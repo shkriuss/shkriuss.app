@@ -16,6 +16,7 @@ An ADR is a short document that records one important decision: the context, wha
 | [0006](0006-hosting-and-deployment.md)   | Hosting and deployment on Cloudflare   | Accepted |
 | [0007](0007-security-baseline.md)        | Security baseline                      | Accepted |
 | [0008](0008-quality-gates.md)            | Quality gates and testing              | Accepted |
+| [0009](0009-stay-on-pnpm-11.md)          | Stay on pnpm 11 for now                | Proposed |
 
 ## Template
 

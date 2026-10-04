@@ -32,7 +32,6 @@ Versions are as of 2026-10. The repository always uses the latest stable release
 - TypeScript 7 has no JavaScript API before 7.1. We avoid tools that need it, such as typescript-eslint, or run TypeScript 6 alongside for them.
 - Owning the service worker means more code to maintain and test, in exchange for full control of the most security-critical script, and no dependence on Workbox, which is in maintenance mode.
 - Libraries that need `eval`, inject `<style>` tags or render HTML cannot be used.
-- Exception to "latest stable": pnpm stays on 11.x for now. pnpm 12 is a native rewrite shipped as platform binaries, which Corepack cannot run yet. Revisit when Corepack, the pnpm GitHub Action and Dependabot handle it.
 
 ## Alternatives considered
 
