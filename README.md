@@ -35,7 +35,8 @@ You need Node.js 22.18 or later and pnpm, which Corepack provides:
 ```sh
 corepack enable pnpm
 pnpm install
-pnpm verify   # format check, lint, type checks, tests, build and repository checks
+pnpm --filter @shkriuss/hub exec playwright install chromium firefox webkit   # once
+pnpm verify   # format check, lint, type checks, tests, build, repository checks and end-to-end tests
 ```
 
 `CLAUDE.md` lists the individual commands.

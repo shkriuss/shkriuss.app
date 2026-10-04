@@ -15,7 +15,8 @@
     "test": "turbo run test",
     "build": "turbo run build",
     "check": "node tooling/checks/src/cli.ts",
-    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm check"
+    "e2e": "turbo run e2e",
+    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm check && pnpm e2e"
   },
   "devDependencies": {
     "oxlint": "catalog:",

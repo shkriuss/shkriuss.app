@@ -69,7 +69,11 @@ Cloudflare Access for staging is set up in Phase 0.3, when staging gets its firs
 - [ ] **`main` ruleset:** add "Require status checks to pass" with the checks **Verify**, **Workflow audit** and **Dependency review**, and turn on "Require branches to be up to date before merging".
 - [ ] **Settings → Code security → Code scanning:** turn on CodeQL **default setup**.
 
-**With the deployment pull request (step 0.3b)** (Claude Code will walk you through these):
+**After the hub pull request (step 0.3b) is merged:**
+
+- [ ] **`main` ruleset:** add **End-to-end** to the required status checks.
+
+**With the deployment pull request (step 0.3c)** (Claude Code will walk you through these):
 
 - Create the `staging` and `production` environments. Production gets you as a required reviewer and allows deployments from `main` only. Each environment gets its own scoped Cloudflare API token.
 - Set up Cloudflare Access so that only your email can open staging.
