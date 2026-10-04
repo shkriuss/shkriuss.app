@@ -10,7 +10,8 @@ Many apps must share one structure, one design and one set of fixes. Most of the
 ## Decision
 
 - **One repository** for everything — hub, apps, shared packages, tooling, docs and deployment configuration: `shkriuss/shkriuss.app`, public.
-- **License:** GNU AGPL-3.0 (see `LICENSE`).
+- **License:** GNU AGPL version 3 **only** — SPDX identifier `AGPL-3.0-only`; full text in `LICENSE`.
+  - The identifier is stated in the README and in every `package.json`.
   - Every app links to its source code.
   - Dependencies must have AGPL-compatible licenses: MIT, BSD, ISC and Apache-2.0 are fine; anything else is checked case by case.
 - **Tooling:**
@@ -27,9 +28,11 @@ Many apps must share one structure, one design and one set of fixes. Most of the
 - One pull request can change the platform and every app at once, and CI tests everything it affects.
 - CI must stay fast as apps are added; this relies on running only the affected tasks.
 - No secret may ever live in the code. Secret scanning with push protection guards this.
+- Future AGPL versions never apply automatically. Code we own can still move to "or later" at any time; code from outside contributors would need their agreement for any relicensing.
 
 ## Alternatives considered
 
 - **A repository per app:** structures drift and configuration is duplicated. Rejected.
 - **A private repository:** loses verifiability and the free CI minutes.
 - **Long-lived `staging` and `production` branches:** they drift apart and cause merge conflicts. Rejected.
+- **`AGPL-3.0-or-later`** (the Free Software Foundation's recommended form): it lets anyone use the code under any future AGPL version, whose terms nobody knows yet, and that permission can't be withdrawn from copies already released. "Only" can be widened later; "or later" can never be narrowed. The forward compatibility it buys matters mostly for libraries, not end-user apps. Rejected for now.

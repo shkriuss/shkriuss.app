@@ -32,4 +32,4 @@ The project is built with [Claude Code](https://claude.com/claude-code). The rul
 
 ## License
 
-[GNU Affero General Public License v3.0](LICENSE)
+[GNU Affero General Public License, version 3 only](LICENSE) — SPDX identifier `AGPL-3.0-only`.
