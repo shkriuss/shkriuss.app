@@ -5,10 +5,12 @@
 
 ## Phase 0 — Foundations
 
+**Complete** since 2026-10-04: every exit criterion below is met.
+
 | Step | What                                                                                                                                                                            | Who                                          | Status |
 | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- | ------ |
 | 0.1  | Architecture, threat model, decision records, `CLAUDE.md`                                                                                                                       | Claude Code                                  | done   |
-| 0.2  | Harden the accounts, domains and repository ([setup checklist](setup-checklist.md))                                                                                             | you                                          | to do  |
+| 0.2  | Harden the accounts, domains and repository ([setup checklist](setup-checklist.md))                                                                                             | you                                          | done   |
 | 0.3a | Monorepo toolchain (pnpm, Turborepo, TypeScript, Oxlint, Prettier, Vitest), repository checks, CI, Dependabot, Claude Code setup (hooks, project skills, cloud-session startup) | Claude Code                                  | done   |
 | 0.3b | Placeholder hub with the full security headers; script-integrity spike ([ADR 0010](decisions/0010-script-integrity.md))                                                         | Claude Code                                  | done   |
 | 0.3c | Deploy the hub to staging and production                                                                                                                                        | Claude Code, with Cloudflare access from you | done   |
@@ -21,6 +23,8 @@
 - A spike proves that script integrity (SRI and `Integrity-Policy`) and Trusted Types work with the production build.
 
 ## Phase 1 — Platform v1 (local-only)
+
+**Current phase.**
 
 | Step | What                                                                                                                                                                                                                                                             |
 | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
