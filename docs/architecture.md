@@ -19,11 +19,11 @@
 
 ## 3. Domains and environments
 
-| Environment | Hub | Apps | Access |
-| --- | --- | --- | --- |
-| Production | `shkriuss.app` | `<id>.shkriuss.app` | public |
-| Staging | `shkriuss.dev` | `<id>.shkriuss.dev` | private (Cloudflare Access) |
-| Local | `localhost` | `localhost` | developer only |
+| Environment | Hub            | Apps                | Access                      |
+| ----------- | -------------- | ------------------- | --------------------------- |
+| Production  | `shkriuss.app` | `<id>.shkriuss.app` | public                      |
+| Staging     | `shkriuss.dev` | `<id>.shkriuss.dev` | private (Cloudflare Access) |
+| Local       | `localhost`    | `localhost`         | developer only              |
 
 Rules ([ADR 0001](decisions/0001-domains-and-environments.md)):
 
@@ -65,16 +65,16 @@ shkriuss.app/
 └─ SECURITY.md              how to report vulnerabilities
 ```
 
-| Package | Responsibility |
-| --- | --- |
-| `@shkriuss/config` | Shared TypeScript, lint, format, Vite, Vitest and Playwright presets |
-| `@shkriuss/ui` | Design tokens, theme, accessible components (React Aria), icons |
-| `@shkriuss/shell` | App frame: navigation, settings, about, install and update prompts, storage status, backup screens, error handling |
-| `@shkriuss/data` | Local database, record model, merge rules, migrations, reactive queries |
-| `@shkriuss/backup` | Export and import, encryption (`age`), backup format versions, readable export formats |
-| `@shkriuss/pwa` | Web app manifest, service worker, install and update flow, persistent storage |
-| `@shkriuss/edge` | Security headers (`_headers`) and Cloudflare/Wrangler configuration |
-| `@shkriuss/i18n` | Message catalogs (English) and `Intl` formatting helpers |
+| Package            | Responsibility                                                                                                     |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| `@shkriuss/config` | Shared TypeScript, lint, format, Vite, Vitest and Playwright presets                                               |
+| `@shkriuss/ui`     | Design tokens, theme, accessible components (React Aria), icons                                                    |
+| `@shkriuss/shell`  | App frame: navigation, settings, about, install and update prompts, storage status, backup screens, error handling |
+| `@shkriuss/data`   | Local database, record model, merge rules, migrations, reactive queries                                            |
+| `@shkriuss/backup` | Export and import, encryption (`age`), backup format versions, readable export formats                             |
+| `@shkriuss/pwa`    | Web app manifest, service worker, install and update flow, persistent storage                                      |
+| `@shkriuss/edge`   | Security headers (`_headers`) and Cloudflare/Wrangler configuration                                                |
+| `@shkriuss/i18n`   | Message catalogs (English) and `Intl` formatting helpers                                                           |
 
 Dependency direction: apps → `shell` → (`ui`, `data`, `backup`, `pwa`, `i18n`); `backup` → `data`. No package imports an app, and apps never import other apps. Lint rules enforce this.
 
@@ -124,7 +124,7 @@ Backups are the only way data leaves a device, the only protection against losin
   - **Updates:** a new version installs in the background and waits. The app shows "Update available" and reloads when the user agrees, never in the middle of a task.
   - **Kill switch:** a documented, tested procedure replaces a broken service worker without touching user data.
 - **Install:** Android and desktop Chromium use the browser's install prompt; iOS uses a guided "Add to Home Screen". Where the Web Install API exists (desktop Chromium), the hub can offer one-click install of an app as an enhancement.
-- **iOS:** every installed home-screen app has its own storage, separate from Safari, and Safari may delete a site's data after seven days of Safari use without a visit to that site (installed apps are exempt). In Safari on iOS, apps therefore suggest installing *before* the user enters data, and offer export → import to move data into the installed app.
+- **iOS:** every installed home-screen app has its own storage, separate from Safari, and Safari may delete a site's data after seven days of Safari use without a visit to that site (installed apps are exempt). In Safari on iOS, apps therefore suggest installing _before_ the user enters data, and offer export → import to move data into the installed app.
 
 ## 10. User interface
 

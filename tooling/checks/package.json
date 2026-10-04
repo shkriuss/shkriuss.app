@@ -1,0 +1,18 @@
+{
+  "name": "@shkriuss/checks",
+  "version": "0.0.0",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@shkriuss/config": "workspace:*",
+    "@types/node": "catalog:",
+    "markdownlint": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

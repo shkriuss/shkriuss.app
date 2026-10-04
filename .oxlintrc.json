@@ -1,0 +1,102 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": [
+    "typescript",
+    "unicorn",
+    "oxc",
+    "import",
+    "promise",
+    "node",
+    "vitest",
+    "react",
+    "jsx-a11y"
+  ],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error"
+  },
+  "rules": {
+    "no-eval": "error",
+    "no-implied-eval": "error",
+    "no-new-func": "error",
+    "no-script-url": "error",
+    "typescript/no-implied-eval": "error",
+    "react/no-danger": "error",
+    "react/jsx-no-script-url": "error",
+    "unicorn/no-document-cookie": "error",
+    "no-restricted-properties": [
+      "error",
+      {
+        "property": "innerHTML",
+        "message": "Render text or React elements instead; never HTML (CLAUDE.md, security rule 2)."
+      },
+      {
+        "property": "outerHTML",
+        "message": "Render text or React elements instead; never HTML (CLAUDE.md, security rule 2)."
+      },
+      {
+        "property": "insertAdjacentHTML",
+        "message": "Render text or React elements instead; never HTML (CLAUDE.md, security rule 2)."
+      },
+      {
+        "property": "createContextualFragment",
+        "message": "Parses HTML; render text or React elements instead (CLAUDE.md, security rule 2)."
+      },
+      {
+        "property": "setHTML",
+        "message": "Render text or React elements instead; never HTML (CLAUDE.md, security rule 2)."
+      },
+      {
+        "property": "setHTMLUnsafe",
+        "message": "Render text or React elements instead; never HTML (CLAUDE.md, security rule 2)."
+      },
+      {
+        "property": "parseHTMLUnsafe",
+        "message": "Parses HTML; render text or React elements instead (CLAUDE.md, security rule 2)."
+      },
+      {
+        "object": "document",
+        "property": "write",
+        "message": "Never use document.write (CLAUDE.md, security rule 2)."
+      },
+      {
+        "object": "document",
+        "property": "writeln",
+        "message": "Never use document.writeln (CLAUDE.md, security rule 2)."
+      }
+    ],
+
+    "eqeqeq": "error",
+    "no-var": "error",
+    "prefer-const": "error",
+    "no-console": "error",
+    "import/no-cycle": "error",
+    "unicorn/prefer-node-protocol": "error",
+    "vitest/no-focused-tests": "error",
+    "vitest/no-disabled-tests": "error",
+
+    "typescript/no-explicit-any": "error",
+    "typescript/no-non-null-assertion": "error",
+    "typescript/no-floating-promises": "error",
+    "typescript/no-misused-promises": "error",
+    "typescript/await-thenable": "error",
+    "typescript/only-throw-error": "error",
+    "typescript/prefer-promise-reject-errors": "error",
+    "typescript/switch-exhaustiveness-check": "error",
+    "typescript/strict-boolean-expressions": "error",
+    "typescript/no-unsafe-argument": "error",
+    "typescript/no-unsafe-assignment": "error",
+    "typescript/no-unsafe-call": "error",
+    "typescript/no-unsafe-member-access": "error",
+    "typescript/no-unsafe-return": "error"
+  },
+  "overrides": [
+    {
+      "files": ["tooling/**"],
+      "rules": {
+        "no-console": "off"
+      }
+    }
+  ],
+  "ignorePatterns": ["**/dist/**", "**/coverage/**"]
+}
