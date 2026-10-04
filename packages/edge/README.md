@@ -32,6 +32,14 @@ The build fails instead of shipping a script without a hash: for example when th
 
 The plugin also writes `dist/sha256sums.txt`: the SHA-256 of every file the deployment serves, in the format `sha256sum` writes. It is published at `/sha256sums.txt`, so anyone can compare what is served with what this repository builds. Follow redirects when you compare: Cloudflare serves `/index.html` at `/`.
 
+CI also signs the build provenance of every deployed file, `sha256sums.txt` included: a GitHub artifact attestation that names the workflow run and the commit that built the file, signed with a short-lived Sigstore certificate and recorded in Sigstore's public transparency log. To check a file that a site serves, for example its page:
+
+```sh
+curl -sSL -o index.html https://shkriuss.app/
+gh attestation verify index.html --repo shkriuss/shkriuss.app \
+  --signer-workflow shkriuss/shkriuss.app/.github/workflows/ci.yml --source-ref refs/heads/main
+```
+
 Before deploying to production, CI runs:
 
 ```sh

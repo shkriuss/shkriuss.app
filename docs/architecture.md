@@ -140,7 +140,8 @@ Backups are the only way data leaves a device, the only protection against losin
 - **Caching:** hashed assets are immutable for a year; `index.html`, the manifest and the service worker are revalidated on every load.
 - **Deployment:** GitHub Actions, in the same workflow as the checks.
   - Every merge to `main` deploys to staging once every check has passed.
-  - Production receives the same commit after manual approval in the `production` environment. It deploys only if its build is byte-for-byte the one staging received, and if no file in `/assets/` would change its content under the same name; browsers keep those files for a year.
+  - A separate job then signs the build provenance of every file staging received: a GitHub artifact attestation, signed with a short-lived Sigstore certificate and recorded in Sigstore's public transparency log. That job runs no code from the repository or its dependencies, so nothing else can sign in its name.
+  - Production receives the same commit once its provenance is attested, after manual approval in the `production` environment. It deploys only if its build is byte-for-byte the one staging received, and if no file in `/assets/` would change its content under the same name; browsers keep those files for a year.
   - Rolling back means redeploying the previous version.
   - Each app's `wrangler.json` keeps `workers.dev` and preview URLs off, so nothing bypasses Cloudflare Access on staging; `pnpm check` enforces it.
 - **Cloudflare features that rewrite pages or inject scripts** (Rocket Loader, Email Address Obfuscation, Zaraz, Web Analytics auto-injection, Bot Fight Mode's JavaScript detections) stay off, because they conflict with the security policy and integrity checks.
@@ -173,7 +174,7 @@ Staging additionally sends `X-Robots-Tag: noindex`. That is a host rule in the s
 - **Older browsers** that don't support Trusted Types or `Integrity-Policy` ignore those headers; the apps still work, with weaker protection.
 - **Code rules:** no HTML injection sinks, no `eval`, no inline scripts (except the generated import map) or styles; user content is rendered as text (see `CLAUDE.md`).
 - **Supply chain:** few dependencies; pnpm with a release-age delay, blocked install scripts and a frozen lockfile; GitHub Actions pinned to commit SHAs with least-privilege tokens; CodeQL, dependency review and secret scanning.
-- **Transparency:** public source, build provenance attestations, and a published SHA-256 list of every deployed file (`/sha256sums.txt` on every origin) — ready for browser-verified transparency (WAICT) once browsers ship it.
+- **Transparency:** public source, a build provenance attestation for every deployed file, and a published SHA-256 list of every deployed file (`/sha256sums.txt` on every origin), so anyone can check what a site serves ([how](../packages/edge/README.md#deployment-checks)) — ready for browser-verified transparency (WAICT) once browsers ship it.
 
 ## 13. Privacy
 

@@ -76,6 +76,7 @@ jobs:
       url: https://shkriuss.dev
     outputs:
       build: ${{ steps.build.outputs.sha256 }}
+      files: ${{ steps.build.outputs.files }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -89,22 +90,50 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       # The SHA-256 of every file Wrangler uploads, `_headers` included, so that production can
-      # check it deploys exactly this build.
+      # check it deploys exactly this build, and the attest job can sign where it came from.
       - id: build
         name: Record the hash of every file to deploy
         working-directory: apps/hub/dist
         run: |
           find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | tee "$RUNNER_TEMP/files.txt"
           echo "sha256=$(sha256sum < "$RUNNER_TEMP/files.txt" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          delimiter="$(openssl rand -hex 16)"
+          { echo "files<<$delimiter"; cat "$RUNNER_TEMP/files.txt"; echo "$delimiter"; } >> "$GITHUB_OUTPUT"
       - run: pnpm --filter @shkriuss/hub exec wrangler deploy --env staging
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
 
-  # The same commit goes to production once the maintainer approves the production environment.
+  # Signs the build provenance of every file staging received: the workflow, commit and run that
+  # built it (ADR 0007). This job runs no code from the repository or its dependencies, so
+  # nothing else can use its signing identity.
+  attest:
+    name: Attest build provenance
+    needs: [deploy-staging]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      id-token: write # to get a short-lived Sigstore signing certificate for this workflow
+      attestations: write # to store the attestation with the repository
+    steps:
+      - name: List the files to attest
+        env:
+          FILES: ${{ needs.deploy-staging.outputs.files }}
+        run: |
+          if [ -z "$FILES" ]; then
+            echo "::error::The staging job listed no files to attest."
+            exit 1
+          fi
+          printf '%s\n' "$FILES" | sed 's|  \./|  |' > "$RUNNER_TEMP/subjects.txt"
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-checksums: ${{ runner.temp }}/subjects.txt
+
+  # The same commit goes to production once its provenance is attested and the maintainer
+  # approves the production environment.
   deploy-production:
     name: Deploy to production
-    needs: [deploy-staging]
+    needs: [deploy-staging, attest]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
