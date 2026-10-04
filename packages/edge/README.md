@@ -28,6 +28,18 @@ Every chunk other than the entry script must be loaded with `import()` and may i
 
 The build fails instead of shipping a script without a hash: for example when the HTML has an inline script or loads a script that is not part of the build.
 
+## Deployment checks
+
+The plugin also writes `dist/sha256sums.txt`: the SHA-256 of every file the deployment serves, in the format `sha256sum` writes. It is published at `/sha256sums.txt`, so anyone can compare what is served with what this repository builds.
+
+Before deploying to production, CI runs:
+
+```sh
+node packages/edge/src/cli.ts check-live apps/hub/dist https://shkriuss.app
+```
+
+It fails if a file in `/assets/` would change its content under the same name. Browsers keep those files for a year, so returning visitors would load the old copy and fail its integrity check.
+
 ## The headers
 
 `securityHeaders()` returns the header set from [architecture §12](../../docs/architecture.md#12-security). Change it only together with the architecture document, and never relax it to make something work.
