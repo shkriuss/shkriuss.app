@@ -13,6 +13,7 @@ import { checkLicenses, parseLicensePolicy, readRuntimeLicenses } from "./licens
 import { checkMarkdown, parseMarkdownConfig } from "./markdown.ts";
 import { formatViolation, type Violation } from "./report.ts";
 import { listFiles, readText, repoRoot } from "./repo.ts";
+import { checkWranglerConfig, isWranglerConfig, missingWranglerConfigs } from "./wrangler.ts";
 
 interface Check {
   readonly description: string;
@@ -51,6 +52,16 @@ const CHECKS: Readonly<Record<string, Check>> = {
     description: `Markdown files follow the markdownlint rules in ${MARKDOWN_CONFIG}`,
     run: (files) =>
       checkMarkdown(markdownFiles(files), parseMarkdownConfig(readText(MARKDOWN_CONFIG))),
+  },
+  wrangler: {
+    description:
+      "apps deploy static assets only, each environment on its own domain, never via workers.dev",
+    run: (files) => [
+      ...missingWranglerConfigs(files),
+      ...files
+        .filter(isWranglerConfig)
+        .flatMap((file) => checkWranglerConfig(file, readText(file))),
+    ],
   },
   "doc-links": {
     description: "relative links and #anchors in Markdown files resolve",

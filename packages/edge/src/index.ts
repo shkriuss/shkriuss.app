@@ -26,4 +26,12 @@ export {
   subresourceIntegrity,
   type IntegrityResult,
 } from "./integrity.ts";
+export { checkAgainstLive, type Fetch, type LiveCheck } from "./live.ts";
+export {
+  MANIFEST_FILE,
+  buildManifest,
+  formatManifest,
+  parseManifest,
+  replacedAssets,
+} from "./manifest.ts";
 export { edge, type EdgeOptions } from "./vite.ts";

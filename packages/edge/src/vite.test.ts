@@ -1,9 +1,11 @@
+import { createHash } from "node:crypto";
 import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { build } from "vite";
 import { afterEach, describe, expect, it } from "vitest";
 import { cspHashSource, subresourceIntegrity } from "./integrity.ts";
+import { parseManifest } from "./manifest.ts";
 import { edge, type EdgeOptions } from "./vite.ts";
 
 const roots: string[] = [];
@@ -68,6 +70,19 @@ describe("edge", () => {
     expect(headers).toContain(`script-src 'self' ${cspHashSource(importMap)};`);
     expect(headers).toContain("Integrity-Policy: blocked-destinations=(script)");
     expect(headers).toContain("https://shkriuss.dev/*\n  X-Robots-Tag: noindex\n");
+
+    // The manifest covers the final files, after the plugin changed index.html.
+    const manifest = parseManifest(await readFile(path.join(dist, "sha256sums.txt"), "utf8"));
+    expect([...manifest.keys()]).toEqual(
+      [...scripts.map((file) => `/assets/${file}`), "/index.html"]
+        .concat(
+          (await readdir(path.join(dist, "assets")))
+            .filter((file) => file.endsWith(".css"))
+            .map((file) => `/assets/${file}`),
+        )
+        .toSorted(),
+    );
+    expect(manifest.get("/index.html")).toBe(createHash("sha256").update(html).digest("hex"));
   });
 
   it("marks an app's own staging host as not for search engines", async () => {

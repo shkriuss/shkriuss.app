@@ -6,6 +6,7 @@ import { appHost, STAGING_DOMAIN } from "./domains.ts";
 import { appHeaderRules, headersFile } from "./headers-file.ts";
 import type { BrowserFeature } from "./headers.ts";
 import { addScriptIntegrity, cspHashSource, subresourceIntegrity } from "./integrity.ts";
+import { buildManifest, formatManifest, MANIFEST_FILE } from "./manifest.ts";
 
 export interface EdgeOptions {
   /** The app's permanent id, which is also its subdomain. Leave it out for the hub. */
@@ -16,8 +17,9 @@ export interface EdgeOptions {
 
 /**
  * Vite plugin for every app's production build. After Vite has written the files, it hashes
- * the scripts, adds integrity attributes and the import map to the HTML, and writes the
- * `_headers` file with the matching Content-Security-Policy.
+ * the scripts, adds integrity attributes and the import map to the HTML, writes the
+ * `_headers` file with the matching Content-Security-Policy, and publishes the SHA-256 of
+ * every served file in `sha256sums.txt`.
  *
  * It works on the files as written, so the hashes match exactly the bytes that are served.
  *
@@ -95,6 +97,11 @@ export function edge(options: EdgeOptions = {}): Plugin {
           stagingHost,
         });
         await writeFile(path.join(directory, "_headers"), headersFile(rules));
+        // Last, so it covers every file as served, including those copied from public/.
+        await writeFile(
+          path.join(directory, MANIFEST_FILE),
+          formatManifest(await buildManifest(directory)),
+        );
       },
     },
   };
