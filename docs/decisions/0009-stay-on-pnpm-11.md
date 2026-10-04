@@ -1,6 +1,6 @@
 # ADR 0009: Stay on pnpm 11 for now
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-10-04
 
 ## Context
