@@ -73,7 +73,41 @@ Cloudflare Access for staging is set up in Phase 0.3, when staging gets its firs
 
 - [ ] **`main` ruleset:** add **End-to-end** to the required status checks.
 
-**With the deployment pull request (step 0.3c)** (Claude Code will walk you through these):
+**Before the deployment pull request (step 0.3c) is merged:**
 
-- Create the `staging` and `production` environments. Production gets you as a required reviewer and allows deployments from `main` only. Each environment gets its own scoped Cloudflare API token.
-- Set up Cloudflare Access so that only your email can open staging.
+Cloudflare Access for staging comes first, so staging is never public:
+
+- [ ] Open **Zero Trust** in the Cloudflare dashboard. Choose a team name, for example `shkriuss`, and the Free plan. It asks for a payment method, but the Free plan costs nothing.
+- [ ] **Integrations → Identity providers:** add **One-time PIN**.
+- [ ] **Access → Applications → Add an application → Self-hosted:**
+  - add two public hostnames, `shkriuss.dev` and `*.shkriuss.dev`, because the wildcard does not cover the apex;
+  - add a policy with the action **Allow** that includes **Emails** → your email address.
+
+Cloudflare API tokens, one per environment (**My Profile → API Tokens → Create Token → Custom token**):
+
+| Token name                  | Permissions                                                    | Resources                         |
+| --------------------------- | -------------------------------------------------------------- | --------------------------------- |
+| `GitHub deploy: staging`    | Account → Workers Scripts → Edit; Zone → Workers Routes → Edit | your account; zone `shkriuss.dev` |
+| `GitHub deploy: production` | Account → Workers Scripts → Edit; Zone → Workers Routes → Edit | your account; zone `shkriuss.app` |
+
+- [ ] Give each token an expiry date, for example one year, and note it somewhere you will see it.
+- [ ] Copy your **Account ID** from the account home page.
+- [ ] Never paste a token anywhere but GitHub.
+
+GitHub environments (**Settings → Environments → New environment**):
+
+| Environment  | Deployment branches | Secret                                       | Variable                | Protection                                                      |
+| ------------ | ------------------- | -------------------------------------------- | ----------------------- | --------------------------------------------------------------- |
+| `staging`    | `main` only         | `CLOUDFLARE_API_TOKEN`: the staging token    | `CLOUDFLARE_ACCOUNT_ID` | none                                                            |
+| `production` | `main` only         | `CLOUDFLARE_API_TOKEN`: the production token | `CLOUDFLARE_ACCOUNT_ID` | Required reviewers: you. Leave "Prevent self-review" turned off |
+
+Optional, in both zones: redirect `www` to the apex ([ADR 0001](decisions/0001-domains-and-environments.md)).
+
+- [ ] **DNS:** add a proxied `AAAA` record named `www` that points to `100::`.
+- [ ] **Rules → Redirect Rules:** create a rule from the template "Redirect from WWW to root".
+
+**After the deployment pull request (step 0.3c) is merged:**
+
+- [ ] The CI run on `main` deploys to staging. Open `https://shkriuss.dev`; Access asks for your email and sends a one-time PIN.
+- [ ] In the same run, approve the **production** deployment (**Review deployments**). Then open `https://shkriuss.app`.
+- [ ] Scan `https://shkriuss.app` with the MDN HTTP Observatory. The target is A+.
