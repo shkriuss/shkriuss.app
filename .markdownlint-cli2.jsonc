@@ -1,0 +1,11 @@
+{
+  // Structural checks for Markdown; formatting is Prettier's job.
+  "config": {
+    "default": true,
+    // Prose is not hard-wrapped.
+    "MD013": false,
+  },
+  "globs": ["**/*.md"],
+  "gitignore": true,
+  "ignores": ["**/node_modules/**"],
+}

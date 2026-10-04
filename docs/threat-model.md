@@ -6,27 +6,27 @@
 
 ## 1. What we protect
 
-| # | Asset | Why it matters |
-| --- | --- | --- |
-| A1 | User data inside each app | Personal notes, lists, health records and similar |
-| A2 | Backup files | Copies of A1 that leave the device (cloud drives, email) |
-| A3 | Backup passphrases | They unlock A2 |
-| A4 | Integrity of the delivered code | Code running in an app's origin can read all of that app's data |
-| A5 | Developer accounts and infrastructure | GitHub, Cloudflare and the domain registrar decide what code is delivered |
-| A6 | Users' privacy | Which apps someone uses, and when |
+| #   | Asset                                 | Why it matters                                                            |
+| --- | ------------------------------------- | ------------------------------------------------------------------------- |
+| A1  | User data inside each app             | Personal notes, lists, health records and similar                         |
+| A2  | Backup files                          | Copies of A1 that leave the device (cloud drives, email)                  |
+| A3  | Backup passphrases                    | They unlock A2                                                            |
+| A4  | Integrity of the delivered code       | Code running in an app's origin can read all of that app's data           |
+| A5  | Developer accounts and infrastructure | GitHub, Cloudflare and the domain registrar decide what code is delivered |
+| A6  | Users' privacy                        | Which apps someone uses, and when                                         |
 
 ## 2. Actors
 
-| Actor | Trust | Notes |
-| --- | --- | --- |
-| Other websites, and other shkriuss apps | untrusted | Isolated by the browser's same-origin policy |
-| Anyone who sends a crafted link or backup file | untrusted | Imports are hostile input |
-| Network attacker (for example, public Wi-Fi) | untrusted | HTTPS only; the `.app` and `.dev` domains are HSTS-preloaded |
-| Malicious or compromised dependency or GitHub Action | untrusted | Supply-chain controls |
-| Attacker targeting the developer's accounts | untrusted | Strong account security |
-| Cloud storage holding backups (Drive, iCloud) | untrusted with content | Backups are encrypted by default |
-| Cloudflare (hosting) | trusted to deliver our files unmodified | Sees request metadata; see R1 and R5 |
-| The user's own device, operating system and browser | trusted | A compromised device is out of scope |
+| Actor                                                | Trust                                   | Notes                                                        |
+| ---------------------------------------------------- | --------------------------------------- | ------------------------------------------------------------ |
+| Other websites, and other shkriuss apps              | untrusted                               | Isolated by the browser's same-origin policy                 |
+| Anyone who sends a crafted link or backup file       | untrusted                               | Imports are hostile input                                    |
+| Network attacker (for example, public Wi-Fi)         | untrusted                               | HTTPS only; the `.app` and `.dev` domains are HSTS-preloaded |
+| Malicious or compromised dependency or GitHub Action | untrusted                               | Supply-chain controls                                        |
+| Attacker targeting the developer's accounts          | untrusted                               | Strong account security                                      |
+| Cloud storage holding backups (Drive, iCloud)        | untrusted with content                  | Backups are encrypted by default                             |
+| Cloudflare (hosting)                                 | trusted to deliver our files unmodified | Sees request metadata; see R1 and R5                         |
+| The user's own device, operating system and browser  | trusted                                 | A compromised device is out of scope                         |
 
 ## 3. Trust boundaries
 
@@ -36,22 +36,22 @@
 
 ## 4. Threats and mitigations
 
-| # | Threat | Mitigations |
-| --- | --- | --- |
-| T1 | Script injection (XSS) reads or changes data | No HTML injection sinks or `eval` (lint-enforced where possible); user content rendered as text; strict CSP with `require-trusted-types-for 'script'` and `trusted-types 'none'`; `Integrity-Policy`; end-to-end tests fail on any CSP violation |
-| T2 | Malicious dependency | Few dependencies, each justified; pnpm release-age delay, trust policy, blocked install scripts, frozen lockfile; Dependabot alerts; CodeQL; no third-party code at runtime |
-| T3 | Compromised CI or GitHub Action | Actions pinned to commit SHAs; read-only default token; workflows audited with zizmor; deploy credentials only in protected environments; production requires manual approval |
-| T4 | Developer account takeover | Passkey or security-key two-factor authentication on GitHub, Cloudflare and the email account behind them; least-privilege API tokens; protected `main` branch; audit logs |
-| T5 | Tampered code served to users | HTTPS with HSTS preload; integrity hashes on every script; public source, build provenance and published file hashes make tampering detectable (see R1) |
-| T6 | Crafted backup file | Size limits; strict parsing and schema validation; imported data is never executed or rendered as HTML; preview before applying; all-or-nothing transaction |
-| T7 | Backup file read by whoever holds it | `age` encryption with a passphrase (scrypt) by default; generated passphrases offered; plain export only after a warning |
-| T8 | Data loss: eviction, uninstall, lost device, bad update | Persistent-storage request; backup reminders; transactional, tested migrations; staging and real-device checks before production; service-worker kill switch |
-| T9 | Clickjacking and framing | `frame-ancestors 'none'` and `X-Frame-Options: DENY` |
-| T10 | Cross-origin leaks (Spectre-style attacks, window references) | COOP `same-origin`, COEP `require-corp`, CORP `same-origin` |
-| T11 | Tracking and metadata leaks | No third-party requests, cookies or analytics; `Referrer-Policy: no-referrer`; minimal logs |
-| T12 | Rogue or taken-over subdomain | Every subdomain deployed from this repository; no third-party hosting; no wildcard or dangling DNS records; DNSSEC; CAA records |
-| T13 | Phishing email that appears to come from our domains | Null MX, SPF `-all` and DMARC `p=reject` on both domains |
-| T14 | Misused browser capabilities | `Permissions-Policy` denies every feature an app does not explicitly need |
+| #   | Threat                                                        | Mitigations                                                                                                                                                                                                                                      |
+| --- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| T1  | Script injection (XSS) reads or changes data                  | No HTML injection sinks or `eval` (lint-enforced where possible); user content rendered as text; strict CSP with `require-trusted-types-for 'script'` and `trusted-types 'none'`; `Integrity-Policy`; end-to-end tests fail on any CSP violation |
+| T2  | Malicious dependency                                          | Few dependencies, each justified; pnpm release-age delay, trust policy, blocked install scripts, frozen lockfile; Dependabot alerts; CodeQL; no third-party code at runtime                                                                      |
+| T3  | Compromised CI or GitHub Action                               | Actions pinned to commit SHAs; read-only default token; workflows audited with zizmor; deploy credentials only in protected environments; production requires manual approval                                                                    |
+| T4  | Developer account takeover                                    | Passkey or security-key two-factor authentication on GitHub, Cloudflare and the email account behind them; least-privilege API tokens; protected `main` branch; audit logs                                                                       |
+| T5  | Tampered code served to users                                 | HTTPS with HSTS preload; integrity hashes on every script; public source, build provenance and published file hashes make tampering detectable (see R1)                                                                                          |
+| T6  | Crafted backup file                                           | Size limits; strict parsing and schema validation; imported data is never executed or rendered as HTML; preview before applying; all-or-nothing transaction                                                                                      |
+| T7  | Backup file read by whoever holds it                          | `age` encryption with a passphrase (scrypt) by default; generated passphrases offered; plain export only after a warning                                                                                                                         |
+| T8  | Data loss: eviction, uninstall, lost device, bad update       | Persistent-storage request; backup reminders; transactional, tested migrations; staging and real-device checks before production; service-worker kill switch                                                                                     |
+| T9  | Clickjacking and framing                                      | `frame-ancestors 'none'` and `X-Frame-Options: DENY`                                                                                                                                                                                             |
+| T10 | Cross-origin leaks (Spectre-style attacks, window references) | COOP `same-origin`, COEP `require-corp`, CORP `same-origin`                                                                                                                                                                                      |
+| T11 | Tracking and metadata leaks                                   | No third-party requests, cookies or analytics; `Referrer-Policy: no-referrer`; minimal logs                                                                                                                                                      |
+| T12 | Rogue or taken-over subdomain                                 | Every subdomain deployed from this repository; no third-party hosting; no wildcard or dangling DNS records; DNSSEC; CAA records                                                                                                                  |
+| T13 | Phishing email that appears to come from our domains          | Null MX, SPF `-all` and DMARC `p=reject` on both domains                                                                                                                                                                                         |
+| T14 | Misused browser capabilities                                  | `Permissions-Policy` denies every feature an app does not explicitly need                                                                                                                                                                        |
 
 ## 5. Residual risks (accepted)
 

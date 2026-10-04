@@ -17,18 +17,28 @@ Private, offline-first web apps — one hub, many small apps, one shared platfor
 
 ## Documentation
 
-| Document | What it covers |
-| --- | --- |
-| [Architecture](docs/architecture.md) | How the hub, the apps and the shared platform fit together |
-| [Threat model](docs/threat-model.md) | What we protect, from whom, and how |
-| [Roadmap](docs/roadmap.md) | Phases and what comes next |
-| [Decision records](docs/decisions/README.md) | Every important decision and why it was made |
-| [Setup checklist](docs/setup-checklist.md) | One-time GitHub and Cloudflare hardening |
-| [Security policy](SECURITY.md) | How to report a vulnerability |
+| Document                                     | What it covers                                             |
+| -------------------------------------------- | ---------------------------------------------------------- |
+| [Architecture](docs/architecture.md)         | How the hub, the apps and the shared platform fit together |
+| [Threat model](docs/threat-model.md)         | What we protect, from whom, and how                        |
+| [Roadmap](docs/roadmap.md)                   | Phases and what comes next                                 |
+| [Decision records](docs/decisions/README.md) | Every important decision and why it was made               |
+| [Setup checklist](docs/setup-checklist.md)   | One-time GitHub and Cloudflare hardening                   |
+| [Security policy](SECURITY.md)               | How to report a vulnerability                              |
 
 ## Development
 
-The project is built with [Claude Code](https://claude.com/claude-code). The rules every contributor follows — human or AI — are in [CLAUDE.md](CLAUDE.md). The toolchain and its commands arrive in Phase 0.3.
+The project is built with [Claude Code](https://claude.com/claude-code). The rules every contributor follows — human or AI — are in [CLAUDE.md](CLAUDE.md).
+
+You need Node.js 22.18 or later and pnpm, which Corepack provides:
+
+```sh
+corepack enable pnpm
+pnpm install
+pnpm verify   # format check, lint, type checks, tests, build and repository checks
+```
+
+`CLAUDE.md` lists the individual commands.
 
 ## License
 

@@ -1,0 +1,15 @@
+{
+  "$comment": "Licenses allowed for runtime dependencies, which ship to users inside the AGPL-3.0-only apps. Development-only dependencies are not distributed and are not checked. Exceptions are keyed by name@version, so every new version is reviewed again.",
+  "allowed": [
+    "0BSD",
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BlueOak-1.0.0",
+    "CC0-1.0",
+    "ISC",
+    "MIT",
+    "Unlicense"
+  ],
+  "exceptions": {}
+}

@@ -7,7 +7,7 @@ One-time steps done by hand in GitHub and Cloudflare. Menu names change from tim
 - [ ] **GitHub:** turn on two-factor authentication with a passkey or security key (Settings → Password and authentication). Store the recovery codes offline.
 - [ ] **Cloudflare:** turn on two-factor authentication, with a security key or passkey if offered (My Profile → Authentication).
 - [ ] **The email account behind GitHub and Cloudflare:** passkey or two-factor authentication too, because account recovery goes through it.
-- [ ] *Optional:* create a free npm account or organization named `shkriuss` to reserve the `@shkriuss` package scope, so nobody can publish look-alike packages under it.
+- [ ] _Optional:_ create a free npm account or organization named `shkriuss` to reserve the `@shkriuss` package scope, so nobody can publish look-alike packages under it.
 
 ## 2. Both domains in Cloudflare (`shkriuss.app` and `shkriuss.dev`)
 
@@ -16,21 +16,22 @@ One-time steps done by hand in GitHub and Cloudflare. Menu names change from tim
 - [ ] **SSL/TLS → Edge Certificates:** Always Use HTTPS on; Minimum TLS Version 1.2; TLS 1.3 on.
 - [ ] **CAA records**, allowing only the certificate authorities Cloudflare uses:
 
-  | Type | Name | Value |
-  | --- | --- | --- |
-  | CAA | `@` | `0 issue "letsencrypt.org"` |
-  | CAA | `@` | `0 issue "pki.goog"` |
-  | CAA | `@` | `0 issue "ssl.com"` |
+  | Type | Name | Value                       |
+  | ---- | ---- | --------------------------- |
+  | CAA  | `@`  | `0 issue "letsencrypt.org"` |
+  | CAA  | `@`  | `0 issue "pki.goog"`        |
+  | CAA  | `@`  | `0 issue "ssl.com"`         |
 
 - [ ] **Email anti-spoofing.** Neither domain sends email:
 
-  | Type | Name | Value |
-  | --- | --- | --- |
-  | MX | `@` | `.` with priority 0 (a "null MX") |
-  | TXT | `@` | `v=spf1 -all` |
-  | TXT | `_dmarc` | `v=DMARC1; p=reject; sp=reject; adkim=s; aspf=s` |
+  | Type | Name     | Value                                            |
+  | ---- | -------- | ------------------------------------------------ |
+  | MX   | `@`      | `.` with priority 0 (a "null MX")                |
+  | TXT  | `@`      | `v=spf1 -all`                                    |
+  | TXT  | `_dmarc` | `v=DMARC1; p=reject; sp=reject; adkim=s; aspf=s` |
 
   If you ever want to receive email on one of these domains (for example with Cloudflare Email Routing), replace the null MX and SPF records at that point.
+
 - [ ] **Keep these off.** They inject scripts or rewrite pages, which breaks our security policy:
   - Rocket Loader
   - Email Address Obfuscation (on by default for new domains)
@@ -63,9 +64,12 @@ Cloudflare Access for staging is set up in Phase 0.3, when staging gets its firs
   - uncheck "Allow GitHub Actions to create and approve pull requests";
   - fork pull request workflows: require approval for all external contributors.
 
-**Later, in Phase 0.3, once CI and deployments exist** (Claude Code will walk you through these):
+**After the CI pull request (step 0.3a) is merged:**
 
-- Add "Require status checks to pass" to the `main` ruleset.
-- Turn on CodeQL default setup.
+- [ ] **`main` ruleset:** add "Require status checks to pass" with the checks **Verify**, **Workflow audit** and **Dependency review**, and turn on "Require branches to be up to date before merging".
+- [ ] **Settings → Code security → Code scanning:** turn on CodeQL **default setup**.
+
+**With the deployment pull request (step 0.3b)** (Claude Code will walk you through these):
+
 - Create the `staging` and `production` environments. Production gets you as a required reviewer and allows deployments from `main` only. Each environment gets its own scoped Cloudflare API token.
 - Set up Cloudflare Access so that only your email can open staging.

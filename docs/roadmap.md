@@ -5,11 +5,12 @@
 
 ## Phase 0 — Foundations
 
-| Step | What | Who | Status |
-| --- | --- | --- | --- |
-| 0.1 | Architecture, threat model, decision records, `CLAUDE.md` | Claude Code | in review |
-| 0.2 | Harden the accounts, domains and repository ([setup checklist](setup-checklist.md)) | you | to do |
-| 0.3 | Monorepo skeleton (pnpm, Turborepo, TypeScript, lint, tests), CI, Claude Code setup (hooks, project skills, cloud-session startup), and a placeholder hub deployed to staging and production with the full security headers | Claude Code | to do |
+| Step | What                                                                                                                                                                            | Who                                          | Status    |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- | --------- |
+| 0.1  | Architecture, threat model, decision records, `CLAUDE.md`                                                                                                                       | Claude Code                                  | done      |
+| 0.2  | Harden the accounts, domains and repository ([setup checklist](setup-checklist.md))                                                                                             | you                                          | to do     |
+| 0.3a | Monorepo toolchain (pnpm, Turborepo, TypeScript, Oxlint, Prettier, Vitest), repository checks, CI, Dependabot, Claude Code setup (hooks, project skills, cloud-session startup) | Claude Code                                  | in review |
+| 0.3b | Placeholder hub deployed to staging and production with the full security headers; script-integrity spike                                                                       | Claude Code, with Cloudflare access from you | to do     |
 
 **Exit criteria:**
 
@@ -20,13 +21,13 @@
 
 ## Phase 1 — Platform v1 (local-only)
 
-| Step | What |
-| --- | --- |
-| 1.1 | Specs: data model and merge rules (`docs/specs/data-model.md`); backup format (`docs/specs/backup-format.md`) |
-| 1.2 | Packages: `config`, `edge`, `i18n`, `ui` (tokens, core components, light and dark themes), `shell`, `pwa`, `data`, `backup` |
-| 1.3 | App template, the `create-app` generator, structure checks in CI |
-| 1.4 | Hub v1: app catalog generated from app configs; install guides for iPhone, Android and desktop; privacy and security pages; `security.txt` |
-| 1.5 | Pilot app (a simple one, chosen together) → staging → real devices → production |
+| Step | What                                                                                                                                       |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1.1  | Specs: data model and merge rules (`docs/specs/data-model.md`); backup format (`docs/specs/backup-format.md`)                              |
+| 1.2  | Packages: `config`, `edge`, `i18n`, `ui` (tokens, core components, light and dark themes), `shell`, `pwa`, `data`, `backup`                |
+| 1.3  | App template, the `create-app` generator, structure checks in CI                                                                           |
+| 1.4  | Hub v1: app catalog generated from app configs; install guides for iPhone, Android and desktop; privacy and security pages; `security.txt` |
+| 1.5  | Pilot app (a simple one, chosen together) → staging → real devices → production                                                            |
 
 **Exit criteria:**
 

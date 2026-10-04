@@ -11,20 +11,20 @@ Many apps need the same structure and look, solid accessibility and long-term ma
 
 Versions are as of 2026-10. The repository always uses the latest stable releases, pinned once in the pnpm catalog.
 
-| Concern | Choice |
-| --- | --- |
-| Language | TypeScript 7 (native compiler), strictest settings |
-| UI | React 19 with React Compiler |
-| Build | Vite 8 |
-| Routing | TanStack Router (file-based, type-safe) |
-| Components | React Aria Components, wrapped in `@shkriuss/ui` |
-| Styling | Tailwind CSS 4 with shared design tokens |
-| Local database | Dexie (IndexedDB) |
-| Validation | Zod 4, configured `jitless` so it never tries `new Function` |
-| Translations | Paraglide JS; English only at launch |
-| Offline | Our own service worker in `@shkriuss/pwa` (no Workbox) |
-| Lint and format | Oxlint with type-aware rules; Prettier |
-| Monorepo | pnpm workspaces with catalogs; Turborepo |
+| Concern         | Choice                                                       |
+| --------------- | ------------------------------------------------------------ |
+| Language        | TypeScript 7 (native compiler), strictest settings           |
+| UI              | React 19 with React Compiler                                 |
+| Build           | Vite 8                                                       |
+| Routing         | TanStack Router (file-based, type-safe)                      |
+| Components      | React Aria Components, wrapped in `@shkriuss/ui`             |
+| Styling         | Tailwind CSS 4 with shared design tokens                     |
+| Local database  | Dexie (IndexedDB)                                            |
+| Validation      | Zod 4, configured `jitless` so it never tries `new Function` |
+| Translations    | Paraglide JS; English only at launch                         |
+| Offline         | Our own service worker in `@shkriuss/pwa` (no Workbox)       |
+| Lint and format | Oxlint with type-aware rules; Prettier                       |
+| Monorepo        | pnpm workspaces with catalogs; Turborepo                     |
 
 ## Consequences
 
@@ -32,6 +32,7 @@ Versions are as of 2026-10. The repository always uses the latest stable release
 - TypeScript 7 has no JavaScript API before 7.1. We avoid tools that need it, such as typescript-eslint, or run TypeScript 6 alongside for them.
 - Owning the service worker means more code to maintain and test, in exchange for full control of the most security-critical script, and no dependence on Workbox, which is in maintenance mode.
 - Libraries that need `eval`, inject `<style>` tags or render HTML cannot be used.
+- Exception to "latest stable": pnpm stays on 11.x for now. pnpm 12 is a native rewrite shipped as platform binaries, which Corepack cannot run yet. Revisit when Corepack, the pnpm GitHub Action and Dependabot handle it.
 
 ## Alternatives considered
 

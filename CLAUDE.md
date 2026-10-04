@@ -10,17 +10,17 @@ Instructions for Claude Code and for anyone else changing this repository. Read 
 - All user data stays on the user's device. The only way data leaves is a backup file the user exports, encrypted by default. There are no accounts, no sync and no backend.
 - Every app is built from the same shared platform in `packages/`, so apps look and behave alike and fixes reach every app at once.
 
-**Current phase: 0 — Foundations.** There is no application code yet. See `docs/roadmap.md`.
+**Current phase: 0 — Foundations.** The toolchain and repository checks exist; there is no app yet. See `docs/roadmap.md`.
 
 ## Read first
 
-| Document | Use it for |
-| --- | --- |
-| `docs/architecture.md` | How the system fits together |
+| Document               | Use it for                                                                                        |
+| ---------------------- | ------------------------------------------------------------------------------------------------- |
+| `docs/architecture.md` | How the system fits together                                                                      |
 | `docs/threat-model.md` | Security reasoning. Update it when a change adds network use, browser permissions or dependencies |
-| `docs/decisions/` | Accepted decisions (ADRs). Binding; change one only with a new ADR |
-| `docs/roadmap.md` | Which phase we are in and what comes next |
-| `docs/specs/` | Exact formats (data model, backup format), written before the code that implements them |
+| `docs/decisions/`      | Accepted decisions (ADRs). Binding; change one only with a new ADR                                |
+| `docs/roadmap.md`      | Which phase we are in and what comes next                                                         |
+| `docs/specs/`          | Exact formats (data model, backup format), written before the code that implements them           |
 
 ## Rules
 
@@ -62,7 +62,7 @@ Instructions for Claude Code and for anyone else changing this repository. Read 
 
 - One task → one branch → one small pull request. Never push to `main`.
 - Commit messages and PR titles use Conventional Commits, scoped by app or package: `feat(notes): …`, `fix(data): …`, `docs: …`, `chore(deps): …`.
-- Before pushing, run the checks listed under Commands; push only when they pass.
+- Before pushing, run `pnpm verify` (see Commands); push only when it passes.
 - A PR description says what changed, why, and how it was tested, and lists any new dependency, browser permission or ADR.
 - For changes to data, backups, the service worker or security headers: update the spec first, add tests, and run the full end-to-end suite.
 
@@ -70,15 +70,29 @@ Instructions for Claude Code and for anyone else changing this repository. Read 
 
 ## Environments
 
-| Environment | Domains | Deployed |
-| --- | --- | --- |
-| Local | `localhost` | dev server |
-| Staging (private) | `shkriuss.dev`, `<id>.shkriuss.dev` | automatically after a merge to `main` |
-| Production | `shkriuss.app`, `<id>.shkriuss.app` | the same commit, after manual approval |
+| Environment       | Domains                             | Deployed                               |
+| ----------------- | ----------------------------------- | -------------------------------------- |
+| Local             | `localhost`                         | dev server                             |
+| Staging (private) | `shkriuss.dev`, `<id>.shkriuss.dev` | automatically after a merge to `main`  |
+| Production        | `shkriuss.app`, `<id>.shkriuss.app` | the same commit, after manual approval |
 
 ## Commands
 
-None yet — the toolchain arrives in Phase 0.3. This section will then list the install, dev, format, lint, typecheck, test, end-to-end and build commands.
+Node.js 22.18 or later (CI uses the version in `.node-version`) and pnpm via Corepack (`corepack enable pnpm`). Run everything from the repository root.
+
+| Command                       | What it does                                                                       |
+| ----------------------------- | ---------------------------------------------------------------------------------- |
+| `pnpm install`                | Install dependencies (supply-chain rules live in `pnpm-workspace.yaml`)            |
+| `pnpm format`                 | Format every file with Prettier                                                    |
+| `pnpm lint`                   | Oxlint with type-aware rules and the security bans, then markdownlint              |
+| `pnpm typecheck`              | TypeScript in every package                                                        |
+| `pnpm test`                   | Unit tests (Vitest) in every package                                               |
+| `pnpm build`                  | Build every package that has a build                                               |
+| `pnpm check`                  | Repository checks: manifests, HTML security, runtime licenses, documentation links |
+| `pnpm verify`                 | Everything CI runs, in order — run it before every push                            |
+| `pnpm --filter <name> <task>` | Run one task in one package, e.g. `pnpm --filter @shkriuss/checks test`            |
+
+Project skills in `.claude/skills/`: `adr` (record a decision) and `add-dependency` (evaluate and add a package). Hooks in `.claude/settings.json` format every file Claude edits and install dependencies when a cloud session starts.
 
 ## Glossary
 
