@@ -82,38 +82,48 @@ describe("edge", () => {
     expect(() => edge({ appId: "www" })).toThrow(/reserved/);
   });
 
-  it("turns module preloading off, so every chunk loads through the import map", async () => {
+  it("lets a lazily loaded chunk import the entry script, and preloads nothing", async () => {
+    const root = await createApp();
+    // Code that both import ends up in the entry chunk, which the page has already loaded.
+    await writeFile(path.join(root, "shared.js"), "export const shared = Math.random();\n");
+    await writeFile(
+      path.join(root, "main.js"),
+      'import { shared } from "./shared.js";\nconsole.info(shared);\nimport("./lazy.js").then((lazy) => lazy.run());\n',
+    );
+    await writeFile(
+      path.join(root, "lazy.js"),
+      'import { shared } from "./shared.js";\nexport function run() { return shared; }\n',
+    );
+    // The plugin overrides an app that asks for preloading.
+    await build({
+      root,
+      configFile: false,
+      logLevel: "silent",
+      plugins: [edge()],
+      build: { modulePreload: { polyfill: true } },
+    });
+    const dist = path.join(root, "dist");
+    const scripts = (await readdir(path.join(dist, "assets"))).filter((file) =>
+      file.endsWith(".js"),
+    );
+    const entry = scripts.find((file) => file.startsWith("index-")) ?? "";
+    const lazy = scripts.find((file) => file.startsWith("lazy-")) ?? "";
+    expect(await readFile(path.join(dist, "assets", lazy), "utf8")).toContain(`./${entry}`);
+    const html = await readFile(path.join(dist, "index.html"), "utf8");
+    expect(html).not.toContain("modulepreload");
+    expect(await readFile(path.join(dist, "assets", entry), "utf8")).not.toContain(
+      "__vite__mapDeps",
+    );
+  });
+
+  it("fails the build when a chunk imports a chunk other than the entry statically", async () => {
     const root = await createApp();
     // Two lazily loaded modules that share a third, which becomes a chunk of its own.
     await writeFile(path.join(root, "main.js"), 'import("./a.js"); import("./b.js");\n');
     await writeFile(path.join(root, "a.js"), 'export { shared as a } from "./shared.js";\n');
     await writeFile(path.join(root, "b.js"), 'export { shared as b } from "./shared.js";\n');
     await writeFile(path.join(root, "shared.js"), "export const shared = Math.random();\n");
-    await build({
-      root,
-      configFile: false,
-      logLevel: "silent",
-      plugins: [edge()],
-      // The plugin overrides an app that asks for preloading.
-      build: { modulePreload: { polyfill: true } },
-    });
-    const dist = path.join(root, "dist");
-    const html = await readFile(path.join(dist, "index.html"), "utf8");
-    const scripts = (await readdir(path.join(dist, "assets"))).filter((file) =>
-      file.endsWith(".js"),
-    );
-    expect(scripts.some((file) => file.startsWith("shared-"))).toBe(true);
-
-    expect(html).not.toContain("modulepreload");
-    const entry = scripts.find((file) => file.startsWith("index-")) ?? "";
-    // With preloading on, Vite lists the chunks to preload before each import() here.
-    expect(await readFile(path.join(dist, "assets", entry), "utf8")).not.toContain(
-      "__vite__mapDeps",
-    );
-    const importMap = /<script type="importmap">(.*?)<\/script>/.exec(html)?.[1] ?? "";
-    for (const file of scripts) {
-      expect(importMap).toContain(`"/assets/${file}":"sha384-`);
-    }
+    await expect(buildApp(root)).rejects.toThrow(/Safari would refuse to load it/);
   });
 
   it("puts all CSS in one stylesheet that the page loads with its hash", async () => {

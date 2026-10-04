@@ -164,7 +164,7 @@ X-Frame-Options: DENY
 
 Staging additionally sends `X-Robots-Tag: noindex`. That is a host rule in the same `_headers` file, so staging and production deploy identical files.
 
-- **Script integrity** ([ADR 0010](decisions/0010-script-integrity.md)): every script — the entry point, preloads and lazily loaded chunks — carries an integrity hash (SRI attributes and import-map `integrity`), added after the build by `@shkriuss/edge`. `Integrity-Policy` makes the browser refuse any script without one. The import map is the only inline script; the CSP allows it by its hash, which changes with every build.
+- **Script integrity** ([ADR 0010](decisions/0010-script-integrity.md)): every script — the entry point and lazily loaded chunks — carries an integrity hash (an SRI attribute and import-map `integrity`), added after the build by `@shkriuss/edge`. Chunks other than the entry are loaded only with `import()`, because Safari refuses statically imported ones. `Integrity-Policy` makes the browser refuse any script without one. The import map is the only inline script; the CSP allows it by its hash, which changes with every build.
 - **Older browsers** that don't support Trusted Types or `Integrity-Policy` ignore those headers; the apps still work, with weaker protection.
 - **Code rules:** no HTML injection sinks, no `eval`, no inline scripts (except the generated import map) or styles; user content is rendered as text (see `CLAUDE.md`).
 - **Supply chain:** few dependencies; pnpm with a release-age delay, blocked install scripts and a frozen lockfile; GitHub Actions pinned to commit SHAs with least-privilege tokens; CodeQL, dependency review and secret scanning.

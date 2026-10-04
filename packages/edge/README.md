@@ -24,7 +24,7 @@ After Vite has written the production build, the plugin:
 3. adds an import map that lists the hash of every script, so modules loaded later with `import()` are checked too;
 4. writes `dist/_headers` with the security headers, including the Content-Security-Policy hash of that import map, a year of caching for `/assets/`, and `X-Robots-Tag: noindex` on the app's staging host.
 
-The plugin also turns off Vite's module preloads and per-chunk CSS. Safari ignores the integrity of module preloads and would refuse them, and Vite adds preload lists to chunks after naming them, which would break year-long caching ([ADR 0010](../../docs/decisions/0010-script-integrity.md)).
+Every chunk other than the entry script must be loaded with `import()` and may import statically only from the entry: Safari refuses statically imported chunks under `Integrity-Policy`. The plugin also turns off Vite's module preloads and per-chunk CSS, because Vite adds preload lists to chunks after naming them, which would break year-long caching. The build fails if any of this is broken ([ADR 0010](../../docs/decisions/0010-script-integrity.md)).
 
 The build fails instead of shipping a script without a hash: for example when the HTML has an inline script or loads a script that is not part of the build.
 

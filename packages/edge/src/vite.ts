@@ -1,6 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { Plugin } from "vite";
+import { assertChunksLoadInSafari } from "./chunks.ts";
 import { appHost, STAGING_DOMAIN } from "./domains.ts";
 import { appHeaderRules, headersFile } from "./headers-file.ts";
 import type { BrowserFeature } from "./headers.ts";
@@ -20,15 +21,18 @@ export interface EdgeOptions {
  *
  * It works on the files as written, so the hashes match exactly the bytes that are served.
  *
- * It also sets two build options (ADR 0010):
+ * It also keeps every chunk loadable in Safari, and every file name tied to its content
+ * (ADR 0010):
  *
- * - **No module preloading.** WebKit ignores the integrity of `<link rel="modulepreload">`,
- *   so under `Integrity-Policy` Safari refuses every preload and the app fails to start.
- *   Statically imported chunks load through the import map instead, which has their hashes.
- * - **One stylesheet.** With per-chunk CSS, Vite writes the list of stylesheets to load into
- *   a chunk after it has named the chunk after its content. That list could then change
- *   while the name stays the same, and a returning visitor's cached copy, which `/assets/`
- *   keeps for a year, would fail its new integrity hash.
+ * - **Only `import()` loads chunks.** Under `Integrity-Policy`, WebKit silently refuses a
+ *   chunk that a script imports statically before the page has loaded it. The build fails
+ *   unless every chunk imports only the entry script statically.
+ * - **No module preloading.** WebKit ignores the integrity of `<link rel="modulepreload">`.
+ * - **One stylesheet, so no preload lists.** Vite writes the list of files to preload for each
+ *   `import()` into a chunk after it has named the chunk after its content. A list could
+ *   then change while the name stays the same, and a returning visitor's cached copy, which
+ *   `/assets/` keeps for a year, would fail its new integrity hash. Without module
+ *   preloading and per-chunk CSS, Vite writes no such lists; the build fails if one appears.
  */
 export function edge(options: EdgeOptions = {}): Plugin {
   const stagingHost = appHost(STAGING_DOMAIN, options.appId);
@@ -57,6 +61,8 @@ export function edge(options: EdgeOptions = {}): Plugin {
         if (directory === undefined) {
           throw new Error("The build has no output directory to add integrity hashes to.");
         }
+
+        assertChunksLoadInSafari(Object.values(bundle).filter((output) => output.type === "chunk"));
 
         const files = Object.keys(bundle).toSorted();
         const hashes = new Map<string, string>();
