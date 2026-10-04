@@ -21,9 +21,11 @@ export interface Security {
  */
 export const test = base.extend<{ security: Security }>({
   security: [
-    async ({ page }, use) => {
+    async ({ page }, use, testInfo) => {
       const violations: string[] = [];
       const problems: string[] = [];
+      // Every console message and response, attached to failed tests for diagnosis.
+      const log: string[] = [];
       let refusalsExpected = false;
 
       await page.exposeBinding("reportSecurityViolation", (_source, text: string) => {
@@ -35,9 +37,13 @@ export const test = base.extend<{ security: Security }>({
         });
       });
       page.on("console", (message) => {
+        log.push(`console ${message.type()}: ${message.text()}`);
         if (message.type() === "error") {
           problems.push(`console error: ${message.text()}`);
         }
+      });
+      page.on("response", (response) => {
+        log.push(`${response.status()} ${response.request().method()} ${response.url()}`);
       });
       page.on("pageerror", (error) => {
         problems.push(`uncaught error: ${error.message}`);
@@ -53,6 +59,10 @@ export const test = base.extend<{ security: Security }>({
         },
       });
 
+      if (testInfo.status !== testInfo.expectedStatus) {
+        const lines = [...violations.map((text) => `violation: ${text}`), ...problems, ...log];
+        await testInfo.attach("browser log", { body: lines.join("\n"), contentType: "text/plain" });
+      }
       if (!refusalsExpected) {
         expect([...violations, ...problems], "problems the browser reported").toEqual([]);
       }

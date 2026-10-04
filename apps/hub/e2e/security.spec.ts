@@ -82,7 +82,10 @@ test.describe("script integrity", () => {
     await expect(page.getByRole("heading", { level: 2, name: "What to expect" })).toBeVisible();
   });
 
-  test("a preloaded script whose content changed is refused", async ({ page, security }) => {
+  test("a statically imported script whose content changed is refused", async ({
+    page,
+    security,
+  }) => {
     security.expectRefusals();
     await tamperWith(page, /\/assets\/react-[^/]+\.js$/);
     await page.goto("/");
@@ -126,8 +129,9 @@ test.describe("Trusted Types", () => {
         document.createElement("script").src = "/assets/injected.js";
       },
     };
+    // None of these throw without Trusted Types. Browsers word the error differently.
     for (const [sink, inject] of Object.entries(injections)) {
-      await expect(page.evaluate(inject), sink).rejects.toThrow(/TypeError/);
+      await expect(page.evaluate(inject), sink).rejects.toThrow();
     }
     await expect
       .poll(() => security.violations.some((v) => v.startsWith("require-trusted-types-for")))
@@ -147,7 +151,7 @@ test.describe("Trusted Types", () => {
       }
       trustedTypes.createPolicy("bypass", {});
     });
-    await expect(createPolicy).rejects.toThrow(/TypeError/);
+    await expect(createPolicy).rejects.toThrow();
   });
 
   test("inline scripts never run", async ({ page, security }) => {
