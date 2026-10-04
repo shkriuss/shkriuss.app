@@ -80,17 +80,17 @@ Instructions for Claude Code and for anyone else changing this repository. Read 
 
 Node.js 22.18 or later (CI uses the version in `.node-version`) and pnpm via Corepack (`corepack enable pnpm`). Run everything from the repository root.
 
-| Command                       | What it does                                                                       |
-| ----------------------------- | ---------------------------------------------------------------------------------- |
-| `pnpm install`                | Install dependencies (supply-chain rules live in `pnpm-workspace.yaml`)            |
-| `pnpm format`                 | Format every file with Prettier                                                    |
-| `pnpm lint`                   | Oxlint with type-aware rules and the security bans, then markdownlint              |
-| `pnpm typecheck`              | TypeScript in every package                                                        |
-| `pnpm test`                   | Unit tests (Vitest) in every package                                               |
-| `pnpm build`                  | Build every package that has a build                                               |
-| `pnpm check`                  | Repository checks: manifests, HTML security, runtime licenses, documentation links |
-| `pnpm verify`                 | Everything CI runs, in order — run it before every push                            |
-| `pnpm --filter <name> <task>` | Run one task in one package, e.g. `pnpm --filter @shkriuss/checks test`            |
+| Command                       | What it does                                                                                       |
+| ----------------------------- | -------------------------------------------------------------------------------------------------- |
+| `pnpm install`                | Install dependencies (supply-chain rules live in `pnpm-workspace.yaml`)                            |
+| `pnpm format`                 | Format every file with Prettier                                                                    |
+| `pnpm lint`                   | Oxlint with type-aware rules and the security bans                                                 |
+| `pnpm typecheck`              | TypeScript in every package                                                                        |
+| `pnpm test`                   | Unit tests (Vitest) in every package                                                               |
+| `pnpm build`                  | Build every package that has a build                                                               |
+| `pnpm check`                  | Repository checks: manifests, HTML security, runtime licenses, Markdown style, documentation links |
+| `pnpm verify`                 | Everything CI runs, in order — run it before every push                                            |
+| `pnpm --filter <name> <task>` | Run one task in one package, e.g. `pnpm --filter @shkriuss/checks test`                            |
 
 Project skills in `.claude/skills/`: `adr` (record a decision) and `add-dependency` (evaluate and add a package). Hooks in `.claude/settings.json` format every file Claude edits and install dependencies when a cloud session starts.
 

@@ -10,7 +10,7 @@
   "scripts": {
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "lint": "oxlint --type-aware --deny-warnings && markdownlint-cli2",
+    "lint": "oxlint --type-aware --deny-warnings",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "build": "turbo run build",
@@ -18,7 +18,6 @@
     "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm check"
   },
   "devDependencies": {
-    "markdownlint-cli2": "catalog:",
     "oxlint": "catalog:",
     "oxlint-tsgolint": "catalog:",
     "prettier": "catalog:",

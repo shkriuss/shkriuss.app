@@ -10,6 +10,7 @@ import { checkManifest, isWorkspaceManifest } from "./dependencies.ts";
 import { checkDocLinks } from "./doc-links.ts";
 import { checkHtml } from "./html.ts";
 import { checkLicenses, parseLicensePolicy, readRuntimeLicenses } from "./licenses.ts";
+import { checkMarkdown, parseMarkdownConfig } from "./markdown.ts";
 import { formatViolation, type Violation } from "./report.ts";
 import { listFiles, readText, repoRoot } from "./repo.ts";
 
@@ -19,6 +20,10 @@ interface Check {
 }
 
 const LICENSE_POLICY = "tooling/checks/license-policy.json";
+const MARKDOWN_CONFIG = ".markdownlint.json";
+
+const markdownFiles = (files: readonly string[]): Map<string, string> =>
+  new Map(files.filter((file) => file.endsWith(".md")).map((file) => [file, readText(file)]));
 
 const CHECKS: Readonly<Record<string, Check>> = {
   dependencies: {
@@ -42,14 +47,18 @@ const CHECKS: Readonly<Record<string, Check>> = {
         LICENSE_POLICY,
       ),
   },
+  markdown: {
+    description: `Markdown files follow the markdownlint rules in ${MARKDOWN_CONFIG}`,
+    run: (files) =>
+      checkMarkdown(markdownFiles(files), parseMarkdownConfig(readText(MARKDOWN_CONFIG))),
+  },
   "doc-links": {
     description: "relative links and #anchors in Markdown files resolve",
-    run: (files) => {
-      const markdown = new Map(
-        files.filter((file) => file.endsWith(".md")).map((file) => [file, readText(file)]),
-      );
-      return checkDocLinks({ markdown, exists: (file) => existsSync(path.join(repoRoot, file)) });
-    },
+    run: (files) =>
+      checkDocLinks({
+        markdown: markdownFiles(files),
+        exists: (file) => existsSync(path.join(repoRoot, file)),
+      }),
   },
 };
 
