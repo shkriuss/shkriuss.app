@@ -62,6 +62,77 @@ jobs:
       - run: pnpm --filter @shkriuss/hub exec playwright install --with-deps chromium firefox webkit
       - run: pnpm e2e
 
+  # Every merge to main goes to staging once every check has passed (ADR 0006).
+  deploy-staging:
+    name: Deploy to staging
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [verify, e2e, workflow-audit]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    environment:
+      name: staging
+      url: https://shkriuss.dev
+    outputs:
+      manifest: ${{ steps.manifest.outputs.sha256 }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      # No dependency cache when deploying, so nothing from a cache can reach users.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - id: manifest
+        run: echo "sha256=$(sha256sum apps/hub/dist/sha256sums.txt | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+      - run: pnpm --filter @shkriuss/hub exec wrangler deploy --env staging
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+
+  # The same commit goes to production once the maintainer approves the production environment.
+  deploy-production:
+    name: Deploy to production
+    needs: [deploy-staging]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    environment:
+      name: production
+      url: https://shkriuss.app
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Check that production gets exactly the files staging got
+        env:
+          STAGING_MANIFEST: ${{ needs.deploy-staging.outputs.manifest }}
+        run: |
+          built="$(sha256sum apps/hub/dist/sha256sums.txt | cut -d ' ' -f 1)"
+          if [ "$built" != "$STAGING_MANIFEST" ]; then
+            echo "::error::This build differs from the one deployed to staging."
+            exit 1
+          fi
+      - name: Check that no live asset changes content under the same name
+        run: node packages/edge/src/cli.ts check-live apps/hub/dist https://shkriuss.app
+      - run: pnpm --filter @shkriuss/hub exec wrangler deploy --env production
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+
   workflow-audit:
     name: Workflow audit
     runs-on: ubuntu-24.04
