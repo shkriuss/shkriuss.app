@@ -10,7 +10,7 @@ Instructions for Claude Code and for anyone else changing this repository. Read 
 - All user data stays on the user's device. The only way data leaves is a backup file the user exports, encrypted by default. There are no accounts, no sync and no backend.
 - Every app is built from the same shared platform in `packages/`, so apps look and behave alike and fixes reach every app at once.
 
-**Current phase: 0 — Foundations.** The toolchain and repository checks exist; there is no app yet. See `docs/roadmap.md`.
+**Current phase: 0 — Foundations.** The toolchain, repository checks and a placeholder hub exist; there is no app yet. See `docs/roadmap.md`.
 
 ## Read first
 
@@ -35,7 +35,7 @@ Instructions for Claude Code and for anyone else changing this repository. Read 
 
 1. **No third parties at runtime:** no CDNs, remote fonts, analytics, trackers, embeds, remote images or external scripts. Everything is bundled and served from the app's own origin.
 2. **No HTML injection or dynamic code:** never use `innerHTML`, `outerHTML`, `insertAdjacentHTML`, `document.write`, `dangerouslySetInnerHTML`, `eval`, `new Function`, string timers or `javascript:` URLs. Render user content as text or React elements, never as HTML.
-3. **No inline scripts or styles:** no `<script>` or `<style>` blocks in HTML and no `style` attributes. Avoid React's `style` prop; use classes.
+3. **No inline scripts or styles:** no `<script>` or `<style>` blocks in HTML and no `style` attributes. Avoid React's `style` prop; use classes. The one exception is the import map that `@shkriuss/edge` generates at build time, which the CSP allows by its hash ([ADR 0010](docs/decisions/0010-script-integrity.md)).
 4. **Never weaken security headers** (CSP, Trusted Types, Integrity-Policy, COOP/COEP, Permissions-Policy) to make something work. Fix the code, or propose an ADR.
 5. **Crypto only through `@shkriuss/backup`** (the `age` format and WebCrypto). Never implement cryptographic primitives. Never log, store or transmit passphrases or user data.
 6. **Imported files are hostile:** size-limit, parse, validate against the schema, migrate, preview, then apply in a single transaction.
@@ -89,8 +89,11 @@ Node.js 22.18 or later (CI uses the version in `.node-version`) and pnpm via Cor
 | `pnpm test`                   | Unit tests (Vitest) in every package                                                               |
 | `pnpm build`                  | Build every package that has a build                                                               |
 | `pnpm check`                  | Repository checks: manifests, HTML security, runtime licenses, Markdown style, documentation links |
+| `pnpm e2e`                    | End-to-end tests (Playwright) against the production builds, served with the real headers          |
 | `pnpm verify`                 | Everything CI runs, in order — run it before every push                                            |
 | `pnpm --filter <name> <task>` | Run one task in one package, e.g. `pnpm --filter @shkriuss/checks test`                            |
+
+The end-to-end tests need Playwright's browsers once: `pnpm --filter @shkriuss/hub exec playwright install chromium firefox webkit`. Claude Code cloud sessions can only use their preinstalled Chromium; there, Firefox and WebKit run in CI.
 
 Project skills in `.claude/skills/`: `adr` (record a decision) and `add-dependency` (evaluate and add a package). Hooks in `.claude/settings.json` format every file Claude edits and install dependencies when a cloud session starts.
 
