@@ -6,14 +6,23 @@ packages:
 # One version of every dependency for the whole repository (ADR 0002).
 # Every package.json refers to these with "catalog:"; `pnpm check` enforces it.
 catalog:
+  "@axe-core/playwright": 4.13.0
+  "@playwright/test": 1.63.0
   "@types/node": 24.19.0
+  "@types/react": 19.3.0
+  "@types/react-dom": 19.3.0
+  "@vitejs/plugin-react": 6.1.1
   markdownlint: 0.41.1
   oxlint: 1.86.0
   oxlint-tsgolint: 7.0.2003
   prettier: 3.9.9
+  react: 19.3.0
+  react-dom: 19.3.0
   turbo: 2.11.6
   typescript: 7.0.2
+  vite: 8.3.2
   vitest: 5.0.3
+  wrangler: 4.146.0
 
 # Supply-chain hardening (ADR 0007).
 # Never install a version published less than 3 days ago. For an urgent security
@@ -27,6 +36,11 @@ trustPolicy: no-downgrade
 blockExoticSubdeps: true
 # Install scripts are blocked; installs fail until a package is reviewed and listed here.
 strictDepBuilds: true
-allowBuilds: {}
+allowBuilds:
+  # Both ship their binary in a platform package (@esbuild/*, @cloudflare/workerd-*) and
+  # run it through a small JavaScript launcher. Their install scripts only swap in the
+  # binary for speed or download it when that package is missing, so they stay off.
+  esbuild: false
+  workerd: false
 engineStrict: true
 savePrefix: ""

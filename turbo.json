@@ -17,6 +17,11 @@
     "build": {
       "dependsOn": ["^build"],
       "outputs": ["dist/**"]
+    },
+    "e2e": {
+      "dependsOn": ["build"],
+      "cache": false,
+      "passThroughEnv": ["CI", "E2E_CHROMIUM_EXECUTABLE", "PLAYWRIGHT_BROWSERS_PATH"]
     }
   }
 }

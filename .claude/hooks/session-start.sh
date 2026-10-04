@@ -14,3 +14,10 @@ corepack enable pnpm
 
 # pnpm-workspace.yaml applies the supply-chain rules (release age, blocked install scripts).
 pnpm install
+
+# Playwright cannot download its browsers here. Point the end-to-end tests at the preinstalled
+# Chromium; Firefox and WebKit run in CI.
+chromium="$(ls -d /opt/pw-browsers/chromium-*/chrome-linux*/chrome 2>/dev/null | sort -V | tail -n 1 || true)"
+if [ -n "$chromium" ] && [ -n "${CLAUDE_ENV_FILE:-}" ]; then
+  echo "export E2E_CHROMIUM_EXECUTABLE=\"$chromium\"" >> "$CLAUDE_ENV_FILE"
+fi

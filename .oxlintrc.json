@@ -23,6 +23,7 @@
     "typescript/no-implied-eval": "error",
     "react/no-danger": "error",
     "react/jsx-no-script-url": "error",
+    "react/react-in-jsx-scope": "off",
     "unicorn/no-document-cookie": "error",
     "no-restricted-properties": [
       "error",
@@ -71,6 +72,7 @@
     "prefer-const": "error",
     "no-console": "error",
     "import/no-cycle": "error",
+    "import/no-unassigned-import": ["error", { "allow": ["**/*.css"] }],
     "unicorn/prefer-node-protocol": "error",
     "vitest/no-focused-tests": "error",
     "vitest/no-disabled-tests": "error",

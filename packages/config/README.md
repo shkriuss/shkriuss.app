@@ -5,6 +5,7 @@ Shared configuration for every package and app in the monorepo.
 | File                 | Use it for                                                              |
 | -------------------- | ----------------------------------------------------------------------- |
 | `tsconfig/base.json` | Strictest TypeScript settings; code that is bundled (Vite) or type-only |
+| `tsconfig/app.json`  | Browser apps: `base.json` plus the DOM and React's JSX                  |
 | `tsconfig/node.json` | Scripts that Node.js runs directly as `.ts` (native type stripping)     |
 
 Extend one of them from a package's `tsconfig.json`:
