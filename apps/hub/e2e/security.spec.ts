@@ -82,14 +82,11 @@ test.describe("script integrity", () => {
     await expect(page.getByRole("heading", { level: 2, name: "What to expect" })).toBeVisible();
   });
 
-  test("a statically imported script whose content changed is refused", async ({
-    page,
-    security,
-  }) => {
+  test("an entry script whose content changed is refused", async ({ page, security }) => {
     security.expectRefusals();
-    await tamperWith(page, /\/assets\/react-[^/]+\.js$/);
+    await tamperWith(page, /\/assets\/index-[^/]+\.js$/);
     await page.goto("/");
-    expect(await importModule(page, await scriptPath(page, "react"))).toBe("refused");
+    expect(await importModule(page, await scriptPath(page, "index"))).toBe("refused");
     expect(await page.evaluate(() => "tampered" in globalThis)).toBe(false);
     await expect(page.getByRole("heading")).toHaveCount(0);
   });
