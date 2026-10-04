@@ -95,7 +95,7 @@ Generated from `app.config.ts` at build time: the web app manifest, icons, `_hea
 
 ## 7. Data layer
 
-All user data lives in IndexedDB and is accessed only through `@shkriuss/data`, which uses Dexie underneath. Decision: [ADR 0004](decisions/0004-local-data-and-backups.md). The exact format will be specified in `docs/specs/data-model.md` (Phase 1.1).
+All user data lives in IndexedDB and is accessed only through `@shkriuss/data`, which uses Dexie underneath. Decision: [ADR 0004](decisions/0004-local-data-and-backups.md). The exact format is specified in [specs/data-model.md](specs/data-model.md).
 
 - **Records** carry a permanent id (UUIDv7), a schema version, a hybrid-logical-clock (HLC) timestamp for every field, and a deletion marker (tombstone). Tombstones are kept, so importing an old backup can never bring a deleted item back.
 - **Merging** (used when a backup is imported, and by any future sync) is field-level last-writer-wins by HLC, with ties broken by device id. It is deterministic, order-independent and idempotent, which property-based tests verify.
@@ -105,13 +105,13 @@ All user data lives in IndexedDB and is accessed only through `@shkriuss/data`, 
 
 ## 8. Backups
 
-Backups are the only way data leaves a device, the only protection against losing one, and the way to move data between devices. They are a first-class platform feature. The exact format will be specified in `docs/specs/backup-format.md` (Phase 1.1).
+Backups are the only way data leaves a device, the only protection against losing one, and the way to move data between devices. They are a first-class platform feature. The exact format is specified in [specs/backup-format.md](specs/backup-format.md).
 
 - **Encrypted by default.** A versioned JSON document encrypted in the standard [age](https://age-encryption.org) format with a passphrase (scrypt). Files end in `.age` and can also be decrypted with the `age` command-line tool, so users are never locked in. A generated passphrase is offered.
 - **Plain JSON export** is available only after an explicit warning.
 - **Readable exports** (CSV, Markdown, iCalendar and so on) where they suit an app. They are for other tools, not for restoring.
 - **Import pipeline:** size check → decrypt → parse → validate against the schema → migrate → preview ("12 new, 3 updated, 1 deleted") → merge → commit in one transaction → report. A failure at any step changes nothing.
-- **Saving:** the share sheet (Web Share API) on phones and tablets — Files, Google Drive, iCloud Drive — with a download fallback. Automatic backup to a chosen folder (File System Access API) is offered where the browser supports it (desktop Chromium).
+- **Saving:** the share sheet (Web Share API) on phones and tablets — Files, Google Drive, iCloud Drive — with a download fallback. Automatic backup to a chosen folder (File System Access API, desktop Chromium) is planned. It needs a way to encrypt with nobody present without storing the passphrase, which requires its own design and ADR first ([backup-format.md §9](specs/backup-format.md#9-not-covered)).
 - **Reminders:** each app tracks when it was last backed up and what changed since, and nudges the user.
 - **Moving data between devices** means exporting on one and importing on the other. Because import merges, this works like a manual sync.
 
