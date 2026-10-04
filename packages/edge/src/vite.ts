@@ -20,10 +20,15 @@ export interface EdgeOptions {
  *
  * It works on the files as written, so the hashes match exactly the bytes that are served.
  *
- * It also turns module preloading off: WebKit ignores the integrity of
- * `<link rel="modulepreload">`, so under `Integrity-Policy` Safari refuses every preload and
- * the app fails to start (ADR 0010). Statically imported chunks then load through the import
- * map, which carries their hashes.
+ * It also sets two build options (ADR 0010):
+ *
+ * - **No module preloading.** WebKit ignores the integrity of `<link rel="modulepreload">`,
+ *   so under `Integrity-Policy` Safari refuses every preload and the app fails to start.
+ *   Statically imported chunks load through the import map instead, which has their hashes.
+ * - **One stylesheet.** With per-chunk CSS, Vite writes the list of stylesheets to load into
+ *   a chunk after it has named the chunk after its content. That list could then change
+ *   while the name stays the same, and a returning visitor's cached copy, which `/assets/`
+ *   keeps for a year, would fail its new integrity hash.
  */
 export function edge(options: EdgeOptions = {}): Plugin {
   const stagingHost = appHost(STAGING_DOMAIN, options.appId);
@@ -32,7 +37,7 @@ export function edge(options: EdgeOptions = {}): Plugin {
     apply: "build",
     enforce: "post",
     config() {
-      return { build: { modulePreload: false } };
+      return { build: { modulePreload: false, cssCodeSplit: false } };
     },
     configResolved(config) {
       if (config.base !== "/") {
@@ -40,8 +45,8 @@ export function edge(options: EdgeOptions = {}): Plugin {
           `Apps are served from the root of their own origin, so "base" must be "/", not "${config.base}".`,
         );
       }
-      if (config.build.modulePreload !== false) {
-        throw new Error("Module preloading must stay off; Safari would refuse every preload.");
+      if (config.build.modulePreload !== false || config.build.cssCodeSplit) {
+        throw new Error("Module preloading and per-chunk CSS must stay off (ADR 0010).");
       }
     },
     writeBundle: {
@@ -58,6 +63,11 @@ export function edge(options: EdgeOptions = {}): Plugin {
         for (const file of files) {
           if (file.endsWith(".js") || file.endsWith(".css")) {
             const bytes = await readFile(path.join(directory, file));
+            if (file.endsWith(".js") && bytes.includes("__vite__mapDeps")) {
+              throw new Error(
+                `${file} lists files to preload, which Vite adds after naming the file (ADR 0010).`,
+              );
+            }
             hashes.set(`/${file}`, subresourceIntegrity(bytes));
           }
         }

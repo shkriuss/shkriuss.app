@@ -40,7 +40,6 @@ async function buildApp(root: string, base = "/", options: EdgeOptions = {}): Pr
     configFile: false,
     logLevel: "silent",
     plugins: [edge(options)],
-    build: { modulePreload: { polyfill: false } },
   });
 }
 
@@ -81,6 +80,59 @@ describe("edge", () => {
 
   it("refuses an invalid app id before building", () => {
     expect(() => edge({ appId: "www" })).toThrow(/reserved/);
+  });
+
+  it("turns module preloading off, so every chunk loads through the import map", async () => {
+    const root = await createApp();
+    // Two lazily loaded modules that share a third, which becomes a chunk of its own.
+    await writeFile(path.join(root, "main.js"), 'import("./a.js"); import("./b.js");\n');
+    await writeFile(path.join(root, "a.js"), 'export { shared as a } from "./shared.js";\n');
+    await writeFile(path.join(root, "b.js"), 'export { shared as b } from "./shared.js";\n');
+    await writeFile(path.join(root, "shared.js"), "export const shared = Math.random();\n");
+    await build({
+      root,
+      configFile: false,
+      logLevel: "silent",
+      plugins: [edge()],
+      // The plugin overrides an app that asks for preloading.
+      build: { modulePreload: { polyfill: true } },
+    });
+    const dist = path.join(root, "dist");
+    const html = await readFile(path.join(dist, "index.html"), "utf8");
+    const scripts = (await readdir(path.join(dist, "assets"))).filter((file) =>
+      file.endsWith(".js"),
+    );
+    expect(scripts.some((file) => file.startsWith("shared-"))).toBe(true);
+
+    expect(html).not.toContain("modulepreload");
+    const entry = scripts.find((file) => file.startsWith("index-")) ?? "";
+    // With preloading on, Vite lists the chunks to preload before each import() here.
+    expect(await readFile(path.join(dist, "assets", entry), "utf8")).not.toContain(
+      "__vite__mapDeps",
+    );
+    const importMap = /<script type="importmap">(.*?)<\/script>/.exec(html)?.[1] ?? "";
+    for (const file of scripts) {
+      expect(importMap).toContain(`"/assets/${file}":"sha384-`);
+    }
+  });
+
+  it("puts all CSS in one stylesheet that the page loads with its hash", async () => {
+    const root = await createApp();
+    await writeFile(path.join(root, "lazy.js"), 'import "./lazy.css";\nexport function run() {}\n');
+    await writeFile(path.join(root, "lazy.css"), "p { color: red; }\n");
+    await buildApp(root);
+    const dist = path.join(root, "dist");
+    const stylesheets = (await readdir(path.join(dist, "assets"))).filter((file) =>
+      file.endsWith(".css"),
+    );
+    expect(stylesheets).toHaveLength(1);
+    const html = await readFile(path.join(dist, "index.html"), "utf8");
+    expect(html).toContain(`href="/assets/${stylesheets[0] ?? ""}" integrity="sha384-`);
+    for (const file of await readdir(path.join(dist, "assets"))) {
+      expect(await readFile(path.join(dist, "assets", file), "utf8")).not.toContain(
+        "__vite__mapDeps",
+      );
+    }
   });
 
   it("produces identical files when nothing changed", async () => {
