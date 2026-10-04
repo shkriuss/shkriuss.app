@@ -54,8 +54,11 @@ interface Edit {
   readonly text: string;
 }
 
+/** Adds the attribute before the tag's closing `>` or `/>`, in linear time. */
 function withIntegrity(tag: string, hash: string): string {
-  return tag.replace(/\s*\/?>$/, (end) => ` integrity="${hash}"${end}`);
+  const selfClosing = tag.endsWith("/>");
+  const attributes = tag.slice(0, selfClosing ? -2 : -1).trimEnd();
+  return `${attributes} integrity="${hash}"${selfClosing ? " />" : ">"}`;
 }
 
 /** The whitespace that indents the line `offset` is on, so inserted tags line up. */

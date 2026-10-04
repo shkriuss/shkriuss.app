@@ -19,6 +19,11 @@ export interface EdgeOptions {
  * `_headers` file with the matching Content-Security-Policy.
  *
  * It works on the files as written, so the hashes match exactly the bytes that are served.
+ *
+ * It also turns module preloading off: WebKit ignores the integrity of
+ * `<link rel="modulepreload">`, so under `Integrity-Policy` Safari refuses every preload and
+ * the app fails to start (ADR 0010). Statically imported chunks then load through the import
+ * map, which carries their hashes.
  */
 export function edge(options: EdgeOptions = {}): Plugin {
   const stagingHost = appHost(STAGING_DOMAIN, options.appId);
@@ -26,11 +31,17 @@ export function edge(options: EdgeOptions = {}): Plugin {
     name: "shkriuss:edge",
     apply: "build",
     enforce: "post",
+    config() {
+      return { build: { modulePreload: false } };
+    },
     configResolved(config) {
       if (config.base !== "/") {
         throw new Error(
           `Apps are served from the root of their own origin, so "base" must be "/", not "${config.base}".`,
         );
+      }
+      if (config.build.modulePreload !== false) {
+        throw new Error("Module preloading must stay off; Safari would refuse every preload.");
       }
     },
     writeBundle: {

@@ -133,6 +133,28 @@ describe("addScriptIntegrity", () => {
     expect(() => addScriptIntegrity(unknownPreload, hashes)).toThrow(/not a file from this build/);
   });
 
+  it("handles self-closing tags", () => {
+    const selfClosing = built.replace(
+      '<link rel="modulepreload" crossorigin href="/assets/vendor-c3.js">',
+      '<link rel="modulepreload" crossorigin href="/assets/vendor-c3.js" />',
+    );
+    expect(addScriptIntegrity(selfClosing, hashes).html).toContain(
+      `<link rel="modulepreload" crossorigin href="/assets/vendor-c3.js" integrity="${VENDOR}" />`,
+    );
+  });
+
+  it("takes linear time on long runs of spaces inside a tag", () => {
+    // Regression test: a backtracking regular expression once took seconds here (CodeQL).
+    const spaced = built.replace(
+      '<script type="module" crossorigin src=',
+      `<script type="module"${" ".repeat(200_000)}src=`,
+    );
+    const start = performance.now();
+    const { html } = addScriptIntegrity(spaced, hashes);
+    expect(performance.now() - start).toBeLessThan(500);
+    expect(html).toContain(`src="/assets/index-a1.js" integrity="${ENTRY}"></script>`);
+  });
+
   it("rejects HTML without a head", () => {
     expect(() => addScriptIntegrity("<p>hi</p>", hashes)).toThrow(/no <\/head>/);
   });
