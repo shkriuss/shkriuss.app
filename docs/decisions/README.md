@@ -17,7 +17,7 @@ An ADR is a short document that records one important decision: the context, wha
 | [0007](0007-security-baseline.md)        | Security baseline                               | Accepted |
 | [0008](0008-quality-gates.md)            | Quality gates and testing                       | Accepted |
 | [0009](0009-stay-on-pnpm-11.md)          | Stay on pnpm 11 for now                         | Accepted |
-| [0010](0010-script-integrity.md)         | Script integrity with a hash-allowed import map | Proposed |
+| [0010](0010-script-integrity.md)         | Script integrity with a hash-allowed import map | Accepted |
 
 ## Template
 

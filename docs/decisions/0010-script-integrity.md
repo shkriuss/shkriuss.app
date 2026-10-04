@@ -1,6 +1,6 @@
 # ADR 0010: Script integrity with a hash-allowed import map
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-10-04
 
 ## Context
