@@ -10,7 +10,7 @@ Instructions for Claude Code and for anyone else changing this repository. Read 
 - All user data stays on the user's device. The only way data leaves is a backup file the user exports, encrypted by default. There are no accounts, no sync and no backend.
 - Every app is built from the same shared platform in `packages/`, so apps look and behave alike and fixes reach every app at once.
 
-**Current phase: 0 — Foundations.** The toolchain, repository checks and a placeholder hub exist; there is no app yet. See `docs/roadmap.md`.
+**Current phase: 0 — Foundations.** The toolchain, repository checks and a placeholder hub exist, and the hub is live on staging and production; there is no app yet. See `docs/roadmap.md`.
 
 ## Read first
 

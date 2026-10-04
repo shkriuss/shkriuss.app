@@ -144,6 +144,7 @@ Backups are the only way data leaves a device, the only protection against losin
   - Rolling back means redeploying the previous version.
   - Each app's `wrangler.json` keeps `workers.dev` and preview URLs off, so nothing bypasses Cloudflare Access on staging; `pnpm check` enforces it.
 - **Cloudflare features that rewrite pages or inject scripts** (Rocket Loader, Email Address Obfuscation, Zaraz, Web Analytics auto-injection, Bot Fight Mode's JavaScript detections) stay off, because they conflict with the security policy and integrity checks.
+- **Network Error Logging** stays off too. Cloudflare turns it on by default; its `NEL` and `Report-To` headers make browsers send reports about failed connections to Cloudflare, which is telemetry.
 - **Plan:** Cloudflare Free. Static asset requests are free and unlimited.
 
 ## 12. Security

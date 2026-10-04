@@ -39,6 +39,8 @@ One-time steps done by hand in GitHub and Cloudflare. Menu names change from tim
   - Web Analytics automatic setup
   - Bot Fight Mode (its JavaScript detections inject a script)
 
+- [ ] **Network → Network Error Logging Monitoring:** off. Cloudflare turns it on by default; its `NEL` and `Report-To` headers make browsers send reports about failed connections to `a.nel.cloudflare.com`. That is telemetry, which we never collect.
+
 Cloudflare Access for staging is set up in Phase 0.3, when staging gets its first deployment.
 
 ## 3. GitHub repository `shkriuss/shkriuss.app`

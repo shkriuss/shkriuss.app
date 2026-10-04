@@ -30,7 +30,7 @@ The build fails instead of shipping a script without a hash: for example when th
 
 ## Deployment checks
 
-The plugin also writes `dist/sha256sums.txt`: the SHA-256 of every file the deployment serves, in the format `sha256sum` writes. It is published at `/sha256sums.txt`, so anyone can compare what is served with what this repository builds.
+The plugin also writes `dist/sha256sums.txt`: the SHA-256 of every file the deployment serves, in the format `sha256sum` writes. It is published at `/sha256sums.txt`, so anyone can compare what is served with what this repository builds. Follow redirects when you compare: Cloudflare serves `/index.html` at `/`.
 
 Before deploying to production, CI runs:
 
