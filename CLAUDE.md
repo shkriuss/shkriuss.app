@@ -1,0 +1,90 @@
+# CLAUDE.md
+
+Instructions for Claude Code and for anyone else changing this repository. Read this file first, then the documents it links to. When a request conflicts with these rules or with an accepted decision record, stop and ask instead of working around it.
+
+## Project
+
+**shkriuss.app** is a hub of small, private, offline-first web apps (installable PWAs).
+
+- Hub: `https://shkriuss.app`. Each app: `https://<id>.shkriuss.app`, for example `notes.shkriuss.app`.
+- All user data stays on the user's device. The only way data leaves is a backup file the user exports, encrypted by default. There are no accounts, no sync and no backend.
+- Every app is built from the same shared platform in `packages/`, so apps look and behave alike and fixes reach every app at once.
+
+**Current phase: 0 — Foundations.** There is no application code yet. See `docs/roadmap.md`.
+
+## Read first
+
+| Document | Use it for |
+| --- | --- |
+| `docs/architecture.md` | How the system fits together |
+| `docs/threat-model.md` | Security reasoning. Update it when a change adds network use, browser permissions or dependencies |
+| `docs/decisions/` | Accepted decisions (ADRs). Binding; change one only with a new ADR |
+| `docs/roadmap.md` | Which phase we are in and what comes next |
+| `docs/specs/` | Exact formats (data model, backup format), written before the code that implements them |
+
+## Rules
+
+### Product
+
+1. **Local-only.** Never send user data over the network. No accounts, servers, sync, analytics, telemetry or crash reporting. Changing this requires a new ADR.
+2. **Offline.** Every app works fully offline after its first load.
+3. **Permanent names.** Never rename or reuse an app `id` or subdomain.
+4. **English UI.** Every user-facing string goes through `@shkriuss/i18n`. Format dates, numbers and lists with `Intl`.
+
+### Security and privacy
+
+1. **No third parties at runtime:** no CDNs, remote fonts, analytics, trackers, embeds, remote images or external scripts. Everything is bundled and served from the app's own origin.
+2. **No HTML injection or dynamic code:** never use `innerHTML`, `outerHTML`, `insertAdjacentHTML`, `document.write`, `dangerouslySetInnerHTML`, `eval`, `new Function`, string timers or `javascript:` URLs. Render user content as text or React elements, never as HTML.
+3. **No inline scripts or styles:** no `<script>` or `<style>` blocks in HTML and no `style` attributes. Avoid React's `style` prop; use classes.
+4. **Never weaken security headers** (CSP, Trusted Types, Integrity-Policy, COOP/COEP, Permissions-Policy) to make something work. Fix the code, or propose an ADR.
+5. **Crypto only through `@shkriuss/backup`** (the `age` format and WebCrypto). Never implement cryptographic primitives. Never log, store or transmit passphrases or user data.
+6. **Imported files are hostile:** size-limit, parse, validate against the schema, migrate, preview, then apply in a single transaction.
+7. **Dependencies:** prefer the web platform and existing packages. A new runtime dependency needs a justification in the pull request: purpose, size, maintenance status, and a license compatible with AGPL-3.0 (MIT, BSD, ISC, Apache-2.0).
+
+### Data
+
+1. Apps never access IndexedDB, `localStorage`, Cache Storage or files directly — only through `@shkriuss/data`, `@shkriuss/backup` and `@shkriuss/pwa`.
+2. Every record has a permanent id, a schema version, per-field change timestamps and a deletion marker ([ADR 0004](docs/decisions/0004-local-data-and-backups.md)). Deleting writes a tombstone; never hard-delete.
+3. Every schema change ships with a migration and tests. Every app must import every backup version it has ever produced; keep those test fixtures forever.
+
+### Structure
+
+1. Create apps only with the `create-app` generator. Apps never import from other apps. Shared code goes into `packages/`, and packages are imported only through their public entry points.
+2. Build the UI from `@shkriuss/ui` (based on React Aria). Target WCAG 2.2 AA: keyboard use, screen readers, contrast, reduced motion.
+
+### Quality
+
+1. Every change ships with tests: unit tests for logic; property-based tests for data, merge, migration and backup code; Playwright tests for user flows; a regression test for every bug fix.
+2. Never skip, disable or loosen a test, lint rule, type check or budget to get to green. Find and fix the cause.
+3. Keep the docs true: architecture changes update `docs/`, and new decisions get an ADR.
+
+## Workflow
+
+- One task → one branch → one small pull request. Never push to `main`.
+- Commit messages and PR titles use Conventional Commits, scoped by app or package: `feat(notes): …`, `fix(data): …`, `docs: …`, `chore(deps): …`.
+- Before pushing, run the checks listed under Commands; push only when they pass.
+- A PR description says what changed, why, and how it was tested, and lists any new dependency, browser permission or ADR.
+- For changes to data, backups, the service worker or security headers: update the spec first, add tests, and run the full end-to-end suite.
+
+**Definition of done:** checks pass locally and in CI; tests cover the change, including failure paths; the app works offline with no CSP or integrity violations; it is accessible; docs and ADRs are updated where behavior or architecture changed.
+
+## Environments
+
+| Environment | Domains | Deployed |
+| --- | --- | --- |
+| Local | `localhost` | dev server |
+| Staging (private) | `shkriuss.dev`, `<id>.shkriuss.dev` | automatically after a merge to `main` |
+| Production | `shkriuss.app`, `<id>.shkriuss.app` | the same commit, after manual approval |
+
+## Commands
+
+None yet — the toolchain arrives in Phase 0.3. This section will then list the install, dev, format, lint, typecheck, test, end-to-end and build commands.
+
+## Glossary
+
+- **App id** — permanent lowercase name of an app; also its subdomain.
+- **Origin** — scheme plus host, such as `https://notes.shkriuss.app`; the browser's data-isolation boundary.
+- **Record** — one stored item, with an id, schema version, per-field timestamps and a tombstone flag.
+- **HLC** — hybrid logical clock; a timestamp that orders changes made on different devices.
+- **Tombstone** — marker that a record was deleted, kept so an import cannot bring it back.
+- **Backup** — an exported file (encrypted `.age` by default) used to restore data or move it between devices.
