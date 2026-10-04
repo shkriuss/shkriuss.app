@@ -40,6 +40,8 @@ node packages/edge/src/cli.ts check-live apps/hub/dist https://shkriuss.app
 
 It fails if a file in `/assets/` would change its content under the same name. Browsers keep those files for a year, so returning visitors would load the old copy and fail its integrity check.
 
+It skips the comparison only while nothing is deployed: when the host has no DNS record, or answers 404 or with the HTML page instead of a manifest. Any other answer or network error fails it, so an outage or a challenge page cannot switch the check off. Re-run the job once the site answers normally.
+
 ## The headers
 
 `securityHeaders()` returns the header set from [architecture §12](../../docs/architecture.md#12-security). Change it only together with the architecture document, and never relax it to make something work.
