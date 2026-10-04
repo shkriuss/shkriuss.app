@@ -75,7 +75,7 @@ jobs:
       name: staging
       url: https://shkriuss.dev
     outputs:
-      manifest: ${{ steps.manifest.outputs.sha256 }}
+      build: ${{ steps.build.outputs.sha256 }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -88,8 +88,14 @@ jobs:
           package-manager-cache: false
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
-      - id: manifest
-        run: echo "sha256=$(sha256sum apps/hub/dist/sha256sums.txt | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+      # The SHA-256 of every file Wrangler uploads, `_headers` included, so that production can
+      # check it deploys exactly this build.
+      - id: build
+        name: Record the hash of every file to deploy
+        working-directory: apps/hub/dist
+        run: |
+          find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | tee "$RUNNER_TEMP/files.txt"
+          echo "sha256=$(sha256sum < "$RUNNER_TEMP/files.txt" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
       - run: pnpm --filter @shkriuss/hub exec wrangler deploy --env staging
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -118,12 +124,13 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - name: Check that production gets exactly the files staging got
+        working-directory: apps/hub/dist
         env:
-          STAGING_MANIFEST: ${{ needs.deploy-staging.outputs.manifest }}
+          STAGING_BUILD: ${{ needs.deploy-staging.outputs.build }}
         run: |
-          built="$(sha256sum apps/hub/dist/sha256sums.txt | cut -d ' ' -f 1)"
-          if [ "$built" != "$STAGING_MANIFEST" ]; then
-            echo "::error::This build differs from the one deployed to staging."
+          find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | tee "$RUNNER_TEMP/files.txt"
+          if [ "$(sha256sum < "$RUNNER_TEMP/files.txt" | cut -d ' ' -f 1)" != "$STAGING_BUILD" ]; then
+            echo "::error::This build differs from the one deployed to staging. Compare the file hashes listed in both jobs."
             exit 1
           fi
       - name: Check that no live asset changes content under the same name
