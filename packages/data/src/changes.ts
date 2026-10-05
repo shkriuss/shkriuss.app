@@ -1,4 +1,4 @@
-import { DataError } from "./errors.ts";
+import { DataLayerError } from "./errors.ts";
 import { type Hlc, isHlc } from "./hlc.ts";
 import { isRecordId } from "./ids.ts";
 import { type JsonValue, toJsonValue } from "./json.ts";
@@ -7,8 +7,9 @@ import { type DataRecord, assertWithinLimits, isDeleted, lastChange } from "./re
 
 /**
  * The writes of a change (data model §4). Each takes the change's HLC, which the device issued
- * for it and which is therefore later than every HLC the record holds. They return a new record
- * and never change the one they are given.
+ * for it and which is therefore later than every HLC the record holds, unless the same change
+ * wrote the record before: a device never issues an HLC twice. They return a new record and never
+ * change the one they are given.
  */
 
 /** Field values to write, by field name. */
@@ -16,7 +17,7 @@ export type FieldValues = Readonly<Record<string, unknown>>;
 
 function checkHlc(hlc: Hlc): void {
   if (!isHlc(hlc)) {
-    throw new DataError("invalid", "A change needs a well-formed HLC.");
+    throw new DataLayerError("invalid", "A change needs a well-formed HLC.");
   }
 }
 
@@ -28,7 +29,7 @@ function writeFields(
 ): void {
   for (const [field, value] of Object.entries(fields)) {
     if (!isFieldName(field)) {
-      throw new DataError("invalid", `"${field}" is not an allowed field name.`);
+      throw new DataLayerError("invalid", `"${field}" is not an allowed field name.`);
     }
     data[field] = toJsonValue(value, `The field ${field}`);
     clock[field] = hlc;
@@ -41,10 +42,10 @@ function writeFields(
  */
 export function createRecord(id: string, v: number, fields: FieldValues, hlc: Hlc): DataRecord {
   if (!isRecordId(id)) {
-    throw new DataError("invalid", "A record's id must be a lowercase UUIDv7.");
+    throw new DataLayerError("invalid", "A record's id must be a lowercase UUIDv7.");
   }
   if (!Number.isSafeInteger(v) || v < 1) {
-    throw new DataError("invalid", "A schema version is an integer from 1.");
+    throw new DataLayerError("invalid", "A schema version is an integer from 1.");
   }
   checkHlc(hlc);
   const data: Record<string, JsonValue> = {};
@@ -55,10 +56,14 @@ export function createRecord(id: string, v: number, fields: FieldValues, hlc: Hl
   return record;
 }
 
-function assertLater(record: DataRecord, hlc: Hlc): void {
+/** Refuses an HLC earlier than the record's last change; an equal one is the same change's. */
+function assertNotEarlier(record: DataRecord, hlc: Hlc): void {
   const last = lastChange(record);
-  if (last !== undefined && hlc <= last) {
-    throw new DataError("invalid", `A change to record ${record.id} must be later than its last.`);
+  if (last !== undefined && hlc < last) {
+    throw new DataLayerError(
+      "invalid",
+      `A change to record ${record.id} is earlier than its last.`,
+    );
   }
 }
 
@@ -70,12 +75,12 @@ function assertLater(record: DataRecord, hlc: Hlc): void {
 export function updateRecord(record: DataRecord, fields: FieldValues, hlc: Hlc): DataRecord {
   checkHlc(hlc);
   if (isDeleted(record)) {
-    throw new DataError("deleted", `Record ${record.id} is deleted and cannot be updated.`);
+    throw new DataLayerError("deleted", `Record ${record.id} is deleted and cannot be updated.`);
   }
   if (Object.keys(fields).length === 0) {
     return record;
   }
-  assertLater(record, hlc);
+  assertNotEarlier(record, hlc);
   const data: Record<string, JsonValue> = { ...record.data };
   const clock: Record<string, Hlc> = { ...record.clock };
   writeFields(data, clock, fields, hlc);
@@ -94,6 +99,6 @@ export function deleteRecord(record: DataRecord, hlc: Hlc): DataRecord {
   if (isDeleted(record)) {
     return record;
   }
-  assertLater(record, hlc);
+  assertNotEarlier(record, hlc);
   return { id: record.id, v: record.v, data: {}, clock: {}, deleted: hlc };
 }

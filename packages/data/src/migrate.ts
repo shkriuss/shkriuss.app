@@ -1,4 +1,4 @@
-import { DataError } from "./errors.ts";
+import { DataLayerError } from "./errors.ts";
 import { type Hlc, maxHlc } from "./hlc.ts";
 import { type JsonValue, toJsonValue } from "./json.ts";
 import { type DataRecord, assertWithinLimits, checkRecord } from "./record.ts";
@@ -26,7 +26,7 @@ function run(compute: () => JsonValue, where: string): JsonValue {
   try {
     value = compute();
   } catch (error) {
-    throw new DataError("invalid", `${where} failed.`, { cause: error });
+    throw new DataLayerError("invalid", `${where} failed.`, { cause: error });
   }
   return toJsonValue(value, `The result of ${where}`);
 }
@@ -37,8 +37,11 @@ function defaultOf(store: StoreSchema, field: string): JsonValue {
   return toJsonValue(value ?? null, `The default of ${field}`);
 }
 
-/** One step: a record of `previous` becomes a record of `next` (data model §6). */
-function migrateStep(
+/**
+ * One step: a record of `previous` becomes a record of `next` (data model §6), whose schema it
+ * must then fit. The storage runs it for every record inside the database upgrade.
+ */
+export function migrateStep(
   previous: SchemaVersion,
   next: SchemaVersion,
   { store, record }: StoredRecord,
@@ -93,7 +96,7 @@ function migrateStep(
 /**
  * Migrates a record of `store` from its schema version to the current one, one version at a
  * time (data model §6). After each step, the result must fit that version's schema, which also
- * catches a faulty migration. Throws a `DataError` otherwise.
+ * catches a faulty migration. Throws a `DataLayerError` otherwise.
  */
 export function migrateRecord(schemas: Schemas, stored: StoredRecord): StoredRecord {
   let result = stored;
@@ -101,7 +104,7 @@ export function migrateRecord(schemas: Schemas, stored: StoredRecord): StoredRec
     result = migrateStep(schemas.version(version - 1), schemas.version(version), result);
   }
   if (result.record.v !== schemas.current.version) {
-    throw new DataError(
+    throw new DataLayerError(
       "invalid",
       `Record ${stored.record.id} has schema version ${stored.record.v}, newer than ${schemas.current.version}.`,
     );
@@ -112,8 +115,8 @@ export function migrateRecord(schemas: Schemas, stored: StoredRecord): StoredRec
 /**
  * Checks a record from outside, such as a backup, and migrates it to the current schema version
  * (data model §8): its structure, then its data against the schema of its own version, then the
- * migration, whose result is checked again. Throws a `DataError`: `future-clock` for an HLC more
- * than 24 hours after `now`, `too-large` beyond a limit, `invalid` for anything else.
+ * migration, whose result is checked again. Throws a `DataLayerError`: `future-clock` for an HLC
+ * more than 24 hours after `now`, `too-large` beyond a limit, `invalid` for anything else.
  */
 export function checkIncomingRecord(
   schemas: Schemas,

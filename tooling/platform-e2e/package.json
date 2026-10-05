@@ -9,6 +9,9 @@
     "typecheck": "tsc",
     "e2e": "playwright test"
   },
+  "dependencies": {
+    "@shkriuss/data": "workspace:*"
+  },
   "devDependencies": {
     "@playwright/test": "catalog:",
     "@shkriuss/config": "workspace:*",

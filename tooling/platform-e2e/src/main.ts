@@ -1,4 +1,5 @@
 import { registerServiceWorker, startWorker } from "@shkriuss/edge/workers";
+import { type DataTests, data } from "./data.ts";
 import pingWorker from "./ping.worker.ts?worker&url";
 
 declare global {
@@ -8,8 +9,9 @@ declare global {
       readonly pingWorker: string;
       readonly startWorker: typeof startWorker;
       readonly registerServiceWorker: typeof registerServiceWorker;
+      readonly data: DataTests;
     };
   }
 }
 
-window.platform = { pingWorker, startWorker, registerServiceWorker };
+window.platform = { pingWorker, startWorker, registerServiceWorker, data };

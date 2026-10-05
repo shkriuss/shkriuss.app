@@ -1,4 +1,4 @@
-import { DataError } from "./errors.ts";
+import { DataLayerError } from "./errors.ts";
 import { type Hlc, isFromFuture, isHlc, maxHlc } from "./hlc.ts";
 import { SETTINGS_ID, isRecordId } from "./ids.ts";
 import { type JsonObject, type JsonValue, canonicalJson, toJsonValue, utf8Length } from "./json.ts";
@@ -42,10 +42,13 @@ export function lastChange(record: DataRecord): Hlc | undefined {
 /** Throws unless the record is within the limits of data model §2.4. */
 export function assertWithinLimits(record: DataRecord): void {
   if (Object.keys(record.data).length > MAX_FIELDS) {
-    throw new DataError("too-large", `Record ${record.id} has more than ${MAX_FIELDS} fields.`);
+    throw new DataLayerError(
+      "too-large",
+      `Record ${record.id} has more than ${MAX_FIELDS} fields.`,
+    );
   }
   if (utf8Length(canonicalJson(toJson(record))) > MAX_RECORD_BYTES) {
-    throw new DataError("too-large", `Record ${record.id} is larger than 1 MiB.`);
+    throw new DataLayerError("too-large", `Record ${record.id} is larger than 1 MiB.`);
   }
 }
 
@@ -81,8 +84,8 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return prototype === Object.prototype || prototype === null;
 }
 
-function invalid(message: string): DataError {
-  return new DataError("invalid", message);
+function invalid(message: string): DataLayerError {
+  return new DataLayerError("invalid", message);
 }
 
 function checkClock(value: unknown, now: number, what: string): Hlc {
@@ -90,16 +93,16 @@ function checkClock(value: unknown, now: number, what: string): Hlc {
     throw invalid(`${what} is not a well-formed HLC.`);
   }
   if (isFromFuture(value, now)) {
-    throw new DataError("future-clock", `${what} lies more than 24 hours in the future.`);
+    throw new DataLayerError("future-clock", `${what} lies more than 24 hours in the future.`);
   }
   return value;
 }
 
 /**
  * Checks the structure of a record from outside, such as a backup (data model §8, step 1), and
- * returns a normalized copy. Throws a `DataError`: `future-clock` for an HLC more than 24 hours
- * ahead of `now`, `too-large` beyond a limit, `invalid` for anything else. The schema of its
- * store is checked separately (step 2).
+ * returns a normalized copy. Throws a `DataLayerError`: `future-clock` for an HLC more than 24
+ * hours ahead of `now`, `too-large` beyond a limit, `invalid` for anything else. The schema of
+ * its store is checked separately (step 2).
  */
 export function checkRecord(value: unknown, context: RecordContext): DataRecord {
   if (!isObject(value)) {
@@ -124,7 +127,7 @@ export function checkRecord(value: unknown, context: RecordContext): DataRecord 
 
   const fields = Object.keys(data);
   if (fields.length > MAX_FIELDS) {
-    throw new DataError("too-large", `Record ${id} has more than ${MAX_FIELDS} fields.`);
+    throw new DataLayerError("too-large", `Record ${id} has more than ${MAX_FIELDS} fields.`);
   }
   const clockFields = Object.keys(clock);
   if (

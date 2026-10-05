@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createRecord, deleteRecord, updateRecord } from "./changes.ts";
-import { DataError } from "./errors.ts";
+import { DataLayerError } from "./errors.ts";
 import { formatHlc } from "./hlc.ts";
 import { MAX_FIELDS, MAX_RECORD_BYTES, isDeleted } from "./record.ts";
 
@@ -17,7 +17,7 @@ function codeOf(write: () => unknown): string | undefined {
     write();
     return undefined;
   } catch (error) {
-    return error instanceof DataError ? error.code : "not a DataError";
+    return error instanceof DataLayerError ? error.code : "not a DataLayerError";
   }
 }
 
@@ -110,9 +110,17 @@ describe("updateRecord (data model §4.2)", () => {
     });
   });
 
-  it("refuses a clock that is not later than the record's last change", () => {
-    expect(codeOf(() => updateRecord(created, { done: true }, at(1)))).toBe("invalid");
+  it("refuses a clock earlier than the record's last change", () => {
     expect(codeOf(() => updateRecord(created, { done: true }, at(0)))).toBe("invalid");
+  });
+
+  it("accepts the clock of the change that wrote the record last: it writes the record again", () => {
+    expect(updateRecord(created, { done: true }, at(1))).toStrictEqual({
+      id: ID,
+      v: 1,
+      data: { title: "Milk", done: true },
+      clock: { title: at(1), done: at(1) },
+    });
   });
 
   it("refuses invalid fields and records beyond the limits", () => {
@@ -139,8 +147,18 @@ describe("deleteRecord (data model §4.3)", () => {
     expect(deleteRecord(deleted, at(3))).toBe(deleted);
   });
 
-  it("refuses a clock that is not later than the record's last change", () => {
-    expect(codeOf(() => deleteRecord(created, at(1)))).toBe("invalid");
+  it("refuses a clock earlier than the record's last change", () => {
+    expect(codeOf(() => deleteRecord(created, at(0)))).toBe("invalid");
     expect(codeOf(() => deleteRecord(created, "now"))).toBe("invalid");
+  });
+
+  it("accepts the clock of the change that wrote the record last: it deletes what it wrote", () => {
+    expect(deleteRecord(created, at(1))).toStrictEqual({
+      id: ID,
+      v: 1,
+      data: {},
+      clock: {},
+      deleted: at(1),
+    });
   });
 });
