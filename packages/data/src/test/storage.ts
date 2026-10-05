@@ -6,6 +6,12 @@ import { type SchemaVersion, type Schemas, defineSchemas } from "../schema.ts";
 
 /** What the storage tests share: two versions of a small app's data, and ways to look inside. */
 
+// Dexie runs live queries only where IndexedDB is a global, as it is in browsers. Each test opens
+// a database of its own, with a fake IndexedDB of its own, so the global one only passes that
+// check.
+Dexie.dependencies.indexedDB = new IDBFactory();
+Dexie.dependencies.IDBKeyRange = IDBKeyRange;
+
 export const START = 1_791_052_200_000;
 
 export const v1 = {

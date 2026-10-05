@@ -5,6 +5,7 @@ import {
   type ImportCounts,
   type SchemaVersion,
   type Schemas,
+  type Subscription,
   checkIncomingStores,
   defineSchemas,
   field,
@@ -39,6 +40,10 @@ export interface DataTests {
   write(texts: readonly string[]): Promise<string[]>;
   /** The texts of the notes. */
   read(): Promise<string[]>;
+  /** Starts observing the texts of the notes, which `observed()` then gives. */
+  observe(): void;
+  /** Each result of the observation so far, sorted, or the error that ended it. */
+  observed(): { readonly results: string[][]; readonly error: string | null };
   /** This device's id. */
   device(): Promise<string>;
   /** How many times other tabs needed the database closed. */
@@ -56,6 +61,9 @@ export interface DataTests {
 let version1: Database<typeof v1> | undefined;
 let version2: Database<typeof v2> | undefined;
 let versionChanges = 0;
+let observation: Subscription | undefined;
+let results: string[][] = [];
+let observationError: string | null = null;
 
 function opened(): Database<typeof v1> | Database<typeof v2> {
   return current().database;
@@ -123,6 +131,32 @@ export const data: DataTests = {
     }
     return (await version1.list("notes")).map(({ values }) => values.title);
   },
+  observe() {
+    observation?.unsubscribe();
+    results = [];
+    observationError = null;
+    const observer = {
+      next(texts: string[]) {
+        results.push(texts.toSorted());
+      },
+      error(error: unknown) {
+        observationError = String(error);
+      },
+    };
+    if (version2 !== undefined) {
+      observation = version2
+        .observe(async (reader) => (await reader.list("memos")).map(({ values }) => values.text))
+        .subscribe(observer);
+      return;
+    }
+    if (version1 === undefined) {
+      throw new Error("The database is not open.");
+    }
+    observation = version1
+      .observe(async (reader) => (await reader.list("notes")).map(({ values }) => values.title))
+      .subscribe(observer);
+  },
+  observed: () => ({ results, error: observationError }),
   async device() {
     return (await opened().device()).device;
   },

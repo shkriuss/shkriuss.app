@@ -16,7 +16,7 @@ It has pure functions on records, the schemas and migrations that check and evol
 | `fields.ts`   | Field types: the values a field holds, its constraints and its default (§2.3)                                                                            |
 | `schema.ts`   | Store schemas and schema versions, checked by `defineSchemas()`; the data check for records (§8, step 2); reading values with defaults                   |
 | `migrate.ts`  | Migrating records from version to version (§6), and the whole check for records from outside (§8)                                                        |
-| `db.ts`       | The storage (§7): opening and upgrading the database, changes with one HLC each, reads, settings and the device's state; snapshots and imports           |
+| `db.ts`       | The storage (§7): opening and upgrading the database, changes with one HLC each, reads and observed queries, the device's state; snapshots and imports   |
 | `incoming.ts` | The checks and the migration of a backup's records before they are imported (backup format §5.4, §5.5)                                                   |
 | `errors.ts`   | `DataLayerError`, which every refusal throws                                                                                                             |
 
@@ -116,11 +116,18 @@ await db.change(async (change) => {
 
 const note = await db.get("notes", id); // { id, values: { title: "Milk", status: "done", list: null } }
 const notes = await db.list("notes"); // every note that is not deleted
+
+// The notes now, and again after every change to them, in this tab or another one.
+const subscription = db
+  .observe(async (reader) => reader.list("notes"))
+  .subscribe({ next: showNotes, error: showError });
+subscription.unsubscribe(); // once they are no longer shown
 ```
 
 - **One database per app,** named `shkriuss`: an object store for each store of the current schema version, keyed by `id`, and `meta` for the device's state (data model §7). Dexie keeps IndexedDB's version at ten times the schema version.
 - **Changes:** `change(write)` runs `write` in one read-write transaction over every store, with one new HLC for all its writes (§3.3, §4). Its reads see its writes, and if `write` throws, nothing changes. Inside `write`, await only the change's own methods: awaiting anything else, such as `fetch` or a timer, lets IndexedDB commit the transaction early. Values are checked against the current schema before they are stored.
 - **Reads:** `get()`, `list()` and `settings()` give every field, with defaults for missing ones, typed by the schema. Deleted records read as missing. `list()` sorts by id, which is by creation time to the millisecond.
+- **Observing:** `observe(query)` gives the result of `query`, then a new one after every change that may change it, made in this tab or in another one. It is built on Dexie's live queries, which tell other tabs through `BroadcastChannel`. It runs `query` again only after changes to what `query` read: a record it got, or a store it listed. `query` gets a reader, which can only read, and must await only its reads. An error of a read, such as `closed`, ends the observation. React components use it through `@shkriuss/shell`.
 - **Upgrades:** opening migrates every record from the database's version to the current one inside the upgrade transaction (§6). If a migration fails, the database stays as it was and `openDatabase()` rejects.
 - **Newer databases:** if a newer version of the app has upgraded the database, `openDatabase()` rejects with `newer-version` and leaves the database as it is. So do later reads and changes if the database reopens by itself, for example when the page comes back from the back-forward cache. A release that raises the schema version can therefore never be rolled back, only fixed by a newer one.
 - **Other tabs:** `onBlocked` is called while other tabs keep an older version of the database open. `onVersionChange` is called when another tab needs the database closed, because a newer version of the app upgrades it or something deletes it; the database is closed by then, its reads and changes reject with `closed`, and the app must reload.
@@ -155,7 +162,7 @@ const imported = await db.import(incoming);
 
 - **Property-based tests** (fast-check, [ADR 0008](../../docs/decisions/0008-quality-gates.md)) check on generated records that merging is commutative, associative and idempotent, that it keeps the later write of every field, and that its result always passes the checks for records from outside. The generators draw clocks and field names from small sets, so copies often share fields and clocks, and sometimes have equal clocks with different values.
 - **Examples** cover each situation of the data model's merge table, the RFC 8785 test vectors, and every check of section 8. Migrations are tested rule by rule, including tombstones, records that came back alive and store moves, and as properties: they are deterministic, give records that pass every check, and merge the same way before and after migrating.
-- **Storage tests** run Dexie on [fake-indexeddb](https://github.com/dumbmatter/fakeIndexedDB): upgrades that move stores and keep tombstones and clocks, failing migrations, newer and repaired databases, tabs that upgrade, delete or block the database, connections that the browser closes, two connections issuing HLCs at once, and the device state.
+- **Storage tests** run Dexie on [fake-indexeddb](https://github.com/dumbmatter/fakeIndexedDB): upgrades that move stores and keep tombstones and clocks, failing migrations, newer and repaired databases, tabs that upgrade, delete or block the database, connections that the browser closes, two connections issuing HLCs at once, and the device state. Observed queries follow changes, imports and other connections, run again only after changes to what they read, and end with their errors.
 - **Backup tests** check every rule of `checkIncomingStores()`, including a migration that merges two stores, and that its result can be neither changed nor forged. They count every outcome of an import, check that the device receives the backup's clock, and that a failed import changes nothing. As a property, any number of imports of two generated backups, in either order, ends in the same records.
-- **In real browsers,** the platform end-to-end tests ([`tooling/platform-e2e`](../../tooling/platform-e2e)) run the storage in Chromium, Firefox and WebKit, under the production security headers: records last across reloads, two tabs never issue the same HLC, a newer version upgrades the database, which older ones then refuse, and a backup carries the records to another device and to a newer version.
+- **In real browsers,** the platform end-to-end tests ([`tooling/platform-e2e`](../../tooling/platform-e2e)) run the storage in Chromium, Firefox and WebKit, under the production security headers: records last across reloads, two tabs never issue the same HLC, a query observed in one tab follows changes made in another, a newer version upgrades the database, which older ones then refuse, and a backup carries the records to another device and to a newer version.
 - **Coverage:** `pnpm --filter @shkriuss/data test` fails below 90% of lines, branches, functions or statements.
