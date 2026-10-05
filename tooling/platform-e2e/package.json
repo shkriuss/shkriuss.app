@@ -11,7 +11,8 @@
   },
   "dependencies": {
     "@shkriuss/backup": "workspace:*",
-    "@shkriuss/data": "workspace:*"
+    "@shkriuss/data": "workspace:*",
+    "@shkriuss/i18n": "workspace:*"
   },
   "devDependencies": {
     "@playwright/test": "catalog:",

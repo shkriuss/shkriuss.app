@@ -133,7 +133,7 @@ Backups are the only way data leaves a device, the only protection against losin
 - `@shkriuss/ui` wraps React Aria Components with our design tokens (Tailwind CSS 4): one look across all apps with a per-app accent color, light and dark themes, system fonts and bundled SVG icons.
 - Layouts are phone-first, with two-pane layouts for tablets and desktops. They respect safe areas, reduced motion and contrast preferences.
 - Accessibility target: WCAG 2.2 AA.
-- English UI. All strings go through `@shkriuss/i18n`; dates, numbers and lists are formatted with `Intl` using the device's regional settings.
+- English UI. All strings go through `@shkriuss/i18n`; dates, numbers and lists are formatted with `Intl` using the device's regional settings: in English for the device's region, such as `en-DE` for a device set to German, where the browser has it, and otherwise in `en` with the device's 12-hour or 24-hour clock.
 
 ## 11. Hosting and delivery
 
