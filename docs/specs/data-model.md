@@ -166,7 +166,7 @@ For copies `a` and `b`:
 
 1. The result's `deleted` is the greater of `a.deleted` and `b.deleted`, or left out if both are. A missing `deleted` is lower than every HLC.
 2. For each field in `a.clock` or `b.clock`, take the value and the clock from the copy whose clock for that field is greater; a missing clock is lower than every HLC. If the clocks are equal but the values differ, take the value whose canonical JSON (section 5.4) is greater, comparing strings by UTF-16 code units. Equal clocks with different values occur only in damaged or crafted data, or when one device's storage was copied to another; the rule keeps the result deterministic.
-3. Remove every field whose clock is lower than the result's `deleted`.
+3. Remove every field whose clock is not greater than the result's `deleted`: the deletion erased it. A clock equal to `deleted` occurs only in damaged or crafted data; removing that field as well keeps every clock greater than `deleted` (section 2.2), so the result always passes the checks of section 8.
 
 The result keeps `id` and `v`, which both copies share.
 
