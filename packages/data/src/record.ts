@@ -118,6 +118,9 @@ export function checkRecord(value: unknown, context: RecordContext): DataRecord 
   if (context.store === SETTINGS_STORE && id !== SETTINGS_ID) {
     throw invalid(`The settings record must have the id ${SETTINGS_ID}.`);
   }
+  if (context.store === SETTINGS_STORE && Object.hasOwn(value, "deleted")) {
+    throw invalid("The settings record is never deleted.");
+  }
   if (typeof v !== "number" || !Number.isSafeInteger(v) || v < 1 || v > context.version) {
     throw invalid(`Record ${id} has a schema version other than 1 to ${context.version}.`);
   }

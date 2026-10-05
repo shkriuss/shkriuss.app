@@ -4,20 +4,21 @@ The data layer: how every app stores its records, stamps its changes and merges 
 
 It has pure functions on records, the schemas and migrations that check and evolve them, and the IndexedDB storage that apps read and write through, built on [Dexie](https://dexie.org). The backup import builds on these.
 
-| Module       | What it does                                                                                                                                             |
-| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `hlc.ts`     | Hybrid logical clocks (§3): the format, issuing an HLC for a change, receiving HLCs from elsewhere, refusing clocks from the future; device ids          |
-| `ids.ts`     | Record ids: UUIDv7 (RFC 9562), and the fixed id of the settings record                                                                                   |
-| `json.ts`    | Field values (§2.3): checked, normalized copies of JSON values, and canonical JSON (RFC 8785) for comparing and measuring them                           |
-| `names.ts`   | Field and store names (§2.3, §2.5)                                                                                                                       |
-| `record.ts`  | The record format (§2): deleted or alive, the last change, the limits, and the structural checks for records from outside, such as a backup (§8, step 1) |
-| `changes.ts` | Creating, updating and deleting a record within a change (§4)                                                                                            |
-| `merge.ts`   | Merging two copies of a record (§5)                                                                                                                      |
-| `fields.ts`  | Field types: the values a field holds, its constraints and its default (§2.3)                                                                            |
-| `schema.ts`  | Store schemas and schema versions, checked by `defineSchemas()`; the data check for records (§8, step 2); reading values with defaults                   |
-| `migrate.ts` | Migrating records from version to version (§6), and the whole check for records from outside (§8)                                                        |
-| `db.ts`      | The storage (§7): opening and upgrading the database, changes with one HLC each, reads, settings and the device's state                                  |
-| `errors.ts`  | `DataLayerError`, which every refusal throws                                                                                                             |
+| Module        | What it does                                                                                                                                             |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `hlc.ts`      | Hybrid logical clocks (§3): the format, issuing an HLC for a change, receiving HLCs from elsewhere, refusing clocks from the future; device ids          |
+| `ids.ts`      | Record ids: UUIDv7 (RFC 9562), and the fixed id of the settings record                                                                                   |
+| `json.ts`     | Field values (§2.3): checked, normalized copies of JSON values, and canonical JSON (RFC 8785) for comparing and measuring them                           |
+| `names.ts`    | Field and store names (§2.3, §2.5)                                                                                                                       |
+| `record.ts`   | The record format (§2): deleted or alive, the last change, the limits, and the structural checks for records from outside, such as a backup (§8, step 1) |
+| `changes.ts`  | Creating, updating and deleting a record within a change (§4)                                                                                            |
+| `merge.ts`    | Merging two copies of a record (§5)                                                                                                                      |
+| `fields.ts`   | Field types: the values a field holds, its constraints and its default (§2.3)                                                                            |
+| `schema.ts`   | Store schemas and schema versions, checked by `defineSchemas()`; the data check for records (§8, step 2); reading values with defaults                   |
+| `migrate.ts`  | Migrating records from version to version (§6), and the whole check for records from outside (§8)                                                        |
+| `db.ts`       | The storage (§7): opening and upgrading the database, changes with one HLC each, reads, settings and the device's state; snapshots and imports           |
+| `incoming.ts` | The checks and the migration of a backup's records before they are imported (backup format §5.4, §5.5)                                                   |
+| `errors.ts`   | `DataLayerError`, which every refusal throws                                                                                                             |
 
 Apart from `db.ts`, every function is pure: it returns a new record and never changes the one it is given. A refusal throws a `DataLayerError` whose `code` says why: `invalid`, `too-large`, `future-clock`, `deleted`, `not-found`, `newer-version` or `closed`. Its message names fields, never their values, which are user data.
 
@@ -126,10 +127,35 @@ const notes = await db.list("notes"); // every note that is not deleted
 - **Device state:** `device()` gives the device id, when the device last made a backup and how many changes have written something since; `recordBackup()` records a backup (backup format §4).
 - **Durability:** transactions ask for strict durability, so a change is on disk when it completes.
 
+## Backups
+
+The data layer's part of the [backup format](../../docs/specs/backup-format.md); `@shkriuss/backup` adds the file, its encryption and the user's steps.
+
+```ts
+import { checkIncomingStores } from "@shkriuss/data";
+
+// Export (§4): every record, deleted ones included, at one moment.
+const { schemaVersion, stores } = await db.snapshot();
+// …write the backup file, then:
+await db.recordBackup();
+
+// Import (§5): `backup` is a parsed backup document whose format, app and version were checked.
+const incoming = checkIncomingStores(schemas, backup.schemaVersion, backup.stores, Date.now());
+const preview = await db.previewImport(incoming); // { total: { new: 12, updated: 3, deleted: 1, unchanged: 40 }, stores }
+// …once the user confirms:
+const imported = await db.import(incoming);
+```
+
+- **Checks:** `checkIncomingStores()` checks that the backup has exactly the stores of its schema version, each an array of records. Every record must pass the checks of data model §8 and be at that version. No store may hold an id twice, before or after the migration, which can merge stores. One refused record refuses the whole backup. It then migrates every record to the current version.
+- **Only checked records:** the result can be previewed and imported, and nothing else can: TypeScript and the import itself refuse any other object, and its records are frozen.
+- **Preview:** `previewImport()` merges each record with its local copy in memory and counts, per store and in total, the records that are new, updated (including ones that come back after a deletion), deleted or unchanged. It writes nothing.
+- **Import:** `import()` does the same in one transaction over every store. It reads each local copy again and writes every merged record that differs, including tombstones of records the device never had. The device receives the backup's greatest HLC, so its later changes sort after everything in the backup. An import that writes something counts as a change since the last backup. If anything fails, nothing changes. Importing the same backup again changes nothing, and the order of imports does not matter.
+
 ## Tests
 
 - **Property-based tests** (fast-check, [ADR 0008](../../docs/decisions/0008-quality-gates.md)) check on generated records that merging is commutative, associative and idempotent, that it keeps the later write of every field, and that its result always passes the checks for records from outside. The generators draw clocks and field names from small sets, so copies often share fields and clocks, and sometimes have equal clocks with different values.
 - **Examples** cover each situation of the data model's merge table, the RFC 8785 test vectors, and every check of section 8. Migrations are tested rule by rule, including tombstones, records that came back alive and store moves, and as properties: they are deterministic, give records that pass every check, and merge the same way before and after migrating.
 - **Storage tests** run Dexie on [fake-indexeddb](https://github.com/dumbmatter/fakeIndexedDB): upgrades that move stores and keep tombstones and clocks, failing migrations, newer and repaired databases, tabs that upgrade, delete or block the database, connections that the browser closes, two connections issuing HLCs at once, and the device state.
-- **In real browsers,** the platform end-to-end tests ([`tooling/platform-e2e`](../../tooling/platform-e2e)) run the storage in Chromium, Firefox and WebKit, under the production security headers: records last across reloads, two tabs never issue the same HLC, and a newer version upgrades the database, which older ones then refuse.
+- **Backup tests** check every rule of `checkIncomingStores()`, including a migration that merges two stores, and that its result can be neither changed nor forged. They count every outcome of an import, check that the device receives the backup's clock, and that a failed import changes nothing. As a property, any number of imports of two generated backups, in either order, ends in the same records.
+- **In real browsers,** the platform end-to-end tests ([`tooling/platform-e2e`](../../tooling/platform-e2e)) run the storage in Chromium, Firefox and WebKit, under the production security headers: records last across reloads, two tabs never issue the same HLC, a newer version upgrades the database, which older ones then refuse, and a backup carries the records to another device and to a newer version.
 - **Coverage:** `pnpm --filter @shkriuss/data test` fails below 90% of lines, branches, functions or statements.

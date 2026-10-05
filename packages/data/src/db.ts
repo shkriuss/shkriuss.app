@@ -10,11 +10,15 @@ import {
   isDeviceId,
   issueHlc,
   newDeviceId,
+  receiveHlc,
 } from "./hlc.ts";
 import { SETTINGS_ID, newRecordId } from "./ids.ts";
+import { Incoming } from "./incoming.ts";
+import { canonicalJson } from "./json.ts";
+import { mergeRecords } from "./merge.ts";
 import { type StoredRecord, migrateStep } from "./migrate.ts";
 import { META_STORE, SETTINGS_STORE } from "./names.ts";
-import { type DataRecord, isDeleted } from "./record.ts";
+import { type DataRecord, isDeleted, toJson } from "./record.ts";
 import {
   type SchemaVersion,
   type Schemas,
@@ -56,6 +60,31 @@ export interface DeviceState {
   readonly lastBackup: number | null;
   /** How many changes and imports have written something since then. */
   readonly changesSinceBackup: number;
+}
+
+/** Every record of every store, deleted ones included, at one moment (backup format §4). */
+export interface Snapshot {
+  /** The app's current schema version, which every record has. */
+  readonly schemaVersion: number;
+  readonly stores: Readonly<Record<string, readonly DataRecord[]>>;
+}
+
+/** What an import does to the records of a store (backup format §5.6). */
+export interface ImportCounts {
+  /** Records the device did not have, which are alive. */
+  readonly new: number;
+  /** Records that change and are alive, including ones that come back after a deletion. */
+  readonly updated: number;
+  /** Records that were alive and become deleted. */
+  readonly deleted: number;
+  /** All others. */
+  readonly unchanged: number;
+}
+
+/** What an import does, in total and for each store. */
+export interface ImportSummary {
+  readonly total: ImportCounts;
+  readonly stores: Readonly<Record<string, ImportCounts>>;
 }
 
 export interface DatabaseOptions {
@@ -305,6 +334,70 @@ export async function openDatabase<C extends SchemaVersion>(
   return new Database(dexie, schemas, options.now ?? Date.now);
 }
 
+type Outcome = keyof ImportCounts;
+
+function isSame(a: DataRecord, b: DataRecord): boolean {
+  return canonicalJson(toJson(a)) === canonicalJson(toJson(b));
+}
+
+/**
+ * An incoming record merged with the local copy (data model §5): the result, what it does to the
+ * local copy (backup format §5.6), and whether it must be written because it differs (§5.7).
+ */
+function mergeIncoming(
+  local: DataRecord | undefined,
+  incoming: DataRecord,
+): { readonly merged: DataRecord; readonly outcome: Outcome; readonly write: boolean } {
+  if (local === undefined) {
+    // A tombstone of a record the device never had changes nothing it shows, but it is kept,
+    // so that an older backup cannot bring the record back.
+    return { merged: incoming, outcome: isDeleted(incoming) ? "unchanged" : "new", write: true };
+  }
+  const merged = mergeRecords(local, incoming);
+  if (isSame(local, merged)) {
+    return { merged, outcome: "unchanged", write: false };
+  }
+  if (!isDeleted(merged)) {
+    return { merged, outcome: "updated", write: true };
+  }
+  return { merged, outcome: isDeleted(local) ? "unchanged" : "deleted", write: true };
+}
+
+function noCounts(): Record<Outcome, number> {
+  return { new: 0, updated: 0, deleted: 0, unchanged: 0 };
+}
+
+/**
+ * Merges every incoming record with its local copy, read in `transaction`: what that does to
+ * each store, and the records that differ from their local copies.
+ */
+async function mergeAll(
+  transaction: Transaction,
+  incoming: Incoming,
+): Promise<{ readonly summary: ImportSummary; readonly writes: Map<string, DataRecord[]> }> {
+  const total = noCounts();
+  const stores: Record<string, ImportCounts> = {};
+  const writes = new Map<string, DataRecord[]>();
+  for (const [store, records] of Object.entries(incoming.stores)) {
+    const counts = noCounts();
+    const changed: DataRecord[] = [];
+    const locals = await transaction
+      .table<DataRecord, string>(store)
+      .bulkGet(records.map((record) => record.id));
+    for (const [index, record] of records.entries()) {
+      const { merged, outcome, write } = mergeIncoming(locals[index], record);
+      counts[outcome] += 1;
+      total[outcome] += 1;
+      if (write) {
+        changed.push(merged);
+      }
+    }
+    stores[store] = counts;
+    writes.set(store, changed);
+  }
+  return { summary: { total, stores }, writes };
+}
+
 /** Whether `schema` is the schema of `store` in `version`. */
 function isStoreOf<C extends SchemaVersion, S extends StoreName<C>>(
   version: C,
@@ -552,6 +645,87 @@ export class Database<C extends SchemaVersion> extends Reader<C> {
       }
       return result;
     });
+  }
+
+  /**
+   * Every record of every store, deleted ones included, read in one transaction, so that a
+   * backup is a consistent snapshot (backup format §4, step 1).
+   */
+  async snapshot(): Promise<Snapshot> {
+    const stores = Object.keys(this.schemas.current.stores);
+    return translating(async () =>
+      this.#dexie.transaction("r", [...stores, META_STORE], async (transaction) => {
+        const records: Record<string, DataRecord[]> = {};
+        for (const store of stores) {
+          records[store] = await transaction.table<DataRecord, string>(store).toArray();
+        }
+        return { schemaVersion: this.schemas.current.version, stores: records };
+      }),
+    );
+  }
+
+  #checked(incoming: Incoming): Incoming {
+    if (!Incoming.isChecked(incoming) || incoming.version !== this.schemas.current.version) {
+      throw new DataLayerError(
+        "invalid",
+        "Only records that checkIncomingStores() checked for this app can be imported.",
+      );
+    }
+    return incoming;
+  }
+
+  /**
+   * What importing `incoming` would do, store by store (backup format §5.6). It merges each
+   * record with its local copy in memory and writes nothing.
+   */
+  async previewImport(incoming: Incoming): Promise<ImportSummary> {
+    const checked = this.#checked(incoming);
+    const stores = [...Object.keys(this.schemas.current.stores), META_STORE];
+    return translating(async () =>
+      this.#dexie.transaction(
+        "r",
+        stores,
+        async (transaction) => (await mergeAll(transaction, checked)).summary,
+      ),
+    );
+  }
+
+  /**
+   * Imports `incoming` in one transaction over every store (backup format §5.7): merges each
+   * record with its local copy, read again in the transaction, and writes the result if it
+   * differs; receives the greatest HLC of the backup (data model §3.4); and counts the import
+   * as a change since the last backup if it wrote anything. If anything fails, nothing changes.
+   * Importing the same backup again changes nothing.
+   */
+  async import(incoming: Incoming): Promise<ImportSummary> {
+    const checked = this.#checked(incoming);
+    const stores = [...Object.keys(this.schemas.current.stores), META_STORE];
+    return translating(async () =>
+      this.#dexie.transaction("rw", stores, async (transaction) => {
+        const { summary, writes } = await mergeAll(transaction, checked);
+        let written = false;
+        for (const [store, records] of writes) {
+          if (records.length > 0) {
+            await transaction.table<DataRecord, string>(store).bulkPut(records);
+            written = true;
+          }
+        }
+        const meta = transaction.table<MetaRow, string>(META_STORE);
+        const [clock, backup] = await meta.bulkGet(["clock", "backup"]);
+        if (checked.greatest !== undefined) {
+          const last = clockOf(clock);
+          const received = receiveHlc(last, checked.greatest);
+          if (received !== last) {
+            await meta.put({ key: "clock", value: received });
+          }
+        }
+        if (written) {
+          const { last, changes } = backupOf(backup);
+          await meta.put({ key: "backup", value: { last, changes: changes + 1 } });
+        }
+        return summary;
+      }),
+    );
   }
 
   /**

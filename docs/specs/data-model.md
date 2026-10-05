@@ -91,7 +91,7 @@ The data layer refuses writes beyond these limits, so every stored record can be
 ### 2.5 Stores
 
 - Store names follow the same rules as field names.
-- `settings` is reserved for an app's settings that travel with its backups. It holds at most one record, with the fixed id `00000000-0000-7000-8000-000000000000`, so that the settings of two devices merge field by field.
+- `settings` is reserved for an app's settings that travel with its backups. It holds at most one record, with the fixed id `00000000-0000-7000-8000-000000000000`, so that the settings of two devices merge field by field. That record is never deleted: a deleted record cannot be written again (section 4.2), so the settings could never change again.
 - `meta` is reserved for the data layer (section 7) and holds no records.
 - Each store holds its records, alive and deleted, by `id`.
 
@@ -223,7 +223,7 @@ Canonical JSON is the [JSON Canonicalization Scheme (RFC 8785)](https://www.rfc-
 
 Records from a backup are untrusted. Before any of them is merged, each one is checked, and one failure fails the whole import:
 
-1. **Structure:** exactly the members of section 2.1, of the right types; `id` a lowercase UUIDv7 (`^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`), and in `settings` the fixed id; `v` an integer from 1 to the app's current version; every HLC well-formed (section 3.1) and not from the future (section 3.5); `clock` has exactly the keys of `data`; every clock is greater than `deleted`, if present; the rules and limits of sections 2.3 and 2.4.
+1. **Structure:** exactly the members of section 2.1, of the right types; `id` a lowercase UUIDv7 (`^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`), and in `settings` the fixed id and no `deleted`; `v` an integer from 1 to the app's current version; every HLC well-formed (section 3.1) and not from the future (section 3.5); `clock` has exactly the keys of `data`; every clock is greater than `deleted`, if present; the rules and limits of sections 2.3 and 2.4.
 2. **Schema:** `data` is valid for its store at the record's own schema version: only known fields, each of the right type and within its constraints.
 3. **Migration:** the record is migrated to the current version (section 6) and checked against the current schema again, which also catches a faulty migration.
 

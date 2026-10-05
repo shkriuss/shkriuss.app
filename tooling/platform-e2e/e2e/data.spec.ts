@@ -56,6 +56,38 @@ async function versionChanges(page: Page): Promise<number> {
   });
 }
 
+async function backup(page: Page): Promise<string> {
+  return page.evaluate(async () => {
+    if (window.platform === undefined) {
+      throw new Error("The test app has not loaded.");
+    }
+    return window.platform.data.backup();
+  });
+}
+
+async function restore(page: Page, from: string): Promise<unknown> {
+  return page.evaluate(async (json) => {
+    if (window.platform === undefined) {
+      throw new Error("The test app has not loaded.");
+    }
+    return window.platform.data.restore(json);
+  }, from);
+}
+
+async function forget(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    if (window.platform === undefined) {
+      throw new Error("The test app has not loaded.");
+    }
+    await window.platform.data.forget();
+  });
+}
+
+/** What an import of `n` new records does. */
+function added(n: number): { new: number; updated: number; deleted: number; unchanged: number } {
+  return { new: n, updated: 0, deleted: 0, unchanged: 0 };
+}
+
 test("records and the device id last across reloads", async ({ page }) => {
   await load(page);
   expect(await open(page, 1)).toBe("open");
@@ -101,4 +133,30 @@ test("a newer version upgrades the database, which older ones then refuse", asyn
   await write(newer, ["Eggs"]);
   expect(await read(newer)).toEqual(["Eggs", "Milk"]);
   expect(await versionChanges(newer)).toBe(0);
+});
+
+test("a backup carries the records to another device, and to a newer version", async ({ page }) => {
+  await load(page);
+  expect(await open(page, 1)).toBe("open");
+  await write(page, ["Milk", "Eggs"]);
+  const before = await device(page);
+  const copy = await backup(page);
+
+  // Another device: the same app with no data, and a device id of its own.
+  await forget(page);
+  expect(await open(page, 1)).toBe("open");
+  expect(await device(page)).not.toBe(before);
+  expect(await restore(page, copy)).toEqual({ preview: added(2), imported: added(2) });
+  expect(await read(page)).toEqual(["Eggs", "Milk"]);
+  // Importing the same backup again changes nothing.
+  expect(await restore(page, copy)).toEqual({
+    preview: { new: 0, updated: 0, deleted: 0, unchanged: 2 },
+    imported: { new: 0, updated: 0, deleted: 0, unchanged: 2 },
+  });
+
+  // A newer version of the app migrates the older backup as it imports it.
+  await forget(page);
+  expect(await open(page, 2)).toBe("open");
+  expect(await restore(page, copy)).toEqual({ preview: added(2), imported: added(2) });
+  expect(await read(page)).toEqual(["Eggs", "Milk"]);
 });
