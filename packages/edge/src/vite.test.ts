@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { build } from "vite";
@@ -69,6 +69,8 @@ describe("edge", () => {
     const headers = await readFile(path.join(dist, "_headers"), "utf8");
     expect(headers).toContain(`script-src 'self' ${cspHashSource(importMap)};`);
     expect(headers).toContain("Integrity-Policy: blocked-destinations=(script)");
+    // Without worker scripts, no Trusted Types policy at all.
+    expect(headers).toContain("; trusted-types 'none'\n");
     expect(headers).toContain("https://shkriuss.dev/*\n  X-Robots-Tag: noindex\n");
 
     // The manifest covers the final files, after the plugin changed index.html.
@@ -178,6 +180,109 @@ describe("edge", () => {
         '<script type="module" src="/main.js"></script></head><body></body></html>',
     );
     await expect(buildApp(root)).rejects.toThrow(/inline <script>/);
+  });
+
+  it("builds each worker into one file and allows the policy that starts it", async () => {
+    const root = await createApp();
+    await writeFile(
+      path.join(root, "main.js"),
+      'import ping from "./ping.worker.js?worker&url";\nconsole.info(ping);\nimport("./lazy.js");\n',
+    );
+    // A dynamic import in a worker would need a chunk of its own, which a worker cannot check.
+    await writeFile(
+      path.join(root, "ping.worker.js"),
+      'self.onmessage = () => import("./lazy.js").then((lazy) => self.postMessage(lazy.run));\n',
+    );
+    // The plugin overrides an app that asks for workers with chunks.
+    await build({
+      root,
+      configFile: false,
+      logLevel: "silent",
+      plugins: [edge()],
+      worker: { format: "es" },
+    });
+    const dist = path.join(root, "dist");
+    const assets = await readdir(path.join(dist, "assets"));
+    const workers = assets.filter((file) => file.includes(".worker-"));
+    expect(workers).toEqual([expect.stringMatching(/^ping\.worker-[A-Za-z0-9_-]{8}\.js$/)]);
+    const worker = await readFile(path.join(dist, "assets", workers[0] ?? ""), "utf8");
+    expect(worker).not.toMatch(/\bimport\b/);
+    // The page's scripts: the entry and the lazily loaded chunk, but not the worker.
+    expect(assets.filter((file) => file.endsWith(".js"))).toHaveLength(3);
+
+    const html = await readFile(path.join(dist, "index.html"), "utf8");
+    const importMap = /<script type="importmap">(.*?)<\/script>/.exec(html)?.[1] ?? "";
+    expect(importMap).toMatch(
+      /^\{"integrity":\{"\/assets\/index-[^"]+":"[^"]+","\/assets\/lazy-[^"]+":"[^"]+"\}\}$/,
+    );
+
+    const headers = await readFile(path.join(dist, "_headers"), "utf8");
+    expect(headers).toContain("; trusted-types shkriuss-workers\n");
+    const manifest = parseManifest(await readFile(path.join(dist, "sha256sums.txt"), "utf8"));
+    expect(manifest.has(`/assets/${workers[0] ?? ""}`)).toBe(true);
+  });
+
+  it("allows the policy for a service worker at /sw.js", async () => {
+    const root = await createApp();
+    await mkdir(path.join(root, "public"));
+    await writeFile(path.join(root, "public", "sw.js"), "self.oninstall = () => {};\n");
+    await buildApp(root);
+    const dist = path.join(root, "dist");
+    expect(await readFile(path.join(dist, "_headers"), "utf8")).toContain(
+      "; trusted-types shkriuss-workers\n",
+    );
+    const manifest = parseManifest(await readFile(path.join(dist, "sha256sums.txt"), "utf8"));
+    expect(manifest.has("/sw.js")).toBe(true);
+  });
+
+  it("leaves a service worker built from source out of the import map", async () => {
+    const root = await createApp();
+    await writeFile(path.join(root, "sw.js"), "self.oninstall = () => {};\n");
+    await build({
+      root,
+      configFile: false,
+      logLevel: "silent",
+      plugins: [
+        {
+          name: "service-worker",
+          buildStart() {
+            this.emitFile({ type: "chunk", id: path.join(root, "sw.js"), fileName: "sw.js" });
+          },
+        },
+        edge(),
+      ],
+    });
+    const dist = path.join(root, "dist");
+    const html = await readFile(path.join(dist, "index.html"), "utf8");
+    expect(html).toContain('<script type="importmap">{"integrity":{"/assets/index-');
+    expect(html).not.toContain("/sw.js");
+    expect(await readFile(path.join(dist, "_headers"), "utf8")).toContain(
+      "; trusted-types shkriuss-workers\n",
+    );
+  });
+
+  it.each([
+    ["a worker whose name the policy would refuse", "./ping-worker.js?worker&url"],
+    ["a script file that is not a worker", "./ping-worker.js?url"],
+  ])("fails the build for %s", async (_case, specifier) => {
+    const root = await createApp();
+    await writeFile(
+      path.join(root, "main.js"),
+      `import url from "${specifier}";\nconsole.info(url);\n`,
+    );
+    // Larger than 4 KiB, so that Vite does not inline a ?url import as a data: URL.
+    await writeFile(
+      path.join(root, "ping-worker.js"),
+      `self.onmessage = () => {};\n${"// padding\n".repeat(400)}`,
+    );
+    await expect(buildApp(root)).rejects.toThrow(/not named "<name>\.worker-<hash>\.js"/);
+  });
+
+  it("fails the build for a worker module that the page imports as a module", async () => {
+    const root = await createApp();
+    await writeFile(path.join(root, "main.js"), 'import("./ping.worker.js");\n');
+    await writeFile(path.join(root, "ping.worker.js"), "export const ping = 1;\n");
+    await expect(buildApp(root)).rejects.toThrow(/named like a worker bundle but is not one/);
   });
 
   it("fails the build for an app that is not served from the root", async () => {

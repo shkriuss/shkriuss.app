@@ -1,6 +1,6 @@
 import { cspHashSource, securityHeaders } from "@shkriuss/edge";
 import type { Page } from "@playwright/test";
-import { expect, test } from "./fixtures.ts";
+import { expect, test } from "@shkriuss/config/playwright";
 
 const IMPORT_MAP = /<script type="importmap">(.*?)<\/script>/s;
 

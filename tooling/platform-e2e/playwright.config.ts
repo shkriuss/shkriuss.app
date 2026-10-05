@@ -1,3 +1,3 @@
 import { playwrightConfig } from "@shkriuss/config/playwright";
 
-export default playwrightConfig({ port: 4173 });
+export default playwrightConfig({ port: 4174 });

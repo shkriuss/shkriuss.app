@@ -1,5 +1,5 @@
 import { AxeBuilder } from "@axe-core/playwright";
-import { expect, test } from "./fixtures.ts";
+import { expect, test } from "@shkriuss/config/playwright";
 
 test("shows the placeholder page", async ({ page }) => {
   await page.goto("/");

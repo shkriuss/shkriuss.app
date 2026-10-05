@@ -35,3 +35,10 @@ export {
   replacedAssets,
 } from "./manifest.ts";
 export { edge, type EdgeOptions } from "./vite.ts";
+export {
+  SERVICE_WORKER_PATH,
+  WORKER_POLICY,
+  isWorkerBundlePath,
+  isWorkerScriptPath,
+  workerScriptUrl,
+} from "./worker-scripts.ts";

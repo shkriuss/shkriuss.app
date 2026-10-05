@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { MANIFEST_FILE, parseManifest } from "@shkriuss/edge";
-import { expect, test } from "./fixtures.ts";
+import { expect, test } from "@shkriuss/config/playwright";
 
 test("publishes the SHA-256 of every file it serves", async ({ request }) => {
   const response = await request.get(`/${MANIFEST_FILE}`);

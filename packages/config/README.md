@@ -1,6 +1,8 @@
 # @shkriuss/config
 
-Shared configuration for every package and app in the monorepo.
+Shared configuration for every package and app in the monorepo: TypeScript settings, and the end-to-end test setup.
+
+## TypeScript
 
 | File                 | Use it for                                                              |
 | -------------------- | ----------------------------------------------------------------------- |
@@ -15,3 +17,19 @@ Extend one of them from a package's `tsconfig.json`:
 ```
 
 Relative imports always include the file extension (`./file.ts`), so the same source works in Node.js, Vite and Vitest.
+
+## End-to-end tests
+
+`@shkriuss/config/playwright` is the Playwright setup that every app shares ([architecture §15](../../docs/architecture.md#15-quality)). An app's `playwright.config.ts` only chooses a port of its own:
+
+```ts
+import { playwrightConfig } from "@shkriuss/config/playwright";
+
+export default playwrightConfig({ port: 4173 });
+```
+
+- **Browsers:** Chromium, Firefox and WebKit, each at phone and tablet size. In Claude Code cloud sessions, only the preinstalled Chromium runs, which `E2E_CHROMIUM_EXECUTABLE` points to; Firefox and WebKit run in CI.
+- **Server:** the production build in `dist/`, served by `wrangler dev` with the generated `_headers`, as Cloudflare serves it. Run `pnpm build` first. Each app has a port of its own (the hub 4173, the platform tests 4174), and Wrangler's devtools use that port plus 5100, so the tests of several apps can run at once.
+- **No retries:** a flaky test is fixed, never retried into passing ([ADR 0008](../../docs/decisions/0008-quality-gates.md)).
+
+Tests import `test` and `expect` from the same module. Its `security` fixture fails every test in which the page reports a CSP or Trusted Types violation, logs an error, throws, or has a request fail. A test that provokes a refusal on purpose calls `security.expectRefusals()` and then checks the refusal itself, for example in `security.violations`.
