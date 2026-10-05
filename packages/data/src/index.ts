@@ -1,6 +1,14 @@
 export { createRecord, deleteRecord, updateRecord, type FieldValues } from "./changes.ts";
 export { DataError, type DataErrorCode } from "./errors.ts";
 export {
+  field,
+  type ArrayOptions,
+  type FieldType,
+  type NumberOptions,
+  type StringOptions,
+  type TypeOf,
+} from "./fields.ts";
+export {
   INITIAL_CLOCK,
   MAX_CLOCK_AHEAD,
   MAX_COUNTER,
@@ -28,6 +36,7 @@ export {
   type JsonValue,
 } from "./json.ts";
 export { mergeRecords } from "./merge.ts";
+export { checkIncomingRecord, migrateRecord, type StoredRecord } from "./migrate.ts";
 export { META_STORE, SETTINGS_STORE, isFieldName, isStoreName } from "./names.ts";
 export type { RandomBytes } from "./random.ts";
 export {
@@ -41,3 +50,15 @@ export {
   type DataRecord,
   type RecordContext,
 } from "./record.ts";
+export {
+  checkData,
+  defineSchemas,
+  readValues,
+  storeSchema,
+  type ComputedField,
+  type SchemaVersion,
+  type Schemas,
+  type StoreMigration,
+  type StoreSchema,
+  type Values,
+} from "./schema.ts";
