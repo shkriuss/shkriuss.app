@@ -14,10 +14,12 @@ describe("uiLocale (architecture §10)", () => {
     expect(uiLocale(device)).toStrictEqual({ locale, hourCycle });
   });
 
+  // Which regions have English formats depends on the browser's Unicode data: Georgia and
+  // Japan gained them with CLDR 48. AA is a private-use region, which no data will ever cover,
+  // so it stands for the regions that a browser's data does not.
   it.each([
-    ["ka-GE", "h23"],
-    ["ja-JP", "h23"],
-    ["ko-KR", "h12"],
+    ["de-AA", "h23"],
+    ["ko-AA", "h12"],
   ])(
     "formats for %s in English with its %s clock, without English formats for its region",
     (device, hourCycle) => {

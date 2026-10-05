@@ -34,7 +34,7 @@ m.count(1234); // "1,234 notes", or "1.234 notes" on a device in Germany
 
 Formats that contain words, such as "Oct", "yesterday" or "and", must be English, but a device set to German or to Germany expects "5 Oct 2026, 14:30" and "1.234,5". So the UI formats with English for the device's region: `en-DE` for `de-DE`, `en-GB` for `en-GB`, `en-CA` for `fr-CA`.
 
-Browsers have English formats for many regions, but not for all, such as Georgia or Japan. There the UI formats with `en` and keeps the device's choice of a 12-hour or 24-hour clock: "Oct 5, 2026, 16:30". Dates always name the month, so that "5/10" can never be read the wrong way round.
+Browsers have English formats for many regions, but not for all, and newer browsers have them for more: Georgia and Japan gained them with Unicode's CLDR 48. For a region without them, the UI formats with `en` and keeps the device's choice of a 12-hour or 24-hour clock: "Oct 5, 2026, 16:30". Dates always name the month, so that "5/10" can never be read the wrong way round.
 
 ```ts
 import { createFormat } from "@shkriuss/i18n";
@@ -48,4 +48,4 @@ format.list(["12 new", "3 updated", "1 deleted"], "units"); // "12 new, 3 update
 
 - **Relative times** count calendar days in the device's time zone, so "yesterday" is always the day before today. Up to a minute is "now"; then minutes, hours, days up to 6, weeks up to 3, months up to 11, then years.
 - **Sizes** use units of 1,000, as phones show them: "999 bytes", "1 kB", "1.2 MB". An amount that rounds to 1,000 moves to the next unit, so 999,950 bytes are "1 MB".
-- **Tests** pass the device's locale and a time zone. The platform end-to-end tests check the formats with each browser's own Unicode data.
+- **Tests** pass the device's locale and a time zone. For a region without English formats they use AA, a private-use region, because which regions have them depends on the browser's Unicode data. The platform end-to-end tests check the formats with each browser's own data.

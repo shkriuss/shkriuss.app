@@ -18,7 +18,12 @@ const DAY = 24 * 60;
 
 const german = createFormat("de-DE", { timeZone: "Europe/Berlin" });
 const american = createFormat("en-US", { timeZone: "America/New_York" });
-const georgian = createFormat("ka-GE", { timeZone: "Asia/Tbilisi" });
+
+/**
+ * A device with a 24-hour clock in Tbilisi, in a region without English formats. Which regions
+ * have them depends on the browser's Unicode data, so this is AA, a private-use region.
+ */
+const elsewhere = createFormat("de-AA", { timeZone: "Asia/Tbilisi" });
 
 describe("dates and times", () => {
   it("follow the device's region, in English", () => {
@@ -31,10 +36,10 @@ describe("dates and times", () => {
   });
 
   it("keep the device's 24-hour clock where the browser has no English formats for its region", () => {
-    expect(georgian.locale).toStrictEqual({ locale: "en", hourCycle: "h23" });
-    expect(georgian.date(AT)).toBe("Oct 5, 2026");
-    expect(georgian.time(AT)).toBe("16:30");
-    expect(georgian.dateTime(AT)).toBe("Oct 5, 2026, 16:30");
+    expect(elsewhere.locale).toStrictEqual({ locale: "en", hourCycle: "h23" });
+    expect(elsewhere.date(AT)).toBe("Oct 5, 2026");
+    expect(elsewhere.time(AT)).toBe("16:30");
+    expect(elsewhere.dateTime(AT)).toBe("Oct 5, 2026, 16:30");
   });
 
   it("are in the device's time zone", () => {
@@ -49,7 +54,7 @@ describe("numbers", () => {
   it("have the region's separators", () => {
     expect(german.number(1234567.891)).toBe("1.234.567,891");
     expect(american.number(1234567.891)).toBe("1,234,567.891");
-    expect(georgian.number(1234567.891)).toBe("1,234,567.891");
+    expect(elsewhere.number(1234567.891)).toBe("1,234,567.891");
   });
 
   it.each([

@@ -24,7 +24,7 @@ And backup files (`@shkriuss/backup`, [backup format](../../docs/specs/backup-fo
 - only the backup worker's bundle includes `age-encryption`;
 - `/licenses.txt` lists the packages of the page and of its workers, and the notices in files of this repository.
 
-And the formats of the UI (`@shkriuss/i18n`): English with a German device's regional conventions, with each browser's own Unicode data.
+And the formats of the UI (`@shkriuss/i18n`), with each browser's own Unicode data: English with a German device's regional conventions, and English with the device's clock in a region without English formats.
 
 | Command                                      | What it does                     |
 | -------------------------------------------- | -------------------------------- |
