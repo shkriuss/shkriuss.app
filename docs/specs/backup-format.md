@@ -1,6 +1,6 @@
 # Backup format
 
-- **Status:** proposed (Phase 1.1)
+- **Status:** accepted, 2026-10-05 (Phase 1.1)
 - **Implements:** [ADR 0004](../decisions/0004-local-data-and-backups.md)
 - **Implemented by:** `@shkriuss/backup` (Phase 1.2)
 - **Format version:** 1

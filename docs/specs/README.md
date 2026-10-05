@@ -4,5 +4,5 @@ Exact formats and protocols. A spec is written and reviewed **before** the code 
 
 | Spec                                                                                          | Phase | Status   |
 | --------------------------------------------------------------------------------------------- | ----- | -------- |
-| [data-model.md](data-model.md) — records, HLC timestamps, tombstones, merge rules, migrations | 1.1   | proposed |
-| [backup-format.md](backup-format.md) — envelope, versions, encryption, import pipeline        | 1.1   | proposed |
+| [data-model.md](data-model.md) — records, HLC timestamps, tombstones, merge rules, migrations | 1.1   | accepted |
+| [backup-format.md](backup-format.md) — envelope, versions, encryption, import pipeline        | 1.1   | accepted |
