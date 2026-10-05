@@ -13,6 +13,7 @@ And the data layer (`@shkriuss/data`, [data model](../../docs/specs/data-model.m
 
 - records and the device id last across reloads;
 - two tabs of the app never issue the same HLC;
+- a query observed in one tab follows the changes made in another;
 - a newer version of the app upgrades the database, which closes in the older version's tab; loaded again, the older version refuses to open it and leaves it as it is;
 - a backup carries the records to another device and to a newer version of the app, and importing it again changes nothing.
 

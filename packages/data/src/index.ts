@@ -10,10 +10,14 @@ export {
   type ImportSummary,
   type Input,
   type Item,
+  type Observable,
+  type Observer,
+  type Reader,
   type RecordStore,
   type SettingsStore,
   type Snapshot,
   type StoreName,
+  type Subscription,
 } from "./db.ts";
 export { DataLayerError, type DataLayerErrorCode } from "./errors.ts";
 export {

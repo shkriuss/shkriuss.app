@@ -1,4 +1,4 @@
-import { Dexie, type Table, type Transaction } from "dexie";
+import { Dexie, type Table, type Transaction, liveQuery } from "dexie";
 import { createRecord, deleteRecord, updateRecord } from "./changes.ts";
 import { DataLayerError } from "./errors.ts";
 import {
@@ -432,7 +432,7 @@ function recordStore<S extends string>(store: S): S {
 }
 
 /** Reads of live records and settings, at the current schema version. */
-abstract class Reader<C extends SchemaVersion> {
+export abstract class Reader<C extends SchemaVersion> {
   /** Every version of the app's data schema; the database is at the current one. */
   readonly schemas: Schemas<C>;
 
@@ -590,6 +590,24 @@ export class Change<C extends SchemaVersion> extends Reader<C> {
   }
 }
 
+/** Receives the results of an observed query (`Database.observe()`). */
+export interface Observer<T> {
+  /** A result: the first one, then one after each change that may have changed it. */
+  next(value: T): void;
+  /** The query failed, and the observation has ended: no result follows. */
+  error(error: unknown): void;
+}
+
+/** An observation, which ends when it is unsubscribed. */
+export interface Subscription {
+  unsubscribe(): void;
+}
+
+/** The results of a query over time (`Database.observe()`). */
+export interface Observable<T> {
+  subscribe(observer: Observer<T>): Subscription;
+}
+
 /** An app's open database: its records, and what it knows about this device. */
 export class Database<C extends SchemaVersion> extends Reader<C> {
   readonly #dexie: Dexie;
@@ -607,6 +625,33 @@ export class Database<C extends SchemaVersion> extends Reader<C> {
 
   protected read<T>(read: () => Promise<T>): Promise<T> {
     return translating(read);
+  }
+
+  /**
+   * The results of `query`, now and after every change that may change them, made in this tab
+   * or in another one (architecture §7). `query` reads with the reader it gets, and awaits
+   * only those reads. A change runs it again only if it wrote what `query` read: a record it
+   * got, or a store it listed. An error of a read, such as `closed`, ends the observation.
+   */
+  observe<T>(query: (reader: Reader<C>) => Promise<T>): Observable<T> {
+    const results = liveQuery(async () => query(this));
+    return {
+      subscribe(observer) {
+        const subscription = results.subscribe({
+          next: (value) => {
+            observer.next(value);
+          },
+          error: (error: unknown) => {
+            observer.error(error);
+          },
+        });
+        return {
+          unsubscribe: () => {
+            subscription.unsubscribe();
+          },
+        };
+      },
+    };
   }
 
   /** What the database knows about this device (data model §7). */

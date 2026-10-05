@@ -114,3 +114,34 @@ test("a backup carries the records to another device, and to a newer version", a
   expect(await restore(page, copy)).toEqual({ preview: added(2), imported: added(2) });
   expect(await read(page)).toEqual(["Eggs", "Milk"]);
 });
+
+async function observed(page: Page): Promise<{ results: string[][]; error: string | null }> {
+  return page.evaluate(() => {
+    if (window.platform === undefined) {
+      throw new Error("The test app has not loaded.");
+    }
+    return window.platform.data.observed();
+  });
+}
+
+test("a query observed in one tab follows the changes made in another", async ({
+  page,
+  context,
+}) => {
+  await load(page);
+  expect(await open(page, 1)).toBe("open");
+  await page.evaluate(() => {
+    if (window.platform === undefined) {
+      throw new Error("The test app has not loaded.");
+    }
+    window.platform.data.observe();
+  });
+  await expect.poll(async () => observed(page)).toEqual({ results: [[]], error: null });
+
+  const other = await context.newPage();
+  await load(other);
+  expect(await open(other, 1)).toBe("open");
+  await write(other, ["Milk", "Eggs"]);
+  await expect.poll(async () => (await observed(page)).results.at(-1)).toEqual(["Eggs", "Milk"]);
+  expect((await observed(page)).error).toBeNull();
+});
