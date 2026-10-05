@@ -24,6 +24,31 @@
     "react/no-danger": "error",
     "react/jsx-no-script-url": "error",
     "react/react-in-jsx-scope": "off",
+    // UI text comes only from message modules (ADR 0012): no text in JSX, and no strings in
+    // the attributes that people read or hear. Class names, ids and links stay strings.
+    "react/jsx-no-literals": [
+      "error",
+      {
+        "noStrings": true,
+        "ignoreProps": true,
+        "allowedStrings": [" "],
+        "restrictedAttributes": [
+          "alt",
+          "aria-braillelabel",
+          "aria-brailleroledescription",
+          "aria-description",
+          "aria-label",
+          "aria-placeholder",
+          "aria-roledescription",
+          "aria-valuetext",
+          "description",
+          "errorMessage",
+          "label",
+          "placeholder",
+          "title"
+        ]
+      }
+    ],
     "unicorn/no-document-cookie": "error",
     "no-restricted-properties": [
       "error",

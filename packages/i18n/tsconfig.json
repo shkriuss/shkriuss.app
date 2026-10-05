@@ -1,0 +1,4 @@
+{
+  "extends": "@shkriuss/config/tsconfig/app.json",
+  "include": ["src", "vitest.config.ts"]
+}
