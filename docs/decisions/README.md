@@ -18,7 +18,7 @@ An ADR is a short document that records one important decision: the context, wha
 | [0008](0008-quality-gates.md)               | Quality gates and testing                       | Accepted |
 | [0009](0009-stay-on-pnpm-11.md)             | Stay on pnpm 11 for now                         | Accepted |
 | [0010](0010-script-integrity.md)            | Script integrity with a hash-allowed import map | Accepted |
-| [0011](0011-worker-trusted-types-policy.md) | One Trusted Types policy for worker scripts     | Proposed |
+| [0011](0011-worker-trusted-types-policy.md) | One Trusted Types policy for worker scripts     | Accepted |
 
 ## Template
 

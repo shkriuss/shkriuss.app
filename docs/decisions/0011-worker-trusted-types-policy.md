@@ -1,6 +1,6 @@
 # ADR 0011: One Trusted Types policy for worker scripts
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-10-05
 
 ## Context
