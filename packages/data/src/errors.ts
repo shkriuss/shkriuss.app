@@ -14,8 +14,8 @@ export type DataErrorCode = "invalid" | "too-large" | "future-clock" | "deleted"
 export class DataError extends Error {
   readonly code: DataErrorCode;
 
-  constructor(code: DataErrorCode, message: string) {
-    super(message);
+  constructor(code: DataErrorCode, message: string, options?: ErrorOptions) {
+    super(message, options);
     this.name = "DataError";
     this.code = code;
   }
