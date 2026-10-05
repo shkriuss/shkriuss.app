@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import { MEDIA_TYPES, backupFileName, kindOf } from "./files.ts";
+import { MAX_BACKUP_BYTES } from "./document.ts";
+import { MEDIA_TYPES, backupFileName, kindOf, openBackupFile } from "./files.ts";
+import { encryptedExample, example } from "./test/fixtures.ts";
 
 const text = (value: string): Uint8Array => new TextEncoder().encode(value);
 
@@ -37,5 +39,28 @@ describe("backupFileName (backup format §1)", () => {
       encrypted: "application/octet-stream",
       plain: "application/json",
     });
+  });
+});
+
+describe("openBackupFile (backup format §5.1, §5.2)", () => {
+  it.each<[string, Uint8Array, boolean]>([
+    ["an encrypted backup", encryptedExample("binary"), true],
+    ["an ASCII-armored backup", encryptedExample("armored"), true],
+    ["a plain backup", text(example()), false],
+    ["any other file, which reading refuses", text("Milk, eggs"), false],
+  ])("reads %s, and tells whether it is encrypted", async (_case, bytes, encrypted) => {
+    const opened = await openBackupFile(new File([Uint8Array.from(bytes)], "backup"));
+    expect(opened).toStrictEqual({ encrypted, bytes });
+  });
+
+  it("refuses a file larger than 64 MiB before reading it", async () => {
+    const file = new Blob([new Uint8Array(MAX_BACKUP_BYTES + 1)]);
+    const read = vi.spyOn(file, "arrayBuffer");
+    await expect(openBackupFile(file)).rejects.toThrow(
+      expect.objectContaining({ name: "BackupError", code: "too-large" }),
+    );
+    expect(read).not.toHaveBeenCalled();
+    const largest = await openBackupFile(file.slice(0, MAX_BACKUP_BYTES));
+    expect(largest.bytes.length).toBe(MAX_BACKUP_BYTES);
   });
 });

@@ -1,3 +1,6 @@
+import { MAX_BACKUP_BYTES } from "./document.ts";
+import { BackupError } from "./errors.ts";
+
 /** How a file offered for import is encoded (backup format §5.2). */
 export type BackupKind = "age" | "armored-age" | "plain";
 
@@ -38,4 +41,22 @@ function pad(value: number, length: number): string {
 export function backupFileName(app: string, made: Date, encrypted: boolean): string {
   const date = `${pad(made.getFullYear(), 4)}-${pad(made.getMonth() + 1, 2)}-${pad(made.getDate(), 2)}`;
   return `shkriuss-${app}-${date}.${encrypted ? "age" : "json"}`;
+}
+
+/** A file offered for import, read: its bytes, and whether it is encrypted (§5.2). */
+export interface OpenedFile {
+  readonly encrypted: boolean;
+  readonly bytes: Uint8Array;
+}
+
+/**
+ * Reads a file offered for import (backup format §5.1, §5.2), and refuses one larger than 64 MiB
+ * with a `BackupError` `too-large` before reading any of it.
+ */
+export async function openBackupFile(file: Blob): Promise<OpenedFile> {
+  if (file.size > MAX_BACKUP_BYTES) {
+    throw new BackupError("too-large", `The file has ${file.size} bytes.`);
+  }
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  return { encrypted: kindOf(bytes) !== "plain", bytes };
 }

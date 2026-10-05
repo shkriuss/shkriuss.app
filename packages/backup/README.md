@@ -1,56 +1,86 @@
 # @shkriuss/backup
 
-Backups: the files that carry an app's data off a device and back, as the [backup format spec](../../docs/specs/backup-format.md) defines them ([ADR 0004](../../docs/decisions/0004-local-data-and-backups.md)). The records inside, their checks and their merge belong to [`@shkriuss/data`](../data); this package adds the file around them.
+Backups: the files that carry an app's data off a device and back, as the [backup format spec](../../docs/specs/backup-format.md) defines them ([ADR 0004](../../docs/decisions/0004-local-data-and-backups.md)). The records inside, their checks and their merge belong to [`@shkriuss/data`](../data); this package adds the file around them: the backup document, encryption with [age](https://age-encryption.org) in a worker, and passphrases.
 
-So far it has the parts that need no encryption: the backup document, how files are recognized and named, and passphrases. Encryption with age, in a worker, comes next.
-
-| Module          | What it does                                                                                                                                                       |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `document.ts`   | Writing the backup document of a snapshot (§2, §4), and reading one back with every check of §5.3–§5.5                                                             |
-| `files.ts`      | Recognizing a file by its content (§5.2), and the names and media types of backup files (§1)                                                                       |
-| `passphrase.ts` | Generated passphrases, their normalization and the minimum length of a passphrase the user picks (§3.1)                                                            |
-| `words.ts`      | The 2,048 words of generated passphrases: the English word list of [BIP-39](https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki), under the MIT License |
-| `errors.ts`     | `BackupError`, whose `code` tells the conditions of §6 apart                                                                                                       |
+| Module            | What it does                                                                                                                                                       |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `backup-file.ts`  | Making a backup file of a database (§4), and reading one that the user offers (§5.2–§5.5)                                                                          |
+| `document.ts`     | Writing the backup document of a snapshot (§2, §4), and reading one back with every check of §5.3–§5.5                                                             |
+| `files.ts`        | Opening a file offered for import (§5.1), recognizing it by its content (§5.2), and the names and media types of backup files (§1)                                 |
+| `crypto.ts`       | Encrypting and decrypting in the backup worker, from the page (§3.1)                                                                                               |
+| `age.worker.ts`   | The backup worker, which answers one request and ends                                                                                                              |
+| `age-messages.ts` | The messages between the page and the backup worker, and their checks                                                                                              |
+| `age.ts`          | Encryption with age (§3), as the worker runs it                                                                                                                    |
+| `passphrase.ts`   | Generated passphrases, their normalization and the minimum length of a passphrase the user picks (§3.1)                                                            |
+| `words.ts`        | The 2,048 words of generated passphrases: the English word list of [BIP-39](https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki), under the MIT License |
+| `errors.ts`       | `BackupError`, whose `code` tells the conditions of §6 apart                                                                                                       |
 
 ## Export and import
 
 ```ts
-import { backupFileName, readBackup, writeBackup } from "@shkriuss/backup";
+import {
+  createBackupFile,
+  generatePassphrase,
+  openBackupFile,
+  readBackupFile,
+} from "@shkriuss/backup";
 
-// Export (§4): the document of a consistent snapshot. Refused above 64 MiB.
-const made = new Date();
-const bytes = writeBackup("notes", await db.snapshot(), made);
-const name = backupFileName("notes", made, false); // "shkriuss-notes-2026-10-05.json"
+// Export (§4): a consistent snapshot, encrypted in the backup worker. With `passphrase: null`,
+// a plain backup, which the app offers only after the user confirms a warning.
+const passphrase = generatePassphrase(); // or one the user typed twice, of 12 characters or more
+const file = await createBackupFile(db, { app: "notes", passphrase });
+// file.name is "shkriuss-notes-2026-10-05.age". Once the app has handed it over:
+await db.recordBackup();
 
-// Import (§5): checks the document and its records, and migrates them.
-const { exported, incoming } = readBackup(bytes, { app: "notes", schemas, now: Date.now() });
+// Import (§5): the size is checked before the file is read.
+const opened = await openBackupFile(chosen);
+// If opened.encrypted, the app asks for the passphrase; after `wrong-passphrase`, it asks again.
+const { exported, incoming } = await readBackupFile(opened, passphrase, {
+  app: "notes",
+  schemas,
+  now: Date.now(),
+});
 const preview = await db.previewImport(incoming); // shown with `exported`, before the user confirms
 await db.import(incoming);
 ```
 
-`readBackup()` refuses with a `BackupError` (§6):
+`writeBackup()` and `readBackup()` do the same for the backup document alone, without a file or encryption.
 
-| `code`          | When                                                                                                                    |
-| --------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `too-large`     | the file is larger than 64 MiB                                                                                          |
-| `not-a-backup`  | it is not UTF-8 JSON (a byte order mark included), or not an object whose `format` is `shkriuss-backup`                 |
-| `newer-version` | its format version or schema version is newer than the app's; a newer format is refused before anything else is checked |
-| `other-app`     | it is a backup of another app, whose id `error.app` gives                                                               |
-| `future-clock`  | an HLC lies more than 24 hours ahead of this device's clock                                                             |
-| `invalid`       | any other member or record fails a check: the backup is damaged or was changed                                          |
+The functions refuse with a `BackupError` (§6), and with a TypeError for a mistake in the app's code, such as a passphrase of fewer than 12 characters, or an encrypted file read without one:
 
-`wrong-passphrase` and `damaged` belong to decryption. Messages are for developers and contain no data from the backup, only ids.
+| `code`             | When                                                                                                                    |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `too-large`        | the file is larger than 64 MiB, or a backup would be: every backup that is made must import                             |
+| `not-a-backup`     | it is not UTF-8 JSON (a byte order mark included), or not an object whose `format` is `shkriuss-backup`                 |
+| `wrong-passphrase` | the passphrase does not decrypt the file; the user can try again                                                        |
+| `damaged`          | the age file is damaged or truncated, is not encrypted with a passphrase alone, or has a work factor above 20           |
+| `newer-version`    | its format version or schema version is newer than the app's; a newer format is refused before anything else is checked |
+| `other-app`        | it is a backup of another app, whose id `error.app` gives                                                               |
+| `future-clock`     | an HLC lies more than 24 hours ahead of this device's clock                                                             |
+| `invalid`          | any other member or record fails a check: the backup is damaged or was changed                                          |
+
+Messages are for developers and contain no data from the backup, only ids. An unexpected failure in the worker, such as running out of memory, is a plain `Error` whose message says only that the worker failed.
+
+## Encryption
+
+- **age, version 1** (§3), through [`age-encryption`](https://github.com/FiloSottile/typage), by the author of age: one recipient stanza of type `scrypt`, work factor 18 (256 MiB), in the binary encoding. Importers also accept the ASCII-armored form, and refuse work factors above 20.
+- **Wrong passphrase or damaged file:** age authenticates the whole file before it gives any of it, so a damaged or truncated file never imports. A changed recipient stanza reads as a wrong passphrase, because age cannot tell the two apart.
+- **No lock-in:** the age command-line tool decrypts every encrypted backup, and backups that it encrypts with `age --passphrase` import. The tests read two files that it made.
+- **In a worker** (§3.1): deriving the key takes seconds and 256 MiB on a phone. Each request starts a worker of its own through `@shkriuss/edge/workers` ([ADR 0011](../../docs/decisions/0011-worker-trusted-types-policy.md)), which ends after it, so that the worker holds the passphrase only during the operation. The page copies the bytes into the worker, so that the user can try another passphrase, and the worker moves the result back.
+- **Only in the worker's bundle:** `age-encryption` and its libraries, [noble](https://paulmillr.com/noble/) and [scure](https://github.com/paulmillr/scure-base), are in the worker, and the page's JavaScript includes none of them. Their licenses ship in every app's `/licenses.txt`.
 
 ## Passphrases
 
 - `generatePassphrase()` joins six words from `WORDS` with hyphens. Each word takes 11 bits from `crypto.getRandomValues`, so all 2,048 words are equally likely and a passphrase has 66 bits.
-- `normalizePassphrase()` puts a passphrase in Unicode NFC, so the same passphrase typed on different devices gives the same bytes. It changes nothing else, and spaces count.
+- `normalizePassphrase()` puts a passphrase in Unicode NFC, so the same passphrase typed on different devices gives the same bytes. It changes nothing else, and spaces count. Encryption and decryption normalize every passphrase.
 - `isLongEnough()` checks that a passphrase the user picks has at least 12 characters, counted as people see them: an emoji or a letter with an accent counts once.
 
 ## Tests
 
-- **The spec's example:** the tests read the example document straight from the backup format spec, so the spec and the code cannot drift apart.
-- **Every refusal:** each check of §5.3–§5.5 has a test with the error code it gives, including invalid UTF-8 inside a string, a byte order mark, a day that does not exist and a record from the future. A further test checks that a refused backup's data stays out of the error messages.
+- **The spec's example:** the tests read the example document straight from the backup format spec, so the spec and the code cannot drift apart. The age command-line tool, version 1.1.1, encrypted it into `src/test/example.age` and, ASCII-armored, `src/test/example.armored.age`, with the passphrase in `src/test/fixtures.ts`. Like every backup fixture, they never change (§8).
+- **Every refusal:** each check of §5.3–§5.5 has a test with the error code it gives, including invalid UTF-8 inside a string, a byte order mark, a day that does not exist and a record from the future. A further test checks that a refused backup's data stays out of the error messages. Damaged age files are refused as `damaged`: truncated, without their last chunk, with a changed payload or header MAC, with a second stanza or one for a key.
+- **The worker in Node.js:** the unit tests replace `@shkriuss/edge/workers` with `src/test/worker.ts`, which runs the worker's module on the test's thread and clones the messages as a browser does. They use a low work factor, which keeps them fast.
+- **In browsers:** the [platform end-to-end tests](../../tooling/platform-e2e) make and read encrypted backups through the real worker, under the production headers, at work factor 18, and read the files that the age command-line tool made.
 - **Properties** (fast-check, [ADR 0008](../../docs/decisions/0008-quality-gates.md)):
   - every snapshot of generated records reads back exactly as it was written;
   - a passphrase uses all 66 random bits and nothing else.

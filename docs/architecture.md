@@ -108,7 +108,7 @@ All user data lives in IndexedDB and is accessed only through `@shkriuss/data`, 
 
 Backups are the only way data leaves a device, the only protection against losing one, and the way to move data between devices. They are a first-class platform feature. The exact format is specified in [specs/backup-format.md](specs/backup-format.md).
 
-- **Encrypted by default.** A versioned JSON document encrypted in the standard [age](https://age-encryption.org) format with a passphrase (scrypt). Files end in `.age` and can also be decrypted with the `age` command-line tool, so users are never locked in. A generated passphrase is offered.
+- **Encrypted by default.** A versioned JSON document encrypted in the standard [age](https://age-encryption.org) format with a passphrase (scrypt). Files end in `.age` and can also be decrypted with the `age` command-line tool, so users are never locked in. A generated passphrase is offered. Deriving the key takes seconds and 256 MiB on a phone, so encryption and decryption run in a worker that ends after each operation.
 - **Plain JSON export** is available only after an explicit warning.
 - **Readable exports** (CSV, Markdown, iCalendar and so on) where they suit an app. They are for other tools, not for restoring.
 - **Import pipeline:** size check → decrypt → parse → validate against the schema → migrate → preview ("12 new, 3 updated, 1 deleted") → merge → commit in one transaction → report. A failure at any step changes nothing.

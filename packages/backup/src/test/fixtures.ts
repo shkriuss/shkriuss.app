@@ -39,6 +39,19 @@ export function example(): string {
   return json;
 }
 
+/** The passphrase of the encrypted examples, and of encrypted backups in tests. */
+export const EXAMPLE_PASSPHRASE = "burst-swarm-slender-curve-ability-various";
+
+/**
+ * The example of backup format §2, encrypted with `EXAMPLE_PASSPHRASE` by the age command-line
+ * tool, version 1.1.1: `age --passphrase`, or with `--armor` for the ASCII-armored form. Its work
+ * factor is 18. Like every backup fixture, these files never change (§8).
+ */
+export function encryptedExample(form: "binary" | "armored"): Uint8Array {
+  const file = form === "binary" ? "example.age" : "example.armored.age";
+  return new Uint8Array(readFileSync(new URL(file, import.meta.url)));
+}
+
 /** A new database of the example's app, on a device of its own. */
 export function openTestDatabase(now: () => number = Date.now): Promise<Database<typeof v1>> {
   return openDatabase(SCHEMAS, { indexedDB: new IDBFactory(), IDBKeyRange, now });

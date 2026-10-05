@@ -1,4 +1,5 @@
 import { registerServiceWorker, startWorker } from "@shkriuss/edge/workers";
+import { type BackupTests, backups } from "./backups.ts";
 import { type DataTests, data } from "./data.ts";
 import pingWorker from "./ping.worker.ts?worker&url";
 
@@ -10,8 +11,9 @@ declare global {
       readonly startWorker: typeof startWorker;
       readonly registerServiceWorker: typeof registerServiceWorker;
       readonly data: DataTests;
+      readonly backups: BackupTests;
     };
   }
 }
 
-window.platform = { pingWorker, startWorker, registerServiceWorker, data };
+window.platform = { pingWorker, startWorker, registerServiceWorker, data, backups };
