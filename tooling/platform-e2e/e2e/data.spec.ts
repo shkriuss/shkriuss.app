@@ -1,42 +1,10 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "@shkriuss/config/playwright";
+import { added, forget, load, open, read, write } from "./app.ts";
 
 // The data layer in real browsers (data model §3, §6, §7): records last, the tabs of one app
 // share its clock, and a newer version of the app upgrades the database, which older ones then
 // refuse to open.
-
-/** Opens the test app and waits until its script has run. */
-async function load(page: Page): Promise<void> {
-  await page.goto("/");
-  await page.waitForFunction(() => window.platform !== undefined);
-}
-
-async function open(page: Page, version: 1 | 2): Promise<string> {
-  return page.evaluate(async (as) => {
-    if (window.platform === undefined) {
-      throw new Error("The test app has not loaded.");
-    }
-    return window.platform.data.open(as);
-  }, version);
-}
-
-async function write(page: Page, texts: readonly string[]): Promise<string[]> {
-  return page.evaluate(async (all) => {
-    if (window.platform === undefined) {
-      throw new Error("The test app has not loaded.");
-    }
-    return window.platform.data.write(all);
-  }, texts);
-}
-
-async function read(page: Page): Promise<string[]> {
-  return page.evaluate(async () => {
-    if (window.platform === undefined) {
-      throw new Error("The test app has not loaded.");
-    }
-    return (await window.platform.data.read()).toSorted();
-  });
-}
 
 async function device(page: Page): Promise<string> {
   return page.evaluate(async () => {
@@ -72,20 +40,6 @@ async function restore(page: Page, from: string): Promise<unknown> {
     }
     return window.platform.data.restore(json);
   }, from);
-}
-
-async function forget(page: Page): Promise<void> {
-  await page.evaluate(async () => {
-    if (window.platform === undefined) {
-      throw new Error("The test app has not loaded.");
-    }
-    await window.platform.data.forget();
-  });
-}
-
-/** What an import of `n` new records does. */
-function added(n: number): { new: number; updated: number; deleted: number; unchanged: number } {
-  return { new: n, updated: 0, deleted: 0, unchanged: 0 };
 }
 
 test("records and the device id last across reloads", async ({ page }) => {

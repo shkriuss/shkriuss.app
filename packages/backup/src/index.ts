@@ -7,8 +7,16 @@ export {
   type BackupContents,
   type ReadOptions,
 } from "./document.ts";
+export { createBackupFile, readBackupFile, type BackupFileOptions } from "./backup-file.ts";
 export { BackupError, type BackupErrorCode } from "./errors.ts";
-export { MEDIA_TYPES, backupFileName, kindOf, type BackupKind } from "./files.ts";
+export {
+  MEDIA_TYPES,
+  backupFileName,
+  kindOf,
+  openBackupFile,
+  type BackupKind,
+  type OpenedFile,
+} from "./files.ts";
 export {
   MIN_PASSPHRASE_LENGTH,
   PASSPHRASE_WORDS,

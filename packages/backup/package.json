@@ -13,14 +13,17 @@
   },
   "dependencies": {
     "@shkriuss/data": "workspace:*",
-    "@shkriuss/edge": "workspace:*"
+    "@shkriuss/edge": "workspace:*",
+    "age-encryption": "catalog:"
   },
   "devDependencies": {
     "@shkriuss/config": "workspace:*",
+    "@types/node": "catalog:",
     "@vitest/coverage-v8": "catalog:",
     "fake-indexeddb": "catalog:",
     "fast-check": "catalog:",
     "typescript": "catalog:",
+    "vite": "catalog:",
     "vitest": "catalog:"
   }
 }

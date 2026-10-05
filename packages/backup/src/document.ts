@@ -29,7 +29,11 @@ const ISO_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
  * UTF-8 bytes. It is indented with two spaces, so that a decrypted backup is readable. Throws a
  * `BackupError` `too-large` if it is larger than imports accept: every backup must import.
  */
-export function writeBackup(app: string, snapshot: Snapshot, exported: Date): Uint8Array {
+export function writeBackup(
+  app: string,
+  snapshot: Snapshot,
+  exported: Date,
+): Uint8Array<ArrayBuffer> {
   if (!isAppId(app)) {
     throw new TypeError(`"${app}" is not an app id.`);
   }

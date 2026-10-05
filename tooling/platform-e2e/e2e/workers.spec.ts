@@ -87,7 +87,11 @@ test.describe("headers", () => {
     const page = await request.get("/");
     const manifest = parseManifest(await (await request.get(`/${MANIFEST_FILE}`)).text());
     const bundles = [...manifest.keys()].filter(isWorkerBundlePath);
-    expect(bundles).toHaveLength(1);
+    // The test app's own worker, and the backup worker of @shkriuss/backup.
+    expect(bundles.map((path) => path.replace(/-[\w-]{8}\.js$/, "")).toSorted()).toEqual([
+      "/assets/age.worker",
+      "/assets/ping.worker",
+    ]);
 
     for (const path of [...bundles, "/sw.js"]) {
       const response = await request.get(path);

@@ -4,6 +4,7 @@ import {
   DataLayerError,
   type ImportCounts,
   type SchemaVersion,
+  type Schemas,
   checkIncomingStores,
   defineSchemas,
   field,
@@ -57,11 +58,21 @@ let version2: Database<typeof v2> | undefined;
 let versionChanges = 0;
 
 function opened(): Database<typeof v1> | Database<typeof v2> {
-  const database = version2 ?? version1;
-  if (database === undefined) {
-    throw new Error("The database is not open.");
+  return current().database;
+}
+
+/** The open database, and every version of its schema, for the tests of backup files. */
+export function current(): {
+  readonly database: Database<typeof v1> | Database<typeof v2>;
+  readonly schemas: Schemas;
+} {
+  if (version2 !== undefined) {
+    return { database: version2, schemas: SCHEMAS_2 };
   }
-  return database;
+  if (version1 !== undefined) {
+    return { database: version1, schemas: SCHEMAS_1 };
+  }
+  throw new Error("The database is not open.");
 }
 
 async function writeOne(text: string): Promise<string> {
