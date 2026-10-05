@@ -95,6 +95,9 @@ importers:
 
   apps/hub:
     dependencies:
+      '@shkriuss/i18n':
+        specifier: workspace:*
+        version: link:../../packages/i18n
       react:
         specifier: 'catalog:'
         version: 19.3.0

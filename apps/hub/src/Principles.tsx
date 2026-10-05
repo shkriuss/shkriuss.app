@@ -1,19 +1,19 @@
+import { m } from "./messages.ts";
+
 export default function Principles() {
   return (
     <section aria-labelledby="principles">
-      <h2 id="principles">What to expect</h2>
+      <h2 id="principles">{m.expect()}</h2>
       <ul>
-        <li>Your data stays on your device. There are no accounts and no tracking.</li>
-        <li>Every app works offline once it has loaded.</li>
-        <li>Encrypted backups move your data between your devices.</li>
+        <li>{m.local()}</li>
+        <li>{m.offline()}</li>
+        <li>{m.backups()}</li>
       </ul>
       <p>
-        The source code is public:{" "}
-        <a href="https://github.com/shkriuss/shkriuss.app">github.com/shkriuss/shkriuss.app</a>
+        {m.source()} <a href="https://github.com/shkriuss/shkriuss.app">{m.sourceLink()}</a>
       </p>
       <p>
-        It includes software of others, under their own licenses:{" "}
-        <a href="/licenses.txt">licenses.txt</a>
+        {m.licenses()} <a href="/licenses.txt">{m.licensesLink()}</a>
       </p>
     </section>
   );

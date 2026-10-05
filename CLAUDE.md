@@ -29,7 +29,7 @@ Instructions for Claude Code and for anyone else changing this repository. Read 
 1. **Local-only.** Never send user data over the network. No accounts, servers, sync, analytics, telemetry or crash reporting. Changing this requires a new ADR.
 2. **Offline.** Every app works fully offline after its first load.
 3. **Permanent names.** Never rename or reuse an app `id` or subdomain.
-4. **English UI.** Every user-facing string goes through `@shkriuss/i18n`. Format dates, numbers and lists with `Intl`.
+4. **English UI.** Every user-facing string comes from a message module of `@shkriuss/i18n` ([ADR 0012](docs/decisions/0012-typed-messages.md)); lint refuses text in JSX. Format dates, numbers and lists with its `Intl` formats.
 
 ### Security and privacy
 

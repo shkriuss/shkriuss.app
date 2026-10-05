@@ -1,13 +1,34 @@
 # @shkriuss/i18n
 
-How the UI writes dates, times, numbers and lists (architecture §10). The UI is in English, and its formats follow the device's regional settings, through the browser's `Intl`.
+The UI's text and formats (architecture §10). The UI is in English. Its text lives in typed message modules ([ADR 0012](../../docs/decisions/0012-typed-messages.md)), and its formats follow the device's regional settings, through the browser's `Intl`.
 
-| Module      | What it does                                                                                 |
-| ----------- | -------------------------------------------------------------------------------------------- |
-| `locale.ts` | The device's locale, and the English locale that the UI formats with on that device          |
-| `format.ts` | `createFormat()`: numbers, sizes in bytes, dates, times, relative times and lists for the UI |
+| Module        | What it does                                                                                          |
+| ------------- | ----------------------------------------------------------------------------------------------------- |
+| `messages.ts` | `defineMessages()`: a message module, whose messages are functions from typed inputs to text          |
+| `format.ts`   | `createFormat()`: numbers, sizes in bytes, dates, times, relative times, lists and plurals for the UI |
+| `locale.ts`   | The device's locale, and the English locale that the UI formats with on that device                   |
 
-Message catalogs come next.
+## Messages
+
+Every package or app with UI text has a message module. Its messages are TypeScript functions, so a missing message, or one called with the wrong inputs, is a type error. There is no compiler and no dependency.
+
+```ts
+import { defineMessages } from "@shkriuss/i18n";
+
+export const messages = defineMessages((format) => ({
+  title: () => "Notes",
+  count: (count: number) => format.plural(count, { one: "# note", other: "# notes" }),
+  lastBackup: (made: Date, now: Date) => `Last backup ${format.relative(made, now)}`,
+}));
+
+const m = messages(format);
+m.count(1234); // "1,234 notes", or "1.234 notes" on a device in Germany
+```
+
+- **Formats:** a message module gets the UI's formats, and writes every number, date and list with them.
+- **Plurals:** `format.plural()` picks the English form for a count with `Intl.PluralRules`; `#` stands for the count.
+- **Text only from messages:** oxlint's `react/jsx-no-literals` refuses text written into JSX, and strings in the attributes that people read or hear, such as `aria-label`, `alt`, `title`, `label` and `placeholder`. Class names, ids and links stay strings.
+- **Cheap to call:** a module gives the same frozen messages for the same formats, so components can call it on every render.
 
 ## English with the device's region
 

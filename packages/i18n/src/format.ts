@@ -26,6 +26,17 @@ export interface Format {
   relative(date: Date, now: Date): string;
   /** A list: "Milk, Eggs and Bread"; with "or"; or as units, "12 new, 3 updated, 1 deleted". */
   list(items: readonly string[], type?: "and" | "or" | "units"): string;
+  /**
+   * The English form for `count`, in which `#` stands for the count as a number:
+   * `plural(3, { one: "# note", other: "# notes" })` is "3 notes".
+   */
+  plural(count: number, forms: PluralForms): string;
+}
+
+/** The forms of an English word or phrase for one, and for any other count. */
+export interface PluralForms {
+  readonly one: string;
+  readonly other: string;
 }
 
 const BYTE_UNITS = ["kilobyte", "megabyte", "gigabyte", "terabyte"] as const;
@@ -75,6 +86,8 @@ export function createFormat(device = deviceLocale(), { timeZone }: FormatOption
     timeZone,
   });
   const relatives = new Intl.RelativeTimeFormat(locale.locale, { numeric: "auto" });
+  // The UI's language is English, whatever the region.
+  const plurals = new Intl.PluralRules("en");
   const lists = {
     and: new Intl.ListFormat(locale.locale, { type: "conjunction" }),
     or: new Intl.ListFormat(locale.locale, { type: "disjunction" }),
@@ -141,5 +154,9 @@ export function createFormat(device = deviceLocale(), { timeZone }: FormatOption
       return relatives.format(Math.round(calendarDays / 365.2425), "year");
     },
     list: (items, type = "and") => lists[type].format(items),
+    plural(count, forms) {
+      const form = plurals.select(count) === "one" ? forms.one : forms.other;
+      return form.replaceAll("#", numbers.format(count));
+    },
   };
 }

@@ -120,3 +120,22 @@ describe("lists", () => {
     expect(german.list([])).toBe("");
   });
 });
+
+describe("plurals", () => {
+  const forms = { one: "# note", other: "# notes" };
+
+  it.each([
+    [0, "0 notes"],
+    [1, "1 note"],
+    [2, "2 notes"],
+    [1.5, "1.5 notes"],
+    [1234, "1,234 notes"],
+  ])("are English for %d: %s", (count, shown) => {
+    expect(american.plural(count, forms)).toBe(shown);
+  });
+
+  it("write the count with the region's separators", () => {
+    expect(german.plural(1234, forms)).toBe("1.234 notes");
+    expect(german.plural(1, { one: "a note", other: "# notes" })).toBe("a note");
+  });
+});
