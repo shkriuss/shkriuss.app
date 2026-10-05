@@ -74,7 +74,7 @@ shkriuss.app/
 | `@shkriuss/backup` | Export and import, encryption (`age`), backup format versions, readable export formats                                       |
 | `@shkriuss/pwa`    | Web app manifest, service worker, install and update flow, persistent storage                                                |
 | `@shkriuss/edge`   | Security headers (`_headers`), script integrity, starting workers under Trusted Types, and Cloudflare/Wrangler configuration |
-| `@shkriuss/i18n`   | Message catalogs (English) and `Intl` formatting helpers                                                                     |
+| `@shkriuss/i18n`   | Typed message modules in English ([ADR 0012](decisions/0012-typed-messages.md)) and `Intl` formats                           |
 
 Dependency direction: apps → `shell` → (`ui`, `data`, `backup`, `pwa`, `i18n`); `backup` → `data`. No package imports an app, and apps never import other apps. Lint rules enforce this.
 

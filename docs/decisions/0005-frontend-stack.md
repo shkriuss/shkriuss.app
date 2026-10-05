@@ -1,6 +1,6 @@
 # ADR 0005: Frontend stack
 
-- **Status:** Accepted
+- **Status:** Accepted; the row on translations is superseded by [ADR 0012](0012-typed-messages.md)
 - **Date:** 2026-10-04
 
 ## Context
