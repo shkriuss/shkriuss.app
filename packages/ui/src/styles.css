@@ -9,6 +9,8 @@
  * themes.
  */
 @import "tailwindcss";
+/* The components of this package, for the classes they use. */
+@source "./";
 
 @theme {
   /* System fonts: nothing is loaded from anywhere else. */
@@ -76,6 +78,19 @@
   :focus-visible {
     outline: 2px solid var(--color-focus);
     outline-offset: 2px;
+  }
+
+  /*
+   * React Aria's rule for pressable elements, which it would otherwise add as a stylesheet in
+   * the page, which the Content-Security-Policy refuses (see index.ts).
+   */
+  [data-react-aria-pressable] {
+    touch-action: pan-x pan-y pinch-zoom;
+  }
+
+  /* The page behind a modal dialog does not scroll. */
+  html:has(dialog:modal) {
+    overflow: hidden;
   }
 
   @media (prefers-reduced-motion: reduce) {

@@ -2,6 +2,7 @@ import { registerServiceWorker, startWorker } from "@shkriuss/edge/workers";
 import { createFormat } from "@shkriuss/i18n";
 import { type BackupTests, backups } from "./backups.ts";
 import { type DataTests, data } from "./data.ts";
+import { showGallery } from "./gallery.tsx";
 import pingWorker from "./ping.worker.ts?worker&url";
 
 declare global {
@@ -26,3 +27,9 @@ window.platform = {
   backups,
   createFormat,
 };
+
+// The components page. React is in the entry script, as in every app, so that the helpers that
+// Rolldown adds for its CommonJS modules are there too (ADR 0010).
+if (location.pathname === "/ui") {
+  showGallery();
+}

@@ -1,10 +1,11 @@
 # @shkriuss/ui
 
-The look that every app shares ([architecture §10](../../docs/architecture.md#10-user-interface)): design tokens, a light and a dark theme, and base styles, on [Tailwind CSS](https://tailwindcss.com) 4 ([ADR 0005](../../docs/decisions/0005-frontend-stack.md)). Accessible components built on React Aria come next.
+The look that every app shares ([architecture §10](../../docs/architecture.md#10-user-interface)): design tokens, a light and a dark theme, base styles, and accessible components built on [React Aria](https://react-spectrum.adobe.com/react-aria/), on [Tailwind CSS](https://tailwindcss.com) 4 ([ADR 0005](../../docs/decisions/0005-frontend-stack.md)).
 
 | File          | What it is                                                                          |
 | ------------- | ----------------------------------------------------------------------------------- |
 | `styles.css`  | Tailwind CSS with the design tokens, both themes and the base styles                |
+| `index.ts`    | The components, and the contrast ratio                                              |
 | `contrast.ts` | The WCAG 2.2 contrast ratio of two colors, which the tests hold every token pair to |
 
 ## Use
@@ -58,6 +59,34 @@ Importing it from a script keeps it a module of the build, so `/licenses.txt` li
 - **Reduced motion:** when the device asks for it, animations and transitions end at once.
 - **`page`:** a utility for a page's content, which keeps it readable in width and clear of the notch and the rounded corners of the screen.
 
+## Components
+
+```tsx
+import { Banner, Button, Dialog, Link, Switch, TextField } from "@shkriuss/ui";
+
+<Button variant="primary" onPress={save}>{m.save()}</Button>
+<TextField label={m.name()} description={m.nameHelp()} errorMessage={m.nameMissing()} />
+```
+
+| Component   | What it is                                                                                                          |
+| ----------- | ------------------------------------------------------------------------------------------------------------------- |
+| `Button`    | A button: `primary` for the main action, `secondary` (the default), or `danger` for one that deletes                |
+| `Link`      | A link, underlined in the accent color                                                                              |
+| `TextField` | A text field with its label, an optional description, and an error message while it is invalid                      |
+| `Switch`    | A switch that turns a setting on or off at once                                                                     |
+| `Dialog`    | A modal dialog: it takes the focus, closes with Escape and gives the focus back; the page behind it does not scroll |
+| `Banner`    | A notice that does not interrupt, such as that an update is available, which screen readers read when it appears    |
+
+- **Accessible:** React Aria gives them the keyboard, pointer and screen-reader behavior of WCAG 2.2. Buttons and switches are at least 44 by 44 pixels, so that they are easy to tap.
+- **One look:** components take no `className` or `style`. Apps lay them out with elements around them.
+- **Text:** labels and messages come from the app's message module ([ADR 0012](../../docs/decisions/0012-typed-messages.md)).
+
+**Under the Content-Security-Policy.** React Aria works under the production headers, with two adjustments, and the end-to-end tests fail if it adds anything that the policy refuses:
+
+- **Pressable elements:** React Aria adds a stylesheet to the page with `touch-action` for buttons and links. `style-src 'self'` refuses that, so `styles.css` has the same rule, and importing the package adds an element with the stylesheet's id, which tells React Aria it is there.
+- **Modal dialogs:** React Aria's modal would add a stylesheet on iOS to keep the page still. `Dialog` uses the browser's `<dialog>` instead, and `styles.css` keeps the page from scrolling while one is open.
+- **Not yet usable:** number and date fields clear their announcements with `innerHTML`, which Trusted Types refuse, and React Aria's modal popovers, as in `Select`, `Menu` and `ComboBox`, add the iOS stylesheet. Each needs a solution like the two above before an app uses it.
+
 ## Tests
 
 - **Contrast** (`tokens.test.ts`): the tests read the tokens from `styles.css`, their only source. In both themes they hold to WCAG 2.2 AA:
@@ -65,3 +94,12 @@ Importing it from a script keeps it a module of the build, so `/licenses.txt` li
   - `line-strong` and `focus` on `canvas` and `surface`: at least 3.
 - **The contrast ratio** (`contrast.test.ts`) is checked against known values, such as 21 for black on white, and the gray that just passes 4.5 on white.
 - **In real browsers,** the hub's end-to-end tests check its colors in both themes, the focus outline, and that axe finds no accessibility problem in either theme.
+- **Components, in real browsers:** the platform tests ([`tooling/platform-e2e`](../../tooling/platform-e2e)) show every component on one page, under the production headers in Chromium, Firefox and WebKit:
+  - axe finds no accessibility problem, in either theme;
+  - React Aria adds no stylesheet, and pressable elements still get its `touch-action`;
+  - buttons respond to the pointer, Enter and Space, and not while disabled;
+  - buttons and switches measure at least 44 by 44 pixels;
+  - a text field's label, description and error reach screen readers;
+  - a switch turns on and off with the pointer and the keyboard;
+  - a dialog takes the focus, keeps the page still, closes with Escape and gives the focus back;
+  - a banner is a status that screen readers read.
