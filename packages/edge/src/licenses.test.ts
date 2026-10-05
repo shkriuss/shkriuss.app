@@ -50,6 +50,15 @@ describe("legalComments", () => {
     expect(legalComments(source)).toBe("First notice.\n\nSecond notice,\non two lines.");
     expect(legalComments("export const y = 2;")).toBe("");
   });
+
+  it("pairs each /*! with the first */ after it, and skips one that never ends", () => {
+    expect(legalComments("/*!*/ /*! a /*! b */ c */ /*! never ends")).toBe("a /*! b");
+  });
+
+  it("takes linear time, also on a file with many comments that never end", () => {
+    // A regular expression took quadratic time here: about 30 seconds for this file.
+    expect(legalComments("/*!".repeat(200_000))).toBe("");
+  });
 });
 
 describe("collectLicenses", () => {

@@ -40,9 +40,6 @@ const GENERATED: readonly (readonly [string, string])[] = [
 const LICENSE_FILE =
   /^(?:licen[cs]e|copying|notice|third[-_]party[-_]licen[cs]es?)(?:[-_.][\w.-]*)?$/i;
 
-/** A legal comment: the comments that start with `/*!`, which bundlers keep for this. */
-const LEGAL_COMMENT = /\/\*!([\s\S]*?)\*\//g;
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -112,16 +109,28 @@ async function readPackage(directory: string, own = false): Promise<ThirdPartyPa
 
 /** The text of the legal comments in `source`, without their comment markers. */
 export function legalComments(source: string): string {
-  return [...source.matchAll(LEGAL_COMMENT)]
-    .map(([, comment = ""]) =>
-      plain(
-        comment
-          .split("\n")
-          .map((line) => line.replace(/^\s*\* ?/, ""))
-          .join("\n"),
-      ),
-    )
-    .join("\n\n");
+  const comments: string[] = [];
+  // A legal comment starts with "/*!" and ends at the first "*/" after it. Found with indexOf,
+  // not a regular expression, so that even a file of comments that never end takes linear time.
+  let start = source.indexOf("/*!");
+  while (start !== -1) {
+    const end = source.indexOf("*/", start + 3);
+    if (end === -1) {
+      break;
+    }
+    const text = plain(
+      source
+        .slice(start + 3, end)
+        .split("\n")
+        .map((line) => line.replace(/^\s*\* ?/, ""))
+        .join("\n"),
+    );
+    if (text !== "") {
+      comments.push(text);
+    }
+    start = source.indexOf("/*!", end + 2);
+  }
+  return comments.join("\n\n");
 }
 
 export interface CollectOptions {
