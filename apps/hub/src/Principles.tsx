@@ -11,6 +11,10 @@ export default function Principles() {
         The source code is public:{" "}
         <a href="https://github.com/shkriuss/shkriuss.app">github.com/shkriuss/shkriuss.app</a>
       </p>
+      <p>
+        It includes software of others, under their own licenses:{" "}
+        <a href="/licenses.txt">licenses.txt</a>
+      </p>
     </section>
   );
 }

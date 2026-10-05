@@ -12,7 +12,7 @@ Every dependency is code we ship to users or run with full trust ([ADR 0007](../
 Put the answers in the pull request description.
 
 - **Purpose:** what it does that we cannot reasonably do ourselves.
-- **License:** `pnpm view <name> license`. A runtime dependency must use a license listed in `tooling/checks/license-policy.json`. Anything else: stop and ask the user.
+- **License:** `pnpm view <name> license`. A runtime dependency must use a license listed in `tooling/checks/license-policy.json`. Anything else: stop and ask the user. It must ship its license text (`LICENSE`, `COPYING` or similar): the build copies it into every app's `/licenses.txt` and fails without one.
 - **Maintenance:** release history (`pnpm view <name> time --json`), maintainers, open security advisories.
 - **Weight:** for runtime dependencies, the bundle-size cost and the number of transitive dependencies (`pnpm view <name> dependencies`).
 - **Install scripts:** pnpm blocks them. If the package needs one, stop and ask the user before adding it to `allowBuilds`.

@@ -76,7 +76,7 @@ describe("edge", () => {
     // The manifest covers the final files, after the plugin changed index.html.
     const manifest = parseManifest(await readFile(path.join(dist, "sha256sums.txt"), "utf8"));
     expect([...manifest.keys()]).toEqual(
-      [...scripts.map((file) => `/assets/${file}`), "/index.html"]
+      [...scripts.map((file) => `/assets/${file}`), "/index.html", "/licenses.txt"]
         .concat(
           (await readdir(path.join(dist, "assets")))
             .filter((file) => file.endsWith(".css"))
@@ -220,6 +220,92 @@ describe("edge", () => {
     expect(headers).toContain("; trusted-types shkriuss-workers\n");
     const manifest = parseManifest(await readFile(path.join(dist, "sha256sums.txt"), "utf8"));
     expect(manifest.has(`/assets/${workers[0] ?? ""}`)).toBe(true);
+  });
+
+  it("writes the licenses of the code in the page and its workers", async () => {
+    const root = await createApp();
+    const library = path.join(root, "node_modules", "fake-library");
+    await mkdir(path.join(library, "dist"), { recursive: true });
+    await writeFile(
+      path.join(library, "package.json"),
+      '{"name": "fake-library", "version": "1.2.3", "license": "MIT", "main": "dist/index.js"}',
+    );
+    // A package.json without a name, such as some packages put into their builds.
+    await writeFile(path.join(library, "dist", "package.json"), '{"type": "module"}');
+    await writeFile(path.join(library, "dist", "index.js"), "export const greet = () => 'hi';\n");
+    await writeFile(path.join(library, "LICENSE"), "MIT License\r\nCopyright (c) Fake\r\n");
+    await writeFile(path.join(library, "NOTICE"), "A notice of Fake.\n");
+    const unused = path.join(root, "node_modules", "unused-library");
+    await mkdir(unused, { recursive: true });
+    await writeFile(
+      path.join(unused, "package.json"),
+      '{"name": "unused-library", "version": "1.0.0"}',
+    );
+    await writeFile(path.join(unused, "index.js"), "export const unused = () => 0;\n");
+    await writeFile(
+      path.join(root, "vendored.js"),
+      "/*! Words from Elsewhere, under the MIT License. */\nexport const words = ['a'];\n",
+    );
+    await writeFile(
+      path.join(root, "helper.js"),
+      "/*!\n * Worker material,\n * under CC0.\n */\nexport const help = () => 1;\n",
+    );
+    await writeFile(
+      path.join(root, "tick.worker.js"),
+      'import { help } from "./helper.js";\nself.onmessage = () => self.postMessage(help());\n',
+    );
+    await writeFile(
+      path.join(root, "main.js"),
+      [
+        'import { greet } from "fake-library";',
+        'import { unused } from "unused-library";',
+        'import { words } from "./vendored.js";',
+        'import tick from "./tick.worker.js?worker&url";',
+        "console.info(greet(), words, tick);",
+        "",
+      ].join("\n"),
+    );
+    await buildApp(root, "/", { appId: "notes" });
+    const dist = path.join(root, "dist");
+    const licenses = await readFile(path.join(dist, "licenses.txt"), "utf8");
+    expect(licenses).toMatch(
+      /^Licenses of notes\.shkriuss\.app\n\nnotes\.shkriuss\.app is free software under the GNU Affero/,
+    );
+    expect(licenses).toContain("https://github.com/shkriuss/shkriuss.app");
+    expect(licenses).toContain(
+      "fake-library 1.2.3 (MIT)\n" +
+        "=".repeat(80) +
+        "\n\n--- LICENSE ---\n\nMIT License\nCopyright (c) Fake\n\n--- NOTICE ---\n\nA notice of Fake.\n",
+    );
+    expect(licenses).toContain(
+      "Material in vendored.js\n" +
+        "=".repeat(80) +
+        "\n\nWords from Elsewhere, under the MIT License.",
+    );
+    expect(licenses).toContain(
+      "Material in helper.js\n" + "=".repeat(80) + "\n\nWorker material,\nunder CC0.\n",
+    );
+    // Tree-shaking removed every line of it, so none of its code is served.
+    expect(licenses).not.toContain("unused-library");
+    expect(licenses).not.toContain("unused");
+    const manifest = parseManifest(await readFile(path.join(dist, "sha256sums.txt"), "utf8"));
+    expect(manifest.get("/licenses.txt")).toBe(createHash("sha256").update(licenses).digest("hex"));
+  });
+
+  it("fails the build for a package without a license file", async () => {
+    const root = await createApp();
+    const library = path.join(root, "node_modules", "unlicensed");
+    await mkdir(library, { recursive: true });
+    await writeFile(
+      path.join(library, "package.json"),
+      '{"name": "unlicensed", "version": "0.1.0"}',
+    );
+    await writeFile(path.join(library, "index.js"), "export const value = () => Math.random();\n");
+    await writeFile(
+      path.join(root, "main.js"),
+      'import { value } from "unlicensed";\nconsole.info(value());\n',
+    );
+    await expect(buildApp(root)).rejects.toThrow(/unlicensed@0\.1\.0 has no license file/);
   });
 
   it("allows the policy for a service worker at /sw.js", async () => {
