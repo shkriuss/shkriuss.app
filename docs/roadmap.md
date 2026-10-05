@@ -1,6 +1,6 @@
 # Roadmap
 
-- **Last updated:** 2026-10-04
+- **Last updated:** 2026-10-05
 - A phase is complete when its exit criteria are met. All work happens in small pull requests.
 
 ## Phase 0 — Foundations
@@ -26,13 +26,13 @@
 
 **Current phase.**
 
-| Step | What                                                                                                                                                                                                                                                             |
-| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1.1  | Specs: data model and merge rules (`docs/specs/data-model.md`); backup format (`docs/specs/backup-format.md`)                                                                                                                                                    |
-| 1.2  | Packages: `config`, `edge`, `i18n`, `ui` (tokens, core components, light and dark themes), `shell`, `pwa`, `data`, `backup`. The service worker first needs an ADR for one narrowly scoped Trusted Types policy ([ADR 0010](decisions/0010-script-integrity.md)) |
-| 1.3  | App template, the `create-app` generator, structure checks in CI                                                                                                                                                                                                 |
-| 1.4  | Hub v1: app catalog generated from app configs; install guides for iPhone, Android and desktop; privacy and security pages; `security.txt`                                                                                                                       |
-| 1.5  | Pilot app (a simple one, chosen together) → staging → real devices → production                                                                                                                                                                                  |
+| Step | What                                                                                                                                                                                                                                                             | Status |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| 1.1  | Specs: data model and merge rules (`docs/specs/data-model.md`); backup format (`docs/specs/backup-format.md`)                                                                                                                                                    | done   |
+| 1.2  | Packages: `config`, `edge`, `i18n`, `ui` (tokens, core components, light and dark themes), `shell`, `pwa`, `data`, `backup`. The service worker first needs an ADR for one narrowly scoped Trusted Types policy ([ADR 0010](decisions/0010-script-integrity.md)) | to do  |
+| 1.3  | App template, the `create-app` generator, structure checks in CI                                                                                                                                                                                                 | to do  |
+| 1.4  | Hub v1: app catalog generated from app configs; install guides for iPhone, Android and desktop; privacy and security pages; `security.txt`                                                                                                                       | to do  |
+| 1.5  | Pilot app (a simple one, chosen together) → staging → real devices → production                                                                                                                                                                                  | to do  |
 
 **Exit criteria:**
 
