@@ -34,6 +34,8 @@ test("serves the licenses of the software it includes, and links them", async ({
   expect(licenses).toContain(SOURCE_URL);
   expect(licenses).toMatch(/^react \d+\.\d+\.\d+ \(MIT\)$/m);
   expect(licenses).toMatch(/^react-dom \d+\.\d+\.\d+ \(MIT\)$/m);
+  // Its stylesheet inlines Tailwind CSS, which no script imports.
+  expect(licenses).toMatch(/^tailwindcss \d+\.\d+\.\d+ \(MIT\)$/m);
 
   await page.goto("/");
   await expect(page.getByRole("link", { name: LICENSES_FILE })).toHaveAttribute(

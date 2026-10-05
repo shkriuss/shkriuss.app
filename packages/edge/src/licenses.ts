@@ -1,4 +1,4 @@
-import { access, readFile, readdir } from "node:fs/promises";
+import { access, readFile, readdir, realpath } from "node:fs/promises";
 import path from "node:path";
 
 /** Where the source code of every app is, which its license file names. */
@@ -133,6 +133,127 @@ export function legalComments(source: string): string {
   return comments.join("\n\n");
 }
 
+/** `css` without its comments, which may mention rules that are not there. */
+function withoutComments(css: string): string {
+  let kept = "";
+  let index = 0;
+  for (;;) {
+    const start = css.indexOf("/*", index);
+    if (start === -1) {
+      return kept + css.slice(index);
+    }
+    kept += css.slice(index, start);
+    const end = css.indexOf("*/", start + 2);
+    if (end === -1) {
+      return kept;
+    }
+    index = end + 2;
+  }
+}
+
+/** The index of the first character of `css` from `index` on that is not white space. */
+function skipSpace(css: string, index: number): number {
+  let at = index;
+  while (/\s/.test(css.charAt(at))) {
+    at += 1;
+  }
+  return at;
+}
+
+/**
+ * What the `@import` and `@plugin` rules of a stylesheet name, quoted or in `url()`, quoted or
+ * not, outside its comments. Found with indexOf, not a regular expression, so that it takes linear time.
+ */
+export function stylesheetImports(css: string): string[] {
+  const source = withoutComments(css);
+  const specifiers: string[] = [];
+  for (const rule of ["@import", "@plugin"]) {
+    for (let index = source.indexOf(rule); index !== -1; index = source.indexOf(rule, index + 1)) {
+      let at = skipSpace(source, index + rule.length);
+      const url = source.startsWith("url(", at);
+      if (url) {
+        at = skipSpace(source, at + 4);
+      }
+      const quote = source.charAt(at);
+      if (quote === '"' || quote === "'") {
+        const end = source.indexOf(quote, at + 1);
+        if (end !== -1) {
+          specifiers.push(source.slice(at + 1, end));
+        }
+      } else if (url) {
+        const end = source.indexOf(")", at);
+        if (end !== -1) {
+          specifiers.push(source.slice(at, end).trim());
+        }
+      }
+    }
+  }
+  return specifiers;
+}
+
+/** The package that a bare specifier such as `@scope/name/file.css` imports from. */
+function packageName(specifier: string): string {
+  const parts = specifier.split("/");
+  return (specifier.startsWith("@") ? parts.slice(0, 2) : parts.slice(0, 1)).join("/");
+}
+
+/** The real directory of the package `name`, found from `file` as Node.js finds packages. */
+async function installedPackage(file: string, name: string): Promise<string> {
+  for (let directory = path.dirname(file); ; directory = path.dirname(directory)) {
+    const candidate = path.join(directory, "node_modules", name);
+    if (await exists(path.join(candidate, "package.json"))) {
+      return realpath(candidate);
+    }
+    if (path.dirname(directory) === directory) {
+      throw new Error(`${file} imports ${name}, which is not installed.`);
+    }
+  }
+}
+
+function isInside(directory: string, file: string): boolean {
+  return !path.relative(directory, file).startsWith("..");
+}
+
+/**
+ * Follows the imports of this repository's stylesheets, which the build inlines, so that its
+ * modules do not show them: adds the packages they import to `packages`, and the stylesheets
+ * of the repository they import, and those that these import, to `files`.
+ */
+async function followStylesheets(
+  root: string,
+  files: Set<string>,
+  packages: Set<string>,
+): Promise<void> {
+  const queue = [...files].filter((file) => file.endsWith(".css"));
+  for (let file = queue.pop(); file !== undefined; file = queue.pop()) {
+    for (const specifier of stylesheetImports(await readFile(file, "utf8"))) {
+      const from = path.relative(root, file);
+      if (specifier.startsWith("./") || specifier.startsWith("../")) {
+        const imported = path.resolve(path.dirname(file), specifier);
+        if (!isInside(root, imported)) {
+          throw new Error(`${from} imports ${specifier}, which is outside ${root}.`);
+        }
+        if (!files.has(imported)) {
+          files.add(imported);
+          queue.push(imported);
+        }
+      } else if (/^[@a-z0-9]/i.test(specifier) && !specifier.includes(":")) {
+        const directory = await installedPackage(file, packageName(specifier));
+        if (!directory.split(path.sep).includes("node_modules")) {
+          throw new Error(
+            `${from} imports ${specifier}, a package of this repository. Import its stylesheet from a script instead, so that the build lists it.`,
+          );
+        }
+        packages.add(directory);
+      } else {
+        throw new Error(
+          `${from} imports ${specifier}, which is neither a package nor a file of the repository.`,
+        );
+      }
+    }
+  }
+}
+
 export interface CollectOptions {
   /** The repository's root, which every file of its own lies in. */
   readonly root: string;
@@ -143,8 +264,10 @@ export interface CollectOptions {
 /**
  * The licenses of a build, from the ids of the modules whose code it includes: every package of
  * others, from `node_modules` or generated by a bundler, and every legal comment in this
- * repository's own files. Throws for generated code of an unknown origin, and for a package
- * without a license file, so that a build never ships code without its license.
+ * repository's own files. The imports of its stylesheets count too, though the build inlines
+ * them. Throws for generated code of an unknown origin, for a package without a license file
+ * and for a stylesheet import it cannot follow, so that a build never ships code without its
+ * license.
  */
 export async function collectLicenses(
   modules: Iterable<string>,
@@ -165,13 +288,14 @@ export async function collectLicenses(
     const file = id.split("?", 1)[0] ?? id;
     if (file.split(path.sep).includes("node_modules")) {
       packageDirectories.add(await packageDirectory(file));
-    } else if (path.relative(root, file).startsWith("..")) {
+    } else if (!isInside(root, file)) {
       throw new Error(`The build includes ${file}, which is neither a package nor in ${root}.`);
     } else {
       ownFiles.add(file);
     }
   }
 
+  await followStylesheets(root, ownFiles, packageDirectories);
   const packages = await Promise.all([
     ...[...packageDirectories].map(async (directory) => readPackage(directory)),
     ...[...generators]

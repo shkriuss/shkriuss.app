@@ -8,6 +8,7 @@ packages:
 catalog:
   "@axe-core/playwright": 4.13.0
   "@playwright/test": 1.63.0
+  "@tailwindcss/vite": 4.3.3
   "@types/node": 24.19.0
   "@types/react": 19.3.0
   "@types/react-dom": 19.3.0
@@ -23,6 +24,7 @@ catalog:
   prettier: 3.9.9
   react: 19.3.0
   react-dom: 19.3.0
+  tailwindcss: 4.3.3
   turbo: 2.11.6
   typescript: 7.0.2
   vite: 8.3.2
