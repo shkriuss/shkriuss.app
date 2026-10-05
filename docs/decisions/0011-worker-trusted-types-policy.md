@@ -12,11 +12,11 @@ Phase 1 needs two kinds of worker:
 - **the service worker** of `@shkriuss/pwa`, which makes every app work offline ([architecture §9](../architecture.md#9-offline-install-and-updates));
 - **a dedicated worker** in `@shkriuss/backup`, which encrypts and decrypts backups. Deriving the key takes seconds and 256 MiB on a phone, and must not freeze the page ([backup format §3.1](../specs/backup-format.md#31-passphrases)).
 
-A spike in Chromium, with the production headers, found:
+A spike in Chromium with the production headers found the first three points below. The end-to-end tests of this decision (point 6) confirmed them in all three engines: Chromium 153, Firefox 155 and WebKit 26.6, in Playwright's builds of October 2026.
 
 - **A named policy works:** a worker and a service worker start from the TrustedScriptURLs it creates, under the full header set: `require-trusted-types-for 'script'`, `Integrity-Policy`, COOP and COEP.
 - **Names are enforced:** without `'allow-duplicates'`, the browser refuses a second policy of the same name, and any name the Content-Security-Policy does not list.
-- **A worker runs under the policy of its own script's response**, so the Content-Security-Policy and Trusted Types apply inside it too.
+- **A worker runs under the policy of its own script's response**, so the Content-Security-Policy and Trusted Types apply inside it too: in all three engines, code in a worker or a service worker cannot create a policy that the Content-Security-Policy does not list.
 - **Browsers check no integrity for worker scripts.** `Integrity-Policy: blocked-destinations=(script)` covers requests whose destination is `script`; worker and service worker scripts have the destinations `worker` and `serviceworker`. Neither `new Worker()` nor `register()` takes an integrity value, and import maps do not apply to workers.
 
 ## Decision
