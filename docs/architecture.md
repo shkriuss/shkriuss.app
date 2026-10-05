@@ -76,7 +76,7 @@ shkriuss.app/
 | `@shkriuss/edge`   | Security headers (`_headers`), script integrity, starting workers under Trusted Types, and Cloudflare/Wrangler configuration |
 | `@shkriuss/i18n`   | Typed message modules in English ([ADR 0012](decisions/0012-typed-messages.md)) and `Intl` formats                           |
 
-Dependency direction: apps → `shell` → (`ui`, `data`, `backup`, `pwa`, `i18n`); `backup` → `data`. No package imports an app, and apps never import other apps. Lint rules enforce this.
+Dependency direction: apps → `shell` → (`ui`, `data`, `backup`, `pwa`, `i18n`); `backup` → `data`. Code that runs in the browser uses `@shkriuss/edge` only through its browser entry points, `@shkriuss/edge/workers` and `@shkriuss/edge/domains`. No package imports an app, and apps never import other apps. Lint rules enforce this.
 
 ## 6. Anatomy of an app
 

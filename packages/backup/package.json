@@ -1,0 +1,26 @@
+{
+  "name": "@shkriuss/backup",
+  "version": "0.0.0",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc",
+    "test": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@shkriuss/data": "workspace:*",
+    "@shkriuss/edge": "workspace:*"
+  },
+  "devDependencies": {
+    "@shkriuss/config": "workspace:*",
+    "@vitest/coverage-v8": "catalog:",
+    "fake-indexeddb": "catalog:",
+    "fast-check": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

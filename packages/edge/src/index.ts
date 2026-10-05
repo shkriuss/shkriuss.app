@@ -13,6 +13,7 @@ export {
   STAGING_DOMAIN,
   appHost,
   assertAppId,
+  isAppId,
 } from "./domains.ts";
 export {
   appHeaderRules,
