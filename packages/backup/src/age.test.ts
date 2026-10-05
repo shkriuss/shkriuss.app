@@ -164,7 +164,15 @@ describe("decrypt (backup format §3, §5.2)", () => {
         return encrypter.encrypt(DOCUMENT);
       },
     ],
-    ["damaged armor", (file) => new TextEncoder().encode(armor.encode(file).replace("\n", "\n!"))],
+    [
+      "damaged armor",
+      (file) => {
+        // "!" is not in the base64 alphabet: put one at the start of the armor's first line of data.
+        const text = armor.encode(file);
+        const data = text.indexOf("\n") + 1;
+        return new TextEncoder().encode(`${text.slice(0, data)}!${text.slice(data)}`);
+      },
+    ],
   ])("refuses %s as damaged", async (_case, damage) => {
     // Two chunks, so that a file can lose its last chunk and still end where a chunk ends.
     const document = new Uint8Array(CHUNK).fill(0x20);
