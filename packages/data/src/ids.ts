@@ -1,4 +1,4 @@
-import { DataError } from "./errors.ts";
+import { DataLayerError } from "./errors.ts";
 import { type RandomBytes, randomBytes, toHex } from "./random.ts";
 
 /** The fixed id of the one record in the `settings` store (data model §2.5). */
@@ -20,7 +20,7 @@ export function isRecordId(value: unknown): value is string {
  */
 export function newRecordId(now: number = Date.now(), random: RandomBytes = randomBytes): string {
   if (!Number.isSafeInteger(now) || now < 0 || now > MAX_UUID_TIME) {
-    throw new DataError("invalid", "A UUIDv7 holds times from 0 to 2^48 - 1 milliseconds.");
+    throw new DataLayerError("invalid", "A UUIDv7 holds times from 0 to 2^48 - 1 milliseconds.");
   }
   const bytes = new Uint8Array(16);
   bytes.set(random(10), 6);

@@ -101,6 +101,7 @@ All user data lives in IndexedDB and is accessed only through `@shkriuss/data`, 
 - **Merging** (used when a backup is imported, and by any future sync) is field-level last-writer-wins by HLC, with ties broken by device id. It is deterministic, order-independent and idempotent, which property-based tests verify.
 - **Migrations** are versioned functions that run inside the database upgrade transaction, so they apply completely or not at all. An app keeps a migration path from every schema version it ever shipped, because old backups must always import.
 - **Data newer than the app understands**, such as a backup made by a newer version, is rejected with an "update the app" message, never partially imported.
+- **Versions side by side:** a new version that upgrades the database closes it in tabs that still run an older version, which must reload. An older version never opens a database that a newer one has upgraded, because it would write records of its older schema among newer ones. A release that raises the schema version is therefore never rolled back, only fixed by a newer one.
 - **Persistence:** apps request persistent storage (`navigator.storage.persist()`) and show how much they store in Settings.
 
 ## 8. Backups
@@ -122,7 +123,7 @@ Backups are the only way data leaves a device, the only protection against losin
   - It precaches the build output, so the app opens offline instantly.
   - It serves the app shell for navigations and never caches anything cross-origin.
   - **Updates:** a new version installs in the background and waits. The app shows "Update available" and reloads when the user agrees, never in the middle of a task.
-  - **Kill switch:** a documented, tested procedure replaces a broken service worker without touching user data.
+  - **Kill switch:** a documented, tested procedure replaces a broken service worker without touching user data. It never brings back a build with an older schema version, which could not open the upgraded database (§7).
 - **Install:** Android and desktop Chromium use the browser's install prompt; iOS uses a guided "Add to Home Screen". Where the Web Install API exists (desktop Chromium), the hub can offer one-click install of an app as an enhancement.
 - **iOS:** every installed home-screen app has its own storage, separate from Safari, and Safari may delete a site's data after seven days of Safari use without a visit to that site (installed apps are exempt). In Safari on iOS, apps therefore suggest installing _before_ the user enters data, and offer export → import to move data into the installed app.
 

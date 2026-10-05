@@ -1,6 +1,6 @@
 import * as fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { DataError } from "./errors.ts";
+import { DataLayerError } from "./errors.ts";
 import { field } from "./fields.ts";
 import { formatHlc } from "./hlc.ts";
 import type { JsonValue } from "./json.ts";
@@ -270,7 +270,7 @@ describe("migrateRecord (data model §6)", () => {
       data: { name: "Food" },
       clock: { name: at(3) },
     };
-    expect(() => migrateRecord(notJson, { store: "lists", record })).toThrow(DataError);
+    expect(() => migrateRecord(notJson, { store: "lists", record })).toThrow(DataLayerError);
   });
 });
 

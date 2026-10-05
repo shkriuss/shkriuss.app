@@ -1,4 +1,4 @@
-import { DataError } from "./errors.ts";
+import { DataLayerError } from "./errors.ts";
 import { type RandomBytes, randomBytes, toHex } from "./random.ts";
 
 /**
@@ -62,13 +62,19 @@ export function isHlc(value: unknown): value is Hlc {
 
 export function formatHlc({ wall, counter, device }: HlcParts): Hlc {
   if (!Number.isSafeInteger(wall) || wall < 0 || wall > MAX_WALL) {
-    throw new DataError("invalid", "An HLC's wall time must be an integer from 0 to 10^15 - 1.");
+    throw new DataLayerError(
+      "invalid",
+      "An HLC's wall time must be an integer from 0 to 10^15 - 1.",
+    );
   }
   if (!Number.isSafeInteger(counter) || counter < 0 || counter > MAX_COUNTER) {
-    throw new DataError("invalid", `An HLC's counter must be an integer from 0 to ${MAX_COUNTER}.`);
+    throw new DataLayerError(
+      "invalid",
+      `An HLC's counter must be an integer from 0 to ${MAX_COUNTER}.`,
+    );
   }
   if (!isDeviceId(device)) {
-    throw new DataError("invalid", "A device id must be 16 lowercase hexadecimal digits.");
+    throw new DataLayerError("invalid", "A device id must be 16 lowercase hexadecimal digits.");
   }
   return `${String(wall).padStart(15, "0")}:${String(counter).padStart(5, "0")}:${device}`;
 }
@@ -97,7 +103,7 @@ export function issueHlc(
 export function receiveHlc(last: ClockState, hlc: Hlc): ClockState {
   const parts = parseHlc(hlc);
   if (parts === undefined) {
-    throw new DataError("invalid", "Only a well-formed HLC can be received.");
+    throw new DataLayerError("invalid", "Only a well-formed HLC can be received.");
   }
   const isLater =
     parts.wall > last.wall || (parts.wall === last.wall && parts.counter > last.counter);
@@ -108,7 +114,7 @@ export function receiveHlc(last: ClockState, hlc: Hlc): ClockState {
 export function isFromFuture(hlc: Hlc, now: number): boolean {
   const parts = parseHlc(hlc);
   if (parts === undefined) {
-    throw new DataError("invalid", "Only a well-formed HLC has a time.");
+    throw new DataLayerError("invalid", "Only a well-formed HLC has a time.");
   }
   return parts.wall - now > MAX_CLOCK_AHEAD;
 }

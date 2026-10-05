@@ -1,7 +1,7 @@
 import * as fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { createRecord, deleteRecord, updateRecord } from "./changes.ts";
-import { DataError } from "./errors.ts";
+import { DataLayerError } from "./errors.ts";
 import { formatHlc, maxHlc } from "./hlc.ts";
 import { canonicalJson } from "./json.ts";
 import { mergeRecords } from "./merge.ts";
@@ -158,6 +158,6 @@ describe("mergeRecords: in practice (data model §5.3)", () => {
     ["another record", { ...created, id: "01a10307-cbc8-73e0-98ab-ae848aa1d694" }],
     ["another schema version", { ...created, v: 2 }],
   ])("refuses to merge a copy of %s", (_case, other: DataRecord) => {
-    expect(() => mergeRecords(created, other)).toThrow(DataError);
+    expect(() => mergeRecords(created, other)).toThrow(DataLayerError);
   });
 });

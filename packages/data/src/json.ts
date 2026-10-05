@@ -1,4 +1,4 @@
-import { DataError } from "./errors.ts";
+import { DataLayerError } from "./errors.ts";
 
 /** A JSON value as records store it (data model §2.3). */
 export type JsonValue = null | boolean | number | string | readonly JsonValue[] | JsonObject;
@@ -19,8 +19,8 @@ function isPlainObject(value: object): boolean {
 
 // Messages name the field but never anything inside its value: member names in a value are
 // user data too.
-function invalid(path: string, problem: string): DataError {
-  return new DataError("invalid", `${path} ${problem}.`);
+function invalid(path: string, problem: string): DataLayerError {
+  return new DataLayerError("invalid", `${path} ${problem}.`);
 }
 
 function copy(value: unknown, path: string, depth: number): JsonValue {
@@ -84,7 +84,7 @@ function copy(value: unknown, path: string, depth: number): JsonValue {
 /**
  * A copy of `value` as a stored JSON value (data model §2.3): `null`, a boolean, a finite number,
  * a well-formed string, or arrays and plain objects of these, at most 32 levels deep, with no
- * member named `__proto__`. `-0` becomes `0`. Throws a `DataError` for anything else, naming
+ * member named `__proto__`. `-0` becomes `0`. Throws a `DataLayerError` for anything else, naming
  * `path` but nothing inside the value.
  */
 export function toJsonValue(value: unknown, path = "The value"): JsonValue {

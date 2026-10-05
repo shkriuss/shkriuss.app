@@ -1,6 +1,6 @@
 import * as fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { DataError } from "./errors.ts";
+import { DataLayerError } from "./errors.ts";
 import {
   INITIAL_CLOCK,
   MAX_CLOCK_AHEAD,
@@ -41,17 +41,17 @@ describe("HLC format (data model §3.1)", () => {
   });
 
   it.each([-1, MAX_WALL + 1, 1.5, Number.NaN])("refuses the wall time %d", (wall) => {
-    expect(() => formatHlc({ wall, counter: 0, device: DEVICE })).toThrow(DataError);
+    expect(() => formatHlc({ wall, counter: 0, device: DEVICE })).toThrow(DataLayerError);
   });
 
   it.each([-1, MAX_COUNTER + 1, 0.5])("refuses the counter %d", (counter) => {
-    expect(() => formatHlc({ wall: 0, counter, device: DEVICE })).toThrow(DataError);
+    expect(() => formatHlc({ wall: 0, counter, device: DEVICE })).toThrow(DataLayerError);
   });
 
   it.each(["", "9F86D081884C7D65", "9f86d081884c7d6", "9f86d081884c7d65a", "9f86d081884c7d6g"])(
     "refuses the device id %j",
     (device) => {
-      expect(() => formatHlc({ wall: 0, counter: 0, device })).toThrow(DataError);
+      expect(() => formatHlc({ wall: 0, counter: 0, device })).toThrow(DataLayerError);
       expect(isDeviceId(device)).toBe(false);
     },
   );
@@ -171,7 +171,7 @@ describe("receiveHlc (data model §3.4)", () => {
   });
 
   it("refuses something that is not an HLC", () => {
-    expect(() => receiveHlc(last, "not an HLC")).toThrow(DataError);
+    expect(() => receiveHlc(last, "not an HLC")).toThrow(DataLayerError);
   });
 });
 
@@ -190,7 +190,7 @@ describe("isFromFuture (data model §3.5)", () => {
   });
 
   it("refuses something that is not an HLC", () => {
-    expect(() => isFromFuture("soon", now)).toThrow(DataError);
+    expect(() => isFromFuture("soon", now)).toThrow(DataLayerError);
   });
 });
 

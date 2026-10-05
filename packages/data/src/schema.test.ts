@@ -1,5 +1,5 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
-import { DataError } from "./errors.ts";
+import { DataLayerError } from "./errors.ts";
 import { field } from "./fields.ts";
 import {
   type SchemaVersion,
@@ -59,7 +59,7 @@ describe("defineSchemas (data model §6)", () => {
   });
 
   it.each([0, 3, 1.5, Number.NaN])("refuses to look up version %d", (n) => {
-    expect(() => defineSchemas(v1).version(n)).toThrow(DataError);
+    expect(() => defineSchemas(v1).version(n)).toThrow(DataLayerError);
   });
 
   it.each<[string, () => unknown, RegExp]>([
@@ -205,8 +205,8 @@ describe("defineSchemas (data model §6)", () => {
 describe("storeSchema", () => {
   it("finds a store of a version, or refuses", () => {
     expect(storeSchema(v1, "notes")).toBe(v1.stores.notes);
-    expect(() => storeSchema(v1, "tasks")).toThrow(DataError);
-    expect(() => storeSchema(v1, "toString")).toThrow(DataError);
+    expect(() => storeSchema(v1, "tasks")).toThrow(DataLayerError);
+    expect(() => storeSchema(v1, "toString")).toThrow(DataLayerError);
   });
 });
 
@@ -232,7 +232,7 @@ describe("checkData (data model §8, step 2)", () => {
     }).toThrow("The field title of a note is not a string of at most 100 characters.");
     expect(() => {
       checkData(v1.stores.notes, { done: "yes" }, "a note");
-    }).toThrow(DataError);
+    }).toThrow(DataLayerError);
   });
 });
 
@@ -246,7 +246,7 @@ describe("readValues", () => {
   });
 
   it("refuses stored values that do not fit the schema", () => {
-    expect(() => readValues(v1.stores.notes, { done: "yes" })).toThrow(DataError);
+    expect(() => readValues(v1.stores.notes, { done: "yes" })).toThrow(DataLayerError);
   });
 
   it("gives the values their TypeScript types", () => {

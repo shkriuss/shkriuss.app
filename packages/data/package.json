@@ -11,9 +11,13 @@
     "typecheck": "tsc",
     "test": "vitest run --coverage"
   },
+  "dependencies": {
+    "dexie": "catalog:"
+  },
   "devDependencies": {
     "@shkriuss/config": "workspace:*",
     "@vitest/coverage-v8": "catalog:",
+    "fake-indexeddb": "catalog:",
     "fast-check": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

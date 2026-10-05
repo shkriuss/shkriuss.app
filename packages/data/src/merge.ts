@@ -1,4 +1,4 @@
-import { DataError } from "./errors.ts";
+import { DataLayerError } from "./errors.ts";
 import { type Hlc, maxHlc } from "./hlc.ts";
 import { type JsonValue, canonicalJson } from "./json.ts";
 import type { DataRecord } from "./record.ts";
@@ -41,7 +41,7 @@ function later(a: FieldWrite | undefined, b: FieldWrite | undefined): FieldWrite
  */
 export function mergeRecords(a: DataRecord, b: DataRecord): DataRecord {
   if (a.id !== b.id || a.v !== b.v) {
-    throw new DataError(
+    throw new DataLayerError(
       "invalid",
       "Only copies of the same record at the same schema version can be merged.",
     );

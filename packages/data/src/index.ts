@@ -1,5 +1,18 @@
 export { createRecord, deleteRecord, updateRecord, type FieldValues } from "./changes.ts";
-export { DataError, type DataErrorCode } from "./errors.ts";
+export {
+  DATABASE_NAME,
+  openDatabase,
+  type Change,
+  type Database,
+  type DatabaseOptions,
+  type DeviceState,
+  type Input,
+  type Item,
+  type RecordStore,
+  type SettingsStore,
+  type StoreName,
+} from "./db.ts";
+export { DataLayerError, type DataLayerErrorCode } from "./errors.ts";
 export {
   field,
   type ArrayOptions,

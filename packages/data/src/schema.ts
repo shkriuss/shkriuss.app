@@ -1,4 +1,4 @@
-import { DataError } from "./errors.ts";
+import { DataLayerError } from "./errors.ts";
 import type { FieldType, TypeOf } from "./fields.ts";
 import type { JsonObject, JsonValue } from "./json.ts";
 import { SETTINGS_STORE, isFieldName, isStoreName } from "./names.ts";
@@ -61,13 +61,28 @@ export interface SchemaVersion {
   readonly migrate?: Readonly<Record<string, StoreMigration>>;
 }
 
-/** Every version an app's data schema has had, from 1 to the current one. */
-export interface Schemas {
+/** Every version an app's data schema has had, from 1 to the current one, `C`. */
+export interface Schemas<C extends SchemaVersion = SchemaVersion> {
   readonly versions: readonly SchemaVersion[];
   /** The current version: the one this build of the app writes. */
-  readonly current: SchemaVersion;
-  /** The schema of version `n`; throws a `DataError` for a version the app never had. */
+  readonly current: C;
+  /** The schema of version `n`; throws a `DataLayerError` for a version the app never had. */
   version(n: number): SchemaVersion;
+}
+
+/** The last of a list of versions. */
+type Last<V extends readonly SchemaVersion[]> = V extends readonly [
+  ...SchemaVersion[],
+  infer L extends SchemaVersion,
+]
+  ? L
+  : SchemaVersion;
+
+function isLast<V extends readonly SchemaVersion[]>(
+  versions: V,
+  schema: SchemaVersion | undefined,
+): schema is Last<V> {
+  return schema !== undefined && versions.at(-1) === schema;
 }
 
 function fail(message: string): never {
@@ -183,7 +198,9 @@ function checkMigration(previous: SchemaVersion, next: SchemaVersion): void {
  * Declare each version with `satisfies SchemaVersion`, so that `Values<typeof v2.stores.notes>`
  * gives the exact types of a store's values.
  */
-export function defineSchemas(...versions: readonly [SchemaVersion, ...SchemaVersion[]]): Schemas {
+export function defineSchemas<const V extends readonly [SchemaVersion, ...SchemaVersion[]]>(
+  ...versions: V
+): Schemas<Last<V>> {
   let previous: SchemaVersion | undefined;
   for (const [index, schema] of versions.entries()) {
     if (schema.version !== index + 1) {
@@ -199,41 +216,50 @@ export function defineSchemas(...versions: readonly [SchemaVersion, ...SchemaVer
     }
     previous = schema;
   }
-  const [first, ...later] = versions;
+  const current = versions.at(-1);
+  if (!isLast(versions, current)) {
+    throw new Error("There is no current version.");
+  }
   return {
     versions,
-    current: later.at(-1) ?? first,
+    current,
     version(n) {
       const schema = Number.isSafeInteger(n) && n >= 1 ? versions[n - 1] : undefined;
       if (schema === undefined) {
-        throw new DataError("invalid", `There is no schema version ${n}.`);
+        throw new DataLayerError("invalid", `There is no schema version ${n}.`);
       }
       return schema;
     },
   };
 }
 
-/** The schema of `store` at version `schema`, or a `DataError` if that version has no such store. */
+/**
+ * The schema of `store` at version `schema`; throws a `DataLayerError` if that version has no
+ * such store.
+ */
 export function storeSchema(schema: SchemaVersion, store: string): StoreSchema {
   const found = has(schema.stores, store) ? schema.stores[store] : undefined;
   if (found === undefined) {
-    throw new DataError("invalid", `Version ${schema.version} has no store ${store}.`);
+    throw new DataLayerError("invalid", `Version ${schema.version} has no store ${store}.`);
   }
   return found;
 }
 
 /**
  * Checks that `data` is valid for a store (data model §8, step 2): only its fields, each of the
- * right type and within its constraints. Throws a `DataError` that names the field.
+ * right type and within its constraints. Throws a `DataLayerError` that names the field.
  */
 export function checkData(store: StoreSchema, data: JsonObject, where: string): void {
   for (const [name, value] of Object.entries(data)) {
     const type = has(store.fields, name) ? store.fields[name] : undefined;
     if (type === undefined) {
-      throw new DataError("invalid", `${where} has a field ${name}, which its store lacks.`);
+      throw new DataLayerError("invalid", `${where} has a field ${name}, which its store lacks.`);
     }
     if (!type.isValid(value)) {
-      throw new DataError("invalid", `The field ${name} of ${where} is not ${type.description}.`);
+      throw new DataLayerError(
+        "invalid",
+        `The field ${name} of ${where} is not ${type.description}.`,
+      );
     }
   }
 }
@@ -250,7 +276,7 @@ function isValuesOf<S extends StoreSchema>(
 
 /**
  * A record's values as an app reads them: its fields, and the defaults of missing ones. Throws a
- * `DataError` if a stored value does not fit the store's schema.
+ * `DataLayerError` if a stored value does not fit the store's schema.
  */
 export function readValues<S extends StoreSchema>(store: S, data: JsonObject): Values<S> {
   const values: Record<string, unknown> = {};
@@ -258,7 +284,7 @@ export function readValues<S extends StoreSchema>(store: S, data: JsonObject): V
     values[name] = has(data, name) ? data[name] : type.defaultValue;
   }
   if (!isValuesOf(store, values)) {
-    throw new DataError("invalid", "A stored record does not fit its store's schema.");
+    throw new DataLayerError("invalid", "A stored record does not fit its store's schema.");
   }
   return values;
 }

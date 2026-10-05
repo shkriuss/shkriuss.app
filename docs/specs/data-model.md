@@ -214,6 +214,7 @@ Canonical JSON is the [JSON Canonicalization Scheme (RFC 8785)](https://www.rfc-
 ## 7. Storage
 
 - Each app has one IndexedDB database named `shkriuss`, used only through `@shkriuss/data` (Dexie). Its version follows the schema version.
+- A version of an app never opens the database once a newer version has upgraded it: it would write records of its own schema version among newer ones. It reports that the app needs updating instead, and leaves the database as it is.
 - Each store is an object store keyed by `id`, holding live and deleted records. `@shkriuss/data` may add derived properties for indexes, such as whether a record is alive; they are never exported.
 - The `meta` object store holds this device's state and is never exported: the device id, the last HLC, when the device last made a backup, and how many changes it has had since. Every change counts, and so does every import that writes anything. Backup reminders use the last two ([architecture §8](../architecture.md#8-backups)).
 - Apps request persistent storage with `navigator.storage.persist()` ([architecture §7](../architecture.md#7-data-layer)).

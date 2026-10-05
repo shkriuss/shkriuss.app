@@ -1,6 +1,6 @@
 import * as fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { DataError } from "./errors.ts";
+import { DataLayerError } from "./errors.ts";
 import { MAX_DEPTH, canonicalJson, toJsonValue, utf8Length } from "./json.ts";
 import { jsonValue } from "./test/arbitraries.ts";
 
@@ -80,7 +80,7 @@ describe("toJsonValue (data model §2.3)", () => {
     ["a member named __proto__", JSON.parse('{"a": {"__proto__": {}}}') as unknown],
     ["a member name with a lone surrogate", { "\udc00": 1 }],
   ])("refuses %s", (_case, value) => {
-    expect(() => toJsonValue(value, "The field title")).toThrow(DataError);
+    expect(() => toJsonValue(value, "The field title")).toThrow(DataLayerError);
   });
 
   it("names the field in its message, but nothing inside the value", () => {

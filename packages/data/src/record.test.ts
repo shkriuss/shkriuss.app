@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DataError, type DataErrorCode } from "./errors.ts";
+import { DataLayerError, type DataLayerErrorCode } from "./errors.ts";
 import { MAX_CLOCK_AHEAD, formatHlc } from "./hlc.ts";
 import { SETTINGS_ID } from "./ids.ts";
 import {
@@ -34,12 +34,12 @@ const TOMBSTONE = {
   deleted: "001791104400000:00000:9f86d081884c7d65",
 };
 
-function refusal(value: unknown, context: RecordContext = CONTEXT): DataErrorCode | undefined {
+function refusal(value: unknown, context: RecordContext = CONTEXT): DataLayerErrorCode | undefined {
   try {
     checkRecord(value, context);
     return undefined;
   } catch (error) {
-    if (error instanceof DataError) {
+    if (error instanceof DataLayerError) {
       return error.code;
     }
     throw error;

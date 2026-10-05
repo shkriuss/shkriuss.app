@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DataError } from "./errors.ts";
+import { DataLayerError } from "./errors.ts";
 import { SETTINGS_ID, isRecordId, newRecordId } from "./ids.ts";
 
 describe("newRecordId", () => {
@@ -22,7 +22,7 @@ describe("newRecordId", () => {
   });
 
   it.each([-1, 2 ** 48, 1.5])("refuses the time %d", (now) => {
-    expect(() => newRecordId(now)).toThrow(DataError);
+    expect(() => newRecordId(now)).toThrow(DataLayerError);
   });
 });
 
