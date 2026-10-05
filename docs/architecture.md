@@ -59,22 +59,22 @@ shkriuss.app/
 │  ├─ hub/                  shkriuss.app
 │  └─ <id>/                 <id>.shkriuss.app
 ├─ packages/                the shared platform (see table)
-├─ tooling/create-app/      generator for new apps
+├─ tooling/                 repository checks, the create-app generator, platform end-to-end tests
 ├─ docs/                    architecture, threat model, roadmap, decisions, specs
 ├─ CLAUDE.md                rules for every contributor, human or AI
 └─ SECURITY.md              how to report vulnerabilities
 ```
 
-| Package            | Responsibility                                                                                                     |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------ |
-| `@shkriuss/config` | Shared TypeScript, lint, format, Vite, Vitest and Playwright presets                                               |
-| `@shkriuss/ui`     | Design tokens, theme, accessible components (React Aria), icons                                                    |
-| `@shkriuss/shell`  | App frame: navigation, settings, about, install and update prompts, storage status, backup screens, error handling |
-| `@shkriuss/data`   | Local database, record model, merge rules, migrations, reactive queries                                            |
-| `@shkriuss/backup` | Export and import, encryption (`age`), backup format versions, readable export formats                             |
-| `@shkriuss/pwa`    | Web app manifest, service worker, install and update flow, persistent storage                                      |
-| `@shkriuss/edge`   | Security headers (`_headers`), script integrity, and Cloudflare/Wrangler configuration                             |
-| `@shkriuss/i18n`   | Message catalogs (English) and `Intl` formatting helpers                                                           |
+| Package            | Responsibility                                                                                                               |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| `@shkriuss/config` | Shared TypeScript, lint, format, Vite, Vitest and Playwright presets                                                         |
+| `@shkriuss/ui`     | Design tokens, theme, accessible components (React Aria), icons                                                              |
+| `@shkriuss/shell`  | App frame: navigation, settings, about, install and update prompts, storage status, backup screens, error handling           |
+| `@shkriuss/data`   | Local database, record model, merge rules, migrations, reactive queries                                                      |
+| `@shkriuss/backup` | Export and import, encryption (`age`), backup format versions, readable export formats                                       |
+| `@shkriuss/pwa`    | Web app manifest, service worker, install and update flow, persistent storage                                                |
+| `@shkriuss/edge`   | Security headers (`_headers`), script integrity, starting workers under Trusted Types, and Cloudflare/Wrangler configuration |
+| `@shkriuss/i18n`   | Message catalogs (English) and `Intl` formatting helpers                                                                     |
 
 Dependency direction: apps → `shell` → (`ui`, `data`, `backup`, `pwa`, `i18n`); `backup` → `data`. No package imports an app, and apps never import other apps. Lint rules enforce this.
 
@@ -118,7 +118,7 @@ Backups are the only way data leaves a device, the only protection against losin
 ## 9. Offline, install and updates
 
 - **Manifest:** generated per app with a stable `id`, `scope: /`, standalone display, maskable and monochrome icons, theme colors, and shortcuts or `share_target` where an app needs them.
-- **Service worker:** our own, in `@shkriuss/pwa` (no Workbox).
+- **Service worker:** our own, in `@shkriuss/pwa` (no Workbox), at `/sw.js`, registered through the platform's Trusted Types policy for worker scripts ([ADR 0011](decisions/0011-worker-trusted-types-policy.md)).
   - It precaches the build output, so the app opens offline instantly.
   - It serves the app shell for navigations and never caches anything cross-origin.
   - **Updates:** a new version installs in the background and waits. The app shows "Update available" and reloads when the user agrees, never in the middle of a task.
@@ -157,6 +157,7 @@ Content-Security-Policy: default-src 'none'; script-src 'self' 'sha256-<import m
   style-src 'self'; img-src 'self' blob: data:; connect-src 'self'; manifest-src 'self';
   worker-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none';
   require-trusted-types-for 'script'; trusted-types 'none'
+  (in apps with worker scripts: trusted-types shkriuss-workers)
 Integrity-Policy: blocked-destinations=(script)
 Cross-Origin-Opener-Policy: same-origin
 Cross-Origin-Embedder-Policy: require-corp
@@ -171,6 +172,7 @@ X-Frame-Options: DENY
 Staging additionally sends `X-Robots-Tag: noindex`. That is a host rule in the same `_headers` file, so staging and production deploy identical files.
 
 - **Script integrity** ([ADR 0010](decisions/0010-script-integrity.md)): every script — the entry point and lazily loaded chunks — carries an integrity hash (an SRI attribute and import-map `integrity`), added after the build by `@shkriuss/edge`. Chunks other than the entry are loaded only with `import()`, because Safari refuses statically imported ones. `Integrity-Policy` makes the browser refuse any script without one. The import map is the only inline script; the CSP allows it by its hash, which changes with every build.
+- **Workers** ([ADR 0011](decisions/0011-worker-trusted-types-policy.md)): the script of a worker or service worker must be a Trusted Type. Apps with worker scripts allow exactly one policy, `shkriuss-workers`, which `@shkriuss/edge/workers` creates; it accepts only the app's own worker bundles (`/assets/<name>.worker-<hash>.js`, each built into one file) and `/sw.js`. Other apps allow no policy. Browsers cannot check the integrity of worker scripts; the published file hashes and the build provenance cover them (threat model R6).
 - **Older browsers** that don't support Trusted Types or `Integrity-Policy` ignore those headers; the apps still work, with weaker protection.
 - **Code rules:** no HTML injection sinks, no `eval`, no inline scripts (except the generated import map) or styles; user content is rendered as text (see `CLAUDE.md`).
 - **Supply chain:** few dependencies; pnpm with a release-age delay, blocked install scripts and a frozen lockfile; GitHub Actions pinned to commit SHAs with least-privilege tokens; CodeQL, dependency review and secret scanning.
@@ -195,7 +197,7 @@ Every pull request must pass the gates in [ADR 0008](decisions/0008-quality-gate
 - type checks and lint;
 - unit and property-based tests;
 - component tests in real browsers (Chromium, Firefox, WebKit);
-- Playwright end-to-end tests against the production build served with production headers, where any CSP or integrity violation fails the run;
+- Playwright end-to-end tests against the production build served with production headers, where any CSP or integrity violation fails the run; a test app that is never deployed (`tooling/platform-e2e`) tests the shared platform the same way;
 - accessibility checks (axe);
 - performance and bundle-size budgets.
 

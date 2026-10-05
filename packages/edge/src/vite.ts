@@ -1,12 +1,13 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { Plugin } from "vite";
-import { assertChunksLoadInSafari } from "./chunks.ts";
+import { assertChunksLoadInSafari, assertWorkerBundleNames } from "./chunks.ts";
 import { appHost, STAGING_DOMAIN } from "./domains.ts";
 import { appHeaderRules, headersFile } from "./headers-file.ts";
 import type { BrowserFeature } from "./headers.ts";
 import { addScriptIntegrity, cspHashSource, subresourceIntegrity } from "./integrity.ts";
 import { buildManifest, formatManifest, MANIFEST_FILE } from "./manifest.ts";
+import { isWorkerScriptPath } from "./worker-scripts.ts";
 
 export interface EdgeOptions {
   /** The app's permanent id, which is also its subdomain. Leave it out for the hub. */
@@ -20,6 +21,11 @@ export interface EdgeOptions {
  * the scripts, adds integrity attributes and the import map to the HTML, writes the
  * `_headers` file with the matching Content-Security-Policy, and publishes the SHA-256 of
  * every served file in `sha256sums.txt`.
+ *
+ * The Content-Security-Policy allows the Trusted Types policy that starts workers only if the
+ * build has worker scripts: worker bundles, or a service worker at `/sw.js` (ADR 0011). Each
+ * worker is built into one file, because a worker cannot check the integrity of the scripts it
+ * imports.
  *
  * It works on the files as written, so the hashes match exactly the bytes that are served.
  *
@@ -43,7 +49,7 @@ export function edge(options: EdgeOptions = {}): Plugin {
     apply: "build",
     enforce: "post",
     config() {
-      return { build: { modulePreload: false, cssCodeSplit: false } };
+      return { build: { modulePreload: false, cssCodeSplit: false }, worker: { format: "iife" } };
     },
     configResolved(config) {
       if (config.base !== "/") {
@@ -53,6 +59,11 @@ export function edge(options: EdgeOptions = {}): Plugin {
       }
       if (config.build.modulePreload !== false || config.build.cssCodeSplit) {
         throw new Error("Module preloading and per-chunk CSS must stay off (ADR 0010).");
+      }
+      if (config.worker.format !== "iife") {
+        throw new Error(
+          'Each worker must be built into one file, so worker.format must be "iife" (ADR 0011).',
+        );
       }
     },
     writeBundle: {
@@ -64,11 +75,17 @@ export function edge(options: EdgeOptions = {}): Plugin {
           throw new Error("The build has no output directory to add integrity hashes to.");
         }
 
-        assertChunksLoadInSafari(Object.values(bundle).filter((output) => output.type === "chunk"));
+        const outputs = Object.values(bundle);
+        assertChunksLoadInSafari(outputs.filter((output) => output.type === "chunk"));
+        assertWorkerBundleNames(outputs);
 
         const files = Object.keys(bundle).toSorted();
         const hashes = new Map<string, string>();
         for (const file of files) {
+          // Worker scripts are started, never imported, so the import map leaves them out.
+          if (isWorkerScriptPath(`/${file}`)) {
+            continue;
+          }
           if (file.endsWith(".js") || file.endsWith(".css")) {
             const bytes = await readFile(path.join(directory, file));
             if (file.endsWith(".js") && bytes.includes("__vite__mapDeps")) {
@@ -91,17 +108,17 @@ export function edge(options: EdgeOptions = {}): Plugin {
           throw new Error("The build has no HTML page to add integrity hashes to.");
         }
 
+        // After the HTML is final, so it covers every file as served, including those copied
+        // from public/ such as a service worker. It leaves out _headers, which is not served.
+        const manifest = await buildManifest(directory);
         const rules = appHeaderRules({
           scriptHashes: [...scriptHashes],
+          workers: [...manifest.keys()].some(isWorkerScriptPath),
           allowedFeatures: options.allowedFeatures ?? [],
           stagingHost,
         });
         await writeFile(path.join(directory, "_headers"), headersFile(rules));
-        // Last, so it covers every file as served, including those copied from public/.
-        await writeFile(
-          path.join(directory, MANIFEST_FILE),
-          formatManifest(await buildManifest(directory)),
-        );
+        await writeFile(path.join(directory, MANIFEST_FILE), formatManifest(manifest));
       },
     },
   };

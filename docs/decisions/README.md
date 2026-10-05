@@ -6,18 +6,19 @@ An ADR is a short document that records one important decision: the context, wha
 - **To change a decision,** add a new ADR that supersedes the old one, and mark the old one "Superseded by ADR NNNN". Don't rewrite history.
 - **Numbering** is sequential and never reused.
 
-| ADR                                      | Title                                           | Status   |
-| ---------------------------------------- | ----------------------------------------------- | -------- |
-| [0001](0001-domains-and-environments.md) | Domains and environments                        | Accepted |
-| [0002](0002-public-monorepo.md)          | One public monorepo under AGPL-3.0              | Accepted |
-| [0003](0003-local-only-at-launch.md)     | Local-only apps at launch, no accounts          | Accepted |
-| [0004](0004-local-data-and-backups.md)   | Local data model and encrypted backups          | Accepted |
-| [0005](0005-frontend-stack.md)           | Frontend stack                                  | Accepted |
-| [0006](0006-hosting-and-deployment.md)   | Hosting and deployment on Cloudflare            | Accepted |
-| [0007](0007-security-baseline.md)        | Security baseline                               | Accepted |
-| [0008](0008-quality-gates.md)            | Quality gates and testing                       | Accepted |
-| [0009](0009-stay-on-pnpm-11.md)          | Stay on pnpm 11 for now                         | Accepted |
-| [0010](0010-script-integrity.md)         | Script integrity with a hash-allowed import map | Accepted |
+| ADR                                         | Title                                           | Status   |
+| ------------------------------------------- | ----------------------------------------------- | -------- |
+| [0001](0001-domains-and-environments.md)    | Domains and environments                        | Accepted |
+| [0002](0002-public-monorepo.md)             | One public monorepo under AGPL-3.0              | Accepted |
+| [0003](0003-local-only-at-launch.md)        | Local-only apps at launch, no accounts          | Accepted |
+| [0004](0004-local-data-and-backups.md)      | Local data model and encrypted backups          | Accepted |
+| [0005](0005-frontend-stack.md)              | Frontend stack                                  | Accepted |
+| [0006](0006-hosting-and-deployment.md)      | Hosting and deployment on Cloudflare            | Accepted |
+| [0007](0007-security-baseline.md)           | Security baseline                               | Accepted |
+| [0008](0008-quality-gates.md)               | Quality gates and testing                       | Accepted |
+| [0009](0009-stay-on-pnpm-11.md)             | Stay on pnpm 11 for now                         | Accepted |
+| [0010](0010-script-integrity.md)            | Script integrity with a hash-allowed import map | Accepted |
+| [0011](0011-worker-trusted-types-policy.md) | One Trusted Types policy for worker scripts     | Accepted |
 
 ## Template
 

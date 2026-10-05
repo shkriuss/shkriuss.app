@@ -10,7 +10,7 @@ const HASH = "'sha256-GRc6Nm15BkLoEye0zzztI4Lk2XalJU7mN5ackOE8koM='";
 
 describe("contentSecurityPolicy", () => {
   it("is the strict policy from the architecture, with the import map's hash", () => {
-    expect(contentSecurityPolicy([HASH])).toBe(
+    expect(contentSecurityPolicy({ scriptHashes: [HASH] })).toBe(
       "default-src 'none'; " +
         `script-src 'self' ${HASH}; ` +
         "style-src 'self'; img-src 'self' blob: data:; connect-src 'self'; " +
@@ -20,7 +20,30 @@ describe("contentSecurityPolicy", () => {
   });
 
   it("allows only same-origin scripts when there is no hash", () => {
-    expect(contentSecurityPolicy([])).toContain("script-src 'self'; ");
+    expect(contentSecurityPolicy({ scriptHashes: [] })).toContain("script-src 'self'; ");
+  });
+
+  it("allows no Trusted Types policy unless the app has workers", () => {
+    for (const policy of [
+      contentSecurityPolicy({ scriptHashes: [HASH] }),
+      contentSecurityPolicy({ scriptHashes: [HASH], workers: false }),
+    ]) {
+      expect(policy).toMatch(/; trusted-types 'none'$/);
+    }
+  });
+
+  it("allows exactly the worker policy, once, for an app with workers (ADR 0011)", () => {
+    const policy = contentSecurityPolicy({ scriptHashes: [HASH], workers: true });
+    expect(policy).toBe(
+      contentSecurityPolicy({ scriptHashes: [HASH] }).replace(
+        "trusted-types 'none'",
+        "trusted-types shkriuss-workers",
+      ),
+    );
+    // Without 'allow-duplicates', nothing can create a second policy of the same name.
+    expect(policy).not.toContain("allow-duplicates");
+    expect(policy).toContain("require-trusted-types-for 'script'; ");
+    expect(policy).toContain("worker-src 'self'; ");
   });
 
   it.each([
@@ -32,7 +55,9 @@ describe("contentSecurityPolicy", () => {
     HASH.slice(1, -1),
     `${HASH}; script-src *`,
   ])("refuses %j as an extra script source; only hash sources are allowed", (source) => {
-    expect(() => contentSecurityPolicy([source])).toThrow(/not a CSP hash source/);
+    expect(() => contentSecurityPolicy({ scriptHashes: [source] })).toThrow(
+      /not a CSP hash source/,
+    );
   });
 });
 
@@ -86,5 +111,14 @@ describe("securityHeaders", () => {
       "X-Content-Type-Options": "nosniff",
       "X-Frame-Options": "DENY",
     });
+  });
+
+  it("passes the workers option on to the Content-Security-Policy", () => {
+    const csp = (workers: boolean): string | undefined =>
+      Object.fromEntries(securityHeaders({ scriptHashes: [HASH], workers }))[
+        "Content-Security-Policy"
+      ];
+    expect(csp(true)).toBe(contentSecurityPolicy({ scriptHashes: [HASH], workers: true }));
+    expect(csp(false)).toBe(contentSecurityPolicy({ scriptHashes: [HASH] }));
   });
 });

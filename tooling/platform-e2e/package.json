@@ -1,22 +1,21 @@
 {
-  "name": "@shkriuss/edge",
+  "name": "@shkriuss/platform-e2e",
   "version": "0.0.0",
   "private": true,
   "license": "AGPL-3.0-only",
   "type": "module",
-  "exports": {
-    ".": "./src/index.ts",
-    "./workers": "./browser/workers.ts"
-  },
   "scripts": {
-    "typecheck": "tsc && tsc -p browser",
-    "test": "vitest run"
+    "build": "vite build",
+    "typecheck": "tsc",
+    "e2e": "playwright test"
   },
   "devDependencies": {
+    "@playwright/test": "catalog:",
     "@shkriuss/config": "workspace:*",
+    "@shkriuss/edge": "workspace:*",
     "@types/node": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
-    "vitest": "catalog:"
+    "wrangler": "catalog:"
   }
 }

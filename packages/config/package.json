@@ -7,6 +7,15 @@
   "exports": {
     "./tsconfig/base.json": "./tsconfig/base.json",
     "./tsconfig/app.json": "./tsconfig/app.json",
-    "./tsconfig/node.json": "./tsconfig/node.json"
+    "./tsconfig/node.json": "./tsconfig/node.json",
+    "./playwright": "./src/playwright.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc"
+  },
+  "devDependencies": {
+    "@playwright/test": "catalog:",
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
   }
 }

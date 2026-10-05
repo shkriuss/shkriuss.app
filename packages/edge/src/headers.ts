@@ -4,6 +4,8 @@
  * code instead, or propose an ADR.
  */
 
+import { WORKER_POLICY } from "./worker-scripts.ts";
+
 /**
  * Browser features that every app denies to itself. A feature that is not listed keeps its
  * default, which allows it for the app's own origin; `web-share` stays allowed that way
@@ -63,6 +65,12 @@ export type BrowserFeature = (typeof DENIED_FEATURES)[number];
 export interface HeaderOptions {
   /** CSP hash sources for the inline scripts the build generates: only the import map. */
   readonly scriptHashes: readonly string[];
+  /**
+   * Whether the app has worker scripts: worker bundles or a service worker. Only then does the
+   * Content-Security-Policy allow the one Trusted Types policy that starts them (ADR 0011);
+   * otherwise it allows none.
+   */
+  readonly workers?: boolean;
   /** Browser features the app needs, allowed for its own origin only. */
   readonly allowedFeatures?: readonly BrowserFeature[];
 }
@@ -72,7 +80,10 @@ export type Header = readonly [name: string, value: string];
 
 const HASH_SOURCE = /^'sha(?:256|384|512)-[A-Za-z0-9+/]+={0,2}'$/;
 
-export function contentSecurityPolicy(scriptHashes: readonly string[]): string {
+export function contentSecurityPolicy({
+  scriptHashes,
+  workers = false,
+}: Pick<HeaderOptions, "scriptHashes" | "workers">): string {
   for (const hash of scriptHashes) {
     if (!HASH_SOURCE.test(hash)) {
       throw new Error(`"${hash}" is not a CSP hash source such as 'sha256-…'.`);
@@ -90,7 +101,7 @@ export function contentSecurityPolicy(scriptHashes: readonly string[]): string {
     ["form-action", "'none'"],
     ["frame-ancestors", "'none'"],
     ["require-trusted-types-for", "'script'"],
-    ["trusted-types", "'none'"],
+    ["trusted-types", workers ? WORKER_POLICY : "'none'"],
   ];
   return directives.map((directive) => directive.join(" ")).join("; ");
 }
@@ -105,7 +116,7 @@ export function permissionsPolicy(allowedFeatures: readonly BrowserFeature[] = [
 /** The security headers for every response, in the order they are written. */
 export function securityHeaders(options: HeaderOptions): Header[] {
   return [
-    ["Content-Security-Policy", contentSecurityPolicy(options.scriptHashes)],
+    ["Content-Security-Policy", contentSecurityPolicy(options)],
     ["Integrity-Policy", "blocked-destinations=(script)"],
     ["Cross-Origin-Opener-Policy", "same-origin"],
     ["Cross-Origin-Embedder-Policy", "require-corp"],

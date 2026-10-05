@@ -72,6 +72,9 @@
     "prefer-const": "error",
     "no-console": "error",
     "import/no-cycle": "error",
+    // TypeScript already refuses a default import of a module that has none (TS1192), and this
+    // rule misreads Vite's "?worker&url" imports, which is how apps import workers (ADR 0011).
+    "import/default": "off",
     "import/no-unassigned-import": ["error", { "allow": ["**/*.css"] }],
     "unicorn/prefer-node-protocol": "error",
     "vitest/no-focused-tests": "error",
