@@ -1,4 +1,6 @@
+import { existsSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import path from "node:path";
 import type { Plugin } from "vite";
 import { assertChunksLoadInSafari, assertWorkerBundleNames } from "./chunks.ts";
@@ -6,8 +8,63 @@ import { appHost, STAGING_DOMAIN } from "./domains.ts";
 import { appHeaderRules, headersFile } from "./headers-file.ts";
 import type { BrowserFeature } from "./headers.ts";
 import { addScriptIntegrity, cspHashSource, subresourceIntegrity } from "./integrity.ts";
+import { type CollectOptions, LICENSES_FILE, collectLicenses, licensesFile } from "./licenses.ts";
 import { buildManifest, formatManifest, MANIFEST_FILE } from "./manifest.ts";
-import { isWorkerScriptPath } from "./worker-scripts.ts";
+import { isWorkerBundlePath, isWorkerScriptPath } from "./worker-scripts.ts";
+
+/** What Rolldown tells about the modules of a chunk. */
+interface ChunkModules {
+  readonly modules: Readonly<Record<string, { readonly renderedLength: number }>>;
+}
+
+const STYLESHEET = /\.(?:css|scss|sass|less|styl)(?:\?|$)/;
+
+/**
+ * The modules whose code a chunk includes: those with rendered code, and stylesheets, whose code
+ * goes into the CSS file instead. Modules that tree-shaking removed entirely are left out.
+ */
+function includedModules(chunk: ChunkModules): string[] {
+  return Object.entries(chunk.modules)
+    .filter(([id, module]) => module.renderedLength > 0 || STYLESHEET.test(id))
+    .map(([id]) => id);
+}
+
+/** Collects the modules of every worker bundle, which Vite builds on its own. */
+function workerModules(modules: Set<string>): Plugin {
+  return {
+    name: "shkriuss:edge:worker-modules",
+    generateBundle(_options, bundle) {
+      for (const output of Object.values(bundle)) {
+        if (output.type === "chunk") {
+          for (const id of includedModules(output)) {
+            modules.add(id);
+          }
+        }
+      }
+    },
+  };
+}
+
+/**
+ * The repository's root: the nearest directory, from `start` up, with pnpm-workspace.yaml, or
+ * `start` itself for an app outside a workspace.
+ */
+function repositoryRoot(start: string): string {
+  for (let directory = start; ; directory = path.dirname(directory)) {
+    if (existsSync(path.join(directory, "pnpm-workspace.yaml"))) {
+      return directory;
+    }
+    if (path.dirname(directory) === directory) {
+      return start;
+    }
+  }
+}
+
+/**
+ * Vite's package.json, for the code that Vite and Rolldown generate: this package's own Vite,
+ * which is the version that builds every app, since the pnpm catalog has one.
+ */
+const VITE = createRequire(import.meta.url).resolve("vite/package.json");
 
 export interface EdgeOptions {
   /** The app's permanent id, which is also its subdomain. Leave it out for the hub. */
@@ -29,6 +86,11 @@ export interface EdgeOptions {
  *
  * It works on the files as written, so the hashes match exactly the bytes that are served.
  *
+ * It writes `licenses.txt` too: the license texts of every package of others whose code is in
+ * the build, in the page's chunks and in its workers, and the legal comments (`/*! … *\/`) of
+ * this repository's files that include material of others. The build fails for a package
+ * without a license file and for generated code of unknown origin.
+ *
  * It also keeps every chunk loadable in Safari, and every file name tied to its content
  * (ADR 0010):
  *
@@ -44,14 +106,26 @@ export interface EdgeOptions {
  */
 export function edge(options: EdgeOptions = {}): Plugin {
   const stagingHost = appHost(STAGING_DOMAIN, options.appId);
+  const workers = new Set<string>();
+  let licenseOptions: CollectOptions | undefined;
   return {
     name: "shkriuss:edge",
     apply: "build",
     enforce: "post",
     config() {
-      return { build: { modulePreload: false, cssCodeSplit: false }, worker: { format: "iife" } };
+      return {
+        build: { modulePreload: false, cssCodeSplit: false },
+        worker: { format: "iife", plugins: () => [workerModules(workers)] },
+      };
     },
     configResolved(config) {
+      licenseOptions = {
+        root: repositoryRoot(config.root),
+        packageOf: (name) =>
+          path.dirname(
+            name === "vite" ? VITE : createRequire(VITE).resolve(`${name}/package.json`),
+          ),
+      };
       if (config.base !== "/") {
         throw new Error(
           `Apps are served from the root of their own origin, so "base" must be "/", not "${config.base}".`,
@@ -65,6 +139,9 @@ export function edge(options: EdgeOptions = {}): Plugin {
           'Each worker must be built into one file, so worker.format must be "iife" (ADR 0011).',
         );
       }
+    },
+    buildStart() {
+      workers.clear();
     },
     writeBundle: {
       order: "post",
@@ -107,6 +184,19 @@ export function edge(options: EdgeOptions = {}): Plugin {
         if (scriptHashes.size === 0) {
           throw new Error("The build has no HTML page to add integrity hashes to.");
         }
+
+        // Vite builds each worker on its own, and edge()'s worker plugin reports its modules.
+        if (files.some((file) => isWorkerBundlePath(`/${file}`)) && workers.size === 0) {
+          throw new Error("No worker build reported its modules: keep edge()'s worker.plugins.");
+        }
+        if (licenseOptions === undefined) {
+          throw new Error("The build has no resolved configuration.");
+        }
+        const pageModules = outputs.flatMap((output) =>
+          output.type === "chunk" ? includedModules(output) : [],
+        );
+        const licenses = await collectLicenses([...pageModules, ...workers], licenseOptions);
+        await writeFile(path.join(directory, LICENSES_FILE), licensesFile(options.appId, licenses));
 
         // After the HTML is final, so it covers every file as served, including those copied
         // from public/ such as a service worker. It leaves out _headers, which is not served.

@@ -178,6 +178,7 @@ Staging additionally sends `X-Robots-Tag: noindex`. That is a host rule in the s
 - **Code rules:** no HTML injection sinks, no `eval`, no inline scripts (except the generated import map) or styles; user content is rendered as text (see `CLAUDE.md`).
 - **Supply chain:** few dependencies; pnpm with a release-age delay, blocked install scripts and a frozen lockfile; GitHub Actions pinned to commit SHAs with least-privilege tokens; CodeQL, dependency review and secret scanning.
 - **Transparency:** public source, a build provenance attestation for every deployed file, and a published SHA-256 list of every deployed file (`/sha256sums.txt` on every origin), so anyone can check what a site serves ([how](../packages/edge/README.md#deployment-checks)) — ready for browser-verified transparency (WAICT) once browsers ship it.
+- **Licenses:** every origin serves `/licenses.txt`. It says that the app is free software (AGPL-3.0-only) and where its source is, and gives the license texts of all the software and material of others in its build. The build writes it and fails for a package without a license file ([how](../packages/edge/README.md#licenses)).
 
 ## 13. Privacy
 

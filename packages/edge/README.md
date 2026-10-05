@@ -46,6 +46,16 @@ const registration = await registerServiceWorker();
 
 The build fails if a worker would not start: if Vite emits a script file that is not named like a worker, or a module of the page is named like one. Unlike the page's scripts, worker scripts have no integrity hash, because browsers offer no way to check one; `sha256sums.txt` and the build provenance cover them like every other file.
 
+## Licenses
+
+The plugin writes `dist/licenses.txt`, which every app serves at `/licenses.txt`. It says that the app is free software under AGPL-3.0-only and where its source is. Then it gives the license texts of all the software and material of others whose code the build includes, in the page's chunks and in its workers:
+
+- **Packages:** every package from `node_modules` with code in the build, with its license files: `LICENSE`, `COPYING`, `NOTICE` and the like. A package that tree-shaking removed entirely is left out, because none of its code is served.
+- **Generated code:** helpers that Vite and Rolldown write into the bundles, with Vite's and Rolldown's own licenses. For them, Vite's license file stops before the licenses of the packages that Vite bundles for its own use, which the helpers do not contain.
+- **Material in this repository:** a file of ours that includes material of others, such as a word list, starts with a legal comment, `/*! … */`, that names the source and the license. The plugin copies the legal comments of every file in the build.
+
+The build fails for a package without a license file, and for generated code whose origin it does not know, so that no build ships code without its license. Files copied from `public/` are not bundled and are not covered: keep material of others out of `public/`.
+
 ## Deployment checks
 
 The plugin also writes `dist/sha256sums.txt`: the SHA-256 of every file the deployment serves, in the format `sha256sum` writes. It is published at `/sha256sums.txt`, so anyone can compare what is served with what this repository builds. Follow redirects when you compare: Cloudflare serves `/index.html` at `/`.

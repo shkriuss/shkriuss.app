@@ -34,6 +34,17 @@ export {
   parseManifest,
   replacedAssets,
 } from "./manifest.ts";
+export {
+  LICENSES_FILE,
+  SOURCE_URL,
+  collectLicenses,
+  legalComments,
+  licensesFile,
+  type CollectOptions,
+  type Licenses,
+  type Notice,
+  type ThirdPartyPackage,
+} from "./licenses.ts";
 export { edge, type EdgeOptions } from "./vite.ts";
 export {
   SERVICE_WORKER_PATH,

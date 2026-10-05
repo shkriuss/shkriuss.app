@@ -39,7 +39,7 @@ Instructions for Claude Code and for anyone else changing this repository. Read 
 4. **Never weaken security headers** (CSP, Trusted Types, Integrity-Policy, COOP/COEP, Permissions-Policy) to make something work. Fix the code, or propose an ADR. Start workers and the service worker only with `@shkriuss/edge/workers`, whose policy is the only Trusted Types policy an app may have; never create another ([ADR 0011](docs/decisions/0011-worker-trusted-types-policy.md)).
 5. **Crypto only through `@shkriuss/backup`** (the `age` format and WebCrypto). Never implement cryptographic primitives. Never log, store or transmit passphrases or user data.
 6. **Imported files are hostile:** size-limit, parse, validate against the schema, migrate, preview, then apply in a single transaction.
-7. **Dependencies:** prefer the web platform and existing packages. A new runtime dependency needs a justification in the pull request: purpose, size, maintenance status, and a license compatible with AGPL-3.0 (MIT, BSD, ISC, Apache-2.0).
+7. **Dependencies:** prefer the web platform and existing packages. A new runtime dependency needs a justification in the pull request: purpose, size, maintenance status, and a license compatible with AGPL-3.0 (MIT, BSD, ISC, Apache-2.0). Its license text ships in every app's `/licenses.txt`, which the build writes. Material of others in our own files starts with a legal comment, `/*! … */`, that names its source and license.
 
 ### Data
 
