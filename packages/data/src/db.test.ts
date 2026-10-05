@@ -1,122 +1,27 @@
-import { Dexie } from "dexie";
-import { IDBFactory, IDBKeyRange, forceCloseDatabase } from "fake-indexeddb";
+import { IDBFactory, forceCloseDatabase } from "fake-indexeddb";
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
-import {
-  DATABASE_NAME,
-  type Database,
-  type DatabaseOptions,
-  type Item,
-  openDatabase,
-  refusingNewer,
-} from "./db.ts";
+import { DATABASE_NAME, type Item, refusingNewer } from "./db.ts";
 import { DataLayerError } from "./errors.ts";
 import { field } from "./fields.ts";
 import { SETTINGS_ID, isRecordId } from "./ids.ts";
-import { type SchemaVersion, type Schemas, defineSchemas } from "./schema.ts";
-
-const START = 1_791_052_200_000;
-
-const v1 = {
-  version: 1,
-  stores: {
-    notes: {
-      fields: {
-        title: field.string({ maxLength: 100 }),
-        done: field.boolean(),
-        list: field.reference("lists"),
-      },
-    },
-    lists: { fields: { name: field.string() } },
-    settings: { fields: { sortBy: field.enum(["title", "date"]) } },
-  },
-} satisfies SchemaVersion;
-
-/** Version 2 renames two fields of notes, computes a third, and moves lists to folders. */
-const v2 = {
-  version: 2,
-  stores: {
-    notes: {
-      fields: {
-        name: field.string({ maxLength: 100 }),
-        status: field.enum(["open", "done"]),
-        folder: field.reference("folders"),
-      },
-    },
-    folders: { fields: { name: field.string() } },
-    settings: v1.stores.settings,
-  },
-  migrate: {
-    notes: {
-      rename: { title: "name", list: "folder" },
-      compute: {
-        status: { from: ["done"], value: ({ done }) => (done === true ? "done" : "open") },
-      },
-      remove: ["done"],
-    },
-    lists: { store: "folders" },
-  },
-} satisfies SchemaVersion;
-
-const VERSION_1 = defineSchemas(v1);
-const VERSION_2 = defineSchemas(v1, v2);
-
-/** A device's clock, which tests move by hand. */
-class Clock {
-  time = START;
-  readonly now = (): number => this.time;
-}
-
-function open<C extends SchemaVersion>(
-  schemas: Schemas<C>,
-  factory: IDBFactory,
-  options: DatabaseOptions = {},
-): Promise<Database<C>> {
-  return openDatabase(schemas, { indexedDB: factory, IDBKeyRange, ...options });
-}
-
-/** The database as stored, read without the data layer: its version and every store's rows. */
-async function snapshot(
-  factory: IDBFactory,
-): Promise<{ readonly version: number; readonly stores: Record<string, unknown[]> }> {
-  const raw = new Dexie(DATABASE_NAME, { indexedDB: factory, IDBKeyRange });
-  await raw.open();
-  try {
-    const stores: Record<string, unknown[]> = {};
-    for (const { name } of raw.tables) {
-      stores[name] = await raw.table<unknown>(name).toArray();
-    }
-    return { version: raw.verno, stores };
-  } finally {
-    raw.close();
-  }
-}
-
-/** A new database at version 1, with its IndexedDB and its device's clock. */
-async function fresh(): Promise<{
-  readonly factory: IDBFactory;
-  readonly clock: Clock;
-  readonly db: Database<typeof v1>;
-}> {
-  const factory = new IDBFactory();
-  const clock = new Clock();
-  return { factory, clock, db: await open(VERSION_1, factory, { now: clock.now }) };
-}
+import { type SchemaVersion, defineSchemas } from "./schema.ts";
+import {
+  START,
+  VERSION_1,
+  VERSION_2,
+  Clock,
+  fresh,
+  open,
+  setMeta,
+  settle,
+  stored,
+  v1,
+  v2,
+} from "./test/storage.ts";
 
 /** A device's clock that stands still. */
 function stopped(): number {
   return START;
-}
-
-/** The result of an IndexedDB request. */
-function settle<T>(request: IDBRequest<T>): Promise<T> {
-  return new Promise((resolve, reject) => {
-    request.addEventListener("success", () => {
-      resolve(request.result);
-    });
-    request.addEventListener("error", () => {
-      reject(request.error ?? new Error("The request failed."));
-    });
-  });
 }
 
 /** `factory`, keeping every connection it opens in `connections`. */
@@ -133,19 +38,6 @@ function recording(factory: IDBFactory, connections: IDBDatabase[]): IDBFactory 
       return request;
     },
   };
-}
-
-/** Changes a row of the `meta` store behind the data layer's back. */
-async function setMeta(factory: IDBFactory, key: string, value: unknown): Promise<void> {
-  const raw = new Dexie(DATABASE_NAME, { indexedDB: factory, IDBKeyRange });
-  await raw.open();
-  try {
-    await (value === undefined
-      ? raw.table("meta").delete(key)
-      : raw.table("meta").put({ key, value }));
-  } finally {
-    raw.close();
-  }
 }
 
 describe("openDatabase (data model §6, §7)", () => {
@@ -166,7 +58,7 @@ describe("openDatabase (data model §6, §7)", () => {
   it("creates a new database directly at the current version", async () => {
     const factory = new IDBFactory();
     (await open(VERSION_2, factory)).close();
-    const { version, stores } = await snapshot(factory);
+    const { version, stores } = await stored(factory);
     expect(version).toBe(2);
     expect(Object.keys(stores).toSorted()).toStrictEqual(["folders", "meta", "notes", "settings"]);
   });
@@ -206,7 +98,7 @@ describe("openDatabase (data model §6, §7)", () => {
     });
     upgraded.close();
 
-    const { version, stores } = await snapshot(factory);
+    const { version, stores } = await stored(factory);
     expect(version).toBe(2);
     expect(Object.keys(stores).toSorted()).toStrictEqual(["folders", "meta", "notes", "settings"]);
     expect(stores["notes"]).toHaveLength(2);
@@ -249,7 +141,7 @@ describe("openDatabase (data model §6, §7)", () => {
       await change.create("notes", { title: "Milk" });
     });
     db.close();
-    const before = await snapshot(factory);
+    const before = await stored(factory);
     const failure = new Error("No.");
     const failing = {
       ...v2,
@@ -268,17 +160,17 @@ describe("openDatabase (data model §6, §7)", () => {
     await expect(open(defineSchemas(v1, failing), factory)).rejects.toThrow(
       expect.objectContaining({ code: "invalid", cause: failure }),
     );
-    expect(await snapshot(factory)).toStrictEqual(before);
+    expect(await stored(factory)).toStrictEqual(before);
   });
 
   it("refuses a database that a newer version of the app upgraded, and leaves it as it is", async () => {
     const factory = new IDBFactory();
     (await open(VERSION_2, factory)).close();
-    const before = await snapshot(factory);
+    const before = await stored(factory);
     await expect(open(VERSION_1, factory)).rejects.toThrow(
       expect.objectContaining({ name: "DataLayerError", code: "newer-version" }),
     );
-    expect(await snapshot(factory)).toStrictEqual(before);
+    expect(await stored(factory)).toStrictEqual(before);
     expect(await factory.databases()).toStrictEqual([{ name: "shkriuss", version: 20 }]);
   });
 
@@ -289,11 +181,11 @@ describe("openDatabase (data model §6, §7)", () => {
       stores: { ...v1.stores, tags: { fields: { name: field.string() } } },
     } satisfies SchemaVersion;
     (await open(defineSchemas(v1, newer), factory)).close();
-    const before = await snapshot(factory);
+    const before = await stored(factory);
     await expect(open(VERSION_1, factory)).rejects.toThrow(
       expect.objectContaining({ code: "newer-version" }),
     );
-    expect(await snapshot(factory)).toStrictEqual(before);
+    expect(await stored(factory)).toStrictEqual(before);
   });
 
   it("opens and upgrades a database that Dexie repaired at the same schema version", async () => {
@@ -367,11 +259,11 @@ describe("openDatabase (data model §6, §7)", () => {
     });
     closeByBrowser();
     (await open(VERSION_2, factory)).close();
-    const before = await snapshot(factory);
+    const before = await stored(factory);
     await expect(db.list("notes")).rejects.toThrow(
       expect.objectContaining({ code: "newer-version" }),
     );
-    expect(await snapshot(factory)).toStrictEqual(before);
+    expect(await stored(factory)).toStrictEqual(before);
     // Every connection it opened to look at the newer database is closed again.
     await settle(factory.deleteDatabase(DATABASE_NAME));
     expect(onVersionChange).not.toHaveBeenCalled();
@@ -426,7 +318,7 @@ describe("changes (data model §4)", () => {
       id,
       values: { title: "Milk", done: false, list: null },
     });
-    expect((await snapshot(factory)).stores["notes"]).toStrictEqual([
+    expect((await stored(factory)).stores["notes"]).toStrictEqual([
       { id, v: 1, data: { title: "Milk" }, clock: { title: hlc } },
     ]);
   });
@@ -449,7 +341,7 @@ describe("changes (data model §4)", () => {
     expect(hlc).toMatch(/^001791052200000:00000:[0-9a-f]{16}$/);
     expect(result.seen).toStrictEqual({ id: note, values: { title: "Milk", done: true, list } });
     expect(result.all).toStrictEqual([{ id: list, values: { name: "Shopping" } }]);
-    expect((await snapshot(factory)).stores["notes"]).toStrictEqual([
+    expect((await stored(factory)).stores["notes"]).toStrictEqual([
       {
         id: note,
         v: 1,
@@ -471,7 +363,7 @@ describe("changes (data model §4)", () => {
       return change.hlc;
     });
     expect(second > first).toBe(true);
-    expect((await snapshot(factory)).stores["notes"]).toStrictEqual([
+    expect((await stored(factory)).stores["notes"]).toStrictEqual([
       { id, v: 1, data: { title: "Milk", done: true }, clock: { title: first, done: second } },
     ]);
   });
@@ -486,7 +378,7 @@ describe("changes (data model §4)", () => {
     });
     expect(await db.get("notes", id)).toBeUndefined();
     expect(await db.list("notes")).toStrictEqual([]);
-    expect((await snapshot(factory)).stores["notes"]).toStrictEqual([
+    expect((await stored(factory)).stores["notes"]).toStrictEqual([
       { id, v: 1, data: {}, clock: {}, deleted },
     ]);
     await expect(db.change((change) => change.update("notes", id, { done: true }))).rejects.toThrow(
@@ -537,17 +429,17 @@ describe("changes (data model §4)", () => {
 
   it("refuses values the schema does not allow, and writes nothing", async () => {
     const { factory, db } = await fresh();
-    const before = await snapshot(factory);
+    const before = await stored(factory);
     await expect(
       db.change((change) => change.create("notes", { title: "x".repeat(101) })),
     ).rejects.toThrow(expect.objectContaining({ code: "invalid" }));
-    expect(await snapshot(factory)).toStrictEqual(before);
+    expect(await stored(factory)).toStrictEqual(before);
   });
 
   it("changes nothing if the change fails", async () => {
     const { factory, db } = await fresh();
     await db.change((change) => change.create("notes", { title: "Milk" }));
-    const before = await snapshot(factory);
+    const before = await stored(factory);
     const failure = new Error("No.");
     await expect(
       db.change(async (change) => {
@@ -555,7 +447,7 @@ describe("changes (data model §4)", () => {
         throw failure;
       }),
     ).rejects.toBe(failure);
-    expect(await snapshot(factory)).toStrictEqual(before);
+    expect(await stored(factory)).toStrictEqual(before);
   });
 
   it("issues later HLCs even when the device's clock stands still or goes back", async () => {
@@ -607,7 +499,7 @@ describe("settings (data model §2.5)", () => {
       return change.hlc;
     });
     expect(await db.settings()).toStrictEqual({ sortBy: "title" });
-    expect((await snapshot(factory)).stores["settings"]).toStrictEqual([
+    expect((await stored(factory)).stores["settings"]).toStrictEqual([
       { id: SETTINGS_ID, v: 1, data: { sortBy: "title" }, clock: { sortBy: hlc } },
     ]);
   });

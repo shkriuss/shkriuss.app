@@ -6,10 +6,13 @@ export {
   type Database,
   type DatabaseOptions,
   type DeviceState,
+  type ImportCounts,
+  type ImportSummary,
   type Input,
   type Item,
   type RecordStore,
   type SettingsStore,
+  type Snapshot,
   type StoreName,
 } from "./db.ts";
 export { DataLayerError, type DataLayerErrorCode } from "./errors.ts";
@@ -40,6 +43,7 @@ export {
   type HlcParts,
 } from "./hlc.ts";
 export { SETTINGS_ID, isRecordId, newRecordId } from "./ids.ts";
+export { checkIncomingStores, type Incoming } from "./incoming.ts";
 export {
   MAX_DEPTH,
   canonicalJson,

@@ -85,6 +85,14 @@ describe("checkRecord (data model §8, step 1)", () => {
     expect(refusal(LIVE, { ...CONTEXT, store: "settings" })).toBe("invalid");
   });
 
+  it("refuses a deleted settings record, alive again or not: settings are never deleted", () => {
+    const context = { ...CONTEXT, store: "settings" };
+    expect(refusal({ ...TOMBSTONE, id: SETTINGS_ID }, context)).toBe("invalid");
+    const revived = { ...LIVE, id: SETTINGS_ID, deleted: "001791000000000:00000:9f86d081884c7d65" };
+    expect(refusal(revived, context)).toBe("invalid");
+    expect(refusal({ ...TOMBSTONE }, CONTEXT)).toBeUndefined();
+  });
+
   it.each<[string, unknown]>([
     ["something other than an object", "record"],
     ["null", null],
