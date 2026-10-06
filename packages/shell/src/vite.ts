@@ -9,6 +9,8 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import type { HtmlTagDescriptor, Plugin, UserConfig } from "vite";
 
+export { CATALOG_MODULE, type CatalogApp, catalog, readCatalog } from "./catalog.ts";
+
 /**
  * What an app is, in its `app.config.ts` (architecture §6): the source of its manifest and
  * icons, its page's title, its security headers, and the id that names it everywhere. Its name

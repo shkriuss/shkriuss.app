@@ -6,6 +6,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./site": "./src/site.ts",
     "./vite": "./src/vite.ts"
   },
   "scripts": {

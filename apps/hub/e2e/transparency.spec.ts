@@ -46,10 +46,9 @@ test("serves the licenses of the software it includes, and links them", async ({
   expect(licenses).toMatch(/^tailwindcss \d+\.\d+\.\d+ \(MIT\)$/m);
 
   await page.goto("/");
-  await expect(page.getByRole("link", { name: LICENSES_FILE })).toHaveAttribute(
-    "href",
-    `/${LICENSES_FILE}`,
-  );
+  await expect(
+    page.getByRole("contentinfo").getByRole("link", { name: "Licenses" }),
+  ).toHaveAttribute("href", `/${LICENSES_FILE}`);
 });
 
 test("says where to report a security problem, at /.well-known/security.txt", async ({
