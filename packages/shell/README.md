@@ -14,6 +14,7 @@ The frame around every app's screens ([architecture §5](../../docs/architecture
 | `Restore`          | The button and dialog that restore a backup, which `BackupSection` shows                                                                         |
 | `BackupReminder`   | A banner that reminds the user to back up, with a button that makes the backup at once                                                           |
 | `InstallSection`   | The install part of Settings: the browser's install prompt, how to add the app to the Home Screen of an iPhone or iPad, or that it is installed  |
+| `AboutSection`     | The about part of Settings: what the app does, where its data stays, its license and source code, the licenses of what it includes               |
 | `InstallBanner`    | On iPhone and iPad, a banner that suggests installing the app before anything is entered                                                         |
 
 ## Use
@@ -71,10 +72,14 @@ createRoot(container).render(
   - **iPhone and iPad:** the section says how to add the app to the Home Screen, and that the app there keeps its own data: to take it along, back it up in the browser, then restore the backup in the app.
   - **Elsewhere:** the section says that some browsers install apps from their menu.
   - **Before anything is entered:** on iPhone and iPad, `<InstallBanner install={install} db={db} />`, among the frame's `banners`, suggests installing the app first, while the device has no data. Like the reminder, it checks when the app opens and whenever it comes back into view; "Later" hides it until the app opens again. Once there is data, the backup reminder takes its place.
+- **About:** `<AboutSection name={m.appName()} description={m.appDescription()} />` says what the app does and that its data stays on the device, and that it is free software under AGPL-3.0.
+  - **Links:** the source code, as the license gives every user the right to it, and how to report a security problem. They open a new tab: an app installed on an iPhone has no back button.
+  - **Licenses** of the software of others that the app includes, from the build's `/licenses.txt`, show in a dialog, also offline. A tab of their own would not do: Chromium shows a text file with a `style` attribute, which the Content-Security-Policy refuses.
+  - **No version yet:** showing which version runs needs the service worker to tell its version id, a change to its spec that comes on its own.
 - **Styles:** the shell's components use Tailwind's classes, which `@shkriuss/ui/styles.css` covers.
 
-The navigation itself, with TanStack Router, comes with the app template (step 1.3). The rest of the settings and the about screen come later.
+The navigation itself, with TanStack Router, comes with the app template (step 1.3).
 
 ## Tests
 
-The store behind `useObserved`, the backup status that the settings and the reminder share, when the reminder comes, saving a file, comparing passphrases, the messages of restore errors and the text have unit tests. The components and hooks need React in a browser, so `tooling/platform-e2e` tests them on its pages `/shell` and `/shell/settings`: axe in both themes, the landmarks and the skip link, the banner in every state, notes that change while the screen shows them, a screen that fails, the storage section in every state, asking the browser with a yes and with a no, and backups: encrypted with either passphrase or plain, saved as a download or through a share sheet that the tests stand in for, read back, and restored on another device, with every error that a file can cause; and the reminder: when it comes and when it does not, its backup, "Later" for a day, and where the focus goes.
+The store behind `useObserved`, the backup status that the settings and the reminder share, when the reminder comes, the links of About, saving a file, comparing passphrases, the messages of restore errors and the text have unit tests. The components and hooks need React in a browser, so `tooling/platform-e2e` tests them on its pages `/shell` and `/shell/settings`: axe in both themes, the landmarks and the skip link, the banner in every state, notes that change while the screen shows them, a screen that fails, the storage section in every state, asking the browser with a yes and with a no, and backups: encrypted with either passphrase or plain, saved as a download or through a share sheet that the tests stand in for, read back, and restored on another device, with every error that a file can cause; the reminder: when it comes and when it does not, its backup, "Later" for a day, and where the focus goes; installing, with the browser's prompt and on iPhone and iPad; and About, with its links and the licenses.

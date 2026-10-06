@@ -986,3 +986,42 @@ test("an app on the Home Screen suggests no install, and says that it is install
     "This app is installed on this device.",
   );
 });
+
+test("the settings say what the app is, where its data stays, and where its source code is", async ({
+  page,
+}) => {
+  await openSettings(page, BEST_EFFORT);
+  const about = page.getByRole("region", { name: "About Notes" });
+  await expect(about).toContainText("Notes that stay on this device, to test the shell.");
+  await expect(about).toContainText(
+    "Your data stays on this device. The app has no accounts, and sends none of your data anywhere: only the backups that you save leave the device.",
+  );
+  await expect(about).toContainText(
+    "This app is free software, under the GNU Affero General Public License, version 3.",
+  );
+  // Each in a new tab: an app installed on an iPhone has no back button to return from them.
+  for (const [name, href] of [
+    ["Source code", "https://github.com/shkriuss/shkriuss.app"],
+    ["Report a security problem", "https://github.com/shkriuss/shkriuss.app/security/policy"],
+  ] as const) {
+    const link = about.getByRole("link", { name });
+    await expect(link).toHaveAttribute("href", href);
+    await expect(link).toHaveAttribute("target", "_blank");
+    await expect(link).toHaveAttribute("rel", "noreferrer");
+  }
+  // The licenses show in the app, from its own file, which the service worker keeps offline.
+  const show = about.getByRole("button", { name: "Licenses of the software it includes" });
+  await show.click();
+  const licenses = page.getByRole("dialog", { name: "Licenses" });
+  await expect(licenses).toContainText(/^dexie \d+\.\d+\.\d+ \(Apache-2\.0\)$/m);
+  // At the top of the text, which the keyboard scrolls from there.
+  await expect(licenses.locator("[tabindex='-1']")).toBeFocused();
+  expect(await licenses.evaluate((dialog) => dialog.scrollTop)).toBe(0);
+  await page.keyboard.press("PageDown");
+  await expect.poll(async () => licenses.evaluate((dialog) => dialog.scrollTop)).toBeGreaterThan(0);
+  const results = await new AxeBuilder({ page }).analyze();
+  expect(results.violations).toEqual([]);
+  await licenses.getByRole("button", { name: "Close" }).click();
+  await expect(licenses).toBeHidden();
+  await expect(show).toBeFocused();
+});
