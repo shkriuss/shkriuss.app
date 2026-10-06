@@ -15,7 +15,7 @@
     "test": "turbo run test",
     "build": "turbo run build",
     "check": "node tooling/checks/src/cli.ts",
-    "e2e": "turbo run e2e",
+    "e2e": "turbo run e2e --concurrency=1",
     "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm check && pnpm e2e"
   },
   "devDependencies": {
