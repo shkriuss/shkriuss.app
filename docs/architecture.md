@@ -76,7 +76,7 @@ shkriuss.app/
 | `@shkriuss/edge`   | Security headers (`_headers`), script integrity, starting workers under Trusted Types, and Cloudflare/Wrangler configuration                                       |
 | `@shkriuss/i18n`   | Typed message modules in English ([ADR 0012](decisions/0012-typed-messages.md)) and `Intl` formats                                                                 |
 
-Dependency direction: apps → `shell` → (`ui`, `data`, `backup`, `pwa`, `i18n`); `backup` → `data`. Code that runs in the browser uses `@shkriuss/edge` only through its browser entry points, `@shkriuss/edge/workers` and `@shkriuss/edge/domains`. No package imports an app, and apps never import other apps. Lint rules enforce this.
+Dependency direction: apps → `shell` → (`ui`, `data`, `backup`, `pwa`, `i18n`); `backup` → `data`. Code that runs in the browser uses `@shkriuss/edge` only through its browser entry points, `@shkriuss/edge/workers` and `@shkriuss/edge/domains`. No package imports an app, and apps never import other apps. `pnpm check` enforces this, and that relative imports stay within their package.
 
 ## 6. Anatomy of an app
 
@@ -95,7 +95,7 @@ apps/<id>/
 └─ e2e/               Playwright tests
 ```
 
-Generated from `app.config.ts` at build time: the web app manifest and the icons, the page's title and description, the service worker, and `_headers` (security policy and permissions). The privacy label and extra export formats join it when the hub's catalog and the first readable export need them. Apps are created only with `create-app`, from the app template in `tooling/app-template`: a small app that CI builds and tests like every app, so that the template always works. CI checks that every app keeps the standard structure.
+Generated from `app.config.ts` at build time: the web app manifest and the icons, the page's title and description, the service worker, and `_headers` (security policy and permissions). The privacy label and extra export formats join it when the hub's catalog and the first readable export need them. Apps are created only with `create-app` (`tooling/create-app`), from the app template in `tooling/app-template`: a small app that CI builds and tests like every app, so that the template always works. `pnpm check` holds every app, and the template, to the standard structure: the same files, an id equal to the app's folder, the platform's build and a test server of its own.
 
 ## 7. Data layer
 

@@ -1,22 +1,19 @@
 {
-  "name": "@shkriuss/checks",
+  "name": "@shkriuss/create-app",
   "version": "0.0.0",
   "private": true,
   "license": "AGPL-3.0-only",
   "type": "module",
-  "exports": {
-    "./structure": "./src/structure.ts",
-    "./wrangler": "./src/wrangler.ts"
-  },
   "scripts": {
     "typecheck": "tsc",
     "test": "vitest run"
   },
   "devDependencies": {
+    "@shkriuss/checks": "workspace:*",
     "@shkriuss/config": "workspace:*",
     "@shkriuss/edge": "workspace:*",
     "@types/node": "catalog:",
-    "markdownlint": "catalog:",
+    "prettier": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }
