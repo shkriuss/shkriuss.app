@@ -3,15 +3,24 @@ import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { build, type Plugin } from "vite";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cspHashSource, subresourceIntegrity } from "./integrity.ts";
 import { parseManifest } from "./manifest.ts";
+import { securityTxt } from "./security-txt.ts";
 import { SERVICE_WORKER_PLUGIN, type ServiceWorkerApi } from "./service-worker.ts";
 import { edge, type EdgeOptions } from "./vite.ts";
 
 const roots: string[] = [];
 
+/** When the builds' commit was made, for their security.txt: they run outside a git checkout. */
+const COMMITTED = 1_791_104_400;
+
+beforeEach(() => {
+  vi.stubEnv("SOURCE_DATE_EPOCH", String(COMMITTED));
+});
+
 afterEach(async () => {
+  vi.unstubAllEnvs();
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
@@ -93,7 +102,12 @@ describe("edge", () => {
     // The manifest covers the final files, after the plugin changed index.html.
     const manifest = parseManifest(await readFile(path.join(dist, "sha256sums.txt"), "utf8"));
     expect([...manifest.keys()]).toEqual(
-      [...scripts.map((file) => `/assets/${file}`), "/index.html", "/licenses.txt"]
+      [
+        ...scripts.map((file) => `/assets/${file}`),
+        "/.well-known/security.txt",
+        "/index.html",
+        "/licenses.txt",
+      ]
         .concat(
           (await readdir(path.join(dist, "assets")))
             .filter((file) => file.endsWith(".css"))
@@ -364,7 +378,7 @@ describe("edge", () => {
       Object.fromEntries([...manifest].filter(([file]) => file !== "/sw.js")),
     );
     expect(Object.keys(listed ?? {})).toEqual(
-      expect.arrayContaining(["/index.html", "/licenses.txt"]),
+      expect.arrayContaining(["/index.html", "/licenses.txt", "/.well-known/security.txt"]),
     );
     expect(manifest.get("/sw.js")).toBe(createHash("sha256").update(script).digest("hex"));
     expect(await readFile(path.join(dist, "_headers"), "utf8")).toContain(
@@ -373,6 +387,33 @@ describe("edge", () => {
     expect(await readFile(path.join(dist, "licenses.txt"), "utf8")).toContain(
       "offline-library 2.0.0 (MIT)",
     );
+  });
+
+  it("writes security.txt, the same for every build of a commit, and publishes its hash", async () => {
+    const root = await createApp();
+    await buildApp(root);
+    const dist = path.join(root, "dist");
+    const text = await readFile(path.join(dist, ".well-known", "security.txt"), "utf8");
+    expect(text).toBe(securityTxt(new Date(COMMITTED * 1000)));
+    const manifest = parseManifest(await readFile(path.join(dist, "sha256sums.txt"), "utf8"));
+    expect(manifest.get("/.well-known/security.txt")).toBe(
+      createHash("sha256").update(text).digest("hex"),
+    );
+  });
+
+  it("fails the build without the commit's date, rather than write a different file", async () => {
+    vi.stubEnv("SOURCE_DATE_EPOCH", undefined);
+    // The app's folder is in no git checkout.
+    await expect(buildApp(await createApp())).rejects.toThrow(
+      "build in a git checkout, or set SOURCE_DATE_EPOCH",
+    );
+  });
+
+  it("fails the build when another file is already security.txt", async () => {
+    const root = await createApp();
+    await mkdir(path.join(root, "public", ".well-known"), { recursive: true });
+    await writeFile(path.join(root, "public", ".well-known", "security.txt"), "Contact: x\n");
+    await expect(buildApp(root)).rejects.toThrow("The build already has /.well-known/security.txt");
   });
 
   it("fails the build when another file is already /sw.js", async () => {

@@ -615,6 +615,18 @@ test("the settings have every part that every app has", async ({ page }) => {
   expect(results.violations).toEqual([]);
 });
 
+test("says where to report a security problem, at /.well-known/security.txt", async ({
+  request,
+}) => {
+  const response = await request.get("/.well-known/security.txt");
+  expect(response.status()).toBe(200);
+  // RFC 9116 asks for UTF-8 plain text.
+  expect(response.headers()["content-type"]).toBe("text/plain; charset=utf-8");
+  expect(await response.text()).toMatch(
+    /^Contact: https:\/\/github\.com\/shkriuss\/shkriuss\.app\/security\/advisories\/new$/m,
+  );
+});
+
 test("the app's service worker controls it and keeps every file of the build, for offline", async ({
   page,
 }) => {

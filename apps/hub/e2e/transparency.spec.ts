@@ -1,5 +1,13 @@
 import { createHash } from "node:crypto";
-import { LICENSES_FILE, MANIFEST_FILE, SOURCE_URL, parseManifest } from "@shkriuss/edge";
+import {
+  LICENSES_FILE,
+  MANIFEST_FILE,
+  SECURITY_TXT_FILE,
+  SOURCE_URL,
+  commitDate,
+  parseManifest,
+  securityTxt,
+} from "@shkriuss/edge";
 import { expect, test } from "@shkriuss/config/playwright";
 
 test("publishes the SHA-256 of every file it serves", async ({ request }) => {
@@ -42,4 +50,17 @@ test("serves the licenses of the software it includes, and links them", async ({
     "href",
     `/${LICENSES_FILE}`,
   );
+});
+
+test("says where to report a security problem, at /.well-known/security.txt", async ({
+  request,
+}) => {
+  const response = await request.get(`/${SECURITY_TXT_FILE}`);
+  expect(response.status()).toBe(200);
+  // RFC 9116 asks for UTF-8 plain text.
+  expect(response.headers()["content-type"]).toBe("text/plain; charset=utf-8");
+  const text = await response.text();
+  expect(text).toContain(`Contact: ${SOURCE_URL}/security/advisories/new\n`);
+  // It expires 180 days after the commit that was built, whenever the build ran.
+  expect(text).toBe(securityTxt(await commitDate(process.cwd())));
 });
