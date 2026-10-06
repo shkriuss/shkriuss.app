@@ -29,7 +29,7 @@ pnpm --filter @shkriuss/notes dev
 
 The app's end-to-end tests read its name and description from its messages, so they pass as they are. Then replace the example feature, `src/features/items`, with the app's own, and the glyph of its icons in `app.config.ts`.
 
-**Deploying:** CI deploys the hub only, for now. Deploying apps as well comes with the pilot app (step 1.5 of the [roadmap](../../docs/roadmap.md)), with their Cloudflare setup.
+**Deploying:** once the app is on `main`, CI deploys it as it deploys every app in `apps/`: to staging at `<id>.shkriuss.dev`, then, once the maintainer approves, to production at `<id>.shkriuss.app`. Its first deployment creates both domains; then check it as the [setup checklist](../../docs/setup-checklist.md#4-each-new-app) says.
 
 ## Tests
 

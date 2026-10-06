@@ -113,3 +113,11 @@ Optional, in both zones: redirect `www` to the apex ([ADR 0001](decisions/0001-d
 - [ ] The CI run on `main` deploys to staging. Open `https://shkriuss.dev`; Access asks for your email and sends a one-time PIN.
 - [ ] In the same run, approve the **production** deployment (**Review deployments**). Then open `https://shkriuss.app`.
 - [ ] Scan `https://shkriuss.app` with the MDN HTTP Observatory. The target is A+.
+
+## 4. Each new app
+
+CI deploys every app in `apps/` to its own domains, `<id>.shkriuss.dev` and `<id>.shkriuss.app`. Its first deployment creates them, as the hub's did, so nothing needs setting up by hand. Then, in the CI run on `main` that first deploys it:
+
+- [ ] Open `https://<id>.shkriuss.dev`. Access asks for your email, as for the hub.
+- [ ] Approve the **production** deployment (**Review deployments**). Then open `https://<id>.shkriuss.app`.
+- [ ] Scan `https://<id>.shkriuss.app` with the MDN HTTP Observatory. The target is A+.

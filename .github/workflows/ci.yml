@@ -65,7 +65,8 @@ jobs:
       - run: pnpm --filter @shkriuss/hub exec playwright install --with-deps --no-shell chromium firefox webkit
       - run: pnpm e2e
 
-  # Every merge to main goes to staging once every check has passed (ADR 0006).
+  # Every merge to main goes to staging once every check has passed (ADR 0006): every app in
+  # apps/, the hub among them, each to its own domain.
   deploy-staging:
     name: Deploy to staging
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -92,17 +93,27 @@ jobs:
           package-manager-cache: false
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
-      # The SHA-256 of every file Wrangler uploads, `_headers` included, so that production can
-      # check it deploys exactly this build, and the attest job can sign where it came from.
+      # The SHA-256 of every file Wrangler uploads, `_headers` included, as `<app>/<file>`, so
+      # that production can check it deploys exactly this build, and the attest job can sign
+      # where it came from.
       - id: build
         name: Record the hash of every file to deploy
-        working-directory: apps/hub/dist
         run: |
-          find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | tee "$RUNNER_TEMP/files.txt"
+          set -euo pipefail
+          export LC_ALL=C
+          for app in apps/*/; do
+            id="$(basename "$app")"
+            (cd "${app}dist" && find . -type f -print0 | sort -z | xargs -0 sha256sum) | sed "s|  \./|  $id/|"
+          done | tee "$RUNNER_TEMP/files.txt"
           echo "sha256=$(sha256sum < "$RUNNER_TEMP/files.txt" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
           delimiter="$(openssl rand -hex 16)"
           { echo "files<<$delimiter"; cat "$RUNNER_TEMP/files.txt"; echo "$delimiter"; } >> "$GITHUB_OUTPUT"
-      - run: pnpm --filter @shkriuss/hub exec wrangler deploy --env staging
+      - name: Deploy every app
+        run: |
+          set -euo pipefail
+          for app in apps/*/; do
+            pnpm --dir "$app" exec wrangler deploy --env staging
+          done
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
@@ -127,7 +138,7 @@ jobs:
             echo "::error::The staging job listed no files to attest."
             exit 1
           fi
-          printf '%s\n' "$FILES" | sed 's|  \./|  |' > "$RUNNER_TEMP/subjects.txt"
+          printf '%s\n' "$FILES" > "$RUNNER_TEMP/subjects.txt"
       - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-checksums: ${{ runner.temp }}/subjects.txt
@@ -155,19 +166,36 @@ jobs:
           package-manager-cache: false
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+      # The same list as in deploy-staging.
       - name: Check that production gets exactly the files staging got
-        working-directory: apps/hub/dist
         env:
           STAGING_BUILD: ${{ needs.deploy-staging.outputs.build }}
         run: |
-          find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | tee "$RUNNER_TEMP/files.txt"
+          set -euo pipefail
+          export LC_ALL=C
+          for app in apps/*/; do
+            id="$(basename "$app")"
+            (cd "${app}dist" && find . -type f -print0 | sort -z | xargs -0 sha256sum) | sed "s|  \./|  $id/|"
+          done | tee "$RUNNER_TEMP/files.txt"
           if [ "$(sha256sum < "$RUNNER_TEMP/files.txt" | cut -d ' ' -f 1)" != "$STAGING_BUILD" ]; then
             echo "::error::This build differs from the one deployed to staging. Compare the file hashes listed in both jobs."
             exit 1
           fi
+      # Each app against its own production domain, from its wrangler.json; `jq -e` fails on an
+      # app without one, rather than check a domain that does not exist and so compare nothing.
       - name: Check that no live asset changes content under the same name
-        run: node packages/edge/src/cli.ts check-live apps/hub/dist https://shkriuss.app
-      - run: pnpm --filter @shkriuss/hub exec wrangler deploy --env production
+        run: |
+          set -euo pipefail
+          for app in apps/*/; do
+            domain="$(jq -er '.env.production.routes[0].pattern' "${app}wrangler.json")"
+            node packages/edge/src/cli.ts check-live "${app}dist" "https://$domain"
+          done
+      - name: Deploy every app
+        run: |
+          set -euo pipefail
+          for app in apps/*/; do
+            pnpm --dir "$app" exec wrangler deploy --env production
+          done
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}

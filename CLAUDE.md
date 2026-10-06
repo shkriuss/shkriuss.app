@@ -10,7 +10,7 @@ Instructions for Claude Code and for anyone else changing this repository. Read 
 - All user data stays on the user's device. The only way data leaves is a backup file the user exports, encrypted by default. There are no accounts, no sync and no backend.
 - Every app is built from the same shared platform in `packages/`, so apps look and behave alike and fixes reach every app at once.
 
-**Current phase: 1 — Platform v1 (local-only).** Phase 0 is complete: the toolchain, repository checks and CI are in place, and a placeholder hub is live on staging and production. In Phase 1, the specs, the platform's packages, the app template and `create-app` are done. The pilot app, Checklists (`apps/checklists`), is built; it goes to staging and real devices next (step 1.5), then the hub (step 1.4). See `docs/roadmap.md`.
+**Current phase: 1 — Platform v1 (local-only).** Phase 0 is complete: the toolchain, repository checks and CI are in place, and a placeholder hub is live on staging and production. In Phase 1, the specs, the platform's packages, the app template and `create-app` are done. The pilot app, Checklists (`apps/checklists`), is built, and CI deploys every app; testing it on real devices comes next (step 1.5), then the hub (step 1.4). See `docs/roadmap.md`.
 
 ## Read first
 
