@@ -5,6 +5,7 @@ import path from "node:path";
 import type { Plugin } from "vite";
 import { assertChunksLoadInSafari, assertWorkerBundleNames } from "./chunks.ts";
 import { appHost, STAGING_DOMAIN } from "./domains.ts";
+import { assertExcludedPackages } from "./excluded-packages.ts";
 import { appHeaderRules, headersFile } from "./headers-file.ts";
 import type { BrowserFeature } from "./headers.ts";
 import { addScriptIntegrity, cspHashSource, subresourceIntegrity } from "./integrity.ts";
@@ -32,16 +33,19 @@ function includedModules(chunk: ChunkModules): string[] {
     .map(([id]) => id);
 }
 
-/** Collects the modules of every worker bundle, which Vite builds on its own. */
-function workerModules(modules: Set<string>): Plugin {
+/**
+ * Collects the modules of every worker bundle, which Vite builds on its own, by the bundle's
+ * file name. Vite builds every worker that a module of the page refers to, even when
+ * tree-shaking then removes that module, and leaves the bundles of such workers out of the
+ * build: only the modules of the bundles that the build has are in it.
+ */
+function workerModules(modules: Map<string, readonly string[]>): Plugin {
   return {
     name: "shkriuss:edge:worker-modules",
     generateBundle(_options, bundle) {
       for (const output of Object.values(bundle)) {
         if (output.type === "chunk") {
-          for (const id of includedModules(output)) {
-            modules.add(id);
-          }
+          modules.set(output.fileName, includedModules(output));
         }
       }
     },
@@ -80,6 +84,11 @@ export interface EdgeOptions {
    * true, and if a script of the page refers to one.
    */
   readonly webAssembly?: boolean;
+  /**
+   * Packages, by name, whose code the build must not have, such as those that keep data, for an
+   * app without data. The build fails if the page, a worker or the service worker has any.
+   */
+  readonly excludedPackages?: readonly string[];
 }
 
 /**
@@ -94,7 +103,8 @@ export interface EdgeOptions {
  * imports.
  *
  * It allows WebAssembly only for an app that declares it, whose workers then load modules
- * from files in `/assets/`, which are never inlined (ADR 0014).
+ * from files in `/assets/`, which are never inlined (ADR 0014). And it fails the build if the
+ * code of a package that the app excludes is in it.
  *
  * It works on the files as written, so the hashes match exactly the bytes that are served.
  *
@@ -125,7 +135,7 @@ export interface EdgeOptions {
  */
 export function edge(options: EdgeOptions = {}): Plugin {
   const stagingHost = appHost(STAGING_DOMAIN, options.appId);
-  const workers = new Set<string>();
+  const workers = new Map<string, readonly string[]>();
   let licenseOptions: CollectOptions | undefined;
   let serviceWorker: ServiceWorkerApi | undefined;
   return {
@@ -213,20 +223,21 @@ export function edge(options: EdgeOptions = {}): Plugin {
         }
 
         // Vite builds each worker on its own, and edge()'s worker plugin reports its modules.
-        if (files.some((file) => isWorkerBundlePath(`/${file}`)) && workers.size === 0) {
+        const workerBundles = files.filter((file) => isWorkerBundlePath(`/${file}`));
+        if (workerBundles.some((file) => !workers.has(file))) {
           throw new Error("No worker build reported its modules: keep edge()'s worker.plugins.");
         }
         if (licenseOptions === undefined) {
           throw new Error("The build has no resolved configuration.");
         }
         const serviceWorkerBundle = await serviceWorker?.bundle();
-        const pageModules = outputs.flatMap((output) =>
-          output.type === "chunk" ? includedModules(output) : [],
-        );
-        const licenses = await collectLicenses(
-          [...pageModules, ...workers, ...(serviceWorkerBundle?.modules ?? [])],
-          licenseOptions,
-        );
+        const modules = [
+          ...outputs.flatMap((output) => (output.type === "chunk" ? includedModules(output) : [])),
+          ...workerBundles.flatMap((file) => workers.get(file) ?? []),
+          ...(serviceWorkerBundle?.modules ?? []),
+        ];
+        await assertExcludedPackages(modules, options.excludedPackages ?? [], licenseOptions.root);
+        const licenses = await collectLicenses(modules, licenseOptions);
         await writeFile(path.join(directory, LICENSES_FILE), licensesFile(options.appId, licenses));
 
         // Before the service worker, which keeps every served file.

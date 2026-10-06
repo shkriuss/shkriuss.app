@@ -126,6 +126,30 @@ describe("app", () => {
     );
   });
 
+  it("builds an app without data only without the code of the packages that keep data", async () => {
+    const root = await createApp();
+    const withoutData = { ...NOTES, keepsData: false };
+    await buildApp(root, withoutData);
+
+    await writeFile(
+      path.join(root, "main.js"),
+      'import { openDatabase } from "@shkriuss/data";\nconsole.info(openDatabase);\n',
+    );
+    await expect(buildApp(root, withoutData)).rejects.toThrow(
+      /The build has the code of @shkriuss\/data \(packages\/data\/src\/[\w/.-]+\), which this app excludes\./,
+    );
+    // An app with data, as most are, has it.
+    await buildApp(root, NOTES);
+
+    await writeFile(
+      path.join(root, "main.js"),
+      'import { generatePassphrase } from "@shkriuss/backup";\nconsole.info(generatePassphrase);\n',
+    );
+    await expect(buildApp(root, withoutData)).rejects.toThrow(
+      / @shkriuss\/backup \(packages\/backup\/src\/[\w/.-]+\)/,
+    );
+  });
+
   it("passes the service worker's procedures of last resort on", async () => {
     const read = await buildApp(await createApp(), NOTES, {
       serviceWorker: { replaces: ["0123456789abcdef"] },

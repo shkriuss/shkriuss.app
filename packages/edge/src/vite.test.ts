@@ -416,6 +416,95 @@ describe("edge", () => {
     await expect(buildApp(root)).rejects.toThrow(/unlicensed@0\.1\.0 has no license file/);
   });
 
+  it("leaves out a worker whose module tree-shaking removed, and its licenses", async () => {
+    const root = await createApp();
+    const library = path.join(root, "node_modules", "worker-library");
+    await mkdir(library, { recursive: true });
+    await writeFile(
+      path.join(library, "package.json"),
+      '{"name": "worker-library", "version": "1.0.0", "license": "MIT"}',
+    );
+    await writeFile(path.join(library, "LICENSE"), "MIT License\n");
+    await writeFile(path.join(library, "index.js"), "export const work = (value) => value * 2;\n");
+    await writeFile(
+      path.join(root, "work.worker.js"),
+      'import { work } from "worker-library";\nself.onmessage = (event) => self.postMessage(work(event.data));\n',
+    );
+    // Vite builds the worker, as a module refers to it, but nothing uses that module.
+    await writeFile(
+      path.join(root, "unused.js"),
+      'import work from "./work.worker.js?worker&url";\nexport const start = () => new Worker(work);\n',
+    );
+    await writeFile(
+      path.join(root, "main.js"),
+      'import { start } from "./unused.js";\nconsole.info("no worker");\n',
+    );
+    await buildApp(root, "/", { excludedPackages: ["worker-library"] });
+    const dist = path.join(root, "dist");
+    expect(await readdir(path.join(dist, "assets"))).not.toContainEqual(
+      expect.stringMatching(/^work\.worker-/),
+    );
+    expect(await readFile(path.join(dist, "licenses.txt"), "utf8")).not.toContain("worker-library");
+  });
+
+  it("fails the build if the page, a worker or the service worker has a package that the app excludes", async () => {
+    const root = await createApp();
+    const store = path.join(root, "node_modules", "fake-store");
+    await mkdir(store, { recursive: true });
+    await writeFile(
+      path.join(store, "package.json"),
+      '{"name": "fake-store", "version": "1.0.0", "license": "MIT"}',
+    );
+    await writeFile(path.join(store, "LICENSE"), "MIT License\n");
+    await writeFile(
+      path.join(store, "index.js"),
+      "export const keep = (value) => [value];\nexport const unused = () => 0;\n",
+    );
+    const excluding: EdgeOptions = { excludedPackages: ["fake-store"] };
+    const refused =
+      "The build has the code of fake-store (node_modules/fake-store/index.js), which this app excludes.";
+
+    // Imported, but tree-shaking removed every line of it: none of its code is in the build.
+    await writeFile(
+      path.join(root, "main.js"),
+      'import { unused } from "fake-store";\nconsole.info("nothing kept");\n',
+    );
+    await buildApp(root, "/", excluding);
+
+    await writeFile(
+      path.join(root, "main.js"),
+      'import { keep } from "fake-store";\nconsole.info(keep(1));\n',
+    );
+    await expect(buildApp(root, "/", excluding)).rejects.toThrow(refused);
+
+    await writeFile(
+      path.join(root, "store.worker.js"),
+      'import { keep } from "fake-store";\nself.onmessage = (event) => self.postMessage(keep(event.data));\n',
+    );
+    await writeFile(
+      path.join(root, "main.js"),
+      'import store from "./store.worker.js?worker&url";\nconsole.info(store);\n',
+    );
+    await expect(buildApp(root, "/", excluding)).rejects.toThrow(refused);
+
+    await writeFile(path.join(root, "main.js"), 'console.info("nothing kept");\n');
+    await expect(
+      build({
+        root,
+        configFile: false,
+        logLevel: "silent",
+        plugins: [serviceWorker([path.join(store, "index.js")]), edge(excluding)],
+      }),
+    ).rejects.toThrow(refused);
+    // An app that excludes nothing may have it.
+    await build({
+      root,
+      configFile: false,
+      logLevel: "silent",
+      plugins: [serviceWorker([path.join(store, "index.js")]), edge()],
+    });
+  });
+
   it("allows the policy for a service worker at /sw.js", async () => {
     const root = await createApp();
     await mkdir(path.join(root, "public"));

@@ -67,7 +67,7 @@ const CHECKS: Readonly<Record<string, Check>> = {
   },
   structure: {
     description:
-      "apps keep the app template's files, their id and build, and a test server of their own",
+      "apps keep the files of their app template, their id and build, and a test server of their own",
     run: (files) => checkAppStructure(files, (file) => readText(file)),
   },
   imports: {

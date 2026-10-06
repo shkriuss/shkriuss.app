@@ -1,16 +1,26 @@
 import { isRecord, lineOf, type Violation } from "./report.ts";
 
 /**
- * Every app keeps the structure of the app template, which `create-app` copies (architecture
- * §6): the same files, its id in `app.config.ts` equal to its folder's name, which is its
- * subdomain, the platform's build, and a test server of its own. The template is held to the
- * same, so that what `create-app` copies always passes.
+ * Every app keeps the structure of the app template that `create-app` copies (architecture §6):
+ * the same files, its id in `app.config.ts` equal to its folder's name, which is its subdomain,
+ * the platform's build, and a test server of its own. The templates are held to the same, so
+ * that what `create-app` copies always passes.
  */
 
-/** The app template, which is checked as the app with this id. */
-export const TEMPLATE = { folder: "tooling/app-template", id: "template" } as const;
+/**
+ * The app templates, each checked as the app with its id: the one for apps that keep data, and
+ * the one for apps without data.
+ */
+export const TEMPLATES = [
+  { folder: "tooling/app-template", id: "template", packageName: "@shkriuss/app-template" },
+  {
+    folder: "tooling/app-template-no-data",
+    id: "template-no-data",
+    packageName: "@shkriuss/app-template-no-data",
+  },
+] as const;
 
-/** The files that every app has, as the template does, relative to its folder. */
+/** The files that every app has, as the templates do, relative to its folder. */
 export const APP_FILES = [
   "README.md",
   "app.config.ts",
@@ -26,8 +36,13 @@ export const APP_FILES = [
   "src/routes/home.tsx",
   "src/routes/root.tsx",
   "src/routes/settings.tsx",
-  "src/schema.ts",
 ] as const;
+
+/** Every version of an app's data, which an app has if it keeps data, and only then. */
+export const SCHEMA_FILE = "src/schema.ts";
+
+/** An app's configuration that says that it keeps no data. */
+const KEEPS_NO_DATA = /^\s*keepsData:\s*false,?$/m;
 
 /** An app's folder and the id that it must have. */
 interface App {
@@ -36,7 +51,7 @@ interface App {
   readonly packageName: string;
 }
 
-/** The apps in `apps/`, but the hub, which is a site and no app, and the template. */
+/** The apps in `apps/`, but the hub, which is a site and no app, and the templates. */
 export function appsOf(files: readonly string[]): App[] {
   const apps = files.flatMap((file) => {
     const id = /^apps\/([^/]+)\/package\.json$/.exec(file)?.[1];
@@ -44,9 +59,10 @@ export function appsOf(files: readonly string[]): App[] {
       ? []
       : [{ folder: `apps/${id}`, id, packageName: `@shkriuss/${id}` }];
   });
-  return files.includes(`${TEMPLATE.folder}/package.json`)
-    ? [...apps, { folder: TEMPLATE.folder, id: TEMPLATE.id, packageName: "@shkriuss/app-template" }]
-    : apps;
+  return [
+    ...apps,
+    ...TEMPLATES.filter((template) => files.includes(`${template.folder}/package.json`)),
+  ];
 }
 
 /** The port of a test server in a `playwright.config.ts`, with its line. */
@@ -83,8 +99,27 @@ function checkPackage(app: App, source: string): Violation[] {
   return violations;
 }
 
+/**
+ * Whether the app keeps data, as its configuration says: unless it says `keepsData: false`, as
+ * the template without data does.
+ */
+export function keepsData(config: string): boolean {
+  return !KEEPS_NO_DATA.test(config);
+}
+
 function checkConfig(app: App, source: string): Violation[] {
   const file = `${app.folder}/app.config.ts`;
+  const said = /^\s*keepsData:.*$/m.exec(source);
+  if (said !== null && keepsData(source)) {
+    return [
+      {
+        file,
+        line: lineOf(source, said.index),
+        message:
+          "An app keeps data unless app.config.ts says keepsData: false, as the template without data; otherwise leave keepsData out.",
+      },
+    ];
+  }
   const ids = [...source.matchAll(/^\s*id:\s*"([^"]*)",?$/gm)];
   if (ids.length !== 1) {
     return [{ file, message: 'app.config.ts must give the app\'s id once, as id: "<id>",.' }];
@@ -125,17 +160,25 @@ export function checkAppStructure(
   const violations: Violation[] = [];
   const present = new Set(files);
   for (const app of appsOf(files)) {
-    const missing = APP_FILES.filter((file) => !present.has(`${app.folder}/${file}`));
+    const has = (file: string): boolean => present.has(`${app.folder}/${file}`);
+    const withData = !has("app.config.ts") || keepsData(read(`${app.folder}/app.config.ts`));
+    const missing = [...APP_FILES, ...(withData ? [SCHEMA_FILE] : [])].filter((file) => !has(file));
     for (const file of missing) {
       violations.push({
         file: `${app.folder}/${file}`,
-        message: "Every app has this file, as the app template does; create apps with create-app.",
+        message: "Every app has this file, as its app template does; create apps with create-app.",
+      });
+    }
+    if (!withData && has(SCHEMA_FILE)) {
+      violations.push({
+        file: `${app.folder}/${SCHEMA_FILE}`,
+        message:
+          "An app without data has no schema, as the template without data; remove it, or keepsData: false from app.config.ts.",
       });
     }
     if (!files.some((file) => file.startsWith(`${app.folder}/e2e/`) && file.endsWith(".spec.ts"))) {
       violations.push({ file: `${app.folder}/e2e`, message: "Every app has end-to-end tests." });
     }
-    const has = (file: string): boolean => present.has(`${app.folder}/${file}`);
     if (has("package.json")) {
       violations.push(...checkPackage(app, read(`${app.folder}/package.json`)));
     }

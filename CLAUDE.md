@@ -80,19 +80,19 @@ Instructions for Claude Code and for anyone else changing this repository. Read 
 
 Node.js 22.18 or later (CI uses the version in `.node-version`) and pnpm via Corepack (`corepack enable pnpm`). Run everything from the repository root.
 
-| Command                                                       | What it does                                                                                                                                       |
-| ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm install`                                                | Install dependencies (supply-chain rules live in `pnpm-workspace.yaml`)                                                                            |
-| `pnpm format`                                                 | Format every file with Prettier                                                                                                                    |
-| `pnpm lint`                                                   | Oxlint with type-aware rules and the security bans                                                                                                 |
-| `pnpm typecheck`                                              | TypeScript in every package                                                                                                                        |
-| `pnpm test`                                                   | Unit tests (Vitest) in every package                                                                                                               |
-| `pnpm build`                                                  | Build every package that has a build                                                                                                               |
-| `pnpm check`                                                  | Repository checks: manifests, HTML security, runtime licenses, Markdown style, Wrangler configuration, app structure, imports, documentation links |
-| `pnpm create-app <id> --name <name> --description <sentence>` | Create an app from the app template, in `apps/<id>` ([`tooling/create-app`](tooling/create-app/README.md))                                         |
-| `pnpm e2e`                                                    | End-to-end tests (Playwright) against the production builds, served with the real headers                                                          |
-| `pnpm verify`                                                 | Everything CI runs, in order — run it before every push                                                                                            |
-| `pnpm --filter <name> <task>`                                 | Run one task in one package, e.g. `pnpm --filter @shkriuss/checks test`                                                                            |
+| Command                                                       | What it does                                                                                                                                            |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm install`                                                | Install dependencies (supply-chain rules live in `pnpm-workspace.yaml`)                                                                                 |
+| `pnpm format`                                                 | Format every file with Prettier                                                                                                                         |
+| `pnpm lint`                                                   | Oxlint with type-aware rules and the security bans                                                                                                      |
+| `pnpm typecheck`                                              | TypeScript in every package                                                                                                                             |
+| `pnpm test`                                                   | Unit tests (Vitest) in every package                                                                                                                    |
+| `pnpm build`                                                  | Build every package that has a build                                                                                                                    |
+| `pnpm check`                                                  | Repository checks: manifests, HTML security, runtime licenses, Markdown style, Wrangler configuration, app structure, imports, documentation links      |
+| `pnpm create-app <id> --name <name> --description <sentence>` | Create an app from the app template, in `apps/<id>`; with `--no-data`, an app that keeps no data ([`tooling/create-app`](tooling/create-app/README.md)) |
+| `pnpm e2e`                                                    | End-to-end tests (Playwright) against the production builds, served with the real headers                                                               |
+| `pnpm verify`                                                 | Everything CI runs, in order — run it before every push                                                                                                 |
+| `pnpm --filter <name> <task>`                                 | Run one task in one package, e.g. `pnpm --filter @shkriuss/checks test`                                                                                 |
 
 The end-to-end tests need Playwright's browsers once: `pnpm --filter @shkriuss/hub exec playwright install chromium firefox webkit`. Claude Code cloud sessions can only use their preinstalled Chromium; there, Firefox and WebKit run in CI.
 

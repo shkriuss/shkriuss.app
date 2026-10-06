@@ -1,6 +1,6 @@
 # App template
 
-The app that every new app starts from ([architecture §6](../../docs/architecture.md#6-anatomy-of-an-app)): a list that stays on the device, built on the whole platform, with the files that every app has. [`create-app`](../create-app/README.md) copies it into `apps/<id>`. It is a package of its own, which CI builds and tests as it does an app, so that the template always works, and `pnpm check` holds it to the structure that every app keeps. It is never deployed.
+The app that every new app starts from ([architecture §6](../../docs/architecture.md#6-anatomy-of-an-app)): a list that stays on the device, built on the whole platform, with the files that every app has. [`create-app`](../create-app/README.md) copies it into `apps/<id>`. It is a package of its own, which CI builds and tests as it does an app, so that the template always works, and `pnpm check` holds it to the structure that every app keeps. It is never deployed. An app that keeps no data starts from the [app template without data](../app-template-no-data/README.md) instead.
 
 | File                                    | What it is                                                                                                                                      |
 | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |

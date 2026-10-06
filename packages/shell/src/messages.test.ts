@@ -89,10 +89,12 @@ describe("the shell's text", () => {
       installed: m.installed(),
       installOffer: m.installOffer(),
       addToHomeScreen: m.addToHomeScreen(),
+      addToHomeScreenWithoutData: m.addToHomeScreenWithoutData(),
       installFromMenu: m.installFromMenu(),
       installFirst: m.installFirst(),
       about: m.about("Notes"),
       privacy: m.privacy(),
+      privacyWithoutData: m.privacyWithoutData(),
       freeSoftware: m.freeSoftware(),
       sourceCode: m.sourceCode(),
       licenses: m.licenses(),
@@ -195,6 +197,8 @@ describe("the shell's text", () => {
         "Install this app to open it like any other, from your home screen or your list of apps.",
       addToHomeScreen:
         "To install this app, open your browser's share menu, then choose Add to Home Screen. The app there keeps its own data, apart from your browser's: to take your data along, back it up here, then restore the backup in the app.",
+      addToHomeScreenWithoutData:
+        "To install this app, open your browser's share menu, then choose Add to Home Screen.",
       installFromMenu:
         "Some browsers install apps from their menu, with Install or Add to Home Screen.",
       installFirst:
@@ -202,6 +206,8 @@ describe("the shell's text", () => {
       about: "About Notes",
       privacy:
         "Your data stays on this device. The app has no accounts, and sends none of your data anywhere: only the backups that you save leave the device.",
+      privacyWithoutData:
+        "This app keeps none of your data: what you enter stays on this device, until you close the app. The app has no accounts, and sends nothing anywhere.",
       freeSoftware:
         "This app is free software, under the GNU Affero General Public License, version 3.",
       sourceCode: "Source code",
