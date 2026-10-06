@@ -33,6 +33,14 @@ And the components of `@shkriuss/ui`, on the page `/ui`, from `src/gallery.tsx`:
 - buttons, text fields, switches, links, dialogs and banners work with the pointer and the keyboard, and reach screen readers;
 - buttons and switches are at least 44 by 44 pixels.
 
+And the shell of `@shkriuss/shell`, on the page `/shell`, from `src/shell-page.tsx`: a screen of notes from the data layer, in the app's frame:
+
+- axe finds no accessibility problem in the frame and its update banner, in either theme;
+- the frame has its landmarks, and a keyboard user can skip to the screen first;
+- the screen follows the notes as they change;
+- the update banner offers an update, applies it when the user agrees, and goes away until there is news when the user says later;
+- a screen that fails shows what happened inside the frame, and reloads the app.
+
 | Command                                      | What it does                     |
 | -------------------------------------------- | -------------------------------- |
 | `pnpm --filter @shkriuss/platform-e2e build` | Builds the test app into `dist/` |

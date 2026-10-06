@@ -9,8 +9,9 @@
  * themes.
  */
 @import "tailwindcss";
-/* The components of this package, for the classes they use. */
+/* The components of this package and of the shell, which every app shows, for their classes. */
 @source "./";
+@source "../../shell/src";
 
 @theme {
   /* System fonts: nothing is loaded from anywhere else. */

@@ -99,6 +99,15 @@ async function writeOne(text: string): Promise<string> {
   });
 }
 
+/** Opens version 1 of the data, which the shell's page shows, and returns its database. */
+export async function notesDatabase(): Promise<Database<typeof v1>> {
+  await data.open(1);
+  if (version1 === undefined) {
+    throw new Error("A newer version of the app upgraded the database.");
+  }
+  return version1;
+}
+
 export const data: DataTests = {
   async open(version) {
     const options = {
