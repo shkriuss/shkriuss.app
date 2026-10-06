@@ -86,7 +86,11 @@ test("a navigation to a file of the version gets that file, offline too", async 
   await open(page);
   await serve(context, "offline");
   const response = await page.goto("/licenses.txt");
-  expect(await response?.text()).toBe(builtFile("a", "licenses.txt"));
+  expect(response?.status()).toBe(200);
+  // The text that the browser shows. The cached response keeps the host's Content-Encoding with
+  // its body already decoded, as the Fetch standard has it; Playwright's Firefox decodes such a
+  // body again and fails to read it (microsoft/playwright#29261), while Firefox shows it right.
+  expect(await page.evaluate(() => document.body.textContent)).toBe(builtFile("a", "licenses.txt"));
   onlyTheTextViewersStyle(security);
 });
 
