@@ -52,13 +52,14 @@ test("a button responds to the pointer and the keyboard, and not when it is disa
   await expect(page.getByText("Pressed 3 times.")).toBeVisible();
 });
 
-test("buttons and switches are at least 44 by 44 pixels, so that they are easy to tap", async ({
+test("buttons, switches and checkboxes are at least 44 by 44 pixels, so that they are easy to tap", async ({
   page,
 }) => {
   await gallery(page);
   const targets = [
     ...(await page.getByRole("button").all()),
     page.locator("label").filter({ has: page.getByRole("switch") }),
+    page.locator("label").filter({ has: page.getByRole("checkbox") }),
   ];
   expect(targets.length).toBeGreaterThan(5);
   for (const target of targets) {
@@ -95,6 +96,20 @@ test("a switch turns on and off with the pointer and the keyboard", async ({ pag
   await page.keyboard.press("Space");
   await expect(reminders).not.toBeChecked();
   await expect(page.getByText("Reminders are off.")).toBeVisible();
+});
+
+test("a checkbox ticks off and back with the pointer and the keyboard", async ({ page }) => {
+  await gallery(page);
+  const charger = page.getByRole("checkbox", { name: "Phone charger" });
+  await expect(charger).not.toBeChecked();
+  // The label takes the pointer too.
+  await page.getByText("Phone charger").click();
+  await expect(charger).toBeChecked();
+  await expect(page.getByText("The charger is packed.")).toBeVisible();
+  await charger.focus();
+  await page.keyboard.press("Space");
+  await expect(charger).not.toBeChecked();
+  await expect(page.getByText("The charger is not packed yet.")).toBeVisible();
 });
 
 test("a link is underlined and leads to its page", async ({ page }) => {

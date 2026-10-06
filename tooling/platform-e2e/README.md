@@ -34,8 +34,8 @@ And the formats of the UI (`@shkriuss/i18n`), with each browser's own Unicode da
 And the components of `@shkriuss/ui`, on the page `/ui`, from `src/gallery.tsx`:
 
 - axe finds no accessibility problem, in either theme, and React Aria adds no stylesheet that the CSP would refuse;
-- buttons, text fields, switches, links, dialogs, banners and file buttons work with the pointer and the keyboard, and reach screen readers;
-- buttons and switches are at least 44 by 44 pixels.
+- buttons, text fields, switches, checkboxes, links, dialogs, banners and file buttons work with the pointer and the keyboard, and reach screen readers;
+- buttons, switches and checkboxes are at least 44 by 44 pixels.
 
 And the shell of `@shkriuss/shell`, on the pages `/shell`, `/shell/archive` and `/shell/settings`, from `src/shell-page.tsx`, whose routes are declared in code as every app's are ([ADR 0013](../../docs/decisions/0013-routes-in-code.md)): a screen of notes from the data layer, an archive and the settings, in the app's frame:
 

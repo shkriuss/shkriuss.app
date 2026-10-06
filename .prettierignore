@@ -1,2 +1,4 @@
 pnpm-lock.yaml
 LICENSE
+# Backups that the apps made, kept as they were made and never changed (backup format §8).
+apps/*/e2e/fixtures/
