@@ -1,6 +1,6 @@
 # Roadmap
 
-- **Last updated:** 2026-10-05
+- **Last updated:** 2026-10-06
 - A phase is complete when its exit criteria are met. All work happens in small pull requests.
 
 ## Phase 0 — Foundations
@@ -33,6 +33,8 @@
 | 1.3  | App template, the `create-app` generator, structure checks in CI                                                                                                                                                                                                               | to do       |
 | 1.4  | Hub v1: app catalog generated from app configs; install guides for iPhone, Android and desktop; privacy and security pages; `security.txt`                                                                                                                                     | to do       |
 | 1.5  | Pilot app (a simple one, chosen together) → staging → real devices → production                                                                                                                                                                                                | to do       |
+
+**Waiting:** React Compiler ([ADR 0005](decisions/0005-frontend-stack.md)). Its Babel plugin, `babel-plugin-react-compiler` 1.0.0, runs only under Babel 7. Babel 7 needs `semver` 6.3.1, which pnpm's trust policy refuses ([ADR 0007](decisions/0007-security-baseline.md)): it was published without provenance after earlier `semver` releases had it. We try again once the plugin supports Babel 8, or once the native compiler is stable. Until then apps build without it, which costs re-renders, not correctness.
 
 **Exit criteria:**
 
