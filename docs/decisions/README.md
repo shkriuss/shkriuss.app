@@ -21,6 +21,7 @@ An ADR is a short document that records one important decision: the context, wha
 | [0011](0011-worker-trusted-types-policy.md) | One Trusted Types policy for worker scripts     | Accepted                                                   |
 | [0012](0012-typed-messages.md)              | Typed message modules instead of Paraglide JS   | Accepted                                                   |
 | [0013](0013-routes-in-code.md)              | Routes declared in code                         | Accepted                                                   |
+| [0014](0014-webassembly.md)                 | WebAssembly for apps that declare it            | Accepted                                                   |
 
 ## Template
 

@@ -24,6 +24,11 @@ export interface AppConfig extends WebAppManifestOptions {
   readonly id: string;
   /** Browser features that the app needs, such as `camera`; every other one stays denied. */
   readonly allowedFeatures?: readonly BrowserFeature[];
+  /**
+   * Whether the app's workers compile WebAssembly, which its Content-Security-Policy then
+   * allows (ADR 0014). Its build must then have WebAssembly modules, and none otherwise.
+   */
+  readonly webAssembly?: boolean;
 }
 
 export interface AppBuildOptions {
@@ -68,7 +73,7 @@ function pageHead({ name, description }: AppConfig): Plugin {
  */
 export function app(config: AppConfig, options: AppBuildOptions = {}): UserConfig {
   assertAppId(config.id);
-  const { id, allowedFeatures, ...manifest } = config;
+  const { id, allowedFeatures, webAssembly, ...manifest } = config;
   return {
     plugins: [
       tailwindcss(),
@@ -76,7 +81,11 @@ export function app(config: AppConfig, options: AppBuildOptions = {}): UserConfi
       pageHead(config),
       webAppManifest(manifest),
       pwa(options.serviceWorker),
-      edge({ appId: id, ...(allowedFeatures === undefined ? {} : { allowedFeatures }) }),
+      edge({
+        appId: id,
+        ...(allowedFeatures === undefined ? {} : { allowedFeatures }),
+        ...(webAssembly === undefined ? {} : { webAssembly }),
+      }),
     ],
   };
 }

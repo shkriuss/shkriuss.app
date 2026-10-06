@@ -91,6 +91,41 @@ describe("app", () => {
     expect(headers).toContain(" microphone=(),");
   });
 
+  it("allows WebAssembly for an app that declares it, whose workers load modules (ADR 0014)", async () => {
+    const root = await createApp();
+    // add(a, b), in WebAssembly's binary format.
+    await writeFile(
+      path.join(root, "add.wasm"),
+      Uint8Array.from([
+        0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x07, 0x01, 0x60, 0x02, 0x7f, 0x7f,
+        0x01, 0x7f, 0x03, 0x02, 0x01, 0x00, 0x07, 0x07, 0x01, 0x03, 0x61, 0x64, 0x64, 0x00, 0x00,
+        0x0a, 0x09, 0x01, 0x07, 0x00, 0x20, 0x00, 0x20, 0x01, 0x6a, 0x0b,
+      ]),
+    );
+    await writeFile(
+      path.join(root, "calc.worker.js"),
+      'const url = new URL("./add.wasm", import.meta.url);\n' +
+        "self.onmessage = async () => {\n" +
+        "  const { instance } = await WebAssembly.instantiateStreaming(fetch(url));\n" +
+        "  self.postMessage(instance.exports.add(2, 3));\n" +
+        "};\n",
+    );
+    await writeFile(
+      path.join(root, "main.js"),
+      'import calc from "./calc.worker.js?worker&url";\nconsole.info(calc);\n',
+    );
+    const read = await buildApp(root, { ...NOTES, webAssembly: true });
+    expect(await read("_headers")).toMatch(/script-src 'self' 'wasm-unsafe-eval' 'sha256-/);
+    // The service worker keeps the module, as every file, for offline use.
+    expect(await read("sw.js")).toMatch(/"url":"\/assets\/add-[\w-]{8}\.wasm"/);
+  });
+
+  it("refuses to declare WebAssembly for an app that has none", async () => {
+    await expect(buildApp(await createApp(), { ...NOTES, webAssembly: true })).rejects.toThrow(
+      /declares webAssembly, but its build has no WebAssembly module/,
+    );
+  });
+
   it("passes the service worker's procedures of last resort on", async () => {
     const read = await buildApp(await createApp(), NOTES, {
       serviceWorker: { replaces: ["0123456789abcdef"] },

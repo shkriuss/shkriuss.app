@@ -253,6 +253,83 @@ describe("edge", () => {
     expect(manifest.has(`/assets/${workers[0] ?? ""}`)).toBe(true);
   });
 
+  describe("WebAssembly (ADR 0014)", () => {
+    /** A module with one function, add(a, b), in the binary format: 41 bytes. */
+    const ADD_MODULE = Uint8Array.from([
+      0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x07, 0x01, 0x60, 0x02, 0x7f, 0x7f,
+      0x01, 0x7f, 0x03, 0x02, 0x01, 0x00, 0x07, 0x07, 0x01, 0x03, 0x61, 0x64, 0x64, 0x00, 0x00,
+      0x0a, 0x09, 0x01, 0x07, 0x00, 0x20, 0x00, 0x20, 0x01, 0x6a, 0x0b,
+    ]);
+
+    /** An app whose worker loads add.wasm, and whose page refers to the module if asked. */
+    async function createWebAssemblyApp(pageLoadsModule = false): Promise<string> {
+      const root = await createApp();
+      await writeFile(path.join(root, "add.wasm"), ADD_MODULE);
+      await writeFile(
+        path.join(root, "main.js"),
+        'import calc from "./calc.worker.js?worker&url";\nconsole.info(calc);\n' +
+          (pageLoadsModule ? 'console.info(new URL("./add.wasm", import.meta.url).href);\n' : ""),
+      );
+      await writeFile(
+        path.join(root, "calc.worker.js"),
+        'const url = new URL("./add.wasm", import.meta.url);\n' +
+          "self.onmessage = async () => {\n" +
+          "  const { instance } = await WebAssembly.instantiateStreaming(fetch(url));\n" +
+          "  self.postMessage(instance.exports.add(2, 3));\n" +
+          "};\n",
+      );
+      return root;
+    }
+
+    it("builds a worker's module as a file of its own and allows it for an app that declares it", async () => {
+      const root = await createWebAssemblyApp();
+      await buildApp(root, "/", { webAssembly: true });
+      const dist = path.join(root, "dist");
+      const assets = await readdir(path.join(dist, "assets"));
+      // A module of 41 bytes stays a file, which Vite would otherwise inline as a data: URL.
+      const modules = assets.filter((file) => file.endsWith(".wasm"));
+      expect(modules).toEqual([expect.stringMatching(/^add-[A-Za-z0-9_-]{8}\.wasm$/)]);
+      const module = modules[0] ?? "";
+      expect(new Uint8Array(await readFile(path.join(dist, "assets", module)))).toEqual(ADD_MODULE);
+      const worker = assets.find((file) => file.startsWith("calc.worker-")) ?? "";
+      expect(await readFile(path.join(dist, "assets", worker), "utf8")).toContain(module);
+
+      const headers = await readFile(path.join(dist, "_headers"), "utf8");
+      expect(headers).toMatch(/script-src 'self' 'wasm-unsafe-eval' 'sha256-[^']+'; /);
+      const manifest = parseManifest(await readFile(path.join(dist, "sha256sums.txt"), "utf8"));
+      expect(manifest.has(`/assets/${module}`)).toBe(true);
+    });
+
+    it("leaves WebAssembly out of the policy of an app without it", async () => {
+      const root = await createApp();
+      await buildApp(root);
+      const headers = await readFile(path.join(root, "dist", "_headers"), "utf8");
+      expect(headers).toContain("Content-Security-Policy: default-src 'none'; script-src 'self' ");
+      expect(headers).not.toContain("wasm-unsafe-eval");
+    });
+
+    it("fails the build for a module in an app that does not declare WebAssembly", async () => {
+      const root = await createWebAssemblyApp();
+      await expect(buildApp(root)).rejects.toThrow(
+        /has WebAssembly \(\/assets\/add-[\w-]{8}\.wasm\), which only an app that declares webAssembly/,
+      );
+    });
+
+    it("fails the build for an app that declares WebAssembly without a module", async () => {
+      const root = await createApp();
+      await expect(buildApp(root, "/", { webAssembly: true })).rejects.toThrow(
+        /declares webAssembly, but its build has no WebAssembly module/,
+      );
+    });
+
+    it("fails the build when a script of the page refers to a module", async () => {
+      const root = await createWebAssemblyApp(true);
+      await expect(buildApp(root, "/", { webAssembly: true })).rejects.toThrow(
+        /assets\/index-[\w-]{8}\.js refers to \/assets\/add-[\w-]{8}\.wasm, but only workers load WebAssembly/,
+      );
+    });
+  });
+
   it("writes the licenses of the code in the page and its workers", async () => {
     const root = await createApp();
     const library = path.join(root, "node_modules", "fake-library");

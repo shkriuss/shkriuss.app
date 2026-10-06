@@ -45,6 +45,7 @@ export default defineConfig({
     }),
     tailwindcss(),
     react(),
-    edge(),
+    // Its wasm worker compiles WebAssembly (ADR 0014).
+    edge({ webAssembly: true }),
   ],
 });

@@ -22,7 +22,7 @@ After Vite has written the production build, the plugin:
 1. hashes every JavaScript and CSS file (SHA-384), except worker scripts, which the page starts rather than imports;
 2. adds `integrity` attributes to the scripts, module preloads and stylesheets in the HTML;
 3. adds an import map that lists the hash of every other script, so modules loaded later with `import()` are checked too;
-4. writes `dist/_headers` with the security headers, including the Content-Security-Policy hash of that import map, a year of caching for `/assets/`, and `X-Robots-Tag: noindex` on the app's staging host. Its `trusted-types` directive names the worker policy (see [Workers](#workers)) only if the build has worker scripts; otherwise it is `'none'`, which allows no Trusted Types policy at all.
+4. writes `dist/_headers` with the security headers, including the Content-Security-Policy hash of that import map, a year of caching for `/assets/`, and `X-Robots-Tag: noindex` on the app's staging host. Its `trusted-types` directive names the worker policy (see [Workers](#workers)) only if the build has worker scripts; otherwise it is `'none'`, which allows no Trusted Types policy at all. Its `script-src` allows `'wasm-unsafe-eval'` only for an app that declares WebAssembly (see [WebAssembly](#webassembly)).
 
 Every chunk other than the entry script must be loaded with `import()` and may import statically only from the entry: Safari refuses statically imported chunks under `Integrity-Policy`. The plugin also turns off Vite's module preloads and per-chunk CSS, because Vite adds preload lists to chunks after naming them, which would break year-long caching. The build fails if any of this is broken ([ADR 0010](../../docs/decisions/0010-script-integrity.md)).
 
@@ -47,6 +47,20 @@ const registration = await registerServiceWorker();
 - **The policy:** the first time an app starts a worker, `@shkriuss/edge/workers` creates the one Trusted Types policy the Content-Security-Policy allows, `shkriuss-workers`. It turns only those scripts, on the app's own origin and without a query or fragment, into TrustedScriptURLs, and throws a TypeError for any other URL. It creates nothing else: HTML and script sinks keep refusing strings. Never create a policy yourself; the Content-Security-Policy allows no other, and this one only once.
 
 The build fails if a worker would not start: if Vite emits a script file that is not named like a worker, or a module of the page is named like one. Unlike the page's scripts, worker scripts have no integrity hash, because browsers offer no way to check one; `sha256sums.txt` and the build provenance cover them like every other file.
+
+## WebAssembly
+
+Only an app that declares it may compile WebAssembly, and only in its workers ([ADR 0014](../../docs/decisions/0014-webassembly.md)). An app declares it with `webAssembly: true` in its `app.config.ts`, which passes it on as `edge({ webAssembly: true })`. Its `script-src` then allows `'wasm-unsafe-eval'`, which lets it compile WebAssembly and nothing else: `eval()` and `new Function()` stay refused.
+
+```ts
+// add.worker.ts, started with startWorker() like any worker
+const module = new URL("./add.wasm", import.meta.url);
+const { instance } = await WebAssembly.instantiateStreaming(fetch(module));
+```
+
+- **Modules are files of the app:** Vite builds each into `/assets/<name>-<hash>.wasm`, and never inlines one as a `data:` URL, which `connect-src 'self'` would refuse. They are listed in `sha256sums.txt`, and the service worker keeps them like every file.
+- **The build fails** for an app that ships modules without declaring WebAssembly, so that a new dependency cannot widen the policy unnoticed; for an app that declares it without shipping any; and for a script of the page that refers to a module.
+- **Licenses:** a package that ships WebAssembly goes through `add-dependency`, and `/licenses.txt` must carry the licenses of everything compiled into its module, not only the package's own.
 
 ## Licenses
 

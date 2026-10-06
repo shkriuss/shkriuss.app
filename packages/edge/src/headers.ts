@@ -71,6 +71,11 @@ export interface HeaderOptions {
    * otherwise it allows none.
    */
   readonly workers?: boolean;
+  /**
+   * Whether the app compiles WebAssembly, which it then does in its workers. Only then does
+   * `script-src` allow `'wasm-unsafe-eval'` (ADR 0014).
+   */
+  readonly webAssembly?: boolean;
   /** Browser features the app needs, allowed for its own origin only. */
   readonly allowedFeatures?: readonly BrowserFeature[];
 }
@@ -83,7 +88,8 @@ const HASH_SOURCE = /^'sha(?:256|384|512)-[A-Za-z0-9+/]+={0,2}'$/;
 export function contentSecurityPolicy({
   scriptHashes,
   workers = false,
-}: Pick<HeaderOptions, "scriptHashes" | "workers">): string {
+  webAssembly = false,
+}: Pick<HeaderOptions, "scriptHashes" | "workers" | "webAssembly">): string {
   for (const hash of scriptHashes) {
     if (!HASH_SOURCE.test(hash)) {
       throw new Error(`"${hash}" is not a CSP hash source such as 'sha256-…'.`);
@@ -91,7 +97,7 @@ export function contentSecurityPolicy({
   }
   const directives: readonly (readonly string[])[] = [
     ["default-src", "'none'"],
-    ["script-src", "'self'", ...scriptHashes],
+    ["script-src", "'self'", ...(webAssembly ? ["'wasm-unsafe-eval'"] : []), ...scriptHashes],
     ["style-src", "'self'"],
     ["img-src", "'self'", "blob:", "data:"],
     ["connect-src", "'self'"],

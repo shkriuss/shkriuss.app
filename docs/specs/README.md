@@ -9,3 +9,4 @@ Exact formats and protocols. A spec is written and reviewed **before** the code 
 | [service-worker.md](service-worker.md) — offline copy, updates, replacing and removing a version | 1.2   | accepted |
 | [hub.md](hub.md) — the hub: pages, the app catalog, the privacy policy, `security.txt`           | 1.4   | accepted |
 | [apps/checklists.md](apps/checklists.md) — the pilot app: screens, data, merging                 | 1.5   | accepted |
+| [apps/grammar.md](apps/grammar.md) — Grammar: English checked on the device, with Harper         | 2     | accepted |
