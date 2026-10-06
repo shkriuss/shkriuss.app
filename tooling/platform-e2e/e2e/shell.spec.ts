@@ -1,5 +1,6 @@
+import { readFile } from "node:fs/promises";
 import { AxeBuilder } from "@axe-core/playwright";
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import type { StorageStatus, UpdateState } from "@shkriuss/pwa";
 import { expect, test } from "@shkriuss/config/playwright";
 
@@ -40,6 +41,102 @@ const BEST_EFFORT: StorageStatus = {
   usage: 1_234_567,
   quota: 10_000_000_000,
 };
+
+/** The file that the page downloads while `action` runs: its name and its bytes. */
+async function downloaded(
+  page: Page,
+  action: () => Promise<void>,
+): Promise<{ readonly name: string; readonly bytes: number[] }> {
+  const download = page.waitForEvent("download");
+  await action();
+  const file = await download;
+  return { name: file.suggestedFilename(), bytes: [...(await readFile(await file.path()))] };
+}
+
+/** How many records each store of a backup file has, as this app reads it. */
+async function recordsIn(
+  page: Page,
+  bytes: readonly number[],
+  passphrase: string | null,
+): Promise<unknown> {
+  return page.evaluate(async ([file, secret]) => window.platform?.backups.read(file, secret), [
+    bytes,
+    passphrase,
+  ] as const);
+}
+
+/** Opens the dialog that makes a backup, and returns it with the passphrase it offers. */
+async function startBackup(page: Page): Promise<{ dialog: Locator; passphrase: string }> {
+  await page.getByRole("button", { name: "Back up", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Back up your data" });
+  const passphrase = await dialog.getByText(/^[a-z]+(?:-[a-z]+){5}$/).textContent();
+  return { dialog, passphrase: passphrase ?? "" };
+}
+
+/** What the share sheet of `fakeShareSheet()` got, and the function that answers it. */
+interface ShareSheet {
+  readonly shared: string[][];
+  answer?: (cancelled: boolean) => void;
+}
+
+declare global {
+  interface Window {
+    shareSheet?: ShareSheet;
+  }
+}
+
+/**
+ * From the next page on, a share sheet that the test controls takes the place of the browser's,
+ * which desktop browsers do not have for these files: it takes every file, and waits for
+ * `answerShareSheet()`.
+ */
+async function fakeShareSheet(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const sheet: ShareSheet = { shared: [] };
+    window.shareSheet = sheet;
+    Object.defineProperty(navigator, "canShare", { configurable: true, value: () => true });
+    Object.defineProperty(navigator, "share", {
+      configurable: true,
+      value: async (data: ShareData) => {
+        sheet.shared.push((data.files ?? []).map((file) => file.name));
+        await new Promise<void>((resolve, reject) => {
+          sheet.answer = (cancelled) => {
+            if (cancelled) {
+              reject(new DOMException("Share canceled.", "AbortError"));
+            } else {
+              resolve();
+            }
+          };
+        });
+      },
+    });
+  });
+}
+
+/** The names of the files of each share so far. */
+async function shared(page: Page): Promise<string[][]> {
+  return page.evaluate(() => window.shareSheet?.shared ?? []);
+}
+
+/** The user shares the file in the share sheet, or closes it. */
+async function answerShareSheet(page: Page, cancelled: boolean): Promise<void> {
+  await page.evaluate((cancel) => {
+    window.shareSheet?.answer?.(cancel);
+  }, cancelled);
+}
+
+/** Makes a plain backup, which takes no time, and returns the dialog that offers to save it. */
+async function makePlainBackup(page: Page): Promise<Locator> {
+  const { dialog } = await startBackup(page);
+  await dialog.getByRole("button", { name: "Make a plain backup instead" }).click();
+  await page.getByRole("button", { name: "Make a plain backup" }).click();
+  const ready = page.getByRole("dialog", { name: "Your backup is ready" });
+  await expect(ready).toBeVisible();
+  return ready;
+}
+
+/** The backup is made, which takes seconds: the key takes 256 MiB to derive. */
+const MAKING = { timeout: 30_000 };
 
 async function write(page: Page, titles: readonly string[]): Promise<void> {
   await page.evaluate(async (all) => {
@@ -204,4 +301,198 @@ test("the settings say so when the browser does not agree to keep the data", asy
   );
   await expect(keep).toBeEnabled();
   await expect(keep).toBeFocused();
+});
+
+for (const colorScheme of ["light", "dark"] as const) {
+  test(`the backup dialog has no accessibility violations in the ${colorScheme} theme`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme });
+    await openSettings(page, BEST_EFFORT);
+    const { dialog } = await startBackup(page);
+    await expect(dialog).toBeVisible();
+    const results = await new AxeBuilder({ page }).analyze();
+    expect(results.violations).toEqual([]);
+  });
+}
+
+test("a backup with the generated passphrase saves the notes, encrypted", async ({ page }) => {
+  await openSettings(page, BEST_EFFORT);
+  await write(page, ["Milk", "Eggs"]);
+  const section = page.getByRole("region", { name: "Backups" });
+  await expect(section).toContainText("No backup yet.");
+
+  const { dialog, passphrase } = await startBackup(page);
+  expect(passphrase).toMatch(/^[a-z]+(?:-[a-z]+){5}$/);
+  await dialog.getByRole("button", { name: "Back up", exact: true }).click();
+  const ready = page.getByRole("dialog", { name: "Your backup is ready" });
+  await expect(ready).toBeVisible(MAKING);
+  // The new step has the focus, not the page behind the dialog.
+  await expect(ready.locator("[tabindex='-1']")).toBeFocused();
+
+  const file = await downloaded(page, async () => {
+    await ready.getByRole("button", { name: "Save backup" }).click();
+  });
+  expect(file.name).toMatch(/^shkriuss-platform-\d{4}-\d{2}-\d{2}\.age$/);
+  const saved = page.getByRole("dialog", { name: "Backed up" });
+  await expect(saved).toContainText(`Your backup is in your downloads, as ${file.name}.`);
+  expect(await recordsIn(page, file.bytes, passphrase)).toStrictEqual({
+    ok: true,
+    value: { records: { notes: 2 } },
+  });
+  expect(await recordsIn(page, file.bytes, "not-the-passphrase")).toStrictEqual({
+    ok: false,
+    code: "wrong-passphrase",
+  });
+
+  await saved.getByRole("button", { name: "Done" }).click();
+  await expect(saved).toBeHidden();
+  await expect(section).toContainText("Last backup:");
+  await expect(section).toContainText("Nothing has changed since then.");
+  // A change after the backup is one that the next backup has to carry.
+  await write(page, ["Bread"]);
+  await openSettings(page, BEST_EFFORT);
+  await expect(section).toContainText("1 change since then.");
+});
+
+test("a backup with the user's own passphrase checks it first", async ({ page }) => {
+  await openSettings(page, BEST_EFFORT);
+  await write(page, ["Milk"]);
+  const { dialog } = await startBackup(page);
+  await dialog.getByRole("button", { name: "Use my own passphrase" }).click();
+  const own = page.getByRole("dialog", { name: "Your own passphrase" });
+  const first = own.getByLabel("Passphrase", { exact: true });
+  const second = own.getByLabel("Passphrase again");
+  const backUp = own.getByRole("button", { name: "Back up" });
+
+  await first.fill("too short");
+  await second.fill("too short");
+  await backUp.click();
+  await expect(own).toContainText("Use at least 12 characters.");
+  await expect(first).toBeFocused();
+
+  // An error goes as soon as the user edits its field, so that nothing moves while they press.
+  await first.fill("correct horse battery staple");
+  await expect(own).not.toContainText("Use at least 12 characters.");
+  await second.fill("correct horse battery stapel");
+  await backUp.click();
+  await expect(own).toContainText("The two passphrases are not the same.");
+  await expect(second).toBeFocused();
+
+  await second.fill("correct horse battery staple");
+  await expect(own).not.toContainText("The two passphrases are not the same.");
+  await backUp.click();
+  const ready = page.getByRole("dialog", { name: "Your backup is ready" });
+  await expect(ready).toBeVisible(MAKING);
+  const file = await downloaded(page, async () => {
+    await ready.getByRole("button", { name: "Save backup" }).click();
+  });
+  expect(await recordsIn(page, file.bytes, "correct horse battery staple")).toStrictEqual({
+    ok: true,
+    value: { records: { notes: 1 } },
+  });
+});
+
+test("a plain backup comes only after a warning", async ({ page }) => {
+  await openSettings(page, BEST_EFFORT);
+  await write(page, ["Milk"]);
+  const { dialog } = await startBackup(page);
+  await dialog.getByRole("button", { name: "Make a plain backup instead" }).click();
+  const plain = page.getByRole("dialog", { name: "A plain backup" });
+  await expect(plain).toContainText("anyone who gets the file can read all of it");
+  await plain.getByRole("button", { name: "Make a plain backup" }).click();
+  const ready = page.getByRole("dialog", { name: "Your backup is ready" });
+  const file = await downloaded(page, async () => {
+    await ready.getByRole("button", { name: "Save backup" }).click();
+  });
+  expect(file.name).toMatch(/^shkriuss-platform-\d{4}-\d{2}-\d{2}\.json$/);
+  expect(await recordsIn(page, file.bytes, null)).toStrictEqual({
+    ok: true,
+    value: { records: { notes: 1 } },
+  });
+});
+
+test("a backup that the user cancels saves nothing, and records nothing", async ({ page }) => {
+  await openSettings(page, BEST_EFFORT);
+  const section = page.getByRole("region", { name: "Backups" });
+  const { dialog } = await startBackup(page);
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(dialog).toBeHidden();
+  // The focus goes back to the button that opened the dialog.
+  await expect(section.getByRole("button", { name: "Back up" })).toBeFocused();
+
+  // Escape closes it too, even once the backup is ready to save.
+  await startBackup(page);
+  await page
+    .getByRole("dialog", { name: "Back up your data" })
+    .getByRole("button", { name: "Make a plain backup instead" })
+    .click();
+  await page.getByRole("button", { name: "Make a plain backup" }).click();
+  await expect(page.getByRole("dialog", { name: "Your backup is ready" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(section).toContainText("No backup yet.");
+});
+
+test("a backup started again after the dialog was closed saves only the new one", async ({
+  page,
+}) => {
+  await openSettings(page, BEST_EFFORT);
+  await write(page, ["Milk"]);
+  const earlier = await startBackup(page);
+  await earlier.dialog.getByRole("button", { name: "Back up", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Making your backup" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+
+  // The earlier backup finishes while the new one is being made, and must not take its place:
+  // its file would need the passphrase that the user no longer has in front of them.
+  const later = await startBackup(page);
+  expect(later.passphrase).not.toBe(earlier.passphrase);
+  await later.dialog.getByRole("button", { name: "Back up", exact: true }).click();
+  const ready = page.getByRole("dialog", { name: "Your backup is ready" });
+  await expect(ready).toBeVisible(MAKING);
+  const file = await downloaded(page, async () => {
+    await ready.getByRole("button", { name: "Save backup" }).click();
+  });
+  expect(await recordsIn(page, file.bytes, later.passphrase)).toStrictEqual({
+    ok: true,
+    value: { records: { notes: 1 } },
+  });
+});
+
+test("where the browser can share the file, the share sheet takes the backup, once", async ({
+  page,
+}) => {
+  await fakeShareSheet(page);
+  await openSettings(page, BEST_EFFORT);
+  const section = page.getByRole("region", { name: "Backups" });
+  const ready = await makePlainBackup(page);
+  const save = ready.getByRole("button", { name: "Save backup" });
+  await save.click();
+  // The button waits while the share sheet is open, and a second press does nothing.
+  await expect(save).toHaveAttribute("aria-disabled", "true");
+  await save.click({ force: true });
+  expect(await shared(page)).toStrictEqual([
+    [expect.stringMatching(/^shkriuss-platform-.*\.json$/)],
+  ]);
+
+  await answerShareSheet(page, false);
+  await expect(page.getByRole("dialog", { name: "Backed up" })).toContainText(
+    "Your backup is saved. Keep it somewhere other than this device.",
+  );
+  await expect(section).toContainText("Last backup:");
+});
+
+test("a share sheet that the user closes saves nothing, and records nothing", async ({ page }) => {
+  await fakeShareSheet(page);
+  await openSettings(page, BEST_EFFORT);
+  const section = page.getByRole("region", { name: "Backups" });
+  const ready = await makePlainBackup(page);
+  const save = ready.getByRole("button", { name: "Save backup" });
+  await save.click();
+  await answerShareSheet(page, true);
+  await expect(ready.getByRole("status")).toHaveText("The backup is not saved yet.");
+  await expect(save).toBeEnabled();
+  await expect(section).toContainText("No backup yet.");
 });

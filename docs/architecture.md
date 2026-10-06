@@ -112,7 +112,7 @@ Backups are the only way data leaves a device, the only protection against losin
 - **Plain JSON export** is available only after an explicit warning.
 - **Readable exports** (CSV, Markdown, iCalendar and so on) where they suit an app. They are for other tools, not for restoring.
 - **Import pipeline:** size check → decrypt → parse → validate against the schema → migrate → preview ("12 new, 3 updated, 1 deleted") → merge → commit in one transaction → report. A failure at any step changes nothing.
-- **Saving:** the share sheet (Web Share API) on phones and tablets — Files, Google Drive, iCloud Drive — with a download fallback. Automatic backup to a chosen folder (File System Access API, desktop Chromium) is planned. It needs a way to encrypt with nobody present without storing the passphrase, which requires its own design and ADR first ([backup-format.md §9](specs/backup-format.md#9-not-covered)).
+- **Saving:** the share sheet (Web Share API) on phones and tablets — Files, Google Drive, iCloud Drive — with a download fallback. Browsers decide which files they share: Chrome shares only some types, which leave out backup files, so it downloads them. Automatic backup to a chosen folder (File System Access API, desktop Chromium) is planned. It needs a way to encrypt with nobody present without storing the passphrase, which requires its own design and ADR first ([backup-format.md §9](specs/backup-format.md#9-not-covered)).
 - **Reminders:** each app tracks when it was last backed up and what changed since, and nudges the user.
 - **Moving data between devices** means exporting on one and importing on the other. Because import merges, this works like a manual sync.
 

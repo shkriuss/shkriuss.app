@@ -1,15 +1,22 @@
 import "@shkriuss/ui/styles.css";
 import type { AppStorage, AppUpdates, StorageStatus, UpdateState } from "@shkriuss/pwa";
-import { AppErrorBoundary, AppFrame, StorageSection, useObserved } from "@shkriuss/shell";
+import {
+  AppErrorBoundary,
+  AppFrame,
+  BackupSection,
+  StorageSection,
+  useObserved,
+} from "@shkriuss/shell";
 import { Button, Link } from "@shkriuss/ui";
 import { StrictMode, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { BACKUP_APP } from "./backups.ts";
 import { notesDatabase } from "./data.ts";
 import { m } from "./shell-messages.ts";
 
 // The shell of @shkriuss/shell around a screen of notes, at /shell, and around the settings, at
-// /shell/settings, for the end-to-end tests in e2e/shell.spec.ts. The notes are the data layer's;
-// the update state and the storage are the tests' to set.
+// /shell/settings, for the end-to-end tests in e2e/shell.spec.ts. The notes and their backups are
+// the data layer's; the update state and the storage are the tests' to set.
 
 type NotesDatabase = Awaited<ReturnType<typeof notesDatabase>>;
 
@@ -149,11 +156,12 @@ function Notes({ db }: { readonly db: NotesDatabase }) {
   );
 }
 
-function Settings() {
+function Settings({ db }: { readonly db: NotesDatabase }) {
   return (
     <div className="flex flex-col items-start gap-6">
       <h1 className="text-2xl font-semibold">{m.settings()}</h1>
       <StorageSection storage={storage} />
+      <BackupSection app={BACKUP_APP} db={db} />
     </div>
   );
 }
@@ -176,7 +184,7 @@ export async function showShellPage(): Promise<void> {
         }
       >
         <AppErrorBoundary>
-          {location.pathname === "/shell/settings" ? <Settings /> : <Notes db={db} />}
+          {location.pathname === "/shell/settings" ? <Settings db={db} /> : <Notes db={db} />}
         </AppErrorBoundary>
       </AppFrame>
     </StrictMode>,

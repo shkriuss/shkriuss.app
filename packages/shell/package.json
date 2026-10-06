@@ -12,6 +12,7 @@
     "test": "vitest run --coverage"
   },
   "dependencies": {
+    "@shkriuss/backup": "workspace:*",
     "@shkriuss/data": "workspace:*",
     "@shkriuss/i18n": "workspace:*",
     "@shkriuss/pwa": "workspace:*",
