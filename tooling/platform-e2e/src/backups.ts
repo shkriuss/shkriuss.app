@@ -13,7 +13,7 @@ import { current } from "./data.ts";
 // `data.ts` and the example of backup format §2.
 
 /** This test app's id in its backups. It is never deployed. */
-const APP = "platform";
+export const BACKUP_APP = "platform";
 
 /** The app of backup format §2's example, whose encrypted fixtures the tests read. */
 const EXAMPLE_APP = "notes";
@@ -51,6 +51,14 @@ export interface BackupTests {
     passphrase: string | null,
   ): Promise<Outcome<{ readonly preview: ImportCounts; readonly imported: ImportCounts }>>;
   /**
+   * Reads `bytes` as a backup of this app, without importing it: how many records each store
+   * has.
+   */
+  read(
+    bytes: readonly number[],
+    passphrase: string | null,
+  ): Promise<Outcome<{ readonly records: Readonly<Record<string, number>> }>>;
+  /**
    * Reads `bytes` as a backup of the example's app, without importing it: when it was made, and
    * how many records each store has.
    */
@@ -60,6 +68,11 @@ export interface BackupTests {
   ): Promise<
     Outcome<{ readonly exported: string; readonly records: Readonly<Record<string, number>> }>
   >;
+}
+
+/** How many records each store has. */
+function counts(stores: Readonly<Record<string, readonly unknown[]>>): Record<string, number> {
+  return Object.fromEntries(Object.entries(stores).map(([store, all]) => [store, all.length]));
 }
 
 async function outcome<T>(operation: () => Promise<T>): Promise<Outcome<T>> {
@@ -76,7 +89,7 @@ async function outcome<T>(operation: () => Promise<T>): Promise<Outcome<T>> {
 export const backups: BackupTests = {
   passphrase: () => generatePassphrase(),
   async make(passphrase) {
-    const file = await createBackupFile(current().database, { app: APP, passphrase });
+    const file = await createBackupFile(current().database, { app: BACKUP_APP, passphrase });
     return {
       name: file.name,
       type: file.type,
@@ -88,12 +101,22 @@ export const backups: BackupTests = {
       const { database, schemas } = current();
       const opened = await openBackupFile(new Blob([Uint8Array.from(bytes)]));
       const contents = await readBackupFile(opened, passphrase, {
-        app: APP,
+        app: BACKUP_APP,
         schemas,
         now: Date.now(),
       });
       const preview = await database.previewImport(contents.incoming);
       return { preview: preview.total, imported: (await database.import(contents.incoming)).total };
+    }),
+  read: async (bytes, passphrase) =>
+    outcome(async () => {
+      const opened = await openBackupFile(new Blob([Uint8Array.from(bytes)]));
+      const contents = await readBackupFile(opened, passphrase, {
+        app: BACKUP_APP,
+        schemas: current().schemas,
+        now: Date.now(),
+      });
+      return { records: counts(contents.incoming.stores) };
     }),
   readExample: async (bytes, passphrase) =>
     outcome(async () => {
@@ -103,9 +126,9 @@ export const backups: BackupTests = {
         schemas: EXAMPLE_SCHEMAS,
         now: Date.now(),
       });
-      const records = Object.fromEntries(
-        Object.entries(contents.incoming.stores).map(([store, all]) => [store, all.length]),
-      );
-      return { exported: contents.exported.toISOString(), records };
+      return {
+        exported: contents.exported.toISOString(),
+        records: counts(contents.incoming.stores),
+      };
     }),
 };

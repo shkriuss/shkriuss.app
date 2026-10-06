@@ -43,6 +43,7 @@ And the shell of `@shkriuss/shell`, on the pages `/shell` and `/shell/settings`,
 - the update banner offers an update, applies it when the user agrees, and goes away until there is news when the user says later;
 - a screen that fails shows what happened inside the frame, and reloads the app;
 - the settings say how much the app stores and whether the browser keeps it, ask the browser to keep it when the user wants, and say so when the browser does not agree.
+- the settings make backups of the notes: encrypted with a generated passphrase or the user's own, which the dialog checks first, or plain after a warning; each file is downloaded, or shared through a stand-in for the share sheet, and read back with its passphrase; a backup that the user cancels saves and records nothing, and one started after the dialog was closed never gives way to the earlier one.
 
 | Command                                      | What it does                     |
 | -------------------------------------------- | -------------------------------- |

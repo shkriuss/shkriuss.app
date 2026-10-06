@@ -294,6 +294,9 @@ importers:
 
   packages/shell:
     dependencies:
+      '@shkriuss/backup':
+        specifier: workspace:*
+        version: link:../backup
       '@shkriuss/data':
         specifier: workspace:*
         version: link:../data
