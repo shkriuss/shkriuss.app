@@ -7,6 +7,7 @@ import {
   type UpdateState,
 } from "@shkriuss/pwa";
 import {
+  AboutSection,
   AppErrorBoundary,
   AppFrame,
   BackupReminder,
@@ -174,6 +175,7 @@ function Settings({ db }: { readonly db: NotesDatabase }) {
       <InstallSection install={appInstall()} />
       <StorageSection storage={storage} />
       <BackupSection app={BACKUP_APP} db={db} schemas={schemas} />
+      <AboutSection name={m.app()} description={m.description()} />
     </div>
   );
 }

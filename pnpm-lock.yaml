@@ -320,6 +320,9 @@ importers:
       '@shkriuss/config':
         specifier: workspace:*
         version: link:../config
+      '@shkriuss/edge':
+        specifier: workspace:*
+        version: link:../edge
       '@types/node':
         specifier: 'catalog:'
         version: 24.19.0

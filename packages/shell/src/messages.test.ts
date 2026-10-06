@@ -84,6 +84,15 @@ describe("the shell's text", () => {
       addToHomeScreen: m.addToHomeScreen(),
       installFromMenu: m.installFromMenu(),
       installFirst: m.installFirst(),
+      about: m.about("Notes"),
+      privacy: m.privacy(),
+      freeSoftware: m.freeSoftware(),
+      sourceCode: m.sourceCode(),
+      licenses: m.licenses(),
+      licensesTitle: m.licensesTitle(),
+      licensesLoading: m.licensesLoading(),
+      licensesFailed: m.licensesFailed(),
+      reportProblem: m.reportProblem(),
       remindFirst: m.remindFirst(),
     }).toStrictEqual({
       skipToContent: "Skip to content",
@@ -174,6 +183,17 @@ describe("the shell's text", () => {
         "Some browsers install apps from their menu, with Install or Add to Home Screen.",
       installFirst:
         "Before you start, add this app to your Home Screen: there it keeps its own data, apart from your browser's. Open the share menu, then choose Add to Home Screen.",
+      about: "About Notes",
+      privacy:
+        "Your data stays on this device. The app has no accounts, and sends none of your data anywhere: only the backups that you save leave the device.",
+      freeSoftware:
+        "This app is free software, under the GNU Affero General Public License, version 3.",
+      sourceCode: "Source code",
+      licenses: "Licenses of the software it includes",
+      licensesTitle: "Licenses",
+      licensesLoading: "Reading the licenses…",
+      licensesFailed: "The licenses could not be read.",
+      reportProblem: "Report a security problem",
       remindFirst: "No backup yet. Back up your data to keep it safe.",
     });
   });

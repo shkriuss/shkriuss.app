@@ -6,7 +6,7 @@ Private, offline-first web apps — one hub, many small apps, one shared platfor
 - **Apps:** each at its own address, for example `https://notes.shkriuss.app`
 - **Your data stays on your device.** Nothing is sent to a server. Back it up as an encrypted file whenever you like.
 
-> **Status:** Phase 1 — platform v1. The foundations are done and a placeholder hub is live; there are no apps yet. See the [roadmap](docs/roadmap.md).
+> **Status:** Phase 1 — platform v1. The foundations and the platform's packages are done, and a placeholder hub is live; there are no apps yet. See the [roadmap](docs/roadmap.md).
 
 ## Principles
 

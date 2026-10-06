@@ -1,3 +1,4 @@
+export { AboutSection, type AboutSectionProps } from "./AboutSection.tsx";
 export { AppError, AppErrorBoundary, type AppErrorBoundaryProps } from "./AppError.tsx";
 export { AppFrame, type AppFrameProps } from "./AppFrame.tsx";
 export { BackupReminder, type BackupReminderProps } from "./BackupReminder.tsx";
