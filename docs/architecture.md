@@ -59,22 +59,22 @@ shkriuss.app/
 │  ├─ hub/                  shkriuss.app
 │  └─ <id>/                 <id>.shkriuss.app
 ├─ packages/                the shared platform (see table)
-├─ tooling/                 repository checks, the create-app generator, platform end-to-end tests
+├─ tooling/                 repository checks, the app template and create-app, platform tests
 ├─ docs/                    architecture, threat model, roadmap, decisions, specs
 ├─ CLAUDE.md                rules for every contributor, human or AI
 └─ SECURITY.md              how to report vulnerabilities
 ```
 
-| Package            | Responsibility                                                                                                               |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
-| `@shkriuss/config` | Shared TypeScript, lint, format, Vite, Vitest and Playwright presets                                                         |
-| `@shkriuss/ui`     | Design tokens, theme, accessible components (React Aria), icons                                                              |
-| `@shkriuss/shell`  | App frame: navigation, settings, about, install and update prompts, storage status, backup screens, error handling           |
-| `@shkriuss/data`   | Local database, record model, merge rules, migrations, reactive queries                                                      |
-| `@shkriuss/backup` | Export and import, encryption (`age`), backup format versions, readable export formats                                       |
-| `@shkriuss/pwa`    | Web app manifest, service worker, install and update flow, persistent storage                                                |
-| `@shkriuss/edge`   | Security headers (`_headers`), script integrity, starting workers under Trusted Types, and Cloudflare/Wrangler configuration |
-| `@shkriuss/i18n`   | Typed message modules in English ([ADR 0012](decisions/0012-typed-messages.md)) and `Intl` formats                           |
+| Package            | Responsibility                                                                                                                                                     |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `@shkriuss/config` | Shared TypeScript settings and the end-to-end test setup (Playwright); lint and format settings are at the repository's root                                       |
+| `@shkriuss/ui`     | Design tokens, theme, accessible components (React Aria), icons                                                                                                    |
+| `@shkriuss/shell`  | App frame: navigation, settings, about, install and update prompts, storage status, backup screens, error handling; and every app's build (`@shkriuss/shell/vite`) |
+| `@shkriuss/data`   | Local database, record model, merge rules, migrations, reactive queries                                                                                            |
+| `@shkriuss/backup` | Export and import, encryption (`age`), backup format versions, readable export formats                                                                             |
+| `@shkriuss/pwa`    | Web app manifest, service worker, install and update flow, persistent storage                                                                                      |
+| `@shkriuss/edge`   | Security headers (`_headers`), script integrity, starting workers under Trusted Types, and Cloudflare/Wrangler configuration                                       |
+| `@shkriuss/i18n`   | Typed message modules in English ([ADR 0012](decisions/0012-typed-messages.md)) and `Intl` formats                                                                 |
 
 Dependency direction: apps → `shell` → (`ui`, `data`, `backup`, `pwa`, `i18n`); `backup` → `data`. Code that runs in the browser uses `@shkriuss/edge` only through its browser entry points, `@shkriuss/edge/workers` and `@shkriuss/edge/domains`. No package imports an app, and apps never import other apps. Lint rules enforce this.
 
@@ -82,16 +82,20 @@ Dependency direction: apps → `shell` → (`ui`, `data`, `backup`, `pwa`, `i18n
 
 ```text
 apps/<id>/
-├─ app.config.ts      id (permanent), name, description, accent color, icon,
-│                     opt-in browser permissions, privacy label, extra export formats
-├─ src/schema.ts      record types and migrations
-├─ src/routes/        screens, each with its route, declared in code (ADR 0013)
+├─ app.config.ts      id (permanent), name and description from the app's messages,
+│                     accent color, icon glyph, opt-in browser features
+├─ vite.config.ts     the build: app(config) of @shkriuss/shell/vite
+├─ index.html         the page, which the build titles and links the manifest from
+├─ src/main.tsx       starts the service worker, the database and the router
+├─ src/router.ts      the routes, declared in code (ADR 0013)
+├─ src/routes/        one file per screen, with its route
 ├─ src/features/      app-specific components and logic
-├─ public/            icon source (all sizes are generated)
+├─ src/schema.ts      record types and migrations
+├─ src/messages.ts    the app's text
 └─ e2e/               Playwright tests
 ```
 
-Generated from `app.config.ts` at build time: the web app manifest, icons, `_headers` (security policy and permissions), Wrangler configuration and the app's entry in the hub catalog. Apps are created only with `create-app`, and CI checks that every app keeps the standard structure.
+Generated from `app.config.ts` at build time: the web app manifest and the icons, the page's title and description, the service worker, and `_headers` (security policy and permissions). The privacy label and extra export formats join it when the hub's catalog and the first readable export need them. Apps are created only with `create-app`, from the app template in `tooling/app-template`: a small app that CI builds and tests like every app, so that the template always works. CI checks that every app keeps the standard structure.
 
 ## 7. Data layer
 
@@ -200,7 +204,7 @@ Every pull request must pass the gates in [ADR 0008](decisions/0008-quality-gate
 - type checks and lint;
 - unit and property-based tests;
 - component tests in real browsers (Chromium, Firefox, WebKit);
-- Playwright end-to-end tests against the production build served with production headers, where any CSP or integrity violation fails the run; a test app that is never deployed (`tooling/platform-e2e`) tests the shared platform the same way;
+- Playwright end-to-end tests against the production build served with production headers, where any CSP or integrity violation fails the run; a test app that is never deployed (`tooling/platform-e2e`) tests the shared platform the same way, and the app template (`tooling/app-template`) is tested as every app is;
 - accessibility checks (axe);
 - performance and bundle-size budgets.
 

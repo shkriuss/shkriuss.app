@@ -4,12 +4,12 @@ Everything about how an app is served: the security headers, script integrity an
 
 ## The Vite plugin
 
-Every app's `vite.config.ts` adds `edge()` after its other plugins:
+Every app gets `edge()` from its build, `app()` of `@shkriuss/shell/vite`, after its other plugins, with the app's id and browser features from its `app.config.ts`. The hub adds it itself, as any build without the shell would:
 
 ```ts
 import { edge } from "@shkriuss/edge";
 
-export default defineConfig({ plugins: [react(), edge({ appId: "notes" })] });
+export default defineConfig({ plugins: [react(), edge()] });
 ```
 
 | Option            | Meaning                                                                         |

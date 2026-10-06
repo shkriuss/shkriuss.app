@@ -7,17 +7,14 @@ import {
   type UpdateState,
 } from "@shkriuss/pwa";
 import {
-  AboutSection,
   AppError,
   AppFrame,
   BackupReminder,
-  BackupSection,
   InstallBanner,
-  InstallSection,
   NotFound,
   Screen,
   ScreenLink,
-  StorageSection,
+  SettingsScreen,
   useObserved,
 } from "@shkriuss/shell";
 import { Button } from "@shkriuss/ui";
@@ -188,16 +185,16 @@ function Archive() {
 }
 
 function Settings({ db }: { readonly db: NotesDatabase }) {
-  const { schemas } = current();
   return (
-    <Screen title={m.settings()}>
-      <div className="flex flex-col items-start gap-6">
-        <InstallSection install={appInstall()} />
-        <StorageSection storage={storage} />
-        <BackupSection app={BACKUP_APP} db={db} schemas={schemas} />
-        <AboutSection name={m.app()} description={m.description()} />
-      </div>
-    </Screen>
+    <SettingsScreen
+      app={BACKUP_APP}
+      name={m.app()}
+      description={m.description()}
+      db={db}
+      schemas={current().schemas}
+      install={appInstall()}
+      storage={storage}
+    />
   );
 }
 
