@@ -1,5 +1,7 @@
 import { fileURLToPath } from "node:url";
 import { edge } from "@shkriuss/edge";
+import tailwindcss from "@tailwindcss/vite";
+import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
 
 /**
@@ -21,5 +23,5 @@ function serviceWorker(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [serviceWorker(), edge()],
+  plugins: [serviceWorker(), tailwindcss(), react(), edge()],
 });

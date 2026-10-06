@@ -27,6 +27,12 @@ And backup files (`@shkriuss/backup`, [backup format](../../docs/specs/backup-fo
 
 And the formats of the UI (`@shkriuss/i18n`), with each browser's own Unicode data: English with a German device's regional conventions, and English with the device's clock in a region without English formats.
 
+And the components of `@shkriuss/ui`, on the page `/ui`, from `src/gallery.tsx`:
+
+- axe finds no accessibility problem, in either theme, and React Aria adds no stylesheet that the CSP would refuse;
+- buttons, text fields, switches, links, dialogs and banners work with the pointer and the keyboard, and reach screen readers;
+- buttons and switches are at least 44 by 44 pixels.
+
 | Command                                      | What it does                     |
 | -------------------------------------------- | -------------------------------- |
 | `pnpm --filter @shkriuss/platform-e2e build` | Builds the test app into `dist/` |

@@ -23,6 +23,7 @@ catalog:
   oxlint-tsgolint: 7.0.2003
   prettier: 3.9.9
   react: 19.3.0
+  react-aria-components: 1.21.1
   react-dom: 19.3.0
   tailwindcss: 4.3.3
   turbo: 2.11.6
