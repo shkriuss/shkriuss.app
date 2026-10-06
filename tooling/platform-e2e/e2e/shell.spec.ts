@@ -66,9 +66,15 @@ async function recordsIn(
   ] as const);
 }
 
-/** Opens the dialog that makes a backup, and returns it with the passphrase it offers. */
+/**
+ * Opens the dialog that makes a backup from the settings, and returns it with the passphrase it
+ * offers.
+ */
 async function startBackup(page: Page): Promise<{ dialog: Locator; passphrase: string }> {
-  await page.getByRole("button", { name: "Back up", exact: true }).click();
+  await page
+    .getByRole("region", { name: "Backups" })
+    .getByRole("button", { name: "Back up", exact: true })
+    .click();
   const dialog = page.getByRole("dialog", { name: "Back up your data" });
   const passphrase = await dialog.getByText(/^[a-z]+(?:-[a-z]+){5}$/).textContent();
   return { dialog, passphrase: passphrase ?? "" };
@@ -191,15 +197,46 @@ async function write(page: Page, titles: readonly string[]): Promise<void> {
   }, titles);
 }
 
+/** The reminder to back up, among the frame's banners. */
+function reminder(page: Page): Locator {
+  return page
+    .getByRole("status")
+    .filter({ hasText: /^(?:No backup yet\.|Your last backup is from)/ });
+}
+
+/**
+ * The app comes back into view, as when the user switches back to it. Browsers under test keep
+ * their pages in view, so the test sends the event that the browser would.
+ */
+async function comeBack(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+}
+
+/** Saves the backup that the dialog `ready` offers, as a download, and closes the dialog. */
+async function saveAndClose(page: Page, ready: Locator): Promise<void> {
+  await downloaded(page, async () => {
+    await ready.getByRole("button", { name: "Save backup" }).click();
+  });
+  const saved = page.getByRole("dialog", { name: "Backed up" });
+  await saved.getByRole("button", { name: "Done" }).click();
+  await expect(saved).toBeHidden();
+}
+
+const DAY = 24 * 60 * 60 * 1000;
+
 for (const colorScheme of ["light", "dark"] as const) {
-  test(`the frame and its update banner have no accessibility violations in the ${colorScheme} theme`, async ({
+  test(`the frame and its banners have no accessibility violations in the ${colorScheme} theme`, async ({
     page,
   }) => {
     await page.emulateMedia({ colorScheme });
     await open(page);
     await write(page, ["Milk"]);
     await setUpdateState(page, "update-available");
-    await expect(page.getByRole("status")).toBeVisible();
+    await comeBack(page);
+    await expect(reminder(page)).toBeVisible();
+    await expect(page.getByRole("status")).toHaveCount(2);
     const results = await new AxeBuilder({ page }).analyze();
     expect(results.violations).toEqual([]);
   });
@@ -269,6 +306,8 @@ test("the banner goes away until there is news, when the user says later", async
   await setUpdateState(page, "update-available");
   await page.getByRole("button", { name: "Later" }).click();
   await expect(page.getByRole("status")).toHaveCount(0);
+  // The button that had the focus went with the banner: the focus goes to the screen.
+  await expect(page.getByRole("main")).toBeFocused();
   // Another window updated the app: that is news.
   await setUpdateState(page, "outdated");
   const banner = page.getByRole("status");
@@ -656,4 +695,157 @@ test("a file that this app cannot restore is refused, with what happened", async
   await refusedWith("The file is damaged or not supported.");
 
   expect(await readNotes(page)).toStrictEqual([]);
+});
+
+test("the reminder asks for a first backup once there is data, when the app opens or comes back", async ({
+  page,
+}) => {
+  await open(page);
+  await expect(page.getByText("No notes yet.")).toBeVisible();
+  await expect(reminder(page)).toHaveCount(0);
+  await write(page, ["Milk"]);
+  await expect(page.getByRole("listitem")).toHaveText(["Milk"]);
+  // Never in the middle of a task: a change does not bring it.
+  await expect(reminder(page)).toHaveCount(0);
+  await comeBack(page);
+  await expect(reminder(page)).toHaveText(/^No backup yet\. Back up your data to keep it safe\./);
+  await page.reload();
+  await expect(reminder(page)).toHaveText(/^No backup yet\./);
+});
+
+test("the reminder comes when the app opens on the settings, which read the status as well", async ({
+  page,
+}) => {
+  await open(page);
+  await write(page, ["Milk"]);
+  // The settings and the reminder both read the status as the page opens.
+  await openSettings(page, BEST_EFFORT);
+  await expect(page.getByRole("region", { name: "Backups" })).toContainText("No backup yet.");
+  await expect(reminder(page)).toHaveText(/^No backup yet\. Back up your data to keep it safe\./);
+});
+
+test("the reminder's backup takes the reminder away, and the focus goes to the screen", async ({
+  page,
+}) => {
+  await open(page);
+  await write(page, ["Milk"]);
+  await page.reload();
+  const backUp = reminder(page).getByRole("button", { name: "Back up" });
+  // A dialog that the user cancels gives the focus back to the reminder, which stays.
+  await backUp.click();
+  const dialog = page.getByRole("dialog", { name: "Back up your data" });
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(backUp).toBeFocused();
+
+  await backUp.click();
+  await dialog.getByRole("button", { name: "Make a plain backup instead" }).click();
+  await page.getByRole("button", { name: "Make a plain backup" }).click();
+  const ready = page.getByRole("dialog", { name: "Your backup is ready" });
+  const file = await downloaded(page, async () => {
+    await ready.getByRole("button", { name: "Save backup" }).click();
+  });
+  expect(await recordsIn(page, file.bytes, null)).toStrictEqual({
+    ok: true,
+    value: { records: { notes: 1 } },
+  });
+  const saved = page.getByRole("dialog", { name: "Backed up" });
+  await expect(saved).toBeVisible();
+  // The reminder goes once the backup is recorded, and its dialog stays.
+  await expect(reminder(page)).toHaveCount(0);
+  await saved.getByRole("button", { name: "Done" }).click();
+  await expect(saved).toBeHidden();
+  // The button that opened the dialog went with the reminder: the focus goes to the screen.
+  await expect(page.getByRole("main")).toBeFocused();
+
+  await openSettings(page, BEST_EFFORT);
+  await expect(page.getByRole("region", { name: "Backups" })).toContainText(
+    "Nothing has changed since then.",
+  );
+  await expect(reminder(page)).toHaveCount(0);
+});
+
+test("the reminder comes a week after the last backup if anything changed, and Later hides it for a day", async ({
+  page,
+}) => {
+  const made = Date.UTC(2026, 9, 6, 10, 0);
+  await page.clock.setFixedTime(made);
+  await openSettings(page, BEST_EFFORT);
+  const section = page.getByRole("region", { name: "Backups" });
+  await write(page, ["Milk"]);
+  await saveAndClose(page, await makePlainBackup(page));
+  await write(page, ["Eggs"]);
+
+  // Six days later, the backup is recent enough.
+  await page.clock.setFixedTime(made + 6 * DAY);
+  await comeBack(page);
+  await expect(section).toContainText("1 change since then.");
+  await expect(reminder(page)).toHaveCount(0);
+
+  // A week later, the reminder comes, with what the backup lacks.
+  await page.clock.setFixedTime(made + 7 * DAY);
+  await comeBack(page);
+  await expect(reminder(page)).toHaveText(
+    /^Your last backup is from \S.*2026, and 1 change is not in it\./,
+  );
+  await reminder(page).getByRole("button", { name: "Later" }).click();
+  await expect(reminder(page)).toHaveCount(0);
+  await expect(page.getByRole("main")).toBeFocused();
+
+  // Later hides it for a day.
+  await write(page, ["Bread"]);
+  await page.clock.setFixedTime(made + 8 * DAY - 1);
+  await comeBack(page);
+  await expect(section).toContainText("2 changes since then.");
+  await expect(reminder(page)).toHaveCount(0);
+  await page.clock.setFixedTime(made + 8 * DAY);
+  await comeBack(page);
+  await expect(reminder(page)).toHaveText(/and 2 changes are not in it\./);
+
+  // A backup made in the settings takes it away.
+  await saveAndClose(page, await makePlainBackup(page));
+  await expect(section).toContainText("Nothing has changed since then.");
+  await expect(reminder(page)).toHaveCount(0);
+});
+
+test("a reminder that the user put off comes again when the app opens again", async ({ page }) => {
+  await open(page);
+  await write(page, ["Milk"]);
+  await page.reload();
+  await reminder(page).getByRole("button", { name: "Later" }).click();
+  await expect(reminder(page)).toHaveCount(0);
+  await page.reload();
+  await expect(reminder(page)).toHaveText(/^No backup yet\./);
+});
+
+test("a restore does not bring the reminder in the middle of the task: the next check does", async ({
+  page,
+}) => {
+  const file = await backupFromAnotherDevice(page, ["Eggs"], null);
+  // From now on, the test sets the time, after that of the other device's backup.
+  const made = Date.now();
+  await page.clock.setFixedTime(made);
+  await openSettings(page, BEST_EFFORT);
+  const section = page.getByRole("region", { name: "Backups" });
+  await write(page, ["Milk"]);
+  await saveAndClose(page, await makePlainBackup(page));
+
+  // A week later, with nothing changed since the backup: no reminder.
+  await page.clock.setFixedTime(made + 7 * DAY);
+  await openSettings(page, BEST_EFFORT);
+  await expect(section).toContainText("Nothing has changed since then.");
+  await expect(reminder(page)).toHaveCount(0);
+
+  await restoreFile(page, file);
+  await page
+    .getByRole("dialog", { name: "Restore this backup?" })
+    .getByRole("button", { name: "Restore" })
+    .click();
+  await page
+    .getByRole("dialog", { name: "Restored" })
+    .getByRole("button", { name: "Done" })
+    .click();
+  await expect(section).toContainText("1 change since then.");
+  await expect(reminder(page)).toHaveCount(0);
+  await comeBack(page);
+  await expect(reminder(page)).toHaveText(/and 1 change is not in it\./);
 });
