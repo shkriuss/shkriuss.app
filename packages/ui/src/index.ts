@@ -15,6 +15,7 @@ if (typeof document !== "undefined" && document.getElementById(PRESSABLE_STYLE_I
 
 export { Banner, type BannerProps } from "./Banner.tsx";
 export { Button, type ButtonProps } from "./Button.tsx";
+export { Checkbox, type CheckboxProps } from "./Checkbox.tsx";
 export { contrastRatio, isHexColor, relativeLuminance } from "./contrast.ts";
 export { Dialog, type DialogProps } from "./Dialog.tsx";
 export { FileButton, type FileButtonProps } from "./FileButton.tsx";

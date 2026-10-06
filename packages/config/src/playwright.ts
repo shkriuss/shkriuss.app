@@ -16,6 +16,7 @@
  * In its tests: `import { expect, test } from "@shkriuss/config/playwright";`
  */
 import {
+  type BrowserContext,
   type Page,
   type PlaywrightTestConfig,
   type Project,
@@ -128,15 +129,20 @@ export interface Security {
   readonly violations: readonly string[];
   /** Call before doing something the browser must refuse; the test then checks the refusal. */
   readonly expectRefusals: () => void;
+  /** Watches another browser context of the test, such as another device's, as its own. */
+  readonly watch: (context: BrowserContext) => Promise<void>;
 }
 
 /**
  * Every test fails if a page reports a CSP or Trusted Types violation, logs an error, throws,
  * or has a request fail (architecture §15). That holds for every page of the test, such as a
- * second tab. Tests that provoke a refusal on purpose call `security.expectRefusals()` and
- * assert what was refused.
+ * second tab, or another device's. Tests that provoke a refusal on purpose call
+ * `security.expectRefusals()` and assert what was refused.
+ *
+ * `otherDevice` is a page of another device: a browser context of its own, with its own
+ * storage, and the options of the test's project, such as its viewport.
  */
-export const test = base.extend<{ security: Security }>({
+export const test = base.extend<{ security: Security; otherDevice: Page }>({
   security: [
     async ({ context }, use, testInfo) => {
       const violations: string[] = [];
@@ -145,14 +151,6 @@ export const test = base.extend<{ security: Security }>({
       const log: string[] = [];
       let refusalsExpected = false;
 
-      await context.exposeBinding("reportSecurityViolation", (_source, text: string) => {
-        violations.push(text);
-      });
-      await context.addInitScript(() => {
-        document.addEventListener("securitypolicyviolation", (event) => {
-          window.reportSecurityViolation?.(`${event.effectiveDirective}: ${event.blockedURI}`);
-        });
-      });
       const watch = (page: Page): void => {
         page.on("console", (message) => {
           log.push(`console ${message.type()}: ${message.text()}`);
@@ -170,14 +168,26 @@ export const test = base.extend<{ security: Security }>({
           problems.push(`request failed: ${request.url()} (${request.failure()?.errorText ?? ""})`);
         });
       };
-      context.pages().forEach(watch);
-      context.on("page", watch);
+      const watchContext = async (watched: BrowserContext): Promise<void> => {
+        await watched.exposeBinding("reportSecurityViolation", (_source, text: string) => {
+          violations.push(text);
+        });
+        await watched.addInitScript(() => {
+          document.addEventListener("securitypolicyviolation", (event) => {
+            window.reportSecurityViolation?.(`${event.effectiveDirective}: ${event.blockedURI}`);
+          });
+        });
+        watched.pages().forEach(watch);
+        watched.on("page", watch);
+      };
+      await watchContext(context);
 
       await use({
         violations,
         expectRefusals: () => {
           refusalsExpected = true;
         },
+        watch: watchContext,
       });
 
       if (testInfo.status !== testInfo.expectedStatus) {
@@ -190,6 +200,15 @@ export const test = base.extend<{ security: Security }>({
     },
     { auto: true },
   ],
+  otherDevice: async ({ browser, security }, use) => {
+    // A context that a test creates has the options of its project too.
+    const context = await browser.newContext();
+    await security.watch(context);
+    await use(await context.newPage());
+    // The test is over: closing the context fails what its pages still had under way.
+    await Promise.all(context.pages().map(async (page) => page.removeAllListeners()));
+    await context.close();
+  },
 });
 
 export { expect };

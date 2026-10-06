@@ -10,17 +10,17 @@ Instructions for Claude Code and for anyone else changing this repository. Read 
 - All user data stays on the user's device. The only way data leaves is a backup file the user exports, encrypted by default. There are no accounts, no sync and no backend.
 - Every app is built from the same shared platform in `packages/`, so apps look and behave alike and fixes reach every app at once.
 
-**Current phase: 1 — Platform v1 (local-only).** Phase 0 is complete: the toolchain, repository checks and CI are in place, and a placeholder hub is live on staging and production. In Phase 1, the specs, the platform's packages, the app template and `create-app` are done; there is no app yet. Next come the hub (step 1.4) and the pilot app (step 1.5). See `docs/roadmap.md`.
+**Current phase: 1 — Platform v1 (local-only).** Phase 0 is complete: the toolchain, repository checks and CI are in place, and a placeholder hub is live on staging and production. In Phase 1, the specs, the platform's packages, the app template and `create-app` are done. The pilot app, Checklists (`apps/checklists`), is built; it goes to staging and real devices next (step 1.5), then the hub (step 1.4). See `docs/roadmap.md`.
 
 ## Read first
 
-| Document               | Use it for                                                                                        |
-| ---------------------- | ------------------------------------------------------------------------------------------------- |
-| `docs/architecture.md` | How the system fits together                                                                      |
-| `docs/threat-model.md` | Security reasoning. Update it when a change adds network use, browser permissions or dependencies |
-| `docs/decisions/`      | Accepted decisions (ADRs). Binding; change one only with a new ADR                                |
-| `docs/roadmap.md`      | Which phase we are in and what comes next                                                         |
-| `docs/specs/`          | Exact formats (data model, backup format), written before the code that implements them           |
+| Document               | Use it for                                                                                                  |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `docs/architecture.md` | How the system fits together                                                                                |
+| `docs/threat-model.md` | Security reasoning. Update it when a change adds network use, browser permissions or dependencies           |
+| `docs/decisions/`      | Accepted decisions (ADRs). Binding; change one only with a new ADR                                          |
+| `docs/roadmap.md`      | Which phase we are in and what comes next                                                                   |
+| `docs/specs/`          | Exact formats (data model, backup format) and each app's spec, written before the code that implements them |
 
 ## Rules
 

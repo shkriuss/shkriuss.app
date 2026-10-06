@@ -1,0 +1,104 @@
+{
+  "format": "shkriuss-backup",
+  "formatVersion": 1,
+  "app": "checklists",
+  "schemaVersion": 1,
+  "exported": "2026-10-06T14:22:45.520Z",
+  "stores": {
+    "lists": [
+      {
+        "id": "01a11198-6a5c-77f4-9aed-ef9dce7bd4b6",
+        "v": 1,
+        "data": {
+          "name": "Groceries"
+        },
+        "clock": {
+          "name": "001791296563801:00000:b4ee8556b96889f4"
+        }
+      },
+      {
+        "id": "01a11198-6e19-77ed-a5f7-9dc1bef842ee",
+        "v": 1,
+        "data": {
+          "name": "Packing"
+        },
+        "clock": {
+          "name": "001791296564761:00000:b4ee8556b96889f4"
+        }
+      },
+      {
+        "id": "01a11198-6f48-7acd-96e1-124a48d92c8d",
+        "v": 1,
+        "data": {},
+        "clock": {},
+        "deleted": "001791296565276:00000:b4ee8556b96889f4"
+      }
+    ],
+    "items": [
+      {
+        "id": "01a11198-6aeb-7d7d-8c67-eb14cce1262d",
+        "v": 1,
+        "data": {
+          "list": "01a11198-6a5c-77f4-9aed-ef9dce7bd4b6",
+          "text": "Milk",
+          "done": true
+        },
+        "clock": {
+          "list": "001791296563942:00000:b4ee8556b96889f4",
+          "text": "001791296563942:00000:b4ee8556b96889f4",
+          "done": "001791296564293:00000:b4ee8556b96889f4"
+        }
+      },
+      {
+        "id": "01a11198-6b4b-791b-bb89-346cd461344b",
+        "v": 1,
+        "data": {
+          "list": "01a11198-6a5c-77f4-9aed-ef9dce7bd4b6",
+          "text": "Eggs"
+        },
+        "clock": {
+          "list": "001791296564042:00000:b4ee8556b96889f4",
+          "text": "001791296564042:00000:b4ee8556b96889f4"
+        }
+      },
+      {
+        "id": "01a11198-6ba8-75cd-9b93-2be1cb435ad7",
+        "v": 1,
+        "data": {
+          "list": "01a11198-6a5c-77f4-9aed-ef9dce7bd4b6",
+          "text": "Bread"
+        },
+        "clock": {
+          "list": "001791296564126:00000:b4ee8556b96889f4",
+          "text": "001791296564459:00000:b4ee8556b96889f4"
+        }
+      },
+      {
+        "id": "01a11198-6c02-797c-87ba-130752ce82d9",
+        "v": 1,
+        "data": {},
+        "clock": {},
+        "deleted": "001791296564592:00000:b4ee8556b96889f4"
+      },
+      {
+        "id": "01a11198-6e7c-7194-aa48-9e3111460625",
+        "v": 1,
+        "data": {
+          "list": "01a11198-6e19-77ed-a5f7-9dc1bef842ee",
+          "text": "Charger"
+        },
+        "clock": {
+          "list": "001791296564859:00000:b4ee8556b96889f4",
+          "text": "001791296564859:00000:b4ee8556b96889f4"
+        }
+      },
+      {
+        "id": "01a11198-6fac-726a-86ff-4be103ed32f8",
+        "v": 1,
+        "data": {},
+        "clock": {},
+        "deleted": "001791296565276:00000:b4ee8556b96889f4"
+      }
+    ]
+  }
+}

@@ -1,5 +1,14 @@
 import "@shkriuss/ui/styles.css";
-import { Banner, Button, Dialog, FileButton, Link, Switch, TextField } from "@shkriuss/ui";
+import {
+  Banner,
+  Button,
+  Checkbox,
+  Dialog,
+  FileButton,
+  Link,
+  Switch,
+  TextField,
+} from "@shkriuss/ui";
 import { StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { createFormat } from "@shkriuss/i18n";
@@ -14,6 +23,7 @@ function Gallery() {
   const [name, setName] = useState("");
   const [checked, setChecked] = useState(false);
   const [reminders, setReminders] = useState(false);
+  const [packed, setPacked] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [deleted, setDeleted] = useState(false);
   const [picked, setPicked] = useState<File>();
@@ -79,6 +89,16 @@ function Gallery() {
           {m.reminders()}
         </Switch>
         <p>{reminders ? m.remindersOn() : m.remindersOff()}</p>
+      </section>
+
+      <section aria-labelledby="checkboxes" className="flex flex-col gap-3">
+        <h2 id="checkboxes" className="text-xl font-semibold">
+          {m.checkboxes()}
+        </h2>
+        <Checkbox isSelected={packed} onChange={setPacked}>
+          {m.charger()}
+        </Checkbox>
+        <p>{packed ? m.packed() : m.notPacked()}</p>
       </section>
 
       <section aria-labelledby="links" className="flex flex-col gap-3">
