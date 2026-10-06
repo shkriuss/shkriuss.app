@@ -39,6 +39,10 @@ overrides:
   # 0.18.2). markdownlint only parses our Markdown in `pnpm check` and never renders math, so
   # katex 0.18 serves it the same. Remove once micromark-extension-math allows katex 0.18.
   katex: 0.18.10
+  # wrangler's local runtime, miniflare, asks for exactly sharp 0.35.4, whose libvips bundles a
+  # librsvg that GHSA-wq5f-xc86-pv6w affects (fixed in 0.35.5). miniflare loads sharp only to
+  # transform images, which no site here asks it to. Remove once miniflare asks for 0.35.5 or later.
+  sharp: 0.35.5
 
 # Supply-chain hardening (ADR 0007).
 # Never install a version published less than 3 days ago. For an urgent security
