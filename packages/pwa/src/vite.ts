@@ -1,9 +1,20 @@
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { SERVICE_WORKER_PLUGIN, type ServiceWorkerApi } from "@shkriuss/edge";
-import { build, type Plugin } from "vite";
+import { build, type HtmlTagDescriptor, type Plugin } from "vite";
+import {
+  type AppManifest,
+  appManifest,
+  MANIFEST_FILE,
+  THEME_COLORS,
+  type WebAppManifestOptions,
+} from "./manifest.ts";
 import { isVersionId } from "./protocol.ts";
 import { serviceWorkerScript } from "./script.ts";
+
+export type { WebAppManifestOptions } from "./manifest.ts";
+export type { IconPath, IconSource } from "./icons/icons.ts";
 
 export interface PwaOptions {
   /**
@@ -89,6 +100,66 @@ export function pwa(options: PwaOptions = {}): Plugin<ServiceWorkerApi> {
           script: (files) => (remove ? code : serviceWorkerScript(code, files, replaces).script),
         };
       },
+    },
+  };
+}
+
+/** A tag for the page's head. */
+function tag(name: string, attrs: Record<string, string>): HtmlTagDescriptor {
+  return { tag: name, attrs, injectTo: "head" };
+}
+
+/**
+ * Vite plugin that gives an app its web app manifest and its icons (architecture §9), which
+ * browsers need to install it:
+ *
+ * ```ts
+ * plugins: [tailwindcss(), react(), webAppManifest({ name, description, accent, icon }), pwa(), edge()];
+ * ```
+ *
+ * It writes `/manifest.webmanifest`, the PNG icons that it lists, the touch icon that iOS puts
+ * on the home screen and the SVG favicon, all from the app's glyph, and links them from the
+ * page, with the theme colors of both themes. The app's `public/` must not have files of the
+ * same names.
+ */
+export function webAppManifest(options: WebAppManifestOptions): Plugin {
+  // Checked and drawn once, when the configuration is read, so that a mistake fails at once.
+  const { manifest, icons }: AppManifest = appManifest(options);
+  const files = [MANIFEST_FILE, ...icons.map(({ fileName }) => fileName)];
+  return {
+    name: "shkriuss:web-app-manifest",
+    apply: "build",
+    configResolved(config) {
+      for (const file of files) {
+        if (config.publicDir !== "" && existsSync(path.join(config.publicDir, file))) {
+          throw new Error(
+            `public/${file} would take the place of the one that webAppManifest() writes; remove it.`,
+          );
+        }
+      }
+    },
+    generateBundle() {
+      this.emitFile({ type: "asset", fileName: MANIFEST_FILE, source: manifest });
+      for (const { fileName, bytes } of icons) {
+        this.emitFile({ type: "asset", fileName, source: bytes });
+      }
+    },
+    transformIndexHtml() {
+      return [
+        tag("link", { rel: "manifest", href: `/${MANIFEST_FILE}` }),
+        tag("link", { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" }),
+        tag("link", { rel: "apple-touch-icon", href: "/apple-touch-icon.png" }),
+        tag("meta", {
+          name: "theme-color",
+          content: THEME_COLORS.light.surface,
+          media: "(prefers-color-scheme: light)",
+        }),
+        tag("meta", {
+          name: "theme-color",
+          content: THEME_COLORS.dark.surface,
+          media: "(prefers-color-scheme: dark)",
+        }),
+      ];
     },
   };
 }

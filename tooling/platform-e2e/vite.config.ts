@@ -1,5 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { edge } from "@shkriuss/edge";
+import { webAppManifest } from "@shkriuss/pwa/vite";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
@@ -24,5 +25,26 @@ function serviceWorker(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [serviceWorker(), tailwindcss(), react(), edge()],
+  plugins: [
+    serviceWorker(),
+    // The manifest and the icons of an app, with the glyph of the hub's favicon: a ring.
+    webAppManifest({
+      name: "Platform tests",
+      shortName: "Platform",
+      description: "The test app of the platform's packages, which is never deployed.",
+      accent: "#1d4ed8",
+      icon: {
+        size: 24,
+        paths: [
+          {
+            d: "M12 2a10 10 0 1 0 0 20a10 10 0 1 0 0-20Z M12 6a6 6 0 1 0 0 12a6 6 0 1 0 0-12Z",
+            fillRule: "evenodd",
+          },
+        ],
+      },
+    }),
+    tailwindcss(),
+    react(),
+    edge(),
+  ],
 });

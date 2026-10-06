@@ -27,6 +27,8 @@ And backup files (`@shkriuss/backup`, [backup format](../../docs/specs/backup-fo
 
 And the app's storage (`appStorage()` of `@shkriuss/pwa`), with the browser's own Storage API: it knows whether the browser keeps its data and how much it stores, its usage grows as it stores data, and it asks the browser to keep its data and shows the answer.
 
+And the web app manifest and the icons that `webAppManifest()` of `@shkriuss/pwa` writes: the page links them, the browser loads them under the CSP, and each icon decodes at its size; Chromium reads the manifest without errors, knows the app by its root, and finds nothing that keeps it from installing the app but the test's private window.
+
 And the formats of the UI (`@shkriuss/i18n`), with each browser's own Unicode data: English with a German device's regional conventions, and English with the device's clock in a region without English formats.
 
 And the components of `@shkriuss/ui`, on the page `/ui`, from `src/gallery.tsx`:

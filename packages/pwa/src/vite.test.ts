@@ -4,8 +4,9 @@ import path from "node:path";
 import { edge, parseManifest } from "@shkriuss/edge";
 import { build, type PluginOption } from "vite";
 import { afterEach, describe, expect, it } from "vitest";
+import { decodePng } from "./icons/test/decode.ts";
 import { BUILD_DATA_PLACEHOLDER, precacheList } from "./script.ts";
-import { pwa } from "./vite.ts";
+import { pwa, webAppManifest } from "./vite.ts";
 
 const roots: string[] = [];
 
@@ -144,5 +145,64 @@ describe("pwa", () => {
     ],
   ])("refuses %s", (_case, options, message) => {
     expect(() => pwa(options)).toThrow(message);
+  });
+});
+
+describe("webAppManifest", () => {
+  const options = {
+    name: "Notes",
+    description: "Notes that stay on this device.",
+    accent: "#1d4ed8",
+    icon: { size: 24, paths: [{ d: "M4 4H20V20H4Z" }] },
+  };
+
+  it("writes the manifest and the icons, links them from the page, and lists their hashes", async () => {
+    const dist = await buildApp(await createApp(), [webAppManifest(options), edge()]);
+    const manifest: unknown = JSON.parse(
+      await readFile(path.join(dist, "manifest.webmanifest"), "utf8"),
+    );
+    expect(manifest).toMatchObject({ id: "/", name: "Notes", display: "standalone" });
+    for (const [file, size] of [
+      ["icon-192.png", 192],
+      ["icon-512.png", 512],
+      ["icon-maskable-192.png", 192],
+      ["icon-maskable-512.png", 512],
+      ["icon-monochrome-512.png", 512],
+      ["apple-touch-icon.png", 180],
+    ] as const) {
+      const { width } = decodePng(await readFile(path.join(dist, file)));
+      expect({ file, width }).toStrictEqual({ file, width: size });
+    }
+    expect(await readFile(path.join(dist, "favicon.svg"), "utf8")).toMatch(/^<svg /);
+
+    const html = await readFile(path.join(dist, "index.html"), "utf8");
+    expect(html).toContain('<link rel="manifest" href="/manifest.webmanifest">');
+    expect(html).toContain('<link rel="icon" href="/favicon.svg" type="image/svg+xml">');
+    expect(html).toContain('<link rel="apple-touch-icon" href="/apple-touch-icon.png">');
+    expect(html).toContain(
+      '<meta name="theme-color" content="#f3f4f6" media="(prefers-color-scheme: light)">',
+    );
+    expect(html).toContain(
+      '<meta name="theme-color" content="#1f2937" media="(prefers-color-scheme: dark)">',
+    );
+
+    // The published hashes cover them, and so the service worker's precache list would too.
+    const hashes = parseManifest(await readFile(path.join(dist, "sha256sums.txt"), "utf8"));
+    expect([...hashes.keys()]).toEqual(
+      expect.arrayContaining(["/manifest.webmanifest", "/icon-512.png", "/favicon.svg"]),
+    );
+  });
+
+  it("fails the build when public/ has a file of the same name", async () => {
+    const root = await createApp();
+    await mkdir(path.join(root, "public"));
+    await writeFile(path.join(root, "public", "favicon.svg"), "<svg/>");
+    await expect(buildApp(root, [webAppManifest(options), edge()])).rejects.toThrow(
+      "public/favicon.svg would take the place",
+    );
+  });
+
+  it("refuses options that make no manifest, when the configuration is read", () => {
+    expect(() => webAppManifest({ ...options, name: "" })).toThrow("needs a name");
   });
 });
