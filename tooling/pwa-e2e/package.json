@@ -1,0 +1,24 @@
+{
+  "name": "@shkriuss/pwa-e2e",
+  "version": "0.0.0",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "scripts": {
+    "build": "vite build --mode a && vite build --mode b && vite build --mode broken && vite build --mode fix && vite build --mode removal",
+    "typecheck": "tsc",
+    "e2e": "playwright test"
+  },
+  "dependencies": {
+    "@shkriuss/pwa": "workspace:*"
+  },
+  "devDependencies": {
+    "@playwright/test": "catalog:",
+    "@shkriuss/config": "workspace:*",
+    "@shkriuss/edge": "workspace:*",
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "wrangler": "catalog:"
+  }
+}

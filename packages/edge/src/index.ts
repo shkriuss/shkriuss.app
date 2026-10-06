@@ -46,6 +46,11 @@ export {
   type Notice,
   type ThirdPartyPackage,
 } from "./licenses.ts";
+export {
+  SERVICE_WORKER_PLUGIN,
+  type ServiceWorkerApi,
+  type ServiceWorkerBundle,
+} from "./service-worker.ts";
 export { edge, type EdgeOptions } from "./vite.ts";
 export {
   SERVICE_WORKER_PATH,

@@ -6,7 +6,8 @@ import { defineConfig, type Plugin } from "vite";
 
 /**
  * Builds `src/sw.ts` into `/sw.js`, the only place a service worker can control the whole app
- * from. `@shkriuss/pwa` will build the real service worker; this one only has to run.
+ * from. It is a stand-in that answers the tests' messages, which the real service worker of
+ * `@shkriuss/pwa` ignores; tooling/pwa-e2e tests the real one.
  */
 function serviceWorker(): Plugin {
   return {

@@ -10,7 +10,8 @@ import type { BrowserFeature } from "./headers.ts";
 import { addScriptIntegrity, cspHashSource, subresourceIntegrity } from "./integrity.ts";
 import { type CollectOptions, LICENSES_FILE, collectLicenses, licensesFile } from "./licenses.ts";
 import { buildManifest, formatManifest, MANIFEST_FILE } from "./manifest.ts";
-import { isWorkerBundlePath, isWorkerScriptPath } from "./worker-scripts.ts";
+import { type ServiceWorkerApi, serviceWorkerApi } from "./service-worker.ts";
+import { isWorkerBundlePath, isWorkerScriptPath, SERVICE_WORKER_PATH } from "./worker-scripts.ts";
 
 /** What Rolldown tells about the modules of a chunk. */
 interface ChunkModules {
@@ -87,9 +88,12 @@ export interface EdgeOptions {
  * It works on the files as written, so the hashes match exactly the bytes that are served.
  *
  * It writes `licenses.txt` too: the license texts of every package of others whose code is in
- * the build, in the page's chunks and in its workers, and the legal comments (`/*! … *\/`) of
- * this repository's files that include material of others. The build fails for a package
- * without a license file and for generated code of unknown origin.
+ * the build, in the page's chunks, in its workers and in its service worker, and the legal
+ * comments (`/*! … *\/`) of this repository's files that include material of others. The build
+ * fails for a package without a license file and for generated code of unknown origin.
+ *
+ * With `pwa()` of `@shkriuss/pwa/vite` among the plugins, it writes the service worker,
+ * `/sw.js`, after every other file, because the service worker lists their hashes.
  *
  * It also keeps every chunk loadable in Safari, and every file name tied to its content
  * (ADR 0010):
@@ -108,6 +112,7 @@ export function edge(options: EdgeOptions = {}): Plugin {
   const stagingHost = appHost(STAGING_DOMAIN, options.appId);
   const workers = new Set<string>();
   let licenseOptions: CollectOptions | undefined;
+  let serviceWorker: ServiceWorkerApi | undefined;
   return {
     name: "shkriuss:edge",
     apply: "build",
@@ -119,6 +124,7 @@ export function edge(options: EdgeOptions = {}): Plugin {
       };
     },
     configResolved(config) {
+      serviceWorker = serviceWorkerApi(config.plugins);
       licenseOptions = {
         root: repositoryRoot(config.root),
         packageOf: (name) =>
@@ -192,14 +198,29 @@ export function edge(options: EdgeOptions = {}): Plugin {
         if (licenseOptions === undefined) {
           throw new Error("The build has no resolved configuration.");
         }
+        const serviceWorkerBundle = await serviceWorker?.bundle();
         const pageModules = outputs.flatMap((output) =>
           output.type === "chunk" ? includedModules(output) : [],
         );
-        const licenses = await collectLicenses([...pageModules, ...workers], licenseOptions);
+        const licenses = await collectLicenses(
+          [...pageModules, ...workers, ...(serviceWorkerBundle?.modules ?? [])],
+          licenseOptions,
+        );
         await writeFile(path.join(directory, LICENSES_FILE), licensesFile(options.appId, licenses));
 
+        // Last of the served files, because it lists the hashes of all the others.
+        if (serviceWorkerBundle !== undefined) {
+          const file = path.join(directory, SERVICE_WORKER_PATH);
+          if (existsSync(file)) {
+            throw new Error(
+              `The build already has ${SERVICE_WORKER_PATH}, which pwa() writes; remove the other.`,
+            );
+          }
+          await writeFile(file, serviceWorkerBundle.script(await buildManifest(directory)));
+        }
+
         // After the HTML is final, so it covers every file as served, including those copied
-        // from public/ such as a service worker. It leaves out _headers, which is not served.
+        // from public/. It leaves out _headers, which is not served.
         const manifest = await buildManifest(directory);
         const rules = appHeaderRules({
           scriptHashes: [...scriptHashes],
