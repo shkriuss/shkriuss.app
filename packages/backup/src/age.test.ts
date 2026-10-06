@@ -1,5 +1,5 @@
 import { Encrypter, armor, generateIdentity, identityToRecipient } from "age-encryption";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { WORK_FACTOR, decrypt, encrypt } from "./age.ts";
 import { BackupError, type BackupErrorCode } from "./errors.ts";
 import { EXAMPLE_PASSPHRASE } from "./test/fixtures.ts";
@@ -99,6 +99,21 @@ describe("decrypt (backup format §3, §5.2)", () => {
     const file = await encrypt(DOCUMENT, PASSPHRASE, FAST);
     const armored = new TextEncoder().encode(armor.encode(file));
     expect(await decrypt(armored, PASSPHRASE)).toStrictEqual(DOCUMENT);
+  });
+
+  it("reads what it decrypts without a Response, which Firefox reports when the stream fails", async () => {
+    // Firefox reports to the console a stream that fails while a Response reads it, even when the
+    // error is handled: a damaged backup would leave an error there.
+    const file = await encrypt(DOCUMENT, PASSPHRASE, FAST);
+    const responses = vi.spyOn(globalThis, "Response");
+    try {
+      expect(await decrypt(file, PASSPHRASE)).toStrictEqual(DOCUMENT);
+      const damaged = withByte(file, file.length - 1, (file.at(-1) ?? 0) ^ 1);
+      expect(await refusal(decrypt(damaged, PASSPHRASE))).toBe("damaged");
+      expect(responses).not.toHaveBeenCalled();
+    } finally {
+      responses.mockRestore();
+    }
   });
 
   it("tells a wrong passphrase, which the user can try again", async () => {
