@@ -124,8 +124,8 @@ Backups are the only way data leaves a device, the only protection against losin
   - It serves the app shell for navigations and never caches anything cross-origin.
   - **Updates:** a new version installs in the background and waits. The app shows "Update available" and reloads when the user agrees, never in the middle of a task.
   - **Kill switch:** a documented, tested procedure replaces a broken service worker without touching user data. It never brings back a build with an older schema version, which could not open the upgraded database (§7).
-- **Install:** Android and desktop Chromium use the browser's install prompt; iOS uses a guided "Add to Home Screen". Where the Web Install API exists (desktop Chromium), the hub can offer one-click install of an app as an enhancement.
-- **iOS:** every installed home-screen app has its own storage, separate from Safari, and Safari may delete a site's data after seven days of Safari use without a visit to that site (installed apps are exempt). In Safari on iOS, apps therefore suggest installing _before_ the user enters data, and offer export → import to move data into the installed app.
+- **Install:** Android and desktop Chromium use the browser's install prompt, which an app shows from its settings when the user asks; iOS uses a guided "Add to Home Screen". Other browsers may install from their menu. Where the Web Install API exists (desktop Chromium), the hub can offer one-click install of an app as an enhancement.
+- **iOS:** every installed home-screen app has its own storage, separate from Safari, and Safari may delete a site's data after seven days of Safari use without a visit to that site (installed apps are exempt). In Safari on iOS, apps therefore suggest installing _before_ the user enters data, with a banner while the device has none, and their settings explain how to move data into the installed app with a backup.
 
 ## 10. User interface
 

@@ -13,13 +13,15 @@ The frame around every app's screens ([architecture §5](../../docs/architecture
 | `BackupSection`    | The backup part of Settings: when the last backup was made and how much has changed since, a dialog that makes one, and one that restores one    |
 | `Restore`          | The button and dialog that restore a backup, which `BackupSection` shows                                                                         |
 | `BackupReminder`   | A banner that reminds the user to back up, with a button that makes the backup at once                                                           |
+| `InstallSection`   | The install part of Settings: the browser's install prompt, how to add the app to the Home Screen of an iPhone or iPad, or that it is installed  |
+| `InstallBanner`    | On iPhone and iPad, a banner that suggests installing the app before anything is entered                                                         |
 
 ## Use
 
 ```tsx
 import "@shkriuss/ui/styles.css";
 import { startServiceWorker } from "@shkriuss/pwa";
-import { AppErrorBoundary, AppFrame, BackupReminder } from "@shkriuss/shell";
+import { AppErrorBoundary, AppFrame, BackupReminder, InstallBanner } from "@shkriuss/shell";
 
 const updates = startServiceWorker();
 
@@ -28,7 +30,12 @@ createRoot(container).render(
     name={m.appName()}
     updates={updates}
     navigation={<Sections />}
-    banners={<BackupReminder app="notes" db={db} />}
+    banners={
+      <>
+        <InstallBanner install={install} db={db} />
+        <BackupReminder app="notes" db={db} />
+      </>
+    }
   >
     <AppErrorBoundary>
       <Screen />
@@ -59,6 +66,11 @@ createRoot(container).render(
   - **Never in the middle of a task:** it checks when the app opens and whenever it comes back into view. A change does not bring it, nor does a restore; a backup, made from the reminder or in the settings, takes it away.
   - **"Back up"** opens the backup dialog at once, as in the settings. After the backup, the reminder is gone, and the focus goes to the screen.
   - **"Later"** hides it until the app opens again, for a day at most. Keeping "Later" over the next opening would need the database to store it, which the [data model](../../docs/specs/data-model.md) §7 does not provide.
+- **Installing** ([architecture §9](../../docs/architecture.md#9-offline-install-and-updates)): `<InstallSection install={appInstall()} />` in the settings, with `appInstall()` from `@shkriuss/pwa`, called when the app starts.
+  - **Chromium:** where the browser offers to install the app, an "Install" button shows its prompt. Once the user answers, the focus goes to the section, whose text says what changed.
+  - **iPhone and iPad:** the section says how to add the app to the Home Screen, and that the app there keeps its own data: to take it along, back it up in the browser, then restore the backup in the app.
+  - **Elsewhere:** the section says that some browsers install apps from their menu.
+  - **Before anything is entered:** on iPhone and iPad, `<InstallBanner install={install} db={db} />`, among the frame's `banners`, suggests installing the app first, while the device has no data. Like the reminder, it checks when the app opens and whenever it comes back into view; "Later" hides it until the app opens again. Once there is data, the backup reminder takes its place.
 - **Styles:** the shell's components use Tailwind's classes, which `@shkriuss/ui/styles.css` covers.
 
 The navigation itself, with TanStack Router, comes with the app template (step 1.3). The rest of the settings and the about screen come later.

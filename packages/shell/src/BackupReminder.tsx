@@ -1,11 +1,12 @@
 import { Banner, Button } from "@shkriuss/ui";
-import { useContext, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useContext, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { FrameContext } from "./frame.ts";
 import { backupStatusOf } from "./backup-status.ts";
 import { m } from "./messages.ts";
 import { LATER, reminderFor } from "./reminder.ts";
 import { type BackupDatabase, useBackupDialog } from "./useBackupDialog.tsx";
+import { useStatusChecks } from "./useStatusChecks.ts";
 
 export interface BackupReminderProps {
   /** The app's id, which names its backup files (backup format §1). */
@@ -33,29 +34,11 @@ export function BackupReminder({ app, db }: BackupReminderProps) {
   // the focus goes to the screen.
   const backup = useBackupDialog(app, db, focusScreen);
 
-  useEffect(() => {
-    let mounted = true;
-    async function check(): Promise<void> {
-      await store.refresh();
-      const checked = store.getStatus();
-      if (mounted && checked?.device !== undefined) {
-        setDue(
-          checked.at >= later.current && reminderFor(checked.device, checked.at) !== undefined,
-        );
-      }
+  useStatusChecks(store, (checked) => {
+    if (checked.device !== undefined) {
+      setDue(checked.at >= later.current && reminderFor(checked.device, checked.at) !== undefined);
     }
-    function onVisibilityChange(): void {
-      if (document.visibilityState === "visible") {
-        void check();
-      }
-    }
-    void check();
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    return () => {
-      mounted = false;
-      document.removeEventListener("visibilitychange", onVisibilityChange);
-    };
-  }, [store]);
+  });
 
   const reminder =
     due && status?.device !== undefined ? reminderFor(status.device, status.at) : undefined;

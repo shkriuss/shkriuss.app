@@ -77,6 +77,13 @@ describe("the shell's text", () => {
       invalid: m.invalid(),
       restoreFailed: m.restoreFailed(),
       close: m.close(),
+      install: m.install(),
+      installApp: m.installApp(),
+      installed: m.installed(),
+      installOffer: m.installOffer(),
+      addToHomeScreen: m.addToHomeScreen(),
+      installFromMenu: m.installFromMenu(),
+      installFirst: m.installFirst(),
       remindFirst: m.remindFirst(),
     }).toStrictEqual({
       skipToContent: "Skip to content",
@@ -156,6 +163,17 @@ describe("the shell's text", () => {
       invalid: "The backup is damaged or was changed, and was not restored.",
       restoreFailed: "The backup could not be restored. Nothing was changed.",
       close: "Close",
+      install: "Install",
+      installApp: "Install",
+      installed: "This app is installed on this device.",
+      installOffer:
+        "Install this app to open it like any other, from your home screen or your list of apps.",
+      addToHomeScreen:
+        "To install this app, open your browser's share menu, then choose Add to Home Screen. The app there keeps its own data, apart from your browser's: to take your data along, back it up here, then restore the backup in the app.",
+      installFromMenu:
+        "Some browsers install apps from their menu, with Install or Add to Home Screen.",
+      installFirst:
+        "Before you start, add this app to your Home Screen: there it keeps its own data, apart from your browser's. Open the share menu, then choose Add to Home Screen.",
       remindFirst: "No backup yet. Back up your data to keep it safe.",
     });
   });
