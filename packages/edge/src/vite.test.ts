@@ -2,10 +2,11 @@ import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { build } from "vite";
+import { build, type Plugin } from "vite";
 import { afterEach, describe, expect, it } from "vitest";
 import { cspHashSource, subresourceIntegrity } from "./integrity.ts";
 import { parseManifest } from "./manifest.ts";
+import { SERVICE_WORKER_PLUGIN, type ServiceWorkerApi } from "./service-worker.ts";
 import { edge, type EdgeOptions } from "./vite.ts";
 
 const roots: string[] = [];
@@ -33,6 +34,22 @@ async function createApp(indexHtml?: string): Promise<string> {
   );
   await writeFile(path.join(root, "style.css"), "body { margin: 0; }\n");
   return root;
+}
+
+/**
+ * A stand-in for pwa() of @shkriuss/pwa/vite: its script lists the files it was given, and its
+ * bundle includes `modules`.
+ */
+function serviceWorker(modules: readonly string[] = []): Plugin<ServiceWorkerApi> {
+  return {
+    name: SERVICE_WORKER_PLUGIN,
+    api: {
+      bundle: async () => ({
+        modules,
+        script: (files) => `self.files = ${JSON.stringify(Object.fromEntries(files))};\n`,
+      }),
+    },
+  };
 }
 
 async function buildApp(root: string, base = "/", options: EdgeOptions = {}): Promise<void> {
@@ -319,6 +336,52 @@ describe("edge", () => {
     );
     const manifest = parseManifest(await readFile(path.join(dist, "sha256sums.txt"), "utf8"));
     expect(manifest.has("/sw.js")).toBe(true);
+  });
+
+  it("writes the service worker last, with the hashes of every other file as served", async () => {
+    const root = await createApp();
+    // A package of others in the service worker's bundle.
+    const library = path.join(root, "node_modules", "offline-library");
+    await mkdir(library, { recursive: true });
+    await writeFile(
+      path.join(library, "package.json"),
+      '{"name": "offline-library", "version": "2.0.0", "license": "MIT"}',
+    );
+    await writeFile(path.join(library, "index.js"), "export const offline = true;\n");
+    await writeFile(path.join(library, "LICENSE"), "MIT License\n");
+    await build({
+      root,
+      configFile: false,
+      logLevel: "silent",
+      plugins: [serviceWorker([path.join(library, "index.js")]), edge()],
+    });
+    const dist = path.join(root, "dist");
+    const script = await readFile(path.join(dist, "sw.js"), "utf8");
+    const manifest = parseManifest(await readFile(path.join(dist, "sha256sums.txt"), "utf8"));
+    const listed: unknown = JSON.parse(script.slice("self.files = ".length, -";\n".length));
+    // The final HTML and licenses.txt among them, but not /sw.js itself.
+    expect(listed).toStrictEqual(
+      Object.fromEntries([...manifest].filter(([file]) => file !== "/sw.js")),
+    );
+    expect(Object.keys(listed ?? {})).toEqual(
+      expect.arrayContaining(["/index.html", "/licenses.txt"]),
+    );
+    expect(manifest.get("/sw.js")).toBe(createHash("sha256").update(script).digest("hex"));
+    expect(await readFile(path.join(dist, "_headers"), "utf8")).toContain(
+      "; trusted-types shkriuss-workers\n",
+    );
+    expect(await readFile(path.join(dist, "licenses.txt"), "utf8")).toContain(
+      "offline-library 2.0.0 (MIT)",
+    );
+  });
+
+  it("fails the build when another file is already /sw.js", async () => {
+    const root = await createApp();
+    await mkdir(path.join(root, "public"));
+    await writeFile(path.join(root, "public", "sw.js"), "self.oninstall = () => {};\n");
+    await expect(
+      build({ root, configFile: false, logLevel: "silent", plugins: [serviceWorker(), edge()] }),
+    ).rejects.toThrow("The build already has /sw.js");
   });
 
   it("leaves a service worker built from source out of the import map", async () => {

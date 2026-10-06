@@ -38,4 +38,4 @@ And the components of `@shkriuss/ui`, on the page `/ui`, from `src/gallery.tsx`:
 | `pnpm --filter @shkriuss/platform-e2e build` | Builds the test app into `dist/` |
 | `pnpm --filter @shkriuss/platform-e2e e2e`   | Runs the tests against the build |
 
-`src/main.ts` hands the tests what they need on `window.platform`. The service worker in `src/sw.ts` is built into `/sw.js` by a small plugin in `vite.config.ts`, until `@shkriuss/pwa` builds the real one.
+`src/main.ts` hands the tests what they need on `window.platform`. The service worker in `src/sw.ts` is built into `/sw.js` by a small plugin in `vite.config.ts`: a stand-in that answers the tests' messages, which the real service worker ignores. `tooling/pwa-e2e` tests the real one, from `@shkriuss/pwa`.

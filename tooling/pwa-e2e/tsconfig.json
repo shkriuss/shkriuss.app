@@ -1,0 +1,7 @@
+{
+  "extends": "@shkriuss/config/tsconfig/app.json",
+  "compilerOptions": {
+    "types": ["node", "vite/client"]
+  },
+  "include": ["src", "e2e", "builds.ts", "server.ts", "vite.config.ts", "playwright.config.ts"]
+}

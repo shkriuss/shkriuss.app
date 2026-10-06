@@ -28,6 +28,8 @@ Every chunk other than the entry script must be loaded with `import()` and may i
 
 The build fails instead of shipping a script without a hash: for example when the HTML has an inline script or loads a script that is not part of the build.
 
+With `pwa()` of `@shkriuss/pwa/vite` among the plugins, the plugin also writes the service worker, `/sw.js`. It writes it after every other file, and before `sha256sums.txt` and `_headers`, because the service worker lists the hash of every other file ([service worker spec](../../docs/specs/service-worker.md)). The build fails if another file is already `/sw.js`.
+
 ## Workers
 
 The Content-Security-Policy accepts only a Trusted Type as the script of a worker or service worker ([ADR 0011](../../docs/decisions/0011-worker-trusted-types-policy.md)). Apps start them with `@shkriuss/edge/workers` only:
@@ -41,7 +43,7 @@ const registration = await registerServiceWorker();
 ```
 
 - **Worker modules** are named `<name>.worker.ts`, in lowercase kebab case, and imported with `?worker&url`. Vite builds each into one file, `/assets/<name>.worker-<hash>.js`, with everything it imports bundled into it: a worker has no import map, so scripts that it loaded itself could not be checked. Vite's `?worker` and `?worker&inline` imports start workers from a plain string or a `blob:` URL, which the browser refuses.
-- **The service worker** is `/sw.js`, so that it controls the whole app.
+- **The service worker** is `/sw.js`, so that it controls the whole app. `@shkriuss/pwa` builds it and registers it.
 - **The policy:** the first time an app starts a worker, `@shkriuss/edge/workers` creates the one Trusted Types policy the Content-Security-Policy allows, `shkriuss-workers`. It turns only those scripts, on the app's own origin and without a query or fragment, into TrustedScriptURLs, and throws a TypeError for any other URL. It creates nothing else: HTML and script sinks keep refusing strings. Never create a policy yourself; the Content-Security-Policy allows no other, and this one only once.
 
 The build fails if a worker would not start: if Vite emits a script file that is not named like a worker, or a module of the page is named like one. Unlike the page's scripts, worker scripts have no integrity hash, because browsers offer no way to check one; `sha256sums.txt` and the build provenance cover them like every other file.

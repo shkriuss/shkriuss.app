@@ -1,0 +1,27 @@
+{
+  "name": "@shkriuss/pwa",
+  "version": "0.0.0",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "exports": {
+    ".": "./browser/index.ts",
+    "./vite": "./src/vite.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc && tsc -p browser && tsc -p worker",
+    "test": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@shkriuss/edge": "workspace:*"
+  },
+  "devDependencies": {
+    "@shkriuss/config": "workspace:*",
+    "@types/node": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
+    "fast-check": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  }
+}
