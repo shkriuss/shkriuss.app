@@ -47,6 +47,13 @@ export {
   type ThirdPartyPackage,
 } from "./licenses.ts";
 export {
+  SECURITY_TXT_DAYS,
+  SECURITY_TXT_FILE,
+  commitDate,
+  securityTxt,
+  type Git,
+} from "./security-txt.ts";
+export {
   SERVICE_WORKER_PLUGIN,
   type ServiceWorkerApi,
   type ServiceWorkerBundle,

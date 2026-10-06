@@ -3,14 +3,21 @@ import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promis
 import path from "node:path";
 import { edge, parseManifest } from "@shkriuss/edge";
 import { build, type PluginOption } from "vite";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { decodePng } from "./icons/test/decode.ts";
 import { BUILD_DATA_PLACEHOLDER, precacheList } from "./script.ts";
 import { pwa, webAppManifest } from "./vite.ts";
 
 const roots: string[] = [];
 
+// The builds run outside a git checkout: edge() takes their commit's date, for security.txt,
+// from here.
+beforeEach(() => {
+  vi.stubEnv("SOURCE_DATE_EPOCH", "1791104400");
+});
+
 afterEach(async () => {
+  vi.unstubAllEnvs();
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 

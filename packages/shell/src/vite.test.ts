@@ -1,12 +1,19 @@
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { build } from "vite";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { type AppConfig, app } from "./vite.ts";
 
 const roots: string[] = [];
 
+// The builds run outside a git checkout: edge() takes their commit's date, for security.txt,
+// from here.
+beforeEach(() => {
+  vi.stubEnv("SOURCE_DATE_EPOCH", "1791104400");
+});
+
 afterEach(async () => {
+  vi.unstubAllEnvs();
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 

@@ -4,6 +4,8 @@
 
 Please report security problems **privately** through GitHub: open this repository's **Security** tab and choose **Report a vulnerability**. Do not open a public issue.
 
+Every site also says so at `/.well-known/security.txt` ([RFC 9116](https://www.rfc-editor.org/rfc/rfc9116)).
+
 Helpful details:
 
 - the affected app or page (URL), browser and device;

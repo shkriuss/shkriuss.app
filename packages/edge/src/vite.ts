@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
 import type { Plugin } from "vite";
@@ -10,6 +10,7 @@ import type { BrowserFeature } from "./headers.ts";
 import { addScriptIntegrity, cspHashSource, subresourceIntegrity } from "./integrity.ts";
 import { type CollectOptions, LICENSES_FILE, collectLicenses, licensesFile } from "./licenses.ts";
 import { buildManifest, formatManifest, MANIFEST_FILE } from "./manifest.ts";
+import { commitDate, SECURITY_TXT_FILE, securityTxt } from "./security-txt.ts";
 import { type ServiceWorkerApi, serviceWorkerApi } from "./service-worker.ts";
 import { isWorkerBundlePath, isWorkerScriptPath, SERVICE_WORKER_PATH } from "./worker-scripts.ts";
 
@@ -91,6 +92,10 @@ export interface EdgeOptions {
  * the build, in the page's chunks, in its workers and in its service worker, and the legal
  * comments (`/*! … *\/`) of this repository's files that include material of others. The build
  * fails for a package without a license file and for generated code of unknown origin.
+ *
+ * And `/.well-known/security.txt`, which says how to report a security problem, on every
+ * origin (RFC 9116). It expires 180 days after the date of the commit that is built, so that
+ * every build of a commit is the same.
  *
  * With `pwa()` of `@shkriuss/pwa/vite` among the plugins, it writes the service worker,
  * `/sw.js`, after every other file, because the service worker lists their hashes.
@@ -207,6 +212,16 @@ export function edge(options: EdgeOptions = {}): Plugin {
           licenseOptions,
         );
         await writeFile(path.join(directory, LICENSES_FILE), licensesFile(options.appId, licenses));
+
+        // Before the service worker, which keeps every served file.
+        const securityTxtPath = path.join(directory, SECURITY_TXT_FILE);
+        if (existsSync(securityTxtPath)) {
+          throw new Error(
+            `The build already has /${SECURITY_TXT_FILE}, which edge() writes; remove the other.`,
+          );
+        }
+        await mkdir(path.dirname(securityTxtPath), { recursive: true });
+        await writeFile(securityTxtPath, securityTxt(await commitDate(licenseOptions.root)));
 
         // Last of the served files, because it lists the hashes of all the others.
         if (serviceWorkerBundle !== undefined) {

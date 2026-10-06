@@ -15,8 +15,12 @@
       "outputs": []
     },
     "build": {
+      // Every build writes its commit's date into /.well-known/security.txt (@shkriuss/edge),
+      // or SOURCE_DATE_EPOCH's. The cache knows files, not commits, so it would give a new
+      // commit an earlier one's file: builds are never cached, and take seconds.
       "dependsOn": ["^build"],
-      "outputs": ["dist/**"]
+      "cache": false,
+      "passThroughEnv": ["SOURCE_DATE_EPOCH"]
     },
     "e2e": {
       "dependsOn": ["build"],

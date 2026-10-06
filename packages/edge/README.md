@@ -59,6 +59,21 @@ The plugin writes `dist/licenses.txt`, which every app serves at `/licenses.txt`
 
 The build fails for a package without a license file, for generated code whose origin it does not know, and for a stylesheet import it cannot follow, such as a URL, so that no build ships code without its license. Files copied from `public/` are not bundled and are not covered: keep material of others out of `public/`.
 
+## `security.txt`
+
+Every build has `/.well-known/security.txt` ([RFC 9116](https://www.rfc-editor.org/rfc/rfc9116)), so that a researcher finds how to report a problem on any of the sites ([hub spec](../../docs/specs/hub.md) §4):
+
+```text
+Contact: https://github.com/shkriuss/shkriuss.app/security/advisories/new
+Policy: https://github.com/shkriuss/shkriuss.app/security/policy
+Preferred-Languages: en
+Expires: <the commit's date plus 180 days>
+```
+
+`Expires` comes from the date of the commit that is built, never from the time of the build: production rebuilds the commit that staging got, maybe days later, and must match it byte for byte. The build takes the date of git's `HEAD`, or `SOURCE_DATE_EPOCH` if it is set, as reproducible builds set it, and fails with neither. Tests that build outside a git checkout set `SOURCE_DATE_EPOCH`. A build that already has the file, as from `public/`, fails too.
+
+Turbo never caches the builds (`turbo.json`): its cache knows the files, not the commit, and would give a new commit the file that an earlier one built, with that commit's date. Every app builds in seconds.
+
 ## Deployment checks
 
 The plugin also writes `dist/sha256sums.txt`: the SHA-256 of every file the deployment serves, in the format `sha256sum` writes. It is published at `/sha256sums.txt`, so anyone can compare what is served with what this repository builds. Follow redirects when you compare: Cloudflare serves `/index.html` at `/`.
