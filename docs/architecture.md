@@ -118,7 +118,7 @@ Backups are the only way data leaves a device, the only protection against losin
 
 ## 9. Offline, install and updates
 
-- **Manifest:** generated per app with a stable `id`, `scope: /`, standalone display, maskable and monochrome icons, theme colors, and shortcuts or `share_target` where an app needs them.
+- **Manifest:** generated per app with a stable `id`, `scope: /`, standalone display, maskable and monochrome icons, theme colors, and shortcuts or `share_target` where an app needs them. Every icon, and the iOS touch icon and the favicon, is drawn at build time from the app's glyph, given as SVG path data, on its accent color, by `@shkriuss/pwa` itself, without dependencies.
 - **Service worker:** our own, in `@shkriuss/pwa` (no Workbox), at `/sw.js`, registered through the platform's Trusted Types policy for worker scripts ([ADR 0011](decisions/0011-worker-trusted-types-policy.md)). The [service worker spec](specs/service-worker.md) gives every detail.
   - It precaches the build output, so the app opens offline instantly.
   - It serves the app shell for navigations and never caches anything cross-origin.

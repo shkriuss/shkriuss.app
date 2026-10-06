@@ -29,6 +29,7 @@ export default playwrightConfig({ port: 4173 });
 ```
 
 - **Browsers:** Chromium, Firefox and WebKit, each at phone and tablet size. In Claude Code cloud sessions, only the preinstalled Chromium runs, which `E2E_CHROMIUM_EXECUTABLE` points to; Firefox and WebKit run in CI.
+- **The whole of Chromium:** the tests run Chromium as people have it, in its new headless mode, and not Playwright's default for tests without a window, its headless shell. That smaller build lacks Chrome's web app layer: it reads no app id from a manifest and never checks whether an app can be installed. CI installs no headless shell, so a test cannot run on it by mistake.
 - **Server:** the production build in `dist/`, served by `wrangler dev` with the generated `_headers`, as Cloudflare serves it. Run `pnpm build` first. Each app has a port of its own (the hub 4173, the platform tests 4174), and Wrangler's devtools use that port plus 5100, so the tests of several apps can run at once.
 - **No retries:** a flaky test is fixed, never retried into passing ([ADR 0008](../../docs/decisions/0008-quality-gates.md)).
 - **Firefox's storage prompt:** Firefox asks the user before it keeps a site's data until the user deletes it (`navigator.storage.persist()`), which a test cannot answer. Firefox's own testing preferences answer yes instead.

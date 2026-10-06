@@ -1,6 +1,6 @@
 # @shkriuss/pwa
 
-The service worker of every app: it makes the app work offline after its first load, and lets the user decide when a new version takes over. It implements the [service worker spec](../../docs/specs/service-worker.md) ([architecture §9](../../docs/architecture.md#9-offline-install-and-updates)). It also tells the app whether the browser keeps its data, and asks the browser to keep it. The web app manifest and install prompts come later.
+The service worker of every app: it makes the app work offline after its first load, and lets the user decide when a new version takes over. It implements the [service worker spec](../../docs/specs/service-worker.md) ([architecture §9](../../docs/architecture.md#9-offline-install-and-updates)). It also gives the app its web app manifest and icons, which browsers need to install it, and tells the app whether the browser keeps its data, and asks the browser to keep it. Install prompts come later.
 
 ## Use
 
@@ -37,6 +37,36 @@ updates.applyUpdate();
 
 React's `useSyncExternalStore(updates.subscribe, updates.getState)` takes the store's functions as they are. The page asks the browser to look for a new version whenever it becomes visible, at most once an hour; `checkForUpdate()` asks at once.
 
+## Manifest and icons
+
+`webAppManifest()` writes the app's web app manifest and every icon, from the app's glyph and accent color ([architecture §9](../../docs/architecture.md#9-offline-install-and-updates)), and links them from the page:
+
+```ts
+import { webAppManifest } from "@shkriuss/pwa/vite";
+
+webAppManifest({
+  name: "Notes",
+  description: "Notes that stay on this device.",
+  accent: "#1d4ed8",
+  // Filled SVG paths in a square of 24 units, as in viewBox="0 0 24 24".
+  icon: { size: 24, paths: [{ d: "M5 3h14v18H5Z M8 7h8v2H8Z", fillRule: "evenodd" }] },
+});
+```
+
+| File                                               | What it is                                                                                         |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `/manifest.webmanifest`                            | The manifest: `id` and `start_url` `/`, standalone, the platform's theme colors, and the PNG icons |
+| `/icon-192.png`, `/icon-512.png`                   | The glyph on a rounded square of the accent color, in its middle 60%, as desktops show apps        |
+| `/icon-maskable-192.png`, `/icon-maskable-512.png` | The accent to every edge, with the glyph in the middle 50%, inside the safe zone of every mask     |
+| `/icon-monochrome-512.png`                         | The glyph alone, in white, which Android tints for themed icons                                    |
+| `/apple-touch-icon.png`                            | 180 pixels, the accent to every edge, which iOS rounds itself, for the home screen                 |
+| `/favicon.svg`                                     | The glyph on a rounded square, as the 512-pixel icon                                               |
+
+- **The glyph** is SVG path data, filled by the non-zero or the even-odd rule: an outline becomes a filled path with "outline stroke" in any SVG editor. The build refuses path data that does not follow SVG's grammar, and paths that leave the glyph's square.
+- **The page** gets `<link rel="manifest">`, the favicon, the touch icon, and a `theme-color` for each theme: the surface of the frame's header, so that an installed app's title bar and its header look like one.
+- **Names:** `shortName`, which a home screen shows under the icon, has at most 12 characters; it is `name` if left out.
+- **No dependencies:** the icons are drawn by this package, with exact area coverage for smooth edges, and written as PNG with Node's zlib, so the same glyph always gives the same bytes.
+
 ## Storage
 
 `appStorage()` says whether the browser keeps the app's data until the user deletes it, and how much the app stores ([architecture §7](../../docs/architecture.md#7-data-layer)). `StorageSection` of `@shkriuss/shell` shows it in the app's settings.
@@ -64,19 +94,21 @@ const kept = await storage.requestPersistence();
 
 `pwa()` bundles `worker/sw.ts` into `/sw.js`: one classic script that contains the build's version id, its precache list and the versions it replaces (spec §2). Every file that `sha256sums.txt` lists is in the precache list, with its SHA-256, so the service worker keeps a file only if it matches the hash that the build published. The version id is the start of the SHA-256 of `/sw.js` itself, so every change gives a new one.
 
-| Module               | What it does                                                                                                       |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `src/protocol.ts`    | What the build, the service worker and the page share: the data in `/sw.js`, the cache names, the activate message |
-| `src/script.ts`      | The precache list and the URL of each file (§2.1), the version id (§2.2) and `/sw.js` (§2.3)                       |
-| `src/vite.ts`        | `pwa()`, the Vite plugin                                                                                           |
-| `worker/worker.ts`   | The service worker: install (§4), activate (§5), fetch (§6), messages (§10), and the one that removes itself (§9)  |
-| `worker/sw.ts`       | Starts the service worker with the build's data                                                                    |
-| `worker/remove.ts`   | Starts the service worker that removes itself                                                                      |
-| `browser/updates.ts` | The page's side: registration (§3) and updates (§7)                                                                |
-| `browser/storage.ts` | The app's storage: whether the browser keeps the data, and how much there is                                       |
-| `browser/index.ts`   | `startServiceWorker()` and `appStorage()`, with the browser's globals                                              |
+| Module               | What it does                                                                                                                 |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `src/protocol.ts`    | What the build, the service worker and the page share: the data in `/sw.js`, the cache names, the activate message           |
+| `src/script.ts`      | The precache list and the URL of each file (§2.1), the version id (§2.2) and `/sw.js` (§2.3)                                 |
+| `src/vite.ts`        | `pwa()` and `webAppManifest()`, the Vite plugins                                                                             |
+| `src/manifest.ts`    | The web app manifest                                                                                                         |
+| `src/icons/`         | The icons: SVG path data (`path.ts`), filling with anti-aliasing (`raster.ts`), PNG files (`png.ts`), each icon (`icons.ts`) |
+| `worker/worker.ts`   | The service worker: install (§4), activate (§5), fetch (§6), messages (§10), and the one that removes itself (§9)            |
+| `worker/sw.ts`       | Starts the service worker with the build's data                                                                              |
+| `worker/remove.ts`   | Starts the service worker that removes itself                                                                                |
+| `browser/updates.ts` | The page's side: registration (§3) and updates (§7)                                                                          |
+| `browser/storage.ts` | The app's storage: whether the browser keeps the data, and how much there is                                                 |
+| `browser/index.ts`   | `startServiceWorker()` and `appStorage()`, with the browser's globals                                                        |
 
-The service worker and the page's side take what they use of the browser as a parameter, so that the unit tests run them against fakes. `tooling/pwa-e2e` tests the service worker in Chromium, Firefox and WebKit, and `tooling/platform-e2e` the storage.
+The service worker and the page's side take what they use of the browser as a parameter, so that the unit tests run them against fakes. `tooling/pwa-e2e` tests the service worker in Chromium, Firefox and WebKit, and `tooling/platform-e2e` the storage and the manifest. The icons' unit tests are property-based: a shape covers exactly its area, whichever way it goes round, and an arc stays on its ellipse.
 
 ## Replacing a broken version
 
