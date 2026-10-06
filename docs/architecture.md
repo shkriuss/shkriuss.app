@@ -119,7 +119,7 @@ Backups are the only way data leaves a device, the only protection against losin
 ## 9. Offline, install and updates
 
 - **Manifest:** generated per app with a stable `id`, `scope: /`, standalone display, maskable and monochrome icons, theme colors, and shortcuts or `share_target` where an app needs them.
-- **Service worker:** our own, in `@shkriuss/pwa` (no Workbox), at `/sw.js`, registered through the platform's Trusted Types policy for worker scripts ([ADR 0011](decisions/0011-worker-trusted-types-policy.md)).
+- **Service worker:** our own, in `@shkriuss/pwa` (no Workbox), at `/sw.js`, registered through the platform's Trusted Types policy for worker scripts ([ADR 0011](decisions/0011-worker-trusted-types-policy.md)). The [service worker spec](specs/service-worker.md) gives every detail.
   - It precaches the build output, so the app opens offline instantly.
   - It serves the app shell for navigations and never caches anything cross-origin.
   - **Updates:** a new version installs in the background and waits. The app shows "Update available" and reloads when the user agrees, never in the middle of a task.
