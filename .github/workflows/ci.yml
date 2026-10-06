@@ -59,7 +59,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       # The browser builds that match the pinned Playwright version, with their system libraries.
-      - run: pnpm --filter @shkriuss/hub exec playwright install --with-deps chromium firefox webkit
+      # Not Chromium's headless shell, so that no test can run on it instead of the whole browser.
+      - run: pnpm --filter @shkriuss/hub exec playwright install --with-deps --no-shell chromium firefox webkit
       - run: pnpm e2e
 
   # Every merge to main goes to staging once every check has passed (ADR 0006).

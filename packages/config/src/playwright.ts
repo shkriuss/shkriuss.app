@@ -47,12 +47,25 @@ const firefox = {
   },
 };
 
+/**
+ * Chromium as people have it: the whole browser, in its new headless mode. Playwright otherwise
+ * runs its headless shell, a smaller build without Chrome's web app layer, which reads no app
+ * id from a manifest and never checks whether an app can be installed.
+ */
+const chromium = { channel: "chromium" };
+
 // The real devices are an iPhone, a Pixel and a Pixel Tablet (architecture §14).
 const allProjects: Project[] = [
-  { name: "chromium-phone", use: { ...devices["Pixel 10"] } },
+  { name: "chromium-phone", use: { ...devices["Pixel 10"], ...chromium } },
   {
     name: "chromium-tablet",
-    use: { ...devices["Desktop Chrome"], viewport: tablet, deviceScaleFactor: 2, hasTouch: true },
+    use: {
+      ...devices["Desktop Chrome"],
+      ...chromium,
+      viewport: tablet,
+      deviceScaleFactor: 2,
+      hasTouch: true,
+    },
   },
   { name: "firefox-phone", use: { ...firefox, viewport: phone } },
   { name: "firefox-tablet", use: { ...firefox, viewport: tablet } },
