@@ -6,6 +6,8 @@ const messages = defineMessages(() => ({
   description: () => "Notes that stay on this device, to test the shell.",
   notes: () => "Notes",
   settings: () => "Settings",
+  archive: () => "Archive",
+  archiveEmpty: () => "Nothing is archived.",
   loading: () => "Loading the notes…",
   empty: () => "No notes yet.",
   failed: () => "The notes could not be read.",

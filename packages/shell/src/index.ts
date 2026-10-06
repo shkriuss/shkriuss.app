@@ -1,12 +1,15 @@
 export { AboutSection, type AboutSectionProps } from "./AboutSection.tsx";
-export { AppError, AppErrorBoundary, type AppErrorBoundaryProps } from "./AppError.tsx";
+export { AppError } from "./AppError.tsx";
 export { AppFrame, type AppFrameProps } from "./AppFrame.tsx";
 export { BackupReminder, type BackupReminderProps } from "./BackupReminder.tsx";
 export { BackupSection, type BackupSectionProps } from "./BackupSection.tsx";
 export { InstallBanner, type InstallBannerProps } from "./InstallBanner.tsx";
 export { InstallSection, type InstallSectionProps } from "./InstallSection.tsx";
+export { NotFound } from "./NotFound.tsx";
 export { observedStore, type Observed, type ObservedStore } from "./observed.ts";
 export { Restore, type RestoreDatabase, type RestoreProps } from "./Restore.tsx";
+export { Screen, type ScreenProps } from "./Screen.tsx";
+export { ScreenLink } from "./ScreenLink.tsx";
 export { StorageSection, type StorageSectionProps } from "./StorageSection.tsx";
 export { UpdateBanner, type UpdateBannerProps } from "./UpdateBanner.tsx";
 export { type BackupDatabase } from "./useBackupDialog.tsx";

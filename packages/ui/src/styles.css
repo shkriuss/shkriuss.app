@@ -75,6 +75,11 @@
     text-underline-offset: 0.15em;
   }
 
+  /* The link to the page that shows, as in a navigation, which screen readers say too. */
+  a[aria-current="page"] {
+    font-weight: 600;
+  }
+
   /* A focus outline that keyboard users can always see (WCAG 2.4.7). */
   :focus-visible {
     outline: 2px solid var(--color-focus);

@@ -7,6 +7,9 @@ describe("the shell's text", () => {
     expect({
       skipToContent: m.skipToContent(),
       navigation: m.navigation(),
+      settings: m.settings(),
+      notFoundTitle: m.notFoundTitle(),
+      notFoundText: m.notFoundText(),
       updateAvailable: m.updateAvailable(),
       update: m.update(),
       later: m.later(),
@@ -97,6 +100,9 @@ describe("the shell's text", () => {
     }).toStrictEqual({
       skipToContent: "Skip to content",
       navigation: "Sections",
+      settings: "Settings",
+      notFoundTitle: "Page not found",
+      notFoundText: "This app has no page at this address.",
       updateAvailable: "A new version of the app is ready.",
       update: "Update",
       later: "Later",
@@ -256,6 +262,17 @@ describe("the shell's text", () => {
     expect(messages(createFormat("de-DE", { timeZone: "UTC" })).remindDue(made, 1234)).toBe(
       "Your last backup is from 29 Sept 2026, and 1.234 changes are not in it.",
     );
+  });
+
+  it("titles the page with the screen and the app, or the app alone on a screen named after it", () => {
+    expect(m.pageTitle("Settings", "Notes")).toBe("Settings – Notes");
+    expect(m.pageTitle("Notes", "Notes")).toBe("Notes");
+    expect(m.pageTitle("Settings", undefined)).toBe("Settings");
+  });
+
+  it("leads from a page that does not exist to the app", () => {
+    expect(m.goHome("Notes")).toBe("Go to Notes");
+    expect(m.goHome(undefined)).toBe("Go to the start page");
   });
 
   it("names another app whose backup it is", () => {

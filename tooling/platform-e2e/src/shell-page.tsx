@@ -8,26 +8,37 @@ import {
 } from "@shkriuss/pwa";
 import {
   AboutSection,
-  AppErrorBoundary,
+  AppError,
   AppFrame,
   BackupReminder,
   BackupSection,
   InstallBanner,
   InstallSection,
+  NotFound,
+  Screen,
+  ScreenLink,
   StorageSection,
   useObserved,
 } from "@shkriuss/shell";
-import { Button, Link } from "@shkriuss/ui";
+import { Button } from "@shkriuss/ui";
+import {
+  createRootRoute,
+  createRoute,
+  createRouter,
+  Outlet,
+  RouterProvider,
+} from "@tanstack/react-router";
 import { StrictMode, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { BACKUP_APP } from "./backups.ts";
 import { current, notesDatabase } from "./data.ts";
 import { m } from "./shell-messages.ts";
 
-// The shell of @shkriuss/shell around a screen of notes, at /shell, and around the settings, at
-// /shell/settings, for the end-to-end tests in e2e/shell.spec.ts. The notes, their backups and the
-// reminder to back them up are the data layer's, and installing is the browser's; the update state
-// and the storage are the tests' to set.
+// The shell of @shkriuss/shell around a screen of notes, at /shell, an archive, at /shell/archive,
+// and the settings, at /shell/settings, for the end-to-end tests in e2e/shell.spec.ts. Its routes
+// are declared in code, as every app's are (ADR 0013), under /shell. The notes, their backups and
+// the reminder to back them up are the data layer's, and installing is the browser's; the update
+// state and the storage are the tests' to set.
 
 type NotesDatabase = Awaited<ReturnType<typeof notesDatabase>>;
 
@@ -153,31 +164,85 @@ function Notes({ db }: { readonly db: NotesDatabase }) {
     );
   }
   return (
-    <div className="flex flex-col items-start gap-4">
-      <h1 className="text-2xl font-semibold">{m.notes()}</h1>
-      {content}
-      <Button
-        onPress={() => {
-          setBroken(true);
-        }}
-      >
-        {m.breakScreen()}
-      </Button>
-    </div>
+    <Screen title={m.notes()}>
+      <div className="flex flex-col items-start gap-4">
+        {content}
+        <Button
+          onPress={() => {
+            setBroken(true);
+          }}
+        >
+          {m.breakScreen()}
+        </Button>
+      </div>
+    </Screen>
+  );
+}
+
+function Archive() {
+  return (
+    <Screen title={m.archive()}>
+      <p>{m.archiveEmpty()}</p>
+    </Screen>
   );
 }
 
 function Settings({ db }: { readonly db: NotesDatabase }) {
   const { schemas } = current();
   return (
-    <div className="flex flex-col items-start gap-6">
-      <h1 className="text-2xl font-semibold">{m.settings()}</h1>
-      <InstallSection install={appInstall()} />
-      <StorageSection storage={storage} />
-      <BackupSection app={BACKUP_APP} db={db} schemas={schemas} />
-      <AboutSection name={m.app()} description={m.description()} />
-    </div>
+    <Screen title={m.settings()}>
+      <div className="flex flex-col items-start gap-6">
+        <InstallSection install={appInstall()} />
+        <StorageSection storage={storage} />
+        <BackupSection app={BACKUP_APP} db={db} schemas={schemas} />
+        <AboutSection name={m.app()} description={m.description()} />
+      </div>
+    </Screen>
   );
+}
+
+/** The routes of the shell's page, in code (ADR 0013), under /shell. */
+function shellRouter(db: NotesDatabase) {
+  const root = createRootRoute({
+    component: () => (
+      <AppFrame
+        name={m.app()}
+        updates={updates}
+        navigation={<ScreenLink to="/archive">{m.archive()}</ScreenLink>}
+        banners={
+          <>
+            <InstallBanner install={appInstall()} db={db} />
+            <BackupReminder app={BACKUP_APP} db={db} />
+          </>
+        }
+      >
+        <Outlet />
+      </AppFrame>
+    ),
+  });
+  const notes = createRoute({
+    getParentRoute: () => root,
+    path: "/",
+    component: () => <Notes db={db} />,
+  });
+  const archive = createRoute({ getParentRoute: () => root, path: "/archive", component: Archive });
+  const settings = createRoute({
+    getParentRoute: () => root,
+    path: "/settings",
+    component: () => <Settings db={db} />,
+  });
+  return createRouter({
+    routeTree: root.addChildren([notes, archive, settings]),
+    basepath: "/shell",
+    defaultErrorComponent: AppError,
+    defaultNotFoundComponent: NotFound,
+  });
+}
+
+declare module "@tanstack/react-router" {
+  interface Register {
+    router: ReturnType<typeof shellRouter>;
+  }
 }
 
 export async function showShellPage(): Promise<void> {
@@ -187,29 +252,11 @@ export async function showShellPage(): Promise<void> {
   const db = await notesDatabase();
   const container = document.createElement("div");
   document.body.replaceChildren(container);
-  // The error boundary shows a screen that fails; nothing reads a console here.
+  const router = shellRouter(db);
+  // The router shows a screen that fails; nothing reads a console here.
   createRoot(container, { onCaughtError: () => undefined }).render(
     <StrictMode>
-      <AppFrame
-        name={m.app()}
-        updates={updates}
-        banners={
-          <>
-            <InstallBanner install={appInstall()} db={db} />
-            <BackupReminder app={BACKUP_APP} db={db} />
-          </>
-        }
-        navigation={
-          <>
-            <Link href="/shell">{m.notes()}</Link>
-            <Link href="/shell/settings">{m.settings()}</Link>
-          </>
-        }
-      >
-        <AppErrorBoundary>
-          {location.pathname === "/shell/settings" ? <Settings db={db} /> : <Notes db={db} />}
-        </AppErrorBoundary>
-      </AppFrame>
+      <RouterProvider router={router} />
     </StrictMode>,
   );
 }

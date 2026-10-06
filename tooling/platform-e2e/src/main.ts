@@ -40,7 +40,8 @@ if (location.pathname === "/ui") {
   showGallery();
 }
 
-// The shell's pages, around a screen of notes and around the settings.
-if (location.pathname === "/shell" || location.pathname === "/shell/settings") {
+// The shell's pages, around a screen of notes, an archive and the settings; any other address
+// under /shell is a page that the app does not have.
+if (location.pathname === "/shell" || location.pathname.startsWith("/shell/")) {
   void showShellPage();
 }

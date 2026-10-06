@@ -314,11 +314,125 @@ for (const colorScheme of ["light", "dark"] as const) {
 
 test("the frame has the app's name, its sections and the screen as landmarks", async ({ page }) => {
   await open(page);
-  await expect(page.getByRole("banner")).toContainText("Notes");
+  // The app's name leads to its first screen, which shows: "/" in an app, which has no base path.
+  const home = page.getByRole("banner").getByRole("link", { name: "Notes", exact: true });
+  await expect(home).toHaveAttribute("href", "/shell/");
+  await expect(home).toHaveAttribute("aria-current", "page");
+  // The app's own sections, then the settings, which every app has.
   const sections = page.getByRole("navigation", { name: "Sections" });
-  await expect(sections.getByRole("link", { name: "Notes" })).toBeVisible();
-  await expect(sections.getByRole("link", { name: "Settings" })).toBeVisible();
+  await expect(sections.getByRole("link")).toHaveText(["Archive", "Settings"]);
+  await expect(sections.getByRole("link", { name: "Settings" })).toHaveAttribute(
+    "href",
+    "/shell/settings",
+  );
   await expect(page.getByRole("main")).toContainText("No notes yet.");
+  await expect(page).toHaveTitle("Notes");
+});
+
+/** Marks the page, so that `marked()` tells whether it has loaded again since. */
+async function mark(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    Reflect.set(window, "marked", true);
+  });
+}
+
+async function marked(page: Page): Promise<boolean> {
+  return page.evaluate(() => Reflect.get(window, "marked") === true);
+}
+
+test("a link opens another screen without loading the page, and its heading takes the focus", async ({
+  page,
+}) => {
+  await open(page);
+  await mark(page);
+  const sections = page.getByRole("navigation", { name: "Sections" });
+  await sections.getByRole("link", { name: "Settings" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeFocused();
+  expect(new URL(page.url()).pathname).toBe("/shell/settings");
+  await expect(page).toHaveTitle("Settings – Notes");
+  await expect(sections.getByRole("link", { name: "Settings" })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+  const home = page.getByRole("banner").getByRole("link", { name: "Notes", exact: true });
+  await expect(home).not.toHaveAttribute("aria-current");
+  await home.click();
+  await expect(page.getByRole("heading", { level: 1, name: "Notes" })).toBeFocused();
+  await expect(page).toHaveTitle("Notes");
+  expect(await marked(page)).toBe(true);
+});
+
+test("a keyboard user follows a link with Enter, and the page does not load again", async ({
+  page,
+}) => {
+  await open(page);
+  await mark(page);
+  await page
+    .getByRole("navigation", { name: "Sections" })
+    .getByRole("link", { name: "Archive" })
+    .focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("heading", { level: 1, name: "Archive" })).toBeFocused();
+  await expect(page.getByRole("main")).toContainText("Nothing is archived.");
+  expect(await marked(page)).toBe(true);
+});
+
+test("the browser's back and forward buttons go through the screens", async ({ page }) => {
+  await open(page);
+  await mark(page);
+  const sections = page.getByRole("navigation", { name: "Sections" });
+  await sections.getByRole("link", { name: "Archive" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Archive" })).toBeFocused();
+  await sections.getByRole("link", { name: "Settings" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeFocused();
+  await page.goBack();
+  await expect(page.getByRole("heading", { level: 1, name: "Archive" })).toBeFocused();
+  await expect(page).toHaveTitle("Archive – Notes");
+  await page.goBack();
+  await expect(page.getByRole("heading", { level: 1, name: "Notes" })).toBeFocused();
+  await page.goForward();
+  await expect(page.getByRole("heading", { level: 1, name: "Archive" })).toBeFocused();
+  expect(await marked(page)).toBe(true);
+});
+
+test("a link that the user opens with a modifier key is the browser's, as for a new tab", async ({
+  page,
+}) => {
+  await open(page);
+  const settings = page
+    .getByRole("navigation", { name: "Sections" })
+    .getByRole("link", { name: "Settings" });
+  const prevented = await settings.evaluate((link) => {
+    let defaultPrevented: boolean | undefined;
+    // After the app's handlers, which React listens with at its root: the click stays here.
+    addEventListener(
+      "click",
+      (event) => {
+        defaultPrevented = event.defaultPrevented;
+        event.preventDefault();
+      },
+      { once: true },
+    );
+    link.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, ctrlKey: true }));
+    return defaultPrevented;
+  });
+  expect(prevented).toBe(false);
+  await expect(page.getByRole("heading", { level: 1, name: "Notes" })).toBeVisible();
+  expect(new URL(page.url()).pathname).toBe("/shell");
+});
+
+test("an address that the app does not have says so, and leads to the app", async ({ page }) => {
+  await page.goto("/shell/nowhere");
+  await expect(page.getByRole("heading", { level: 1, name: "Page not found" })).toBeVisible();
+  await expect(page.getByRole("main")).toContainText("This app has no page at this address.");
+  await expect(page).toHaveTitle("Page not found – Notes");
+  // In the frame, with its navigation.
+  await expect(page.getByRole("navigation", { name: "Sections" })).toBeVisible();
+  const results = await new AxeBuilder({ page }).analyze();
+  expect(results.violations).toEqual([]);
+  await page.getByRole("main").getByRole("link", { name: "Go to Notes" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Notes" })).toBeFocused();
+  expect(new URL(page.url()).pathname).toBe("/shell/");
 });
 
 test("a keyboard user can skip to the screen first", async ({ page, browserName }) => {
@@ -382,6 +496,7 @@ test("a screen that fails shows what happened in the frame, and reloads the app"
   await page.getByRole("button", { name: "Break this screen" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Something went wrong" })).toBeVisible();
   await expect(page.getByRole("main")).toContainText("Your data stays on this device.");
+  await expect(page).toHaveTitle("Something went wrong – Notes");
   // The frame stays, with the update banner: a new version may fix it.
   await expect(page.getByRole("banner")).toContainText("Notes");
   await expect(page.getByRole("status")).toContainText("A new version of the app is ready.");
