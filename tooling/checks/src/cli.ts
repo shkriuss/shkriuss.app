@@ -9,10 +9,12 @@ import path from "node:path";
 import { checkManifest, isWorkspaceManifest } from "./dependencies.ts";
 import { checkDocLinks } from "./doc-links.ts";
 import { checkHtml } from "./html.ts";
+import { checkImports } from "./imports.ts";
 import { checkLicenses, parseLicensePolicy, readRuntimeLicenses } from "./licenses.ts";
 import { checkMarkdown, parseMarkdownConfig } from "./markdown.ts";
 import { formatViolation, type Violation } from "./report.ts";
 import { listFiles, readText, repoRoot } from "./repo.ts";
+import { checkAppStructure } from "./structure.ts";
 import { checkWranglerConfig, isWranglerConfig, missingWranglerConfigs } from "./wrangler.ts";
 
 interface Check {
@@ -62,6 +64,15 @@ const CHECKS: Readonly<Record<string, Check>> = {
         .filter(isWranglerConfig)
         .flatMap((file) => checkWranglerConfig(file, readText(file))),
     ],
+  },
+  structure: {
+    description:
+      "apps keep the app template's files, their id and build, and a test server of their own",
+    run: (files) => checkAppStructure(files, (file) => readText(file)),
+  },
+  imports: {
+    description: "relative imports stay in their package, and nothing imports an app",
+    run: (files) => checkImports(files, (file) => readText(file)),
   },
   "doc-links": {
     description: "relative links and #anchors in Markdown files resolve",
