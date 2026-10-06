@@ -226,6 +226,64 @@ async function saveAndClose(page: Page, ready: Locator): Promise<void> {
 
 const DAY = 24 * 60 * 60 * 1000;
 
+/** What the stand-in for Chromium's install prompt saw, and the function that answers it. */
+interface InstallPrompt {
+  shown: number;
+  answer?: (outcome: "accepted" | "dismissed") => void;
+}
+
+declare global {
+  interface Window {
+    installPrompt?: InstallPrompt;
+  }
+}
+
+/**
+ * The browser offers to install the app, as Chromium does with `beforeinstallprompt`, which test
+ * browsers never fire: the event's prompt counts how often it shows, and waits for
+ * `answerInstall()`.
+ */
+async function offerInstall(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const prompt: InstallPrompt = { shown: 0 };
+    window.installPrompt = prompt;
+    const userChoice = new Promise<{ outcome: string }>((resolve) => {
+      prompt.answer = (outcome) => {
+        resolve({ outcome });
+      };
+    });
+    window.dispatchEvent(
+      Object.assign(new Event("beforeinstallprompt", { cancelable: true }), {
+        prompt: async () => {
+          prompt.shown += 1;
+        },
+        userChoice,
+      }),
+    );
+  });
+}
+
+async function answerInstall(page: Page, outcome: "accepted" | "dismissed"): Promise<void> {
+  await page.evaluate((answer) => {
+    window.installPrompt?.answer?.(answer);
+  }, outcome);
+}
+
+/**
+ * From the next page on, the browser is one on iPhone or iPad, whose `navigator.standalone` says
+ * whether the page runs from the Home Screen.
+ */
+async function onIPhone(page: Page, homeScreen: boolean): Promise<void> {
+  await page.addInitScript((value) => {
+    Object.defineProperty(navigator, "standalone", { configurable: true, value });
+  }, homeScreen);
+}
+
+/** The banner that suggests installing the app before anything is entered. */
+function installFirst(page: Page): Locator {
+  return page.getByRole("status").filter({ hasText: /^Before you start, add this app/ });
+}
+
 for (const colorScheme of ["light", "dark"] as const) {
   test(`the frame and its banners have no accessibility violations in the ${colorScheme} theme`, async ({
     page,
@@ -848,4 +906,83 @@ test("a restore does not bring the reminder in the middle of the task: the next 
   await expect(reminder(page)).toHaveCount(0);
   await comeBack(page);
   await expect(reminder(page)).toHaveText(/and 1 change is not in it\./);
+});
+
+test("the settings offer the browser's install prompt, and say when the app is installed", async ({
+  page,
+}) => {
+  await openSettings(page, BEST_EFFORT);
+  const section = page.getByRole("region", { name: "Install" });
+  // Before the browser offers anything, the settings point to its menu.
+  await expect(section).toContainText("Some browsers install apps from their menu");
+  await expect(section.getByRole("button")).toHaveCount(0);
+  await offerInstall(page);
+  await section.getByRole("button", { name: "Install" }).click();
+  expect(await page.evaluate(() => window.installPrompt?.shown)).toBe(1);
+  await answerInstall(page, "accepted");
+  await expect(section).toContainText("This app is installed on this device.");
+  await expect(section.getByRole("button")).toHaveCount(0);
+  // The button went away: the focus goes to the section, whose text says what changed.
+  await expect(section.getByRole("heading", { name: "Install" })).toBeFocused();
+});
+
+test("an install prompt that the user dismissed is spent, and the settings point to the menu", async ({
+  page,
+}) => {
+  await openSettings(page, BEST_EFFORT);
+  const section = page.getByRole("region", { name: "Install" });
+  await offerInstall(page);
+  await section.getByRole("button", { name: "Install" }).click();
+  await answerInstall(page, "dismissed");
+  await expect(section).toContainText("Some browsers install apps from their menu");
+  await expect(section.getByRole("button")).toHaveCount(0);
+  expect(await page.evaluate(() => window.installPrompt?.shown)).toBe(1);
+});
+
+test("on iPhone and iPad, the settings say how to add the app to the Home Screen, and take the data along", async ({
+  page,
+}) => {
+  await onIPhone(page, false);
+  await openSettings(page, BEST_EFFORT);
+  await expect(page.getByRole("region", { name: "Install" })).toContainText(
+    "open your browser's share menu, then choose Add to Home Screen. The app there keeps its own data, apart from your browser's: to take your data along, back it up here, then restore the backup in the app.",
+  );
+});
+
+test("on iPhone and iPad, a banner suggests installing before anything is entered, and not after", async ({
+  page,
+}) => {
+  await onIPhone(page, false);
+  await open(page);
+  await expect(installFirst(page)).toContainText(
+    "Before you start, add this app to your Home Screen: there it keeps its own data, apart from your browser's.",
+  );
+  const results = await new AxeBuilder({ page }).analyze();
+  expect(results.violations).toEqual([]);
+  await installFirst(page).getByRole("button", { name: "Later" }).click();
+  await expect(installFirst(page)).toHaveCount(0);
+  await expect(page.getByRole("main")).toBeFocused();
+  // Later lasts until the app opens again.
+  await page.reload();
+  await expect(installFirst(page)).toBeVisible();
+  // Once there is data, the next check brings the backup reminder instead.
+  await write(page, ["Milk"]);
+  await comeBack(page);
+  await expect(reminder(page)).toBeVisible();
+  await expect(installFirst(page)).toHaveCount(0);
+});
+
+test("an app on the Home Screen suggests no install, and says that it is installed", async ({
+  page,
+}) => {
+  await onIPhone(page, true);
+  await open(page);
+  // The app knows that it runs installed from the start, whatever a check finds.
+  await comeBack(page);
+  await expect(page.getByText("No notes yet.")).toBeVisible();
+  await expect(installFirst(page)).toHaveCount(0);
+  await openSettings(page, BEST_EFFORT);
+  await expect(page.getByRole("region", { name: "Install" })).toContainText(
+    "This app is installed on this device.",
+  );
 });

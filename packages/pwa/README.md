@@ -1,6 +1,6 @@
 # @shkriuss/pwa
 
-The service worker of every app: it makes the app work offline after its first load, and lets the user decide when a new version takes over. It implements the [service worker spec](../../docs/specs/service-worker.md) ([architecture §9](../../docs/architecture.md#9-offline-install-and-updates)). It also gives the app its web app manifest and icons, which browsers need to install it, and tells the app whether the browser keeps its data, and asks the browser to keep it. Install prompts come later.
+The service worker of every app: it makes the app work offline after its first load, and lets the user decide when a new version takes over. It implements the [service worker spec](../../docs/specs/service-worker.md) ([architecture §9](../../docs/architecture.md#9-offline-install-and-updates)). It also gives the app its web app manifest and icons, which browsers need to install it, says how the app installs and shows the browser's install prompt when the user asks, and tells the app whether the browser keeps its data, and asks the browser to keep it.
 
 ## Use
 
@@ -67,6 +67,29 @@ webAppManifest({
 - **Names:** `shortName`, which a home screen shows under the icon, has at most 12 characters; it is `name` if left out.
 - **No dependencies:** the icons are drawn by this package, with exact area coverage for smooth edges, and written as PNG with Node's zlib, so the same glyph always gives the same bytes.
 
+## Installing
+
+`appInstall()` says whether and how the app can be installed on this device ([architecture §9](../../docs/architecture.md#9-offline-install-and-updates)), and shows the browser's install prompt when the user asks. `InstallSection` and `InstallBanner` of `@shkriuss/shell` show it.
+
+```ts
+import { appInstall } from "@shkriuss/pwa";
+
+// When the app starts, before the browser offers to install it once the page has loaded:
+const install = appInstall();
+// When the user asks for it, as with a button in Settings:
+const installed = await install.install();
+```
+
+| State                | Meaning                                                                                             |
+| -------------------- | --------------------------------------------------------------------------------------------------- |
+| `installed`          | The app runs installed, or the user has just installed it                                           |
+| `promptable`         | The browser offers to install it (Chromium's `beforeinstallprompt`), which `install()` shows        |
+| `add-to-home-screen` | A browser on iPhone or iPad: the user installs the app from the share menu, with Add to Home Screen |
+| `unavailable`        | The browser offers the page nothing; its menu may still install the app                             |
+
+- **The prompt** shows only for the user's press, and once: a second press while it shows waits for the same answer, and a dismissed prompt is spent until the browser offers another. The browser's own banner never shows, so that the app offers installing where it fits.
+- **iPhone and iPad:** `navigator.standalone`, which only browsers there have, tells a page on the Home Screen from one in the browser.
+
 ## Storage
 
 `appStorage()` says whether the browser keeps the app's data until the user deletes it, and how much the app stores ([architecture §7](../../docs/architecture.md#7-data-layer)). `StorageSection` of `@shkriuss/shell` shows it in the app's settings.
@@ -106,7 +129,8 @@ const kept = await storage.requestPersistence();
 | `worker/remove.ts`   | Starts the service worker that removes itself                                                                                |
 | `browser/updates.ts` | The page's side: registration (§3) and updates (§7)                                                                          |
 | `browser/storage.ts` | The app's storage: whether the browser keeps the data, and how much there is                                                 |
-| `browser/index.ts`   | `startServiceWorker()` and `appStorage()`, with the browser's globals                                                        |
+| `browser/install.ts` | How the app installs: the browser's prompt, the display mode, the Home Screen of iOS                                         |
+| `browser/index.ts`   | `startServiceWorker()`, `appStorage()` and `appInstall()`, with the browser's globals                                        |
 
 The service worker and the page's side take what they use of the browser as a parameter, so that the unit tests run them against fakes. `tooling/pwa-e2e` tests the service worker in Chromium, Firefox and WebKit, and `tooling/platform-e2e` the storage and the manifest. The icons' unit tests are property-based: a shape covers exactly its area, whichever way it goes round, and an arc stays on its ellipse.
 

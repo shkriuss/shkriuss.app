@@ -19,11 +19,16 @@
  *
  * The storage (architecture §7): `appStorage()` says whether the browser keeps the app's data
  * until the user deletes it, and how much the app stores, and asks the browser to keep it.
+ *
+ * Installing (architecture §9): `appInstall()` says whether and how the app can be installed,
+ * and shows the browser's install prompt when the user asks for it.
  */
 import { registerServiceWorker } from "@shkriuss/edge/workers";
+import { type AppInstall, createAppInstall } from "./install.ts";
 import { type AppStorage, createAppStorage } from "./storage.ts";
 import { type AppUpdates, createAppUpdates, type PageEnvironment } from "./updates.ts";
 
+export { type AppInstall, type InstallState } from "./install.ts";
 export { type AppStorage, type Persistence, type StorageStatus } from "./storage.ts";
 export { UPDATE_CHECK_INTERVAL, type AppUpdates, type UpdateState } from "./updates.ts";
 
@@ -77,4 +82,22 @@ let storage: AppStorage | undefined;
 export function appStorage(): AppStorage {
   storage ??= createAppStorage("storage" in navigator ? navigator.storage : undefined);
   return storage;
+}
+
+let install: AppInstall | undefined;
+
+/**
+ * How the app installs on this device; every call returns the same. Call it when the app starts,
+ * as `@shkriuss/shell` does, so that it hears the browser's offer to install the app, which
+ * comes once the page has loaded.
+ */
+export function appInstall(): AppInstall {
+  // Only browsers on iPhone and iPad have navigator.standalone, which the DOM types leave out.
+  const homeScreen: unknown = Reflect.get(navigator, "standalone");
+  install ??= createAppInstall({
+    standalone: matchMedia("(display-mode: standalone)"),
+    homeScreen: typeof homeScreen === "boolean" ? homeScreen : undefined,
+    window,
+  });
+  return install;
 }

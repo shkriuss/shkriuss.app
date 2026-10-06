@@ -2,6 +2,8 @@ export { AppError, AppErrorBoundary, type AppErrorBoundaryProps } from "./AppErr
 export { AppFrame, type AppFrameProps } from "./AppFrame.tsx";
 export { BackupReminder, type BackupReminderProps } from "./BackupReminder.tsx";
 export { BackupSection, type BackupSectionProps } from "./BackupSection.tsx";
+export { InstallBanner, type InstallBannerProps } from "./InstallBanner.tsx";
+export { InstallSection, type InstallSectionProps } from "./InstallSection.tsx";
 export { observedStore, type Observed, type ObservedStore } from "./observed.ts";
 export { Restore, type RestoreDatabase, type RestoreProps } from "./Restore.tsx";
 export { StorageSection, type StorageSectionProps } from "./StorageSection.tsx";

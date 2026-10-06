@@ -1,10 +1,18 @@
 import "@shkriuss/ui/styles.css";
-import type { AppStorage, AppUpdates, StorageStatus, UpdateState } from "@shkriuss/pwa";
+import {
+  type AppStorage,
+  type AppUpdates,
+  appInstall,
+  type StorageStatus,
+  type UpdateState,
+} from "@shkriuss/pwa";
 import {
   AppErrorBoundary,
   AppFrame,
   BackupReminder,
   BackupSection,
+  InstallBanner,
+  InstallSection,
   StorageSection,
   useObserved,
 } from "@shkriuss/shell";
@@ -17,8 +25,8 @@ import { m } from "./shell-messages.ts";
 
 // The shell of @shkriuss/shell around a screen of notes, at /shell, and around the settings, at
 // /shell/settings, for the end-to-end tests in e2e/shell.spec.ts. The notes, their backups and the
-// reminder to back them up are the data layer's; the update state and the storage are the tests'
-// to set.
+// reminder to back them up are the data layer's, and installing is the browser's; the update state
+// and the storage are the tests' to set.
 
 type NotesDatabase = Awaited<ReturnType<typeof notesDatabase>>;
 
@@ -163,6 +171,7 @@ function Settings({ db }: { readonly db: NotesDatabase }) {
   return (
     <div className="flex flex-col items-start gap-6">
       <h1 className="text-2xl font-semibold">{m.settings()}</h1>
+      <InstallSection install={appInstall()} />
       <StorageSection storage={storage} />
       <BackupSection app={BACKUP_APP} db={db} schemas={schemas} />
     </div>
@@ -170,6 +179,9 @@ function Settings({ db }: { readonly db: NotesDatabase }) {
 }
 
 export async function showShellPage(): Promise<void> {
+  // Before anything waits, as every app does when it starts: the browser offers to install the
+  // app once the page has loaded, and the tests stand in for it.
+  appInstall();
   const db = await notesDatabase();
   const container = document.createElement("div");
   document.body.replaceChildren(container);
@@ -179,7 +191,12 @@ export async function showShellPage(): Promise<void> {
       <AppFrame
         name={m.app()}
         updates={updates}
-        banners={<BackupReminder app={BACKUP_APP} db={db} />}
+        banners={
+          <>
+            <InstallBanner install={appInstall()} db={db} />
+            <BackupReminder app={BACKUP_APP} db={db} />
+          </>
+        }
         navigation={
           <>
             <Link href="/shell">{m.notes()}</Link>
