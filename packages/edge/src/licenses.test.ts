@@ -1,8 +1,14 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { type Licenses, collectLicenses, legalComments, licensesFile } from "./licenses.ts";
+import {
+  type Licenses,
+  collectLicenses,
+  legalComments,
+  licensesFile,
+  stylesheetImports,
+} from "./licenses.ts";
 
 const roots: string[] = [];
 
@@ -58,6 +64,40 @@ describe("legalComments", () => {
   it("takes linear time, also on a file with many comments that never end", () => {
     // A regular expression took quadratic time here: about 30 seconds for this file.
     expect(legalComments("/*!".repeat(200_000))).toBe("");
+  });
+});
+
+describe("stylesheetImports", () => {
+  it("finds what @import and @plugin name, in every form", () => {
+    const css = [
+      '@import "tailwindcss" source(none);',
+      "@import 'single.css' layer(base);",
+      '@import url("quoted.css") screen;',
+      "@import url( 'spaced.css' );",
+      "@import url(bare.css);",
+      '@import"tight.css";',
+      '@plugin "a-plugin";',
+    ].join("\n");
+    expect(stylesheetImports(css)).toStrictEqual([
+      "tailwindcss",
+      "single.css",
+      "quoted.css",
+      "spaced.css",
+      "bare.css",
+      "tight.css",
+      "a-plugin",
+    ]);
+  });
+
+  it("leaves out comments, other rules and imports that never end", () => {
+    const css = '/* @import "commented.css"; */ @importance "no"; @import; @import "never';
+    expect(stylesheetImports(css)).toStrictEqual([]);
+  });
+
+  it("takes linear time, also on many rules that name nothing", () => {
+    expect(stylesheetImports("@import".repeat(200_000))).toStrictEqual([]);
+    expect(stylesheetImports(`@import url(${" ".repeat(400_000)}`)).toStrictEqual([]);
+    expect(stylesheetImports("/*".repeat(200_000))).toStrictEqual([]);
   });
 });
 
@@ -135,6 +175,76 @@ describe("collectLicenses", () => {
       packages: [],
       notices: [{ file: "src/words.ts", text: "From BIP-39, MIT." }],
     });
+  });
+
+  it("follows the imports of the repository's stylesheets, which the build inlines", async () => {
+    const root = await directory();
+    await fakePackage(
+      root,
+      { name: "styles", version: "4.0.0", license: "MIT" },
+      { LICENSE: "Styles license." },
+    );
+    // Only the stylesheet that app.css imports imports this scoped package.
+    await fakePackage(
+      root,
+      { name: "@fonts/serif", version: "1.0.0", license: "OFL-1.1" },
+      { LICENSE: "Font license." },
+    );
+    await mkdir(path.join(root, "src", "parts"), { recursive: true });
+    await writeFile(
+      path.join(root, "src", "app.css"),
+      '/*! App notice. */\n@import "./parts/theme.css";\n@import "styles";\n',
+    );
+    await writeFile(
+      path.join(root, "src", "parts", "theme.css"),
+      '/*! Theme notice. */\n@import "styles/extra.css";\n@import "@fonts/serif/index.css";\n@import "../app.css";\n',
+    );
+    const licenses = await collectLicenses([path.join(root, "src", "app.css")], {
+      root,
+      packageOf: () => root,
+    });
+    expect(licenses).toStrictEqual({
+      packages: [
+        {
+          name: "@fonts/serif",
+          version: "1.0.0",
+          license: "OFL-1.1",
+          files: [{ name: "LICENSE", text: "Font license." }],
+        },
+        {
+          name: "styles",
+          version: "4.0.0",
+          license: "MIT",
+          files: [{ name: "LICENSE", text: "Styles license." }],
+        },
+      ],
+      notices: [
+        { file: "src/app.css", text: "App notice." },
+        { file: "src/parts/theme.css", text: "Theme notice." },
+      ],
+    });
+  });
+
+  it.each([
+    ["a URL", '@import "https://example.com/x.css";', /neither a package nor a file/],
+    [
+      "a file outside the repository",
+      '@import "../../outside.css";',
+      /imports \.\.\/\.\.\/outside\.css, which is outside/,
+    ],
+    ["a package that is not installed", '@import "missing";', /missing, which is not installed/],
+    ["a package of the repository", '@import "own";', /a package of this repository/],
+  ])("refuses a stylesheet that imports %s", async (_case, css, error) => {
+    const root = await directory();
+    await mkdir(path.join(root, "packages", "own"), { recursive: true });
+    await writeFile(path.join(root, "packages", "own", "package.json"), '{"name":"own"}');
+    await mkdir(path.join(root, "node_modules"));
+    await symlink(path.join(root, "packages", "own"), path.join(root, "node_modules", "own"));
+    await mkdir(path.join(root, "src"));
+    await writeFile(path.join(root, "src", "app.css"), css);
+    await expect(
+      collectLicenses([path.join(root, "src", "app.css")], { root, packageOf: () => root }),
+    ).rejects.toThrow(error);
   });
 
   it("keeps only a bundler's own license for the code it generates", async () => {

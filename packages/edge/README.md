@@ -53,8 +53,9 @@ The plugin writes `dist/licenses.txt`, which every app serves at `/licenses.txt`
 - **Packages:** every package from `node_modules` with code in the build, with its license files: `LICENSE`, `COPYING`, `NOTICE` and the like. A package that tree-shaking removed entirely is left out, because none of its code is served.
 - **Generated code:** helpers that Vite and Rolldown write into the bundles, with Vite's and Rolldown's own licenses. For them, Vite's license file stops before the licenses of the packages that Vite bundles for its own use, which the helpers do not contain.
 - **Material in this repository:** a file of ours that includes material of others, such as a word list, starts with a legal comment, `/*! … */`, that names the source and the license. The plugin copies the legal comments of every file in the build.
+- **Stylesheet imports:** a stylesheet inlines what it `@import`s, such as Tailwind CSS, so the build's modules do not show it. The plugin follows the `@import` and `@plugin` rules of every stylesheet of ours in the build: a package they name counts as a package in the build, and a stylesheet of ours they name has its legal comments copied and its own imports followed.
 
-The build fails for a package without a license file, and for generated code whose origin it does not know, so that no build ships code without its license. Files copied from `public/` are not bundled and are not covered: keep material of others out of `public/`.
+The build fails for a package without a license file, for generated code whose origin it does not know, and for a stylesheet import it cannot follow, such as a URL, so that no build ships code without its license. Files copied from `public/` are not bundled and are not covered: keep material of others out of `public/`.
 
 ## Deployment checks
 

@@ -1,0 +1,101 @@
+/*
+ * The look that every app shares (architecture §10): Tailwind CSS with the platform's design
+ * tokens, a light and a dark theme that follow the device, and base styles for focus, links
+ * and motion. Apps import it from their entry script, before anything else:
+ *
+ *   import "@shkriuss/ui/styles.css";
+ *
+ * tokens.test.ts holds every pair of colors to the contrast that WCAG 2.2 AA requires, in both
+ * themes.
+ */
+@import "tailwindcss";
+
+@theme {
+  /* System fonts: nothing is loaded from anywhere else. */
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  /* Only these colors, so that every app uses the same ones. The light theme: */
+  --color-*: initial;
+  /* The page, and areas raised from it. */
+  --color-canvas: #ffffff;
+  --color-surface: #f3f4f6;
+  /* Text, and secondary text. */
+  --color-ink: #111827;
+  --color-ink-muted: #4b5563;
+  /* Lines that only divide, and the borders of controls, which must stand out. */
+  --color-line: #e5e7eb;
+  --color-line-strong: #6b7280;
+  /* Links and main actions, and text on them. Each app may set its own accent. */
+  --color-accent: #1d4ed8;
+  --color-accent-ink: #ffffff;
+  /* Errors and destructive actions, and text on them. */
+  --color-danger: #b91c1c;
+  --color-danger-ink: #ffffff;
+  /* The outline of the element that has the keyboard focus. */
+  --color-focus: #1d4ed8;
+}
+
+@layer theme {
+  @media (prefers-color-scheme: dark) {
+    :root,
+    :host {
+      --color-canvas: #111827;
+      --color-surface: #1f2937;
+      --color-ink: #f3f4f6;
+      --color-ink-muted: #9ca3af;
+      --color-line: #374151;
+      --color-line-strong: #9ca3af;
+      --color-accent: #93c5fd;
+      --color-accent-ink: #111827;
+      --color-danger: #fca5a5;
+      --color-danger-ink: #111827;
+      --color-focus: #93c5fd;
+    }
+  }
+}
+
+@layer base {
+  :root {
+    color-scheme: light dark;
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+  }
+
+  /* Links stand out by more than their color (WCAG 1.4.1). */
+  a {
+    color: var(--color-accent);
+    text-decoration-line: underline;
+    text-underline-offset: 0.15em;
+  }
+
+  /* A focus outline that keyboard users can always see (WCAG 2.4.7). */
+  :focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      scroll-behavior: auto !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+/* A page's content: a readable width, clear of the notch and the rounded corners. */
+@utility page {
+  max-width: 40rem;
+  margin-inline: auto;
+  padding-top: max(2rem, env(safe-area-inset-top));
+  padding-right: max(1.5rem, env(safe-area-inset-right));
+  padding-bottom: max(2rem, env(safe-area-inset-bottom));
+  padding-left: max(1.5rem, env(safe-area-inset-left));
+}

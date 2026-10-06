@@ -8,10 +8,12 @@ const Principles = lazy(() => import("./Principles.tsx"));
 
 export function App() {
   return (
-    <main>
-      <h1>{m.title()}</h1>
-      <p className="lead">{m.lead()}</p>
-      <p>{m.comingSoon()}</p>
+    <main className="page">
+      <h1 className="mb-2 text-[clamp(2rem,8vw,3rem)] leading-tight font-bold tracking-tight">
+        {m.title()}
+      </h1>
+      <p className="mb-4 text-xl">{m.lead()}</p>
+      <p className="text-ink-muted">{m.comingSoon()}</p>
       <LoadBoundary>
         <Suspense fallback={null}>
           <Principles />
