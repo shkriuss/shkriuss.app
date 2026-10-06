@@ -1,5 +1,5 @@
 import { cspHashSource, securityHeaders } from "@shkriuss/edge";
-import type { Page } from "@playwright/test";
+import type { ConsoleMessage, Page } from "@playwright/test";
 import { expect, test } from "@shkriuss/config/playwright";
 
 const IMPORT_MAP = /<script type="importmap">(.*?)<\/script>/s;
@@ -65,6 +65,19 @@ async function importModule(page: Page, url: string): Promise<string> {
   );
 }
 
+/**
+ * Whether a console message logs a `TypeError`, as React logs the error that a boundary caught,
+ * such as a refused import's. The browsers word that error differently, and Playwright gives a
+ * logged object's text as only "Error" in Firefox, so this looks at the logged object itself.
+ */
+async function logsTypeError(message: ConsoleMessage): Promise<boolean> {
+  if (message.type() !== "error") {
+    return false;
+  }
+  const [logged] = message.args();
+  return (await logged?.evaluate((value) => value instanceof TypeError)) ?? false;
+}
+
 async function scriptPath(page: Page, name: string): Promise<string> {
   const path = scriptPaths(await page.content()).find((candidate) =>
     candidate.startsWith(`/assets/${name}-`),
@@ -96,12 +109,9 @@ test.describe("script integrity", () => {
   test("a lazily loaded script whose content changed is refused", async ({ page, security }) => {
     security.expectRefusals();
     await tamperWith(page, /\/assets\/Verification-[^/]+\.js$/);
-    // Every browser reports that the page's own import of the chunk failed: only then does the
-    // page show what it is left with.
-    const refused = page.waitForEvent(
-      "console",
-      (message) => message.type() === "error" && /module/iv.test(message.text()),
-    );
+    // Every browser rejects the page's own import of the chunk with a TypeError, which React
+    // logs once a boundary has caught it: only then does the page show what it is left with.
+    const refused = page.waitForEvent("console", logsTypeError);
     await page.goto("/security");
     await refused;
     expect(await importModule(page, await scriptPath(page, "Verification"))).toBe("refused");
