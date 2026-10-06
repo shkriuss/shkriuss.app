@@ -32,7 +32,7 @@ And the formats of the UI (`@shkriuss/i18n`), with each browser's own Unicode da
 And the components of `@shkriuss/ui`, on the page `/ui`, from `src/gallery.tsx`:
 
 - axe finds no accessibility problem, in either theme, and React Aria adds no stylesheet that the CSP would refuse;
-- buttons, text fields, switches, links, dialogs and banners work with the pointer and the keyboard, and reach screen readers;
+- buttons, text fields, switches, links, dialogs, banners and file buttons work with the pointer and the keyboard, and reach screen readers;
 - buttons and switches are at least 44 by 44 pixels.
 
 And the shell of `@shkriuss/shell`, on the pages `/shell` and `/shell/settings`, from `src/shell-page.tsx`: a screen of notes from the data layer, and the settings, in the app's frame:
@@ -43,7 +43,8 @@ And the shell of `@shkriuss/shell`, on the pages `/shell` and `/shell/settings`,
 - the update banner offers an update, applies it when the user agrees, and goes away until there is news when the user says later;
 - a screen that fails shows what happened inside the frame, and reloads the app;
 - the settings say how much the app stores and whether the browser keeps it, ask the browser to keep it when the user wants, and say so when the browser does not agree.
-- the settings make backups of the notes: encrypted with a generated passphrase or the user's own, which the dialog checks first, or plain after a warning; each file is downloaded, or shared through a stand-in for the share sheet, and read back with its passphrase; a backup that the user cancels saves and records nothing, and one started after the dialog was closed never gives way to the earlier one.
+- the settings make backups of the notes: encrypted with a generated passphrase or the user's own, which the dialog checks first, or plain after a warning; each file is downloaded, or shared through a stand-in for the share sheet, and read back with its passphrase; a backup that the user cancels saves and records nothing, and one started after the dialog was closed never gives way to the earlier one;
+- the settings restore a backup from another device: encrypted, after a wrong passphrase, or plain; restoring it again brings nothing, and a backup that the user does not restore changes nothing; a file that is no backup, too large, of a newer version, of another app or damaged is refused with what happened.
 
 | Command                                      | What it does                     |
 | -------------------------------------------- | -------------------------------- |

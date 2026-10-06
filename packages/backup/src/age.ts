@@ -18,6 +18,42 @@ function damaged(message: string, cause?: unknown): BackupError {
   return new BackupError("damaged", message, { cause });
 }
 
+/** A stream of `bytes`, which age-encryption decrypts into a stream that it does not read. */
+function streamOf(bytes: Uint8Array): ReadableStream<Uint8Array> {
+  return new ReadableStream({
+    start(controller) {
+      controller.enqueue(bytes);
+      controller.close();
+    },
+  });
+}
+
+/**
+ * Every byte of `stream`, read here rather than by age-encryption, which reads through a
+ * `Response`: Firefox reports a stream that fails there to the console, even when the error is
+ * handled, as when a damaged backup fails its authentication.
+ */
+async function readAll(stream: ReadableStream<Uint8Array>): Promise<Uint8Array<ArrayBuffer>> {
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  let length = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+    chunks.push(value);
+    length += value.length;
+  }
+  const bytes = new Uint8Array(length);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return bytes;
+}
+
 /**
  * `bytes` on an ArrayBuffer, as files and messages take them. age-encryption gives them so; they
  * are copied only if they are on shared memory.
@@ -86,7 +122,7 @@ export async function decrypt(
   const decrypter = new Decrypter();
   decrypter.addPassphrase(normalizePassphrase(passphrase));
   try {
-    return unshared(await decrypter.decrypt(binary));
+    return await readAll(await decrypter.decrypt(streamOf(binary)));
   } catch (error) {
     if (error instanceof Error && error.message === NO_MATCH) {
       throw new BackupError("wrong-passphrase", "The passphrase does not decrypt the file.");

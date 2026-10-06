@@ -1,8 +1,9 @@
-import { readFile } from "node:fs/promises";
+import { readFile, truncate, writeFile } from "node:fs/promises";
 import { AxeBuilder } from "@axe-core/playwright";
 import type { Locator, Page } from "@playwright/test";
 import type { StorageStatus, UpdateState } from "@shkriuss/pwa";
 import { expect, test } from "@shkriuss/config/playwright";
+import { forget, load, open as openData, read as readNotes } from "./app.ts";
 
 // The shell of @shkriuss/shell in real browsers, under the production security headers, on the
 // pages of src/shell-page.tsx: /shell, a screen of notes from the data layer in the app's frame,
@@ -133,6 +134,52 @@ async function makePlainBackup(page: Page): Promise<Locator> {
   const ready = page.getByRole("dialog", { name: "Your backup is ready" });
   await expect(ready).toBeVisible();
   return ready;
+}
+
+/** The encrypted examples of `@shkriuss/backup`, of the app "notes", which the age tool made. */
+const EXAMPLE = new URL("../../../packages/backup/src/test/example.age", import.meta.url);
+const EXAMPLE_PASSPHRASE = "burst-swarm-slender-curve-ability-various";
+
+interface BackupFile {
+  readonly name: string;
+  readonly bytes: readonly number[];
+}
+
+/**
+ * A backup made on another device: the notes written into a new database of `version` of the
+ * app, which the test app then forgets, so that the page that opens next starts empty.
+ */
+async function backupFromAnotherDevice(
+  page: Page,
+  notes: readonly string[],
+  passphrase: string | null,
+  version: 1 | 2 = 1,
+): Promise<BackupFile> {
+  await load(page);
+  await openData(page, version);
+  await write(page, notes);
+  const file = await page.evaluate(
+    async (secret) => window.platform?.backups.make(secret),
+    passphrase,
+  );
+  await forget(page);
+  if (file === undefined) {
+    throw new Error("The test app has not loaded.");
+  }
+  return { name: file.name, bytes: [...file.bytes] };
+}
+
+/** Picks a file in the file picker that "Restore from a backup" opens: bytes, or a path. */
+async function restoreFile(page: Page, file: BackupFile | string): Promise<void> {
+  const chooser = page.waitForEvent("filechooser");
+  await page.getByRole("button", { name: "Restore from a backup" }).click();
+  await (
+    await chooser
+  ).setFiles(
+    typeof file === "string"
+      ? file
+      : { name: file.name, mimeType: "application/octet-stream", buffer: Buffer.from(file.bytes) },
+  );
 }
 
 /** The backup is made, which takes seconds: the key takes 256 MiB to derive. */
@@ -495,4 +542,118 @@ test("a share sheet that the user closes saves nothing, and records nothing", as
   await expect(ready.getByRole("status")).toHaveText("The backup is not saved yet.");
   await expect(save).toBeEnabled();
   await expect(section).toContainText("No backup yet.");
+});
+
+test("an encrypted backup from another device restores its notes, with its passphrase", async ({
+  page,
+}) => {
+  const passphrase = "correct horse battery staple";
+  const file = await backupFromAnotherDevice(page, ["Milk", "Eggs"], passphrase);
+  await openSettings(page, BEST_EFFORT);
+  await restoreFile(page, file);
+  const encrypted = page.getByRole("dialog", { name: "This backup is encrypted" });
+  const field = encrypted.getByLabel("Passphrase");
+  const openFile = encrypted.getByRole("button", { name: "Open" });
+  await expect(field).toBeFocused();
+
+  await openFile.click();
+  await expect(encrypted).toContainText("Enter the passphrase.");
+  await field.fill("not the passphrase");
+  await expect(encrypted).not.toContainText("Enter the passphrase.");
+  await openFile.click();
+  // The user tries again, with the same file (backup format §5.2).
+  await expect(encrypted).toContainText("The passphrase is wrong. Try again.", MAKING);
+  await expect(field).toBeFocused();
+  await field.fill(passphrase);
+  await openFile.click();
+
+  const preview = page.getByRole("dialog", { name: "Restore this backup?" });
+  await expect(preview).toContainText("Restoring it brings 2 new.", MAKING);
+  await expect(preview).toContainText("This backup was made on");
+  // Nothing is written before the user agrees (§5.6).
+  expect(await readNotes(page)).toStrictEqual([]);
+  await preview.getByRole("button", { name: "Restore" }).click();
+  const restored = page.getByRole("dialog", { name: "Restored" });
+  await expect(restored).toContainText("Restored: 2 new.");
+  await restored.getByRole("button", { name: "Done" }).click();
+  expect(await readNotes(page)).toStrictEqual(["Eggs", "Milk"]);
+});
+
+test("a plain backup restores without a passphrase, and a second time brings nothing", async ({
+  page,
+}) => {
+  const file = await backupFromAnotherDevice(page, ["Milk"], null);
+  await openSettings(page, BEST_EFFORT);
+  await restoreFile(page, file);
+  const preview = page.getByRole("dialog", { name: "Restore this backup?" });
+  await expect(preview).toContainText("Restoring it brings 1 new.");
+  await preview.getByRole("button", { name: "Restore" }).click();
+  await page
+    .getByRole("dialog", { name: "Restored" })
+    .getByRole("button", { name: "Done" })
+    .click();
+
+  await restoreFile(page, file);
+  await expect(preview).toContainText("This device already has everything in this backup.");
+  await expect(preview.getByRole("button", { name: "Restore" })).toHaveCount(0);
+  await preview.getByRole("button", { name: "Close" }).click();
+  expect(await readNotes(page)).toStrictEqual(["Milk"]);
+});
+
+test("a backup that the user does not restore changes nothing", async ({ page }) => {
+  const file = await backupFromAnotherDevice(page, ["Milk"], null);
+  await openSettings(page, BEST_EFFORT);
+  await restoreFile(page, file);
+  const preview = page.getByRole("dialog", { name: "Restore this backup?" });
+  await preview.getByRole("button", { name: "Cancel" }).click();
+  await expect(preview).toBeHidden();
+  expect(await readNotes(page)).toStrictEqual([]);
+});
+
+test("a file that this app cannot restore is refused, with what happened", async ({
+  page,
+}, testInfo) => {
+  const newer = await backupFromAnotherDevice(page, ["Milk"], null, 2);
+  const encrypted = await backupFromAnotherDevice(page, ["Milk"], EXAMPLE_PASSPHRASE);
+  await openSettings(page, BEST_EFFORT);
+  const refused = page.getByRole("dialog", { name: "Not restored" });
+
+  async function refusedWith(message: string): Promise<void> {
+    await expect(refused).toContainText(message, MAKING);
+    await refused.getByRole("button", { name: "Close" }).click();
+    await expect(refused).toBeHidden();
+  }
+
+  await restoreFile(page, { name: "notes.txt", bytes: [...Buffer.from("Milk, eggs")] });
+  await refusedWith("This is not a backup file.");
+
+  // Larger than any backup can be, refused before it is read (backup format §5.1).
+  const huge = testInfo.outputPath("huge.age");
+  await writeFile(huge, "");
+  await truncate(huge, 64 * 1024 * 1024 + 1);
+  await restoreFile(page, huge);
+  await refusedWith("The file is too large to be a backup.");
+
+  await restoreFile(page, newer);
+  await refusedWith(
+    "The backup was made by a newer version of the app. Update the app and try again.",
+  );
+
+  const example = await readFile(EXAMPLE);
+  await restoreFile(page, { name: "shkriuss-notes-2026-10-04.age", bytes: [...example] });
+  const passphrase = page.getByRole("dialog", { name: "This backup is encrypted" });
+  await passphrase.getByLabel("Passphrase").fill(EXAMPLE_PASSPHRASE);
+  await passphrase.getByRole("button", { name: "Open" }).click();
+  await refusedWith("This is a backup of the app “notes”, not of this one.");
+
+  // A changed byte near the end of an encrypted backup, which age authenticates (§3).
+  const damaged = [...encrypted.bytes];
+  const last = damaged.length - 2;
+  damaged[last] = (damaged[last] ?? 0) ^ 0xff;
+  await restoreFile(page, { name: encrypted.name, bytes: damaged });
+  await passphrase.getByLabel("Passphrase").fill(EXAMPLE_PASSPHRASE);
+  await passphrase.getByRole("button", { name: "Open" }).click();
+  await refusedWith("The file is damaged or not supported.");
+
+  expect(await readNotes(page)).toStrictEqual([]);
 });

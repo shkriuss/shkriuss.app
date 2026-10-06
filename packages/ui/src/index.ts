@@ -17,6 +17,7 @@ export { Banner, type BannerProps } from "./Banner.tsx";
 export { Button, type ButtonProps } from "./Button.tsx";
 export { contrastRatio, isHexColor, relativeLuminance } from "./contrast.ts";
 export { Dialog, type DialogProps } from "./Dialog.tsx";
+export { FileButton, type FileButtonProps } from "./FileButton.tsx";
 export { Link, type LinkProps } from "./Link.tsx";
 export { Switch, type SwitchProps } from "./Switch.tsx";
 export { TextField, type TextFieldProps } from "./TextField.tsx";
