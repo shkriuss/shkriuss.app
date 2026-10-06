@@ -71,7 +71,7 @@ gh attestation verify index.html --repo shkriuss/shkriuss.app \
   --signer-workflow shkriuss/shkriuss.app/.github/workflows/ci.yml --source-ref refs/heads/main
 ```
 
-Before deploying to production, CI runs:
+Before deploying to production, CI runs it for every app, against the production domain in the app's `wrangler.json`; for the hub:
 
 ```sh
 node packages/edge/src/cli.ts check-live apps/hub/dist https://shkriuss.app
