@@ -25,6 +25,8 @@ And backup files (`@shkriuss/backup`, [backup format](../../docs/specs/backup-fo
 - only the backup worker's bundle includes `age-encryption`;
 - `/licenses.txt` lists the packages of the page and of its workers, and the notices in files of this repository.
 
+And the app's storage (`appStorage()` of `@shkriuss/pwa`), with the browser's own Storage API: it knows whether the browser keeps its data and how much it stores, its usage grows as it stores data, and it asks the browser to keep its data and shows the answer.
+
 And the formats of the UI (`@shkriuss/i18n`), with each browser's own Unicode data: English with a German device's regional conventions, and English with the device's clock in a region without English formats.
 
 And the components of `@shkriuss/ui`, on the page `/ui`, from `src/gallery.tsx`:
@@ -33,13 +35,14 @@ And the components of `@shkriuss/ui`, on the page `/ui`, from `src/gallery.tsx`:
 - buttons, text fields, switches, links, dialogs and banners work with the pointer and the keyboard, and reach screen readers;
 - buttons and switches are at least 44 by 44 pixels.
 
-And the shell of `@shkriuss/shell`, on the page `/shell`, from `src/shell-page.tsx`: a screen of notes from the data layer, in the app's frame:
+And the shell of `@shkriuss/shell`, on the pages `/shell` and `/shell/settings`, from `src/shell-page.tsx`: a screen of notes from the data layer, and the settings, in the app's frame:
 
 - axe finds no accessibility problem in the frame and its update banner, in either theme;
 - the frame has its landmarks, and a keyboard user can skip to the screen first;
 - the screen follows the notes as they change;
 - the update banner offers an update, applies it when the user agrees, and goes away until there is news when the user says later;
-- a screen that fails shows what happened inside the frame, and reloads the app.
+- a screen that fails shows what happened inside the frame, and reloads the app;
+- the settings say how much the app stores and whether the browser keeps it, ask the browser to keep it when the user wants, and say so when the browser does not agree.
 
 | Command                                      | What it does                     |
 | -------------------------------------------- | -------------------------------- |

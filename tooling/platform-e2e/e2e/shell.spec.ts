@@ -1,11 +1,12 @@
 import { AxeBuilder } from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
-import type { UpdateState } from "@shkriuss/pwa";
+import type { StorageStatus, UpdateState } from "@shkriuss/pwa";
 import { expect, test } from "@shkriuss/config/playwright";
 
 // The shell of @shkriuss/shell in real browsers, under the production security headers, on the
-// page /shell of src/shell-page.tsx: a screen of notes from the data layer, in the app's frame.
-// The fixture fails every test on a CSP violation, an error or a failed request.
+// pages of src/shell-page.tsx: /shell, a screen of notes from the data layer in the app's frame,
+// and /shell/settings. The fixture fails every test on a CSP violation, an error or a failed
+// request.
 
 /** Opens the shell's page with no notes yet. */
 async function open(page: Page): Promise<void> {
@@ -18,6 +19,27 @@ async function setUpdateState(page: Page, state: UpdateState): Promise<void> {
     window.platform?.shell.setUpdateState(next);
   }, state);
 }
+
+/** Opens the settings, with the storage saying `status`. */
+async function openSettings(page: Page, status: StorageStatus): Promise<void> {
+  await page.goto("/shell/settings");
+  await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
+  await page.evaluate((next) => {
+    window.platform?.shell.setStorageStatus(next);
+  }, status);
+}
+
+async function answerPersistence(page: Page, kept: boolean): Promise<void> {
+  await page.evaluate((answer) => {
+    window.platform?.shell.answerPersistence(answer);
+  }, kept);
+}
+
+const BEST_EFFORT: StorageStatus = {
+  persistence: "best-effort",
+  usage: 1_234_567,
+  quota: 10_000_000_000,
+};
 
 async function write(page: Page, titles: readonly string[]): Promise<void> {
   await page.evaluate(async (all) => {
@@ -34,6 +56,18 @@ for (const colorScheme of ["light", "dark"] as const) {
     await write(page, ["Milk"]);
     await setUpdateState(page, "update-available");
     await expect(page.getByRole("status")).toBeVisible();
+    const results = await new AxeBuilder({ page }).analyze();
+    expect(results.violations).toEqual([]);
+  });
+}
+
+for (const colorScheme of ["light", "dark"] as const) {
+  test(`the settings have no accessibility violations in the ${colorScheme} theme`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme });
+    await openSettings(page, BEST_EFFORT);
+    await expect(page.getByRole("button", { name: "Keep data on this device" })).toBeVisible();
     const results = await new AxeBuilder({ page }).analyze();
     expect(results.violations).toEqual([]);
   });
@@ -114,4 +148,60 @@ test("a screen that fails shows what happened in the frame, and reloads the app"
   await page.getByRole("button", { name: "Reload" }).click();
   await reloaded;
   await expect(page.getByRole("heading", { level: 1, name: "Notes" })).toBeVisible();
+});
+
+test("the settings say how much the app stores, and whether the browser keeps it", async ({
+  page,
+}) => {
+  await openSettings(page, BEST_EFFORT);
+  const section = page.getByRole("region", { name: "Storage" });
+  await expect(section).toContainText("This app stores 1.2 MB on this device.");
+  await expect(section.getByRole("status")).toHaveText(
+    "Your browser may delete this data when the device runs low on space.",
+  );
+  // The settings read the status again when they open.
+  expect(await page.evaluate(() => window.platform?.shell.storageRefreshes())).toBe(1);
+
+  await openSettings(page, { persistence: "persisted", usage: 0, quota: 10_000_000_000 });
+  await expect(section).toContainText("This app stores 0 bytes on this device.");
+  await expect(section.getByRole("status")).toHaveText(
+    "Your browser keeps this data until you delete it.",
+  );
+  await expect(section.getByRole("button")).toHaveCount(0);
+
+  await openSettings(page, { persistence: "unknown", usage: undefined, quota: undefined });
+  await expect(section).toContainText("Your browser does not say how much this app stores.");
+  await expect(section.getByRole("status")).toHaveText(
+    "Your browser does not say whether it keeps this data.",
+  );
+  await expect(section.getByRole("button")).toHaveCount(0);
+});
+
+test("the settings ask the browser to keep the data, when the user wants", async ({ page }) => {
+  await openSettings(page, BEST_EFFORT);
+  const section = page.getByRole("region", { name: "Storage" });
+  const keep = section.getByRole("button", { name: "Keep data on this device" });
+  await keep.click();
+  // Firefox asks the user, which can take a while.
+  await expect(keep).toHaveAttribute("aria-disabled", "true");
+  await answerPersistence(page, true);
+  await expect(section.getByRole("status")).toHaveText(
+    "Your browser keeps this data until you delete it.",
+  );
+  await expect(keep).toHaveCount(0);
+  // The focus goes to the section, not to the page, when the button goes away.
+  await expect(section.getByRole("heading", { name: "Storage" })).toBeFocused();
+});
+
+test("the settings say so when the browser does not agree to keep the data", async ({ page }) => {
+  await openSettings(page, BEST_EFFORT);
+  const section = page.getByRole("region", { name: "Storage" });
+  const keep = section.getByRole("button", { name: "Keep data on this device" });
+  await keep.click();
+  await answerPersistence(page, false);
+  await expect(section.getByRole("status")).toHaveText(
+    "Your browser did not agree to keep this data. Back it up to keep it safe.",
+  );
+  await expect(keep).toBeEnabled();
+  await expect(keep).toBeFocused();
 });
