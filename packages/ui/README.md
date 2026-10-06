@@ -62,20 +62,21 @@ Importing it from a script keeps it a module of the build, so `/licenses.txt` li
 ## Components
 
 ```tsx
-import { Banner, Button, Dialog, Link, Switch, TextField } from "@shkriuss/ui";
+import { Banner, Button, Dialog, FileButton, Link, Switch, TextField } from "@shkriuss/ui";
 
 <Button variant="primary" onPress={save}>{m.save()}</Button>
 <TextField label={m.name()} description={m.nameHelp()} errorMessage={m.nameMissing()} />
 ```
 
-| Component   | What it is                                                                                                          |
-| ----------- | ------------------------------------------------------------------------------------------------------------------- |
-| `Button`    | A button: `primary` for the main action, `secondary` (the default), or `danger` for one that deletes                |
-| `Link`      | A link, underlined in the accent color                                                                              |
-| `TextField` | A text field with its label, an optional description, and an error message while it is invalid                      |
-| `Switch`    | A switch that turns a setting on or off at once                                                                     |
-| `Dialog`    | A modal dialog: it takes the focus, closes with Escape and gives the focus back; the page behind it does not scroll |
-| `Banner`    | A notice that does not interrupt, such as that an update is available, which screen readers read when it appears    |
+| Component    | What it is                                                                                                                 |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| `Button`     | A button: `primary` for the main action, `secondary` (the default), or `danger` for one that deletes                       |
+| `Link`       | A link, underlined in the accent color                                                                                     |
+| `TextField`  | A text field with its label, an optional description, and an error message while it is invalid                             |
+| `Switch`     | A switch that turns a setting on or off at once                                                                            |
+| `Dialog`     | A modal dialog: it takes the focus, closes with Escape and gives the focus back; the page behind it does not scroll        |
+| `FileButton` | A button that lets the user pick a file in the browser's file picker; any type of file, which the app tells by its content |
+| `Banner`     | A notice that does not interrupt, such as that an update is available, which screen readers read when it appears           |
 
 - **Accessible:** React Aria gives them the keyboard, pointer and screen-reader behavior of WCAG 2.2. Buttons and switches are at least 44 by 44 pixels, so that they are easy to tap.
 - **One look:** components take no `className` or `style`. Apps lay them out with elements around them.
@@ -85,6 +86,7 @@ import { Banner, Button, Dialog, Link, Switch, TextField } from "@shkriuss/ui";
 
 - **Pressable elements:** React Aria adds a stylesheet to the page with `touch-action` for buttons and links. `style-src 'self'` refuses that, so `styles.css` has the same rule, and importing the package adds an element with the stylesheet's id, which tells React Aria it is there.
 - **Modal dialogs:** React Aria's modal would add a stylesheet on iOS to keep the page still. `Dialog` uses the browser's `<dialog>` instead, and `styles.css` keeps the page from scrolling while one is open.
+- **File picker:** React Aria's `FileTrigger` hides its file input through the element's `style` object, which the policy allows, unlike a `style` attribute.
 - **Not yet usable:** number and date fields clear their announcements with `innerHTML`, which Trusted Types refuse, and React Aria's modal popovers, as in `Select`, `Menu` and `ComboBox`, add the iOS stylesheet. Each needs a solution like the two above before an app uses it.
 
 ## Tests

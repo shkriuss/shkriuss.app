@@ -1,23 +1,26 @@
 import { BackupError, createBackupFile, generatePassphrase, isLongEnough } from "@shkriuss/backup";
-import type { DeviceState, Snapshot } from "@shkriuss/data";
+import type { DeviceState, Schemas, Snapshot } from "@shkriuss/data";
 import { Button, Dialog, TextField } from "@shkriuss/ui";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { browserSaveEnvironment } from "./browser.ts";
 import { m } from "./messages.ts";
 import { samePassphrase } from "./passphrases.ts";
+import { Restore, type RestoreDatabase } from "./Restore.tsx";
 import { saveFile } from "./save.ts";
 
 /** What backups use of the app's database, from `openDatabase()` of `@shkriuss/data`. */
-export interface BackupDatabase {
+export interface BackupDatabase extends RestoreDatabase {
   snapshot(): Promise<Snapshot>;
   device(): Promise<DeviceState>;
   recordBackup(): Promise<void>;
 }
 
 export interface BackupSectionProps {
-  /** The app's id, which names its backup files (backup format §1). */
+  /** The app's id, which names its backup files (backup format §1), and its own backups. */
   readonly app: string;
   readonly db: BackupDatabase;
+  /** Every version of the app's schema, to read backups of older versions (§5.5). */
+  readonly schemas: Schemas;
 }
 
 /** Where the dialog that makes a backup stands. */
@@ -150,15 +153,16 @@ function OwnPassphrase({
 }
 
 /**
- * The part of Settings about backups (backup format §3, §4; architecture §8): when the last
- * backup was made and how much has changed since, and a dialog that makes one.
+ * The part of Settings about backups (backup format §3–§5; architecture §8): when the last
+ * backup was made and how much has changed since, a dialog that makes one, and one that restores
+ * one.
  *
  * A backup is encrypted with a generated passphrase, which the user writes down, or with one
  * the user picks and types twice. A plain backup comes only after a warning. Once the file is
  * ready, "Save backup" hands it to the share sheet where the browser can share it, or downloads
  * it, and the database records the backup.
  */
-export function BackupSection({ app, db }: BackupSectionProps) {
+export function BackupSection({ app, db, schemas }: BackupSectionProps) {
   const [device, setDevice] = useState<DeviceState>();
   const [step, setStep] = useState<Step>({ name: "closed" });
   const [generated, setGenerated] = useState("");
@@ -398,16 +402,28 @@ export function BackupSection({ app, db }: BackupSectionProps) {
         {m.backups()}
       </h2>
       <p className="empty:hidden">{status}</p>
-      <Button
-        variant="primary"
-        onPress={() => {
-          // A new passphrase for each backup.
-          setGenerated(generatePassphrase());
-          setStep({ name: "generated" });
-        }}
-      >
-        {m.backUp()}
-      </Button>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          variant="primary"
+          onPress={() => {
+            // A new passphrase for each backup.
+            setGenerated(generatePassphrase());
+            setStep({ name: "generated" });
+          }}
+        >
+          {m.backUp()}
+        </Button>
+        <Restore
+          app={app}
+          db={db}
+          schemas={schemas}
+          onRestored={() => {
+            void (async () => {
+              setDevice(await deviceState(db));
+            })();
+          }}
+        />
+      </div>
       <Dialog isOpen={step.name !== "closed"} onClose={close} title={title}>
         <div ref={content} tabIndex={-1} className="flex flex-col gap-4 outline-none">
           {body}

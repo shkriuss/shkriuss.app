@@ -1,4 +1,20 @@
-import { createFormat, defineMessages } from "@shkriuss/i18n";
+import type { ImportCounts } from "@shkriuss/data";
+import { createFormat, defineMessages, type Format } from "@shkriuss/i18n";
+
+/** What an import does, as backup format §5.6 shows it: "12 new, 3 updated, 1 deleted". */
+function importCounts(format: Format, counts: ImportCounts): string {
+  const parts: string[] = [];
+  if (counts.new > 0) {
+    parts.push(`${format.number(counts.new)} new`);
+  }
+  if (counts.updated > 0) {
+    parts.push(`${format.number(counts.updated)} updated`);
+  }
+  if (counts.deleted > 0) {
+    parts.push(`${format.number(counts.deleted)} deleted`);
+  }
+  return format.list(parts, "units");
+}
 
 /** The text of the shell, which every app shows around its own screens. */
 export const messages = defineMessages((format) => ({
@@ -61,6 +77,38 @@ export const messages = defineMessages((format) => ({
   tooLarge: () => "This app's data is too large for a backup.",
   failed: () => "The backup could not be made. Try again.",
   tryAgain: () => "Try again",
+  restore: () => "Restore from a backup",
+  readingTitle: () => "Reading the backup",
+  reading: () => "Reading the backup… An encrypted one takes a few seconds.",
+  encryptedTitle: () => "This backup is encrypted",
+  encryptedText: () => "Enter the passphrase that the backup was made with.",
+  open: () => "Open",
+  enterPassphrase: () => "Enter the passphrase.",
+  wrongPassphrase: () => "The passphrase is wrong. Try again.",
+  previewTitle: () => "Restore this backup?",
+  madeOn: (made: Date) => `This backup was made on ${format.dateTime(made)}.`,
+  brings: (counts: ImportCounts) => `Restoring it brings ${importCounts(format, counts)}.`,
+  nothingNew: () => "This device already has everything in this backup.",
+  restoreNow: () => "Restore",
+  restoringTitle: () => "Restoring the backup",
+  restoring: () => "Restoring the backup…",
+  restoredTitle: () => "Restored",
+  restored: (counts: ImportCounts) => `Restored: ${importCounts(format, counts)}.`,
+  notRestoredTitle: () => "Not restored",
+  fileTooLarge: () => "The file is too large to be a backup.",
+  notABackup: () => "This is not a backup file.",
+  damaged: () => "The file is damaged or not supported.",
+  otherApp: (app: string | undefined) =>
+    app === undefined
+      ? "This is a backup of another app."
+      : `This is a backup of the app “${app}”, not of this one.`,
+  newerVersion: () =>
+    "The backup was made by a newer version of the app. Update the app and try again.",
+  futureClock: () =>
+    "The backup's times lie in the future. Check the date and time on this device and on the one that made the backup.",
+  invalid: () => "The backup is damaged or was changed, and was not restored.",
+  restoreFailed: () => "The backup could not be restored. Nothing was changed.",
+  close: () => "Close",
 }));
 
 export const m = messages(createFormat());

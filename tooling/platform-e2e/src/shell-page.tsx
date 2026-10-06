@@ -11,7 +11,7 @@ import { Button, Link } from "@shkriuss/ui";
 import { StrictMode, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { BACKUP_APP } from "./backups.ts";
-import { notesDatabase } from "./data.ts";
+import { current, notesDatabase } from "./data.ts";
 import { m } from "./shell-messages.ts";
 
 // The shell of @shkriuss/shell around a screen of notes, at /shell, and around the settings, at
@@ -157,11 +157,12 @@ function Notes({ db }: { readonly db: NotesDatabase }) {
 }
 
 function Settings({ db }: { readonly db: NotesDatabase }) {
+  const { schemas } = current();
   return (
     <div className="flex flex-col items-start gap-6">
       <h1 className="text-2xl font-semibold">{m.settings()}</h1>
       <StorageSection storage={storage} />
-      <BackupSection app={BACKUP_APP} db={db} />
+      <BackupSection app={BACKUP_APP} db={db} schemas={schemas} />
     </div>
   );
 }

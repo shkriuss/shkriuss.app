@@ -139,3 +139,21 @@ test("a banner tells its message to screen readers, with its actions", async ({ 
   await expect(banner.getByRole("button", { name: "Reload" })).toBeVisible();
   await expect(banner.getByRole("button", { name: "Later" })).toBeVisible();
 });
+
+test("a file button opens the browser's file picker, and gives the app the file", async ({
+  page,
+}) => {
+  await gallery(page);
+  const section = page.getByRole("region", { name: "Files" });
+  await expect(section).toContainText("No file picked.");
+  const chooser = page.waitForEvent("filechooser");
+  await section.getByRole("button", { name: "Pick a file" }).click();
+  await (
+    await chooser
+  ).setFiles({
+    name: "shkriuss-notes-2026-10-06.age",
+    mimeType: "application/octet-stream",
+    buffer: Buffer.alloc(1500),
+  });
+  await expect(section).toContainText("Picked shkriuss-notes-2026-10-06.age, 1.5 kB.");
+});

@@ -1,8 +1,11 @@
 import "@shkriuss/ui/styles.css";
-import { Banner, Button, Dialog, Link, Switch, TextField } from "@shkriuss/ui";
+import { Banner, Button, Dialog, FileButton, Link, Switch, TextField } from "@shkriuss/ui";
 import { StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { createFormat } from "@shkriuss/i18n";
 import { m } from "./gallery-messages.ts";
+
+const format = createFormat();
 
 // Every component of @shkriuss/ui, for the end-to-end tests in e2e/ui.spec.ts.
 
@@ -13,6 +16,7 @@ function Gallery() {
   const [reminders, setReminders] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [deleted, setDeleted] = useState(false);
+  const [picked, setPicked] = useState<File>();
   return (
     <main className="page flex flex-col gap-8">
       <h1 className="text-3xl font-bold">{m.title()}</h1>
@@ -128,6 +132,18 @@ function Gallery() {
             </Button>
           </div>
         </Dialog>
+      </section>
+
+      <section aria-labelledby="files" className="flex flex-col gap-3">
+        <h2 id="files" className="text-xl font-semibold">
+          {m.files()}
+        </h2>
+        <div>
+          <FileButton onSelect={setPicked}>{m.pickFile()}</FileButton>
+        </div>
+        <p>
+          {picked === undefined ? m.noFile() : m.picked(picked.name, format.bytes(picked.size))}
+        </p>
       </section>
 
       <section aria-labelledby="notices" className="flex flex-col gap-3">
