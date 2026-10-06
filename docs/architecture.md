@@ -85,7 +85,7 @@ apps/<id>/
 ├─ app.config.ts      id (permanent), name, description, accent color, icon,
 │                     opt-in browser permissions, privacy label, extra export formats
 ├─ src/schema.ts      record types and migrations
-├─ src/routes/        screens (TanStack Router, file-based)
+├─ src/routes/        screens, each with its route, declared in code (ADR 0013)
 ├─ src/features/      app-specific components and logic
 ├─ public/            icon source (all sizes are generated)
 └─ e2e/               Playwright tests
@@ -129,7 +129,8 @@ Backups are the only way data leaves a device, the only protection against losin
 
 ## 10. User interface
 
-- React 19 with React Compiler, Vite, TypeScript and TanStack Router ([ADR 0005](decisions/0005-frontend-stack.md)).
+- React 19, Vite, TypeScript and TanStack Router, with routes declared in code ([ADR 0005](decisions/0005-frontend-stack.md), [ADR 0013](decisions/0013-routes-in-code.md)). The React Compiler waits for support of Babel 8 ([roadmap](roadmap.md)).
+- **Navigation:** the shell's frame leads to the app's first screen and to its settings, and each screen titles the page. Links between screens open them without loading the page again, and the new screen's heading takes the focus, which screen readers then read.
 - `@shkriuss/ui` wraps React Aria Components with our design tokens (Tailwind CSS 4): one look across all apps with a per-app accent color, light and dark themes, system fonts and bundled SVG icons.
 - Layouts are phone-first, with two-pane layouts for tablets and desktops. They respect safe areas, reduced motion and contrast preferences.
 - Accessibility target: WCAG 2.2 AA.

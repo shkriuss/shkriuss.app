@@ -1,53 +1,92 @@
 # @shkriuss/shell
 
-The frame around every app's screens ([architecture §5](../../docs/architecture.md#5-repository-layout)), so that every app is laid out, updates and fails alike. It builds on `@shkriuss/ui`, and its text comes from its own message module.
+The frame around every app's screens ([architecture §5](../../docs/architecture.md#5-repository-layout)), so that every app is laid out, navigates, updates and fails alike. It builds on `@shkriuss/ui` and on TanStack Router, with routes declared in code ([ADR 0013](../../docs/decisions/0013-routes-in-code.md)), and its text comes from its own message module.
 
-| Export             | What it is                                                                                                                                       |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `AppFrame`         | The frame: a header with the app's name and its navigation, the update banner and others, and the screen as the page's main content              |
-| `UpdateBanner`     | Tells the user that a new version is ready, and updates the app when they agree ([service worker spec](../../docs/specs/service-worker.md) §7.2) |
-| `AppErrorBoundary` | Shows `AppError` in place of a screen that throws while rendering                                                                                |
-| `AppError`         | What a failed screen shows: that something went wrong, and a button that reloads the app                                                         |
-| `useObserved`      | The latest result of an observed query, such as `db.observe()`, which re-renders the component at each new result                                |
-| `StorageSection`   | The storage part of Settings: how much the app stores, whether the browser keeps it, and a button that asks the browser to keep it               |
-| `BackupSection`    | The backup part of Settings: when the last backup was made and how much has changed since, a dialog that makes one, and one that restores one    |
-| `Restore`          | The button and dialog that restore a backup, which `BackupSection` shows                                                                         |
-| `BackupReminder`   | A banner that reminds the user to back up, with a button that makes the backup at once                                                           |
-| `InstallSection`   | The install part of Settings: the browser's install prompt, how to add the app to the Home Screen of an iPhone or iPad, or that it is installed  |
-| `AboutSection`     | The about part of Settings: what the app does, where its data stays, its license and source code, the licenses of what it includes               |
-| `InstallBanner`    | On iPhone and iPad, a banner that suggests installing the app before anything is entered                                                         |
+| Export           | What it is                                                                                                                                                            |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AppFrame`       | The frame, which the app's root route shows: a header with the app's name and its navigation, the update banner and others, and the screen as the page's main content |
+| `ScreenLink`     | A link to another screen, which the router opens without loading the page again; its `to` is checked against the app's routes                                         |
+| `Screen`         | A screen: its heading, which takes the focus when the user comes to it from another, and the page's title                                                             |
+| `NotFound`       | What the app shows at an address that none of its screens has: the router's `defaultNotFoundComponent`                                                                |
+| `UpdateBanner`   | Tells the user that a new version is ready, and updates the app when they agree ([service worker spec](../../docs/specs/service-worker.md) §7.2)                      |
+| `AppError`       | What a failed screen shows: that something went wrong, and a button that reloads the app; the router's `defaultErrorComponent`                                        |
+| `useObserved`    | The latest result of an observed query, such as `db.observe()`, which re-renders the component at each new result                                                     |
+| `StorageSection` | The storage part of Settings: how much the app stores, whether the browser keeps it, and a button that asks the browser to keep it                                    |
+| `BackupSection`  | The backup part of Settings: when the last backup was made and how much has changed since, a dialog that makes one, and one that restores one                         |
+| `Restore`        | The button and dialog that restore a backup, which `BackupSection` shows                                                                                              |
+| `BackupReminder` | A banner that reminds the user to back up, with a button that makes the backup at once                                                                                |
+| `InstallSection` | The install part of Settings: the browser's install prompt, how to add the app to the Home Screen of an iPhone or iPad, or that it is installed                       |
+| `AboutSection`   | The about part of Settings: what the app does, where its data stays, its license and source code, the licenses of what it includes                                    |
+| `InstallBanner`  | On iPhone and iPad, a banner that suggests installing the app before anything is entered                                                                              |
 
 ## Use
+
+The app's routes, declared in code ([ADR 0013](../../docs/decisions/0013-routes-in-code.md)): the root route shows the frame, and every app has `/` and `/settings`, which the frame links to.
 
 ```tsx
 import "@shkriuss/ui/styles.css";
 import { startServiceWorker } from "@shkriuss/pwa";
-import { AppErrorBoundary, AppFrame, BackupReminder, InstallBanner } from "@shkriuss/shell";
+import {
+  AppError,
+  AppFrame,
+  BackupReminder,
+  InstallBanner,
+  NotFound,
+  Screen,
+  ScreenLink,
+} from "@shkriuss/shell";
+import { createRootRoute, createRoute, createRouter, Outlet } from "@tanstack/react-router";
 
 const updates = startServiceWorker();
 
-createRoot(container).render(
-  <AppFrame
-    name={m.appName()}
-    updates={updates}
-    navigation={<Sections />}
-    banners={
-      <>
-        <InstallBanner install={install} db={db} />
-        <BackupReminder app="notes" db={db} />
-      </>
-    }
-  >
-    <AppErrorBoundary>
-      <Screen />
-    </AppErrorBoundary>
-  </AppFrame>,
-);
+const root = createRootRoute({
+  component: () => (
+    <AppFrame
+      name={m.appName()}
+      updates={updates}
+      navigation={<ScreenLink to="/lists">{m.lists()}</ScreenLink>}
+      banners={
+        <>
+          <InstallBanner install={install} db={db} />
+          <BackupReminder app="notes" db={db} />
+        </>
+      }
+    >
+      <Outlet />
+    </AppFrame>
+  ),
+});
+const home = createRoute({ getParentRoute: () => root, path: "/", component: Home });
+const lists = createRoute({ getParentRoute: () => root, path: "/lists", component: Lists });
+const settings = createRoute({
+  getParentRoute: () => root,
+  path: "/settings",
+  component: Settings,
+});
+
+function Lists() {
+  return <Screen title={m.lists()}>{/* The screen's content, under its heading. */}</Screen>;
+}
+
+export const router = createRouter({
+  routeTree: root.addChildren([home, lists, settings]),
+  defaultErrorComponent: AppError,
+  defaultNotFoundComponent: NotFound,
+});
+
+declare module "@tanstack/react-router" {
+  interface Register {
+    router: typeof router;
+  }
+}
 ```
 
-- **The frame** has a banner, a navigation and a main landmark. A link that keyboard users reach first skips to the screen (WCAG 2.4.1), without adding to the browser's history. A banner that goes away with the button that had the focus, as after "Later", gives the focus to the screen, so that it is not lost (WCAG 2.4.3).
+- **The frame** has a banner, a navigation and a main landmark. The app's name leads to its first screen, and the navigation ends with the settings. A link that keyboard users reach first skips to the screen (WCAG 2.4.1), without adding to the browser's history. A banner that goes away with the button that had the focus, as after "Later", gives the focus to the screen, so that it is not lost (WCAG 2.4.3).
+- **Navigation:** `ScreenLink` opens another screen without loading the page again. TypeScript checks its `to` against the app's routes, once the app registers its router as above. It is a plain link, so the browser opens it in a new tab when the user asks, and the link to the screen that shows has `aria-current="page"`.
+- **Screens:** each screen is a `<Screen title={…}>`, whose title is its heading and names it in the page's title, as "Settings – Notes" (WCAG 2.4.2). When the user comes to a screen from another, with a link or with the browser's back and forward buttons, its heading takes the focus, and screen readers read it, as after loading a page (WCAG 2.4.3). The router has scrolled to the top by then. The first screen leaves the focus where a page leaves it.
+- **Addresses the app does not have,** such as an old bookmark, show `NotFound` in the frame, with a link to the app's first screen.
 - **Updates** never interrupt: the banner shows that a new version is ready, and "Later" hides it until there is news again, such as another window that updated the app.
-- **Errors:** a screen that fails shows what happened inside the frame, which keeps the update banner, since a new version may well fix it. The error's details stay in the app; nothing reports them anywhere.
+- **Errors:** a screen that fails shows `AppError` inside the frame, which keeps the update banner, since a new version may well fix it. The error's details stay in the app; nothing reports them anywhere.
 - **Observed data:** create the observable once, with `useMemo`, so that each render does not start a new observation:
 
   ```tsx
@@ -78,8 +117,6 @@ createRoot(container).render(
   - **No version yet:** showing which version runs needs the service worker to tell its version id, a change to its spec that comes on its own.
 - **Styles:** the shell's components use Tailwind's classes, which `@shkriuss/ui/styles.css` covers.
 
-The navigation itself, with TanStack Router, comes with the app template (step 1.3).
-
 ## Tests
 
-The store behind `useObserved`, the backup status that the settings and the reminder share, when the reminder comes, the links of About, saving a file, comparing passphrases, the messages of restore errors and the text have unit tests. The components and hooks need React in a browser, so `tooling/platform-e2e` tests them on its pages `/shell` and `/shell/settings`: axe in both themes, the landmarks and the skip link, the banner in every state, notes that change while the screen shows them, a screen that fails, the storage section in every state, asking the browser with a yes and with a no, and backups: encrypted with either passphrase or plain, saved as a download or through a share sheet that the tests stand in for, read back, and restored on another device, with every error that a file can cause; the reminder: when it comes and when it does not, its backup, "Later" for a day, and where the focus goes; installing, with the browser's prompt and on iPhone and iPad; and About, with its links and the licenses.
+The store behind `useObserved`, the backup status that the settings and the reminder share, when the reminder comes, the links of About, saving a file, comparing passphrases, the messages of restore errors and the text have unit tests. The components and hooks need React in a browser, so `tooling/platform-e2e` tests them on its pages `/shell`, `/shell/archive` and `/shell/settings`, whose routes are declared in code: axe in both themes, the landmarks and the skip link; links between screens, which do not load the page again, with the pointer, with Enter and with the browser's back and forward buttons, the focus on each new screen's heading and the page's title, a link opened with a modifier key, which stays the browser's, and an address that the app does not have; the banner in every state, notes that change while the screen shows them, a screen that fails, the storage section in every state, asking the browser with a yes and with a no, and backups: encrypted with either passphrase or plain, saved as a download or through a share sheet that the tests stand in for, read back, and restored on another device, with every error that a file can cause; the reminder: when it comes and when it does not, its backup, "Later" for a day, and where the focus goes; installing, with the browser's prompt and on iPhone and iPad; and About, with its links and the licenses.

@@ -20,6 +20,13 @@ function importCounts(format: Format, counts: ImportCounts): string {
 export const messages = defineMessages((format) => ({
   skipToContent: () => "Skip to content",
   navigation: () => "Sections",
+  settings: () => "Settings",
+  pageTitle: (screen: string, app: string | undefined) =>
+    app === undefined || screen === app ? screen : `${screen} – ${app}`,
+  notFoundTitle: () => "Page not found",
+  notFoundText: () => "This app has no page at this address.",
+  goHome: (app: string | undefined) =>
+    app === undefined ? "Go to the start page" : `Go to ${app}`,
   updateAvailable: () => "A new version of the app is ready.",
   update: () => "Update",
   later: () => "Later",

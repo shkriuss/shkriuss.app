@@ -17,6 +17,7 @@
     "@shkriuss/i18n": "workspace:*",
     "@shkriuss/pwa": "workspace:*",
     "@shkriuss/ui": "workspace:*",
+    "@tanstack/react-router": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:"
   },
