@@ -35,6 +35,12 @@ export const messages = defineMessages((format) => ({
   reload: () => "Reload",
   errorTitle: () => "Something went wrong",
   errorText: () => "Reload the app to try again. Your data stays on this device.",
+  startFailedTitle: () => "The app could not start",
+  startFailedText: () =>
+    "It could not open its data on this device. Reload the app to try again. Your data stays on this device.",
+  startOutdatedTitle: () => "This app was updated",
+  startOutdatedText: () =>
+    "A newer version of this app has opened its data on this device already. Reload the app to use it.",
   storage: () => "Storage",
   usage: (bytes: number) => `This app stores ${format.bytes(bytes)} on this device.`,
   usageUnknown: () => "Your browser does not say how much this app stores.",

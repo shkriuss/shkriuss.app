@@ -44,7 +44,9 @@ jobs:
   e2e:
     name: End-to-end
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    # Each app's tests run after the last one's (pnpm e2e), about 9 minutes in all, and the
+    # browsers' system libraries once took 11 minutes to install from a slow package mirror.
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:

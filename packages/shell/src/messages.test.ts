@@ -18,6 +18,10 @@ describe("the shell's text", () => {
       reload: m.reload(),
       errorTitle: m.errorTitle(),
       errorText: m.errorText(),
+      startFailedTitle: m.startFailedTitle(),
+      startFailedText: m.startFailedText(),
+      startOutdatedTitle: m.startOutdatedTitle(),
+      startOutdatedText: m.startOutdatedText(),
       storage: m.storage(),
       usageUnknown: m.usageUnknown(),
       kept: m.kept(),
@@ -111,6 +115,12 @@ describe("the shell's text", () => {
       reload: "Reload",
       errorTitle: "Something went wrong",
       errorText: "Reload the app to try again. Your data stays on this device.",
+      startFailedTitle: "The app could not start",
+      startFailedText:
+        "It could not open its data on this device. Reload the app to try again. Your data stays on this device.",
+      startOutdatedTitle: "This app was updated",
+      startOutdatedText:
+        "A newer version of this app has opened its data on this device already. Reload the app to use it.",
       storage: "Storage",
       usageUnknown: "Your browser does not say how much this app stores.",
       kept: "Your browser keeps this data until you delete it.",

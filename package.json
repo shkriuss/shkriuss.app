@@ -12,10 +12,10 @@
     "format:check": "prettier --check .",
     "lint": "oxlint --type-aware --deny-warnings",
     "typecheck": "turbo run typecheck",
-    "test": "turbo run test",
+    "test": "turbo run test --concurrency=1",
     "build": "turbo run build",
     "check": "node tooling/checks/src/cli.ts",
-    "e2e": "turbo run e2e",
+    "e2e": "turbo run e2e --concurrency=1",
     "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm check && pnpm e2e"
   },
   "devDependencies": {

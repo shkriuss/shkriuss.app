@@ -4,7 +4,7 @@ The service worker of every app: it makes the app work offline after its first l
 
 ## Use
 
-In the app's `vite.config.ts`, `pwa()` comes before `edge()`, which writes `/sw.js` once every other file of the build is final:
+Every app gets `pwa()` from its build, `app()` of `@shkriuss/shell/vite`. There, as anywhere, `pwa()` comes before `edge()`, which writes `/sw.js` once every other file of the build is final:
 
 ```ts
 import { edge } from "@shkriuss/edge";
@@ -144,12 +144,12 @@ If a version is broken in a way that keeps it from updating itself, for example 
    curl -s https://notes.shkriuss.app/sw.js | grep -o '"version":"[0-9a-f]*"'
    ```
 
-2. Fix the code. In the app's `vite.config.ts`, list the broken version's id: `pwa({ replaces: ["0123456789abcdef"] })`. Never deploy an older build instead: it could not open a database that the broken version upgraded.
+2. Fix the code. In the app's `vite.config.ts`, list the broken version's id: `app(config, { serviceWorker: { replaces: ["0123456789abcdef"] } })`, which passes it to `pwa()`. Never deploy an older build instead: it could not open a database that the broken version upgraded.
 3. Merge and deploy as usual. Every device whose active version is the broken one takes the fix as soon as it has installed it, and reloads every window of the app, even in the middle of a task. Every other device gets a normal update.
 4. Remove the id again in a later release.
 
 ## Removing the service worker
 
-The last resort, if the service worker itself is broken in a way that a new version cannot fix (spec §9). In the app's `vite.config.ts`, use `pwa({ remove: true })`, then merge and deploy as usual.
+The last resort, if the service worker itself is broken in a way that a new version cannot fix (spec §9). In the app's `vite.config.ts`, use `app(config, { serviceWorker: { remove: true } })`, which passes it to `pwa()`, then merge and deploy as usual.
 
 The next time a device opens the app, its browser fetches the new `/sw.js`, which deletes every cache of the app, unregisters itself and reloads every window of the app from the network. It never touches IndexedDB, so the user's data stays. Pages of this build register no service worker; they unregister any they find, and delete its caches. The app works online until a build with `pwa()` is deployed again.

@@ -8,6 +8,9 @@ The frame around every app's screens ([architecture §5](../../docs/architecture
 | `ScreenLink`     | A link to another screen, which the router opens without loading the page again; its `to` is checked against the app's routes                                         |
 | `Screen`         | A screen: its heading, which takes the focus when the user comes to it from another, and the page's title                                                             |
 | `NotFound`       | What the app shows at an address that none of its screens has: the router's `defaultNotFoundComponent`                                                                |
+| `SettingsScreen` | The settings at `/settings`: the app's own, then installing, storage, backups and About, alike in every app                                                           |
+| `StartFailed`    | What the app shows in place of its frame when it cannot open its database, as when a newer version upgraded it                                                        |
+| `appUpdates`     | The service worker's updates, to which it adds the database: a newer version that closed it makes the page outdated                                                   |
 | `UpdateBanner`   | Tells the user that a new version is ready, and updates the app when they agree ([service worker spec](../../docs/specs/service-worker.md) §7.2)                      |
 | `AppError`       | What a failed screen shows: that something went wrong, and a button that reloads the app; the router's `defaultErrorComponent`                                        |
 | `useObserved`    | The latest result of an observed query, such as `db.observe()`, which re-renders the component at each new result                                                     |
@@ -19,9 +22,24 @@ The frame around every app's screens ([architecture §5](../../docs/architecture
 | `AboutSection`   | The about part of Settings: what the app does, where its data stays, its license and source code, the licenses of what it includes                                    |
 | `InstallBanner`  | On iPhone and iPad, a banner that suggests installing the app before anything is entered                                                                              |
 
+## Building an app
+
+`@shkriuss/shell/vite` is every app's build. An app's `vite.config.ts` is only:
+
+```ts
+import { app } from "@shkriuss/shell/vite";
+import { config } from "./app.config.ts";
+
+export default app(config);
+```
+
+`app.config.ts` says what the app is (`AppConfig`): its permanent id, its name and description from its messages, the accent color and glyph of its icons, and the browser features it needs, if any. `app()` refuses an id that cannot be an app's, then puts together React, Tailwind CSS, the page's title and description, the manifest and the icons, the service worker, and `edge()`, last, which writes the security headers once every other file is final. For the service worker's procedures of last resort, `app(config, { serviceWorker: { replaces: […] } })` or `{ remove: true }` ([`@shkriuss/pwa`](../pwa/README.md)).
+
+`tooling/app-template` is an app built so, which CI builds and tests.
+
 ## Use
 
-The app's routes, declared in code ([ADR 0013](../../docs/decisions/0013-routes-in-code.md)): the root route shows the frame, and every app has `/` and `/settings`, which the frame links to.
+The app's routes, declared in code ([ADR 0013](../../docs/decisions/0013-routes-in-code.md)): the root route shows the frame, and every app has `/` and `/settings`, which the frame links to. The app template's `src/` shows all of it at work: starting, routes, a screen and the settings.
 
 ```tsx
 import "@shkriuss/ui/styles.css";
@@ -87,6 +105,9 @@ declare module "@tanstack/react-router" {
 - **Addresses the app does not have,** such as an old bookmark, show `NotFound` in the frame, with a link to the app's first screen.
 - **Updates** never interrupt: the banner shows that a new version is ready, and "Later" hides it until there is news again, such as another window that updated the app.
 - **Errors:** a screen that fails shows `AppError` inside the frame, which keeps the update banner, since a new version may well fix it. The error's details stay in the app; nothing reports them anywhere.
+- **Starting:** the app opens its database before it shows its frame. If that fails, it shows `StartFailed` instead: that a newer version of the app has opened the data already, which reloading brings, or that the data could not be opened, with a button that reloads.
+- **Versions side by side:** a newer version of the app, in another window, upgrades the database and closes it here ([data model](../../docs/specs/data-model.md) §7). With `appUpdates(startServiceWorker())` as the frame's `updates`, and its `databaseClosed` as `onVersionChange` of `openDatabase()`, the update banner then says that the app was updated in another window, and reloads it.
+- **Settings:** `<SettingsScreen>` at `/settings` shows the app's own settings, its children, then the parts that every app has, below.
 - **Observed data:** create the observable once, with `useMemo`, so that each render does not start a new observation:
 
   ```tsx
@@ -119,4 +140,4 @@ declare module "@tanstack/react-router" {
 
 ## Tests
 
-The store behind `useObserved`, the backup status that the settings and the reminder share, when the reminder comes, the links of About, saving a file, comparing passphrases, the messages of restore errors and the text have unit tests. The components and hooks need React in a browser, so `tooling/platform-e2e` tests them on its pages `/shell`, `/shell/archive` and `/shell/settings`, whose routes are declared in code: axe in both themes, the landmarks and the skip link; links between screens, which do not load the page again, with the pointer, with Enter and with the browser's back and forward buttons, the focus on each new screen's heading and the page's title, a link opened with a modifier key, which stays the browser's, and an address that the app does not have; the banner in every state, notes that change while the screen shows them, a screen that fails, the storage section in every state, asking the browser with a yes and with a no, and backups: encrypted with either passphrase or plain, saved as a download or through a share sheet that the tests stand in for, read back, and restored on another device, with every error that a file can cause; the reminder: when it comes and when it does not, its backup, "Later" for a day, and where the focus goes; installing, with the browser's prompt and on iPhone and iPad; and About, with its links and the licenses.
+The store behind `useObserved`, the backup status that the settings and the reminder share, when the reminder comes, the links of About, saving a file, comparing passphrases, the messages of restore errors, the text, and the updates that a closed database makes outdated have unit tests. So does the build of an app, with real builds of a tiny app: its page's title and description, the manifest, the service worker and the security headers, the browser features it allows, the service worker's procedures of last resort, and ids that cannot be an app's. The components and hooks need React in a browser, so `tooling/platform-e2e` tests them on its pages `/shell`, `/shell/archive` and `/shell/settings`, whose routes are declared in code: axe in both themes, the landmarks and the skip link; links between screens, which do not load the page again, with the pointer, with Enter and with the browser's back and forward buttons, the focus on each new screen's heading and the page's title, a link opened with a modifier key, which stays the browser's, and an address that the app does not have; the banner in every state, notes that change while the screen shows them, a screen that fails, the storage section in every state, asking the browser with a yes and with a no, and backups: encrypted with either passphrase or plain, saved as a download or through a share sheet that the tests stand in for, read back, and restored on another device, with every error that a file can cause; the reminder: when it comes and when it does not, its backup, "Later" for a day, and where the focus goes; installing, with the browser's prompt and on iPhone and iPad; and About, with its links and the licenses.

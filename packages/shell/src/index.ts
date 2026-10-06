@@ -10,7 +10,10 @@ export { observedStore, type Observed, type ObservedStore } from "./observed.ts"
 export { Restore, type RestoreDatabase, type RestoreProps } from "./Restore.tsx";
 export { Screen, type ScreenProps } from "./Screen.tsx";
 export { ScreenLink } from "./ScreenLink.tsx";
+export { SettingsScreen, type SettingsScreenProps } from "./SettingsScreen.tsx";
+export { StartFailed, type StartFailedProps } from "./StartFailed.tsx";
 export { StorageSection, type StorageSectionProps } from "./StorageSection.tsx";
 export { UpdateBanner, type UpdateBannerProps } from "./UpdateBanner.tsx";
+export { type AppUpdatesWithDatabase, appUpdates } from "./updates.ts";
 export { type BackupDatabase } from "./useBackupDialog.tsx";
 export { useObserved } from "./useObserved.ts";
