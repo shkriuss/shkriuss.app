@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { appManifest, THEME_COLORS, type WebAppManifestOptions } from "./manifest.ts";
+import { appIconSvg, appManifest, THEME_COLORS, type WebAppManifestOptions } from "./manifest.ts";
 
 const OPTIONS: WebAppManifestOptions = {
   name: "Notes",
@@ -94,5 +94,17 @@ describe("THEME_COLORS", () => {
         canvas: token("@media (prefers-color-scheme: dark)", "canvas"),
       },
     });
+  });
+});
+
+describe("appIconSvg", () => {
+  it("draws the app's icon as its favicon is drawn", () => {
+    const favicon = appManifest(OPTIONS).icons.find(({ fileName }) => fileName === "favicon.svg");
+    expect(appIconSvg(OPTIONS)).toBe(new TextDecoder().decode(favicon?.bytes));
+    expect(appIconSvg(OPTIONS)).toContain('fill="#1d4ed8"');
+  });
+
+  it("refuses an accent that is no color", () => {
+    expect(() => appIconSvg({ ...OPTIONS, accent: "blue" })).toThrow("is not a color");
   });
 });

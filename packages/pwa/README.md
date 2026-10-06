@@ -65,6 +65,7 @@ webAppManifest({
 - **The glyph** is SVG path data, filled by the non-zero or the even-odd rule: an outline becomes a filled path with "outline stroke" in any SVG editor. The build refuses path data that does not follow SVG's grammar, and paths that leave the glyph's square.
 - **The page** gets `<link rel="manifest">`, the favicon, the touch icon, and a `theme-color` for each theme: the surface of the frame's header, so that an installed app's title bar and its header look like one.
 - **Names:** `shortName`, which a home screen shows under the icon, has at most 12 characters; it is `name` if left out.
+- **For other pages:** `appIconSvg({ accent, icon })` gives the favicon's drawing, as the hub's catalog shows each app.
 - **No dependencies:** the icons are drawn by this package, with exact area coverage for smooth edges, and written as PNG with Node's zlib, so the same glyph always gives the same bytes.
 
 ## Installing

@@ -37,6 +37,7 @@ export {
 } from "./manifest.ts";
 export {
   LICENSES_FILE,
+  OWN_GENERATED,
   SOURCE_URL,
   collectLicenses,
   legalComments,

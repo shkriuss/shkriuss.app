@@ -13,7 +13,7 @@ import {
 import { isVersionId } from "./protocol.ts";
 import { serviceWorkerScript } from "./script.ts";
 
-export type { WebAppManifestOptions } from "./manifest.ts";
+export { appIconSvg, type WebAppManifestOptions } from "./manifest.ts";
 export type { IconPath, IconSource } from "./icons/icons.ts";
 
 export interface PwaOptions {

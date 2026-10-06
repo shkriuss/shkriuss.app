@@ -172,9 +172,15 @@ importers:
       '@shkriuss/i18n':
         specifier: workspace:*
         version: link:../../packages/i18n
+      '@shkriuss/shell':
+        specifier: workspace:*
+        version: link:../../packages/shell
       '@shkriuss/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      '@tanstack/react-router':
+        specifier: 'catalog:'
+        version: 1.170.41(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       react:
         specifier: 'catalog:'
         version: 19.3.0

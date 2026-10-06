@@ -1,26 +1,28 @@
 # @shkriuss/shell
 
-The frame around every app's screens ([architecture §5](../../docs/architecture.md#5-repository-layout)), so that every app is laid out, navigates, updates and fails alike. It builds on `@shkriuss/ui` and on TanStack Router, with routes declared in code ([ADR 0013](../../docs/decisions/0013-routes-in-code.md)), and its text comes from its own message module.
+The frame around every app's screens, and around the hub's pages ([architecture §5](../../docs/architecture.md#5-repository-layout)), so that every app is laid out, navigates, updates and fails alike. It builds on `@shkriuss/ui` and on TanStack Router, with routes declared in code ([ADR 0013](../../docs/decisions/0013-routes-in-code.md)), and its text comes from its own message module.
 
-| Export           | What it is                                                                                                                                                            |
-| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `AppFrame`       | The frame, which the app's root route shows: a header with the app's name and its navigation, the update banner and others, and the screen as the page's main content |
-| `ScreenLink`     | A link to another screen, which the router opens without loading the page again; its `to` is checked against the app's routes                                         |
-| `Screen`         | A screen: its heading, which takes the focus when the user comes to it from another, and the page's title                                                             |
-| `NotFound`       | What the app shows at an address that none of its screens has: the router's `defaultNotFoundComponent`                                                                |
-| `SettingsScreen` | The settings at `/settings`: the app's own, then installing, storage, backups and About, alike in every app                                                           |
-| `StartFailed`    | What the app shows in place of its frame when it cannot open its database, as when a newer version upgraded it                                                        |
-| `appUpdates`     | The service worker's updates, to which it adds the database: a newer version that closed it makes the page outdated                                                   |
-| `UpdateBanner`   | Tells the user that a new version is ready, and updates the app when they agree ([service worker spec](../../docs/specs/service-worker.md) §7.2)                      |
-| `AppError`       | What a failed screen shows: that something went wrong, and a button that reloads the app; the router's `defaultErrorComponent`                                        |
-| `useObserved`    | The latest result of an observed query, such as `db.observe()`, which re-renders the component at each new result                                                     |
-| `StorageSection` | The storage part of Settings: how much the app stores, whether the browser keeps it, and a button that asks the browser to keep it                                    |
-| `BackupSection`  | The backup part of Settings: when the last backup was made and how much has changed since, a dialog that makes one, and one that restores one                         |
-| `Restore`        | The button and dialog that restore a backup, which `BackupSection` shows                                                                                              |
-| `BackupReminder` | A banner that reminds the user to back up, with a button that makes the backup at once                                                                                |
-| `InstallSection` | The install part of Settings: the browser's install prompt, how to add the app to the Home Screen of an iPhone or iPad, or that it is installed                       |
-| `AboutSection`   | The about part of Settings: what the app does, where its data stays, its license and source code, the licenses of what it includes                                    |
-| `InstallBanner`  | On iPhone and iPad, a banner that suggests installing the app before anything is entered                                                                              |
+| Export                                                      | What it is                                                                                                                                                                                          |
+| ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AppFrame`                                                  | The frame, which the app's root route shows: a header with the app's name and its navigation, the update banner and others, and the screen as the page's main content                               |
+| `Frame`                                                     | The frame of every page, of the apps and the hub: a header with the name and the navigation, banners, the page, and a footer. `AppFrame` is a `Frame` with the app's settings and the update banner |
+| `SOURCE_URL`, `LICENSES_PATH`, `SECURITY_URL`, `REPORT_URL` | Where the source code is, the licenses of what a build includes, the security policy, and the private report of a vulnerability that every site's `security.txt` gives                              |
+| `ScreenLink`                                                | A link to another screen, which the router opens without loading the page again; its `to` is checked against the app's routes                                                                       |
+| `Screen`                                                    | A screen: its heading, which takes the focus when the user comes to it from another, and the page's title                                                                                           |
+| `NotFound`                                                  | What the app shows at an address that none of its screens has: the router's `defaultNotFoundComponent`                                                                                              |
+| `SettingsScreen`                                            | The settings at `/settings`: the app's own, then installing, storage, backups and About, alike in every app                                                                                         |
+| `StartFailed`                                               | What the app shows in place of its frame when it cannot open its database, as when a newer version upgraded it                                                                                      |
+| `appUpdates`                                                | The service worker's updates, to which it adds the database: a newer version that closed it makes the page outdated                                                                                 |
+| `UpdateBanner`                                              | Tells the user that a new version is ready, and updates the app when they agree ([service worker spec](../../docs/specs/service-worker.md) §7.2)                                                    |
+| `AppError`                                                  | What a failed screen shows: that something went wrong, and a button that reloads the app; the router's `defaultErrorComponent`                                                                      |
+| `useObserved`                                               | The latest result of an observed query, such as `db.observe()`, which re-renders the component at each new result                                                                                   |
+| `StorageSection`                                            | The storage part of Settings: how much the app stores, whether the browser keeps it, and a button that asks the browser to keep it                                                                  |
+| `BackupSection`                                             | The backup part of Settings: when the last backup was made and how much has changed since, a dialog that makes one, and one that restores one                                                       |
+| `Restore`                                                   | The button and dialog that restore a backup, which `BackupSection` shows                                                                                                                            |
+| `BackupReminder`                                            | A banner that reminds the user to back up, with a button that makes the backup at once                                                                                                              |
+| `InstallSection`                                            | The install part of Settings: the browser's install prompt, how to add the app to the Home Screen of an iPhone or iPad, or that it is installed                                                     |
+| `AboutSection`                                              | The about part of Settings: what the app does, where its data stays, its license and source code, the licenses of what it includes                                                                  |
+| `InstallBanner`                                             | On iPhone and iPad, a banner that suggests installing the app before anything is entered                                                                                                            |
 
 ## Building an app
 
@@ -36,6 +38,13 @@ export default app(config);
 `app.config.ts` says what the app is (`AppConfig`): its permanent id, its name and description from its messages, the accent color and glyph of its icons, and the browser features it needs, if any. `app()` refuses an id that cannot be an app's, then puts together React, Tailwind CSS, the page's title and description, the manifest and the icons, the service worker, and `edge()`, last, which writes the security headers once every other file is final. For the service worker's procedures of last resort, `app(config, { serviceWorker: { replaces: […] } })` or `{ remove: true }` ([`@shkriuss/pwa`](../pwa/README.md)).
 
 `tooling/app-template` is an app built so, which CI builds and tests.
+
+## The hub
+
+The hub is a site without data, and no app. It takes two entry points of the shell:
+
+- **`@shkriuss/shell/site`:** what it shares with the apps: `Frame`, `Screen`, `ScreenLink` and the links above, without the apps' parts, whose links to `/settings` its routes do not have.
+- **`catalog(appsDirectory)` of `@shkriuss/shell/vite`:** its build's catalog of apps ([hub spec](../../docs/specs/hub.md) §2). It reads the `app.config.ts` of every app in `apps/`, checks it, and gives the hub each app's id, name, description, icon and browser features as the module `virtual:shkriuss/catalog`. Only those values reach the hub's bundle. It is the one place that reads another app's configuration; `pnpm check imports` refuses imports of an app anywhere. `readCatalog()` reads the same, for the hub's tests.
 
 ## Use
 

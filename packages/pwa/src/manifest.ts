@@ -4,7 +4,7 @@
  * name, description, accent color and glyph.
  */
 
-import { appIcons, type IconFile, type IconSource } from "./icons/icons.ts";
+import { appIcons, faviconSvg, glyphOf, type IconFile, type IconSource } from "./icons/icons.ts";
 
 export interface WebAppManifestOptions {
   /** The app's name, as installed apps and the app switcher show it. */
@@ -28,6 +28,9 @@ export const THEME_COLORS = {
   light: { surface: "#f3f4f6", canvas: "#ffffff" },
   dark: { surface: "#1f2937", canvas: "#111827" },
 } as const;
+
+/** The color of the glyph on every app's icons. */
+const GLYPH_COLOR = "#ffffff";
 
 /** The longest short name that home screens show whole under an icon. */
 const SHORT_NAME_LENGTH = 12;
@@ -58,7 +61,7 @@ export function appManifest(options: WebAppManifestOptions): AppManifest {
       `"${shortName}" is longer than ${SHORT_NAME_LENGTH} characters, which home screens cut short: give a shorter shortName.`,
     );
   }
-  const icons = appIcons(options.icon, { background: options.accent, foreground: "#ffffff" });
+  const icons = appIcons(options.icon, { background: options.accent, foreground: GLYPH_COLOR });
   const manifest = {
     id: "/",
     name,
@@ -76,4 +79,15 @@ export function appManifest(options: WebAppManifestOptions): AppManifest {
     ),
   };
   return { manifest: `${JSON.stringify(manifest, null, 2)}\n`, icons };
+}
+
+/**
+ * An app's icon as SVG, drawn as its favicon is: for a page that shows the apps, as the hub's
+ * catalog does.
+ */
+export function appIconSvg({
+  accent,
+  icon,
+}: Pick<WebAppManifestOptions, "accent" | "icon">): string {
+  return faviconSvg(glyphOf(icon), { background: accent, foreground: GLYPH_COLOR });
 }

@@ -48,7 +48,7 @@ Rules ([ADR 0001](decisions/0001-domains-and-environments.md)):
 ```
 
 - Each app is a **separate origin** with its own storage, service worker, manifest and install. The browser's same-origin policy stops apps from reading each other's data.
-- The **hub** (`shkriuss.app`) is a static site: the app catalog, install guides, and the privacy and security pages. It holds no user data.
+- The **hub** (`shkriuss.app`) is a static site: the app catalog, install guides, and the privacy and security pages ([hub spec](specs/hub.md)). It holds no user data, and has no service worker.
 - Hosting is purely static. There is no backend, database or API.
 
 ## 5. Repository layout
@@ -65,18 +65,18 @@ shkriuss.app/
 └─ SECURITY.md              how to report vulnerabilities
 ```
 
-| Package            | Responsibility                                                                                                                                                     |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `@shkriuss/config` | Shared TypeScript settings and the end-to-end test setup (Playwright); lint and format settings are at the repository's root                                       |
-| `@shkriuss/ui`     | Design tokens, theme, accessible components (React Aria), icons                                                                                                    |
-| `@shkriuss/shell`  | App frame: navigation, settings, about, install and update prompts, storage status, backup screens, error handling; and every app's build (`@shkriuss/shell/vite`) |
-| `@shkriuss/data`   | Local database, record model, merge rules, migrations, reactive queries                                                                                            |
-| `@shkriuss/backup` | Export and import, encryption (`age`), backup format versions, readable export formats                                                                             |
-| `@shkriuss/pwa`    | Web app manifest, service worker, install and update flow, persistent storage                                                                                      |
-| `@shkriuss/edge`   | Security headers (`_headers`), script integrity, starting workers under Trusted Types, and Cloudflare/Wrangler configuration                                       |
-| `@shkriuss/i18n`   | Typed message modules in English ([ADR 0012](decisions/0012-typed-messages.md)) and `Intl` formats                                                                 |
+| Package            | Responsibility                                                                                                                                                                                                                               |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@shkriuss/config` | Shared TypeScript settings and the end-to-end test setup (Playwright); lint and format settings are at the repository's root                                                                                                                 |
+| `@shkriuss/ui`     | Design tokens, theme, accessible components (React Aria), icons                                                                                                                                                                              |
+| `@shkriuss/shell`  | App frame: navigation, settings, about, install and update prompts, storage status, backup screens, error handling; every app's build and the hub's catalog (`@shkriuss/shell/vite`); the frame that the hub shares (`@shkriuss/shell/site`) |
+| `@shkriuss/data`   | Local database, record model, merge rules, migrations, reactive queries                                                                                                                                                                      |
+| `@shkriuss/backup` | Export and import, encryption (`age`), backup format versions, readable export formats                                                                                                                                                       |
+| `@shkriuss/pwa`    | Web app manifest, service worker, install and update flow, persistent storage                                                                                                                                                                |
+| `@shkriuss/edge`   | Security headers (`_headers`), script integrity, starting workers under Trusted Types, and Cloudflare/Wrangler configuration                                                                                                                 |
+| `@shkriuss/i18n`   | Typed message modules in English ([ADR 0012](decisions/0012-typed-messages.md)) and `Intl` formats                                                                                                                                           |
 
-Dependency direction: apps → `shell` → (`ui`, `data`, `backup`, `pwa`, `i18n`); `backup` → `data`. Code that runs in the browser uses `@shkriuss/edge` only through its browser entry points, `@shkriuss/edge/workers` and `@shkriuss/edge/domains`. No package imports an app, and apps never import other apps. `pnpm check` enforces this, and that relative imports stay within their package.
+Dependency direction: apps → `shell` → (`ui`, `data`, `backup`, `pwa`, `i18n`); `backup` → `data`. Code that runs in the browser uses `@shkriuss/edge` only through its browser entry points, `@shkriuss/edge/workers` and `@shkriuss/edge/domains`. No package imports an app, and apps never import other apps; only the hub's build reads every app's `app.config.ts`, for its catalog. `pnpm check` enforces this, and that relative imports stay within their package.
 
 ## 6. Anatomy of an app
 
@@ -95,7 +95,7 @@ apps/<id>/
 └─ e2e/               Playwright tests
 ```
 
-Generated from `app.config.ts` at build time: the web app manifest and the icons, the page's title and description, the service worker, and `_headers` (security policy and permissions). The privacy label and extra export formats join it when the hub's catalog and the first readable export need them. Apps are created only with `create-app` (`tooling/create-app`), from the app template in `tooling/app-template`: a small app that CI builds and tests like every app, so that the template always works. `pnpm check` holds every app, and the template, to the standard structure: the same files, an id equal to the app's folder, the platform's build and a test server of its own.
+Generated from `app.config.ts` at build time: the web app manifest and the icons, the page's title and description, the service worker, and `_headers` (security policy and permissions). The hub's catalog reads it too, at the hub's build: each app's name, description, icon and browser features; its privacy label follows from them ([hub spec](specs/hub.md) §2). Extra export formats join it when the first readable export needs them. Apps are created only with `create-app` (`tooling/create-app`), from the app template in `tooling/app-template`: a small app that CI builds and tests like every app, so that the template always works. `pnpm check` holds every app, and the template, to the standard structure: the same files, an id equal to the app's folder, the platform's build and a test server of its own.
 
 ## 7. Data layer
 

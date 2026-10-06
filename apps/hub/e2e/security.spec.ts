@@ -77,9 +77,11 @@ async function scriptPath(page: Page, name: string): Promise<string> {
 
 test.describe("script integrity", () => {
   test("every script loads without a CSP, Trusted Types or integrity problem", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/security");
     // The lazily loaded chunk has arrived; the security fixture checks the browser's reports.
-    await expect(page.getByRole("heading", { level: 2, name: "What to expect" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { level: 2, name: "Check what a site serves" }),
+    ).toBeVisible();
   });
 
   test("an entry script whose content changed is refused", async ({ page, security }) => {
@@ -93,13 +95,23 @@ test.describe("script integrity", () => {
 
   test("a lazily loaded script whose content changed is refused", async ({ page, security }) => {
     security.expectRefusals();
-    await tamperWith(page, /\/assets\/Principles-[^/]+\.js$/);
-    await page.goto("/");
-    expect(await importModule(page, await scriptPath(page, "Principles"))).toBe("refused");
+    await tamperWith(page, /\/assets\/Verification-[^/]+\.js$/);
+    // Every browser reports that the page's own import of the chunk failed: only then does the
+    // page show what it is left with.
+    const refused = page.waitForEvent(
+      "console",
+      (message) => message.type() === "error" && /module/iv.test(message.text()),
+    );
+    await page.goto("/security");
+    await refused;
+    expect(await importModule(page, await scriptPath(page, "Verification"))).toBe("refused");
     expect(await page.evaluate(() => "tampered" in globalThis)).toBe(false);
-    // The rest of the page still works.
-    await expect(page.getByRole("heading", { level: 1, name: "shkriuss.app" })).toBeVisible();
-    await expect(page.getByRole("heading", { level: 2 })).toHaveCount(0);
+    // The rest of the page still works, without the section.
+    await expect(page.getByRole("heading", { level: 1, name: "Security" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 2 })).toHaveText([
+      "How the apps are protected",
+      "Report a problem",
+    ]);
   });
 
   test("a script without an integrity hash is refused", async ({ page, security }) => {

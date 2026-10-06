@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   type Licenses,
+  OWN_GENERATED,
   collectLicenses,
   legalComments,
   licensesFile,
@@ -279,6 +280,13 @@ describe("collectLicenses", () => {
       packageOf,
     });
     expect(bundled.packages[0]?.files[0]?.text).toBe(license.trim());
+  });
+
+  it("counts what this repository's own plugins generate as its own code", async () => {
+    const root = await directory();
+    expect(
+      await collectLicenses([`${OWN_GENERATED}catalog`], { root, packageOf: () => root }),
+    ).toStrictEqual({ packages: [], notices: [] });
   });
 
   it.each<[string, (root: string) => Promise<string>, RegExp]>([
