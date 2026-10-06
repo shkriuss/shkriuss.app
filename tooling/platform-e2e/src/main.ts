@@ -1,5 +1,6 @@
 import { registerServiceWorker, startWorker } from "@shkriuss/edge/workers";
 import { createFormat } from "@shkriuss/i18n";
+import { type AppStorage, appStorage } from "@shkriuss/pwa";
 import { type BackupTests, backups } from "./backups.ts";
 import { type DataTests, data } from "./data.ts";
 import { showGallery } from "./gallery.tsx";
@@ -17,6 +18,7 @@ declare global {
       readonly backups: BackupTests;
       readonly createFormat: typeof createFormat;
       readonly shell: ShellTests;
+      readonly storage: AppStorage;
     };
   }
 }
@@ -29,6 +31,7 @@ window.platform = {
   backups,
   createFormat,
   shell,
+  storage: appStorage(),
 };
 
 // The components page. React is in the entry script, as in every app, so that the helpers that
@@ -37,7 +40,7 @@ if (location.pathname === "/ui") {
   showGallery();
 }
 
-// The shell's page, around a screen of notes.
-if (location.pathname === "/shell") {
+// The shell's pages, around a screen of notes and around the settings.
+if (location.pathname === "/shell" || location.pathname === "/shell/settings") {
   void showShellPage();
 }

@@ -33,6 +33,20 @@ export interface PlaywrightOptions {
 const phone = { width: 412, height: 915 };
 const tablet = { width: 1280, height: 800 };
 
+/**
+ * Firefox asks the user before it keeps an app's data until the user deletes it, which a test
+ * cannot answer. These preferences, which Firefox's own tests use, answer yes instead.
+ */
+const firefox = {
+  ...devices["Desktop Firefox"],
+  launchOptions: {
+    firefoxUserPrefs: {
+      "dom.storageManager.prompt.testing": true,
+      "dom.storageManager.prompt.testing.allow": true,
+    },
+  },
+};
+
 // The real devices are an iPhone, a Pixel and a Pixel Tablet (architecture §14).
 const allProjects: Project[] = [
   { name: "chromium-phone", use: { ...devices["Pixel 10"] } },
@@ -40,8 +54,8 @@ const allProjects: Project[] = [
     name: "chromium-tablet",
     use: { ...devices["Desktop Chrome"], viewport: tablet, deviceScaleFactor: 2, hasTouch: true },
   },
-  { name: "firefox-phone", use: { ...devices["Desktop Firefox"], viewport: phone } },
-  { name: "firefox-tablet", use: { ...devices["Desktop Firefox"], viewport: tablet } },
+  { name: "firefox-phone", use: { ...firefox, viewport: phone } },
+  { name: "firefox-tablet", use: { ...firefox, viewport: tablet } },
   { name: "webkit-phone", use: { ...devices["iPhone 17"] } },
   { name: "webkit-tablet", use: { ...devices["iPad (gen 11)"] } },
 ];

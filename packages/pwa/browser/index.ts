@@ -1,6 +1,8 @@
 /**
- * The service worker of an app, from the page (docs/specs/service-worker.md): the app calls
- * `startServiceWorker()` once, as `@shkriuss/shell` does, and shows its state.
+ * The page's side of an app's service worker and storage.
+ *
+ * The service worker (docs/specs/service-worker.md): the app calls `startServiceWorker()` once, as
+ * `@shkriuss/shell` does, and shows its state.
  *
  * ```ts
  * import { startServiceWorker } from "@shkriuss/pwa";
@@ -14,10 +16,15 @@
  * ```
  *
  * The app's `vite.config.ts` needs `pwa()` from `@shkriuss/pwa/vite`, which builds `/sw.js`.
+ *
+ * The storage (architecture §7): `appStorage()` says whether the browser keeps the app's data
+ * until the user deletes it, and how much the app stores, and asks the browser to keep it.
  */
 import { registerServiceWorker } from "@shkriuss/edge/workers";
+import { type AppStorage, createAppStorage } from "./storage.ts";
 import { type AppUpdates, createAppUpdates, type PageEnvironment } from "./updates.ts";
 
+export { type AppStorage, type Persistence, type StorageStatus } from "./storage.ts";
 export { UPDATE_CHECK_INTERVAL, type AppUpdates, type UpdateState } from "./updates.ts";
 
 /** Set by `pwa()`: "remove" in a build that turns service workers off (§9). */
@@ -62,4 +69,12 @@ export function startServiceWorker(): AppUpdates {
   }
   updates ??= createAppUpdates(browserEnvironment(), SHKRIUSS_PWA_MODE);
   return updates;
+}
+
+let storage: AppStorage | undefined;
+
+/** The app's storage on this device; every call returns the same. */
+export function appStorage(): AppStorage {
+  storage ??= createAppStorage("storage" in navigator ? navigator.storage : undefined);
+  return storage;
 }

@@ -1,14 +1,15 @@
 import "@shkriuss/ui/styles.css";
-import type { AppUpdates, UpdateState } from "@shkriuss/pwa";
-import { AppErrorBoundary, AppFrame, useObserved } from "@shkriuss/shell";
+import type { AppStorage, AppUpdates, StorageStatus, UpdateState } from "@shkriuss/pwa";
+import { AppErrorBoundary, AppFrame, StorageSection, useObserved } from "@shkriuss/shell";
 import { Button, Link } from "@shkriuss/ui";
 import { StrictMode, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { notesDatabase } from "./data.ts";
 import { m } from "./shell-messages.ts";
 
-// The shell of @shkriuss/shell around a screen of notes, for the end-to-end tests in
-// e2e/shell.spec.ts. The notes are the data layer's; the update state is the tests' to set.
+// The shell of @shkriuss/shell around a screen of notes, at /shell, and around the settings, at
+// /shell/settings, for the end-to-end tests in e2e/shell.spec.ts. The notes are the data layer's;
+// the update state and the storage are the tests' to set.
 
 type NotesDatabase = Awaited<ReturnType<typeof notesDatabase>>;
 
@@ -18,6 +19,12 @@ export interface ShellTests {
   setUpdateState(state: UpdateState): void;
   /** How many times the banner applied an update. */
   applied(): number;
+  /** Sets what the storage says. */
+  setStorageStatus(status: StorageStatus): void;
+  /** Answers the request to keep the data that waits, and says it is kept if `kept`. */
+  answerPersistence(kept: boolean): void;
+  /** How many times the settings read the storage's status again. */
+  storageRefreshes(): number;
 }
 
 let updateState: UpdateState = "ready";
@@ -39,6 +46,45 @@ const updates: AppUpdates = {
   checkForUpdate: async () => undefined,
 };
 
+let storageStatus: StorageStatus = {
+  persistence: "best-effort",
+  usage: 1_234_567,
+  quota: 10_000_000_000,
+};
+let storageRefreshes = 0;
+let answerRequest: ((kept: boolean) => void) | undefined;
+const storageListeners = new Set<() => void>();
+
+function setStorageStatus(status: StorageStatus): void {
+  storageStatus = status;
+  for (const listener of storageListeners) {
+    listener();
+  }
+}
+
+/** A stand-in for the app's storage, whose status and answers the tests set. */
+const storage: AppStorage = {
+  getStatus: () => storageStatus,
+  subscribe: (listener) => {
+    storageListeners.add(listener);
+    return () => {
+      storageListeners.delete(listener);
+    };
+  },
+  refresh: async () => {
+    storageRefreshes += 1;
+  },
+  requestPersistence: async () =>
+    new Promise<boolean>((resolve) => {
+      answerRequest = (kept) => {
+        if (kept) {
+          setStorageStatus({ ...storageStatus, persistence: "persisted" });
+        }
+        resolve(kept);
+      };
+    }),
+};
+
 export const shell: ShellTests = {
   setUpdateState(state) {
     updateState = state;
@@ -47,6 +93,15 @@ export const shell: ShellTests = {
     }
   },
   applied: () => applied,
+  setStorageStatus,
+  answerPersistence(kept) {
+    if (answerRequest === undefined) {
+      throw new Error("Nothing asked the browser to keep the data.");
+    }
+    answerRequest(kept);
+    answerRequest = undefined;
+  },
+  storageRefreshes: () => storageRefreshes,
 };
 
 function Notes({ db }: { readonly db: NotesDatabase }) {
@@ -94,6 +149,15 @@ function Notes({ db }: { readonly db: NotesDatabase }) {
   );
 }
 
+function Settings() {
+  return (
+    <div className="flex flex-col items-start gap-6">
+      <h1 className="text-2xl font-semibold">{m.settings()}</h1>
+      <StorageSection storage={storage} />
+    </div>
+  );
+}
+
 export async function showShellPage(): Promise<void> {
   const db = await notesDatabase();
   const container = document.createElement("div");
@@ -107,12 +171,12 @@ export async function showShellPage(): Promise<void> {
         navigation={
           <>
             <Link href="/shell">{m.notes()}</Link>
-            <Link href="/shell#settings">{m.settings()}</Link>
+            <Link href="/shell/settings">{m.settings()}</Link>
           </>
         }
       >
         <AppErrorBoundary>
-          <Notes db={db} />
+          {location.pathname === "/shell/settings" ? <Settings /> : <Notes db={db} />}
         </AppErrorBoundary>
       </AppFrame>
     </StrictMode>,

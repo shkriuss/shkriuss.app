@@ -1,6 +1,6 @@
 # @shkriuss/pwa
 
-The service worker of every app: it makes the app work offline after its first load, and lets the user decide when a new version takes over. It implements the [service worker spec](../../docs/specs/service-worker.md) ([architecture §9](../../docs/architecture.md#9-offline-install-and-updates)). The web app manifest, install prompts and persistent storage come later.
+The service worker of every app: it makes the app work offline after its first load, and lets the user decide when a new version takes over. It implements the [service worker spec](../../docs/specs/service-worker.md) ([architecture §9](../../docs/architecture.md#9-offline-install-and-updates)). It also tells the app whether the browser keeps its data, and asks the browser to keep it. The web app manifest and install prompts come later.
 
 ## Use
 
@@ -37,6 +37,29 @@ updates.applyUpdate();
 
 React's `useSyncExternalStore(updates.subscribe, updates.getState)` takes the store's functions as they are. The page asks the browser to look for a new version whenever it becomes visible, at most once an hour; `checkForUpdate()` asks at once.
 
+## Storage
+
+`appStorage()` says whether the browser keeps the app's data until the user deletes it, and how much the app stores ([architecture §7](../../docs/architecture.md#7-data-layer)). `StorageSection` of `@shkriuss/shell` shows it in the app's settings.
+
+```ts
+import { appStorage } from "@shkriuss/pwa";
+
+const storage = appStorage();
+const { persistence, usage, quota } = storage.getStatus();
+// When the user asks for it, as with a button in Settings:
+const kept = await storage.requestPersistence();
+```
+
+| `persistence` | Meaning                                                                     |
+| ------------- | --------------------------------------------------------------------------- |
+| `persisted`   | The browser keeps the app's data until the user deletes it                  |
+| `best-effort` | The browser may delete the app's data, as when the device runs low on space |
+| `unknown`     | The browser has no Storage API, or did not answer                           |
+
+`usage` and `quota` are the browser's estimates in bytes, or `undefined` while unknown. The status is read once at the start; `refresh()` reads it again, as after the app stored data.
+
+`requestPersistence()` asks the browser to keep the data, and resolves to whether it does. Firefox asks the user, so an app calls it only for something the user does. Chromium and Safari ask nothing: they decide from how much the user uses the app and whether it is installed. React's `useSyncExternalStore(storage.subscribe, storage.getStatus)` takes the store's functions as they are.
+
 ## What it builds
 
 `pwa()` bundles `worker/sw.ts` into `/sw.js`: one classic script that contains the build's version id, its precache list and the versions it replaces (spec §2). Every file that `sha256sums.txt` lists is in the precache list, with its SHA-256, so the service worker keeps a file only if it matches the hash that the build published. The version id is the start of the SHA-256 of `/sw.js` itself, so every change gives a new one.
@@ -50,9 +73,10 @@ React's `useSyncExternalStore(updates.subscribe, updates.getState)` takes the st
 | `worker/sw.ts`       | Starts the service worker with the build's data                                                                    |
 | `worker/remove.ts`   | Starts the service worker that removes itself                                                                      |
 | `browser/updates.ts` | The page's side: registration (§3) and updates (§7)                                                                |
-| `browser/index.ts`   | `startServiceWorker()`, with the browser's globals                                                                 |
+| `browser/storage.ts` | The app's storage: whether the browser keeps the data, and how much there is                                       |
+| `browser/index.ts`   | `startServiceWorker()` and `appStorage()`, with the browser's globals                                              |
 
-The service worker and the page's side take what they use of the browser as a parameter, so that the unit tests run them against fakes. `tooling/pwa-e2e` tests them in Chromium, Firefox and WebKit.
+The service worker and the page's side take what they use of the browser as a parameter, so that the unit tests run them against fakes. `tooling/pwa-e2e` tests the service worker in Chromium, Firefox and WebKit, and `tooling/platform-e2e` the storage.
 
 ## Replacing a broken version
 

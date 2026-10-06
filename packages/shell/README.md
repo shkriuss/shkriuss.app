@@ -9,6 +9,7 @@ The frame around every app's screens ([architecture §5](../../docs/architecture
 | `AppErrorBoundary` | Shows `AppError` in place of a screen that throws while rendering                                                                                |
 | `AppError`         | What a failed screen shows: that something went wrong, and a button that reloads the app                                                         |
 | `useObserved`      | The latest result of an observed query, such as `db.observe()`, which re-renders the component at each new result                                |
+| `StorageSection`   | The storage part of Settings: how much the app stores, whether the browser keeps it, and a button that asks the browser to keep it               |
 
 ## Use
 
@@ -39,10 +40,11 @@ createRoot(container).render(
 
   It is `loading` until the first result, then `ready` with each new one, or `failed` with the error that ended the observation.
 
+- **Storage:** `<StorageSection storage={appStorage()} />` shows how much the app stores and whether the browser keeps it until the user deletes it, with `appStorage()` from `@shkriuss/pwa`. When the browser may delete the data, a button asks it to keep it; Firefox then asks the user. The section reads the status again whenever it appears.
 - **Styles:** the shell's components use Tailwind's classes, which `@shkriuss/ui/styles.css` covers.
 
-The navigation itself, with TanStack Router, comes with the app template (step 1.3), and the settings, about, storage and backup screens come later.
+The navigation itself, with TanStack Router, comes with the app template (step 1.3). The rest of the settings, the about screen and the backup screens come later.
 
 ## Tests
 
-The store behind `useObserved` has unit tests. The components and hooks need React in a browser, so `tooling/platform-e2e` tests them on its page `/shell`: axe in both themes, the landmarks and the skip link, the banner in every state, notes that change while the screen shows them, and a screen that fails.
+The store behind `useObserved` and the text have unit tests. The components and hooks need React in a browser, so `tooling/platform-e2e` tests them on its pages `/shell` and `/shell/settings`: axe in both themes, the landmarks and the skip link, the banner in every state, notes that change while the screen shows them, a screen that fails, and the storage section in every state, asking the browser with a yes and with a no.
