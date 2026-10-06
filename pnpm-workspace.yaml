@@ -32,6 +32,14 @@ catalog:
   vitest: 5.0.3
   wrangler: 4.146.0
 
+# Versions that replace what a dependency asks for, each with its reason; remove each once the
+# dependency itself allows a version that is fine.
+overrides:
+  # markdownlint's math syntax asks for katex ^0.16, which GHSA-238p-pmpm-9mq7 affects (fixed in
+  # 0.18.2). markdownlint only parses our Markdown in `pnpm check` and never renders math, so
+  # katex 0.18 serves it the same. Remove once micromark-extension-math allows katex 0.18.
+  katex: 0.18.10
+
 # Supply-chain hardening (ADR 0007).
 # Never install a version published less than 3 days ago. For an urgent security
 # fix, list the package in minimumReleaseAgeExclude with a comment, and remove it
