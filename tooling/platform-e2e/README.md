@@ -37,14 +37,15 @@ And the components of `@shkriuss/ui`, on the page `/ui`, from `src/gallery.tsx`:
 
 And the shell of `@shkriuss/shell`, on the pages `/shell` and `/shell/settings`, from `src/shell-page.tsx`: a screen of notes from the data layer, and the settings, in the app's frame:
 
-- axe finds no accessibility problem in the frame and its update banner, in either theme;
+- axe finds no accessibility problem in the frame and its banners, in either theme;
 - the frame has its landmarks, and a keyboard user can skip to the screen first;
 - the screen follows the notes as they change;
-- the update banner offers an update, applies it when the user agrees, and goes away until there is news when the user says later;
+- the update banner offers an update, applies it when the user agrees, and goes away until there is news when the user says later, giving the focus to the screen;
 - a screen that fails shows what happened inside the frame, and reloads the app;
-- the settings say how much the app stores and whether the browser keeps it, ask the browser to keep it when the user wants, and say so when the browser does not agree.
+- the settings say how much the app stores and whether the browser keeps it, ask the browser to keep it when the user wants, and say so when the browser does not agree;
 - the settings make backups of the notes: encrypted with a generated passphrase or the user's own, which the dialog checks first, or plain after a warning; each file is downloaded, or shared through a stand-in for the share sheet, and read back with its passphrase; a backup that the user cancels saves and records nothing, and one started after the dialog was closed never gives way to the earlier one;
-- the settings restore a backup from another device: encrypted, after a wrong passphrase, or plain; restoring it again brings nothing, and a backup that the user does not restore changes nothing; a file that is no backup, too large, of a newer version, of another app or damaged is refused with what happened.
+- the settings restore a backup from another device: encrypted, after a wrong passphrase, or plain; restoring it again brings nothing, and a backup that the user does not restore changes nothing; a file that is no backup, too large, of a newer version, of another app or damaged is refused with what happened;
+- the reminder to back up comes when the app opens or comes back into view, never with a change or a restore: for a first backup, and a week after the last one, with the time that the tests set; its backup takes it away, as does one made in the settings, and "Later" hides it for a day.
 
 | Command                                      | What it does                     |
 | -------------------------------------------- | -------------------------------- |

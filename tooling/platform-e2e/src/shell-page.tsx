@@ -3,6 +3,7 @@ import type { AppStorage, AppUpdates, StorageStatus, UpdateState } from "@shkriu
 import {
   AppErrorBoundary,
   AppFrame,
+  BackupReminder,
   BackupSection,
   StorageSection,
   useObserved,
@@ -15,8 +16,9 @@ import { current, notesDatabase } from "./data.ts";
 import { m } from "./shell-messages.ts";
 
 // The shell of @shkriuss/shell around a screen of notes, at /shell, and around the settings, at
-// /shell/settings, for the end-to-end tests in e2e/shell.spec.ts. The notes and their backups are
-// the data layer's; the update state and the storage are the tests' to set.
+// /shell/settings, for the end-to-end tests in e2e/shell.spec.ts. The notes, their backups and the
+// reminder to back them up are the data layer's; the update state and the storage are the tests'
+// to set.
 
 type NotesDatabase = Awaited<ReturnType<typeof notesDatabase>>;
 
@@ -177,6 +179,7 @@ export async function showShellPage(): Promise<void> {
       <AppFrame
         name={m.app()}
         updates={updates}
+        banners={<BackupReminder app={BACKUP_APP} db={db} />}
         navigation={
           <>
             <Link href="/shell">{m.notes()}</Link>

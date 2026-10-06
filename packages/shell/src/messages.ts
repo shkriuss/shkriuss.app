@@ -109,6 +109,12 @@ export const messages = defineMessages((format) => ({
   invalid: () => "The backup is damaged or was changed, and was not restored.",
   restoreFailed: () => "The backup could not be restored. Nothing was changed.",
   close: () => "Close",
+  remindFirst: () => "No backup yet. Back up your data to keep it safe.",
+  remindDue: (made: Date, changes: number) =>
+    format.plural(changes, {
+      one: `Your last backup is from ${format.date(made)}, and # change is not in it.`,
+      other: `Your last backup is from ${format.date(made)}, and # changes are not in it.`,
+    }),
 }));
 
 export const m = messages(createFormat());

@@ -1,6 +1,7 @@
 import type { AppUpdates, UpdateState } from "@shkriuss/pwa";
 import { Banner, Button } from "@shkriuss/ui";
-import { useState, useSyncExternalStore } from "react";
+import { useContext, useState, useSyncExternalStore } from "react";
+import { FrameContext } from "./frame.ts";
 import { m } from "./messages.ts";
 
 export interface UpdateBannerProps {
@@ -15,6 +16,7 @@ export interface UpdateBannerProps {
 export function UpdateBanner({ updates }: UpdateBannerProps) {
   const state = useSyncExternalStore(updates.subscribe, updates.getState);
   const [dismissed, setDismissed] = useState<UpdateState>();
+  const { focusScreen } = useContext(FrameContext);
   if (state === dismissed) {
     return null;
   }
@@ -22,6 +24,8 @@ export function UpdateBanner({ updates }: UpdateBannerProps) {
     <Button
       onPress={() => {
         setDismissed(state);
+        // The banner goes, and with it the button that has the focus.
+        focusScreen();
       }}
     >
       {m.later()}

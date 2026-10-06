@@ -77,6 +77,7 @@ describe("the shell's text", () => {
       invalid: m.invalid(),
       restoreFailed: m.restoreFailed(),
       close: m.close(),
+      remindFirst: m.remindFirst(),
     }).toStrictEqual({
       skipToContent: "Skip to content",
       navigation: "Sections",
@@ -155,6 +156,7 @@ describe("the shell's text", () => {
       invalid: "The backup is damaged or was changed, and was not restored.",
       restoreFailed: "The backup could not be restored. Nothing was changed.",
       close: "Close",
+      remindFirst: "No backup yet. Back up your data to keep it safe.",
     });
   });
 
@@ -202,6 +204,20 @@ describe("the shell's text", () => {
     expect(
       messages(createFormat("de-DE")).brings({ new: 1234, updated: 0, deleted: 0, unchanged: 0 }),
     ).toBe("Restoring it brings 1.234 new.");
+  });
+
+  it("reminds of a backup that is a week old, with the changes it lacks, as the device writes", () => {
+    const made = new Date("2026-09-29T14:30:00Z");
+    const british = messages(createFormat("en-GB", { timeZone: "UTC" }));
+    expect(british.remindDue(made, 1)).toBe(
+      "Your last backup is from 29 Sept 2026, and 1 change is not in it.",
+    );
+    expect(british.remindDue(made, 1234)).toBe(
+      "Your last backup is from 29 Sept 2026, and 1,234 changes are not in it.",
+    );
+    expect(messages(createFormat("de-DE", { timeZone: "UTC" })).remindDue(made, 1234)).toBe(
+      "Your last backup is from 29 Sept 2026, and 1.234 changes are not in it.",
+    );
   });
 
   it("names another app whose backup it is", () => {
