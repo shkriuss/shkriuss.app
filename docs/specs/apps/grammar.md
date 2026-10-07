@@ -18,7 +18,7 @@ Checks English text for mistakes in grammar, spelling, punctuation and word choi
 
 - **The field** takes text that the user types or pastes, up to 20,000 characters. The browser's own spelling checker is off in it, as some browsers send text to a server to check it.
 - **Checking** starts as soon as the checker is ready, and again half a second after the user stops typing. It runs in a worker, so typing never waits for it.
-- **Getting ready:** "Getting the checker ready…" shows until the checker has started. On the first visit, the checker waits until the app has been kept for offline use, so that its 8 MB download happens once; then it starts from that copy.
+- **Getting ready:** the checker starts each time the app opens, which takes a few seconds; the field takes text meanwhile. Once there is text, "Getting the checker ready…" shows until the checker has started; with the field empty, nothing shows. On the first visit, the checker waits until the app has been kept for offline use, so that its 8 MB download happens once; then it starts from that copy.
 - **The mistakes** are listed under the field, in the order of the text. Each shows its kind (Spelling, Grammar, Punctuation, …), what is wrong, and the words it is about, quoted from the text. A status says how many there are, or "No mistakes found"; screen readers hear it.
 - **Fixes:** each mistake offers Harper's fixes as buttons, such as "Replace with “an”" or "Remove", without repeats. One press changes the text and checks it again. The focus then goes to the next mistake, or to the field when none is left.
 - **Show** selects the mistake's words in the field. **Ignore** hides the mistake until the user changes its words.
