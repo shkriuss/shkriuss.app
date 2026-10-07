@@ -23,7 +23,7 @@ export function AppCard({ app }: { readonly app: CatalogApp }) {
           <dt className="font-medium">{m.dataCollected()}</dt>
           <dd>{m.noData()}</dd>
           <dt className="font-medium">{m.leavesDevice()}</dt>
-          <dd>{m.onlyBackups()}</dd>
+          <dd>{app.keepsData ? m.onlyBackups() : m.nothing()}</dd>
           <dt className="font-medium">{m.permissions()}</dt>
           <dd>{m.features(app.allowedFeatures)}</dd>
         </dl>

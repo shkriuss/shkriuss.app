@@ -1,0 +1,37 @@
+{
+  "name": "@shkriuss/grammar",
+  "version": "0.0.0",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc",
+    "test": "vitest run",
+    "e2e": "playwright test"
+  },
+  "dependencies": {
+    "@shkriuss/edge": "workspace:*",
+    "@shkriuss/i18n": "workspace:*",
+    "@shkriuss/pwa": "workspace:*",
+    "@shkriuss/shell": "workspace:*",
+    "@shkriuss/ui": "workspace:*",
+    "@tanstack/react-router": "catalog:",
+    "harper.js": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "catalog:",
+    "@playwright/test": "catalog:",
+    "@shkriuss/config": "workspace:*",
+    "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:",
+    "wrangler": "catalog:"
+  }
+}

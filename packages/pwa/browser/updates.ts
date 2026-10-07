@@ -11,6 +11,8 @@ import { ACTIVATE_MESSAGE, CACHE_PREFIX } from "../src/protocol.ts";
 /**
  * Where the page stands:
  *
+ * - `starting`: the page has not registered the service worker yet, which it does once it has
+ *   loaded (§3). It does not know yet whether the app works offline.
  * - `unavailable`: no service worker, as in development builds, in browsers without service
  *   workers and in private windows that refuse them. The app works online only.
  * - `installing`: the first version is installing; the app works offline once it is ready.
@@ -20,7 +22,13 @@ import { ACTIVATE_MESSAGE, CACHE_PREFIX } from "../src/protocol.ts";
  * - `outdated`: another tab or window made a new version active, and this page should reload.
  */
 export type UpdateState =
-  "unavailable" | "installing" | "ready" | "update-available" | "updating" | "outdated";
+  | "starting"
+  | "unavailable"
+  | "installing"
+  | "ready"
+  | "update-available"
+  | "updating"
+  | "outdated";
 
 /**
  * The app's view of its service worker. Its functions need no `this`, so React's
@@ -86,11 +94,21 @@ export function createAppUpdates(
   mode: "serve" | "remove",
 ): AppUpdates {
   const listeners = new Set<() => void>();
-  let state: UpdateState = "unavailable";
+  let state: UpdateState =
+    environment.container !== undefined && mode === "serve" ? "starting" : "unavailable";
   let registration: RegistrationLike | undefined;
   let updateRequested = false;
   let outdated = false;
   let lastCheck = environment.now();
+
+  function set(next: UpdateState): void {
+    if (next !== state) {
+      state = next;
+      for (const listener of listeners) {
+        listener();
+      }
+    }
+  }
 
   function refresh(): void {
     if (registration === undefined) {
@@ -108,12 +126,7 @@ export function createAppUpdates(
     } else {
       next = "update-available";
     }
-    if (next !== state) {
-      state = next;
-      for (const listener of listeners) {
-        listener();
-      }
-    }
+    set(next);
   }
 
   function follow(worker: WorkerLike | null): void {
@@ -150,6 +163,7 @@ export function createAppUpdates(
       registered = await environment.register();
     } catch {
       // Refused, as some private windows do: the app works online only (§3).
+      set("unavailable");
       return;
     }
     registration = registered;

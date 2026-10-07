@@ -3,7 +3,7 @@
 - **Status:** accepted, 2026-10-06 (Phase 2)
 - **App id:** `grammar`, at `https://grammar.shkriuss.app`. Permanent (`CLAUDE.md`, product rule 3).
 - **Builds on:** [ADR 0014](../../decisions/0014-webassembly.md) (WebAssembly), the [app template without data](../../../tooling/app-template-no-data/README.md), and Harper (`harper.js`, Apache-2.0).
-- **Implemented by:** `apps/grammar` (Phase 2)
+- **Implemented by:** `apps/grammar`
 
 Checks English text for mistakes in grammar, spelling, punctuation and word choice, and suggests fixes. It runs on the device and works offline. It keeps nothing: the text stays only while the app is open.
 

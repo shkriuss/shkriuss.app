@@ -1,0 +1,36 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "shkriuss-grammar",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  },
+  "workers_dev": false,
+  "preview_urls": false,
+  "send_metrics": false,
+  "env": {
+    "staging": {
+      "name": "shkriuss-grammar-staging",
+      "routes": [
+        {
+          "pattern": "grammar.shkriuss.dev",
+          "custom_domain": true
+        }
+      ],
+      "workers_dev": false,
+      "preview_urls": false
+    },
+    "production": {
+      "name": "shkriuss-grammar-production",
+      "routes": [
+        {
+          "pattern": "grammar.shkriuss.app",
+          "custom_domain": true
+        }
+      ],
+      "workers_dev": false,
+      "preview_urls": false
+    }
+  }
+}

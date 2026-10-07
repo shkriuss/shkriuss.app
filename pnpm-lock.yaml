@@ -45,6 +45,9 @@ catalogs:
     fast-check:
       specifier: 4.10.2
       version: 4.10.2
+    harper.js:
+      specifier: 2.10.0
+      version: 2.10.0
     markdownlint:
       specifier: 0.41.1
       version: 0.41.1
@@ -129,6 +132,67 @@ importers:
       '@tanstack/react-router':
         specifier: 'catalog:'
         version: 1.170.41(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      react:
+        specifier: 'catalog:'
+        version: 19.3.0
+      react-dom:
+        specifier: 'catalog:'
+        version: 19.3.0(react@19.3.0)
+    devDependencies:
+      '@axe-core/playwright':
+        specifier: 'catalog:'
+        version: 4.13.0(playwright-core@1.63.0)
+      '@playwright/test':
+        specifier: 'catalog:'
+        version: 1.63.0
+      '@shkriuss/config':
+        specifier: workspace:*
+        version: link:../../packages/config
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.19.0
+      '@types/react':
+        specifier: 'catalog:'
+        version: 19.3.0
+      '@types/react-dom':
+        specifier: 'catalog:'
+        version: 19.3.0(@types/react@19.3.0)
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+      vite:
+        specifier: 'catalog:'
+        version: 8.3.2(@types/node@24.19.0)(esbuild@0.28.1)(jiti@2.7.0)
+      vitest:
+        specifier: 'catalog:'
+        version: 5.0.3(@types/node@24.19.0)(@vitest/coverage-v8@5.0.3)(vite@8.3.2(@types/node@24.19.0)(esbuild@0.28.1)(jiti@2.7.0))
+      wrangler:
+        specifier: 'catalog:'
+        version: 4.146.0(@types/node@24.19.0)
+
+  apps/grammar:
+    dependencies:
+      '@shkriuss/edge':
+        specifier: workspace:*
+        version: link:../../packages/edge
+      '@shkriuss/i18n':
+        specifier: workspace:*
+        version: link:../../packages/i18n
+      '@shkriuss/pwa':
+        specifier: workspace:*
+        version: link:../../packages/pwa
+      '@shkriuss/shell':
+        specifier: workspace:*
+        version: link:../../packages/shell
+      '@shkriuss/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      '@tanstack/react-router':
+        specifier: 'catalog:'
+        version: 1.170.41(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      harper.js:
+        specifier: 'catalog:'
+        version: 2.10.0
       react:
         specifier: 'catalog:'
         version: 19.3.0
@@ -1907,6 +1971,9 @@ packages:
       picomatch:
         optional: true
 
+  fflate@0.8.3:
+    resolution: {integrity: sha512-tbZNuJrLwGUp3zshBtdy4W+ORxZuIh8a5ilyIEQDC5rY1f3U20JMry0Ll3WBzU58EZKsEuJFXhb5gwv8CsPvgA==}
+
   fsevents@2.3.3:
     resolution: {integrity: sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw==}
     engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
@@ -1918,6 +1985,9 @@ packages:
 
   graceful-fs@4.2.11:
     resolution: {integrity: sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ==}
+
+  harper.js@2.10.0:
+    resolution: {integrity: sha512-s6BDuqtRbX8M/5exH1G5M7VzAuv6l0TagbRxMY37OsrT/1kWFjWmqHydWrkYFqTUW+fFhu4Hj2yUxvChp862Pg==}
 
   is-alphabetical@2.0.1:
     resolution: {integrity: sha512-FWyyY60MeTNyeSRpkM2Iry0G9hpr7/9kD40mD/cGQEuilcZYS4okz8SN2Q6rLCJ8gbCt6fN+rC+6tMGS99LaxQ==}
@@ -3311,12 +3381,18 @@ snapshots:
     optionalDependencies:
       picomatch: 4.0.7
 
+  fflate@0.8.3: {}
+
   fsevents@2.3.3:
     optional: true
 
   get-east-asian-width@1.7.0: {}
 
   graceful-fs@4.2.11: {}
+
+  harper.js@2.10.0:
+    dependencies:
+      fflate: 0.8.3
 
   is-alphabetical@2.0.1: {}
 

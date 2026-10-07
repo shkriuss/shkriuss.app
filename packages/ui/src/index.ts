@@ -20,5 +20,7 @@ export { contrastRatio, isHexColor, relativeLuminance } from "./contrast.ts";
 export { Dialog, type DialogProps } from "./Dialog.tsx";
 export { FileButton, type FileButtonProps } from "./FileButton.tsx";
 export { Link, type LinkProps } from "./Link.tsx";
+export { Select, type SelectOption, type SelectProps } from "./Select.tsx";
 export { Switch, type SwitchProps } from "./Switch.tsx";
+export { TextArea, type TextAreaProps } from "./TextArea.tsx";
 export { TextField, type TextFieldProps } from "./TextField.tsx";

@@ -28,6 +28,7 @@ updates.applyUpdate();
 
 | State              | Meaning                                                                                                           |
 | ------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| `starting`         | The page has not registered the service worker yet, which it does once it has loaded                              |
 | `unavailable`      | No service worker: a development build, a browser without service workers, or a private window that refuses them  |
 | `installing`       | The first version is installing; the app works offline once it is ready                                           |
 | `ready`            | A version is active, and the app works offline                                                                    |

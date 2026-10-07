@@ -27,7 +27,7 @@ One card per app in `apps/`, the hub excepted, sorted by name: its icon, name an
 - **From `app.config.ts`, at build time.** The hub's build reads every app's `app.config.ts`, through a `catalog()` Vite plugin of `@shkriuss/shell/vite`, and puts the names, descriptions, icons and features in the hub's bundle. No app code goes into the hub: only these values. The plugin is the one place that reads other apps' configuration; the `imports` check keeps refusing imports of an app anywhere else.
 - **The privacy label** is not declared, so it cannot be wrong; it follows from what the platform enforces:
   - "Data collected: none." Every app is local-only ([ADR 0003](../decisions/0003-local-only-at-launch.md)).
-  - "Leaves this device: only the backups that you save."
+  - "Leaves this device: only the backups that you save", or "nothing" for an app without data (`keepsData: false`), whose build has none of the code of the backups.
   - "Browser permissions:" none, or those that the app's `allowedFeatures` allow, in words, such as "camera". The app's Permissions-Policy denies every other one.
 - **Links** go to `https://<id>.` followed by the hub's own host, so the same build links to `checklists.shkriuss.dev` on staging and to `checklists.shkriuss.app` in production, as the byte-for-byte check between them requires.
 - **The icon** is the app's glyph on its accent color, drawn as SVG, as its home-screen icon is.
