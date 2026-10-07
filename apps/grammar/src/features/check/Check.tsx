@@ -85,10 +85,11 @@ function MistakeItem({
 }
 
 /**
- * The check screen's content (docs/specs/apps/grammar.md §1): the text, its variety of English
- * and Copy, then the mistakes that the checker finds in it, each with its fixes. The text is
- * checked once the checker is ready, half a second after the user stops typing, and at once
- * after a fix or another variety. Nothing is kept: the text is gone when the app closes.
+ * The check screen's content (docs/specs/apps/grammar.md §1): the text, its variety of English,
+ * Copy and Delete, then the mistakes that the checker finds in it, each with its fixes. The text
+ * is checked once the checker is ready, half a second after the user stops typing, and at once
+ * after a fix, another variety, Delete or Undo. Nothing is kept: the text is gone when the app
+ * closes.
  */
 export function Check({ checker }: { readonly checker: Checker }) {
   const state = useSyncExternalStore(checker.subscribe, checker.getState);
@@ -97,7 +98,11 @@ export function Check({ checker }: { readonly checker: Checker }) {
   const [result, setResult] = useState<Result>();
   const [failed, setFailed] = useState(false);
   const [ignored, setIgnored] = useState<ReadonlySet<string>>(() => new Set());
-  const [copied, setCopied] = useState("");
+  // What Copy, Delete or Undo did, until the text changes.
+  const [notice, setNotice] = useState("");
+  // The text that Delete took, which Undo brings back until the user types again: the app keeps
+  // no copy of it.
+  const [deleted, setDeleted] = useState<string>();
   const field = useRef<HTMLTextAreaElement>(null);
   const headings = useRef<(HTMLHeadingElement | null)[]>([]);
   // The next check comes at once, rather than after the pause.
@@ -158,7 +163,8 @@ export function Check({ checker }: { readonly checker: Checker }) {
 
   function edit(next: string): void {
     setText(next);
-    setCopied("");
+    setNotice("");
+    setDeleted(undefined);
   }
 
   function fix(index: number, mistake: Mistake, chosen: Fix): void {
@@ -189,10 +195,26 @@ export function Check({ checker }: { readonly checker: Checker }) {
   async function copy(): Promise<void> {
     try {
       await navigator.clipboard.writeText(text);
-      setCopied(m.copied());
+      setNotice(m.copied());
     } catch {
-      setCopied(m.copyFailed());
+      setNotice(m.copyFailed());
     }
+  }
+
+  function deleteText(): void {
+    now.current = true;
+    edit("");
+    setDeleted(text);
+    setNotice(m.deleted());
+  }
+
+  function undo(): void {
+    if (deleted === undefined) {
+      return;
+    }
+    now.current = true;
+    edit(deleted);
+    setNotice(m.undone());
   }
 
   let status = "";
@@ -239,9 +261,16 @@ export function Check({ checker }: { readonly checker: Checker }) {
         >
           {m.copy()}
         </Button>
+        {/* Undo takes Delete's place, so that the focus stays on it. */}
+        <Button
+          isDisabled={text === "" && deleted === undefined}
+          onPress={deleted === undefined ? deleteText : undo}
+        >
+          {deleted === undefined ? m.delete() : m.undo()}
+        </Button>
       </div>
       {/* <output>s, whose role is status: screen readers read what changes. */}
-      <output className="block">{copied}</output>
+      <output className="block">{notice}</output>
       <output className="block font-medium">{status}</output>
       {shown.length === 0 || state !== "ready" || failed ? null : (
         <section aria-labelledby={headingId} className="flex flex-col gap-3">
