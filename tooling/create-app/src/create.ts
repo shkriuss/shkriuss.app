@@ -1,7 +1,7 @@
 import { PRODUCTION_DOMAIN, STAGING_DOMAIN, appHost, assertAppId } from "@shkriuss/edge";
 
 /**
- * What `create-app` makes of the app template (architecture §6): the files of a new app, which
+ * What `create-app` makes of an app template (architecture §6): the files of a new app, which
  * are the template's with the app's id, names, accent color and test port, and the README and
  * the Cloudflare configuration of its own.
  */
@@ -21,10 +21,23 @@ export interface NewApp {
   readonly description: string;
   /** The color of the app's icons, as `#rrggbb`; the template's if left out. */
   readonly accent?: string;
+  /**
+   * Whether the app keeps data, in a database that backups save, as most apps do: true if left
+   * out. An app without data starts from the template without data.
+   */
+  readonly keepsData?: boolean;
 }
 
 /** The app template, relative to the repository's root. */
 export const TEMPLATE = "tooling/app-template";
+
+/** The app template without data: no database, no backups. */
+export const TEMPLATE_WITHOUT_DATA = "tooling/app-template-no-data";
+
+/** The template that `app` starts from, relative to the repository's root. */
+export function templateOf(app: NewApp): string {
+  return app.keepsData === false ? TEMPLATE_WITHOUT_DATA : TEMPLATE;
+}
 
 /** The test servers of apps listen from this port up, those of the platform's tests below it. */
 export const FIRST_APP_PORT = 4200;
@@ -154,13 +167,21 @@ function transform(file: string, source: string, app: NewApp, port: number): str
 /** The new app's README. */
 function readme(app: NewApp): string {
   const name = `@shkriuss/${app.id}`;
+  const id =
+    app.keepsData === false
+      ? "it is the app's subdomain and folder"
+      : "it is the app's subdomain and folder, and the app that its backups belong to";
+  const template =
+    app.keepsData === false
+      ? `the [app template without data](../../${TEMPLATE_WITHOUT_DATA}/README.md)`
+      : `the [app template](../../${TEMPLATE}/README.md)`;
   return `# ${app.name}
 
 ${app.description}
 
 - **Address:** \`https://${appHost(PRODUCTION_DOMAIN, app.id)}\`, and \`https://${appHost(STAGING_DOMAIN, app.id)}\` for staging.
-- **Id:** \`${app.id}\`, which never changes: it is the app's subdomain and folder, and the app that its backups belong to.
-- **Made** with \`create-app\` from the [app template](../../tooling/app-template/README.md), which says what each file is.
+- **Id:** \`${app.id}\`, which never changes: ${id}.
+- **Made** with \`create-app\` from ${template}, which says what each file is.
 
 | Command | What it does |
 | --- | --- |
@@ -198,8 +219,9 @@ function wranglerConfig(app: NewApp, template: string): string {
 }
 
 /**
- * The files of the new app, by their path in the repository, from the template's files by their
- * path in its folder. `port` is its test server's, as from `nextPort()`.
+ * The files of the new app, by their path in the repository, from the files of its template, as
+ * from `templateOf()`, by their path in its folder. `port` is its test server's, as from
+ * `nextPort()`.
  */
 export function appFiles(
   app: NewApp,

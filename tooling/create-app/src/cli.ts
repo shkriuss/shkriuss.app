@@ -1,7 +1,7 @@
 /**
- * Creates an app from the app template (architecture §6), in `apps/<id>`:
+ * Creates an app from an app template (architecture §6), in `apps/<id>`:
  *
- *   pnpm create-app <id> --name <name> --description <sentence> [--short-name <name>] [--accent <#rrggbb>]
+ *   pnpm create-app <id> --name <name> --description <sentence> [--short-name <name>] [--accent <#rrggbb>] [--no-data]
  */
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -10,9 +10,9 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 import { portOf } from "@shkriuss/checks/structure";
 import * as prettier from "prettier";
-import { TEMPLATE, appFiles, nextPort } from "./create.ts";
+import { type NewApp, appFiles, nextPort, templateOf } from "./create.ts";
 
-const USAGE = `Usage: pnpm create-app <id> --name <name> --description <sentence> [--short-name <name>] [--accent <#rrggbb>]
+const USAGE = `Usage: pnpm create-app <id> --name <name> --description <sentence> [--short-name <name>] [--accent <#rrggbb>] [--no-data]
 
   <id>           The app's permanent id: its subdomain, as in <id>.shkriuss.app. Lowercase
                  letters, digits and inner hyphens. It never changes.
@@ -20,7 +20,9 @@ const USAGE = `Usage: pnpm create-app <id> --name <name> --description <sentence
   --description  What the app does, in one sentence.
   --short-name   The name under its icon on a home screen, at most 12 characters, if the
                  name is longer.
-  --accent       The color of its icons, as #rrggbb.`;
+  --accent       The color of its icons, as #rrggbb.
+  --no-data      The app keeps no data: no database and no backups. It starts from the
+                 app template without data.`;
 
 /** The repository's root: this file is in `tooling/create-app/src`. */
 const root = path.resolve(import.meta.dirname, "../../..");
@@ -56,6 +58,7 @@ async function main(args: readonly string[]): Promise<number> {
       "short-name": { type: "string" },
       description: { type: "string" },
       accent: { type: "string" },
+      "no-data": { type: "boolean" },
     },
   });
   const [id, ...more] = positionals;
@@ -77,10 +80,19 @@ async function main(args: readonly string[]): Promise<number> {
     return 1;
   }
 
+  const app: NewApp = {
+    id,
+    name,
+    description,
+    ...(values["short-name"] === undefined ? {} : { shortName: values["short-name"] }),
+    ...(values.accent === undefined ? {} : { accent: values.accent }),
+    ...(values["no-data"] === true ? { keepsData: false } : {}),
+  };
+  const templateFolder = templateOf(app);
   const template = new Map<string, string>();
-  for (const file of gitFiles(TEMPLATE)) {
+  for (const file of gitFiles(templateFolder)) {
     template.set(
-      path.posix.relative(TEMPLATE, file),
+      path.posix.relative(templateFolder, file),
       await readFile(path.join(root, file), "utf8"),
     );
   }
@@ -94,17 +106,7 @@ async function main(args: readonly string[]): Promise<number> {
 
   let files: Map<string, string>;
   try {
-    files = appFiles(
-      {
-        id,
-        name,
-        description,
-        ...(values["short-name"] === undefined ? {} : { shortName: values["short-name"] }),
-        ...(values.accent === undefined ? {} : { accent: values.accent }),
-      },
-      template,
-      nextPort(ports),
-    );
+    files = appFiles(app, template, nextPort(ports));
   } catch (error) {
     console.error(`${error instanceof Error ? error.message : String(error)}\n\n${USAGE}`);
     return 1;
@@ -116,12 +118,13 @@ async function main(args: readonly string[]): Promise<number> {
     await mkdir(path.dirname(target), { recursive: true });
     await writeFile(target, await prettier.format(source, { ...options, filepath: target }));
   }
-  console.log(`Created ${folder} from the app template. Next:
+  const feature = app.keepsData === false ? "src/features/words" : "src/features/items";
+  console.log(`Created ${folder} from ${templateFolder}. Next:
 
   pnpm install
   pnpm --filter @shkriuss/${id} dev
 
-Then replace the example feature, src/features/items, with the app's own, and the glyph of its
+Then replace the example feature, ${feature}, with the app's own, and the glyph of its
 icons in app.config.ts. Run pnpm verify before every push.`);
   return 0;
 }

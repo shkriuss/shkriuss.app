@@ -11,6 +11,7 @@ The frame around every app's screens, and around the hub's pages ([architecture 
 | `Screen`                                                    | A screen: its heading, which takes the focus when the user comes to it from another, and the page's title                                                                                           |
 | `NotFound`                                                  | What the app shows at an address that none of its screens has: the router's `defaultNotFoundComponent`                                                                                              |
 | `SettingsScreen`                                            | The settings at `/settings`: the app's own, then installing, storage, backups and About, alike in every app                                                                                         |
+| `SettingsScreenWithoutData`                                 | The settings of an app without data: installing and About. It imports neither storage nor backups, so the app's build has none of their code                                                        |
 | `StartFailed`                                               | What the app shows in place of its frame when it cannot open its database, as when a newer version upgraded it                                                                                      |
 | `appUpdates`                                                | The service worker's updates, to which it adds the database: a newer version that closed it makes the page outdated                                                                                 |
 | `UpdateBanner`                                              | Tells the user that a new version is ready, and updates the app when they agree ([service worker spec](../../docs/specs/service-worker.md) §7.2)                                                    |
@@ -20,8 +21,8 @@ The frame around every app's screens, and around the hub's pages ([architecture 
 | `BackupSection`                                             | The backup part of Settings: when the last backup was made and how much has changed since, a dialog that makes one, and one that restores one                                                       |
 | `Restore`                                                   | The button and dialog that restore a backup, which `BackupSection` shows                                                                                                                            |
 | `BackupReminder`                                            | A banner that reminds the user to back up, with a button that makes the backup at once                                                                                                              |
-| `InstallSection`                                            | The install part of Settings: the browser's install prompt, how to add the app to the Home Screen of an iPhone or iPad, or that it is installed                                                     |
-| `AboutSection`                                              | The about part of Settings: what the app does, where its data stays, its license and source code, the licenses of what it includes                                                                  |
+| `InstallSection`                                            | The install part of Settings: the browser's install prompt, how to add the app to the Home Screen of an iPhone or iPad, and how to take its data along there, or that it is installed               |
+| `AboutSection`                                              | The about part of Settings: what the app does, where its data stays, or that it keeps none, its license and source code, the licenses of what it includes                                           |
 | `InstallBanner`                                             | On iPhone and iPad, a banner that suggests installing the app before anything is entered                                                                                                            |
 
 ## Building an app
@@ -35,9 +36,11 @@ import { config } from "./app.config.ts";
 export default app(config);
 ```
 
-`app.config.ts` says what the app is (`AppConfig`): its permanent id, its name and description from its messages, the accent color and glyph of its icons, the browser features it needs, if any, and whether its workers compile WebAssembly (`webAssembly`, [ADR 0014](../../docs/decisions/0014-webassembly.md)). `app()` refuses an id that cannot be an app's, then puts together React, Tailwind CSS, the page's title and description, the manifest and the icons, the service worker, and `edge()`, last, which writes the security headers once every other file is final. For the service worker's procedures of last resort, `app(config, { serviceWorker: { replaces: […] } })` or `{ remove: true }` ([`@shkriuss/pwa`](../pwa/README.md)).
+`app.config.ts` says what the app is (`AppConfig`): its permanent id, its name and description from its messages, the accent color and glyph of its icons, the browser features it needs, if any, whether its workers compile WebAssembly (`webAssembly`, [ADR 0014](../../docs/decisions/0014-webassembly.md)), and whether it keeps data (`keepsData`, true if left out). An app without data has no database and no backups: its build fails if it has the code of `@shkriuss/data` or `@shkriuss/backup` (see `excludedPackages` of [`@shkriuss/edge`](../edge/README.md#excluded-packages)), and its settings are `SettingsScreenWithoutData`. `app()` refuses an id that cannot be an app's, then puts together React, Tailwind CSS, the page's title and description, the manifest and the icons, the service worker, and `edge()`, last, which writes the security headers once every other file is final. For the service worker's procedures of last resort, `app(config, { serviceWorker: { replaces: […] } })` or `{ remove: true }` ([`@shkriuss/pwa`](../pwa/README.md)).
 
-`tooling/app-template` is an app built so, which CI builds and tests.
+`tooling/app-template` and `tooling/app-template-no-data` are apps built so, which CI builds and tests.
+
+The package has no side effects (`"sideEffects": false` in its `package.json`): a module of it runs only for what an app uses of it, and an app's build leaves the rest out. So an app without data gets none of the code of the backups, though `@shkriuss/shell` exports it.
 
 ## The hub
 

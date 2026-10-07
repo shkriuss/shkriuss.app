@@ -12,10 +12,12 @@ import { edge } from "@shkriuss/edge";
 export default defineConfig({ plugins: [react(), edge()] });
 ```
 
-| Option            | Meaning                                                                         |
-| ----------------- | ------------------------------------------------------------------------------- |
-| `appId`           | The app's permanent id, which is also its subdomain. Leave it out for the hub.  |
-| `allowedFeatures` | Browser features the app needs, such as `camera`; every other one stays denied. |
+| Option             | Meaning                                                                                                                                   |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `appId`            | The app's permanent id, which is also its subdomain. Leave it out for the hub.                                                            |
+| `allowedFeatures`  | Browser features the app needs, such as `camera`; every other one stays denied.                                                           |
+| `webAssembly`      | Whether the app's workers compile WebAssembly, which its policy then allows (see [WebAssembly](#webassembly)).                            |
+| `excludedPackages` | Packages whose code the build must not have: those that keep data, for an app without data (see [Excluded packages](#excluded-packages)). |
 
 After Vite has written the production build, the plugin:
 
@@ -62,9 +64,15 @@ const { instance } = await WebAssembly.instantiateStreaming(fetch(module));
 - **The build fails** for an app that ships modules without declaring WebAssembly, so that a new dependency cannot widen the policy unnoticed; for an app that declares it without shipping any; and for a script of the page that refers to a module.
 - **Licenses:** a package that ships WebAssembly goes through `add-dependency`, and `/licenses.txt` must carry the licenses of everything compiled into its module, not only the package's own.
 
+## Excluded packages
+
+An app without data excludes the packages that keep data, `@shkriuss/data` and `@shkriuss/backup`: `app()` of `@shkriuss/shell/vite` passes them as `excludedPackages` for `keepsData: false`. The build fails if the page, a worker or the service worker has the code of an excluded package, even through another package. A module belongs to the package named in the nearest `package.json` with a name.
+
+Only code that the build has counts: a module that tree-shaking removed entirely does not, nor a worker whose module it removed. Vite builds every worker that a module refers to, even when tree-shaking then removes that module, and leaves such a worker out of the build; so does the plugin.
+
 ## Licenses
 
-The plugin writes `dist/licenses.txt`, which every app serves at `/licenses.txt`. It says that the app is free software under AGPL-3.0-only and where its source is. Then it gives the license texts of all the software and material of others whose code the build includes, in the page's chunks and in its workers:
+The plugin writes `dist/licenses.txt`, which every app serves at `/licenses.txt`. It says that the app is free software under AGPL-3.0-only and where its source is. Then it gives the license texts of all the software and material of others whose code the build includes, in the page's chunks and in the workers that it has (see [Excluded packages](#excluded-packages)):
 
 - **Packages:** every package from `node_modules` with code in the build, with its license files: `LICENSE`, `COPYING`, `NOTICE` and the like. A package that tree-shaking removed entirely is left out, because none of its code is served.
 - **Generated code:** helpers that Vite and Rolldown write into the bundles, with Vite's and Rolldown's own licenses. For them, Vite's license file stops before the licenses of the packages that Vite bundles for its own use, which the helpers do not contain. Modules that this repository's own plugins generate, whose ids start with `OWN_GENERATED` (`\0shkriuss:`), such as the hub's catalog, are our own code.

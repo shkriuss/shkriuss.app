@@ -129,6 +129,8 @@ export const messages = defineMessages((format) => ({
     "Install this app to open it like any other, from your home screen or your list of apps.",
   addToHomeScreen: () =>
     "To install this app, open your browser's share menu, then choose Add to Home Screen. The app there keeps its own data, apart from your browser's: to take your data along, back it up here, then restore the backup in the app.",
+  addToHomeScreenWithoutData: () =>
+    "To install this app, open your browser's share menu, then choose Add to Home Screen.",
   installFromMenu: () =>
     "Some browsers install apps from their menu, with Install or Add to Home Screen.",
   installFirst: () =>
@@ -136,6 +138,8 @@ export const messages = defineMessages((format) => ({
   about: (name: string) => `About ${name}`,
   privacy: () =>
     "Your data stays on this device. The app has no accounts, and sends none of your data anywhere: only the backups that you save leave the device.",
+  privacyWithoutData: () =>
+    "This app keeps none of your data: what you enter stays on this device, until you close the app. The app has no accounts, and sends nothing anywhere.",
   freeSoftware: () =>
     "This app is free software, under the GNU Affero General Public License, version 3.",
   sourceCode: () => "Source code",

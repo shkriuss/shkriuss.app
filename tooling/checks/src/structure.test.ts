@@ -1,14 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { APP_FILES, appsOf, checkAppStructure, checkPorts } from "./structure.ts";
+import { APP_FILES, SCHEMA_FILE, appsOf, checkAppStructure, checkPorts } from "./structure.ts";
 
-/** The files of an app as the template has them, by path, with its contents. */
+/** The files of an app as its template has them, by path, with its contents. */
 function app(
   folder: string,
   id: string,
   port: number,
-  name = `@shkriuss/${id}`,
+  { name = `@shkriuss/${id}`, keepsData = true } = {},
 ): Map<string, string> {
-  const files = new Map<string, string>(APP_FILES.map((file) => [`${folder}/${file}`, ""]));
+  const files = new Map<string, string>(
+    [...APP_FILES, ...(keepsData ? [SCHEMA_FILE] : [])].map((file) => [`${folder}/${file}`, ""]),
+  );
   files.set(
     `${folder}/package.json`,
     JSON.stringify({
@@ -18,7 +20,7 @@ function app(
   );
   files.set(
     `${folder}/app.config.ts`,
-    `export const config = {\n  id: "${id}",\n  name: m.appName(),\n};\n`,
+    `export const config = {\n  id: "${id}",\n  name: m.appName(),\n${keepsData ? "" : "  keepsData: false,\n"}};\n`,
   );
   files.set(
     `${folder}/vite.config.ts`,
@@ -41,25 +43,32 @@ function check(...apps: Map<string, string>[]): string[] {
 }
 
 describe("appsOf", () => {
-  it("finds the apps in apps/ and the template, but not the hub, which is a site", () => {
+  it("finds the apps in apps/ and the templates, but not the hub, which is a site", () => {
     const files = [
       "apps/hub/package.json",
       "apps/notes/package.json",
       "tooling/app-template/package.json",
+      "tooling/app-template-no-data/package.json",
     ];
     expect(appsOf(files).map(({ folder, id }) => `${folder} ${id}`)).toStrictEqual([
       "apps/notes notes",
       "tooling/app-template template",
+      "tooling/app-template-no-data template-no-data",
     ]);
   });
 });
 
 describe("checkAppStructure", () => {
-  it("accepts apps as the template is, and the template itself", () => {
+  it("accepts apps as their templates are, and the templates themselves", () => {
     expect(
       check(
         app("apps/notes", "notes", 4200),
-        app("tooling/app-template", "template", 4176, "@shkriuss/app-template"),
+        app("apps/words", "words", 4201, { keepsData: false }),
+        app("tooling/app-template", "template", 4176, { name: "@shkriuss/app-template" }),
+        app("tooling/app-template-no-data", "template-no-data", 4177, {
+          name: "@shkriuss/app-template-no-data",
+          keepsData: false,
+        }),
       ),
     ).toStrictEqual([]);
   });
@@ -69,13 +78,37 @@ describe("checkAppStructure", () => {
     notes.delete("apps/notes/src/router.ts");
     notes.delete("apps/notes/e2e/app.spec.ts");
     expect(check(notes)).toStrictEqual([
-      "apps/notes/src/router.ts: Every app has this file, as the app template does; create apps with create-app.",
+      "apps/notes/src/router.ts: Every app has this file, as its app template does; create apps with create-app.",
       "apps/notes/e2e: Every app has end-to-end tests.",
     ]);
   });
 
+  it("asks an app with data for its schema, and an app without data for none", () => {
+    const notes = app("apps/notes", "notes", 4200);
+    notes.delete("apps/notes/src/schema.ts");
+    const words = app("apps/words", "words", 4201, { keepsData: false });
+    words.set("apps/words/src/schema.ts", "");
+    expect(check(notes, words)).toStrictEqual([
+      "apps/notes/src/schema.ts: Every app has this file, as its app template does; create apps with create-app.",
+      "apps/words/src/schema.ts: An app without data has no schema, as the template without data; remove it, or keepsData: false from app.config.ts.",
+    ]);
+  });
+
+  it("reads only keepsData: false, as the template without data says it", () => {
+    for (const said of ["keepsData: true,", "keepsData: !online,", "keepsData: false && online,"]) {
+      const notes = app("apps/notes", "notes", 4200);
+      notes.set(
+        "apps/notes/app.config.ts",
+        `export const config = {\n  id: "notes",\n  ${said}\n};\n`,
+      );
+      expect(check(notes)).toStrictEqual([
+        "apps/notes/app.config.ts:3: An app keeps data unless app.config.ts says keepsData: false, as the template without data; otherwise leave keepsData out.",
+      ]);
+    }
+  });
+
   it("holds the package to the app's name and the template's scripts", () => {
-    const notes = app("apps/notes", "notes", 4200, "@shkriuss/memo");
+    const notes = app("apps/notes", "notes", 4200, { name: "@shkriuss/memo" });
     notes.set("apps/notes/package.json", JSON.stringify({ name: "@shkriuss/memo", scripts: {} }));
     expect(check(notes)).toStrictEqual([
       "apps/notes/package.json: The app's package must be named @shkriuss/notes.",
@@ -88,7 +121,7 @@ describe("checkAppStructure", () => {
   });
 
   it("keeps the app's id equal to its folder, which is its subdomain", () => {
-    const renamed = app("apps/memo", "notes", 4200, "@shkriuss/memo");
+    const renamed = app("apps/memo", "notes", 4200, { name: "@shkriuss/memo" });
     expect(check(renamed)).toStrictEqual([
       'apps/memo/app.config.ts:2: The app\'s id must be "memo", the name of its folder and its subdomain. App ids never change (CLAUDE.md, product rule 3).',
     ]);

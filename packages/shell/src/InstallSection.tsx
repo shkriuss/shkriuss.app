@@ -6,21 +6,24 @@ import { m } from "./messages.ts";
 export interface InstallSectionProps {
   /** How the app installs, from `appInstall()` of `@shkriuss/pwa`. */
   readonly install: AppInstall;
+  /** Whether the app keeps data, which then needs taking along on iPhone and iPad; true if left out. */
+  readonly keepsData?: boolean;
 }
 
-const TEXT: Readonly<Record<InstallState, () => string>> = {
+const TEXT: Readonly<Record<InstallState, (keepsData: boolean) => string>> = {
   installed: m.installed,
   promptable: m.installOffer,
-  "add-to-home-screen": m.addToHomeScreen,
+  "add-to-home-screen": (keepsData) =>
+    keepsData ? m.addToHomeScreen() : m.addToHomeScreenWithoutData(),
   unavailable: m.installFromMenu,
 };
 
 /**
  * The part of Settings about installing the app (architecture §9): where the browser offers to
  * install it, a button that shows the browser's prompt; on iPhone and iPad, how to add it to the
- * Home Screen, and how to take the data along; and whether it is installed.
+ * Home Screen, and how to take the data along, if the app keeps any; and whether it is installed.
  */
-export function InstallSection({ install }: InstallSectionProps) {
+export function InstallSection({ install, keepsData = true }: InstallSectionProps) {
   const state = useSyncExternalStore(install.subscribe, install.getState);
   const [asking, setAsking] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null);
@@ -41,7 +44,7 @@ export function InstallSection({ install }: InstallSectionProps) {
         {m.install()}
       </h2>
       {/* An <output>, whose role is status: screen readers read what changes. */}
-      <output className="block">{TEXT[state]()}</output>
+      <output className="block">{TEXT[state](keepsData)}</output>
       {state === "promptable" ? (
         <Button
           variant="primary"

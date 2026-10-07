@@ -29,7 +29,16 @@ export interface AppConfig extends WebAppManifestOptions {
    * allows (ADR 0014). Its build must then have WebAssembly modules, and none otherwise.
    */
   readonly webAssembly?: boolean;
+  /**
+   * Whether the app keeps data on the device, as most apps do: in a database of
+   * `@shkriuss/data`, which the backups of `@shkriuss/backup` save. True if left out. An app
+   * without data keeps nothing, and its build fails if it has the code of either package.
+   */
+  readonly keepsData?: boolean;
 }
+
+/** The packages that keep data, whose code an app without data must not have. */
+const DATA_PACKAGES = ["@shkriuss/data", "@shkriuss/backup"];
 
 export interface AppBuildOptions {
   /**
@@ -73,7 +82,7 @@ function pageHead({ name, description }: AppConfig): Plugin {
  */
 export function app(config: AppConfig, options: AppBuildOptions = {}): UserConfig {
   assertAppId(config.id);
-  const { id, allowedFeatures, webAssembly, ...manifest } = config;
+  const { id, allowedFeatures, webAssembly, keepsData = true, ...manifest } = config;
   return {
     plugins: [
       tailwindcss(),
@@ -85,6 +94,7 @@ export function app(config: AppConfig, options: AppBuildOptions = {}): UserConfi
         appId: id,
         ...(allowedFeatures === undefined ? {} : { allowedFeatures }),
         ...(webAssembly === undefined ? {} : { webAssembly }),
+        ...(keepsData ? {} : { excludedPackages: DATA_PACKAGES }),
       }),
     ],
   };

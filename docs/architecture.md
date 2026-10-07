@@ -83,19 +83,20 @@ Dependency direction: apps → `shell` → (`ui`, `data`, `backup`, `pwa`, `i18n
 ```text
 apps/<id>/
 ├─ app.config.ts      id (permanent), name and description from the app's messages,
-│                     accent color, icon glyph, opt-in browser features
+│                     accent color, icon glyph, opt-in browser features, and
+│                     keepsData: false for an app without data
 ├─ vite.config.ts     the build: app(config) of @shkriuss/shell/vite
 ├─ index.html         the page, which the build titles and links the manifest from
-├─ src/main.tsx       starts the service worker, the database and the router
+├─ src/main.tsx       starts the service worker, the database if any, and the router
 ├─ src/router.ts      the routes, declared in code (ADR 0013)
 ├─ src/routes/        one file per screen, with its route
 ├─ src/features/      app-specific components and logic
-├─ src/schema.ts      record types and migrations
+├─ src/schema.ts      record types and migrations, in an app that keeps data
 ├─ src/messages.ts    the app's text
 └─ e2e/               Playwright tests
 ```
 
-Generated from `app.config.ts` at build time: the web app manifest and the icons, the page's title and description, the service worker, and `_headers` (security policy and permissions). The hub's catalog reads it too, at the hub's build: each app's name, description, icon and browser features; its privacy label follows from them ([hub spec](specs/hub.md) §2). Extra export formats join it when the first readable export needs them. Apps are created only with `create-app` (`tooling/create-app`), from the app template in `tooling/app-template`: a small app that CI builds and tests like every app, so that the template always works. `pnpm check` holds every app, and the template, to the standard structure: the same files, an id equal to the app's folder, the platform's build and a test server of its own.
+Generated from `app.config.ts` at build time: the web app manifest and the icons, the page's title and description, the service worker, and `_headers` (security policy and permissions). The hub's catalog reads it too, at the hub's build: each app's name, description, icon and browser features; its privacy label follows from them ([hub spec](specs/hub.md) §2). Extra export formats join it when the first readable export needs them. Apps are created only with `create-app` (`tooling/create-app`), from the app template in `tooling/app-template`, or, for an app that keeps no data, from the one in `tooling/app-template-no-data`: small apps that CI builds and tests like every app, so that the templates always work. An app without data says `keepsData: false` in its `app.config.ts`. It has no database and no backups, and its settings show installing and About only; its build fails if it has the code of `@shkriuss/data` or `@shkriuss/backup`, even through another package. `pnpm check` holds every app, and the templates, to the standard structure: the files of its template, an id equal to the app's folder, the platform's build and a test server of its own.
 
 ## 7. Data layer
 

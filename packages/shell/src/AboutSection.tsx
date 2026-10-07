@@ -8,6 +8,8 @@ export interface AboutSectionProps {
   readonly name: string;
   /** What the app does, in a sentence. */
   readonly description: string;
+  /** Whether the app keeps data, which then stays on the device; true if left out. */
+  readonly keepsData?: boolean;
 }
 
 /** What the licenses dialog shows: the text, or that it is on its way or could not be read. */
@@ -95,13 +97,13 @@ function LicensesButton() {
 
 /**
  * The part of Settings about the app (architecture §5, §13): what it does, that the user's data
- * stays on the device, that it is free software under AGPL-3.0, with its source code, the licenses
- * of the software it includes, and how to report a security problem.
+ * stays on the device, or that the app keeps none, that it is free software under AGPL-3.0, with
+ * its source code, the licenses of the software it includes, and how to report a security problem.
  *
  * The links to the repository open a new tab: an app installed on an iPhone has no back button to
  * return from them.
  */
-export function AboutSection({ name, description }: AboutSectionProps) {
+export function AboutSection({ name, description, keepsData = true }: AboutSectionProps) {
   const headingId = useId();
   return (
     <section aria-labelledby={headingId} className="flex flex-col items-start gap-3">
@@ -109,7 +111,7 @@ export function AboutSection({ name, description }: AboutSectionProps) {
         {m.about(name)}
       </h2>
       <p>{description}</p>
-      <p>{m.privacy()}</p>
+      <p>{keepsData ? m.privacy() : m.privacyWithoutData()}</p>
       <p>{m.freeSoftware()}</p>
       <ul className="flex flex-col gap-2">
         {[
