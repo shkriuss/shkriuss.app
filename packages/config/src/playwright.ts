@@ -55,7 +55,8 @@ const firefox = {
  */
 const chromium = { channel: "chromium" };
 
-// The real devices are an iPhone, a Pixel and a Pixel Tablet (architecture §14).
+// The real devices are an iPhone, a Pixel and a Pixel Tablet (architecture §14). Each project's
+// name starts with its browser's: CI runs each browser's projects in jobs of their own.
 const allProjects: Project[] = [
   { name: "chromium-phone", use: { ...devices["Pixel 10"], ...chromium } },
   {

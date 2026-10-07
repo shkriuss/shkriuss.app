@@ -208,7 +208,7 @@ Every pull request must pass the gates in [ADR 0008](decisions/0008-quality-gate
 - type checks and lint;
 - unit and property-based tests;
 - component tests in real browsers (Chromium, Firefox, WebKit);
-- Playwright end-to-end tests against the production build served with production headers, where any CSP or integrity violation fails the run; a test app that is never deployed (`tooling/platform-e2e`) tests the shared platform the same way, and the app template (`tooling/app-template`) is tested as every app is;
+- Playwright end-to-end tests against the production build served with production headers, where any CSP or integrity violation fails the run; a test app that is never deployed (`tooling/platform-e2e`) tests the shared platform the same way, and the app template (`tooling/app-template`) is tested as every app is. CI runs them in six jobs at once, each browser's projects in two halves, and its check "End-to-end" passes once all six have;
 - accessibility checks (axe);
 - performance and bundle-size budgets.
 
