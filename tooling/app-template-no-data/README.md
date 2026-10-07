@@ -26,5 +26,5 @@ In Chromium, Firefox and WebKit, at phone and tablet sizes, with the app's real 
 - **Opening:** the app opens on its first screen, titled with its name, with no accessibility violation in either theme.
 - **Words:** they are counted as the user types, and are gone after a reload. The app stores nothing: no database, nothing in local or session storage, and no cache but the service worker's.
 - **Settings:** installing and About, without storage or backups; About says that the app keeps none of the user's data. On iPhone and iPad, they say how to add the app to the Home Screen, with no data to take along.
-- **Offline:** the app's service worker controls the page, and keeps every file of the build.
+- **Offline:** the app's service worker controls the page, and keeps every file of the build. Once the test cuts the network, the app still opens, at any of its addresses, and counts words.
 - **Addresses** that the app does not have show that the page does not exist, in the frame.

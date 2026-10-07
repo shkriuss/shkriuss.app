@@ -4,7 +4,8 @@
  * - `playwrightConfig()`: the browsers and devices, and a server that serves the production
  *   build with its generated headers, as Cloudflare does;
  * - `test` and `expect`: Playwright's, with a fixture that fails a test on any security
- *   violation the browser reports.
+ *   violation the browser reports, and `network`, the way to the app's server, which a test
+ *   cuts to go offline.
  *
  * In an app's `playwright.config.ts`:
  *
@@ -15,6 +16,7 @@
  *
  * In its tests: `import { expect, test } from "@shkriuss/config/playwright";`
  */
+import http from "node:http";
 import {
   type BrowserContext,
   type Page,
@@ -134,6 +136,103 @@ export interface Security {
   readonly watch: (context: BrowserContext) => Promise<void>;
 }
 
+/** Requests that the network holds back until the test lets them through. */
+export interface Hold {
+  /** Settles once the first of them has come. */
+  readonly arrived: Promise<void>;
+  /** Lets them through, and those that come later. */
+  readonly release: () => void;
+}
+
+/** The way from the browser to the app's server, which a test can hold up or cut. */
+export interface Network {
+  /** The app's address through this network: an origin of its own, with its own storage. */
+  readonly url: string;
+  /** From now on, holds back the requests whose path ends with `suffix`. */
+  readonly hold: (suffix: string) => Hold;
+  /** From now on, the network closes every connection instead of answering, as offline. */
+  readonly cut: () => void;
+}
+
+/**
+ * A proxy to the app's server at `target`, as tooling/pwa-e2e has. Playwright's
+ * `context.setOffline()` cannot stand in for it: its WebKit then fails every load, even those
+ * that the service worker answers.
+ */
+async function networkTo(target: string): Promise<Network & { close(): Promise<void> }> {
+  const { hostname, port } = new URL(target);
+  let up = true;
+  let held:
+    | { readonly suffix: string; readonly waiting: (() => void)[]; readonly came: () => void }
+    | undefined;
+  const server = http.createServer((request, response) => {
+    if (!up) {
+      request.socket.destroy();
+      return;
+    }
+    function forward(): void {
+      const upstream = http.request(
+        {
+          host: hostname,
+          port,
+          method: request.method,
+          path: request.url,
+          headers: request.headers,
+        },
+        (answer) => {
+          response.writeHead(answer.statusCode ?? 502, answer.rawHeaders);
+          answer.pipe(response);
+        },
+      );
+      upstream.on("error", () => {
+        response.destroy();
+      });
+      request.pipe(upstream);
+    }
+    if (held !== undefined && request.url?.endsWith(held.suffix) === true) {
+      held.waiting.push(forward);
+      held.came();
+      return;
+    }
+    forward();
+  });
+  await new Promise<void>((resolve) => {
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  const address = server.address();
+  if (address === null || typeof address === "string") {
+    throw new Error("The proxy listens on no port.");
+  }
+  return {
+    url: `http://127.0.0.1:${String(address.port)}/`,
+    hold: (suffix) => {
+      const waiting: (() => void)[] = [];
+      const { promise, resolve } = Promise.withResolvers<void>();
+      held = { suffix, waiting, came: resolve };
+      return {
+        arrived: promise,
+        release: () => {
+          held = undefined;
+          for (const forward of waiting) {
+            forward();
+          }
+        },
+      };
+    },
+    cut: () => {
+      up = false;
+    },
+    close: async () => {
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => {
+        server.close(() => {
+          resolve();
+        });
+      });
+    },
+  };
+}
+
 /**
  * Every test fails if a page reports a CSP or Trusted Types violation, logs an error, throws,
  * or has a request fail (architecture §15). That holds for every page of the test, such as a
@@ -142,8 +241,13 @@ export interface Security {
  *
  * `otherDevice` is a page of another device: a browser context of its own, with its own
  * storage, and the options of the test's project, such as its viewport.
+ *
+ * `network` is the way to the app's server, for a test that opens the app at `network.url`
+ * (CLAUDE.md: every app works offline after its first load). Cutting it fails every request
+ * that reaches the network, as offline, while the service worker still answers; holding it up
+ * keeps, say, a module from coming until the test lets it.
  */
-export const test = base.extend<{ security: Security; otherDevice: Page }>({
+export const test = base.extend<{ security: Security; otherDevice: Page; network: Network }>({
   security: [
     async ({ context }, use, testInfo) => {
       const violations: string[] = [];
@@ -209,6 +313,14 @@ export const test = base.extend<{ security: Security; otherDevice: Page }>({
     // The test is over: closing the context fails what its pages still had under way.
     await Promise.all(context.pages().map(async (page) => page.removeAllListeners()));
     await context.close();
+  },
+  network: async ({ baseURL }, use) => {
+    if (baseURL === undefined) {
+      throw new Error("The network leads to the app's server at the config's baseURL.");
+    }
+    const network = await networkTo(baseURL);
+    await use(network);
+    await network.close();
   },
 });
 

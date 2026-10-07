@@ -30,6 +30,6 @@ In Chromium, Firefox and WebKit, at phone and tablet sizes, with the app's real 
 - **Items:** they are added with the button or with Enter, listed in the order they were added, kept across a reload, and deleted. After a deletion, the focus goes to the next item's button, or to the field once the list is empty. An empty item is refused, with what to do.
 - **Settings:** every part that every app has, with no accessibility violation.
 - **Backups:** an encrypted backup, made with the generated passphrase, restores the items on another device.
-- **Offline:** the app's service worker controls the page, and keeps every file of the build.
+- **Offline:** the app's service worker controls the page, and keeps every file of the build. Once the test cuts the network, the app still opens, at any of its addresses, with its items, and keeps the ones added offline.
 - **Versions:** a newer version of the app, in another window, closes the database here: the app offers to reload, then says that it was updated.
 - **Addresses** that the app does not have show that the page does not exist, in the frame.

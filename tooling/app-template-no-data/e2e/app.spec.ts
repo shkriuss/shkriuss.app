@@ -20,9 +20,9 @@ function escaped(text: string): string {
     .replaceAll('"', "&quot;");
 }
 
-/** Opens the app on its first screen. */
-async function open(page: Page): Promise<void> {
-  await page.goto("/");
+/** Opens the app on its first screen, at `url`. */
+async function open(page: Page, url = "/"): Promise<void> {
+  await page.goto(url);
   await expect(page.getByRole("heading", { level: 1, name: NAME })).toBeVisible();
 }
 
@@ -138,6 +138,18 @@ test("the app's service worker controls it and keeps every file of the build, fo
     return files.filter((_file, index) => kept[index] !== true);
   });
   expect(missing).toStrictEqual([]);
+});
+
+test("it works offline after the first visit", async ({ page, network }) => {
+  await open(page, network.url);
+  await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+  network.cut();
+  await page.reload();
+  await page.getByRole("textbox", { name: "Text" }).fill("Still counting, offline.");
+  await expect(page.getByRole("main").getByRole("status")).toHaveText("3 words");
+  // Every address of the app opens offline, as the service worker answers each navigation.
+  await page.goto(`${network.url}settings`);
+  await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
 });
 
 test("an address that the app does not have says so, in the frame", async ({ page }) => {
