@@ -180,6 +180,33 @@ test("Copy puts the text on the clipboard, and says so", async ({ page, browserN
   }
 });
 
+test("Delete empties the field, and Undo brings the text back until the user types again", async ({
+  page,
+}) => {
+  await check(page, SAMPLE, 6);
+  const remove = page.getByRole("button", { name: m.delete(), exact: true });
+  const undo = page.getByRole("button", { name: m.undo(), exact: true });
+  await remove.click();
+  await expect(field(page)).toHaveValue("");
+  await expect(page.getByText(m.deleted())).toBeVisible();
+  await expect(mistakes(page)).toHaveCount(0);
+
+  // Undo takes Delete's place, with the keyboard too, and the focus stays on the button.
+  await undo.focus();
+  await page.keyboard.press("Enter");
+  await expect(field(page)).toHaveValue(SAMPLE);
+  await expect(page.getByText(m.undone())).toBeVisible();
+  await expect(found(page)).toHaveText(m.found(6));
+  await expect(remove).toBeFocused();
+
+  // Once the user types, there is nothing to undo; with the field empty, nothing to delete.
+  await remove.click();
+  await field(page).fill("Hello");
+  await expect(undo).toHaveCount(0);
+  await field(page).fill("");
+  await expect(remove).toBeDisabled();
+});
+
 test("it keeps nothing: no database, no storage, and no cache but the service worker's", async ({
   page,
 }) => {

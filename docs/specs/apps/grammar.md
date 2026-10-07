@@ -24,6 +24,7 @@ Checks English text for mistakes in grammar, spelling, punctuation and word choi
 - **Show** selects the mistake's words in the field. **Ignore** hides the mistake until the user changes its words.
 - **English variety:** American, British, Australian, Canadian or Indian English. It starts from the browser's language (`en-GB` gives British, …), or else American. It is not kept.
 - **Copy** puts the whole text on the clipboard, and says so.
+- **Delete** empties the field, and says so. As the app keeps no copy of the text, the button then reads **Undo** until the user types again, and Undo brings the text back.
 - **If the checker cannot start,** for example in a browser without WebAssembly, the screen says so instead of the list.
 
 ## 2. Data
@@ -56,7 +57,7 @@ None. The app has no database, no backups and no settings of its own. It stores 
   - the checker starts in its worker and finds the mistakes of a sample text;
   - a fix changes the text, and the list follows; Ignore and Show;
   - another variety gives other results ("color" and "colour");
-  - Copy, where the browser allows it in tests;
+  - Copy, where the browser allows it in tests; Delete, and Undo;
   - nothing is stored: no IndexedDB database, nothing beyond the service worker's own cache;
   - it works offline after the first visit;
   - no accessibility violation in either theme; everything works with the keyboard.

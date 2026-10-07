@@ -20,7 +20,7 @@ Checks English text for mistakes in grammar, spelling and punctuation, and sugge
 
 | File in `src/features/check/` | What it is                                                                                          |
 | ----------------------------- | --------------------------------------------------------------------------------------------------- |
-| `Check.tsx`                   | The check screen: the text, its variety of English and Copy, and the mistakes with their fixes      |
+| `Check.tsx`                   | The check screen: the text, its variety of English, Copy, Delete, and the mistakes with fixes       |
 | `checker.ts`                  | The page's checker: it starts once the app is kept offline, and says when it is ready or failed     |
 | `worker-check.ts`             | Starts the worker, and sends it each text with a port for the answer                                |
 | `harper.worker.ts`            | The worker: Harper's linter, which answers each request in turn                                     |
