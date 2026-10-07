@@ -196,15 +196,15 @@ export function Check({ checker }: { readonly checker: Checker }) {
   }
 
   let status = "";
-  if (state === "starting") {
-    status = m.gettingReady();
-  } else if (state === "failed") {
+  if (state === "failed") {
     status = m.cannotStart();
   } else if (failed) {
     status = m.checkFailed();
-  } else if (result === undefined) {
-    status = m.checking();
-  } else if (result.text !== "") {
+  } else if (result === undefined && text !== "") {
+    // The checker's start, which takes seconds each time the app opens, and its first check
+    // are worth a word only once there is text to check.
+    status = state === "starting" ? m.gettingReady() : m.checking();
+  } else if (result !== undefined && result.text !== "") {
     status = m.found(shown.length);
   }
 
