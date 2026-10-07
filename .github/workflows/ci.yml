@@ -41,14 +41,22 @@ jobs:
       - run: pnpm build
       - run: pnpm check
 
-  e2e:
-    name: End-to-end
+  # The end-to-end tests, in six jobs at once: each browser's projects, in two halves. One job
+  # running them all took 19 minutes, and each app adds about 5.
+  e2e-part:
+    name: End-to-end (${{ matrix.browser }} ${{ matrix.part }}/2)
     runs-on: ubuntu-24.04
-    # Each app's tests run after the last one's (pnpm e2e), about 9 minutes in all, and the
-    # browsers' system libraries once took 11 minutes to install from a slow package mirror.
+    # Each app's tests run after the last one's, and the browsers' system libraries once took
+    # 11 minutes to install from a slow package mirror.
     timeout-minutes: 30
     permissions:
       contents: read
+    strategy:
+      # Every part reports, so that one failure hides no other.
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+        part: [1, 2]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -60,10 +68,31 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
-      # The browser builds that match the pinned Playwright version, with their system libraries.
+      # The browser build that matches the pinned Playwright version, with its system libraries.
       # Not Chromium's headless shell, so that no test can run on it instead of the whole browser.
-      - run: pnpm --filter @shkriuss/hub exec playwright install --with-deps --no-shell chromium firefox webkit
-      - run: pnpm e2e
+      - run: pnpm --filter @shkriuss/hub exec playwright install --with-deps --no-shell "$BROWSER"
+        env:
+          BROWSER: ${{ matrix.browser }}
+      # pnpm e2e, for the projects whose name starts with the browser's (@shkriuss/config), and
+      # half of their tests.
+      - run: pnpm exec turbo run e2e --concurrency=1 -- --project="$BROWSER-*" --shard="$PART/2"
+        env:
+          BROWSER: ${{ matrix.browser }}
+          PART: ${{ matrix.part }}
+
+  # The check that the main branch's ruleset requires, and that the deployments wait for: it
+  # passes once every part has. It runs when a part fails too, as a skipped check would pass.
+  e2e:
+    name: End-to-end
+    needs: [e2e-part]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - run: test "$RESULT" = success
+        env:
+          RESULT: ${{ needs.e2e-part.result }}
 
   # Every merge to main goes to staging once every check has passed (ADR 0006): every app in
   # apps/, the hub among them, each to its own domain.
