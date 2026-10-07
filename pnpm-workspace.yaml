@@ -19,6 +19,7 @@ catalog:
   dexie: 4.4.6
   fake-indexeddb: 6.2.5
   fast-check: 4.10.2
+  harper.js: 2.10.0
   markdownlint: 0.41.1
   oxlint: 1.86.0
   oxlint-tsgolint: 7.0.2003

@@ -71,6 +71,7 @@ const messages = defineMessages((format) => ({
   noData: () => "None",
   leavesDevice: () => "Leaves this device",
   onlyBackups: () => "Only the backups that you save",
+  nothing: () => "Nothing",
   permissions: () => "Browser permissions",
   features: (features: readonly BrowserFeature[]) =>
     features.length === 0

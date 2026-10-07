@@ -52,7 +52,7 @@ test("a button responds to the pointer and the keyboard, and not when it is disa
   await expect(page.getByText("Pressed 3 times.")).toBeVisible();
 });
 
-test("buttons, switches and checkboxes are at least 44 by 44 pixels, so that they are easy to tap", async ({
+test("buttons, switches, checkboxes and selects are at least 44 by 44 pixels, so that they are easy to tap", async ({
   page,
 }) => {
   await gallery(page);
@@ -60,6 +60,7 @@ test("buttons, switches and checkboxes are at least 44 by 44 pixels, so that the
     ...(await page.getByRole("button").all()),
     page.locator("label").filter({ has: page.getByRole("switch") }),
     page.locator("label").filter({ has: page.getByRole("checkbox") }),
+    page.getByRole("combobox", { name: "Size" }),
   ];
   expect(targets.length).toBeGreaterThan(5);
   for (const target of targets) {
@@ -83,6 +84,35 @@ test("a text field has its label and its description, and its error when it is i
   await field.fill("Ada");
   await expect(field).not.toHaveAttribute("aria-invalid", "true");
   await expect(page.getByText("Enter a name.")).toBeHidden();
+});
+
+test("a text area has its label and its description, takes several lines, and can leave spelling to the app", async ({
+  page,
+}) => {
+  await gallery(page);
+  const note = page.getByRole("textbox", { name: "Note" });
+  await expect(note).toHaveAccessibleDescription("As many lines as you need.");
+  await note.fill("Milk");
+  await note.press("Enter");
+  await note.pressSequentially("Eggs");
+  await expect(note).toHaveValue("Milk\nEggs");
+  await expect(page.getByText("2 lines.")).toBeVisible();
+  // The app checks the text itself: the browser's spell checker, which may send it to a
+  // server, is off.
+  await expect(note).toHaveAttribute("spellcheck", "false");
+});
+
+test("a select shows its options, and gives the app the one that the user chose", async ({
+  page,
+}) => {
+  await gallery(page);
+  const size = page.getByRole("combobox", { name: "Size" });
+  await expect(size).toHaveValue("medium");
+  await expect(size.getByRole("option")).toHaveText(["Small", "Medium", "Large"]);
+  await size.selectOption("Large");
+  await expect(page.getByText("The size is Large.")).toBeVisible();
+  await size.selectOption({ label: "Small" });
+  await expect(page.getByText("The size is Small.")).toBeVisible();
 });
 
 test("a switch turns on and off with the pointer and the keyboard", async ({ page }) => {

@@ -6,7 +6,9 @@ import {
   Dialog,
   FileButton,
   Link,
+  Select,
   Switch,
+  TextArea,
   TextField,
 } from "@shkriuss/ui";
 import { StrictMode, useState } from "react";
@@ -18,9 +20,13 @@ const format = createFormat();
 
 // Every component of @shkriuss/ui, for the end-to-end tests in e2e/ui.spec.ts.
 
+const SIZES = ["small", "medium", "large"] as const;
+
 function Gallery() {
   const [presses, setPresses] = useState(0);
   const [name, setName] = useState("");
+  const [note, setNote] = useState("");
+  const [size, setSize] = useState<(typeof SIZES)[number]>("medium");
   const [checked, setChecked] = useState(false);
   const [reminders, setReminders] = useState(false);
   const [packed, setPacked] = useState(false);
@@ -79,6 +85,21 @@ function Gallery() {
             {m.check()}
           </Button>
         </div>
+        <TextArea
+          label={m.note()}
+          description={m.noteHelp()}
+          value={note}
+          onChange={setNote}
+          spellCheck="false"
+        />
+        <p>{m.noteLines(note === "" ? 0 : note.split("\n").length)}</p>
+        <Select
+          label={m.size()}
+          options={SIZES.map((value) => ({ value, label: m[value]() }))}
+          value={size}
+          onChange={setSize}
+        />
+        <p>{m.sized(m[size]())}</p>
       </section>
 
       <section aria-labelledby="settings" className="flex flex-col gap-3">

@@ -16,6 +16,11 @@ export interface CatalogApp {
   readonly icon: string;
   /** The browser features that it may use, besides those that every app may; none for most. */
   readonly allowedFeatures: readonly BrowserFeature[];
+  /**
+   * Whether it keeps data, which only backups that the user saves take off the device; an app
+   * without data has nothing that leaves it.
+   */
+  readonly keepsData: boolean;
 }
 
 /** The module that gives the hub its catalog: `import { apps } from "virtual:shkriuss/catalog"`. */
@@ -59,7 +64,7 @@ function catalogApp(folder: string, module: unknown): CatalogApp {
   if (!isRecord(config)) {
     throw new Error(`${file} must export the app's configuration as "config".`);
   }
-  const { name, description, accent, icon, allowedFeatures = [] } = config;
+  const { name, description, accent, icon, allowedFeatures = [], keepsData = true } = config;
   if (config["id"] !== id) {
     throw new Error(`${file} must give its folder's name, "${id}", as the app's id.`);
   }
@@ -73,12 +78,16 @@ function catalogApp(folder: string, module: unknown): CatalogApp {
   if (!Array.isArray(allowedFeatures) || !allowedFeatures.every(isFeature)) {
     throw new Error(`${file} must list only browser features that exist, in allowedFeatures.`);
   }
+  if (typeof keepsData !== "boolean") {
+    throw new Error(`${file} must say whether the app keeps data as true or false, if at all.`);
+  }
   return {
     id,
     name: name.trim(),
     description: description.trim(),
     icon: `data:image/svg+xml,${encodeURIComponent(appIconSvg({ accent, icon }))}`,
     allowedFeatures,
+    keepsData,
   };
 }
 

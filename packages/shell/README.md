@@ -47,7 +47,7 @@ The package has no side effects (`"sideEffects": false` in its `package.json`): 
 The hub is a site without data, and no app. It takes two entry points of the shell:
 
 - **`@shkriuss/shell/site`:** what it shares with the apps: `Frame`, `Screen`, `ScreenLink` and the links above, without the apps' parts, whose links to `/settings` its routes do not have.
-- **`catalog(appsDirectory)` of `@shkriuss/shell/vite`:** its build's catalog of apps ([hub spec](../../docs/specs/hub.md) §2). It reads the `app.config.ts` of every app in `apps/`, checks it, and gives the hub each app's id, name, description, icon and browser features as the module `virtual:shkriuss/catalog`. Only those values reach the hub's bundle. It is the one place that reads another app's configuration; `pnpm check imports` refuses imports of an app anywhere. `readCatalog()` reads the same, for the hub's tests.
+- **`catalog(appsDirectory)` of `@shkriuss/shell/vite`:** its build's catalog of apps ([hub spec](../../docs/specs/hub.md) §2). It reads the `app.config.ts` of every app in `apps/`, checks it, and gives the hub each app's id, name, description, icon, browser features and whether it keeps data as the module `virtual:shkriuss/catalog`. Only those values reach the hub's bundle. It is the one place that reads another app's configuration; `pnpm check imports` refuses imports of an app anywhere. `readCatalog()` reads the same, for the hub's tests.
 
 ## Use
 

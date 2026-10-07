@@ -60,6 +60,7 @@ describe("readCatalog", () => {
         accent: "#15803d",
         allowedFeatures: ["camera"],
       }),
+      grammar: configFile({ ...NOTES, id: "grammar", name: "Grammar", keepsData: false }),
     });
     expect(await readCatalog(apps)).toStrictEqual([
       {
@@ -68,6 +69,15 @@ describe("readCatalog", () => {
         description: NOTES.description,
         icon: iconUrl("#15803d"),
         allowedFeatures: ["camera"],
+        keepsData: true,
+      },
+      {
+        id: "grammar",
+        name: "Grammar",
+        description: NOTES.description,
+        icon: iconUrl("#1d4ed8"),
+        allowedFeatures: [],
+        keepsData: false,
       },
       {
         id: "notes",
@@ -75,6 +85,7 @@ describe("readCatalog", () => {
         description: NOTES.description,
         icon: iconUrl("#1d4ed8"),
         allowedFeatures: [],
+        keepsData: true,
       },
     ]);
   });
@@ -111,6 +122,11 @@ describe("readCatalog", () => {
       "a browser feature that does not exist",
       { notes: configFile({ ...NOTES, allowedFeatures: ["telepathy"] }) },
       "must list only browser features that exist",
+    ],
+    [
+      "keepsData that is neither true nor false",
+      { notes: configFile({ ...NOTES, keepsData: "no" }) },
+      "must say whether the app keeps data as true or false",
     ],
   ])("refuses an app with %s", async (_case, files, error) => {
     await expect(readCatalog(await appsWith(files))).rejects.toThrow(error);

@@ -41,23 +41,28 @@ describe("registration (§3)", () => {
     const page = new FakePage({ container: new FakeContainer({ controlled: false }) });
     page.registration.installing = new FakeWorker("installing");
     const updates = createAppUpdates(page, "serve");
+    const seen = states(updates);
     await settle();
     expect(page.register).not.toHaveBeenCalled();
+    // Until then, the page does not know yet whether the app works offline.
+    expect(updates.getState()).toBe("starting");
     await page.finishLoading();
     expect(page.register).toHaveBeenCalledOnce();
     expect(updates.getState()).toBe("installing");
+    expect(seen).toStrictEqual(["installing"]);
   });
 
-  it("stays unavailable when the browser refuses the service worker", async () => {
+  it("becomes unavailable when the browser refuses the service worker", async () => {
     const page = new FakePage({ container: new FakeContainer({ controlled: false }) });
     page.register.mockRejectedValueOnce(
       new DOMException("Not in a private window.", "SecurityError"),
     );
     const updates = createAppUpdates(page, "serve");
+    expect(updates.getState()).toBe("starting");
     const seen = states(updates);
     await page.finishLoading();
     expect(updates.getState()).toBe("unavailable");
-    expect(seen).toStrictEqual([]);
+    expect(seen).toStrictEqual(["unavailable"]);
   });
 });
 
@@ -84,7 +89,7 @@ describe("a change of controller before the page has loaded", () => {
     const updates = createAppUpdates(page, "serve");
     // The first version takes control before the page has loaded: not an update.
     container.takeOver();
-    expect(updates.getState()).toBe("unavailable");
+    expect(updates.getState()).toBe("starting");
     await page.finishLoading();
     expect(updates.getState()).toBe("ready");
     // Now that a version controls the page, the next one is an update.

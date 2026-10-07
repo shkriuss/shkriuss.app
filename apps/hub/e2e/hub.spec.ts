@@ -56,7 +56,8 @@ test("the first page says what the apps are, and lists every app with its privac
     ]);
     await expect(card.getByRole("definition")).toHaveText([
       "None",
-      "Only the backups that you save",
+      // An app without data has nothing that could leave the device.
+      app.keepsData ? "Only the backups that you save" : "Nothing",
       app.allowedFeatures.length === 0 ? "None" : /\S/v,
     ]);
   }
