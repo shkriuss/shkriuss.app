@@ -20,9 +20,9 @@ function escaped(text: string): string {
     .replaceAll('"', "&quot;");
 }
 
-/** Opens the app on its lists. */
-async function open(page: Page): Promise<void> {
-  await page.goto("/");
+/** Opens the app on its lists, at `url`. */
+async function open(page: Page, url = "/"): Promise<void> {
+  await page.goto(url);
   await expect(page.getByRole("heading", { level: 1, name: NAME })).toBeVisible();
 }
 
@@ -647,6 +647,24 @@ test("the app's service worker controls it and keeps every file of the build, fo
     return files.filter((_file, index) => kept[index] !== true);
   });
   expect(missing).toStrictEqual([]);
+});
+
+test("it works offline after the first visit, with its lists", async ({ page, network }) => {
+  await open(page, network.url);
+  await addList(page, "Groceries");
+  await addItem(page, "Milk");
+  await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+  network.cut();
+  // The list's own address opens offline, with its items, and changes are kept.
+  await page.reload();
+  await expect(texts(page, "To do")).toHaveText(["Milk"]);
+  await addItem(page, "Eggs");
+  await tick(page, "Milk");
+  await page.reload();
+  await expect(texts(page, "To do")).toHaveText(["Eggs"]);
+  await expect(texts(page, "Done")).toHaveText(["Milk"]);
+  await toLists(page);
+  await expect(lists(page)).toHaveCount(1);
 });
 
 test("a newer version of the app in another window closes the data here, and the app says so", async ({

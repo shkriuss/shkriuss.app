@@ -71,7 +71,7 @@ Items whose list is deleted or missing, or that have no list, are kept, as the d
 
 ## 5. Tests
 
-- **Screens and flows,** end to end in every browser: lists and items added, ticked, renamed and deleted; a list deleted after the user confirms; clearing done items; a list that does not exist; changes in another window; no accessibility violation in either theme.
+- **Screens and flows,** end to end in every browser: lists and items added, ticked, renamed and deleted; a list deleted after the user confirms; clearing done items; a list that does not exist; changes in another window; offline after the first visit, a list and its changes kept; no accessibility violation in either theme.
 - **Merging, through real backups:** each row of section 3, with two devices in a test, one backup made on each and restored on the other.
 - **Every backup version restores** ([backup format](../backup-format.md) §8): fixture backups of schema version 1, plain and encrypted, made by the app and never changed.
 - **On real devices,** for the phase's exit criteria: installed on the iPhone, the Pixel and the Pixel Tablet; offline; updated; and an encrypted backup moving lists between the iPhone and the Pixel, merged as above.

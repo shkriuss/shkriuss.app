@@ -22,9 +22,9 @@ function escaped(text: string): string {
     .replaceAll('"', "&quot;");
 }
 
-/** Opens the app on its list. */
-async function open(page: Page): Promise<void> {
-  await page.goto("/");
+/** Opens the app on its list, at `url`. */
+async function open(page: Page, url = "/"): Promise<void> {
+  await page.goto(url);
   await expect(page.getByRole("heading", { level: 1, name: NAME })).toBeVisible();
 }
 
@@ -217,6 +217,22 @@ test("the app's service worker controls it and keeps every file of the build, fo
     return files.filter((_file, index) => kept[index] !== true);
   });
   expect(missing).toStrictEqual([]);
+});
+
+test("it works offline after the first visit, with its data", async ({ page, network }) => {
+  await open(page, network.url);
+  await add(page, "Milk");
+  await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+  network.cut();
+  await page.reload();
+  const items = page.getByRole("list", { name: "Items" });
+  await expect(items.getByRole("listitem")).toHaveText(["MilkDelete"]);
+  await add(page, "Eggs");
+  await page.reload();
+  await expect(items.getByRole("listitem")).toHaveText(["MilkDelete", "EggsDelete"]);
+  // Every address of the app opens offline, as the service worker answers each navigation.
+  await page.goto(`${network.url}settings`);
+  await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
 });
 
 test("a newer version of the app in another window closes the data here, and the app says so", async ({
