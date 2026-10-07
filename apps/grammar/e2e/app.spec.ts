@@ -1,3 +1,4 @@
+import http from "node:http";
 import { AxeBuilder } from "@axe-core/playwright";
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "@shkriuss/config/playwright";
@@ -43,9 +44,9 @@ function mistake(page: Page, words: string): Locator {
   return mistakes(page).filter({ has: page.locator("mark", { hasText: words }) });
 }
 
-/** Opens the app, and checks `text` once its checker is ready. */
-async function check(page: Page, text: string, count: number): Promise<void> {
-  await page.goto("/");
+/** Opens the app at `url`, and checks `text` once its checker is ready. */
+async function check(page: Page, text: string, count: number, url = "/"): Promise<void> {
+  await page.goto(url);
   await expect(page.getByRole("heading", { level: 1, name: NAME })).toBeVisible();
   await field(page).fill(text);
   await expect(found(page)).toHaveText(m.found(count), STARTING);
@@ -196,15 +197,76 @@ test("it keeps nothing: no database, no storage, and no cache but the service wo
   expect(stored.caches.filter((name) => !name.startsWith("pwa-"))).toStrictEqual([]);
 });
 
+/** The way from the browser to the app's server, which a test can cut. */
+interface Network {
+  /** The app's address through this network, an origin of its own. */
+  readonly url: string;
+  /** From now on, the network closes every connection instead of answering, as offline. */
+  readonly cut: () => void;
+  readonly close: () => Promise<void>;
+}
+
+/**
+ * A proxy to the app's server at `target`, as tooling/pwa-e2e has. Playwright's
+ * `context.setOffline()` cannot stand in for it: its WebKit then fails every load, even those
+ * that the service worker answers.
+ */
+async function networkTo(target: string): Promise<Network> {
+  const { hostname, port } = new URL(target);
+  let up = true;
+  const server = http.createServer((request, response) => {
+    if (!up) {
+      request.socket.destroy();
+      return;
+    }
+    const upstream = http.request(
+      { host: hostname, port, method: request.method, path: request.url, headers: request.headers },
+      (answer) => {
+        response.writeHead(answer.statusCode ?? 502, answer.rawHeaders);
+        answer.pipe(response);
+      },
+    );
+    upstream.on("error", () => {
+      response.destroy();
+    });
+    request.pipe(upstream);
+  });
+  await new Promise<void>((resolve) => {
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  const address = server.address();
+  if (address === null || typeof address === "string") {
+    throw new Error("The proxy listens on no port.");
+  }
+  return {
+    url: `http://127.0.0.1:${String(address.port)}/`,
+    cut: () => {
+      up = false;
+    },
+    close: async () => {
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => {
+        server.close(() => {
+          resolve();
+        });
+      });
+    },
+  };
+}
+
 test("it works offline after the first visit, Harper's module included", async ({
   page,
-  context,
+  baseURL,
 }) => {
-  await check(page, SAMPLE, 6);
-  await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
-  await context.setOffline(true);
-  await check(page, "Their is a cat.", 1);
-  await context.setOffline(false);
+  const network = await networkTo(baseURL ?? "");
+  try {
+    await check(page, SAMPLE, 6, network.url);
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+    network.cut();
+    await check(page, "Their is a cat.", 1, network.url);
+  } finally {
+    await network.close();
+  }
 });
 
 test("the settings have installing and About, and neither storage nor backups", async ({
