@@ -79,6 +79,9 @@ jobs:
               exit 0
             fi
             echo "::warning::Installing $BROWSER failed or took over 10 minutes, on try $try of 2."
+            # Playwright runs apt-get as root, through sudo, which the signal that stops a try does
+            # not reach. Left running, it would keep the package lists locked for the next try.
+            sudo pkill --signal KILL --exact apt-get || true
           done
           exit 1
         env:
