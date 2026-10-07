@@ -12,6 +12,7 @@ import { type CollectOptions, LICENSES_FILE, collectLicenses, licensesFile } fro
 import { buildManifest, formatManifest, MANIFEST_FILE } from "./manifest.ts";
 import { commitDate, SECURITY_TXT_FILE, securityTxt } from "./security-txt.ts";
 import { type ServiceWorkerApi, serviceWorkerApi } from "./service-worker.ts";
+import { assertWebAssembly, isWebAssemblyPath } from "./webassembly.ts";
 import { isWorkerBundlePath, isWorkerScriptPath, SERVICE_WORKER_PATH } from "./worker-scripts.ts";
 
 /** What Rolldown tells about the modules of a chunk. */
@@ -73,6 +74,12 @@ export interface EdgeOptions {
   readonly appId?: string;
   /** Browser features the app needs (see `DENIED_FEATURES`); everything else is denied. */
   readonly allowedFeatures?: readonly BrowserFeature[];
+  /**
+   * Whether the app's workers compile WebAssembly, which its Content-Security-Policy then
+   * allows (ADR 0014). The build fails unless it has WebAssembly modules exactly when this is
+   * true, and if a script of the page refers to one.
+   */
+  readonly webAssembly?: boolean;
 }
 
 /**
@@ -85,6 +92,9 @@ export interface EdgeOptions {
  * build has worker scripts: worker bundles, or a service worker at `/sw.js` (ADR 0011). Each
  * worker is built into one file, because a worker cannot check the integrity of the scripts it
  * imports.
+ *
+ * It allows WebAssembly only for an app that declares it, whose workers then load modules
+ * from files in `/assets/`, which are never inlined (ADR 0014).
  *
  * It works on the files as written, so the hashes match exactly the bytes that are served.
  *
@@ -124,7 +134,13 @@ export function edge(options: EdgeOptions = {}): Plugin {
     enforce: "post",
     config() {
       return {
-        build: { modulePreload: false, cssCodeSplit: false },
+        build: {
+          modulePreload: false,
+          cssCodeSplit: false,
+          // A module inlined as a data: URL could not be fetched under `connect-src 'self'`, and
+          // would escape the checks of ADR 0014; every other asset keeps Vite's default.
+          assetsInlineLimit: (file: string) => (isWebAssemblyPath(file) ? false : undefined),
+        },
         worker: { format: "iife", plugins: () => [workerModules(workers)] },
       };
     },
@@ -237,9 +253,17 @@ export function edge(options: EdgeOptions = {}): Plugin {
         // After the HTML is final, so it covers every file as served, including those copied
         // from public/. It leaves out _headers, which is not served.
         const manifest = await buildManifest(directory);
+        const webAssembly = assertWebAssembly({
+          declared: options.webAssembly ?? false,
+          paths: [...manifest.keys()],
+          pageScripts: outputs.flatMap((output) =>
+            output.type === "chunk" ? [{ fileName: output.fileName, code: output.code }] : [],
+          ),
+        });
         const rules = appHeaderRules({
           scriptHashes: [...scriptHashes],
           workers: [...manifest.keys()].some(isWorkerScriptPath),
+          webAssembly,
           allowedFeatures: options.allowedFeatures ?? [],
           stagingHost,
         });

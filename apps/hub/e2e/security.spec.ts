@@ -135,6 +135,25 @@ test.describe("script integrity", () => {
   });
 });
 
+test.describe("WebAssembly", () => {
+  test("the browser refuses to compile it, as the hub does not declare it (ADR 0014)", async ({
+    page,
+    security,
+  }) => {
+    security.expectRefusals();
+    await page.goto("/");
+    // The smallest module there is: its magic number and its version.
+    const outcome = await page.evaluate(async () =>
+      WebAssembly.compile(new Uint8Array([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00])).then(
+        () => "compiled",
+        (error: unknown) => (error instanceof Error ? error.name : String(error)),
+      ),
+    );
+    // Engines differ in the kind of error, not in the refusal.
+    expect(["CompileError", "EvalError"]).toContain(outcome);
+  });
+});
+
 test.describe("Trusted Types", () => {
   test("DOM injection sinks refuse strings", async ({ page, security }) => {
     security.expectRefusals();

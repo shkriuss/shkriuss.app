@@ -4,6 +4,7 @@ import {
   MANIFEST_FILE,
   WORKER_POLICY,
   cspHashSource,
+  isWebAssemblyPath,
   isWorkerBundlePath,
   parseManifest,
   securityHeaders,
@@ -74,7 +75,11 @@ test.describe("headers", () => {
     expect(response.status()).toBe(200);
     const importMap = IMPORT_MAP.exec(await response.text())?.[1] ?? "";
     const headers = response.headers();
-    const expected = securityHeaders({ scriptHashes: [cspHashSource(importMap)], workers: true });
+    const expected = securityHeaders({
+      scriptHashes: [cspHashSource(importMap)],
+      workers: true,
+      webAssembly: true,
+    });
     for (const [name, value] of expected) {
       expect(headers[name.toLowerCase()], name).toBe(value);
     }
@@ -87,10 +92,11 @@ test.describe("headers", () => {
     const page = await request.get("/");
     const manifest = parseManifest(await (await request.get(`/${MANIFEST_FILE}`)).text());
     const bundles = [...manifest.keys()].filter(isWorkerBundlePath);
-    // The test app's own worker, and the backup worker of @shkriuss/backup.
+    // The test app's own workers, and the backup worker of @shkriuss/backup.
     expect(bundles.map((path) => path.replace(/-[\w-]{8}\.js$/, "")).toSorted()).toEqual([
       "/assets/age.worker",
       "/assets/ping.worker",
+      "/assets/wasm.worker",
     ]);
 
     for (const path of [...bundles, "/sw.js"]) {
@@ -264,6 +270,59 @@ test.describe("the worker policy", () => {
     };
     for (const [sink, inject] of Object.entries(injections)) {
       await expect(page.evaluate(inject), sink).rejects.toThrow();
+    }
+  });
+});
+
+// WebAssembly in an app that declares it (ADR 0014): its workers compile modules that are files
+// of the app, served like every other file.
+test.describe("WebAssembly", () => {
+  test("a worker compiles a module of the app", async ({ page }) => {
+    await open(page);
+    const answer = await page.evaluate(async () => {
+      const { platform } = window;
+      if (platform === undefined) {
+        throw new Error("The test app has not loaded.");
+      }
+      const worker = platform.startWorker(platform.wasmWorker);
+      const channel = new MessageChannel();
+      try {
+        return await new Promise<unknown>((resolve, reject) => {
+          channel.port1.addEventListener("message", (event) => {
+            resolve(event.data);
+          });
+          channel.port1.start();
+          worker.addEventListener("error", () => {
+            reject(new Error("The worker failed to start."));
+          });
+          worker.postMessage("add", [channel.port2]);
+        });
+      } finally {
+        worker.terminate();
+      }
+    });
+    expect(answer).toBe(5);
+  });
+
+  test("modules are files of the app, with its security headers, cached by name", async ({
+    request,
+  }) => {
+    const page = await request.get("/");
+    const manifest = parseManifest(await (await request.get(`/${MANIFEST_FILE}`)).text());
+    const modules = [...manifest.keys()].filter(isWebAssemblyPath);
+    expect(modules).toEqual([expect.stringMatching(/^\/assets\/add-[\w-]{8}\.wasm$/)]);
+    for (const path of modules) {
+      const response = await request.get(path);
+      expect(response.status(), path).toBe(200);
+      const headers = response.headers();
+      // Compiling while downloading needs the right type, which also keeps it from being a script.
+      expect(headers["content-type"], path).toBe("application/wasm");
+      expect(headers["cache-control"], path).toBe("public, max-age=31536000, immutable");
+      for (const [name] of securityHeaders({ scriptHashes: [] })) {
+        const header = name.toLowerCase();
+        expect(headers[header], `${path}: ${name}`).toBe(page.headers()[header]);
+      }
+      expect((await response.body()).length, path).toBe(41);
     }
   });
 });

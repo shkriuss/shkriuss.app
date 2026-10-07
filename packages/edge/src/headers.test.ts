@@ -46,6 +46,23 @@ describe("contentSecurityPolicy", () => {
     expect(policy).toContain("worker-src 'self'; ");
   });
 
+  it("allows WebAssembly only for an app that declares it, and nothing else with it (ADR 0014)", () => {
+    for (const policy of [
+      contentSecurityPolicy({ scriptHashes: [HASH] }),
+      contentSecurityPolicy({ scriptHashes: [HASH], webAssembly: false }),
+    ]) {
+      expect(policy).not.toContain("wasm-unsafe-eval");
+    }
+    const policy = contentSecurityPolicy({ scriptHashes: [HASH], webAssembly: true });
+    expect(policy).toBe(
+      contentSecurityPolicy({ scriptHashes: [HASH] }).replace(
+        "script-src 'self' ",
+        "script-src 'self' 'wasm-unsafe-eval' ",
+      ),
+    );
+    expect(policy).not.toContain("'unsafe-eval'");
+  });
+
   it.each([
     "'unsafe-inline'",
     "'unsafe-eval'",
@@ -120,5 +137,12 @@ describe("securityHeaders", () => {
       ];
     expect(csp(true)).toBe(contentSecurityPolicy({ scriptHashes: [HASH], workers: true }));
     expect(csp(false)).toBe(contentSecurityPolicy({ scriptHashes: [HASH] }));
+  });
+
+  it("passes the webAssembly option on to the Content-Security-Policy", () => {
+    const csp = Object.fromEntries(securityHeaders({ scriptHashes: [HASH], webAssembly: true }))[
+      "Content-Security-Policy"
+    ];
+    expect(csp).toBe(contentSecurityPolicy({ scriptHashes: [HASH], webAssembly: true }));
   });
 });

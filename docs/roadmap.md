@@ -52,6 +52,10 @@ For each app:
 
 Anything reusable goes into a shared package first, so every app benefits.
 
+| App                                                | Spec                                                                                               | Status      |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------------- | ----------- |
+| Grammar (`grammar`): English checked on the device | [apps/grammar.md](specs/apps/grammar.md); WebAssembly by [ADR 0014](decisions/0014-webassembly.md) | in progress |
+
 ## Later — only when needed
 
 Each item needs its own ADR before work starts.

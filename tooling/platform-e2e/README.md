@@ -9,6 +9,8 @@ It covers workers under Trusted Types ([ADR 0011](../../docs/decisions/0011-work
 - the worker policy starts nothing but the app's own worker scripts, and the browser refuses plain strings as worker scripts;
 - no script can create another policy, or the worker policy a second time.
 
+And WebAssembly in an app that declares it ([ADR 0014](../../docs/decisions/0014-webassembly.md)): a worker compiles `src/add.wasm`, a module of 41 bytes, and runs it; the module is a file of the app, served with its security headers as `application/wasm` and cached by name. The hub's tests check the other side: an app that does not declare it cannot compile any.
+
 And the data layer (`@shkriuss/data`, [data model](../../docs/specs/data-model.md) §3, §6, §7), with two versions of a small app's data in `src/data.ts`:
 
 - records and the device id last across reloads;

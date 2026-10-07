@@ -61,6 +61,12 @@ export {
 } from "./service-worker.ts";
 export { edge, type EdgeOptions } from "./vite.ts";
 export {
+  assertWebAssembly,
+  isWebAssemblyPath,
+  type PageScript,
+  type WebAssemblyBuild,
+} from "./webassembly.ts";
+export {
   SERVICE_WORKER_PATH,
   WORKER_POLICY,
   isWorkerBundlePath,
