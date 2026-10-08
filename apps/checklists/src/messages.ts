@@ -23,6 +23,7 @@ export const messages = defineMessages((format) => ({
     total === 0 ? "No items" : `${format.number(done)} of ${format.number(total)} done`,
   noName: () => "(no name)",
   // A list.
+  list: () => "List",
   listLoading: () => "Reading the list…",
   newItem: () => "New item",
   newItemMissing: () => "Enter the item.",
