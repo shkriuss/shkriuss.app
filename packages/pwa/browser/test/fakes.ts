@@ -41,6 +41,16 @@ export class FakeRegistration extends EventTarget implements RegistrationLike {
     worker?.become("installed");
   }
 
+  /**
+   * The installing version fails to install. It says so before it leaves its place, as
+   * browsers may tell a page.
+   */
+  failed(): void {
+    const worker = this.installing;
+    worker?.become("redundant");
+    this.installing = null;
+  }
+
   /** The waiting version, or else the installing one, becomes active. */
   activated(): void {
     const worker = this.waiting ?? this.installing;
@@ -99,6 +109,9 @@ export class FakePage implements PageEnvironment {
   time = 0;
   readonly #load = Promise.withResolvers<void>();
   readonly #visible: (() => void)[] = [];
+  readonly #online: (() => void)[] = [];
+  readonly #timers: { readonly interval: number; readonly listener: () => void; due: number }[] =
+    [];
 
   constructor({
     container,
@@ -119,6 +132,14 @@ export class FakePage implements PageEnvironment {
     this.#visible.push(listener);
   }
 
+  onOnline(listener: () => void): void {
+    this.#online.push(listener);
+  }
+
+  every(interval: number, listener: () => void): void {
+    this.#timers.push({ interval, listener, due: this.time + interval });
+  }
+
   now(): number {
     return this.time;
   }
@@ -136,6 +157,32 @@ export class FakePage implements PageEnvironment {
       listener();
     }
     await settle();
+  }
+
+  /** The device comes back online after `minutes`. */
+  async comeOnline(minutes: number): Promise<void> {
+    this.time += minutes * 60 * 1000;
+    for (const listener of this.#online) {
+      listener();
+    }
+    await settle();
+  }
+
+  /** `minutes` pass with the page open, and its timers run as they fall due. */
+  async wait(minutes: number): Promise<void> {
+    const end = this.time + minutes * 60 * 1000;
+    for (;;) {
+      const next = this.#timers.toSorted((a, b) => a.due - b.due)[0];
+      if (next === undefined || next.due > end) {
+        break;
+      }
+      // A timer that fell due while the time jumped runs now, once.
+      this.time = Math.max(this.time, next.due);
+      next.due = this.time + next.interval;
+      next.listener();
+      await settle();
+    }
+    this.time = end;
   }
 }
 

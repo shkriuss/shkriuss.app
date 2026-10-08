@@ -55,6 +55,8 @@ class FakeCache implements CacheLike {
 
 export class FakeCaches implements CacheStorageLike {
   readonly stores = new Map<string, Map<string, Kept>>();
+  /** Whether finding a response fails, as when the browser's storage is damaged. */
+  damaged = false;
 
   async open(name: string): Promise<CacheLike> {
     let store = this.stores.get(name);
@@ -77,6 +79,9 @@ export class FakeCaches implements CacheStorageLike {
     request: string,
     { cacheName }: { cacheName: string },
   ): Promise<Response | undefined> {
+    if (this.damaged) {
+      throw new DOMException("The cache could not be read.", "UnknownError");
+    }
     const kept = this.stores.get(cacheName)?.get(request);
     return kept === undefined ? undefined : restore(kept);
   }
@@ -159,7 +164,15 @@ export class FakeScope implements WorkerScope {
       async () => this.windows,
     ),
   };
-  readonly registration = { unregister: vi.fn<() => Promise<boolean>>(async () => true) };
+  readonly registration: {
+    installing: unknown;
+    active: { state: string } | null;
+    readonly unregister: ReturnType<typeof vi.fn<() => Promise<boolean>>>;
+  } = {
+    installing: null,
+    active: null,
+    unregister: vi.fn<() => Promise<boolean>>(async () => true),
+  };
   readonly skipWaiting = vi.fn<() => Promise<void>>(async () => undefined);
   /** What the host answers, by URL path; anything else is a network error. */
   readonly host = new Map<string, Answer>();

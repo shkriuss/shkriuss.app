@@ -14,7 +14,8 @@ import { ACTIVATE_MESSAGE, CACHE_PREFIX } from "../src/protocol.ts";
  * - `starting`: the page has not registered the service worker yet, which it does once it has
  *   loaded (§3). It does not know yet whether the app works offline.
  * - `unavailable`: no service worker, as in development builds, in browsers without service
- *   workers and in private windows that refuse them. The app works online only.
+ *   workers and in private windows that refuse them, or none yet, when registering failed or the
+ *   first version failed to install, until a later try works (§3). The app works online only.
  * - `installing`: the first version is installing; the app works offline once it is ready.
  * - `ready`: a version is active, and the app works offline.
  * - `update-available`: a new version has installed and waits until the user agrees.
@@ -75,6 +76,10 @@ export interface PageEnvironment {
   loaded(): Promise<void>;
   /** Calls `listener` whenever the page becomes visible. */
   onVisible(listener: () => void): void;
+  /** Calls `listener` whenever the device comes back online. */
+  onOnline(listener: () => void): void;
+  /** Calls `listener` every `interval` milliseconds while the page is open. */
+  every(interval: number, listener: () => void): void;
   reload(): void;
   now(): number;
   readonly caches:
@@ -83,6 +88,14 @@ export interface PageEnvironment {
 
 /** How often, at most, the page asks the browser to look for a new version (§7.1): hourly. */
 export const UPDATE_CHECK_INTERVAL = 60 * 60 * 1000;
+
+/** How often the page looks whether a check is due while it stays open (§7.1). */
+const CHECK_TICK = 10 * 60 * 1000;
+
+/** Whether `worker` is there, and the browser has not given up on it. */
+function alive(worker: WorkerLike | null): boolean {
+  return worker !== null && worker.state !== "redundant";
+}
 
 /**
  * Starts the page's side of the service worker. In a build that turns service workers off
@@ -97,6 +110,9 @@ export function createAppUpdates(
   let state: UpdateState =
     environment.container !== undefined && mode === "serve" ? "starting" : "unavailable";
   let registration: RegistrationLike | undefined;
+  // Whether the page has a service worker to follow: false until it has registered, and again
+  // when registering failed or the first version failed to install, which leaves none (§3).
+  let registered = false;
   let updateRequested = false;
   let outdated = false;
   let lastCheck = environment.now();
@@ -114,14 +130,23 @@ export function createAppUpdates(
     if (registration === undefined) {
       return;
     }
+    // A worker that has become redundant may stay in its place for a moment after it says so.
+    const installing = alive(registration.installing);
+    const waiting = alive(registration.waiting);
+    const active = alive(registration.active);
+    // A first version that failed to install leaves no worker: the browser drops the
+    // registration, and the page must register again (§3).
+    registered = installing || waiting || active;
     let next: UpdateState;
     if (outdated) {
       next = "outdated";
+    } else if (!registered) {
+      next = "unavailable";
     } else if (updateRequested) {
       next = "updating";
-    } else if (registration.active === null) {
+    } else if (!active) {
       next = "installing";
-    } else if (registration.waiting === null) {
+    } else if (!waiting) {
       next = "ready";
     } else {
       next = "update-available";
@@ -145,6 +170,43 @@ export function createAppUpdates(
     }
   }
 
+  /** Registers `/sw.js`, and follows the versions of the app that it brings. */
+  async function register(): Promise<void> {
+    lastCheck = environment.now();
+    let added: RegistrationLike;
+    try {
+      added = await environment.register();
+    } catch {
+      // Refused, as some private windows do, or the script could not be fetched: the app works
+      // online only, until a later try works (§3).
+      registered = false;
+      set("unavailable");
+      return;
+    }
+    registration = added;
+    follow(added.installing);
+    follow(added.waiting);
+    added.addEventListener("updatefound", () => {
+      follow(added.installing);
+      refresh();
+    });
+    refresh();
+  }
+
+  /**
+   * Registers again, or asks the browser to look for a new version, once an hour has passed
+   * since the last try (§3, §7.1). Coming back online, the page registers again at once: the
+   * first install may have failed for the want of a network.
+   */
+  function poke(online: boolean): void {
+    const due = environment.now() - lastCheck >= UPDATE_CHECK_INTERVAL;
+    if (!registered && (online || due)) {
+      void register();
+    } else if (registered && due) {
+      void checkForUpdate();
+    }
+  }
+
   async function start(container: ContainerLike): Promise<void> {
     // The first controller of a page that had none is the first version, not an update (§5).
     let controlled = container.controller !== null;
@@ -158,27 +220,16 @@ export function createAppUpdates(
       refresh();
     });
     await environment.loaded();
-    let registered: RegistrationLike;
-    try {
-      registered = await environment.register();
-    } catch {
-      // Refused, as some private windows do: the app works online only (§3).
-      set("unavailable");
-      return;
-    }
-    registration = registered;
-    follow(registered.installing);
-    follow(registered.waiting);
-    registered.addEventListener("updatefound", () => {
-      follow(registered.installing);
-      refresh();
-    });
+    await register();
     environment.onVisible(() => {
-      if (environment.now() - lastCheck >= UPDATE_CHECK_INTERVAL) {
-        void checkForUpdate();
-      }
+      poke(false);
     });
-    refresh();
+    environment.onOnline(() => {
+      poke(true);
+    });
+    environment.every(CHECK_TICK, () => {
+      poke(false);
+    });
   }
 
   async function remove(container: ContainerLike): Promise<void> {

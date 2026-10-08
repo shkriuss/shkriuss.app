@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ACTIVATE_MESSAGE, type BuildData, versionCache } from "../src/protocol.ts";
 import {
   type Answer,
@@ -14,6 +14,7 @@ import { integrity, removeApp, serveApp } from "./worker.ts";
 
 const A = "aaaaaaaaaaaaaaaa";
 const B = "bbbbbbbbbbbbbbbb";
+const C = "cccccccccccccccc";
 const BROKEN = "0123456789abcdef";
 
 /** The files of version A, by URL path. */
@@ -27,6 +28,13 @@ const FILES_A = {
 /** The files of version B: a new entry script and shell, the same licenses. */
 const FILES_B = {
   "/": "<!doctype html><title>B</title>",
+  "/assets/index-BBBBBBBB.js": "console.info('b');",
+  "/licenses.txt": "licenses",
+};
+
+/** The files of version C: a new shell again. */
+const FILES_C = {
+  "/": "<!doctype html><title>C</title>",
   "/assets/index-BBBBBBBB.js": "console.info('b');",
   "/licenses.txt": "licenses",
 };
@@ -144,6 +152,48 @@ describe("install (§4)", () => {
     expect(await scope.caches.texts(versionCache(A))).toStrictEqual(FILES_A);
   });
 
+  it("fails, and keeps nothing, when its cache is deleted while it installs", async () => {
+    // As by another version that becomes active meanwhile, which deletes the caches it does
+    // not know (§5).
+    const { scope } = await start(FILES_B, B);
+    const fetch = scope.fetch.bind(scope);
+    vi.spyOn(scope, "fetch").mockImplementationOnce(async (request) => {
+      await scope.caches.delete(versionCache(B));
+      return fetch(request);
+    });
+    await expect(scope.lifecycle("install")).rejects.toThrow(
+      `Version ${B} lost its cache while it installed.`,
+    );
+    expect(scope.caches.stores.has(versionCache(B))).toBe(false);
+  });
+
+  it("deletes the cache of a waiting version that it replaces, once it has installed", async () => {
+    // A is active and B waits; C installs and takes B's place.
+    const scope = await activeA();
+    await start(FILES_B, B, { scope });
+    await scope.lifecycle("install");
+    const next = new FakeScope(scope.caches);
+    next.registration.active = { state: "activated" };
+    await start(FILES_C, C, { scope: next });
+    await next.lifecycle("install");
+    expect((await scope.caches.keys()).toSorted()).toStrictEqual(
+      [versionCache(A), versionCache(C), "pwa-state"].toSorted(),
+    );
+  });
+
+  it("deletes no cache while a version becomes active, which may be the one it replaces", async () => {
+    const scope = await activeA();
+    await start(FILES_B, B, { scope });
+    await scope.lifecycle("install");
+    const next = new FakeScope(scope.caches);
+    next.registration.active = { state: "activating" };
+    await start(FILES_C, C, { scope: next });
+    await next.lifecycle("install");
+    expect((await scope.caches.keys()).toSorted()).toStrictEqual(
+      [versionCache(A), versionCache(B), versionCache(C), "pwa-state"].toSorted(),
+    );
+  });
+
   it("takes over at once from an active version that it replaces (§8)", async () => {
     const { scope } = await start(FILES_B, B, { replaces: [BROKEN] });
     await recordState(scope, { active: BROKEN });
@@ -190,6 +240,20 @@ describe("activate (§5)", () => {
     await scope.lifecycle("activate");
     expect((await scope.caches.keys()).toSorted()).toStrictEqual(
       ["another-cache", versionCache(A), versionCache(B), "pwa-state"].toSorted(),
+    );
+  });
+
+  it("deletes no cache while a newer version installs, whose cache it cannot tell", async () => {
+    const { scope } = await start(FILES_B, B);
+    await recordState(scope, { active: A });
+    for (const name of [versionCache(A), versionCache(B), versionCache(C)]) {
+      await scope.caches.seed(name, { "/": name });
+    }
+    scope.registration.installing = {};
+    await scope.lifecycle("activate");
+    expect(await state(scope)).toStrictEqual({ active: B, previous: A });
+    expect((await scope.caches.keys()).toSorted()).toStrictEqual(
+      [versionCache(A), versionCache(B), versionCache(C), "pwa-state"].toSorted(),
     );
   });
 
@@ -330,6 +394,30 @@ describe("fetch (§6)", () => {
     expect(await text(await scope.request("/notes/42", { navigate: true }))).toBe(FILES_A["/"]);
     expect(scope.requests[0]?.url).toBe(`${ORIGIN}/notes/42`);
     expect(await scope.caches.texts(versionCache(A))).toStrictEqual(FILES_A);
+  });
+
+  it("gets a missing file of its version from the network, though the previous version has one under its URL", async () => {
+    // B is active and A the previous version, whose app shell is another file under "/".
+    const scope = await activeA();
+    const next = new FakeScope(scope.caches);
+    await start(FILES_B, B, { scope: next });
+    await next.lifecycle("install");
+    await next.lifecycle("activate");
+    next.caches.stores.get(versionCache(B))?.delete(`${ORIGIN}/`);
+    // The host answers any other path with the app shell, as its single-page fallback does.
+    next.host.set("/notes/42", FILES_B["/"]);
+    expect(await text(await next.request("/notes/42", { navigate: true }))).toBe(FILES_B["/"]);
+    expect(await next.caches.texts(versionCache(B))).toStrictEqual(FILES_B);
+  });
+
+  it("lets the network answer when Cache Storage fails", async () => {
+    const scope = await activeA();
+    scope.caches.damaged = true;
+    scope.host.set("/notes/42", FILES_A["/"]);
+    expect(await text(await scope.request("/notes/42", { navigate: true }))).toBe(FILES_A["/"]);
+    expect(await text(await scope.request("/assets/lazy-AAAAAAAA.js"))).toBe(
+      FILES_A["/assets/lazy-AAAAAAAA.js"],
+    );
   });
 
   it("repairs once for several misses at a time, and only what is missing", async () => {

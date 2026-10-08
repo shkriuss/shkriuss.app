@@ -26,17 +26,17 @@ updates.subscribe(() => {
 updates.applyUpdate();
 ```
 
-| State              | Meaning                                                                                                           |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------- |
-| `starting`         | The page has not registered the service worker yet, which it does once it has loaded                              |
-| `unavailable`      | No service worker: a development build, a browser without service workers, or a private window that refuses them  |
-| `installing`       | The first version is installing; the app works offline once it is ready                                           |
-| `ready`            | A version is active, and the app works offline                                                                    |
-| `update-available` | A new version has installed and waits; `applyUpdate()` makes it active and reloads the page into it               |
-| `updating`         | The user agreed; the page reloads once the new version is active                                                  |
-| `outdated`         | Another tab or window made a new version active; this page still runs the old one, and `applyUpdate()` reloads it |
+| State              | Meaning                                                                                                                                                                                                  |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `starting`         | The page has not registered the service worker yet, which it does once it has loaded                                                                                                                     |
+| `unavailable`      | No service worker: a development build, a browser without service workers, or a private window that refuses them; or none yet, after the first version failed to install, until the page registers again |
+| `installing`       | The first version is installing; the app works offline once it is ready                                                                                                                                  |
+| `ready`            | A version is active, and the app works offline                                                                                                                                                           |
+| `update-available` | A new version has installed and waits; `applyUpdate()` makes it active and reloads the page into it                                                                                                      |
+| `updating`         | The user agreed; the page reloads once the new version is active                                                                                                                                         |
+| `outdated`         | Another tab or window made a new version active; this page still runs the old one, and `applyUpdate()` reloads it                                                                                        |
 
-React's `useSyncExternalStore(updates.subscribe, updates.getState)` takes the store's functions as they are. The page asks the browser to look for a new version whenever it becomes visible, at most once an hour; `checkForUpdate()` asks at once.
+React's `useSyncExternalStore(updates.subscribe, updates.getState)` takes the store's functions as they are. The page asks the browser to look for a new version when it becomes visible, when the device comes back online and while it stays open, at most once an hour; `checkForUpdate()` asks at once. After a first version that failed to install, it registers again at those times, and at once when the device comes back online.
 
 ## Manifest and icons
 

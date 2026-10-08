@@ -57,6 +57,12 @@ function browserEnvironment(): PageEnvironment {
         }
       });
     },
+    onOnline: (listener) => {
+      window.addEventListener("online", listener);
+    },
+    every: (interval, listener) => {
+      setInterval(listener, interval);
+    },
     reload: () => {
       location.reload();
     },
