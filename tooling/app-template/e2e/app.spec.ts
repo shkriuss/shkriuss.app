@@ -32,6 +32,8 @@ declare global {
   interface Window {
     /** How often the page asked the browser to keep its data, from `countPersistRequests()`. */
     persistRequests?: number;
+    /** Whether the browser refuses every write for lack of space, from `fillUpOnDemand()`. */
+    deviceFull?: boolean;
   }
 }
 
@@ -47,6 +49,34 @@ async function countPersistRequests(page: Page): Promise<void> {
       },
     });
   });
+}
+
+/**
+ * From the next page on, the browser refuses every write to IndexedDB for lack of space while
+ * `window.deviceFull` is true, as on a device with no space left.
+ */
+async function fillUpOnDemand(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    for (const method of ["add", "put"] as const) {
+      const write = new Proxy(IDBObjectStore.prototype[method], {
+        apply(target, store, values: unknown[]) {
+          if (window.deviceFull === true) {
+            throw new DOMException("The quota has been exceeded.", "QuotaExceededError");
+          }
+          const request: unknown = Reflect.apply(target, store, values);
+          return request;
+        },
+      });
+      Object.defineProperty(IDBObjectStore.prototype, method, { configurable: true, value: write });
+    }
+  });
+}
+
+/** The device has no space left from now on, or space again. */
+async function setDeviceFull(page: Page, full: boolean): Promise<void> {
+  await page.evaluate((value) => {
+    window.deviceFull = value;
+  }, full);
 }
 
 async function add(page: Page, text: string): Promise<void> {
@@ -313,4 +343,18 @@ test("the app asks the browser to keep its data when it starts, but not Firefox,
       )
       .toBe(true);
   }
+});
+
+test("a write that the device has no space for says so", async ({ page }) => {
+  await fillUpOnDemand(page);
+  await open(page);
+  await setDeviceFull(page, true);
+  await page.getByRole("textbox", { name: "New item" }).fill("Milk");
+  await page.getByRole("button", { name: "Add" }).click();
+  await expect(page.getByRole("alert")).toHaveText(
+    "This device has no space left for the app's data. Free some space, then try again.",
+  );
+  await setDeviceFull(page, false);
+  await page.getByRole("button", { name: "Add" }).click();
+  await expect(page.getByRole("listitem").filter({ hasText: "Milk" })).toBeVisible();
 });

@@ -38,6 +38,8 @@ export const messages = defineMessages((format) => ({
   startFailedTitle: () => "The app could not start",
   startFailedText: () =>
     "It could not open its data on this device. Reload the app to try again. Your data stays on this device.",
+  startStorageFullText: () =>
+    "This device has no space left for the app's data. Free some space, then reload the app. Your data stays on this device.",
   startOutdatedTitle: () => "This app was updated",
   startOutdatedText: () =>
     "A newer version of this app has opened its data on this device already. Reload the app to use it.",
@@ -128,6 +130,8 @@ export const messages = defineMessages((format) => ({
   futureClock: () =>
     "The backup's dates lie in the future. Check the date and time on this device, then try again.",
   invalid: () => "The backup is damaged or was changed, and was not restored.",
+  storageFull: () =>
+    "This device has no space left for the app's data. Free some space, then try again.",
   restoreFailed: () => "The backup could not be restored. Nothing was changed.",
   close: () => "Close",
   install: () => "Install",

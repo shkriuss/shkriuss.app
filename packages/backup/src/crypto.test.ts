@@ -77,6 +77,25 @@ describe("encryptBackup and decryptBackup (backup format §3.1)", () => {
     expect(workers.map((worker) => worker.terminated)).toStrictEqual([true]);
   });
 
+  it("stop the worker when the signal aborts, as when the user closes the dialog", async () => {
+    const controller = new AbortController();
+    const workers = await workersOf(async () => {
+      const encrypting = encryptBackup(DOCUMENT, PASSPHRASE, controller.signal);
+      controller.abort(new DOMException("The user closed the dialog.", "AbortError"));
+      await expect(encrypting).rejects.toThrow("The user closed the dialog.");
+    });
+    expect(workers.map((worker) => worker.terminated)).toStrictEqual([true]);
+  });
+
+  it("start no worker for a signal that aborted already", async () => {
+    const workers = await workersOf(async () => {
+      await expect(
+        decryptBackup(DOCUMENT, PASSPHRASE, AbortSignal.abort(new Error("Too late."))),
+      ).rejects.toThrow("Too late.");
+    });
+    expect(workers).toStrictEqual([]);
+  });
+
   it.each<[string, unknown]>([
     ["nothing", null],
     ["bytes on shared memory", { ok: true, bytes: new Uint8Array(new SharedArrayBuffer(3)) }],

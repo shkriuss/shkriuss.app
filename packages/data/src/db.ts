@@ -280,10 +280,39 @@ export function refusingNewer(factory: IDBFactory, current: number): IDBFactory 
 }
 
 /**
- * `error`, or the data layer's error it stands for. Dexie reports a closed database with an error
- * of its own, which holds the reason it could not reopen, if there is one.
+ * Whether `error` is the browser's refusal of a write for lack of storage space, which Dexie
+ * passes on as an error of the same name, or in an error that it wraps around it.
+ */
+function isQuotaExceeded(error: unknown, depth = 0): boolean {
+  if (typeof error !== "object" || error === null || depth > 3) {
+    return false;
+  }
+  if ("name" in error && error.name === "QuotaExceededError") {
+    return true;
+  }
+  const inner: unknown = "inner" in error ? error.inner : undefined;
+  const failures: unknown = "failures" in error ? error.failures : undefined;
+  return (
+    isQuotaExceeded(inner, depth + 1) ||
+    (Array.isArray(failures) &&
+      failures.some((failure: unknown) => isQuotaExceeded(failure, depth + 1)))
+  );
+}
+
+/** The data layer's error for a write that the browser refused for lack of space. */
+function storageFull(cause: unknown): DataLayerError {
+  return new DataLayerError("storage-full", "The device has no storage space left.", { cause });
+}
+
+/**
+ * `error`, or the data layer's error it stands for: `storage-full` for a write that the browser
+ * refused for lack of space. Dexie reports a closed database with an error of its own, which
+ * holds the reason it could not reopen, if there is one.
  */
 function translate(error: unknown): unknown {
+  if (isQuotaExceeded(error)) {
+    return storageFull(error);
+  }
   if (!(error instanceof Dexie.DatabaseClosedError)) {
     return error;
   }
@@ -408,7 +437,12 @@ export async function openDatabase<C extends SchemaVersion>(
     options.onVersionChange?.();
     return false;
   });
-  await dexie.open();
+  try {
+    await dexie.open();
+  } catch (error) {
+    // As when an upgrade needs more space than the device has left.
+    throw isQuotaExceeded(error) ? storageFull(error) : error;
+  }
   return new Database(dexie, schemas, options.now ?? Date.now);
 }
 

@@ -8,7 +8,10 @@ import { normalizePassphrase } from "./passphrase.ts";
  * seconds and 256 MiB on a phone, which must not freeze the page (§3.1).
  */
 
-/** The work factor of new backups: scrypt with N = 2^18, r = 8 and p = 1, so 256 MiB (§3). */
+/**
+ * The work factor of new backups, and the highest that imports accept: scrypt with N = 2^18,
+ * r = 8 and p = 1, so 256 MiB (§3).
+ */
 export const WORK_FACTOR = 18;
 
 /** What age-encryption says when the passphrase does not open the file's only stanza. */
@@ -65,8 +68,8 @@ function unshared(bytes: Uint8Array): Uint8Array<ArrayBuffer> {
     : Uint8Array.from(bytes);
 }
 
-/** The types of the recipient stanzas in the header of an age file. */
-function stanzaTypes(file: Uint8Array): (string | undefined)[] {
+/** The recipient stanzas in the header of an age file: each its type and its arguments. */
+function stanzasOf(file: Uint8Array): string[][] {
   // The header is ASCII and short, and ends with the line of its MAC, which starts with "---".
   const head = new TextDecoder("latin1").decode(file.subarray(0, 4096));
   const end = head.indexOf("\n---");
@@ -77,7 +80,7 @@ function stanzaTypes(file: Uint8Array): (string | undefined)[] {
     .slice(0, end)
     .split("\n")
     .filter((line) => line.startsWith("-> "))
-    .map((line) => line.split(" ")[1]);
+    .map((line) => line.split(" ").slice(1));
 }
 
 /**
@@ -101,7 +104,8 @@ export async function encrypt(
  * which age authenticates in full before this returns. Throws a `BackupError`: `wrong-passphrase`
  * if the passphrase does not open it, so that the user can try again, and `damaged` for a file
  * that is damaged or truncated, not encrypted with a passphrase alone, or whose work factor is
- * above 20.
+ * above 18: each step above doubles the memory that deriving the key takes, which a phone may not
+ * give a worker. No key is derived for such a file.
  */
 export async function decrypt(
   file: Uint8Array,
@@ -115,9 +119,13 @@ export async function decrypt(
       throw damaged("The file's ASCII armor is damaged.", error);
     }
   }
-  const types = stanzaTypes(binary);
-  if (types.length !== 1 || types[0] !== "scrypt") {
+  const stanzas = stanzasOf(binary);
+  const [type, , workFactor] = stanzas[0] ?? [];
+  if (stanzas.length !== 1 || type !== "scrypt") {
     throw damaged("The file is not encrypted with a passphrase alone.");
+  }
+  if (!(Number(workFactor) <= WORK_FACTOR)) {
+    throw damaged(`The file's work factor is above ${WORK_FACTOR}.`);
   }
   const decrypter = new Decrypter();
   decrypter.addPassphrase(normalizePassphrase(passphrase));

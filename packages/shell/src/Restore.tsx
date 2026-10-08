@@ -123,8 +123,17 @@ function Passphrase({
 export function Restore({ app, db, schemas, onRestored }: RestoreProps) {
   const [step, setStep] = useState<Step>({ name: "closed" });
   const content = useRef<HTMLDivElement>(null);
-  // Counts what the dialog started, so that only the latest shows its result.
-  const work = useRef(0);
+  // What the dialog started last: only its result shows, and closing the dialog, or starting
+  // anything else, stops it, with the worker that decrypts the file.
+  const work = useRef<AbortController | undefined>(undefined);
+
+  /** Starts new work, and stops the one before; its signal says when it is no longer wanted. */
+  const begin = (): AbortSignal => {
+    work.current?.abort();
+    const controller = new AbortController();
+    work.current = controller;
+    return controller.signal;
+  };
 
   useEffect(() => {
     // A step that replaces another takes the focus, so that it is not lost with a button that
@@ -135,17 +144,17 @@ export function Restore({ app, db, schemas, onRestored }: RestoreProps) {
   }, [step.name]);
 
   const close = (): void => {
-    work.current += 1;
+    work.current?.abort();
+    work.current = undefined;
     setStep({ name: "closed" });
   };
 
   async function read(file: OpenedFile, passphrase: string | null): Promise<void> {
-    work.current += 1;
-    const id = work.current;
+    const signal = begin();
     setStep({ name: "reading" });
     let next: Step;
     try {
-      const contents = await readBackupFile(file, passphrase, { app, schemas });
+      const contents = await readBackupFile(file, passphrase, { app, schemas, signal });
       next = { name: "preview", contents, summary: await db.previewImport(contents.incoming) };
     } catch (error) {
       next =
@@ -153,25 +162,24 @@ export function Restore({ app, db, schemas, onRestored }: RestoreProps) {
           ? { name: "passphrase", file, wrong: true }
           : { name: "failed", message: restoreErrorMessage(error) };
     }
-    if (id === work.current) {
+    if (!signal.aborted) {
       setStep(next);
     }
   }
 
   async function restoreFrom(picked: File): Promise<void> {
-    work.current += 1;
-    const id = work.current;
+    const signal = begin();
     setStep({ name: "reading" });
     let file: OpenedFile;
     try {
       file = await openBackupFile(picked);
     } catch (error) {
-      if (id === work.current) {
+      if (!signal.aborted) {
         setStep({ name: "failed", message: restoreErrorMessage(error) });
       }
       return;
     }
-    if (id !== work.current) {
+    if (signal.aborted) {
       return;
     }
     if (file.encrypted) {
@@ -183,8 +191,7 @@ export function Restore({ app, db, schemas, onRestored }: RestoreProps) {
 
   /** Imports the backup; `acceptFromFuture` once the user has confirmed its dates (§5.6). */
   async function apply(contents: BackupContents, acceptFromFuture: boolean): Promise<void> {
-    work.current += 1;
-    const id = work.current;
+    const signal = begin();
     setStep({ name: "restoring" });
     let next: Step;
     try {
@@ -196,7 +203,7 @@ export function Restore({ app, db, schemas, onRestored }: RestoreProps) {
     } catch (error) {
       next = { name: "failed", message: restoreErrorMessage(error) };
     }
-    if (id === work.current) {
+    if (!signal.aborted) {
       setStep(next);
     }
   }
@@ -304,7 +311,13 @@ export function Restore({ app, db, schemas, onRestored }: RestoreProps) {
       >
         {m.restore()}
       </FileButton>
-      <Dialog isOpen={step.name !== "closed"} onClose={close} title={title}>
+      <Dialog
+        isOpen={step.name !== "closed"}
+        // An import that has started commits: the dialog stays until it says so (§5.7).
+        isDismissable={step.name !== "restoring"}
+        onClose={close}
+        title={title}
+      >
         <div ref={content} tabIndex={-1} className="flex flex-col gap-4 outline-none">
           {body}
         </div>

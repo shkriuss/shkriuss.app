@@ -1,7 +1,7 @@
-import { IDBFactory, forceCloseDatabase } from "fake-indexeddb";
+import { IDBFactory, IDBObjectStore, forceCloseDatabase } from "fake-indexeddb";
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import { DATABASE_NAME, type Item, refusingNewer } from "./db.ts";
-import { DataLayerError } from "./errors.ts";
+import { DataLayerError, isStorageFull } from "./errors.ts";
 import { field } from "./fields.ts";
 import { SETTINGS_ID, isRecordId } from "./ids.ts";
 import { type SchemaVersion, defineSchemas } from "./schema.ts";
@@ -208,6 +208,25 @@ describe("openDatabase (data model §6, §7)", () => {
       ]),
     );
     upgraded.close();
+  });
+
+  it("fails as storage-full when an upgrade needs more space than the device has (data model §7)", async () => {
+    const factory = new IDBFactory();
+    const db = await open(VERSION_1, factory);
+    await db.change((change) => change.create("notes", { title: "Milk" }));
+    db.close();
+    const put = vi.spyOn(IDBObjectStore.prototype, "put").mockImplementation(() => {
+      throw new DOMException("The quota has been exceeded.", "QuotaExceededError");
+    });
+    try {
+      const failure: unknown = await open(VERSION_2, factory).catch((error: unknown) => error);
+      expect(isStorageFull(failure)).toBe(true);
+    } finally {
+      put.mockRestore();
+    }
+    const again = await open(VERSION_2, factory);
+    expect(await again.list("notes")).toHaveLength(1);
+    again.close();
   });
 
   it("leaves the database as it was if a migration fails", async () => {
@@ -502,6 +521,27 @@ describe("changes (data model §4)", () => {
     await expect(db.change((change) => change.delete("notes", missing))).rejects.toBeInstanceOf(
       DataLayerError,
     );
+  });
+
+  it("fails as storage-full when the browser refuses a write for lack of space (data model §7)", async () => {
+    const { factory, db } = await fresh();
+    const before = await stored(factory);
+    const put = vi.spyOn(IDBObjectStore.prototype, "put").mockImplementation(() => {
+      throw new DOMException("The quota has been exceeded.", "QuotaExceededError");
+    });
+    try {
+      const failure: unknown = await db
+        .change((change) => change.create("notes", { title: "Milk" }))
+        .catch((error: unknown) => error);
+      expect(failure).toBeInstanceOf(DataLayerError);
+      expect(isStorageFull(failure)).toBe(true);
+    } finally {
+      put.mockRestore();
+    }
+    expect(await stored(factory)).toStrictEqual(before);
+    // Other failures are no lack of space.
+    expect(isStorageFull(new DataLayerError("closed", "Closed."))).toBe(false);
+    expect(isStorageFull(new DOMException("Full.", "QuotaExceededError"))).toBe(false);
   });
 
   it("refuses values the schema does not allow, and writes nothing", async () => {

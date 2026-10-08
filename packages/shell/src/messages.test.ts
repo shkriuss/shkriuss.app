@@ -20,6 +20,7 @@ describe("the shell's text", () => {
       errorText: m.errorText(),
       startFailedTitle: m.startFailedTitle(),
       startFailedText: m.startFailedText(),
+      startStorageFullText: m.startStorageFullText(),
       startOutdatedTitle: m.startOutdatedTitle(),
       startOutdatedText: m.startOutdatedText(),
       storage: m.storage(),
@@ -85,6 +86,7 @@ describe("the shell's text", () => {
       newerVersion: m.newerVersion(),
       futureClock: m.futureClock(),
       invalid: m.invalid(),
+      storageFull: m.storageFull(),
       restoreFailed: m.restoreFailed(),
       close: m.close(),
       install: m.install(),
@@ -123,6 +125,8 @@ describe("the shell's text", () => {
       startFailedTitle: "The app could not start",
       startFailedText:
         "It could not open its data on this device. Reload the app to try again. Your data stays on this device.",
+      startStorageFullText:
+        "This device has no space left for the app's data. Free some space, then reload the app. Your data stays on this device.",
       startOutdatedTitle: "This app was updated",
       startOutdatedText:
         "A newer version of this app has opened its data on this device already. Reload the app to use it.",
@@ -195,6 +199,8 @@ describe("the shell's text", () => {
       futureClock:
         "The backup's dates lie in the future. Check the date and time on this device, then try again.",
       invalid: "The backup is damaged or was changed, and was not restored.",
+      storageFull:
+        "This device has no space left for the app's data. Free some space, then try again.",
       restoreFailed: "The backup could not be restored. Nothing was changed.",
       close: "Close",
       install: "Install",

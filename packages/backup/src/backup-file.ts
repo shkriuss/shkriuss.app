@@ -38,6 +38,13 @@ export interface BackupFileOptions {
   readonly passphrase: string | null;
   /** When the backup is made: now, unless a test says otherwise. */
   readonly made?: Date;
+  /** Stops making it, and the worker that encrypts it, as when the user closes the dialog. */
+  readonly signal?: AbortSignal;
+}
+
+export interface ReadFileOptions extends ReadOptions {
+  /** Stops reading it, and the worker that decrypts it, as when the user closes the dialog. */
+  readonly signal?: AbortSignal;
 }
 
 /**
@@ -50,7 +57,7 @@ export interface BackupFileOptions {
  */
 export async function createBackupFile(
   db: { snapshot(): Promise<Snapshot> },
-  { app, passphrase, made = new Date() }: BackupFileOptions,
+  { app, passphrase, made = new Date(), signal }: BackupFileOptions,
 ): Promise<BackupFile> {
   if (passphrase !== null && !isLongEnough(passphrase)) {
     throw new TypeError("A passphrase has at least 12 characters.");
@@ -63,7 +70,7 @@ export async function createBackupFile(
     });
     return { file, fromFuture: snapshot.fromFuture, counted: snapshot.counted };
   }
-  const bytes = await encryptBackup(document, passphrase);
+  const bytes = await encryptBackup(document, passphrase, signal);
   // Encryption adds 16 bytes to every 64 KiB, and a header.
   if (bytes.length > MAX_BACKUP_BYTES) {
     throw new BackupError("too-large", `The backup would have ${bytes.length} bytes.`);
@@ -83,7 +90,7 @@ export async function createBackupFile(
 export async function readBackupFile(
   file: OpenedFile,
   passphrase: string | null,
-  options: ReadOptions,
+  options: ReadFileOptions,
 ): Promise<BackupContents> {
   if (!file.encrypted) {
     return readBackup(file.bytes, options);
@@ -91,5 +98,5 @@ export async function readBackupFile(
   if (passphrase === null) {
     throw new TypeError("The file is encrypted: ask for its passphrase.");
   }
-  return readBackup(await decryptBackup(file.bytes, passphrase), options);
+  return readBackup(await decryptBackup(file.bytes, passphrase, options.signal), options);
 }

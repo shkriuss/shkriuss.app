@@ -12,6 +12,7 @@ export {
   readBackupFile,
   type BackupFile,
   type BackupFileOptions,
+  type ReadFileOptions,
 } from "./backup-file.ts";
 export { BackupError, type BackupErrorCode } from "./errors.ts";
 export {

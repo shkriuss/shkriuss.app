@@ -198,6 +198,22 @@ test("a dialog that opens again before the browser says that it closed stays ope
   await expect(dialog.getByRole("button", { name: "Cancel" })).toBeVisible();
 });
 
+test("a dialog that the user may not dismiss stays open on Escape, until its work ends", async ({
+  page,
+}) => {
+  await gallery(page);
+  await page.getByRole("button", { name: "Start a task" }).click();
+  const dialog = page.getByRole("dialog", { name: "Working on the task" });
+  await expect(dialog).toBeVisible();
+  // Browsers close a dialog on a second Escape whatever the page says: it opens again.
+  for (let press = 0; press < 3; press += 1) {
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeVisible();
+  }
+  await dialog.getByRole("button", { name: "Finish the task" }).click();
+  await expect(dialog).toBeHidden();
+});
+
 test("a dialog's buttons do their action and close it", async ({ page }) => {
   await gallery(page);
   await page.getByRole("button", { name: "Delete everything" }).click();

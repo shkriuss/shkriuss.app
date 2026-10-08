@@ -9,14 +9,22 @@
  * - `not-found`: a write to a record that the store lacks;
  * - `newer-version`: data from a newer version of the app, which this one cannot read (data
  *   model §5.1, §7);
- * - `closed`: the database is closed, because the app closed it or another tab needed it closed.
+ * - `closed`: the database is closed, because the app closed it or another tab needed it closed;
+ * - `storage-full`: the browser refused a write for lack of storage space (data model §7).
  *
  * Messages are for developers. They name fields and members, never their values, because values
  * are user data. The name differs from IndexedDB's `DataError`, which Dexie would wrap in an
  * error of its own.
  */
 export type DataLayerErrorCode =
-  "invalid" | "too-large" | "future-clock" | "deleted" | "not-found" | "newer-version" | "closed";
+  | "invalid"
+  | "too-large"
+  | "future-clock"
+  | "deleted"
+  | "not-found"
+  | "newer-version"
+  | "closed"
+  | "storage-full";
 
 export class DataLayerError extends Error {
   readonly code: DataLayerErrorCode;
@@ -26,4 +34,12 @@ export class DataLayerError extends Error {
     this.name = "DataLayerError";
     this.code = code;
   }
+}
+
+/**
+ * Whether `error` says that the device has no storage space left for the app's data (data model
+ * §7), so that the app can tell the user to free some.
+ */
+export function isStorageFull(error: unknown): boolean {
+  return error instanceof DataLayerError && error.code === "storage-full";
 }

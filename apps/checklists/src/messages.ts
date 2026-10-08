@@ -59,6 +59,8 @@ export const messages = defineMessages((format) => ({
           other: "The list and its # items are deleted. This cannot be undone.",
         }),
   changeFailed: () => "The change could not be saved. Reload the app to try again.",
+  storageFull: () =>
+    "This device has no space left for the app's data. Free some space, then try again.",
   listNotFoundTitle: () => "List not found",
   listNotFoundText: () =>
     "This list is not on this device: it was deleted, here or on another device, or never was.",

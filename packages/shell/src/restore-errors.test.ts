@@ -34,6 +34,12 @@ describe("a backup that cannot be restored", () => {
     );
   });
 
+  it("says when the device has no space left for the data", () => {
+    expect(restoreErrorMessage(new DataLayerError("storage-full", "A test."))).toBe(
+      "This device has no space left for the app's data. Free some space, then try again.",
+    );
+  });
+
   it("says only that nothing changed when something else failed", () => {
     expect(restoreErrorMessage(new DataLayerError("closed", "A test."))).toBe(
       "The backup could not be restored. Nothing was changed.",

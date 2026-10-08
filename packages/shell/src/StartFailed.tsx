@@ -1,4 +1,4 @@
-import { DataLayerError } from "@shkriuss/data";
+import { DataLayerError, isStorageFull } from "@shkriuss/data";
 import { Button } from "@shkriuss/ui";
 import { useMemo } from "react";
 import { type Frame, FrameContext } from "./frame.ts";
@@ -20,11 +20,17 @@ export interface StartFailedProps {
 export function StartFailed({ name, error }: StartFailedProps) {
   const frame = useMemo<Frame>(() => ({ name, focusScreen: () => undefined }), [name]);
   const outdated = error instanceof DataLayerError && error.code === "newer-version";
+  let text = m.startFailedText();
+  if (outdated) {
+    text = m.startOutdatedText();
+  } else if (isStorageFull(error)) {
+    text = m.startStorageFullText();
+  }
   return (
     <FrameContext value={frame}>
       <main className="page">
         <Screen title={outdated ? m.startOutdatedTitle() : m.startFailedTitle()}>
-          <p>{outdated ? m.startOutdatedText() : m.startFailedText()}</p>
+          <p>{text}</p>
           <div>
             <Button
               variant="primary"

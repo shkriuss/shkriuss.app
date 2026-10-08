@@ -20,6 +20,8 @@ export const messages = defineMessages(() => ({
   delete: () => "Delete",
   deleteItem: (text: string) => `Delete “${text}”`,
   deleteFailed: () => "The item could not be deleted. Reload the app to try again.",
+  storageFull: () =>
+    "This device has no space left for the app's data. Free some space, then try again.",
 }));
 
 export const m = messages(createFormat());

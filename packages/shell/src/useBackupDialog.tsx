@@ -166,9 +166,9 @@ export function useBackupDialog(
   const [step, setStep] = useState<Step>({ name: "closed" });
   const [generated, setGenerated] = useState("");
   const content = useRef<HTMLDivElement>(null);
-  // Counts what the dialog started, so that only the latest shows its result: a backup that was
-  // being made when the user closed the dialog, or made another, never appears.
-  const work = useRef(0);
+  // What the dialog started last, so that only its result shows: a backup that was being made
+  // when the user closed the dialog, or made another, never appears, and its worker stops.
+  const work = useRef<AbortController | undefined>(undefined);
 
   useEffect(() => {
     // A step that replaces another takes the focus, so that it is not lost with a button that
@@ -179,19 +179,26 @@ export function useBackupDialog(
   }, [step.name]);
 
   const close = (): void => {
-    work.current += 1;
+    work.current?.abort();
+    work.current = undefined;
     // The passphrase stays in memory only while the dialog needs it (backup format §3.1).
     setGenerated("");
     setStep({ name: "closed" });
   };
 
   async function make(passphrase: string | null): Promise<void> {
-    work.current += 1;
-    const id = work.current;
+    work.current?.abort();
+    const controller = new AbortController();
+    work.current = controller;
+    const { signal } = controller;
     setStep({ name: "making" });
     let next: Step;
     try {
-      const { file, fromFuture, counted } = await createBackupFile(db, { app, passphrase });
+      const { file, fromFuture, counted } = await createBackupFile(db, {
+        app,
+        passphrase,
+        signal,
+      });
       next = { name: "ready", file, fromFuture, counted, notSaved: false, saving: false };
     } catch (error) {
       next = {
@@ -199,13 +206,13 @@ export function useBackupDialog(
         tooLarge: error instanceof BackupError && error.code === "too-large",
       };
     }
-    if (id === work.current) {
+    if (!signal.aborted) {
       setStep(next);
     }
   }
 
   async function save(ready: Ready): Promise<void> {
-    const id = work.current;
+    const current = work.current;
     const { file } = ready;
     // Called while the user's press still counts, as the share sheet needs: setting the step
     // only schedules a render.
@@ -219,7 +226,7 @@ export function useBackupDialog(
       }
       await backupStatusOf(db).refresh();
     }
-    if (id === work.current) {
+    if (current === work.current) {
       setStep(
         result === "cancelled"
           ? { ...ready, notSaved: true, saving: false }
