@@ -244,12 +244,16 @@ test("in a contrast theme, buttons keep an outline, and ticked boxes and switche
   expect(marks.thumb).not.toBe(marks.track);
 });
 
-test("a banner tells its message to screen readers, with its actions", async ({ page }) => {
+test("a banner shows its message with its actions, and is no live region of its own", async ({
+  page,
+}) => {
   await gallery(page);
-  const banner = page.getByRole("status").filter({ hasText: "An update is available." });
-  await expect(banner).toBeVisible();
-  await expect(banner.getByRole("button", { name: "Reload" })).toBeVisible();
-  await expect(banner.getByRole("button", { name: "Later" })).toBeVisible();
+  const notices = page.getByRole("region", { name: "Notices" });
+  await expect(notices).toContainText("An update is available.");
+  await expect(notices.getByRole("button", { name: "Reload" })).toBeVisible();
+  await expect(notices.getByRole("button", { name: "Later" })).toBeVisible();
+  // The status region of the frame around it is what screen readers follow.
+  await expect(notices.getByRole("status")).toHaveCount(0);
 });
 
 test("a file button opens the browser's file picker, and gives the app the file", async ({

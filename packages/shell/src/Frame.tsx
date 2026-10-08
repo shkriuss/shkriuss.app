@@ -19,10 +19,10 @@ export interface FrameProps {
 
 /**
  * The frame of every page, of the apps and of the hub: a header with the name, which leads to
- * the first page, and the navigation; the banners; the page as the page's main content; and a
- * footer. A link that keyboard users reach first skips to the page (WCAG 2.4.1). When the user
- * comes to another page, its heading takes the focus. Apps take `AppFrame`, which adds their
- * settings and the update banner.
+ * the first page, and the navigation; the banners, in the page's status region; the page as the
+ * page's main content; and a footer. A link that keyboard users reach first skips to the page
+ * (WCAG 2.4.1). When the user comes to another page, its heading takes the focus. Apps take
+ * `AppFrame`, which adds their settings and the update banner.
  */
 export function Frame({ name, navigation, banners, footer, children }: FrameProps) {
   const main = useRef<HTMLElement>(null);
@@ -78,9 +78,15 @@ export function Frame({ name, navigation, banners, footer, children }: FrameProp
             )}
           </div>
         </header>
-        <div className="mx-auto flex w-full max-w-160 flex-col gap-3 px-6 pt-4 empty:hidden">
+        {/* The status region of every page, an <output>, there from the start, empty as long as
+            there is no banner: screen readers read a banner that appears in it. A region that
+            only appears with its text, as a banner of its own would, they often leave unread. */}
+        <output
+          aria-atomic="false"
+          className="mx-auto flex w-full max-w-160 flex-col gap-3 px-6 pt-4 empty:pt-0"
+        >
           {banners}
-        </div>
+        </output>
         <main id="main" ref={main} tabIndex={-1} className="page w-full grow">
           {children}
         </main>
