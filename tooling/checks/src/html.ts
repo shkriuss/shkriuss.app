@@ -9,22 +9,28 @@ import { lineOf, type Violation } from "./report.ts";
  * hand-written `index.html` files in this repository; it is not a general HTML parser.
  */
 
-/** Tags whose `src`, `href` or `srcset` makes the browser fetch a resource. */
-const RESOURCE_TAGS = new Set([
-  "audio",
-  "embed",
-  "iframe",
-  "img",
-  "link",
-  "object",
-  "script",
-  "source",
-  "track",
-  "video",
+/**
+ * Attributes whose URL the browser fetches, on any tag: an image's `src`, an object's `data`, a
+ * video's `poster`, an SVG image's `xlink:href`, and the `ping` of a link, which reports a click.
+ */
+const RESOURCE_ATTRIBUTES = new Set([
+  "background",
+  "data",
+  "manifest",
+  "ping",
+  "poster",
+  "src",
+  "srcset",
+  "xlink:href",
 ]);
-const RESOURCE_ATTRIBUTES = new Set(["src", "href", "srcset"]);
+/** Tags whose `href` is a link that the user may follow, not a resource that the page loads. */
+const LINK_TAGS = new Set(["a", "area"]);
 
-const TAG = /<([a-zA-Z][a-zA-Z0-9-]*)((?:\s[^>]*)?)>/g;
+/**
+ * A start tag: its name, then attributes up to the first `>` that no quotes hold. A `/` may
+ * separate the name from the first attribute, as browsers accept in `<script/src=…>`.
+ */
+const TAG = /<([a-zA-Z][a-zA-Z0-9-]*)((?:"[^"]*"|'[^']*'|[^"'>])*)>/g;
 const ATTRIBUTE = /([^\s"'>/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g;
 const JAVASCRIPT_URL = /^\s*javascript:/i;
 /** Absolute (`https://…`) or protocol-relative (`//…`) URLs point at another origin. */
@@ -59,6 +65,18 @@ export function checkHtml(file: string, source: string): Violation[] {
     const attributes = parseAttributes(match[2] ?? "");
     const offset = match.index;
 
+    if (name === "base") {
+      report(offset, "A <base> element is not allowed; it changes where relative URLs lead.");
+    }
+    if (
+      name === "meta" &&
+      attributes.some(
+        (attribute) =>
+          attribute.name === "http-equiv" && attribute.value.trim().toLowerCase() === "refresh",
+      )
+    ) {
+      report(offset, "A meta refresh is not allowed; it navigates the page by itself.");
+    }
     if (name === "style") {
       report(
         offset,
@@ -89,11 +107,15 @@ export function checkHtml(file: string, source: string): Violation[] {
       if (JAVASCRIPT_URL.test(attribute.value)) {
         report(offset, "URLs with the javascript: scheme are not allowed.");
       }
-      if (
-        RESOURCE_TAGS.has(name) &&
-        RESOURCE_ATTRIBUTES.has(attribute.name) &&
-        REMOTE_URL.test(attribute.value)
-      ) {
+      const loads =
+        RESOURCE_ATTRIBUTES.has(attribute.name) ||
+        (attribute.name === "href" && !LINK_TAGS.has(name));
+      // A srcset lists several URLs, each followed by its size.
+      const urls =
+        attribute.name === "srcset" || attribute.name === "ping"
+          ? attribute.value.split(/[,\s]+/)
+          : [attribute.value];
+      if (loads && urls.some((url) => REMOTE_URL.test(url))) {
         report(offset, "Third-party resources are not allowed; bundle the file instead.");
       }
     }

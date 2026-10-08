@@ -43,6 +43,38 @@ describe("checkHtml", () => {
     expect(messages('<a href="https://example.com">Example</a>')).toEqual([]);
   });
 
+  it("sees attributes after a slash, and past a > that quotes hold", () => {
+    expect(messages('<script/src="https://cdn.example.com/x.js"></script>')).toEqual([
+      "Third-party resources are not allowed; bundle the file instead.",
+    ]);
+    expect(messages('<img alt=">" src="https://example.com/a.png" />')).toHaveLength(1);
+    expect(messages("<img alt='>' src=https://example.com/a.png>")).toHaveLength(1);
+    expect(messages('<p title="a > b">x</p>')).toEqual([]);
+  });
+
+  it("rejects <base> and a meta refresh", () => {
+    expect(messages('<base href="/" />')).toEqual([
+      "A <base> element is not allowed; it changes where relative URLs lead.",
+    ]);
+    expect(messages('<meta http-equiv="Refresh" content="0; url=https://example.com" />')).toEqual([
+      "A meta refresh is not allowed; it navigates the page by itself.",
+    ]);
+    expect(messages('<meta http-equiv="content-language" content="en" />')).toEqual([]);
+  });
+
+  it("rejects every attribute that loads from another origin, on any tag", () => {
+    expect(messages('<object data="https://example.com/x.swf"></object>')).toHaveLength(1);
+    expect(messages('<video poster="https://example.com/p.png"></video>')).toHaveLength(1);
+    expect(messages('<svg><image href="https://example.com/a.png" /></svg>')).toHaveLength(1);
+    expect(messages('<svg><use xlink:href="https://example.com/s.svg#i" /></svg>')).toHaveLength(1);
+    expect(
+      messages('<img srcset="/a.png 1x, https://example.com/b.png 2x" alt="" />'),
+    ).toHaveLength(1);
+    expect(messages('<a href="/" ping="/count https://tracker.example.com">x</a>')).toHaveLength(1);
+    expect(messages('<img srcset="/a.png 1x, /b.png 2x" alt="" />')).toEqual([]);
+    expect(messages('<area href="https://example.com" alt="Example" />')).toEqual([]);
+  });
+
   it("does not mistake text or attribute values for attributes", () => {
     expect(messages("<p>Someone said one = two, style = fine</p>")).toEqual([]);
     expect(messages('<meta name="description" content="Notes online = yes, style=x" />')).toEqual(
