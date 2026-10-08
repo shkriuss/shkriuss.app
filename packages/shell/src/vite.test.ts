@@ -42,6 +42,16 @@ async function createApp(): Promise<string> {
   return root;
 }
 
+/** The tiny app, with a page that uses `name` of `module`. */
+async function createAppUsing(module: string, name: string): Promise<string> {
+  const root = await createApp();
+  await writeFile(
+    path.join(root, "main.js"),
+    `import { ${name} } from "${module}";\nconsole.info(${name});\n`,
+  );
+  return root;
+}
+
 /** Builds the app at `root` as `app(...options)` configures it, and returns what it wrote. */
 async function buildApp(
   root: string,
@@ -126,28 +136,35 @@ describe("app", () => {
     );
   });
 
-  it("builds an app without data only without the code of the packages that keep data", async () => {
-    const root = await createApp();
+  // One build in each test: under coverage, a build takes over a second here.
+  describe("an app without data", () => {
     const withoutData = { ...NOTES, keepsData: false };
-    await buildApp(root, withoutData);
 
-    await writeFile(
-      path.join(root, "main.js"),
-      'import { openDatabase } from "@shkriuss/data";\nconsole.info(openDatabase);\n',
-    );
-    await expect(buildApp(root, withoutData)).rejects.toThrow(
-      /The build has the code of @shkriuss\/data \(packages\/data\/src\/[\w/.-]+\), which this app excludes\./,
-    );
-    // An app with data, as most are, has it.
-    await buildApp(root, NOTES);
+    it("builds without the code of the packages that keep data", async () => {
+      await expect(buildApp(await createApp(), withoutData)).resolves.toBeTypeOf("function");
+    });
 
-    await writeFile(
-      path.join(root, "main.js"),
-      'import { generatePassphrase } from "@shkriuss/backup";\nconsole.info(generatePassphrase);\n',
-    );
-    await expect(buildApp(root, withoutData)).rejects.toThrow(
-      / @shkriuss\/backup \(packages\/backup\/src\/[\w/.-]+\)/,
-    );
+    it.each([
+      [
+        "@shkriuss/data",
+        "openDatabase",
+        /The build has the code of @shkriuss\/data \(packages\/data\/src\/[\w/.-]+\), which this app excludes\./,
+      ],
+      [
+        "@shkriuss/backup",
+        "generatePassphrase",
+        / @shkriuss\/backup \(packages\/backup\/src\/[\w/.-]+\)/,
+      ],
+    ])("does not build with the code of %s", async (module, name, message) => {
+      await expect(buildApp(await createAppUsing(module, name), withoutData)).rejects.toThrow(
+        message,
+      );
+    });
+
+    it("differs from an app with data, as most are, which builds with that code", async () => {
+      const root = await createAppUsing("@shkriuss/data", "openDatabase");
+      await expect(buildApp(root, NOTES)).resolves.toBeTypeOf("function");
+    });
   });
 
   it("passes the service worker's procedures of last resort on", async () => {
