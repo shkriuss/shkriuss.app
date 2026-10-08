@@ -70,9 +70,10 @@ jobs:
       - run: pnpm build
       # The browser build that matches the pinned Playwright version, with its system libraries.
       # Not Chromium's headless shell, so that no test can run on it instead of the whole browser.
-      # It takes about a minute, but Ubuntu's package mirrors are sometimes slow (8½ minutes at
-      # worst, so far) and sometimes stall for half an hour: a try that has not finished in 10
-      # minutes stops, and a second one starts.
+      # It takes about a minute. But GitHub's Azure mirror of Ubuntu, which the runner uses first,
+      # sometimes stalls, or crawls at 0.1 MB/s while WebKit needs 115 MB: a try that has not
+      # finished in 10 minutes stops, and a second one, which keeps what the first downloaded,
+      # goes to Ubuntu's own archive.
       - run: |
           for try in 1 2; do
             if timeout --kill-after=1m 10m pnpm --filter @shkriuss/hub exec playwright install --with-deps --no-shell "$BROWSER"; then
@@ -82,6 +83,8 @@ jobs:
             # Playwright runs apt-get as root, through sudo, which the signal that stops a try does
             # not reach. Left running, it would keep the package lists locked for the next try.
             sudo pkill --signal KILL --exact apt-get || true
+            # The runner's list of Ubuntu mirrors, without the Azure one.
+            sudo sed -i '/azure\.archive\.ubuntu\.com/d' /etc/apt/apt-mirrors.txt || true
           done
           exit 1
         env:
