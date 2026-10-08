@@ -299,6 +299,42 @@ async function comeBack(page: Page): Promise<void> {
   });
 }
 
+/**
+ * Waits until the checks that `comeBack()` started have read the database, and the screen shows
+ * what they found, so that a test can see that a banner stays away. A transaction that writes
+ * begins only once every transaction that began before it on the same stores has ended, as a
+ * check's read has; React renders what the read found before the second frame after that.
+ */
+async function checked(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open("shkriuss");
+      request.addEventListener("success", () => {
+        resolve(request.result);
+      });
+      request.addEventListener("error", () => {
+        reject(request.error ?? new Error("The database did not open."));
+      });
+    });
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const transaction = database.transaction("meta", "readwrite");
+        transaction.addEventListener("complete", () => {
+          resolve();
+        });
+        transaction.addEventListener("abort", () => {
+          reject(transaction.error ?? new Error("The transaction ended."));
+        });
+      });
+    } finally {
+      database.close();
+    }
+    for (let frame = 0; frame < 2; frame += 1) {
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    }
+  });
+}
+
 /** Saves the backup that the dialog `ready` offers, as a download, and closes the dialog. */
 async function saveAndClose(page: Page, ready: Locator): Promise<void> {
   await downloaded(page, async () => {
@@ -1400,7 +1436,10 @@ test("on iPhone and iPad, a banner suggests installing before anything is entere
   await installFirst(page).getByRole("button", { name: "Later" }).click();
   await expect(installFirst(page)).toHaveCount(0);
   await expect(page.getByRole("main")).toBeFocused();
-  // Later lasts until the app opens again.
+  // Later lasts until the app opens again: coming back into view does not bring it back.
+  await comeBack(page);
+  await checked(page);
+  await expect(installFirst(page)).toHaveCount(0);
   await page.reload();
   await expect(installFirst(page)).toBeVisible();
   // Once there is data, the next check brings the backup reminder instead.

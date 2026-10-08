@@ -1,6 +1,6 @@
 import type { AppInstall } from "@shkriuss/pwa";
 import { Banner, Button } from "@shkriuss/ui";
-import { useContext, useState, useSyncExternalStore } from "react";
+import { useContext, useRef, useState, useSyncExternalStore } from "react";
 import { backupStatusOf, type DeviceReader } from "./backup-status.ts";
 import { FrameContext } from "./frame.ts";
 import { m } from "./messages.ts";
@@ -27,10 +27,13 @@ export function InstallBanner({ install, db }: InstallBannerProps) {
   const store = backupStatusOf(db);
   const { focusScreen } = useContext(FrameContext);
   const [due, setDue] = useState(false);
+  // Whether the user pressed "Later": no check brings the banner back until the app opens again.
+  const later = useRef(false);
 
   useStatusChecks(store, ({ device }) => {
     setDue(
-      install.getState() === "add-to-home-screen" &&
+      !later.current &&
+        install.getState() === "add-to-home-screen" &&
         device !== undefined &&
         device.lastBackup === null &&
         device.changesSinceBackup === 0,
@@ -45,6 +48,7 @@ export function InstallBanner({ install, db }: InstallBannerProps) {
       actions={
         <Button
           onPress={() => {
+            later.current = true;
             setDue(false);
             // The banner goes, and with it the button that has the focus.
             focusScreen();
