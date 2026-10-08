@@ -92,7 +92,7 @@ Preferred-Languages: en
 Expires: <the commit's date plus 180 days>
 ```
 
-`Expires` comes from the date of the commit that is built, never from the time of the build: production rebuilds the commit that staging got, maybe days later, and must match it byte for byte. The build takes the date of git's `HEAD`, or `SOURCE_DATE_EPOCH` if it is set, as reproducible builds set it, and fails with neither. Tests that build outside a git checkout set `SOURCE_DATE_EPOCH`. A build that already has the file, as from `public/`, fails too.
+`Expires` comes from the date of the commit that is built, never from the time of the build: a second build of the commit, in CI or by anyone who compares it with what a site serves, must match the deployed files byte for byte, maybe days later. The build takes the date of git's `HEAD`, or `SOURCE_DATE_EPOCH` if it is set, as reproducible builds set it, and fails with neither. Tests that build outside a git checkout set `SOURCE_DATE_EPOCH`. A build that already has the file, as from `public/`, fails too.
 
 Turbo never caches the builds (`turbo.json`): its cache knows the files, not the commit, and would give a new commit the file that an earlier one built, with that commit's date. Every app builds in seconds.
 
