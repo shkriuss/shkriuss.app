@@ -63,7 +63,7 @@ describe("readBackup (backup format §5.3–§5.5)", () => {
       deleted: 0,
       unchanged: 1,
     });
-    expect(await second.snapshot()).toStrictEqual(snapshot);
+    expect((await second.snapshot()).stores).toStrictEqual(snapshot.stores);
   });
 
   it.each<[string, Uint8Array, BackupErrorCode]>([
@@ -268,6 +268,7 @@ describe("writeBackup (backup format §2, §4)", () => {
       schemaVersion: 1,
       stores: { notes: [record], settings: [] },
       fromFuture: undefined,
+      counted: 0,
     };
     const text = new TextDecoder().decode(writeBackup(APP, snapshot, new Date()));
     expect(text).toContain(
@@ -280,6 +281,7 @@ describe("writeBackup (backup format §2, §4)", () => {
       schemaVersion: 1,
       stores: { notes: [], settings: [] },
       fromFuture: undefined,
+      counted: 0,
     };
     expect(() => writeBackup("Notes", snapshot, new Date())).toThrow(TypeError);
   });
@@ -296,6 +298,7 @@ describe("writeBackup (backup format §2, §4)", () => {
       schemaVersion: 1,
       stores: { notes: Array.from({ length: 70 }, () => record), settings: [] },
       fromFuture: undefined,
+      counted: 0,
     };
     expect(() => writeBackup(APP, snapshot, new Date())).toThrow(
       expect.objectContaining({ code: "too-large" }),
@@ -343,6 +346,7 @@ describe("writeBackup and readBackup, as a property", () => {
             schemaVersion: 1,
             stores: { notes: records, settings: [] },
             fromFuture: undefined,
+            counted: 0,
           };
           const contents = read(writeBackup(APP, snapshot, made));
           expect(contents.exported).toStrictEqual(made);

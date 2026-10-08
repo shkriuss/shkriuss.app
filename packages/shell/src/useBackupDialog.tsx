@@ -12,7 +12,7 @@ import { saveFile } from "./save.ts";
 export interface BackupDatabase {
   snapshot(): Promise<Snapshot>;
   device(): Promise<DeviceState>;
-  recordBackup(): Promise<void>;
+  recordBackup(counted: number): Promise<void>;
 }
 
 /** The step that offers to save the backup that was made. */
@@ -21,6 +21,8 @@ interface Ready {
   readonly file: File;
   /** When its latest change is dated, if that is more than a day ahead (data model §3.5). */
   readonly fromFuture: number | undefined;
+  /** The changes that its snapshot had, which the database records once it is saved. */
+  readonly counted: number;
   readonly notSaved: boolean;
   readonly saving: boolean;
 }
@@ -189,8 +191,8 @@ export function useBackupDialog(
     setStep({ name: "making" });
     let next: Step;
     try {
-      const { file, fromFuture } = await createBackupFile(db, { app, passphrase });
-      next = { name: "ready", file, fromFuture, notSaved: false, saving: false };
+      const { file, fromFuture, counted } = await createBackupFile(db, { app, passphrase });
+      next = { name: "ready", file, fromFuture, counted, notSaved: false, saving: false };
     } catch (error) {
       next = {
         name: "failed",
@@ -211,7 +213,7 @@ export function useBackupDialog(
     const result = await saveFile(file, browserSaveEnvironment());
     if (result !== "cancelled") {
       try {
-        await db.recordBackup();
+        await db.recordBackup(ready.counted);
       } catch {
         // The file is saved all the same; only the reminders do not know of it.
       }

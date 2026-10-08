@@ -217,6 +217,7 @@ Canonical JSON is the [JSON Canonicalization Scheme (RFC 8785)](https://www.rfc-
   - a removed field is dropped with its clock;
   - `id` and `deleted` never change, and tombstones only get the new `v`.
 - A field that a migration keeps, under its name or a new one, keeps its value, so its type in the new version must accept every value of its old type: the same type, or the same type made nullable. Any other change to a kept field's type needs a conversion, which may return the value as it is where the new type accepts it, or the field's removal. Otherwise a stored value that the new type refuses would stop the upgrade, and the app would fail to start on every device that holds one. The data layer refuses to define such a migration, so that tests catch it before a release.
+- A migration that moves a store into another can put two records with the same id into one store. Ids are unique, so they are two copies of one record, and they merge as copies do (section 5), on the device and in imports alike.
 - Migrations never create or remove records. Anything else requires a change to this spec first.
 
 ## 7. Storage
@@ -224,7 +225,7 @@ Canonical JSON is the [JSON Canonicalization Scheme (RFC 8785)](https://www.rfc-
 - Each app has one IndexedDB database named `shkriuss`, used only through `@shkriuss/data` (Dexie). Its version follows the schema version.
 - A version of an app never opens the database once a newer version has upgraded it: it would write records of its own schema version among newer ones. It reports that the app needs updating instead, and leaves the database as it is.
 - Each store is an object store keyed by `id`, holding live and deleted records. `@shkriuss/data` may add derived properties for indexes, such as whether a record is alive; they are never exported.
-- The `meta` object store holds this device's state and is never exported: the device id, the last HLC, when the device last made a backup, and how many changes it has had since. Every change counts, and so does every import that writes anything. Backup reminders use the last two ([architecture §8](../architecture.md#8-backups)).
+- The `meta` object store holds this device's state and is never exported: the device id, the last HLC, how many changes the device has had, and when it last made a backup and how many of those changes the backup's snapshot had. Every change counts, and so does every import that writes anything. The changes since the last backup are those that its snapshot did not have, including any made while the user saved it. Backup reminders use them and the time of the last backup ([architecture §8](../architecture.md#8-backups)).
 - Apps request persistent storage with `navigator.storage.persist()` ([architecture §7](../architecture.md#7-data-layer)).
 
 ## 8. Records from outside

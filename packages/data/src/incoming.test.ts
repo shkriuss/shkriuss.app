@@ -243,30 +243,38 @@ describe("checkIncomingStores (backup format §5.4, §5.5)", () => {
     expect(refusal(check)).toBe(code);
   });
 
-  it("refuses records that a migration would put into one store with the same id", () => {
+  it("merges two records that the migration puts into one store with the same id (data model §6)", () => {
     const shelf = {
       version: 1,
-      stores: { books: { fields: { title: field.string() } }, films: { fields: {} } },
+      stores: {
+        books: { fields: { title: field.string() } },
+        films: { fields: { title: field.string(), seen: field.boolean() } },
+      },
     } satisfies SchemaVersion;
     const merged = {
       version: 2,
-      stores: { books: shelf.stores.books },
+      stores: { books: shelf.stores.films },
       migrate: { films: { store: "books" } },
     } satisfies SchemaVersion;
     const schemas = defineSchemas(shelf, merged);
     const book = { ...LIST, data: { title: "Emma" }, clock: { title: at(1) } };
-    const film = { ...LIST, data: {}, clock: {} };
-    expect(refusal(() => checkIncomingStores(schemas, 1, { books: [book], films: [film] }))).toBe(
+    const film = {
+      ...LIST,
+      data: { title: "Emma, the film", seen: true },
+      clock: { title: at(2), seen: at(1) },
+    };
+    const other = { ...book, id: "01a10307-cbc8-73e0-98ab-ae848aa1d696" };
+    expect(
+      checkIncomingStores(schemas, 1, { books: [book, other], films: [film] }).stores,
+    ).toStrictEqual({
+      books: [
+        { ...film, v: 2 },
+        { ...other, v: 2 },
+      ],
+    });
+    // Within one store of the backup, an id still comes once.
+    expect(refusal(() => checkIncomingStores(schemas, 1, { books: [book, book], films: [] }))).toBe(
       "invalid",
-    );
-    const other = { ...film, id: "01a10307-cbc8-73e0-98ab-ae848aa1d696" };
-    expect(checkIncomingStores(schemas, 1, { books: [book], films: [other] }).stores).toStrictEqual(
-      {
-        books: [
-          { ...book, v: 2 },
-          { ...other, v: 2 },
-        ],
-      },
     );
   });
 

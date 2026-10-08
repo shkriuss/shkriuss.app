@@ -103,7 +103,7 @@ Deriving the key takes seconds on a phone, so encryption and decryption run in a
 2. Build the document (section 2). If it would be larger than importers accept (section 5.1), refuse and explain: every backup that is made must import. If it has HLCs from the future ([data-model.md §3.5](data-model.md#35-clocks-from-the-future)), say so with the file, and the latest of their times: if this device's date is wrong, the user can correct it; otherwise, restoring the backup will ask the user to confirm those times.
 3. **Encrypted:** encrypt it with the passphrase (section 3). **Plain:** only after the user confirms a warning that anyone who gets the file can read all of it.
 4. Hand the file over: the share sheet (Web Share API) where the browser has one, otherwise a download ([architecture §8](../architecture.md#8-backups)).
-5. Record in `meta` when the backup was made, and set the count of changes since the last backup to zero ([data-model.md §7](data-model.md#7-storage)). Backup reminders use both.
+5. Record in `meta` when the backup was made, and how many of the device's changes its snapshot has ([data-model.md §7](data-model.md#7-storage)): changes made after the snapshot, while the user saved the file, still count as changes since the last backup. Backup reminders use both.
 
 ## 5. Import
 
@@ -133,7 +133,7 @@ Decode the bytes as UTF-8, refusing invalid UTF-8, and parse them as JSON. A byt
 
 ### 5.5 Migrate
 
-Migrate every record to the app's current schema version ([data-model.md §6](data-model.md#6-schema-versions-and-migrations)), and check the results against the current schema.
+Migrate every record to the app's current schema version ([data-model.md §6](data-model.md#6-schema-versions-and-migrations)), and check the results against the current schema. Records that the migration moves into one store with the same id merge, as on the device.
 
 ### 5.6 Preview
 
@@ -145,6 +145,8 @@ Merge each incoming record with its local copy, in memory, and count per store:
 - **unchanged:** all others.
 
 Show the app, the date of the backup and the counts, such as "12 new, 3 updated, 1 deleted", and ask the user to confirm. Nothing has been written yet.
+
+The import also writes deletions that change nothing the device shows, such as those of records it never had (section 5.7). If those are all that it would write, the preview says that the device has everything the app shows, and still offers to import them, so that an older backup cannot later bring those records back.
 
 If the backup has HLCs from the future ([data-model.md §3.5](data-model.md#35-clocks-from-the-future)), the preview also says so, with the latest of their times: if this device's date is wrong, the user can correct it first; otherwise, restoring gives this device's changes that time too, until it comes. Confirming the import then confirms those times.
 

@@ -225,18 +225,23 @@ export function Restore({ app, db, schemas, onRestored }: RestoreProps) {
     }
     case "preview": {
       const { contents, summary } = step;
-      const { total, fromFuture } = summary;
+      const { total, fromFuture, writes } = summary;
       const changes = total.new + total.updated + total.deleted;
       // Dates from the future matter only to a restore that writes something.
-      const ahead = changes === 0 ? undefined : fromFuture;
+      const ahead = writes === 0 ? undefined : fromFuture;
+      let brings = m.brings(total);
+      if (changes === 0) {
+        // Deletions that change nothing the app shows are still worth keeping (§5.6).
+        brings = writes === 0 ? m.nothingNew() : m.onlyDeletions();
+      }
       title = m.previewTitle();
       body = (
         <>
           <p>{m.madeOn(contents.exported)}</p>
-          <p>{changes === 0 ? m.nothingNew() : m.brings(total)}</p>
+          <p>{brings}</p>
           {ahead === undefined ? null : <p>{m.restoreFromFuture(new Date(ahead))}</p>}
           <Actions>
-            {changes === 0 ? null : (
+            {writes === 0 ? null : (
               <Button
                 variant="primary"
                 onPress={() => {
@@ -246,7 +251,7 @@ export function Restore({ app, db, schemas, onRestored }: RestoreProps) {
                 {ahead === undefined ? m.restoreNow() : m.restoreAnyway()}
               </Button>
             )}
-            <Button onPress={close}>{changes === 0 ? m.close() : m.cancel()}</Button>
+            <Button onPress={close}>{writes === 0 ? m.close() : m.cancel()}</Button>
           </Actions>
         </>
       );
@@ -256,11 +261,16 @@ export function Restore({ app, db, schemas, onRestored }: RestoreProps) {
       title = m.restoringTitle();
       body = <p>{m.restoring()}</p>;
       break;
-    case "restored":
+    case "restored": {
+      const { total } = step.summary;
       title = m.restoredTitle();
       body = (
         <>
-          <p>{m.restored(step.summary.total)}</p>
+          <p>
+            {total.new + total.updated + total.deleted === 0
+              ? m.restoredNothingShown()
+              : m.restored(total)}
+          </p>
           <Actions>
             <Button variant="primary" onPress={close}>
               {m.done()}
@@ -269,6 +279,7 @@ export function Restore({ app, db, schemas, onRestored }: RestoreProps) {
         </>
       );
       break;
+    }
     case "failed":
       title = m.notRestoredTitle();
       body = (
