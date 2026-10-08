@@ -10,7 +10,13 @@ import { appHeaderRules, headersFile } from "./headers-file.ts";
 import { type BrowserFeature, securityHeaders } from "./headers.ts";
 import { addScriptIntegrity, cspHashSource, subresourceIntegrity } from "./integrity.ts";
 import { type CollectOptions, LICENSES_FILE, collectLicenses, licensesFile } from "./licenses.ts";
-import { buildManifest, formatManifest, MANIFEST_FILE } from "./manifest.ts";
+import {
+  buildManifest,
+  formatManifest,
+  MANIFEST_FILE,
+  MAX_FILE_BYTES,
+  oversizedFiles,
+} from "./manifest.ts";
 import { commitDate, SECURITY_TXT_FILE, securityTxt } from "./security-txt.ts";
 import { type ServiceWorkerApi, serviceWorkerApi } from "./service-worker.ts";
 import { assertWebAssembly, isWebAssemblyPath } from "./webassembly.ts";
@@ -302,6 +308,13 @@ export function edge(options: EdgeOptions = {}): Plugin {
         // After the HTML is final, so it covers every file as served, including those copied
         // from public/. It leaves out _headers, which is not served.
         const manifest = await buildManifest(directory);
+        const oversized = await oversizedFiles(directory);
+        if (oversized.size > 0) {
+          const sizes = [...oversized].map(([file, size]) => `${file} has ${String(size)} bytes`);
+          throw new Error(
+            `Cloudflare serves files of at most 25 MiB (${String(MAX_FILE_BYTES)} bytes): ${sizes.join(", ")}.`,
+          );
+        }
         const rules = appHeaderRules({
           ...headerOptions,
           stagingHost,

@@ -1,12 +1,12 @@
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, truncate, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { build, type Plugin } from "vite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Header } from "./headers.ts";
 import { cspHashSource, subresourceIntegrity } from "./integrity.ts";
-import { parseManifest } from "./manifest.ts";
+import { MAX_FILE_BYTES, parseManifest } from "./manifest.ts";
 import { securityTxt } from "./security-txt.ts";
 import { SERVICE_WORKER_PLUGIN, type ServiceWorkerApi } from "./service-worker.ts";
 import { edge, type EdgeOptions } from "./vite.ts";
@@ -610,6 +610,18 @@ describe("edge", () => {
     // The app's folder is in no git checkout.
     await expect(buildApp(await createApp())).rejects.toThrow(
       "build in a git checkout, or set SOURCE_DATE_EPOCH",
+    );
+  });
+
+  it("fails the build for a file larger than Cloudflare serves, before any deploy", async () => {
+    const root = await createApp();
+    await mkdir(path.join(root, "public"));
+    const file = path.join(root, "public", "huge.bin");
+    // Its bytes need not be written: the rest of the file reads as zeros.
+    await writeFile(file, "");
+    await truncate(file, MAX_FILE_BYTES + 1);
+    await expect(buildApp(root)).rejects.toThrow(
+      "Cloudflare serves files of at most 25 MiB (26214400 bytes): /huge.bin has 26214401 bytes.",
     );
   });
 

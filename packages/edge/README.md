@@ -30,6 +30,8 @@ Every chunk other than the entry script must be loaded with `import()` and may i
 
 The build fails instead of shipping a script without a hash: for example when the HTML has an inline script or loads a script that is not part of the build.
 
+It fails too for a file larger than 25 MiB, the most that Cloudflare serves as a static asset, which the deploy would otherwise refuse after every test had passed. Grammar's WebAssembly module is the largest file today, at 16 MB.
+
 With `pwa()` of `@shkriuss/pwa/vite` among the plugins, the plugin also writes the service worker, `/sw.js`. It writes it after every other file, and before `sha256sums.txt` and `_headers`, because the service worker lists the hash of every other file ([service worker spec](../../docs/specs/service-worker.md)). The build fails if another file is already `/sw.js`.
 
 ## Workers
