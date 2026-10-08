@@ -4,6 +4,8 @@ The data layer: how every app stores its records, stamps its changes and merges 
 
 It has pure functions on records, the schemas and migrations that check and evolve them, and the IndexedDB storage that apps read and write through, built on [Dexie](https://dexie.org). The backup import builds on these.
 
+The package has no side effects (`"sideEffects": false` in its `package.json`): its modules only define things, so a build keeps only the modules whose code it uses. The backups' encryption worker uses the checks of imported data, and so has neither the storage nor Dexie; a test of `@shkriuss/backup` holds it to that.
+
 | Module        | What it does                                                                                                                                             |
 | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `hlc.ts`      | Hybrid logical clocks (§3): the format, issuing an HLC for a change, receiving HLCs from elsewhere, refusing clocks from the future; device ids          |
