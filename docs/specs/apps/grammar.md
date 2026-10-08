@@ -17,14 +17,15 @@ Checks English text for mistakes in grammar, spelling, punctuation and word choi
 **On the Check screen:**
 
 - **The field** takes text that the user types or pastes, up to 20,000 characters. The browser's own spelling checker is off in it, as some browsers send text to a server to check it.
-- **Checking** starts as soon as the checker is ready, and again half a second after the user stops typing. It runs in a worker, so typing never waits for it.
+- **Checking** starts as soon as the checker is ready, and again half a second after the user stops typing. It runs in a worker, so typing never waits for it. The worker checks one text at a time: a text that changes again before its check begins is not checked.
 - **Getting ready:** the checker starts each time the app opens, which takes a few seconds; the field takes text meanwhile. Once there is text, "Getting the checker ready…" shows until the checker has started; with the field empty, nothing shows. On the first visit, the checker waits until the app has been kept for offline use, so that its 8 MB download happens once; then it starts from that copy.
-- **The mistakes** are listed under the field, in the order of the text. Each shows its kind (Spelling, Grammar, Punctuation, …), what is wrong, and the words it is about, quoted from the text. A status says how many there are, or "No mistakes found"; screen readers hear it.
-- **Fixes:** each mistake offers Harper's fixes as buttons, such as "Replace with “an”" or "Remove", without repeats. One press changes the text and checks it again. The focus then goes to the next mistake, or to the field when none is left.
+- **The mistakes** are listed under the field, in the order of the text, 50 at a time: **Show more** shows up to 50 more, and the focus goes to the first of them. Each shows its kind (Spelling, Grammar, Punctuation, …), what is wrong, and the words it is about, quoted from the text. A status says how many there are in all, or "No mistakes found"; screen readers hear it.
+- **Fixes:** each mistake offers Harper's fixes as buttons, such as "Replace with “an”" or "Remove", without repeats. One press changes the text and checks it again. The focus then goes to the next mistake, or to the field when none is left; if the user has put it elsewhere by then, such as back in the field, it stays there.
 - **Show** selects the mistake's words in the field. **Ignore** hides the mistake until the user changes its words.
-- **English variety:** American, British, Australian, Canadian or Indian English. It starts from the browser's language (`en-GB` gives British, …), or else American. It is not kept.
+- **English variety:** American, British, Australian, Canadian or Indian English. It starts from the browser's language (`en-GB` gives British, …), or else American. It is not stored, so it starts there again each time the app opens.
 - **Copy** puts the whole text on the clipboard, and says so.
 - **Delete** empties the field, and says so. As the app keeps no copy of the text, the button then reads **Undo** until the user types again, and Undo brings the text back.
+- **The text stays** while the app is open, when the user goes to the settings and back, with its variety, the mistakes ignored and Undo. Reloading the app clears it, and so does updating it, which reloads it: while there is text, the update banner says so.
 - **If the checker cannot start,** for example in a browser without WebAssembly, the screen says so instead of the list.
 
 ## 2. Data
@@ -52,10 +53,13 @@ None. The app has no database, no backups and no settings of its own. It stores 
 
 ## 6. Tests
 
-- **Unit tests:** Harper's results as the screen shows them (kinds, quoted words, fixes without repeats); a fix applied to the text; the variety from the browser's language.
+- **Unit tests:** Harper's results as the screen shows them (kinds, quoted words, fixes without repeats); a fix applied to the text; the variety from the browser's language; one check at a time, of the latest text; what the page keeps of the text, and when the update banner warns.
 - **End to end, in every browser,** with the production headers:
   - the checker starts in its worker and finds the mistakes of a sample text;
   - a fix changes the text, and the list follows; Ignore and Show;
+  - the focus stays in the field when the user goes back to it before a fix is checked;
+  - a long text's mistakes show 50 at a time;
+  - the text, its variety, the mistakes ignored and Undo stay when the user goes to the settings and back;
   - another variety gives other results ("color" and "colour");
   - Copy, where the browser allows it in tests; Delete, and Undo;
   - nothing is stored: no IndexedDB database, nothing beyond the service worker's own cache;

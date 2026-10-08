@@ -14,6 +14,11 @@ export interface AppFrameProps {
   readonly navigation?: ReactNode;
   /** Banners under the update banner, such as `<BackupReminder>`. */
   readonly banners?: ReactNode;
+  /**
+   * What reloading the page clears, for an app that keeps something only in the page, such as a
+   * text: the update banner says it while it offers to update, which reloads the page.
+   */
+  readonly reloadWarning?: string | undefined;
   /** The screen: the router's `<Outlet />`. */
   readonly children: ReactNode;
 }
@@ -24,7 +29,14 @@ export interface AppFrameProps {
  * settings; the update banner and the others; and the screen as the page's main content. When
  * the user comes to another screen, its heading takes the focus.
  */
-export function AppFrame({ name, updates, navigation, banners, children }: AppFrameProps) {
+export function AppFrame({
+  name,
+  updates,
+  navigation,
+  banners,
+  reloadWarning,
+  children,
+}: AppFrameProps) {
   return (
     <Frame
       name={name}
@@ -36,7 +48,7 @@ export function AppFrame({ name, updates, navigation, banners, children }: AppFr
       }
       banners={
         <>
-          <UpdateBanner updates={updates} />
+          <UpdateBanner updates={updates} reloadWarning={reloadWarning} />
           {banners}
         </>
       }

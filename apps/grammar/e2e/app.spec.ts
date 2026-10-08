@@ -142,6 +142,71 @@ test("Show selects a mistake's words in the field; Ignore hides it until they ch
   await expect(mistake(page, "teh")).toHaveCount(1);
 });
 
+test("the focus stays in the field when the user goes back to it before a fix is checked", async ({
+  page,
+}) => {
+  // A long text, whose check takes a moment, with a mistake at each end.
+  const filler = "The quick brown fox jumps over the lazy dog. ".repeat(400);
+  await check(page, `This is an test. ${filler}I has a cat.`, 2);
+  // The user presses a fix and, before the text is checked again, goes back to the field.
+  await page.evaluate(() => {
+    const fix = [...document.querySelectorAll("button")].find(
+      (button) => button.textContent === "Replace with “a”",
+    );
+    fix?.click();
+    document.querySelector("textarea")?.focus();
+  });
+  await expect(found(page)).toHaveText(m.found(1));
+  // React moves the focus after it has shown the list.
+  await page.evaluate(
+    async () =>
+      new Promise((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(resolve));
+      }),
+  );
+  await expect(field(page)).toBeFocused();
+  await page.keyboard.press("ControlOrMeta+End");
+  await page.keyboard.type(" Bye.");
+  await expect(field(page)).toHaveValue(`This is a test. ${filler}I has a cat. Bye.`);
+});
+
+test("a long text's mistakes show 50 at a time", async ({ page }) => {
+  await check(page, Array.from({ length: 10 }, () => SAMPLE).join(" "), 60);
+  await expect(mistakes(page)).toHaveCount(50);
+  await page.getByRole("button", { name: m.showMore(10) }).click();
+  await expect(mistakes(page)).toHaveCount(60);
+  // The button went: the focus is on the first of the mistakes that came.
+  await expect(mistakes(page).nth(50).getByRole("heading")).toBeFocused();
+  await expect(page.getByRole("button", { name: /^Show \d+ more$/v })).toHaveCount(0);
+});
+
+test("the text stays while the app is open, when the user goes to the settings and back", async ({
+  page,
+}) => {
+  await check(page, SAMPLE, 6);
+  const english = page.getByRole("combobox", { name: "English" });
+  await english.selectOption("British");
+  await mistake(page, "teh").getByRole("button", { name: "Ignore" }).click();
+  await expect(found(page)).toHaveText(m.found(5));
+  const settings = page.getByRole("link", { name: "Settings", exact: true });
+  const home = page.getByRole("link", { name: NAME, exact: true });
+  await settings.click();
+  await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
+  await home.click();
+  await expect(field(page)).toHaveValue(SAMPLE);
+  await expect(english).toHaveValue("british");
+  await expect(found(page)).toHaveText(m.found(5));
+  await expect(mistake(page, "teh")).toHaveCount(0);
+
+  // Delete's Undo stays too, until the user types again.
+  await page.getByRole("button", { name: m.delete(), exact: true }).click();
+  await settings.click();
+  await page.goBack();
+  await expect(field(page)).toHaveValue("");
+  await page.getByRole("button", { name: m.undo(), exact: true }).click();
+  await expect(field(page)).toHaveValue(SAMPLE);
+});
+
 test("each variety of English spells its own way", async ({ page }) => {
   await check(page, "The colour of the sky.", 1);
   await expect(mistake(page, "colour")).toContainText("Spelling");

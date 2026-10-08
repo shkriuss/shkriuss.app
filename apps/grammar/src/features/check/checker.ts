@@ -14,8 +14,52 @@ export type CheckerState = "starting" | "ready" | "failed";
 export interface Checker {
   readonly getState: () => CheckerState;
   readonly subscribe: (listener: () => void) => () => void;
-  /** The mistakes in `text` in `variety`; rejects if the checker failed, or has not started. */
+  /**
+   * The mistakes in `text` in `variety`; rejects if the checker failed or has not started, or if
+   * a newer check took its place before it began.
+   */
   readonly check: Check;
+}
+
+/**
+ * `check`, one text at a time, as the worker checks them. Of the texts that come meanwhile, only
+ * the latest waits; each takes the place of the one before, which rejects. The screen asks again
+ * each time the text changes and wants only the answer about the text as it is, so the worker
+ * skips the texts that changed before it could begin them.
+ */
+function oneAtATime(check: Check): Check {
+  let running = false;
+  // The latest text that waits, to check once the worker is free, or to skip.
+  let waiting: { readonly run: () => void; readonly skip: () => void } | undefined;
+
+  async function run(text: string, variety: Variety): Promise<readonly Mistake[]> {
+    running = true;
+    try {
+      return await check(text, variety);
+    } finally {
+      running = false;
+      const next = waiting;
+      waiting = undefined;
+      next?.run();
+    }
+  }
+
+  return async (text, variety) => {
+    if (!running) {
+      return run(text, variety);
+    }
+    return new Promise((resolve, reject) => {
+      waiting?.skip();
+      waiting = {
+        run: () => {
+          run(text, variety).then(resolve, reject);
+        },
+        skip: () => {
+          reject(new Error("A newer check took its place."));
+        },
+      };
+    });
+  };
 }
 
 /**
@@ -44,7 +88,7 @@ export function createChecker(updates: AppUpdates, start: () => Check): Checker 
     }
     stopFollowing();
     try {
-      check = start();
+      check = oneAtATime(start());
     } catch {
       settle("failed");
       return;

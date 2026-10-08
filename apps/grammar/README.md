@@ -18,17 +18,18 @@ Checks English text for mistakes in grammar, spelling and punctuation, and sugge
 
 [Harper](https://github.com/Automattic/harper) checks the text: its slim WebAssembly module, from `harper.js`, without Typst and without the thesaurus, which only suggests other words for some that are used too often. It runs in `src/features/check/harper.worker.ts`, which the page starts once the service worker keeps the app for offline use, so that the module, 16 MB (8 MB compressed), comes once.
 
-| File in `src/features/check/` | What it is                                                                                          |
-| ----------------------------- | --------------------------------------------------------------------------------------------------- |
-| `Check.tsx`                   | The check screen: the text, its variety of English, Copy, Delete, and the mistakes with fixes       |
-| `checker.ts`                  | The page's checker: it starts once the app is kept offline, and says when it is ready or failed     |
-| `worker-check.ts`             | Starts the worker, and sends it each text with a port for the answer                                |
-| `harper.worker.ts`            | The worker: Harper's linter, which answers each request in turn                                     |
-| `harper.ts`                   | Creates the linter, and gives, in its legal comment, the notices of the crates compiled into Harper |
-| `lints.ts`                    | Harper's lints as the app's mistakes: their kind, message, place in the text and fixes, each once   |
-| `protocol.ts`                 | What the page and the worker say to each other, and the checks of it                                |
-| `text.ts`                     | A fix applied to the text, Harper's messages as plain text, the words quoted, and what Ignore hides |
-| `variety.ts`                  | The variety of English to start with, from the browser's language                                   |
+| File in `src/features/check/` | What it is                                                                                                                             |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `Check.tsx`                   | The check screen: the text, its variety of English, Copy, Delete, and the mistakes with fixes                                          |
+| `checker.ts`                  | The page's checker: it starts once the app is kept offline, says when it is ready or failed, and checks one text at a time, the latest |
+| `draft.ts`                    | The text, its variety, the mistakes ignored, Undo's text and the last check, kept while the page is open                               |
+| `worker-check.ts`             | Starts the worker, and sends it each text with a port for the answer                                                                   |
+| `harper.worker.ts`            | The worker: Harper's linter, which answers each request in turn                                                                        |
+| `harper.ts`                   | Creates the linter, and gives, in its legal comment, the notices of the crates compiled into Harper                                    |
+| `lints.ts`                    | Harper's lints as the app's mistakes: their kind, message, place in the text and fixes, each once                                      |
+| `protocol.ts`                 | What the page and the worker say to each other, and the checks of it                                                                   |
+| `text.ts`                     | A fix applied to the text, Harper's messages as plain text, the words quoted, and what Ignore hides                                    |
+| `variety.ts`                  | The variety of English to start with, from the browser's language                                                                      |
 
 ## Updating harper.js
 
