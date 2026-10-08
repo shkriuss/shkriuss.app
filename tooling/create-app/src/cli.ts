@@ -10,7 +10,7 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 import { portOf } from "@shkriuss/checks/structure";
 import * as prettier from "prettier";
-import { type NewApp, appFiles, nextPort, templateOf } from "./create.ts";
+import { type NewApp, appFiles, idProblem, nextPort, templateOf } from "./create.ts";
 
 const USAGE = `Usage: pnpm create-app <id> --name <name> --description <sentence> [--short-name <name>] [--accent <#rrggbb>] [--no-data]
 
@@ -38,6 +38,15 @@ function gitFiles(...pathspecs: string[]): string[] {
     encoding: "utf8",
   });
   return output.split("\0").filter((file) => file !== "");
+}
+
+/** Whether the clone has only part of the repository's history, as a shallow clone has. */
+function isShallow(): boolean {
+  const output = execFileSync("git", ["rev-parse", "--is-shallow-repository"], {
+    cwd: root,
+    encoding: "utf8",
+  });
+  return output.trim() === "true";
 }
 
 /** Whether `folder` was ever in the repository's history, as an app that was removed or renamed. */
@@ -69,14 +78,30 @@ async function main(args: readonly string[]): Promise<number> {
   }
 
   const folder = `apps/${id}`;
-  if (existsSync(path.join(root, folder))) {
-    console.error(`${folder} exists already.`);
-    return 1;
+  const packages = new Set<string>();
+  for (const file of gitFiles(
+    "apps/*/package.json",
+    "packages/*/package.json",
+    "tooling/*/package.json",
+  )) {
+    const manifest: unknown = JSON.parse(await readFile(path.join(root, file), "utf8"));
+    if (
+      typeof manifest === "object" &&
+      manifest !== null &&
+      "name" in manifest &&
+      typeof manifest.name === "string"
+    ) {
+      packages.add(manifest.name);
+    }
   }
-  if (existedBefore(folder)) {
-    console.error(
-      `${folder} existed before: an app's id is never used again (CLAUDE.md, product rule 3).`,
-    );
+  const problem = idProblem(id, {
+    exists: existsSync(path.join(root, folder)),
+    existedBefore: existedBefore(folder),
+    shallow: isShallow(),
+    packages,
+  });
+  if (problem !== undefined) {
+    console.error(problem);
     return 1;
   }
 

@@ -11,6 +11,7 @@ import {
   TEMPLATE_WITHOUT_DATA,
   appFiles,
   checkNewApp,
+  idProblem,
   isCopied,
   nextPort,
   templateOf,
@@ -220,6 +221,37 @@ describe("checkNewApp", () => {
         checkNewApp(app);
       }).toThrow(error);
     }
+  });
+});
+
+describe("idProblem", () => {
+  const free = {
+    exists: false,
+    existedBefore: false,
+    shallow: false,
+    packages: new Set(["@shkriuss/ui", "@shkriuss/data", "@shkriuss/checklists"]),
+  };
+
+  it("accepts an id that no app or package has had", () => {
+    expect(idProblem("notes", free)).toBeUndefined();
+  });
+
+  it("refuses an id that an app has, or had", () => {
+    expect(idProblem("notes", { ...free, exists: true })).toBe("apps/notes exists already.");
+    expect(idProblem("notes", { ...free, existedBefore: true })).toBe(
+      "apps/notes existed before: an app's id is never used again (CLAUDE.md, product rule 3).",
+    );
+  });
+
+  it("refuses an id whose package name a package of the workspace has", () => {
+    expect(idProblem("ui", free)).toBe(
+      "@shkriuss/ui is a package of the workspace already: choose another id.",
+    );
+    expect(idProblem("data", free)).toBeDefined();
+  });
+
+  it("refuses to decide in a shallow clone, which may lack an app that was removed", () => {
+    expect(idProblem("notes", { ...free, shallow: true })).toContain("git fetch --unshallow");
   });
 });
 

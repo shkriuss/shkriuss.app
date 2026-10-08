@@ -87,6 +87,39 @@ export function checkNewApp(app: NewApp): void {
   }
 }
 
+/** What the repository says about a new app's id, which `create-app` asks git and the disk. */
+export interface IdFacts {
+  /** Whether `apps/<id>` exists. */
+  readonly exists: boolean;
+  /** Whether `apps/<id>` is anywhere in the history that the clone has. */
+  readonly existedBefore: boolean;
+  /** Whether the clone has only part of the history, which may lack an app that was removed. */
+  readonly shallow: boolean;
+  /** The names of the workspace's packages, such as `@shkriuss/ui`. */
+  readonly packages: ReadonlySet<string>;
+}
+
+/**
+ * Why `id` cannot be a new app's, or undefined if it can: an id is never used again (`CLAUDE.md`,
+ * product rule 3), and an app's package name, `@shkriuss/<id>`, must be its own.
+ */
+export function idProblem(id: string, facts: IdFacts): string | undefined {
+  const folder = `apps/${id}`;
+  if (facts.exists) {
+    return `${folder} exists already.`;
+  }
+  if (facts.packages.has(`@shkriuss/${id}`)) {
+    return `@shkriuss/${id} is a package of the workspace already: choose another id.`;
+  }
+  if (facts.shallow) {
+    return `This clone has only part of the repository's history, so it cannot tell whether an app had the id ${id} before. Fetch the rest with git fetch --unshallow, then try again.`;
+  }
+  if (facts.existedBefore) {
+    return `${folder} existed before: an app's id is never used again (CLAUDE.md, product rule 3).`;
+  }
+  return undefined;
+}
+
 /** Whether a file of the template, by its path in the template's folder, goes into a new app. */
 export function isCopied(file: string): boolean {
   return !LEFT_BY_TOOLS.has(file.split("/")[0] ?? "") && !WRITTEN.has(file);

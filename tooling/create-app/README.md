@@ -19,7 +19,7 @@ pnpm --filter @shkriuss/notes dev
 
 ## What it does
 
-1. **Checks the app:** the id must be a valid subdomain and not reserved ([ADR 0001](../../docs/decisions/0001-domains-and-environments.md)). It must be new: `apps/<id>` must not exist, and must never have existed in the repository's history, because an app's id is never used again (`CLAUDE.md`, product rule 3). The names and the description must be one line each, and the short name at most 12 characters.
+1. **Checks the app:** the id must be a valid subdomain and not reserved ([ADR 0001](../../docs/decisions/0001-domains-and-environments.md)). It must be new: `apps/<id>` must not exist, and must never have existed in the repository's history, because an app's id is never used again (`CLAUDE.md`, product rule 3). A shallow clone lacks part of that history, so `create-app` asks for the rest first: `git fetch --unshallow`. The app's package name, `@shkriuss/<id>`, must not be a package of the workspace already, such as `@shkriuss/ui`. The names and the description must be one line each, and the short name at most 12 characters.
 2. **Copies the template:** every file of `tooling/app-template`, or of `tooling/app-template-no-data` with `--no-data`, that git does not ignore, but what builds and tests leave there. It changes only what makes the app itself:
    - the package's name, `@shkriuss/<id>`;
    - the id and the accent color in `app.config.ts`;
@@ -39,5 +39,6 @@ The app's end-to-end tests read its name and description from its messages, so t
 - **What changes:** every file of the template is there, and only the four files above differ.
 - **The repository's checks accept it,** as `pnpm check` runs them: its structure, its test port and its Cloudflare configuration. So they do an app without data, which has no schema and no backups.
 - **Names and descriptions** with quotes, backslashes and emoji read back as they were given.
-- **Refusals:** ids that cannot be an app's, names that are not one line, a long name without a short name, and accent colors that are not `#rrggbb`.
+- **Refusals:** ids that cannot be an app's, an id that an app has or had, that a package of the workspace has, or that a shallow clone cannot tell, names that are not one line, a long name without a short name, and accent colors that are not `#rrggbb`.
+- **Turbo** runs them again when either template changes (`turbo.json`), rather than replay a cached result.
 - **The template:** a change to it that `create-app` does not know fails, rather than making a broken app.
