@@ -45,10 +45,11 @@ test("serves the licenses of the software it includes, and links them", async ({
   // Its stylesheet inlines Tailwind CSS, which no script imports.
   expect(licenses).toMatch(/^tailwindcss \d+\.\d+\.\d+ \(MIT\)$/m);
 
+  // The frame links to the page that shows them (hub.spec.ts).
   await page.goto("/");
   await expect(
     page.getByRole("contentinfo").getByRole("link", { name: "Licenses" }),
-  ).toHaveAttribute("href", `/${LICENSES_FILE}`);
+  ).toHaveAttribute("href", "/licenses");
 });
 
 test("says where to report a security problem, at /.well-known/security.txt", async ({

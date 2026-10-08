@@ -6,6 +6,7 @@ export { BackupSection, type BackupSectionProps } from "./BackupSection.tsx";
 export { Frame, type FrameProps } from "./Frame.tsx";
 export { InstallBanner, type InstallBannerProps } from "./InstallBanner.tsx";
 export { InstallSection, type InstallSectionProps } from "./InstallSection.tsx";
+export { Licenses } from "./Licenses.tsx";
 export { LICENSES_PATH, REPORT_URL, SECURITY_URL, SOURCE_URL } from "./links.ts";
 export { NotFound } from "./NotFound.tsx";
 export { observedStore, type Observed, type ObservedStore } from "./observed.ts";

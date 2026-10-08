@@ -15,8 +15,9 @@ The hub is the front door: it lists the apps, explains how to install them, and 
 | Install  | `/install`  | How to install an app on an iPhone or iPad (Safari, Add to Home Screen), on Android (Chrome), and on a computer (Chrome and Edge; Safari's Add to Dock on a Mac). |
 | Privacy  | `/privacy`  | The privacy policy, in plain language (section 3).                                                                                                                |
 | Security | `/security` | How the apps are protected, how anyone can check what a site serves (`/sha256sums.txt`, build provenance), and how to report a problem privately.                 |
+| Licenses | `/licenses` | The licenses of the software of others that the hub includes, from its `/licenses.txt`, in lines that wrap on a phone.                                            |
 
-- **The frame:** the hub's name, which leads to `/`, and links to the other pages; the source code and `/licenses.txt` at the bottom. It looks like the apps, from `@shkriuss/ui`, in light and dark.
+- **The frame:** the hub's name, which leads to `/`, and links to the other pages; the source code and the licenses at the bottom. It looks like the apps, from `@shkriuss/ui`, in light and dark.
 - **Install guides** say what differs on each platform: an app installed on an iPhone keeps its own data, apart from Safari's, so moving data in means a backup; each app installs on its own.
 - **Unknown addresses** show that the page does not exist, with a link to `/`.
 
