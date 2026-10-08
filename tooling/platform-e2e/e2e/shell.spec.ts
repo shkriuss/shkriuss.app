@@ -473,6 +473,29 @@ test("the banner offers an update when one is ready, and applies it when the use
   await expect(banner.getByRole("button")).toHaveCount(0);
 });
 
+test("the banner says what updating clears, for an app that keeps something only in the page", async ({
+  page,
+}) => {
+  await open(page);
+  await page.evaluate(() => {
+    window.platform?.shell.setReloadWarning("Updating clears the draft.");
+  });
+  await setUpdateState(page, "update-available");
+  const banner = page.getByRole("status");
+  await expect(banner).toContainText(
+    "A new version of the app is ready. Updating clears the draft.",
+  );
+  await setUpdateState(page, "outdated");
+  await expect(banner).toContainText(
+    "The app was updated in another window. Updating clears the draft.",
+  );
+  await page.evaluate(() => {
+    window.platform?.shell.setReloadWarning(undefined);
+  });
+  await expect(banner).not.toContainText("clears");
+  await expect(banner).toContainText("The app was updated in another window.");
+});
+
 test("the banner goes away until there is news, when the user says later", async ({ page }) => {
   await open(page);
   await setUpdateState(page, "update-available");

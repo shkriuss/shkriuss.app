@@ -25,7 +25,7 @@ import {
   Outlet,
   RouterProvider,
 } from "@tanstack/react-router";
-import { StrictMode, useMemo, useState } from "react";
+import { StrictMode, useMemo, useState, useSyncExternalStore } from "react";
 import { createRoot } from "react-dom/client";
 import { BACKUP_APP } from "./backups.ts";
 import { current, notesDatabase } from "./data.ts";
@@ -43,6 +43,8 @@ type NotesDatabase = Awaited<ReturnType<typeof notesDatabase>>;
 export interface ShellTests {
   /** Sets the state that the update banner shows. */
   setUpdateState(state: UpdateState): void;
+  /** Sets what the update banner says that reloading clears, or that it clears nothing. */
+  setReloadWarning(warning: string | undefined): void;
   /** How many times the banner applied an update. */
   applied(): number;
   /** Sets what the storage says. */
@@ -54,8 +56,15 @@ export interface ShellTests {
 }
 
 let updateState: UpdateState = "ready";
+let reloadWarning: string | undefined;
 let applied = 0;
 const listeners = new Set<() => void>();
+
+function changed(): void {
+  for (const listener of listeners) {
+    listener();
+  }
+}
 
 /** A stand-in for the app's service worker, whose state the tests set. */
 const updates: AppUpdates = {
@@ -114,9 +123,11 @@ const storage: AppStorage = {
 export const shell: ShellTests = {
   setUpdateState(state) {
     updateState = state;
-    for (const listener of listeners) {
-      listener();
-    }
+    changed();
+  },
+  setReloadWarning(warning) {
+    reloadWarning = warning;
+    changed();
   },
   applied: () => applied,
   setStorageStatus,
@@ -198,25 +209,29 @@ function Settings({ db }: { readonly db: NotesDatabase }) {
   );
 }
 
+function Root({ db }: { readonly db: NotesDatabase }) {
+  const warning = useSyncExternalStore(updates.subscribe, () => reloadWarning);
+  return (
+    <AppFrame
+      name={m.app()}
+      updates={updates}
+      navigation={<ScreenLink to="/archive">{m.archive()}</ScreenLink>}
+      banners={
+        <>
+          <InstallBanner install={appInstall()} db={db} />
+          <BackupReminder app={BACKUP_APP} db={db} />
+        </>
+      }
+      reloadWarning={warning}
+    >
+      <Outlet />
+    </AppFrame>
+  );
+}
+
 /** The routes of the shell's page, in code (ADR 0013), under /shell. */
 function shellRouter(db: NotesDatabase) {
-  const root = createRootRoute({
-    component: () => (
-      <AppFrame
-        name={m.app()}
-        updates={updates}
-        navigation={<ScreenLink to="/archive">{m.archive()}</ScreenLink>}
-        banners={
-          <>
-            <InstallBanner install={appInstall()} db={db} />
-            <BackupReminder app={BACKUP_APP} db={db} />
-          </>
-        }
-      >
-        <Outlet />
-      </AppFrame>
-    ),
-  });
+  const root = createRootRoute({ component: () => <Root db={db} /> });
   const notes = createRoute({
     getParentRoute: () => root,
     path: "/",

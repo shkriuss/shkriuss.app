@@ -1,11 +1,21 @@
-import { deviceLocale } from "@shkriuss/i18n";
 import { Button, Select, TextArea } from "@shkriuss/ui";
-import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
+import {
+  memo,
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
+import { flushSync } from "react-dom";
 import { m } from "../../messages.ts";
 import type { Checker } from "./checker.ts";
-import { type Fix, type Mistake, VARIETIES, type Variety } from "./protocol.ts";
+import { type DraftStore, isChecked } from "./draft.ts";
+import { type Fix, type Mistake, VARIETIES } from "./protocol.ts";
 import { applyFix, excerptOf, ignoreKey, plainMessage } from "./text.ts";
-import { varietyOf } from "./variety.ts";
 
 /** The longest text that the field takes. */
 export const TEXT_LIMIT = 20_000;
@@ -13,12 +23,11 @@ export const TEXT_LIMIT = 20_000;
 /** How long the checker waits after the user stops typing, in milliseconds. */
 const PAUSE = 500;
 
-/** The mistakes that the checker found in a text, in a variety. */
-interface Result {
-  readonly text: string;
-  readonly variety: Variety;
-  readonly mistakes: readonly Mistake[];
-}
+/**
+ * How many mistakes the list shows at first, and how many more each Show more adds: a long text
+ * can have more than a thousand, which would take seconds to show each time they change.
+ */
+const LIST_STEP = 50;
 
 function fixLabel(fix: Fix): string {
   if (fix.kind === "remove") {
@@ -28,22 +37,30 @@ function fixLabel(fix: Fix): string {
 }
 
 interface MistakeItemProps {
+  /** The text that was checked, in which the mistake is. */
   readonly text: string;
   readonly mistake: Mistake;
+  /** Its place in the list. */
+  readonly index: number;
   /** Whether the text has changed since it was checked, which leaves the fixes for later. */
   readonly stale: boolean;
-  readonly headingRef: (element: HTMLHeadingElement | null) => void;
-  readonly onFix: (fix: Fix) => void;
-  readonly onShow: () => void;
-  readonly onIgnore: () => void;
+  readonly onHeading: (index: number, heading: HTMLHeadingElement | null) => void;
+  readonly onFix: (index: number, mistake: Mistake, fix: Fix) => void;
+  readonly onShow: (mistake: Mistake) => void;
+  readonly onIgnore: (index: number, mistake: Mistake) => void;
 }
 
-/** A mistake: its kind, what is wrong, its words in the text, and its fixes. */
-function MistakeItem({
+/**
+ * A mistake: its kind, what is wrong, its words in the text, and its fixes. What it gets stays
+ * the same while the user types, so it renders again only once the mistakes change, or once the
+ * text first does after they were found.
+ */
+const MistakeItem = memo(function MistakeItem({
   text,
   mistake,
+  index,
   stale,
-  headingRef,
+  onHeading,
   onFix,
   onShow,
   onIgnore,
@@ -51,7 +68,13 @@ function MistakeItem({
   const excerpt = excerptOf(text, mistake);
   return (
     <li className="flex flex-col items-start gap-2 rounded-lg border border-line p-4">
-      <h3 ref={headingRef} tabIndex={-1} className="font-semibold">
+      <h3
+        ref={(heading) => {
+          onHeading(index, heading);
+        }}
+        tabIndex={-1}
+        className="font-semibold"
+      >
         {m.kind(mistake.kind)}
       </h3>
       <p>{plainMessage(mistake.message)}</p>
@@ -69,66 +92,93 @@ function MistakeItem({
             variant="primary"
             isDisabled={stale}
             onPress={() => {
-              onFix(fix);
+              onFix(index, mistake, fix);
             }}
           >
             {fixLabel(fix)}
           </Button>
         ))}
-        <Button isDisabled={stale} onPress={onShow}>
+        <Button
+          isDisabled={stale}
+          onPress={() => {
+            onShow(mistake);
+          }}
+        >
           {m.show()}
         </Button>
-        <Button onPress={onIgnore}>{m.ignore()}</Button>
+        <Button
+          onPress={() => {
+            onIgnore(index, mistake);
+          }}
+        >
+          {m.ignore()}
+        </Button>
       </div>
     </li>
   );
-}
+});
 
 /**
  * The check screen's content (docs/specs/apps/grammar.md §1): the text, its variety of English,
  * Copy and Delete, then the mistakes that the checker finds in it, each with its fixes. The text
  * is checked once the checker is ready, half a second after the user stops typing, and at once
- * after a fix, another variety, Delete or Undo. Nothing is kept: the text is gone when the app
- * closes.
+ * after a fix, another variety, Delete or Undo. The text and what goes with it are the page's
+ * `draft`, which stays when the user goes to another screen, and goes when the app closes.
  */
-export function Check({ checker }: { readonly checker: Checker }) {
+export function Check({
+  checker,
+  draft,
+}: {
+  readonly checker: Checker;
+  readonly draft: DraftStore;
+}) {
   const state = useSyncExternalStore(checker.subscribe, checker.getState);
-  const [text, setText] = useState("");
-  const [variety, setVariety] = useState(() => varietyOf(deviceLocale()));
-  const [result, setResult] = useState<Result>();
+  const snapshot = useSyncExternalStore(draft.subscribe, draft.getState);
+  const { text, variety, ignored, deleted, result } = snapshot;
   const [failed, setFailed] = useState(false);
-  const [ignored, setIgnored] = useState<ReadonlySet<string>>(() => new Set());
   // What Copy, Delete or Undo did, until the text changes.
   const [notice, setNotice] = useState("");
-  // The text that Delete took, which Undo brings back until the user types again: the app keeps
-  // no copy of it.
-  const [deleted, setDeleted] = useState<string>();
+  // How many of the mistakes the list shows.
+  const [limit, setLimit] = useState(LIST_STEP);
   const field = useRef<HTMLTextAreaElement>(null);
+  const list = useRef<HTMLElement>(null);
   const headings = useRef<(HTMLHeadingElement | null)[]>([]);
   // The next check comes at once, rather than after the pause.
   const now = useRef(true);
-  // Where the mistake was that the user fixed or ignored, whose place the next one takes.
+  // Where the mistake was that the user fixed or ignored, whose place the next one takes once
+  // the text is checked.
   const focusAt = useRef<number>(undefined);
   const headingId = useId();
 
-  const current = result !== undefined && result.text === text && result.variety === variety;
-  const shown =
-    result === undefined
-      ? []
-      : result.mistakes.filter((mistake) => !ignored.has(ignoreKey(result.text, mistake)));
+  const current = isChecked(snapshot);
+  const shown = useMemo(
+    () =>
+      result === undefined
+        ? []
+        : result.mistakes.filter((mistake) => !ignored.has(ignoreKey(result.text, mistake))),
+    [result, ignored],
+  );
+  // The first keystroke after a check makes every mistake's fixes wait: the list shows that
+  // after the keystroke, rather than hold it up. A new check's fixes are ready at once.
+  const changed = useDeferredValue(!current);
+  const stale = !current && changed;
 
   useEffect(() => {
-    // Set when the text or the variety changes again, whose answer then comes in its place.
-    let cancelled = false;
+    // The answer counts while the text and the variety are still those it is about, even once
+    // the user has gone to another screen: the draft keeps it for when they come back.
+    function stillAbout(): boolean {
+      const latest = draft.getState();
+      return latest.text === text && latest.variety === variety;
+    }
     async function run(): Promise<void> {
       try {
         const mistakes = await checker.check(text, variety);
-        if (!cancelled) {
-          setResult({ text, variety, mistakes });
+        if (stillAbout()) {
+          draft.update({ result: { text, variety, mistakes } });
           setFailed(false);
         }
       } catch {
-        if (!cancelled) {
+        if (stillAbout()) {
           setFailed(true);
         }
       }
@@ -144,53 +194,83 @@ export function Check({ checker }: { readonly checker: Checker }) {
       now.current = false;
     }
     return () => {
-      cancelled = true;
       clearTimeout(timer);
     };
-  }, [checker, state, current, text, variety]);
+  }, [checker, draft, state, current, text, variety]);
 
   // The focus was on a button of the mistake that went: it goes to the next mistake, or the one
-  // before when it was the last, or the field once none is left (WCAG 2.4.3).
+  // before when it was the last, or the field once none is left (WCAG 2.4.3). If the user has put
+  // it elsewhere meanwhile, such as back in the field to type, it stays there.
   useEffect(() => {
     const index = focusAt.current;
     if (index === undefined || !current) {
       return;
     }
     focusAt.current = undefined;
-    const heading = shown.length === 0 ? null : headings.current[Math.min(index, shown.length - 1)];
+    const { activeElement } = document;
+    if (
+      activeElement !== null &&
+      activeElement !== document.body &&
+      list.current?.contains(activeElement) !== true
+    ) {
+      return;
+    }
+    const last = Math.min(shown.length, limit) - 1;
+    const heading = last < 0 ? null : headings.current[Math.min(index, last)];
     (heading ?? field.current)?.focus();
   });
 
-  function edit(next: string): void {
-    setText(next);
-    setNotice("");
-    setDeleted(undefined);
-  }
+  // What the mistakes do reads the draft when the user acts, so that it stays the same from one
+  // keystroke to the next, and the mistakes need not render again.
+  const edit = useCallback(
+    (next: string) => {
+      draft.update({ text: next, deleted: undefined });
+      setNotice("");
+    },
+    [draft],
+  );
 
-  function fix(index: number, mistake: Mistake, chosen: Fix): void {
-    if (!current) {
-      return;
-    }
-    now.current = true;
-    focusAt.current = index;
-    edit(applyFix(text, mistake, chosen));
-  }
+  const fix = useCallback(
+    (index: number, mistake: Mistake, chosen: Fix) => {
+      const latest = draft.getState();
+      if (!isChecked(latest)) {
+        return;
+      }
+      now.current = true;
+      focusAt.current = index;
+      edit(applyFix(latest.text, mistake, chosen));
+    },
+    [draft, edit],
+  );
 
-  function show(mistake: Mistake): void {
-    const element = field.current;
-    if (element !== null) {
-      element.focus();
-      element.setSelectionRange(mistake.start, mistake.end);
-    }
-  }
+  const show = useCallback(
+    (mistake: Mistake) => {
+      const element = field.current;
+      if (element !== null && isChecked(draft.getState())) {
+        element.focus();
+        element.setSelectionRange(mistake.start, mistake.end);
+      }
+    },
+    [draft],
+  );
 
-  function ignore(index: number, mistake: Mistake): void {
-    if (result === undefined) {
-      return;
-    }
-    focusAt.current = index;
-    setIgnored((keys) => new Set(keys).add(ignoreKey(result.text, mistake)));
-  }
+  const ignore = useCallback(
+    (index: number, mistake: Mistake) => {
+      const latest = draft.getState();
+      if (latest.result === undefined) {
+        return;
+      }
+      focusAt.current = index;
+      draft.update({
+        ignored: new Set(latest.ignored).add(ignoreKey(latest.result.text, mistake)),
+      });
+    },
+    [draft],
+  );
+
+  const keepHeading = useCallback((index: number, heading: HTMLHeadingElement | null) => {
+    headings.current[index] = heading;
+  }, []);
 
   async function copy(): Promise<void> {
     try {
@@ -203,8 +283,7 @@ export function Check({ checker }: { readonly checker: Checker }) {
 
   function deleteText(): void {
     now.current = true;
-    edit("");
-    setDeleted(text);
+    draft.update({ text: "", deleted: text });
     setNotice(m.deleted());
   }
 
@@ -215,6 +294,15 @@ export function Check({ checker }: { readonly checker: Checker }) {
     now.current = true;
     edit(deleted);
     setNotice(m.undone());
+  }
+
+  function showMore(): void {
+    const first = limit;
+    // The button may go, with the focus: it goes to the first of the mistakes that come.
+    flushSync(() => {
+      setLimit(first + LIST_STEP);
+    });
+    headings.current[first]?.focus();
   }
 
   let status = "";
@@ -250,7 +338,7 @@ export function Check({ checker }: { readonly checker: Checker }) {
           value={variety}
           onChange={(next) => {
             now.current = true;
-            setVariety(next);
+            draft.update({ variety: next });
           }}
         />
         <Button
@@ -273,32 +361,32 @@ export function Check({ checker }: { readonly checker: Checker }) {
       <output className="block">{notice}</output>
       <output className="block font-medium">{status}</output>
       {shown.length === 0 || state !== "ready" || failed ? null : (
-        <section aria-labelledby={headingId} className="flex flex-col gap-3">
+        <section ref={list} aria-labelledby={headingId} className="flex flex-col gap-3">
           <h2 id={headingId} className="text-lg font-semibold">
             {m.mistakes()}
           </h2>
           <ul className="flex flex-col gap-3">
-            {shown.map((mistake, index) => (
+            {shown.slice(0, limit).map((mistake, index) => (
               <MistakeItem
                 key={`${String(mistake.start)}-${String(mistake.end)}-${mistake.kind}`}
                 text={result?.text ?? text}
                 mistake={mistake}
-                stale={!current}
-                headingRef={(element) => {
-                  headings.current[index] = element;
-                }}
-                onFix={(chosen) => {
-                  fix(index, mistake, chosen);
-                }}
-                onShow={() => {
-                  show(mistake);
-                }}
-                onIgnore={() => {
-                  ignore(index, mistake);
-                }}
+                index={index}
+                stale={stale}
+                onHeading={keepHeading}
+                onFix={fix}
+                onShow={show}
+                onIgnore={ignore}
               />
             ))}
           </ul>
+          {shown.length > limit ? (
+            <div>
+              <Button onPress={showMore}>
+                {m.showMore(Math.min(LIST_STEP, shown.length - limit))}
+              </Button>
+            </div>
+          ) : null}
         </section>
       )}
     </div>

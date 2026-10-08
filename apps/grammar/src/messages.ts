@@ -68,6 +68,10 @@ export const messages = defineMessages((format) => ({
   insert: (words: string) => `Add “${words}”`,
   show: () => "Show",
   ignore: () => "Ignore",
+  // The list shows some of a long text's mistakes at a time.
+  showMore: (count: number) => `Show ${format.number(count)} more`,
+  // In the update banner, which offers to reload the app, while there is text.
+  reloadWarning: () => "Updating clears the text, so copy it first if you need it.",
 }));
 
 export const m = messages(createFormat());

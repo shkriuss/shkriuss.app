@@ -12,10 +12,10 @@ export const homeRoute = createRoute({
 });
 
 function Home() {
-  const { checker } = homeRoute.useRouteContext();
+  const { checker, draft } = homeRoute.useRouteContext();
   return (
     <Screen title={m.appName()}>
-      <Check checker={checker} />
+      <Check checker={checker} draft={draft} />
     </Screen>
   );
 }

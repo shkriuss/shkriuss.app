@@ -90,6 +90,51 @@ describe("createChecker", () => {
     expect(start).toHaveBeenCalledOnce();
   });
 
+  it("checks one text at a time, and of those that come meanwhile, only the latest", async () => {
+    const { check, pending } = fakeCheck();
+    const checker = createChecker(fakeUpdates("ready"), () => check);
+    pending[0]?.settle(true);
+    await vi.waitFor(() => {
+      expect(checker.getState()).toBe("ready");
+    });
+    const one = checker.check("One.", "american");
+    const two = checker.check("Two.", "american");
+    const three = checker.check("Three.", "british");
+    // "Three." took the place of "Two.", which the worker never gets.
+    await expect(two).rejects.toThrow("newer");
+    expect(pending.map((request) => request.text)).toStrictEqual(["", "One."]);
+    pending[1]?.settle(true);
+    await expect(one).resolves.toStrictEqual([]);
+    await vi.waitFor(() => {
+      expect(pending.map((request) => request.text)).toStrictEqual(["", "One.", "Three."]);
+    });
+    pending[2]?.settle(true);
+    await expect(three).resolves.toStrictEqual([]);
+    // With nothing to wait for, a text goes to the worker at once.
+    const four = checker.check("Four.", "american");
+    expect(pending.map((request) => request.text)).toStrictEqual(["", "One.", "Three.", "Four."]);
+    pending[3]?.settle(true);
+    await expect(four).resolves.toStrictEqual([]);
+  });
+
+  it("checks the text that waits after a check that failed", async () => {
+    const { check, pending } = fakeCheck();
+    const checker = createChecker(fakeUpdates("ready"), () => check);
+    pending[0]?.settle(true);
+    await vi.waitFor(() => {
+      expect(checker.getState()).toBe("ready");
+    });
+    const one = checker.check("One.", "american");
+    const two = checker.check("Two.", "american");
+    pending[1]?.settle(false);
+    await expect(one).rejects.toThrow("Failed.");
+    await vi.waitFor(() => {
+      expect(pending.map((request) => request.text)).toStrictEqual(["", "One.", "Two."]);
+    });
+    pending[2]?.settle(true);
+    await expect(two).resolves.toStrictEqual([]);
+  });
+
   it("fails when it cannot start, and then checks nothing", async () => {
     const { check, pending } = fakeCheck();
     const checker = createChecker(fakeUpdates("ready"), () => check);
