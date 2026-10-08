@@ -14,6 +14,11 @@ const MANIFEST = new Map([
   ["/sw.js", hash("service worker")],
 ]);
 
+/** `MANIFEST` with the security.txt of a commit, which expires 180 days after it. */
+function withSecurityTxt(expires: string): Map<string, string> {
+  return new Map(MANIFEST).set("/.well-known/security.txt", hash(`Expires: ${expires}`));
+}
+
 /** A bundled service worker as Rolldown writes it, with the placeholder once. */
 const CODE = `(function(){start(self,${BUILD_DATA_PLACEHOLDER})})();`;
 
@@ -57,6 +62,12 @@ describe("precacheList (§2.1)", () => {
       ]),
     );
     expect(list.map((file) => file.url)).toStrictEqual(["/", "/a/", "/z.txt"]);
+  });
+
+  it("leaves out security.txt, which changes with every commit", () => {
+    expect(precacheList(withSecurityTxt("2027-04-06T11:34:17.000Z"))).toStrictEqual(
+      precacheList(MANIFEST),
+    );
   });
 
   it("refuses a build without /index.html, which answers navigations offline", () => {
@@ -129,6 +140,12 @@ describe("serviceWorkerScript (§2.2, §2.3)", () => {
     const changedServiceWorker = new Map(MANIFEST).set("/sw.js", hash("another service worker"));
     expect(serviceWorkerScript(CODE, changedServiceWorker).script).toBe(
       serviceWorkerScript(CODE, MANIFEST).script,
+    );
+  });
+
+  it("is the same for builds of two commits that change no file of the app", () => {
+    expect(serviceWorkerScript(CODE, withSecurityTxt("2027-04-06T11:34:17.000Z")).script).toBe(
+      serviceWorkerScript(CODE, withSecurityTxt("2027-04-07T09:12:00.000Z")).script,
     );
   });
 

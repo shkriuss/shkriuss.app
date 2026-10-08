@@ -278,11 +278,13 @@ test("a version whose cache was cleared gets its files again, and works offline 
   await page.reload();
   await page.waitForFunction(() => window.pwaTest !== undefined);
   // The navigation went to the network, and the service worker requested its files again: every
-  // file that the version serves, but /sw.js itself.
+  // file that the version serves, but /sw.js itself and security.txt (spec §2.1).
   const files = builtFile("a", "sha256sums.txt")
     .trim()
     .split("\n")
-    .filter((line) => !line.endsWith("  /sw.js")).length;
+    .filter(
+      (line) => !line.endsWith("  /sw.js") && !line.endsWith("  /.well-known/security.txt"),
+    ).length;
   await expect
     .poll(async () =>
       page.evaluate(async (name) => (await (await caches.open(name)).keys()).length, cache),

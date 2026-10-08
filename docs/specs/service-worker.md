@@ -19,7 +19,9 @@ It never stores user data, which lives in IndexedDB ([data-model.md](data-model.
 
 ### 2.1 The precache list
 
-Every file that the build's `sha256sums.txt` lists ([ADR 0007](../decisions/0007-security-baseline.md)), except `/sw.js`, with the SHA-256 it gives. `sha256sums.txt` lists every file the app serves but itself.
+Every file that the build's `sha256sums.txt` lists ([ADR 0007](../decisions/0007-security-baseline.md)), except `/sw.js` and `/.well-known/security.txt`, with the SHA-256 it gives. `sha256sums.txt` lists every file the app serves but itself.
+
+`security.txt` expires a fixed time after the commit that the build is made from, so it changes with every commit. In the list, it would make every commit a new version, which every installed app would download and announce though nothing in it changed. It need not work offline.
 
 Each file is requested at the URL the host serves it from without a redirect: `/index.html` at `/`, `/<path>/index.html` at `/<path>/`, `/<name>.html` at `/<name>`, and every other file at its own path. The build fails if two files would be served at one URL, or if it has no `/index.html`.
 
@@ -27,7 +29,7 @@ Each file is requested at the URL the host serves it from without a redirect: `/
 
 The first 16 hexadecimal digits of the SHA-256 of `/sw.js` as it would be with sixteen zeros as its version id.
 
-- Any change to a file, to the service worker's code or to the versions it replaces gives a new version id, and the same build always gives the same one.
+- Any change to a file of the precache list, to the service worker's code or to the versions it replaces gives a new version id, and the same build always gives the same one.
 - The browser installs a new service worker exactly when `/sw.js` changes, so every service worker it installs has a version id, and a cache (section 4), of its own.
 
 ### 2.3 `/sw.js`
@@ -79,7 +81,7 @@ The service worker answers only `GET` requests for URLs of the app's own origin.
 A navigation is matched by the path of its URL; its query does not matter, as for the host.
 
 - A navigation to the URL of a file of the precache list, `/` included, is answered with that file from the active version's cache.
-- A navigation to `/sw.js` or `/sha256sums.txt` goes to the network.
+- A navigation to `/sw.js`, `/sha256sums.txt` or `/.well-known/security.txt` goes to the network.
 - Any other navigation is answered with the app shell, whatever its path and query, as the host's single-page fallback does. The app's router then shows the page, or its own "not found" page.
 
 ### 6.3 Other requests

@@ -74,11 +74,12 @@ describe("pwa", () => {
     );
     const unversioned = script.replace(`"version":"${version}"`, `"version":"${"0".repeat(16)}"`);
     expect(hash(unversioned).slice(0, 16)).toBe(version);
-    // Every file the build serves, but /sw.js.
-    expect(precacheList(manifest).map((file) => file.url)).toEqual(
-      expect.arrayContaining(["/", "/licenses.txt"]),
-    );
-    expect(precacheList(manifest)).toHaveLength(manifest.size - 1);
+    // Every file the build serves, but /sw.js and security.txt, which changes with every commit.
+    const urls = precacheList(manifest).map((file) => file.url);
+    expect(urls).toEqual(expect.arrayContaining(["/", "/licenses.txt"]));
+    expect(manifest.has("/.well-known/security.txt")).toBe(true);
+    expect(urls).not.toContain("/.well-known/security.txt");
+    expect(urls).toHaveLength(manifest.size - 2);
 
     expect(await readFile(path.join(dist, "_headers"), "utf8")).toContain(
       "; trusted-types shkriuss-workers\n",

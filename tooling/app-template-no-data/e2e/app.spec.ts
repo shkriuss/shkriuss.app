@@ -129,7 +129,8 @@ test("the app's service worker controls it and keeps every file of the build, fo
       .trim()
       .split("\n")
       .map((line) => line.split(/\s+/)[1] ?? "")
-      .filter((file) => file !== "/sw.js");
+      // security.txt changes with every commit, so it is not kept: it would make each a version.
+      .filter((file) => file !== "/sw.js" && file !== "/.well-known/security.txt");
     const kept = await Promise.all(
       files.map(
         async (file) => (await caches.match(file === "/index.html" ? "/" : file)) !== undefined,

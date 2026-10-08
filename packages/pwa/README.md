@@ -117,7 +117,7 @@ const kept = await storage.requestPersistence();
 
 ## What it builds
 
-`pwa()` bundles `worker/sw.ts` into `/sw.js`: one classic script that contains the build's version id, its precache list and the versions it replaces (spec §2). Every file that `sha256sums.txt` lists is in the precache list, with its SHA-256, so the service worker keeps a file only if it matches the hash that the build published. The version id is the start of the SHA-256 of `/sw.js` itself, so every change gives a new one.
+`pwa()` bundles `worker/sw.ts` into `/sw.js`: one classic script that contains the build's version id, its precache list and the versions it replaces (spec §2). Every file that `sha256sums.txt` lists, but `/sw.js` and `/.well-known/security.txt`, is in the precache list, with its SHA-256, so the service worker keeps a file only if it matches the hash that the build published. `security.txt` changes with every commit, so it would make every commit a new version. The version id is the start of the SHA-256 of `/sw.js` itself, so every change to the app gives a new one.
 
 | Module               | What it does                                                                                                                 |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
