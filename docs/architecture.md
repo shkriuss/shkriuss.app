@@ -149,8 +149,9 @@ Backups are the only way data leaves a device, the only protection against losin
   - Every merge to `main` deploys every app in `apps/`, the hub among them, to staging once every check has passed, each to its own domain.
   - A separate job then signs the build provenance of every file staging received: a GitHub artifact attestation, signed with a short-lived Sigstore certificate and recorded in Sigstore's public transparency log. That job runs no code from the repository or its dependencies, so nothing else can sign in its name.
   - Production receives the same commit once its provenance is attested, after manual approval in the `production` environment. It deploys only if its build is byte-for-byte the one staging received, and if no file in `/assets/` would change its content under the same name; browsers keep those files for a year.
+  - Deploys take turns, and each goes to the end: a newer merge never stops one halfway, which would leave some apps on each commit. Of the deploys that wait, only the latest stays queued.
   - Rolling back means redeploying the previous version.
-  - Each app's `wrangler.json` keeps `workers.dev` and preview URLs off, so nothing bypasses Cloudflare Access on staging; `pnpm check` enforces it.
+  - Each app's `wrangler.json` keeps `workers.dev` and preview URLs off, so nothing bypasses Cloudflare Access on staging. It has only the keys that static assets on the app's two domains need, so that it can add no build command, Worker script, other files or routes, which `wrangler deploy` would run or upload with the deploy token. `pnpm check` enforces both.
 - **Cloudflare features that rewrite pages or inject scripts** (Rocket Loader, Email Address Obfuscation, Zaraz, Web Analytics auto-injection, Bot Fight Mode's JavaScript detections) stay off, because they conflict with the security policy and integrity checks.
 - **Network Error Logging** stays off too. Cloudflare turns it on by default; its `NEL` and `Report-To` headers make browsers send reports about failed connections to Cloudflare, which is telemetry.
 - **Plan:** Cloudflare Free. Static asset requests are free and unlimited.

