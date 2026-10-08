@@ -1,0 +1,37 @@
+name: Freshness
+
+# What Dependabot does not update: pnpm, which packageManager pins, and Node.js. Fails when one
+# falls behind, so that GitHub tells the maintainer (tooling/checks/src/freshness.ts).
+on:
+  schedule:
+    # Mondays, after Dependabot's weekly run.
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions: {}
+
+# A run started by hand replaces one that is still running: both check the same thing.
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+env:
+  DO_NOT_TRACK: "1"
+
+jobs:
+  freshness:
+    name: pnpm and Node.js
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # It needs Node.js and the repository's code only: no dependency is installed.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+      - run: node tooling/checks/src/freshness-cli.ts
