@@ -23,6 +23,9 @@ An ADR is a short document that records one important decision: the context, wha
 | [0013](0013-routes-in-code.md)              | Routes declared in code                         | Accepted                                                   |
 | [0014](0014-webassembly.md)                 | WebAssembly for apps that declare it            | Accepted; when modules are kept superseded by 0019         |
 | [0015](0015-releasing-apps.md)              | Release each app to production on its own       | Accepted                                                   |
+| [0016](0016-frontend-stack-as-built.md)     | The frontend stack as built                     | Proposed                                                   |
+| [0017](0017-deploy-and-fix-forward.md)      | Deploy every app, and fix forward               | Proposed                                                   |
+| [0018](0018-quality-gates-as-enforced.md)   | Quality gates as CI enforces them               | Proposed                                                   |
 | [0019](0019-files-kept-on-first-use.md)     | Large files kept on first use                   | Accepted                                                   |
 
 ## Template
