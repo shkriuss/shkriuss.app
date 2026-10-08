@@ -183,16 +183,15 @@ export const data: DataTests = {
       throw new Error("This is not what backup() gives.");
     }
     const { schemaVersion, stores } = parsed;
-    const now = Date.now();
     if (version2 !== undefined) {
-      const incoming = checkIncomingStores(SCHEMAS_2, schemaVersion, stores, now);
+      const incoming = checkIncomingStores(SCHEMAS_2, schemaVersion, stores);
       const preview = await version2.previewImport(incoming);
       return { preview: preview.total, imported: (await version2.import(incoming)).total };
     }
     if (version1 === undefined) {
       throw new Error("The database is not open.");
     }
-    const incoming = checkIncomingStores(SCHEMAS_1, schemaVersion, stores, now);
+    const incoming = checkIncomingStores(SCHEMAS_1, schemaVersion, stores);
     const preview = await version1.previewImport(incoming);
     return { preview: preview.total, imported: (await version1.import(incoming)).total };
   },

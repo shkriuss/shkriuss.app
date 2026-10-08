@@ -1,5 +1,5 @@
 import { DataLayerError } from "./errors.ts";
-import { type Hlc, isFromFuture, isHlc, maxHlc } from "./hlc.ts";
+import { type Hlc, MAX_RECEIVED_WALL, isHlc, maxHlc, wallTime } from "./hlc.ts";
 import { SETTINGS_ID, isRecordId } from "./ids.ts";
 import { type JsonObject, type JsonValue, canonicalJson, toJsonValue, utf8Length } from "./json.ts";
 import { SETTINGS_STORE, isFieldName } from "./names.ts";
@@ -72,8 +72,6 @@ export interface RecordContext {
   readonly store: string;
   /** The app's current schema version: the highest a record may have. */
   readonly version: number;
-  /** This device's time, `Date.now()`, to refuse clocks from the future. */
-  readonly now: number;
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -88,21 +86,21 @@ function invalid(message: string): DataLayerError {
   return new DataLayerError("invalid", message);
 }
 
-function checkClock(value: unknown, now: number, what: string): Hlc {
+function checkClock(value: unknown, what: string): Hlc {
   if (!isHlc(value)) {
     throw invalid(`${what} is not a well-formed HLC.`);
   }
-  if (isFromFuture(value, now)) {
-    throw new DataLayerError("future-clock", `${what} lies more than 24 hours in the future.`);
+  if (wallTime(value) > MAX_RECEIVED_WALL) {
+    throw invalid(`${what} lies after the year 9999.`);
   }
   return value;
 }
 
 /**
  * Checks the structure of a record from outside, such as a backup (data model §8, step 1), and
- * returns a normalized copy. Throws a `DataLayerError`: `future-clock` for an HLC more than 24
- * hours ahead of `now`, `too-large` beyond a limit, `invalid` for anything else. The schema of
- * its store is checked separately (step 2).
+ * returns a normalized copy. Throws a `DataLayerError`: `too-large` beyond a limit, `invalid` for
+ * anything else. The schema of its store is checked separately (step 2), and its clocks against
+ * this device's when it is imported (§3.5).
  */
 export function checkRecord(value: unknown, context: RecordContext): DataRecord {
   if (!isObject(value)) {
@@ -141,7 +139,7 @@ export function checkRecord(value: unknown, context: RecordContext): DataRecord 
   }
 
   const tombstone = Object.hasOwn(value, "deleted")
-    ? checkClock(deleted, context.now, `The tombstone of record ${id}`)
+    ? checkClock(deleted, `The tombstone of record ${id}`)
     : undefined;
   const checkedData: Record<string, JsonValue> = {};
   const checkedClock: Record<string, Hlc> = {};
@@ -149,7 +147,7 @@ export function checkRecord(value: unknown, context: RecordContext): DataRecord 
     if (!isFieldName(field)) {
       throw invalid(`Record ${id} has a field whose name is not allowed.`);
     }
-    const hlc = checkClock(clock[field], context.now, `The clock of ${id}.${field}`);
+    const hlc = checkClock(clock[field], `The clock of ${id}.${field}`);
     if (tombstone !== undefined && hlc <= tombstone) {
       throw invalid(`The clock of ${id}.${field} is not after the record's deletion.`);
     }

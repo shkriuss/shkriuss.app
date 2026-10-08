@@ -2,7 +2,7 @@ import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import type { Database, Observable, Subscription } from "./db.ts";
 import { DataLayerError } from "./errors.ts";
 import { checkIncomingStores } from "./incoming.ts";
-import { START, VERSION_1, fresh, open, type v1 } from "./test/storage.ts";
+import { VERSION_1, fresh, open, type v1 } from "./test/storage.ts";
 
 /** What an observation has given so far. */
 interface Watched<T> {
@@ -73,7 +73,7 @@ describe("observe (architecture §7)", () => {
       expect(watched.values).toStrictEqual([[]]);
     });
     const backup: unknown = JSON.parse(JSON.stringify(stores));
-    await db.import(checkIncomingStores(VERSION_1, schemaVersion, backup, START));
+    await db.import(checkIncomingStores(VERSION_1, schemaVersion, backup));
     await vi.waitFor(() => {
       expect(watched.values.at(-1)).toStrictEqual(["Eggs"]);
     });

@@ -11,6 +11,17 @@ import { BackupError } from "./errors.ts";
 import { MEDIA_TYPES, type OpenedFile, backupFileName } from "./files.ts";
 import { isLongEnough } from "./passphrase.ts";
 
+/** A backup file that `createBackupFile()` made. */
+export interface BackupFile {
+  readonly file: File;
+  /**
+   * The wall time of the backup's greatest HLC, in milliseconds since 1970, if that lies more
+   * than 24 hours after this device's clock (data model §3.5): restoring the backup will ask the
+   * user to confirm it. `undefined` otherwise.
+   */
+  readonly fromFuture: number | undefined;
+}
+
 export interface BackupFileOptions {
   /** The id of the app whose data it is. */
   readonly app: string;
@@ -26,28 +37,36 @@ export interface BackupFileOptions {
 
 /**
  * A backup file of the database's data (backup format §4): the document of a snapshot, encrypted
- * with the passphrase in a worker unless it is plain, and named and typed as §1 says. Throws a
- * `BackupError` `too-large` for a backup larger than imports accept, and a TypeError for a
- * passphrase shorter than 12 characters. Once the app has handed the file over, it records the
- * backup with the database's `recordBackup()`.
+ * with the passphrase in a worker unless it is plain, and named and typed as §1 says, with
+ * whether it has clocks from the future (data model §3.5). Throws a `BackupError` `too-large` for
+ * a backup larger than imports accept, and a TypeError for a passphrase shorter than 12
+ * characters. Once the app has handed the file over, it records the backup with the database's
+ * `recordBackup()`.
  */
 export async function createBackupFile(
   db: { snapshot(): Promise<Snapshot> },
   { app, passphrase, made = new Date() }: BackupFileOptions,
-): Promise<File> {
+): Promise<BackupFile> {
   if (passphrase !== null && !isLongEnough(passphrase)) {
     throw new TypeError("A passphrase has at least 12 characters.");
   }
-  const document = writeBackup(app, await db.snapshot(), made);
+  const snapshot = await db.snapshot();
+  const document = writeBackup(app, snapshot, made);
   if (passphrase === null) {
-    return new File([document], backupFileName(app, made, false), { type: MEDIA_TYPES.plain });
+    const file = new File([document], backupFileName(app, made, false), {
+      type: MEDIA_TYPES.plain,
+    });
+    return { file, fromFuture: snapshot.fromFuture };
   }
   const bytes = await encryptBackup(document, passphrase);
   // Encryption adds 16 bytes to every 64 KiB, and a header.
   if (bytes.length > MAX_BACKUP_BYTES) {
     throw new BackupError("too-large", `The backup would have ${bytes.length} bytes.`);
   }
-  return new File([bytes], backupFileName(app, made, true), { type: MEDIA_TYPES.encrypted });
+  const file = new File([bytes], backupFileName(app, made, true), {
+    type: MEDIA_TYPES.encrypted,
+  });
+  return { file, fromFuture: snapshot.fromFuture };
 }
 
 /**

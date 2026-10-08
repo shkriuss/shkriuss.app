@@ -19,7 +19,6 @@ const CODES: readonly BackupErrorCode[] = [
   "damaged",
   "other-app",
   "newer-version",
-  "future-clock",
   "invalid",
 ];
 

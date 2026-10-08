@@ -1,7 +1,7 @@
 import { DataLayerError } from "./errors.ts";
 import { type Hlc, maxHlc } from "./hlc.ts";
 import { migrateRecord } from "./migrate.ts";
-import { type DataRecord, checkRecord } from "./record.ts";
+import { type DataRecord, checkRecord, lastChange } from "./record.ts";
 import { type Schemas, checkData, storeSchema } from "./schema.ts";
 
 /** Only this module can make an `Incoming`. */
@@ -46,7 +46,10 @@ export class Incoming {
     return this.#stores;
   }
 
-  /** The greatest HLC in the backup, which the device receives (data model §3.4). */
+  /**
+   * The greatest HLC in the backup, which the device receives (data model §3.4), and which the
+   * import checks against this device's clock (§3.5).
+   */
   get greatest(): Hlc | undefined {
     return this.#greatest;
   }
@@ -79,15 +82,6 @@ function freeze<T>(value: T): T {
   return value;
 }
 
-/** The greatest HLC of a record: its tombstone, and the clocks of all its fields. */
-function greatestOf(record: DataRecord): Hlc | undefined {
-  let greatest = record.deleted;
-  for (const hlc of Object.values(record.clock)) {
-    greatest = maxHlc(greatest, hlc);
-  }
-  return greatest;
-}
-
 /**
  * Checks the stores of a backup that an app made at schema version `schemaVersion`, and
  * migrates their records to the current version (backup format §5.4, steps 5 and 6, and §5.5):
@@ -97,14 +91,14 @@ function greatestOf(record: DataRecord): Hlc | undefined {
  *   no other record of its store has its id, before or after the migration.
  *
  * Throws a `DataLayerError`: `newer-version` if `schemaVersion` is newer than the app's,
- * `future-clock` for an HLC more than 24 hours after `now`, `too-large` beyond a limit, and
- * `invalid` for anything else. One refused record refuses them all.
+ * `too-large` beyond a limit, and `invalid` for anything else. One refused record refuses them
+ * all. Clocks from the future pass: the preview shows them, and the import refuses them unless
+ * the user has confirmed them (data model §3.5).
  */
 export function checkIncomingStores(
   schemas: Schemas,
   schemaVersion: number,
   stores: unknown,
-  now: number,
 ): Incoming {
   if (!Number.isSafeInteger(schemaVersion) || schemaVersion < 1) {
     throw invalid("A backup's schema version is an integer from 1.");
@@ -137,12 +131,12 @@ export function checkIncomingStores(
     }
     const before = storeSchema(schema, store);
     for (const value of values) {
-      const record = checkRecord(value, { store, version: schemaVersion, now });
+      const record = checkRecord(value, { store, version: schemaVersion });
       if (record.v !== schemaVersion) {
         throw invalid(`Record ${record.id} of ${store} is not at schema version ${schemaVersion}.`);
       }
       checkData(before, record.data, `record ${record.id} of ${store}`);
-      greatest = maxHlc(greatest, greatestOf(record));
+      greatest = maxHlc(greatest, lastChange(record));
       const result = migrateRecord(schemas, { store, record });
       // A store holds each id once: in the backup, and after a migration that merges stores.
       const seen = ids.get(result.store);

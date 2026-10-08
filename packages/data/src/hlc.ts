@@ -21,8 +21,18 @@ export const INITIAL_CLOCK: ClockState = { wall: 0, counter: 0 };
 export const MAX_WALL = 999_999_999_999_999;
 export const MAX_COUNTER = 65_535;
 
-/** How far after this device's clock a received HLC may lie (data model §3.5). */
+/**
+ * How far after this device's clock an HLC may lie before it is from the future (data model
+ * §3.5).
+ */
 export const MAX_CLOCK_AHEAD = 24 * 60 * 60 * 1000;
+
+/**
+ * The latest wall time of an HLC from outside: the last millisecond of the year 9999, which no
+ * device's date reaches (data model §3.5). A device that receives it can still issue more HLCs
+ * than it ever will; one that received `MAX_WALL` could issue only 65,536.
+ */
+export const MAX_RECEIVED_WALL = 253_402_300_799_999;
 
 const HLC = /^[0-9]{15}:[0-9]{5}:[0-9a-f]{16}$/;
 const DEVICE_ID = /^[0-9a-f]{16}$/;
@@ -110,13 +120,18 @@ export function receiveHlc(last: ClockState, hlc: Hlc): ClockState {
   return isLater ? { wall: parts.wall, counter: parts.counter } : last;
 }
 
-/** Whether `hlc` lies more than 24 hours after `now` (data model §3.5). */
-export function isFromFuture(hlc: Hlc, now: number): boolean {
+/** The wall time of `hlc`: when the device that issued it made its change, by its own date. */
+export function wallTime(hlc: Hlc): number {
   const parts = parseHlc(hlc);
   if (parts === undefined) {
     throw new DataLayerError("invalid", "Only a well-formed HLC has a time.");
   }
-  return parts.wall - now > MAX_CLOCK_AHEAD;
+  return parts.wall;
+}
+
+/** Whether `hlc` lies more than 24 hours after `now`: from the future (data model §3.5). */
+export function isFromFuture(hlc: Hlc, now: number): boolean {
+  return wallTime(hlc) - now > MAX_CLOCK_AHEAD;
 }
 
 /** The greater of two HLCs, where a missing one is lower than every HLC. */

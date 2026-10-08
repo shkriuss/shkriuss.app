@@ -8,7 +8,6 @@
  * - `damaged`: a damaged or truncated age file, or one whose work factor is above 20;
  * - `other-app`: a backup of another app, whose id `app` names if it is a valid app id;
  * - `newer-version`: made by a newer version of the app, with a newer format or schema version;
- * - `future-clock`: an HLC more than 24 hours ahead of this device's clock;
  * - `invalid`: any other failed check: the backup is damaged or was changed.
  *
  * Messages are for developers and never contain anything from the backup but ids.
@@ -20,7 +19,6 @@ export type BackupErrorCode =
   | "damaged"
   | "other-app"
   | "newer-version"
-  | "future-clock"
   | "invalid";
 
 export class BackupError extends Error {

@@ -852,6 +852,42 @@ test("a backup that the user does not restore changes nothing", async ({ page })
   expect(await readNotes(page)).toStrictEqual([]);
 });
 
+test("a backup whose changes are dated ahead says so, and restores elsewhere once the user confirms their date", async ({
+  page,
+}) => {
+  // This device's date was two days ahead when it wrote a note, and is right again: its changes
+  // carry that date until it comes (data model §3.3, §3.5).
+  const now = Date.now();
+  await page.clock.setFixedTime(now + 2 * DAY);
+  await openSettings(page, BEST_EFFORT);
+  await write(page, ["Milk"]);
+  await page.clock.setFixedTime(now);
+  const ready = await makePlainBackup(page);
+  await expect(ready).toContainText(
+    /Some changes in it are dated up to \S.*, more than a day ahead of this device's clock\. If the clock is wrong, correct it\. If not, restoring this backup will ask you to confirm those dates\./,
+  );
+  const file = await downloaded(page, async () => {
+    await ready.getByRole("button", { name: "Save backup" }).click();
+  });
+
+  // Another device, whose date is right.
+  await load(page);
+  await forget(page);
+  await openSettings(page, BEST_EFFORT);
+  await restoreFile(page, { name: file.name, bytes: file.bytes });
+  const preview = page.getByRole("dialog", { name: "Restore this backup?" });
+  await expect(preview).toContainText("Restoring it brings 1 new.");
+  await expect(preview).toContainText(
+    /Some changes in it are dated up to \S.*, more than a day ahead of this device's clock\. If the clock is wrong, correct it first\. If not, the backup comes from a device whose clock was set ahead: restoring it anyway gives this device's changes that date too, until it comes\./,
+  );
+  await expect(preview.getByRole("button", { name: "Restore", exact: true })).toHaveCount(0);
+  await preview.getByRole("button", { name: "Restore anyway" }).click();
+  const restored = page.getByRole("dialog", { name: "Restored" });
+  await expect(restored).toContainText("Restored: 1 new.");
+  await restored.getByRole("button", { name: "Done" }).click();
+  expect(await readNotes(page)).toStrictEqual(["Milk"]);
+});
+
 test("a file that this app cannot restore is refused, with what happened", async ({
   page,
 }, testInfo) => {

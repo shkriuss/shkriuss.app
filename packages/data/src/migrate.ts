@@ -115,16 +115,11 @@ export function migrateRecord(schemas: Schemas, stored: StoredRecord): StoredRec
 /**
  * Checks a record from outside, such as a backup, and migrates it to the current schema version
  * (data model §8): its structure, then its data against the schema of its own version, then the
- * migration, whose result is checked again. Throws a `DataLayerError`: `future-clock` for an HLC
- * more than 24 hours after `now`, `too-large` beyond a limit, `invalid` for anything else.
+ * migration, whose result is checked again. Throws a `DataLayerError`: `too-large` beyond a
+ * limit, `invalid` for anything else.
  */
-export function checkIncomingRecord(
-  schemas: Schemas,
-  store: string,
-  value: unknown,
-  now: number,
-): StoredRecord {
-  const record = checkRecord(value, { store, version: schemas.current.version, now });
+export function checkIncomingRecord(schemas: Schemas, store: string, value: unknown): StoredRecord {
+  const record = checkRecord(value, { store, version: schemas.current.version });
   checkData(
     storeSchema(schemas.version(record.v), store),
     record.data,

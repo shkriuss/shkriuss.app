@@ -2,7 +2,7 @@ import * as fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { DataLayerError } from "./errors.ts";
 import { field } from "./fields.ts";
-import { formatHlc } from "./hlc.ts";
+import { MAX_RECEIVED_WALL, formatHlc } from "./hlc.ts";
 import type { JsonValue } from "./json.ts";
 import { mergeRecords } from "./merge.ts";
 import { checkIncomingRecord, migrateRecord } from "./migrate.ts";
@@ -11,7 +11,6 @@ import { type SchemaVersion, checkData, defineSchemas } from "./schema.ts";
 import { RECORD_ID, hlc } from "./test/arbitraries.ts";
 
 const LIST_ID = "01a10307-cbc8-73e0-98ab-ae848aa1d694";
-const NOW = 1_791_200_000_000;
 
 /** The HLC of a change `minute` minutes into the test's day. */
 function at(minute: number, device = "aaaaaaaaaaaaaaaa"): string {
@@ -284,7 +283,7 @@ describe("checkIncomingRecord (data model §8)", () => {
 
   it("checks a record from outside and migrates it to the current version", () => {
     expect(
-      checkIncomingRecord(schemas, "notes", JSON.parse(JSON.stringify(incoming)), NOW),
+      checkIncomingRecord(schemas, "notes", JSON.parse(JSON.stringify(incoming))),
     ).toStrictEqual({
       store: "notes",
       record: {
@@ -313,29 +312,29 @@ describe("checkIncomingRecord (data model §8)", () => {
     ["a store its version lacks", { ...incoming, data: {}, clock: {} }, "tasks", "invalid"],
     ["a version newer than the app's", { ...incoming, v: 4 }, "notes", "invalid"],
     [
-      "a clock from the future",
+      "a clock after the year 9999",
       {
         ...incoming,
         clock: {
           title: at(1),
-          done: formatHlc({ wall: NOW + 86_400_001, counter: 0, device: "aaaaaaaaaaaaaaaa" }),
+          done: formatHlc({ wall: MAX_RECEIVED_WALL + 1, counter: 0, device: "aaaaaaaaaaaaaaaa" }),
         },
       },
       "notes",
-      "future-clock",
+      "invalid",
     ],
   ])("refuses %s", (_case, value, store, code) => {
-    expect(() => checkIncomingRecord(schemas, store, value, NOW)).toThrow(
+    expect(() => checkIncomingRecord(schemas, store, value)).toThrow(
       expect.objectContaining({ code }),
     );
   });
 
   it("checks a record's data against the schema of its own version", () => {
     const lists = { id: LIST_ID, v: 3, data: { color: "blue" }, clock: { color: at(1) } };
-    expect(checkIncomingRecord(schemas, "lists", lists, NOW).record.data).toStrictEqual({
+    expect(checkIncomingRecord(schemas, "lists", lists).record.data).toStrictEqual({
       color: "blue",
     });
-    expect(() => checkIncomingRecord(schemas, "lists", { ...lists, v: 1 }, NOW)).toThrow(
+    expect(() => checkIncomingRecord(schemas, "lists", { ...lists, v: 1 })).toThrow(
       /has a field color, which its store lacks/,
     );
   });
@@ -379,7 +378,7 @@ describe("migrateRecord: properties", () => {
       fc.property(consistentNote, (record) => {
         const first = migrateRecord(schemas, { store: "notes", record });
         expect(migrateRecord(schemas, { store: "notes", record })).toStrictEqual(first);
-        expect(checkRecord(first.record, { store: "notes", version: 3, now: NOW })).toStrictEqual(
+        expect(checkRecord(first.record, { store: "notes", version: 3 })).toStrictEqual(
           first.record,
         );
         checkData(v3.stores.notes, first.record.data, "a migrated note");

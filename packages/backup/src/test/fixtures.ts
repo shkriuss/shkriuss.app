@@ -23,9 +23,6 @@ export const v1 = {
 
 export const SCHEMAS = defineSchemas(v1);
 
-/** The time of the example's last change, when its backup is checked. */
-export const EXAMPLE_NOW = 1_791_104_400_000;
-
 /** The example of backup format §2, as the spec has it. */
 export function example(): string {
   const spec = readFileSync(

@@ -72,6 +72,7 @@ describe("the shell's text", () => {
       previewTitle: m.previewTitle(),
       nothingNew: m.nothingNew(),
       restoreNow: m.restoreNow(),
+      restoreAnyway: m.restoreAnyway(),
       restoringTitle: m.restoringTitle(),
       restoring: m.restoring(),
       restoredTitle: m.restoredTitle(),
@@ -176,6 +177,7 @@ describe("the shell's text", () => {
       previewTitle: "Restore this backup?",
       nothingNew: "This device already has everything in this backup.",
       restoreNow: "Restore",
+      restoreAnyway: "Restore anyway",
       restoringTitle: "Restoring the backup",
       restoring: "Restoring the backup…",
       restoredTitle: "Restored",
@@ -186,7 +188,7 @@ describe("the shell's text", () => {
       newerVersion:
         "The backup was made by a newer version of the app. Update the app and try again.",
       futureClock:
-        "The backup's times lie in the future. Check the date and time on this device and on the one that made the backup.",
+        "The backup's dates lie in the future. Check the date and time on this device, then try again.",
       invalid: "The backup is damaged or was changed, and was not restored.",
       restoreFailed: "The backup could not be restored. Nothing was changed.",
       close: "Close",
@@ -264,6 +266,17 @@ describe("the shell's text", () => {
     expect(
       messages(createFormat("de-DE")).brings({ new: 1234, updated: 0, deleted: 0, unchanged: 0 }),
     ).toBe("Restoring it brings 1.234 new.");
+  });
+
+  it("says when a backup's changes are dated more than a day ahead of this device's clock (data model §3.5)", () => {
+    const latest = new Date("2027-03-01T09:00:00Z");
+    const british = messages(createFormat("en-GB", { timeZone: "UTC" }));
+    expect(british.readyFromFuture(latest)).toBe(
+      "Some changes in it are dated up to 1 Mar 2027, 09:00, more than a day ahead of this device's clock. If the clock is wrong, correct it. If not, restoring this backup will ask you to confirm those dates.",
+    );
+    expect(british.restoreFromFuture(latest)).toBe(
+      "Some changes in it are dated up to 1 Mar 2027, 09:00, more than a day ahead of this device's clock. If the clock is wrong, correct it first. If not, the backup comes from a device whose clock was set ahead: restoring it anyway gives this device's changes that date too, until it comes.",
+    );
   });
 
   it("reminds of a backup that is a week old, with the changes it lacks, as the device writes", () => {

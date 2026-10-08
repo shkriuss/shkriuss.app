@@ -8,9 +8,12 @@ import {
   MAX_COUNTER,
   MAX_WALL,
   isDeviceId,
+  isFromFuture,
   issueHlc,
+  maxHlc,
   newDeviceId,
   receiveHlc,
+  wallTime,
 } from "./hlc.ts";
 import { SETTINGS_ID, newRecordId } from "./ids.ts";
 import { Incoming } from "./incoming.ts";
@@ -18,7 +21,7 @@ import { canonicalJson } from "./json.ts";
 import { mergeRecords } from "./merge.ts";
 import { type StoredRecord, migrateStep } from "./migrate.ts";
 import { META_STORE, SETTINGS_STORE } from "./names.ts";
-import { type DataRecord, isDeleted, toJson } from "./record.ts";
+import { type DataRecord, isDeleted, lastChange, toJson } from "./record.ts";
 import {
   type SchemaVersion,
   type Schemas,
@@ -67,6 +70,12 @@ export interface Snapshot {
   /** The app's current schema version, which every record has. */
   readonly schemaVersion: number;
   readonly stores: Readonly<Record<string, readonly DataRecord[]>>;
+  /**
+   * The wall time of its greatest HLC, in milliseconds since 1970, if that lies more than 24
+   * hours after this device's clock (data model §3.5): restoring a backup of it then asks the
+   * user to confirm. `undefined` otherwise.
+   */
+  readonly fromFuture: number | undefined;
 }
 
 /** What an import does to the records of a store (backup format §5.6). */
@@ -85,6 +94,24 @@ export interface ImportCounts {
 export interface ImportSummary {
   readonly total: ImportCounts;
   readonly stores: Readonly<Record<string, ImportCounts>>;
+}
+
+/** What an import would do (backup format §5.6). */
+export interface ImportPreview extends ImportSummary {
+  /**
+   * The wall time of the incoming greatest HLC, in milliseconds since 1970, if that lies more
+   * than 24 hours after this device's clock (data model §3.5): the user must confirm it, and the
+   * import must accept it. `undefined` otherwise.
+   */
+  readonly fromFuture: number | undefined;
+}
+
+export interface ImportOptions {
+  /**
+   * Whether the user has confirmed the times from the future that the preview showed (data model
+   * §3.5). Without it, an import with an HLC from the future throws `future-clock`.
+   */
+  readonly acceptFromFuture?: boolean;
 }
 
 export interface DatabaseOptions {
@@ -335,6 +362,11 @@ export async function openDatabase<C extends SchemaVersion>(
 }
 
 type Outcome = keyof ImportCounts;
+
+/** The wall time of `hlc` if it lies more than 24 hours after `now` (data model §3.5). */
+function fromFuture(hlc: Hlc | undefined, now: number): number | undefined {
+  return hlc !== undefined && isFromFuture(hlc, now) ? wallTime(hlc) : undefined;
+}
 
 function isSame(a: DataRecord, b: DataRecord): boolean {
   return canonicalJson(toJson(a)) === canonicalJson(toJson(b));
@@ -701,10 +733,18 @@ export class Database<C extends SchemaVersion> extends Reader<C> {
     return translating(async () =>
       this.#dexie.transaction("r", [...stores, META_STORE], async (transaction) => {
         const records: Record<string, DataRecord[]> = {};
+        let greatest: Hlc | undefined;
         for (const store of stores) {
           records[store] = await transaction.table<DataRecord, string>(store).toArray();
+          for (const record of records[store]) {
+            greatest = maxHlc(greatest, lastChange(record));
+          }
         }
-        return { schemaVersion: this.schemas.current.version, stores: records };
+        return {
+          schemaVersion: this.schemas.current.version,
+          stores: records,
+          fromFuture: fromFuture(greatest, this.#now()),
+        };
       }),
     );
   }
@@ -720,19 +760,17 @@ export class Database<C extends SchemaVersion> extends Reader<C> {
   }
 
   /**
-   * What importing `incoming` would do, store by store (backup format §5.6). It merges each
-   * record with its local copy in memory and writes nothing.
+   * What importing `incoming` would do, store by store (backup format §5.6), and whether it has
+   * an HLC from the future (data model §3.5). It merges each record with its local copy in memory
+   * and writes nothing.
    */
-  async previewImport(incoming: Incoming): Promise<ImportSummary> {
+  async previewImport(incoming: Incoming): Promise<ImportPreview> {
     const checked = this.#checked(incoming);
     const stores = [...Object.keys(this.schemas.current.stores), META_STORE];
-    return translating(async () =>
-      this.#dexie.transaction(
-        "r",
-        stores,
-        async (transaction) => (await mergeAll(transaction, checked)).summary,
-      ),
+    const { summary } = await translating(async () =>
+      this.#dexie.transaction("r", stores, async (transaction) => mergeAll(transaction, checked)),
     );
+    return { ...summary, fromFuture: fromFuture(checked.greatest, this.#now()) };
   }
 
   /**
@@ -741,9 +779,22 @@ export class Database<C extends SchemaVersion> extends Reader<C> {
    * differs; receives the greatest HLC of the backup (data model §3.4); and counts the import
    * as a change since the last backup if it wrote anything. If anything fails, nothing changes.
    * Importing the same backup again changes nothing.
+   *
+   * An HLC from the future (data model §3.5) is imported only with `acceptFromFuture`, once the
+   * user has confirmed what the preview showed; otherwise it throws a `DataLayerError`
+   * `future-clock`.
    */
-  async import(incoming: Incoming): Promise<ImportSummary> {
+  async import(incoming: Incoming, options: ImportOptions = {}): Promise<ImportSummary> {
     const checked = this.#checked(incoming);
+    if (
+      options.acceptFromFuture !== true &&
+      fromFuture(checked.greatest, this.#now()) !== undefined
+    ) {
+      throw new DataLayerError(
+        "future-clock",
+        "The records have clocks more than 24 hours in the future, which the user has not confirmed.",
+      );
+    }
     const stores = [...Object.keys(this.schemas.current.stores), META_STORE];
     return translating(async () =>
       this.#dexie.transaction("rw", stores, async (transaction) => {

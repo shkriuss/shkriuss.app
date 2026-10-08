@@ -89,7 +89,7 @@ async function outcome<T>(operation: () => Promise<T>): Promise<Outcome<T>> {
 export const backups: BackupTests = {
   passphrase: () => generatePassphrase(),
   async make(passphrase) {
-    const file = await createBackupFile(current().database, { app: BACKUP_APP, passphrase });
+    const { file } = await createBackupFile(current().database, { app: BACKUP_APP, passphrase });
     return {
       name: file.name,
       type: file.type,
@@ -103,7 +103,6 @@ export const backups: BackupTests = {
       const contents = await readBackupFile(opened, passphrase, {
         app: BACKUP_APP,
         schemas,
-        now: Date.now(),
       });
       const preview = await database.previewImport(contents.incoming);
       return { preview: preview.total, imported: (await database.import(contents.incoming)).total };
@@ -114,7 +113,6 @@ export const backups: BackupTests = {
       const contents = await readBackupFile(opened, passphrase, {
         app: BACKUP_APP,
         schemas: current().schemas,
-        now: Date.now(),
       });
       return { records: counts(contents.incoming.stores) };
     }),
@@ -124,7 +122,6 @@ export const backups: BackupTests = {
       const contents = await readBackupFile(opened, passphrase, {
         app: EXAMPLE_APP,
         schemas: EXAMPLE_SCHEMAS,
-        now: Date.now(),
       });
       return {
         exported: contents.exported.toISOString(),

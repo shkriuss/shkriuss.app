@@ -3,11 +3,11 @@ import * as fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { MAX_BACKUP_BYTES, readBackup, writeBackup } from "./document.ts";
 import { BackupError, type BackupErrorCode } from "./errors.ts";
-import { APP, EXAMPLE_NOW, SCHEMAS, example, openTestDatabase } from "./test/fixtures.ts";
+import { APP, SCHEMAS, example, openTestDatabase } from "./test/fixtures.ts";
 
 const encode = (text: string): Uint8Array => new TextEncoder().encode(text);
-const read = (bytes: Uint8Array, now = EXAMPLE_NOW): ReturnType<typeof readBackup> =>
-  readBackup(bytes, { app: APP, schemas: SCHEMAS, now });
+const read = (bytes: Uint8Array): ReturnType<typeof readBackup> =>
+  readBackup(bytes, { app: APP, schemas: SCHEMAS });
 
 /** The example of backup format §2, changed by `change`. */
 function changed(change: (document: Record<string, unknown>) => void): Uint8Array {
@@ -54,7 +54,7 @@ describe("readBackup (backup format §5.3–§5.5)", () => {
     });
     const snapshot = await first.snapshot();
     const made = new Date("2026-10-05T08:00:00.000Z");
-    const contents = read(writeBackup(APP, snapshot, made), Date.now());
+    const contents = read(writeBackup(APP, snapshot, made));
     expect(contents.exported).toStrictEqual(made);
     const second = await openTestDatabase();
     expect((await second.import(contents.incoming)).total).toStrictEqual({
@@ -186,17 +186,17 @@ describe("readBackup (backup format §5.3–§5.5)", () => {
       "invalid",
     ],
     [
-      "a clock from the future",
+      "a clock after the year 9999",
       changed((document) => {
         const record = {
           id: "01a10307-b840-78aa-ab29-1a1138faaff6",
           v: 1,
           data: { done: true },
-          clock: { done: "009791052200000:00000:9f86d081884c7d65" },
+          clock: { done: "253402300800000:00000:9f86d081884c7d65" },
         };
         document["stores"] = { notes: [record], settings: [] };
       }),
-      "future-clock",
+      "invalid",
     ],
   ])("refuses %s", (_case, bytes, code) => {
     expect(refusal(bytes).code).toBe(code);
@@ -264,7 +264,11 @@ describe("writeBackup (backup format §2, §4)", () => {
       v: 1,
       id: "01a10307-b840-78aa-ab29-1a1138faaff6",
     };
-    const snapshot: Snapshot = { schemaVersion: 1, stores: { notes: [record], settings: [] } };
+    const snapshot: Snapshot = {
+      schemaVersion: 1,
+      stores: { notes: [record], settings: [] },
+      fromFuture: undefined,
+    };
     const text = new TextDecoder().decode(writeBackup(APP, snapshot, new Date()));
     expect(text).toContain(
       `"notes": [\n      {\n        "id": "${record.id}",\n        "v": 1,\n        "data": {},\n        "clock": {},\n        "deleted": "${HLC}"\n      }\n    ]`,
@@ -272,7 +276,11 @@ describe("writeBackup (backup format §2, §4)", () => {
   });
 
   it("refuses an app id that is not one", () => {
-    const snapshot: Snapshot = { schemaVersion: 1, stores: { notes: [], settings: [] } };
+    const snapshot: Snapshot = {
+      schemaVersion: 1,
+      stores: { notes: [], settings: [] },
+      fromFuture: undefined,
+    };
     expect(() => writeBackup("Notes", snapshot, new Date())).toThrow(TypeError);
   });
 
@@ -287,6 +295,7 @@ describe("writeBackup (backup format §2, §4)", () => {
     const snapshot: Snapshot = {
       schemaVersion: 1,
       stores: { notes: Array.from({ length: 70 }, () => record), settings: [] },
+      fromFuture: undefined,
     };
     expect(() => writeBackup(APP, snapshot, new Date())).toThrow(
       expect.objectContaining({ code: "too-large" }),
@@ -330,7 +339,11 @@ describe("writeBackup and readBackup, as a property", () => {
         notes,
         fc.date({ min: new Date(0), max: new Date(4_102_444_800_000), noInvalidDate: true }),
         (records, made) => {
-          const snapshot: Snapshot = { schemaVersion: 1, stores: { notes: records, settings: [] } };
+          const snapshot: Snapshot = {
+            schemaVersion: 1,
+            stores: { notes: records, settings: [] },
+            fromFuture: undefined,
+          };
           const contents = read(writeBackup(APP, snapshot, made));
           expect(contents.exported).toStrictEqual(made);
           expect(contents.incoming.stores).toStrictEqual(snapshot.stores);

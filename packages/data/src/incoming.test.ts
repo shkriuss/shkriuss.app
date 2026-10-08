@@ -1,14 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { DataLayerError, type DataLayerErrorCode } from "./errors.ts";
 import { field } from "./fields.ts";
-import { MAX_CLOCK_AHEAD, formatHlc } from "./hlc.ts";
+import { MAX_CLOCK_AHEAD, MAX_RECEIVED_WALL, formatHlc } from "./hlc.ts";
 import { SETTINGS_ID } from "./ids.ts";
 import { Incoming, checkIncomingStores } from "./incoming.ts";
 import { MAX_RECORD_BYTES } from "./record.ts";
 import { type SchemaVersion, defineSchemas } from "./schema.ts";
 import { START, VERSION_1, VERSION_2 } from "./test/storage.ts";
 
-const NOW = START + 60 * 60 * 1000;
 const DEVICE = "9f86d081884c7d65";
 
 /** The HLC of a change `seconds` seconds after `START`. */
@@ -56,7 +55,7 @@ function refusal(check: () => unknown): DataLayerErrorCode | undefined {
 
 describe("checkIncomingStores (backup format §5.4, §5.5)", () => {
   it("checks the records of a backup of the current version", () => {
-    const incoming = checkIncomingStores(VERSION_1, 1, backup(), NOW);
+    const incoming = checkIncomingStores(VERSION_1, 1, backup());
     expect(incoming.version).toBe(1);
     expect(incoming.stores).toStrictEqual({
       notes: [NOTE, DELETED_NOTE],
@@ -67,7 +66,7 @@ describe("checkIncomingStores (backup format §5.4, §5.5)", () => {
   });
 
   it("migrates the records of an older backup, moving stores", () => {
-    const incoming = checkIncomingStores(VERSION_2, 1, backup(), NOW);
+    const incoming = checkIncomingStores(VERSION_2, 1, backup());
     expect(incoming.version).toBe(2);
     expect(incoming.stores).toStrictEqual({
       notes: [
@@ -86,7 +85,7 @@ describe("checkIncomingStores (backup format §5.4, §5.5)", () => {
 
   it("takes the greatest HLC from the backup as it is, before the migration drops fields", () => {
     const note = { ...NOTE, clock: { ...NOTE.clock, done: at(9) } };
-    const incoming = checkIncomingStores(VERSION_2, 1, backup({ notes: [note] }), NOW);
+    const incoming = checkIncomingStores(VERSION_2, 1, backup({ notes: [note] }));
     expect(incoming.stores["notes"]?.[0]?.clock).toStrictEqual({
       name: at(1),
       folder: at(1),
@@ -101,7 +100,6 @@ describe("checkIncomingStores (backup format §5.4, §5.5)", () => {
       }),
       1,
       backup({ notes: [note] }),
-      NOW,
     );
     expect(removed.stores["notes"]?.[0]?.clock).toStrictEqual({ title: at(1) });
     expect(removed.greatest).toBe(at(9));
@@ -109,68 +107,74 @@ describe("checkIncomingStores (backup format §5.4, §5.5)", () => {
 
   it("counts tombstones for the greatest HLC, and has none for an empty backup", () => {
     const tombstone = { ...DELETED_NOTE, deleted: at(20) };
-    expect(checkIncomingStores(VERSION_1, 1, backup({ notes: [tombstone] }), NOW).greatest).toBe(
-      at(20),
-    );
-    const empty = checkIncomingStores(VERSION_1, 1, { notes: [], lists: [], settings: [] }, NOW);
+    expect(checkIncomingStores(VERSION_1, 1, backup({ notes: [tombstone] })).greatest).toBe(at(20));
+    const empty = checkIncomingStores(VERSION_1, 1, { notes: [], lists: [], settings: [] });
     expect(empty.stores).toStrictEqual({ notes: [], lists: [], settings: [] });
     expect(empty.greatest).toBeUndefined();
   });
 
+  it("lets clocks from the future pass, up to the end of the year 9999: the import checks them (data model §3.5)", () => {
+    const ahead = at(30 * 24 * 60 * 60 + MAX_CLOCK_AHEAD / 1000);
+    const note = { ...NOTE, clock: { ...NOTE.clock, done: ahead } };
+    expect(checkIncomingStores(VERSION_1, 1, backup({ notes: [note] })).greatest).toBe(ahead);
+    const last = formatHlc({ wall: MAX_RECEIVED_WALL, counter: 0, device: DEVICE });
+    const tombstone = { ...DELETED_NOTE, deleted: last };
+    expect(checkIncomingStores(VERSION_1, 1, backup({ notes: [tombstone] })).greatest).toBe(last);
+  });
+
   it.each<[string, () => unknown, DataLayerErrorCode]>([
-    ["schema version 0", () => checkIncomingStores(VERSION_1, 0, backup(), NOW), "invalid"],
-    ["schema version 1.5", () => checkIncomingStores(VERSION_1, 1.5, backup(), NOW), "invalid"],
+    ["schema version 0", () => checkIncomingStores(VERSION_1, 0, backup()), "invalid"],
+    ["schema version 1.5", () => checkIncomingStores(VERSION_1, 1.5, backup()), "invalid"],
     [
       "a schema version newer than the app's",
-      () => checkIncomingStores(VERSION_1, 2, backup(), NOW),
+      () => checkIncomingStores(VERSION_1, 2, backup()),
       "newer-version",
     ],
-    ["stores that are not an object", () => checkIncomingStores(VERSION_1, 1, [], NOW), "invalid"],
-    ["stores that are null", () => checkIncomingStores(VERSION_1, 1, null, NOW), "invalid"],
+    ["stores that are not an object", () => checkIncomingStores(VERSION_1, 1, []), "invalid"],
+    ["stores that are null", () => checkIncomingStores(VERSION_1, 1, null), "invalid"],
     [
       "a missing store",
-      () => checkIncomingStores(VERSION_1, 1, { notes: [], lists: [] }, NOW),
+      () => checkIncomingStores(VERSION_1, 1, { notes: [], lists: [] }),
       "invalid",
     ],
     [
       "a store the version lacks",
-      () => checkIncomingStores(VERSION_1, 1, backup({ folders: [] }), NOW),
+      () => checkIncomingStores(VERSION_1, 1, backup({ folders: [] })),
       "invalid",
     ],
     [
       "a store of the current version that the backup's lacks",
-      () => checkIncomingStores(VERSION_2, 1, { ...backup(), folders: [] }, NOW),
+      () => checkIncomingStores(VERSION_2, 1, { ...backup(), folders: [] }),
       "invalid",
     ],
     [
       "a store that is not an array",
-      () => checkIncomingStores(VERSION_1, 1, backup({ lists: { 0: LIST } }), NOW),
+      () => checkIncomingStores(VERSION_1, 1, backup({ lists: { 0: LIST } })),
       "invalid",
     ],
     [
       "a record that is not one",
-      () => checkIncomingStores(VERSION_1, 1, backup({ lists: ["Shopping"] }), NOW),
+      () => checkIncomingStores(VERSION_1, 1, backup({ lists: ["Shopping"] })),
       "invalid",
     ],
     [
       "a record of an older schema version than the backup's",
       () =>
-        checkIncomingStores(
-          VERSION_2,
-          2,
-          { notes: [], folders: [{ ...LIST, v: 2 }], settings: [SETTINGS] },
-          NOW,
-        ),
+        checkIncomingStores(VERSION_2, 2, {
+          notes: [],
+          folders: [{ ...LIST, v: 2 }],
+          settings: [SETTINGS],
+        }),
       "invalid",
     ],
     [
       "a store in place of another",
-      () => checkIncomingStores(VERSION_1, 1, { notes: [], lists: [], folders: [] }, NOW),
+      () => checkIncomingStores(VERSION_1, 1, { notes: [], lists: [], folders: [] }),
       "invalid",
     ],
     [
       "two records with the same id in a store",
-      () => checkIncomingStores(VERSION_1, 1, backup({ lists: [LIST, LIST] }), NOW),
+      () => checkIncomingStores(VERSION_1, 1, backup({ lists: [LIST, LIST] })),
       "invalid",
     ],
     [
@@ -180,7 +184,6 @@ describe("checkIncomingStores (backup format §5.4, §5.5)", () => {
           VERSION_1,
           1,
           backup({ lists: [{ ...LIST, data: { color: "red" }, clock: { color: at(1) } }] }),
-          NOW,
         ),
       "invalid",
     ],
@@ -191,7 +194,6 @@ describe("checkIncomingStores (backup format §5.4, §5.5)", () => {
           VERSION_1,
           1,
           backup({ notes: [{ ...NOTE, data: { ...NOTE.data, title: "x".repeat(101) } }] }),
-          NOW,
         ),
       "invalid",
     ],
@@ -202,20 +204,27 @@ describe("checkIncomingStores (backup format §5.4, §5.5)", () => {
           VERSION_1,
           1,
           backup({ settings: [{ ...DELETED_NOTE, id: SETTINGS_ID }] }),
-          NOW,
         ),
       "invalid",
     ],
     [
-      "a clock more than 24 hours ahead",
+      "a clock after the year 9999",
       () =>
         checkIncomingStores(
           VERSION_1,
           1,
-          backup({ lists: [{ ...LIST, clock: { name: at(3600 + MAX_CLOCK_AHEAD / 1000 + 1) } }] }),
-          NOW,
+          backup({
+            lists: [
+              {
+                ...LIST,
+                clock: {
+                  name: formatHlc({ wall: MAX_RECEIVED_WALL + 1, counter: 0, device: DEVICE }),
+                },
+              },
+            ],
+          }),
         ),
-      "future-clock",
+      "invalid",
     ],
     [
       "a record larger than 1 MiB",
@@ -224,7 +233,6 @@ describe("checkIncomingStores (backup format §5.4, §5.5)", () => {
           VERSION_1,
           1,
           backup({ lists: [{ ...LIST, data: { name: "x".repeat(MAX_RECORD_BYTES) } }] }),
-          NOW,
         ),
       "too-large",
     ],
@@ -245,22 +253,22 @@ describe("checkIncomingStores (backup format §5.4, §5.5)", () => {
     const schemas = defineSchemas(shelf, merged);
     const book = { ...LIST, data: { title: "Emma" }, clock: { title: at(1) } };
     const film = { ...LIST, data: {}, clock: {} };
-    expect(
-      refusal(() => checkIncomingStores(schemas, 1, { books: [book], films: [film] }, NOW)),
-    ).toBe("invalid");
+    expect(refusal(() => checkIncomingStores(schemas, 1, { books: [book], films: [film] }))).toBe(
+      "invalid",
+    );
     const other = { ...film, id: "01a10307-cbc8-73e0-98ab-ae848aa1d696" };
-    expect(
-      checkIncomingStores(schemas, 1, { books: [book], films: [other] }, NOW).stores,
-    ).toStrictEqual({
-      books: [
-        { ...book, v: 2 },
-        { ...other, v: 2 },
-      ],
-    });
+    expect(checkIncomingStores(schemas, 1, { books: [book], films: [other] }).stores).toStrictEqual(
+      {
+        books: [
+          { ...book, v: 2 },
+          { ...other, v: 2 },
+        ],
+      },
+    );
   });
 
   it("freezes what it returns, which nothing else can make", () => {
-    const incoming = checkIncomingStores(VERSION_1, 1, backup(), NOW);
+    const incoming = checkIncomingStores(VERSION_1, 1, backup());
     expect(Object.isFrozen(incoming.stores)).toBe(true);
     expect(Object.isFrozen(incoming.stores["notes"])).toBe(true);
     expect(Object.isFrozen(incoming.stores["notes"]?.[0]?.data)).toBe(true);
