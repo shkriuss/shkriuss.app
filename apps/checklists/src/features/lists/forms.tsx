@@ -26,16 +26,27 @@ export function AddForm({ label, missing, maxLength, onAdd, inputRef }: AddFormP
   const input = inputRef ?? own;
   const [value, setValue] = useState("");
   const [blank, setBlank] = useState(false);
+  // Whether an add is under way. A double tap submits twice before the first add is saved and
+  // the field empties: the second submit adds nothing, or it would add the value again.
+  const adding = useRef(false);
 
   async function add(): Promise<void> {
+    if (adding.current) {
+      return;
+    }
     const trimmed = value.trim();
     if (trimmed === "") {
       setBlank(true);
       input.current?.focus();
       return;
     }
-    if (await onAdd(trimmed)) {
-      setValue("");
+    adding.current = true;
+    try {
+      if (await onAdd(trimmed)) {
+        setValue("");
+      }
+    } finally {
+      adding.current = false;
     }
   }
 
