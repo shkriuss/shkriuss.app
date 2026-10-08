@@ -32,7 +32,14 @@ export function Dialog({ isOpen, onClose, title, children }: DialogProps) {
     <dialog
       ref={ref}
       aria-labelledby={titleId}
-      onClose={onClose}
+      onClose={() => {
+        // The browser says that the dialog closed in a task of its own, after it did. A dialog
+        // that is open by then opened again in between, as when the user reopens it at once:
+        // that close is over, and must not close it again.
+        if (ref.current?.open !== true) {
+          onClose();
+        }
+      }}
       className="m-auto w-[min(32rem,calc(100%-2rem))] rounded-xl border border-line bg-canvas p-6 text-ink backdrop:bg-[rgb(0_0_0/0.5)]"
     >
       <h2 id={titleId} className="mb-4 text-xl font-semibold">

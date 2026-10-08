@@ -168,6 +168,36 @@ test("a dialog takes the focus, keeps the page still, closes with Escape and giv
   await expect(page.getByText("Nothing was deleted.")).toBeVisible();
 });
 
+test("a dialog that opens again before the browser says that it closed stays open", async ({
+  page,
+}) => {
+  await gallery(page);
+  const open = page.getByRole("button", { name: "Delete everything" });
+  await open.click();
+  const dialog = page.getByRole("dialog", { name: "Delete everything?" });
+  await expect(dialog).toBeVisible();
+  // The dialog closes and opens again before the browser fires the event of that close, as when
+  // a quick Enter on the button that opened it follows Cancel, which failed a test in CI.
+  await page.evaluate(async () => {
+    const element = document.querySelector("dialog");
+    if (element === null) {
+      throw new Error("The gallery has no dialog.");
+    }
+    const closed = new Promise((resolve) => {
+      element.addEventListener("close", resolve, { once: true });
+    });
+    element.close();
+    element.showModal();
+    await closed;
+    // What the dialog does on that event, React renders before the next task.
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+  });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Cancel" })).toBeVisible();
+});
+
 test("a dialog's buttons do their action and close it", async ({ page }) => {
   await gallery(page);
   await page.getByRole("button", { name: "Delete everything" }).click();
