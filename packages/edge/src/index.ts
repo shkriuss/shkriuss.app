@@ -67,8 +67,10 @@ export {
   type WebAssemblyBuild,
 } from "./webassembly.ts";
 export {
+  REPORT_WORKER_VIOLATIONS,
   SERVICE_WORKER_PATH,
   WORKER_POLICY,
+  WORKER_VIOLATION,
   isWorkerBundlePath,
   isWorkerScriptPath,
   workerScriptUrl,

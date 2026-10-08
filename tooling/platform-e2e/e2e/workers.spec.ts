@@ -142,6 +142,7 @@ test.describe("workers", () => {
     test(`code in the ${target} cannot create another Trusted Types policy`, async ({
       page,
       security,
+      browserName,
     }) => {
       security.expectRefusals();
       await open(page);
@@ -150,6 +151,13 @@ test.describe("workers", () => {
       // to create either.
       expect(["refused", "unsupported"]).toContain(answer);
       console.info(`Creating a policy in the ${target}: ${String(answer)}`);
+      // The worker reports the refusal on its console, which Playwright passes on from both
+      // kinds of worker in Chromium, so the test sees it as a page's.
+      if (answer === "refused" && browserName === "chromium") {
+        await expect
+          .poll(() => security.violations)
+          .toContainEqual(expect.stringMatching(/^trusted-types: /));
+      }
     });
   }
 });

@@ -36,7 +36,7 @@ The first 16 hexadecimal digits of the SHA-256 of `/sw.js` as it would be with s
 
 - One classic script, built from `@shkriuss/pwa`, with no `importScripts()` ([ADR 0011](../decisions/0011-worker-trusted-types-policy.md)). It contains its version id, its precache list, the security headers that the host sends with every file of the build (section 6.5) and the versions it replaces (section 8).
 - It changes whenever the version does, so the browser finds a new version by comparing it byte for byte.
-- It is served with the same security headers as every other file of the app, so the Content-Security-Policy applies inside it.
+- It is served with the same security headers as every other file of the app, so the Content-Security-Policy applies inside it. As every worker script, it starts with code that logs each violation of the policy inside it on its console, where the end-to-end tests see it ([architecture §12](../architecture.md#12-security)).
 - It is listed in `sha256sums.txt`, but browsers cannot check its integrity ([threat model](../threat-model.md#5-residual-risks-accepted) R6).
 
 ## 3. Registration

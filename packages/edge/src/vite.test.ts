@@ -10,6 +10,7 @@ import { parseManifest } from "./manifest.ts";
 import { securityTxt } from "./security-txt.ts";
 import { SERVICE_WORKER_PLUGIN, type ServiceWorkerApi } from "./service-worker.ts";
 import { edge, type EdgeOptions } from "./vite.ts";
+import { WORKER_VIOLATION } from "./worker-scripts.ts";
 
 const roots: string[] = [];
 
@@ -255,6 +256,9 @@ describe("edge", () => {
     expect(workers).toEqual([expect.stringMatching(/^ping\.worker-[A-Za-z0-9_-]{8}\.js$/)]);
     const worker = await readFile(path.join(dist, "assets", workers[0] ?? ""), "utf8");
     expect(worker).not.toMatch(/\bimport\b/);
+    // It starts with the code that logs each violation of the Content-Security-Policy inside it.
+    expect(worker).toMatch(/^self\.addEventListener\([`"]securitypolicyviolation[`"]/);
+    expect(worker).toContain(WORKER_VIOLATION);
     // The page's scripts: the entry and the lazily loaded chunk, but not the worker.
     expect(assets.filter((file) => file.endsWith(".js"))).toHaveLength(3);
 

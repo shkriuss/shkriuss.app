@@ -14,7 +14,12 @@ import { buildManifest, formatManifest, MANIFEST_FILE } from "./manifest.ts";
 import { commitDate, SECURITY_TXT_FILE, securityTxt } from "./security-txt.ts";
 import { type ServiceWorkerApi, serviceWorkerApi } from "./service-worker.ts";
 import { assertWebAssembly, isWebAssemblyPath } from "./webassembly.ts";
-import { isWorkerBundlePath, isWorkerScriptPath, SERVICE_WORKER_PATH } from "./worker-scripts.ts";
+import {
+  isWorkerBundlePath,
+  isWorkerScriptPath,
+  REPORT_WORKER_VIOLATIONS,
+  SERVICE_WORKER_PATH,
+} from "./worker-scripts.ts";
 
 /** What Rolldown tells about the modules of a chunk. */
 interface ChunkModules {
@@ -48,6 +53,19 @@ function workerModules(modules: Map<string, readonly string[]>): Plugin {
           modules.set(output.fileName, includedModules(output));
         }
       }
+    },
+  };
+}
+
+/**
+ * Starts every worker bundle with the code that logs each Content-Security-Policy violation
+ * inside the worker on its console, where the end-to-end tests see it.
+ */
+function reportWorkerViolations(): Plugin {
+  return {
+    name: "shkriuss:edge:worker-violations",
+    renderChunk(code, chunk) {
+      return chunk.isEntry ? { code: `${REPORT_WORKER_VIOLATIONS}${code}`, map: null } : null;
     },
   };
 }
@@ -151,7 +169,10 @@ export function edge(options: EdgeOptions = {}): Plugin {
           // would escape the checks of ADR 0014; every other asset keeps Vite's default.
           assetsInlineLimit: (file: string) => (isWebAssemblyPath(file) ? false : undefined),
         },
-        worker: { format: "iife", plugins: () => [workerModules(workers)] },
+        worker: {
+          format: "iife",
+          plugins: () => [reportWorkerViolations(), workerModules(workers)],
+        },
       };
     },
     configResolved(config) {
