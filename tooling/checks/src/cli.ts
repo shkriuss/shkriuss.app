@@ -57,7 +57,7 @@ const CHECKS: Readonly<Record<string, Check>> = {
   },
   wrangler: {
     description:
-      "apps deploy static assets only, each environment on its own domain, never via workers.dev",
+      "apps deploy static assets only, each environment on its own domain, never via workers.dev, with no other settings",
     run: (files) => [
       ...missingWranglerConfigs(files),
       ...files

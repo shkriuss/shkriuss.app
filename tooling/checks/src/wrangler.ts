@@ -8,15 +8,56 @@ import { isRecord, type Violation } from "./report.ts";
  * - staging reachable only through its custom domain, which Cloudflare Access protects:
  *   `workers.dev` and preview URLs would bypass Access, so both are off everywhere (Wrangler
  *   keeps an existing setting when the key is missing, so the keys must be there);
- * - each environment on its own domain: `apps/hub` at the apex, any other app at its id.
+ * - each environment on its own domain: `apps/hub` at the apex, any other app at its id;
+ * - nothing else: only the keys below, at the root and in each environment. Another key could
+ *   add a build command, a Worker script, other files or other routes, which `wrangler deploy`
+ *   would run or upload with the deploy token, after CI recorded the hash of every file.
  */
 
 const CONFIG = /^apps\/([^/]+)\/wrangler\.json$/;
 const OTHER_FORMAT = /^apps\/[^/]+\/wrangler\.(?:jsonc|toml)$/;
 const ENVIRONMENTS = { staging: STAGING_DOMAIN, production: PRODUCTION_DOMAIN } as const;
 
+/** The keys of an app's configuration, at its root and in each of its environments. */
+const ROOT_KEYS = new Set([
+  "$schema",
+  "name",
+  "compatibility_date",
+  "assets",
+  "workers_dev",
+  "preview_urls",
+  "send_metrics",
+  "env",
+]);
+const ENVIRONMENT_KEYS = new Set(["name", "routes", "workers_dev", "preview_urls"]);
+
+const SCHEMA = "./node_modules/wrangler/config-schema.json";
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+
 export function isWranglerConfig(file: string): boolean {
   return CONFIG.test(file) || OTHER_FORMAT.test(file);
+}
+
+/** A violation for each key of `object` that `allowed` does not have. */
+function expectOnly(
+  violations: Violation[],
+  file: string,
+  object: Record<string, unknown>,
+  allowed: ReadonlySet<string>,
+  where: string,
+): void {
+  for (const key of Object.keys(object)) {
+    if (allowed.has(key)) {
+      continue;
+    }
+    let message = `${where}${key} is not allowed: apps are static assets on their own domains only (ADR 0006).`;
+    if (key === "main") {
+      message = `Apps are static assets only; remove ${where}main (ADR 0006).`;
+    } else if (where === "" && (key === "routes" || key === "route")) {
+      message = "Routes belong in env.staging and env.production only.";
+    }
+    violations.push({ file, message });
+  }
 }
 
 function expectValue(
@@ -56,11 +97,13 @@ export function checkWranglerConfig(file: string, source: string): Violation[] {
 
   const violations: Violation[] = [];
   const appId = directory === "hub" ? undefined : directory;
-  if ("main" in config) {
-    violations.push({ file, message: "Apps are static assets only; remove main (ADR 0006)." });
+  expectOnly(violations, file, config, ROOT_KEYS, "");
+  if ("$schema" in config) {
+    expectValue(violations, file, config, "$schema", SCHEMA, "");
   }
-  if ("routes" in config) {
-    violations.push({ file, message: "Routes belong in env.staging and env.production only." });
+  const date = config["compatibility_date"];
+  if (typeof date !== "string" || !DATE.test(date)) {
+    violations.push({ file, message: "compatibility_date must be a date, as 2026-10-01." });
   }
   expectValue(violations, file, config, "name", `shkriuss-${directory}`, "");
   expectValue(
@@ -93,6 +136,7 @@ export function checkWranglerConfig(file: string, source: string): Violation[] {
       continue;
     }
     const where = `env.${name}.`;
+    expectOnly(violations, file, environment, ENVIRONMENT_KEYS, where);
     expectValue(violations, file, environment, "name", `shkriuss-${directory}-${name}`, where);
     expectValue(
       violations,
