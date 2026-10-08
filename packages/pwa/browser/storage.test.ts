@@ -173,3 +173,52 @@ describe("requestPersistence()", () => {
     });
   });
 });
+
+describe("requestPersistenceQuietly() (architecture §7)", () => {
+  it("asks a browser that asks the user nothing, and shows the data as persisted when it agrees", async () => {
+    const manager = new FakeManager();
+    const storage = createAppStorage(manager);
+    await settle();
+    await storage.requestPersistenceQuietly();
+    expect(manager.persist).toHaveBeenCalledOnce();
+    expect(storage.getStatus().persistence).toBe("persisted");
+  });
+
+  it("asks nothing where the browser would ask the user, as Firefox does", async () => {
+    const manager = new FakeManager();
+    const storage = createAppStorage(manager, { asksUser: true });
+    await settle();
+    await storage.requestPersistenceQuietly();
+    expect(manager.persist).not.toHaveBeenCalled();
+    expect(storage.getStatus().persistence).toBe("best-effort");
+    // The button in Settings still asks.
+    expect(await storage.requestPersistence()).toBe(true);
+  });
+
+  it("asks nothing once the browser keeps the data", async () => {
+    const manager = new FakeManager();
+    manager.persistedValue = true;
+    const storage = createAppStorage(manager);
+    await storage.requestPersistenceQuietly();
+    expect(manager.persist).not.toHaveBeenCalled();
+  });
+
+  it("never fails: a no, or a browser that fails, leaves the data as it was", async () => {
+    const manager = new FakeManager();
+    manager.grants = false;
+    const storage = createAppStorage(manager);
+    await settle();
+    await storage.requestPersistenceQuietly();
+    expect(manager.persist).toHaveBeenCalledOnce();
+    expect(storage.getStatus().persistence).toBe("best-effort");
+    manager.persist.mockRejectedValueOnce(new DOMException("Not now.", "InvalidStateError"));
+    await expect(storage.requestPersistenceQuietly()).resolves.toBeUndefined();
+    manager.persisted.mockRejectedValueOnce(new DOMException("Not now.", "InvalidStateError"));
+    await expect(storage.requestPersistenceQuietly()).resolves.toBeUndefined();
+    expect(storage.getStatus().persistence).toBe("best-effort");
+  });
+
+  it("does nothing without a Storage API", async () => {
+    await expect(createAppStorage(undefined).requestPersistenceQuietly()).resolves.toBeUndefined();
+  });
+});

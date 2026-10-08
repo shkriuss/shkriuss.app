@@ -102,6 +102,8 @@ const installed = await install.install();
 import { appStorage } from "@shkriuss/pwa";
 
 const storage = appStorage();
+// When an app with data starts: asks Chromium and Safari, which ask the user nothing.
+void storage.requestPersistenceQuietly();
 const { persistence, usage, quota } = storage.getStatus();
 // When the user asks for it, as with a button in Settings:
 const kept = await storage.requestPersistence();
@@ -115,7 +117,7 @@ const kept = await storage.requestPersistence();
 
 `usage` and `quota` are the browser's estimates in bytes, or `undefined` while unknown. The status is read once at the start; `refresh()` reads it again, as after the app stored data.
 
-`requestPersistence()` asks the browser to keep the data, and resolves to whether it does. Firefox asks the user, so an app calls it only for something the user does. Chromium and Safari ask nothing: they decide from how much the user uses the app and whether it is installed. React's `useSyncExternalStore(storage.subscribe, storage.getStatus)` takes the store's functions as they are.
+`requestPersistence()` asks the browser to keep the data, and resolves to whether it does. Firefox asks the user, so an app calls it only for something the user does. Chromium and Safari ask nothing: they decide from how much the user uses the app and whether it is installed. `requestPersistenceQuietly()` asks only those, unless the data is kept already, and never fails: an app with data calls it each time it starts, so that its data is kept from the moment the browser agrees ([architecture §7](../../docs/architecture.md#7-data-layer)). In Firefox it does nothing, and the button in Settings asks. React's `useSyncExternalStore(storage.subscribe, storage.getStatus)` takes the store's functions as they are.
 
 ## What it builds
 
