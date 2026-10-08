@@ -43,7 +43,7 @@ In plain language, what [architecture §13](../architecture.md#13-privacy) commi
 
 ## 4. `security.txt`
 
-Every origin serves `/.well-known/security.txt` ([RFC 9116](https://www.rfc-editor.org/rfc/rfc9116)), the hub's and each app's, because a researcher looks at the site in front of them. `@shkriuss/edge` writes it into every build:
+Every origin serves `/.well-known/security.txt` ([RFC 9116](https://www.rfc-editor.org/rfc/rfc9116)), the hub's and each app's, because a researcher looks at the site in front of them, as `text/plain; charset=utf-8`, which RFC 9116 asks for. `@shkriuss/edge` writes it into every build:
 
 ```text
 Contact: https://github.com/shkriuss/shkriuss.app/security/advisories/new

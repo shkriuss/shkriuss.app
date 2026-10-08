@@ -144,7 +144,7 @@ Backups are the only way data leaves a device, the only protection against losin
 ## 11. Hosting and delivery
 
 - **Cloudflare Workers static assets**, one Worker per app (and one for the hub), each with a custom domain per environment ([ADR 0006](decisions/0006-hosting-and-deployment.md)). There is no Worker script: responses come straight from the asset store, with headers from a generated `_headers` file, and unknown paths fall back to `index.html`.
-- **Caching:** hashed assets are immutable for a year; `index.html`, the manifest and the service worker are revalidated on every load.
+- **Caching:** hashed assets are immutable for a year, each by its exact path, so that a request for one that the build does not have, which gets `index.html`, is not kept in its place; `index.html`, the manifest and the service worker are revalidated on every load. Text files, such as `licenses.txt`, are served as UTF-8.
 - **Deployment:** GitHub Actions, in the same workflow as the checks.
   - Every merge to `main` deploys every app in `apps/`, the hub among them, to staging once every check has passed, each to its own domain.
   - A separate job then signs the build provenance of every file staging received: a GitHub artifact attestation, signed with a short-lived Sigstore certificate and recorded in Sigstore's public transparency log. That job runs no code from the repository or its dependencies, so nothing else can sign in its name.

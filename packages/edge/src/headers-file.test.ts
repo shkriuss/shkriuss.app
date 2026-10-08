@@ -50,6 +50,20 @@ describe("headersFile", () => {
     );
   });
 
+  it("lets rules for exact paths set the same header, as no request matches two of them", () => {
+    expect(() =>
+      headersFile([...rule("/a.js", "A", "1"), ...rule("/b.js", "a", "2")]),
+    ).not.toThrow();
+    for (const other of ["/x/*", "/:name.js", "https://shkriuss.dev/b.js"]) {
+      expect(() => headersFile([...rule("/a.js", "A", "1"), ...rule(other, "A", "2")])).toThrow(
+        /would join the values/,
+      );
+      expect(() => headersFile([...rule(other, "A", "1"), ...rule("/a.js", "A", "2")])).toThrow(
+        /would join the values/,
+      );
+    }
+  });
+
   it("enforces Cloudflare's limits", () => {
     expect(() => headersFile(rule("/*", "A", "b".repeat(2000)))).toThrow(/Cloudflare allows 2000/);
     const tooMany = Array.from({ length: 101 }, (_, index) => rule(`/${index}`, `H${index}`, "x"));
@@ -58,18 +72,45 @@ describe("headersFile", () => {
 });
 
 describe("appHeaderRules", () => {
-  const rules = appHeaderRules({ scriptHashes: [], stagingHost: "notes.shkriuss.dev" });
+  const rules = appHeaderRules({
+    scriptHashes: [],
+    stagingHost: "notes.shkriuss.dev",
+    files: [
+      "/index.html",
+      "/assets/style-5e6f7a8b.css",
+      "/assets/index-1a2b3c4d.js",
+      "/icon-192.png",
+      "/licenses.txt",
+      "/.well-known/security.txt",
+      "/sha256sums.txt",
+    ],
+  });
 
   it("sends the security headers with every response", () => {
     const all = rules.find((candidate) => candidate.pattern === "/*");
     expect(all?.headers.map(([name]) => name)).toContain("Content-Security-Policy");
   });
 
-  it("caches hashed assets for a year and nothing else", () => {
+  it("caches each hashed asset for a year, by its exact path, and nothing else", () => {
+    // A path in /assets/ that the build does not have gets the app's HTML, which must not be
+    // kept for a year.
+    const year: HeaderRule["headers"] = [["Cache-Control", "public, max-age=31536000, immutable"]];
     expect(
       rules.filter((candidate) => candidate.headers.some(([name]) => name === "Cache-Control")),
     ).toEqual([
-      { pattern: "/assets/*", headers: [["Cache-Control", "public, max-age=31536000, immutable"]] },
+      { pattern: "/assets/index-1a2b3c4d.js", headers: year },
+      { pattern: "/assets/style-5e6f7a8b.css", headers: year },
+    ]);
+  });
+
+  it("serves text files as UTF-8", () => {
+    const utf8: HeaderRule["headers"] = [["Content-Type", "text/plain; charset=utf-8"]];
+    expect(
+      rules.filter((candidate) => candidate.headers.some(([name]) => name === "Content-Type")),
+    ).toEqual([
+      { pattern: "/.well-known/security.txt", headers: utf8 },
+      { pattern: "/licenses.txt", headers: utf8 },
+      { pattern: "/sha256sums.txt", headers: utf8 },
     ]);
   });
 

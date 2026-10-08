@@ -98,6 +98,16 @@ describe("edge", () => {
     // Without worker scripts, no Trusted Types policy at all.
     expect(headers).toContain("; trusted-types 'none'\n");
     expect(headers).toContain("https://shkriuss.dev/*\n  X-Robots-Tag: noindex\n");
+    // A year of caching for each file in /assets/ by its exact path, and UTF-8 for text files.
+    expect(headers).not.toContain("/assets/*");
+    for (const file of await readdir(path.join(dist, "assets"))) {
+      expect(headers).toContain(
+        `\n/assets/${file}\n  Cache-Control: public, max-age=31536000, immutable\n`,
+      );
+    }
+    for (const file of ["/.well-known/security.txt", "/licenses.txt", "/sha256sums.txt"]) {
+      expect(headers).toContain(`\n${file}\n  Content-Type: text/plain; charset=utf-8\n`);
+    }
 
     // The manifest covers the final files, after the plugin changed index.html.
     const manifest = parseManifest(await readFile(path.join(dist, "sha256sums.txt"), "utf8"));

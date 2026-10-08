@@ -277,6 +277,8 @@ export function edge(options: EdgeOptions = {}): Plugin {
           webAssembly,
           allowedFeatures: options.allowedFeatures ?? [],
           stagingHost,
+          // The manifest is served too, though it does not list itself.
+          files: [...manifest.keys(), `/${MANIFEST_FILE}`],
         });
         await writeFile(path.join(directory, "_headers"), headersFile(rules));
         await writeFile(path.join(directory, MANIFEST_FILE), formatManifest(manifest));
