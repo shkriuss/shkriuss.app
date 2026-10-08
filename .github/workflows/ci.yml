@@ -46,8 +46,8 @@ jobs:
   e2e-part:
     name: End-to-end (${{ matrix.browser }} ${{ matrix.part }}/2)
     runs-on: ubuntu-24.04
-    # Each app's tests run after the last one's, and the browsers' system libraries once took
-    # 11 minutes to install from a slow package mirror.
+    # Each app's tests run after the last one's, and installing the browser can take two tries of
+    # up to 10 minutes (below).
     timeout-minutes: 30
     permissions:
       contents: read
@@ -70,7 +70,20 @@ jobs:
       - run: pnpm build
       # The browser build that matches the pinned Playwright version, with its system libraries.
       # Not Chromium's headless shell, so that no test can run on it instead of the whole browser.
-      - run: pnpm --filter @shkriuss/hub exec playwright install --with-deps --no-shell "$BROWSER"
+      # It takes about a minute, but Ubuntu's package mirrors are sometimes slow (8½ minutes at
+      # worst, so far) and sometimes stall for half an hour: a try that has not finished in 10
+      # minutes stops, and a second one starts.
+      - run: |
+          for try in 1 2; do
+            if timeout --kill-after=1m 10m pnpm --filter @shkriuss/hub exec playwright install --with-deps --no-shell "$BROWSER"; then
+              exit 0
+            fi
+            echo "::warning::Installing $BROWSER failed or took over 10 minutes, on try $try of 2."
+            # Playwright runs apt-get as root, through sudo, which the signal that stops a try does
+            # not reach. Left running, it would keep the package lists locked for the next try.
+            sudo pkill --signal KILL --exact apt-get || true
+          done
+          exit 1
         env:
           BROWSER: ${{ matrix.browser }}
       # pnpm e2e, for the projects whose name starts with the browser's (@shkriuss/config), and
