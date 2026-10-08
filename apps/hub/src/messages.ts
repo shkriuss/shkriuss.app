@@ -141,9 +141,9 @@ const messages = defineMessages((format) => ({
   threatModelText: () => "explains the rest.",
   check: () => "Check what a site serves",
   checkText: () =>
-    "Every site lists the SHA-256 hash of each file that it serves, at /sha256sums.txt. GitHub signs where each file was built: from which commit, by which workflow. With GitHub's command-line tool, anyone can check a file that a site serves:",
+    "Every site lists the SHA-256 hash of each file that it serves, at /sha256sums.txt. GitHub signs where each file was built: from which commit, by which workflow. With GitHub's command-line tool, anyone can check that this repository's CI built a file that a site serves, from its main branch:",
   checkCommand: () =>
-    "curl -sSL -o index.html https://shkriuss.app/\ngh attestation verify index.html --repo shkriuss/shkriuss.app",
+    "curl -sSL -o index.html https://shkriuss.app/\ngh attestation verify index.html --repo shkriuss/shkriuss.app \\\n  --signer-workflow shkriuss/shkriuss.app/.github/workflows/ci.yml --source-ref refs/heads/main",
   report: () => "Report a problem",
   reportText: () =>
     "Please report security problems privately, through GitHub. Every site also says how, at /.well-known/security.txt.",
