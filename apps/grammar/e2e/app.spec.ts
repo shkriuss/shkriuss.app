@@ -283,7 +283,8 @@ test("the app's service worker keeps every file of the build, Harper's module in
       .trim()
       .split("\n")
       .map((line) => line.split(/\s+/)[1] ?? "")
-      .filter((file) => file !== "/sw.js");
+      // security.txt changes with every commit, so it is not kept: it would make each a version.
+      .filter((file) => file !== "/sw.js" && file !== "/.well-known/security.txt");
     const missing: string[] = [];
     for (const file of files) {
       if ((await caches.match(file === "/index.html" ? "/" : file)) === undefined) {

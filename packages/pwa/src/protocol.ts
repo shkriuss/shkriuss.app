@@ -26,8 +26,16 @@ export interface BuildData {
 /** The app shell: the URL of `/index.html`, which answers navigations that are not to a file. */
 export const APP_SHELL_URL = "/";
 
-/** URLs that the build serves but does not precache; navigations to them go to the network. */
-export const NOT_PRECACHED_URLS: readonly string[] = ["/sw.js", "/sha256sums.txt"];
+/**
+ * URLs that the build serves but does not precache; navigations to them go to the network.
+ * `security.txt` expires a fixed time after the commit that a build is made from, so it changes
+ * with every commit: precached, it would make every commit a new version of the app.
+ */
+export const NOT_PRECACHED_URLS: readonly string[] = [
+  "/sw.js",
+  "/sha256sums.txt",
+  "/.well-known/security.txt",
+];
 
 const VERSION_ID = /^[0-9a-f]{16}$/;
 

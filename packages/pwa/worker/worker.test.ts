@@ -247,7 +247,7 @@ describe("fetch (§6)", () => {
     expect(answers).toStrictEqual(Object.fromEntries(urls.map((url) => [url, FILES_A["/"]])));
   });
 
-  it.each([["/sw.js"], ["/sha256sums.txt"]])(
+  it.each([["/sw.js"], ["/sha256sums.txt"], ["/.well-known/security.txt"]])(
     "lets a navigation to %s go to the network",
     async (url) => {
       const scope = await activeA();
