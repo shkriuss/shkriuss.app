@@ -48,7 +48,7 @@ For each app:
 
 1. Write a one-page spec in `docs/specs/apps/`: purpose, screens, data schema, export formats, privacy label and browser permissions.
 2. Generate it with `create-app`, build it and test it.
-3. Release it to staging, check it on real devices, then release it to production.
+3. Release it to staging, check it on real devices, then release it to production: a pull request that sets `released: true` in its `app.config.ts` ([ADR 0015](decisions/0015-releasing-apps.md)).
 
 Anything reusable goes into a shared package first, so every app benefits.
 

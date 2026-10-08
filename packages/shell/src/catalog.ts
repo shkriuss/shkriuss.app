@@ -21,6 +21,8 @@ export interface CatalogApp {
    * without data has nothing that leaves it.
    */
   readonly keepsData: boolean;
+  /** Whether production gets it (ADR 0015), so that the production hub lists it. */
+  readonly released: boolean;
 }
 
 /** The module that gives the hub its catalog: `import { apps } from "virtual:shkriuss/catalog"`. */
@@ -64,7 +66,15 @@ function catalogApp(folder: string, module: unknown): CatalogApp {
   if (!isRecord(config)) {
     throw new Error(`${file} must export the app's configuration as "config".`);
   }
-  const { name, description, accent, icon, allowedFeatures = [], keepsData = true } = config;
+  const {
+    name,
+    description,
+    accent,
+    icon,
+    allowedFeatures = [],
+    keepsData = true,
+    released,
+  } = config;
   if (config["id"] !== id) {
     throw new Error(`${file} must give its folder's name, "${id}", as the app's id.`);
   }
@@ -81,6 +91,9 @@ function catalogApp(folder: string, module: unknown): CatalogApp {
   if (typeof keepsData !== "boolean") {
     throw new Error(`${file} must say whether the app keeps data as true or false, if at all.`);
   }
+  if (typeof released !== "boolean") {
+    throw new Error(`${file} must say whether production gets the app, as released (ADR 0015).`);
+  }
   return {
     id,
     name: name.trim(),
@@ -88,6 +101,7 @@ function catalogApp(folder: string, module: unknown): CatalogApp {
     icon: `data:image/svg+xml,${encodeURIComponent(appIconSvg({ accent, icon }))}`,
     allowedFeatures,
     keepsData,
+    released,
   };
 }
 

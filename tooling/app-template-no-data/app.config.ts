@@ -15,4 +15,6 @@ export const config = {
   icon: { size: 24, paths: [{ d: "M5 5h14v3H5Z M5 10.5h14v3H5Z M5 16h9v3H5Z" }] },
   // The app keeps nothing: it has no database and no backups, whose code its build cannot have.
   keepsData: false,
+  // Production gets a new app only once it has been checked on real devices (ADR 0015).
+  released: false,
 } satisfies AppConfig;

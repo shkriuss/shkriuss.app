@@ -337,25 +337,43 @@ jobs:
           BUILD: ${{ needs.build.outputs.build }}
           LISTED: ${{ steps.files.outputs.sha256 }}
         run: *check-files
+      # Production gets only the apps that are released, as their app.config.ts says on a line
+      # that `pnpm check` holds to that form; the hub, which has none, always (ADR 0015).
+      - id: released
+        name: List what production gets
+        run: |
+          set -euo pipefail
+          released=""
+          for app in apps/*/; do
+            if [ ! -f "${app}app.config.ts" ] || grep -qx '  released: true,' "${app}app.config.ts"; then
+              released="$released $app"
+            else
+              echo "$app is not released, so it stays on staging (ADR 0015)."
+            fi
+          done
+          echo "apps=${released# }" >> "$GITHUB_OUTPUT"
       # Each app against its own production domain, from its wrangler.json; `jq -e` fails on an
       # app without one, rather than check a domain that does not exist and so compare nothing.
       # The check uses only Node.js and the repository's code.
       - name: Check that no live asset changes content under the same name
+        env:
+          APPS: ${{ steps.released.outputs.apps }}
         run: |
           set -euo pipefail
-          for app in apps/*/; do
+          for app in $APPS; do
             domain="$(jq -er '.env.production.routes[0].pattern' "${app}wrangler.json")"
             node packages/edge/src/cli.ts check-live "${app}dist" "https://$domain"
           done
-      - name: Deploy every app
-        run: |
-          set -euo pipefail
-          for app in apps/*/; do
-            pnpm --dir "$app" exec wrangler deploy --env production
-          done
+      - name: Deploy every released app
         env:
+          APPS: ${{ steps.released.outputs.apps }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          for app in $APPS; do
+            pnpm --dir "$app" exec wrangler deploy --env production
+          done
 
   workflow-audit:
     name: Workflow audit

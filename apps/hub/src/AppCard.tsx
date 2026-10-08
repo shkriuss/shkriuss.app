@@ -19,6 +19,8 @@ export function AppCard({ app }: { readonly app: CatalogApp }) {
           <a href={appUrl(app.id)}>{app.name}</a>
         </h3>
         <p>{app.description}</p>
+        {/* Only staging lists an app that is not released (ADR 0015). */}
+        {app.released ? null : <p className="text-sm font-medium">{m.notReleased()}</p>}
         <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
           <dt className="font-medium">{m.dataCollected()}</dt>
           <dd>{m.noData()}</dd>

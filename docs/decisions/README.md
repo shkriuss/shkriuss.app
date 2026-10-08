@@ -22,6 +22,7 @@ An ADR is a short document that records one important decision: the context, wha
 | [0012](0012-typed-messages.md)              | Typed message modules instead of Paraglide JS   | Accepted                                                   |
 | [0013](0013-routes-in-code.md)              | Routes declared in code                         | Accepted                                                   |
 | [0014](0014-webassembly.md)                 | WebAssembly for apps that declare it            | Accepted; when modules are kept superseded by 0019         |
+| [0015](0015-releasing-apps.md)              | Release each app to production on its own       | Accepted                                                   |
 | [0019](0019-files-kept-on-first-use.md)     | Large files kept on first use                   | Accepted                                                   |
 
 ## Template

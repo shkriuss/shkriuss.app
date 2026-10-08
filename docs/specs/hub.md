@@ -24,6 +24,8 @@ The hub is the front door: it lists the apps, explains how to install them, and 
 
 One card per app in `apps/`, the hub excepted, sorted by name: its icon, name and description, its privacy label, and a link that opens it.
 
+- **Released apps only, in production** ([ADR 0015](../decisions/0015-releasing-apps.md)). The hub's build is the same on staging and in production, so it decides where it runs: on `shkriuss.app`, it leaves out an app whose `app.config.ts` says `released: false`, which production does not have; elsewhere, it lists every app, and says "Not released: only staging has it." on those cards.
+
 - **From `app.config.ts`, at build time.** The hub's build reads every app's `app.config.ts`, through a `catalog()` Vite plugin of `@shkriuss/shell/vite`, and puts the names, descriptions, icons and features in the hub's bundle. No app code goes into the hub: only these values. The plugin is the one place that reads other apps' configuration; the `imports` check keeps refusing imports of an app anywhere else.
 - **The privacy label** is not declared, so it cannot be wrong; it follows from what the platform enforces:
   - "Data collected: none." Every app is local-only ([ADR 0003](../decisions/0003-local-only-at-launch.md)).
@@ -58,7 +60,7 @@ Expires: <the commit's date plus 180 days>
 ## 5. Tests
 
 - **End to end,** in every browser: each page, with its title and heading; the catalog's cards, links and labels; the frame's links; unknown addresses; no accessibility violation in either theme; the security headers, as the hub's tests check them now.
-- **The catalog plugin,** with unit tests: it reads every app but the hub, sorted by name; it refuses a configuration without a valid id, name or description; it puts only the catalog's values into the bundle.
+- **The catalog plugin,** with unit tests: it reads every app but the hub, sorted by name; it refuses a configuration without a valid id, name or description, or without `released`; it puts only the catalog's values into the bundle. Which apps the hub lists where has unit tests too.
 - **`security.txt`,** with unit tests in `@shkriuss/edge`: its fields, and an `Expires` that depends only on the commit.
 
 ## 6. Not in version 1

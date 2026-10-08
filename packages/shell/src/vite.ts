@@ -41,6 +41,11 @@ export interface AppConfig extends WebAppManifestOptions {
    * without data keeps nothing, and its build fails if it has the code of either package.
    */
   readonly keepsData?: boolean;
+  /**
+   * Whether production gets the app (ADR 0015): only once the maintainer has checked it on real
+   * devices. Staging gets every app. The deploy reads the line `released: true,` as it is.
+   */
+  readonly released: boolean;
 }
 
 /** The packages that keep data, whose code an app without data must not have. */

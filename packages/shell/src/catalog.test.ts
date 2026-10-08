@@ -20,6 +20,7 @@ const NOTES = {
   description: "Notes that stay on this device.",
   accent: "#1d4ed8",
   icon: ICON,
+  released: true,
 };
 
 async function directory(): Promise<string> {
@@ -60,7 +61,13 @@ describe("readCatalog", () => {
         accent: "#15803d",
         allowedFeatures: ["camera"],
       }),
-      grammar: configFile({ ...NOTES, id: "grammar", name: "Grammar", keepsData: false }),
+      grammar: configFile({
+        ...NOTES,
+        id: "grammar",
+        name: "Grammar",
+        keepsData: false,
+        released: false,
+      }),
     });
     expect(await readCatalog(apps)).toStrictEqual([
       {
@@ -70,6 +77,7 @@ describe("readCatalog", () => {
         icon: iconUrl("#15803d"),
         allowedFeatures: ["camera"],
         keepsData: true,
+        released: true,
       },
       {
         id: "grammar",
@@ -78,6 +86,7 @@ describe("readCatalog", () => {
         icon: iconUrl("#1d4ed8"),
         allowedFeatures: [],
         keepsData: false,
+        released: false,
       },
       {
         id: "notes",
@@ -86,6 +95,7 @@ describe("readCatalog", () => {
         icon: iconUrl("#1d4ed8"),
         allowedFeatures: [],
         keepsData: true,
+        released: true,
       },
     ]);
   });
@@ -127,6 +137,11 @@ describe("readCatalog", () => {
       "keepsData that is neither true nor false",
       { notes: configFile({ ...NOTES, keepsData: "no" }) },
       "must say whether the app keeps data as true or false",
+    ],
+    [
+      "no word on whether production gets it",
+      { notes: configFile({ ...NOTES, released: undefined }) },
+      "must say whether production gets the app, as released (ADR 0015)",
     ],
   ])("refuses an app with %s", async (_case, files, error) => {
     await expect(readCatalog(await appsWith(files))).rejects.toThrow(error);

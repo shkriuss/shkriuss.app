@@ -20,7 +20,7 @@ function app(
   );
   files.set(
     `${folder}/app.config.ts`,
-    `export const config = {\n  id: "${id}",\n  name: m.appName(),\n${keepsData ? "" : "  keepsData: false,\n"}};\n`,
+    `export const config = {\n  id: "${id}",\n  name: m.appName(),\n${keepsData ? "" : "  keepsData: false,\n"}  released: false,\n};\n`,
   );
   files.set(
     `${folder}/vite.config.ts`,
@@ -92,6 +92,34 @@ describe("checkAppStructure", () => {
       "apps/notes/src/schema.ts: Every app has this file, as its app template does; create apps with create-app.",
       "apps/words/src/schema.ts: An app without data has no schema, as the template without data; remove it, or keepsData: false from app.config.ts.",
     ]);
+  });
+
+  it("wants a line that says whether production gets the app, as the deploy reads it", () => {
+    for (const said of ["  released: true,", "  released: false,"]) {
+      const notes = app("apps/notes", "notes", 4200);
+      notes.set(
+        "apps/notes/app.config.ts",
+        `export const config = {\n  id: "notes",\n${said}\n};\n`,
+      );
+      expect(check(notes)).toEqual([]);
+    }
+    for (const said of [
+      "",
+      "  released: !beta,",
+      "  released: true,\n  released: false,",
+      "released: true,",
+    ]) {
+      const notes = app("apps/notes", "notes", 4200);
+      notes.set(
+        "apps/notes/app.config.ts",
+        `export const config = {\n  id: "notes",\n${said}\n};\n`,
+      );
+      expect(check(notes)).toEqual([
+        expect.stringContaining(
+          "app.config.ts must say once whether production gets the app, on a line of its own",
+        ),
+      ]);
+    }
   });
 
   it("reads only keepsData: false, as the template without data says it", () => {

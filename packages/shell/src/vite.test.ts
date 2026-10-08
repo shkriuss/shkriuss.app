@@ -24,6 +24,7 @@ const NOTES: AppConfig = {
   description: 'Notes that stay on this "device".',
   accent: "#1d4ed8",
   icon: { size: 24, paths: [{ d: "M4 4h16v16H4Z" }] },
+  released: false,
 };
 
 /**
