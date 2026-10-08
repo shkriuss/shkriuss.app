@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import * as fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import type { BuildData } from "./protocol.ts";
+import type { BuildData, Header } from "./protocol.ts";
 import { BUILD_DATA_PLACEHOLDER, fileUrl, precacheList, serviceWorkerScript } from "./script.ts";
 
 const hash = (text: string): string => createHash("sha256").update(text).digest("hex");
@@ -18,6 +18,12 @@ const MANIFEST = new Map([
 function withSecurityTxt(expires: string): Map<string, string> {
   return new Map(MANIFEST).set("/.well-known/security.txt", hash(`Expires: ${expires}`));
 }
+
+/** The security headers that the host sends with every file of the build. */
+const HEADERS: readonly Header[] = [
+  ["Content-Security-Policy", "default-src 'none'; script-src 'self'"],
+  ["X-Content-Type-Options", "nosniff"],
+];
 
 /** A bundled service worker as Rolldown writes it, with the placeholder once. */
 const CODE = `(function(){start(self,${BUILD_DATA_PLACEHOLDER})})();`;
@@ -99,9 +105,10 @@ describe("precacheList (§2.1)", () => {
 });
 
 describe("serviceWorkerScript (§2.2, §2.3)", () => {
-  it("puts the version id, the precache list and the replaced versions in place of the placeholder", () => {
-    const { script, data } = serviceWorkerScript(CODE, MANIFEST, ["0123456789abcdef"]);
+  it("puts the version id, the precache list, the headers and the replaced versions in place of the placeholder", () => {
+    const { script, data } = serviceWorkerScript(CODE, MANIFEST, HEADERS, ["0123456789abcdef"]);
     expect(data.files).toStrictEqual(precacheList(MANIFEST));
+    expect(data.headers).toStrictEqual(HEADERS);
     expect(data.replaces).toStrictEqual(["0123456789abcdef"]);
     expect(data.version).toMatch(/^[0-9a-f]{16}$/);
     expect(dataOf(script)).toStrictEqual(data);
@@ -109,7 +116,7 @@ describe("serviceWorkerScript (§2.2, §2.3)", () => {
   });
 
   it("derives the version id from the script with sixteen zeros as its id", () => {
-    const { script, data } = serviceWorkerScript(CODE, MANIFEST);
+    const { script, data } = serviceWorkerScript(CODE, MANIFEST, HEADERS);
     const unversioned = script.replace(
       `"version":"${data.version}"`,
       `"version":"${"0".repeat(16)}"`,
@@ -118,50 +125,69 @@ describe("serviceWorkerScript (§2.2, §2.3)", () => {
   });
 
   it("gives the same script for the same build", () => {
-    expect(serviceWorkerScript(CODE, MANIFEST)).toStrictEqual(serviceWorkerScript(CODE, MANIFEST));
+    expect(serviceWorkerScript(CODE, MANIFEST, HEADERS)).toStrictEqual(
+      serviceWorkerScript(CODE, MANIFEST, HEADERS),
+    );
     const reordered = new Map([...MANIFEST].toReversed());
-    expect(serviceWorkerScript(CODE, reordered).script).toBe(
-      serviceWorkerScript(CODE, MANIFEST).script,
+    expect(serviceWorkerScript(CODE, reordered, HEADERS).script).toBe(
+      serviceWorkerScript(CODE, MANIFEST, HEADERS).script,
     );
   });
 
-  it("gives a new version id for any change to a file, to the code or to the replaced versions", () => {
-    const { version } = serviceWorkerScript(CODE, MANIFEST).data;
+  it("gives a new version id for any change to a file, the headers, the code or the replaced versions", () => {
+    const { version } = serviceWorkerScript(CODE, MANIFEST, HEADERS).data;
     const changedFile = new Map(MANIFEST).set("/licenses.txt", hash("licenses, changed"));
     const others = [
-      serviceWorkerScript(CODE, changedFile).data.version,
-      serviceWorkerScript(CODE.replace("start", "begin"), MANIFEST).data.version,
-      serviceWorkerScript(CODE, MANIFEST, ["0123456789abcdef"]).data.version,
+      serviceWorkerScript(CODE, changedFile, HEADERS).data.version,
+      serviceWorkerScript(CODE.replace("start", "begin"), MANIFEST, HEADERS).data.version,
+      serviceWorkerScript(CODE, MANIFEST, HEADERS, ["0123456789abcdef"]).data.version,
+      serviceWorkerScript(CODE, MANIFEST, [...HEADERS, ["X-Frame-Options", "DENY"]]).data.version,
     ];
-    expect(new Set([version, ...others]).size).toBe(4);
+    expect(new Set([version, ...others]).size).toBe(5);
   });
 
   it("ignores /sw.js itself, whose hash changes with the script", () => {
     const changedServiceWorker = new Map(MANIFEST).set("/sw.js", hash("another service worker"));
-    expect(serviceWorkerScript(CODE, changedServiceWorker).script).toBe(
-      serviceWorkerScript(CODE, MANIFEST).script,
+    expect(serviceWorkerScript(CODE, changedServiceWorker, HEADERS).script).toBe(
+      serviceWorkerScript(CODE, MANIFEST, HEADERS).script,
     );
   });
 
   it("is the same for builds of two commits that change no file of the app", () => {
-    expect(serviceWorkerScript(CODE, withSecurityTxt("2027-04-06T11:34:17.000Z")).script).toBe(
-      serviceWorkerScript(CODE, withSecurityTxt("2027-04-07T09:12:00.000Z")).script,
-    );
+    expect(
+      serviceWorkerScript(CODE, withSecurityTxt("2027-04-06T11:34:17.000Z"), HEADERS).script,
+    ).toBe(serviceWorkerScript(CODE, withSecurityTxt("2027-04-07T09:12:00.000Z"), HEADERS).script);
   });
 
   it.each([
     ["no placeholder", "(function(){})();", 0],
     ["two placeholders", `${CODE}${CODE}`, 2],
   ])("refuses code with %s", (_case, code, times) => {
-    expect(() => serviceWorkerScript(code, MANIFEST)).toThrow(`not ${times} times`);
+    expect(() => serviceWorkerScript(code, MANIFEST, HEADERS)).toThrow(`not ${times} times`);
   });
 
   it.each([["0123456789ABCDEF"], ["0123"], ["the broken one"]])(
     "refuses %s as a replaced version",
     (version) => {
-      expect(() => serviceWorkerScript(CODE, MANIFEST, [version])).toThrow("is not a version id");
+      expect(() => serviceWorkerScript(CODE, MANIFEST, HEADERS, [version])).toThrow(
+        "is not a version id",
+      );
     },
   );
+
+  it.each<[string, Header]>([
+    ["a name with a space", ["Content Security-Policy", "default-src 'none'"]],
+    ["an empty name", ["", "nosniff"]],
+    ["a value of two lines", ["Content-Security-Policy", "default-src 'none'\nscript-src *"]],
+    ["a value with a null character", ["X-Content-Type-Options", "nosniff\0"]],
+  ])("refuses a header with %s, which the service worker could not set", (_case, header) => {
+    expect(() => serviceWorkerScript(CODE, MANIFEST, [header])).toThrow("is not a header");
+  });
+
+  it("accepts a tab in a header's value, as HTTP does", () => {
+    const header: Header = ["Content-Security-Policy", "default-src 'none';\tscript-src 'self'"];
+    expect(serviceWorkerScript(CODE, MANIFEST, [header]).data.headers).toStrictEqual([header]);
+  });
 
   it("keeps every file of any build, each at one URL, and its data readable", () => {
     const segment = fc.stringMatching(/^[a-z0-9_-]{1,8}$/);
@@ -186,6 +212,7 @@ describe("serviceWorkerScript (§2.2, §2.3)", () => {
           const { script, data }: { script: string; data: BuildData } = serviceWorkerScript(
             CODE,
             manifest,
+            HEADERS,
           );
           expect(dataOf(script)).toStrictEqual(data);
           const urls = data.files.map((file) => file.url);

@@ -9,6 +9,8 @@
  *   build at a time, and tests in other contexts run in parallel.
  * - **Offline:** with the cookie `build=offline`, the proxy closes the connection instead, so
  *   every request that reaches the network fails, as offline.
+ * - **What reaches the host:** with the cookie `log=<name>`, the proxy records the path of every
+ *   request that it sends on, and `GET /__requests/<name>` answers them, once.
  */
 import { type ChildProcess, spawn } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
@@ -19,6 +21,11 @@ import { BUILDS, isBuild } from "./builds.ts";
 const port = Number(process.argv[2] ?? "4175");
 const directory = import.meta.dirname;
 const COOKIE = /(?:^|;\s*)build=([a-z]+)(?:;|$)/;
+const LOG_COOKIE = /(?:^|;\s*)log=([a-z0-9-]+)(?:;|$)/;
+const LOG_PATH = /^\/__requests\/([a-z0-9-]+)$/;
+
+/** The paths of the requests sent on to a build, by the name in their `log` cookie. */
+const logs = new Map<string, string[]>();
 
 /** Each build's own server, on the ports after the proxy's. */
 const backends = new Map(BUILDS.map((build, index) => [build, port + 10 + index]));
@@ -98,6 +105,14 @@ await Promise.all([...backends.values()].map(ready));
 
 http
   .createServer((request, response) => {
+    const read = LOG_PATH.exec(request.url ?? "")?.[1];
+    if (read !== undefined) {
+      response
+        .writeHead(200, { "Content-Type": "application/json" })
+        .end(JSON.stringify(logs.get(read) ?? []));
+      logs.delete(read);
+      return;
+    }
     const build = COOKIE.exec(request.headers.cookie ?? "")?.[1] ?? BUILDS[0];
     if (build === "offline") {
       request.socket.destroy();
@@ -107,6 +122,10 @@ http
     if (backend === undefined) {
       response.writeHead(400).end(`There is no build named ${build}.`);
       return;
+    }
+    const log = LOG_COOKIE.exec(request.headers.cookie ?? "")?.[1];
+    if (log !== undefined) {
+      logs.set(log, [...(logs.get(log) ?? []), request.url ?? ""]);
     }
     const upstream = http.request(
       {

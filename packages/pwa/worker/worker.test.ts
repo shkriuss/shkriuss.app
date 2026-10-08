@@ -3,8 +3,10 @@ import { ACTIVATE_MESSAGE, type BuildData, versionCache } from "../src/protocol.
 import {
   type Answer,
   buildOf,
+  type FakeCaches,
   FakeScope,
   FakeWindow,
+  HEADERS,
   NETWORK_ERROR,
   NO_ANSWER,
   ORIGIN,
@@ -63,6 +65,30 @@ async function activeA(): Promise<FakeScope> {
   scope.requests.length = 0;
   return scope;
 }
+
+/** Version B, active after version A, which is now the previous one. */
+async function activeBAfterA(): Promise<FakeScope> {
+  const scope = await activeA();
+  const next = new FakeScope(scope.caches);
+  await start(FILES_B, B, { scope: next });
+  await next.lifecycle("install");
+  await next.lifecycle("activate");
+  next.requests.length = 0;
+  return next;
+}
+
+/** The headers of an answer, by lowercase name. */
+function headersOf(response: Response | "network"): Record<string, string> {
+  if (response === "network") {
+    throw new Error("The service worker let the request go to the network.");
+  }
+  return Object.fromEntries(response.headers);
+}
+
+/** The build's security headers, by lowercase name. */
+const BUILD_HEADERS = Object.fromEntries(
+  HEADERS.map(([name, value]) => [name.toLowerCase(), value]),
+);
 
 async function state(scope: FakeScope): Promise<unknown> {
   const texts = await scope.caches.texts("pwa-state");
@@ -206,6 +232,51 @@ describe("install (§4)", () => {
     await recordState(scope, { active: A });
     await scope.lifecycle("install");
     expect(scope.skipWaiting).not.toHaveBeenCalled();
+  });
+
+  it("copies the files that the cache of another version keeps with their hashes, and requests only the others", async () => {
+    const scope = await activeA();
+    // The cache of a version that never became active keeps B's entry script.
+    await scope.caches.seed(versionCache(C), {
+      "/assets/index-BBBBBBBB.js": FILES_B["/assets/index-BBBBBBBB.js"],
+    });
+    const next = new FakeScope(scope.caches);
+    await start(FILES_B, B, { scope: next });
+    await next.lifecycle("install");
+    expect(await next.caches.texts(versionCache(B))).toStrictEqual(FILES_B);
+    // Only the new app shell came from the host.
+    expect(next.requests.map((request) => request.url)).toStrictEqual([`${ORIGIN}/`]);
+    // A copy keeps the headers of its file, but those of its encoding on the network.
+    expect(next.caches.headersOf(versionCache(B), "/licenses.txt")).toStrictEqual({
+      "content-type": "text/plain",
+      ...BUILD_HEADERS,
+    });
+  });
+
+  it.each<[string, (caches: FakeCaches) => Promise<void>]>([
+    [
+      "fails its hash",
+      async (caches) => caches.seed(versionCache(A), { "/licenses.txt": "licenses, changed" }),
+    ],
+    [
+      "has a status other than 200",
+      async (caches) =>
+        caches.seed(versionCache(A), { "/licenses.txt": "licenses" }, { status: 203 }),
+    ],
+    [
+      "is in a cache that fails",
+      async (caches) => {
+        caches.failing.add(versionCache(A));
+      },
+    ],
+  ])("requests a file whose copy %s", async (_case, spoil) => {
+    const scope = await activeA();
+    await spoil(scope.caches);
+    const next = new FakeScope(scope.caches);
+    await start(FILES_B, B, { scope: next });
+    await next.lifecycle("install");
+    expect(await next.caches.texts(versionCache(B))).toStrictEqual(FILES_B);
+    expect(next.requests.map((request) => request.url)).toContain(`${ORIGIN}/licenses.txt`);
   });
 });
 
@@ -446,6 +517,95 @@ describe("fetch (§6)", () => {
     scope.host.set("/licenses.txt", "licenses");
     await scope.request("/licenses.txt");
     expect(await scope.caches.texts(versionCache(A))).toStrictEqual(FILES_A);
+  });
+
+  it("repairs a file from the cache of another version that keeps it with its hash, offline too", async () => {
+    const scope = await activeBAfterA();
+    scope.caches.stores.get(versionCache(B))?.delete(`${ORIGIN}/licenses.txt`);
+    scope.host.clear();
+    await expect(scope.request("/licenses.txt")).rejects.toThrow("Failed to fetch");
+    await vi.waitFor(async () => {
+      expect(await scope.caches.texts(versionCache(B))).toStrictEqual(FILES_B);
+    });
+  });
+});
+
+describe("checks before serving (§6.5)", () => {
+  it("answers with the build's security headers, in place of those its cache keeps", async () => {
+    const scope = await activeA();
+    // The app shell as the build made it, but kept with other headers, as a page could put it.
+    await scope.caches.seed(
+      versionCache(A),
+      { "/": FILES_A["/"] },
+      { headers: { "Content-Type": "text/html", "Content-Security-Policy": "script-src *" } },
+    );
+    const answer = await scope.request("/notes/42", { navigate: true });
+    expect(headersOf(answer)).toStrictEqual({ "content-type": "text/html", ...BUILD_HEADERS });
+    expect(await text(answer)).toBe(FILES_A["/"]);
+  });
+
+  it("answers without the headers of the body's encoding on the network, which is decoded", async () => {
+    const scope = await activeA();
+    expect(scope.caches.headersOf(versionCache(A), "/licenses.txt")).toHaveProperty(
+      "content-encoding",
+      "br",
+    );
+    expect(headersOf(await scope.request("/licenses.txt"))).toStrictEqual({
+      "content-type": "text/plain",
+      ...BUILD_HEADERS,
+    });
+  });
+
+  it("serves no file of its version that a page changed in Cache Storage, and gets it again", async () => {
+    const scope = await activeA();
+    await scope.caches.seed(versionCache(A), { "/assets/lazy-AAAAAAAA.js": "steal();" });
+    expect(await text(await scope.request("/assets/lazy-AAAAAAAA.js"))).toBe(
+      FILES_A["/assets/lazy-AAAAAAAA.js"],
+    );
+    expect(await scope.caches.texts(versionCache(A))).toStrictEqual(FILES_A);
+    // The page's request, then the repair's, which is checked like an install's.
+    expect(scope.requests.map((request) => request.integrity === "")).toStrictEqual([true, false]);
+  });
+
+  it("serves no changed app shell offline either", async () => {
+    const scope = await activeA();
+    await scope.caches.seed(
+      versionCache(A),
+      { "/": '<meta http-equiv="refresh" content="0; url=https://example.com/">' },
+      { headers: { "Content-Type": "text/html" } },
+    );
+    scope.host.clear();
+    await expect(scope.request("/notes/42", { navigate: true })).rejects.toThrow("Failed to fetch");
+    expect(await scope.caches.texts(versionCache(A))).not.toHaveProperty("/");
+  });
+
+  it("serves no file of its version that its cache keeps with another status", async () => {
+    const scope = await activeA();
+    await scope.caches.seed(versionCache(A), { "/licenses.txt": "licenses" }, { status: 203 });
+    expect(await text(await scope.request("/licenses.txt"))).toBe("licenses");
+    expect(scope.requests[0]?.url).toBe(`${ORIGIN}/licenses.txt`);
+    expect(scope.caches.stores.get(versionCache(A))?.get(`${ORIGIN}/licenses.txt`)?.status).toBe(
+      200,
+    );
+  });
+
+  it("serves from its cache only the files of its version, not what a page put under other URLs", async () => {
+    const scope = await activeA();
+    await scope.caches.seed(versionCache(A), { "/assets/other-CCCCCCCC.js": "planted" });
+    scope.host.set("/assets/other-CCCCCCCC.js", "from the host");
+    expect(await text(await scope.request("/assets/other-CCCCCCCC.js"))).toBe("from the host");
+  });
+
+  it("serves the files of the previous version as they are kept, whose hashes it does not know", async () => {
+    const scope = await activeBAfterA();
+    await scope.caches.seed(
+      versionCache(A),
+      { "/assets/lazy-AAAAAAAA.js": "export const lazy = 'a, kept';" },
+      { headers: { "Content-Security-Policy": "script-src 'self'" } },
+    );
+    const answer = await scope.request("/assets/lazy-AAAAAAAA.js");
+    expect(headersOf(answer)).toHaveProperty("content-security-policy", "script-src 'self'");
+    expect(await text(answer)).toBe("export const lazy = 'a, kept';");
   });
 });
 

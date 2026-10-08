@@ -51,6 +51,18 @@ async function bundledFiles(options: Parameters<typeof pwa>[0]): Promise<string[
     .toSorted();
 }
 
+/** The headers of the `_headers` rule for every file, `/*`, in their order. */
+function headersOfEveryFile(headersFile: string): [string, string][] {
+  const [, block = ""] = /^\/\*\n((?: {2}.+\n)+)/m.exec(headersFile) ?? [];
+  return block
+    .trimEnd()
+    .split("\n")
+    .map((line) => {
+      const [name = "", value = ""] = line.trim().split(/: (.*)/);
+      return [name, value];
+    });
+}
+
 async function buildApp(root: string, plugins: PluginOption[]): Promise<string> {
   await build({ root, configFile: false, logLevel: "silent", plugins });
   return path.join(root, "dist");
@@ -69,8 +81,13 @@ describe("pwa", () => {
     expect(script).not.toContain(BUILD_DATA_PLACEHOLDER);
 
     const version = /"version":"([0-9a-f]{16})"/.exec(script)?.[1] ?? "";
+    // The security headers that the host sends with every file, which it serves its files with.
+    const headers = headersOfEveryFile(await readFile(path.join(dist, "_headers"), "utf8"));
+    expect(headers.map(([name]) => name)).toEqual(
+      expect.arrayContaining(["Content-Security-Policy", "Integrity-Policy"]),
+    );
     expect(script).toContain(
-      JSON.stringify({ version, files: precacheList(manifest), replaces: [] }),
+      JSON.stringify({ version, files: precacheList(manifest), headers, replaces: [] }),
     );
     const unversioned = script.replace(`"version":"${version}"`, `"version":"${"0".repeat(16)}"`);
     expect(hash(unversioned).slice(0, 16)).toBe(version);

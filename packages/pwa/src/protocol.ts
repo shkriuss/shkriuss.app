@@ -13,12 +13,17 @@ export interface PrecacheFile {
   readonly sha256: string;
 }
 
+/** A header of a response, as a name and a value. */
+export type Header = readonly [name: string, value: string];
+
 /** What a build puts into its `/sw.js` (§2.3). */
 export interface BuildData {
   /** The version id (§2.2). */
   readonly version: string;
   /** The precache list, sorted by URL path. */
   readonly files: readonly PrecacheFile[];
+  /** The security headers that the host sends with every file of the build (§6.5). */
+  readonly headers: readonly Header[];
   /** The ids of the broken versions that this one replaces at once (§8). */
   readonly replaces: readonly string[];
 }
