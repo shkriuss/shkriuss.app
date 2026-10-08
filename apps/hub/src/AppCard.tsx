@@ -15,7 +15,7 @@ export function AppCard({ app }: { readonly app: CatalogApp }) {
     <li className="flex gap-4 rounded-lg border border-line p-4">
       <img src={app.icon} alt="" width={48} height={48} className="size-12 shrink-0" />
       <div className="flex min-w-0 flex-col gap-2">
-        <h3 className="text-lg font-semibold break-words">
+        <h3 className="text-lg font-semibold wrap-anywhere">
           <a href={appUrl(app.id)}>{app.name}</a>
         </h3>
         <p>{app.description}</p>

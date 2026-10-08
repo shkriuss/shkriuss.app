@@ -75,7 +75,7 @@ export function Items({ db }: ItemsProps) {
             data-item={id}
             className="flex items-center justify-between gap-3 rounded-lg border border-line px-3 py-2"
           >
-            <span className="min-w-0 break-words">{values.text}</span>
+            <span className="min-w-0 wrap-anywhere">{values.text}</span>
             <Button
               aria-label={m.deleteItem(values.text)}
               onPress={() => {

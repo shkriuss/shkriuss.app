@@ -68,6 +68,10 @@ export const messages = defineMessages((format) => ({
   insert: (words: string) => `Add “${words}”`,
   show: () => "Show",
   ignore: () => "Ignore",
+  // Show's and Ignore's names for screen readers: what they show or ignore, after what they
+  // read on screen.
+  showWords: (words: string) => `Show “${words}”`,
+  ignoreWords: (words: string) => `Ignore “${words}”`,
   // The list shows some of a long text's mistakes at a time.
   showMore: (count: number) => `Show ${format.number(count)} more`,
   // In the update banner, which offers to reload the app, while there is text.

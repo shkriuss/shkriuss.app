@@ -207,6 +207,43 @@ test("a dialog's buttons do their action and close it", async ({ page }) => {
   await expect(page.getByText("Everything was deleted.")).toBeVisible();
 });
 
+test("in a contrast theme, buttons keep an outline, and ticked boxes and switches their marks", async ({
+  page,
+}) => {
+  // Windows' contrast themes (forced colors) drop backgrounds and impose their own colours.
+  await page.emulateMedia({ forcedColors: "active" });
+  await gallery(page);
+  expect(await page.evaluate(() => matchMedia("(forced-colors: active)").matches)).toBe(true);
+  // Filled buttons keep a border, which the theme draws where it drops their background.
+  for (const name of ["Save", "Delete"]) {
+    const border = await page
+      .getByRole("button", { name, exact: true })
+      .evaluate((button) => getComputedStyle(button).borderTopStyle);
+    expect(border, name).toBe("solid");
+  }
+  // A ticked box shows its check mark, and a switch that is on its thumb, each in a colour of
+  // its own.
+  await page.getByText("Phone charger").click();
+  await page.getByText("Backup reminders").click();
+  const marks = await page.evaluate(() => {
+    const box = document.querySelector("label[data-selected] svg")?.parentElement ?? null;
+    const mark = box?.querySelector("svg") ?? null;
+    const track = document.querySelector('label[data-selected] span[class*="rounded-full"]');
+    const thumb = track?.querySelector("span") ?? null;
+    if (box === null || mark === null || track === null || thumb === null) {
+      throw new Error("The gallery has no ticked box or switch that is on.");
+    }
+    return {
+      box: getComputedStyle(box).backgroundColor,
+      mark: getComputedStyle(mark).fill,
+      track: getComputedStyle(track).backgroundColor,
+      thumb: getComputedStyle(thumb).backgroundColor,
+    };
+  });
+  expect(marks.mark).not.toBe(marks.box);
+  expect(marks.thumb).not.toBe(marks.track);
+});
+
 test("a banner tells its message to screen readers, with its actions", async ({ page }) => {
   await gallery(page);
   const banner = page.getByRole("status").filter({ hasText: "An update is available." });

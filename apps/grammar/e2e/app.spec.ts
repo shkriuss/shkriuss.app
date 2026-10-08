@@ -88,6 +88,9 @@ test("the checker finds the mistakes of a text, each with its kind, its words an
     "Show",
     "Ignore",
   ]);
+  // Screen readers hear which words each Show and Ignore is about.
+  await expect(their.getByRole("button", { name: "Show “their”", exact: true })).toBeVisible();
+  await expect(their.getByRole("button", { name: "Ignore “their”", exact: true })).toBeVisible();
   // The browser's own spelling checker, which may send the text to a server, is off.
   await expect(field(page)).toHaveAttribute("spellcheck", "false");
 });

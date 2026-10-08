@@ -42,7 +42,7 @@ export function Dialog({ isOpen, onClose, title, children }: DialogProps) {
       }}
       className="m-auto w-[min(32rem,calc(100%-2rem))] rounded-xl border border-line bg-canvas p-6 text-ink backdrop:bg-[rgb(0_0_0/0.5)]"
     >
-      <h2 id={titleId} className="mb-4 text-xl font-semibold">
+      <h2 id={titleId} className="mb-4 text-xl font-semibold wrap-anywhere">
         {title}
       </h2>
       {children}

@@ -21,7 +21,7 @@ export function Screen({ title, children }: ScreenProps) {
   }, [title, name]);
   return (
     <div className="flex flex-col gap-6">
-      <h1 tabIndex={-1} className="text-2xl font-semibold">
+      <h1 tabIndex={-1} className="text-2xl font-semibold wrap-anywhere">
         {title}
       </h1>
       {children}
