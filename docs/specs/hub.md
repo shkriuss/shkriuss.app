@@ -53,7 +53,7 @@ Expires: <the commit's date plus 180 days>
 ```
 
 - **Contact** is GitHub's private vulnerability report, as `SECURITY.md` says; no email address is published.
-- **Expires** comes from the date of the commit that is built, not from the time of the build. Production rebuilds the commit that staging got and must match it byte for byte, and the deploy may come days later. A site that is not deployed for 180 days shows that its contact may be out of date, as RFC 9116 intends.
+- **Expires** comes from the date of the commit that is built, not from the time of the build. A second build of the commit must match the deployed files byte for byte, and it may come days later. A site that is not deployed for 180 days shows that its contact may be out of date, as RFC 9116 intends.
 
 ## 5. Tests
 
