@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { build } from "vite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { type AppConfig, app } from "./vite.ts";
+import { type AppConfig, app, pageHead } from "./vite.ts";
 
 const roots: string[] = [];
 
@@ -61,6 +61,21 @@ async function buildApp(
   await build({ ...app(...options), root, configFile: false, logLevel: "silent" });
   return async (file) => readFile(path.join(root, "dist", file), "utf8");
 }
+
+describe("pageHead", () => {
+  it("titles and describes a page that is no app, such as the hub's", async () => {
+    const root = await createApp();
+    await build({
+      plugins: [pageHead({ name: "Apps & more <beta>", description: 'Apps that stay "here".' })],
+      root,
+      configFile: false,
+      logLevel: "silent",
+    });
+    const page = await readFile(path.join(root, "dist", "index.html"), "utf8");
+    expect(page).toContain("<title>Apps &amp; more &lt;beta></title>");
+    expect(page).toContain('<meta name="description" content="Apps that stay &quot;here&quot;.">');
+  });
+});
 
 describe("app", () => {
   it("titles and describes the page with the app's name and description", async () => {
