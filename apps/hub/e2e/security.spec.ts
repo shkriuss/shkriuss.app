@@ -43,6 +43,16 @@ test.describe("response headers", () => {
       expect(asset.headers()["cache-control"], path).toBe("public, max-age=31536000, immutable");
     }
   });
+
+  test("a file in /assets/ that the build does not have is not kept for a year", async ({
+    request,
+  }) => {
+    // As from a page of another version: the single-page fallback answers with the page, which
+    // must not take the file's place in the browser's cache.
+    const missing = await request.get("/assets/index-00000000.js");
+    expect(missing.headers()["content-type"]).toMatch(/^text\/html/v);
+    expect(missing.headers()["cache-control"]).toBe("public, max-age=0, must-revalidate");
+  });
 });
 
 /** Serves the files that match `pattern` with one line of code added at the end. */
