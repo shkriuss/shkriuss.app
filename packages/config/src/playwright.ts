@@ -239,8 +239,8 @@ async function networkTo(target: string): Promise<Network & { close(): Promise<v
 /**
  * Every test fails if a page reports a CSP or Trusted Types violation, logs an error, throws,
  * or has a request fail (architecture §15), but for one that a navigation of the page cancels.
- * That holds for every page of the test, such as a second tab, or another device's. Tests that provoke a refusal on purpose call
- * `security.expectRefusals()` and assert what was refused.
+ * That holds for every page of the test, such as a second tab, or another device's. Tests that
+ * provoke a refusal on purpose call `security.expectRefusals()` and assert what was refused.
  *
  * `otherDevice` is a page of another device: a browser context of its own, with its own
  * storage, and the options of the test's project, such as its viewport.
@@ -284,9 +284,9 @@ export const test = base.extend<{ security: Security; otherDevice: Page; network
         page.on("requestfailed", (request) => {
           const error = request.failure()?.errorText ?? "";
           // A navigation of the page, such as the test's reload, cancels what the page still had
-          // under way, which Chromium reports as failed. Nothing failed: say, a favicon that
-          // Chromium fetches again when the app changes its address, which waited behind the
-          // service worker's first downloads.
+          // under way, which some versions of Chromium report as failed. Nothing failed: say, a
+          // favicon that Chromium fetches again when the app changes its address, which waited
+          // behind the service worker's first downloads.
           if (error === "net::ERR_ABORTED" && started.get(request) !== navigations) {
             return;
           }

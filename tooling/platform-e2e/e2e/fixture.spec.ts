@@ -1,3 +1,4 @@
+import type { Request } from "@playwright/test";
 import { expect, test } from "@shkriuss/config/playwright";
 
 // The fixture that fails a test on any problem that the browser reports, which every app's
@@ -17,9 +18,17 @@ test("a request that a navigation of the page cancels is no problem", async ({
     fetch("/held.txt").catch(() => undefined);
   });
   await held.arrived;
-  const failed = page.waitForEvent("requestfailed");
+  const failed: Request[] = [];
+  page.on("requestfailed", (request) => {
+    failed.push(request);
+  });
   await page.reload();
-  expect((await failed).failure()?.errorText).toBe("net::ERR_ABORTED");
+  // Chromium 141, as in cloud sessions, reports the cancelled request as failed before the new
+  // page loads; the Chromium of CI's Playwright reported nothing within 30 seconds. Either way,
+  // it is no problem. Without the fixture's rule, Chromium 141 fails the test.
+  for (const request of failed) {
+    expect(request.failure()?.errorText).toBe("net::ERR_ABORTED");
+  }
   expect(security.problems).toEqual([]);
 });
 
