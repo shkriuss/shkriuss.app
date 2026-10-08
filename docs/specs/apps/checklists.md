@@ -27,8 +27,9 @@ Names and texts must not be empty or blank; the fields refuse them. The screens 
 
 **The focus follows the user,** as in the template:
 
-- An item that is ticked off or back moves to the other section, and the focus goes to the next item of the section it left, so that the user can go down the list; to the item itself if it was the last. Screen readers hear where it went.
-- After a deletion, the focus goes to the next item, or to the field once there is none.
+- An item that is ticked off or back moves to the other section, and the focus goes to the next item of the section it left, so that the user can go down the list, or to the one before it if there is no next; to the item itself if it was the only one. Screen readers hear where it went.
+- After an item is deleted, the focus goes to the next item of its section, or to the one before it; to the field once its section has none.
+- After **Clear done items**, the focus goes to the field.
 - A new list opens, with the focus on its name.
 
 ## 2. Data
