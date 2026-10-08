@@ -1,6 +1,7 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { DataLayerError } from "./errors.ts";
-import { field } from "./fields.ts";
+import { type FieldType, field } from "./fields.ts";
+import type { JsonValue } from "./json.ts";
 import {
   type SchemaVersion,
   type StoreMigration,
@@ -42,6 +43,17 @@ const NOTES_V2 = {
     list: field.reference("lists"),
   },
 };
+
+/** Versions 1 and 2 of a store with one field, `value`, of the types given. */
+function versions(
+  before: FieldType<unknown>,
+  after: FieldType<unknown>,
+): readonly [SchemaVersion, SchemaVersion] {
+  return [
+    { version: 1, stores: { notes: { fields: { value: before } } } },
+    { version: 2, stores: { notes: { fields: { value: after } } } },
+  ];
+}
 
 describe("defineSchemas (data model §6)", () => {
   it("accepts every version and gives the current one", () => {
@@ -199,6 +211,75 @@ describe("defineSchemas (data model §6)", () => {
   it("allows a removed field to come back under the same name with another type", () => {
     const notes = { fields: { ...v1.stores.notes.fields, done: field.enum(["no", "yes"]) } };
     expect(() => defineSchemas(v1, v2(notes, { remove: ["done"] }))).not.toThrow();
+  });
+
+  it.each<[string, FieldType<unknown>, FieldType<unknown>]>([
+    ["shorter strings", field.string({ maxLength: 100 }), field.string({ maxLength: 10 })],
+    ["longer strings", field.string(), field.string({ minLength: 1 }).default("-")],
+    ["fewer values", field.enum(["low", "normal", "high"]), field.enum(["low", "high"])],
+    ["narrower numbers", field.number(), field.number({ min: 0 })],
+    ["whole numbers", field.number(), field.number({ integer: true })],
+    ["no null", field.date().nullable(), field.date().default("2026-01-01")],
+    ["another type", field.string(), field.number()],
+    ["lists of another type", field.array(field.string()), field.array(field.number())],
+    [
+      "an object whose member narrows",
+      field.object({ x: field.number() }),
+      field.object({ x: field.number({ min: 0 }) }),
+    ],
+    ["even wider strings", field.string({ maxLength: 10 }), field.string({ maxLength: 100 })],
+  ])(
+    "refuses a kept field whose type changes, here to %s, unless it is converted or removed",
+    (_case, before, after) => {
+      const [first, second] = versions(before, after);
+      expect(() => defineSchemas(first, second)).toThrow(
+        /keeps the field value, but changes its type from .+ to .+: convert it, so that every stored value fits, or remove it\./,
+      );
+      const convert = { notes: { convert: { value: (value: JsonValue) => value } } };
+      expect(() => defineSchemas(first, { ...second, migrate: convert })).not.toThrow();
+      const remove = { notes: { remove: ["value"] } };
+      expect(() => defineSchemas(first, { ...second, migrate: remove })).not.toThrow();
+    },
+  );
+
+  it("names the new name of a renamed field whose type changes", () => {
+    const notes = { fields: { ...NOTES_V2.fields, name: field.string({ maxLength: 50 }) } };
+    expect(() =>
+      defineSchemas(v1, v2(notes, { rename: { title: "name" }, remove: ["done"] })),
+    ).toThrow(
+      "The migration of notes to version 2 keeps the field title as name, but changes its type from a string of at most 100 characters to a string of at most 50 characters: convert it, so that every stored value fits, or remove it.",
+    );
+  });
+
+  it.each<[string, FieldType<unknown>, FieldType<unknown>]>([
+    ["the same type", field.string({ maxLength: 100 }), field.string({ maxLength: 100 })],
+    ["another default", field.enum(["low", "high"]), field.enum(["low", "high"]).default("high")],
+    ["the same values in another order", field.enum(["low", "high"]), field.enum(["high", "low"])],
+    ["the same type made nullable", field.date().default("2026-01-01"), field.date().nullable()],
+    [
+      "the same members in another order",
+      field.object({ x: field.number(), y: field.boolean() }),
+      field.object({ y: field.boolean(), x: field.number() }),
+    ],
+  ])("allows a kept field whose type holds every value it held: %s", (_case, before, after) => {
+    const [first, second] = versions(before, after);
+    expect(() => defineSchemas(first, second)).not.toThrow();
+  });
+
+  it("allows a reference to follow its store to a new name", () => {
+    const first = {
+      version: 1,
+      stores: { notes: { fields: { list: field.reference("lists") } }, lists: { fields: {} } },
+    } satisfies SchemaVersion;
+    const second = {
+      version: 2,
+      stores: {
+        notes: { fields: { folder: field.reference("folders") } },
+        folders: { fields: {} },
+      },
+      migrate: { notes: { rename: { list: "folder" } }, lists: { store: "folders" } },
+    } satisfies SchemaVersion;
+    expect(() => defineSchemas(first, second)).not.toThrow();
   });
 });
 

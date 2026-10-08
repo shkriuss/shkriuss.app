@@ -216,6 +216,7 @@ Canonical JSON is the [JSON Canonicalization Scheme (RFC 8785)](https://www.rfc-
   - a new field is missing, so it reads as its default;
   - a removed field is dropped with its clock;
   - `id` and `deleted` never change, and tombstones only get the new `v`.
+- A field that a migration keeps, under its name or a new one, keeps its value, so its type in the new version must accept every value of its old type: the same type, or the same type made nullable. Any other change to a kept field's type needs a conversion, which may return the value as it is where the new type accepts it, or the field's removal. Otherwise a stored value that the new type refuses would stop the upgrade, and the app would fail to start on every device that holds one. The data layer refuses to define such a migration, so that tests catch it before a release.
 - Migrations never create or remove records. Anything else requires a change to this spec first.
 
 ## 7. Storage

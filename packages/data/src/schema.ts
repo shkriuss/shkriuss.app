@@ -119,6 +119,14 @@ function checkStores(schema: SchemaVersion): void {
   }
 }
 
+/**
+ * Whether a field of type `next` holds every value of a field of type `previous`: the same type,
+ * whatever its default, or the same made nullable (data model §6).
+ */
+function holdsEveryValue(previous: FieldType<unknown>, next: FieldType<unknown>): boolean {
+  return next.signature === previous.signature || next.signature === `${previous.signature}|null`;
+}
+
 function checkMigration(previous: SchemaVersion, next: SchemaVersion): void {
   const migrations = next.migrate ?? {};
   for (const store of Object.keys(migrations)) {
@@ -172,9 +180,19 @@ function checkMigration(previous: SchemaVersion, next: SchemaVersion): void {
       }
       targets.set(name, source);
     };
-    for (const name of Object.keys(before.fields)) {
-      if (!remove.has(name)) {
-        claim(has(rename, name) ? (rename[name] ?? name) : name, `the field ${name}`);
+    for (const [name, type] of Object.entries(before.fields)) {
+      if (remove.has(name)) {
+        continue;
+      }
+      const kept = has(rename, name) ? (rename[name] ?? name) : name;
+      claim(kept, `the field ${name}`);
+      // A kept field keeps its value, which its new type must hold.
+      const now = after.fields[kept];
+      if (!has(convert, name) && now !== undefined && !holdsEveryValue(type, now)) {
+        const as = kept === name ? "" : ` as ${kept}`;
+        fail(
+          `${where} keeps the field ${name}${as}, but changes its type from ${type.description} to ${now.description}: convert it, so that every stored value fits, or remove it.`,
+        );
       }
     }
     for (const [name, computed] of Object.entries(compute)) {
