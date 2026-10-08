@@ -61,3 +61,65 @@ export function isLongEnough(passphrase: string): boolean {
   }
   return count >= MIN_PASSPHRASE_LENGTH;
 }
+
+/**
+ * The fewest different characters of a passphrase that the user picks, ignoring case and
+ * spaces (backup format §3.1).
+ */
+export const MIN_DIFFERENT_CHARACTERS = 5;
+
+/** What people type along: the digits, the alphabet, and the keyboard's letters, row by row. */
+const RUNS = ["0123456789", "abcdefghijklmnopqrstuvwxyz", "qwertyuiopasdfghjklzxcvbnm"];
+
+/**
+ * Long passwords that people often use, which the other rules of §3.1 let through: mostly
+ * runs along the keyboard with digits, by rows or by columns.
+ */
+const COMMON: ReadonlySet<string> = new Set([
+  "123456qwerty",
+  "123qweasdzxc",
+  "1q2w3e4r5t6y",
+  "1qaz2wsx3edc",
+  "1qazxsw23edc",
+  "a1b2c3d4e5f6",
+  "abcd12345678",
+  "administrator",
+  "iloveyou1234",
+  "passw0rd1234",
+  "password1234",
+  "password12345",
+  "password123456",
+  "q1w2e3r4t5y6",
+  "qazwsxedcrfv",
+  "qwer1234asdf",
+  "qwerty123456",
+  "qwertyuiop123",
+  "zaq12wsxcde3",
+  "zxcvbnm12345",
+]);
+
+/** Whether `text` follows `run`, from any place in it and around again. */
+function runsAlong(text: string, run: string): boolean {
+  return run.repeat(Math.ceil(text.length / run.length) + 1).includes(text);
+}
+
+/**
+ * Whether a passphrase that the user picks is easy to guess (backup format §3.1). Ignoring case
+ * and spaces, it is when it has fewer than 5 different characters, repeats a shorter part, runs
+ * along the digits, the alphabet or the keyboard, or is a long password that people often use.
+ */
+export function isEasyToGuess(passphrase: string): boolean {
+  const characters = Array.from(
+    graphemes.segment(normalizePassphrase(passphrase).toLowerCase()),
+    ({ segment }) => segment,
+  ).filter((segment) => segment.trim() !== "");
+  const text = characters.join("");
+  const backwards = characters.toReversed().join("");
+  return (
+    new Set(characters).size < MIN_DIFFERENT_CHARACTERS ||
+    // A text that repeats a shorter part is found in itself twice over before its own length.
+    `${text}${text}`.indexOf(text, 1) < text.length ||
+    RUNS.some((run) => runsAlong(text, run) || runsAlong(backwards, run)) ||
+    COMMON.has(text)
+  );
+}

@@ -11,7 +11,7 @@ Backups: the files that carry an app's data off a device and back, as the [backu
 | `age.worker.ts`   | The backup worker, which answers one request and ends                                                                                                              |
 | `age-messages.ts` | The messages between the page and the backup worker, and their checks                                                                                              |
 | `age.ts`          | Encryption with age (§3), as the worker runs it                                                                                                                    |
-| `passphrase.ts`   | Generated passphrases, their normalization and the minimum length of a passphrase the user picks (§3.1)                                                            |
+| `passphrase.ts`   | Generated passphrases, their normalization, and the checks of a passphrase that the user picks (§3.1)                                                              |
 | `words.ts`        | The 2,048 words of generated passphrases: the English word list of [BIP-39](https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki), under the MIT License |
 | `errors.ts`       | `BackupError`, whose `code` tells the conditions of §6 apart                                                                                                       |
 
@@ -72,6 +72,7 @@ Messages are for developers and contain no data from the backup, only ids. An un
 - `generatePassphrase()` joins six words from `WORDS` with hyphens. Each word takes 11 bits from `crypto.getRandomValues`, so all 2,048 words are equally likely and a passphrase has 66 bits.
 - `normalizePassphrase()` puts a passphrase in Unicode NFC, so the same passphrase typed on different devices gives the same bytes. It changes nothing else, and spaces count. Encryption and decryption normalize every passphrase.
 - `isLongEnough()` checks that a passphrase the user picks has at least 12 characters, counted as people see them: an emoji or a letter with an accent counts once.
+- `isEasyToGuess()` refuses a passphrase that the user picks when it is easy to guess, ignoring case and spaces: fewer than 5 different characters, a shorter part repeated, a run along the digits, the alphabet or the keyboard, or one of a few long passwords that people often use, such as `qwerty123456`.
 
 ## Tests
 

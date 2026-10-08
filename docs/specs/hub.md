@@ -38,7 +38,7 @@ In plain language, what [architecture §13](../architecture.md#13-privacy) commi
 
 - The apps keep the user's data on the device. There are no accounts, cookies, analytics, telemetry or third-party requests.
 - **What Cloudflare sees:** the IP address, the user agent, the address requested and the time, as with any website. Cloudflare's own privacy policy applies to it. The sites turn on no logging or analytics of their own.
-- **Backups** are files that the user saves, where the user chooses. They are encrypted by default, with a passphrase that never leaves the device.
+- **Backups** are files that the user saves, where the user chooses. They are encrypted by default, with a passphrase that the apps never store or send anywhere. The browser may offer to save the passphrase, as it does passwords, and its password manager keeps it if the user lets it.
 - **Changes** to the policy are in the repository's history, with the date of the last change on the page.
 
 ## 4. `security.txt`

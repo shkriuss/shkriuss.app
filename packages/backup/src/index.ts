@@ -24,9 +24,11 @@ export {
   type OpenedFile,
 } from "./files.ts";
 export {
+  MIN_DIFFERENT_CHARACTERS,
   MIN_PASSPHRASE_LENGTH,
   PASSPHRASE_WORDS,
   generatePassphrase,
+  isEasyToGuess,
   isLongEnough,
   normalizePassphrase,
   type RandomBytes,
