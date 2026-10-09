@@ -188,17 +188,29 @@ async function restoreFile(page: Page, file: BackupFile | string): Promise<void>
   );
 }
 
+/** What `recordStops()` records. */
+interface Stops {
+  /** When a dialog first closed. */
+  closed?: number;
+  /** When a worker was first stopped. */
+  terminated?: number;
+  /** When that worker first said something, which the backup worker does once its script ran. */
+  running?: number;
+}
+
 declare global {
   interface Window {
-    /** When a dialog first closed, and a worker was first stopped, from `recordStops()`. */
-    stops?: { closed?: number; terminated?: number };
+    stops?: Stops;
   }
 }
 
-/** From the next page on, records when a dialog first closes and a worker is first stopped. */
+/**
+ * From the next page on, records when a dialog first closes, when a worker is first stopped, and
+ * when that worker had said that its script has run.
+ */
 async function recordStops(page: Page): Promise<void> {
   await page.addInitScript(() => {
-    const stops: { closed?: number; terminated?: number } = {};
+    const stops: Stops = {};
     window.stops = stops;
     document.addEventListener(
       "close",
@@ -207,13 +219,34 @@ async function recordStops(page: Page): Promise<void> {
       },
       true,
     );
+    const running = new WeakMap<object, number>();
+    window.Worker = new Proxy(Worker, {
+      construct(target, values: unknown[]) {
+        const worker: unknown = Reflect.construct(target, values);
+        if (!(worker instanceof EventTarget)) {
+          throw new TypeError("A worker is no event target here.");
+        }
+        worker.addEventListener("message", () => {
+          if (!running.has(worker)) {
+            running.set(worker, performance.now());
+          }
+        });
+        return worker;
+      },
+    });
     const original: unknown = Reflect.get(Worker.prototype, "terminate");
     if (typeof original !== "function") {
       throw new TypeError("Workers cannot be terminated here.");
     }
     const terminate = new Proxy(original, {
-      apply(target, worker, values: unknown[]) {
-        stops.terminated ??= performance.now();
+      apply(target, worker: object, values: unknown[]) {
+        if (stops.terminated === undefined) {
+          stops.terminated = performance.now();
+          const ran = running.get(worker);
+          if (ran !== undefined) {
+            stops.running = ran;
+          }
+        }
         const result: unknown = Reflect.apply(target, worker, values);
         return result;
       },
@@ -224,13 +257,17 @@ async function recordStops(page: Page): Promise<void> {
 
 /**
  * How long after the dialog closed the page stopped the worker, in milliseconds: almost at once
- * if closing stops it, and only once it has derived the key, seconds later, if not.
+ * if closing stops it, and only once it has derived the key, seconds later, if not. A worker
+ * whose script had not run yet when the dialog closed counts from when it said that it had, and
+ * must not be stopped before: Firefox can crash the page then.
  */
 async function stoppedAfter(page: Page): Promise<number> {
   await expect
     .poll(async () => page.evaluate(() => window.stops?.terminated), MAKING)
     .toBeDefined();
-  return page.evaluate(() => (window.stops?.terminated ?? 0) - (window.stops?.closed ?? 0));
+  const { closed = 0, running, terminated = 0 } = await page.evaluate(() => window.stops ?? {});
+  expect(running, "when the worker said that its script had run").toBeDefined();
+  return terminated - Math.max(closed, running ?? terminated);
 }
 
 /** The backup is made, which takes seconds: the key takes 256 MiB to derive. */

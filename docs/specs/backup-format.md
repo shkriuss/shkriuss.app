@@ -95,7 +95,7 @@ age authenticates the whole file: a changed or truncated file fails to decrypt. 
 - Before use, a passphrase is normalized to Unicode NFC, so the same passphrase typed on different devices gives the same bytes. Nothing else is changed; spaces count.
 - A passphrase is never stored, logged or sent anywhere, and stays in memory only during the operation. There is no hint and no recovery: without the passphrase, the backup cannot be opened ([threat model](../threat-model.md#5-residual-risks-accepted) R3).
 
-Deriving the key takes seconds on a phone, so encryption and decryption run in a worker and the page stays responsive. The worker starts through the platform's Trusted Types policy for worker scripts ([ADR 0011](../decisions/0011-worker-trusted-types-policy.md)). It ends with its operation, and also when the user closes the dialog that started it, so that two never derive keys at once.
+Deriving the key takes seconds on a phone, so encryption and decryption run in a worker and the page stays responsive. The worker starts through the platform's Trusted Types policy for worker scripts ([ADR 0011](../decisions/0011-worker-trusted-types-policy.md)). It ends with its operation, and also when the user closes the dialog that started it, so that two never derive keys at once. The page stops it only once its script has run, which the worker says first: Firefox can crash the page when a worker stops while its script still compiles.
 
 ## 4. Export
 

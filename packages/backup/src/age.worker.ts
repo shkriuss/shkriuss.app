@@ -37,3 +37,7 @@ self.addEventListener("message", (event) => {
     void answer(event.data, port);
   }
 });
+
+// The script has run, so the page may stop the worker from now on: Firefox can crash the page
+// when a worker stops while its script still compiles (microsoft/playwright#42565).
+postMessage("running");

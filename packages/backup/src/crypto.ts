@@ -15,6 +15,18 @@ async function inWorker(
 ): Promise<Uint8Array<ArrayBuffer>> {
   signal?.throwIfAborted();
   const worker = startWorker(ageWorker);
+  // Firefox can crash the page when a worker stops while its script still compiles, so the
+  // worker stops only once it has said that its script has run, or has failed to start.
+  let running = false;
+  let done = false;
+  const ran = (): void => {
+    running = true;
+    if (done) {
+      worker.terminate();
+    }
+  };
+  worker.addEventListener("message", ran, { once: true });
+  worker.addEventListener("error", ran, { once: true });
   const channel = new MessageChannel();
   let abort: (() => void) | undefined;
   try {
@@ -50,7 +62,10 @@ async function inWorker(
       signal?.removeEventListener("abort", abort);
     }
     channel.port1.close();
-    worker.terminate();
+    done = true;
+    if (running) {
+      worker.terminate();
+    }
   }
 }
 

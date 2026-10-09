@@ -4,7 +4,13 @@ import { decrypt, encrypt } from "./age.ts";
 import { decryptBackup, encryptBackup } from "./crypto.ts";
 import { BackupError } from "./errors.ts";
 import { kindOf } from "./files.ts";
-import { answerNextWith, failNextWorker, startWorker, started } from "./test/worker.ts";
+import {
+  answerNextWith,
+  failNextWorker,
+  holdNextWorker,
+  startWorker,
+  started,
+} from "./test/worker.ts";
 
 vi.mock("@shkriuss/edge/workers", () => import("./test/worker.ts"));
 vi.mock("./age.ts", async (importOriginal) => {
@@ -84,7 +90,27 @@ describe("encryptBackup and decryptBackup (backup format §3.1)", () => {
       controller.abort(new DOMException("The user closed the dialog.", "AbortError"));
       await expect(encrypting).rejects.toThrow("The user closed the dialog.");
     });
-    expect(workers.map((worker) => worker.terminated)).toStrictEqual([true]);
+    await vi.waitFor(() => {
+      expect(workers.map((worker) => worker.terminated)).toStrictEqual([true]);
+    });
+    expect(workers.map((worker) => worker.terminatedBeforeRunning)).toStrictEqual([false]);
+  });
+
+  it("stop a worker whose script has not run yet once it has, as Firefox can crash before", async () => {
+    const run = holdNextWorker();
+    const controller = new AbortController();
+    const workers = await workersOf(async () => {
+      const decrypting = decryptBackup(DOCUMENT, PASSPHRASE, controller.signal);
+      controller.abort(new Error("Closed."));
+      await expect(decrypting).rejects.toThrow("Closed.");
+    });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(workers.map((worker) => worker.terminated)).toStrictEqual([false]);
+    run();
+    await vi.waitFor(() => {
+      expect(workers.map((worker) => worker.terminated)).toStrictEqual([true]);
+    });
+    expect(workers.map((worker) => worker.terminatedBeforeRunning)).toStrictEqual([false]);
   });
 
   it("start no worker for a signal that aborted already", async () => {
