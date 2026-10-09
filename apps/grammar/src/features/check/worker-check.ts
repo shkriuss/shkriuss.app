@@ -1,5 +1,5 @@
 import { startWorker } from "@shkriuss/edge/workers";
-import type { Check } from "./checker.ts";
+import type { RunningCheck } from "./checker.ts";
 import harperWorker from "./harper.worker.ts?worker&url";
 import { type CheckRequest, isCheckResponse } from "./protocol.ts";
 
@@ -7,9 +7,9 @@ import { type CheckRequest, isCheckResponse } from "./protocol.ts";
  * Starts the checker's worker, which starts loading Harper's module at once, and checks texts in
  * it: each request goes with a port for its answer, and the worker answers them in turn.
  */
-export function startWorkerCheck(): Check {
+export function startWorkerCheck(): RunningCheck {
   const worker = startWorker(harperWorker);
-  return async (text, variety) => {
+  const check: RunningCheck["check"] = async (text, variety) => {
     const channel = new MessageChannel();
     // Ends the request's listeners, on the worker too, once it has its answer.
     const listening = new AbortController();
@@ -40,5 +40,11 @@ export function startWorkerCheck(): Check {
       listening.abort();
       channel.port1.close();
     }
+  };
+  return {
+    check,
+    stop: () => {
+      worker.terminate();
+    },
   };
 }

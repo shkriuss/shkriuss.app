@@ -1,24 +1,54 @@
-import type { AppUpdates } from "@shkriuss/pwa";
+import type { AppInstall, AppUpdates } from "@shkriuss/pwa";
 import type { Mistake, Variety } from "./protocol.ts";
 
 /** Checks texts: the mistakes in `text` in `variety`, or a rejection if the check failed. */
 export type Check = (text: string, variety: Variety) => Promise<readonly Mistake[]>;
 
+/** A worker that checks texts, as `startWorkerCheck()` starts it. */
+export interface RunningCheck {
+  readonly check: Check;
+  /** Stops the worker. */
+  readonly stop: () => void;
+}
+
 /**
- * Where the checker stands: `starting` until it has checked its first text, then `ready`, or
- * `failed` if it could not start, as in a browser without WebAssembly.
+ * Where the checker stands:
+ *
+ * - `starting`: it has not checked its first text yet, which it does once it has started;
+ * - `downloading`: the same, but it downloads its module first, 8 MB, which the app then keeps
+ *   for offline use (ADR 0019);
+ * - `ready`: it checks texts;
+ * - `offline`: it could not download its module, as offline the first time; it tries again once
+ *   the device is back online;
+ * - `failed`: it cannot start, as in a browser without WebAssembly.
  */
-export type CheckerState = "starting" | "ready" | "failed";
+export type CheckerState = "starting" | "downloading" | "ready" | "offline" | "failed";
 
 /** The page's checker, for React's `useSyncExternalStore(checker.subscribe, checker.getState)`. */
 export interface Checker {
   readonly getState: () => CheckerState;
   readonly subscribe: (listener: () => void) => () => void;
+  /** There is text to check: the checker starts, if it has not, as soon as it can. */
+  readonly prepare: () => void;
   /**
    * The mistakes in `text` in `variety`; rejects if the checker failed or has not started, or if
    * a newer check took its place before it began.
    */
   readonly check: Check;
+}
+
+/** What the checker uses of the page. */
+export interface CheckerEnvironment {
+  /** The app's service worker, which keeps the checker's module once it has come (ADR 0019). */
+  readonly updates: AppUpdates;
+  /** How the app runs: installed, it starts the checker as soon as it opens. */
+  readonly install: Pick<AppInstall, "getState" | "subscribe">;
+  /** Starts the checker's worker, as `startWorkerCheck()` does. */
+  readonly start: () => RunningCheck;
+  /** Calls `listener` whenever the device comes back online. */
+  readonly onOnline: (listener: () => void) => void;
+  /** Whether the browser has WebAssembly, without which the checker cannot start. */
+  readonly webAssembly: boolean;
 }
 
 /**
@@ -63,16 +93,24 @@ function oneAtATime(check: Check): Check {
 }
 
 /**
- * The page's checker (docs/specs/apps/grammar.md §1). It starts once the service worker keeps
- * the app for offline use, so that the module, 8 MB to download, comes once, then from that
- * copy: at once if a version of the app is active already, or once the page knows that it has
- * no service worker, as in a private window that refuses one. `start` starts the worker, as `startWorkerCheck()` does. The
- * first check, of an empty text, tells when the checker is ready.
+ * The page's checker (docs/specs/apps/grammar.md §1). It starts once there is text, or as soon as
+ * the app opens if the app runs installed or the service worker keeps its module already, so
+ * that an installed app works offline from its first opening (ADR 0019). It waits until the
+ * service worker controls the page, so that the module, 8 MB to download, comes through it, which
+ * checks it and keeps it; or until the page knows that it has none, as in a private window that
+ * refuses one. The first check, of an empty text, tells when the checker is ready.
  */
-export function createChecker(updates: AppUpdates, start: () => Check): Checker {
+export function createChecker(environment: CheckerEnvironment): Checker {
+  const { updates, install, start, onOnline, webAssembly } = environment;
   const listeners = new Set<() => void>();
-  let state: CheckerState = "starting";
+  let state: CheckerState = webAssembly ? "starting" : "failed";
+  let running: RunningCheck | undefined;
   let check: Check | undefined;
+  // Whether the checker should start: there is text, or the module is kept, or the app runs
+  // installed.
+  let wanted = false;
+  // Whether the service worker keeps the module; undefined until the page knows.
+  let kept: boolean | undefined;
 
   function settle(next: CheckerState): void {
     state = next;
@@ -81,17 +119,32 @@ export function createChecker(updates: AppUpdates, start: () => Check): Checker 
     }
   }
 
+  /** Whether the module comes from the network, which the service worker then keeps. */
+  function downloads(): boolean {
+    return kept === false && updates.getState() !== "unavailable";
+  }
+
   function startOnce(): void {
-    const kept = updates.getState();
-    if (check !== undefined || kept === "starting" || kept === "installing") {
+    const worker = updates.getState();
+    if (
+      !wanted ||
+      running !== undefined ||
+      state === "failed" ||
+      state === "offline" ||
+      worker === "starting" ||
+      worker === "installing"
+    ) {
       return;
     }
-    stopFollowing();
     try {
-      check = oneAtATime(start());
+      running = start();
     } catch {
       settle("failed");
       return;
+    }
+    check = oneAtATime(running.check);
+    if (downloads()) {
+      settle("downloading");
     }
     void firstCheck(check);
   }
@@ -101,12 +154,44 @@ export function createChecker(updates: AppUpdates, start: () => Check): Checker 
       await started("", "american");
       settle("ready");
     } catch {
-      settle("failed");
+      running?.stop();
+      running = undefined;
+      check = undefined;
+      // A module that is not kept yet could not come, as offline: it tries again once online.
+      settle(kept === true ? "failed" : "offline");
     }
   }
 
-  const stopFollowing = updates.subscribe(startOnce);
-  startOnce();
+  function want(): void {
+    wanted = true;
+    startOnce();
+  }
+
+  if (webAssembly) {
+    updates.subscribe(startOnce);
+    install.subscribe(() => {
+      if (install.getState() === "installed") {
+        want();
+      }
+    });
+    onOnline(() => {
+      if (state === "offline") {
+        settle("starting");
+        startOnce();
+      }
+    });
+    void (async () => {
+      kept = await updates.firstUseKept();
+      if (kept) {
+        want();
+      } else if (running !== undefined && state === "starting" && downloads()) {
+        settle("downloading");
+      }
+    })();
+    if (install.getState() === "installed") {
+      want();
+    }
+  }
 
   return {
     getState: () => state,
@@ -116,8 +201,9 @@ export function createChecker(updates: AppUpdates, start: () => Check): Checker 
         listeners.delete(listener);
       };
     },
+    prepare: want,
     check: async (text, variety) => {
-      if (check === undefined || state === "failed") {
+      if (check === undefined) {
         throw new Error("The checker is not running.");
       }
       return check(text, variety);

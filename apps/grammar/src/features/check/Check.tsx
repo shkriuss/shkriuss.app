@@ -121,6 +121,13 @@ const MistakeItem = memo(function MistakeItem({
   );
 });
 
+/** The status while there is text and no answer yet, by where the checker stands. */
+const STARTING_STATUS: Readonly<Record<"starting" | "downloading" | "ready", () => string>> = {
+  starting: m.gettingReady,
+  downloading: m.downloading,
+  ready: m.checking,
+};
+
 /**
  * The check screen's content (docs/specs/apps/grammar.md §1): the text, its variety of English,
  * Copy and Delete, then the mistakes that the checker finds in it, each with its fixes. The text
@@ -165,6 +172,13 @@ export function Check({
   // after the keystroke, rather than hold it up. A new check's fixes are ready at once.
   const changed = useDeferredValue(!current);
   const stale = !current && changed;
+
+  useEffect(() => {
+    // The checker starts once there is text to check (ADR 0019), unless it has started already.
+    if (text !== "") {
+      checker.prepare();
+    }
+  }, [checker, text]);
 
   useEffect(() => {
     // The answer counts while the text and the variety are still those it is about, even once
@@ -311,12 +325,14 @@ export function Check({
   let status = "";
   if (state === "failed") {
     status = m.cannotStart();
+  } else if (state === "offline") {
+    status = m.cannotDownload();
   } else if (failed) {
     status = m.checkFailed();
   } else if (result === undefined && text !== "") {
-    // The checker's start, which takes seconds each time the app opens, and its first check
-    // are worth a word only once there is text to check.
-    status = state === "starting" ? m.gettingReady() : m.checking();
+    // The checker's start, which takes seconds each time, and its first check are worth a word
+    // only once there is text to check.
+    status = STARTING_STATUS[state]();
   } else if (result !== undefined && result.text !== "") {
     status = m.found(shown.length);
   }

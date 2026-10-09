@@ -27,6 +27,8 @@ export const config = {
   keepsData: false,
   // Its checker is Harper, compiled to WebAssembly, in a worker (ADR 0014).
   webAssembly: true,
+  // Harper's module, 8 MB to download, comes only once the checker first starts (ADR 0019).
+  keepOnFirstUse: [".wasm"],
   // Copy puts the text on the clipboard.
   allowedFeatures: ["clipboard-write"],
 } satisfies AppConfig;
