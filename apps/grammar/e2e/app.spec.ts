@@ -339,8 +339,16 @@ test("offline before its first check, it says that the checker needs the interne
   await expect(page.getByText(m.cannotDownload())).toBeVisible(STARTING);
   await expect(mistakes(page)).toHaveCount(0);
   // The browser reports the module's failed request, in its own words, and nothing else failed.
+  // WebKit can report it as uncaught errors too, though the checker catches it.
   expect(security.violations).toStrictEqual([]);
-  expect(security.problems.filter((problem) => problem.startsWith("uncaught"))).toStrictEqual([]);
+  expect(
+    security.problems.filter(
+      (problem) =>
+        problem.startsWith("uncaught") &&
+        !problem.endsWith("Load failed") &&
+        !problem.includes(".wasm"),
+    ),
+  ).toStrictEqual([]);
 });
 
 test("the settings have installing and About, and neither storage nor backups", async ({

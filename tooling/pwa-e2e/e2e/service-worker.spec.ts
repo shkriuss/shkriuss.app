@@ -273,9 +273,17 @@ test("a file kept on first use that fails its hash is neither served nor kept", 
   expect(
     await page.evaluate(async () => (await caches.match("/first-use/build.dat")) === undefined),
   ).toBe(true);
-  // The browser reports the failed request, in its own words, and nothing else failed.
+  // The browser reports the failed request, in its own words, and nothing else failed. WebKit
+  // reports it as uncaught errors too, though the page catches it.
   expect(security.violations).toStrictEqual([]);
-  expect(security.problems.filter((problem) => problem.startsWith("uncaught"))).toStrictEqual([]);
+  expect(
+    security.problems.filter(
+      (problem) =>
+        problem.startsWith("uncaught") &&
+        !problem.endsWith("Load failed") &&
+        !problem.includes("/first-use/build.dat"),
+    ),
+  ).toStrictEqual([]);
 });
 
 test("a window of the old version keeps loading its files, then reloads into the new one", async ({
