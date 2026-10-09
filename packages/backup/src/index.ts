@@ -7,7 +7,12 @@ export {
   type BackupContents,
   type ReadOptions,
 } from "./document.ts";
-export { createBackupFile, readBackupFile, type BackupFileOptions } from "./backup-file.ts";
+export {
+  createBackupFile,
+  readBackupFile,
+  type BackupFile,
+  type BackupFileOptions,
+} from "./backup-file.ts";
 export { BackupError, type BackupErrorCode } from "./errors.ts";
 export {
   MEDIA_TYPES,

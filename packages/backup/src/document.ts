@@ -70,8 +70,6 @@ export interface ReadOptions {
   readonly app: string;
   /** Every version of the app's data schema. */
   readonly schemas: Schemas;
-  /** This device's time, `Date.now()`, to refuse clocks from the future (data model §3.5). */
-  readonly now: number;
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -90,9 +88,13 @@ function invalid(message: string, cause?: unknown): BackupError {
   return new BackupError("invalid", message, { cause });
 }
 
-/** What the data layer's refusal of a record means for the import as a whole (§6). */
+/**
+ * What the data layer's refusal of a record means for the import as a whole (§6). Reading never
+ * refuses clocks from the future: the import does, unless the user confirmed them (data model
+ * §3.5).
+ */
 const FROM_DATA: Readonly<Record<DataLayerErrorCode, BackupErrorCode>> = {
-  "future-clock": "future-clock",
+  "future-clock": "invalid",
   "newer-version": "newer-version",
   invalid: "invalid",
   "too-large": "invalid",
@@ -107,13 +109,14 @@ const decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 /**
  * Reads a backup document (backup format §5.3) and checks it (§5.4) for the app `app`, then
  * checks and migrates its records (§5.5). Throws a `BackupError` (§6): `not-a-backup` for
- * anything that is not a backup document, `other-app`, `newer-version`, `future-clock`,
- * `too-large` above 64 MiB, or `invalid` for any other failed check.
+ * anything that is not a backup document, `other-app`, `newer-version`, `too-large` above 64 MiB,
+ * or `invalid` for any other failed check. Clocks from the future pass: the preview shows them
+ * (data model §3.5).
  *
  * A newer format version is refused before anything else is checked, because a newer format
  * may differ in every other way.
  */
-export function readBackup(bytes: Uint8Array, { app, schemas, now }: ReadOptions): BackupContents {
+export function readBackup(bytes: Uint8Array, { app, schemas }: ReadOptions): BackupContents {
   if (bytes.length > MAX_BACKUP_BYTES) {
     throw new BackupError("too-large", `The file has ${bytes.length} bytes.`);
   }
@@ -160,7 +163,7 @@ export function readBackup(bytes: Uint8Array, { app, schemas, now }: ReadOptions
     return {
       exported: time,
       schemaVersion,
-      incoming: checkIncomingStores(schemas, schemaVersion, stores, now),
+      incoming: checkIncomingStores(schemas, schemaVersion, stores),
     };
   } catch (error) {
     if (error instanceof DataLayerError) {

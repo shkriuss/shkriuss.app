@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DataLayerError, type DataLayerErrorCode } from "./errors.ts";
-import { MAX_CLOCK_AHEAD, formatHlc } from "./hlc.ts";
+import { MAX_RECEIVED_WALL, formatHlc } from "./hlc.ts";
 import { SETTINGS_ID } from "./ids.ts";
 import {
   MAX_FIELDS,
@@ -13,8 +13,7 @@ import {
   toJson,
 } from "./record.ts";
 
-const NOW = 1_791_200_000_000;
-const CONTEXT: RecordContext = { store: "notes", version: 2, now: NOW };
+const CONTEXT: RecordContext = { store: "notes", version: 2 };
 
 // The examples of data model §2.1.
 const LIVE = {
@@ -141,20 +140,17 @@ describe("checkRecord (data model §8, step 1)", () => {
     expect(refusal(crafted)).toBe("invalid");
   });
 
-  it("refuses clocks more than 24 hours after this device's time (data model §3.5)", () => {
-    const tomorrow = formatHlc({
-      wall: NOW + MAX_CLOCK_AHEAD + 1,
+  it("refuses clocks after the year 9999, but not clocks from the future (data model §3.5)", () => {
+    const after = formatHlc({
+      wall: MAX_RECEIVED_WALL + 1,
       counter: 0,
       device: "0000000000000001",
     });
-    const limit = formatHlc({
-      wall: NOW + MAX_CLOCK_AHEAD,
-      counter: 0,
-      device: "0000000000000001",
-    });
-    expect(refusal({ ...LIVE, clock: { ...LIVE.clock, done: tomorrow } })).toBe("future-clock");
-    expect(refusal({ ...TOMBSTONE, deleted: tomorrow })).toBe("future-clock");
-    expect(refusal({ ...LIVE, clock: { ...LIVE.clock, done: limit } })).toBeUndefined();
+    const last = formatHlc({ wall: MAX_RECEIVED_WALL, counter: 7, device: "0000000000000001" });
+    expect(refusal({ ...LIVE, clock: { ...LIVE.clock, done: after } })).toBe("invalid");
+    expect(refusal({ ...TOMBSTONE, deleted: after })).toBe("invalid");
+    expect(refusal({ ...LIVE, clock: { ...LIVE.clock, done: last } })).toBeUndefined();
+    expect(refusal({ ...TOMBSTONE, deleted: last })).toBeUndefined();
   });
 
   it(`refuses more than ${MAX_FIELDS} fields`, () => {

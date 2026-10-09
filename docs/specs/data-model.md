@@ -132,7 +132,14 @@ After records from elsewhere are merged in, the device sets its last HLC to the 
 
 ### 3.5 Clocks from the future
 
-An import is refused if any of its HLCs has a wall time more than 24 hours after the receiving device's `Date.now()` ([backup-format.md](backup-format.md#54-validate)). Accepting it would move this device's clock that far ahead for good, and its changes would then win against every other device's.
+An HLC is from the future if its wall time lies more than 24 hours after this device's `Date.now()`. It comes from a device whose date was set ahead, unless this device's date is behind. A device whose date was set ahead goes on issuing such HLCs after its date is put right: they carry its last wall time until its date catches up (section 3.3), and so does every backup that it makes until then.
+
+- An export says when it has HLCs from the future ([backup-format.md §4](backup-format.md#4-export)).
+- An import with HLCs from the future applies only once the user has confirmed their times ([backup-format.md §5.6](backup-format.md#56-preview)). The device then receives them (section 3.4): until their time comes, its own changes carry it, and win against those of devices whose date is right.
+
+Refusing such an import would keep the user from restoring any backup that such a device made until its date caught up, with nothing they could do about it. Accepting it unasked would hide a wrong date on this device, which the user can correct instead.
+
+An HLC from outside whose wall time lies after 253402300799999, the end of the year 9999, is refused (section 8). No device's date gets there, and a device that received a wall time near the end of section 3.1's range could run out of HLCs to issue.
 
 ## 4. Changes
 
@@ -223,7 +230,7 @@ Canonical JSON is the [JSON Canonicalization Scheme (RFC 8785)](https://www.rfc-
 
 Records from a backup are untrusted. Before any of them is merged, each one is checked, and one failure fails the whole import:
 
-1. **Structure:** exactly the members of section 2.1, of the right types; `id` a lowercase UUIDv7 (`^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`), and in `settings` the fixed id and no `deleted`; `v` an integer from 1 to the app's current version; every HLC well-formed (section 3.1) and not from the future (section 3.5); `clock` has exactly the keys of `data`; every clock is greater than `deleted`, if present; the rules and limits of sections 2.3 and 2.4.
+1. **Structure:** exactly the members of section 2.1, of the right types; `id` a lowercase UUIDv7 (`^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`), and in `settings` the fixed id and no `deleted`; `v` an integer from 1 to the app's current version; every HLC well-formed (section 3.1) and not after the end of the year 9999 (section 3.5); `clock` has exactly the keys of `data`; every clock is greater than `deleted`, if present; the rules and limits of sections 2.3 and 2.4.
 2. **Schema:** `data` is valid for its store at the record's own schema version: only known fields, each of the right type and within its constraints.
 3. **Migration:** the record is migrated to the current version (section 6) and checked against the current schema again, which also catches a faulty migration.
 

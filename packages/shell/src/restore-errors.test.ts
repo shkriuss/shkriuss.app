@@ -15,10 +15,6 @@ describe("a backup that cannot be restored", () => {
         "newer-version",
         "The backup was made by a newer version of the app. Update the app and try again.",
       ],
-      [
-        "future-clock",
-        "The backup's times lie in the future. Check the date and time on this device and on the one that made the backup.",
-      ],
       ["invalid", "The backup is damaged or was changed, and was not restored."],
     ];
     for (const [code, message] of cases) {
@@ -29,6 +25,12 @@ describe("a backup that cannot be restored", () => {
   it("names the other app whose backup it is, when the backup names a valid one", () => {
     expect(restoreErrorMessage(new BackupError("other-app", "A test.", { app: "notes" }))).toBe(
       "This is a backup of the app “notes”, not of this one.",
+    );
+  });
+
+  it("says that the backup's dates lie in the future when the user did not confirm them (§5.7)", () => {
+    expect(restoreErrorMessage(new DataLayerError("future-clock", "A test."))).toBe(
+      "The backup's dates lie in the future. Check the date and time on this device, then try again.",
     );
   });
 

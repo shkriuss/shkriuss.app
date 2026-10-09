@@ -8,7 +8,7 @@ The package has no side effects (`"sideEffects": false` in its `package.json`): 
 
 | Module        | What it does                                                                                                                                             |
 | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `hlc.ts`      | Hybrid logical clocks (§3): the format, issuing an HLC for a change, receiving HLCs from elsewhere, refusing clocks from the future; device ids          |
+| `hlc.ts`      | Hybrid logical clocks (§3): the format, issuing an HLC for a change, receiving HLCs from elsewhere, telling clocks from the future; device ids           |
 | `ids.ts`      | Record ids: UUIDv7 (RFC 9562), and the fixed id of the settings record                                                                                   |
 | `json.ts`     | Field values (§2.3): checked, normalized copies of JSON values, and canonical JSON (RFC 8785) for comparing and measuring them                           |
 | `names.ts`    | Field and store names (§2.3, §2.5)                                                                                                                       |
@@ -149,15 +149,16 @@ const { schemaVersion, stores } = await db.snapshot();
 await db.recordBackup();
 
 // Import (§5): `backup` is a parsed backup document whose format, app and version were checked.
-const incoming = checkIncomingStores(schemas, backup.schemaVersion, backup.stores, Date.now());
-const preview = await db.previewImport(incoming); // { total: { new: 12, updated: 3, deleted: 1, unchanged: 40 }, stores }
-// …once the user confirms:
-const imported = await db.import(incoming);
+const incoming = checkIncomingStores(schemas, backup.schemaVersion, backup.stores);
+const preview = await db.previewImport(incoming); // { total: { new: 12, updated: 3, deleted: 1, unchanged: 40 }, stores, fromFuture }
+// …once the user confirms, including any dates from the future that the preview showed:
+const imported = await db.import(incoming, { acceptFromFuture: preview.fromFuture !== undefined });
 ```
 
 - **Checks:** `checkIncomingStores()` checks that the backup has exactly the stores of its schema version, each an array of records. Every record must pass the checks of data model §8 and be at that version. No store may hold an id twice, before or after the migration, which can merge stores. One refused record refuses the whole backup. It then migrates every record to the current version.
 - **Only checked records:** the result can be previewed and imported, and nothing else can: TypeScript and the import itself refuse any other object, and its records are frozen.
-- **Preview:** `previewImport()` merges each record with its local copy in memory and counts, per store and in total, the records that are new, updated (including ones that come back after a deletion), deleted or unchanged. It writes nothing.
+- **Preview:** `previewImport()` merges each record with its local copy in memory and counts, per store and in total, the records that are new, updated (including ones that come back after a deletion), deleted or unchanged. It writes nothing. Its `fromFuture` is the time of the backup's greatest HLC if that lies more than 24 hours after this device's clock (§3.5), which the user must confirm.
+- **Clocks from the future:** `import()` refuses them with `future-clock`, unless `acceptFromFuture` says that the user confirmed them; it checks them against this device's clock again, which may have changed since the preview. `snapshot()` has the same `fromFuture`, so that an export can say that restoring it will ask. HLCs after the end of the year 9999 are refused as `invalid`: a device's clock never gets that far, and one that received such a time could run out of HLCs.
 - **Import:** `import()` does the same in one transaction over every store. It reads each local copy again and writes every merged record that differs, including tombstones of records the device never had. The device receives the backup's greatest HLC, so its later changes sort after everything in the backup. An import that writes something counts as a change since the last backup. If anything fails, nothing changes. Importing the same backup again changes nothing, and the order of imports does not matter.
 
 ## Tests
@@ -165,6 +166,6 @@ const imported = await db.import(incoming);
 - **Property-based tests** (fast-check, [ADR 0008](../../docs/decisions/0008-quality-gates.md)) check on generated records that merging is commutative, associative and idempotent, that it keeps the later write of every field, and that its result always passes the checks for records from outside. The generators draw clocks and field names from small sets, so copies often share fields and clocks, and sometimes have equal clocks with different values.
 - **Examples** cover each situation of the data model's merge table, the RFC 8785 test vectors, and every check of section 8. Migrations are tested rule by rule, including tombstones, records that came back alive and store moves, and as properties: they are deterministic, give records that pass every check, and merge the same way before and after migrating.
 - **Storage tests** run Dexie on [fake-indexeddb](https://github.com/dumbmatter/fakeIndexedDB): upgrades that move stores and keep tombstones and clocks, failing migrations, newer and repaired databases, tabs that upgrade, delete or block the database, connections that the browser closes, two connections issuing HLCs at once, and the device state. Observed queries follow changes, imports and other connections, run again only after changes to what they read, and end with their errors.
-- **Backup tests** check every rule of `checkIncomingStores()`, including a migration that merges two stores, and that its result can be neither changed nor forged. They count every outcome of an import, check that the device receives the backup's clock, and that a failed import changes nothing. As a property, any number of imports of two generated backups, in either order, ends in the same records.
+- **Backup tests** check every rule of `checkIncomingStores()`, including a migration that merges two stores, and that its result can be neither changed nor forged. They count every outcome of an import, check that the device receives the backup's clock, that clocks from the future import only once accepted, as a property too, and that a failed import changes nothing. As a property, any number of imports of two generated backups, in either order, ends in the same records.
 - **In real browsers,** the platform end-to-end tests ([`tooling/platform-e2e`](../../tooling/platform-e2e)) run the storage in Chromium, Firefox and WebKit, under the production security headers: records last across reloads, two tabs never issue the same HLC, a query observed in one tab follows changes made in another, a newer version upgrades the database, which older ones then refuse, and a backup carries the records to another device and to a newer version.
 - **Coverage:** `pnpm --filter @shkriuss/data test` fails below 90% of lines, branches, functions or statements.

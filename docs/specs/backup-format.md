@@ -100,7 +100,7 @@ Deriving the key takes seconds on a phone, so encryption and decryption run in a
 ## 4. Export
 
 1. Read every store in one IndexedDB read transaction, so the backup is a consistent snapshot. Include deleted records: they carry deletions to other devices.
-2. Build the document (section 2). If it would be larger than importers accept (section 5.1), refuse and explain: every backup that is made must import.
+2. Build the document (section 2). If it would be larger than importers accept (section 5.1), refuse and explain: every backup that is made must import. If it has HLCs from the future ([data-model.md §3.5](data-model.md#35-clocks-from-the-future)), say so with the file, and the latest of their times: if this device's date is wrong, the user can correct it; otherwise, restoring the backup will ask the user to confirm those times.
 3. **Encrypted:** encrypt it with the passphrase (section 3). **Plain:** only after the user confirms a warning that anyone who gets the file can read all of it.
 4. Hand the file over: the share sheet (Web Share API) where the browser has one, otherwise a download ([architecture §8](../architecture.md#8-backups)).
 5. Record in `meta` when the backup was made, and set the count of changes since the last backup to zero ([data-model.md §7](data-model.md#7-storage)). Backup reminders use both.
@@ -129,7 +129,7 @@ Decode the bytes as UTF-8, refusing invalid UTF-8, and parse them as JSON. A byt
 3. `app` is this app's id.
 4. `schemaVersion` is at most the app's current schema version. Data newer than the app understands is never partly imported.
 5. `stores` has exactly the stores the app had at `schemaVersion`.
-6. Every record passes the checks of [data-model.md §8](data-model.md#8-records-from-outside), has `v` equal to `schemaVersion`, and has an `id` that no other record in its store has. No HLC is more than 24 hours ahead of this device's clock ([data-model.md §3.5](data-model.md#35-clocks-from-the-future)).
+6. Every record passes the checks of [data-model.md §8](data-model.md#8-records-from-outside), has `v` equal to `schemaVersion`, and has an `id` that no other record in its store has.
 
 ### 5.5 Migrate
 
@@ -146,9 +146,11 @@ Merge each incoming record with its local copy, in memory, and count per store:
 
 Show the app, the date of the backup and the counts, such as "12 new, 3 updated, 1 deleted", and ask the user to confirm. Nothing has been written yet.
 
+If the backup has HLCs from the future ([data-model.md §3.5](data-model.md#35-clocks-from-the-future)), the preview also says so, with the latest of their times: if this device's date is wrong, the user can correct it first; otherwise, restoring gives this device's changes that time too, until it comes. Confirming the import then confirms those times.
+
 ### 5.7 Apply
 
-In one IndexedDB read-write transaction over every store and `meta`:
+If the backup has HLCs from the future by this device's clock now, and the user did not confirm their times in the preview, as when this device's date has changed since, refuse (section 6). Otherwise, in one IndexedDB read-write transaction over every store and `meta`:
 
 1. Merge each incoming record with its local copy, read again inside this transaction in case another tab changed it since the preview, and write the result if it differs. This also stores tombstones of records the device never had, so that an older backup imported later cannot bring them back.
 2. Advance the device's last HLC to the greatest HLC in the backup ([data-model.md §3.4](data-model.md#34-receiving-hlcs)).
@@ -162,22 +164,22 @@ Importing the same backup twice changes nothing, and the order in which backups 
 
 Every failure says what happened and what to do. The import must tell these apart:
 
-| Condition                                                | The user is told                                                                                                  |
-| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| Larger than 64 MiB                                       | The file is too large to be a backup.                                                                             |
-| Neither an age file nor a backup document                | This is not a backup file.                                                                                        |
-| Wrong passphrase                                         | The passphrase is wrong; try again.                                                                               |
-| Damaged or truncated age file, or a work factor above 20 | The file is damaged or not supported.                                                                             |
-| A backup of another app                                  | This is a backup of another app, with a link to it if `app` is one of ours.                                       |
-| A newer format version or schema version                 | The backup was made by a newer version of the app; update the app and try again.                                  |
-| An HLC more than 24 hours in the future                  | The backup's times lie in the future; check the date and time on this device and on the one that made the backup. |
-| Any other failed check                                   | The backup is damaged or was changed, and was not imported.                                                       |
+| Condition                                                        | The user is told                                                                              |
+| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Larger than 64 MiB                                               | The file is too large to be a backup.                                                         |
+| Neither an age file nor a backup document                        | This is not a backup file.                                                                    |
+| Wrong passphrase                                                 | The passphrase is wrong; try again.                                                           |
+| Damaged or truncated age file, or a work factor above 20         | The file is damaged or not supported.                                                         |
+| A backup of another app                                          | This is a backup of another app, with a link to it if `app` is one of ours.                   |
+| A newer format version or schema version                         | The backup was made by a newer version of the app; update the app and try again.              |
+| HLCs from the future that the user did not confirm (section 5.7) | The backup's dates lie in the future; check the date and time on this device, then try again. |
+| Any other failed check                                           | The backup is damaged or was changed, and was not imported.                                   |
 
 ## 7. Security
 
 - An encrypted backup reveals only its size, name and file dates without the passphrase. Its content and integrity rest on age and the passphrase (section 3).
 - A plain backup protects nothing: anyone who gets it can read and change it. Changes are caught only to the extent that the import checks are.
-- A crafted backup can add, change or delete records of the app it names, within the checks of section 5.4, and the user sees the counts before anything is written; it cannot affect other apps. Imported data is never executed or rendered as HTML ([threat model](../threat-model.md#4-threats-and-mitigations) T6).
+- A crafted backup can add, change or delete records of the app it names, within the checks of section 5.4, and the user sees the counts before anything is written; it cannot affect other apps. It can move this device's clock ahead, to the end of the year 9999 at most, only once the user has confirmed the time that the preview shows ([data-model.md §3.5](data-model.md#35-clocks-from-the-future)). Imported data is never executed or rendered as HTML ([threat model](../threat-model.md#4-threats-and-mitigations) T6).
 
 ## 8. Compatibility
 

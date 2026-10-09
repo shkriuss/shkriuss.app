@@ -3,7 +3,8 @@
  *
  * - `invalid`: not a valid record, field, value or clock (data model §2, §3, §8);
  * - `too-large`: beyond a limit (data model §2.4);
- * - `future-clock`: an HLC more than 24 hours ahead of this device's clock (data model §3.5);
+ * - `future-clock`: an import with HLCs more than 24 hours ahead of this device's clock, which
+ *   the user has not confirmed (data model §3.5);
  * - `deleted`: a write to a deleted record (data model §4.2);
  * - `not-found`: a write to a record that the store lacks;
  * - `newer-version`: data from a newer version of the app, which this one cannot read (data

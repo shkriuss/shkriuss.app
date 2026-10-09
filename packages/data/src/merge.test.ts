@@ -8,8 +8,6 @@ import { mergeRecords } from "./merge.ts";
 import { type DataRecord, checkRecord, isDeleted } from "./record.ts";
 import { RECORD_ID, dataRecord } from "./test/arbitraries.ts";
 
-// Times in the past of every test run, so that no clock is from the future.
-const NOW = 1_791_100_000_000;
 const A = "aaaaaaaaaaaaaaaa";
 const B = "bbbbbbbbbbbbbbbb";
 
@@ -71,7 +69,7 @@ describe("mergeRecords: properties (data model §5.3)", () => {
     fc.assert(
       fc.property(dataRecord, dataRecord, (a, b) => {
         const merged = mergeRecords(a, b);
-        expect(checkRecord(merged, { store: "notes", version: 1, now: NOW })).toStrictEqual(merged);
+        expect(checkRecord(merged, { store: "notes", version: 1 })).toStrictEqual(merged);
       }),
     );
   });
@@ -151,7 +149,7 @@ describe("mergeRecords: in practice (data model §5.3)", () => {
     };
     const merged = mergeRecords(tombstone, crafted);
     expect(merged).toStrictEqual(tombstone);
-    expect(checkRecord(merged, { store: "notes", version: 1, now: NOW })).toStrictEqual(merged);
+    expect(checkRecord(merged, { store: "notes", version: 1 })).toStrictEqual(merged);
   });
 
   it.each([

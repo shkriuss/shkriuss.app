@@ -15,6 +15,16 @@ export interface BackupDatabase {
   recordBackup(): Promise<void>;
 }
 
+/** The step that offers to save the backup that was made. */
+interface Ready {
+  readonly name: "ready";
+  readonly file: File;
+  /** When its latest change is dated, if that is more than a day ahead (data model §3.5). */
+  readonly fromFuture: number | undefined;
+  readonly notSaved: boolean;
+  readonly saving: boolean;
+}
+
 /** Where the dialog that makes a backup stands. */
 type Step =
   | { readonly name: "closed" }
@@ -22,12 +32,7 @@ type Step =
   | { readonly name: "own" }
   | { readonly name: "plain" }
   | { readonly name: "making" }
-  | {
-      readonly name: "ready";
-      readonly file: File;
-      readonly notSaved: boolean;
-      readonly saving: boolean;
-    }
+  | Ready
   | { readonly name: "saved"; readonly file: File; readonly shared: boolean }
   | { readonly name: "failed"; readonly tooLarge: boolean };
 
@@ -184,12 +189,8 @@ export function useBackupDialog(
     setStep({ name: "making" });
     let next: Step;
     try {
-      next = {
-        name: "ready",
-        file: await createBackupFile(db, { app, passphrase }),
-        notSaved: false,
-        saving: false,
-      };
+      const { file, fromFuture } = await createBackupFile(db, { app, passphrase });
+      next = { name: "ready", file, fromFuture, notSaved: false, saving: false };
     } catch (error) {
       next = {
         name: "failed",
@@ -201,11 +202,12 @@ export function useBackupDialog(
     }
   }
 
-  async function save(file: File): Promise<void> {
+  async function save(ready: Ready): Promise<void> {
     const id = work.current;
+    const { file } = ready;
     // Called while the user's press still counts, as the share sheet needs: setting the step
     // only schedules a render.
-    setStep({ name: "ready", file, notSaved: false, saving: true });
+    setStep({ ...ready, notSaved: false, saving: true });
     const result = await saveFile(file, browserSaveEnvironment());
     if (result !== "cancelled") {
       try {
@@ -218,7 +220,7 @@ export function useBackupDialog(
     if (id === work.current) {
       setStep(
         result === "cancelled"
-          ? { name: "ready", file, notSaved: true, saving: false }
+          ? { ...ready, notSaved: true, saving: false }
           : { name: "saved", file, shared: result === "shared" },
       );
     }
@@ -304,11 +306,12 @@ export function useBackupDialog(
       body = <p>{m.making()}</p>;
       break;
     case "ready": {
-      const { file, notSaved, saving } = step;
+      const { fromFuture, notSaved, saving } = step;
       title = m.readyTitle();
       body = (
         <>
           <p>{m.readyText()}</p>
+          {fromFuture === undefined ? null : <p>{m.readyFromFuture(new Date(fromFuture))}</p>}
           {/* An <output>, whose role is status: screen readers read it when it changes. */}
           <output className="block empty:hidden">{notSaved ? m.notSaved() : ""}</output>
           <Actions>
@@ -316,7 +319,7 @@ export function useBackupDialog(
               variant="primary"
               isPending={saving}
               onPress={() => {
-                void save(file);
+                void save(step);
               }}
             >
               {m.save()}

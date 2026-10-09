@@ -5,7 +5,13 @@ import {
   openBackupFile,
   readBackupFile,
 } from "@shkriuss/backup";
-import type { ImportSummary, Incoming, Schemas } from "@shkriuss/data";
+import type {
+  ImportOptions,
+  ImportPreview,
+  ImportSummary,
+  Incoming,
+  Schemas,
+} from "@shkriuss/data";
 import { Button, Dialog, FileButton, TextField } from "@shkriuss/ui";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { m } from "./messages.ts";
@@ -13,8 +19,8 @@ import { restoreErrorMessage } from "./restore-errors.ts";
 
 /** What restoring uses of the app's database, from `openDatabase()` of `@shkriuss/data`. */
 export interface RestoreDatabase {
-  previewImport(incoming: Incoming): Promise<ImportSummary>;
-  import(incoming: Incoming): Promise<ImportSummary>;
+  previewImport(incoming: Incoming): Promise<ImportPreview>;
+  import(incoming: Incoming, options?: ImportOptions): Promise<ImportSummary>;
 }
 
 export interface RestoreProps {
@@ -35,7 +41,7 @@ type Step =
   | {
       readonly name: "preview";
       readonly contents: BackupContents;
-      readonly summary: ImportSummary;
+      readonly summary: ImportPreview;
     }
   | { readonly name: "restoring" }
   | { readonly name: "restored"; readonly summary: ImportSummary }
@@ -110,7 +116,8 @@ function Passphrase({
 /**
  * Restores a backup that the user picks (backup format §5): it opens the file, asks for the
  * passphrase if the file is encrypted, reads and checks it, and shows what restoring it would
- * do; only when the user agrees does it write, in one transaction. A failure at any step says
+ * do, and when its changes are dated more than a day ahead of this device's clock (data model
+ * §3.5); only when the user agrees does it write, in one transaction. A failure at any step says
  * why (§6), and changes nothing.
  */
 export function Restore({ app, db, schemas, onRestored }: RestoreProps) {
@@ -138,7 +145,7 @@ export function Restore({ app, db, schemas, onRestored }: RestoreProps) {
     setStep({ name: "reading" });
     let next: Step;
     try {
-      const contents = await readBackupFile(file, passphrase, { app, schemas, now: Date.now() });
+      const contents = await readBackupFile(file, passphrase, { app, schemas });
       next = { name: "preview", contents, summary: await db.previewImport(contents.incoming) };
     } catch (error) {
       next =
@@ -174,13 +181,17 @@ export function Restore({ app, db, schemas, onRestored }: RestoreProps) {
     }
   }
 
-  async function apply(contents: BackupContents): Promise<void> {
+  /** Imports the backup; `acceptFromFuture` once the user has confirmed its dates (§5.6). */
+  async function apply(contents: BackupContents, acceptFromFuture: boolean): Promise<void> {
     work.current += 1;
     const id = work.current;
     setStep({ name: "restoring" });
     let next: Step;
     try {
-      next = { name: "restored", summary: await db.import(contents.incoming) };
+      next = {
+        name: "restored",
+        summary: await db.import(contents.incoming, { acceptFromFuture }),
+      };
       onRestored();
     } catch (error) {
       next = { name: "failed", message: restoreErrorMessage(error) };
@@ -214,22 +225,25 @@ export function Restore({ app, db, schemas, onRestored }: RestoreProps) {
     }
     case "preview": {
       const { contents, summary } = step;
-      const { total } = summary;
+      const { total, fromFuture } = summary;
       const changes = total.new + total.updated + total.deleted;
+      // Dates from the future matter only to a restore that writes something.
+      const ahead = changes === 0 ? undefined : fromFuture;
       title = m.previewTitle();
       body = (
         <>
           <p>{m.madeOn(contents.exported)}</p>
           <p>{changes === 0 ? m.nothingNew() : m.brings(total)}</p>
+          {ahead === undefined ? null : <p>{m.restoreFromFuture(new Date(ahead))}</p>}
           <Actions>
             {changes === 0 ? null : (
               <Button
                 variant="primary"
                 onPress={() => {
-                  void apply(contents);
+                  void apply(contents, ahead !== undefined);
                 }}
               >
-                {m.restoreNow()}
+                {ahead === undefined ? m.restoreNow() : m.restoreAnyway()}
               </Button>
             )}
             <Button onPress={close}>{changes === 0 ? m.close() : m.cancel()}</Button>

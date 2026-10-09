@@ -79,6 +79,8 @@ export const messages = defineMessages((format) => ({
   making: () => "Making your backup… This takes a few seconds.",
   readyTitle: () => "Your backup is ready",
   readyText: () => "Save it somewhere other than this device, such as a cloud drive.",
+  readyFromFuture: (latest: Date) =>
+    `Some changes in it are dated up to ${format.dateTime(latest)}, more than a day ahead of this device's clock. If the clock is wrong, correct it. If not, restoring this backup will ask you to confirm those dates.`,
   notSaved: () => "The backup is not saved yet.",
   save: () => "Save backup",
   savedTitle: () => "Backed up",
@@ -103,6 +105,9 @@ export const messages = defineMessages((format) => ({
   brings: (counts: ImportCounts) => `Restoring it brings ${importCounts(format, counts)}.`,
   nothingNew: () => "This device already has everything in this backup.",
   restoreNow: () => "Restore",
+  restoreFromFuture: (latest: Date) =>
+    `Some changes in it are dated up to ${format.dateTime(latest)}, more than a day ahead of this device's clock. If the clock is wrong, correct it first. If not, the backup comes from a device whose clock was set ahead: restoring it anyway gives this device's changes that date too, until it comes.`,
+  restoreAnyway: () => "Restore anyway",
   restoringTitle: () => "Restoring the backup",
   restoring: () => "Restoring the backup…",
   restoredTitle: () => "Restored",
@@ -118,7 +123,7 @@ export const messages = defineMessages((format) => ({
   newerVersion: () =>
     "The backup was made by a newer version of the app. Update the app and try again.",
   futureClock: () =>
-    "The backup's times lie in the future. Check the date and time on this device and on the one that made the backup.",
+    "The backup's dates lie in the future. Check the date and time on this device, then try again.",
   invalid: () => "The backup is damaged or was changed, and was not restored.",
   restoreFailed: () => "The backup could not be restored. Nothing was changed.",
   close: () => "Close",

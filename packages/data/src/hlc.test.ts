@@ -5,6 +5,7 @@ import {
   INITIAL_CLOCK,
   MAX_CLOCK_AHEAD,
   MAX_COUNTER,
+  MAX_RECEIVED_WALL,
   MAX_WALL,
   formatHlc,
   isDeviceId,
@@ -15,6 +16,7 @@ import {
   newDeviceId,
   parseHlc,
   receiveHlc,
+  wallTime,
 } from "./hlc.ts";
 
 const DEVICE = "9f86d081884c7d65";
@@ -175,22 +177,46 @@ describe("receiveHlc (data model §3.4)", () => {
   });
 });
 
+describe("wallTime", () => {
+  it("is the time that an HLC carries", () => {
+    expect(wallTime(EXAMPLE)).toBe(1_791_052_200_000);
+    expect(wallTime(formatHlc({ wall: MAX_WALL, counter: MAX_COUNTER, device: DEVICE }))).toBe(
+      MAX_WALL,
+    );
+  });
+
+  it("refuses something that is not an HLC", () => {
+    expect(() => wallTime("soon")).toThrow(DataLayerError);
+  });
+});
+
 describe("isFromFuture (data model §3.5)", () => {
   const now = 1_791_052_200_000;
 
-  it("allows up to 24 hours ahead of this device's clock", () => {
+  it("is false up to 24 hours ahead of this device's clock", () => {
     const limit = formatHlc({ wall: now + MAX_CLOCK_AHEAD, counter: 0, device: DEVICE });
     expect(isFromFuture(limit, now)).toBe(false);
     expect(isFromFuture(EXAMPLE, now)).toBe(false);
   });
 
-  it("refuses anything later", () => {
+  it("is true for anything later", () => {
     const later = formatHlc({ wall: now + MAX_CLOCK_AHEAD + 1, counter: 0, device: DEVICE });
     expect(isFromFuture(later, now)).toBe(true);
   });
 
   it("refuses something that is not an HLC", () => {
     expect(() => isFromFuture("soon", now)).toThrow(DataLayerError);
+  });
+});
+
+describe("MAX_RECEIVED_WALL (data model §3.5)", () => {
+  it("is the end of the year 9999", () => {
+    expect(new Date(MAX_RECEIVED_WALL).toISOString()).toBe("9999-12-31T23:59:59.999Z");
+  });
+
+  it("leaves a device that received it more HLCs than it could ever issue", () => {
+    // Each millisecond up to MAX_WALL holds 65,536 HLCs.
+    expect((MAX_WALL - MAX_RECEIVED_WALL) * (MAX_COUNTER + 1)).toBeGreaterThan(1e19);
   });
 });
 

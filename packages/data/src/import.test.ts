@@ -2,14 +2,15 @@ import { IDBFactory } from "fake-indexeddb";
 import * as fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import type { Snapshot } from "./db.ts";
-import { type Hlc, formatHlc } from "./hlc.ts";
+import { DataLayerError } from "./errors.ts";
+import { type Hlc, MAX_CLOCK_AHEAD, formatHlc, wallTime } from "./hlc.ts";
 import { SETTINGS_ID } from "./ids.ts";
 import { type Incoming, checkIncomingStores } from "./incoming.ts";
 import type { DataRecord } from "./record.ts";
 import type { Schemas } from "./schema.ts";
 import { START, VERSION_1, VERSION_2, fresh, open, putStored, stored } from "./test/storage.ts";
 
-const HOUR = 60 * 60 * 1000;
+const DAY = 24 * 60 * 60 * 1000;
 const DEVICE = "9f86d081884c7d65";
 
 /** The HLC of a change `seconds` seconds after `START`. */
@@ -25,17 +26,12 @@ function id(n: number): string {
 /** A backup of `snapshot`, as a file carries it, checked as an import checks it. */
 function backupOf(snapshot: Snapshot, schemas: Schemas = VERSION_1): Incoming {
   const stores: unknown = JSON.parse(JSON.stringify(snapshot.stores));
-  return checkIncomingStores(schemas, snapshot.schemaVersion, stores, START + HOUR);
+  return checkIncomingStores(schemas, snapshot.schemaVersion, stores);
 }
 
 /** Notes from a backup made at version 1, checked as an import checks them. */
 function notes(records: readonly object[]): Incoming {
-  return checkIncomingStores(
-    VERSION_1,
-    1,
-    { notes: records, lists: [], settings: [] },
-    START + HOUR,
-  );
+  return checkIncomingStores(VERSION_1, 1, { notes: records, lists: [], settings: [] });
 }
 
 function note(n: number, title: string, clock: Hlc, deleted?: Hlc): DataRecord {
@@ -53,6 +49,7 @@ describe("snapshot (backup format §4, step 1)", () => {
     expect(await db.snapshot()).toStrictEqual({
       schemaVersion: 1,
       stores: { notes: [], lists: [], settings: [] },
+      fromFuture: undefined,
     });
     const created = await db.change(async (change) => {
       const list = await change.create("lists", { name: "Shopping" });
@@ -76,6 +73,7 @@ describe("snapshot (backup format §4, step 1)", () => {
           { id: SETTINGS_ID, v: 1, data: { sortBy: "date" }, clock: { sortBy: created.hlc } },
         ],
       },
+      fromFuture: undefined,
     });
   });
 });
@@ -107,7 +105,9 @@ describe("import (backup format §5.6, §5.7)", () => {
     // The preview writes nothing.
     expect(await second.db.snapshot()).toStrictEqual(empty);
 
-    expect(await second.db.import(backup)).toStrictEqual(preview);
+    const { fromFuture, ...summary } = preview;
+    expect(fromFuture).toBeUndefined();
+    expect(await second.db.import(backup)).toStrictEqual(summary);
     expect(await second.db.snapshot()).toStrictEqual(snapshot);
     expect(await second.db.device()).toMatchObject({ changesSinceBackup: 1 });
 
@@ -202,12 +202,7 @@ describe("import (backup format §5.6, §5.7)", () => {
     await expect(db.previewImport(forged)).rejects.toThrow(
       expect.objectContaining({ code: "invalid" }),
     );
-    const newer = checkIncomingStores(
-      VERSION_2,
-      2,
-      { notes: [], folders: [], settings: [] },
-      START,
-    );
+    const newer = checkIncomingStores(VERSION_2, 2, { notes: [], folders: [], settings: [] });
     await expect(db.import(newer)).rejects.toThrow(expect.objectContaining({ code: "invalid" }));
   });
 
@@ -220,6 +215,107 @@ describe("import (backup format §5.6, §5.7)", () => {
       db.import(notes([note(1, "Milk", at(1)), note(2, "Eggs", at(2))])),
     ).rejects.toThrow(expect.objectContaining({ code: "invalid" }));
     expect(await stored(factory)).toStrictEqual(before);
+  });
+});
+
+/** The HLC of a change at `wall`, on another device. */
+function hlcAt(wall: number, counter = 0): Hlc {
+  return formatHlc({ wall, counter, device: DEVICE });
+}
+
+describe("clocks from the future (data model §3.5)", () => {
+  it("come from a device whose date was set ahead, whose snapshots say so until its date catches up", async () => {
+    const { clock, db } = await fresh();
+    clock.time = START + 2 * DAY;
+    await db.change((change) => change.create("lists", { name: "Shopping" }));
+    // The date is put right: the next change still carries the last wall time (§3.3).
+    clock.time = START;
+    const next = await db.change(async (change) => {
+      await change.create("notes", { title: "Milk" });
+      return change.hlc;
+    });
+    expect(wallTime(next)).toBe(START + 2 * DAY);
+    expect((await db.snapshot()).fromFuture).toBe(START + 2 * DAY);
+    clock.time = START + 2 * DAY - MAX_CLOCK_AHEAD - 1;
+    expect((await db.snapshot()).fromFuture).toBe(START + 2 * DAY);
+    clock.time = START + 2 * DAY - MAX_CLOCK_AHEAD;
+    expect((await db.snapshot()).fromFuture).toBeUndefined();
+  });
+
+  it("are imported only once the user has confirmed what the preview shows", async () => {
+    const { factory, db } = await fresh();
+    const backup = notes([note(1, "Milk", hlcAt(START + 2 * DAY, 5)), note(2, "Eggs", at(1))]);
+    const counts = { new: 2, updated: 0, deleted: 0, unchanged: 0 };
+    expect(await db.previewImport(backup)).toStrictEqual({
+      total: counts,
+      stores: {
+        notes: counts,
+        lists: { new: 0, updated: 0, deleted: 0, unchanged: 0 },
+        settings: { new: 0, updated: 0, deleted: 0, unchanged: 0 },
+      },
+      fromFuture: START + 2 * DAY,
+    });
+    const before = await stored(factory);
+    await expect(db.import(backup)).rejects.toThrow(
+      expect.objectContaining({ code: "future-clock" }),
+    );
+    await expect(db.import(backup, { acceptFromFuture: false })).rejects.toThrow(
+      expect.objectContaining({ code: "future-clock" }),
+    );
+    // Neither the records nor the device's clock and backup count change.
+    expect(await stored(factory)).toStrictEqual(before);
+
+    expect((await db.import(backup, { acceptFromFuture: true })).total).toStrictEqual(counts);
+    expect(await db.list("notes")).toHaveLength(2);
+    // The device received the backup's clock (§3.4): its changes carry that time until it comes.
+    const next = await db.change(async (change) => change.hlc);
+    expect(next).toBe(formatHlc({ wall: START + 2 * DAY, counter: 6, device: next.slice(-16) }));
+    expect((await db.snapshot()).fromFuture).toBe(START + 2 * DAY);
+  });
+
+  it("are those more than 24 hours after this device's clock when the import runs", async () => {
+    const { clock, db } = await fresh();
+    const backup = notes([note(1, "Milk", hlcAt(START + MAX_CLOCK_AHEAD))]);
+    expect((await db.previewImport(backup)).fromFuture).toBeUndefined();
+    // The date went back after the preview, which therefore did not ask.
+    clock.time = START - 1;
+    expect((await db.previewImport(backup)).fromFuture).toBe(START + MAX_CLOCK_AHEAD);
+    await expect(db.import(backup)).rejects.toThrow(
+      expect.objectContaining({ code: "future-clock" }),
+    );
+    clock.time = START;
+    expect((await db.import(backup)).total.new).toBe(1);
+  });
+
+  it("as a property: an import that the user did not confirm fails exactly when the preview shows a time, and then changes nothing", async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.array(fc.integer({ min: -2 * DAY, max: 3 * DAY }), { minLength: 1, maxLength: 3 }),
+        async (offsets) => {
+          const { factory, db } = await fresh();
+          const walls = offsets.map((offset) => START + offset);
+          const backup = notes(walls.map((wall, n) => note(n, "Milk", hlcAt(wall))));
+          const latest = Math.max(...walls);
+          const future = latest - START > MAX_CLOCK_AHEAD ? latest : undefined;
+          expect((await db.previewImport(backup)).fromFuture).toBe(future);
+          const before = JSON.stringify(await stored(factory));
+          const refusal = await db.import(backup).then(
+            () => undefined,
+            (error: unknown) => (error instanceof DataLayerError ? error.code : error),
+          );
+          expect(refusal).toBe(future === undefined ? undefined : "future-clock");
+          // A refused import changes nothing; one that went through adds every note.
+          expect(JSON.stringify(await stored(factory)) === before).toBe(refusal !== undefined);
+          await db.import(backup, { acceptFromFuture: true });
+          expect(await db.list("notes")).toHaveLength(walls.length);
+          expect(wallTime(await db.change(async (change) => change.hlc))).toBeGreaterThanOrEqual(
+            latest,
+          );
+          db.close();
+        },
+      ),
+      { numRuns: 40 },
+    );
   });
 });
 
