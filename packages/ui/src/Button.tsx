@@ -5,10 +5,12 @@ export interface ButtonProps extends Omit<AriaButtonProps, "className" | "style"
   readonly variant?: "primary" | "secondary" | "danger";
 }
 
+// A filled button has a border too, transparent: Windows' contrast themes, which drop
+// backgrounds (forced colors), draw it, so that the button still looks like one.
 const VARIANTS = {
-  primary: "bg-accent text-accent-ink",
+  primary: "border border-transparent bg-accent text-accent-ink",
   secondary: "border border-line-strong bg-canvas text-ink",
-  danger: "bg-danger text-danger-ink",
+  danger: "border border-transparent bg-danger text-danger-ink",
 } as const;
 
 /**

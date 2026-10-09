@@ -82,6 +82,8 @@ import { Banner, Button, Checkbox, Dialog, FileButton, Link, Select, Switch, Tex
 | `Banner`     | A notice that does not interrupt, such as that an update is available, which screen readers read when it appears           |
 
 - **Accessible:** React Aria gives them the keyboard, pointer and screen-reader behavior of WCAG 2.2. Buttons, switches, checkboxes and selects are at least 44 by 44 pixels, so that they are easy to tap.
+- **Contrast themes:** Windows' contrast themes (forced colors) drop backgrounds and impose their own colors. Filled buttons have a transparent border, which those themes draw, and checkboxes and switches take the themes' colors, so that a ticked box and a switch that is on still show it.
+- **Long words,** such as a link in a checkbox's label or in a dialog's title, break rather than widen the page on a narrow phone (WCAG 1.4.10).
 - **One look:** components take no `className` or `style`. Apps lay them out with elements around them.
 - **Text:** labels and messages come from the app's message module ([ADR 0012](../../docs/decisions/0012-typed-messages.md)).
 

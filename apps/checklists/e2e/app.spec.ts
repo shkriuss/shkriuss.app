@@ -264,6 +264,29 @@ test("lists are added and opened, sorted by name, with how much of each is done"
   await expect(page.getByRole("heading", { level: 1, name: "Packing", exact: true })).toBeFocused();
 });
 
+test.describe("on a narrow phone", () => {
+  test.use({ viewport: { width: 320, height: 640 } });
+
+  test("long words wrap, so the page never scrolls sideways (WCAG 1.4.10)", async ({ page }) => {
+    await open(page);
+    const name = "Weekend-shopping-list-for-the-cottage-trip-in-the-mountains";
+    const link = "https://example.com/products/garden/outdoor-furniture/folding-chair-set";
+    await addList(page, name);
+    await addItem(page, link);
+    // Each screen and dialog, with the long words in it.
+    const fits = async (): Promise<boolean> =>
+      page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
+    expect(await fits()).toBe(true);
+    await expect(page.getByRole("button", { name: `Edit “${link}”` })).toBeInViewport();
+    await edit(page, link);
+    expect(await fits()).toBe(true);
+    await page.keyboard.press("Escape");
+    await toLists(page);
+    await expect(lists(page)).toHaveCount(1);
+    expect(await fits()).toBe(true);
+  });
+});
+
 test("items are ticked off and back, and the focus goes down the list", async ({ page }) => {
   await open(page);
   await addList(page, "Groceries");

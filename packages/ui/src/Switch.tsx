@@ -12,8 +12,10 @@ export function Switch({ children, ...props }: SwitchProps) {
       {...props}
       className="group inline-flex min-h-11 cursor-default items-center gap-3 text-ink data-disabled:opacity-50"
     >
-      <span className="flex h-7 w-12 shrink-0 items-center rounded-full border border-line-strong bg-surface p-0.5 group-data-focus-visible:outline-2 group-data-focus-visible:outline-offset-2 group-data-focus-visible:outline-focus group-data-selected:border-accent group-data-selected:bg-accent">
-        <span className="size-5 rounded-full bg-line-strong transition-transform group-data-selected:translate-x-5 group-data-selected:bg-accent-ink" />
+      {/* In Windows' contrast themes (forced colors), the track and the thumb take their colours,
+          which would otherwise drop their backgrounds. */}
+      <span className="flex h-7 w-12 shrink-0 items-center rounded-full border border-line-strong bg-surface p-0.5 group-data-focus-visible:outline-2 group-data-focus-visible:outline-offset-2 group-data-focus-visible:outline-focus group-data-selected:border-accent group-data-selected:bg-accent forced-colors:border-[ButtonText] forced-colors:bg-[Canvas] forced-colors:forced-color-adjust-none group-data-selected:forced-colors:border-[Highlight] group-data-selected:forced-colors:bg-[Highlight]">
+        <span className="size-5 rounded-full bg-line-strong transition-transform group-data-selected:translate-x-5 group-data-selected:bg-accent-ink forced-colors:bg-[ButtonText] group-data-selected:forced-colors:bg-[HighlightText]" />
       </span>
       {children}
     </AriaSwitch>

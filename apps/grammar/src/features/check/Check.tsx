@@ -78,7 +78,7 @@ const MistakeItem = memo(function MistakeItem({
         {m.kind(mistake.kind)}
       </h3>
       <p>{plainMessage(mistake.message)}</p>
-      <q className="break-words text-ink-muted">
+      <q className="wrap-anywhere text-ink-muted">
         {excerpt.before}
         <mark className="rounded bg-accent px-0.5 whitespace-pre-wrap text-accent-ink">
           {excerpt.words}
@@ -98,8 +98,10 @@ const MistakeItem = memo(function MistakeItem({
             {fixLabel(fix)}
           </Button>
         ))}
+        {/* Named by the words, as a long list has many of each (WCAG 2.4.6). */}
         <Button
           isDisabled={stale}
+          aria-label={m.showWords(excerpt.words)}
           onPress={() => {
             onShow(mistake);
           }}
@@ -107,6 +109,7 @@ const MistakeItem = memo(function MistakeItem({
           {m.show()}
         </Button>
         <Button
+          aria-label={m.ignoreWords(excerpt.words)}
           onPress={() => {
             onIgnore(index, mistake);
           }}

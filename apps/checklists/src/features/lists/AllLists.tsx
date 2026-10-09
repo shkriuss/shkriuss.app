@@ -62,7 +62,7 @@ export function AllLists({ db }: AllListsProps) {
                 params={{ listId: id }}
                 className="flex min-h-11 flex-col justify-center px-3 py-2 no-underline"
               >
-                <span className="font-medium break-words underline underline-offset-[0.15em]">
+                <span className="font-medium wrap-anywhere underline underline-offset-[0.15em]">
                   {values.name === "" ? m.noName() : values.name}
                 </span>{" "}
                 <span className="text-sm text-ink-muted">{m.progress(done, total)}</span>
