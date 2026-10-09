@@ -1,7 +1,7 @@
 # Architecture
 
 - **Status:** accepted
-- **Last updated:** 2026-10-04
+- **Last updated:** 2026-10-09
 - **Scope:** the hub, every app and the shared platform. The reasons behind each choice are in the [decision records](decisions/README.md); this document describes the resulting system.
 
 ## 1. Summary
@@ -125,7 +125,7 @@ Backups are the only way data leaves a device, the only protection against losin
 
 - **Manifest:** generated per app with a stable `id`, `scope: /`, standalone display, maskable and monochrome icons, theme colors, and shortcuts or `share_target` where an app needs them. Every icon, and the iOS touch icon and the favicon, is drawn at build time from the app's glyph, given as SVG path data, on its accent color, by `@shkriuss/pwa` itself, without dependencies.
 - **Service worker:** our own, in `@shkriuss/pwa` (no Workbox), at `/sw.js`, registered through the platform's Trusted Types policy for worker scripts ([ADR 0011](decisions/0011-worker-trusted-types-policy.md)). The [service worker spec](specs/service-worker.md) gives every detail.
-  - It precaches the build output, so the app opens offline instantly.
+  - It precaches the build output, so the app opens offline instantly. Large files that not every use needs, such as Grammar's checker, it keeps once the app first uses them, and from then on at every update ([ADR 0019](decisions/0019-files-kept-on-first-use.md)).
   - It serves the app shell for navigations and never caches anything cross-origin.
   - **Updates:** a new version installs in the background and waits. The app shows "Update available" and reloads when the user agrees, never in the middle of a task.
   - **Kill switch:** a documented, tested procedure replaces a broken service worker without touching user data. It never brings back a build with an older schema version, which could not open the upgraded database (§7).
@@ -183,7 +183,7 @@ Staging additionally sends `X-Robots-Tag: noindex`. That is a host rule in the s
 
 - **Script integrity** ([ADR 0010](decisions/0010-script-integrity.md)): every script — the entry point and lazily loaded chunks — carries an integrity hash (an SRI attribute and import-map `integrity`), added after the build by `@shkriuss/edge`. Chunks other than the entry are loaded only with `import()`, because Safari refuses statically imported ones. `Integrity-Policy` makes the browser refuse any script without one. The import map is the only inline script; the CSP allows it by its hash, which changes with every build.
 - **Workers** ([ADR 0011](decisions/0011-worker-trusted-types-policy.md)): the script of a worker or service worker must be a Trusted Type. Apps with worker scripts allow exactly one policy, `shkriuss-workers`, which `@shkriuss/edge/workers` creates; it accepts only the app's own worker bundles (`/assets/<name>.worker-<hash>.js`, each built into one file) and `/sw.js`. Other apps allow no policy. Browsers cannot check the integrity of worker scripts; the published file hashes and the build provenance cover them (threat model R6). Every worker script starts with code that logs each CSP violation inside it on its console, where the end-to-end tests see it: they listen for a page's violations, but cannot listen inside a worker before its script runs.
-- **WebAssembly** ([ADR 0014](decisions/0014-webassembly.md)): only an app that declares `webAssembly` in its `app.config.ts` may compile it, in its workers; its `script-src` then allows `'wasm-unsafe-eval'`, and nothing else changes. Modules are files of the app in `/assets/`, which its workers fetch from its own origin and its service worker keeps, as it keeps worker scripts (threat model R6). The build fails if an app ships modules without declaring them, declares them without shipping any, or loads one from the page.
+- **WebAssembly** ([ADR 0014](decisions/0014-webassembly.md)): only an app that declares `webAssembly` in its `app.config.ts` may compile it, in its workers; its `script-src` then allows `'wasm-unsafe-eval'`, and nothing else changes. Modules are files of the app in `/assets/`, which its workers fetch from its own origin and its service worker keeps, as it keeps worker scripts, or once first used where the app says so ([ADR 0019](decisions/0019-files-kept-on-first-use.md)) (threat model R6). The build fails if an app ships modules without declaring them, declares them without shipping any, or loads one from the page.
 - **Older browsers** that don't support Trusted Types or `Integrity-Policy` ignore those headers; the apps still work, with weaker protection.
 - **Code rules:** no HTML injection sinks, no `eval`, no inline scripts (except the generated import map) or styles; user content is rendered as text (see `CLAUDE.md`).
 - **Supply chain:** few dependencies; pnpm with a release-age delay, blocked install scripts and a frozen lockfile; GitHub Actions pinned to commit SHAs with least-privilege tokens; CodeQL, dependency review and secret scanning.

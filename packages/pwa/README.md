@@ -38,6 +38,8 @@ updates.applyUpdate();
 
 React's `useSyncExternalStore(updates.subscribe, updates.getState)` takes the store's functions as they are. The page asks the browser to look for a new version when it becomes visible, when the device comes back online and while it stays open, at most once an hour; `checkForUpdate()` asks at once. After a first version that failed to install, it registers again at those times, and at once when the device comes back online.
 
+**Large files kept on first use** ([ADR 0019](../../docs/decisions/0019-files-kept-on-first-use.md)): an app names them by the ends of their names, `pwa({ keepOnFirstUse: [".wasm"] })`, as `keepOnFirstUse` of its `app.config.ts` does. The service worker keeps them only once the app first requests one, checked against its hash, and from then on at every install (spec §4, §6.3); until then they need the network. `updates.firstUseKept()` says whether it keeps them, so that what needs them can start at once, as Grammar's checker does.
+
 ## Manifest and icons
 
 `webAppManifest()` writes the app's web app manifest and every icon, from the app's glyph and accent color ([architecture §9](../../docs/architecture.md#9-offline-install-and-updates)), and links them from the page:
@@ -117,7 +119,7 @@ const kept = await storage.requestPersistence();
 
 ## What it builds
 
-`pwa()` bundles `worker/sw.ts` into `/sw.js`: one classic script that contains the build's version id, its precache list, the security headers that `edge()` gives every file, and the versions it replaces (spec §2). Every file that `sha256sums.txt` lists, but `/sw.js` and `/.well-known/security.txt`, is in the precache list, with its SHA-256, so the service worker keeps a file only if it matches the hash that the build published, and serves it only while it still does, with those headers (§6.5). `security.txt` changes with every commit, so it would make every commit a new version. The version id is the start of the SHA-256 of `/sw.js` itself, so every change to the app gives a new one.
+`pwa()` bundles `worker/sw.ts` into `/sw.js`: one classic script that contains the build's version id, its precache list, the security headers that `edge()` gives every file, and the versions it replaces (spec §2). Every file that `sha256sums.txt` lists, but `/sw.js` and `/.well-known/security.txt`, is in the precache list, with its SHA-256, and marked if it is kept on first use, so the service worker keeps a file only if it matches the hash that the build published, and serves it only while it still does, with those headers (§6.5). `security.txt` changes with every commit, so it would make every commit a new version. The version id is the start of the SHA-256 of `/sw.js` itself, so every change to the app gives a new one.
 
 | Module               | What it does                                                                                                                 |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------------- |

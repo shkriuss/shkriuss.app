@@ -1,6 +1,6 @@
 import type { APIRequestContext, BrowserContext, Page, TestInfo } from "@playwright/test";
 import { expect, test } from "@shkriuss/config/playwright";
-import { type Build, builtFile, precachedFiles, versionOf } from "../builds.ts";
+import { type Build, builtFile, keptAtInstall, versionOf } from "../builds.ts";
 
 // The service worker of @shkriuss/pwa in real browsers (docs/specs/service-worker.md §13), with
 // the builds of builds.ts at one origin, under the production security headers. The fixture
@@ -173,8 +173,9 @@ test("an update downloads only the files that changed, and copies the others", a
   await checkForUpdate(page);
   await stateIs(page, "update-available");
 
-  const a = precachedFiles("a");
-  const changed = [...precachedFiles("b")].filter(([url, sha256]) => a.get(url) !== sha256);
+  // The app has used no file kept on first use, so the update requests none of them either.
+  const a = keptAtInstall("a");
+  const changed = [...keptAtInstall("b")].filter(([url, sha256]) => a.get(url) !== sha256);
   expect(changed.length).toBeLessThan(a.size);
   // /sw.js for the update check, then only the files that changed.
   const requested = (await requestsToHost(request, log)).filter((path) => path !== "/sw.js");
@@ -188,6 +189,93 @@ test("an update downloads only the files that changed, and copies the others", a
   expect(await page.evaluate(async () => (await fetch("/licenses.txt")).text())).toBe(
     builtFile("b", "licenses.txt"),
   );
+});
+
+/** What a page of the app gets for `path`: the text of the answer, or why the request failed. */
+async function fetched(page: Page, path: string): Promise<string> {
+  return page.evaluate(async (url) => {
+    try {
+      const response = await fetch(url);
+      return response.ok ? await response.text() : `status ${response.status}`;
+    } catch (error) {
+      return `failed: ${String(error)}`;
+    }
+  }, path);
+}
+
+/** Whether the page's service worker records that the app has kept a file on first use. */
+async function firstUseKept(page: Page): Promise<boolean | undefined> {
+  return page.evaluate(async () => window.pwaTest?.updates.firstUseKept());
+}
+
+test("a file kept on first use is not downloaded at install; its first request keeps it, for offline", async ({
+  page,
+  context,
+  request,
+}, testInfo) => {
+  const log = await recordRequests(context, testInfo);
+  await serve(context, "a");
+  await open(page);
+  expect(
+    (await requestsToHost(request, log)).filter((path) => path.endsWith(".dat")),
+  ).toStrictEqual([]);
+  expect(await firstUseKept(page)).toBe(false);
+
+  expect(await fetched(page, "/first-use/build.dat")).toBe("first use of a");
+  // The service worker's request, checked against the file's hash; the page's went to it.
+  expect(await requestsToHost(request, log)).toStrictEqual(["/first-use/build.dat"]);
+  await expect.poll(async () => firstUseKept(page)).toBe(true);
+
+  await serve(context, "offline");
+  await page.reload();
+  expect(await buildOf(page)).toBe("a");
+  expect(await fetched(page, "/first-use/build.dat")).toBe("first use of a");
+});
+
+test("once the app has used a file kept on first use, an update keeps them at install", async ({
+  page,
+  context,
+  request,
+}, testInfo) => {
+  const log = await recordRequests(context, testInfo);
+  await serve(context, "a");
+  await open(page);
+  expect(await fetched(page, "/first-use/same.dat")).toBe("the same in every build");
+  await expect.poll(async () => firstUseKept(page)).toBe(true);
+  await requestsToHost(request, log);
+
+  await serve(context, "b");
+  await checkForUpdate(page);
+  await stateIs(page, "update-available");
+  // It copied the file that did not change, and requested the one that did, unused as it is.
+  expect(
+    (await requestsToHost(request, log)).filter((path) => path.endsWith(".dat")),
+  ).toStrictEqual(["/first-use/build.dat"]);
+
+  await reloadedBy(page, async () => page.evaluate(() => window.pwaTest?.updates.applyUpdate()));
+  await serve(context, "offline");
+  await page.reload();
+  expect(await buildOf(page)).toBe("b");
+  expect(await fetched(page, "/first-use/same.dat")).toBe("the same in every build");
+  expect(await fetched(page, "/first-use/build.dat")).toBe("first use of b");
+});
+
+test("a file kept on first use that fails its hash is neither served nor kept", async ({
+  page,
+  context,
+  security,
+}) => {
+  security.expectRefusals();
+  await serve(context, "tampered");
+  await open(page);
+  expect(await fetched(page, "/first-use/build.dat")).toMatch(/^failed: /v);
+  expect(await firstUseKept(page)).toBe(false);
+  expect(
+    await page.evaluate(async () => (await caches.match("/first-use/build.dat")) === undefined),
+  ).toBe(true);
+  // The browser reports the failed request, in its own words, and nothing else failed.
+  expect(security.violations).toStrictEqual([]);
+  expect(security.problems.filter((problem) => problem.startsWith("uncaught"))).toStrictEqual([]);
 });
 
 test("a window of the old version keeps loading its files, then reloads into the new one", async ({
@@ -354,13 +442,9 @@ test("a version whose cache was cleared gets its files again, and works offline 
   await page.reload();
   await page.waitForFunction(() => window.pwaTest !== undefined);
   // The navigation went to the network, and the service worker requested its files again: every
-  // file that the version serves, but /sw.js itself and security.txt (spec §2.1).
-  const files = builtFile("a", "sha256sums.txt")
-    .trim()
-    .split("\n")
-    .filter(
-      (line) => !line.endsWith("  /sw.js") && !line.endsWith("  /.well-known/security.txt"),
-    ).length;
+  // file that the version serves, but /sw.js itself and security.txt (spec §2.1), and those kept
+  // on first use, which come again at their next use (§6.4).
+  const files = keptAtInstall("a").size;
   await expect
     .poll(async () =>
       page.evaluate(async (name) => (await (await caches.open(name)).keys()).length, cache),

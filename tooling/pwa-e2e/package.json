@@ -5,7 +5,7 @@
   "license": "AGPL-3.0-only",
   "type": "module",
   "scripts": {
-    "build": "vite build --mode a && vite build --mode b && vite build --mode broken && vite build --mode fix && vite build --mode removal",
+    "build": "vite build --mode a && vite build --mode b && vite build --mode broken && vite build --mode fix && vite build --mode removal && vite build --mode tampered",
     "typecheck": "tsc",
     "e2e": "playwright test"
   },

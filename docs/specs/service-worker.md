@@ -4,7 +4,7 @@
 - **Implements:** [architecture §9](../architecture.md#9-offline-install-and-updates), [ADR 0005](../decisions/0005-frontend-stack.md) (our own service worker) and [ADR 0011](../decisions/0011-worker-trusted-types-policy.md) (starting it under Trusted Types)
 - **Implemented by:** `@shkriuss/pwa` (Phase 1.2)
 
-Every app has a service worker at `/sw.js`. It makes the app work offline after its first load: it keeps a checked copy of every file of one version of the app and answers the app's requests from it. It also decides when a new version takes over: it installs in the background and waits until the user agrees, so an update never interrupts a task, unless it replaces a broken version (section 8).
+Every app has a service worker at `/sw.js`. It makes the app work offline after its first load: it keeps a checked copy of every file of one version of the app and answers the app's requests from it. Large files that the app keeps on first use come into that copy once the app has used them. It also decides when a new version takes over: it installs in the background and waits until the user agrees, so an update never interrupts a task, unless it replaces a broken version (section 8).
 
 It never stores user data, which lives in IndexedDB ([data-model.md](data-model.md)), and it never answers requests for other origins. **Must**, **must not**, **should** and **may** are used as in [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
 
@@ -12,6 +12,7 @@ It never stores user data, which lives in IndexedDB ([data-model.md](data-model.
 
 - **Version:** one build of an app, as deployed. Its **version id** is 16 lowercase hexadecimal digits (section 2.2).
 - **Precache list:** the files of a version that the service worker keeps, each with its SHA-256 (section 2.1).
+- **Files kept on first use:** files of the precache list that the service worker keeps only once the app has requested one of them, not at install (section 2.1).
 - **App shell:** the version's `/index.html`, which answers every navigation that is not to a file.
 - **Client:** a tab or window of the app. The **active** service worker controls the clients; a **waiting** one has installed a newer version and waits to take over.
 
@@ -22,6 +23,8 @@ It never stores user data, which lives in IndexedDB ([data-model.md](data-model.
 Every file that the build's `sha256sums.txt` lists ([ADR 0007](../decisions/0007-security-baseline.md)), except `/sw.js` and `/.well-known/security.txt`, with the SHA-256 it gives. `sha256sums.txt` lists every file the app serves but itself.
 
 `security.txt` expires a fixed time after the commit that the build is made from, so it changes with every commit. In the list, it would make every commit a new version, which every installed app would download and announce though nothing in it changed. It need not work offline.
+
+An app may keep large files on first use, such as Grammar's WebAssembly module, which not every use of the app needs ([ADR 0019](../decisions/0019-files-kept-on-first-use.md)). It names them by the ends of their names, such as `.wasm`, and the list marks them. The service worker keeps them once the app first requests one (section 6.3), and from then on at every install (section 4). Until then they need the network. The build fails if an end matches no file, or the app shell.
 
 Each file is requested at the URL the host serves it from without a redirect: `/index.html` at `/`, `/<path>/index.html` at `/<path>/`, `/<name>.html` at `/<name>`, and every other file at its own path. The build fails if two files would be served at one URL, or if it has no `/index.html`.
 
@@ -50,8 +53,8 @@ The first 16 hexadecimal digits of the SHA-256 of `/sw.js` as it would be with s
 When the browser has fetched a new `/sw.js`, the new service worker installs its version:
 
 1. It opens the cache `pwa-<version id>`.
-2. It copies each file of the precache list that the cache of another version keeps under the same URL with the same SHA-256, which the service worker computes from the kept bytes: an update downloads only the files that changed. It looks in every cache whose name starts with `pwa-`, but `pwa-state`, and copies only a response with status 200, headers included.
-3. It requests every other file with `cache: "no-cache"`, `redirect: "error"` and the file's SHA-256 as the request's `integrity`, so the browser checks every byte. It keeps each response in the cache under its URL, headers included.
+2. It copies each file of the precache list, files kept on first use included, that the cache of another version keeps under the same URL with the same SHA-256, which the service worker computes from the kept bytes: an update downloads only the files that changed. It looks in every cache whose name starts with `pwa-`, but `pwa-state`, and copies only a response with status 200, headers included.
+3. It requests every other file with `cache: "no-cache"`, `redirect: "error"` and the file's SHA-256 as the request's `integrity`, so the browser checks every byte. It keeps each response in the cache under its URL, headers included. It requests files kept on first use only if `pwa-state` records that the app has kept one (section 6.3), so that an app that has used them keeps working offline after an update.
 4. Any failure fails the install: a network error, a status other than 200, a redirect, a hash that does not match, storage that is full, or a cache that is gone before the install has finished, as when another version that becomes active meanwhile deletes it (section 5). The service worker stops its other requests, deletes its cache, and the active version stays active. The browser tries again on a later update check (section 7.1).
 5. Once it has installed, it deletes the caches of the waiting versions that it replaces, which will never become active: every cache whose name starts with `pwa-`, except its own, those of the active and the previous version, as `pwa-state` records them (section 5), and `pwa-state`. It deletes none while a version is becoming active, which may be one of them before it has recorded itself.
 
@@ -91,9 +94,11 @@ A navigation is matched by the path of its URL; its query does not matter, as fo
 
 A request for the exact URL of a file of the active version is answered from the active version's cache (section 6.5), or else from the network (section 6.4). Any other request is answered with the response kept under its exact URL in the previous version's cache, or else from the network. So a client that still runs the previous version keeps loading its own files (section 7.3), and the page's integrity checks still apply to every script.
 
+A request for a file of the active version that is kept on first use, and that the active version's cache does not have, goes to the network as the requests of section 4 do. The service worker keeps the response in the active version's cache, records in `pwa-state` that the app has kept a file on first use, and answers with it. If the request fails, as offline or for a file that fails its hash, the request fails, as without a service worker. The page can read that record, to start at once what needs such a file.
+
 ### 6.4 Repair
 
-If a file of the active version is missing from its cache, because the browser or the user cleared Cache Storage, or fails its check (section 6.5), the request goes to the network, though the previous version's cache may have a file under the same URL: it may be another file, as the previous version's app shell is. The service worker then requests the files that its cache lacks again, in the background, with the checks of section 4. A repair that fails, for example offline, is tried again at the next miss.
+If a file of the active version is missing from its cache, because the browser or the user cleared Cache Storage, or fails its check (section 6.5), the request goes to the network, though the previous version's cache may have a file under the same URL: it may be another file, as the previous version's app shell is. The service worker then requests the files that its cache lacks again, in the background, with the checks of section 4, but those kept on first use, which come again when they are next requested. A repair that fails, for example offline, is tried again at the next miss.
 
 ### 6.5 Checks before serving
 
@@ -154,20 +159,21 @@ Pages of a build without service workers register none. They unregister any they
 
 ## 11. Errors
 
-| Failure                                                       | What happens                                                                          |
-| ------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| An install fails (section 4)                                  | The active version stays; a later update check tries again.                           |
-| The first version fails to install (section 3)                | The app works online only; the page registers again later.                            |
-| A file of the active version is missing from its cache        | The request goes to the network, and the version gets its files again (section 6.4).  |
-| A file of the active version fails its check (section 6.5)    | It is deleted; the request goes to the network, and the version gets it again.        |
-| Offline, a request that the cache cannot answer               | It fails as it would without a service worker.                                        |
-| Cache Storage fails, as when the browser's storage is damaged | Requests go to the network, as without a service worker.                              |
-| A client needs a file that is gone (section 7.3)              | The app shows an error that asks the user to reload.                                  |
-| A newer version upgraded the database                         | The client reports that it must reload ([data-model.md §7](data-model.md#7-storage)). |
+| Failure                                                       | What happens                                                                           |
+| ------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| An install fails (section 4)                                  | The active version stays; a later update check tries again.                            |
+| The first version fails to install (section 3)                | The app works online only; the page registers again later.                             |
+| A file of the active version is missing from its cache        | The request goes to the network, and the version gets its files again (section 6.4).   |
+| A file of the active version fails its check (section 6.5)    | It is deleted; the request goes to the network, and the version gets it again.         |
+| Offline, a request that the cache cannot answer               | It fails as it would without a service worker.                                         |
+| Offline, a file kept on first use that the app has not used   | It fails as it would without a service worker; the app says that it needs the network. |
+| Cache Storage fails, as when the browser's storage is damaged | Requests go to the network, as without a service worker.                               |
+| A client needs a file that is gone (section 7.3)              | The app shows an error that asks the user to reload.                                   |
+| A newer version upgraded the database                         | The client reports that it must reload ([data-model.md §7](data-model.md#7-storage)).  |
 
 ## 12. Security
 
-- The service worker serves only files of the active and the previous version, each checked against its SHA-256 at install. A file changed on the host or on the way fails the install and is never served. It checks the active version's files again each time it serves them, and serves them with the build's security headers, so a script injected into a page cannot change them through Cache Storage (section 6.5).
+- The service worker serves only files of the active and the previous version, each checked against its SHA-256 when it keeps it: at install, or on its first use (section 6.3). A file changed on the host or on the way fails the install and is never served. It checks the active version's files again each time it serves them, and serves them with the build's security headers, so a script injected into a page cannot change them through Cache Storage (section 6.5).
 - It answers only `GET` requests of its own origin, stores no response but the files it checked, and never sees user data, which stays in IndexedDB.
 - `/sw.js` itself has no integrity check (R6). The browser fetches it without HTTP caches on navigations, so a changed one can be replaced (sections 8 and 9).
 - Messages are checked. A client can only make active a version that the browser has already installed and checked.
@@ -182,6 +188,7 @@ End-to-end tests run against production builds, served with the production heade
 - a client of the old version keeps loading its files, from the previous version's cache;
 - a version with a file that fails its hash does not install, and the old version stays active;
 - an update downloads only the files that changed, and copies the others;
+- a file kept on first use is not downloaded at install; its first request is checked, kept and answered, and it is served offline afterwards; a file that fails its hash is neither served nor kept; once the app has used one, an update copies or downloads them at install;
 - a version that replaces the active one takes over at once and reloads its clients;
 - removing the service worker deletes its caches and unregisters it, and leaves the app's IndexedDB data as it was;
 - a cleared cache is repaired;

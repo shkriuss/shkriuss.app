@@ -27,8 +27,11 @@ const LOG_PATH = /^\/__requests\/([a-z0-9-]+)$/;
 /** The paths of the requests sent on to a build, by the name in their `log` cookie. */
 const logs = new Map<string, string[]>();
 
-/** Each build's own server, on the ports after the proxy's. */
-const backends = new Map(BUILDS.map((build, index) => [build, port + 10 + index]));
+/**
+ * Each build's own server, on ports after the proxy's: 30 after it, clear of the servers of the
+ * other end-to-end tests, and of 4190, which fetch() refuses as the Fetch standard's bad ports.
+ */
+const backends = new Map(BUILDS.map((build, index) => [build, port + 30 + index]));
 
 const children: ChildProcess[] = [];
 function stop(): void {

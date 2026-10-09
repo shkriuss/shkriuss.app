@@ -16,6 +16,9 @@ const NO_VERSION = "0".repeat(16);
 
 const SHA256 = /^[0-9a-f]{64}$/;
 
+/** The end of a file's name, such as `.wasm`, that the files kept on first use have (§2.1). */
+const NAME_END = /^\.[^/]+$/;
+
 /** A header name: a token of RFC 9110. */
 const HEADER_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
 
@@ -47,11 +50,22 @@ export function fileUrl(path: string): string {
 
 /**
  * The precache list of a build (§2.1): every file in its manifest, as `sha256sums.txt` lists them
- * by path, but `/sw.js`, by the URL the host serves it at. Throws for a build without the app
- * shell, for two files at one URL, and for a hash that is not a SHA-256.
+ * by path, but `/sw.js`, by the URL the host serves it at. The files whose names end with one of
+ * `keepOnFirstUse`, such as `.wasm`, are kept on first use. Throws for a build without the app
+ * shell, for two files at one URL, for a hash that is not a SHA-256, and for an end that is not
+ * one, that no file has, or that the app shell has.
  */
-export function precacheList(manifest: ReadonlyMap<string, string>): PrecacheFile[] {
-  const files = new Map<string, string>();
+export function precacheList(
+  manifest: ReadonlyMap<string, string>,
+  keepOnFirstUse: readonly string[] = [],
+): PrecacheFile[] {
+  for (const end of keepOnFirstUse) {
+    if (!NAME_END.test(end)) {
+      throw new Error(`${JSON.stringify(end)} is not the end of a file's name, such as ".wasm".`);
+    }
+  }
+  const unused = new Set(keepOnFirstUse);
+  const files = new Map<string, PrecacheFile>();
   for (const [path, sha256] of manifest) {
     if (NOT_PRECACHED_URLS.includes(path)) {
       continue;
@@ -63,15 +77,31 @@ export function precacheList(manifest: ReadonlyMap<string, string>): PrecacheFil
     if (files.has(url)) {
       throw new Error(`The build has two files that are served at ${url}.`);
     }
-    files.set(url, sha256);
+    const ends = keepOnFirstUse.filter((end) => path.endsWith(end));
+    for (const end of ends) {
+      unused.delete(end);
+    }
+    files.set(url, ends.length === 0 ? { url, sha256 } : { url, sha256, firstUse: true });
   }
-  if (!files.has(APP_SHELL_URL)) {
+  const shell = files.get(APP_SHELL_URL);
+  if (shell === undefined) {
     throw new Error("The build has no /index.html, which answers navigations offline.");
   }
+  if (shell.firstUse === true) {
+    throw new Error("/index.html answers navigations offline, so it cannot be kept on first use.");
+  }
+  if (unused.size > 0) {
+    throw new Error(`No file of the build ends with ${[...unused].join(" or ")}.`);
+  }
   // URLs are unique, so the order is total; code-unit order, as `sort` uses, needs no locale.
-  return [...files]
-    .toSorted(([a], [b]) => (a < b ? -1 : 1))
-    .map(([url, sha256]) => ({ url, sha256 }));
+  return [...files.values()].toSorted((a, b) => (a.url < b.url ? -1 : 1));
+}
+
+export interface ServiceWorkerOptions {
+  /** The ids of the broken versions that this one replaces at once (§8). */
+  readonly replaces?: readonly string[];
+  /** The ends of the names of the files that the service worker keeps on first use (§2.1). */
+  readonly keepOnFirstUse?: readonly string[];
 }
 
 export interface ServiceWorkerScript {
@@ -95,7 +125,7 @@ export function serviceWorkerScript(
   code: string,
   manifest: ReadonlyMap<string, string>,
   headers: readonly Header[],
-  replaces: readonly string[] = [],
+  { replaces = [], keepOnFirstUse = [] }: ServiceWorkerOptions = {},
 ): ServiceWorkerScript {
   const parts = code.split(BUILD_DATA_PLACEHOLDER);
   if (parts.length !== 2) {
@@ -114,7 +144,7 @@ export function serviceWorkerScript(
       throw new Error(`${JSON.stringify(`${name}: ${value}`)} is not a header.`);
     }
   }
-  const files = precacheList(manifest);
+  const files = precacheList(manifest, keepOnFirstUse);
   // JSON is valid JavaScript (ES2019), so the data goes in as it is.
   const withVersion = (version: string): string =>
     parts.join(JSON.stringify({ version, files, headers, replaces }));

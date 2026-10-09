@@ -102,11 +102,55 @@ describe("precacheList (§2.1)", () => {
     ]);
     expect(() => precacheList(manifest)).toThrow("The hash of /x.js");
   });
+
+  it("marks the files whose names end with an end of keepOnFirstUse as kept on first use", () => {
+    const manifest = new Map(MANIFEST)
+      .set("/assets/harper_wasm_bg-AbCd1234.wasm", hash("module"))
+      .set("/assets/other-EfGh5678.wasm", hash("another module"))
+      .set("/assets/dictionary-IjKl9012.dict", hash("words"));
+    expect(precacheList(manifest, [".wasm", ".dict"])).toStrictEqual([
+      { url: "/", sha256: hash("<!doctype html>") },
+      { url: "/assets/dictionary-IjKl9012.dict", sha256: hash("words"), firstUse: true },
+      { url: "/assets/harper_wasm_bg-AbCd1234.wasm", sha256: hash("module"), firstUse: true },
+      { url: "/assets/index-AbCd1234.js", sha256: hash("index") },
+      { url: "/assets/other-EfGh5678.wasm", sha256: hash("another module"), firstUse: true },
+      { url: "/licenses.txt", sha256: hash("licenses") },
+    ]);
+  });
+
+  it("refuses an end that no file has, as after a dependency dropped its module", () => {
+    expect(() => precacheList(MANIFEST, [".txt", ".wasm"])).toThrow(
+      "No file of the build ends with .wasm.",
+    );
+  });
+
+  it("refuses an end that the app shell has, which answers navigations offline", () => {
+    expect(() => precacheList(MANIFEST, [".html"])).toThrow("cannot be kept on first use");
+  });
+
+  it("does not count security.txt and /sw.js, which it never keeps, as files with an end", () => {
+    const manifest = new Map([
+      ["/index.html", hash("shell")],
+      ["/sw.js", hash("service worker")],
+      ["/.well-known/security.txt", hash("Expires: 2027-04-06T11:34:17.000Z")],
+    ]);
+    expect(() => precacheList(manifest, [".js"])).toThrow("No file of the build ends with .js.");
+    expect(() => precacheList(manifest, [".txt"])).toThrow("No file of the build ends with .txt.");
+  });
+
+  it.each([[""], ["."], ["wasm"], ["/x.wasm"], [".a/b"]])(
+    "refuses %j as the end of a file's name",
+    (end) => {
+      expect(() => precacheList(MANIFEST, [end])).toThrow("is not the end of a file's name");
+    },
+  );
 });
 
 describe("serviceWorkerScript (§2.2, §2.3)", () => {
   it("puts the version id, the precache list, the headers and the replaced versions in place of the placeholder", () => {
-    const { script, data } = serviceWorkerScript(CODE, MANIFEST, HEADERS, ["0123456789abcdef"]);
+    const { script, data } = serviceWorkerScript(CODE, MANIFEST, HEADERS, {
+      replaces: ["0123456789abcdef"],
+    });
     expect(data.files).toStrictEqual(precacheList(MANIFEST));
     expect(data.headers).toStrictEqual(HEADERS);
     expect(data.replaces).toStrictEqual(["0123456789abcdef"]);
@@ -134,16 +178,17 @@ describe("serviceWorkerScript (§2.2, §2.3)", () => {
     );
   });
 
-  it("gives a new version id for any change to a file, the headers, the code or the replaced versions", () => {
+  it("gives a new version id for any change to a file, the headers, the code, the replaced versions or the files kept on first use", () => {
     const { version } = serviceWorkerScript(CODE, MANIFEST, HEADERS).data;
     const changedFile = new Map(MANIFEST).set("/licenses.txt", hash("licenses, changed"));
     const others = [
       serviceWorkerScript(CODE, changedFile, HEADERS).data.version,
       serviceWorkerScript(CODE.replace("start", "begin"), MANIFEST, HEADERS).data.version,
-      serviceWorkerScript(CODE, MANIFEST, HEADERS, ["0123456789abcdef"]).data.version,
+      serviceWorkerScript(CODE, MANIFEST, HEADERS, { replaces: ["0123456789abcdef"] }).data.version,
       serviceWorkerScript(CODE, MANIFEST, [...HEADERS, ["X-Frame-Options", "DENY"]]).data.version,
+      serviceWorkerScript(CODE, MANIFEST, HEADERS, { keepOnFirstUse: [".txt"] }).data.version,
     ];
-    expect(new Set([version, ...others]).size).toBe(5);
+    expect(new Set([version, ...others]).size).toBe(6);
   });
 
   it("ignores /sw.js itself, whose hash changes with the script", () => {
@@ -169,7 +214,7 @@ describe("serviceWorkerScript (§2.2, §2.3)", () => {
   it.each([["0123456789ABCDEF"], ["0123"], ["the broken one"]])(
     "refuses %s as a replaced version",
     (version) => {
-      expect(() => serviceWorkerScript(CODE, MANIFEST, HEADERS, [version])).toThrow(
+      expect(() => serviceWorkerScript(CODE, MANIFEST, HEADERS, { replaces: [version] })).toThrow(
         "is not a version id",
       );
     },

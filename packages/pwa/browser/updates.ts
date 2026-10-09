@@ -6,7 +6,7 @@
  * `createAppUpdates()` takes what it uses of the browser as a parameter, so that tests can run
  * it; `index.ts` gives it the browser's.
  */
-import { ACTIVATE_MESSAGE, CACHE_PREFIX } from "../src/protocol.ts";
+import { ACTIVATE_MESSAGE, CACHE_PREFIX, FIRST_USE_RECORD, STATE_CACHE } from "../src/protocol.ts";
 
 /**
  * Where the page stands:
@@ -46,6 +46,12 @@ export interface AppUpdates {
   readonly applyUpdate: () => void;
   /** Asks the browser to look for a new version now; a failed check waits for the next (§7.1). */
   readonly checkForUpdate: () => Promise<void>;
+  /**
+   * Whether the service worker keeps the files that the app keeps on first use, as it does once
+   * the app has requested one (§6.3), so that what needs them can start without the network.
+   * False without a service worker, and if Cache Storage fails.
+   */
+  readonly firstUseKept: () => Promise<boolean>;
 }
 
 /** A service worker as the page sees it. */
@@ -83,7 +89,12 @@ export interface PageEnvironment {
   reload(): void;
   now(): number;
   readonly caches:
-    { keys(): Promise<string[]>; delete(name: string): Promise<boolean> } | undefined;
+    | {
+        keys(): Promise<string[]>;
+        delete(name: string): Promise<boolean>;
+        match(request: string, options: { cacheName: string }): Promise<Response | undefined>;
+      }
+    | undefined;
 }
 
 /** How often, at most, the page asks the browser to look for a new version (§7.1): hourly. */
@@ -285,5 +296,16 @@ export function createAppUpdates(
       waiting.postMessage(ACTIVATE_MESSAGE, []);
     },
     checkForUpdate,
+    firstUseKept: async () => {
+      const { caches } = environment;
+      if (container === undefined || mode === "remove" || caches === undefined) {
+        return false;
+      }
+      try {
+        return (await caches.match(FIRST_USE_RECORD, { cacheName: STATE_CACHE })) !== undefined;
+      } catch {
+        return false;
+      }
+    },
   };
 }

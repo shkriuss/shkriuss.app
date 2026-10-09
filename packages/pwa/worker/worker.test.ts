@@ -43,13 +43,20 @@ const FILES_C = {
 
 const STATE_KEY = "/pwa-state.json";
 
-/** A service worker of a version whose files the host serves. */
+/**
+ * A service worker of a version whose files the host serves, with the files at the URL paths of
+ * `firstUse` kept on first use.
+ */
 async function start(
   files: Record<string, string>,
   version: string,
-  { replaces = [], scope = new FakeScope() }: { replaces?: string[]; scope?: FakeScope } = {},
+  {
+    replaces = [],
+    firstUse = [],
+    scope = new FakeScope(),
+  }: { replaces?: string[]; firstUse?: string[]; scope?: FakeScope } = {},
 ): Promise<{ scope: FakeScope; build: BuildData }> {
-  const build = await buildOf(files, version, replaces);
+  const build = await buildOf(files, version, replaces, firstUse);
   for (const [path, content] of Object.entries(files)) {
     scope.host.set(path, content);
   }
@@ -526,6 +533,160 @@ describe("fetch (§6)", () => {
     await expect(scope.request("/licenses.txt")).rejects.toThrow("Failed to fetch");
     await vi.waitFor(async () => {
       expect(await scope.caches.texts(versionCache(B))).toStrictEqual(FILES_B);
+    });
+  });
+});
+
+describe("files kept on first use (§2.1, §4, §6.3)", () => {
+  /** Two large files of version A that it keeps on first use, such as WebAssembly modules. */
+  const MODULE = "/assets/checker-AAAAAAAA.wasm";
+  const DICTIONARY = "/assets/words-AAAAAAAA.dat";
+  const WITH_MODULES_A = { ...FILES_A, [MODULE]: "the module", [DICTIONARY]: "the words" };
+  /** Version B: the same module, other words. */
+  const WITH_MODULES_B = { ...FILES_B, [MODULE]: "the module", [DICTIONARY]: "other words" };
+  const FIRST_USE = [MODULE, DICTIONARY];
+  const RECORD = "/pwa-first-use.json";
+
+  /** Version A, with its modules, installed and active; the host serves its files. */
+  async function activeWithModules(): Promise<FakeScope> {
+    const { scope } = await start(WITH_MODULES_A, A, { firstUse: FIRST_USE });
+    await scope.lifecycle("install");
+    await scope.lifecycle("activate");
+    scope.requests.length = 0;
+    return scope;
+  }
+
+  /** Version B, with its modules, installed after version A in the same Cache Storage. */
+  async function installB(scope: FakeScope): Promise<FakeScope> {
+    const next = new FakeScope(scope.caches);
+    await start(WITH_MODULES_B, B, { firstUse: FIRST_USE, scope: next });
+    await next.lifecycle("install");
+    return next;
+  }
+
+  async function recorded(scope: FakeScope): Promise<boolean> {
+    return (await scope.caches.texts("pwa-state"))?.[RECORD] !== undefined;
+  }
+
+  it("are not requested at install, with every other file", async () => {
+    const { scope } = await start(WITH_MODULES_A, A, { firstUse: FIRST_USE });
+    await scope.lifecycle("install");
+    expect(await scope.caches.texts(versionCache(A))).toStrictEqual(FILES_A);
+    expect(scope.requests.map((request) => new URL(request.url).pathname).toSorted()).toStrictEqual(
+      Object.keys(FILES_A).toSorted(),
+    );
+  });
+
+  it("are requested at their first use as at install, kept, and answered, and the app's use recorded", async () => {
+    const scope = await activeWithModules();
+    expect(await recorded(scope)).toBe(false);
+    expect(await text(await scope.request(MODULE))).toBe("the module");
+    const [request, ...others] = scope.requests;
+    expect(others).toStrictEqual([]);
+    expect(request?.integrity).toBe(integrity(await sha256("the module")));
+    expect(request?.cache).toBe("no-cache");
+    expect(request?.redirect).toBe("error");
+    expect(await scope.caches.texts(versionCache(A))).toStrictEqual({
+      ...FILES_A,
+      [MODULE]: "the module",
+    });
+    expect(await recorded(scope)).toBe(true);
+
+    // From then on, from the cache, offline too, with the build's headers.
+    scope.host.clear();
+    const again = await scope.request(MODULE);
+    expect(await text(again)).toBe("the module");
+    expect(headersOf(again)).toMatchObject(BUILD_HEADERS);
+    expect(scope.requests).toHaveLength(1);
+  });
+
+  it("answers a navigation to one as any request for it", async () => {
+    const scope = await activeWithModules();
+    expect(await text(await scope.request(MODULE, { navigate: true }))).toBe("the module");
+    expect(scope.requests[0]?.integrity).toBe(integrity(await sha256("the module")));
+    expect(await scope.caches.texts(versionCache(A))).toHaveProperty(MODULE, "the module");
+  });
+
+  it.each<[string, Answer, string]>([
+    ["fails its hash", "a module changed on the host", "the integrity check failed"],
+    ["is missing on the host", { status: 404 }, "answered with status 404"],
+    ["comes through a redirect", { redirect: "/elsewhere.wasm" }, "redirected"],
+    ["cannot be fetched, as offline", NETWORK_ERROR, "Failed to fetch"],
+  ])(
+    "are neither answered nor kept if one %s: never from the network unchecked",
+    async (_case, answer, failure) => {
+      const scope = await activeWithModules();
+      scope.host.set(MODULE, answer);
+      await expect(scope.request(MODULE)).rejects.toThrow(failure);
+      // One request, checked: no other went to the network for it.
+      expect(scope.requests).toHaveLength(1);
+      expect(scope.requests[0]?.integrity).toBe(integrity(await sha256("the module")));
+      expect(await scope.caches.texts(versionCache(A))).toStrictEqual(FILES_A);
+      expect(await recorded(scope)).toBe(false);
+    },
+  );
+
+  it("come from the host, checked, when Cache Storage fails", async () => {
+    const scope = await activeWithModules();
+    scope.caches.damaged = true;
+    expect(await text(await scope.request(MODULE))).toBe("the module");
+    expect(scope.requests[0]?.integrity).toBe(integrity(await sha256("the module")));
+  });
+
+  it("are requested again, checked, if a page changed the kept one in Cache Storage", async () => {
+    const scope = await activeWithModules();
+    await scope.request(MODULE);
+    await scope.caches.seed(versionCache(A), { [MODULE]: "a module that a page changed" });
+    expect(await text(await scope.request(MODULE))).toBe("the module");
+    expect(scope.requests).toHaveLength(2);
+    expect(await scope.caches.texts(versionCache(A))).toHaveProperty(MODULE, "the module");
+  });
+
+  it("are not kept by a version whose cache is gone, which they would make again", async () => {
+    const scope = await activeWithModules();
+    await scope.caches.delete(versionCache(A));
+    expect(await text(await scope.request(MODULE))).toBe("the module");
+    expect(await scope.caches.keys()).not.toContain(versionCache(A));
+  });
+
+  it("are kept at install once the app has used one: copied if unchanged, else requested", async () => {
+    const scope = await activeWithModules();
+    await scope.request(MODULE);
+    const next = await installB(scope);
+    expect(await next.caches.texts(versionCache(B))).toStrictEqual(WITH_MODULES_B);
+    // The new app shell and entry script, and the words that changed; the module was copied.
+    expect(next.requests.map((request) => new URL(request.url).pathname).toSorted()).toStrictEqual(
+      ["/", "/assets/index-BBBBBBBB.js", DICTIONARY].toSorted(),
+    );
+  });
+
+  it("are not requested at install while the app has not used one, but copied if another version keeps one", async () => {
+    const scope = await activeWithModules();
+    // As if a page had put the module there, without the record of a first use.
+    await scope.caches.seed(versionCache(A), { [MODULE]: "the module" });
+    const next = await installB(scope);
+    expect(await next.caches.texts(versionCache(B))).toStrictEqual({
+      ...FILES_B,
+      [MODULE]: "the module",
+    });
+    expect(next.requests.map((request) => new URL(request.url).pathname)).not.toContain(DICTIONARY);
+  });
+
+  it("are not requested by a repair, which gets the other missing files", async () => {
+    const scope = await activeWithModules();
+    await scope.request(MODULE);
+    scope.requests.length = 0;
+    scope.caches.stores.delete(versionCache(A));
+    await scope.request("/licenses.txt");
+    const repaired = scope.requests.filter((request) => request.integrity !== "");
+    expect(repaired.map((request) => new URL(request.url).pathname).toSorted()).toStrictEqual(
+      Object.keys(FILES_A).toSorted(),
+    );
+    // The module comes again at its next use.
+    expect(await text(await scope.request(MODULE))).toBe("the module");
+    expect(await scope.caches.texts(versionCache(A))).toStrictEqual({
+      ...FILES_A,
+      [MODULE]: "the module",
     });
   });
 });

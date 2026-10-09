@@ -16,6 +16,7 @@ function fakeUpdates(initial: UpdateState): AppUpdates & { set(state: UpdateStat
     },
     applyUpdate: () => {},
     checkForUpdate: async () => {},
+    firstUseKept: async () => false,
     set(next) {
       state = next;
       for (const listener of listeners) {

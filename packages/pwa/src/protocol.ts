@@ -11,6 +11,8 @@ export interface PrecacheFile {
   readonly url: string;
   /** Its SHA-256 in lowercase hexadecimal, as `sha256sums.txt` gives it. */
   readonly sha256: string;
+  /** Whether the service worker keeps it only once the app has requested one such file (§2.1). */
+  readonly firstUse?: true;
 }
 
 /** A header of a response, as a name and a value. */
@@ -54,6 +56,12 @@ export const CACHE_PREFIX = "pwa-";
 
 /** The cache in which the service worker records the active and the previous version (§5). */
 export const STATE_CACHE = `${CACHE_PREFIX}state`;
+
+/**
+ * The key in `pwa-state` of the record that the app has kept a file on first use (§6.3), which
+ * the page reads too. It is never requested.
+ */
+export const FIRST_USE_RECORD = "/pwa-first-use.json";
 
 /** The cache that keeps the files of a version (§4). */
 export function versionCache(version: string): string {
