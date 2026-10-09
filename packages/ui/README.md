@@ -79,7 +79,7 @@ import { Banner, Button, Checkbox, Dialog, FileButton, Link, Select, Switch, Tex
 | `Checkbox`   | A checkbox with its label, which ticks something off or back, such as an item of a list                                    |
 | `Dialog`     | A modal dialog: it takes the focus, closes with Escape and gives the focus back; the page behind it does not scroll        |
 | `FileButton` | A button that lets the user pick a file in the browser's file picker; any type of file, which the app tells by its content |
-| `Banner`     | A notice that does not interrupt, such as that an update is available, which screen readers read when it appears           |
+| `Banner`     | A notice that does not interrupt, such as an update; screen readers read it as it appears in the frame's status region     |
 
 - **Accessible:** React Aria gives them the keyboard, pointer and screen-reader behavior of WCAG 2.2. Buttons, switches, checkboxes and selects are at least 44 by 44 pixels, so that they are easy to tap.
 - **Contrast themes:** Windows' contrast themes (forced colors) drop backgrounds and impose their own colors. Filled buttons have a transparent border, which those themes draw, and checkboxes and switches take the themes' colors, so that a ticked box and a switch that is on still show it.

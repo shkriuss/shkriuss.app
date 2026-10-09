@@ -197,11 +197,14 @@ async function write(page: Page, titles: readonly string[]): Promise<void> {
   }, titles);
 }
 
+/** The frame's banners: what its status region holds. */
+function banners(page: Page): Locator {
+  return page.getByRole("status").locator(":scope > *");
+}
+
 /** The reminder to back up, among the frame's banners. */
 function reminder(page: Page): Locator {
-  return page
-    .getByRole("status")
-    .filter({ hasText: /^(?:No backup yet\.|Your last backup is from)/ });
+  return banners(page).filter({ hasText: /^(?:No backup yet\.|Your last backup is from)/ });
 }
 
 /**
@@ -281,7 +284,7 @@ async function onIPhone(page: Page, homeScreen: boolean): Promise<void> {
 
 /** The banner that suggests installing the app before anything is entered. */
 function installFirst(page: Page): Locator {
-  return page.getByRole("status").filter({ hasText: /^Before you start, add this app/ });
+  return banners(page).filter({ hasText: /^Before you start, add this app/ });
 }
 
 for (const colorScheme of ["light", "dark"] as const) {
@@ -294,7 +297,7 @@ for (const colorScheme of ["light", "dark"] as const) {
     await setUpdateState(page, "update-available");
     await comeBack(page);
     await expect(reminder(page)).toBeVisible();
-    await expect(page.getByRole("status")).toHaveCount(2);
+    await expect(banners(page)).toHaveCount(2);
     const results = await new AxeBuilder({ page }).analyze();
     expect(results.violations).toEqual([]);
   });
@@ -462,10 +465,14 @@ test("the banner offers an update when one is ready, and applies it when the use
   page,
 }) => {
   await open(page);
-  await expect(page.getByRole("status")).toHaveCount(0);
+  // The page's status region is there from the start, empty: screen readers read a banner that
+  // appears in it, where one that appears as a live region of its own often goes unread.
+  await expect(page.getByRole("status")).toHaveCount(1);
+  await expect(page.getByRole("status")).toBeEmpty();
   await setUpdateState(page, "update-available");
   const banner = page.getByRole("status");
   await expect(banner).toContainText("A new version of the app is ready.");
+  await expect(banner.locator("[role=status], [aria-live], output")).toHaveCount(0);
   await banner.getByRole("button", { name: "Update" }).click();
   expect(await page.evaluate(() => window.platform?.shell.applied())).toBe(1);
   await setUpdateState(page, "updating");
@@ -500,7 +507,7 @@ test("the banner goes away until there is news, when the user says later", async
   await open(page);
   await setUpdateState(page, "update-available");
   await page.getByRole("button", { name: "Later" }).click();
-  await expect(page.getByRole("status")).toHaveCount(0);
+  await expect(page.getByRole("status")).toBeEmpty();
   // The button that had the focus went with the banner: the focus goes to the screen.
   await expect(page.getByRole("main")).toBeFocused();
   // Another window updated the app: that is news.
