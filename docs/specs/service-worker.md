@@ -43,6 +43,7 @@ The first 16 hexadecimal digits of the SHA-256 of `/sw.js` as it would be with s
 
 - The page registers `/sw.js` with scope `/` and `updateViaCache: "none"`, through `@shkriuss/edge/workers` ([ADR 0011](../decisions/0011-worker-trusted-types-policy.md)), once the page has loaded. Development builds register none, and neither do builds that turn service workers off (section 9).
 - Where the browser has no service workers, or refuses one, as some private windows do, the app works online only.
+- If registering fails, for example because `/sw.js` could not be fetched, or the first version fails to install (section 4), which leaves the browser no service worker, the app works online only too, rather than wait for one. The page registers again when the device comes back online, and when it becomes visible or stays open, once an hour has passed since it last tried (section 7.1).
 
 ## 4. Install
 
@@ -50,7 +51,8 @@ When the browser has fetched a new `/sw.js`, the new service worker installs its
 
 1. It opens the cache `pwa-<version id>`.
 2. It requests every file of the precache list with `cache: "no-cache"`, `redirect: "error"` and the file's SHA-256 as the request's `integrity`, so the browser checks every byte. It keeps each response in the cache under its URL, headers included.
-3. Any failure fails the install: a network error, a status other than 200, a redirect, a hash that does not match, or storage that is full. The service worker stops its other requests, deletes its cache, and the active version stays active. The browser tries again on a later update check (section 7.1).
+3. Any failure fails the install: a network error, a status other than 200, a redirect, a hash that does not match, storage that is full, or a cache that is gone before the install has finished, as when another version that becomes active meanwhile deletes it (section 5). The service worker stops its other requests, deletes its cache, and the active version stays active. The browser tries again on a later update check (section 7.1).
+4. Once it has installed, it deletes the caches of the waiting versions that it replaces, which will never become active: every cache whose name starts with `pwa-`, except its own, those of the active and the previous version, as `pwa-state` records them (section 5), and `pwa-state`. It deletes none while a version is becoming active, which may be one of them before it has recorded itself.
 
 So a version is installed complete and checked, or not at all. A deployment during an install changes some of its files, which then fail their hashes; a later update check installs the newer version.
 
@@ -67,7 +69,7 @@ A version becomes active:
 Then the service worker:
 
 1. records, in the cache `pwa-state`, its version id as the active one, and the version it took over from as the previous one;
-2. deletes every cache whose name starts with `pwa-`, except its own, the previous version's and `pwa-state`: those of older versions, and of versions that never became active;
+2. deletes every cache whose name starts with `pwa-`, except its own, the previous version's and `pwa-state`: those of older versions, and of versions that never became active. It deletes none while a newer version installs, whose cache it cannot tell from an old one; that version deletes them once it has installed (section 4);
 3. takes control of every client with `clients.claim()`, so the app works offline right after its first load. A page that gets its first controller this way does not treat it as an update (section 7.3).
 
 ## 6. Fetch
@@ -86,17 +88,17 @@ A navigation is matched by the path of its URL; its query does not matter, as fo
 
 ### 6.3 Other requests
 
-Any other request is answered with the response kept under its exact URL in the active version's cache, or else in the previous version's, or else from the network. So a client that still runs the previous version keeps loading its own files (section 7.3), and the page's integrity checks still apply to every script.
+Any other request is answered with the response kept under its exact URL in the active version's cache, or else, unless it is a file of the active version (section 6.4), in the previous version's, or else from the network. So a client that still runs the previous version keeps loading its own files (section 7.3), and the page's integrity checks still apply to every script.
 
 ### 6.4 Repair
 
-If a file of the active version is missing from its cache, because the browser or the user cleared Cache Storage, the request goes to the network. The service worker then requests the files that its cache lacks again, in the background, with the checks of section 4. A repair that fails, for example offline, is tried again at the next miss.
+If a file of the active version is missing from its cache, because the browser or the user cleared Cache Storage, the request goes to the network, though the previous version's cache may have a file under the same URL: it may be another file, as the previous version's app shell is. The service worker then requests the files that its cache lacks again, in the background, with the checks of section 4. A repair that fails, for example offline, is tried again at the next miss.
 
 ## 7. Updates
 
 ### 7.1 Checking
 
-The browser checks for a new `/sw.js` on navigations to the app. Installed apps often stay open for days, so the page also asks the browser to check (`registration.update()`) whenever it becomes visible, at most once an hour. A check that fails, for example offline, is not retried until the next one.
+The browser checks for a new `/sw.js` on navigations to the app. Installed apps often stay open for days, so the page also asks the browser to check (`registration.update()`) when it becomes visible, when the device comes back online, and every ten minutes while it stays open, once an hour has passed since the last check. A check that fails, for example offline, is not retried until the next one.
 
 ### 7.2 Asking the user
 
@@ -142,13 +144,15 @@ Pages of a build without service workers register none. They unregister any they
 
 ## 11. Errors
 
-| Failure                                                | What happens                                                                          |
-| ------------------------------------------------------ | ------------------------------------------------------------------------------------- |
-| An install fails (section 4)                           | The active version stays; a later update check tries again.                           |
-| A file of the active version is missing from its cache | The request goes to the network, and the version gets its files again (section 6.4).  |
-| Offline, a request that the cache cannot answer        | It fails as it would without a service worker.                                        |
-| A client needs a file that is gone (section 7.3)       | The app shows an error that asks the user to reload.                                  |
-| A newer version upgraded the database                  | The client reports that it must reload ([data-model.md §7](data-model.md#7-storage)). |
+| Failure                                                       | What happens                                                                          |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| An install fails (section 4)                                  | The active version stays; a later update check tries again.                           |
+| The first version fails to install (section 3)                | The app works online only; the page registers again later.                            |
+| A file of the active version is missing from its cache        | The request goes to the network, and the version gets its files again (section 6.4).  |
+| Offline, a request that the cache cannot answer               | It fails as it would without a service worker.                                        |
+| Cache Storage fails, as when the browser's storage is damaged | Requests go to the network, as without a service worker.                              |
+| A client needs a file that is gone (section 7.3)              | The app shows an error that asks the user to reload.                                  |
+| A newer version upgraded the database                         | The client reports that it must reload ([data-model.md §7](data-model.md#7-storage)). |
 
 ## 12. Security
 

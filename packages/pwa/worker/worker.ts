@@ -63,7 +63,13 @@ export interface WorkerScope {
     matchAll(options: { type: "window" }): Promise<readonly WindowClientLike[]>;
   };
   readonly location: { readonly origin: string };
-  readonly registration: { unregister(): Promise<boolean> };
+  readonly registration: {
+    /** The worker of a newer version while it installs. */
+    readonly installing: unknown;
+    /** The worker of the active version, which may be becoming active. */
+    readonly active: { readonly state: string } | null;
+    unregister(): Promise<boolean>;
+  };
   fetch(request: Request): Promise<Response>;
   skipWaiting(): Promise<void>;
   addEventListener(type: "install" | "activate", listener: (event: Extendable) => void): void;
@@ -181,10 +187,30 @@ export function serveApp(scope: WorkerScope, build: BuildData): void {
     }
   }
 
+  /** Deletes the caches of versions of the app, but those of `versions` and `pwa-state`. */
+  async function deleteCachesBut(versions: readonly (string | undefined)[]): Promise<void> {
+    const names = new Set([STATE_CACHE]);
+    for (const version of versions) {
+      if (version !== undefined) {
+        names.add(versionCache(version));
+      }
+    }
+    for (const name of await scope.caches.keys()) {
+      if (name.startsWith(CACHE_PREFIX) && !names.has(name)) {
+        await scope.caches.delete(name);
+      }
+    }
+  }
+
   async function install(): Promise<void> {
     const state = await readState();
     try {
       await precache(build.files);
+      // Another version that became active meanwhile deletes the caches it does not know (§5).
+      // Without its cache, this one would serve another version's files.
+      if (!(await scope.caches.keys()).includes(ownCache)) {
+        throw new Error(`Version ${build.version} lost its cache while it installed.`);
+      }
     } catch (error) {
       // A version installs complete or not at all. Its cache can be the active one only when
       // the browser installs the active script again, and then it keeps it.
@@ -192,6 +218,13 @@ export function serveApp(scope: WorkerScope, build: BuildData): void {
         await scope.caches.delete(ownCache);
       }
       throw error;
+    }
+    // The waiting version that this one replaces will never become active: its cache goes now,
+    // rather than at the next activation (§4). Not while a version becomes active, which may be
+    // that one, before it has recorded itself.
+    if (scope.registration.active?.state !== "activating") {
+      const now = await readState();
+      await deleteCachesBut([build.version, now.active, now.previous]);
     }
     if (state.active !== undefined && build.replaces.includes(state.active)) {
       await scope.skipWaiting();
@@ -204,14 +237,10 @@ export function serveApp(scope: WorkerScope, build: BuildData): void {
     await writeState(
       previous === undefined ? { active: build.version } : { active: build.version, previous },
     );
-    const kept = new Set([ownCache, STATE_CACHE]);
-    if (previous !== undefined) {
-      kept.add(versionCache(previous));
-    }
-    for (const name of await scope.caches.keys()) {
-      if (name.startsWith(CACHE_PREFIX) && !kept.has(name)) {
-        await scope.caches.delete(name);
-      }
+    // A newer version that installs meanwhile keeps its files in a cache that this one cannot
+    // tell from an old one: the caches then wait until that one has installed (§5).
+    if (scope.registration.installing === null) {
+      await deleteCachesBut([build.version, previous]);
     }
     await scope.clients.claim();
     if (state.active !== undefined && build.replaces.includes(state.active)) {
@@ -234,30 +263,42 @@ export function serveApp(scope: WorkerScope, build: BuildData): void {
   }
 
   /**
-   * Answers with the file at `key` from this version's cache, or else from the previous
-   * version's, or else from the network. A file of this version that is missing is repaired.
+   * The file at `key` from this version's cache, or else, unless it is a file of this version,
+   * from the previous version's (§6.3). A file of this version that is missing is repaired, and
+   * comes from the network meanwhile (§6.4): the previous version's file under its URL may be
+   * another one, as its app shell is.
    */
-  async function respond(event: FetchEventLike, key: string, ownFile: boolean): Promise<Response> {
+  async function fromCaches(
+    event: FetchEventLike,
+    key: string,
+    ownFile: boolean,
+  ): Promise<Response | undefined> {
     const options = { ignoreVary: true };
     const cached = await scope.caches.match(key, { ...options, cacheName: ownCache });
     if (cached !== undefined) {
       return cached;
     }
-    const { previous } = await readState();
-    if (previous !== undefined) {
-      const older = await scope.caches.match(key, {
-        ...options,
-        cacheName: versionCache(previous),
-      });
-      if (older !== undefined) {
-        return older;
-      }
-    }
     if (ownFile) {
       // Offline, it fails again at the next miss, which tries again.
       event.waitUntil(repair().catch(() => undefined));
+      return undefined;
     }
-    return scope.fetch(event.request);
+    const { previous } = await readState();
+    return previous === undefined
+      ? undefined
+      : scope.caches.match(key, { ...options, cacheName: versionCache(previous) });
+  }
+
+  /** Answers with the file at `key` that a cache keeps, or else from the network. */
+  async function respond(event: FetchEventLike, key: string, ownFile: boolean): Promise<Response> {
+    let found: Response | undefined;
+    try {
+      found = await fromCaches(event, key, ownFile);
+    } catch {
+      // Cache Storage failed, as when the browser's storage is damaged: the network answers, as
+      // without a service worker (§11).
+    }
+    return found ?? scope.fetch(event.request);
   }
 
   scope.addEventListener("install", (event) => {

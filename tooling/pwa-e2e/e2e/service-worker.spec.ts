@@ -202,6 +202,28 @@ test("a version with a file that fails its hash does not install; the old one st
   await stateIs(page, "update-available");
 });
 
+test("a first version that fails to install leaves the app online only, until a later try", async ({
+  page,
+  context,
+}) => {
+  await serve(context, "broken");
+  await page.goto("/");
+  // Not installing for ever: the app works online only, and its pages can go on.
+  await stateIs(page, "unavailable");
+  expect(await cacheNames(page)).toStrictEqual([]);
+  expect(
+    await page.evaluate(async () => navigator.serviceWorker.getRegistration()),
+  ).toBeUndefined();
+
+  // Once the host serves a good version, the page registers again when the device is back
+  // online, as the browser tells it.
+  await serve(context, "a");
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+  await stateIs(page, "ready");
+  await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+  expect(await cacheNames(page)).toStrictEqual([`pwa-${versionOf("a")}`, "pwa-state"]);
+});
+
 test("a version that replaces the active one takes over at once and reloads its windows", async ({
   page,
   context,

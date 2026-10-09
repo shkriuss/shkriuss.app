@@ -26,6 +26,17 @@ function states(updates: AppUpdates): string[] {
   return seen;
 }
 
+/** A page whose first version failed to install, which leaves the browser no worker. */
+async function failedPage(): Promise<{ page: FakePage; updates: AppUpdates; seen: string[] }> {
+  const page = new FakePage({ container: new FakeContainer({ controlled: false }) });
+  page.registration.installing = new FakeWorker("installing");
+  const updates = createAppUpdates(page, "serve");
+  await page.finishLoading();
+  const seen = states(updates);
+  page.registration.failed();
+  return { page, updates, seen };
+}
+
 describe("registration (§3)", () => {
   it("registers nothing without service workers, as in development builds", async () => {
     const page = new FakePage({ container: undefined });
@@ -63,6 +74,55 @@ describe("registration (§3)", () => {
     await page.finishLoading();
     expect(updates.getState()).toBe("unavailable");
     expect(seen).toStrictEqual(["unavailable"]);
+  });
+});
+
+describe("a first version that fails to install (§3)", () => {
+  it("leaves the app online only, and registers again when the device comes back online", async () => {
+    const { page, updates, seen } = await failedPage();
+    // Not installing for ever: the app works online only, and its pages can start what they
+    // waited for.
+    expect(updates.getState()).toBe("unavailable");
+    page.registration.installing = new FakeWorker("installing");
+    await page.comeOnline(1);
+    expect(page.register).toHaveBeenCalledTimes(2);
+    page.registration.activated();
+    expect(seen).toStrictEqual(["unavailable", "installing", "ready"]);
+  });
+
+  it("registers again once an hour has passed, as the page becomes visible or stays open", async () => {
+    const { page } = await failedPage();
+    await page.becomeVisible(30);
+    await page.wait(29);
+    expect(page.register).toHaveBeenCalledOnce();
+    await page.becomeVisible(1);
+    expect(page.register).toHaveBeenCalledTimes(2);
+    // Failed again: the next try comes an hour after this one.
+    await page.wait(59);
+    expect(page.register).toHaveBeenCalledTimes(2);
+    await page.wait(1);
+    expect(page.register).toHaveBeenCalledTimes(3);
+  });
+
+  it("tries again when registering failed, as when /sw.js could not be fetched", async () => {
+    const page = new FakePage({ container: new FakeContainer({ controlled: false }) });
+    page.register.mockRejectedValueOnce(new TypeError("Failed to fetch."));
+    page.registration.installing = new FakeWorker("installing");
+    const updates = createAppUpdates(page, "serve");
+    await page.finishLoading();
+    expect(updates.getState()).toBe("unavailable");
+    await page.comeOnline(5);
+    expect(updates.getState()).toBe("installing");
+  });
+
+  it("registers nothing more once a version installs", async () => {
+    const page = new FakePage({ container: new FakeContainer({ controlled: false }) });
+    page.registration.installing = new FakeWorker("installing");
+    createAppUpdates(page, "serve");
+    await page.finishLoading();
+    await page.comeOnline(90);
+    await page.wait(120);
+    expect(page.register).toHaveBeenCalledOnce();
   });
 });
 
@@ -210,6 +270,19 @@ describe("checking for a new version (§7.1)", () => {
     expect(page.registration.update).toHaveBeenCalledOnce();
     await page.becomeVisible(1);
     expect(page.registration.update).toHaveBeenCalledTimes(2);
+  });
+
+  it("asks every hour while the page stays open, and when the device comes back online", async () => {
+    const { page } = await controlledPage();
+    await page.wait(59);
+    expect(page.registration.update).not.toHaveBeenCalled();
+    await page.wait(1);
+    expect(page.registration.update).toHaveBeenCalledOnce();
+    await page.comeOnline(30);
+    expect(page.registration.update).toHaveBeenCalledOnce();
+    await page.comeOnline(30);
+    expect(page.registration.update).toHaveBeenCalledTimes(2);
+    expect(page.register).toHaveBeenCalledOnce();
   });
 
   it("checks when asked, and a failed check waits for the next one", async () => {
