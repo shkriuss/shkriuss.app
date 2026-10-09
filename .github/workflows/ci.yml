@@ -84,10 +84,17 @@ jobs:
             fi
             echo "::warning::Installing $BROWSER failed or took over 10 minutes, on try $try of 2."
             # Playwright runs apt-get as root, through sudo, which the signal that stops a try does
-            # not reach. Left running, it would keep the package lists locked for the next try.
-            sudo pkill --signal KILL --exact apt-get || true
+            # not reach. Left running, it and the dpkg that it runs would keep the next try locked
+            # out of the package system.
+            sudo pkill --signal KILL --exact 'apt-get|dpkg' || true
+            timeout 30s sh -c "while pgrep --exact 'apt-get|dpkg' > /dev/null; do sleep 1; done" || true
             # The runner's list of Ubuntu mirrors, without the Azure one.
             sudo sed -i '/azure\.archive\.ubuntu\.com/d' /etc/apt/apt-mirrors.txt || true
+            # A try stopped while dpkg was unpacking leaves packages half installed, and apt-get
+            # then refuses to install anything until they are finished, as in CI run 150. With
+            # nothing to finish, both do nothing.
+            sudo DEBIAN_FRONTEND=noninteractive dpkg --configure -a || true
+            sudo DEBIAN_FRONTEND=noninteractive apt-get --fix-broken --yes install || true
           done
           exit 1
         env:
