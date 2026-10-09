@@ -18,6 +18,11 @@ import { isFieldName, isStoreName } from "./names.ts";
 export interface FieldType<T = JsonValue> {
   /** What the field holds, for messages, such as "a string of at most 200 characters". */
   readonly description: string;
+  /**
+   * Which values the field holds, exactly, in one canonical form: two types with the same
+   * signature hold the same values, whatever their defaults (data model §6).
+   */
+  readonly signature: string;
   /** The value a missing field reads as; `undefined` if the type has none yet. */
   readonly defaultValue: T | undefined;
   /** For a record id: the store of the records it refers to. */
@@ -54,6 +59,7 @@ function matches<T>(
 
 function fieldType<T>(
   description: string,
+  signature: string,
   isValid: (value: unknown) => boolean,
   defaultValue?: unknown,
   references?: string,
@@ -69,17 +75,19 @@ function fieldType<T>(
   }
   return {
     description,
+    signature,
     defaultValue: checkedDefault,
     ...(references === undefined ? {} : { references }),
     isValid,
     nullable: () =>
       fieldType<T | null>(
         `${description}, or null`,
+        `${signature}|null`,
         (value) => value === null || isValid(value),
         null,
         references,
       ),
-    default: (value) => fieldType(description, isValid, value, references),
+    default: (value) => fieldType(description, signature, isValid, value, references),
   };
 }
 
@@ -152,6 +160,7 @@ export const field = {
     assertBounds(minLength, maxLength, "a string's length");
     return fieldType<string>(
       `a string of ${range(minLength, maxLength, "characters")}`,
+      `string(${minLength},${maxLength})`,
       (value) =>
         typeof value === "string" && value.length >= minLength && value.length <= maxLength,
       minLength === 0 ? "" : undefined,
@@ -174,12 +183,22 @@ export const field = {
       value >= min &&
       value <= max &&
       (!integer || Number.isSafeInteger(value));
-    return fieldType<number>(`${kind}${bounds}`, isValid, isValid(0) ? 0 : undefined);
+    return fieldType<number>(
+      `${kind}${bounds}`,
+      `number(${min},${max},${integer})`,
+      isValid,
+      isValid(0) ? 0 : undefined,
+    );
   },
 
   /** `true` or `false`; `false` by default. */
   boolean(): FieldType<boolean> {
-    return fieldType<boolean>("true or false", (value) => typeof value === "boolean", false);
+    return fieldType<boolean>(
+      "true or false",
+      "boolean",
+      (value) => typeof value === "boolean",
+      false,
+    );
   },
 
   /** One of the given strings; the first by default. */
@@ -190,6 +209,8 @@ export const field = {
     const allowed = new Set<unknown>(values);
     return fieldType<V[number]>(
       `one of ${values.map((value) => JSON.stringify(value)).join(", ")}`,
+      // The order of the values changes nothing that the field holds.
+      `enum(${JSON.stringify(values.toSorted())})`,
       (value) => allowed.has(value),
       values[0],
     );
@@ -205,6 +226,8 @@ export const field = {
     }
     return fieldType<string | null>(
       `the id of a record of ${store}, or null`,
+      // Any record id: the store it refers to changes nothing that the field holds.
+      "id|null",
       (value) => value === null || isRecordId(value),
       null,
       store,
@@ -213,12 +236,12 @@ export const field = {
 
   /** A calendar date, `YYYY-MM-DD`; it has no default, so give one or make it nullable. */
   date(): FieldType<string> {
-    return fieldType<string>("a date (YYYY-MM-DD)", isDate);
+    return fieldType<string>("a date (YYYY-MM-DD)", "date", isDate);
   },
 
   /** A time in milliseconds since 1970 (UTC); it has no default. */
   timestamp(): FieldType<number> {
-    return fieldType<number>("a time in milliseconds since 1970", (value) =>
+    return fieldType<number>("a time in milliseconds since 1970", "timestamp", (value) =>
       Number.isSafeInteger(value),
     );
   },
@@ -231,6 +254,7 @@ export const field = {
     assertBounds(minItems, maxItems, "a list's length");
     return fieldType<readonly T[]>(
       `a list of ${range(minItems, maxItems, "items")}, each ${item.description}`,
+      `array(${minItems},${maxItems},${item.signature})`,
       (value) =>
         Array.isArray(value) &&
         value.length >= minItems &&
@@ -256,8 +280,14 @@ export const field = {
     const types = names.map((name) => [name, members[name]] as const);
     const defaults = types.map(([name, type]) => [name, type?.defaultValue] as const);
     const hasDefault = defaults.every(([, value]) => value !== undefined);
+    // The order of the members changes nothing that the field holds.
+    const signatures = types
+      .map(([name, type]) => `${name}:${type?.signature ?? ""}`)
+      .toSorted()
+      .join(",");
     return fieldType<{ readonly [K in keyof M]: TypeOf<M[K]> }>(
       `an object with the members ${names.join(", ")}`,
+      `object(${signatures})`,
       (value) =>
         isPlainObject(value) &&
         Object.keys(value).length === names.length &&

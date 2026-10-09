@@ -95,7 +95,10 @@ describe("checkIncomingStores (backup format §5.4, §5.5)", () => {
     const removed = checkIncomingStores(
       defineSchemas(VERSION_1.current, {
         version: 2,
-        stores: { ...VERSION_1.current.stores, notes: { fields: { title: field.string() } } },
+        stores: {
+          ...VERSION_1.current.stores,
+          notes: { fields: { title: field.string({ maxLength: 100 }) } },
+        },
         migrate: { notes: { remove: ["done", "list"] } },
       }),
       1,

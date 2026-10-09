@@ -135,6 +135,32 @@ describe("field types (data model §2.3)", () => {
     expect(type.isValid(new Map([["a", 1]]))).toBe(false);
   });
 
+  it("signature: the same exactly when two types hold the same values (data model §6)", () => {
+    const short = field.string({ maxLength: 3 });
+    expect(short.signature).toBe(field.string({ maxLength: 3 }).default("abc").signature);
+    expect(short.signature).not.toBe(field.string({ maxLength: 4 }).signature);
+    expect(short.signature).not.toBe(field.string({ minLength: 1, maxLength: 3 }).signature);
+    expect(field.number().signature).not.toBe(field.number({ integer: true }).signature);
+    expect(field.number().signature).not.toBe(field.number({ max: 10 }).signature);
+    expect(field.enum(["a", "b"]).signature).toBe(field.enum(["b", "a"]).signature);
+    expect(field.enum(["a", "b"]).signature).not.toBe(field.enum(["a"]).signature);
+    expect(field.reference("lists").signature).toBe(field.reference("folders").signature);
+    expect(field.date().signature).not.toBe(field.timestamp().signature);
+    expect(field.array(field.date()).signature).not.toBe(
+      field.array(field.date().nullable()).signature,
+    );
+    expect(field.array(field.date()).signature).not.toBe(
+      field.array(field.date(), { maxItems: 2 }).signature,
+    );
+    const point = field.object({ x: field.number(), y: field.boolean() });
+    expect(point.signature).toBe(field.object({ y: field.boolean(), x: field.number() }).signature);
+    expect(point.signature).not.toBe(
+      field.object({ x: field.number({ min: 0 }), y: field.boolean() }).signature,
+    );
+    expect(point.signature).not.toBe(field.object({ x: field.number() }).signature);
+    expect(field.date().nullable().signature).toBe(`${field.date().signature}|null`);
+  });
+
   it("nullable: also null, which becomes the default", () => {
     const type = field.date().nullable();
     check(type, ["2026-10-05", null], ["", 0]);
