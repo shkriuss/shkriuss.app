@@ -21,6 +21,18 @@ export interface BackupDatabase {
   recordBackup(counted: number): Promise<void>;
 }
 
+/**
+ * What the backup dialog uses of the database: its snapshot and recording the backup, and the
+ * device's state, which the reminders follow, where it has one. A backup of the data as stored,
+ * when the app cannot open it, has none (backup format §4).
+ */
+export type BackupMaker = Pick<BackupDatabase, "snapshot" | "recordBackup"> &
+  Partial<Pick<BackupDatabase, "device">>;
+
+function hasDeviceState(db: BackupMaker): db is BackupDatabase {
+  return db.device !== undefined;
+}
+
 /** The step that offers to save the backup that was made. */
 interface Ready {
   readonly name: "ready";
@@ -177,7 +189,7 @@ export interface BackupDialog {
  */
 export function useBackupDialog(
   app: string,
-  db: BackupDatabase,
+  db: BackupMaker,
   onFocusLost?: () => void,
 ): BackupDialog {
   const [step, setStep] = useState<Step>({ name: "closed" });
@@ -243,7 +255,9 @@ export function useBackupDialog(
       } catch {
         // The file is saved all the same; only the reminders do not know of it.
       }
-      await backupStatusOf(db).refresh();
+      if (hasDeviceState(db)) {
+        await backupStatusOf(db).refresh();
+      }
     }
     if (current === work.current) {
       setStep(

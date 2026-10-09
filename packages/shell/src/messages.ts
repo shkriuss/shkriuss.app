@@ -38,6 +38,8 @@ export const messages = defineMessages((format) => ({
   startFailedTitle: () => "The app could not start",
   startFailedText: () =>
     "It could not open its data on this device. Reload the app to try again. Your data stays on this device.",
+  startRescueText: () =>
+    "To keep a copy of it meanwhile, back it up: once the app works again, it can restore the backup.",
   startStorageFullText: () =>
     "This device has no space left for the app's data. Free some space, then reload the app. Your data stays on this device.",
   startOutdatedTitle: () => "This app was updated",

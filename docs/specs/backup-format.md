@@ -105,6 +105,8 @@ Deriving the key takes seconds on a phone, so encryption and decryption run in a
 4. Hand the file over: the share sheet (Web Share API) where the browser has one, otherwise a download ([architecture §8](../architecture.md#8-backups)).
 5. Record in `meta` when the backup was made, and how many of the device's changes its snapshot has ([data-model.md §7](data-model.md#7-storage)): changes made after the snapshot, while the user saved the file, still count as changes since the last backup. Backup reminders use both.
 
+**When the app cannot open its data,** as when an upgrade fails, the error that the app shows instead offers the same backup, of the records as the database stores them, at the database's own schema version ([data-model.md §7](data-model.md#7-storage)). It reads them without changing anything, and step 5 is left out: the database stays as it was. A version of the app that works restores the backup as any older one, migrating its records (section 5.5).
+
 ## 5. Import
 
 A backup file is hostile input ([threat model](../threat-model.md#4-threats-and-mitigations) T6). The steps run in this order. A failure at any step stops the import, tells the user why (section 6) and changes nothing.

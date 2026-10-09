@@ -26,8 +26,29 @@ const v2 = {
   migrate: { notes: { store: "memos", rename: { title: "text" } } },
 } satisfies SchemaVersion;
 
-const SCHEMAS_1 = defineSchemas(v1);
+/** Version 2 with a bug in its migration, which fails for every note: its upgrade fails. */
+const broken2 = {
+  ...v2,
+  migrate: {
+    notes: {
+      store: "memos",
+      compute: {
+        text: {
+          from: ["title"],
+          value: () => {
+            throw new Error("A migration with a bug.");
+          },
+        },
+      },
+      remove: ["title"],
+    },
+  },
+} satisfies SchemaVersion;
+
+export const SCHEMAS_1 = defineSchemas(v1);
 const SCHEMAS_2 = defineSchemas(v1, v2);
+/** The schemas of a version of the app whose upgrade fails, for the shell's error (data model §7). */
+export const BROKEN_SCHEMAS = defineSchemas(v1, broken2);
 
 /** What the end-to-end tests do with the data layer. */
 export interface DataTests {
@@ -99,11 +120,27 @@ async function writeOne(text: string): Promise<string> {
   });
 }
 
+/**
+ * Opens the database as a version of the app whose upgrade fails does, which leaves it as it was,
+ * and returns why it failed. Throws if the upgrade went through, as for a database without notes.
+ */
+export async function failedUpgrade(): Promise<unknown> {
+  let upgraded: { close(): void };
+  try {
+    upgraded = await openDatabase(BROKEN_SCHEMAS);
+  } catch (error) {
+    return error;
+  }
+  upgraded.close();
+  throw new Error("The upgrade did not fail: the database has no notes to migrate.");
+}
+
 /** Opens version 1 of the data, which the shell's page shows, and returns its database. */
 export async function notesDatabase(): Promise<Database<typeof v1>> {
   await data.open(1);
   if (version1 === undefined) {
-    throw new Error("A newer version of the app upgraded the database.");
+    // As openDatabase() refuses it, for the shell's error, which says so.
+    throw new DataLayerError("newer-version", "A newer version of the app upgraded the database.");
   }
   return version1;
 }

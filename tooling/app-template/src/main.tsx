@@ -5,6 +5,7 @@ import { StartFailed, appUpdates } from "@shkriuss/shell";
 import { RouterProvider } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { config } from "../app.config.ts";
 import { m } from "./messages.ts";
 import { createAppRouter } from "./router.ts";
 import { schemas } from "./schema.ts";
@@ -33,7 +34,7 @@ try {
 } catch (error) {
   root.render(
     <StrictMode>
-      <StartFailed name={m.appName()} error={error} />
+      <StartFailed name={m.appName()} app={config.id} schemas={schemas} error={error} />
     </StrictMode>,
   );
 }

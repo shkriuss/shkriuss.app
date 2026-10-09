@@ -67,7 +67,10 @@ export interface DeviceState {
 
 /** Every record of every store, deleted ones included, at one moment (backup format §4). */
 export interface Snapshot {
-  /** The app's current schema version, which every record has. */
+  /**
+   * The schema version that every record has: the app's current one, or the database's own in a
+   * snapshot of `rescueSnapshot()`.
+   */
   readonly schemaVersion: number;
   readonly stores: Readonly<Record<string, readonly DataRecord[]>>;
   /**
@@ -444,6 +447,71 @@ export async function openDatabase<C extends SchemaVersion>(
     throw isQuotaExceeded(error) ? storageFull(error) : error;
   }
   return new Database(dexie, schemas, options.now ?? Date.now);
+}
+
+/**
+ * The app's records as the database stores them, at the database's own schema version, for a
+ * backup when the app cannot open it, as when an upgrade failed (data model §7; backup format
+ * §4). It opens the database as it is, without upgrading it, reads every store of that version
+ * but `meta` in one transaction, and changes nothing. It throws a `DataLayerError` `not-found` if
+ * the device has no database of the app, `newer-version` if a newer version of the app has
+ * upgraded it, and `invalid` if its version is none of the app's.
+ */
+export async function rescueSnapshot(
+  schemas: Schemas,
+  options: DatabaseOptions = {},
+): Promise<Snapshot> {
+  // Without versions, Dexie opens the database at the version it has, and creates none.
+  const dexie = new Dexie(DATABASE_NAME, {
+    indexedDB: options.indexedDB ?? indexedDB,
+    ...(options.IDBKeyRange === undefined ? {} : { IDBKeyRange: options.IDBKeyRange }),
+  });
+  try {
+    try {
+      await dexie.open();
+    } catch (error) {
+      if (error instanceof Dexie.NoSuchDatabaseError) {
+        throw new DataLayerError("not-found", "The device has no database of the app.", {
+          cause: error,
+        });
+      }
+      throw translate(error);
+    }
+    const version = dexie.verno;
+    if (version > schemas.current.version) {
+      throw new DataLayerError(
+        "newer-version",
+        `The database has schema version ${version}, newer than ${schemas.current.version}.`,
+      );
+    }
+    const schema = schemas.versions.find((known) => known.version === version);
+    if (schema === undefined) {
+      throw new DataLayerError("invalid", `The database has schema version ${version}.`);
+    }
+    const stores = Object.keys(schema.stores);
+    const now = options.now ?? Date.now;
+    return await translating(async () =>
+      dexie.transaction("r", stores, async (transaction) => {
+        const records: Record<string, DataRecord[]> = {};
+        let greatest: Hlc | undefined;
+        for (const store of stores) {
+          records[store] = await transaction.table<DataRecord, string>(store).toArray();
+          for (const record of records[store]) {
+            greatest = maxHlc(greatest, lastChange(record));
+          }
+        }
+        // Nothing records this backup: the database stays as it is (backup format §4).
+        return {
+          schemaVersion: version,
+          stores: records,
+          fromFuture: fromFuture(greatest, now()),
+          counted: 0,
+        };
+      }),
+    );
+  } finally {
+    dexie.close();
+  }
 }
 
 type Outcome = keyof ImportCounts;
