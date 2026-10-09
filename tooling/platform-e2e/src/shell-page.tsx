@@ -15,6 +15,7 @@ import {
   Screen,
   ScreenLink,
   SettingsScreen,
+  StartFailed,
   useObserved,
 } from "@shkriuss/shell";
 import { Button } from "@shkriuss/ui";
@@ -28,7 +29,7 @@ import {
 import { StrictMode, useMemo, useState, useSyncExternalStore } from "react";
 import { createRoot } from "react-dom/client";
 import { BACKUP_APP } from "./backups.ts";
-import { current, notesDatabase } from "./data.ts";
+import { current, failedUpgrade, notesDatabase, SCHEMAS_1, BROKEN_SCHEMAS } from "./data.ts";
 import { m } from "./shell-messages.ts";
 
 // The shell of @shkriuss/shell around a screen of notes, at /shell, an archive, at /shell/archive,
@@ -265,14 +266,33 @@ export async function showShellPage(): Promise<void> {
   // Before anything waits, as every app does when it starts: the browser offers to install the
   // app once the page has loaded, and the tests stand in for it.
   appInstall();
-  const db = await notesDatabase();
   const container = document.createElement("div");
   document.body.replaceChildren(container);
-  const router = shellRouter(db);
   // The router shows a screen that fails; nothing reads a console here.
-  createRoot(container, { onCaughtError: () => undefined }).render(
-    <StrictMode>
-      <RouterProvider router={router} />
-    </StrictMode>,
-  );
+  const root = createRoot(container, { onCaughtError: () => undefined });
+  // At /shell?upgrade=broken, the page is a version of the app whose upgrade fails.
+  if (new URLSearchParams(location.search).get("upgrade") === "broken") {
+    const error = await failedUpgrade();
+    root.render(
+      <StrictMode>
+        <StartFailed name={m.app()} app={BACKUP_APP} schemas={BROKEN_SCHEMAS} error={error} />
+      </StrictMode>,
+    );
+    return;
+  }
+  // As every app with data starts (tooling/app-template/src/main.tsx).
+  try {
+    const router = shellRouter(await notesDatabase());
+    root.render(
+      <StrictMode>
+        <RouterProvider router={router} />
+      </StrictMode>,
+    );
+  } catch (error) {
+    root.render(
+      <StrictMode>
+        <StartFailed name={m.app()} app={BACKUP_APP} schemas={SCHEMAS_1} error={error} />
+      </StrictMode>,
+    );
+  }
 }

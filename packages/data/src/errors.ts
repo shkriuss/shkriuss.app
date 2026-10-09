@@ -6,7 +6,8 @@
  * - `future-clock`: an import with HLCs more than 24 hours ahead of this device's clock, which
  *   the user has not confirmed (data model §3.5);
  * - `deleted`: a write to a deleted record (data model §4.2);
- * - `not-found`: a write to a record that the store lacks;
+ * - `not-found`: a write to a record that the store lacks, or a rescue of a database that the
+ *   device lacks (data model §7);
  * - `newer-version`: data from a newer version of the app, which this one cannot read (data
  *   model §5.1, §7);
  * - `closed`: the database is closed, because the app closed it or another tab needed it closed;

@@ -2,6 +2,7 @@ export { createRecord, deleteRecord, updateRecord, type FieldValues } from "./ch
 export {
   DATABASE_NAME,
   openDatabase,
+  rescueSnapshot,
   type Change,
   type Database,
   type DatabaseOptions,

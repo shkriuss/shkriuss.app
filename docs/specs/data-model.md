@@ -228,6 +228,7 @@ Canonical JSON is the [JSON Canonicalization Scheme (RFC 8785)](https://www.rfc-
 - The `meta` object store holds this device's state and is never exported: the device id, the last HLC, how many changes the device has had, and when it last made a backup and how many of those changes the backup's snapshot had. Every change counts, and so does every import that writes anything. The changes since the last backup are those that its snapshot did not have, including any made while the user saved it. Backup reminders use them and the time of the last backup ([architecture §8](../architecture.md#8-backups)).
 - Apps request persistent storage with `navigator.storage.persist()` ([architecture §7](../architecture.md#7-data-layer)).
 - A write that the browser refuses for lack of storage space fails as such, apart from other failures, so that the app can tell the user to free some space.
+- If the app cannot open its database for another reason than a newer version's, as when an upgrade fails, `@shkriuss/data` can still read the records as they are stored, at the database's own schema version, without changing anything. The app then offers to save them as a backup ([backup-format.md §4](backup-format.md#4-export)), which a version of the app that works can restore.
 
 ## 8. Records from outside
 

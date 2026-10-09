@@ -3,7 +3,7 @@ import { AxeBuilder } from "@axe-core/playwright";
 import type { Locator, Page } from "@playwright/test";
 import type { StorageStatus, UpdateState } from "@shkriuss/pwa";
 import { expect, test } from "@shkriuss/config/playwright";
-import { forget, load, open as openData, read as readNotes } from "./app.ts";
+import { added, forget, load, open as openData, read as readNotes } from "./app.ts";
 
 // The shell of @shkriuss/shell in real browsers, under the production security headers, on the
 // pages of src/shell-page.tsx: /shell, a screen of notes from the data layer in the app's frame,
@@ -1146,6 +1146,51 @@ test("a file that this app cannot restore is refused, with what happened", async
   await refusedWith("The file is damaged or not supported.");
 
   expect(await readNotes(page)).toStrictEqual([]);
+});
+
+test("when an upgrade fails, the error offers a backup of the data as stored, which a version that works restores", async ({
+  page,
+}) => {
+  await open(page);
+  await write(page, ["Milk", "Eggs"]);
+  await page.goto("/shell?upgrade=broken");
+  await expect(
+    page.getByRole("heading", { level: 1, name: "The app could not start" }),
+  ).toBeVisible();
+  await expect(page.getByText("once the app works again, it can restore the backup")).toBeVisible();
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+
+  await page.getByRole("button", { name: "Back up", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Back up your data" });
+  await dialog.getByRole("button", { name: "Make a plain backup instead" }).click();
+  await page.getByRole("button", { name: "Make a plain backup" }).click();
+  const ready = page.getByRole("dialog", { name: "Your backup is ready" });
+  const file = await downloaded(page, async () => {
+    await ready.getByRole("button", { name: "Save backup" }).click();
+  });
+  await expect(page.getByRole("dialog", { name: "Backed up" })).toBeVisible();
+  // The notes as the database stores them, at its own schema version.
+  const backup: unknown = JSON.parse(Buffer.from(file.bytes).toString("utf8"));
+  expect(backup).toMatchObject({ app: "platform", schemaVersion: 1 });
+
+  // On a device where a version that works runs, the backup restores, migrated.
+  await forget(page);
+  expect(await openData(page, 2)).toBe("open");
+  expect(
+    await page.evaluate(async (bytes) => window.platform?.backups.restore(bytes, null), file.bytes),
+  ).toStrictEqual({ ok: true, value: { preview: added(2), imported: added(2) } });
+  expect(await readNotes(page)).toEqual(["Eggs", "Milk"]);
+});
+
+test("an app whose data a newer version has upgraded says so, and offers no backup of what it cannot read", async ({
+  page,
+}) => {
+  await load(page);
+  expect(await openData(page, 2)).toBe("open");
+  await page.goto("/shell");
+  await expect(page.getByRole("heading", { level: 1, name: "This app was updated" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Reload" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Back up" })).toHaveCount(0);
 });
 
 test("the reminder asks for a first backup once there is data, when the app opens or comes back", async ({
