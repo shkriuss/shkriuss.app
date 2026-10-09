@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { build, type Plugin } from "vite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Header } from "./headers.ts";
 import { cspHashSource, subresourceIntegrity } from "./integrity.ts";
 import { parseManifest } from "./manifest.ts";
 import { securityTxt } from "./security-txt.ts";
@@ -47,15 +48,21 @@ async function createApp(indexHtml?: string): Promise<string> {
 
 /**
  * A stand-in for pwa() of @shkriuss/pwa/vite: its script lists the files it was given, and its
- * bundle includes `modules`.
+ * bundle includes `modules`. It adds the headers that it was given to `headers`.
  */
-function serviceWorker(modules: readonly string[] = []): Plugin<ServiceWorkerApi> {
+function serviceWorker(
+  modules: readonly string[] = [],
+  headers: (readonly Header[])[] = [],
+): Plugin<ServiceWorkerApi> {
   return {
     name: SERVICE_WORKER_PLUGIN,
     api: {
       bundle: async () => ({
         modules,
-        script: (files) => `self.files = ${JSON.stringify(Object.fromEntries(files))};\n`,
+        script: (files, given) => {
+          headers.push(given);
+          return `self.files = ${JSON.stringify(Object.fromEntries(files))};\n`;
+        },
       }),
     },
   };
@@ -563,6 +570,23 @@ describe("edge", () => {
     expect(await readFile(path.join(dist, "licenses.txt"), "utf8")).toContain(
       "offline-library 2.0.0 (MIT)",
     );
+  });
+
+  it("gives the service worker the security headers that _headers gives every file", async () => {
+    const root = await createApp();
+    const given: (readonly Header[])[] = [];
+    await build({
+      root,
+      configFile: false,
+      logLevel: "silent",
+      plugins: [serviceWorker([], given), edge({ allowedFeatures: ["camera"] })],
+    });
+    const headers = await readFile(path.join(root, "dist", "_headers"), "utf8");
+    const everyFile = /^\/\*\n((?: {2}.+\n)+)/m.exec(headers)?.[1];
+    expect(given).toHaveLength(1);
+    expect(everyFile).toBe(given[0]?.map(([name, value]) => `  ${name}: ${value}\n`).join(""));
+    expect(everyFile).toContain("Permissions-Policy: accelerometer=(), autoplay=(), camera=(self)");
+    expect(everyFile).toContain("; trusted-types shkriuss-workers\n");
   });
 
   it("writes security.txt, the same for every build of a commit, and publishes its hash", async () => {

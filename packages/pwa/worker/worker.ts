@@ -43,6 +43,7 @@ export interface WindowClientLike {
 export interface CacheLike {
   keys(): Promise<readonly Request[]>;
   put(request: string, response: Response): Promise<void>;
+  delete(request: string): Promise<boolean>;
 }
 
 export interface CacheStorageLike {
@@ -95,6 +96,32 @@ export function integrity(sha256: string): string {
   return `sha256-${btoa(bytes)}`;
 }
 
+/** The SHA-256 of `bytes` in lowercase hexadecimal, as the precache list gives it. */
+async function sha256Of(bytes: ArrayBuffer): Promise<string> {
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+  return Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+/** The body of `response`, if its status is 200 and its bytes have this SHA-256 (§4, §6.5). */
+async function checkedBody(response: Response, sha256: string): Promise<ArrayBuffer | undefined> {
+  if (response.status !== 200) {
+    return undefined;
+  }
+  const body = await response.arrayBuffer();
+  return (await sha256Of(body)) === sha256 ? body : undefined;
+}
+
+/**
+ * The headers of `response` for a response with its body as read, which is decoded: without
+ * those that describe the body's encoding and length on the network.
+ */
+function decodedHeaders(response: Response): Headers {
+  const headers = new Headers(response.headers);
+  headers.delete("Content-Encoding");
+  headers.delete("Content-Length");
+  return headers;
+}
+
 function isWindowClient(source: unknown): boolean {
   return (
     typeof source === "object" && source !== null && "type" in source && source.type === "window"
@@ -113,7 +140,8 @@ async function reloadWindows(scope: WorkerScope): Promise<void> {
 export function serveApp(scope: WorkerScope, build: BuildData): void {
   const { origin } = scope.location;
   const ownCache = versionCache(build.version);
-  const ownUrls = new Set(build.files.map((file) => file.url));
+  // The files of this version by URL path; the app shell is one (§2.1).
+  const ownFiles = new Map(build.files.map((file) => [file.url, file]));
   const stateKey = `${origin}${STATE_PATH}`;
   let repairing: Promise<void> | undefined;
 
@@ -151,17 +179,56 @@ export function serveApp(scope: WorkerScope, build: BuildData): void {
   }
 
   /**
-   * Requests `files` and keeps them in this version's cache (§4): each with its SHA-256 as its
-   * integrity, so the browser checks every byte, revalidated with the host and never through a
-   * redirect. Throws on the first failure, after the other requests have stopped.
+   * Copies the file at `url` into `cache` from the first of the caches named `from` that keeps it
+   * with this SHA-256, which it computes from the kept bytes (§4). Resolves to whether one did.
+   */
+  async function copy(
+    cache: CacheLike,
+    from: readonly string[],
+    { url, sha256 }: PrecacheFile,
+  ): Promise<boolean> {
+    const key = `${origin}${url}`;
+    for (const cacheName of from) {
+      let kept: Response | undefined;
+      let body: ArrayBuffer | undefined;
+      try {
+        kept = await scope.caches.match(key, { cacheName, ignoreVary: true });
+        body = kept === undefined ? undefined : await checkedBody(kept, sha256);
+      } catch {
+        // A cache that fails, or that another version deletes meanwhile, has nothing to copy.
+      }
+      if (kept !== undefined && body !== undefined) {
+        const headers = decodedHeaders(kept);
+        await cache.put(
+          key,
+          new Response(body, { status: 200, statusText: kept.statusText, headers }),
+        );
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Keeps `files` in this version's cache (§4). Each file that the cache of another version keeps
+   * with its SHA-256 is copied; every other one is requested with its SHA-256 as its integrity,
+   * so the browser checks every byte, revalidated with the host and never through a redirect.
+   * Throws on the first failure, after the other requests have stopped.
    */
   async function precache(files: readonly PrecacheFile[]): Promise<void> {
     const cache = await scope.caches.open(ownCache);
+    const others = (await scope.caches.keys()).filter(
+      (name) => name.startsWith(CACHE_PREFIX) && name !== STATE_CACHE && name !== ownCache,
+    );
     const controller = new AbortController();
     const failures: unknown[] = [];
     await Promise.all(
-      files.map(async ({ url, sha256 }) => {
+      files.map(async (file) => {
+        const { url, sha256 } = file;
         try {
+          if (await copy(cache, others, file)) {
+            return;
+          }
           const response = await scope.fetch(
             new Request(`${origin}${url}`, {
               integrity: integrity(sha256),
@@ -248,7 +315,7 @@ export function serveApp(scope: WorkerScope, build: BuildData): void {
     }
   }
 
-  /** Requests again, in the background, the files of this version that its cache lacks (§6.4). */
+  /** Gets again, in the background, the files of this version that its cache lacks (§6.4). */
   async function repair(): Promise<void> {
     repairing ??= (async () => {
       try {
@@ -263,37 +330,50 @@ export function serveApp(scope: WorkerScope, build: BuildData): void {
   }
 
   /**
-   * The file at `key` from this version's cache, or else, unless it is a file of this version,
-   * from the previous version's (§6.3). A file of this version that is missing is repaired, and
-   * comes from the network meanwhile (§6.4): the previous version's file under its URL may be
-   * another one, as its app shell is.
+   * A file of this version from its cache, if it still has its SHA-256 and status 200, with the
+   * security headers of the build (§6.5). A file that is missing, or that a page changed in Cache
+   * Storage, which then goes, is repaired, and comes from the network meanwhile (§6.4): the
+   * previous version's file under its URL may be another one, as its app shell is.
    */
-  async function fromCaches(
+  async function fromOwnCache(
     event: FetchEventLike,
-    key: string,
-    ownFile: boolean,
+    { url, sha256 }: PrecacheFile,
   ): Promise<Response | undefined> {
-    const options = { ignoreVary: true };
-    const cached = await scope.caches.match(key, { ...options, cacheName: ownCache });
-    if (cached !== undefined) {
-      return cached;
+    const key = `${origin}${url}`;
+    const kept = await scope.caches.match(key, { cacheName: ownCache, ignoreVary: true });
+    if (kept !== undefined) {
+      const body = await checkedBody(kept, sha256);
+      if (body !== undefined) {
+        const headers = decodedHeaders(kept);
+        for (const [name, value] of build.headers) {
+          headers.set(name, value);
+        }
+        return new Response(body, { status: 200, statusText: kept.statusText, headers });
+      }
+      // Changed in Cache Storage: it goes, and the repair gets it again.
+      await (await scope.caches.open(ownCache)).delete(key);
     }
-    if (ownFile) {
-      // Offline, it fails again at the next miss, which tries again.
-      event.waitUntil(repair().catch(() => undefined));
-      return undefined;
-    }
+    // Offline, it fails again at the next miss, which tries again.
+    event.waitUntil(repair().catch(() => undefined));
+    return undefined;
+  }
+
+  /** The response kept under `key` in the previous version's cache, if any (§6.3). */
+  async function fromPreviousCache(key: string): Promise<Response | undefined> {
     const { previous } = await readState();
     return previous === undefined
       ? undefined
-      : scope.caches.match(key, { ...options, cacheName: versionCache(previous) });
+      : scope.caches.match(key, { cacheName: versionCache(previous), ignoreVary: true });
   }
 
-  /** Answers with the file at `key` that a cache keeps, or else from the network. */
-  async function respond(event: FetchEventLike, key: string, ownFile: boolean): Promise<Response> {
+  /** Answers with what `find` gets from the caches, or else from the network. */
+  async function respond(
+    event: FetchEventLike,
+    find: () => Promise<Response | undefined>,
+  ): Promise<Response> {
     let found: Response | undefined;
     try {
-      found = await fromCaches(event, key, ownFile);
+      found = await find();
     } catch {
       // Cache Storage failed, as when the browser's storage is damaged: the network answers, as
       // without a service worker (§11).
@@ -321,13 +401,21 @@ export function serveApp(scope: WorkerScope, build: BuildData): void {
       if (NOT_PRECACHED_URLS.includes(url.pathname)) {
         return;
       }
-      const file = ownUrls.has(url.pathname) ? url.pathname : APP_SHELL_URL;
-      event.respondWith(respond(event, `${origin}${file}`, true));
+      const file = ownFiles.get(url.pathname) ?? ownFiles.get(APP_SHELL_URL);
+      if (file !== undefined) {
+        event.respondWith(respond(event, async () => fromOwnCache(event, file)));
+      }
       return;
     }
-    // §6.3: a file of this version or the previous one, by its exact URL, or the network.
+    // §6.3: a file of this version by its exact URL, or else one that the previous version keeps
+    // under it, or the network.
     url.hash = "";
-    event.respondWith(respond(event, url.href, url.search === "" && ownUrls.has(url.pathname)));
+    const file = url.search === "" ? ownFiles.get(url.pathname) : undefined;
+    event.respondWith(
+      respond(event, async () =>
+        file === undefined ? fromPreviousCache(url.href) : fromOwnCache(event, file),
+      ),
+    );
   });
 
   scope.addEventListener("message", (event) => {

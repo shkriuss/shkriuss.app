@@ -7,7 +7,7 @@ import { assertChunksLoadInSafari, assertWorkerBundleNames } from "./chunks.ts";
 import { appHost, STAGING_DOMAIN } from "./domains.ts";
 import { assertExcludedPackages } from "./excluded-packages.ts";
 import { appHeaderRules, headersFile } from "./headers-file.ts";
-import type { BrowserFeature } from "./headers.ts";
+import { type BrowserFeature, securityHeaders } from "./headers.ts";
 import { addScriptIntegrity, cspHashSource, subresourceIntegrity } from "./integrity.ts";
 import { type CollectOptions, LICENSES_FILE, collectLicenses, licensesFile } from "./licenses.ts";
 import { buildManifest, formatManifest, MANIFEST_FILE } from "./manifest.ts";
@@ -250,6 +250,23 @@ export function edge(options: EdgeOptions = {}): Plugin {
         await mkdir(path.dirname(securityTxtPath), { recursive: true });
         await writeFile(securityTxtPath, securityTxt(await commitDate(licenseOptions.root)));
 
+        // The security headers of every file. The service worker serves its files with them
+        // too (service worker spec §6.5), so they are known before it is written; only the
+        // build's other files decide them.
+        const served = await buildManifest(directory);
+        const headerOptions = {
+          scriptHashes: [...scriptHashes],
+          workers: serviceWorkerBundle !== undefined || [...served.keys()].some(isWorkerScriptPath),
+          webAssembly: assertWebAssembly({
+            declared: options.webAssembly ?? false,
+            paths: [...served.keys()],
+            pageScripts: outputs.flatMap((output) =>
+              output.type === "chunk" ? [{ fileName: output.fileName, code: output.code }] : [],
+            ),
+          }),
+          allowedFeatures: options.allowedFeatures ?? [],
+        };
+
         // Last of the served files, because it lists the hashes of all the others.
         if (serviceWorkerBundle !== undefined) {
           const file = path.join(directory, SERVICE_WORKER_PATH);
@@ -258,24 +275,14 @@ export function edge(options: EdgeOptions = {}): Plugin {
               `The build already has ${SERVICE_WORKER_PATH}, which pwa() writes; remove the other.`,
             );
           }
-          await writeFile(file, serviceWorkerBundle.script(await buildManifest(directory)));
+          await writeFile(file, serviceWorkerBundle.script(served, securityHeaders(headerOptions)));
         }
 
         // After the HTML is final, so it covers every file as served, including those copied
         // from public/. It leaves out _headers, which is not served.
         const manifest = await buildManifest(directory);
-        const webAssembly = assertWebAssembly({
-          declared: options.webAssembly ?? false,
-          paths: [...manifest.keys()],
-          pageScripts: outputs.flatMap((output) =>
-            output.type === "chunk" ? [{ fileName: output.fileName, code: output.code }] : [],
-          ),
-        });
         const rules = appHeaderRules({
-          scriptHashes: [...scriptHashes],
-          workers: [...manifest.keys()].some(isWorkerScriptPath),
-          webAssembly,
-          allowedFeatures: options.allowedFeatures ?? [],
+          ...headerOptions,
           stagingHost,
           // The manifest is served too, though it does not list itself.
           files: [...manifest.keys(), `/${MANIFEST_FILE}`],

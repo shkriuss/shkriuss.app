@@ -97,7 +97,8 @@ export function pwa(options: PwaOptions = {}): Plugin<ServiceWorkerApi> {
         const { code, modules } = await bundle(remove ? REMOVE_ENTRY : SERVE_ENTRY);
         return {
           modules,
-          script: (files) => (remove ? code : serviceWorkerScript(code, files, replaces).script),
+          script: (files, headers) =>
+            remove ? code : serviceWorkerScript(code, files, headers, replaces).script,
         };
       },
     },

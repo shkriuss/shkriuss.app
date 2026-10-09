@@ -2,7 +2,7 @@
 // clients, and a host whose answers the tests set. Like a browser, its fetch() checks a
 // request's integrity, refuses redirects when asked to, and stops when the request is aborted.
 import { vi } from "vitest";
-import type { BuildData } from "../../src/protocol.ts";
+import type { BuildData, Header } from "../../src/protocol.ts";
 import type {
   CacheLike,
   CacheStorageLike,
@@ -51,12 +51,18 @@ class FakeCache implements CacheLike {
   async put(request: string, response: Response): Promise<void> {
     this.#entries.set(request, await keep(response));
   }
+
+  async delete(request: string): Promise<boolean> {
+    return this.#entries.delete(request);
+  }
 }
 
 export class FakeCaches implements CacheStorageLike {
   readonly stores = new Map<string, Map<string, Kept>>();
   /** Whether finding a response fails, as when the browser's storage is damaged. */
   damaged = false;
+  /** The caches in which finding a response fails, as in one that is deleted meanwhile. */
+  readonly failing = new Set<string>();
 
   async open(name: string): Promise<CacheLike> {
     let store = this.stores.get(name);
@@ -79,7 +85,7 @@ export class FakeCaches implements CacheStorageLike {
     request: string,
     { cacheName }: { cacheName: string },
   ): Promise<Response | undefined> {
-    if (this.damaged) {
+    if (this.damaged || this.failing.has(cacheName)) {
       throw new DOMException("The cache could not be read.", "UnknownError");
     }
     const kept = this.stores.get(cacheName)?.get(request);
@@ -99,12 +105,25 @@ export class FakeCaches implements CacheStorageLike {
     return texts;
   }
 
-  /** Puts a response with `text` into a cache directly, as an earlier version did. */
-  async seed(name: string, files: Record<string, string>): Promise<void> {
+  /**
+   * Puts a response with `text` into a cache directly, as an earlier version did, or a page of
+   * the app could.
+   */
+  async seed(
+    name: string,
+    files: Record<string, string>,
+    init: ResponseInit = { headers: { "Content-Type": "text/plain" } },
+  ): Promise<void> {
     const cache = await this.open(name);
     for (const [path, text] of Object.entries(files)) {
-      await cache.put(`${ORIGIN}${path}`, new Response(text));
+      await cache.put(`${ORIGIN}${path}`, new Response(text, init));
     }
+  }
+
+  /** The headers of the response that a cache keeps under a URL path, by lowercase name. */
+  headersOf(name: string, path: string): Record<string, string> | undefined {
+    const kept = this.stores.get(name)?.get(`${ORIGIN}${path}`);
+    return kept === undefined ? undefined : Object.fromEntries(kept.headers);
   }
 }
 
@@ -130,6 +149,12 @@ async function integrityOf(text: string): Promise<string> {
   return `sha256-${btoa(String.fromCharCode(...digest))}`;
 }
 
+/** The security headers of the builds in the tests, as the host sends them with every file. */
+export const HEADERS: readonly Header[] = [
+  ["Content-Security-Policy", "default-src 'none'; script-src 'self'"],
+  ["X-Content-Type-Options", "nosniff"],
+];
+
 /** The data of a build whose files have these texts, by URL path. */
 export async function buildOf(
   files: Record<string, string>,
@@ -139,7 +164,7 @@ export async function buildOf(
   const list = await Promise.all(
     Object.entries(files).map(async ([url, text]) => ({ url, sha256: await sha256(text) })),
   );
-  return { version, files: list, replaces };
+  return { version, files: list, headers: HEADERS, replaces };
 }
 
 export class FakeWindow implements WindowClientLike {
@@ -214,7 +239,15 @@ export class FakeScope implements WorkerScope {
     if (request.integrity !== "" && request.integrity !== (await integrityOf(answer))) {
       throw new TypeError("Failed to fetch: the integrity check failed");
     }
-    return new Response(answer, { headers: { "Content-Type": "text/plain" } });
+    // As a host sends a file: compressed on the way, with its security headers.
+    return new Response(answer, {
+      headers: [
+        ["Content-Type", "text/plain"],
+        ["Content-Encoding", "br"],
+        ["Content-Length", "7"],
+        ...HEADERS.map(([name, value]): [string, string] => [name, value]),
+      ],
+    });
   }
 
   #event(fields: Partial<AnyEvent>): AnyEvent {

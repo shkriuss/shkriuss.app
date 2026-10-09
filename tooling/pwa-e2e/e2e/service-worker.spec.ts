@@ -1,6 +1,6 @@
-import type { BrowserContext, Page } from "@playwright/test";
+import type { APIRequestContext, BrowserContext, Page, TestInfo } from "@playwright/test";
 import { expect, test } from "@shkriuss/config/playwright";
-import { type Build, builtFile, versionOf } from "../builds.ts";
+import { type Build, builtFile, precachedFiles, versionOf } from "../builds.ts";
 
 // The service worker of @shkriuss/pwa in real browsers (docs/specs/service-worker.md §13), with
 // the builds of builds.ts at one origin, under the production security headers. The fixture
@@ -34,6 +34,23 @@ async function checkForUpdate(page: Page): Promise<void> {
 
 async function cacheNames(page: Page): Promise<string[]> {
   return page.evaluate(async () => (await caches.keys()).toSorted());
+}
+
+/**
+ * From now on, the test server records the requests of the browser context that reach the host
+ * (server.ts); `requestsToHost()` reads them.
+ */
+async function recordRequests(context: BrowserContext, testInfo: TestInfo): Promise<string> {
+  const log = `${testInfo.testId}-${testInfo.retry}`.toLowerCase().replaceAll(/[^a-z0-9-]/g, "-");
+  await context.addCookies([{ name: "log", value: log, url: "http://127.0.0.1:4175" }]);
+  return log;
+}
+
+/** The paths of the requests that reached the host since it was last asked, in their order. */
+async function requestsToHost(request: APIRequestContext, log: string): Promise<string[]> {
+  const answer = await request.get(`/__requests/${log}`);
+  const paths: unknown = await answer.json();
+  return Array.isArray(paths) ? paths.map(String) : [];
 }
 
 /** Does what reloads the page, and waits until the reloaded page's script has run. */
@@ -87,14 +104,12 @@ test("a navigation to a file of the version gets that file, offline too", async 
   await serve(context, "offline");
   const response = await page.goto("/licenses.txt");
   expect(response?.status()).toBe(200);
-  // The text that the browser shows. The cached response keeps the host's Content-Encoding with
-  // its body already decoded, as the Fetch standard has it; Playwright's Firefox decodes such a
-  // body again and fails to read it (microsoft/playwright#29261), while Firefox shows it right.
+  // The text that the browser shows.
   expect(await page.evaluate(() => document.body.textContent)).toBe(builtFile("a", "licenses.txt"));
   onlyTheTextViewersStyle(security);
 });
 
-test("a page from the kept version has the version's Content-Security-Policy", async ({
+test("a page from the kept version has the build's Content-Security-Policy, though its cache lost it", async ({
   page,
   context,
   security,
@@ -102,6 +117,15 @@ test("a page from the kept version has the version's Content-Security-Policy", a
   security.expectRefusals();
   await serve(context, "a");
   await open(page);
+  // The app shell as the build made it, kept without its headers, as a page could put it.
+  await page.evaluate(
+    async (name) => {
+      const cache = await caches.open(name);
+      const body = await (await cache.match("/"))?.arrayBuffer();
+      await cache.put("/", new Response(body, { headers: { "Content-Type": "text/html" } }));
+    },
+    `pwa-${versionOf("a")}`,
+  );
   await serve(context, "offline");
   await page.reload();
   await page.waitForFunction(() => window.pwaTest !== undefined);
@@ -133,6 +157,36 @@ test("a new version installs in the background and waits, until the user agrees"
   // The previous version's files stay for windows that still run it.
   expect(await cacheNames(page)).toStrictEqual(
     [`pwa-${versionOf("a")}`, `pwa-${versionOf("b")}`, "pwa-state"].toSorted(),
+  );
+});
+
+test("an update downloads only the files that changed, and copies the others", async ({
+  page,
+  context,
+  request,
+}, testInfo) => {
+  const log = await recordRequests(context, testInfo);
+  await serve(context, "a");
+  await open(page);
+  await requestsToHost(request, log);
+  await serve(context, "b");
+  await checkForUpdate(page);
+  await stateIs(page, "update-available");
+
+  const a = precachedFiles("a");
+  const changed = [...precachedFiles("b")].filter(([url, sha256]) => a.get(url) !== sha256);
+  expect(changed.length).toBeLessThan(a.size);
+  // /sw.js for the update check, then only the files that changed.
+  const requested = (await requestsToHost(request, log)).filter((path) => path !== "/sw.js");
+  expect(requested.toSorted()).toStrictEqual(changed.map(([url]) => url).toSorted());
+
+  // Version b works offline, with the files it copied.
+  await reloadedBy(page, async () => page.evaluate(() => window.pwaTest?.updates.applyUpdate()));
+  await serve(context, "offline");
+  await page.reload();
+  expect(await buildOf(page)).toBe("b");
+  expect(await page.evaluate(async () => (await fetch("/licenses.txt")).text())).toBe(
+    builtFile("b", "licenses.txt"),
   );
 });
 
@@ -316,6 +370,33 @@ test("a version whose cache was cleared gets its files again, and works offline 
   await page.reload();
   expect(await buildOf(page)).toBe("a");
   expect(await page.evaluate(async () => window.pwaTest?.loadLazy())).toBe("lazy of a");
+});
+
+test("a file of the version that a page changed in Cache Storage is not served, and comes back", async ({
+  page,
+  context,
+}) => {
+  await serve(context, "a");
+  await open(page);
+  const cache = `pwa-${versionOf("a")}`;
+  // A script injected into a page could put a page of its own in the app shell's place.
+  await page.evaluate(async (name) => {
+    const changed = new Response("<!doctype html><title>Changed</title><p>Changed</p>", {
+      headers: { "Content-Type": "text/html" },
+    });
+    await (await caches.open(name)).put("/", changed);
+  }, cache);
+  await page.reload();
+  expect(await buildOf(page)).toBe("a");
+  // The service worker deleted it, and got the version's app shell again.
+  await expect
+    .poll(async () =>
+      page.evaluate(async (name) => (await (await caches.open(name)).match("/"))?.text(), cache),
+    )
+    .toBe(builtFile("a", "index.html"));
+  await serve(context, "offline");
+  await page.reload();
+  expect(await buildOf(page)).toBe("a");
 });
 
 test("/sha256sums.txt and /sw.js always come from the host", async ({

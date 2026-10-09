@@ -22,6 +22,22 @@ export function builtFile(build: Build, file: string): string {
   return readFileSync(new URL(`dist/${build}/${file}`, import.meta.url), "utf8");
 }
 
+/**
+ * The files that the service worker of a build keeps, by the URL that the host serves each at,
+ * with their SHA-256 (service worker spec §2.1): every file of its `sha256sums.txt`, but `/sw.js`
+ * and `security.txt`. The test app has one HTML file, `/index.html`, served at `/`.
+ */
+export function precachedFiles(build: Build): Map<string, string> {
+  const files = new Map<string, string>();
+  for (const line of builtFile(build, "sha256sums.txt").trim().split("\n")) {
+    const [sha256 = "", path = ""] = line.split("  ");
+    if (path !== "/sw.js" && path !== "/.well-known/security.txt") {
+      files.set(path === "/index.html" ? "/" : path, sha256);
+    }
+  }
+  return files;
+}
+
 /** The version id in the `/sw.js` of a build in `dist/`. */
 export function versionOf(build: Build): string {
   const script = builtFile(build, "sw.js");

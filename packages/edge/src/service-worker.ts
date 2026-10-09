@@ -3,10 +3,12 @@
  *
  * The service worker lists the SHA-256 of every other file of the build, so `edge()` writes it
  * last: once the HTML has its integrity hashes and `licenses.txt` is written, and before it
- * hashes the build for `sha256sums.txt` and writes `_headers`. The script comes from a Vite
- * plugin named `SERVICE_WORKER_PLUGIN`, which offers it as its `api`; `pwa()` of
+ * hashes the build for `sha256sums.txt` and writes `_headers`. It also contains the security
+ * headers that `_headers` gives every file, which it serves its files with. The script comes
+ * from a Vite plugin named `SERVICE_WORKER_PLUGIN`, which offers it as its `api`; `pwa()` of
  * `@shkriuss/pwa/vite` is that plugin.
  */
+import type { Header } from "./headers.ts";
 
 /** The name of the plugin that builds the service worker. */
 export const SERVICE_WORKER_PLUGIN = "shkriuss:pwa";
@@ -15,8 +17,11 @@ export const SERVICE_WORKER_PLUGIN = "shkriuss:pwa";
 export interface ServiceWorkerBundle {
   /** The ids of the modules whose code it includes, for `licenses.txt`. */
   readonly modules: readonly string[];
-  /** `/sw.js`, for a build whose other served files have these SHA-256 hashes, by URL path. */
-  script(files: ReadonlyMap<string, string>): string;
+  /**
+   * `/sw.js`, for a build whose other served files have these SHA-256 hashes, by URL path, and
+   * these security headers, which the host sends with every file.
+   */
+  script(files: ReadonlyMap<string, string>, headers: readonly Header[]): string;
 }
 
 /** What the plugin offers as its `api`. */
