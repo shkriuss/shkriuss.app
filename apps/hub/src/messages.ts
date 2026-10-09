@@ -48,7 +48,7 @@ const FEATURES: Readonly<Record<BrowserFeature, string>> = {
 };
 
 /** When the privacy policy last changed, which its page says (docs/specs/hub.md §3). */
-const POLICY_CHANGED = new Date(2026, 9, 6);
+const POLICY_CHANGED = new Date(2026, 9, 9);
 
 /** The hub's text (ADR 0012). */
 const messages = defineMessages((format) => ({
@@ -110,7 +110,7 @@ const messages = defineMessages((format) => ({
   hostPolicy: () => "Cloudflare's privacy policy",
   backups: () => "Backups",
   backupsText: () =>
-    "A backup is a file that you save, wherever you choose. It is encrypted by default, with a passphrase that never leaves your device. A plain backup, which you can choose after a warning, is not encrypted: anyone who gets the file can read it.",
+    "A backup is a file that you save, wherever you choose. It is encrypted by default, with a passphrase that the apps never store or send anywhere. Your browser may offer to save the passphrase, as it does passwords: if you let it, its password manager keeps it. A plain backup, which you can choose after a warning, is not encrypted: anyone who gets the file can read it.",
   changes: () => "Changes",
   changesText: () => "Every change to this policy is in the history of the source code.",
   changesLink: () => "The history of this page",

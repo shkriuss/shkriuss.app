@@ -1,9 +1,11 @@
 import * as fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import {
+  MIN_DIFFERENT_CHARACTERS,
   MIN_PASSPHRASE_LENGTH,
   PASSPHRASE_WORDS,
   generatePassphrase,
+  isEasyToGuess,
   isLongEnough,
   normalizePassphrase,
 } from "./passphrase.ts";
@@ -80,5 +82,88 @@ describe("isLongEnough (backup format §3.1)", () => {
     expect(isLongEnough(accented.repeat(12))).toBe(true);
     expect(isLongEnough(family.repeat(11))).toBe(false);
     expect(isLongEnough(`${family.repeat(11)}x`)).toBe(true);
+  });
+});
+
+describe("isEasyToGuess (backup format §3.1)", () => {
+  it("refuses what the audit found: blanks, one letter over and over, and the digits", () => {
+    expect(isEasyToGuess(" ".repeat(12))).toBe(true);
+    expect(isEasyToGuess("aaaaaaaaaaaa")).toBe(true);
+    expect(isEasyToGuess("123456789012")).toBe(true);
+  });
+
+  it("accepts passphrases that people make up, and generated ones", () => {
+    expect(isEasyToGuess("correct horse battery staple")).toBe(false);
+    expect(isEasyToGuess("vivid lantern orbits quietly")).toBe(false);
+    expect(isEasyToGuess("Mein Hund heißt Bello!")).toBe(false);
+    expect(isEasyToGuess("burst-swarm-slender-curve-ability-various")).toBe(false);
+    expect(isEasyToGuess(generatePassphrase())).toBe(false);
+  });
+
+  it(`wants ${MIN_DIFFERENT_CHARACTERS} different characters, ignoring case and spaces`, () => {
+    expect(MIN_DIFFERENT_CHARACTERS).toBe(5);
+    expect(isEasyToGuess("abcd dcba abcd")).toBe(true);
+    expect(isEasyToGuess("AbCd aBcD dDcC")).toBe(true);
+    expect(isEasyToGuess("abcde edcba aa")).toBe(false);
+    fc.assert(
+      fc.property(
+        fc.array(fc.constantFrom("a", "B", "c", "D", " "), { minLength: 12 }),
+        (parts) => {
+          expect(isEasyToGuess(parts.join(""))).toBe(true);
+        },
+      ),
+    );
+  });
+
+  it("refuses a passphrase that repeats a shorter part", () => {
+    expect(isEasyToGuess("passwordpassword")).toBe(true);
+    expect(isEasyToGuess("Hello world hello world")).toBe(true);
+    fc.assert(
+      fc.property(
+        fc.string({ minLength: 1, maxLength: 12 }),
+        fc.integer({ min: 2, max: 5 }),
+        (part, times) => {
+          expect(isEasyToGuess(part.repeat(times))).toBe(true);
+        },
+      ),
+    );
+  });
+
+  it("refuses runs along the digits, the alphabet and the keyboard, either way and around again", () => {
+    for (const run of ["123456789012", "210987654321", "abcdefghijkl", "XYZABCDEFGHI"]) {
+      expect(isEasyToGuess(run)).toBe(true);
+    }
+    for (const run of ["qwertyuiopas", "lkjhgfdsapoi", "asdf ghjk lzxc"]) {
+      expect(isEasyToGuess(run)).toBe(true);
+    }
+    const keyboard = "qwertyuiopasdfghjklzxcvbnm";
+    const backwards = "mnbvcxzlkjhgfdsapoiuytrewq";
+    fc.assert(
+      fc.property(
+        fc.constantFrom(keyboard, backwards),
+        fc.nat({ max: keyboard.length - 1 }),
+        fc.integer({ min: 12, max: 40 }),
+        (keys, start, length) => {
+          expect(isEasyToGuess(keys.repeat(3).slice(start, start + length))).toBe(true);
+        },
+      ),
+    );
+  });
+
+  it("refuses long passwords that people often use, in any case", () => {
+    expect(isEasyToGuess("qwerty123456")).toBe(true);
+    expect(isEasyToGuess("Password1234")).toBe(true);
+    expect(isEasyToGuess("1QAZ 2WSX 3EDC")).toBe(true);
+    expect(isEasyToGuess("qwerty1234567")).toBe(false);
+  });
+
+  it("does not change with case or spaces", () => {
+    fc.assert(
+      fc.property(fc.array(fc.nat({ max: 35 }), { minLength: 12 }), (picks) => {
+        const characters = picks.map((pick) => "abcdefghijklmnopqrstuvwxyz0123456789".charAt(pick));
+        const spaced = characters.join(" ").toUpperCase();
+        expect(isEasyToGuess(spaced)).toBe(isEasyToGuess(characters.join("")));
+      }),
+    );
   });
 });

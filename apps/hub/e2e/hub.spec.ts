@@ -108,6 +108,8 @@ test("the privacy page says what stays on the device, and what the host sees", a
   ]);
   await expect(page.getByRole("main")).toContainText("Last changed on");
   await expect(page.getByRole("main")).toContainText("your IP address");
+  // The apps never keep the passphrase, but the browser's password manager may.
+  await expect(page.getByRole("main")).toContainText("its password manager keeps it");
   await expect(page.getByRole("link", { name: "Cloudflare's privacy policy" })).toHaveAttribute(
     "href",
     "https://www.cloudflare.com/privacypolicy/",

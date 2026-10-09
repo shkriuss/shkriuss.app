@@ -43,6 +43,7 @@ describe("the shell's text", () => {
       passphrase: m.passphrase(),
       passphraseAgain: m.passphraseAgain(),
       tooShort: m.tooShort(),
+      easyToGuess: m.easyToGuess(),
       different: m.different(),
       chooseGenerated: m.chooseGenerated(),
       plainTitle: m.plainTitle(),
@@ -148,10 +149,12 @@ describe("the shell's text", () => {
       cancel: "Cancel",
       ownTitle: "Your own passphrase",
       ownText:
-        "Choose a passphrase of at least 12 characters, and type it twice. Without it, nobody can open the backup, not even you.",
+        "Choose a passphrase of at least 12 characters that is hard to guess, and type it twice. Without it, nobody can open the backup, not even you.",
       passphrase: "Passphrase",
       passphraseAgain: "Passphrase again",
       tooShort: "Use at least 12 characters.",
+      easyToGuess:
+        "This is easy to guess. Avoid repeats, runs such as 123456 or qwerty, and common passwords.",
       different: "The two passphrases are not the same.",
       chooseGenerated: "Use a generated passphrase",
       plainTitle: "A plain backup",

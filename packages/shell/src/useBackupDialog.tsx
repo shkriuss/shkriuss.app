@@ -1,4 +1,10 @@
-import { BackupError, createBackupFile, generatePassphrase, isLongEnough } from "@shkriuss/backup";
+import {
+  BackupError,
+  createBackupFile,
+  generatePassphrase,
+  isEasyToGuess,
+  isLongEnough,
+} from "@shkriuss/backup";
 import type { DeviceState, Snapshot } from "@shkriuss/data";
 import { Button, Dialog, TextField } from "@shkriuss/ui";
 import { type ReactNode, useEffect, useRef, useState } from "react";
@@ -27,28 +33,33 @@ interface Ready {
   readonly saving: boolean;
 }
 
-/** Where the dialog that makes a backup stands. */
+/**
+ * Where the dialog that makes a backup stands. Only the steps that show the generated passphrase,
+ * or lead back to it, keep it: once the backup is made, the page lets go of it (backup format
+ * §3.1).
+ */
 type Step =
   | { readonly name: "closed" }
-  | { readonly name: "generated" }
-  | { readonly name: "own" }
-  | { readonly name: "plain" }
+  | { readonly name: "generated"; readonly generated: string }
+  | { readonly name: "own"; readonly generated: string }
+  | { readonly name: "plain"; readonly generated: string }
   | { readonly name: "making" }
   | Ready
   | { readonly name: "saved"; readonly file: File; readonly shared: boolean }
-  | { readonly name: "failed"; readonly tooLarge: boolean };
+  | { readonly name: "failed"; readonly tooLarge: boolean; readonly generated: string };
 
 function Actions({ children }: { readonly children: ReactNode }) {
   return <div className="flex flex-wrap gap-2">{children}</div>;
 }
 
 /**
- * What keeps the user's own passphrase from being used: the first field's is too short, or the
- * second field's differs. Each failed attempt gives a new one.
+ * What keeps the user's own passphrase from being used: the first field's is too short or easy
+ * to guess (backup format §3.1), or the second field's differs. Each failed attempt gives a new
+ * one.
  */
-interface PassphraseProblem {
-  readonly field: "first" | "second";
-}
+type PassphraseProblem =
+  | { readonly field: "first"; readonly reason: "too-short" | "easy-to-guess" }
+  | { readonly field: "second" };
 
 /**
  * The form for a passphrase that the user picks and types twice (backup format §3.1). It checks
@@ -87,7 +98,9 @@ function OwnPassphrase({
         event.preventDefault();
         let found: PassphraseProblem | null = null;
         if (!isLongEnough(first)) {
-          found = { field: "first" };
+          found = { field: "first", reason: "too-short" };
+        } else if (isEasyToGuess(first)) {
+          found = { field: "first", reason: "easy-to-guess" };
         } else if (!samePassphrase(first, second)) {
           found = { field: "second" };
         }
@@ -110,7 +123,11 @@ function OwnPassphrase({
           setProblem(null);
         }}
         isInvalid={problem?.field === "first"}
-        errorMessage={m.tooShort()}
+        errorMessage={
+          problem?.field === "first" && problem.reason === "easy-to-guess"
+            ? m.easyToGuess()
+            : m.tooShort()
+        }
         inputRef={firstInput}
       />
       <TextField
@@ -164,7 +181,6 @@ export function useBackupDialog(
   onFocusLost?: () => void,
 ): BackupDialog {
   const [step, setStep] = useState<Step>({ name: "closed" });
-  const [generated, setGenerated] = useState("");
   const content = useRef<HTMLDivElement>(null);
   // What the dialog started last, so that only its result shows: a backup that was being made
   // when the user closed the dialog, or made another, never appears, and its worker stops.
@@ -181,12 +197,14 @@ export function useBackupDialog(
   const close = (): void => {
     work.current?.abort();
     work.current = undefined;
-    // The passphrase stays in memory only while the dialog needs it (backup format §3.1).
-    setGenerated("");
     setStep({ name: "closed" });
   };
 
-  async function make(passphrase: string | null): Promise<void> {
+  /**
+   * Makes the backup, encrypted with `passphrase`, or plain without one. `generated` is the
+   * generated passphrase, which the dialog offers again if making the backup failed.
+   */
+  async function make(passphrase: string | null, generated: string): Promise<void> {
     work.current?.abort();
     const controller = new AbortController();
     work.current = controller;
@@ -204,6 +222,7 @@ export function useBackupDialog(
       next = {
         name: "failed",
         tooLarge: error instanceof BackupError && error.code === "too-large",
+        generated,
       };
     }
     if (!signal.aborted) {
@@ -240,7 +259,8 @@ export function useBackupDialog(
   switch (step.name) {
     case "closed":
       break;
-    case "generated":
+    case "generated": {
+      const { generated } = step;
       body = (
         <>
           <p>{m.generatedText()}</p>
@@ -251,14 +271,14 @@ export function useBackupDialog(
             <Button
               variant="primary"
               onPress={() => {
-                void make(generated);
+                void make(generated, generated);
               }}
             >
               {m.backUp()}
             </Button>
             <Button
               onPress={() => {
-                setStep({ name: "own" });
+                setStep({ name: "own", generated });
               }}
             >
               {m.chooseOwn()}
@@ -268,7 +288,7 @@ export function useBackupDialog(
           <Actions>
             <Button
               onPress={() => {
-                setStep({ name: "plain" });
+                setStep({ name: "plain", generated });
               }}
             >
               {m.plainInstead()}
@@ -277,21 +297,25 @@ export function useBackupDialog(
         </>
       );
       break;
-    case "own":
+    }
+    case "own": {
+      const { generated } = step;
       title = m.ownTitle();
       body = (
         <OwnPassphrase
           onBackUp={(passphrase) => {
-            void make(passphrase);
+            void make(passphrase, generated);
           }}
           onGenerated={() => {
-            setStep({ name: "generated" });
+            setStep({ name: "generated", generated });
           }}
           onCancel={close}
         />
       );
       break;
-    case "plain":
+    }
+    case "plain": {
+      const { generated } = step;
       title = m.plainTitle();
       body = (
         <>
@@ -300,7 +324,7 @@ export function useBackupDialog(
             <Button
               variant="danger"
               onPress={() => {
-                void make(null);
+                void make(null, generated);
               }}
             >
               {m.makePlain()}
@@ -310,6 +334,7 @@ export function useBackupDialog(
         </>
       );
       break;
+    }
     case "making":
       title = m.makingTitle();
       body = <p>{m.making()}</p>;
@@ -354,17 +379,18 @@ export function useBackupDialog(
         </>
       );
       break;
-    case "failed":
+    case "failed": {
+      const { tooLarge, generated } = step;
       title = m.failedTitle();
       body = (
         <>
-          <p>{step.tooLarge ? m.tooLarge() : m.failed()}</p>
+          <p>{tooLarge ? m.tooLarge() : m.failed()}</p>
           <Actions>
-            {step.tooLarge ? null : (
+            {tooLarge ? null : (
               <Button
                 variant="primary"
                 onPress={() => {
-                  setStep({ name: "generated" });
+                  setStep({ name: "generated", generated });
                 }}
               >
                 {m.tryAgain()}
@@ -375,13 +401,13 @@ export function useBackupDialog(
         </>
       );
       break;
+    }
   }
 
   return {
     start: () => {
       // A new passphrase for each backup.
-      setGenerated(generatePassphrase());
-      setStep({ name: "generated" });
+      setStep({ name: "generated", generated: generatePassphrase() });
     },
     dialog: (
       <Dialog

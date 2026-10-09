@@ -726,6 +726,35 @@ test("a backup with the generated passphrase saves the notes, encrypted", async 
   await expect(section).toContainText("1 change since then.");
 });
 
+/** Whether the page's memory still holds `text` after a garbage collection: Chromium only. */
+async function memoryHolds(page: Page, text: string): Promise<boolean> {
+  const client = await page.context().newCDPSession(page);
+  const chunks: string[] = [];
+  client.on("HeapProfiler.addHeapSnapshotChunk", ({ chunk }) => {
+    chunks.push(chunk);
+  });
+  await client.send("HeapProfiler.enable");
+  await client.send("HeapProfiler.collectGarbage");
+  await client.send("HeapProfiler.takeHeapSnapshot", { reportProgress: false });
+  await client.detach();
+  return chunks.join("").includes(text);
+}
+
+test("once the backup is made, the page lets go of the generated passphrase", async ({
+  page,
+  browserName,
+}) => {
+  test.skip(browserName !== "chromium", "Only Chromium shows what the page's memory holds.");
+  await openSettings(page, BEST_EFFORT);
+  await write(page, ["Milk"]);
+  const { dialog, passphrase } = await startBackup(page);
+  expect(await memoryHolds(page, passphrase)).toBe(true);
+  await dialog.getByRole("button", { name: "Back up", exact: true }).click();
+  const ready = page.getByRole("dialog", { name: "Your backup is ready" });
+  await expect(ready).toBeVisible(MAKING);
+  expect(await memoryHolds(page, passphrase)).toBe(false);
+});
+
 test("a backup with the user's own passphrase checks it first", async ({ page }) => {
   await openSettings(page, BEST_EFFORT);
   await write(page, ["Milk"]);
@@ -743,8 +772,15 @@ test("a backup with the user's own passphrase checks it first", async ({ page })
   await expect(first).toBeFocused();
 
   // An error goes as soon as the user edits its field, so that nothing moves while they press.
-  await first.fill("correct horse battery staple");
+  await first.fill("123456789012");
   await expect(own).not.toContainText("Use at least 12 characters.");
+  await second.fill("123456789012");
+  await backUp.click();
+  await expect(own).toContainText("This is easy to guess.");
+  await expect(first).toBeFocused();
+
+  await first.fill("correct horse battery staple");
+  await expect(own).not.toContainText("This is easy to guess.");
   await second.fill("correct horse battery stapel");
   await backUp.click();
   await expect(own).toContainText("The two passphrases are not the same.");
