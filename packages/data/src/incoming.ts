@@ -1,5 +1,6 @@
 import { DataLayerError } from "./errors.ts";
 import { type Hlc, maxHlc } from "./hlc.ts";
+import { mergeRecords } from "./merge.ts";
 import { migrateRecord } from "./migrate.ts";
 import { type DataRecord, checkRecord, lastChange } from "./record.ts";
 import { type Schemas, checkData, storeSchema } from "./schema.ts";
@@ -88,7 +89,10 @@ function freeze<T>(value: T): T {
  *
  * - `stores` has exactly the stores of `schemaVersion`, each an array of records;
  * - every record passes the checks of data model §8 and has `v` equal to `schemaVersion`, and
- *   no other record of its store has its id, before or after the migration.
+ *   no other record of its store has its id.
+ *
+ * Two records that the migration puts into one store with the same id are copies of one record,
+ * and merge (data model §6).
  *
  * Throws a `DataLayerError`: `newer-version` if `schemaVersion` is newer than the app's,
  * `too-large` beyond a limit, and `invalid` for anything else. One refused record refuses them
@@ -117,11 +121,9 @@ export function checkIncomingStores(
     throw invalid(expected);
   }
 
-  const migrated = new Map<string, DataRecord[]>();
-  const ids = new Map<string, Set<string>>();
+  const migrated = new Map<string, Map<string, DataRecord>>();
   for (const store of Object.keys(schemas.current.stores)) {
-    migrated.set(store, []);
-    ids.set(store, new Set());
+    migrated.set(store, new Map());
   }
   let greatest: Hlc | undefined;
   for (const store of names) {
@@ -130,23 +132,32 @@ export function checkIncomingStores(
       throw invalid(expected);
     }
     const before = storeSchema(schema, store);
+    const ids = new Set<string>();
     for (const value of values) {
       const record = checkRecord(value, { store, version: schemaVersion });
       if (record.v !== schemaVersion) {
         throw invalid(`Record ${record.id} of ${store} is not at schema version ${schemaVersion}.`);
       }
       checkData(before, record.data, `record ${record.id} of ${store}`);
+      // A store of a backup holds each id once.
+      if (ids.has(record.id)) {
+        throw invalid(`The backup has record ${record.id} twice in ${store}.`);
+      }
+      ids.add(record.id);
       greatest = maxHlc(greatest, lastChange(record));
       const result = migrateRecord(schemas, { store, record });
-      // A store holds each id once: in the backup, and after a migration that merges stores.
-      const seen = ids.get(result.store);
-      if (seen === undefined || seen.has(result.record.id)) {
-        throw invalid(`The backup has record ${result.record.id} twice in ${result.store}.`);
+      const target = migrated.get(result.store);
+      if (target === undefined) {
+        throw invalid(`The app has no store ${result.store}.`);
       }
-      seen.add(result.record.id);
-      migrated.get(result.store)?.push(result.record);
+      const copy = target.get(result.record.id);
+      target.set(
+        result.record.id,
+        copy === undefined ? result.record : mergeRecords(copy, result.record),
+      );
     }
   }
   const version = schemas.current.version;
-  return new Incoming(CHECKED, version, freeze(Object.fromEntries(migrated)), greatest);
+  const records = [...migrated].map(([store, byId]) => [store, [...byId.values()]] as const);
+  return new Incoming(CHECKED, version, freeze(Object.fromEntries(records)), greatest);
 }

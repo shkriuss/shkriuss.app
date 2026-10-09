@@ -701,6 +701,17 @@ test("a plain backup comes only after a warning", async ({ page }) => {
   });
 });
 
+test("a change made while the backup waits to be saved still counts as one that the backup lacks", async ({
+  page,
+}) => {
+  await openSettings(page, BEST_EFFORT);
+  await write(page, ["Milk"]);
+  const ready = await makePlainBackup(page);
+  await write(page, ["Eggs"]);
+  await saveAndClose(page, ready);
+  await expect(page.getByRole("region", { name: "Backups" })).toContainText("1 change since then.");
+});
+
 test("a backup that the user cancels saves nothing, and records nothing", async ({ page }) => {
   await openSettings(page, BEST_EFFORT);
   const section = page.getByRole("region", { name: "Backups" });
@@ -886,6 +897,54 @@ test("a backup whose changes are dated ahead says so, and restores elsewhere onc
   await expect(restored).toContainText("Restored: 1 new.");
   await restored.getByRole("button", { name: "Done" }).click();
   expect(await readNotes(page)).toStrictEqual(["Milk"]);
+});
+
+/** A plain backup of this app with `record` in its notes, made at `made`. */
+function plainBackup(made: number, record: object): BackupFile {
+  const document = {
+    format: "shkriuss-backup",
+    formatVersion: 1,
+    app: "platform",
+    schemaVersion: 1,
+    exported: new Date(made).toISOString(),
+    stores: { notes: [record] },
+  };
+  return { name: "shkriuss-platform.json", bytes: [...Buffer.from(JSON.stringify(document))] };
+}
+
+/** The HLC of a change at `wall`, on another device. */
+function hlcAt(wall: number): string {
+  return `${String(wall).padStart(15, "0")}:00000:9f86d081884c7d65`;
+}
+
+test("a backup that only deletes what this device never had still restores, so that an older one cannot bring it back", async ({
+  page,
+}) => {
+  const id = "01a10307-b840-78aa-ab29-1a1138faaff6";
+  const made = Date.now() - 60_000;
+  const deletion = plainBackup(made, { id, v: 1, data: {}, clock: {}, deleted: hlcAt(made) });
+  const older = plainBackup(made - 1000, {
+    id,
+    v: 1,
+    data: { title: "Milk" },
+    clock: { title: hlcAt(made - 1000) },
+  });
+  await openSettings(page, BEST_EFFORT);
+  await restoreFile(page, deletion);
+  const preview = page.getByRole("dialog", { name: "Restore this backup?" });
+  await expect(preview).toContainText(
+    "This device already has everything in this backup that the app shows. Restoring it still records what was deleted on other devices, so that an older backup cannot bring those items back.",
+  );
+  await preview.getByRole("button", { name: "Restore", exact: true }).click();
+  const restored = page.getByRole("dialog", { name: "Restored" });
+  await expect(restored).toContainText("Restored. Nothing that the app shows has changed.");
+  await restored.getByRole("button", { name: "Done" }).click();
+
+  await restoreFile(page, older);
+  await expect(preview).toContainText("This device already has everything in this backup.");
+  await expect(preview.getByRole("button", { name: "Restore", exact: true })).toHaveCount(0);
+  await preview.getByRole("button", { name: "Close" }).click();
+  expect(await readNotes(page)).toStrictEqual([]);
 });
 
 test("a file that this app cannot restore is refused, with what happened", async ({

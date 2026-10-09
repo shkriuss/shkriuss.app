@@ -104,6 +104,8 @@ export const messages = defineMessages((format) => ({
   madeOn: (made: Date) => `This backup was made on ${format.dateTime(made)}.`,
   brings: (counts: ImportCounts) => `Restoring it brings ${importCounts(format, counts)}.`,
   nothingNew: () => "This device already has everything in this backup.",
+  onlyDeletions: () =>
+    "This device already has everything in this backup that the app shows. Restoring it still records what was deleted on other devices, so that an older backup cannot bring those items back.",
   restoreNow: () => "Restore",
   restoreFromFuture: (latest: Date) =>
     `Some changes in it are dated up to ${format.dateTime(latest)}, more than a day ahead of this device's clock. If the clock is wrong, correct it first. If not, the backup comes from a device whose clock was set ahead: restoring it anyway gives this device's changes that date too, until it comes.`,
@@ -112,6 +114,7 @@ export const messages = defineMessages((format) => ({
   restoring: () => "Restoring the backup…",
   restoredTitle: () => "Restored",
   restored: (counts: ImportCounts) => `Restored: ${importCounts(format, counts)}.`,
+  restoredNothingShown: () => "Restored. Nothing that the app shows has changed.",
   notRestoredTitle: () => "Not restored",
   fileTooLarge: () => "The file is too large to be a backup.",
   notABackup: () => "This is not a backup file.",

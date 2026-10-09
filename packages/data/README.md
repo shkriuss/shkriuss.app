@@ -133,7 +133,7 @@ subscription.unsubscribe(); // once they are no longer shown
 - **Upgrades:** opening migrates every record from the database's version to the current one inside the upgrade transaction (§6). If a migration fails, the database stays as it was and `openDatabase()` rejects.
 - **Newer databases:** if a newer version of the app has upgraded the database, `openDatabase()` rejects with `newer-version` and leaves the database as it is. So do later reads and changes if the database reopens by itself, for example when the page comes back from the back-forward cache. A release that raises the schema version can therefore never be rolled back, only fixed by a newer one.
 - **Other tabs:** `onBlocked` is called while other tabs keep an older version of the database open. `onVersionChange` is called when another tab needs the database closed, because a newer version of the app upgrades it or something deletes it; the database is closed by then, its reads and changes reject with `closed`, and the app must reload.
-- **Device state:** `device()` gives the device id, when the device last made a backup and how many changes have written something since; `recordBackup()` records a backup (backup format §4).
+- **Device state:** `device()` gives the device id, when the device last made a backup and how many changes have written something since; `recordBackup(counted)` records a backup of a snapshot that had counted `counted` changes (backup format §4), so that changes made while the user saved it still count as changes since.
 - **Durability:** transactions ask for strict durability, so a change is on disk when it completes.
 
 ## Backups
@@ -144,9 +144,9 @@ The data layer's part of the [backup format](../../docs/specs/backup-format.md);
 import { checkIncomingStores } from "@shkriuss/data";
 
 // Export (§4): every record, deleted ones included, at one moment.
-const { schemaVersion, stores } = await db.snapshot();
+const { schemaVersion, stores, counted } = await db.snapshot();
 // …write the backup file, then:
-await db.recordBackup();
+await db.recordBackup(counted);
 
 // Import (§5): `backup` is a parsed backup document whose format, app and version were checked.
 const incoming = checkIncomingStores(schemas, backup.schemaVersion, backup.stores);
@@ -155,9 +155,9 @@ const preview = await db.previewImport(incoming); // { total: { new: 12, updated
 const imported = await db.import(incoming, { acceptFromFuture: preview.fromFuture !== undefined });
 ```
 
-- **Checks:** `checkIncomingStores()` checks that the backup has exactly the stores of its schema version, each an array of records. Every record must pass the checks of data model §8 and be at that version. No store may hold an id twice, before or after the migration, which can merge stores. One refused record refuses the whole backup. It then migrates every record to the current version.
+- **Checks:** `checkIncomingStores()` checks that the backup has exactly the stores of its schema version, each an array of records. Every record must pass the checks of data model §8 and be at that version. No store of the backup may hold an id twice. One refused record refuses the whole backup. It then migrates every record to the current version; two records that the migration puts into one store with the same id are copies of one record, and merge (data model §6), as in an upgrade.
 - **Only checked records:** the result can be previewed and imported, and nothing else can: TypeScript and the import itself refuse any other object, and its records are frozen.
-- **Preview:** `previewImport()` merges each record with its local copy in memory and counts, per store and in total, the records that are new, updated (including ones that come back after a deletion), deleted or unchanged. It writes nothing. Its `fromFuture` is the time of the backup's greatest HLC if that lies more than 24 hours after this device's clock (§3.5), which the user must confirm.
+- **Preview:** `previewImport()` merges each record with its local copy in memory and counts, per store and in total, the records that are new, updated (including ones that come back after a deletion), deleted or unchanged. Its `writes` also counts the deletions that change nothing the device shows, such as those of records it never had, which the import keeps: an app offers to import a backup whenever `writes` is more than 0. It writes nothing. Its `fromFuture` is the time of the backup's greatest HLC if that lies more than 24 hours after this device's clock (§3.5), which the user must confirm.
 - **Clocks from the future:** `import()` refuses them with `future-clock`, unless `acceptFromFuture` says that the user confirmed them; it checks them against this device's clock again, which may have changed since the preview. `snapshot()` has the same `fromFuture`, so that an export can say that restoring it will ask. HLCs after the end of the year 9999 are refused as `invalid`: a device's clock never gets that far, and one that received such a time could run out of HLCs.
 - **Import:** `import()` does the same in one transaction over every store. It reads each local copy again and writes every merged record that differs, including tombstones of records the device never had. The device receives the backup's greatest HLC, so its later changes sort after everything in the backup. An import that writes something counts as a change since the last backup. If anything fails, nothing changes. Importing the same backup again changes nothing, and the order of imports does not matter.
 

@@ -50,6 +50,7 @@ describe("snapshot (backup format §4, step 1)", () => {
       schemaVersion: 1,
       stores: { notes: [], lists: [], settings: [] },
       fromFuture: undefined,
+      counted: 0,
     });
     const created = await db.change(async (change) => {
       const list = await change.create("lists", { name: "Shopping" });
@@ -74,6 +75,7 @@ describe("snapshot (backup format §4, step 1)", () => {
         ],
       },
       fromFuture: undefined,
+      counted: 2,
     });
   });
 });
@@ -108,12 +110,12 @@ describe("import (backup format §5.6, §5.7)", () => {
     const { fromFuture, ...summary } = preview;
     expect(fromFuture).toBeUndefined();
     expect(await second.db.import(backup)).toStrictEqual(summary);
-    expect(await second.db.snapshot()).toStrictEqual(snapshot);
+    expect((await second.db.snapshot()).stores).toStrictEqual(snapshot.stores);
     expect(await second.db.device()).toMatchObject({ changesSinceBackup: 1 });
 
     const again = await second.db.import(backup);
     expect(again.total).toStrictEqual({ new: 0, updated: 0, deleted: 0, unchanged: 4 });
-    expect(await second.db.snapshot()).toStrictEqual(snapshot);
+    expect((await second.db.snapshot()).stores).toStrictEqual(snapshot.stores);
     expect(await second.db.device()).toMatchObject({ changesSinceBackup: 1 });
   });
 
@@ -149,8 +151,13 @@ describe("import (backup format §5.6, §5.7)", () => {
       note(8, "Pasta", at(5)),
     ]);
     const expected = { new: 1, updated: 2, deleted: 1, unchanged: 4 };
-    expect((await db.previewImport(backup)).stores["notes"]).toStrictEqual(expected);
-    expect((await db.import(backup)).stores["notes"]).toStrictEqual(expected);
+    const preview = await db.previewImport(backup);
+    expect(preview.stores["notes"]).toStrictEqual(expected);
+    // All but the copy of Tea and the earlier Pasta, deletions that change nothing shown included.
+    expect(preview.writes).toBe(6);
+    const imported = await db.import(backup);
+    expect(imported.stores["notes"]).toStrictEqual(expected);
+    expect(imported.writes).toBe(6);
     expect((await stored(factory)).stores["notes"]).toStrictEqual([
       note(1, "Oat milk", at(5)),
       tombstone(2, at(5)),
@@ -161,6 +168,22 @@ describe("import (backup format §5.6, §5.7)", () => {
       tombstone(7, at(6)),
       note(8, "Rice", at(7)),
     ]);
+  });
+
+  it("writes deletions that change nothing the device shows, so that an older backup cannot bring the records back (§5.6)", async () => {
+    const { factory, db } = await fresh();
+    const deletions = notes([tombstone(4, at(5))]);
+    const preview = await db.previewImport(deletions);
+    expect(preview.total).toStrictEqual({ new: 0, updated: 0, deleted: 0, unchanged: 1 });
+    expect(preview.writes).toBe(1);
+    expect((await db.import(deletions)).writes).toBe(1);
+    expect((await stored(factory)).stores["notes"]).toStrictEqual([tombstone(4, at(5))]);
+    expect((await db.previewImport(deletions)).writes).toBe(0);
+    // An older backup, which still has the record.
+    const older = await db.import(notes([note(4, "Milk", at(1))]));
+    expect(older.total).toStrictEqual({ new: 0, updated: 0, deleted: 0, unchanged: 1 });
+    expect(older.writes).toBe(0);
+    expect(await db.list("notes")).toStrictEqual([]);
   });
 
   it("receives the backup's greatest HLC, so that later changes sort after it", async () => {
@@ -253,6 +276,7 @@ describe("clocks from the future (data model §3.5)", () => {
         lists: { new: 0, updated: 0, deleted: 0, unchanged: 0 },
         settings: { new: 0, updated: 0, deleted: 0, unchanged: 0 },
       },
+      writes: 2,
       fromFuture: START + 2 * DAY,
     });
     const before = await stored(factory);
@@ -356,7 +380,7 @@ describe("import, as a property (backup format §5.7)", () => {
         await two.db.import(notes(second));
         await two.db.import(notes(first));
         await two.db.import(notes(second));
-        expect(await two.db.snapshot()).toStrictEqual(await one.db.snapshot());
+        expect((await two.db.snapshot()).stores).toStrictEqual((await one.db.snapshot()).stores);
         one.db.close();
         two.db.close();
       }),

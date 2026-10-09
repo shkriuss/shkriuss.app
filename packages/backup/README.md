@@ -28,11 +28,11 @@ import {
 // Export (§4): a consistent snapshot, encrypted in the backup worker. With `passphrase: null`,
 // a plain backup, which the app offers only after the user confirms a warning.
 const passphrase = generatePassphrase(); // or one the user typed twice, of 12 characters or more
-const { file, fromFuture } = await createBackupFile(db, { app: "notes", passphrase });
+const { file, fromFuture, counted } = await createBackupFile(db, { app: "notes", passphrase });
 // file.name is "shkriuss-notes-2026-10-05.age". `fromFuture` is when its latest change is dated,
 // if that is more than a day ahead of this device's clock (data model §3.5): the app says so.
-// Once the app has handed the file over:
-await db.recordBackup();
+// Once the app has handed the file over, with the changes that its snapshot had:
+await db.recordBackup(counted);
 
 // Import (§5): the size is checked before the file is read.
 const opened = await openBackupFile(chosen);

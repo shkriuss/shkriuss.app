@@ -19,7 +19,7 @@ import { SETTINGS_ID, newRecordId } from "./ids.ts";
 import { Incoming } from "./incoming.ts";
 import { canonicalJson } from "./json.ts";
 import { mergeRecords } from "./merge.ts";
-import { type StoredRecord, migrateStep } from "./migrate.ts";
+import { migrateStep } from "./migrate.ts";
 import { META_STORE, SETTINGS_STORE } from "./names.ts";
 import { type DataRecord, isDeleted, lastChange, toJson } from "./record.ts";
 import {
@@ -76,6 +76,11 @@ export interface Snapshot {
    * user to confirm. `undefined` otherwise.
    */
   readonly fromFuture: number | undefined;
+  /**
+   * How many changes the device had counted when it took the snapshot, which `recordBackup()`
+   * records once the backup is saved (data model §7).
+   */
+  readonly counted: number;
 }
 
 /** What an import does to the records of a store (backup format §5.6). */
@@ -94,6 +99,12 @@ export interface ImportCounts {
 export interface ImportSummary {
   readonly total: ImportCounts;
   readonly stores: Readonly<Record<string, ImportCounts>>;
+  /**
+   * How many records it writes: those that it counts as new, updated or deleted, and deletions
+   * that change nothing the device shows, such as those of records it never had (backup format
+   * §5.6, §5.7).
+   */
+  readonly writes: number;
 }
 
 /** What an import would do (backup format §5.6). */
@@ -140,12 +151,17 @@ interface MetaRow {
   readonly value: unknown;
 }
 
+/**
+ * What the device knows about its backups (data model §7): when it last made one, how many
+ * changes it has counted in all, and how many of them the snapshot of that backup had.
+ */
 interface BackupState {
   readonly last: number | null;
-  readonly changes: number;
+  readonly counted: number;
+  readonly saved: number;
 }
 
-const NO_BACKUP: BackupState = { last: null, changes: 0 };
+const NO_BACKUP: BackupState = { last: null, counted: 0, saved: 0 };
 
 function isWithin(value: unknown, max: number): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && value <= max;
@@ -163,6 +179,22 @@ function isClock(value: unknown): value is ClockState {
 }
 
 function isBackupState(value: unknown): value is BackupState {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "last" in value &&
+    "counted" in value &&
+    "saved" in value &&
+    (value.last === null || Number.isSafeInteger(value.last)) &&
+    isWithin(value.counted, Number.MAX_SAFE_INTEGER) &&
+    isWithin(value.saved, value.counted)
+  );
+}
+
+/** The state as earlier versions stored it: only how many changes the last backup lacks. */
+function isEarlierBackupState(
+  value: unknown,
+): value is { readonly last: number | null; readonly changes: number } {
   return (
     typeof value === "object" &&
     value !== null &&
@@ -195,10 +227,19 @@ function backupOf(row: MetaRow | undefined): BackupState {
   if (row === undefined) {
     return NO_BACKUP;
   }
-  if (!isBackupState(row.value)) {
-    throw new DataLayerError("invalid", "The database holds an invalid backup state.");
+  if (isBackupState(row.value)) {
+    return row.value;
   }
-  return row.value;
+  if (isEarlierBackupState(row.value)) {
+    // The next write stores it as it is now.
+    return { last: row.value.last, counted: row.value.changes, saved: 0 };
+  }
+  throw new DataLayerError("invalid", "The database holds an invalid backup state.");
+}
+
+/** The state after one more change that wrote something. */
+function counting(state: BackupState): BackupState {
+  return { ...state, counted: state.counted + 1 };
 }
 
 /**
@@ -278,26 +319,36 @@ function storesOf(
 /**
  * Migrates every record of `previous` to `next` inside the upgrade transaction (data model §6),
  * so the database moves to the new version completely or not at all. Every record is read
- * before any is written, so a record moved into a store is not migrated a second time. Stores
- * that `next` lacks are deleted after this, when every record has moved out.
+ * before any is written, so a record moved into a store is not migrated a second time, and
+ * records leave their stores before any is written, so that none written is then deleted. Two
+ * records that the migration puts into one store with the same id are copies of one record, and
+ * merge. Stores that `next` lacks are deleted after this, when every record has moved out.
  */
 async function upgrade(
   transaction: Transaction,
   previous: SchemaVersion,
   next: SchemaVersion,
 ): Promise<void> {
-  const migrated: { readonly from: string; readonly to: StoredRecord }[] = [];
+  const moved: { readonly from: string; readonly id: string }[] = [];
+  const results = new Map<string, Map<string, DataRecord>>();
   for (const store of Object.keys(previous.stores)) {
     const records = await transaction.table<DataRecord, string>(store).toArray();
     for (const record of records) {
-      migrated.push({ from: store, to: migrateStep(previous, next, { store, record }) });
+      const to = migrateStep(previous, next, { store, record });
+      if (to.store !== store) {
+        moved.push({ from: store, id: record.id });
+      }
+      const target = results.get(to.store) ?? new Map<string, DataRecord>();
+      results.set(to.store, target);
+      const copy = target.get(to.record.id);
+      target.set(to.record.id, copy === undefined ? to.record : mergeRecords(copy, to.record));
     }
   }
-  for (const { from, to } of migrated) {
-    if (to.store !== from) {
-      await transaction.table<DataRecord, string>(from).delete(to.record.id);
-    }
-    await transaction.table<DataRecord, string>(to.store).put(to.record);
+  for (const { from, id } of moved) {
+    await transaction.table<DataRecord, string>(from).delete(id);
+  }
+  for (const [store, records] of results) {
+    await transaction.table<DataRecord, string>(store).bulkPut([...records.values()]);
   }
 }
 
@@ -410,6 +461,7 @@ async function mergeAll(
   const total = noCounts();
   const stores: Record<string, ImportCounts> = {};
   const writes = new Map<string, DataRecord[]>();
+  let count = 0;
   for (const [store, records] of Object.entries(incoming.stores)) {
     const counts = noCounts();
     const changed: DataRecord[] = [];
@@ -426,8 +478,9 @@ async function mergeAll(
     }
     stores[store] = counts;
     writes.set(store, changed);
+    count += changed.length;
   }
-  return { summary: { total, stores }, writes };
+  return { summary: { total, stores, writes: count }, writes };
 }
 
 /** Whether `schema` is the schema of `store` in `version`. */
@@ -692,8 +745,8 @@ export class Database<C extends SchemaVersion> extends Reader<C> {
       const [device, backup] = await this.#dexie
         .table<MetaRow, string>(META_STORE)
         .bulkGet(["device", "backup"]);
-      const { last, changes } = backupOf(backup);
-      return { device: deviceIdOf(device), lastBackup: last, changesSinceBackup: changes };
+      const { last, counted, saved } = backupOf(backup);
+      return { device: deviceIdOf(device), lastBackup: last, changesSinceBackup: counted - saved };
     });
   }
 
@@ -717,8 +770,7 @@ export class Database<C extends SchemaVersion> extends Reader<C> {
       const change = new Change(this.schemas, transaction, this.#now, issued.hlc);
       const result = await write(change);
       if (change.written) {
-        const { last, changes } = backupOf(backup);
-        await meta.put({ key: "backup", value: { last, changes: changes + 1 } });
+        await meta.put({ key: "backup", value: counting(backupOf(backup)) });
       }
       return result;
     });
@@ -740,10 +792,12 @@ export class Database<C extends SchemaVersion> extends Reader<C> {
             greatest = maxHlc(greatest, lastChange(record));
           }
         }
+        const backup = await transaction.table<MetaRow, string>(META_STORE).get("backup");
         return {
           schemaVersion: this.schemas.current.version,
           stores: records,
           fromFuture: fromFuture(greatest, this.#now()),
+          counted: backupOf(backup).counted,
         };
       }),
     );
@@ -816,8 +870,7 @@ export class Database<C extends SchemaVersion> extends Reader<C> {
           }
         }
         if (written) {
-          const { last, changes } = backupOf(backup);
-          await meta.put({ key: "backup", value: { last, changes: changes + 1 } });
+          await meta.put({ key: "backup", value: counting(backupOf(backup)) });
         }
         return summary;
       }),
@@ -826,12 +879,19 @@ export class Database<C extends SchemaVersion> extends Reader<C> {
 
   /**
    * Records that this device has just made a backup (backup format §4, step 5): its time, and
-   * no changes since.
+   * that it has the changes that its snapshot counted, `counted` of `snapshot()`. Changes made
+   * since the snapshot still count as changes since the backup.
    */
-  async recordBackup(): Promise<void> {
-    const backup: BackupState = { last: this.#now(), changes: 0 };
+  async recordBackup(counted: number): Promise<void> {
     await translating(async () =>
-      this.#dexie.table<MetaRow, string>(META_STORE).put({ key: "backup", value: backup }),
+      this.#dexie.transaction("rw", [META_STORE], async (transaction) => {
+        const meta = transaction.table<MetaRow, string>(META_STORE);
+        const state = backupOf(await meta.get("backup"));
+        // A backup of an older snapshot, recorded late, takes nothing from a newer one.
+        const saved = Math.max(state.saved, Math.min(counted, state.counted));
+        const value: BackupState = { last: this.#now(), counted: state.counted, saved };
+        await meta.put({ key: "backup", value });
+      }),
     );
   }
 

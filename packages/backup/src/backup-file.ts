@@ -20,6 +20,11 @@ export interface BackupFile {
    * user to confirm it. `undefined` otherwise.
    */
   readonly fromFuture: number | undefined;
+  /**
+   * How many changes the device had counted at the snapshot, for the database's
+   * `recordBackup()` once the app has handed the file over (data model §7).
+   */
+  readonly counted: number;
 }
 
 export interface BackupFileOptions {
@@ -41,7 +46,7 @@ export interface BackupFileOptions {
  * whether it has clocks from the future (data model §3.5). Throws a `BackupError` `too-large` for
  * a backup larger than imports accept, and a TypeError for a passphrase shorter than 12
  * characters. Once the app has handed the file over, it records the backup with the database's
- * `recordBackup()`.
+ * `recordBackup(counted)`.
  */
 export async function createBackupFile(
   db: { snapshot(): Promise<Snapshot> },
@@ -56,7 +61,7 @@ export async function createBackupFile(
     const file = new File([document], backupFileName(app, made, false), {
       type: MEDIA_TYPES.plain,
     });
-    return { file, fromFuture: snapshot.fromFuture };
+    return { file, fromFuture: snapshot.fromFuture, counted: snapshot.counted };
   }
   const bytes = await encryptBackup(document, passphrase);
   // Encryption adds 16 bytes to every 64 KiB, and a header.
@@ -66,7 +71,7 @@ export async function createBackupFile(
   const file = new File([bytes], backupFileName(app, made, true), {
     type: MEDIA_TYPES.encrypted,
   });
-  return { file, fromFuture: snapshot.fromFuture };
+  return { file, fromFuture: snapshot.fromFuture, counted: snapshot.counted };
 }
 
 /**

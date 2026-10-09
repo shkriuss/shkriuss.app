@@ -67,7 +67,7 @@ describe("createBackupFile and readBackupFile (backup format §4, §5.1–§5.5)
       deleted: 0,
       unchanged: 1,
     });
-    expect(await second.snapshot()).toStrictEqual(await first.snapshot());
+    expect((await second.snapshot()).stores).toStrictEqual((await first.snapshot()).stores);
   });
 
   it("make a plain backup without a passphrase, and without a worker", async () => {

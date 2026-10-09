@@ -12,12 +12,18 @@ import {
   Clock,
   fresh,
   open,
+  putStored,
   setMeta,
   settle,
   stored,
   v1,
   v2,
 } from "./test/storage.ts";
+
+/** The HLC of a change `second` seconds after `START`, on another device. */
+function hlcAt(second: number): string {
+  return `${String(START + second * 1000).padStart(15, "0")}:00000:9f86d081884c7d65`;
+}
 
 /** A device's clock that stands still. */
 function stopped(): number {
@@ -130,6 +136,77 @@ describe("openDatabase (data model §6, §7)", () => {
     const upgraded = await open(defineSchemas(v1, archived), factory);
     expect(await upgraded.list("lists")).toStrictEqual([]);
     expect(await upgraded.list("archive")).toStrictEqual([{ id, values: { name: "Shopping" } }]);
+    upgraded.close();
+  });
+
+  it("merges two records that the migration puts into one store with the same id", async () => {
+    const shelf = {
+      version: 1,
+      stores: {
+        books: { fields: { title: field.string() } },
+        films: { fields: { title: field.string(), seen: field.boolean() } },
+      },
+    } satisfies SchemaVersion;
+    const merged = {
+      version: 2,
+      stores: { books: shelf.stores.films },
+      migrate: { films: { store: "books" } },
+    } satisfies SchemaVersion;
+    const factory = new IDBFactory();
+    const db = await open(defineSchemas(shelf), factory);
+    db.close();
+    // One record in both stores, as only a mistake could leave it: two copies of it.
+    const id = "01a10307-b840-78aa-ab29-1a1138faaff6";
+    await putStored(factory, "books", {
+      id,
+      v: 1,
+      data: { title: "Emma" },
+      clock: { title: hlcAt(2) },
+    });
+    await putStored(factory, "films", {
+      id,
+      v: 1,
+      data: { title: "Emma, the film", seen: true },
+      clock: { title: hlcAt(1), seen: hlcAt(1) },
+    });
+    const upgraded = await open(defineSchemas(shelf, merged), factory);
+    expect(await upgraded.list("books")).toStrictEqual([
+      { id, values: { title: "Emma", seen: true } },
+    ]);
+    upgraded.close();
+  });
+
+  it("moves records between stores that trade places, the same ids included", async () => {
+    const pair = {
+      version: 1,
+      stores: {
+        left: { fields: { name: field.string() } },
+        right: { fields: { name: field.string() } },
+      },
+    } satisfies SchemaVersion;
+    const swapped = {
+      version: 2,
+      stores: pair.stores,
+      migrate: { left: { store: "right" }, right: { store: "left" } },
+    } satisfies SchemaVersion;
+    const factory = new IDBFactory();
+    const db = await open(defineSchemas(pair), factory);
+    const only = await db.change((change) => change.create("left", { name: "Only left" }));
+    db.close();
+    const id = "01a10307-b840-78aa-ab29-1a1138faaff6";
+    const clock = { name: hlcAt(0) };
+    await putStored(factory, "left", { id, v: 1, data: { name: "Left" }, clock });
+    await putStored(factory, "right", { id, v: 1, data: { name: "Right" }, clock });
+    const upgraded = await open(defineSchemas(pair, swapped), factory);
+    expect(await upgraded.list("left")).toStrictEqual([{ id, values: { name: "Right" } }]);
+    const right = await upgraded.list("right");
+    expect(right).toHaveLength(2);
+    expect(right).toStrictEqual(
+      expect.arrayContaining([
+        { id: only, values: { name: "Only left" } },
+        { id, values: { name: "Left" } },
+      ]),
+    );
     upgraded.close();
   });
 
@@ -525,11 +602,51 @@ describe("device state (data model §7)", () => {
     await db.change((change) => change.update("notes", id, {}));
     await db.change((change) => change.updateSettings({}));
     expect(await db.device()).toMatchObject({ lastBackup: null, changesSinceBackup: 2 });
+    const { counted } = await db.snapshot();
+    expect(counted).toBe(2);
     clock.time += 1000;
-    await db.recordBackup();
+    await db.recordBackup(counted);
     expect(await db.device()).toMatchObject({ lastBackup: START + 1000, changesSinceBackup: 0 });
     await db.change((change) => change.delete("notes", id));
     expect(await db.device()).toMatchObject({ lastBackup: START + 1000, changesSinceBackup: 1 });
+  });
+
+  it("still counts the changes made after the snapshot, as while the user saved the backup", async () => {
+    const db = await open(VERSION_1, new IDBFactory());
+    await db.change((change) => change.create("notes", { title: "Milk" }));
+    const { counted } = await db.snapshot();
+    await db.change((change) => change.create("notes", { title: "Eggs" }));
+    await db.recordBackup(counted);
+    expect(await db.device()).toMatchObject({ changesSinceBackup: 1 });
+  });
+
+  it("keeps a newer backup when an older one is recorded after it, as from another tab", async () => {
+    const db = await open(VERSION_1, new IDBFactory());
+    await db.change((change) => change.create("notes", { title: "Milk" }));
+    const older = await db.snapshot();
+    await db.change((change) => change.create("notes", { title: "Eggs" }));
+    const newer = await db.snapshot();
+    await db.recordBackup(newer.counted);
+    await db.change((change) => change.create("notes", { title: "Tea" }));
+    await db.recordBackup(older.counted);
+    expect(await db.device()).toMatchObject({ changesSinceBackup: 1 });
+  });
+
+  it("reads the backup state that earlier versions stored, and stores it as it is now", async () => {
+    const factory = new IDBFactory();
+    const db = await open(VERSION_1, factory);
+    db.close();
+    await setMeta(factory, "backup", { last: START, changes: 3 });
+    const again = await open(VERSION_1, factory);
+    expect(await again.device()).toMatchObject({ lastBackup: START, changesSinceBackup: 3 });
+    await again.change((change) => change.create("notes", { title: "Milk" }));
+    expect(await again.device()).toMatchObject({ lastBackup: START, changesSinceBackup: 4 });
+    again.close();
+    const { stores } = await stored(factory);
+    expect(stores["meta"]).toContainEqual({
+      key: "backup",
+      value: { last: START, counted: 4, saved: 0 },
+    });
   });
 
   it.for<[string, string, unknown]>([
@@ -537,6 +654,7 @@ describe("device state (data model §7)", () => {
     ["an invalid device id", "device", "DEVICE"],
     ["an invalid clock", "clock", { wall: -1, counter: 0 }],
     ["an invalid backup state", "backup", { last: null, changes: -1 }],
+    ["a backup of more changes than counted", "backup", { last: null, counted: 1, saved: 2 }],
   ])("refuses to work with %s", async ([_case, key, value]) => {
     const factory = new IDBFactory();
     const db = await open(VERSION_1, factory);
