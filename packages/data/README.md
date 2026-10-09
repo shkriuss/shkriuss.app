@@ -22,7 +22,7 @@ The package has no side effects (`"sideEffects": false` in its `package.json`): 
 | `incoming.ts` | The checks and the migration of a backup's records before they are imported (backup format §5.4, §5.5)                                                   |
 | `errors.ts`   | `DataLayerError`, which every refusal throws                                                                                                             |
 
-Apart from `db.ts`, every function is pure: it returns a new record and never changes the one it is given. A refusal throws a `DataLayerError` whose `code` says why: `invalid`, `too-large`, `future-clock`, `deleted`, `not-found`, `newer-version` or `closed`. Its message names fields, never their values, which are user data.
+Apart from `db.ts`, every function is pure: it returns a new record and never changes the one it is given. A refusal throws a `DataLayerError` whose `code` says why: `invalid`, `too-large`, `future-clock`, `deleted`, `not-found`, `newer-version`, `closed` or `storage-full`, for a write that the browser refused for lack of space, which `isStorageFull(error)` tells apart so that the app can ask the user to free some (data model §7). Its message names fields, never their values, which are user data.
 
 ## Schemas
 

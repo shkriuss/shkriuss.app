@@ -4,6 +4,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
 import { m } from "../../messages.ts";
 import { type AppDatabase, NAME_LENGTH, TEXT_LENGTH } from "../../schema.ts";
+import { writeFailure } from "./failures.ts";
 import { AddForm, TextForm } from "./forms.tsx";
 import { type ItemRecord, type ListContent, itemsOf, neighbor, readList } from "./lists.ts";
 
@@ -126,8 +127,8 @@ export function OneList({ db, listId, loaded }: OneListProps) {
           await change.create("items", { list: listId, text });
         }
       });
-    } catch {
-      setFailure(m.addItemFailed());
+    } catch (error) {
+      setFailure(writeFailure(error, m.addItemFailed()));
       return false;
     }
     setFailure(undefined);
@@ -140,8 +141,8 @@ export function OneList({ db, listId, loaded }: OneListProps) {
     const section = isDone ? toDo : done;
     try {
       await db.change(async (change) => change.update("items", item.id, { done: isDone }));
-    } catch {
-      setFailure(m.changeFailed());
+    } catch (error) {
+      setFailure(writeFailure(error, m.changeFailed()));
       return;
     }
     setFailure(undefined);
@@ -159,8 +160,8 @@ export function OneList({ db, listId, loaded }: OneListProps) {
     if (value !== item.values.text) {
       try {
         await db.change(async (change) => change.update("items", item.id, { text: value }));
-      } catch {
-        setDialogFailure(m.changeFailed());
+      } catch (error) {
+        setDialogFailure(writeFailure(error, m.changeFailed()));
         return;
       }
     }
@@ -170,8 +171,8 @@ export function OneList({ db, listId, loaded }: OneListProps) {
   async function deleteItem(item: ItemRecord): Promise<void> {
     try {
       await db.change(async (change) => change.delete("items", item.id));
-    } catch {
-      setDialogFailure(m.changeFailed());
+    } catch (error) {
+      setDialogFailure(writeFailure(error, m.changeFailed()));
       return;
     }
     close();
@@ -196,8 +197,8 @@ export function OneList({ db, listId, loaded }: OneListProps) {
         }
         return ids;
       });
-    } catch {
-      setFailure(m.changeFailed());
+    } catch (error) {
+      setFailure(writeFailure(error, m.changeFailed()));
       return;
     }
     setFailure(undefined);
@@ -210,8 +211,8 @@ export function OneList({ db, listId, loaded }: OneListProps) {
     if (to !== from) {
       try {
         await db.change(async (change) => change.update("lists", listId, { name: to }));
-      } catch {
-        setDialogFailure(m.changeFailed());
+      } catch (error) {
+        setDialogFailure(writeFailure(error, m.changeFailed()));
         return;
       }
     }
@@ -230,9 +231,9 @@ export function OneList({ db, listId, loaded }: OneListProps) {
         }
         await change.delete("lists", listId);
       });
-    } catch {
+    } catch (error) {
       setLeaving(undefined);
-      setDialogFailure(m.changeFailed());
+      setDialogFailure(writeFailure(error, m.changeFailed()));
       return;
     }
     close();

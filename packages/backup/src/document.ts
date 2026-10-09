@@ -101,6 +101,7 @@ const FROM_DATA: Readonly<Record<DataLayerErrorCode, BackupErrorCode>> = {
   deleted: "invalid",
   "not-found": "invalid",
   closed: "invalid",
+  "storage-full": "invalid",
 };
 
 // Invalid UTF-8 is refused. A byte order mark stays in the text, where JSON refuses it.

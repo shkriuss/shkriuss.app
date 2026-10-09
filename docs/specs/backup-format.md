@@ -80,11 +80,11 @@ The document is an object with these members and no others:
 Encrypted backups use [age, version 1](https://age-encryption.org/v1), through the `age-encryption` library ([ADR 0004](../decisions/0004-local-data-and-backups.md)):
 
 - **Passphrase only:** the header has exactly one recipient stanza, of type `scrypt`.
-- **Work factor:** exporters use log2(N) = 18, with r = 8 and p = 1, so deriving the key takes 256 MiB of memory. Importers accept at most 20; `age-encryption` refuses higher values as too slow.
+- **Work factor:** exporters use log2(N) = 18, with r = 8 and p = 1, so deriving the key takes 256 MiB of memory. Importers accept at most 18, as `age` and `age-encryption` write it: each step above doubles the memory, which a phone may not give a worker.
 - **Binary encoding:** the file starts with the line `age-encryption.org/v1`. Importers also accept the ASCII-armored form, which starts with `-----BEGIN AGE ENCRYPTED FILE-----`.
 - **Payload:** exactly the bytes of the backup document.
 
-Any age implementation can therefore decrypt a backup, for example `age --decrypt shkriuss-notes-2026-10-04.age > backup.json`, so users are never locked in. A backup document encrypted with `age --passphrase` imports too, if its work factor is at most 20.
+Any age implementation can therefore decrypt a backup, for example `age --decrypt shkriuss-notes-2026-10-04.age > backup.json`, so users are never locked in. A backup document encrypted with `age --passphrase` imports too, if its work factor is at most 18, as `age` writes it.
 
 age authenticates the whole file: a changed or truncated file fails to decrypt. Importers decrypt the whole file before using any of it.
 
@@ -95,7 +95,7 @@ age authenticates the whole file: a changed or truncated file fails to decrypt. 
 - Before use, a passphrase is normalized to Unicode NFC, so the same passphrase typed on different devices gives the same bytes. Nothing else is changed; spaces count.
 - A passphrase is never stored, logged or sent anywhere, and stays in memory only during the operation. There is no hint and no recovery: without the passphrase, the backup cannot be opened ([threat model](../threat-model.md#5-residual-risks-accepted) R3).
 
-Deriving the key takes seconds on a phone, so encryption and decryption run in a worker and the page stays responsive. The worker starts through the platform's Trusted Types policy for worker scripts ([ADR 0011](../decisions/0011-worker-trusted-types-policy.md)).
+Deriving the key takes seconds on a phone, so encryption and decryption run in a worker and the page stays responsive. The worker starts through the platform's Trusted Types policy for worker scripts ([ADR 0011](../decisions/0011-worker-trusted-types-policy.md)). It ends with its operation, and also when the user closes the dialog that started it, so that two never derive keys at once. The page stops it only once its script has run, which the worker says first: Firefox can crash the page when a worker stops while its script still compiles.
 
 ## 4. Export
 
@@ -158,7 +158,7 @@ If the backup has HLCs from the future by this device's clock now, and the user 
 2. Advance the device's last HLC to the greatest HLC in the backup ([data-model.md §3.4](data-model.md#34-receiving-hlcs)).
 3. If anything was written, count the import as a change since the last backup: the device now holds data that its own last backup lacks.
 
-If anything fails, the transaction aborts and nothing changes. Otherwise, report what was imported.
+If anything fails, the transaction aborts and nothing changes. Otherwise, report what was imported. Once the transaction has started, the user cannot dismiss the dialog until it ends, so that an import is never taken for cancelled while it commits.
 
 Importing the same backup twice changes nothing, and the order in which backups are imported does not matter ([data-model.md §5.3](data-model.md#53-properties)).
 
@@ -171,9 +171,10 @@ Every failure says what happened and what to do. The import must tell these apar
 | Larger than 64 MiB                                               | The file is too large to be a backup.                                                         |
 | Neither an age file nor a backup document                        | This is not a backup file.                                                                    |
 | Wrong passphrase                                                 | The passphrase is wrong; try again.                                                           |
-| Damaged or truncated age file, or a work factor above 20         | The file is damaged or not supported.                                                         |
+| Damaged or truncated age file, or a work factor above 18         | The file is damaged or not supported.                                                         |
 | A backup of another app                                          | This is a backup of another app, with a link to it if `app` is one of ours.                   |
 | A newer format version or schema version                         | The backup was made by a newer version of the app; update the app and try again.              |
+| No storage space left on the device                              | This device has no space left for the app's data; free some space, then try again.            |
 | HLCs from the future that the user did not confirm (section 5.7) | The backup's dates lie in the future; check the date and time on this device, then try again. |
 | Any other failed check                                           | The backup is damaged or was changed, and was not imported.                                   |
 

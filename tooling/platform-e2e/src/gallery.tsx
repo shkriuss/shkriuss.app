@@ -31,6 +31,7 @@ function Gallery() {
   const [reminders, setReminders] = useState(false);
   const [packed, setPacked] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [working, setWorking] = useState(false);
   const [deleted, setDeleted] = useState(false);
   const [picked, setPicked] = useState<File>();
   return (
@@ -172,6 +173,33 @@ function Gallery() {
               {m.remove()}
             </Button>
           </div>
+        </Dialog>
+        <div>
+          <Button
+            onPress={() => {
+              setWorking(true);
+            }}
+          >
+            {m.startTask()}
+          </Button>
+        </div>
+        <Dialog
+          isOpen={working}
+          isDismissable={false}
+          onClose={() => {
+            setWorking(false);
+          }}
+          title={m.taskTitle()}
+        >
+          <p className="mb-6 text-ink-muted">{m.taskText()}</p>
+          <Button
+            variant="primary"
+            onPress={() => {
+              setWorking(false);
+            }}
+          >
+            {m.finishTask()}
+          </Button>
         </Dialog>
       </section>
 

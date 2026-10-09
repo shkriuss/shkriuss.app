@@ -7,6 +7,12 @@ export interface DialogProps {
   readonly onClose: () => void;
   readonly title: string;
   readonly children: ReactNode;
+  /**
+   * Whether Escape closes it; true by default. While it is false, as while the work that the
+   * dialog shows cannot stop, Escape does nothing, and if the browser closes the dialog all the
+   * same, as it does after a second Escape, it opens again.
+   */
+  readonly isDismissable?: boolean;
 }
 
 /**
@@ -14,7 +20,7 @@ export interface DialogProps {
  * gives the focus back when it closes. React Aria's modal would add a stylesheet to the page on
  * iOS, which the Content-Security-Policy refuses.
  */
-export function Dialog({ isOpen, onClose, title, children }: DialogProps) {
+export function Dialog({ isOpen, onClose, title, children, isDismissable = true }: DialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   useEffect(() => {
@@ -32,13 +38,23 @@ export function Dialog({ isOpen, onClose, title, children }: DialogProps) {
     <dialog
       ref={ref}
       aria-labelledby={titleId}
+      onCancel={(event) => {
+        if (!isDismissable) {
+          event.preventDefault();
+        }
+      }}
       onClose={() => {
         // The browser says that the dialog closed in a task of its own, after it did. A dialog
         // that is open by then opened again in between, as when the user reopens it at once:
         // that close is over, and must not close it again.
-        if (ref.current?.open !== true) {
-          onClose();
+        if (ref.current?.open === true) {
+          return;
         }
+        if (isOpen && !isDismissable) {
+          ref.current?.showModal();
+          return;
+        }
+        onClose();
       }}
       className="m-auto w-[min(32rem,calc(100%-2rem))] rounded-xl border border-line bg-canvas p-6 text-ink backdrop:bg-[rgb(0_0_0/0.5)]"
     >

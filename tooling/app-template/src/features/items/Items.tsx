@@ -1,3 +1,4 @@
+import { isStorageFull } from "@shkriuss/data";
 import { useObserved } from "@shkriuss/shell";
 import { Button, TextField } from "@shkriuss/ui";
 import { useMemo, useRef, useState } from "react";
@@ -36,8 +37,8 @@ export function Items({ db }: ItemsProps) {
       await db.change(async (change) => change.create("items", { text: value }));
       setText("");
       setFailure(undefined);
-    } catch {
-      setFailure(m.addFailed());
+    } catch (error) {
+      setFailure(isStorageFull(error) ? m.storageFull() : m.addFailed());
     }
   }
 
@@ -45,8 +46,8 @@ export function Items({ db }: ItemsProps) {
     try {
       await db.change(async (change) => change.delete("items", id));
       setFailure(undefined);
-    } catch {
-      setFailure(m.deleteFailed());
+    } catch (error) {
+      setFailure(isStorageFull(error) ? m.storageFull() : m.deleteFailed());
       return;
     }
     // The focus was on the button that went with the item: it goes to the next item's, or the

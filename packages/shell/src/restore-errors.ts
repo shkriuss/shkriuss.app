@@ -1,5 +1,5 @@
 import { BackupError, type BackupErrorCode } from "@shkriuss/backup";
-import { DataLayerError } from "@shkriuss/data";
+import { DataLayerError, isStorageFull } from "@shkriuss/data";
 import { m } from "./messages.ts";
 
 /** The message of each error of backup format §6, but `other-app`, which names the app. */
@@ -16,11 +16,15 @@ const MESSAGES: Readonly<Record<Exclude<BackupErrorCode, "other-app">, () => str
  * What the user reads when a backup cannot be restored (backup format §6): what happened, and
  * what to do. Nothing has changed then (§5). The database's refusal of dates from the future
  * that the user did not confirm, as when this device's date changed after the preview, says so
- * (§5.7); any other failure that is no `BackupError` says only that the backup was not restored.
+ * (§5.7), and so does a device without space left for the data; any other failure that is no
+ * `BackupError` says only that the backup was not restored.
  */
 export function restoreErrorMessage(error: unknown): string {
   if (error instanceof DataLayerError && error.code === "future-clock") {
     return m.futureClock();
+  }
+  if (isStorageFull(error)) {
+    return m.storageFull();
   }
   if (!(error instanceof BackupError)) {
     return m.restoreFailed();

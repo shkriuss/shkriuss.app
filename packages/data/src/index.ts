@@ -21,7 +21,7 @@ export {
   type StoreName,
   type Subscription,
 } from "./db.ts";
-export { DataLayerError, type DataLayerErrorCode } from "./errors.ts";
+export { DataLayerError, isStorageFull, type DataLayerErrorCode } from "./errors.ts";
 export {
   field,
   type ArrayOptions,

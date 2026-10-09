@@ -1,4 +1,4 @@
-import { Encrypter, armor, generateIdentity, identityToRecipient } from "age-encryption";
+import { Decrypter, Encrypter, armor, generateIdentity, identityToRecipient } from "age-encryption";
 import { describe, expect, it, vi } from "vitest";
 import { WORK_FACTOR, decrypt, encrypt } from "./age.ts";
 import { BackupError, type BackupErrorCode } from "./errors.ts";
@@ -6,7 +6,7 @@ import { EXAMPLE_PASSPHRASE } from "./test/fixtures.ts";
 
 const DOCUMENT = new TextEncoder().encode('{"format": "shkriuss-backup"}');
 const PASSPHRASE = EXAMPLE_PASSPHRASE;
-// A low work factor keeps the tests fast; importers accept any up to 20.
+// A low work factor keeps the tests fast; importers accept any up to 18.
 const FAST = 10;
 // age encrypts the payload in chunks of 64 KiB, each with a tag of 16 bytes, after a nonce.
 const CHUNK = 64 * 1024 + 16;
@@ -146,6 +146,18 @@ describe("decrypt (backup format §3, §5.2)", () => {
     expect(await refusal(decrypt(body, PASSPHRASE))).toBe("wrong-passphrase");
   });
 
+  it("refuses a work factor above 18 before deriving any key, which would take 512 MiB or more", async () => {
+    const file = withHeader(await encrypt(DOCUMENT, PASSPHRASE, FAST), (lines) =>
+      lines.map((line) => line.replace(/ 10$/, " 19")),
+    );
+    const derive = vi.spyOn(Decrypter.prototype, "decrypt");
+    await expect(decrypt(file, PASSPHRASE)).rejects.toThrow(
+      expect.objectContaining({ code: "damaged", message: "The file's work factor is above 18." }),
+    );
+    expect(derive).not.toHaveBeenCalled();
+    derive.mockRestore();
+  });
+
   it.each<[string, (file: Uint8Array) => Promise<Uint8Array> | Uint8Array]>([
     ["a truncated file", (file) => file.subarray(0, file.length - 1)],
     ["a file without its payload", (file) => file.subarray(0, payload(file))],
@@ -163,8 +175,12 @@ describe("decrypt (backup format §3, §5.2)", () => {
       () => new TextEncoder().encode("age-encryption.org/v1\n-> scrypt"),
     ],
     [
-      "a work factor above 20",
-      (file) => withHeader(file, (lines) => lines.map((line) => line.replace(/ 10$/, " 21"))),
+      "a work factor above 18",
+      (file) => withHeader(file, (lines) => lines.map((line) => line.replace(/ 10$/, " 19"))),
+    ],
+    [
+      "a work factor that is no number",
+      (file) => withHeader(file, (lines) => lines.map((line) => line.replace(/ 10$/, " ten"))),
     ],
     [
       "a second stanza",

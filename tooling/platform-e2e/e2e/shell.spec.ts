@@ -188,6 +188,88 @@ async function restoreFile(page: Page, file: BackupFile | string): Promise<void>
   );
 }
 
+/** What `recordStops()` records. */
+interface Stops {
+  /** When a dialog first closed. */
+  closed?: number;
+  /** When a worker was first stopped. */
+  terminated?: number;
+  /** When that worker first said something, which the backup worker does once its script ran. */
+  running?: number;
+}
+
+declare global {
+  interface Window {
+    stops?: Stops;
+  }
+}
+
+/**
+ * From the next page on, records when a dialog first closes, when a worker is first stopped, and
+ * when that worker had said that its script has run.
+ */
+async function recordStops(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const stops: Stops = {};
+    window.stops = stops;
+    document.addEventListener(
+      "close",
+      () => {
+        stops.closed ??= performance.now();
+      },
+      true,
+    );
+    const running = new WeakMap<object, number>();
+    window.Worker = new Proxy(Worker, {
+      construct(target, values: unknown[]) {
+        const worker: unknown = Reflect.construct(target, values);
+        if (!(worker instanceof EventTarget)) {
+          throw new TypeError("A worker is no event target here.");
+        }
+        worker.addEventListener("message", () => {
+          if (!running.has(worker)) {
+            running.set(worker, performance.now());
+          }
+        });
+        return worker;
+      },
+    });
+    const original: unknown = Reflect.get(Worker.prototype, "terminate");
+    if (typeof original !== "function") {
+      throw new TypeError("Workers cannot be terminated here.");
+    }
+    const terminate = new Proxy(original, {
+      apply(target, worker: object, values: unknown[]) {
+        if (stops.terminated === undefined) {
+          stops.terminated = performance.now();
+          const ran = running.get(worker);
+          if (ran !== undefined) {
+            stops.running = ran;
+          }
+        }
+        const result: unknown = Reflect.apply(target, worker, values);
+        return result;
+      },
+    });
+    Object.defineProperty(Worker.prototype, "terminate", { configurable: true, value: terminate });
+  });
+}
+
+/**
+ * How long after the dialog closed the page stopped the worker, in milliseconds: almost at once
+ * if closing stops it, and only once it has derived the key, seconds later, if not. A worker
+ * whose script had not run yet when the dialog closed counts from when it said that it had, and
+ * must not be stopped before: Firefox can crash the page then.
+ */
+async function stoppedAfter(page: Page): Promise<number> {
+  await expect
+    .poll(async () => page.evaluate(() => window.stops?.terminated), MAKING)
+    .toBeDefined();
+  const { closed = 0, running, terminated = 0 } = await page.evaluate(() => window.stops ?? {});
+  expect(running, "when the worker said that its script had run").toBeDefined();
+  return terminated - Math.max(closed, running ?? terminated);
+}
+
 /** The backup is made, which takes seconds: the key takes 256 MiB to derive. */
 const MAKING = { timeout: 30_000 };
 
@@ -712,6 +794,22 @@ test("a change made while the backup waits to be saved still counts as one that 
   await expect(page.getByRole("region", { name: "Backups" })).toContainText("1 change since then.");
 });
 
+test("closing the dialog while it makes a backup stops the worker that derives the key", async ({
+  page,
+}) => {
+  await recordStops(page);
+  await openSettings(page, BEST_EFFORT);
+  await write(page, ["Milk"]);
+  const { dialog } = await startBackup(page);
+  const started = page.waitForEvent("worker");
+  await dialog.getByRole("button", { name: "Back up", exact: true }).click();
+  await started;
+  await expect(page.getByRole("dialog", { name: "Making your backup" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  expect(await stoppedAfter(page)).toBeLessThan(100);
+});
+
 test("a backup that the user cancels saves nothing, and records nothing", async ({ page }) => {
   await openSettings(page, BEST_EFFORT);
   const section = page.getByRole("region", { name: "Backups" });
@@ -851,6 +949,25 @@ test("a plain backup restores without a passphrase, and a second time brings not
   await expect(preview.getByRole("button", { name: "Restore" })).toHaveCount(0);
   await preview.getByRole("button", { name: "Close" }).click();
   expect(await readNotes(page)).toStrictEqual(["Milk"]);
+});
+
+test("closing the dialog while it decrypts a backup stops the worker that derives the key", async ({
+  page,
+}) => {
+  const file = await backupFromAnotherDevice(page, ["Milk"], EXAMPLE_PASSPHRASE);
+  await recordStops(page);
+  await openSettings(page, BEST_EFFORT);
+  await restoreFile(page, file);
+  const encrypted = page.getByRole("dialog", { name: "This backup is encrypted" });
+  await encrypted.getByLabel("Passphrase").fill(EXAMPLE_PASSPHRASE);
+  const started = page.waitForEvent("worker");
+  await encrypted.getByRole("button", { name: "Open" }).click();
+  await started;
+  await expect(page.getByRole("dialog", { name: "Reading the backup" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  expect(await stoppedAfter(page)).toBeLessThan(100);
+  expect(await readNotes(page)).toStrictEqual([]);
 });
 
 test("a backup that the user does not restore changes nothing", async ({ page }) => {
