@@ -83,6 +83,7 @@ Messages are for developers and contain no data from the backup, only ids. An un
 - **In browsers:** the [platform end-to-end tests](../../tooling/platform-e2e) make and read encrypted backups through the real worker, under the production headers, at work factor 18, and read the files that the age command-line tool made.
 - **Properties** (fast-check, [ADR 0008](../../docs/decisions/0008-quality-gates.md)):
   - every snapshot of generated records reads back exactly as it was written;
+  - any bytes, any JSON value, and the spec's example with any one part changed or removed are refused with a `BackupError`, or read into contents that write and read back the same;
   - a passphrase uses all 66 random bits and nothing else.
 - **The word list** is checked against the SHA-256 of BIP-39's English list.
 - **Coverage:** `pnpm --filter @shkriuss/backup test` fails below 90% of lines, branches, functions or statements.
