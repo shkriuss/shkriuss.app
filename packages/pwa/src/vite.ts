@@ -1,7 +1,11 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { SERVICE_WORKER_PLUGIN, type ServiceWorkerApi } from "@shkriuss/edge";
+import {
+  REPORT_WORKER_VIOLATIONS,
+  SERVICE_WORKER_PLUGIN,
+  type ServiceWorkerApi,
+} from "@shkriuss/edge";
 import { build, type HtmlTagDescriptor, type Plugin } from "vite";
 import {
   type AppManifest,
@@ -33,7 +37,11 @@ const REMOVE_ENTRY = fileURLToPath(new URL("../worker/remove.ts", import.meta.ur
 /** The plugin that writes the build's other files and calls this one (`@shkriuss/edge`). */
 const EDGE_PLUGIN = "shkriuss:edge";
 
-/** Bundles a service worker into one classic script, with the ids of the modules it includes. */
+/**
+ * Bundles a service worker into one classic script, with the ids of the modules it includes. It
+ * starts, as every worker script does, with the code that logs each Content-Security-Policy
+ * violation inside it on its console (`@shkriuss/edge`).
+ */
 async function bundle(entry: string): Promise<{ code: string; modules: string[] }> {
   const result = await build({
     configFile: false,
@@ -58,7 +66,7 @@ async function bundle(entry: string): Promise<{ code: string; modules: string[] 
   const modules = Object.entries(script.modules)
     .filter(([, module]) => module.renderedLength > 0)
     .map(([id]) => id);
-  return { code: script.code, modules };
+  return { code: `${REPORT_WORKER_VIOLATIONS}${script.code}`, modules };
 }
 
 /**

@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { edge } from "@shkriuss/edge";
+import { edge, REPORT_WORKER_VIOLATIONS } from "@shkriuss/edge";
 import { webAppManifest } from "@shkriuss/pwa/vite";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
@@ -8,7 +8,8 @@ import { defineConfig, type Plugin } from "vite";
 /**
  * Builds `src/sw.ts` into `/sw.js`, the only place a service worker can control the whole app
  * from. It is a stand-in that answers the tests' messages, which the real service worker of
- * `@shkriuss/pwa` ignores; tooling/pwa-e2e tests the real one.
+ * `@shkriuss/pwa` ignores; tooling/pwa-e2e tests the real one. As every worker script, it starts
+ * with the code that reports a Content-Security-Policy violation inside it.
  */
 function serviceWorker(): Plugin {
   return {
@@ -20,6 +21,11 @@ function serviceWorker(): Plugin {
         id: fileURLToPath(new URL("src/sw.ts", import.meta.url)),
         fileName: "sw.js",
       });
+    },
+    renderChunk(code, chunk) {
+      return chunk.fileName === "sw.js"
+        ? { code: `${REPORT_WORKER_VIOLATIONS}${code}`, map: null }
+        : null;
     },
   };
 }

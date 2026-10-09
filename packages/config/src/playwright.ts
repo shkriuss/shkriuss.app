@@ -129,7 +129,10 @@ declare global {
 
 /** What the browser reported while a test ran. */
 export interface Security {
-  /** CSP and Trusted Types violations, as "directive: blocked URI". */
+  /**
+   * CSP and Trusted Types violations of the pages and of their workers, as "directive: blocked
+   * URI".
+   */
   readonly violations: readonly string[];
   /** Console errors, uncaught errors and failed requests, in the words of the test's failure. */
   readonly problems: readonly string[];
@@ -237,10 +240,18 @@ async function networkTo(target: string): Promise<Network & { close(): Promise<v
 }
 
 /**
- * Every test fails if a page reports a CSP or Trusted Types violation, logs an error, throws,
- * or has a request fail (architecture §15), but for one that a navigation of the page cancels.
- * That holds for every page of the test, such as a second tab, or another device's. Tests that
- * provoke a refusal on purpose call `security.expectRefusals()` and assert what was refused.
+ * The start of the line that a worker script logs for each Content-Security-Policy violation
+ * inside it, before "<directive>: <blocked URI>": `WORKER_VIOLATION` of `@shkriuss/edge`, whose
+ * code starts every worker script that it builds.
+ */
+const WORKER_VIOLATION = "Content-Security-Policy violation in a worker: ";
+
+/**
+ * Every test fails if a page or one of its workers reports a CSP or Trusted Types violation,
+ * logs an error, throws, or has a request fail (architecture §15), but for one that a navigation
+ * of the page cancels. That holds for every page of the test, such as a second tab, or another
+ * device's. Tests that provoke a refusal on purpose call `security.expectRefusals()` and assert
+ * what was refused.
  *
  * `otherDevice` is a page of another device: a browser context of its own, with its own
  * storage, and the options of the test's project, such as its viewport.
@@ -269,12 +280,6 @@ export const test = base.extend<{ security: Security; otherDevice: Page; network
           }
           started.set(request, navigations);
         });
-        page.on("console", (message) => {
-          log.push(`console ${message.type()}: ${message.text()}`);
-          if (message.type() === "error") {
-            problems.push(`console error: ${message.text()}`);
-          }
-        });
         page.on("response", (response) => {
           log.push(`${response.status()} ${response.request().method()} ${response.url()}`);
         });
@@ -301,6 +306,17 @@ export const test = base.extend<{ security: Security; otherDevice: Page; network
           document.addEventListener("securitypolicyviolation", (event) => {
             window.reportSecurityViolation?.(`${event.effectiveDirective}: ${event.blockedURI}`);
           });
+        });
+        // The console of every page of the context and of their workers. On the context, rather
+        // than on each page, it also makes Playwright pass on the service worker's, in Chromium.
+        watched.on("console", (message) => {
+          const text = message.text();
+          log.push(`console ${message.type()}: ${text}`);
+          if (message.type() === "error" && text.startsWith(WORKER_VIOLATION)) {
+            violations.push(text.slice(WORKER_VIOLATION.length));
+          } else if (message.type() === "error") {
+            problems.push(`console error: ${text}`);
+          }
         });
         watched.pages().forEach(watch);
         watched.on("page", watch);

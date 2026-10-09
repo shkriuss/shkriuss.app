@@ -35,7 +35,7 @@ export default playwrightConfig({ port: 4173 });
 - **No retries:** a flaky test is fixed, never retried into passing ([ADR 0008](../../docs/decisions/0008-quality-gates.md)).
 - **Firefox's storage prompt:** Firefox asks the user before it keeps a site's data until the user deletes it (`navigator.storage.persist()`), which a test cannot answer. Firefox's own testing preferences answer yes instead.
 
-Tests import `test` and `expect` from the same module. Its `security` fixture fails every test in which the page reports a CSP or Trusted Types violation, logs an error, throws, or has a request fail. A test that provokes a refusal on purpose calls `security.expectRefusals()` and then checks the refusal itself, for example in `security.violations`.
+Tests import `test` and `expect` from the same module. Its `security` fixture fails every test in which a page or one of its workers reports a CSP or Trusted Types violation, logs an error, throws, or has a request fail. Workers report their violations on their console, with the code that `@shkriuss/edge` puts at the start of every worker script; Playwright passes on the service worker's in Chromium only. A test that provokes a refusal on purpose calls `security.expectRefusals()` and then checks the refusal itself, for example in `security.violations`.
 
 A test that needs two devices, as to move data between them with backups, takes `otherDevice` besides `page`: a page in a browser context of its own, with its own storage, which `security` watches too.
 

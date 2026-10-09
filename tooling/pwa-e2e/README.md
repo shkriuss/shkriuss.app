@@ -38,4 +38,4 @@ The tests show that:
 | `pnpm --filter @shkriuss/pwa-e2e build` | Builds the five versions into `dist/<build>` |
 | `pnpm --filter @shkriuss/pwa-e2e e2e`   | Starts the test server and runs the tests    |
 
-The fixture of `@shkriuss/config/playwright` fails a test on any CSP or integrity violation, error or failed request of a page. Two tests open text files, which browsers show with an inline style of their own that the Content-Security-Policy refuses; they allow that refusal only.
+The fixture of `@shkriuss/config/playwright` fails a test on any CSP or integrity violation, error or failed request of a page or of its workers, the service worker included in Chromium. Two tests open text files, which browsers show with an inline style of their own that the Content-Security-Policy refuses; they allow that refusal only.

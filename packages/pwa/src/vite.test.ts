@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { edge, parseManifest } from "@shkriuss/edge";
+import { edge, parseManifest, REPORT_WORKER_VIOLATIONS } from "@shkriuss/edge";
 import { build, type PluginOption } from "vite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { decodePng } from "./icons/test/decode.ts";
@@ -75,8 +75,12 @@ describe("pwa", () => {
     const manifest = parseManifest(await readFile(path.join(dist, "sha256sums.txt"), "utf8"));
     expect(manifest.get("/sw.js")).toBe(hash(script));
 
-    // A classic script: one function that runs at once, without imports or exports.
-    expect(script).toMatch(/^\(function\(\)\{.*\}\)\(\);\s*$/s);
+    // A classic script: the code that reports violations inside it, as every worker script
+    // starts with, then one function that runs at once, without imports or exports.
+    expect(script.startsWith(REPORT_WORKER_VIOLATIONS)).toBe(true);
+    expect(script.slice(REPORT_WORKER_VIOLATIONS.length)).toMatch(
+      /^\(function\(\)\{.*\}\)\(\);\s*$/s,
+    );
     expect(script).not.toMatch(/\bimport\b|\bexport\b/);
     expect(script).not.toContain(BUILD_DATA_PLACEHOLDER);
 
@@ -122,6 +126,7 @@ describe("pwa", () => {
     const root = await createApp();
     const dist = await buildApp(root, [pwa({ remove: true }), edge()]);
     const script = await readFile(path.join(dist, "sw.js"), "utf8");
+    expect(script.startsWith(REPORT_WORKER_VIOLATIONS)).toBe(true);
     expect(script).toContain("unregister");
     expect(script).not.toContain('"version"');
     const manifest = parseManifest(await readFile(path.join(dist, "sha256sums.txt"), "utf8"));
