@@ -110,6 +110,9 @@ const storage: AppStorage = {
   refresh: async () => {
     storageRefreshes += 1;
   },
+  requestPersistenceQuietly: async () => {
+    // The tests set the status by hand.
+  },
   requestPersistence: async () =>
     new Promise<boolean>((resolve) => {
       answerRequest = (kept) => {

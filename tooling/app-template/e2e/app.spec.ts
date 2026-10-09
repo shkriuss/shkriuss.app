@@ -28,6 +28,27 @@ async function open(page: Page, url = "/"): Promise<void> {
   await expect(page.getByRole("heading", { level: 1, name: NAME })).toBeVisible();
 }
 
+declare global {
+  interface Window {
+    /** How often the page asked the browser to keep its data, from `countPersistRequests()`. */
+    persistRequests?: number;
+  }
+}
+
+/** From the next page on, counts the page's calls of `navigator.storage.persist()`. */
+async function countPersistRequests(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    window.persistRequests = 0;
+    Object.defineProperty(navigator.storage, "persist", {
+      configurable: true,
+      value: async () => {
+        window.persistRequests = (window.persistRequests ?? 0) + 1;
+        return StorageManager.prototype.persist.call(navigator.storage);
+      },
+    });
+  });
+}
+
 async function add(page: Page, text: string): Promise<void> {
   await page.getByRole("textbox", { name: "New item" }).fill(text);
   await page.getByRole("button", { name: "Add" }).click();
@@ -272,4 +293,24 @@ test("an address that the app does not have says so, in the frame", async ({ pag
   await expect(page.getByRole("heading", { level: 1, name: "Page not found" })).toBeVisible();
   await page.getByRole("link", { name: `Go to ${NAME}` }).click();
   await expect(page.getByRole("heading", { level: 1, name: NAME })).toBeFocused();
+});
+
+test("the app asks the browser to keep its data when it starts, but not Firefox, which would ask the user", async ({
+  page,
+  browserName,
+}) => {
+  await countPersistRequests(page);
+  await open(page);
+  if (browserName === "firefox") {
+    expect(await page.evaluate(() => window.persistRequests)).toBe(0);
+  } else {
+    // Chromium and WebKit decide by themselves, and ask the user nothing (architecture §7).
+    await expect
+      .poll(async () =>
+        page.evaluate(
+          async () => (window.persistRequests ?? 0) > 0 || (await navigator.storage.persisted()),
+        ),
+      )
+      .toBe(true);
+  }
 });

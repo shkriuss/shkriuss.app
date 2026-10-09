@@ -21,7 +21,10 @@ const root = createRoot(container);
 try {
   // A newer version of the app, in another window, may close the database later.
   const db = await openDatabase(schemas, { onVersionChange: updates.databaseClosed });
-  const router = createAppRouter({ db, updates, install, storage: appStorage() });
+  const storage = appStorage();
+  // Chromium and Safari keep the data once they agree, which they decide by themselves.
+  void storage.requestPersistenceQuietly();
+  const router = createAppRouter({ db, updates, install, storage });
   root.render(
     <StrictMode>
       <RouterProvider router={router} />

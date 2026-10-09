@@ -41,6 +41,18 @@ export interface AppStorage {
    * the app and whether it is installed, and ask nothing.
    */
   readonly requestPersistence: () => Promise<boolean>;
+  /**
+   * Asks the browser to keep the app's data, where that asks the user nothing: in Chromium and
+   * Safari, unless the data is kept already. In Firefox, which would ask the user, it does
+   * nothing, and the button in Settings asks. Apps with data call it each time they start
+   * (architecture §7); it never fails.
+   */
+  readonly requestPersistenceQuietly: () => Promise<void>;
+}
+
+export interface StorageOptions {
+  /** Whether the browser asks the user when the app asks it to keep the data, as Firefox does. */
+  readonly asksUser?: boolean;
 }
 
 /** What the app uses of `navigator.storage`. */
@@ -73,7 +85,10 @@ function same(a: StorageStatus, b: StorageStatus): boolean {
  * Follows the storage of the app, from `manager`, which is `navigator.storage` where the browser
  * has one. It reads the status once at the start, and again on `refresh()`.
  */
-export function createAppStorage(manager: StorageManagerLike | undefined): AppStorage {
+export function createAppStorage(
+  manager: StorageManagerLike | undefined,
+  { asksUser = false }: StorageOptions = {},
+): AppStorage {
   const listeners = new Set<() => void>();
   let status = UNKNOWN;
   let reads = 0;
@@ -119,6 +134,21 @@ export function createAppStorage(manager: StorageManagerLike | undefined): AppSt
       }
       await refresh();
       return persisted;
+    },
+    requestPersistenceQuietly: async () => {
+      if (manager === undefined || asksUser) {
+        return;
+      }
+      try {
+        if (await manager.persisted()) {
+          return;
+        }
+        if (await manager.persist()) {
+          await refresh();
+        }
+      } catch {
+        // The data stays as it was, and Settings still offers to ask.
+      }
     },
   };
 }

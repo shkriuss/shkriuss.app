@@ -84,9 +84,19 @@ export function startServiceWorker(): AppUpdates {
 
 let storage: AppStorage | undefined;
 
+/**
+ * Whether the browser asks the user when the app asks it to keep the data: Firefox, whose
+ * engine no other browser has. Firefox on iPhone and iPad uses Safari's, and says FxiOS instead.
+ */
+function asksUserToPersist(): boolean {
+  return /\bFirefox\//.test(navigator.userAgent);
+}
+
 /** The app's storage on this device; every call returns the same. */
 export function appStorage(): AppStorage {
-  storage ??= createAppStorage("storage" in navigator ? navigator.storage : undefined);
+  storage ??= createAppStorage("storage" in navigator ? navigator.storage : undefined, {
+    asksUser: asksUserToPersist(),
+  });
   return storage;
 }
 

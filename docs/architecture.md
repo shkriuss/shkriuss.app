@@ -107,7 +107,7 @@ All user data lives in IndexedDB and is accessed only through `@shkriuss/data`, 
 - **Migrations** are versioned functions that run inside the database upgrade transaction, so they apply completely or not at all. An app keeps a migration path from every schema version it ever shipped, because old backups must always import.
 - **Data newer than the app understands**, such as a backup made by a newer version, is rejected with an "update the app" message, never partially imported.
 - **Versions side by side:** a new version that upgrades the database closes it in tabs that still run an older version, which must reload. An older version never opens a database that a newer one has upgraded, because it would write records of its older schema among newer ones. A release that raises the schema version is therefore never rolled back, only fixed by a newer one.
-- **Persistence:** apps request persistent storage (`navigator.storage.persist()`) and show how much they store in Settings, through `@shkriuss/pwa`. Firefox asks the user, so apps request it only when the user acts, as from Settings; Chromium and Safari decide by themselves, from how much the app is used and whether it is installed.
+- **Persistence:** apps request persistent storage (`navigator.storage.persist()`) and show how much they store in Settings, through `@shkriuss/pwa`. Chromium and Safari decide by themselves, from how much the app is used and whether it is installed, and ask the user nothing, so apps with data request it each time they start: the data is kept from the moment the browser agrees, whether or not the user ever opens Settings. Firefox asks the user, so there apps request it only when the user acts, with the button in Settings.
 
 ## 8. Backups
 
