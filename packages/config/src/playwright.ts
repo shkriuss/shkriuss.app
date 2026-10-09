@@ -22,6 +22,7 @@ import {
   type Page,
   type PlaywrightTestConfig,
   type Project,
+  type Request,
   test as base,
   defineConfig,
   devices,
@@ -130,6 +131,8 @@ declare global {
 export interface Security {
   /** CSP and Trusted Types violations, as "directive: blocked URI". */
   readonly violations: readonly string[];
+  /** Console errors, uncaught errors and failed requests, in the words of the test's failure. */
+  readonly problems: readonly string[];
   /** Call before doing something the browser must refuse; the test then checks the refusal. */
   readonly expectRefusals: () => void;
   /** Watches another browser context of the test, such as another device's, as its own. */
@@ -235,9 +238,9 @@ async function networkTo(target: string): Promise<Network & { close(): Promise<v
 
 /**
  * Every test fails if a page reports a CSP or Trusted Types violation, logs an error, throws,
- * or has a request fail (architecture §15). That holds for every page of the test, such as a
- * second tab, or another device's. Tests that provoke a refusal on purpose call
- * `security.expectRefusals()` and assert what was refused.
+ * or has a request fail (architecture §15), but for one that a navigation of the page cancels.
+ * That holds for every page of the test, such as a second tab, or another device's. Tests that
+ * provoke a refusal on purpose call `security.expectRefusals()` and assert what was refused.
  *
  * `otherDevice` is a page of another device: a browser context of its own, with its own
  * storage, and the options of the test's project, such as its viewport.
@@ -257,6 +260,15 @@ export const test = base.extend<{ security: Security; otherDevice: Page; network
       let refusalsExpected = false;
 
       const watch = (page: Page): void => {
+        // The page's navigations so far, and how many had started when each request did.
+        let navigations = 0;
+        const started = new WeakMap<Request, number>();
+        page.on("request", (request) => {
+          if (request.isNavigationRequest() && request.frame() === page.mainFrame()) {
+            navigations += 1;
+          }
+          started.set(request, navigations);
+        });
         page.on("console", (message) => {
           log.push(`console ${message.type()}: ${message.text()}`);
           if (message.type() === "error") {
@@ -270,7 +282,15 @@ export const test = base.extend<{ security: Security; otherDevice: Page; network
           problems.push(`uncaught error: ${error.message}`);
         });
         page.on("requestfailed", (request) => {
-          problems.push(`request failed: ${request.url()} (${request.failure()?.errorText ?? ""})`);
+          const error = request.failure()?.errorText ?? "";
+          // A navigation of the page, such as the test's reload, cancels what the page still had
+          // under way, which some versions of Chromium report as failed. Nothing failed: say, a
+          // favicon that Chromium fetches again when the app changes its address, which waited
+          // behind the service worker's first downloads.
+          if (error === "net::ERR_ABORTED" && started.get(request) !== navigations) {
+            return;
+          }
+          problems.push(`request failed: ${request.url()} (${error})`);
         });
       };
       const watchContext = async (watched: BrowserContext): Promise<void> => {
@@ -289,6 +309,7 @@ export const test = base.extend<{ security: Security; otherDevice: Page; network
 
       await use({
         violations,
+        problems,
         expectRefusals: () => {
           refusalsExpected = true;
         },
