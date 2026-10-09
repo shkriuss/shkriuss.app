@@ -310,6 +310,47 @@ describe("subscribe", () => {
   });
 });
 
+/** A page whose Cache Storage has the record of a first use (§6.3), or not. */
+function recordingPage(recorded: boolean, container: FakeContainer | undefined): FakePage {
+  const caches = new FakeCaches(["pwa-state"]);
+  if (recorded) {
+    caches.kept.set("pwa-state", new Set(["/pwa-first-use.json"]));
+  }
+  return new FakePage({ container, caches });
+}
+
+function controlled(): FakeContainer {
+  return new FakeContainer({ controlled: true });
+}
+
+describe("files kept on first use (§6.3)", () => {
+  it("says whether the service worker records that the app has kept one", async () => {
+    expect(await createAppUpdates(recordingPage(true, controlled()), "serve").firstUseKept()).toBe(
+      true,
+    );
+    expect(await createAppUpdates(recordingPage(false, controlled()), "serve").firstUseKept()).toBe(
+      false,
+    );
+  });
+
+  it("says no without service workers, in a build that removes them, and when Cache Storage fails", async () => {
+    // A browser without service workers, or a development build.
+    expect(await createAppUpdates(recordingPage(true, undefined), "serve").firstUseKept()).toBe(
+      false,
+    );
+    expect(await createAppUpdates(recordingPage(true, controlled()), "remove").firstUseKept()).toBe(
+      false,
+    );
+    const withoutCaches = new FakePage({ container: controlled(), caches: undefined });
+    expect(await createAppUpdates(withoutCaches, "serve").firstUseKept()).toBe(false);
+    const damaged = recordingPage(true, controlled());
+    if (damaged.caches !== undefined) {
+      damaged.caches.damaged = true;
+    }
+    expect(await createAppUpdates(damaged, "serve").firstUseKept()).toBe(false);
+  });
+});
+
 describe("a build that removes the service worker (§9)", () => {
   it("registers none, and unregisters every one it finds and deletes their caches", async () => {
     const container = new FakeContainer({ controlled: true });

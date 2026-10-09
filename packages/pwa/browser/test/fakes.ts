@@ -85,7 +85,19 @@ export class FakeContainer extends EventTarget implements ContainerLike {
 
 export class FakeCaches {
   readonly names: string[];
+  /** The keys of the responses that each cache keeps, by the cache's name. */
+  readonly kept = new Map<string, Set<string>>();
+  /** Whether finding a response fails, as when the browser's storage is damaged. */
+  damaged = false;
   readonly keys = vi.fn<() => Promise<string[]>>(async () => [...this.names]);
+  readonly match = vi.fn<
+    (request: string, options: { cacheName: string }) => Promise<Response | undefined>
+  >(async (request, { cacheName }) => {
+    if (this.damaged) {
+      throw new DOMException("The cache could not be read.", "UnknownError");
+    }
+    return this.kept.get(cacheName)?.has(request) === true ? new Response("true") : undefined;
+  });
   readonly delete = vi.fn<(name: string) => Promise<boolean>>(async (name) => {
     const index = this.names.indexOf(name);
     if (index < 0) {

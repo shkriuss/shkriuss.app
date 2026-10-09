@@ -28,6 +28,12 @@ export interface PwaOptions {
   readonly replaces?: readonly string[];
   /** Publishes a `/sw.js` that removes the service worker and its caches instead (§9). */
   readonly remove?: boolean;
+  /**
+   * The ends of the names of large files that the service worker keeps only once the app first
+   * requests one, not at install, such as `".wasm"` (§2.1, ADR 0019). Until then they need the
+   * network. The build fails if no file has one of them, or if the app shell has one.
+   */
+  readonly keepOnFirstUse?: readonly string[];
 }
 
 /** The entry scripts of the service worker, and of the one that removes it. */
@@ -81,7 +87,7 @@ async function bundle(entry: string): Promise<{ code: string; modules: string[] 
  * removes the service worker.
  */
 export function pwa(options: PwaOptions = {}): Plugin<ServiceWorkerApi> {
-  const { replaces = [], remove = false } = options;
+  const { replaces = [], remove = false, keepOnFirstUse = [] } = options;
   for (const version of replaces) {
     if (!isVersionId(version)) {
       throw new Error(`${JSON.stringify(version)} is not a version id: 16 lowercase hex digits.`);
@@ -106,7 +112,9 @@ export function pwa(options: PwaOptions = {}): Plugin<ServiceWorkerApi> {
         return {
           modules,
           script: (files, headers) =>
-            remove ? code : serviceWorkerScript(code, files, headers, replaces).script,
+            remove
+              ? code
+              : serviceWorkerScript(code, files, headers, { replaces, keepOnFirstUse }).script,
         };
       },
     },

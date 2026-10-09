@@ -53,8 +53,13 @@ export const messages = defineMessages((format) => ({
   undo: () => "Undo",
   undone: () => "The text is back.",
   gettingReady: () => "Getting the checker ready…",
+  // The first time, the checker downloads its module, which the app then keeps (ADR 0019).
+  downloading: () =>
+    "Getting the checker ready… The first time, it downloads 8 MB, which the app then keeps for offline use.",
   checking: () => "Checking…",
   cannotStart: () => "The checker cannot start in this browser, so the text cannot be checked.",
+  cannotDownload: () =>
+    "The checker could not be downloaded. The first time, it needs the internet; it tries again once the device is back online.",
   checkFailed: () => "The text could not be checked. Reload the app to try again.",
   found: (count: number) =>
     count === 0

@@ -291,7 +291,7 @@ test("it keeps nothing: no database, no storage, and no cache but the service wo
   expect(stored.caches.filter((name) => !name.startsWith("pwa-"))).toStrictEqual([]);
 });
 
-test("it works offline after the first visit, Harper's module included", async ({
+test("it works offline once it has checked a text, Harper's module included", async ({
   page,
   network,
 }) => {
@@ -301,20 +301,54 @@ test("it works offline after the first visit, Harper's module included", async (
   await check(page, "Their is a cat.", 1, network.url);
 });
 
-test("“Getting the checker ready…” shows only once there is text to check", async ({
+test("opening the app downloads no module; the first text does, and the status says so", async ({
   page,
   network,
 }) => {
   // Harper's module waits in the network, so that the checker cannot start until it comes.
   const harper = network.hold(".wasm");
+  let requested = false;
+  void (async () => {
+    await harper.arrived;
+    requested = true;
+  })();
   await page.goto(network.url);
   await expect(page.getByRole("heading", { level: 1, name: NAME })).toBeVisible();
-  await harper.arrived;
-  await expect(page.getByText(m.gettingReady())).toHaveCount(0);
+  // The service worker has kept the app, without the module, and nothing asked for it.
+  await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+  expect(requested).toBe(false);
+  await expect(found(page)).toHaveCount(0);
+
   await field(page).fill(SAMPLE);
-  await expect(found(page)).toHaveText(m.gettingReady());
+  await harper.arrived;
+  await expect(found(page)).toHaveText(m.downloading());
   harper.release();
   await expect(found(page)).toHaveText(m.found(6), STARTING);
+});
+
+test("offline before its first check, it says that the checker needs the internet", async ({
+  page,
+  network,
+  security,
+}) => {
+  security.expectRefusals();
+  await page.goto(network.url);
+  await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+  network.cut();
+  await field(page).fill(SAMPLE);
+  await expect(page.getByText(m.cannotDownload())).toBeVisible(STARTING);
+  await expect(mistakes(page)).toHaveCount(0);
+  // The browser reports the module's failed request, in its own words, and nothing else failed.
+  // WebKit can report it as uncaught errors too, though the checker catches it.
+  expect(security.violations).toStrictEqual([]);
+  expect(
+    security.problems.filter(
+      (problem) =>
+        problem.startsWith("uncaught") &&
+        !problem.endsWith("Load failed") &&
+        !problem.includes(".wasm"),
+    ),
+  ).toStrictEqual([]);
 });
 
 test("the settings have installing and About, and neither storage nor backups", async ({
@@ -340,12 +374,9 @@ test("says where to report a security problem, at /.well-known/security.txt", as
   );
 });
 
-test("the app's service worker keeps every file of the build, Harper's module included", async ({
-  page,
-}) => {
-  await page.goto("/");
-  await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
-  const kept = await page.evaluate(async () => {
+/** The files of the build that the service worker does not keep, and how many modules it has. */
+async function notKept(page: Page): Promise<{ missing: string[]; modules: number }> {
+  return page.evaluate(async () => {
     const sums = await (await fetch("/sha256sums.txt")).text();
     const files = sums
       .trim()
@@ -361,7 +392,21 @@ test("the app's service worker keeps every file of the build, Harper's module in
     }
     return { missing, modules: files.filter((file) => file.endsWith(".wasm")).length };
   });
-  expect(kept).toStrictEqual({ missing: [], modules: 1 });
+}
+
+test("the app's service worker keeps every file of the build, and Harper's module once the checker starts", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+  const before = await notKept(page);
+  expect(before.modules).toBe(1);
+  expect(before.missing).toHaveLength(1);
+  expect(before.missing[0]).toMatch(/^\/assets\/.+\.wasm$/v);
+
+  await field(page).fill(SAMPLE);
+  await expect(found(page)).toHaveText(m.found(6), STARTING);
+  await expect.poll(async () => notKept(page)).toStrictEqual({ missing: [], modules: 1 });
 });
 
 test("an address that the app does not have says so, in the frame", async ({ page }) => {

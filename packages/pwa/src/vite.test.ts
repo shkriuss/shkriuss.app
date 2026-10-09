@@ -122,6 +122,23 @@ describe("pwa", () => {
     );
   });
 
+  it("marks the files that the app keeps on first use, and fails for an end that no file has", async () => {
+    const dist = await buildApp(await createApp(), [pwa({ keepOnFirstUse: [".txt"] }), edge()]);
+    const script = await readFile(path.join(dist, "sw.js"), "utf8");
+    const manifest = parseManifest(await readFile(path.join(dist, "sha256sums.txt"), "utf8"));
+    const sha256 = manifest.get("/licenses.txt") ?? "";
+    expect(script).toContain(`{"url":"/licenses.txt","sha256":"${sha256}","firstUse":true}`);
+    expect(script.match(/"firstUse"/g)).toHaveLength(1);
+
+    await expect(
+      buildApp(await createApp(), [pwa({ keepOnFirstUse: [".wasm"] }), edge()]),
+    ).rejects.toThrow("No file of the build ends with .wasm.");
+    // A build that removes the service worker keeps nothing, on first use or otherwise.
+    await expect(
+      buildApp(await createApp(), [pwa({ remove: true, keepOnFirstUse: [".wasm"] }), edge()]),
+    ).resolves.toBeDefined();
+  });
+
   it("writes a /sw.js that removes the service worker in a build that turns it off", async () => {
     const root = await createApp();
     const dist = await buildApp(root, [pwa({ remove: true }), edge()]);

@@ -174,6 +174,19 @@ describe("app", () => {
     expect(await read("sw.js")).toContain('"replaces":["0123456789abcdef"]');
   });
 
+  it("keeps the files that the app names on first use, with the procedures of last resort", async () => {
+    const read = await buildApp(
+      await createApp(),
+      { ...NOTES, keepOnFirstUse: [".txt"] },
+      { serviceWorker: { replaces: ["0123456789abcdef"] } },
+    );
+    const serviceWorker = await read("sw.js");
+    expect(serviceWorker).toMatch(
+      /"url":"\/licenses\.txt","sha256":"[0-9a-f]{64}","firstUse":true\}/,
+    );
+    expect(serviceWorker).toContain('"replaces":["0123456789abcdef"]');
+  });
+
   it("refuses an id that cannot be an app's, before anything is built", () => {
     expect(() => app({ ...NOTES, id: "Notes" })).toThrow('"Notes" is not a valid app id');
     expect(() => app({ ...NOTES, id: "www" })).toThrow('"www" is reserved');

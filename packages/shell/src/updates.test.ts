@@ -16,6 +16,7 @@ function serviceWorker(initial: UpdateState): AppUpdates & { set(state: UpdateSt
     },
     applyUpdate: vi.fn<() => void>(),
     checkForUpdate: vi.fn<() => Promise<void>>(async () => undefined),
+    firstUseKept: vi.fn<() => Promise<boolean>>(async () => true),
     set(next) {
       state = next;
       for (const listener of listeners) {
@@ -26,7 +27,7 @@ function serviceWorker(initial: UpdateState): AppUpdates & { set(state: UpdateSt
 }
 
 describe("appUpdates", () => {
-  it("is the service worker's while the database is open", () => {
+  it("is the service worker's while the database is open", async () => {
     const worker = serviceWorker("ready");
     const updates = appUpdates(worker);
     const listener = vi.fn<() => void>();
@@ -38,6 +39,7 @@ describe("appUpdates", () => {
     expect(worker.applyUpdate).toHaveBeenCalledOnce();
     void updates.checkForUpdate();
     expect(worker.checkForUpdate).toHaveBeenCalledOnce();
+    expect(await updates.firstUseKept()).toBe(true);
   });
 
   it("is outdated once a newer version closed the database, and reloads the page", () => {

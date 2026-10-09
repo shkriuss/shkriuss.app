@@ -155,14 +155,22 @@ export const HEADERS: readonly Header[] = [
   ["X-Content-Type-Options", "nosniff"],
 ];
 
-/** The data of a build whose files have these texts, by URL path. */
+/**
+ * The data of a build whose files have these texts, by URL path, with the files at the URL paths
+ * of `firstUse` kept on first use.
+ */
 export async function buildOf(
   files: Record<string, string>,
   version: string,
   replaces: readonly string[] = [],
+  firstUse: readonly string[] = [],
 ): Promise<BuildData> {
   const list = await Promise.all(
-    Object.entries(files).map(async ([url, text]) => ({ url, sha256: await sha256(text) })),
+    Object.entries(files).map(async ([url, text]) => ({
+      url,
+      sha256: await sha256(text),
+      ...(firstUse.includes(url) && { firstUse: true as const }),
+    })),
   );
   return { version, files: list, headers: HEADERS, replaces };
 }

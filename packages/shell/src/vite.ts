@@ -30,6 +30,12 @@ export interface AppConfig extends WebAppManifestOptions {
    */
   readonly webAssembly?: boolean;
   /**
+   * Large files that not every use of the app needs, by the ends of their names, such as
+   * `".wasm"`: the service worker keeps them only once the app first requests one, not at
+   * install, and they need the network until then (ADR 0019).
+   */
+  readonly keepOnFirstUse?: readonly string[];
+  /**
    * Whether the app keeps data on the device, as most apps do: in a database of
    * `@shkriuss/data`, which the backups of `@shkriuss/backup` save. True if left out. An app
    * without data keeps nothing, and its build fails if it has the code of either package.
@@ -82,14 +88,24 @@ function pageHead({ name, description }: AppConfig): Plugin {
  */
 export function app(config: AppConfig, options: AppBuildOptions = {}): UserConfig {
   assertAppId(config.id);
-  const { id, allowedFeatures, webAssembly, keepsData = true, ...manifest } = config;
+  const {
+    id,
+    allowedFeatures,
+    webAssembly,
+    keepOnFirstUse,
+    keepsData = true,
+    ...manifest
+  } = config;
   return {
     plugins: [
       tailwindcss(),
       react(),
       pageHead(config),
       webAppManifest(manifest),
-      pwa(options.serviceWorker),
+      pwa({
+        ...options.serviceWorker,
+        ...(keepOnFirstUse === undefined ? {} : { keepOnFirstUse }),
+      }),
       edge({
         appId: id,
         ...(allowedFeatures === undefined ? {} : { allowedFeatures }),

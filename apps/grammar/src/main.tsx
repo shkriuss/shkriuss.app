@@ -17,13 +17,23 @@ if (container === null) {
 
 // The app keeps no data, so it has no database to open: it starts the install prompt, which
 // the browser offers once the page has loaded, and the service worker, then shows its screens.
-// The checker starts once the service worker keeps the app for offline use. The text, in the
-// variety of the browser's language until the user picks another, stays while the page does.
+// The checker starts once there is text, or at once in an installed app or once its module is
+// kept (ADR 0019). The text, in the variety of the browser's language until the user picks
+// another, stays while the page does.
 const updates = startServiceWorker();
+const install = appInstall();
 const router = createAppRouter({
   updates,
-  install: appInstall(),
-  checker: createChecker(updates, startWorkerCheck),
+  install,
+  checker: createChecker({
+    updates,
+    install,
+    start: startWorkerCheck,
+    onOnline: (listener) => {
+      window.addEventListener("online", listener);
+    },
+    webAssembly: typeof WebAssembly === "object",
+  }),
   draft: createDraftStore(varietyOf(deviceLocale())),
 });
 createRoot(container).render(
