@@ -34,7 +34,7 @@
 | 1.4  | Hub v1 ([spec](specs/hub.md)): app catalog generated from app configs; install guides for iPhone, Android and desktop; privacy and security pages; `security.txt`                                                                                                              | done        |
 | 1.5  | Pilot app: [Checklists](specs/apps/checklists.md) → staging → real devices → production; CI deploys every app, not only the hub                                                                                                                                                | in progress |
 
-**Waiting:** React Compiler ([ADR 0016](decisions/0016-frontend-stack-as-built.md)). Its Babel plugin, `babel-plugin-react-compiler` 1.0.0, runs only under Babel 7. Babel 7 needs `semver` 6.3.1, which pnpm's trust policy refuses ([ADR 0007](decisions/0007-security-baseline.md)): it was published without provenance after earlier `semver` releases had it. We try again once the plugin supports Babel 8, or once the native compiler is stable. Until then apps build without it, which costs re-renders, not correctness.
+**Waiting:** React Compiler ([ADR 0016](decisions/0016-frontend-stack-as-built.md)). Its Babel plugin, `babel-plugin-react-compiler` 1.0.0, runs only under Babel 7 (as checked on 2026-10-07; not re-verified on 2026-10-10). Babel 7 needs `semver` 6.3.1, which pnpm's trust policy refuses ([ADR 0007](decisions/0007-security-baseline.md)): it was published without provenance after earlier `semver` releases had it. We try again once the plugin supports Babel 8, or once the native compiler is stable. Until then apps build without it, which costs re-renders, not correctness.
 
 **Exit criteria:**
 

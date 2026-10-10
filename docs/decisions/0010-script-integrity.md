@@ -7,7 +7,7 @@
 
 [ADR 0007](0007-security-baseline.md) requires an integrity hash on every script: SRI attributes on script and module-preload tags, import-map `integrity` for lazily loaded modules, and `Integrity-Policy: blocked-destinations=(script)`, which makes the browser refuse any script that has no hash. It left the details to a spike in Phase 0.3, to be checked against our real build.
 
-Browser support, as of 2026-10:
+Browser support, as of 2026-10 (as checked on 2026-10-04; not re-verified on 2026-10-10):
 
 | Feature                | Chrome | Firefox | Safari |
 | ---------------------- | ------ | ------- | ------ |
@@ -39,7 +39,7 @@ The spike found four constraints:
 
 - `script-src` changes with every build, because the map's hash covers the hashes of all scripts. The HTML and `_headers` are written together, and a test checks that they match.
 - `CLAUDE.md` security rule 3 gets one exception: the generated import map.
-- Apps can still load code lazily, for example per route, which keeps the initial download small ([ADR 0008](0008-quality-gates.md) budgets initial JavaScript).
+- Apps can still load code lazily, for example per route, which keeps the initial download small ([ADR 0008](0008-quality-gates.md), now [ADR 0018](0018-quality-gates-as-enforced.md), budgets the first page's JavaScript).
 - Code that several lazily loaded screens share has to live in the entry script, which every visit downloads. Revisit this when WebKit takes the hashes of static imports from the import map.
 - All of an app's CSS is in one file, including the styles of lazily loaded screens.
 - A browser that supports `Integrity-Policy` but not import-map integrity would refuse lazily loaded chunks. The end-to-end tests in all three engines catch that before release.
@@ -47,7 +47,7 @@ The spike found four constraints:
 
 ## Alternatives considered
 
-- **No lazily loaded modules** (one bundle, no import map): keeps `script-src 'self'`, but every app would download all of its code up front, and the 150 KB budget would cap the whole app.
+- **No lazily loaded modules** (one bundle, no import map): keeps `script-src 'self'`, but every app would download all of its code up front, and the 150 KB budget (ADR 0008's; now ADR 0018's 150 or 180 kB) would cap the whole app.
 - **A nonce instead of a hash:** needs a new nonce for every response, which means server code; our apps are static files ([ADR 0006](0006-hosting-and-deployment.md)).
 - **`'unsafe-inline'`:** would let injected scripts run. Rejected.
 - **No `Integrity-Policy`, only SRI attributes:** lazily loaded chunks and anything injected later would go unchecked.

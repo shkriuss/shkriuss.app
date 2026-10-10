@@ -1,6 +1,6 @@
 # ADR 0002: One public monorepo under AGPL-3.0
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [ADR 0018](0018-quality-gates-as-enforced.md)
 - **Date:** 2026-10-04
 
 ## Context
@@ -16,7 +16,7 @@ Many apps must share one structure, one design and one set of fixes. Most of the
   - Dependencies must have AGPL-compatible licenses: MIT, BSD, ISC and Apache-2.0 are fine; anything else is checked case by case.
 - **Tooling:**
   - pnpm workspaces with catalogs, so every dependency has a single version across the repository;
-  - Turborepo for cached tasks that run only for what changed.
+  - Turborepo for cached tasks that run only for what changed (amended by [ADR 0018](0018-quality-gates-as-enforced.md): CI runs every task on every pull request, and builds and end-to-end tests are never cached).
 - **Trunk-based development:**
   - `main` is always deployable;
   - work happens on short-lived branches merged by squash;
@@ -26,7 +26,7 @@ Many apps must share one structure, one design and one set of fixes. Most of the
 ## Consequences
 
 - One pull request can change the platform and every app at once, and CI tests everything it affects.
-- CI must stay fast as apps are added; this relies on running only the affected tasks.
+- CI must stay fast as apps are added; this relies on running only the affected tasks (amended by ADR 0018, which revisits this once a run takes more than 20 minutes).
 - No secret may ever live in the code. Secret scanning with push protection guards this.
 - Future AGPL versions never apply automatically. Code we own can still move to "or later" at any time; code from outside contributors would need their agreement for any relicensing.
 

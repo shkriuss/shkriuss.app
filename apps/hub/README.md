@@ -4,13 +4,13 @@ The hub at `https://shkriuss.app`, and `https://shkriuss.dev` for staging: the a
 
 | Path                   | What it is                                                                                                                                                           |
 | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/routes/`          | The pages, with routes declared in code ([ADR 0013](../../docs/decisions/0013-routes-in-code.md)): `/`, `/install`, `/privacy`, `/security`                          |
+| `src/routes/`          | The pages, with routes declared in code ([ADR 0013](../../docs/decisions/0013-routes-in-code.md)): `/`, `/install`, `/privacy`, `/security`, `/licenses`             |
 | `src/AppCard.tsx`      | An app in the catalog, with its privacy label and its link                                                                                                           |
 | `src/Verification.tsx` | A section of the security page that loads on demand, so the end-to-end tests cover a lazily loaded chunk ([ADR 0010](../../docs/decisions/0010-script-integrity.md)) |
 | `src/messages.ts`      | All of the hub's text, the privacy policy's too                                                                                                                      |
 | `vite.config.ts`       | The build: `catalog()` of `@shkriuss/shell/vite`, which reads every app's `app.config.ts`, and `edge()`, last                                                        |
 
-- **The catalog** lists every app in `apps/`, as their `app.config.ts` and messages are when the hub is built: builds are never cached.
+- **The catalog** lists every app in `apps/`, as their `app.config.ts` and messages are when the hub is built: builds are never cached. In production, on `shkriuss.app`, it lists only the released apps; elsewhere, as on staging, it lists every app and marks those that are not released ([ADR 0015](../../docs/decisions/0015-releasing-apps.md)).
 - **Links to apps** go to `https://<id>.` and the hub's own host, so the same build links to staging's apps on staging, and to production's in production.
 - **The privacy policy** says when it last changed: change that date with its text, in `src/messages.ts`.
 

@@ -1,6 +1,6 @@
 # ADR 0014: WebAssembly for apps that declare it
 
-- **Status:** Accepted; the last item of point 3, on when the service worker keeps modules, is superseded by [ADR 0019](0019-files-kept-on-first-use.md)
+- **Status:** Partly superseded by [ADR 0019](0019-files-kept-on-first-use.md): the last item of point 3, on when the service worker keeps modules
 - **Date:** 2026-10-06
 
 ## Context

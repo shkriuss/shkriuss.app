@@ -5,13 +5,13 @@
 
 ## Context
 
-Every merge to `main` deploys every app in `apps/` to staging, and the same files go to production once the maintainer approves the `production` environment ([ADR 0006](0006-hosting-and-deployment.md)). The roadmap asks that each app reach production only after it has been checked on real devices: the iPhone, the Pixel and the Pixel Tablet. But the deploy to production loops over every app, so approving any change ships every app, including one that is still being built.
+Every merge to `main` deploys every app in `apps/` to staging, and the same files go to production once the maintainer approves the `production` environment ([ADR 0006](0006-hosting-and-deployment.md), now [ADR 0017](0017-deploy-and-fix-forward.md)). The roadmap asks that each app reach production only after it has been checked on real devices: the iPhone, the Pixel and the Pixel Tablet. But the deploy to production loops over every app, so approving any change ships every app, including one that is still being built.
 
 The hub's build must be the same file for file on staging and in production, as the deploys check ([architecture §11](../architecture.md#11-hosting-and-delivery)). It cannot leave out an app in one of them only.
 
 ## Decision
 
-1. **Each app says whether production gets it,** in its `app.config.ts`, as `released: true,` or `released: false,` on a line of its own. TypeScript requires it, the hub's catalog refuses an app without it, and `pnpm check` holds the line to that form, which the deploy reads as it is.
+1. **Each app says whether production gets it,** in its `app.config.ts`, as `released: true,` or `released: false,` on a line of its own. TypeScript requires it, the hub's catalog refuses an app without it, and `pnpm check` holds the line to that form, which the deploy reads as it is. (Since 2026-10-10 the check also holds the line to being the value the hub reads: the word `released` once in the file, comments included, as a direct property of the one object literal, with no spread, computed key or statement after it.)
 2. **A new app is not released.** Both templates say `released: false`, and `create-app` copies them. Staging gets every app, released or not.
 3. **The deploy to production** checks, deploys and compares only the released apps, and the hub. The build, the file hashes and the provenance still cover every app, so staging and production get the same files of each app they have.
 4. **The hub lists only released apps in production.** Its build is the same everywhere, so it decides where it runs: on `shkriuss.app`, it leaves out the apps that are not released; elsewhere, as on staging, it lists every app, and marks those that are not released.

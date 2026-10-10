@@ -1,6 +1,6 @@
 # @shkriuss/edge
 
-Everything about how an app is served: the security headers, script integrity and starting workers under Trusted Types ([ADR 0007](../../docs/decisions/0007-security-baseline.md), [ADR 0010](../../docs/decisions/0010-script-integrity.md), [ADR 0011](../../docs/decisions/0011-worker-trusted-types-policy.md)). Later also the Wrangler configuration.
+Everything about how an app is served: the security headers, script integrity and starting workers under Trusted Types ([ADR 0007](../../docs/decisions/0007-security-baseline.md), [ADR 0010](../../docs/decisions/0010-script-integrity.md), [ADR 0011](../../docs/decisions/0011-worker-trusted-types-policy.md)), and the deployment checks, `sha256sums.txt` and `check-live` (see [Deployment checks](#deployment-checks)). The Wrangler configuration is not here: `tooling/create-app` writes each app's `wrangler.json`, and `pnpm check wrangler` holds it to its form.
 
 ## The Vite plugin
 
@@ -24,9 +24,11 @@ export default defineConfig({ plugins: [react(), edge()] });
 After Vite has written the production build, the plugin:
 
 1. hashes every JavaScript and CSS file (SHA-384), except worker scripts, which the page starts rather than imports;
-2. adds `integrity` attributes to the scripts, module preloads and stylesheets in the HTML;
+2. adds `integrity` attributes to the entry script and the stylesheet in the HTML, which has no module preloads (see below);
 3. adds an import map that lists the hash of every other script, so modules loaded later with `import()` are checked too;
 4. writes `dist/_headers` with the security headers, including the Content-Security-Policy hash of that import map; a year of caching for each file in `/assets/`, by its exact path, so that the single-page fallback's HTML, which answers a request for a file that the build does not have, is not kept for a year in its place; UTF-8 for text files, which Cloudflare otherwise serves without a charset; and `X-Robots-Tag: noindex` on the app's staging host. Its `trusted-types` directive names the worker policy (see [Workers](#workers)) only if the build has worker scripts; otherwise it is `'none'`, which allows no Trusted Types policy at all. Its `script-src` allows `'wasm-unsafe-eval'` only for an app that declares WebAssembly (see [WebAssembly](#webassembly)).
+
+Cloudflare reads at most 100 rules from `_headers`, and at most 2,000 characters per line; the build fails above either. The security headers take one rule (`/*`) and the staging `noindex` another, and each file in `/assets/` and each `.txt` file (`licenses.txt`, `sha256sums.txt`, `security.txt`) gets a rule of its own, so an app with roughly 95 files in `/assets/` stops building, with an error that says so, until the per-file caching rules are rethought. Today's largest app has 16.
 
 Every chunk other than the entry script must be loaded with `import()` and may import statically only from the entry: Safari refuses statically imported chunks under `Integrity-Policy`. The plugin also turns off Vite's module preloads and per-chunk CSS, because Vite adds preload lists to chunks after naming them, which would break year-long caching. The build fails if any of this is broken ([ADR 0010](../../docs/decisions/0010-script-integrity.md)).
 
@@ -128,7 +130,7 @@ node packages/edge/src/cli.ts check-live apps/hub/dist https://shkriuss.app
 
 It fails if a file in `/assets/` would change its content under the same name. Browsers keep those files for a year, so returning visitors would load the old copy and fail its integrity check.
 
-It skips the comparison only while nothing is deployed: when the host has no DNS record, or answers 404 or with the HTML page instead of a manifest. Any other answer or network error fails it, so an outage or a challenge page cannot switch the check off. Re-run the job once the site answers normally.
+It skips the comparison only before the first deployment, while the host has no DNS record. Every other answer fails it: a 404 or the HTML page in place of the manifest, which a deployment without one would answer, an outage, a challenge page or any network error, so that none of them can switch the check off. Re-run the job once the site answers normally.
 
 ## The headers
 
