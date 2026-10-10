@@ -6,6 +6,7 @@
  */
 import { existsSync } from "node:fs";
 import path from "node:path";
+import { checkCode } from "./code.ts";
 import { checkManifest, isWorkspaceManifest } from "./dependencies.ts";
 import { checkDocLinks } from "./doc-links.ts";
 import { checkHtml } from "./html.ts";
@@ -15,6 +16,7 @@ import { checkMarkdown, parseMarkdownConfig } from "./markdown.ts";
 import { formatViolation, type Violation } from "./report.ts";
 import { listFiles, readText, repoRoot } from "./repo.ts";
 import { checkAppStructure } from "./structure.ts";
+import { checkWorkspace } from "./workspace.ts";
 import { checkWranglerConfig, isWranglerConfig, missingWranglerConfigs } from "./wrangler.ts";
 
 interface Check {
@@ -67,7 +69,7 @@ const CHECKS: Readonly<Record<string, Check>> = {
   },
   structure: {
     description:
-      "apps keep the files of their app template, their id and build, and a test server of their own",
+      "apps keep the files of their app template, their id, build and scripts, and a test server of their own; every folder in apps/ is an app, and git has no build output",
     run: (files) => checkAppStructure(files, (file) => readText(file)),
   },
   imports: {
@@ -81,6 +83,16 @@ const CHECKS: Readonly<Record<string, Check>> = {
         markdown: markdownFiles(files),
         exists: (file) => existsSync(path.join(repoRoot, file)),
       }),
+  },
+  code: {
+    description:
+      "sources set no inline styles, and use no HTML sink, worker start or UI text that lint cannot see",
+    run: (files) => checkCode(files, (file) => readText(file)),
+  },
+  workspace: {
+    description:
+      "pnpm-workspace.yaml keeps the settings of ADR 0007, with plain versions and no install scripts, and no .npmrc or pnpmfile exists",
+    run: (files) => checkWorkspace(files, (file) => readText(file)),
   },
 };
 
