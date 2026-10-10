@@ -30,7 +30,7 @@ pnpm --filter @shkriuss/notes dev
 
 The app's end-to-end tests read its name and description from its messages, so they pass as they are. Then replace the example feature, `src/features/items`, or `src/features/words` in an app without data, with the app's own, and the glyph of its icons in `app.config.ts`.
 
-**Deploying:** once the app is on `main`, CI deploys it as it deploys every app in `apps/`: to staging at `<id>.shkriuss.dev`, then, once the maintainer approves, to production at `<id>.shkriuss.app`. Its first deployment creates both domains; then check it as the [setup checklist](../../docs/setup-checklist.md#4-each-new-app) says.
+**Deploying:** once the app is on `main`, CI deploys it as it deploys every app in `apps/`, to staging at `<id>.shkriuss.dev`. A new app is not released (`released: false` in its `app.config.ts`), so production does not get it, nor lists it in the hub, until a pull request releases it, once the maintainer has checked it on real devices ([ADR 0015](../../docs/decisions/0015-releasing-apps.md)). Its first deployment to each creates the domain; then check it as the [setup checklist](../../docs/setup-checklist.md#4-each-new-app) says.
 
 ## Tests
 

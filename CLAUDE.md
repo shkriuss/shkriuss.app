@@ -76,6 +76,8 @@ Instructions for Claude Code and for anyone else changing this repository. Read 
 | Staging (private) | `shkriuss.dev`, `<id>.shkriuss.dev` | automatically after a merge to `main`  |
 | Production        | `shkriuss.app`, `<id>.shkriuss.app` | the same commit, after manual approval |
 
+Production gets only the apps that are released, as their `app.config.ts` says; a new app is not, until it has been checked on real devices ([ADR 0015](docs/decisions/0015-releasing-apps.md)).
+
 ## Commands
 
 Node.js 22.18 or later (CI uses the version in `.node-version`) and pnpm via Corepack (`corepack enable pnpm`). Run everything from the repository root.

@@ -1,4 +1,4 @@
-import { Screen } from "@shkriuss/shell/site";
+import { Screen, listedApps } from "@shkriuss/shell/site";
 import { createRoute } from "@tanstack/react-router";
 import { useId } from "react";
 import { apps } from "virtual:shkriuss/catalog";
@@ -15,6 +15,7 @@ export const homeRoute = createRoute({
 
 function Home() {
   const heading = useId();
+  const shown = listedApps(apps, location.hostname);
   return (
     <Screen title={m.title()}>
       <p className="text-xl">{m.lead()}</p>
@@ -22,11 +23,11 @@ function Home() {
       <h2 id={heading} className="text-xl font-semibold">
         {m.apps()}
       </h2>
-      {apps.length === 0 ? (
+      {shown.length === 0 ? (
         <p>{m.noApps()}</p>
       ) : (
         <ul aria-labelledby={heading} className="flex flex-col gap-4">
-          {apps.map((app) => (
+          {shown.map((app) => (
             <AppCard key={app.id} app={app} />
           ))}
         </ul>

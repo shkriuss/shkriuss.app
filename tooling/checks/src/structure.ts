@@ -99,6 +99,9 @@ function checkPackage(app: App, source: string): Violation[] {
   return violations;
 }
 
+/** The line of `app.config.ts` that says whether production gets the app (ADR 0015). */
+const RELEASED = /^ {2}released: (?:true|false),$/;
+
 /**
  * Whether the app keeps data, as its configuration says: unless it says `keepsData: false`, as
  * the template without data does.
@@ -125,16 +128,28 @@ function checkConfig(app: App, source: string): Violation[] {
     return [{ file, message: 'app.config.ts must give the app\'s id once, as id: "<id>",.' }];
   }
   const [match] = ids;
-  if (match?.[1] === app.id) {
-    return [];
+  if (match?.[1] !== app.id) {
+    return [
+      {
+        file,
+        line: lineOf(source, match?.index ?? 0),
+        message: `The app's id must be "${app.id}", the name of its folder and its subdomain. App ids never change (CLAUDE.md, product rule 3).`,
+      },
+    ];
   }
-  return [
-    {
-      file,
-      line: lineOf(source, match?.index ?? 0),
-      message: `The app's id must be "${app.id}", the name of its folder and its subdomain. App ids never change (CLAUDE.md, product rule 3).`,
-    },
-  ];
+  // The deploy reads this line as it is (ADR 0015).
+  const released = [...source.matchAll(/^\s*released:.*$/gm)];
+  if (released.length !== 1 || !RELEASED.test(released[0]?.[0] ?? "")) {
+    return [
+      {
+        file,
+        line: lineOf(source, released[0]?.index ?? 0),
+        message:
+          "app.config.ts must say once whether production gets the app, on a line of its own: released: true, or released: false, (ADR 0015).",
+      },
+    ];
+  }
+  return [];
 }
 
 function checkBuild(app: App, source: string): Violation[] {

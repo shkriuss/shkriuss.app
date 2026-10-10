@@ -13,4 +13,6 @@ export const config = {
   accent: "#1d4ed8",
   // The glyph on the app's icons, in white: filled SVG paths in a square of 24 units.
   icon: { size: 24, paths: [{ d: "M5 5h14v3H5Z M5 10.5h14v3H5Z M5 16h9v3H5Z" }] },
+  // Production gets a new app only once it has been checked on real devices (ADR 0015).
+  released: false,
 } satisfies AppConfig;

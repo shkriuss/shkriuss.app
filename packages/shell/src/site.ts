@@ -5,5 +5,6 @@
  */
 export { Frame, type FrameProps } from "./Frame.tsx";
 export { LICENSES_PATH, REPORT_URL, SECURITY_URL, SOURCE_URL } from "./links.ts";
+export { listedApps } from "./listed.ts";
 export { Screen, type ScreenProps } from "./Screen.tsx";
 export { ScreenLink } from "./ScreenLink.tsx";
