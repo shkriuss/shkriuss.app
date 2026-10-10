@@ -64,8 +64,18 @@ function escapeText(text: string): string {
   return text.replaceAll("&", "&amp;").replaceAll("<", "&lt;");
 }
 
-/** Gives the page the app's name as its title, and its description, from `app.config.ts`. */
-function pageHead({ name, description }: AppConfig): Plugin {
+/** What a page says of itself before any script runs: its title, and its description. */
+export interface PageHead {
+  readonly name: string;
+  readonly description: string;
+}
+
+/**
+ * Gives the page `name` as its title, and its description, in its HTML: an app's, from its
+ * `app.config.ts`, which `app()` does, and the hub's, from its messages. The text comes from
+ * messages, as all text does (ADR 0012), rather than from the page's `index.html`.
+ */
+export function pageHead({ name, description }: PageHead): Plugin {
   return {
     name: "shkriuss:page-head",
     transformIndexHtml(): HtmlTagDescriptor[] {

@@ -3,6 +3,7 @@ import { AxeBuilder } from "@axe-core/playwright";
 import { expect, test } from "@shkriuss/config/playwright";
 import { REPORT_URL, SECURITY_URL, SOURCE_URL } from "@shkriuss/shell/site";
 import { readCatalog } from "@shkriuss/shell/vite";
+import { m } from "../src/messages.ts";
 
 // The hub in real browsers (docs/specs/hub.md §5): its production build, under the production
 // security headers. The fixture fails every test on a CSP violation, an error or a failed request.
@@ -22,6 +23,10 @@ test("the first page says what the apps are, and lists every app with its privac
 }) => {
   await page.goto("/");
   await expect(page).toHaveTitle("shkriuss.app");
+  // The page names and describes the hub before any script runs, from its messages.
+  const html = await (await page.request.get("/")).text();
+  expect(html).toContain(`<title>${m.title()}</title>`);
+  expect(html).toContain(`<meta name="description" content="${m.lead()}">`);
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
   await expect(page.getByRole("heading", { level: 1, name: "shkriuss.app" })).toBeVisible();
   await expect(page.getByRole("main")).toContainText("Small, private web apps that work offline.");
