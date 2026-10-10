@@ -292,7 +292,8 @@ test("lists are added and opened, sorted by name, with how much of each is done"
 }) => {
   await open(page);
   await addList(page, "Packing");
-  await expect(page).toHaveTitle(`Packing – ${NAME}`);
+  // The page's title does not name the list: browsers keep titles in their history.
+  await expect(page).toHaveTitle(`List – ${NAME}`);
   await expect(page.getByRole("main")).toContainText("No items yet.");
   await toLists(page);
 
@@ -461,7 +462,7 @@ test("a list is renamed, and deleted with its items once the user confirms", asy
   await name.fill("Food");
   await rename.getByRole("button", { name: "Save" }).click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Food");
-  await expect(page).toHaveTitle(`Food – ${NAME}`);
+  await expect(page).toHaveTitle(`List – ${NAME}`);
   await expect(page.getByRole("button", { name: "Rename list" })).toBeFocused();
 
   // The dialog asks first; Enter deletes nothing, and Cancel keeps the list.

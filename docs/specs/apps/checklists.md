@@ -21,6 +21,7 @@ Lists to tick off, such as shopping, packing or to-dos, kept on the device, offl
 - **Clear done items** deletes every item that is done.
 - **The list** can be renamed, and deleted with its items, after the user confirms it in a dialog: it cannot be undone.
 - **A list that does not exist,** whether deleted here, on another device, or never there, shows that it does not exist, with a link to the lists.
+- **The page's title** says only "List", not the list's name, which is the screen's heading: browsers keep page titles in their history, which they may sync.
 
 Names and texts must not be empty or blank; the fields refuse them. The screens follow every change, in this window or another.
 

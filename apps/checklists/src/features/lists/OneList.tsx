@@ -399,7 +399,7 @@ export function OneList({ db, listId, loaded }: OneListProps) {
   }
 
   return (
-    <Screen title={name}>
+    <Screen title={name} pageTitle={m.list()}>
       <AddForm
         label={m.newItem()}
         missing={m.newItemMissing()}
