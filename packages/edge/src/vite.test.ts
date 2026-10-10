@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { mkdir, mkdtemp, readdir, readFile, rm, truncate, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -648,6 +648,28 @@ describe("edge", () => {
     await expect(buildApp(root)).rejects.toThrow(
       "Cloudflare serves files of at most 25 MiB (26214400 bytes): /huge.bin has 26214401 bytes.",
     );
+  });
+
+  it("fails the build if the first page loads more JavaScript than its budget, but not for what it loads later", async () => {
+    const root = await createApp();
+    // Random text, which gzip shrinks only to about three quarters of its length.
+    const text = randomBytes(15_000).toString("base64");
+    const budget: EdgeOptions = { firstPageBudget: 10_000 };
+
+    await writeFile(path.join(root, "main.js"), `console.info("${text}");\n`);
+    await expect(buildApp(root, "/", budget)).rejects.toThrow(
+      /index\.html loads 1\d\.\d kB of JavaScript, gzipped, more than its budget of 10\.0 kB \(ADR 0018\): assets\/index-[\w-]{8}\.js has 1\d\.\d kB\. Load what its first screen does not need with import\(\)\./,
+    );
+
+    await writeFile(
+      path.join(root, "main.js"),
+      'import("./lazy.js").then((lazy) => lazy.run());\n',
+    );
+    await writeFile(
+      path.join(root, "lazy.js"),
+      `export const run = () => console.info("${text}");\n`,
+    );
+    await buildApp(root, "/", budget);
   });
 
   it("fails the build when another file is already security.txt", async () => {

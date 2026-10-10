@@ -19,6 +19,7 @@ export default defineConfig({ plugins: [react(), edge()] });
 | `webAssembly`      | Whether the app's workers compile WebAssembly, which its policy then allows (see [WebAssembly](#webassembly)).                                                                                      |
 | `excludedPackages` | Packages whose code the build must not have: those that keep data, for an app without data (see [Excluded packages](#excluded-packages)).                                                           |
 | `excludedFiles`    | Files whose code the build must not have, though it may have the rest of their package: the shell's text for apps with data, for an app without data (see [Excluded packages](#excluded-packages)). |
+| `firstPageBudget`  | The most JavaScript, gzipped, that each page may load before it runs; the build fails above it (see [Budgets](#budgets)).                                                                           |
 
 After Vite has written the production build, the plugin:
 
@@ -74,6 +75,12 @@ An app without data excludes the packages that keep data, `@shkriuss/data` and `
 It also excludes the shell's text for apps with data, `data-messages.ts` of `@shkriuss/shell`, which `app()` passes, by its path, as `excludedFiles`: the app has the shell, but not its storage, backups and other parts for apps with data, which all show that text, nor the text itself, which only those parts use.
 
 Only code that the build has counts: a module that tree-shaking removed entirely does not, nor a worker whose module it removed. Vite builds every worker that a module refers to, even when tree-shaking then removes that module, and leaves such a worker out of the build; so does the plugin.
+
+## Budgets
+
+With `firstPageBudget`, the build measures the JavaScript that each page loads before it runs: the scripts of its HTML and the chunks that they import statically, gzipped at level 9, in kilobytes of 1,000 bytes. Chunks that the page loads later with `import()` do not count, nor do its workers and service worker. Above the budget, the build fails and names each of those scripts with its size; within it, the build logs what the page loads.
+
+`FIRST_PAGE_BUDGETS` has the budgets of [ADR 0018](../../docs/decisions/0018-quality-gates-as-enforced.md): `app()` of `@shkriuss/shell/vite` passes 180 kB for an app with data and 150 kB for an app without, and the hub passes 150 kB.
 
 ## Licenses
 

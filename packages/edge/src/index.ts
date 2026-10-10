@@ -28,6 +28,7 @@ export {
   subresourceIntegrity,
   type IntegrityResult,
 } from "./integrity.ts";
+export { FIRST_PAGE_BUDGETS } from "./budget.ts";
 export { checkAgainstLive, type Fetch, type LiveCheck } from "./live.ts";
 export {
   MANIFEST_FILE,

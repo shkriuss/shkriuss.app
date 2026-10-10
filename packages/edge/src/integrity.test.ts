@@ -1,6 +1,11 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { addScriptIntegrity, cspHashSource, subresourceIntegrity } from "./integrity.ts";
+import {
+  addScriptIntegrity,
+  cspHashSource,
+  pageScriptPaths,
+  subresourceIntegrity,
+} from "./integrity.ts";
 
 const ENTRY = "sha384-entry";
 const LAZY = "sha384-lazy";
@@ -44,6 +49,15 @@ describe("cspHashSource", () => {
   it("is a quoted SHA-256 source expression of the exact text", () => {
     const expected = createHash("sha256").update('{"a":1}').digest("base64");
     expect(cspHashSource('{"a":1}')).toBe(`'sha256-${expected}'`);
+  });
+});
+
+describe("pageScriptPaths", () => {
+  it("lists the scripts and module preloads that a page loads, in order", () => {
+    const html =
+      '<head><link rel="stylesheet" href="/assets/index.css"><script type="module" src="/assets/index.js"></script>' +
+      '<link rel="modulepreload" href="/assets/vendor.js" /><script>inline()</script></head>';
+    expect(pageScriptPaths(html)).toStrictEqual(["/assets/index.js", "/assets/vendor.js"]);
   });
 });
 

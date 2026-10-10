@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { assertAppId, type BrowserFeature, edge } from "@shkriuss/edge";
+import { assertAppId, type BrowserFeature, edge, FIRST_PAGE_BUDGETS } from "@shkriuss/edge";
 import {
   type PwaOptions,
   pwa,
@@ -40,7 +40,8 @@ export interface AppConfig extends WebAppManifestOptions {
    * Whether the app keeps data on the device, as most apps do: in a database of
    * `@shkriuss/data`, which the backups of `@shkriuss/backup` save. True if left out. An app
    * without data keeps nothing, and its build fails if it has the code of either package, or the
-   * shell's text for apps with data.
+   * shell's text for apps with data. Its first page may load 150 kB of JavaScript, gzipped, and
+   * an app with data 180 kB (ADR 0018).
    */
   readonly keepsData?: boolean;
   /**
@@ -133,6 +134,8 @@ export function app(config: AppConfig, options: AppBuildOptions = {}): UserConfi
         appId: id,
         ...(allowedFeatures === undefined ? {} : { allowedFeatures }),
         ...(webAssembly === undefined ? {} : { webAssembly }),
+        // ADR 0018: an app with data has the platform's database and backups to load.
+        firstPageBudget: keepsData ? FIRST_PAGE_BUDGETS.withData : FIRST_PAGE_BUDGETS.withoutData,
         ...(keepsData ? {} : { excludedPackages: DATA_PACKAGES, excludedFiles: [DATA_MESSAGES] }),
       }),
     ],
