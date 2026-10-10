@@ -43,7 +43,7 @@ Instructions for Claude Code and for anyone else changing this repository. Read 
 
 ### Data
 
-1. Apps never access IndexedDB, `localStorage`, Cache Storage or files directly — only through `@shkriuss/data`, `@shkriuss/backup` and `@shkriuss/pwa`.
+1. Apps never access IndexedDB, `localStorage`, Cache Storage or files directly — only through `@shkriuss/data`, `@shkriuss/backup` and `@shkriuss/pwa`; lint refuses those APIs in an app's code.
 2. Every record has a permanent id, a schema version, per-field change timestamps and a deletion marker ([ADR 0004](docs/decisions/0004-local-data-and-backups.md)). Deleting writes a tombstone; never hard-delete.
 3. Every schema change ships with a migration and tests. Every app must import every backup version it has ever produced; keep those test fixtures forever.
 

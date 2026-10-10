@@ -89,6 +89,70 @@
         "object": "document",
         "property": "writeln",
         "message": "Never use document.writeln (CLAUDE.md, security rule 2)."
+      },
+      {
+        "object": "window",
+        "property": "localStorage",
+        "message": "Apps reach storage only through @shkriuss/data, @shkriuss/backup and @shkriuss/pwa (CLAUDE.md, data rule 1)."
+      },
+      {
+        "object": "window",
+        "property": "sessionStorage",
+        "message": "Apps reach storage only through @shkriuss/data, @shkriuss/backup and @shkriuss/pwa (CLAUDE.md, data rule 1)."
+      },
+      {
+        "object": "window",
+        "property": "indexedDB",
+        "message": "Apps reach storage only through @shkriuss/data, @shkriuss/backup and @shkriuss/pwa (CLAUDE.md, data rule 1)."
+      },
+      {
+        "object": "window",
+        "property": "caches",
+        "message": "Apps reach storage only through @shkriuss/data, @shkriuss/backup and @shkriuss/pwa (CLAUDE.md, data rule 1)."
+      },
+      {
+        "object": "globalThis",
+        "property": "localStorage",
+        "message": "Apps reach storage only through @shkriuss/data, @shkriuss/backup and @shkriuss/pwa (CLAUDE.md, data rule 1)."
+      },
+      {
+        "object": "globalThis",
+        "property": "sessionStorage",
+        "message": "Apps reach storage only through @shkriuss/data, @shkriuss/backup and @shkriuss/pwa (CLAUDE.md, data rule 1)."
+      },
+      {
+        "object": "globalThis",
+        "property": "indexedDB",
+        "message": "Apps reach storage only through @shkriuss/data, @shkriuss/backup and @shkriuss/pwa (CLAUDE.md, data rule 1)."
+      },
+      {
+        "object": "globalThis",
+        "property": "caches",
+        "message": "Apps reach storage only through @shkriuss/data, @shkriuss/backup and @shkriuss/pwa (CLAUDE.md, data rule 1)."
+      },
+      {
+        "object": "self",
+        "property": "localStorage",
+        "message": "Apps reach storage only through @shkriuss/data, @shkriuss/backup and @shkriuss/pwa (CLAUDE.md, data rule 1)."
+      },
+      {
+        "object": "self",
+        "property": "sessionStorage",
+        "message": "Apps reach storage only through @shkriuss/data, @shkriuss/backup and @shkriuss/pwa (CLAUDE.md, data rule 1)."
+      },
+      {
+        "object": "self",
+        "property": "indexedDB",
+        "message": "Apps reach storage only through @shkriuss/data, @shkriuss/backup and @shkriuss/pwa (CLAUDE.md, data rule 1)."
+      },
+      {
+        "object": "self",
+        "property": "caches",
+        "message": "Apps reach storage only through @shkriuss/data, @shkriuss/backup and @shkriuss/pwa (CLAUDE.md, data rule 1)."
+      },
+      {
+        "property": "getDirectory",
+        "message": "Apps reach files only through @shkriuss/backup (CLAUDE.md, data rule 1)."
       }
     ],
 
@@ -125,6 +189,48 @@
       "files": ["tooling/**"],
       "rules": {
         "no-console": "off"
+      }
+    },
+    {
+      // An app's own code keeps its data only through the platform's packages (CLAUDE.md, data
+      // rule 1); its end-to-end tests may look into storage directly.
+      "files": [
+        "apps/*/src/**",
+        "tooling/app-template/src/**",
+        "tooling/app-template-no-data/src/**"
+      ],
+      "rules": {
+        "no-restricted-globals": [
+          "error",
+          {
+            "name": "localStorage",
+            "message": "Apps reach storage only through @shkriuss/data, @shkriuss/backup and @shkriuss/pwa (CLAUDE.md, data rule 1)."
+          },
+          {
+            "name": "sessionStorage",
+            "message": "Apps reach storage only through @shkriuss/data, @shkriuss/backup and @shkriuss/pwa (CLAUDE.md, data rule 1)."
+          },
+          {
+            "name": "indexedDB",
+            "message": "Apps reach storage only through @shkriuss/data, @shkriuss/backup and @shkriuss/pwa (CLAUDE.md, data rule 1)."
+          },
+          {
+            "name": "caches",
+            "message": "Apps reach storage only through @shkriuss/data, @shkriuss/backup and @shkriuss/pwa (CLAUDE.md, data rule 1)."
+          },
+          {
+            "name": "showOpenFilePicker",
+            "message": "Apps reach files only through @shkriuss/backup (CLAUDE.md, data rule 1)."
+          },
+          {
+            "name": "showSaveFilePicker",
+            "message": "Apps reach files only through @shkriuss/backup (CLAUDE.md, data rule 1)."
+          },
+          {
+            "name": "showDirectoryPicker",
+            "message": "Apps reach files only through @shkriuss/backup (CLAUDE.md, data rule 1)."
+          }
+        ]
       }
     }
   ],
