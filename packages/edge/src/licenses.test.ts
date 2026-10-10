@@ -328,14 +328,17 @@ describe("licensesFile", () => {
     ],
     notices: [{ file: "packages/backup/src/words.ts", text: "BIP-39, MIT." }],
   };
+  const commit = "0123456789abcdef0123456789abcdef01234567";
+  const own = { text: "GNU AFFERO GENERAL PUBLIC LICENSE\r\nVersion 3\r\n", commit };
 
-  it("names the app, its license and its source, then every license it includes", () => {
-    expect(licensesFile("notes", licenses)).toBe(
+  it("names the app, its license, its source and its commit, then every license it includes, then its own", () => {
+    expect(licensesFile("notes", licenses, own)).toBe(
       [
         "Licenses of notes.shkriuss.app",
         "",
         "notes.shkriuss.app is free software under the GNU Affero General Public License, version 3 only",
-        "(AGPL-3.0-only). Its source code is at https://github.com/shkriuss/shkriuss.app.",
+        "(AGPL-3.0-only), whose text ends this file. Its source code is at https://github.com/shkriuss/shkriuss.app; this build",
+        `is of the commit https://github.com/shkriuss/shkriuss.app/tree/${commit}.`,
         "",
         "It includes the following software and material of others, under their own licenses.",
         "",
@@ -357,13 +360,22 @@ describe("licensesFile", () => {
         "",
         "BIP-39, MIT.",
         "",
+        RULE,
+        "The license of notes.shkriuss.app",
+        RULE,
+        "",
+        "GNU AFFERO GENERAL PUBLIC LICENSE\nVersion 3",
+        "",
       ].join("\n"),
     );
   });
 
   it("names the hub by its domain", () => {
-    expect(licensesFile(undefined, { packages: [], notices: [] })).toMatch(
+    expect(licensesFile(undefined, { packages: [], notices: [] }, own)).toMatch(
       /^Licenses of shkriuss\.app\n\nshkriuss\.app is free software/,
+    );
+    expect(licensesFile(undefined, { packages: [], notices: [] }, own)).toContain(
+      "The license of shkriuss.app",
     );
   });
 });

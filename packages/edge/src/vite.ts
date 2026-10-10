@@ -23,7 +23,7 @@ import {
   MAX_FILE_BYTES,
   oversizedFiles,
 } from "./manifest.ts";
-import { commitDate, SECURITY_TXT_FILE, securityTxt } from "./security-txt.ts";
+import { commitDate, commitHash, SECURITY_TXT_FILE, securityTxt } from "./security-txt.ts";
 import { type ServiceWorkerApi, serviceWorkerApi } from "./service-worker.ts";
 import { assertWebAssembly, isWebAssemblyPath } from "./webassembly.ts";
 import {
@@ -286,6 +286,9 @@ export function edge(options: EdgeOptions = {}): Plugin {
         if (licenseOptions === undefined) {
           throw new Error("The build has no resolved configuration.");
         }
+        // The commit that is built: its date for security.txt, its hash for licenses.txt.
+        const committed = await commitDate(licenseOptions.root);
+        const commit = await commitHash(licenseOptions.root);
         const serviceWorkerBundle = await serviceWorker?.bundle();
         const modules = [
           ...outputs.flatMap((output) => (output.type === "chunk" ? includedModules(output) : [])),
@@ -295,7 +298,20 @@ export function edge(options: EdgeOptions = {}): Plugin {
         await assertExcludedPackages(modules, options.excludedPackages ?? [], licenseOptions.root);
         assertExcludedFiles(modules, options.excludedFiles ?? [], licenseOptions.root);
         const licenses = await collectLicenses(modules, licenseOptions);
-        await writeFile(path.join(directory, LICENSES_FILE), licensesFile(options.appId, licenses));
+        // The app's own license text, which every copy of the app carries (AGPL-3.0 §4, §6).
+        let licenseText: string;
+        try {
+          licenseText = await readFile(path.join(licenseOptions.root, "LICENSE"), "utf8");
+        } catch (error) {
+          throw new Error(
+            `${licenseOptions.root} has no LICENSE file, whose text licenses.txt carries.`,
+            { cause: error },
+          );
+        }
+        await writeFile(
+          path.join(directory, LICENSES_FILE),
+          licensesFile(options.appId, licenses, { text: licenseText, commit }),
+        );
 
         // Before the service worker, which keeps every served file.
         const securityTxtPath = path.join(directory, SECURITY_TXT_FILE);
@@ -305,7 +321,7 @@ export function edge(options: EdgeOptions = {}): Plugin {
           );
         }
         await mkdir(path.dirname(securityTxtPath), { recursive: true });
-        await writeFile(securityTxtPath, securityTxt(await commitDate(licenseOptions.root)));
+        await writeFile(securityTxtPath, securityTxt(committed));
 
         // The security headers of every file. The service worker serves its files with them
         // too (service worker spec §6.5), so they are known before it is written; only the

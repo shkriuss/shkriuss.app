@@ -1,6 +1,12 @@
 import { execFileSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
-import { type Git, SECURITY_TXT_DAYS, commitDate, securityTxt } from "./security-txt.ts";
+import {
+  type Git,
+  SECURITY_TXT_DAYS,
+  commitDate,
+  commitHash,
+  securityTxt,
+} from "./security-txt.ts";
 
 const NO_GIT: Git = () => Promise.reject(new Error("not a git repository"));
 
@@ -53,5 +59,43 @@ describe("commitDate", () => {
   it("reads this repository's HEAD commit with the real git", async () => {
     const seconds = execFileSync("git", ["log", "-1", "--format=%ct"], { encoding: "utf8" });
     expect(await commitDate(process.cwd(), {})).toEqual(new Date(Number(seconds.trim()) * 1000));
+  });
+});
+
+describe("commitHash", () => {
+  const HASH = "0123456789abcdef0123456789abcdef01234567";
+
+  it("takes GITHUB_SHA first, as GitHub Actions sets it", async () => {
+    expect(await commitHash("/nowhere", { GITHUB_SHA: HASH }, NO_GIT)).toBe(HASH);
+  });
+
+  it("refuses a GITHUB_SHA that is not a commit's hash", async () => {
+    await expect(commitHash("/nowhere", { GITHUB_SHA: "main" }, NO_GIT)).rejects.toThrow(
+      'GITHUB_SHA must be a commit\'s hash, 40 hexadecimal digits, not "main".',
+    );
+  });
+
+  it("takes the HEAD commit from git otherwise", async () => {
+    const asked: string[][] = [];
+    const git: Git = async (directory, args) => {
+      asked.push([directory, ...args]);
+      return `${HASH}\n`;
+    };
+    expect(await commitHash("/repo", { GITHUB_SHA: "" }, git)).toBe(HASH);
+    expect(asked).toStrictEqual([["/repo", "rev-parse", "HEAD"]]);
+  });
+
+  it("fails without git or GITHUB_SHA, rather than differ from build to build", async () => {
+    await expect(commitHash("/nowhere", {}, NO_GIT)).rejects.toThrow(
+      "build in a git checkout, or set GITHUB_SHA",
+    );
+    await expect(commitHash("/repo", {}, async () => "HEAD\n")).rejects.toThrow(
+      'git gave "HEAD" as the commit, not its hash.',
+    );
+  });
+
+  it("reads this repository's HEAD commit with the real git", async () => {
+    const head = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+    expect(await commitHash(process.cwd(), {})).toBe(head);
   });
 });

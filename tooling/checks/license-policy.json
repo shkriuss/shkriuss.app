@@ -1,5 +1,5 @@
 {
-  "$comment": "Licenses allowed for runtime dependencies, which ship to users inside the AGPL-3.0-only apps. Development-only dependencies are not distributed and are not checked. Exceptions are keyed by name@version, so every new version is reviewed again.",
+  "$comment": "Licenses allowed for runtime dependencies, which ship to users inside the AGPL-3.0-only apps. Development-only dependencies are not distributed and are not checked. Exceptions are keyed by name@version, so every new version is reviewed again. ADR 0002 names MIT, BSD, ISC and Apache-2.0; 0BSD, BlueOak-1.0.0, CC0-1.0 and Unlicense were reviewed and accepted on 2026-10-10 (the audit of that day): each is permissive and GPL-compatible, and asks for no notice that the apps do not give, so nothing in them conflicts with the AGPL.",
   "allowed": [
     "0BSD",
     "Apache-2.0",
