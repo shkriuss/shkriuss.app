@@ -1,5 +1,4 @@
 import "@shkriuss/ui/styles.css";
-import { deviceLocale } from "@shkriuss/i18n";
 import { appInstall, startServiceWorker } from "@shkriuss/pwa";
 import { RouterProvider } from "@tanstack/react-router";
 import { StrictMode } from "react";
@@ -34,7 +33,7 @@ const router = createAppRouter({
     },
     webAssembly: typeof WebAssembly === "object",
   }),
-  draft: createDraftStore(varietyOf(deviceLocale())),
+  draft: createDraftStore(varietyOf(navigator.language)),
 });
 createRoot(container).render(
   <StrictMode>

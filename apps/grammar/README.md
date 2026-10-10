@@ -18,18 +18,18 @@ Checks English text for mistakes in grammar, spelling and punctuation, and sugge
 
 [Harper](https://github.com/Automattic/harper) checks the text: its slim WebAssembly module, from `harper.js`, without Typst and without the thesaurus, which only suggests other words for some that are used too often. It runs in `src/features/check/harper.worker.ts`, which the page starts once there is text, or as soon as the app opens if the app runs installed or keeps the module already, and only once the service worker controls the page. The module, 16 MB (8 MB compressed), then comes through the service worker, which checks it and keeps it from its first use on (`keepOnFirstUse` in `app.config.ts`, [ADR 0019](../../docs/decisions/0019-files-kept-on-first-use.md)): opening the app costs little, and the module comes once.
 
-| File in `src/features/check/` | What it is                                                                                                                                   |
-| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Check.tsx`                   | The check screen: the text, its variety of English, Copy, Delete, and the mistakes with fixes                                                |
-| `checker.ts`                  | The page's checker: when it starts, whether it downloads its module or could not, when it is ready or failed; one text at a time, the latest |
-| `draft.ts`                    | The text, its variety, the mistakes ignored, Undo's text and the last check, kept while the page is open                                     |
-| `worker-check.ts`             | Starts the worker, and sends it each text with a port for the answer                                                                         |
-| `harper.worker.ts`            | The worker: Harper's linter, which answers each request in turn                                                                              |
-| `harper.ts`                   | Creates the linter, and gives, in its legal comment, the notices of the crates compiled into Harper                                          |
-| `lints.ts`                    | Harper's lints as the app's mistakes: their kind, message, place in the text and fixes, each once                                            |
-| `protocol.ts`                 | What the page and the worker say to each other, and the checks of it                                                                         |
-| `text.ts`                     | A fix applied to the text, Harper's messages as plain text, the words quoted, and what Ignore hides                                          |
-| `variety.ts`                  | The variety of English to start with, from the browser's language                                                                            |
+| File in `src/features/check/` | What it is                                                                                                                                |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `Check.tsx`                   | The check screen: the text, its variety of English, Copy, Delete, and the mistakes with fixes                                             |
+| `checker.ts`                  | The page's checker: when it starts, whether it downloads its module or could not, when it is ready, failed or stopped; one text at a time |
+| `draft.ts`                    | The text, its variety, the mistakes ignored, Undo's text and the last check, kept while the page is open                                  |
+| `worker-check.ts`             | Starts the worker, and sends it each text with a port for the answer, which it waits for until a deadline                                 |
+| `harper.worker.ts`            | The worker: Harper's linter, which answers each request in turn                                                                           |
+| `harper.ts`                   | Loads the module and creates the linter, and gives, in its legal comment, the notices of the crates compiled into Harper                  |
+| `lints.ts`                    | Harper's lints as the app's mistakes: their kind, message, place in the text and fixes, each once                                         |
+| `protocol.ts`                 | What the page and the worker say to each other, and the checks of it                                                                      |
+| `text.ts`                     | A fix applied to the text, Harper's messages as plain text, the words quoted, and what Ignore hides                                       |
+| `variety.ts`                  | The variety of English to start with, from the browser's language                                                                         |
 
 ## Updating harper.js
 

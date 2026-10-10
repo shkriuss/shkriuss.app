@@ -31,6 +31,6 @@ export const config = {
   keepOnFirstUse: [".wasm"],
   // Copy puts the text on the clipboard.
   allowedFeatures: ["clipboard-write"],
-  // Production gets it: it was checked on real devices (ADR 0015).
+  // Production had it before ADR 0015, which keeps it there (ADR 0015, point 5).
   released: true,
 } satisfies AppConfig;

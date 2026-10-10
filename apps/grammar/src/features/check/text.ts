@@ -52,16 +52,83 @@ export function excerptOf(text: string, mistake: Mistake): Excerpt {
 }
 
 /**
+ * How many characters of the text on each side of a mistake's words Ignore goes by
+ * (docs/specs/apps/grammar.md §1).
+ */
+const AROUND_IGNORED = 12;
+
+/**
  * What tells a mistake apart, while its words and the text right around them stay the same:
- * Ignore hides it until they change, wherever they move in the text.
+ * Ignore hides it until they change, wherever they move in the text. The key has the mistake's
+ * kind, its message, up to `AROUND_IGNORED` characters before its words, the words, and up to as
+ * many after: fewer only where the text starts or ends within them, which `ignoredBy()` allows
+ * for.
  */
 export function ignoreKey(text: string, mistake: Mistake): string {
-  const around = 12;
   return JSON.stringify([
     mistake.kind,
     mistake.message,
-    text.slice(Math.max(0, mistake.start - around), mistake.start),
+    text.slice(Math.max(0, mistake.start - AROUND_IGNORED), mistake.start),
     text.slice(mistake.start, mistake.end),
-    text.slice(mistake.end, mistake.end + around),
+    text.slice(mistake.end, mistake.end + AROUND_IGNORED),
   ]);
+}
+
+/** A key of `ignoreKey()`, read back. */
+type IgnoreKey = readonly [
+  kind: string,
+  message: string,
+  before: string,
+  words: string,
+  after: string,
+];
+
+function isIgnoreKey(value: unknown): value is IgnoreKey {
+  return (
+    Array.isArray(value) && value.length === 5 && value.every((part) => typeof part === "string")
+  );
+}
+
+/**
+ * Whether the text on one side of a mistake's words, `now`, is what a key recorded there,
+ * `then`: the same, or more of it where the key's stopped short of `AROUND_IGNORED` characters,
+ * as it only does at the text's start or end. Text added there since does not change what was
+ * around the words; text taken away does.
+ */
+function sameAround(then: string, now: string, side: "before" | "after"): boolean {
+  if (then.length === AROUND_IGNORED) {
+    return then === now;
+  }
+  return side === "before" ? now.endsWith(then) : now.startsWith(then);
+}
+
+/**
+ * Whether a mistake in a text is one that the user ignored, by `ignored`, keys of `ignoreKey()`:
+ * one with the same kind, message and words, and the same text right around them,
+ * `AROUND_IGNORED` characters on each side, or more of it where the text started or ended when
+ * it was ignored.
+ */
+export function ignoredBy(
+  ignored: ReadonlySet<string>,
+): (text: string, mistake: Mistake) => boolean {
+  const keys = [...ignored].flatMap((key) => {
+    const value: unknown = JSON.parse(key);
+    return isIgnoreKey(value) ? [value] : [];
+  });
+  if (keys.length === 0) {
+    return () => false;
+  }
+  return (text, mistake) => {
+    const before = text.slice(Math.max(0, mistake.start - AROUND_IGNORED), mistake.start);
+    const words = text.slice(mistake.start, mistake.end);
+    const after = text.slice(mistake.end, mistake.end + AROUND_IGNORED);
+    return keys.some(
+      ([kind, message, thenBefore, thenWords, thenAfter]) =>
+        kind === mistake.kind &&
+        message === mistake.message &&
+        thenWords === words &&
+        sameAround(thenBefore, before, "before") &&
+        sameAround(thenAfter, after, "after"),
+    );
+  };
 }

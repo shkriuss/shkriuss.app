@@ -1,4 +1,4 @@
-import { Button, Select, TextArea } from "@shkriuss/ui";
+import { type Announcement, Button, Select, Status, TextArea, announce } from "@shkriuss/ui";
 import {
   memo,
   useCallback,
@@ -12,10 +12,10 @@ import {
 } from "react";
 import { flushSync } from "react-dom";
 import { m } from "../../messages.ts";
-import type { Checker } from "./checker.ts";
+import { type Checker, Superseded } from "./checker.ts";
 import { type DraftStore, isChecked } from "./draft.ts";
 import { type Fix, type Mistake, VARIETIES } from "./protocol.ts";
-import { applyFix, excerptOf, ignoreKey, plainMessage } from "./text.ts";
+import { applyFix, excerptOf, ignoredBy, ignoreKey, plainMessage } from "./text.ts";
 
 /** The longest text that the field takes. */
 export const TEXT_LIMIT = 20_000;
@@ -147,7 +147,7 @@ export function Check({
   const { text, variety, ignored, deleted, result } = snapshot;
   const [failed, setFailed] = useState(false);
   // What Copy, Delete or Undo did, until the text changes.
-  const [notice, setNotice] = useState("");
+  const [notice, setNotice] = useState<Announcement>();
   // How many of the mistakes the list shows.
   const [limit, setLimit] = useState(LIST_STEP);
   const field = useRef<HTMLTextAreaElement>(null);
@@ -161,13 +161,13 @@ export function Check({
   const headingId = useId();
 
   const current = isChecked(snapshot);
-  const shown = useMemo(
-    () =>
-      result === undefined
-        ? []
-        : result.mistakes.filter((mistake) => !ignored.has(ignoreKey(result.text, mistake))),
-    [result, ignored],
-  );
+  const shown = useMemo(() => {
+    if (result === undefined) {
+      return [];
+    }
+    const isIgnored = ignoredBy(ignored);
+    return result.mistakes.filter((mistake) => !isIgnored(result.text, mistake));
+  }, [result, ignored]);
   // The first keystroke after a check makes every mistake's fixes wait: the list shows that
   // after the keystroke, rather than hold it up. A new check's fixes are ready at once.
   const changed = useDeferredValue(!current);
@@ -194,7 +194,12 @@ export function Check({
           draft.update({ result: { text, variety, mistakes } });
           setFailed(false);
         }
-      } catch {
+      } catch (error) {
+        // A check that a newer text replaced before it began: nothing failed, and the newer
+        // check answers for the text as it is.
+        if (error instanceof Superseded) {
+          return;
+        }
         if (stillAbout()) {
           setFailed(true);
         }
@@ -242,7 +247,7 @@ export function Check({
   const edit = useCallback(
     (next: string) => {
       draft.update({ text: next, deleted: undefined });
-      setNotice("");
+      setNotice(undefined);
     },
     [draft],
   );
@@ -292,16 +297,16 @@ export function Check({
   async function copy(): Promise<void> {
     try {
       await navigator.clipboard.writeText(text);
-      setNotice(m.copied());
+      setNotice((last) => announce(last, m.copied()));
     } catch {
-      setNotice(m.copyFailed());
+      setNotice((last) => announce(last, m.copyFailed()));
     }
   }
 
   function deleteText(): void {
     now.current = true;
     draft.update({ text: "", deleted: text });
-    setNotice(m.deleted());
+    setNotice((last) => announce(last, m.deleted()));
   }
 
   function undo(): void {
@@ -310,7 +315,7 @@ export function Check({
     }
     now.current = true;
     edit(deleted);
-    setNotice(m.undone());
+    setNotice((last) => announce(last, m.undone()));
   }
 
   function showMore(): void {
@@ -327,7 +332,8 @@ export function Check({
     status = m.cannotStart();
   } else if (state === "offline") {
     status = m.cannotDownload();
-  } else if (failed) {
+  } else if (state === "stopped" || failed) {
+    // The worker stopped answering, or a check failed: reloading the app starts it again.
     status = m.checkFailed();
   } else if (result === undefined && text !== "") {
     // The checker's start, which takes seconds each time, and its first check are worth a word
@@ -376,8 +382,9 @@ export function Check({
           {deleted === undefined ? m.delete() : m.undo()}
         </Button>
       </div>
-      {/* <output>s, whose role is status: screen readers read what changes. */}
-      <output className="block">{notice}</output>
+      {/* <output>s, whose role is status: screen readers read what changes; what the user did,
+          such as copying, is read again when done again (WCAG 4.1.3). */}
+      <Status announcement={notice} className="block" />
       <output className="block font-medium">{status}</output>
       {shown.length === 0 || state !== "ready" || failed ? null : (
         <section ref={list} aria-labelledby={headingId} className="flex flex-col gap-3">
@@ -387,7 +394,9 @@ export function Check({
           <ul className="flex flex-col gap-3">
             {shown.slice(0, limit).map((mistake, index) => (
               <MistakeItem
-                key={`${String(mistake.start)}-${String(mistake.end)}-${mistake.kind}`}
+                // Harper can report two mistakes of one kind on the same words, with messages
+                // of their own.
+                key={JSON.stringify([mistake.start, mistake.end, mistake.kind, mistake.message])}
                 text={result?.text ?? text}
                 mistake={mistake}
                 index={index}

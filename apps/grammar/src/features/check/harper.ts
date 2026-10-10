@@ -1287,8 +1287,13 @@ import { slimBinary } from "harper.js/slimBinary";
  * Harper's linter, on the slim build of its WebAssembly module: without Typst, and without the
  * thesaurus, which only suggests other words for some that are used too often. The legal comment
  * above gives the notices of the code of others compiled into the module, which the build copies
- * into /licenses.txt. Creating it starts loading the module.
+ * into /licenses.txt.
+ *
+ * The module loads first, and the linter comes once it has: harper.js's linter starts loading
+ * the module when it is created, and leaves a failure of that unhandled, which here rejects the
+ * linter instead.
  */
-export function createLinter(): LocalLinter {
+export async function createLinter(): Promise<LocalLinter> {
+  await slimBinary.setup();
   return new LocalLinter({ binary: slimBinary });
 }
