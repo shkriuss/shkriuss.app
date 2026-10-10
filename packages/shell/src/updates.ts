@@ -47,6 +47,7 @@ export function appUpdates(
     },
     checkForUpdate: updates.checkForUpdate,
     firstUseKept: updates.firstUseKept,
+    controlled: updates.controlled,
     databaseClosed: () => {
       if (closed) {
         return;

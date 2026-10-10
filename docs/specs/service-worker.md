@@ -53,8 +53,8 @@ The first 16 hexadecimal digits of the SHA-256 of `/sw.js` as it would be with s
 When the browser has fetched a new `/sw.js`, the new service worker installs its version:
 
 1. It opens the cache `pwa-<version id>`.
-2. It copies each file of the precache list, files kept on first use included, that the cache of another version keeps under the same URL with the same SHA-256, which the service worker computes from the kept bytes: an update downloads only the files that changed. It looks in every cache whose name starts with `pwa-`, but `pwa-state`, and copies only a response with status 200, headers included.
-3. It requests every other file with `cache: "no-cache"`, `redirect: "error"` and the file's SHA-256 as the request's `integrity`, so the browser checks every byte. It keeps each response in the cache under its URL, headers included. It requests files kept on first use only if `pwa-state` records that the app has kept one (section 6.3), so that an app that has used them keeps working offline after an update.
+2. It copies each file of the precache list, files kept on first use included, that the cache of another version keeps under the same URL with the same SHA-256, which the service worker computes from the kept bytes: an update downloads only the files that changed. It looks in every cache whose name starts with `pwa-`, but `pwa-state`, and copies only a response with status 200, with its `Content-Type` and no other header (section 6.5).
+3. It requests every other file with `cache: "no-cache"`, `redirect: "error"` and the file's SHA-256 as the request's `integrity`, so the browser checks every byte. It keeps each response in the cache under its URL, with status 200, its `Content-Type` and no other header (section 6.5). It requests files kept on first use only if `pwa-state` records that the app has kept one (section 6.3), so that an app that has used them keeps working offline after an update.
 4. Any failure fails the install: a network error, a status other than 200, a redirect, a hash that does not match, storage that is full, or a cache that is gone before the install has finished, as when another version that becomes active meanwhile deletes it (section 5). The service worker stops its other requests, deletes its cache, and the active version stays active. The browser tries again on a later update check (section 7.1).
 5. Once it has installed, it deletes the caches of the waiting versions that it replaces, which will never become active: every cache whose name starts with `pwa-`, except its own, those of the active and the previous version, as `pwa-state` records them (section 5), and `pwa-state`. It deletes none while a version is becoming active, which may be one of them before it has recorded itself.
 
@@ -105,7 +105,7 @@ If a file of the active version is missing from its cache, because the browser o
 Pages of the app can write to Cache Storage, as the service worker does. A script injected into a page could change a file that the cache keeps, or its headers, and the changed file would then be served on every launch, offline too, perhaps without the Content-Security-Policy. So each time the service worker answers with a file of the active version from its cache:
 
 - it checks the file's SHA-256 again, and its status, which must be 200. A file that fails is deleted from the cache and handled as a missing one (section 6.4);
-- it answers with the security headers that `/sw.js` contains (section 2.3), in place of those the cache kept. Other headers, such as `Content-Type`, are kept.
+- it answers with the file's `Content-Type` and the security headers that `/sw.js` contains (section 2.3), and with no other header, whatever the cache keeps. A header that the cache keeps is only as trustworthy as the page that could have written it: served as kept, a reporting policy that a script had added would make every launch report to whoever it names, offline too, long after the script was gone.
 
 The files of the previous version are served as they are kept: the service worker does not know their hashes. Only requests for URLs that are not files of the active version reach them, such as those of clients that still run the previous version (section 7.3).
 
@@ -140,7 +140,7 @@ A broken version may be unable to update itself, for example if it fails before 
 The last resort, if the service worker itself is broken in a way that a new version cannot fix. A build with service workers turned off publishes, in place of the usual one, a `/sw.js` that:
 
 1. becomes active as soon as it has installed;
-2. deletes every cache of the app;
+2. deletes every cache of the service worker, those whose names start with `pwa-`;
 3. unregisters itself;
 4. reloads every client, which then loads the app from the network.
 
@@ -173,7 +173,7 @@ Pages of a build without service workers register none. They unregister any they
 
 ## 12. Security
 
-- The service worker serves only files of the active and the previous version, each checked against its SHA-256 when it keeps it: at install, or on its first use (section 6.3). A file changed on the host or on the way fails the install and is never served. It checks the active version's files again each time it serves them, and serves them with the build's security headers, so a script injected into a page cannot change them through Cache Storage (section 6.5).
+- The service worker serves only files of the active and the previous version, each checked against its SHA-256 when it keeps it: at install, or on its first use (section 6.3). A file changed on the host or on the way fails the install and is never served. It checks the active version's files again each time it serves them, and serves them with their `Content-Type` and the build's security headers only, so a script injected into a page cannot change them, or their headers, through Cache Storage (section 6.5).
 - It answers only `GET` requests of its own origin, stores no response but the files it checked, and never sees user data, which stays in IndexedDB.
 - `/sw.js` itself has no integrity check (R6). The browser fetches it without HTTP caches on navigations, so a changed one can be replaced (sections 8 and 9).
 - Messages are checked. A client can only make active a version that the browser has already installed and checked.

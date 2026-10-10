@@ -82,6 +82,7 @@ const updates: AppUpdates = {
   },
   checkForUpdate: async () => undefined,
   firstUseKept: async () => false,
+  controlled: () => true,
 };
 
 let storageStatus: StorageStatus = {

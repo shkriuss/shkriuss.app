@@ -17,6 +17,7 @@ function serviceWorker(initial: UpdateState): AppUpdates & { set(state: UpdateSt
     applyUpdate: vi.fn<() => void>(),
     checkForUpdate: vi.fn<() => Promise<void>>(async () => undefined),
     firstUseKept: vi.fn<() => Promise<boolean>>(async () => true),
+    controlled: vi.fn<() => boolean>(() => true),
     set(next) {
       state = next;
       for (const listener of listeners) {
@@ -40,6 +41,8 @@ describe("appUpdates", () => {
     void updates.checkForUpdate();
     expect(worker.checkForUpdate).toHaveBeenCalledOnce();
     expect(await updates.firstUseKept()).toBe(true);
+    expect(updates.controlled()).toBe(true);
+    expect(worker.controlled).toHaveBeenCalledOnce();
   });
 
   it("is outdated once a newer version closed the database, and reloads the page", () => {

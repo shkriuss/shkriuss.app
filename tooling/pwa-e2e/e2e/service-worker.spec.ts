@@ -140,6 +140,41 @@ test("a page from the kept version has the build's Content-Security-Policy, thou
     .toBe(true);
 });
 
+test("a page from the kept version has no header that a page added to its cache", async ({
+  page,
+  context,
+}) => {
+  await serve(context, "a");
+  await open(page);
+  // The app shell as the build made it, kept with headers that a script injected into a page
+  // could have put with it: a reporting policy would make every launch report to its endpoint.
+  await page.evaluate(
+    async (name) => {
+      const cache = await caches.open(name);
+      const body = await (await cache.match("/"))?.arrayBuffer();
+      await cache.put(
+        "/",
+        new Response(body, {
+          headers: {
+            "Content-Type": "text/html",
+            "Content-Security-Policy-Report-Only": "default-src 'none'; report-uri /report",
+            "X-Added": "1",
+          },
+        }),
+      );
+    },
+    `pwa-${versionOf("a")}`,
+  );
+  await serve(context, "offline");
+  const response = await page.reload();
+  const headers = response?.headers() ?? {};
+  expect(headers["content-type"]).toMatch(/^text\/html/v);
+  expect(headers["content-security-policy"]).toMatch(/^default-src 'none'/v);
+  expect(headers).not.toHaveProperty("content-security-policy-report-only");
+  expect(headers).not.toHaveProperty("x-added");
+  expect(await buildOf(page)).toBe("a");
+});
+
 test("a new version installs in the background and waits, until the user agrees", async ({
   page,
   context,
