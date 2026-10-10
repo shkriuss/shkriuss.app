@@ -1,7 +1,7 @@
 import type { AppStorage, StorageStatus } from "@shkriuss/pwa";
 import { Button } from "@shkriuss/ui";
 import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
-import { m } from "./messages.ts";
+import { m } from "./data-messages.ts";
 
 export interface StorageSectionProps {
   /** The app's storage, from `appStorage()` of `@shkriuss/pwa`. */

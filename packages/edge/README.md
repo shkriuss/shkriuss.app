@@ -12,12 +12,13 @@ import { edge } from "@shkriuss/edge";
 export default defineConfig({ plugins: [react(), edge()] });
 ```
 
-| Option             | Meaning                                                                                                                                   |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `appId`            | The app's permanent id, which is also its subdomain. Leave it out for the hub.                                                            |
-| `allowedFeatures`  | Browser features the app needs, such as `camera`; every other one stays denied.                                                           |
-| `webAssembly`      | Whether the app's workers compile WebAssembly, which its policy then allows (see [WebAssembly](#webassembly)).                            |
-| `excludedPackages` | Packages whose code the build must not have: those that keep data, for an app without data (see [Excluded packages](#excluded-packages)). |
+| Option             | Meaning                                                                                                                                                                                             |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `appId`            | The app's permanent id, which is also its subdomain. Leave it out for the hub.                                                                                                                      |
+| `allowedFeatures`  | Browser features the app needs, such as `camera`; every other one stays denied.                                                                                                                     |
+| `webAssembly`      | Whether the app's workers compile WebAssembly, which its policy then allows (see [WebAssembly](#webassembly)).                                                                                      |
+| `excludedPackages` | Packages whose code the build must not have: those that keep data, for an app without data (see [Excluded packages](#excluded-packages)).                                                           |
+| `excludedFiles`    | Files whose code the build must not have, though it may have the rest of their package: the shell's text for apps with data, for an app without data (see [Excluded packages](#excluded-packages)). |
 
 After Vite has written the production build, the plugin:
 
@@ -69,6 +70,8 @@ const { instance } = await WebAssembly.instantiateStreaming(fetch(module));
 ## Excluded packages
 
 An app without data excludes the packages that keep data, `@shkriuss/data` and `@shkriuss/backup`: `app()` of `@shkriuss/shell/vite` passes them as `excludedPackages` for `keepsData: false`. The build fails if the page, a worker or the service worker has the code of an excluded package, even through another package. A module belongs to the package named in the nearest `package.json` with a name.
+
+It also excludes the shell's text for apps with data, `data-messages.ts` of `@shkriuss/shell`, which `app()` passes, by its path, as `excludedFiles`: the app has the shell, but not its storage, backups and other parts for apps with data, which all show that text, nor the text itself, which only those parts use.
 
 Only code that the build has counts: a module that tree-shaking removed entirely does not, nor a worker whose module it removed. Vite builds every worker that a module refers to, even when tree-shaking then removes that module, and leaves such a worker out of the build; so does the plugin.
 

@@ -1,6 +1,6 @@
 import { BackupError, type BackupErrorCode } from "@shkriuss/backup";
 import { DataLayerError, isStorageFull } from "@shkriuss/data";
-import { m } from "./messages.ts";
+import { m } from "./data-messages.ts";
 
 /** The message of each error of backup format §6, but `other-app`, which names the app. */
 const MESSAGES: Readonly<Record<Exclude<BackupErrorCode, "other-app">, () => string>> = {

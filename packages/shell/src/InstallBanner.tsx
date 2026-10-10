@@ -3,7 +3,7 @@ import { Banner, Button } from "@shkriuss/ui";
 import { useContext, useRef, useState, useSyncExternalStore } from "react";
 import { backupStatusOf, type DeviceReader } from "./backup-status.ts";
 import { FrameContext } from "./frame.ts";
-import { m } from "./messages.ts";
+import { m } from "./data-messages.ts";
 import { useStatusChecks } from "./useStatusChecks.ts";
 
 export interface InstallBannerProps {

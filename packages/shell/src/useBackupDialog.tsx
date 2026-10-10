@@ -10,7 +10,7 @@ import { Button, Dialog, TextField } from "@shkriuss/ui";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { backupStatusOf } from "./backup-status.ts";
 import { browserSaveEnvironment } from "./browser.ts";
-import { m } from "./messages.ts";
+import { m } from "./data-messages.ts";
 import { samePassphrase } from "./passphrases.ts";
 import { saveFile } from "./save.ts";
 

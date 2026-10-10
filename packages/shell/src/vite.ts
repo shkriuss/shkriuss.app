@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { assertAppId, type BrowserFeature, edge } from "@shkriuss/edge";
 import {
   type PwaOptions,
@@ -38,7 +39,8 @@ export interface AppConfig extends WebAppManifestOptions {
   /**
    * Whether the app keeps data on the device, as most apps do: in a database of
    * `@shkriuss/data`, which the backups of `@shkriuss/backup` save. True if left out. An app
-   * without data keeps nothing, and its build fails if it has the code of either package.
+   * without data keeps nothing, and its build fails if it has the code of either package, or the
+   * shell's text for apps with data.
    */
   readonly keepsData?: boolean;
   /**
@@ -50,6 +52,12 @@ export interface AppConfig extends WebAppManifestOptions {
 
 /** The packages that keep data, whose code an app without data must not have. */
 const DATA_PACKAGES = ["@shkriuss/data", "@shkriuss/backup"];
+
+/**
+ * The shell's text that only apps with data show, which an app without data must not have, and
+ * so none of the shell's parts that show it, such as the backups.
+ */
+const DATA_MESSAGES = fileURLToPath(new URL("./data-messages.ts", import.meta.url));
 
 export interface AppBuildOptions {
   /**
@@ -125,7 +133,7 @@ export function app(config: AppConfig, options: AppBuildOptions = {}): UserConfi
         appId: id,
         ...(allowedFeatures === undefined ? {} : { allowedFeatures }),
         ...(webAssembly === undefined ? {} : { webAssembly }),
-        ...(keepsData ? {} : { excludedPackages: DATA_PACKAGES }),
+        ...(keepsData ? {} : { excludedPackages: DATA_PACKAGES, excludedFiles: [DATA_MESSAGES] }),
       }),
     ],
   };

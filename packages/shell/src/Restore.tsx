@@ -14,7 +14,7 @@ import type {
 } from "@shkriuss/data";
 import { Button, Dialog, FileButton, TextField } from "@shkriuss/ui";
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import { m } from "./messages.ts";
+import { m } from "./data-messages.ts";
 import { restoreErrorMessage } from "./restore-errors.ts";
 
 /** What restoring uses of the app's database, from `openDatabase()` of `@shkriuss/data`. */

@@ -526,6 +526,31 @@ describe("edge", () => {
     });
   });
 
+  it("fails the build if it has a file that the app excludes, though it may have the rest of its package", async () => {
+    const root = await createApp();
+    await writeFile(path.join(root, "text.js"), 'export const hello = () => "Hello";\n');
+    await writeFile(
+      path.join(root, "data-text.js"),
+      'export const saved = () => "Saved";\nexport const unused = () => 0;\n',
+    );
+    const excluding: EdgeOptions = { excludedFiles: [path.join(root, "data-text.js")] };
+
+    // Imported, but tree-shaking removed every line of it: none of its code is in the build.
+    await writeFile(
+      path.join(root, "main.js"),
+      'import { hello } from "./text.js";\nimport { unused } from "./data-text.js";\nconsole.info(hello());\n',
+    );
+    await buildApp(root, "/", excluding);
+
+    await writeFile(
+      path.join(root, "main.js"),
+      'import { saved } from "./data-text.js";\nconsole.info(saved());\n',
+    );
+    await expect(buildApp(root, "/", excluding)).rejects.toThrow(
+      "The build has data-text.js, which this app excludes.",
+    );
+  });
+
   it("allows the policy for a service worker at /sw.js", async () => {
     const root = await createApp();
     await mkdir(path.join(root, "public"));

@@ -3,7 +3,7 @@ import { useContext, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { FrameContext } from "./frame.ts";
 import { backupStatusOf } from "./backup-status.ts";
-import { m } from "./messages.ts";
+import { m } from "./data-messages.ts";
 import { LATER, reminderFor } from "./reminder.ts";
 import { type BackupDatabase, useBackupDialog } from "./useBackupDialog.tsx";
 import { useStatusChecks } from "./useStatusChecks.ts";

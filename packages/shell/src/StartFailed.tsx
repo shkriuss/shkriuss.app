@@ -2,7 +2,7 @@ import { DataLayerError, isStorageFull, rescueSnapshot, type Schemas } from "@sh
 import { Button } from "@shkriuss/ui";
 import { useMemo } from "react";
 import { type Frame, FrameContext } from "./frame.ts";
-import { m } from "./messages.ts";
+import { m } from "./data-messages.ts";
 import { Screen } from "./Screen.tsx";
 import { type BackupMaker, useBackupDialog } from "./useBackupDialog.tsx";
 

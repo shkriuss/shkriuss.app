@@ -177,6 +177,19 @@ describe("app", () => {
       );
     });
 
+    it("builds with the shell's parts that every app has", async () => {
+      const root = await createAppUsing("../src/index.ts", "SettingsScreenWithoutData");
+      await expect(buildApp(root, withoutData)).resolves.toBeTypeOf("function");
+    });
+
+    it("does not build with the shell's text for apps with data, nor the parts that show it", async () => {
+      // The storage section has no code of the packages that keep data, only that text.
+      const root = await createAppUsing("../src/index.ts", "StorageSection");
+      await expect(buildApp(root, withoutData)).rejects.toThrow(
+        "The build has packages/shell/src/data-messages.ts, which this app excludes.",
+      );
+    });
+
     it("differs from an app with data, as most are, which builds with that code", async () => {
       const root = await createAppUsing("@shkriuss/data", "openDatabase");
       await expect(buildApp(root, NOTES)).resolves.toBeTypeOf("function");

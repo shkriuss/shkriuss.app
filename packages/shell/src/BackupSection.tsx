@@ -2,7 +2,7 @@ import type { Schemas } from "@shkriuss/data";
 import { Button } from "@shkriuss/ui";
 import { useEffect, useId, useSyncExternalStore } from "react";
 import { backupStatusOf } from "./backup-status.ts";
-import { m } from "./messages.ts";
+import { m } from "./data-messages.ts";
 import { Restore, type RestoreDatabase } from "./Restore.tsx";
 import { type BackupDatabase, useBackupDialog } from "./useBackupDialog.tsx";
 
