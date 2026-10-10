@@ -81,10 +81,29 @@ test("the frame leads to every page, whose heading then takes the focus", async 
     "href",
     SOURCE_URL,
   );
-  await expect(footer.getByRole("link", { name: "Licenses" })).toHaveAttribute(
-    "href",
-    "/licenses.txt",
-  );
+  await expect(footer.getByRole("link", { name: "Licenses" })).toHaveAttribute("href", "/licenses");
+});
+
+test("the licenses show on a page, from the hub's /licenses.txt, as text that wraps", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("contentinfo").getByRole("link", { name: "Licenses" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Licenses" })).toBeFocused();
+  await expect(page).toHaveTitle("Licenses – shkriuss.app");
+  const text = page.getByRole("main").locator("pre");
+  await expect(text).toContainText(/^react \d+\.\d+\.\d+ \(MIT\)$/m);
+  // All of the file, as the build wrote it.
+  const file = await (await page.request.get("/licenses.txt")).text();
+  expect(await text.textContent()).toBe(file);
+  // The long lines wrap: the page does not scroll sideways, even on a phone.
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+    ),
+  ).toBe(true);
+  const results = await new AxeBuilder({ page }).analyze();
+  expect(results.violations).toEqual([]);
 });
 
 test("the install page explains each kind of device", async ({ page }) => {
