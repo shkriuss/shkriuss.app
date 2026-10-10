@@ -550,6 +550,35 @@ test("blank names and items are refused, with what to do", async ({ page }) => {
   await expect(page.getByRole("main")).toContainText("No items yet.");
 });
 
+/** Submits a field's form twice at once, as a double tap on "Add" can before the first is saved. */
+async function submitTwice(field: Locator): Promise<void> {
+  await field.evaluate((input: HTMLInputElement) => {
+    input.form?.requestSubmit();
+    input.form?.requestSubmit();
+  });
+}
+
+test("a double submit adds the list, or the item, once", async ({ page }) => {
+  await open(page);
+  const list = page.getByRole("textbox", { name: "New list" });
+  await list.fill("Groceries");
+  await submitTwice(list);
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Groceries", exact: true }),
+  ).toBeFocused();
+
+  const item = page.getByRole("textbox", { name: "New item" });
+  await item.fill("Milk");
+  await submitTwice(item);
+  await expect(item).toHaveValue("");
+  // Changes are saved in turn: once "Eggs" is there, whatever the double submit added is too.
+  await addItem(page, "Eggs");
+  await expect(texts(page, "To do")).toHaveText(["Milk", "Eggs"]);
+
+  await toLists(page);
+  await expect(lists(page)).toHaveText(["Groceries 0 of 2 done"]);
+});
+
 test("a list follows the changes made in another window, up to its deletion", async ({
   page,
   context,

@@ -25,20 +25,29 @@ export function Items({ db }: ItemsProps) {
   const [failure, setFailure] = useState<string>();
   const field = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLUListElement>(null);
+  // Whether an add is under way. A double tap submits twice before the first item is saved and
+  // the field empties: the second submit adds nothing, or it would add the item again.
+  const adding = useRef(false);
 
   async function add(): Promise<void> {
+    if (adding.current) {
+      return;
+    }
     const value = text.trim();
     if (value === "") {
       setMissing(true);
       field.current?.focus();
       return;
     }
+    adding.current = true;
     try {
       await db.change(async (change) => change.create("items", { text: value }));
       setText("");
       setFailure(undefined);
     } catch (error) {
       setFailure(isStorageFull(error) ? m.storageFull() : m.addFailed());
+    } finally {
+      adding.current = false;
     }
   }
 
