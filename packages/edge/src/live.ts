@@ -5,7 +5,7 @@ import { MANIFEST_FILE, parseManifest, replacedAssets } from "./manifest.ts";
 export type Fetch = (url: string) => Promise<Response>;
 
 export interface LiveCheck {
-  /** False when the origin serves no manifest yet, as before the first deployment. */
+  /** False when the host has no DNS record yet, as before the first deployment. */
   readonly compared: boolean;
   /** Files in `/assets/` whose content would change under the same name. */
   readonly replaced: readonly string[];
@@ -23,11 +23,11 @@ const fetchWithoutRedirects: Fetch = (url) => fetch(url, { redirect: "manual" })
 /**
  * Compares a build with what `origin` serves now, using the published manifests.
  *
- * Before the first deployment there is nothing to compare: the host has no DNS record yet,
- * or it serves no manifest, so it answers 404 or the single-page fallback answers with HTML.
- * Any other answer is an error, such as an error status, a redirect or a challenge page, and
- * so is any other network failure: a check that skipped itself whenever the origin misbehaved
- * would protect nothing.
+ * Before the first deployment there is nothing to compare: the host has no DNS record yet.
+ * Every other answer is an error: an error status, a redirect or a challenge page, and so a
+ * 404 or the single-page fallback's HTML in place of the manifest, which a deployment without
+ * one would answer, and any other network failure. A check that skipped itself whenever the
+ * origin misbehaved would protect nothing.
  */
 export async function checkAgainstLive(
   directory: string,
@@ -48,9 +48,6 @@ export async function checkAgainstLive(
   const type = response.headers.get("content-type") ?? "";
   if (response.status !== 200 || !type.startsWith("text/plain")) {
     await response.body?.cancel();
-    if (response.status === 404 || (response.status === 200 && type.startsWith("text/html"))) {
-      return { compared: false, replaced: [] };
-    }
     throw new Error(
       `${url} answered with status ${response.status} and content type "${type}", not a manifest.`,
     );
