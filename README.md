@@ -6,12 +6,12 @@ Private, offline-first web apps — one hub, many small apps, one shared platfor
 - **Apps:** each at its own address, for example `https://notes.shkriuss.app`
 - **Your data stays on your device.** Nothing is sent to a server. Back it up as an encrypted file whenever you like.
 
-> **Status:** Phase 1 — platform v1. The foundations, the platform's packages, the app template and the hub are done. The pilot app, Checklists, is built, and CI deploys it as it does the hub; testing it on real devices comes next. See the [roadmap](docs/roadmap.md).
+> **Status:** Phase 1 — platform v1. The foundations, the platform's packages, the app template and the hub are done. The pilot app, Checklists, and the first app of Phase 2, Grammar, are built, and CI deploys them as it does the hub; testing them on real devices comes next. See the [roadmap](docs/roadmap.md).
 
 ## Principles
 
 - **Local-first.** Every app works fully offline. There are no accounts and no sync: your data leaves your device only in a backup file you export yourself, encrypted by default.
-- **Private by default.** No tracking, analytics, cookies or third-party code.
+- **Private by default.** No tracking, analytics or cookies, and nothing is loaded from anyone else's servers.
 - **One platform.** All apps share the same design, structure, storage, backups and security, so they look and behave alike and every improvement reaches every app.
 - **Verifiable.** All source code is public under the AGPL-3.0 license.
 

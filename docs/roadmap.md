@@ -1,6 +1,6 @@
 # Roadmap
 
-- **Last updated:** 2026-10-06
+- **Last updated:** 2026-10-10
 - A phase is complete when its exit criteria are met. All work happens in small pull requests.
 
 ## Phase 0 — Foundations

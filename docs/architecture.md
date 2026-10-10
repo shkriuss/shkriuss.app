@@ -115,7 +115,7 @@ Backups are the only way data leaves a device, the only protection against losin
 
 - **Encrypted by default.** A versioned JSON document encrypted in the standard [age](https://age-encryption.org) format with a passphrase (scrypt). Files end in `.age` and can also be decrypted with the `age` command-line tool, so users are never locked in. A generated passphrase is offered. Deriving the key takes seconds and 256 MiB on a phone, so encryption and decryption run in a worker that ends after each operation.
 - **Plain JSON export** is available only after an explicit warning.
-- **Readable exports** (CSV, Markdown, iCalendar and so on) where they suit an app. They are for other tools, not for restoring.
+- **Readable exports** (CSV, Markdown, iCalendar and so on) come where they suit an app; no app has one yet. They are for other tools, not for restoring.
 - **Import pipeline:** size check → decrypt → parse → validate against the schema → migrate → preview ("12 new, 3 updated, 1 deleted") → merge → commit in one transaction → report. A failure at any step changes nothing.
 - **Saving:** the share sheet (Web Share API) on phones and tablets — Files, Google Drive, iCloud Drive — with a download fallback. Browsers decide which files they share: Chrome shares only some types, which leave out backup files, so it downloads them. Automatic backup to a chosen folder (File System Access API, desktop Chromium) is planned. It needs a way to encrypt with nobody present without storing the passphrase, which requires its own design and ADR first ([backup-format.md §9](specs/backup-format.md#9-not-covered)).
 - **Reminders:** each app tracks when it was last backed up and how many changes it has had since ([data-model.md §7](specs/data-model.md#7-storage)). A banner in the frame reminds the user to back up when there are changes and no backup yet, or the last backup is a week old. It appears when the app opens or comes back into view, never in the middle of a task, and its "Back up" makes the backup at once.
@@ -124,21 +124,21 @@ Backups are the only way data leaves a device, the only protection against losin
 
 ## 9. Offline, install and updates
 
-- **Manifest:** generated per app with a stable `id`, `scope: /`, standalone display, maskable and monochrome icons, theme colors, and shortcuts or `share_target` where an app needs them. Every icon, and the iOS touch icon and the favicon, is drawn at build time from the app's glyph, given as SVG path data, on its accent color, by `@shkriuss/pwa` itself, without dependencies.
+- **Manifest:** generated per app with a stable `id`, `scope: /`, standalone display, maskable and monochrome icons, and theme colors; shortcuts and `share_target` join it once an app needs them. Every icon, and the iOS touch icon and the favicon, is drawn at build time from the app's glyph, given as SVG path data, on its accent color, by `@shkriuss/pwa` itself, without dependencies.
 - **Service worker:** our own, in `@shkriuss/pwa` (no Workbox), at `/sw.js`, registered through the platform's Trusted Types policy for worker scripts ([ADR 0011](decisions/0011-worker-trusted-types-policy.md)). The [service worker spec](specs/service-worker.md) gives every detail.
   - It precaches the build output, so the app opens offline instantly. Large files that not every use needs, such as Grammar's checker, it keeps once the app first uses them, and from then on at every update ([ADR 0019](decisions/0019-files-kept-on-first-use.md)).
   - It serves the app shell for navigations and never caches anything cross-origin.
   - **Updates:** a new version installs in the background and waits. The app shows "Update available" and reloads when the user agrees, never in the middle of a task.
   - **Kill switch:** a documented, tested procedure replaces a broken service worker without touching user data. It never brings back a build with an older schema version, which could not open the upgraded database (§7).
-- **Install:** Android and desktop Chromium use the browser's install prompt, which an app shows from its settings when the user asks; iOS uses a guided "Add to Home Screen". Other browsers may install from their menu. Where the Web Install API exists (desktop Chromium), the hub can offer one-click install of an app as an enhancement.
+- **Install:** Android and desktop Chromium use the browser's install prompt, which an app shows from its settings when the user asks; iOS uses a guided "Add to Home Screen". Other browsers may install from their menu. Where the Web Install API exists (desktop Chromium), the hub may later offer to install an app in one click; it does not yet.
 - **iOS:** every installed home-screen app has its own storage, separate from Safari, and Safari may delete a site's data after seven days of Safari use without a visit to that site (installed apps are exempt). In Safari on iOS, apps therefore suggest installing _before_ the user enters data, with a banner while the device has none, and their settings explain how to move data into the installed app with a backup.
 
 ## 10. User interface
 
 - React 19, Vite, TypeScript and TanStack Router, with routes declared in code ([ADR 0005](decisions/0005-frontend-stack.md), [ADR 0013](decisions/0013-routes-in-code.md)). The React Compiler waits for support of Babel 8 ([roadmap](roadmap.md)).
 - **Navigation:** the shell's frame leads to the app's first screen and to its settings, and each screen titles the page, but never with what the user entered, such as a list's name: browsers keep titles in their history. Links between screens open them without loading the page again, and the new screen's heading takes the focus, which screen readers then read.
-- `@shkriuss/ui` wraps React Aria Components with our design tokens (Tailwind CSS 4): one look across all apps with a per-app accent color, light and dark themes, system fonts and bundled SVG icons.
-- Layouts are phone-first, with two-pane layouts for tablets and desktops. They respect safe areas, reduced motion and contrast preferences.
+- `@shkriuss/ui` wraps React Aria Components with our design tokens (Tailwind CSS 4): one look across all apps, light and dark themes, and system fonts. An app's accent color is the background of its icons; on the screens, every app has the same accent.
+- Layouts are phone-first: one column of readable width, on every screen size; two-pane layouts for tablets and desktops come once an app needs them. They respect safe areas, reduced motion and Windows' contrast themes (forced colors). A test holds the colors of both themes to the contrast that WCAG AA asks: 4.5:1 for text, 3:1 for the borders of controls and the focus outline.
 - Accessibility target: WCAG 2.2 AA.
 - English UI. All text comes from typed message modules of `@shkriuss/i18n` ([ADR 0012](decisions/0012-typed-messages.md)), and lint refuses text in JSX. Dates, numbers and lists are formatted with `Intl` using the device's regional settings: in English for the device's region, such as `en-DE` for a device set to German, where the browser has it, and otherwise in `en` with the device's 12-hour or 24-hour clock.
 
@@ -202,7 +202,7 @@ Staging additionally sends `X-Robots-Tag: noindex`. That is a host rule in the s
 ## 14. Browser support
 
 - Current Chrome, Edge and Firefox, and Safari 18 or later (iOS, iPadOS and macOS).
-- Baseline "widely available" features are used freely. Newer features are used only with a fallback, for example the Web Install API, the File System Access API, and Temporal (with a polyfill where it is missing).
+- Baseline "widely available" features are used freely. Newer features are used only with a fallback: the share sheet, for example, falls back to a download (§8).
 - **Real devices:** iPhone (Safari tab and installed app), Pixel (Chrome tab and installed app), Pixel Tablet (Chrome, large screen). Desktop browsers are covered by automated tests.
 
 ## 15. Quality
@@ -214,7 +214,7 @@ Every pull request must pass the gates in [ADR 0008](decisions/0008-quality-gate
 - component tests in real browsers (Chromium, Firefox, WebKit);
 - Playwright end-to-end tests against the production build served with production headers, where any CSP or integrity violation, a worker's included, fails the run; a test app that is never deployed (`tooling/platform-e2e`) tests the shared platform the same way, and the app template (`tooling/app-template`) is tested as every app is. CI runs them in six jobs at once, each browser's projects in two halves, and its check "End-to-end" passes once all six have;
 - accessibility checks (axe);
-- performance and bundle-size budgets.
+- performance and bundle-size budgets, which CI does not check yet.
 
 ## 16. Future: accounts and sync
 

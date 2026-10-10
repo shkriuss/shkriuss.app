@@ -10,7 +10,7 @@ Instructions for Claude Code and for anyone else changing this repository. Read 
 - All user data stays on the user's device. The only way data leaves is a backup file the user exports, encrypted by default. There are no accounts, no sync and no backend.
 - Every app is built from the same shared platform in `packages/`, so apps look and behave alike and fixes reach every app at once.
 
-**Current phase: 1 — Platform v1 (local-only).** Phase 0 is complete: the toolchain, repository checks and CI are in place, and a placeholder hub is live on staging and production. In Phase 1, the specs, the platform's packages, the app template, `create-app` and the hub are done. The pilot app, Checklists (`apps/checklists`), is built, and CI deploys every app; testing it on real devices comes next (step 1.5). See `docs/roadmap.md`.
+**Current phase: 1 — Platform v1 (local-only).** Phase 0 is complete: the toolchain, repository checks and CI are in place, and a placeholder hub is live on staging and production. In Phase 1, the specs, the platform's packages, the app template, `create-app` and the hub are done. The pilot app, Checklists (`apps/checklists`), is built, and CI deploys every app; testing it on real devices comes next (step 1.5). The first app of Phase 2, Grammar (`apps/grammar`), is built and deployed too, and waits for the same checks. See `docs/roadmap.md`.
 
 ## Read first
 
@@ -39,7 +39,7 @@ Instructions for Claude Code and for anyone else changing this repository. Read 
 4. **Never weaken security headers** (CSP, Trusted Types, Integrity-Policy, COOP/COEP, Permissions-Policy) to make something work. Fix the code, or propose an ADR. Start workers and the service worker only with `@shkriuss/edge/workers`, whose policy is the only Trusted Types policy an app may have; never create another ([ADR 0011](docs/decisions/0011-worker-trusted-types-policy.md)). Only an app that declares `webAssembly` in its `app.config.ts` may compile WebAssembly, and only in its workers ([ADR 0014](docs/decisions/0014-webassembly.md)).
 5. **Crypto only through `@shkriuss/backup`** (the `age` format and WebCrypto). Never implement cryptographic primitives. Never log, store or transmit passphrases or user data.
 6. **Imported files are hostile:** size-limit, parse, validate against the schema, migrate, preview, then apply in a single transaction.
-7. **Dependencies:** prefer the web platform and existing packages. A new runtime dependency needs a justification in the pull request: purpose, size, maintenance status, and a license compatible with AGPL-3.0 (MIT, BSD, ISC, Apache-2.0). Its license text ships in every app's `/licenses.txt`, which the build writes. Material of others in our own files starts with a legal comment, `/*! … */`, that names its source and license.
+7. **Dependencies:** prefer the web platform and existing packages. A new runtime dependency needs a justification in the pull request: purpose, size, maintenance status, and a license compatible with AGPL-3.0: one that `tooling/checks/license-policy.json` allows, such as MIT, BSD, ISC or Apache-2.0, or another after the maintainer has reviewed it. Its license text ships in every app's `/licenses.txt`, which the build writes. Material of others in our own files starts with a legal comment, `/*! … */`, that names its source and license.
 
 ### Data
 
@@ -93,7 +93,7 @@ Node.js 22.18 or later (CI uses the version in `.node-version`) and pnpm via Cor
 | `pnpm check`                                                  | Repository checks: manifests, HTML security, runtime licenses, Markdown style, Wrangler configuration, app structure, imports, documentation links      |
 | `pnpm create-app <id> --name <name> --description <sentence>` | Create an app from the app template, in `apps/<id>`; with `--no-data`, an app that keeps no data ([`tooling/create-app`](tooling/create-app/README.md)) |
 | `pnpm e2e`                                                    | End-to-end tests (Playwright) against the production builds, served with the real headers                                                               |
-| `pnpm verify`                                                 | Everything CI runs, in order — run it before every push                                                                                                 |
+| `pnpm verify`                                                 | Every check of CI, in order, except the workflow audit and dependency review, which only CI runs — run it before every push                             |
 | `pnpm --filter <name> <task>`                                 | Run one task in one package, e.g. `pnpm --filter @shkriuss/checks test`                                                                                 |
 
 The end-to-end tests need Playwright's browsers once: `pnpm --filter @shkriuss/hub exec playwright install chromium firefox webkit`. Claude Code cloud sessions can only use their preinstalled Chromium; there, Firefox and WebKit run in CI.

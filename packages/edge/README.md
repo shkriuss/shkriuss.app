@@ -124,4 +124,4 @@ It skips the comparison only while nothing is deployed: when the host has no DNS
 
 `securityHeaders()` returns the header set from [architecture §12](../../docs/architecture.md#12-security). Change it only together with the architecture document, and never relax it to make something work.
 
-The end-to-end tests of each app check these headers against a real server and prove that the browser refuses changed scripts, scripts without a hash and HTML strings in DOM injection sinks.
+The hub's end-to-end tests (`apps/hub/e2e/security.spec.ts`) check these headers against a real server and prove that the browser refuses changed scripts, scripts without a hash and HTML strings in DOM injection sinks. Every app's end-to-end tests run under the same headers, and fail on any violation that the browser reports.
