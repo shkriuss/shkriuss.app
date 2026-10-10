@@ -130,8 +130,14 @@ test("the security page says how to check a site, and how to report a problem", 
     "Check what a site serves",
     "Report a problem",
   ]);
-  await expect(page.getByRole("main").locator("pre")).toContainText(
-    "gh attestation verify index.html --repo shkriuss/shkriuss.app",
+  // The command accepts only a file that the CI built from main: without its options, any
+  // workflow of the repository, on any branch, could have signed it.
+  await expect(page.getByRole("main").locator("pre")).toHaveText(
+    [
+      "curl -sSL -o index.html https://shkriuss.app/",
+      "gh attestation verify index.html --repo shkriuss/shkriuss.app \\",
+      "  --signer-workflow shkriuss/shkriuss.app/.github/workflows/ci.yml --source-ref refs/heads/main",
+    ].join("\n"),
   );
   await expect(page.getByRole("link", { name: "Report a vulnerability" })).toHaveAttribute(
     "href",
