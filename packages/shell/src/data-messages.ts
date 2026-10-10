@@ -35,6 +35,9 @@ export const messages = defineMessages((format) => ({
   startOutdatedTitle: () => "This app was updated",
   startOutdatedText: () =>
     "A newer version of this app has opened its data on this device already. Reload the app to use it.",
+  startBlockedTitle: () => "Waiting for another window",
+  startBlockedText: () =>
+    "This app is open in another window or tab, with an older version, which has not closed its data yet. Close this app's other windows and tabs; if the app does not start then, reload it.",
   storage: () => "Storage",
   usage: (bytes: number) => `This app stores ${format.bytes(bytes)} on this device.`,
   usageUnknown: () => "Your browser does not say how much this app stores.",
@@ -62,7 +65,7 @@ export const messages = defineMessages((format) => ({
     "Choose a passphrase of at least 12 characters that is hard to guess, and type it twice. Without it, nobody can open the backup, not even you.",
   passphrase: () => "Passphrase",
   passphraseAgain: () => "Passphrase again",
-  tooShort: () => "Use at least 12 characters.",
+  tooShort: () => "Use at least 12 characters. Spaces do not count.",
   easyToGuess: () =>
     "This is easy to guess. Avoid repeats, runs such as 123456 or qwerty, and common passwords.",
   different: () => "The two passphrases are not the same.",
@@ -87,7 +90,12 @@ export const messages = defineMessages((format) => ({
   failedTitle: () => "No backup",
   tooLarge: () => "This app's data is too large for a backup.",
   failed: () => "The backup could not be made. Try again.",
+  noMemoryToBackUp: () =>
+    "This device does not have enough free memory to make the backup right now. Close other apps or tabs and try again.",
   tryAgain: () => "Try again",
+  notLoadedTitle: () => "The backup could not start",
+  notLoadedText: () =>
+    "The app could not load the part of itself that makes backups. Try again; if that fails, reload the app.",
   restore: () => "Restore from a backup",
   readingTitle: () => "Reading the backup",
   reading: () => "Reading the backup… An encrypted one takes a few seconds.",
@@ -115,6 +123,8 @@ export const messages = defineMessages((format) => ({
   fileTooLarge: () => "The file is too large to be a backup.",
   notABackup: () => "This is not a backup file.",
   damaged: () => "The file is damaged or not supported.",
+  noMemory: () =>
+    "This device does not have enough free memory to open the backup right now. Close other apps or tabs and try again.",
   otherApp: (app: string | undefined) =>
     app === undefined
       ? "This is a backup of another app."

@@ -18,6 +18,8 @@ Extend one of them from a package's `tsconfig.json`:
 
 Relative imports always include the file extension (`./file.ts`), so the same source works in Node.js, Vite and Vitest.
 
+A package with browser code has two configurations: `tsconfig.json`, the whole package, with Node's types for its tests, its build and its end-to-end tests, and `tsconfig.browser.json`, only `src/`, with the browser's types alone (`"types": ["vite/client"]`), so that nothing of Node's, such as `process` or `Buffer`, type-checks in code that runs in the browser. Its `typecheck` script runs both: `tsc && tsc -p tsconfig.browser.json`.
+
 ## End-to-end tests
 
 `@shkriuss/config/playwright` is the Playwright setup that every app shares ([architecture §15](../../docs/architecture.md#15-quality)). An app's `playwright.config.ts` only chooses a port of its own:

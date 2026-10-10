@@ -1,6 +1,7 @@
 import { Button, TextField } from "@shkriuss/ui";
 import { type ReactNode, type RefObject, useRef, useState } from "react";
 import { m } from "../../messages.ts";
+import { Failure } from "./Failure.tsx";
 
 /*
  * Names and texts are never blank (spec §1). A field says so when the user submits it blank,
@@ -41,9 +42,13 @@ export function AddForm({ label, missing, maxLength, onAdd, inputRef }: AddFormP
       return;
     }
     adding.current = true;
+    // The field empties at once, before the add is saved: what the user types meanwhile is the
+    // next value, which an empty field that comes later would drop. If the add fails, the field
+    // gets its text back, unless the user typed on.
+    setValue("");
     try {
-      if (await onAdd(trimmed)) {
-        setValue("");
+      if (!(await onAdd(trimmed))) {
+        setValue((typed) => (typed === "" ? value : typed));
       }
     } finally {
       adding.current = false;
@@ -135,11 +140,7 @@ export function TextForm({
         maxLength={maxLength}
         inputRef={input}
       />
-      {failure === undefined ? null : (
-        <p role="alert" className="text-danger">
-          {failure}
-        </p>
-      )}
+      <Failure message={failure} />
       <div className="flex flex-wrap gap-2">
         <Button type="submit" variant="primary">
           {m.save()}

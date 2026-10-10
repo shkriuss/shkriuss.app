@@ -1,3 +1,4 @@
+import type { Snapshot } from "@shkriuss/data";
 import { describe, expect, it, vi } from "vitest";
 import type * as Age from "./age.ts";
 import { encrypt } from "./age.ts";
@@ -43,6 +44,31 @@ async function withNotes(): ReturnType<typeof openTestDatabase> {
 
 async function bytesOf(file: Blob): Promise<Uint8Array> {
   return new Uint8Array(await file.arrayBuffer());
+}
+
+/** A snapshot of one note, whose title has `length` characters of one byte each. */
+function titled(length: number): Snapshot {
+  return {
+    schemaVersion: 1,
+    stores: {
+      notes: [
+        {
+          id: "01a10307-b840-78aa-ab29-1a1138faaff6",
+          v: 1,
+          data: { title: "x".repeat(length) },
+          clock: { title: "001791052200000:00000:9f86d081884c7d65" },
+        },
+      ],
+      settings: [],
+    },
+    fromFuture: undefined,
+    counted: 0,
+  };
+}
+
+/** What `createBackupFile()` uses of a database whose only note has a title of `length`. */
+function withTitle(length: number): { snapshot(): Promise<Snapshot> } {
+  return { snapshot: () => Promise.resolve(titled(length)) };
 }
 
 describe("createBackupFile and readBackupFile (backup format §4, §5.1–§5.5)", () => {
@@ -101,18 +127,30 @@ describe("createBackupFile and readBackupFile (backup format §4, §5.1–§5.5)
     await expect(readBackupFile(opened, null, OPTIONS)).rejects.toThrow(TypeError);
   });
 
-  it("refuse a passphrase shorter than 12 characters", async () => {
+  it("refuse a passphrase shorter than 12 characters, spaces not counted", async () => {
     const db = await withNotes();
-    await expect(
-      createBackupFile(db, { app: APP, passphrase: "eleven char", made: MADE }),
-    ).rejects.toThrow(TypeError);
+    for (const passphrase of ["eleven char", "twelve chars"]) {
+      await expect(createBackupFile(db, { app: APP, passphrase, made: MADE })).rejects.toThrow(
+        TypeError,
+      );
+    }
     const { file } = await createBackupFile(db, {
       app: APP,
-      passphrase: "twelve chars",
+      passphrase: "twelve-chars",
       made: MADE,
     });
     expect(file.name).toBe("shkriuss-notes-2026-10-05.age");
   });
+
+  it("make a plain backup of exactly 64 MiB, and refuse one of a byte more: every backup must import", async () => {
+    const around = writeBackup(APP, titled(0), MADE).length;
+    const options = { app: APP, passphrase: null, made: MADE };
+    const largest = await createBackupFile(withTitle(MAX_BACKUP_BYTES - around), options);
+    expect(largest.file.size).toBe(MAX_BACKUP_BYTES);
+    await expect(
+      createBackupFile(withTitle(MAX_BACKUP_BYTES - around + 1), options),
+    ).rejects.toThrow(expect.objectContaining({ name: "BackupError", code: "too-large" }));
+  }, 30_000);
 
   it("refuse a backup that would be too large once encrypted: every backup must import", async () => {
     // Encryption adds 16 bytes to every 64 KiB, so a document just under 64 MiB grows over it.

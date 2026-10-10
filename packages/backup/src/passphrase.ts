@@ -51,20 +51,35 @@ export function normalizePassphrase(passphrase: string): string {
 const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 
 /**
- * Whether a passphrase that the user picks is long enough: 12 characters or more, counted as
- * people see them, so that an emoji or a letter with an accent counts once.
+ * What people do not see in a passphrase: white space, and format characters such as a
+ * zero-width space or joiner, which hide in a passphrase and add nothing to guessing it.
  */
-export function isLongEnough(passphrase: string): boolean {
-  let count = 0;
-  for (const _ of graphemes.segment(normalizePassphrase(passphrase))) {
-    count += 1;
-  }
-  return count >= MIN_PASSPHRASE_LENGTH;
+const INVISIBLE = /[\p{White_Space}\p{Cf}]/gu;
+
+/**
+ * The characters of a passphrase as people see them (backup format §3.1): its graphemes, so that
+ * an emoji or a letter with an accent counts once, without white space and format characters. A
+ * zero-width joiner inside an emoji, such as a family, goes with its grapheme, which stays one
+ * character; one between letters attaches to the letter before it, which stays that letter.
+ */
+function visibleCharacters(passphrase: string): string[] {
+  return Array.from(graphemes.segment(passphrase), ({ segment }) =>
+    segment.replace(INVISIBLE, ""),
+  ).filter((character) => character !== "");
 }
 
 /**
- * The fewest different characters of a passphrase that the user picks, ignoring case and
- * spaces (backup format §3.1).
+ * Whether a passphrase that the user picks is long enough: 12 characters or more, counted as
+ * people see them, so that an emoji or a letter with an accent counts once, and spaces,
+ * zero-width and other invisible characters do not count (backup format §3.1).
+ */
+export function isLongEnough(passphrase: string): boolean {
+  return visibleCharacters(normalizePassphrase(passphrase)).length >= MIN_PASSPHRASE_LENGTH;
+}
+
+/**
+ * The fewest different characters of a passphrase that the user picks, ignoring case, spaces
+ * and invisible characters (backup format §3.1).
  */
 export const MIN_DIFFERENT_CHARACTERS = 5;
 
@@ -104,15 +119,13 @@ function runsAlong(text: string, run: string): boolean {
 }
 
 /**
- * Whether a passphrase that the user picks is easy to guess (backup format §3.1). Ignoring case
- * and spaces, it is when it has fewer than 5 different characters, repeats a shorter part, runs
- * along the digits, the alphabet or the keyboard, or is a long password that people often use.
+ * Whether a passphrase that the user picks is easy to guess (backup format §3.1). Ignoring case,
+ * spaces and invisible characters, it is when it has fewer than 5 different characters, repeats
+ * a shorter part, runs along the digits, the alphabet or the keyboard, or is a long password
+ * that people often use.
  */
 export function isEasyToGuess(passphrase: string): boolean {
-  const characters = Array.from(
-    graphemes.segment(normalizePassphrase(passphrase).toLowerCase()),
-    ({ segment }) => segment,
-  ).filter((segment) => segment.trim() !== "");
+  const characters = visibleCharacters(normalizePassphrase(passphrase).toLowerCase());
   const text = characters.join("");
   const backwards = characters.toReversed().join("");
   return (

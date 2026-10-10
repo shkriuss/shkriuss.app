@@ -70,3 +70,38 @@ export async function commitDate(
   }
   return new Date(Number(seconds) * 1000);
 }
+
+/** A commit's hash: 40 lowercase hexadecimal digits. */
+const COMMIT_HASH = /^[0-9a-f]{40}$/v;
+
+/**
+ * The commit that is built, which `licenses.txt` names: from `GITHUB_SHA`, as GitHub Actions
+ * sets it, or else from git, as the checkout's `HEAD`. Throws if neither gives one, rather than
+ * build a file that would differ from build to build.
+ */
+export async function commitHash(
+  directory: string,
+  environment: Readonly<Record<string, string | undefined>> = process.env,
+  git: Git = runGit,
+): Promise<string> {
+  const given = environment["GITHUB_SHA"];
+  if (given !== undefined && given !== "") {
+    if (!COMMIT_HASH.test(given)) {
+      throw new Error(`GITHUB_SHA must be a commit's hash, 40 hexadecimal digits, not "${given}".`);
+    }
+    return given;
+  }
+  let hash: string;
+  try {
+    hash = (await git(directory, ["rev-parse", "HEAD"])).trim();
+  } catch (error) {
+    throw new Error(
+      "licenses.txt names the commit that is built: build in a git checkout, or set GITHUB_SHA.",
+      { cause: error },
+    );
+  }
+  if (!COMMIT_HASH.test(hash)) {
+    throw new Error(`git gave "${hash}" as the commit, not its hash.`);
+  }
+  return hash;
+}

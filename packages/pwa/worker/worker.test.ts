@@ -253,10 +253,38 @@ describe("install (§4)", () => {
     expect(await next.caches.texts(versionCache(B))).toStrictEqual(FILES_B);
     // Only the new app shell came from the host.
     expect(next.requests.map((request) => request.url)).toStrictEqual([`${ORIGIN}/`]);
-    // A copy keeps the headers of its file, but those of its encoding on the network.
+    // A copy keeps only the Content-Type of its file (§6.5).
     expect(next.caches.headersOf(versionCache(B), "/licenses.txt")).toStrictEqual({
       "content-type": "text/plain",
-      ...BUILD_HEADERS,
+    });
+  });
+
+  it("keeps only the Content-Type of a file that it requested, not the host's other headers", async () => {
+    const scope = await activeA();
+    expect(scope.caches.headersOf(versionCache(A), "/licenses.txt")).toStrictEqual({
+      "content-type": "text/plain",
+    });
+  });
+
+  it("keeps only the Content-Type of a copy, whatever headers the other cache kept", async () => {
+    const scope = await activeA();
+    await scope.caches.seed(
+      versionCache(C),
+      { "/assets/index-BBBBBBBB.js": FILES_B["/assets/index-BBBBBBBB.js"] },
+      {
+        headers: {
+          "Content-Type": "text/javascript",
+          "Content-Security-Policy-Report-Only":
+            "default-src 'none'; report-uri https://evil.example/",
+          "Set-Cookie": "a=1",
+        },
+      },
+    );
+    const next = new FakeScope(scope.caches);
+    await start(FILES_B, B, { scope: next });
+    await next.lifecycle("install");
+    expect(next.caches.headersOf(versionCache(B), "/assets/index-BBBBBBBB.js")).toStrictEqual({
+      "content-type": "text/javascript",
     });
   });
 
@@ -707,14 +735,45 @@ describe("checks before serving (§6.5)", () => {
 
   it("answers without the headers of the body's encoding on the network, which is decoded", async () => {
     const scope = await activeA();
-    expect(scope.caches.headersOf(versionCache(A), "/licenses.txt")).toHaveProperty(
+    expect(scope.caches.headersOf(versionCache(A), "/licenses.txt")).not.toHaveProperty(
       "content-encoding",
-      "br",
     );
     expect(headersOf(await scope.request("/licenses.txt"))).toStrictEqual({
       "content-type": "text/plain",
       ...BUILD_HEADERS,
     });
+  });
+
+  it("answers with no header that its cache keeps but the Content-Type, such as one a page added", async () => {
+    const scope = await activeA();
+    // The app shell as the build made it, with headers that a script could have put with it: a
+    // reporting policy would make every launch report to whoever it names.
+    await scope.caches.seed(
+      versionCache(A),
+      { "/": FILES_A["/"] },
+      {
+        headers: {
+          "Content-Type": "text/html",
+          "Content-Security-Policy-Report-Only":
+            "default-src 'none'; report-uri https://evil.example/",
+          "Reporting-Endpoints": 'evil="https://evil.example/"',
+          "Set-Cookie": "a=1",
+          "X-Evil": "1",
+        },
+      },
+    );
+    const answer = await scope.request("/", { navigate: true });
+    expect(headersOf(answer)).toStrictEqual({ "content-type": "text/html", ...BUILD_HEADERS });
+    expect(await text(answer)).toBe(FILES_A["/"]);
+  });
+
+  it("answers with no Content-Type when its cache keeps none", async () => {
+    const scope = await activeA();
+    // Bytes, not text: a response made from text gets a Content-Type of its own.
+    await (
+      await scope.caches.open(versionCache(A))
+    ).put(`${ORIGIN}/licenses.txt`, new Response(new TextEncoder().encode("licenses")));
+    expect(headersOf(await scope.request("/licenses.txt"))).toStrictEqual(BUILD_HEADERS);
   });
 
   it("serves no file of its version that a page changed in Cache Storage, and gets it again", async () => {
@@ -797,7 +856,7 @@ describe("removeApp (§9)", () => {
     expect(scope.skipWaiting).toHaveBeenCalledOnce();
   });
 
-  it("deletes every cache, unregisters itself, then reloads every window", async () => {
+  it("deletes every cache of the service worker, unregisters itself, then reloads every window", async () => {
     const scope = new FakeScope();
     for (const name of [versionCache(A), "pwa-state", "another-cache"]) {
       await scope.caches.seed(name, { "/": name });
@@ -818,10 +877,11 @@ describe("removeApp (§9)", () => {
     scope.windows.push(...windows);
     removeApp(scope);
     await scope.lifecycle("activate");
-    expect(await scope.caches.keys()).toStrictEqual([]);
+    // Only the service worker's caches go: a cache of another name is not its to delete.
+    expect(await scope.caches.keys()).toStrictEqual(["another-cache"]);
     // Reloaded once it is unregistered, the windows load the app from the network.
     expect(steps).toStrictEqual([
-      "unregister, with caches []",
+      "unregister, with caches [another-cache]",
       `reload ${ORIGIN}/`,
       `reload ${ORIGIN}/settings`,
     ]);

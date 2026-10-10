@@ -16,6 +16,6 @@ export const config = {
     size: 24,
     paths: [{ d: "M3.58 13.42 9.5 19.34 20.42 8.42 18.58 6.58 9.5 15.66 5.42 11.58Z" }],
   },
-  // Production gets it: it was checked on real devices (ADR 0015).
+  // Production had it before ADR 0015, which keeps it there (ADR 0015, point 5).
   released: true,
 } satisfies AppConfig;

@@ -29,7 +29,7 @@ Checks English text for mistakes in grammar, spelling, punctuation and word choi
 - **Copy** puts the whole text on the clipboard, and says so, or that it could not. With the field empty, it cannot be pressed, nor can Delete.
 - **Delete** empties the field, and says so. As the app keeps no copy of the text, the button then reads **Undo** until the user types again, and Undo brings the text back.
 - **The text stays** while the app is open, when the user goes to the settings and back, with its variety, the mistakes ignored and Undo. Reloading the app clears it, and so does updating it, which reloads it: while there is text, the update banner says so.
-- **If the checker cannot start,** for example in a browser without WebAssembly, the screen says so instead of the list. If it could not download its module, as offline the first time, the screen says that it needs the internet the first time, and the checker tries again once the device is back online. **If a check fails,** it says so instead of the list too, and that reloading the app tries again.
+- **If the checker cannot start,** for example in a browser without WebAssembly, the screen says so instead of the list. If it could not download its module, as offline the first time, the screen says that it needs the internet the first time, and the checker tries again once the device is back online. **If a check fails,** it says so instead of the list too, and that reloading the app tries again. **If the checker stops answering,** as when the browser ends its worker for want of memory, the screen says the same, and the checker checks nothing more until the app reloads, which starts it anew.
 
 ## 2. Data
 
@@ -57,7 +57,7 @@ None. The app has no database, no backups and no settings of its own. It stores 
 
 ## 6. Tests
 
-- **Unit tests:** Harper's results as the screen shows them (kinds, quoted words, fixes without repeats); a fix applied to the text; the variety from the browser's language; one check at a time, of the latest text; what the page keeps of the text, and when the update banner warns; when the checker starts, downloads its module, and tries again once online.
+- **Unit tests:** Harper's results as the screen shows them (kinds, quoted words, fixes without repeats); a fix applied to the text; what Ignore hides, at the text's start and end too; the variety from the browser's language; one check at a time, of the latest text; what the page keeps of the text, and when the update banner warns; when the checker starts, downloads its module, and tries again once online; what the page sends its worker, and how long it waits for an answer; a worker that stops answering.
 - **End to end, in every browser,** with the production headers:
   - the checker starts in its worker and finds the mistakes of a sample text;
   - a fix changes the text, and the list follows; Ignore and Show;

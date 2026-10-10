@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "build": "vite build --mode a && vite build --mode b && vite build --mode broken && vite build --mode fix && vite build --mode removal && vite build --mode tampered",
-    "typecheck": "tsc",
+    "typecheck": "tsc && tsc -p tsconfig.browser.json",
     "e2e": "playwright test"
   },
   "dependencies": {

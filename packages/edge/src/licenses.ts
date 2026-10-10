@@ -328,19 +328,33 @@ export async function collectLicenses(
 
 const RULE = "=".repeat(80);
 
+/** The app's own license, which its license file carries: the AGPL's text, and the commit built. */
+export interface OwnLicense {
+  /** The text of this repository's LICENSE file. */
+  readonly text: string;
+  /** The hash of the commit that is built, which the file links the source of. */
+  readonly commit: string;
+}
+
 /**
- * The license file of an app (`app` its id) or of the hub: that it is free software and where its
- * source is, then the license texts of every package of others and every notice that it
- * includes.
+ * The license file of an app (`app` its id) or of the hub: that it is free software, where its
+ * source is and which commit it was built from, then the license texts of every package of
+ * others and every notice that it includes, and last its own license's text, which the AGPL asks
+ * every copy to carry.
  */
-export function licensesFile(app: string | undefined, { packages, notices }: Licenses): string {
+export function licensesFile(
+  app: string | undefined,
+  { packages, notices }: Licenses,
+  own: OwnLicense,
+): string {
   const name = app === undefined ? "shkriuss.app" : `${app}.shkriuss.app`;
   const sections = [
     [
       `Licenses of ${name}`,
       "",
       `${name} is free software under the GNU Affero General Public License, version 3 only`,
-      `(AGPL-3.0-only). Its source code is at ${SOURCE_URL}.`,
+      `(AGPL-3.0-only), whose text ends this file. Its source code is at ${SOURCE_URL}; this build`,
+      `is of the commit ${SOURCE_URL}/tree/${own.commit}.`,
       "",
       "It includes the following software and material of others, under their own licenses.",
     ].join("\n"),
@@ -355,6 +369,7 @@ export function licensesFile(app: string | undefined, { packages, notices }: Lic
     ...notices.map((notice) =>
       [RULE, `Material in ${notice.file}`, RULE, "", notice.text].join("\n"),
     ),
+    [RULE, `The license of ${name}`, RULE, "", plain(own.text)].join("\n"),
   ];
   return `${sections.join("\n\n")}\n`;
 }

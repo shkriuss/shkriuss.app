@@ -1,5 +1,11 @@
 export { createRecord, deleteRecord, updateRecord, type FieldValues } from "./changes.ts";
 export {
+  migrationProblems,
+  schemaSignatures,
+  type FieldSignature,
+  type SchemaSignatures,
+} from "./checks.ts";
+export {
   DATABASE_NAME,
   openDatabase,
   rescueSnapshot,
@@ -35,12 +41,14 @@ export {
   INITIAL_CLOCK,
   MAX_CLOCK_AHEAD,
   MAX_COUNTER,
+  MAX_RECEIVED_AHEAD,
   MAX_RECEIVED_WALL,
   MAX_WALL,
   formatHlc,
   isDeviceId,
   isFromFuture,
   isHlc,
+  isTooFarAhead,
   issueHlc,
   maxHlc,
   newDeviceId,
@@ -51,7 +59,7 @@ export {
   type Hlc,
   type HlcParts,
 } from "./hlc.ts";
-export { SETTINGS_ID, isRecordId, newRecordId } from "./ids.ts";
+export { SETTINGS_ID, isRecordId, newRecordId, recordIdIssuer } from "./ids.ts";
 export { checkIncomingStores, type Incoming } from "./incoming.ts";
 export {
   MAX_DEPTH,

@@ -30,7 +30,7 @@ Private, offline-first web apps — one hub, many small apps, one shared platfor
 
 The project is built with [Claude Code](https://claude.com/claude-code). The rules every contributor follows — human or AI — are in [CLAUDE.md](CLAUDE.md).
 
-You need Node.js 22.18 or later and pnpm, which Corepack provides:
+You need Node.js — 22.18 is the floor (`engines`); CI and the deployed builds use the version in `.node-version` (24) — and pnpm, which Corepack provides:
 
 ```sh
 corepack enable pnpm

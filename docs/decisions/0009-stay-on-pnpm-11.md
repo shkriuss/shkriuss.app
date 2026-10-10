@@ -5,9 +5,9 @@
 
 ## Context
 
-[ADR 0005](0005-frontend-stack.md) says the repository uses the latest stable releases. For pnpm that is version 12, first released on 2026-08-26. pnpm 12 is a rewrite in Rust: its npm package is a small wrapper, and the program itself is a separate executable for each platform.
+[ADR 0005](0005-frontend-stack.md) says the repository uses the latest stable releases. For pnpm that is version 12, first released on 2026-08-26 (as checked on 2026-10-04; not re-verified on 2026-10-10). pnpm 12 is a rewrite in Rust: its npm package is a small wrapper, and the program itself is a separate executable for each platform.
 
-Contributors and Claude Code cloud sessions get pnpm through Corepack, which installs the version pinned in the `packageManager` field of the root `package.json`. The Corepack that ships with Node.js 22, which cloud sessions use, is version 0.34. It cannot start pnpm 12 and fails with "Cannot find module …/bin/pnpm.cjs". Corepack 0.35 and later can start it, but would have to be installed from npm first. The pnpm 12 executable is then downloaded the first time pnpm runs and checked by pnpm's own code, not by the hash in `packageManager`.
+Contributors and Claude Code cloud sessions get pnpm through Corepack, which installs the version pinned in the `packageManager` field of the root `package.json`. The Corepack that ships with Node.js 22, which cloud sessions run (22.22.0 with Corepack 0.34.0 on 2026-10-10; CI and the deployed builds use the version in `.node-version`, 24, which ships Corepack as well), is version 0.34. It cannot start pnpm 12 and fails with "Cannot find module …/bin/pnpm.cjs". Corepack 0.35 and later can start it, but would have to be installed from npm first. The pnpm 12 executable is then downloaded the first time pnpm runs and checked by pnpm's own code, not by the hash in `packageManager`.
 
 pnpm 11 is still maintained: new 11.x releases ship alongside the 12.x ones.
 
@@ -22,7 +22,7 @@ pnpm 11 is still maintained: new 11.x releases ship alongside the 12.x ones.
 - Contributors, cloud sessions and CI run the same pnpm version: Corepack and the pnpm GitHub Action both read `packageManager`.
 - Each pnpm update follows the rules above, in its own pull request.
 - We go without pnpm 12's improvements for a while.
-- Revisit by the end of Phase 1, or sooner if the Corepack that ships with our Node.js version can start pnpm 12. Before moving, check that the pnpm GitHub Action and Dependabot support it.
+- Revisit by the end of Phase 1, or sooner if the Corepack that ships with our Node.js version can start pnpm 12. Before moving, check that the pnpm GitHub Action and Dependabot support it. (That revisit is due: on 2026-10-10, pnpm 11.28.5 was the newest 11.x and `latest` was 12.11.2. [ADR 0021](0021-pnpm-after-corepack.md) settles how pnpm is installed once Node.js ships no Corepack, and leaves the pnpm major to this revisit.)
 
 ## Alternatives considered
 

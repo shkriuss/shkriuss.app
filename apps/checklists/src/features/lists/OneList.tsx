@@ -1,10 +1,11 @@
 import { Screen, ScreenLink, useObserved } from "@shkriuss/shell";
-import { Button, Checkbox, Dialog } from "@shkriuss/ui";
+import { type Announcement, Button, Checkbox, Dialog, Status, announce } from "@shkriuss/ui";
 import { useNavigate } from "@tanstack/react-router";
 import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
 import { m } from "../../messages.ts";
 import { type AppDatabase, NAME_LENGTH, TEXT_LENGTH } from "../../schema.ts";
-import { writeFailure } from "./failures.ts";
+import { Failure } from "./Failure.tsx";
+import { type ItemFailure, failureShownWith, writeFailure } from "./failures.ts";
 import { AddForm, TextForm } from "./forms.tsx";
 import { type ItemRecord, type ListContent, itemsOf, neighbor, readList } from "./lists.ts";
 
@@ -47,14 +48,6 @@ function Actions({ children }: { readonly children: ReactNode }) {
   return <div className="flex flex-wrap gap-2">{children}</div>;
 }
 
-function Failure({ message }: { readonly message: string | undefined }) {
-  return message === undefined ? null : (
-    <p role="alert" className="text-danger">
-      {message}
-    </p>
-  );
-}
-
 /**
  * A list's screen (docs/specs/apps/checklists.md §1): its items to do, then those done, each
  * with a checkbox that ticks it off or back and a button that edits it; a field that adds an
@@ -66,9 +59,10 @@ export function OneList({ db, listId, loaded }: OneListProps) {
     useMemo(() => db.observe(async (reader) => readList(reader, listId)), [db, listId]),
   );
   const navigate = useNavigate();
-  const [failure, setFailure] = useState<string>();
+  // Why the last write failed, and the item that it was to, if one: it goes with the item.
+  const [failure, setFailure] = useState<ItemFailure>();
   // What the last change did, for screen readers: the focus moved on from the items it moved.
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useState<Announcement>();
   const [open, setOpen] = useState<Open>(CLOSED);
   const [dialogFailure, setDialogFailure] = useState<string>();
   const [focusAfter, setFocusAfter] = useState<FocusAfter>();
@@ -128,7 +122,7 @@ export function OneList({ db, listId, loaded }: OneListProps) {
         }
       });
     } catch (error) {
-      setFailure(writeFailure(error, m.addItemFailed()));
+      setFailure({ message: writeFailure(error, { otherwise: m.addItemFailed() }) });
       return false;
     }
     setFailure(undefined);
@@ -142,11 +136,19 @@ export function OneList({ db, listId, loaded }: OneListProps) {
     try {
       await db.change(async (change) => change.update("items", item.id, { done: isDone }));
     } catch (error) {
-      setFailure(writeFailure(error, m.changeFailed()));
+      setFailure({
+        message: writeFailure(error, {
+          otherwise: m.changeFailed(),
+          deleted: m.itemDeletedElsewhere(),
+        }),
+        item: item.id,
+      });
       return;
     }
     setFailure(undefined);
-    setStatus(isDone ? m.movedToDone(textOf(item)) : m.movedToToDo(textOf(item)));
+    setStatus((last) =>
+      announce(last, isDone ? m.movedToDone(textOf(item)) : m.movedToToDo(textOf(item))),
+    );
     setFocusAfter({
       items: [item.id],
       now: isDone ? "done" : "toDo",
@@ -161,7 +163,9 @@ export function OneList({ db, listId, loaded }: OneListProps) {
       try {
         await db.change(async (change) => change.update("items", item.id, { text: value }));
       } catch (error) {
-        setDialogFailure(writeFailure(error, m.changeFailed()));
+        setDialogFailure(
+          writeFailure(error, { otherwise: m.changeFailed(), deleted: m.itemDeletedElsewhere() }),
+        );
         return;
       }
     }
@@ -172,11 +176,11 @@ export function OneList({ db, listId, loaded }: OneListProps) {
     try {
       await db.change(async (change) => change.delete("items", item.id));
     } catch (error) {
-      setDialogFailure(writeFailure(error, m.changeFailed()));
+      setDialogFailure(writeFailure(error, { otherwise: m.changeFailed() }));
       return;
     }
     close();
-    setStatus(m.itemDeleted(textOf(item)));
+    setStatus((last) => announce(last, m.itemDeleted(textOf(item))));
     setFocusAfter({
       items: [item.id],
       now: "deleted",
@@ -198,11 +202,11 @@ export function OneList({ db, listId, loaded }: OneListProps) {
         return ids;
       });
     } catch (error) {
-      setFailure(writeFailure(error, m.changeFailed()));
+      setFailure({ message: writeFailure(error, { otherwise: m.changeFailed() }) });
       return;
     }
     setFailure(undefined);
-    setStatus(m.doneCleared(cleared.length));
+    setStatus((last) => announce(last, m.doneCleared(cleared.length)));
     setFocusAfter({ items: cleared, now: "deleted", to: undefined });
   }
 
@@ -212,7 +216,9 @@ export function OneList({ db, listId, loaded }: OneListProps) {
       try {
         await db.change(async (change) => change.update("lists", listId, { name: to }));
       } catch (error) {
-        setDialogFailure(writeFailure(error, m.changeFailed()));
+        setDialogFailure(
+          writeFailure(error, { otherwise: m.changeFailed(), deleted: m.listDeletedElsewhere() }),
+        );
         return;
       }
     }
@@ -233,7 +239,7 @@ export function OneList({ db, listId, loaded }: OneListProps) {
       });
     } catch (error) {
       setLeaving(undefined);
-      setDialogFailure(writeFailure(error, m.changeFailed()));
+      setDialogFailure(writeFailure(error, { otherwise: m.changeFailed() }));
       return;
     }
     close();
@@ -407,10 +413,9 @@ export function OneList({ db, listId, loaded }: OneListProps) {
         onAdd={addItem}
         inputRef={field}
       />
-      <Failure message={failure} />
+      <Failure message={failureShownWith(failure, content.items)?.message} />
       {items}
-      {/* An <output>, whose role is status: screen readers read it when it changes. */}
-      <output className="sr-only">{status}</output>
+      <Status announcement={status} className="sr-only" />
       <Actions>
         <Button
           onPress={() => {

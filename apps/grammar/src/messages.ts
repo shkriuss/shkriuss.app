@@ -1,29 +1,32 @@
 import { createFormat, defineMessages } from "@shkriuss/i18n";
 
-/** Harper's kinds of mistakes, as the list names them (docs/specs/apps/grammar.md §1). */
-const KINDS: Readonly<Record<string, string>> = {
-  Agreement: "Agreement",
-  BoundaryError: "Word boundary",
-  Capitalization: "Capitalization",
-  Eggcorn: "Word choice",
-  Enhancement: "Improvement",
-  Formatting: "Formatting",
-  Grammar: "Grammar",
-  Malapropism: "Word choice",
-  Miscellaneous: "Grammar",
-  Nonstandard: "Nonstandard",
-  Punctuation: "Punctuation",
-  Readability: "Readability",
-  Redundancy: "Redundancy",
-  Regionalism: "Regional word",
-  Repetition: "Repetition",
-  Spelling: "Spelling",
-  Style: "Style",
-  Typo: "Typo",
-  Usage: "Usage",
-  WordChoice: "Word choice",
-  WordOrder: "Word order",
-};
+/**
+ * Harper's kinds of mistakes, as the list names them (docs/specs/apps/grammar.md §1). A map, so
+ * that a kind named like a property of every object, such as `constructor`, is not that property.
+ */
+const KINDS: ReadonlyMap<string, string> = new Map([
+  ["Agreement", "Agreement"],
+  ["BoundaryError", "Word boundary"],
+  ["Capitalization", "Capitalization"],
+  ["Eggcorn", "Word choice"],
+  ["Enhancement", "Improvement"],
+  ["Formatting", "Formatting"],
+  ["Grammar", "Grammar"],
+  ["Malapropism", "Word choice"],
+  ["Miscellaneous", "Grammar"],
+  ["Nonstandard", "Nonstandard"],
+  ["Punctuation", "Punctuation"],
+  ["Readability", "Readability"],
+  ["Redundancy", "Redundancy"],
+  ["Regionalism", "Regional word"],
+  ["Repetition", "Repetition"],
+  ["Spelling", "Spelling"],
+  ["Style", "Style"],
+  ["Typo", "Typo"],
+  ["Usage", "Usage"],
+  ["WordChoice", "Word choice"],
+  ["WordOrder", "Word order"],
+]);
 
 /**
  * The app's text (ADR 0012): its name and what it does, for its frame, its manifest and its
@@ -67,7 +70,7 @@ export const messages = defineMessages((format) => ({
       : format.plural(count, { one: "# mistake found", other: "# mistakes found" }),
   mistakes: () => "Mistakes",
   // Harper's kind of mistake; a kind that a later Harper adds is one of the others.
-  kind: (kind: string) => KINDS[kind] ?? "Other",
+  kind: (kind: string) => KINDS.get(kind) ?? "Other",
   replace: (words: string) => `Replace with “${words}”`,
   remove: () => "Remove",
   insert: (words: string) => `Add “${words}”`,

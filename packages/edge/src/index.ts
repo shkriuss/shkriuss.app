@@ -47,12 +47,14 @@ export {
   type CollectOptions,
   type Licenses,
   type Notice,
+  type OwnLicense,
   type ThirdPartyPackage,
 } from "./licenses.ts";
 export {
   SECURITY_TXT_DAYS,
   SECURITY_TXT_FILE,
   commitDate,
+  commitHash,
   securityTxt,
   type Git,
 } from "./security-txt.ts";

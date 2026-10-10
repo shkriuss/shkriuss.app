@@ -22,6 +22,8 @@ Measured on 2026-10-10, the first page's JavaScript, gzipped at level 9:
 | App template without data | 115.3 kB   |
 | The hub                   | 113.8 kB   |
 
+Done in #99, which loads the settings and the backup dialog of apps with data on demand. Measured on 2026-10-10 at commit 38841c4: Checklists 164.6 kB, the app template 160.3 kB, with `later-*.js` (13.7 kB) loaded on demand.
+
 ## Decision
 
 1. **The required checks of every pull request.** A failing check blocks the merge.
@@ -49,7 +51,8 @@ Measured on 2026-10-10, the first page's JavaScript, gzipped at level 9:
 ## Consequences
 
 - Every gate in this ADR runs: an accepted ADR asks for nothing that CI does not do.
-- Apps with data get 30 kB more than ADR 0008 allowed, which the platform's own code needs. Checklists fits, with 3 kB to spare: before its first page grows, its settings and backups load on demand, which wins about 16 kB.
+- Apps with data get 30 kB more than ADR 0008 allowed, which the platform's own code needs. Checklists fit with 3 kB to spare when this was decided; since #99 its settings and backups load on demand, which won 12 kB (164.6 kB on 2026-10-10).
+- Vite's own warning about chunks larger than 500 kB is raised from the budget: `app()` of `@shkriuss/shell/vite` sets `build.chunkSizeWarningLimit` to about 3.5 minified bytes per gzipped byte of the first page's budget, 630 kB for apps with data and 525 kB for apps without, so that the entry chunk of an app within its budget, which holds the code that its screens share ([ADR 0010](0010-script-integrity.md)), builds without a warning that would hide a real one. The budget stays the gate.
 - A gzip budget is a stand-in for what browsers download: Cloudflare compresses with Brotli or zstd, a little smaller. It changes only with the code, so the check never flakes.
 - The coverage threshold now covers every platform package with code of its own: six had it, and `@shkriuss/edge` gets it with this ADR.
 

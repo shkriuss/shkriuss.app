@@ -183,6 +183,35 @@ test("a long text's mistakes show 50 at a time", async ({ page }) => {
   await expect(page.getByRole("button", { name: /^Show \d+ more$/v })).toHaveCount(0);
 });
 
+test("the field takes 20,000 characters, and no more: what is typed or pasted beyond them is cut", async ({
+  page,
+  browserName,
+}) => {
+  // The limit of the spec (§1), and `TEXT_LIMIT` in Check.tsx.
+  const limit = 20_000;
+  const longest = "The quick brown fox jumps over the lazy dog. ".repeat(500).slice(0, limit);
+  await page.goto("/");
+  await expect(page.getByRole("heading", { level: 1, name: NAME })).toBeVisible();
+  await expect(field(page)).toHaveAttribute("maxlength", String(limit));
+  await expect(page.getByText(m.textHelp(limit))).toBeVisible();
+  await field(page).fill(longest);
+  await expect(found(page)).toHaveText(/found$/v, STARTING);
+  // Typed at the end of the longest text, characters are refused.
+  await page.keyboard.press("ControlOrMeta+End");
+  await page.keyboard.type(" More.");
+  await expect(field(page)).toHaveValue(longest);
+  if (browserName === "chromium") {
+    // Pasted text is cut to what fits. Only Chromium pastes in tests (see Copy below).
+    await page.getByRole("button", { name: "Copy" }).click();
+    await expect(page.getByText(m.copied())).toBeVisible();
+    const before = "Hello. ";
+    await field(page).fill(before);
+    await page.keyboard.press("ControlOrMeta+End");
+    await page.keyboard.press("ControlOrMeta+V");
+    await expect(field(page)).toHaveValue(before + longest.slice(0, limit - before.length));
+  }
+});
+
 test("the text stays while the app is open, when the user goes to the settings and back", async ({
   page,
 }) => {

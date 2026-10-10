@@ -104,29 +104,19 @@ describe("checkAgainstLive", () => {
   });
 
   it.each([
-    ["answers 404", 404, "text/plain"],
-    ["answers with the single-page fallback", 200, "text/html; charset=utf-8"],
-  ])("skips the comparison when the origin has no manifest: it %s", async (_, status, type) => {
-    const live = serving(status, type, "<!doctype html>");
-    const build = await buildWith(`${A}  /assets/x.js\n`);
-    expect(await checkAgainstLive(build, "https://shkriuss.app", live.fetch)).toEqual({
-      compared: false,
-      replaced: [],
-    });
-    // An unread body would keep the connection open.
-    expect(live.responses.map((response) => response.bodyUsed)).toEqual([true]);
-  });
-
-  it.each([
     ["an outage", 503, "text/html"],
     ["a challenge page", 403, "text/html; charset=UTF-8"],
     ["a file that is not text", 200, "application/octet-stream"],
+    // A deployment without a manifest, which every later check would otherwise pass vacuously.
+    ["a 404 for the manifest", 404, "text/plain"],
+    ["the single-page fallback for the manifest", 200, "text/html; charset=utf-8"],
   ])("fails on %s, rather than skip the check", async (_, status, type) => {
-    const live = serving(status, type, "");
+    const live = serving(status, type, "<!doctype html>");
     const build = await buildWith(`${A}  /assets/x.js\n`);
     await expect(checkAgainstLive(build, "https://shkriuss.app", live.fetch)).rejects.toThrow(
       `https://shkriuss.app/sha256sums.txt answered with status ${status} and content type "${type}"`,
     );
+    // An unread body would keep the connection open.
     expect(live.responses.map((response) => response.bodyUsed)).toEqual([true]);
   });
 

@@ -12,6 +12,8 @@ describe("the text that only apps with data show", () => {
       startStorageFullText: m.startStorageFullText(),
       startOutdatedTitle: m.startOutdatedTitle(),
       startOutdatedText: m.startOutdatedText(),
+      startBlockedTitle: m.startBlockedTitle(),
+      startBlockedText: m.startBlockedText(),
       storage: m.storage(),
       usageUnknown: m.usageUnknown(),
       kept: m.kept(),
@@ -51,7 +53,10 @@ describe("the text that only apps with data show", () => {
       failedTitle: m.failedTitle(),
       tooLarge: m.tooLarge(),
       failed: m.failed(),
+      noMemoryToBackUp: m.noMemoryToBackUp(),
       tryAgain: m.tryAgain(),
+      notLoadedTitle: m.notLoadedTitle(),
+      notLoadedText: m.notLoadedText(),
       restore: m.restore(),
       readingTitle: m.readingTitle(),
       reading: m.reading(),
@@ -73,6 +78,7 @@ describe("the text that only apps with data show", () => {
       fileTooLarge: m.fileTooLarge(),
       notABackup: m.notABackup(),
       damaged: m.damaged(),
+      noMemory: m.noMemory(),
       newerVersion: m.newerVersion(),
       futureClock: m.futureClock(),
       invalid: m.invalid(),
@@ -91,6 +97,9 @@ describe("the text that only apps with data show", () => {
       startOutdatedTitle: "This app was updated",
       startOutdatedText:
         "A newer version of this app has opened its data on this device already. Reload the app to use it.",
+      startBlockedTitle: "Waiting for another window",
+      startBlockedText:
+        "This app is open in another window or tab, with an older version, which has not closed its data yet. Close this app's other windows and tabs; if the app does not start then, reload it.",
       storage: "Storage",
       usageUnknown: "Your browser does not say how much this app stores.",
       kept: "Your browser keeps this data until you delete it.",
@@ -112,7 +121,7 @@ describe("the text that only apps with data show", () => {
         "Choose a passphrase of at least 12 characters that is hard to guess, and type it twice. Without it, nobody can open the backup, not even you.",
       passphrase: "Passphrase",
       passphraseAgain: "Passphrase again",
-      tooShort: "Use at least 12 characters.",
+      tooShort: "Use at least 12 characters. Spaces do not count.",
       easyToGuess:
         "This is easy to guess. Avoid repeats, runs such as 123456 or qwerty, and common passwords.",
       different: "The two passphrases are not the same.",
@@ -134,7 +143,12 @@ describe("the text that only apps with data show", () => {
       failedTitle: "No backup",
       tooLarge: "This app's data is too large for a backup.",
       failed: "The backup could not be made. Try again.",
+      noMemoryToBackUp:
+        "This device does not have enough free memory to make the backup right now. Close other apps or tabs and try again.",
       tryAgain: "Try again",
+      notLoadedTitle: "The backup could not start",
+      notLoadedText:
+        "The app could not load the part of itself that makes backups. Try again; if that fails, reload the app.",
       restore: "Restore from a backup",
       readingTitle: "Reading the backup",
       reading: "Reading the backup… An encrypted one takes a few seconds.",
@@ -157,6 +171,8 @@ describe("the text that only apps with data show", () => {
       fileTooLarge: "The file is too large to be a backup.",
       notABackup: "This is not a backup file.",
       damaged: "The file is damaged or not supported.",
+      noMemory:
+        "This device does not have enough free memory to open the backup right now. Close other apps or tabs and try again.",
       newerVersion:
         "The backup was made by a newer version of the app. Update the app and try again.",
       futureClock:

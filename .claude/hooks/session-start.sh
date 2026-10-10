@@ -12,8 +12,9 @@ cd "$CLAUDE_PROJECT_DIR"
 export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 corepack enable pnpm
 
-# pnpm-workspace.yaml applies the supply-chain rules (release age, blocked install scripts).
-pnpm install
+# pnpm-workspace.yaml applies the supply-chain rules (release age, blocked install scripts). The
+# lockfile is taken as it is, as in CI: one that has drifted is a problem to see, not to rewrite.
+pnpm install --frozen-lockfile
 
 # Playwright cannot download its browsers here. Point the end-to-end tests at the preinstalled
 # Chromium; Firefox and WebKit run in CI.

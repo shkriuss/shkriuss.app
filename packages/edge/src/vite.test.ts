@@ -17,8 +17,12 @@ const roots: string[] = [];
 /** When the builds' commit was made, for their security.txt: they run outside a git checkout. */
 const COMMITTED = 1_791_104_400;
 
+/** The builds' commit, for their licenses.txt, as GitHub Actions sets it. */
+const COMMIT = "0123456789abcdef0123456789abcdef01234567";
+
 beforeEach(() => {
   vi.stubEnv("SOURCE_DATE_EPOCH", String(COMMITTED));
+  vi.stubEnv("GITHUB_SHA", COMMIT);
 });
 
 afterEach(async () => {
@@ -44,6 +48,8 @@ async function createApp(indexHtml?: string): Promise<string> {
     'export function run() { document.title = "ran"; }\n',
   );
   await writeFile(path.join(root, "style.css"), "body { margin: 0; }\n");
+  // The repository's own license, which licenses.txt carries.
+  await writeFile(path.join(root, "LICENSE"), "GNU AFFERO GENERAL PUBLIC LICENSE\nThe text.\n");
   return root;
 }
 
@@ -401,6 +407,11 @@ describe("edge", () => {
       /^Licenses of notes\.shkriuss\.app\n\nnotes\.shkriuss\.app is free software under the GNU Affero/,
     );
     expect(licenses).toContain("https://github.com/shkriuss/shkriuss.app");
+    // The commit that was built, and the app's own license, last.
+    expect(licenses).toContain(`https://github.com/shkriuss/shkriuss.app/tree/${COMMIT}.`);
+    expect(licenses).toMatch(
+      /\n={80}\nThe license of notes\.shkriuss\.app\n={80}\n\nGNU AFFERO GENERAL PUBLIC LICENSE\nThe text\.\n$/v,
+    );
     expect(licenses).toContain(
       "fake-library 1.2.3 (MIT)\n" +
         "=".repeat(80) +
@@ -636,6 +647,19 @@ describe("edge", () => {
     await expect(buildApp(await createApp())).rejects.toThrow(
       "build in a git checkout, or set SOURCE_DATE_EPOCH",
     );
+  });
+
+  it("fails the build without the commit's hash, which licenses.txt names", async () => {
+    vi.stubEnv("GITHUB_SHA", undefined);
+    await expect(buildApp(await createApp())).rejects.toThrow(
+      "build in a git checkout, or set GITHUB_SHA",
+    );
+  });
+
+  it("fails the build without the repository's LICENSE, which licenses.txt carries", async () => {
+    const root = await createApp();
+    await rm(path.join(root, "LICENSE"));
+    await expect(buildApp(root)).rejects.toThrow("has no LICENSE file");
   });
 
   it("fails the build for a file larger than Cloudflare serves, before any deploy", async () => {

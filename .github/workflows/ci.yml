@@ -162,6 +162,9 @@ jobs:
       - run: pnpm build
       # The SHA-256 of every file Wrangler uploads, `_headers` included, as `<app>/<file>`: the
       # deploy jobs deploy exactly these files, and the attest job signs where they came from.
+      # Every folder in apps/ is a workspace app, with the package.json that every check went by,
+      # and ships its dist/ as it is. A folder without either, a symbolic link, which Wrangler
+      # would follow but the hashes would not cover, or more or fewer dist/ than apps stops the run.
       - id: files
         name: Record the hash of every file to deploy
         run: &list-files |
@@ -169,8 +172,26 @@ jobs:
           export LC_ALL=C
           for app in apps/*/; do
             id="$(basename "$app")"
+            if [ ! -f "${app}package.json" ]; then
+              echo "::error::$app has no package.json, so no check saw it as an app."
+              exit 1
+            fi
+            if [ ! -d "${app}dist" ]; then
+              echo "::error::$app has no dist/ to deploy."
+              exit 1
+            fi
+            if [ -n "$(find "${app}dist" -type l -print -quit)" ]; then
+              echo "::error::${app}dist has a symbolic link, which the hashes do not cover."
+              exit 1
+            fi
             (cd "${app}dist" && find . -type f -print0 | sort -z | xargs -0 sha256sum) | sed "s|  \./|  $id/|"
           done | tee "$RUNNER_TEMP/files.txt"
+          hashed="$(cut -d ' ' -f 3 "$RUNNER_TEMP/files.txt" | cut -d / -f 1 | sort -u | wc -l)"
+          apps="$(find apps -mindepth 2 -maxdepth 2 -name package.json | wc -l)"
+          if [ "$hashed" != "$apps" ]; then
+            echo "::error::Hashed the dist/ of $hashed apps, but the workspace has $apps."
+            exit 1
+          fi
           echo "sha256=$(sha256sum < "$RUNNER_TEMP/files.txt" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
           delimiter="$(openssl rand -hex 16)"
           { echo "files<<$delimiter"; cat "$RUNNER_TEMP/files.txt"; echo "$delimiter"; } >> "$GITHUB_OUTPUT"
@@ -212,6 +233,10 @@ jobs:
           BUILD: ${{ needs.build.outputs.build }}
           REBUILD: ${{ steps.files.outputs.sha256 }}
         run: |
+          if [ -z "$BUILD" ]; then
+            echo "::error::The build job recorded no hash of its files."
+            exit 1
+          fi
           if [ "$REBUILD" != "$BUILD" ]; then
             echo "::error::This build differs from the one to deploy. Compare the file hashes listed in both jobs."
             exit 1
@@ -242,9 +267,10 @@ jobs:
       # pnpm at the version that package.json's packageManager pins, which Corepack checks against
       # the SHA-512 there, as pnpm/action-setup does not.
       - run: corepack enable pnpm
-      # For Wrangler. Installing runs no package's scripts (allowBuilds in pnpm-workspace.yaml),
-      # and nothing is built here.
-      - run: pnpm install --frozen-lockfile
+      # For Wrangler: only the dependencies of @shkriuss/deploy (tooling/deploy), which has no
+      # other, so that as little code as possible is installed beside the deploy token. Installing
+      # runs no package's scripts (allowBuilds in pnpm-workspace.yaml), and nothing is built here.
+      - run: pnpm install --frozen-lockfile --filter @shkriuss/deploy
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: dist
@@ -257,15 +283,33 @@ jobs:
           BUILD: ${{ needs.build.outputs.build }}
           LISTED: ${{ steps.files.outputs.sha256 }}
         run: &check-files |
+          if [ -z "$BUILD" ]; then
+            echo "::error::The build job recorded no hash of its files."
+            exit 1
+          fi
           if [ "$LISTED" != "$BUILD" ]; then
             echo "::error::These files differ from those that the build job recorded. Compare the file hashes listed in both jobs."
             exit 1
           fi
+      # Only the newest commit of main deploys. The jobs of a concurrency group run in any order,
+      # and a run can wait days for the production approval: either would put an older build over
+      # a newer one, which is never done; a bad release is fixed forward (ADR 0017). The repository
+      # is public, so the question needs no token.
+      - name: Check that main has not moved on
+        run: &check-main |
+          set -euo pipefail
+          main="$(git ls-remote "https://github.com/$GITHUB_REPOSITORY.git" refs/heads/main | cut -f 1)"
+          if [ "$main" != "$GITHUB_SHA" ]; then
+            echo "::error::main has moved on to $main; fix forward from the newer commit (ADR 0017)."
+            exit 1
+          fi
+      # Each app from its own wrangler.json, which Wrangler reads from the app's folder, with the
+      # app's dist/ next to it; Wrangler itself comes from @shkriuss/deploy.
       - name: Deploy every app
         run: |
           set -euo pipefail
           for app in apps/*/; do
-            pnpm --dir "$app" exec wrangler deploy --env staging
+            pnpm --filter @shkriuss/deploy exec wrangler deploy -c "$GITHUB_WORKSPACE/${app}wrangler.json" --env staging
           done
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -323,8 +367,9 @@ jobs:
       # pnpm at the version that package.json's packageManager pins, which Corepack checks against
       # the SHA-512 there, as pnpm/action-setup does not.
       - run: corepack enable pnpm
-      # As for staging: for Wrangler, with no package's scripts, and nothing built.
-      - run: pnpm install --frozen-lockfile
+      # As for staging: for Wrangler, the dependencies of @shkriuss/deploy only, with no package's
+      # scripts, and nothing built.
+      - run: pnpm install --frozen-lockfile --filter @shkriuss/deploy
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: dist
@@ -337,15 +382,25 @@ jobs:
           BUILD: ${{ needs.build.outputs.build }}
           LISTED: ${{ steps.files.outputs.sha256 }}
         run: *check-files
+      - name: Check that main has not moved on
+        run: *check-main
       # Production gets only the apps that are released, as their app.config.ts says on a line
-      # that `pnpm check` holds to that form; the hub, which has none, always (ADR 0015).
+      # that `pnpm check` holds to that form, and to being the value the hub reads: the word
+      # `released` once in the file, as a direct property of the one object literal, with no
+      # spread, computed key or statement after it (ADR 0015). The hub, a site and no app, has no
+      # app.config.ts and always goes; any other folder without one stops the run.
       - id: released
         name: List what production gets
         run: |
           set -euo pipefail
           released=""
           for app in apps/*/; do
-            if [ ! -f "${app}app.config.ts" ] || grep -qx '  released: true,' "${app}app.config.ts"; then
+            if [ "$app" = apps/hub/ ]; then
+              released="$released $app"
+            elif [ ! -f "${app}app.config.ts" ]; then
+              echo "::error::$app has no app.config.ts, so nothing says whether production gets it (ADR 0015)."
+              exit 1
+            elif grep -qx '  released: true,' "${app}app.config.ts"; then
               released="$released $app"
             else
               echo "$app is not released, so it stays on staging (ADR 0015)."
@@ -372,7 +427,7 @@ jobs:
         run: |
           set -euo pipefail
           for app in $APPS; do
-            pnpm --dir "$app" exec wrangler deploy --env production
+            pnpm --filter @shkriuss/deploy exec wrangler deploy -c "$GITHUB_WORKSPACE/${app}wrangler.json" --env production
           done
 
   workflow-audit:

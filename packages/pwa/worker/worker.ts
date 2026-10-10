@@ -113,14 +113,25 @@ async function checkedBody(response: Response, sha256: string): Promise<ArrayBuf
 }
 
 /**
- * The headers of `response` for a response with its body as read, which is decoded: without
- * those that describe the body's encoding and length on the network.
+ * The headers that a file is kept and served with, from `headers`, those of the host's answer
+ * or of a kept copy: its Content-Type, and nothing else (§4, §6.5). A page can write to Cache
+ * Storage, so a header that the cache keeps is only as trustworthy as the page: a header that
+ * went unchecked, such as a reporting policy, would persist across launches. The security
+ * headers come from the build (§6.5), and the headers of the body's encoding on the network
+ * are gone with the encoding.
  */
-function decodedHeaders(response: Response): Headers {
-  const headers = new Headers(response.headers);
-  headers.delete("Content-Encoding");
-  headers.delete("Content-Length");
-  return headers;
+function keptHeaders(headers: Headers): Headers {
+  const kept = new Headers();
+  const type = headers.get("Content-Type");
+  if (type !== null) {
+    kept.set("Content-Type", type);
+  }
+  return kept;
+}
+
+/** `response`, with status 200 and only the headers that a kept file has (§4). */
+function toKeep(response: Response): Response {
+  return new Response(response.body, { status: 200, headers: keptHeaders(response.headers) });
 }
 
 function isWindowClient(source: unknown): boolean {
@@ -198,7 +209,7 @@ export function serveApp(scope: WorkerScope, build: BuildData): void {
     if (!(await scope.caches.keys()).includes(ownCache)) {
       return;
     }
-    await (await scope.caches.open(ownCache)).put(`${origin}${url}`, response);
+    await (await scope.caches.open(ownCache)).put(`${origin}${url}`, toKeep(response));
     await (
       await scope.caches.open(STATE_CACHE)
     ).put(firstUseKey, new Response("true", { headers: { "Content-Type": "application/json" } }));
@@ -224,10 +235,9 @@ export function serveApp(scope: WorkerScope, build: BuildData): void {
         // A cache that fails, or that another version deletes meanwhile, has nothing to copy.
       }
       if (kept !== undefined && body !== undefined) {
-        const headers = decodedHeaders(kept);
         await cache.put(
           key,
-          new Response(body, { status: 200, statusText: kept.statusText, headers }),
+          new Response(body, { status: 200, headers: keptHeaders(kept.headers) }),
         );
         return true;
       }
@@ -273,7 +283,7 @@ export function serveApp(scope: WorkerScope, build: BuildData): void {
           if (response.status !== 200) {
             throw new Error(`${url} answered with status ${response.status}.`);
           }
-          await cache.put(`${origin}${url}`, response);
+          await cache.put(`${origin}${url}`, toKeep(response));
         } catch (error) {
           failures.push(error);
           controller.abort();
@@ -370,8 +380,9 @@ export function serveApp(scope: WorkerScope, build: BuildData): void {
   }
 
   /**
-   * A file of this version from its cache, if it still has its SHA-256 and status 200, with the
-   * security headers of the build (§6.5). A file that a page changed in Cache Storage goes.
+   * A file of this version from its cache, if it still has its SHA-256 and status 200, with its
+   * Content-Type and the security headers of the build, and no other header (§6.5). A file that
+   * a page changed in Cache Storage goes.
    */
   async function fromOwnCache({ url, sha256 }: PrecacheFile): Promise<Response | undefined> {
     const key = `${origin}${url}`;
@@ -384,11 +395,11 @@ export function serveApp(scope: WorkerScope, build: BuildData): void {
       await (await scope.caches.open(ownCache)).delete(key);
       return undefined;
     }
-    const headers = decodedHeaders(kept);
+    const headers = keptHeaders(kept.headers);
     for (const [name, value] of build.headers) {
       headers.set(name, value);
     }
-    return new Response(body, { status: 200, statusText: kept.statusText, headers });
+    return new Response(body, { status: 200, headers });
   }
 
   /**
@@ -508,8 +519,9 @@ export function serveApp(scope: WorkerScope, build: BuildData): void {
 
 /**
  * Starts the service worker of a build that turns service workers off (§9): it takes over at
- * once, deletes every cache, unregisters itself and reloads every window from the network. It
- * never touches IndexedDB or any other storage.
+ * once, deletes every cache of the service worker, those whose names start with `pwa-`,
+ * unregisters itself and reloads every window from the network. It never touches IndexedDB or
+ * any other storage.
  */
 export function removeApp(scope: WorkerScope): void {
   scope.addEventListener("install", (event) => {
@@ -519,7 +531,9 @@ export function removeApp(scope: WorkerScope): void {
     event.waitUntil(
       (async () => {
         for (const name of await scope.caches.keys()) {
-          await scope.caches.delete(name);
+          if (name.startsWith(CACHE_PREFIX)) {
+            await scope.caches.delete(name);
+          }
         }
         await scope.registration.unregister();
         await reloadWindows(scope);

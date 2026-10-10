@@ -140,6 +140,25 @@ describe("checkRecord (data model §8, step 1)", () => {
     expect(refusal(crafted)).toBe("invalid");
   });
 
+  it("refuses a member named __proto__ of the record, as a field, and inside an array", () => {
+    const base = `"id":"${LIVE.id}","v":1`;
+    const hlc = LIVE.clock.title;
+    for (const text of [
+      `{${base},"data":{},"clock":{},"__proto__":{"admin":true}}`,
+      `{${base},"data":{"__proto__":1},"clock":{"__proto__":"${hlc}"}}`,
+      `{${base},"data":{"title":[{"__proto__":{"admin":true}}]},"clock":{"title":"${hlc}"}}`,
+    ]) {
+      const crafted: unknown = JSON.parse(text);
+      expect(refusal(crafted)).toBe("invalid");
+    }
+    expect(Object.hasOwn(Object.prototype, "admin")).toBe(false);
+  });
+
+  it("refuses a lone surrogate in the name of a member inside a value", () => {
+    expect(refusal({ ...LIVE, data: { title: { "\udc00": 1 }, done: true } })).toBe("invalid");
+    expect(refusal({ ...LIVE, data: { title: [{ "\ud800": "x" }], done: true } })).toBe("invalid");
+  });
+
   it("refuses clocks after the year 9999, but not clocks from the future (data model §3.5)", () => {
     const after = formatHlc({
       wall: MAX_RECEIVED_WALL + 1,

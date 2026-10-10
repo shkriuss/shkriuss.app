@@ -37,7 +37,10 @@ export type UpdateState =
  */
 export interface AppUpdates {
   readonly getState: () => UpdateState;
-  /** Calls `listener` after each change of the state, until the function it returns is called. */
+  /**
+   * Calls `listener` after each change of the state, and when a version first takes control of
+   * the page (`controlled`), until the function it returns is called.
+   */
   readonly subscribe: (listener: () => void) => () => void;
   /**
    * Makes the waiting version active, then reloads the page into it (§7.2). When the page is
@@ -52,6 +55,14 @@ export interface AppUpdates {
    * False without a service worker, and if Cache Storage fails.
    */
   readonly firstUseKept: () => Promise<boolean>;
+  /**
+   * Whether a version controls the page, so that its requests, and those of its workers, go
+   * through the service worker (§5): false until the first version has taken control, which
+   * comes a moment after it is active, and `ready` says so; false too for a page that the
+   * browser loaded past the service worker, as after a hard reload, which no version will
+   * control. Listeners hear the change.
+   */
+  readonly controlled: () => boolean;
 }
 
 /** A service worker as the page sees it. */
@@ -127,13 +138,22 @@ export function createAppUpdates(
   let updateRequested = false;
   let outdated = false;
   let lastCheck = environment.now();
+  // Whether a version controls the page (§5); a change of controller says so.
+  let controlled =
+    environment.container !== undefined &&
+    mode === "serve" &&
+    environment.container.controller !== null;
+
+  function notify(): void {
+    for (const listener of listeners) {
+      listener();
+    }
+  }
 
   function set(next: UpdateState): void {
     if (next !== state) {
       state = next;
-      for (const listener of listeners) {
-        listener();
-      }
+      notify();
     }
   }
 
@@ -219,16 +239,19 @@ export function createAppUpdates(
   }
 
   async function start(container: ContainerLike): Promise<void> {
-    // The first controller of a page that had none is the first version, not an update (§5).
-    let controlled = container.controller !== null;
     container.addEventListener("controllerchange", () => {
       if (updateRequested) {
         environment.reload();
         return;
       }
+      // The first controller of a page that had none is the first version, not an update (§5).
+      const first = !controlled;
       outdated ||= controlled;
       controlled = true;
       refresh();
+      if (first) {
+        notify();
+      }
     });
     await environment.loaded();
     await register();
@@ -296,6 +319,7 @@ export function createAppUpdates(
       waiting.postMessage(ACTIVATE_MESSAGE, []);
     },
     checkForUpdate,
+    controlled: () => controlled,
     firstUseKept: async () => {
       const { caches } = environment;
       if (container === undefined || mode === "remove" || caches === undefined) {

@@ -1,9 +1,12 @@
+import { Dexie } from "dexie";
 import { IDBFactory, IDBObjectStore, forceCloseDatabase } from "fake-indexeddb";
+import * as fc from "fast-check";
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
-import { DATABASE_NAME, type Item, refusingNewer } from "./db.ts";
+import { DATABASE_NAME, type Database, type Item, refusingNewer } from "./db.ts";
 import { DataLayerError, isStorageFull } from "./errors.ts";
 import { field } from "./fields.ts";
 import { SETTINGS_ID, isRecordId } from "./ids.ts";
+import { checkIncomingStores } from "./incoming.ts";
 import { type SchemaVersion, defineSchemas } from "./schema.ts";
 import {
   START,
@@ -20,9 +23,16 @@ import {
   v2,
 } from "./test/storage.ts";
 
+const DAY = 24 * 60 * 60 * 1000;
+
 /** The HLC of a change `second` seconds after `START`, on another device. */
 function hlcAt(second: number): string {
   return `${String(START + second * 1000).padStart(15, "0")}:00000:9f86d081884c7d65`;
+}
+
+/** A pattern for the HLCs of this device's changes at `wall` with `counter`. */
+function issuedAt(wall: number, counter: number): RegExp {
+  return new RegExp(`^${String(wall).padStart(15, "0")}:${String(counter).padStart(5, "0")}:`);
 }
 
 /** A device's clock that stands still. */
@@ -316,6 +326,31 @@ describe("openDatabase (data model §6, §7)", () => {
     upgraded.close();
   });
 
+  it("finishes a change in flight before another tab's upgrade closes the database, then stays closed", async () => {
+    const factory = new IDBFactory();
+    const onVersionChange = vi.fn<() => void>();
+    const db = await open(VERSION_1, factory, { onVersionChange });
+    const upgrading = Promise.withResolvers<Database<typeof v2>>();
+    const ids = await db.change(async (change) => {
+      const first = await change.create("notes", { title: "Milk" });
+      // The other tab shares nothing with this change, least of all its transaction.
+      upgrading.resolve(Dexie.ignoreTransaction(() => open(VERSION_2, factory)));
+      const second = await change.create("notes", { title: "Eggs" });
+      return [first, second];
+    });
+    // IndexedDB closes a connection only once its transactions have ended: the change was
+    // written whole, never half, and the upgrade then migrated it.
+    expect(onVersionChange).toHaveBeenCalledOnce();
+    const upgraded = await upgrading.promise;
+    expect((await upgraded.list("notes")).map(({ id }) => id)).toStrictEqual(ids);
+    await expect(db.list("notes")).rejects.toThrow(expect.objectContaining({ code: "closed" }));
+    await expect(db.change((change) => change.create("notes", { title: "Tea" }))).rejects.toThrow(
+      expect.objectContaining({ code: "closed" }),
+    );
+    expect(await upgraded.list("notes")).toHaveLength(2);
+    upgraded.close();
+  });
+
   it("closes when another tab deletes the database", async () => {
     const factory = new IDBFactory();
     const onVersionChange = vi.fn<() => void>();
@@ -482,6 +517,52 @@ describe("changes (data model §4)", () => {
     );
   });
 
+  it("gives records created within one millisecond ascending ids, in that order (RFC 9562 §6.2)", async () => {
+    const { db } = await fresh();
+    const ids = await db.change(async (change) => [
+      await change.create("notes", { title: "Milk" }),
+      await change.create("notes", { title: "Eggs" }),
+      await change.create("notes", { title: "Bread" }),
+    ]);
+    // The clock stood still: every id carries the same time.
+    expect(new Set(ids.map((id) => id.slice(0, 13))).size).toBe(1);
+    expect(new Set(ids).size).toBe(3);
+    expect(ids.toSorted()).toStrictEqual(ids);
+    // Across the changes of one connection too, and list() keeps the order.
+    const later = await db.change((change) => change.create("notes", { title: "Tea" }));
+    expect(later > (ids[2] ?? "")).toBe(true);
+    expect((await db.list("notes")).map(({ values }) => values.title)).toStrictEqual([
+      "Milk",
+      "Eggs",
+      "Bread",
+      "Tea",
+    ]);
+  });
+
+  it("as a property: the ids of the records created in one change never decrease, whatever the clock does", async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.array(fc.integer({ min: -2, max: 2 }), { minLength: 1, maxLength: 8 }),
+        async (steps) => {
+          const { clock, db } = await fresh();
+          const ids = await db.change(async (change) => {
+            const created: string[] = [];
+            for (const step of steps) {
+              clock.time += step;
+              created.push(await change.create("notes", { title: "Milk" }));
+            }
+            return created;
+          });
+          expect(ids.every((id) => isRecordId(id))).toBe(true);
+          expect(ids.toSorted()).toStrictEqual(ids);
+          expect(new Set(ids).size).toBe(ids.length);
+          db.close();
+        },
+      ),
+      { numRuns: 30 },
+    );
+  });
+
   it("lists live records, oldest first", async () => {
     const { clock, db } = await fresh();
     const ids: string[] = [];
@@ -621,6 +702,18 @@ describe("settings (data model §2.5)", () => {
     ]);
   });
 
+  it("refuses to delete the settings record, which is never deleted", async () => {
+    const { factory, db } = await fresh();
+    await db.change((change) => change.updateSettings({ sortBy: "date" }));
+    const before = await stored(factory);
+    await expect(
+      // @ts-expect-error -- The settings are never deleted, which TypeScript refuses as well.
+      db.change((change) => change.delete("settings", SETTINGS_ID)),
+    ).rejects.toThrow(expect.objectContaining({ code: "invalid" }));
+    expect(await stored(factory)).toStrictEqual(before);
+    expect(await db.settings()).toStrictEqual({ sortBy: "date" });
+  });
+
   it("refuses settings when the app has none", async () => {
     const db = await open(
       defineSchemas({ version: 1, stores: { notes: { fields: {} } } }),
@@ -693,8 +786,6 @@ describe("device state (data model §7)", () => {
     ["no device id", "device", undefined],
     ["an invalid device id", "device", "DEVICE"],
     ["an invalid clock", "clock", { wall: -1, counter: 0 }],
-    ["an invalid backup state", "backup", { last: null, changes: -1 }],
-    ["a backup of more changes than counted", "backup", { last: null, counted: 1, saved: 2 }],
   ])("refuses to work with %s", async ([_case, key, value]) => {
     const factory = new IDBFactory();
     const db = await open(VERSION_1, factory);
@@ -704,6 +795,96 @@ describe("device state (data model §7)", () => {
     await expect(
       Promise.all([again.device(), again.change(async (change) => change.hlc)]),
     ).rejects.toThrow(expect.objectContaining({ code: "invalid" }));
+    again.close();
+  });
+
+  it.for<[string, unknown]>([
+    ["an invalid backup state", { last: null, changes: -1 }],
+    ["a backup of more changes than counted", { last: null, counted: 1, saved: 2 }],
+    ["a backup state with a fractional count", { last: null, counted: 1.5, saved: 0 }],
+    ["something else as the backup state", "soon"],
+  ])(
+    "reads %s as no backup, which only feeds reminders, and stores the state afresh with the next write",
+    async ([_case, value]) => {
+      const factory = new IDBFactory();
+      const db = await open(VERSION_1, factory);
+      db.close();
+      await setMeta(factory, "backup", value);
+      const again = await open(VERSION_1, factory);
+      expect(await again.device()).toMatchObject({ lastBackup: null, changesSinceBackup: 0 });
+      expect((await again.snapshot()).counted).toBe(0);
+      await again.change((change) => change.create("notes", { title: "Milk" }));
+      expect(await again.device()).toMatchObject({ lastBackup: null, changesSinceBackup: 1 });
+      again.close();
+      expect((await stored(factory)).stores["meta"]).toContainEqual({
+        key: "backup",
+        value: { last: null, counted: 1, saved: 0 },
+      });
+    },
+  );
+
+  it.each([1.5, Number.NaN, -1, Number.POSITIVE_INFINITY])(
+    "refuses to record a backup of %d changes, and records nothing",
+    async (counted) => {
+      const { factory, db } = await fresh();
+      await db.change((change) => change.create("notes", { title: "Milk" }));
+      const before = await stored(factory);
+      await expect(db.recordBackup(counted)).rejects.toThrow(
+        expect.objectContaining({ code: "invalid" }),
+      );
+      expect(await stored(factory)).toStrictEqual(before);
+      expect(await db.device()).toMatchObject({ lastBackup: null, changesSinceBackup: 1 });
+    },
+  );
+
+  it("takes the greatest last change of its records as its last HLC when meta has none, as after damage", async () => {
+    const factory = new IDBFactory();
+    const clock = new Clock();
+    const db = await open(VERSION_1, factory, { now: clock.now });
+    clock.time = START + 2 * DAY;
+    const id = await db.change((change) => change.create("notes", { title: "Milk" }));
+    db.close();
+    await setMeta(factory, "clock", undefined);
+    clock.time = START;
+    const again = await open(VERSION_1, factory, { now: clock.now });
+    // Starting from (0, 0), the change would be earlier than the record's last, and refused.
+    const hlc = await again.change(async (change) => {
+      await change.update("notes", id, { done: true });
+      return change.hlc;
+    });
+    expect(hlc).toMatch(issuedAt(START + 2 * DAY, 1));
+    again.close();
+    expect((await stored(factory)).stores["meta"]).toContainEqual({
+      key: "clock",
+      value: { wall: START + 2 * DAY, counter: 1 },
+    });
+  });
+
+  it("takes it from its records before it receives a backup's clock, when meta has none", async () => {
+    const factory = new IDBFactory();
+    const clock = new Clock();
+    const db = await open(VERSION_1, factory, { now: clock.now });
+    clock.time = START + 2 * DAY;
+    await db.change((change) => change.create("notes", { title: "Milk" }));
+    db.close();
+    await setMeta(factory, "clock", undefined);
+    clock.time = START;
+    const again = await open(VERSION_1, factory, { now: clock.now });
+    // An older backup, whose clock lies before the records'.
+    const older = {
+      id: "01a10307-b840-78aa-ab29-1a1138faaff6",
+      v: 1,
+      data: { title: "Eggs" },
+      clock: { title: hlcAt(1) },
+    };
+    await again.import(
+      checkIncomingStores(VERSION_1, 1, { notes: [older], lists: [], settings: [] }),
+    );
+    expect((await stored(factory)).stores["meta"]).toContainEqual({
+      key: "clock",
+      value: { wall: START + 2 * DAY, counter: 0 },
+    });
+    expect(await again.change(async (change) => change.hlc)).toMatch(issuedAt(START + 2 * DAY, 1));
     again.close();
   });
 });

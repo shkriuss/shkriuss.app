@@ -7,7 +7,8 @@ import { checkAgainstLive } from "./live.ts";
  *   node packages/edge/src/cli.ts check-live <build directory> <origin>
  *
  * Fails when the build would serve a file in /assets/ that the origin already serves under
- * the same name with different content (ADR 0010).
+ * the same name with different content (ADR 0010), and when the origin does not serve its
+ * manifest, unless its host has no DNS record yet.
  */
 async function main(args: readonly string[]): Promise<number> {
   const [command, directory, origin] = args;
@@ -19,7 +20,7 @@ async function main(args: readonly string[]): Promise<number> {
   }
   const result = await checkAgainstLive(directory, origin);
   if (!result.compared) {
-    process.stdout.write(`${origin} serves no manifest yet, so there is nothing to compare.\n`);
+    process.stdout.write(`${origin} has no DNS record yet, so there is nothing to compare.\n`);
     return 0;
   }
   if (result.replaced.length === 0) {

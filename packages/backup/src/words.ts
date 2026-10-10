@@ -1,7 +1,10 @@
 /*!
  * The 2,048 words of generated passphrases (backup format §3.1): the English word list of
  * BIP-39 (https://github.com/bitcoin/bips/blob/master/bip-0039/english.txt), by Marek Palatinus,
- * Pavol Rusnak, Aaron Voisine and Sean Bowe, which falls under the MIT License:
+ * Pavol Rusnak, Aaron Voisine and Sean Bowe. The BIP's header says "License: MIT"
+ * (https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki, checked on 2026-10-10), and a
+ * BIP's license covers the files that come with it, such as its word lists (BIP-2). The MIT
+ * License:
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of this software
  * and associated documentation files (the "Software"), to deal in the Software without

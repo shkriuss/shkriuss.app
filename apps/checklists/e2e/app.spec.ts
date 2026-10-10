@@ -599,6 +599,38 @@ test("a list follows the changes made in another window, up to its deletion", as
   await expect(page.getByRole("heading", { level: 1, name: "List not found" })).toBeVisible();
 });
 
+test("an item deleted in another window cannot be saved here, and the app says so, without asking for a reload", async ({
+  page,
+  context,
+}) => {
+  await open(page);
+  const groceries = await addList(page, "Groceries");
+  await addItem(page, "Milk");
+  await addItem(page, "Eggs");
+
+  // The dialog holds the item as it was when it opened; the other window deletes it meanwhile,
+  // and the list behind the dialog follows.
+  const dialog = await edit(page, "Milk");
+  const other = await context.newPage();
+  await other.goto(`/lists/${groceries}`);
+  await deleteItem(other, "Milk");
+  await expect(checkbox(page, "Milk")).toHaveCount(0);
+
+  await dialog.getByRole("textbox", { name: "Text" }).fill("Oat milk");
+  await dialog.getByRole("button", { name: "Save" }).click();
+  await expect(dialog.getByRole("alert")).toHaveText(
+    "This item was deleted in another window or on another device.",
+  );
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(texts(page, "To do")).toHaveText(["Eggs"]);
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  // No reload is needed: the next change is saved.
+  await addItem(page, "Bread");
+  await expect(texts(page, "To do")).toHaveText(["Eggs", "Bread"]);
+  await expect(texts(other, "To do")).toHaveText(["Eggs", "Bread"]);
+});
+
 test("backups merge what two devices changed, as the spec's table says", async ({
   page: a,
   otherDevice: b,

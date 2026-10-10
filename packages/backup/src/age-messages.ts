@@ -17,6 +17,7 @@ const CODES: readonly BackupErrorCode[] = [
   "not-a-backup",
   "wrong-passphrase",
   "damaged",
+  "no-memory",
   "other-app",
   "newer-version",
   "invalid",

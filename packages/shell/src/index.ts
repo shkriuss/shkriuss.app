@@ -9,7 +9,7 @@ export { InstallSection, type InstallSectionProps } from "./InstallSection.tsx";
 export { Licenses } from "./Licenses.tsx";
 export { LICENSES_PATH, REPORT_URL, SECURITY_URL, SOURCE_URL } from "./links.ts";
 export { NotFound } from "./NotFound.tsx";
-export { observedStore, type Observed, type ObservedStore } from "./observed.ts";
+export type { Observed } from "./observed.ts";
 export { Restore, type RestoreDatabase, type RestoreProps } from "./Restore.tsx";
 export { Screen, type ScreenProps } from "./Screen.tsx";
 export { ScreenLink } from "./ScreenLink.tsx";
@@ -19,6 +19,7 @@ export {
   SettingsScreenWithoutData,
   type SettingsScreenWithoutDataProps,
 } from "./SettingsScreenWithoutData.tsx";
+export { StartBlocked, type StartBlockedProps } from "./StartBlocked.tsx";
 export { StartFailed, type StartFailedProps } from "./StartFailed.tsx";
 export { StorageSection, type StorageSectionProps } from "./StorageSection.tsx";
 export { UpdateBanner, type UpdateBannerProps } from "./UpdateBanner.tsx";

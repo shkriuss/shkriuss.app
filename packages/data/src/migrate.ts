@@ -31,6 +31,15 @@ function run(compute: () => JsonValue, where: string): JsonValue {
   return toJsonValue(value, `The result of ${where}`);
 }
 
+/**
+ * A copy of a stored value for an app's migration function, so that one which changes what it
+ * is given, against data model §6, changes nothing that the record keeps or that another
+ * function sees.
+ */
+function given(value: JsonValue, field: string): JsonValue {
+  return toJsonValue(value, `The field ${field}`);
+}
+
 /** The default of a field of the previous version, which a missing field reads as. */
 function defaultOf(store: StoreSchema, field: string): JsonValue {
   const value = has(store.fields, field) ? store.fields[field]?.defaultValue : undefined;
@@ -65,7 +74,9 @@ export function migrateStep(
     const name = has(rename, field) ? (rename[field] ?? field) : field;
     const conversion = has(convert, field) ? convert[field] : undefined;
     data[name] =
-      conversion === undefined ? value : run(() => conversion(value), `${where} (${field})`);
+      conversion === undefined
+        ? value
+        : run(() => conversion(given(value, field)), `${where} (${field})`);
     clock[name] = hlc;
   }
   for (const [name, computed] of Object.entries(migration?.compute ?? {})) {
@@ -74,7 +85,7 @@ export function migrateStep(
     for (const source of computed.from) {
       hlc = maxHlc(hlc, record.clock[source]);
       values[source] = has(record.data, source)
-        ? (record.data[source] ?? null)
+        ? given(record.data[source] ?? null, source)
         : defaultOf(before, source);
     }
     // A field computed only from missing fields is missing too.

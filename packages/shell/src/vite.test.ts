@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { build } from "vite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { type AppConfig, app, pageHead } from "./vite.ts";
+import { type AppConfig, app, BUILD_TARGET, chunkSizeWarningLimit, pageHead } from "./vite.ts";
 
 const roots: string[] = [];
 
@@ -226,6 +226,27 @@ describe("app", () => {
       /"url":"\/licenses\.txt","sha256":"[0-9a-f]{64}","firstUse":true\}/,
     );
     expect(serviceWorker).toContain('"replaces":["0123456789abcdef"]');
+  });
+
+  it("writes the build for the browsers of architecture §14: Safari 18, and the Chrome, Edge and Firefox of its time", () => {
+    expect(BUILD_TARGET).toStrictEqual([
+      "es2024",
+      "chrome120",
+      "edge120",
+      "firefox128",
+      "safari18",
+      "ios18",
+    ]);
+    expect(app(NOTES).build?.target).toStrictEqual([...BUILD_TARGET]);
+    expect(app({ ...NOTES, keepsData: false }).build?.target).toStrictEqual([...BUILD_TARGET]);
+  });
+
+  it("warns of a large chunk only beyond the first page's budget, counted in minified bytes (ADR 0018)", () => {
+    // 180 kB and 150 kB gzipped, which gzip shrinks from about three and a half times as much.
+    expect(app(NOTES).build?.chunkSizeWarningLimit).toBe(630);
+    expect(app({ ...NOTES, keepsData: false }).build?.chunkSizeWarningLimit).toBe(525);
+    expect(chunkSizeWarningLimit(100_000)).toBe(350);
+    expect(chunkSizeWarningLimit(100_001)).toBe(351);
   });
 
   it("refuses an id that cannot be an app's, before anything is built", () => {

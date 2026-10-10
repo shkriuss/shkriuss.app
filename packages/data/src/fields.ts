@@ -180,6 +180,7 @@ export const field = {
     const bounds = Number.isFinite(min) || Number.isFinite(max) ? ` from ${min} to ${max}` : "";
     const isValid = (value: unknown): boolean =>
       typeof value === "number" &&
+      Number.isFinite(value) &&
       value >= min &&
       value <= max &&
       (!integer || Number.isSafeInteger(value));

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Mistake } from "./protocol.ts";
-import { applyFix, excerptOf, ignoreKey, plainMessage } from "./text.ts";
+import { applyFix, excerptOf, ignoredBy, ignoreKey, plainMessage } from "./text.ts";
 
 function mistake(text: string, words: string, from = 0): Mistake {
   const start = text.indexOf(words, from);
@@ -68,5 +68,59 @@ describe("ignoreKey", () => {
     expect(ignoreKey(text, mistake(text, "teh"))).not.toBe(
       ignoreKey(text, mistake(text, "teh", 10)),
     );
+  });
+});
+
+/**
+ * Whether the mistake at `words` in `text` is ignored, by the mistake at `ignoredWords` in
+ * `ignoredText`, which the user ignored.
+ */
+function ignored(ignoredText: string, ignoredWords: string, text: string, words: string) {
+  const isIgnored = ignoredBy(
+    new Set([ignoreKey(ignoredText, mistake(ignoredText, ignoredWords))]),
+  );
+  return isIgnored(text, mistake(text, words));
+}
+
+describe("ignoredBy", () => {
+  it("hides the mistake while its words and the 12 characters on each side stay, wherever they move", () => {
+    const text = "Once upon a time there was teh cat whose name nobody knew.";
+    expect(ignored(text, "teh", text, "teh")).toBe(true);
+    expect(ignored(text, "teh", `Yes. ${text}`, "teh")).toBe(true);
+    // Just the 12 characters on each side left.
+    expect(ignored(text, "teh", "e there was teh cat whose n", "teh")).toBe(true);
+    // Fewer: the text right around the words changed.
+    expect(ignored(text, "teh", "there was teh cat whose n", "teh")).toBe(false);
+    expect(ignored(text, "teh", "e there was teh cat whose", "teh")).toBe(false);
+    expect(ignored(text, "teh", text.replace("teh cat", "teh dog"), "teh")).toBe(false);
+  });
+
+  it("keeps a mistake at the text's start or end hidden when text comes before or after it", () => {
+    // Ignored at the start, with nothing before its words; then text is put before them.
+    const atStart = "Teh cat sat on the mat.";
+    expect(ignored(atStart, "Teh", `Hello. ${atStart}`, "Teh")).toBe(true);
+    expect(ignored(atStart, "Teh", `Hello there, you. ${atStart}`, "Teh")).toBe(true);
+    // Ignored near the start, with less than 12 characters before its words.
+    const nearStart = "Hello. Teh cat sat on the mat.";
+    expect(ignored(nearStart, "Teh", `Well, well. ${nearStart}`, "Teh")).toBe(true);
+    // The text right around the words changed, or went: the mistake comes back.
+    expect(ignored(nearStart, "Teh", "Hallo. Teh cat sat on the mat.", "Teh")).toBe(false);
+    expect(ignored(nearStart, "Teh", atStart, "Teh")).toBe(false);
+    // And at the end, with nothing after its words, then text after them.
+    const atEnd = "The cat sat on teh";
+    expect(ignored(atEnd, "teh", `${atEnd} mat, and slept.`, "teh")).toBe(true);
+    expect(ignored(`${atEnd} mat.`, "teh", `${atEnd} mat. Then it slept.`, "teh")).toBe(true);
+    expect(ignored(`${atEnd} mat.`, "teh", `${atEnd} rug.`, "teh")).toBe(false);
+    expect(ignored(`${atEnd} mat.`, "teh", atEnd, "teh")).toBe(false);
+  });
+
+  it("goes by the kind, the message and the words too", () => {
+    const text = "I saw teh dog.";
+    const isIgnored = ignoredBy(new Set([ignoreKey(text, mistake(text, "teh"))]));
+    expect(isIgnored(text, mistake(text, "teh"))).toBe(true);
+    expect(isIgnored(text, { ...mistake(text, "teh"), kind: "Typo" })).toBe(false);
+    expect(isIgnored(text, { ...mistake(text, "teh"), message: "Another." })).toBe(false);
+    expect(isIgnored(text, mistake(text, "teh dog"))).toBe(false);
+    expect(ignoredBy(new Set())(text, mistake(text, "teh"))).toBe(false);
   });
 });

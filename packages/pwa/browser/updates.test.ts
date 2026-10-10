@@ -136,8 +136,47 @@ describe("the first version (§5)", () => {
     const seen = states(updates);
     page.registration.activated();
     container.takeOver();
-    expect(seen).toStrictEqual(["ready"]);
+    // Ready once active; the listener hears again when the version takes control, not as a
+    // change of state (it stays ready) but of `controlled()`.
+    expect(seen).toStrictEqual(["ready", "ready"]);
     expect(page.reload).not.toHaveBeenCalled();
+  });
+});
+
+describe("control of the page (§5)", () => {
+  it("is false until the first version takes control, which listeners hear", async () => {
+    const container = new FakeContainer({ controlled: false });
+    const page = new FakePage({ container });
+    page.registration.installing = new FakeWorker("installing");
+    const updates = createAppUpdates(page, "serve");
+    await page.finishLoading();
+    const listener = vi.fn<() => void>();
+    updates.subscribe(listener);
+    page.registration.activated();
+    // Active, so ready, but the page is not controlled until the version claims it.
+    expect(updates.getState()).toBe("ready");
+    expect(updates.controlled()).toBe(false);
+    expect(listener).toHaveBeenCalledOnce();
+    container.takeOver();
+    expect(updates.controlled()).toBe(true);
+    expect(updates.getState()).toBe("ready");
+    expect(listener).toHaveBeenCalledTimes(2);
+  });
+
+  it("is true from the start for a page that a version controls, and stays so when another takes over", async () => {
+    const { container, updates } = await controlledPage();
+    expect(updates.controlled()).toBe(true);
+    container.takeOver();
+    expect(updates.controlled()).toBe(true);
+    expect(updates.getState()).toBe("outdated");
+  });
+
+  it("is false without service workers, and in a build that removes them", async () => {
+    expect(createAppUpdates(new FakePage({ container: undefined }), "serve").controlled()).toBe(
+      false,
+    );
+    const container = new FakeContainer({ controlled: true });
+    expect(createAppUpdates(new FakePage({ container }), "remove").controlled()).toBe(false);
   });
 });
 

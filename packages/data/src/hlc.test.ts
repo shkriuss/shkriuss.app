@@ -5,12 +5,14 @@ import {
   INITIAL_CLOCK,
   MAX_CLOCK_AHEAD,
   MAX_COUNTER,
+  MAX_RECEIVED_AHEAD,
   MAX_RECEIVED_WALL,
   MAX_WALL,
   formatHlc,
   isDeviceId,
   isFromFuture,
   isHlc,
+  isTooFarAhead,
   issueHlc,
   maxHlc,
   newDeviceId,
@@ -172,6 +174,13 @@ describe("receiveHlc (data model §3.4)", () => {
     expect(next.hlc > received).toBe(true);
   });
 
+  it("moves the next HLC to the following millisecond after receiving one whose counter is full", () => {
+    const full = formatHlc({ wall: 9_000, counter: MAX_COUNTER, device: "ffffffffffffffff" });
+    const received = receiveHlc(last, full);
+    expect(received).toStrictEqual({ wall: 9_000, counter: MAX_COUNTER });
+    expect(issueHlc(received, 1_000, DEVICE).clock).toStrictEqual({ wall: 9_001, counter: 0 });
+  });
+
   it("refuses something that is not an HLC", () => {
     expect(() => receiveHlc(last, "not an HLC")).toThrow(DataLayerError);
   });
@@ -217,6 +226,43 @@ describe("MAX_RECEIVED_WALL (data model §3.5)", () => {
   it("leaves a device that received it more HLCs than it could ever issue", () => {
     // Each millisecond up to MAX_WALL holds 65,536 HLCs.
     expect((MAX_WALL - MAX_RECEIVED_WALL) * (MAX_COUNTER + 1)).toBeGreaterThan(1e19);
+  });
+});
+
+describe("isTooFarAhead (data model §3.5)", () => {
+  const now = 1_791_052_200_000;
+
+  it("allows 100 years, as 36,525 days, ahead of this device's clock", () => {
+    expect(MAX_RECEIVED_AHEAD).toBe(100 * 365.25 * 24 * 60 * 60 * 1000);
+    const limit = formatHlc({
+      wall: now + MAX_RECEIVED_AHEAD,
+      counter: MAX_COUNTER,
+      device: DEVICE,
+    });
+    expect(isTooFarAhead(limit, now)).toBe(false);
+    expect(isTooFarAhead(EXAMPLE, now)).toBe(false);
+  });
+
+  it("is true for anything later, as for the end of the year 9999", () => {
+    const later = formatHlc({ wall: now + MAX_RECEIVED_AHEAD + 1, counter: 0, device: DEVICE });
+    expect(isTooFarAhead(later, now)).toBe(true);
+    const last = formatHlc({ wall: MAX_RECEIVED_WALL, counter: 0, device: DEVICE });
+    expect(isTooFarAhead(last, now)).toBe(true);
+  });
+
+  it("never catches the next change of a device that received an HLC just within it: a millisecond has passed", () => {
+    const limit = formatHlc({
+      wall: now + MAX_RECEIVED_AHEAD,
+      counter: MAX_COUNTER,
+      device: DEVICE,
+    });
+    const next = issueHlc(receiveHlc(INITIAL_CLOCK, limit), now, DEVICE);
+    expect(next.clock).toStrictEqual({ wall: now + MAX_RECEIVED_AHEAD + 1, counter: 0 });
+    expect(isTooFarAhead(next.hlc, now + 1)).toBe(false);
+  });
+
+  it("refuses something that is not an HLC", () => {
+    expect(() => isTooFarAhead("soon", now)).toThrow(DataLayerError);
   });
 });
 

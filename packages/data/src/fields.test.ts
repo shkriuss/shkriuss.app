@@ -32,7 +32,12 @@ describe("field types (data model §2.3)", () => {
   });
 
   it("number: finite, within its bounds, and whole if asked", () => {
-    check(field.number(), [0, -1.5, 1e300], ["1", null, true]);
+    check(
+      field.number(),
+      [0, -1.5, 1e300],
+      ["1", null, true, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY],
+    );
+    check(field.number({ min: 0 }), [0, 1e300], [Number.POSITIVE_INFINITY]);
     const type = field.number({ min: 1, max: 10, integer: true });
     check(type, [1, 10, 5], [0, 11, 1.5, Number.NaN]);
     expect(type.description).toBe("a whole number from 1 to 10");

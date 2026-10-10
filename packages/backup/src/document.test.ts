@@ -115,6 +115,34 @@ describe("readBackup (backup format §5.3–§5.5)", () => {
     ],
     ["a member too many", changed((document) => (document["comment"] = "Mine")), "invalid"],
     ["a member too few", changed((document) => delete document["exported"]), "invalid"],
+    // JSON gives __proto__ and constructor as keys of the document's own, like any other.
+    [
+      "a member named __proto__ too many",
+      encode(example().replace('"stores": {', '"__proto__": { "polluted": true },\n  "stores": {')),
+      "invalid",
+    ],
+    [
+      "a member named constructor too many",
+      encode(
+        example().replace('"stores": {', '"constructor": { "prototype": {} },\n  "stores": {'),
+      ),
+      "invalid",
+    ],
+    [
+      "a member named __proto__ in the place of one",
+      encode(example().replace('"exported"', '"__proto__"')),
+      "invalid",
+    ],
+    [
+      "a store named __proto__",
+      encode(example().replace('"settings": [', '"__proto__": [')),
+      "invalid",
+    ],
+    [
+      "a store named constructor",
+      encode(example().replace('"notes": [', '"constructor": [')),
+      "invalid",
+    ],
     ["an app that is not a string", changed((document) => (document["app"] = 1)), "invalid"],
     ["an app that is not an app id", changed((document) => (document["app"] = "Notes")), "invalid"],
     ["another app", changed((document) => (document["app"] = "todo")), "other-app"],
@@ -200,6 +228,18 @@ describe("readBackup (backup format §5.3–§5.5)", () => {
     ],
   ])("refuses %s", (_case, bytes, code) => {
     expect(refusal(bytes).code).toBe(code);
+  });
+
+  it("leaves every object as it was after a backup names __proto__ or constructor", () => {
+    for (const name of ["__proto__", "constructor"]) {
+      refusal(
+        encode(example().replace('"stores": {', `"${name}": { "polluted": true },\n  "stores": {`)),
+      );
+      refusal(encode(example().replace('"settings": [', `"${name}": [`)));
+    }
+    expect("polluted" in {}).toBe(false);
+    expect(Object.hasOwn(Object.prototype, "polluted")).toBe(false);
+    expect(Object.getPrototypeOf({})).toBe(Object.prototype);
   });
 
   it("names the other app if its id is valid", () => {

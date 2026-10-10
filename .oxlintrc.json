@@ -24,6 +24,31 @@
     "react/no-danger": "error",
     "react/jsx-no-script-url": "error",
     "react/react-in-jsx-scope": "off",
+    // No inline styles (CLAUDE.md, security rule 3): no style prop on elements or components.
+    // `pnpm check html` refuses the attribute in HTML, and `pnpm check code` refuses
+    // element.style and setAttribute("style", …), which no lint rule sees.
+    "react/forbid-dom-props": [
+      "error",
+      {
+        "forbid": [
+          {
+            "propName": "style",
+            "message": "Inline styles are not allowed; use classes (CLAUDE.md, security rule 3)."
+          }
+        ]
+      }
+    ],
+    "react/forbid-component-props": [
+      "error",
+      {
+        "forbid": [
+          {
+            "propName": "style",
+            "message": "Inline styles are not allowed; use classes (CLAUDE.md, security rule 3)."
+          }
+        ]
+      }
+    ],
     // UI text comes only from message modules (ADR 0012): no text in JSX, and no strings in
     // the attributes that people read or hear. Class names, ids and links stay strings.
     "react/jsx-no-literals": [
@@ -153,6 +178,11 @@
       {
         "property": "getDirectory",
         "message": "Apps reach files only through @shkriuss/backup (CLAUDE.md, data rule 1)."
+      },
+      {
+        "object": "Math",
+        "property": "random",
+        "message": "Math.random is predictable; take random values from crypto.getRandomValues (CLAUDE.md, security rule 5)."
       }
     ],
 

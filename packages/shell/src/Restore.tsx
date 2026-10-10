@@ -16,6 +16,7 @@ import { Button, Dialog, FileButton, TextField } from "@shkriuss/ui";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { m } from "./data-messages.ts";
 import { restoreErrorMessage } from "./restore-errors.ts";
+import { stopOnUnmount } from "./work.ts";
 
 /** What restoring uses of the app's database, from `openDatabase()` of `@shkriuss/data`. */
 export interface RestoreDatabase {
@@ -143,6 +144,9 @@ export function Restore({ app, db, schemas, onRestored }: RestoreProps) {
     }
   }, [step.name]);
 
+  // The dialog went away without closing, as when the user navigates elsewhere: the work stops.
+  useEffect(() => stopOnUnmount(work), []);
+
   const close = (): void => {
     work.current?.abort();
     work.current = undefined;
@@ -214,7 +218,15 @@ export function Restore({ app, db, schemas, onRestored }: RestoreProps) {
     case "closed":
       break;
     case "reading":
-      body = <p>{m.reading()}</p>;
+      body = (
+        <>
+          <p>{m.reading()}</p>
+          <Actions>
+            {/* Escape closes the dialog too, but a phone has no Escape key. */}
+            <Button onPress={close}>{m.cancel()}</Button>
+          </Actions>
+        </>
+      );
       break;
     case "passphrase": {
       const { file, wrong } = step;

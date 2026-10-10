@@ -5,7 +5,9 @@
  * - `too-large`: a file larger than 64 MiB, or a backup that would be;
  * - `not-a-backup`: neither an age file nor a backup document;
  * - `wrong-passphrase`: the passphrase does not decrypt the file; the user can try again;
- * - `damaged`: a damaged or truncated age file, or one whose work factor is above 20;
+ * - `damaged`: a damaged or truncated age file, or one whose work factor is above 18;
+ * - `no-memory`: the device could not give the worker the memory that deriving the key takes;
+ *   the user can try again, once other apps or tabs are closed;
  * - `other-app`: a backup of another app, whose id `app` names if it is a valid app id;
  * - `newer-version`: made by a newer version of the app, with a newer format or schema version;
  * - `invalid`: any other failed check: the backup is damaged or was changed.
@@ -17,6 +19,7 @@ export type BackupErrorCode =
   | "not-a-backup"
   | "wrong-passphrase"
   | "damaged"
+  | "no-memory"
   | "other-app"
   | "newer-version"
   | "invalid";
