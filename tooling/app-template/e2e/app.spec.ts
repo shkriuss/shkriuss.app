@@ -150,6 +150,24 @@ test("an empty or blank item is refused, with what to do, and one click adds the
   await expect(page.getByRole("listitem").filter({ hasText: "Milk" })).toBeVisible();
 });
 
+test("a double submit adds the item once", async ({ page }) => {
+  await open(page);
+  const field = page.getByRole("textbox", { name: "New item" });
+  await field.fill("Milk");
+  // Two submits at once, as a double tap on "Add" can make before the first item is saved.
+  await field.evaluate((input: HTMLInputElement) => {
+    input.form?.requestSubmit();
+    input.form?.requestSubmit();
+  });
+  await expect(field).toHaveValue("");
+  // Changes are saved in turn: once "Eggs" is there, whatever the double submit added is too.
+  await add(page, "Eggs");
+  await expect(page.getByRole("list", { name: "Items" }).getByRole("listitem")).toHaveText([
+    "MilkDelete",
+    "EggsDelete",
+  ]);
+});
+
 test("the settings have every part that every app has", async ({ page }) => {
   await page.goto("/settings");
   await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
