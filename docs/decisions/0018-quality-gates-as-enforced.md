@@ -1,6 +1,6 @@
 # ADR 0018: Quality gates as CI enforces them
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-10-08
 
 ## Context
@@ -29,7 +29,7 @@ Measured on 2026-10-10, the first page's JavaScript, gzipped at level 9:
    2. **Unit and property tests:**
       - unit tests with Vitest;
       - property-based tests with fast-check for data, merge, migration and backup code;
-      - at least 90% coverage of lines, branches, functions and statements in every platform package.
+      - at least 90% coverage of lines, branches, functions and statements in every platform package but `@shkriuss/config`, whose Playwright setup is test code that every end-to-end test runs.
    3. **Component tests in real browsers:** the platform's test app, `tooling/platform-e2e`, with Playwright in Chromium, Firefox and WebKit.
    4. **End-to-end tests,** as ADR 0008 sets them:
       - Chromium, Firefox and WebKit, in phone and tablet viewports;
@@ -51,7 +51,7 @@ Measured on 2026-10-10, the first page's JavaScript, gzipped at level 9:
 - Every gate in this ADR runs: an accepted ADR asks for nothing that CI does not do.
 - Apps with data get 30 kB more than ADR 0008 allowed, which the platform's own code needs. Checklists fits, with 3 kB to spare: before its first page grows, its settings and backups load on demand, which wins about 16 kB.
 - A gzip budget is a stand-in for what browsers download: Cloudflare compresses with Brotli or zstd, a little smaller. It changes only with the code, so the check never flakes.
-- The coverage threshold now covers every platform package, as their configurations already do.
+- The coverage threshold now covers every platform package with code of its own: six had it, and `@shkriuss/edge` gets it with this ADR.
 
 ## Alternatives considered
 

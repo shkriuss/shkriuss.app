@@ -133,7 +133,7 @@ jobs:
           RESULT: ${{ needs.e2e-part.result }}
 
   # Every merge to main builds every app in apps/, the hub among them, once every check has
-  # passed (ADR 0006). The build runs the code of many dependencies, so it runs here, without
+  # passed (ADR 0017). The build runs the code of many dependencies, so it runs here, without
   # secrets; the deploy jobs only check its files and run Wrangler.
   build:
     name: Build

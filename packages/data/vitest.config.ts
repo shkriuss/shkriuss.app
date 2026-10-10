@@ -6,7 +6,7 @@ export default defineConfig({
       provider: "v8",
       include: ["src/**/*.ts"],
       exclude: ["src/**/*.test.ts", "src/test/**"],
-      // ADR 0008: at least 90% of lines and branches in @shkriuss/data.
+      // ADR 0018: at least 90% of lines and branches in @shkriuss/data.
       thresholds: { lines: 90, branches: 90, functions: 90, statements: 90 },
     },
   },

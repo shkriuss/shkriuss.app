@@ -1,6 +1,6 @@
 # ADR 0006: Hosting and deployment on Cloudflare
 
-- **Status:** Accepted
+- **Status:** Superseded by [ADR 0017](0017-deploy-and-fix-forward.md)
 - **Date:** 2026-10-04
 
 ## Context

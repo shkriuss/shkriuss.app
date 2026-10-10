@@ -1,6 +1,6 @@
 # ADR 0016: The frontend stack as built
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-10-08
 
 ## Context

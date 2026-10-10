@@ -81,7 +81,7 @@ Messages are for developers and contain no data from the backup, only ids. An un
 - **Stopping:** `createBackupFile()` and `readBackupFile()` take a `signal`. When it aborts, as when the user closes the dialog, the worker stops at once, so that two never derive keys together, and the call rejects with the signal's reason. A worker whose script has not run yet stops as soon as it has, which it says first: Firefox can crash the page when a worker stops while its script still compiles.
 - **The worker in Node.js:** the unit tests replace `@shkriuss/edge/workers` with `src/test/worker.ts`, which runs the worker's module on the test's thread and clones the messages as a browser does. They use a low work factor, which keeps them fast.
 - **In browsers:** the [platform end-to-end tests](../../tooling/platform-e2e) make and read encrypted backups through the real worker, under the production headers, at work factor 18, and read the files that the age command-line tool made.
-- **Properties** (fast-check, [ADR 0008](../../docs/decisions/0008-quality-gates.md)):
+- **Properties** (fast-check, [ADR 0018](../../docs/decisions/0018-quality-gates-as-enforced.md)):
   - every snapshot of generated records reads back exactly as it was written;
   - any bytes, any JSON value, and the spec's example with any one part changed or removed are refused with a `BackupError`, or read into contents that write and read back the same;
   - a passphrase uses all 66 random bits and nothing else.

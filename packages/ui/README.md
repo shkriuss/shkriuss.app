@@ -1,6 +1,6 @@
 # @shkriuss/ui
 
-The look that every app shares ([architecture §10](../../docs/architecture.md#10-user-interface)): design tokens, a light and a dark theme, base styles, and accessible components built on [React Aria](https://react-spectrum.adobe.com/react-aria/), on [Tailwind CSS](https://tailwindcss.com) 4 ([ADR 0005](../../docs/decisions/0005-frontend-stack.md)).
+The look that every app shares ([architecture §10](../../docs/architecture.md#10-user-interface)): design tokens, a light and a dark theme, base styles, and accessible components built on [React Aria](https://react-spectrum.adobe.com/react-aria/), on [Tailwind CSS](https://tailwindcss.com) 4 ([ADR 0016](../../docs/decisions/0016-frontend-stack-as-built.md)).
 
 | File          | What it is                                                                          |
 | ------------- | ----------------------------------------------------------------------------------- |

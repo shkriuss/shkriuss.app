@@ -1,5 +1,5 @@
 /**
- * The end-to-end test setup that every app shares (architecture §15, ADR 0008):
+ * The end-to-end test setup that every app shares (architecture §15, ADR 0018):
  *
  * - `playwrightConfig()`: the browsers and devices, and a server that serves the production
  *   build with its generated headers, as Cloudflare does;
@@ -100,7 +100,7 @@ export function playwrightConfig({ port }: PlaywrightOptions): PlaywrightTestCon
     testDir: "e2e",
     fullyParallel: true,
     forbidOnly: inCi,
-    // Flaky tests are fixed, never retried into passing (ADR 0008).
+    // Flaky tests are fixed, never retried into passing (ADR 0018).
     retries: 0,
     reporter: inCi ? [["github"], ["list"]] : "list",
     use: {
