@@ -21,8 +21,8 @@ async function answer(request: unknown, port: MessagePort): Promise<void> {
     // Moved, not copied: the worker ends after this.
     port.postMessage(response, [output.buffer]);
   } catch (error) {
-    // Only what the page needs: the details of an unexpected error, such as running out of
-    // memory, stay here.
+    // Only what the page needs: the details of an unexpected error stay here. Running out of
+    // memory is expected, and a `BackupError` of its own.
     const response: AgeResponse =
       error instanceof BackupError
         ? { ok: false, code: error.code, message: error.message }

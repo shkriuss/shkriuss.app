@@ -80,7 +80,7 @@ The document is an object with these members and no others:
 Encrypted backups use [age, version 1](https://age-encryption.org/v1), through the `age-encryption` library ([ADR 0004](../decisions/0004-local-data-and-backups.md)):
 
 - **Passphrase only:** the header has exactly one recipient stanza, of type `scrypt`.
-- **Work factor:** exporters use log2(N) = 18, with r = 8 and p = 1, so deriving the key takes 256 MiB of memory. Importers accept at most 18, as `age` and `age-encryption` write it: each step above doubles the memory, which a phone may not give a worker.
+- **Work factor:** exporters use log2(N) = 18, with r = 8 and p = 1, so deriving the key takes 256 MiB of memory. Importers accept at most 18, as `age` and `age-encryption` write it: each step above doubles the memory, which a phone may not give a worker. The stanza must be as age writes it, `-> scrypt <salt> <work factor>` with the work factor as a plain decimal number: `018`, `+18`, `1e1` or `0x12` are refused as damaged, before any key is derived.
 - **Binary encoding:** the file starts with the line `age-encryption.org/v1`. Importers also accept the ASCII-armored form, which starts with `-----BEGIN AGE ENCRYPTED FILE-----`.
 - **Payload:** exactly the bytes of the backup document.
 
@@ -91,11 +91,11 @@ age authenticates the whole file: a changed or truncated file fails to decrypt. 
 ### 3.1 Passphrases
 
 - The app first offers a generated passphrase: six words chosen with `crypto.getRandomValues` from a list of 2,048 words that ships with the app, joined by hyphens. That is 66 bits, far out of reach of offline guessing at this work factor. Example: `burst-swarm-slender-curve-ability-various`.
-- A passphrase the user picks must have at least 12 characters and is typed twice. It must not be easy to guess. Ignoring case and spaces, it needs at least 5 different characters. It must not repeat a shorter part, such as `passwordpassword`, or run along the digits, the alphabet or the keyboard, such as `123456789012` or `qwertyuiopas`. It must not be one of a few long passwords that people often use, such as `qwerty123456`. The generated passphrase needs no such check.
-- Before use, a passphrase is normalized to Unicode NFC, so the same passphrase typed on different devices gives the same bytes. Nothing else is changed; spaces count.
+- A passphrase the user picks must have at least 12 characters and is typed twice. Characters are counted as people see them, so an emoji or a letter with an accent counts once, and spaces, zero-width and other invisible characters, such as a zero-width space, joiner or non-joiner, a word joiner or a soft hyphen, do not count at all: they would pad a short passphrase to the length without making it harder to guess. It must not be easy to guess. Ignoring case, spaces and invisible characters, it needs at least 5 different characters. It must not repeat a shorter part, such as `passwordpassword`, or run along the digits, the alphabet or the keyboard, such as `123456789012` or `qwertyuiopas`, and invisible characters between the letters hide no such run or repeat. It must not be one of a few long passwords that people often use, such as `qwerty123456`. The generated passphrase needs no such check.
+- Before use, a passphrase is normalized to Unicode NFC, so the same passphrase typed on different devices gives the same bytes. Nothing else is changed: spaces and invisible characters stay, and count for encryption, though not for the checks above.
 - The apps never store, log or send a passphrase anywhere. The page keeps one only while it shows it or the user types it, and lets go of it once the backup is made; the worker keeps it while it derives the key. A browser's password manager may offer to save a passphrase that the user types, as it does any password: that is for the user to decide. There is no hint and no recovery: without the passphrase, the backup cannot be opened ([threat model](../threat-model.md#5-residual-risks-accepted) R3).
 
-Deriving the key takes seconds on a phone, so encryption and decryption run in a worker and the page stays responsive. The worker starts through the platform's Trusted Types policy for worker scripts ([ADR 0011](../decisions/0011-worker-trusted-types-policy.md)). It ends with its operation, and also when the user closes the dialog that started it, so that two never derive keys at once. The page stops it only once its script has run, which the worker says first: Firefox can crash the page when a worker stops while its script still compiles.
+Deriving the key takes seconds on a phone, so encryption and decryption run in a worker and the page stays responsive. The worker starts through the platform's Trusted Types policy for worker scripts ([ADR 0011](../decisions/0011-worker-trusted-types-policy.md)). It ends with its operation, and also when the user closes the dialog that started it, which the dialog offers with a button while the worker runs, since a phone has no Escape key, or when that dialog goes away without closing, as when the user navigates elsewhere; so two never derive keys at once. The page stops it only once its script has run, which the worker says first: Firefox can crash the page when a worker stops while its script still compiles. A worker that has said nothing after 15 seconds never will: the browser ended it without a word, as it may when memory runs short, or it is stuck. The page then stops it all the same, and the dialog says that the backup could not be made or restored. A device that cannot give the worker the memory that deriving the key takes is told apart from a damaged file (section 6).
 
 ## 4. Export
 
@@ -146,7 +146,7 @@ Merge each incoming record with its local copy, in memory, and count per store:
 - **deleted:** the local copy is alive and the merged record is deleted;
 - **unchanged:** all others.
 
-Show the app, the date of the backup and the counts, such as "12 new, 3 updated, 1 deleted", and ask the user to confirm. Nothing has been written yet.
+Show the date of the backup and the counts, such as "12 new, 3 updated, 1 deleted", and ask the user to confirm. The app goes without saying: a backup of another app was refused in section 5.4. Nothing has been written yet.
 
 The import also writes deletions that change nothing the device shows, such as those of records it never had (section 5.7). If those are all that it would write, the preview says that the device has everything the app shows, and still offers to import them, so that an older backup cannot later bring those records back.
 
@@ -168,17 +168,19 @@ Importing the same backup twice changes nothing, and the order in which backups 
 
 Every failure says what happened and what to do. The import must tell these apart:
 
-| Condition                                                        | The user is told                                                                              |
-| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| Larger than 64 MiB                                               | The file is too large to be a backup.                                                         |
-| Neither an age file nor a backup document                        | This is not a backup file.                                                                    |
-| Wrong passphrase                                                 | The passphrase is wrong; try again.                                                           |
-| Damaged or truncated age file, or a work factor above 18         | The file is damaged or not supported.                                                         |
-| A backup of another app                                          | This is a backup of another app, with a link to it if `app` is one of ours.                   |
-| A newer format version or schema version                         | The backup was made by a newer version of the app; update the app and try again.              |
-| No storage space left on the device                              | This device has no space left for the app's data; free some space, then try again.            |
-| HLCs from the future that the user did not confirm (section 5.7) | The backup's dates lie in the future; check the date and time on this device, then try again. |
-| Any other failed check                                           | The backup is damaged or was changed, and was not imported.                                   |
+| Condition                                                                   | The user is told                                                                                                                                         |
+| --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Larger than 64 MiB                                                          | The file is too large to be a backup.                                                                                                                    |
+| Neither an age file nor a backup document                                   | This is not a backup file.                                                                                                                               |
+| Wrong passphrase                                                            | The passphrase is wrong; try again.                                                                                                                      |
+| Damaged or truncated age file, or a work factor above 18                    | The file is damaged or not supported.                                                                                                                    |
+| Not enough free memory to derive the key, as on a phone with much else open | This device does not have enough free memory to open the backup right now; close other apps or tabs and try again.                                       |
+| A backup of another app                                                     | This is a backup of another app, named by its id as text if `app` is a valid app id, and never linked: an app cannot know at runtime which ids are ours. |
+| A newer format version or schema version                                    | The backup was made by a newer version of the app; update the app and try again.                                                                         |
+| No storage space left on the device                                         | This device has no space left for the app's data; free some space, then try again.                                                                       |
+| HLCs from the future that the user did not confirm (section 5.7)            | The backup's dates lie in the future; check the date and time on this device, then try again.                                                            |
+| The backup's dates lie more than 100 years in the future (data model §3.5)  | The backup is damaged or was changed, and was not imported.                                                                                              |
+| Any other failed check                                                      | The backup is damaged or was changed, and was not imported.                                                                                              |
 
 ## 7. Security
 

@@ -14,11 +14,37 @@ import { normalizePassphrase } from "./passphrase.ts";
  */
 export const WORK_FACTOR = 18;
 
+/**
+ * How age writes a work factor: a decimal number without a sign, leading zeros, an exponent or
+ * anything else. `018`, `+18`, `1e1`, `0x12` and `18` with a carriage return, which `Number()`
+ * reads as 18 or less, are refused here, before any key is derived, and not left to the library.
+ */
+const WORK_FACTOR_FORM = /^[1-9][0-9]*$/;
+
 /** What age-encryption says when the passphrase does not open the file's only stanza. */
 const NO_MATCH = "no identity matched any of the file's recipients";
 
 function damaged(message: string, cause?: unknown): BackupError {
   return new BackupError("damaged", message, { cause });
+}
+
+/**
+ * Whether the engine could not give the memory that deriving the key takes, 256 MiB at once: V8
+ * and JavaScriptCore throw a RangeError; another engine may say "out of memory" in an error of
+ * its own.
+ */
+function isOutOfMemory(error: unknown): boolean {
+  return (
+    error instanceof RangeError || (error instanceof Error && /out of memory/i.test(error.message))
+  );
+}
+
+function noMemory(cause: unknown): BackupError {
+  return new BackupError(
+    "no-memory",
+    "The device did not give the memory that deriving the key takes.",
+    { cause },
+  );
 }
 
 /** A stream of `bytes`, which age-encryption decrypts into a stream that it does not read. */
@@ -86,7 +112,8 @@ function stanzasOf(file: Uint8Array): string[][] {
 /**
  * A backup document encrypted with `passphrase` (backup format §3): an age file in the binary
  * encoding, with one recipient stanza of type `scrypt`. The passphrase is normalized first, so
- * that it decrypts on every device (§3.1). `workFactor` is for tests only.
+ * that it decrypts on every device (§3.1). Throws a `BackupError` `no-memory` if the device
+ * cannot give the memory that deriving the key takes. `workFactor` is for tests only.
  */
 export async function encrypt(
   document: Uint8Array,
@@ -96,16 +123,27 @@ export async function encrypt(
   const encrypter = new Encrypter();
   encrypter.setScryptWorkFactor(workFactor);
   encrypter.setPassphrase(normalizePassphrase(passphrase));
-  return unshared(await encrypter.encrypt(document));
+  let file: Uint8Array;
+  try {
+    file = await encrypter.encrypt(document);
+  } catch (error) {
+    if (isOutOfMemory(error)) {
+      throw noMemory(error);
+    }
+    throw error;
+  }
+  return unshared(file);
 }
 
 /**
  * The backup document in an encrypted backup (backup format §3, §5.2), binary or ASCII-armored,
  * which age authenticates in full before this returns. Throws a `BackupError`: `wrong-passphrase`
- * if the passphrase does not open it, so that the user can try again, and `damaged` for a file
- * that is damaged or truncated, not encrypted with a passphrase alone, or whose work factor is
- * above 18: each step above doubles the memory that deriving the key takes, which a phone may not
- * give a worker. No key is derived for such a file.
+ * if the passphrase does not open it, so that the user can try again; `no-memory` if the device
+ * cannot give the memory that deriving the key takes, after which the user can try again too;
+ * and `damaged` for a file that is damaged or truncated, not encrypted with a passphrase alone,
+ * whose scrypt stanza is not as age writes it, or whose work factor is above 18: each step above
+ * doubles the memory that deriving the key takes, which a phone may not give a worker. No key is
+ * derived for such a file.
  */
 export async function decrypt(
   file: Uint8Array,
@@ -120,11 +158,16 @@ export async function decrypt(
     }
   }
   const stanzas = stanzasOf(binary);
-  const [type, , workFactor] = stanzas[0] ?? [];
+  const [stanza = []] = stanzas;
+  const [type, , workFactor = ""] = stanza;
   if (stanzas.length !== 1 || type !== "scrypt") {
     throw damaged("The file is not encrypted with a passphrase alone.");
   }
-  if (!(Number(workFactor) <= WORK_FACTOR)) {
+  // The type, the salt and the work factor, as age writes them: nothing else goes to the library.
+  if (stanza.length !== 3 || !WORK_FACTOR_FORM.test(workFactor)) {
+    throw damaged("The file's scrypt stanza is not as age writes it.");
+  }
+  if (Number(workFactor) > WORK_FACTOR) {
     throw damaged(`The file's work factor is above ${WORK_FACTOR}.`);
   }
   const decrypter = new Decrypter();
@@ -134,6 +177,10 @@ export async function decrypt(
   } catch (error) {
     if (error instanceof Error && error.message === NO_MATCH) {
       throw new BackupError("wrong-passphrase", "The passphrase does not decrypt the file.");
+    }
+    // A healthy backup that the device cannot open right now is not a damaged one.
+    if (isOutOfMemory(error)) {
+      throw noMemory(error);
     }
     throw damaged("The file is damaged, truncated or not supported.", error);
   }

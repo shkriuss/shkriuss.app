@@ -10,6 +10,10 @@ describe("a backup that cannot be restored", () => {
       ["not-a-backup", "This is not a backup file."],
       ["wrong-passphrase", "The passphrase is wrong. Try again."],
       ["damaged", "The file is damaged or not supported."],
+      [
+        "no-memory",
+        "This device does not have enough free memory to open the backup right now. Close other apps or tabs and try again.",
+      ],
       ["other-app", "This is a backup of another app."],
       [
         "newer-version",
@@ -22,9 +26,16 @@ describe("a backup that cannot be restored", () => {
     }
   });
 
-  it("names the other app whose backup it is, when the backup names a valid one", () => {
-    expect(restoreErrorMessage(new BackupError("other-app", "A test.", { app: "notes" }))).toBe(
-      "This is a backup of the app “notes”, not of this one.",
+  it("names the other app whose backup it is, as text, when the backup names a valid one", () => {
+    // Any valid app id from the file, one of ours or not: the app cannot know which ids are ours,
+    // so it echoes the id as text and never builds a link from it.
+    for (const app of ["notes", "login", "not-an-app-of-ours"]) {
+      const message = restoreErrorMessage(new BackupError("other-app", "A test.", { app }));
+      expect(message).toBe(`This is a backup of the app “${app}”, not of this one.`);
+      expect(message).not.toMatch(/https?:|shkriuss\./);
+    }
+    expect(restoreErrorMessage(new BackupError("other-app", "A test."))).toBe(
+      "This is a backup of another app.",
     );
   });
 

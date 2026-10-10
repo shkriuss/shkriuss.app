@@ -58,12 +58,29 @@ describe("generatePassphrase (backup format §3.1)", () => {
   });
 });
 
+/**
+ * Characters that people do not see: a zero-width space, a zero-width non-joiner, a zero-width
+ * joiner, a word joiner, a byte order mark and a soft hyphen.
+ */
+const INVISIBLE = ["\u200B", "\u200C", "\u200D", "\u2060", "\uFEFF", "\u00AD"];
+
+/** `letters` with `hidden` after each of them. */
+function hiding(letters: string, hidden: string): string {
+  return Array.from(letters, (letter) => `${letter}${hidden}`).join("");
+}
+
 describe("normalizePassphrase (backup format §3.1)", () => {
   it("composes characters, so that each passphrase has one form, and keeps everything else", () => {
     const decomposed = String.fromCodePoint(0x63, 0x61, 0x66, 0x65, 0x301);
     const composed = String.fromCodePoint(0x63, 0x61, 0x66, 0xe9);
     expect(normalizePassphrase(decomposed)).toBe(composed);
     expect(normalizePassphrase(` ${composed}  Tea `)).toBe(` ${composed}  Tea `);
+  });
+
+  it("keeps spaces and invisible characters, which the checks alone leave out", () => {
+    for (const hidden of INVISIBLE) {
+      expect(normalizePassphrase(hiding("ab c", hidden))).toBe(hiding("ab c", hidden));
+    }
   });
 });
 
@@ -82,6 +99,25 @@ describe("isLongEnough (backup format §3.1)", () => {
     expect(isLongEnough(accented.repeat(12))).toBe(true);
     expect(isLongEnough(family.repeat(11))).toBe(false);
     expect(isLongEnough(`${family.repeat(11)}x`)).toBe(true);
+  });
+
+  it("does not count spaces, which pad a short passphrase to the length", () => {
+    expect(isLongEnough("abcdf       ")).toBe(false);
+    expect(isLongEnough(`${" ".repeat(20)}x`)).toBe(false);
+    expect(isLongEnough("abcde fghij k")).toBe(false);
+    expect(isLongEnough("abcde fghij kl")).toBe(true);
+    expect(isLongEnough("correct horse battery staple")).toBe(true);
+    expect(isLongEnough(" \t\u3000abcdefghijk ")).toBe(false);
+  });
+
+  it("does not count zero-width and other invisible characters, which hide between letters", () => {
+    for (const hidden of INVISIBLE) {
+      expect(hiding("abcdef", hidden)).toHaveLength(12);
+      expect(isLongEnough(hiding("abcdef", hidden))).toBe(false);
+      expect(isLongEnough(hiding("abcdefghijk", hidden))).toBe(false);
+      expect(isLongEnough(hiding("abcdefghijkl", hidden))).toBe(true);
+      expect(isLongEnough(hidden.repeat(30))).toBe(false);
+    }
   });
 });
 
@@ -155,6 +191,19 @@ describe("isEasyToGuess (backup format §3.1)", () => {
     expect(isEasyToGuess("Password1234")).toBe(true);
     expect(isEasyToGuess("1QAZ 2WSX 3EDC")).toBe(true);
     expect(isEasyToGuess("qwerty1234567")).toBe(false);
+  });
+
+  it("sees through zero-width and other invisible characters, which hide a run or a repeat", () => {
+    // Six letters along the alphabet, with a zero-width space after each.
+    expect(isEasyToGuess("a\u200Bb\u200Bc\u200Bd\u200Be\u200Bf\u200B")).toBe(true);
+    for (const hidden of INVISIBLE) {
+      expect(isEasyToGuess(hiding("abcdef", hidden))).toBe(true);
+      expect(isEasyToGuess(hiding("qwerty123456", hidden))).toBe(true);
+      expect(isEasyToGuess(hiding("passwordpassword", hidden))).toBe(true);
+      // One letter, which joiners after it would make look like several different characters.
+      expect(isEasyToGuess(`a${hidden}a${hidden}${hidden}a${hidden}a a aaaaaa`)).toBe(true);
+      expect(isEasyToGuess(hiding("correct horse battery staple", hidden))).toBe(false);
+    }
   });
 
   it("does not change with case or spaces", () => {

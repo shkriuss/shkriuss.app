@@ -2,7 +2,7 @@ import { Decrypter, Encrypter, armor, generateIdentity, identityToRecipient } fr
 import { describe, expect, it, vi } from "vitest";
 import { WORK_FACTOR, decrypt, encrypt } from "./age.ts";
 import { BackupError, type BackupErrorCode } from "./errors.ts";
-import { EXAMPLE_PASSPHRASE } from "./test/fixtures.ts";
+import { EXAMPLE_PASSPHRASE, encryptedExample, example } from "./test/fixtures.ts";
 
 const DOCUMENT = new TextEncoder().encode('{"format": "shkriuss-backup"}');
 const PASSPHRASE = EXAMPLE_PASSPHRASE;
@@ -95,10 +95,30 @@ describe("encrypt (backup format §3)", () => {
 });
 
 describe("decrypt (backup format §3, §5.2)", () => {
+  it.each<["binary" | "armored"]>([["binary"], ["armored"]])(
+    "decrypts the %s file that the age command-line tool made, at work factor 18",
+    async (form) => {
+      // The spec's example, which the tool encrypted: any age implementation reads a backup.
+      expect(await decrypt(encryptedExample(form), PASSPHRASE)).toStrictEqual(
+        new TextEncoder().encode(example()),
+      );
+    },
+    60_000,
+  );
+
   it("decrypts the ASCII-armored form", async () => {
     const file = await encrypt(DOCUMENT, PASSPHRASE, FAST);
     const armored = new TextEncoder().encode(armor.encode(file));
     expect(await decrypt(armored, PASSPHRASE)).toStrictEqual(DOCUMENT);
+  });
+
+  it("decrypts the ASCII-armored form with CRLF line ends, and with white space after it", async () => {
+    const file = await encrypt(DOCUMENT, PASSPHRASE, FAST);
+    const text = armor.encode(file);
+    const crlf = text.replaceAll("\n", "\r\n");
+    for (const variant of [crlf, `${text}\n\n \t`, `${crlf}\r\n  `]) {
+      expect(await decrypt(new TextEncoder().encode(variant), PASSPHRASE)).toStrictEqual(DOCUMENT);
+    }
   });
 
   it("reads what it decrypts without a Response, which Firefox reports when the stream fails", async () => {
@@ -146,16 +166,62 @@ describe("decrypt (backup format §3, §5.2)", () => {
     expect(await refusal(decrypt(body, PASSPHRASE))).toBe("wrong-passphrase");
   });
 
-  it("refuses a work factor above 18 before deriving any key, which would take 512 MiB or more", async () => {
-    const file = withHeader(await encrypt(DOCUMENT, PASSPHRASE, FAST), (lines) =>
-      lines.map((line) => line.replace(/ 10$/, " 19")),
-    );
+  it.each<[string, (file: Uint8Array) => Promise<Uint8Array> | Uint8Array, string]>([
+    [
+      "a work factor above 18, which would take 512 MiB or more",
+      (file) => withHeader(file, (lines) => lines.map((line) => line.replace(/ 10$/, " 19"))),
+      "The file's work factor is above 18.",
+    ],
+    ...["018", "+18", "1e1", "0x12", "18\r"].map(
+      (form): [string, (file: Uint8Array) => Uint8Array, string] => [
+        `a work factor written as ${JSON.stringify(form)}, which is not how age writes one`,
+        (file) =>
+          withHeader(file, (lines) => lines.map((line) => line.replace(/ 10$/, ` ${form}`))),
+        "The file's scrypt stanza is not as age writes it.",
+      ],
+    ),
+    [
+      "a scrypt stanza with an argument too many",
+      (file) => withHeader(file, (lines) => lines.map((line) => line.replace(/ 10$/, " 10 1"))),
+      "The file's scrypt stanza is not as age writes it.",
+    ],
+    [
+      "two scrypt stanzas",
+      (file) => withHeader(file, ([version = "", ...stanzas]) => [version, ...stanzas, ...stanzas]),
+      "The file is not encrypted with a passphrase alone.",
+    ],
+    [
+      "a stanza for a key and one for a passphrase",
+      async (file) => {
+        const encrypter = new Encrypter();
+        encrypter.addRecipient(await identityToRecipient(await generateIdentity()));
+        const forKey = header(await encrypter.encrypt(DOCUMENT)).slice(1);
+        return withHeader(file, ([version = "", ...stanzas]) => [version, ...forKey, ...stanzas]);
+      },
+      "The file is not encrypted with a passphrase alone.",
+    ],
+    [
+      "a header longer than 4096 bytes",
+      (file) =>
+        withHeader(file, ([version = "", stanza = "", ...body]) => [
+          version,
+          stanza,
+          ...Array.from({ length: 70 }, () => "A".repeat(64)),
+          ...body,
+        ]),
+      "The file's age header has no end.",
+    ],
+  ])("refuses %s as damaged before deriving any key", async (_case, damage, message) => {
+    const file = await damage(await encrypt(DOCUMENT, PASSPHRASE, FAST));
     const derive = vi.spyOn(Decrypter.prototype, "decrypt");
-    await expect(decrypt(file, PASSPHRASE)).rejects.toThrow(
-      expect.objectContaining({ code: "damaged", message: "The file's work factor is above 18." }),
-    );
-    expect(derive).not.toHaveBeenCalled();
-    derive.mockRestore();
+    try {
+      await expect(decrypt(file, PASSPHRASE)).rejects.toThrow(
+        expect.objectContaining({ name: "BackupError", code: "damaged", message }),
+      );
+      expect(derive).not.toHaveBeenCalled();
+    } finally {
+      derive.mockRestore();
+    }
   });
 
   it.each<[string, (file: Uint8Array) => Promise<Uint8Array> | Uint8Array]>([
@@ -209,5 +275,41 @@ describe("decrypt (backup format §3, §5.2)", () => {
     const document = new Uint8Array(CHUNK).fill(0x20);
     const file = await damage(await encrypt(document, PASSPHRASE, FAST));
     expect(await refusal(decrypt(file, PASSPHRASE))).toBe("damaged");
+  });
+});
+
+describe("a device without the memory that deriving the key takes (backup format §6)", () => {
+  it.each<[string, Error]>([
+    [
+      "a RangeError, as V8 and JavaScriptCore throw",
+      new RangeError("Array buffer allocation failed"),
+    ],
+    ["an error that says out of memory", new Error("out of memory")],
+  ])("is told apart from a damaged file while decrypting, by %s", async (_case, error) => {
+    const file = await encrypt(DOCUMENT, PASSPHRASE, FAST);
+    const derive = vi.spyOn(Decrypter.prototype, "decrypt").mockRejectedValueOnce(error);
+    try {
+      await expect(decrypt(file, PASSPHRASE)).rejects.toThrow(
+        expect.objectContaining({ name: "BackupError", code: "no-memory", cause: error }),
+      );
+    } finally {
+      derive.mockRestore();
+    }
+  });
+
+  it("is told while encrypting, and any other failure there is let through", async () => {
+    const error = new RangeError("Array buffer allocation failed");
+    const derive = vi.spyOn(Encrypter.prototype, "encrypt").mockRejectedValueOnce(error);
+    try {
+      await expect(encrypt(DOCUMENT, PASSPHRASE, FAST)).rejects.toThrow(
+        expect.objectContaining({ name: "BackupError", code: "no-memory", cause: error }),
+      );
+      derive.mockRejectedValueOnce(new TypeError("Unexpected."));
+      const failure = await encrypt(DOCUMENT, PASSPHRASE, FAST).catch((cause: unknown) => cause);
+      expect(failure).not.toBeInstanceOf(BackupError);
+      expect(failure).toStrictEqual(new TypeError("Unexpected."));
+    } finally {
+      derive.mockRestore();
+    }
   });
 });

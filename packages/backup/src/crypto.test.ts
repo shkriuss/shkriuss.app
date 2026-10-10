@@ -1,3 +1,4 @@
+import { Decrypter, Encrypter } from "age-encryption";
 import { describe, expect, it, vi } from "vitest";
 import type * as Age from "./age.ts";
 import { decrypt, encrypt } from "./age.ts";
@@ -66,8 +67,29 @@ describe("encryptBackup and decryptBackup (backup format §3.1)", () => {
     expect(failure).toMatchObject({ code: "damaged" });
   });
 
+  it("pass on a device without the memory to derive the key, which is no damaged file", async () => {
+    const file = await encrypt(DOCUMENT, PASSPHRASE);
+    const allocation = new RangeError("Array buffer allocation failed");
+    const derive = vi.spyOn(Decrypter.prototype, "decrypt").mockRejectedValueOnce(allocation);
+    try {
+      await expect(decryptBackup(file, PASSPHRASE)).rejects.toThrow(
+        expect.objectContaining({ name: "BackupError", code: "no-memory" }),
+      );
+    } finally {
+      derive.mockRestore();
+    }
+    const seal = vi.spyOn(Encrypter.prototype, "encrypt").mockRejectedValueOnce(allocation);
+    try {
+      await expect(encryptBackup(DOCUMENT, PASSPHRASE)).rejects.toThrow(
+        expect.objectContaining({ name: "BackupError", code: "no-memory" }),
+      );
+    } finally {
+      seal.mockRestore();
+    }
+  });
+
   it("keep the details of an unexpected failure in the worker", async () => {
-    vi.mocked(encrypt).mockRejectedValueOnce(new RangeError("Array buffer allocation failed"));
+    vi.mocked(encrypt).mockRejectedValueOnce(new TypeError("Unexpected."));
     const failure = await encryptBackup(DOCUMENT, PASSPHRASE).catch((error: unknown) => error);
     expect(failure).not.toBeInstanceOf(BackupError);
     expect(failure).toStrictEqual(new Error("The backup worker failed."));
@@ -81,6 +103,61 @@ describe("encryptBackup and decryptBackup (backup format §3.1)", () => {
       );
     });
     expect(workers.map((worker) => worker.terminated)).toStrictEqual([true]);
+  });
+
+  it("give up on a worker that says nothing for 15 seconds, as one the browser ended, and stop it", async () => {
+    vi.useFakeTimers();
+    try {
+      // The worker never says that its script has run.
+      holdNextWorker();
+      const settled = vi.fn<(reason: unknown) => void>();
+      const workers = await workersOf(async () => {
+        const decrypting = decryptBackup(DOCUMENT, PASSPHRASE);
+        decrypting.catch(settled);
+        await vi.advanceTimersByTimeAsync(14_999);
+        expect(settled).not.toHaveBeenCalled();
+        await vi.advanceTimersByTimeAsync(1);
+        await expect(decrypting).rejects.toThrow("The backup worker could not run.");
+      });
+      expect(workers.map((worker) => worker.terminated)).toStrictEqual([true]);
+      // The one time the page stops a worker that has not said that its script has run.
+      expect(workers.map((worker) => worker.terminatedBeforeRunning)).toStrictEqual([true]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("stop a worker that says nothing for 15 seconds even after the request was given up", async () => {
+    vi.useFakeTimers();
+    try {
+      holdNextWorker();
+      const controller = new AbortController();
+      const workers = await workersOf(async () => {
+        const decrypting = decryptBackup(DOCUMENT, PASSPHRASE, controller.signal);
+        controller.abort(new Error("Closed."));
+        await expect(decrypting).rejects.toThrow("Closed.");
+      });
+      expect(workers.map((worker) => worker.terminated)).toStrictEqual([false]);
+      await vi.advanceTimersByTimeAsync(15_000);
+      expect(workers.map((worker) => worker.terminated)).toStrictEqual([true]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("wait no longer for a worker once it has run, or has failed to", async () => {
+    vi.useFakeTimers();
+    try {
+      await encryptBackup(DOCUMENT, PASSPHRASE);
+      expect(vi.getTimerCount()).toBe(0);
+      failNextWorker();
+      await expect(encryptBackup(DOCUMENT, PASSPHRASE)).rejects.toThrow(
+        "The backup worker could not run.",
+      );
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("stop the worker when the signal aborts, as when the user closes the dialog", async () => {

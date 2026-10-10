@@ -13,6 +13,7 @@ import { m } from "./data-messages.ts";
 import { samePassphrase } from "./passphrases.ts";
 import { saveFile } from "./save.ts";
 import type { BackupDatabase, BackupMaker } from "./useBackupDialog.tsx";
+import { stopOnUnmount } from "./work.ts";
 
 function hasDeviceState(db: BackupMaker): db is BackupDatabase {
   return db.device !== undefined;
@@ -43,7 +44,20 @@ type Step =
   | { readonly name: "making" }
   | Ready
   | { readonly name: "saved"; readonly file: File; readonly shared: boolean }
-  | { readonly name: "failed"; readonly tooLarge: boolean; readonly generated: string };
+  | { readonly name: "failed"; readonly reason: FailureReason; readonly generated: string };
+
+/**
+ * Why a backup could not be made: the data is too large for one, the device has no memory to
+ * encrypt it right now (backup format §6), or anything else.
+ */
+type FailureReason = "too-large" | "no-memory" | "other";
+
+function failureReason(error: unknown): FailureReason {
+  if (error instanceof BackupError && (error.code === "too-large" || error.code === "no-memory")) {
+    return error.code;
+  }
+  return "other";
+}
 
 function Actions({ children }: { readonly children: ReactNode }) {
   return <div className="flex flex-wrap gap-2">{children}</div>;
@@ -153,6 +167,13 @@ function OwnPassphrase({
   );
 }
 
+/** What the user reads when the backup could not be made, and what to do. */
+const FAILED: Readonly<Record<FailureReason, () => string>> = {
+  "too-large": m.tooLarge,
+  "no-memory": m.noMemoryToBackUp,
+  other: m.failed,
+};
+
 export interface BackupDialogProps {
   /** The app's id, which names its backup files (backup format §1). */
   readonly app: string;
@@ -186,6 +207,9 @@ export function BackupDialog({ app, db, onFocusLost, onClosed }: BackupDialogPro
     }
   }, [step.name]);
 
+  // The dialog went away without closing, as when the user navigates elsewhere: the work stops.
+  useEffect(() => stopOnUnmount(work), []);
+
   const close = (): void => {
     work.current?.abort();
     work.current = undefined;
@@ -211,11 +235,7 @@ export function BackupDialog({ app, db, onFocusLost, onClosed }: BackupDialogPro
       });
       next = { name: "ready", file, fromFuture, counted, notSaved: false, saving: false };
     } catch (error) {
-      next = {
-        name: "failed",
-        tooLarge: error instanceof BackupError && error.code === "too-large",
-        generated,
-      };
+      next = { name: "failed", reason: failureReason(error), generated };
     }
     if (!signal.aborted) {
       setStep(next);
@@ -331,7 +351,15 @@ export function BackupDialog({ app, db, onFocusLost, onClosed }: BackupDialogPro
     }
     case "making":
       title = m.makingTitle();
-      body = <p>{m.making()}</p>;
+      body = (
+        <>
+          <p>{m.making()}</p>
+          <Actions>
+            {/* Escape closes the dialog too, but a phone has no Escape key. */}
+            <Button onPress={close}>{m.cancel()}</Button>
+          </Actions>
+        </>
+      );
       break;
     case "ready": {
       const { fromFuture, notSaved, saving } = step;
@@ -374,13 +402,13 @@ export function BackupDialog({ app, db, onFocusLost, onClosed }: BackupDialogPro
       );
       break;
     case "failed": {
-      const { tooLarge, generated } = step;
+      const { reason, generated } = step;
       title = m.failedTitle();
       body = (
         <>
-          <p>{tooLarge ? m.tooLarge() : m.failed()}</p>
+          <p>{FAILED[reason]()}</p>
           <Actions>
-            {tooLarge ? null : (
+            {reason === "too-large" ? null : (
               <Button
                 variant="primary"
                 onPress={() => {

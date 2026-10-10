@@ -8,6 +8,7 @@ const MESSAGES: Readonly<Record<Exclude<BackupErrorCode, "other-app">, () => str
   "not-a-backup": m.notABackup,
   "wrong-passphrase": m.wrongPassphrase,
   damaged: m.damaged,
+  "no-memory": m.noMemory,
   "newer-version": m.newerVersion,
   invalid: m.invalid,
 };
@@ -17,7 +18,8 @@ const MESSAGES: Readonly<Record<Exclude<BackupErrorCode, "other-app">, () => str
  * what to do. Nothing has changed then (§5). The database's refusal of dates from the future
  * that the user did not confirm, as when this device's date changed after the preview, says so
  * (§5.7), and so does a device without space left for the data; any other failure that is no
- * `BackupError` says only that the backup was not restored.
+ * `BackupError` says only that the backup was not restored. A backup of another app names that
+ * app, as text: the id comes from the file, and nothing of the file ever becomes a link.
  */
 export function restoreErrorMessage(error: unknown): string {
   if (error instanceof DataLayerError && error.code === "future-clock") {
