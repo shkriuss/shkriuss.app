@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DENIED_FEATURES,
+  UNDENIED_FEATURES,
   contentSecurityPolicy,
   permissionsPolicy,
   securityHeaders,
@@ -100,6 +101,11 @@ describe("permissionsPolicy", () => {
 
   it("lists each feature once", () => {
     expect(new Set(DENIED_FEATURES).size).toBe(DENIED_FEATURES.length);
+  });
+
+  it("leaves alone only features that it does not deny", () => {
+    expect(DENIED_FEATURES.filter((feature) => UNDENIED_FEATURES.has(feature))).toEqual([]);
+    expect(UNDENIED_FEATURES.has("web-share")).toBe(true);
   });
 });
 

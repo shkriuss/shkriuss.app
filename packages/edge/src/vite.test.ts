@@ -589,7 +589,7 @@ describe("edge", () => {
     const everyFile = /^\/\*\n((?: {2}.+\n)+)/m.exec(headers)?.[1];
     expect(given).toHaveLength(1);
     expect(everyFile).toBe(given[0]?.map(([name, value]) => `  ${name}: ${value}\n`).join(""));
-    expect(everyFile).toContain("Permissions-Policy: accelerometer=(), autoplay=(), camera=(self)");
+    expect(everyFile).toMatch(/^ {2}Permissions-Policy: .*\bcamera=\(self\)/m);
     expect(everyFile).toContain("; trusted-types shkriuss-workers\n");
   });
 

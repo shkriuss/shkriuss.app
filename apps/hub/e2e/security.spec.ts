@@ -1,4 +1,4 @@
-import { cspHashSource, securityHeaders } from "@shkriuss/edge";
+import { DENIED_FEATURES, UNDENIED_FEATURES, cspHashSource, securityHeaders } from "@shkriuss/edge";
 import type { ConsoleMessage, Page } from "@playwright/test";
 import { expect, test } from "@shkriuss/config/playwright";
 
@@ -52,6 +52,38 @@ test.describe("response headers", () => {
     const missing = await request.get("/assets/index-00000000.js");
     expect(missing.headers()["content-type"]).toMatch(/^text\/html/v);
     expect(missing.headers()["cache-control"]).toBe("public, max-age=0, must-revalidate");
+  });
+});
+
+test.describe("Permissions-Policy", () => {
+  test("denies every feature that Chromium knows, but those left alone on purpose", async ({
+    page,
+    browserName,
+  }) => {
+    test.skip(browserName !== "chromium", "Only Chromium lists the features that it knows.");
+    await page.goto("/");
+    const { known, allowed } = await page.evaluate(() => {
+      // Chromium's own interface, which TypeScript's DOM types do not describe.
+      const { featurePolicy } = document as Document & {
+        featurePolicy?: { features: () => string[]; allowedFeatures: () => string[] };
+      };
+      if (featurePolicy === undefined) {
+        throw new Error("This Chromium has no document.featurePolicy.");
+      }
+      return { known: featurePolicy.features(), allowed: featurePolicy.allowedFeatures() };
+    });
+    const denied = new Set<string>(DENIED_FEATURES);
+    expect(
+      known.filter(
+        (feature) =>
+          !denied.has(feature) && !UNDENIED_FEATURES.has(feature) && !feature.startsWith("ch-"),
+      ),
+      "features to add to DENIED_FEATURES, or with a reason to UNDENIED_FEATURES, in @shkriuss/edge",
+    ).toEqual([]);
+    // The browser applies the header: a header that it cannot parse would allow them all.
+    expect(allowed.filter((feature) => denied.has(feature))).toEqual([]);
+    // What the apps leave alone stays allowed, such as announcements to screen readers.
+    expect(allowed).toContain("aria-notify");
   });
 });
 

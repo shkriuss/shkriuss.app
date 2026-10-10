@@ -8,16 +8,19 @@ import { WORKER_POLICY } from "./worker-scripts.ts";
 
 /**
  * Browser features that every app denies to itself. A feature that is not listed keeps its
- * default, which allows it for the app's own origin; `web-share` stays allowed that way
- * because backups use the share sheet. Apps opt in to more in their configuration.
+ * default, which allows it for the app's own origin. Apps opt in to more in their
+ * configuration.
  *
- * Only features that Chromium recognizes are listed; it ignores unknown names. Privacy
- * Sandbox features are left out: Chrome is retiring them, and they only matter to third-party
- * content, which we never load.
+ * It holds every feature that Chromium ships, on any platform, and some that it is trying out,
+ * except those in `UNDENIED_FEATURES` and client hints. A browser ignores a feature that it
+ * does not know, with a warning in its console. An end-to-end test fails when its Chromium
+ * knows a feature that neither list has.
  */
 export const DENIED_FEATURES = [
   "accelerometer",
+  "ambient-light-sensor",
   "autoplay",
+  "bluetooth",
   "camera",
   "captured-surface-control",
   "clipboard-read",
@@ -26,6 +29,8 @@ export const DENIED_FEATURES = [
   "cross-origin-isolated",
   "deferred-fetch",
   "deferred-fetch-minimal",
+  "device-attributes",
+  "digital-credentials-create",
   "digital-credentials-get",
   "display-capture",
   "encrypted-media",
@@ -38,8 +43,11 @@ export const DENIED_FEATURES = [
   "idle-detection",
   "keyboard-map",
   "language-detector",
+  "language-model",
   "local-fonts",
+  "local-network",
   "local-network-access",
+  "loopback-network",
   "magnetometer",
   "microphone",
   "midi",
@@ -49,16 +57,52 @@ export const DENIED_FEATURES = [
   "picture-in-picture",
   "publickey-credentials-create",
   "publickey-credentials-get",
+  "rewriter",
   "screen-wake-lock",
   "serial",
+  "speaker-selection",
   "storage-access",
   "summarizer",
   "sync-xhr",
+  "tools",
   "translator",
+  "unload",
   "usb",
+  "web-app-installation",
+  "webnn",
   "window-management",
+  "writer",
   "xr-spatial-tracking",
 ] as const;
+
+/**
+ * Features that the apps leave as they are, though Chromium knows them:
+ *
+ * - `web-share`, which backups use for the share sheet.
+ * - `aria-notify`, through which a page tells screen readers what changed, as a live region
+ *   does, and `focus-without-user-activation`, as the apps move the focus themselves for
+ *   keyboard and screen reader users.
+ * - The Privacy Sandbox, which Chrome is retiring, and which only matters to third-party content,
+ *   which the apps never load.
+ *
+ * Client hints, the features named `ch-…`, are left alone too: they are request headers that a
+ * browser sends only to an origin that asks for them, which ours never do.
+ */
+export const UNDENIED_FEATURES: ReadonlySet<string> = new Set([
+  "aria-notify",
+  "attribution-reporting",
+  "browsing-topics",
+  "focus-without-user-activation",
+  "interest-cohort",
+  "join-ad-interest-group",
+  "private-aggregation",
+  "private-state-token-issuance",
+  "private-state-token-redemption",
+  "run-ad-auction",
+  "shared-storage",
+  "shared-storage-select-url",
+  "web-share",
+]);
 
 export type BrowserFeature = (typeof DENIED_FEATURES)[number];
 

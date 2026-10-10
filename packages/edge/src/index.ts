@@ -1,5 +1,6 @@
 export {
   DENIED_FEATURES,
+  UNDENIED_FEATURES,
   contentSecurityPolicy,
   permissionsPolicy,
   securityHeaders,
