@@ -27,6 +27,7 @@
 | Attacker targeting the developer's accounts          | untrusted                               | Strong account security                                      |
 | Cloud storage holding backups (Drive, iCloud)        | untrusted with content                  | Backups are encrypted by default                             |
 | Cloudflare (hosting)                                 | trusted to deliver our files unmodified | Sees request metadata; see R1 and R5                         |
+| Coding agents working on this repository             | trusted with code, not with secrets     | May follow instructions planted in what they read; T15       |
 | The user's own device, operating system and browser  | trusted                                 | A compromised device is out of scope                         |
 
 ## 3. Trust boundaries
@@ -53,6 +54,7 @@
 | T12 | Rogue or taken-over subdomain                                 | Every subdomain deployed from this repository; no third-party hosting; no wildcard or dangling DNS records; DNSSEC; CAA records                                                                                                                                                                                                                                                                                                                 |
 | T13 | Phishing email that appears to come from our domains          | Null MX, SPF `-all` and DMARC `p=reject` on both domains                                                                                                                                                                                                                                                                                                                                                                                        |
 | T14 | Misused browser capabilities                                  | `Permissions-Policy` denies every feature an app does not explicitly need, among all that Chromium ships, and a test fails when Chromium knows a feature that the policy does not name; Grammar may only write to the clipboard, when the user presses Copy, and no app may read it                                                                                                                                                             |
+| T15 | Coding agent misled by what it reads                          | Claude Code's project settings run only checks and read-only git without a prompt, and deny git's `--output`, which writes files; agents push only to their own branch, never to `main`, whose changes need a pull request, passing CI and the maintainer's merge; agents never hold deploy credentials, and production deploys only after the maintainer approves                                                                              |
 
 ## 5. Residual risks (accepted)
 
