@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, truncate, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -7,6 +7,8 @@ import {
   buildManifest,
   formatManifest,
   MANIFEST_FILE,
+  MAX_FILE_BYTES,
+  oversizedFiles,
   parseManifest,
   replacedAssets,
 } from "./manifest.ts";
@@ -33,6 +35,29 @@ describe("buildManifest", () => {
     expect([...(await buildManifest(root))]).toEqual([
       ["/assets/index-a1.js", sha256("console.info(1)")],
       ["/index.html", sha256("<p>hi</p>")],
+    ]);
+  });
+});
+
+describe("oversizedFiles", () => {
+  it("finds the served files over 25 MiB, which Cloudflare would refuse, and only those", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "shkriuss-manifest-"));
+    roots.push(root);
+    await mkdir(path.join(root, "assets"));
+    // Files of these sizes without writing their bytes: the rest of each file reads as zeros.
+    for (const [file, size] of [
+      ["assets/just-fits.wasm", MAX_FILE_BYTES],
+      ["assets/too-big.wasm", MAX_FILE_BYTES + 1],
+      ["index.html", 10],
+      // Cloudflare reads it as configuration, and never serves it.
+      ["_headers", MAX_FILE_BYTES + 1],
+    ] as const) {
+      await writeFile(path.join(root, file), "");
+      await truncate(path.join(root, file), size);
+    }
+    expect(MAX_FILE_BYTES).toBe(26_214_400);
+    expect([...(await oversizedFiles(root))]).toEqual([
+      ["/assets/too-big.wasm", MAX_FILE_BYTES + 1],
     ]);
   });
 });

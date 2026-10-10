@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readdir, readFile } from "node:fs/promises";
+import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 
 /**
@@ -35,6 +35,25 @@ export async function buildManifest(directory: string): Promise<Map<string, stri
     manifest.set(file, createHash("sha256").update(bytes).digest("hex"));
   }
   return manifest;
+}
+
+/** The largest file that Cloudflare serves as a static asset: 25 MiB. */
+export const MAX_FILE_BYTES = 25 * 1024 * 1024;
+
+/**
+ * The served files of `directory` that are larger than Cloudflare serves (`MAX_FILE_BYTES`),
+ * with their sizes in bytes, by URL path. The deploy would refuse them, after the build and the
+ * tests had passed.
+ */
+export async function oversizedFiles(directory: string): Promise<Map<string, number>> {
+  const oversized = new Map<string, number>();
+  for (const file of (await servedFiles(directory)).toSorted()) {
+    const { size } = await stat(path.join(directory, file));
+    if (size > MAX_FILE_BYTES) {
+      oversized.set(file, size);
+    }
+  }
+  return oversized;
 }
 
 export function formatManifest(manifest: ReadonlyMap<string, string>): string {
