@@ -60,6 +60,38 @@ const DATA_PACKAGES = ["@shkriuss/data", "@shkriuss/backup"];
  */
 const DATA_MESSAGES = fileURLToPath(new URL("./data-messages.ts", import.meta.url));
 
+/**
+ * The browsers that the build writes its JavaScript and CSS for (architecture §14): Safari 18,
+ * and the Chrome, Edge and Firefox of its time, with ES2024 as the syntax that all of them have;
+ * whatever is newer is written in older terms. Vite's own default is older, and a future Vite
+ * may move it: the floor stays explicit here.
+ */
+export const BUILD_TARGET = [
+  "es2024",
+  "chrome120",
+  "edge120",
+  "firefox128",
+  "safari18",
+  "ios18",
+] as const;
+
+/**
+ * How many minified bytes gzip shrinks to one, about, in the platform's chunks: the entry chunk
+ * of an app with data has been 3.1 minified bytes for each gzipped one.
+ */
+const MINIFIED_PER_GZIPPED = 3.5;
+
+/**
+ * The size, in kB of minified code, from which the bundler warns of a chunk, for a first page
+ * whose budget is `budget` bytes gzipped (ADR 0018). The budget is the gate, which `edge()`
+ * measures and enforces on the first page as a whole; the bundler's warning counts each chunk's
+ * minified bytes, so it is raised to where a chunk within the budget passes without it, and one
+ * far beyond it still shows.
+ */
+export function chunkSizeWarningLimit(budget: number): number {
+  return Math.ceil((budget * MINIFIED_PER_GZIPPED) / 1000);
+}
+
 export interface AppBuildOptions {
   /**
    * For the service worker's procedures of last resort: the broken versions that this build
@@ -120,7 +152,13 @@ export function app(config: AppConfig, options: AppBuildOptions = {}): UserConfi
     keepsData = true,
     ...manifest
   } = config;
+  // ADR 0018: an app with data has the platform's database and backups to load.
+  const firstPageBudget = keepsData ? FIRST_PAGE_BUDGETS.withData : FIRST_PAGE_BUDGETS.withoutData;
   return {
+    build: {
+      target: [...BUILD_TARGET],
+      chunkSizeWarningLimit: chunkSizeWarningLimit(firstPageBudget),
+    },
     plugins: [
       tailwindcss(),
       react(),
@@ -134,8 +172,7 @@ export function app(config: AppConfig, options: AppBuildOptions = {}): UserConfi
         appId: id,
         ...(allowedFeatures === undefined ? {} : { allowedFeatures }),
         ...(webAssembly === undefined ? {} : { webAssembly }),
-        // ADR 0018: an app with data has the platform's database and backups to load.
-        firstPageBudget: keepsData ? FIRST_PAGE_BUDGETS.withData : FIRST_PAGE_BUDGETS.withoutData,
+        firstPageBudget,
         ...(keepsData ? {} : { excludedPackages: DATA_PACKAGES, excludedFiles: [DATA_MESSAGES] }),
       }),
     ],

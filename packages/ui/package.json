@@ -9,7 +9,7 @@
     "./styles.css": "./src/styles.css"
   },
   "scripts": {
-    "typecheck": "tsc",
+    "typecheck": "tsc && tsc -p tsconfig.browser.json",
     "test": "vitest run --coverage"
   },
   "dependencies": {

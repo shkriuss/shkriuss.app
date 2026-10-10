@@ -3,6 +3,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { m } from "../../messages.ts";
 import { type AppDatabase, NAME_LENGTH } from "../../schema.ts";
+import { Failure } from "./Failure.tsx";
 import { writeFailure } from "./failures.ts";
 import { AddForm } from "./forms.tsx";
 import { byName, progressOf } from "./lists.ts";
@@ -34,7 +35,7 @@ export function AllLists({ db }: AllListsProps) {
     try {
       listId = await db.change(async (change) => change.create("lists", { name }));
     } catch (error) {
-      setFailure(writeFailure(error, m.addListFailed()));
+      setFailure(writeFailure(error, { otherwise: m.addListFailed() }));
       return false;
     }
     setFailure(undefined);
@@ -83,11 +84,7 @@ export function AllLists({ db }: AllListsProps) {
         maxLength={NAME_LENGTH}
         onAdd={add}
       />
-      {failure === undefined ? null : (
-        <p role="alert" className="text-danger">
-          {failure}
-        </p>
-      )}
+      <Failure message={failure} />
       {content}
     </div>
   );

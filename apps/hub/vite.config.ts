@@ -1,12 +1,17 @@
 import { fileURLToPath } from "node:url";
 import { edge, FIRST_PAGE_BUDGETS } from "@shkriuss/edge";
-import { catalog, pageHead } from "@shkriuss/shell/vite";
+import { BUILD_TARGET, catalog, chunkSizeWarningLimit, pageHead } from "@shkriuss/shell/vite";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 import { m } from "./src/messages.ts";
 
 export default defineConfig({
+  // The browsers of architecture §14, and the bundler's chunk warning from the budget (ADR 0018).
+  build: {
+    target: [...BUILD_TARGET],
+    chunkSizeWarningLimit: chunkSizeWarningLimit(FIRST_PAGE_BUDGETS.withoutData),
+  },
   plugins: [
     tailwindcss(),
     react(),

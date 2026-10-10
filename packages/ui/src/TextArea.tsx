@@ -25,8 +25,8 @@ export interface TextAreaProps extends Omit<
 
 /**
  * A labeled field for text of several lines, with an optional description and error message.
- * `spellCheck="false"` turns the browser's spell checker off, for text that an app checks
- * itself: some browsers send the text to a server to check it.
+ * It leaves the browser's spell checker as it is: an app that checks the text itself passes
+ * `spellCheck="false"`, as some browsers send the text to a server to check it.
  */
 export function TextArea({
   label,

@@ -24,7 +24,6 @@ export const messages = defineMessages((format) => ({
   noName: () => "(no name)",
   // A list.
   list: () => "List",
-  listLoading: () => "Reading the list…",
   newItem: () => "New item",
   newItemMissing: () => "Enter the item.",
   addItemFailed: () => "The item could not be added. Reload the app to try again.",
@@ -60,6 +59,8 @@ export const messages = defineMessages((format) => ({
           other: "The list and its # items are deleted. This cannot be undone.",
         }),
   changeFailed: () => "The change could not be saved. Reload the app to try again.",
+  itemDeletedElsewhere: () => "This item was deleted in another window or on another device.",
+  listDeletedElsewhere: () => "This list was deleted in another window or on another device.",
   storageFull: () =>
     "This device has no space left for the app's data. Free some space, then try again.",
   listNotFoundTitle: () => "List not found",

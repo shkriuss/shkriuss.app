@@ -23,7 +23,7 @@ Lists to tick off, such as shopping, packing or to-dos, kept on the device, offl
 - **A list that does not exist,** whether deleted here, on another device, or never there, shows that it does not exist, with a link to the lists.
 - **The page's title** says only "List", not the list's name, which is the screen's heading: browsers keep page titles in their history, which they may sync.
 
-Names and texts must not be empty or blank; the fields refuse them. The screens follow every change, in this window or another.
+Names and texts must not be empty or blank; the fields refuse them. The screens follow every change, in this window or another. A change to an item or a list that another window or device has deleted meanwhile is not made: the screen says that it was deleted there, and the message goes away once the screen follows the deletion.
 
 **The focus follows the user,** as in the template:
 

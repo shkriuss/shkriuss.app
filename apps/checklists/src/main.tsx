@@ -1,7 +1,7 @@
 import "@shkriuss/ui/styles.css";
 import { openDatabase } from "@shkriuss/data";
 import { appInstall, appStorage, startServiceWorker } from "@shkriuss/pwa";
-import { StartFailed, appUpdates } from "@shkriuss/shell";
+import { StartBlocked, StartFailed, appUpdates } from "@shkriuss/shell";
 import { RouterProvider } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
@@ -28,8 +28,19 @@ const root = createRoot(container);
  */
 async function start(): Promise<void> {
   try {
-    // A newer version of the app, in another window, may close the database later.
-    const db = await openDatabase(schemas, { onVersionChange: updates.databaseClosed });
+    const db = await openDatabase(schemas, {
+      // A newer version of the app, in another window, may close the database later.
+      onVersionChange: updates.databaseClosed,
+      // Another window, with an older version, may keep the database from upgrading: it closes
+      // it by itself unless it is frozen, when the user must; the app says so meanwhile.
+      onBlocked: () => {
+        root.render(
+          <StrictMode>
+            <StartBlocked name={m.appName()} />
+          </StrictMode>,
+        );
+      },
+    });
     const storage = appStorage();
     // Chromium and Safari keep the data once they agree, which they decide by themselves.
     void storage.requestPersistenceQuietly();

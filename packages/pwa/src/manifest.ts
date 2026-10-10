@@ -74,6 +74,8 @@ export function appManifest(options: WebAppManifestOptions): AppManifest {
     display: "standalone",
     background_color: THEME_COLORS.light.canvas,
     theme_color: THEME_COLORS.light.surface,
+    // The web app is the app: there is no store app for a browser to offer instead.
+    prefer_related_applications: false,
     icons: icons.flatMap(({ fileName, manifest: entry }) =>
       entry === undefined ? [] : [{ src: `/${fileName}`, ...entry }],
     ),

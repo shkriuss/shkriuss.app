@@ -1,6 +1,7 @@
 import { fileURLToPath } from "node:url";
-import { edge, REPORT_WORKER_VIOLATIONS } from "@shkriuss/edge";
+import { edge, FIRST_PAGE_BUDGETS, REPORT_WORKER_VIOLATIONS } from "@shkriuss/edge";
 import { webAppManifest } from "@shkriuss/pwa/vite";
+import { BUILD_TARGET, chunkSizeWarningLimit } from "@shkriuss/shell/vite";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
@@ -31,6 +32,12 @@ function serviceWorker(): Plugin {
 }
 
 export default defineConfig({
+  // As the apps build (packages/shell/src/vite.ts): the browsers of architecture §14, and the
+  // bundler's chunk warning from the budget of an app with data (ADR 0018).
+  build: {
+    target: [...BUILD_TARGET],
+    chunkSizeWarningLimit: chunkSizeWarningLimit(FIRST_PAGE_BUDGETS.withData),
+  },
   plugins: [
     serviceWorker(),
     // The manifest and the icons of an app, with the glyph of the hub's favicon: a ring.
