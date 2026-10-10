@@ -9,13 +9,14 @@ import {
   MAX_WALL,
   isDeviceId,
   isFromFuture,
+  isTooFarAhead,
   issueHlc,
   maxHlc,
   newDeviceId,
   receiveHlc,
   wallTime,
 } from "./hlc.ts";
-import { SETTINGS_ID, newRecordId } from "./ids.ts";
+import { SETTINGS_ID, recordIdIssuer } from "./ids.ts";
 import { Incoming } from "./incoming.ts";
 import { canonicalJson } from "./json.ts";
 import { mergeRecords } from "./merge.ts";
@@ -216,16 +217,39 @@ function deviceIdOf(row: MetaRow | undefined): string {
   return value;
 }
 
-function clockOf(row: MetaRow | undefined): ClockState {
-  if (row === undefined) {
-    return INITIAL_CLOCK;
-  }
+function clockOf(row: MetaRow): ClockState {
   if (!isClock(row.value)) {
     throw new DataLayerError("invalid", "The database holds an invalid clock.");
   }
   return row.value;
 }
 
+/**
+ * The device's last HLC (data model §3.3): the `clock` row of `meta`, or, if the row is missing,
+ * as after damage, the greatest last change among the records of `stores`, so that the next
+ * change still sorts after everything the device holds (§7).
+ */
+async function lastClock(
+  transaction: Transaction,
+  stores: readonly string[],
+  row: MetaRow | undefined,
+): Promise<ClockState> {
+  if (row !== undefined) {
+    return clockOf(row);
+  }
+  let greatest: Hlc | undefined;
+  for (const store of stores) {
+    for (const record of await transaction.table<DataRecord, string>(store).toArray()) {
+      greatest = maxHlc(greatest, lastChange(record));
+    }
+  }
+  return greatest === undefined ? INITIAL_CLOCK : receiveHlc(INITIAL_CLOCK, greatest);
+}
+
+/**
+ * What the device knows about its backups, which only feeds reminders: an unreadable row reads
+ * as no backup at all, and the next write stores it afresh (data model §7).
+ */
 function backupOf(row: MetaRow | undefined): BackupState {
   if (row === undefined) {
     return NO_BACKUP;
@@ -237,7 +261,7 @@ function backupOf(row: MetaRow | undefined): BackupState {
     // The next write stores it as it is now.
     return { last: row.value.last, counted: row.value.changes, saved: 0 };
   }
-  throw new DataLayerError("invalid", "The database holds an invalid backup state.");
+  return NO_BACKUP;
 }
 
 /** The state after one more change that wrote something. */
@@ -254,6 +278,27 @@ const NATIVE_VERSIONS = 10;
 /** Whether IndexedDB's version `native` belongs to a schema version after `current`. */
 function isNewer(native: number, current: number): boolean {
   return native >= (current + 1) * NATIVE_VERSIONS;
+}
+
+/**
+ * Dexie's own store, where it keeps the schema version once its repairs have taken IndexedDB's
+ * version to the next schema version's number.
+ */
+const DEXIE_META_STORE = "$meta";
+
+/**
+ * The schema version of a database opened as it is (data model §7): the one Dexie keeps in
+ * `$meta`, where it has one, and otherwise IndexedDB's version without the 1 that Dexie adds for
+ * each repair.
+ */
+async function storedVersion(dexie: Dexie): Promise<number> {
+  if (dexie.tables.some((table) => table.name === DEXIE_META_STORE)) {
+    const version: unknown = await dexie.table(DEXIE_META_STORE).get("version");
+    if (typeof version === "number" && Number.isSafeInteger(version) && version >= 1) {
+      return version;
+    }
+  }
+  return Math.floor(dexie.verno);
 }
 
 /**
@@ -453,9 +498,10 @@ export async function openDatabase<C extends SchemaVersion>(
  * The app's records as the database stores them, at the database's own schema version, for a
  * backup when the app cannot open it, as when an upgrade failed (data model §7; backup format
  * §4). It opens the database as it is, without upgrading it, reads every store of that version
- * but `meta` in one transaction, and changes nothing. It throws a `DataLayerError` `not-found` if
- * the device has no database of the app, `newer-version` if a newer version of the app has
- * upgraded it, and `invalid` if its version is none of the app's.
+ * that the database has, but `meta`, in one transaction, and changes nothing; a store that the
+ * database lacks is empty. It throws a `DataLayerError` `not-found` if the device has no database
+ * of the app, `newer-version` if a newer version of the app has upgraded it, and `invalid` if
+ * its version is none of the app's.
  */
 export async function rescueSnapshot(
   schemas: Schemas,
@@ -477,7 +523,7 @@ export async function rescueSnapshot(
       }
       throw translate(error);
     }
-    const version = dexie.verno;
+    const version = await translating(async () => storedVersion(dexie));
     if (version > schemas.current.version) {
       throw new DataLayerError(
         "newer-version",
@@ -488,27 +534,33 @@ export async function rescueSnapshot(
     if (schema === undefined) {
       throw new DataLayerError("invalid", `The database has schema version ${version}.`);
     }
-    const stores = Object.keys(schema.stores);
-    const now = options.now ?? Date.now;
-    return await translating(async () =>
-      dexie.transaction("r", stores, async (transaction) => {
-        const records: Record<string, DataRecord[]> = {};
-        let greatest: Hlc | undefined;
-        for (const store of stores) {
-          records[store] = await transaction.table<DataRecord, string>(store).toArray();
-          for (const record of records[store]) {
-            greatest = maxHlc(greatest, lastChange(record));
+    const existing = new Set(dexie.tables.map((table) => table.name));
+    const stores = Object.keys(schema.stores).filter((store) => existing.has(store));
+    const records: Record<string, DataRecord[]> = {};
+    for (const store of Object.keys(schema.stores)) {
+      records[store] = [];
+    }
+    let greatest: Hlc | undefined;
+    if (stores.length > 0) {
+      await translating(async () =>
+        dexie.transaction("r", stores, async (transaction) => {
+          for (const store of stores) {
+            records[store] = await transaction.table<DataRecord, string>(store).toArray();
+            for (const record of records[store]) {
+              greatest = maxHlc(greatest, lastChange(record));
+            }
           }
-        }
-        // Nothing records this backup: the database stays as it is (backup format §4).
-        return {
-          schemaVersion: version,
-          stores: records,
-          fromFuture: fromFuture(greatest, now()),
-          counted: 0,
-        };
-      }),
-    );
+        }),
+      );
+    }
+    const now = options.now ?? Date.now;
+    // Nothing records this backup: the database stays as it is (backup format §4).
+    return {
+      schemaVersion: version,
+      stores: records,
+      fromFuture: fromFuture(greatest, now()),
+      counted: 0,
+    };
   } finally {
     dexie.close();
   }
@@ -647,7 +699,7 @@ export abstract class Reader<C extends SchemaVersion> {
 
   /**
    * The ids and values of every live record of `store`, sorted by id: by the time each was
-   * created, to the millisecond.
+   * created, to the millisecond, and within one, in the order one connection created them.
    */
   async list<S extends RecordStore<C>>(store: S): Promise<Item<C, S>[]> {
     return this.read(async () => {
@@ -693,15 +745,23 @@ function isSettingsStore<C extends SchemaVersion>(
 export class Change<C extends SchemaVersion> extends Reader<C> {
   readonly #transaction: Transaction;
   readonly #now: () => number;
+  readonly #newId: (now: number) => string;
   /** The HLC that every write of this change carries. */
   readonly hlc: Hlc;
   #written = false;
 
-  constructor(schemas: Schemas<C>, transaction: Transaction, now: () => number, hlc: Hlc) {
+  constructor(
+    schemas: Schemas<C>,
+    transaction: Transaction,
+    now: () => number,
+    hlc: Hlc,
+    newId: (now: number) => string,
+  ) {
     super(schemas);
     this.#transaction = transaction;
     this.#now = now;
     this.hlc = hlc;
+    this.#newId = newId;
   }
 
   /** Whether the change has written anything. */
@@ -736,9 +796,12 @@ export class Change<C extends SchemaVersion> extends Reader<C> {
     this.#written = true;
   }
 
-  /** Creates a record with `values` and returns its new id (data model §4.1). */
+  /**
+   * Creates a record with `values` and returns its new id (data model §4.1), which is greater
+   * than the id of every record this connection created before.
+   */
   async create<S extends RecordStore<C>>(store: S, values: Input<C, S>): Promise<string> {
-    const id = newRecordId(this.#now());
+    const id = this.#newId(this.#now());
     const record = createRecord(id, this.schemas.current.version, values, this.hlc);
     await this.#write(recordStore(store), undefined, record);
     return id;
@@ -799,6 +862,8 @@ export interface Observable<T> {
 export class Database<C extends SchemaVersion> extends Reader<C> {
   readonly #dexie: Dexie;
   readonly #now: () => number;
+  /** The ids of the records this connection creates, which ascend in that order. */
+  readonly #newId = recordIdIssuer();
 
   constructor(dexie: Dexie, schemas: Schemas<C>, now: () => number) {
     super(schemas);
@@ -867,9 +932,10 @@ export class Database<C extends SchemaVersion> extends Reader<C> {
     return this.#dexie.transaction("rw", stores, async (transaction) => {
       const meta = transaction.table<MetaRow, string>(META_STORE);
       const [device, clock, backup] = await meta.bulkGet(["device", "clock", "backup"]);
-      const issued = issueHlc(clockOf(clock), this.#now(), deviceIdOf(device));
+      const last = await lastClock(transaction, Object.keys(this.schemas.current.stores), clock);
+      const issued = issueHlc(last, this.#now(), deviceIdOf(device));
       await meta.put({ key: "clock", value: issued.clock });
-      const change = new Change(this.schemas, transaction, this.#now, issued.hlc);
+      const change = new Change(this.schemas, transaction, this.#now, issued.hlc, this.#newId);
       const result = await write(change);
       if (change.written) {
         await meta.put({ key: "backup", value: counting(backupOf(backup)) });
@@ -910,6 +976,14 @@ export class Database<C extends SchemaVersion> extends Reader<C> {
       throw new DataLayerError(
         "invalid",
         "Only records that checkIncomingStores() checked for this app can be imported.",
+      );
+    }
+    // Whatever the user confirms: a date wrong by a century is beyond what confirming is for, and
+    // only a crafted backup carries such a time (data model §3.5).
+    if (incoming.greatest !== undefined && isTooFarAhead(incoming.greatest, this.#now())) {
+      throw new DataLayerError(
+        "invalid",
+        "The records have a clock more than 100 years after this device's clock, which it never receives.",
       );
     }
     return incoming;
@@ -965,9 +1039,9 @@ export class Database<C extends SchemaVersion> extends Reader<C> {
         const meta = transaction.table<MetaRow, string>(META_STORE);
         const [clock, backup] = await meta.bulkGet(["clock", "backup"]);
         if (checked.greatest !== undefined) {
-          const last = clockOf(clock);
+          const last = await lastClock(transaction, Object.keys(checked.stores), clock);
           const received = receiveHlc(last, checked.greatest);
-          if (received !== last) {
+          if (clock === undefined || received !== last) {
             await meta.put({ key: "clock", value: received });
           }
         }
@@ -982,9 +1056,16 @@ export class Database<C extends SchemaVersion> extends Reader<C> {
   /**
    * Records that this device has just made a backup (backup format §4, step 5): its time, and
    * that it has the changes that its snapshot counted, `counted` of `snapshot()`. Changes made
-   * since the snapshot still count as changes since the backup.
+   * since the snapshot still count as changes since the backup. Throws a `DataLayerError`
+   * `invalid`, and records nothing, for anything but such a count.
    */
   async recordBackup(counted: number): Promise<void> {
+    if (!Number.isSafeInteger(counted) || counted < 0) {
+      throw new DataLayerError(
+        "invalid",
+        "A backup is recorded with the count of changes that its snapshot gave.",
+      );
+    }
     await translating(async () =>
       this.#dexie.transaction("rw", [META_STORE], async (transaction) => {
         const meta = transaction.table<MetaRow, string>(META_STORE);

@@ -21,11 +21,13 @@ export const INITIAL_CLOCK: ClockState = { wall: 0, counter: 0 };
 export const MAX_WALL = 999_999_999_999_999;
 export const MAX_COUNTER = 65_535;
 
+const DAY = 24 * 60 * 60 * 1000;
+
 /**
  * How far after this device's clock an HLC may lie before it is from the future (data model
  * §3.5).
  */
-export const MAX_CLOCK_AHEAD = 24 * 60 * 60 * 1000;
+export const MAX_CLOCK_AHEAD = DAY;
 
 /**
  * The latest wall time of an HLC from outside: the last millisecond of the year 9999, which no
@@ -33,6 +35,15 @@ export const MAX_CLOCK_AHEAD = 24 * 60 * 60 * 1000;
  * than it ever will; one that received `MAX_WALL` could issue only 65,536.
  */
 export const MAX_RECEIVED_WALL = 253_402_300_799_999;
+
+/**
+ * How far after this device's clock the greatest HLC of a backup may lie for the device to
+ * receive it at all, whatever the user confirms (data model §3.5): 100 years, as 36,525 days. A
+ * device's own HLCs run at most a few milliseconds ahead of what it received, and real time moves
+ * on between an export and its import, so a bound that moves with this device's clock never
+ * refuses a backup of what a device received, while a crafted year-9999 file is never received.
+ */
+export const MAX_RECEIVED_AHEAD = 36_525 * DAY;
 
 const HLC = /^[0-9]{15}:[0-9]{5}:[0-9a-f]{16}$/;
 const DEVICE_ID = /^[0-9a-f]{16}$/;
@@ -132,6 +143,14 @@ export function wallTime(hlc: Hlc): number {
 /** Whether `hlc` lies more than 24 hours after `now`: from the future (data model §3.5). */
 export function isFromFuture(hlc: Hlc, now: number): boolean {
   return wallTime(hlc) - now > MAX_CLOCK_AHEAD;
+}
+
+/**
+ * Whether `hlc` lies more than 100 years after `now`: too far ahead for this device to receive
+ * it, whatever the user confirms (data model §3.5).
+ */
+export function isTooFarAhead(hlc: Hlc, now: number): boolean {
+  return wallTime(hlc) - now > MAX_RECEIVED_AHEAD;
 }
 
 /** The greater of two HLCs, where a missing one is lower than every HLC. */

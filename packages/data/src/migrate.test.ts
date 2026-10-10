@@ -89,6 +89,11 @@ function note(
     : { id: RECORD_ID, v: 1, data, clock, deleted };
 }
 
+/** A list as the data layer stores it, which a migration function may try to change in place. */
+function isList(value: JsonValue | undefined): value is JsonValue[] {
+  return Array.isArray(value);
+}
+
 describe("migrateRecord (data model §6)", () => {
   it("carries clocks over as the spec requires", () => {
     const record = note(
@@ -189,6 +194,66 @@ describe("migrateRecord (data model §6)", () => {
       clock: { status: at(6), label: at(6) },
       deleted: at(4),
     });
+  });
+
+  it("gives the same result whatever the order of a record's fields", () => {
+    const record = note(
+      { title: "Milk", done: true, list: LIST_ID },
+      { title: at(1), done: at(5), list: at(2) },
+    );
+    const reordered = note(
+      { list: LIST_ID, done: true, title: "Milk" },
+      { list: at(2), done: at(5), title: at(1) },
+    );
+    expect(migrateRecord(schemas, { store: "notes", record: reordered })).toStrictEqual(
+      migrateRecord(schemas, { store: "notes", record }),
+    );
+  });
+
+  it("gives a migration function a copy of each value, so that one which changes it changes nothing else", () => {
+    const fields = { tags: field.array(field.string()), label: field.string() };
+    const mutating = defineSchemas(
+      { version: 1, stores: { notes: { fields } } },
+      {
+        version: 2,
+        stores: { notes: { fields: { ...fields, count: field.number() } } },
+        migrate: {
+          notes: {
+            convert: {
+              tags: (tags) => {
+                if (isList(tags)) {
+                  tags.push("x");
+                }
+                return tags;
+              },
+            },
+            compute: {
+              count: {
+                from: ["tags"],
+                value: ({ tags }) => {
+                  if (!isList(tags)) {
+                    return 0;
+                  }
+                  tags.push("y");
+                  return tags.length;
+                },
+              },
+            },
+          },
+        },
+      },
+    );
+    const record: DataRecord = {
+      id: RECORD_ID,
+      v: 1,
+      data: { tags: ["a"] },
+      clock: { tags: at(1) },
+    };
+    const first = migrateRecord(mutating, { store: "notes", record });
+    // The record keeps its value, and each function changed a copy of its own.
+    expect(record.data).toStrictEqual({ tags: ["a"] });
+    expect(first.record.data).toStrictEqual({ tags: ["a", "x"], count: 2 });
+    expect(migrateRecord(mutating, { store: "notes", record })).toStrictEqual(first);
   });
 
   it("returns a record of the current version as it is", () => {

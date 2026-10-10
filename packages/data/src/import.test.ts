@@ -3,7 +3,15 @@ import * as fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import type { Snapshot } from "./db.ts";
 import { DataLayerError } from "./errors.ts";
-import { type Hlc, MAX_CLOCK_AHEAD, formatHlc, wallTime } from "./hlc.ts";
+import {
+  type Hlc,
+  MAX_CLOCK_AHEAD,
+  MAX_COUNTER,
+  MAX_RECEIVED_AHEAD,
+  MAX_RECEIVED_WALL,
+  formatHlc,
+  wallTime,
+} from "./hlc.ts";
 import { SETTINGS_ID } from "./ids.ts";
 import { type Incoming, checkIncomingStores } from "./incoming.ts";
 import type { DataRecord } from "./record.ts";
@@ -340,6 +348,73 @@ describe("clocks from the future (data model §3.5)", () => {
       ),
       { numRuns: 40 },
     );
+  });
+});
+
+describe("clocks more than 100 years ahead (data model §3.5)", () => {
+  const CENTURY = MAX_RECEIVED_AHEAD;
+  const HOUR = 60 * 60 * 1000;
+
+  it("imports a backup whose greatest HLC lies within 100 years, once confirmed, after which the device's own backups still import elsewhere", async () => {
+    const { db } = await fresh();
+    // With the counter full, so that the device's next change lies a millisecond further ahead.
+    const backup = notes([note(1, "Milk", hlcAt(START + CENTURY - HOUR, MAX_COUNTER))]);
+    expect((await db.previewImport(backup)).fromFuture).toBe(START + CENTURY - HOUR);
+    await expect(db.import(backup)).rejects.toThrow(
+      expect.objectContaining({ code: "future-clock" }),
+    );
+    await db.import(backup, { acceptFromFuture: true });
+    const next = await db.change(async (change) => {
+      await change.update("notes", id(1), { title: "Oat milk" });
+      return change.hlc;
+    });
+    expect(wallTime(next)).toBe(START + CENTURY - HOUR + 1);
+    const own = backupOf(await db.snapshot());
+    // On a device whose clock is the same, and on one whose clock is later.
+    for (const ahead of [0, 365 * DAY]) {
+      const other = await fresh();
+      other.clock.time = START + ahead;
+      expect((await other.db.previewImport(own)).fromFuture).toBe(START + CENTURY - HOUR + 1);
+      expect((await other.db.import(own, { acceptFromFuture: true })).total.new).toBe(1);
+      expect(await other.db.get("notes", id(1))).toMatchObject({ values: { title: "Oat milk" } });
+      other.db.close();
+    }
+  });
+
+  it.each<[string, (now: number) => number]>([
+    ["a millisecond more than 100 years ahead", (now) => now + CENTURY + 1],
+    ["at the end of the year 9999", () => MAX_RECEIVED_WALL],
+  ])(
+    "refuses a backup whose greatest HLC lies %s, whatever the user confirms, and writes nothing",
+    async (_case, wall) => {
+      const { factory, db } = await fresh();
+      const backup = notes([note(1, "Milk", at(1)), note(2, "Eggs", hlcAt(wall(START)))]);
+      const before = await stored(factory);
+      await expect(db.previewImport(backup)).rejects.toThrow(
+        expect.objectContaining({ code: "invalid" }),
+      );
+      await expect(db.import(backup, { acceptFromFuture: true })).rejects.toThrow(
+        expect.objectContaining({ code: "invalid" }),
+      );
+      await expect(db.import(backup)).rejects.toThrow(expect.objectContaining({ code: "invalid" }));
+      expect(await stored(factory)).toStrictEqual(before);
+    },
+  );
+
+  it("measures the 100 years from this device's clock when the import runs", async () => {
+    const { clock, db } = await fresh();
+    const backup = notes([note(1, "Milk", hlcAt(START + CENTURY))]);
+    expect((await db.previewImport(backup)).fromFuture).toBe(START + CENTURY);
+    // The date went back after the preview.
+    clock.time = START - 1;
+    await expect(db.previewImport(backup)).rejects.toThrow(
+      expect.objectContaining({ code: "invalid" }),
+    );
+    await expect(db.import(backup, { acceptFromFuture: true })).rejects.toThrow(
+      expect.objectContaining({ code: "invalid" }),
+    );
+    clock.time = START;
+    expect((await db.import(backup, { acceptFromFuture: true })).total.new).toBe(1);
   });
 });
 
