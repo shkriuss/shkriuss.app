@@ -1,7 +1,7 @@
 # Architecture
 
 - **Status:** accepted
-- **Last updated:** 2026-10-09
+- **Last updated:** 2026-10-10
 - **Scope:** the hub, every app and the shared platform. The reasons behind each choice are in the [decision records](decisions/README.md); this document describes the resulting system.
 
 ## 1. Summary
@@ -135,7 +135,7 @@ Backups are the only way data leaves a device, the only protection against losin
 
 ## 10. User interface
 
-- React 19, Vite, TypeScript and TanStack Router, with routes declared in code ([ADR 0005](decisions/0005-frontend-stack.md), [ADR 0013](decisions/0013-routes-in-code.md)). The React Compiler waits for support of Babel 8 ([roadmap](roadmap.md)).
+- React 19, Vite, TypeScript and TanStack Router, with routes declared in code ([ADR 0016](decisions/0016-frontend-stack-as-built.md), [ADR 0013](decisions/0013-routes-in-code.md)). The React Compiler waits for support of Babel 8 ([roadmap](roadmap.md)).
 - **Navigation:** the shell's frame leads to the app's first screen and to its settings, and each screen titles the page, but never with what the user entered, such as a list's name: browsers keep titles in their history. Links between screens open them without loading the page again, and the new screen's heading takes the focus, which screen readers then read.
 - `@shkriuss/ui` wraps React Aria Components with our design tokens (Tailwind CSS 4): one look across all apps, light and dark themes, and system fonts. An app's accent color is the background of its icons; on the screens, every app has the same accent.
 - Layouts are phone-first: one column of readable width, on every screen size; two-pane layouts for tablets and desktops come once an app needs them. They respect safe areas, reduced motion and Windows' contrast themes (forced colors). A test holds the colors of both themes to the contrast that WCAG AA asks: 4.5:1 for text, 3:1 for the borders of controls and the focus outline.
@@ -144,7 +144,7 @@ Backups are the only way data leaves a device, the only protection against losin
 
 ## 11. Hosting and delivery
 
-- **Cloudflare Workers static assets**, one Worker per app (and one for the hub), each with a custom domain per environment ([ADR 0006](decisions/0006-hosting-and-deployment.md)). There is no Worker script: responses come straight from the asset store, with headers from a generated `_headers` file, and unknown paths fall back to `index.html`. A file may have at most 25 MiB, which the build checks.
+- **Cloudflare Workers static assets**, one Worker per app (and one for the hub), each with a custom domain per environment ([ADR 0017](decisions/0017-deploy-and-fix-forward.md)). There is no Worker script: responses come straight from the asset store, with headers from a generated `_headers` file, and unknown paths fall back to `index.html`. A file may have at most 25 MiB, which the build checks.
 - **Caching:** hashed assets are immutable for a year, each by its exact path, so that a request for one that the build does not have, which gets `index.html`, is not kept in its place; `index.html`, the manifest and the service worker are revalidated on every load. Text files, such as `licenses.txt`, are served as UTF-8.
 - **Deployment:** GitHub Actions, in the same workflow as the checks.
   - Every merge to `main` builds every app in `apps/`, the hub among them, once every check has passed. The build runs without secrets, and records the SHA-256 of every file it made.
@@ -152,7 +152,7 @@ Backups are the only way data leaves a device, the only protection against losin
   - A separate job then signs the build provenance of every file staging received: a GitHub artifact attestation, signed with a short-lived Sigstore certificate and recorded in Sigstore's public transparency log. That job runs no code from the repository or its dependencies, so nothing else can sign in its name.
   - Production receives the same files once their provenance is attested, after manual approval in the `production` environment, but only of the apps that are released ([ADR 0015](decisions/0015-releasing-apps.md)): a new app stays on staging until it has been checked on real devices. It deploys only if a second build of the commit, on another runner, gave them byte for byte, and if no file in `/assets/` would change its content under the same name; browsers keep those files for a year.
   - Deploys take turns, and each goes to the end: a newer merge never stops one halfway, which would leave some apps on each commit. Of the deploys that wait, only the latest stays queued.
-  - Rolling back means redeploying the previous version.
+  - A bad release is fixed forward, by a new commit, usually a revert, which goes through CI and both deploys like any other ([ADR 0017](decisions/0017-deploy-and-fix-forward.md)). An older build of an app whose schema version is lower than the live one's is never deployed again: whoever opened the newer version could no longer open their data (§7). Cloudflare's own rollback of a Worker's version is for emergencies only, for an app whose schema version the bad release did not change.
   - Each app's `wrangler.json` keeps `workers.dev` and preview URLs off, so nothing bypasses Cloudflare Access on staging. It has only the keys that static assets on the app's two domains need, so that it can add no build command, Worker script, other files or routes, which `wrangler deploy` would run or upload with the deploy token. `pnpm check` enforces both.
 - **Cloudflare features that rewrite pages or inject scripts** (Rocket Loader, Email Address Obfuscation, Zaraz, Web Analytics auto-injection, Bot Fight Mode's JavaScript detections) stay off, because they conflict with the security policy and integrity checks.
 - **Network Error Logging** stays off too. Cloudflare turns it on by default; its `NEL` and `Report-To` headers make browsers send reports about failed connections to Cloudflare, which is telemetry.
@@ -207,14 +207,17 @@ Staging additionally sends `X-Robots-Tag: noindex`. That is a host rule in the s
 
 ## 15. Quality
 
-Every pull request must pass the gates in [ADR 0008](decisions/0008-quality-gates.md):
+Every pull request must pass the gates in [ADR 0018](decisions/0018-quality-gates-as-enforced.md), and CI runs every task on every pull request:
 
-- type checks and lint;
-- unit and property-based tests;
-- component tests in real browsers (Chromium, Firefox, WebKit);
-- Playwright end-to-end tests against the production build served with production headers, where any CSP or integrity violation, a worker's included, fails the run; a test app that is never deployed (`tooling/platform-e2e`) tests the shared platform the same way, and the app template (`tooling/app-template`) is tested as every app is. CI runs them in six jobs at once, each browser's projects in two halves, and its check "End-to-end" passes once all six have;
+- formatting, lint and type checks;
+- unit and property-based tests, with at least 90% coverage in every platform package but `@shkriuss/config`, whose Playwright setup is test code;
+- component tests in real browsers (Chromium, Firefox, WebKit), on the pages of a test app that is never deployed (`tooling/platform-e2e`);
+- Playwright end-to-end tests against the production build served with production headers, where any CSP or integrity violation, a worker's included, fails the run; the app template (`tooling/app-template`) is tested as every app is. CI runs them in six jobs at once, each browser's projects in two halves, and its check "End-to-end" passes once all six have;
 - accessibility checks (axe);
-- performance and bundle-size budgets, which CI does not check yet.
+- the repository checks (`pnpm check`), the workflow audit and dependency review;
+- budgets: the first page's JavaScript, gzipped, is at most 150 kB for the hub and for apps without data, and at most 180 kB for apps with data. A check in every build, which fails above them, is planned.
+
+CodeQL also runs on every pull request. Lighthouse is no gate: the budgets and the end-to-end tests in phone viewports cover what its lab scores would.
 
 ## 16. Future: accounts and sync
 

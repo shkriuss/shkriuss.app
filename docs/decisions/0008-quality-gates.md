@@ -1,6 +1,6 @@
 # ADR 0008: Quality gates and testing
 
-- **Status:** Accepted
+- **Status:** Superseded by [ADR 0018](0018-quality-gates-as-enforced.md)
 - **Date:** 2026-10-04
 
 ## Context

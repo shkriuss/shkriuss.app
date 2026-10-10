@@ -2,7 +2,7 @@ import { appHost, PRODUCTION_DOMAIN, STAGING_DOMAIN } from "@shkriuss/edge";
 import { isRecord, type Violation } from "./report.ts";
 
 /**
- * The Cloudflare configuration of every app (ADR 0001, ADR 0006):
+ * The Cloudflare configuration of every app (ADR 0001, ADR 0017):
  *
  * - static assets only, with no Worker script;
  * - staging reachable only through its custom domain, which Cloudflare Access protects:
@@ -50,9 +50,9 @@ function expectOnly(
     if (allowed.has(key)) {
       continue;
     }
-    let message = `${where}${key} is not allowed: apps are static assets on their own domains only (ADR 0006).`;
+    let message = `${where}${key} is not allowed: apps are static assets on their own domains only (ADR 0017).`;
     if (key === "main") {
-      message = `Apps are static assets only; remove ${where}main (ADR 0006).`;
+      message = `Apps are static assets only; remove ${where}main (ADR 0017).`;
     } else if (where === "" && (key === "routes" || key === "route")) {
       message = "Routes belong in env.staging and env.production only.";
     }

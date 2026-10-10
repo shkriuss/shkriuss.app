@@ -1,6 +1,6 @@
 # ADR 0005: Frontend stack
 
-- **Status:** Accepted; the row on translations is superseded by [ADR 0012](0012-typed-messages.md), and the row on routing by [ADR 0013](0013-routes-in-code.md)
+- **Status:** Superseded by [ADR 0016](0016-frontend-stack-as-built.md); earlier, the row on translations by [ADR 0012](0012-typed-messages.md), and the row on routing by [ADR 0013](0013-routes-in-code.md)
 - **Date:** 2026-10-04
 
 ## Context

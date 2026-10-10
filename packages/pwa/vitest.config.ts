@@ -15,7 +15,7 @@ export default defineConfig({
         "worker/sw.ts",
         "worker/remove.ts",
       ],
-      // ADR 0008: at least 90% of lines and branches.
+      // ADR 0018: at least 90% of lines and branches.
       thresholds: { lines: 90, branches: 90, functions: 90, statements: 90 },
     },
   },

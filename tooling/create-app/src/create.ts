@@ -225,7 +225,7 @@ ${app.description}
 }
 
 /**
- * The new app's Cloudflare configuration, as the repository's checks require it (ADR 0006):
+ * The new app's Cloudflare configuration, as the repository's checks require it (ADR 0017):
  * static assets only, staging and production each on the app's subdomain, never `workers.dev`.
  * It keeps the template's settings for the assets and Wrangler.
  */

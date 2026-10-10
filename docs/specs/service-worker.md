@@ -1,7 +1,7 @@
 # Service worker
 
 - **Status:** accepted, 2026-10-06 (Phase 1.2)
-- **Implements:** [architecture §9](../architecture.md#9-offline-install-and-updates), [ADR 0005](../decisions/0005-frontend-stack.md) (our own service worker) and [ADR 0011](../decisions/0011-worker-trusted-types-policy.md) (starting it under Trusted Types)
+- **Implements:** [architecture §9](../architecture.md#9-offline-install-and-updates), [ADR 0016](../decisions/0016-frontend-stack-as-built.md) (our own service worker) and [ADR 0011](../decisions/0011-worker-trusted-types-policy.md) (starting it under Trusted Types)
 - **Implemented by:** `@shkriuss/pwa` (Phase 1.2)
 
 Every app has a service worker at `/sw.js`. It makes the app work offline after its first load: it keeps a checked copy of every file of one version of the app and answers the app's requests from it. Large files that the app keeps on first use come into that copy once the app has used them. It also decides when a new version takes over: it installs in the background and waits until the user agrees, so an update never interrupts a task, unless it replaces a broken version (section 8).
