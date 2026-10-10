@@ -5,7 +5,7 @@ import path from "node:path";
 import type { Plugin } from "vite";
 import { assertChunksLoadInSafari, assertWorkerBundleNames } from "./chunks.ts";
 import { appHost, STAGING_DOMAIN } from "./domains.ts";
-import { assertExcludedPackages } from "./excluded-packages.ts";
+import { assertExcludedFiles, assertExcludedPackages } from "./excluded-packages.ts";
 import { appHeaderRules, headersFile } from "./headers-file.ts";
 import { type BrowserFeature, securityHeaders } from "./headers.ts";
 import { addScriptIntegrity, cspHashSource, subresourceIntegrity } from "./integrity.ts";
@@ -113,6 +113,12 @@ export interface EdgeOptions {
    * app without data. The build fails if the page, a worker or the service worker has any.
    */
   readonly excludedPackages?: readonly string[];
+  /**
+   * Files, by absolute path, whose code the build must not have, though their package's other
+   * files it may: the shell's text for apps with data, for an app without data. The build fails
+   * if the page, a worker or the service worker has any.
+   */
+  readonly excludedFiles?: readonly string[];
 }
 
 /**
@@ -264,6 +270,7 @@ export function edge(options: EdgeOptions = {}): Plugin {
           ...(serviceWorkerBundle?.modules ?? []),
         ];
         await assertExcludedPackages(modules, options.excludedPackages ?? [], licenseOptions.root);
+        assertExcludedFiles(modules, options.excludedFiles ?? [], licenseOptions.root);
         const licenses = await collectLicenses(modules, licenseOptions);
         await writeFile(path.join(directory, LICENSES_FILE), licensesFile(options.appId, licenses));
 

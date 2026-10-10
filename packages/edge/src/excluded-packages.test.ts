@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { assertExcludedPackages } from "./excluded-packages.ts";
+import { assertExcludedFiles, assertExcludedPackages } from "./excluded-packages.ts";
 
 let root = "";
 
@@ -67,5 +67,42 @@ describe("assertExcludedPackages", () => {
     await expect(
       assertExcludedPackages([path.join(root, "nowhere", "x.js")], [], root),
     ).resolves.toBeUndefined();
+  });
+});
+
+describe("assertExcludedFiles", () => {
+  it("accepts a build without the files that the app excludes, though it has their package", () => {
+    expect(() =>
+      assertExcludedFiles(
+        [
+          file("packages/store/src/text.ts"),
+          // Generated code is no file of the repository.
+          "\0vite/preload-helper.js",
+        ],
+        [file("packages/store/src/data-text.ts")],
+        root,
+      ),
+    ).not.toThrow();
+  });
+
+  it("names each excluded file that the build has, however the paths are written", () => {
+    expect(() =>
+      assertExcludedFiles(
+        [
+          file("packages/store/src/text.ts"),
+          `${file("packages/store/src/data-text.ts")}?raw`,
+          file("packages/store/src/data-text.ts"),
+          file("packages/store/src/more-text.ts"),
+        ],
+        [`${root}/packages/store/lib/../src/data-text.ts`, file("packages/store/src/more-text.ts")],
+        root,
+      ),
+    ).toThrow(
+      "The build has packages/store/src/data-text.ts and packages/store/src/more-text.ts, which this app excludes.",
+    );
+  });
+
+  it("excludes nothing for an app that names no file", () => {
+    expect(() => assertExcludedFiles([file("packages/store/src/text.ts")], [], root)).not.toThrow();
   });
 });

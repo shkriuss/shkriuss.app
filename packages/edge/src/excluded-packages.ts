@@ -70,3 +70,34 @@ export async function assertExcludedPackages(
     );
   }
 }
+
+/**
+ * Throws if the build has one of `files`, by absolute path: if one of `modules`, the ids of the
+ * modules whose code the build includes, is such a file. An app without data excludes the
+ * shell's text for apps with data, and so every part of the shell that shows it, though they
+ * belong to a package that it has. The files that it names are relative to `root`, the
+ * repository's root.
+ */
+export function assertExcludedFiles(
+  modules: Iterable<string>,
+  files: readonly string[],
+  root: string,
+): void {
+  if (files.length === 0) {
+    return;
+  }
+  const excluded = new Set(files.map((file) => path.resolve(file)));
+  const found = new Set<string>();
+  for (const id of modules) {
+    if (id.startsWith("\0")) {
+      continue;
+    }
+    const file = path.resolve(id.split("?", 1)[0] ?? id);
+    if (excluded.has(file)) {
+      found.add(path.relative(root, file).split(path.sep).join("/"));
+    }
+  }
+  if (found.size > 0) {
+    throw new Error(`The build has ${[...found].join(" and ")}, which this app excludes.`);
+  }
+}
