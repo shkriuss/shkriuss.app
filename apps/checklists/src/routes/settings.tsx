@@ -1,4 +1,4 @@
-import { SettingsScreen } from "@shkriuss/shell";
+import { loadSettingsScreen, SettingsScreen } from "@shkriuss/shell";
 import { createRoute } from "@tanstack/react-router";
 import { config } from "../../app.config.ts";
 import { m } from "../messages.ts";
@@ -9,6 +9,8 @@ import { rootRoute } from "./root.tsx";
 export const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/settings",
+  // They load on demand, with the code of backups, before they show (ADR 0018).
+  loader: loadSettingsScreen,
   component: Settings,
 });
 

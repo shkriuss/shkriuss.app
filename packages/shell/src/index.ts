@@ -13,7 +13,8 @@ export { observedStore, type Observed, type ObservedStore } from "./observed.ts"
 export { Restore, type RestoreDatabase, type RestoreProps } from "./Restore.tsx";
 export { Screen, type ScreenProps } from "./Screen.tsx";
 export { ScreenLink } from "./ScreenLink.tsx";
-export { SettingsScreen, type SettingsScreenProps } from "./SettingsScreen.tsx";
+export { loadSettingsScreen, SettingsScreen } from "./on-demand.tsx";
+export type { SettingsScreenProps } from "./SettingsScreen.tsx";
 export {
   SettingsScreenWithoutData,
   type SettingsScreenWithoutDataProps,
