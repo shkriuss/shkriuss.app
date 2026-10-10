@@ -32,7 +32,7 @@ function check(files: Record<string, string>): string[] {
 }
 
 const MANIFESTS = {
-  "apps/notes/package.json": '{ "name": "@shkriuss/notes" }',
+  "apps/www/package.json": '{ "name": "@shkriuss/www" }',
   "apps/lists/package.json": '{ "name": "@shkriuss/lists" }',
   "packages/data/package.json": '{ "name": "@shkriuss/data" }',
   "tooling/checks/package.json": '{ "name": "@shkriuss/checks" }',
@@ -43,9 +43,9 @@ describe("checkImports", () => {
     expect(
       check({
         ...MANIFESTS,
-        "apps/notes/src/routes/home.tsx":
+        "apps/www/src/routes/home.tsx":
           'import { m } from "../messages.ts";\nimport { config } from "../../app.config.ts";\nimport { openDatabase } from "@shkriuss/data";',
-        "apps/notes/src/main.tsx": 'import worker from "./backup.worker.ts?worker&url";',
+        "apps/www/src/main.tsx": 'import worker from "./backup.worker.ts?worker&url";',
         "packages/data/src/db.ts": 'import Dexie from "dexie";',
       }),
     ).toStrictEqual([]);
@@ -55,12 +55,12 @@ describe("checkImports", () => {
     expect(
       check({
         ...MANIFESTS,
-        "apps/notes/src/main.tsx": '\nimport { db } from "../../../packages/data/src/db.ts";',
-        "tooling/checks/src/cli.ts": 'export { x } from "../../../apps/notes/src/x.ts";',
+        "apps/www/src/main.tsx": '\nimport { db } from "../../../packages/data/src/db.ts";',
+        "tooling/checks/src/cli.ts": 'export { x } from "../../../apps/www/src/x.ts";',
       }),
     ).toStrictEqual([
-      'apps/notes/src/main.tsx:2: "../../../packages/data/src/db.ts" leaves apps/notes: import other packages by their name, through their entry points.',
-      'tooling/checks/src/cli.ts:1: "../../../apps/notes/src/x.ts" leaves tooling/checks: import other packages by their name, through their entry points.',
+      'apps/www/src/main.tsx:2: "../../../packages/data/src/db.ts" leaves apps/www: import other packages by their name, through their entry points.',
+      'tooling/checks/src/cli.ts:1: "../../../apps/www/src/x.ts" leaves tooling/checks: import other packages by their name, through their entry points.',
     ]);
   });
 
@@ -68,12 +68,12 @@ describe("checkImports", () => {
     expect(
       check({
         ...MANIFESTS,
-        "apps/lists/src/main.tsx": 'import { notes } from "@shkriuss/notes";',
-        "packages/data/src/db.ts": 'const notes = import("@shkriuss/notes/src/x.ts");',
+        "apps/lists/src/main.tsx": 'import { www } from "@shkriuss/www";',
+        "packages/data/src/db.ts": 'const www = import("@shkriuss/www/src/x.ts");',
       }),
     ).toStrictEqual([
-      'apps/lists/src/main.tsx:1: "@shkriuss/notes" is an app, which nothing imports: shared code goes into packages/.',
-      'packages/data/src/db.ts:1: "@shkriuss/notes/src/x.ts" is an app, which nothing imports: shared code goes into packages/.',
+      'apps/lists/src/main.tsx:1: "@shkriuss/www" is an app, which nothing imports: shared code goes into packages/.',
+      'packages/data/src/db.ts:1: "@shkriuss/www/src/x.ts" is an app, which nothing imports: shared code goes into packages/.',
     ]);
   });
 
@@ -81,8 +81,8 @@ describe("checkImports", () => {
     expect(
       check({
         ...MANIFESTS,
-        "packages/data/README.md": 'import { x } from "../../apps/notes/x.ts";',
-        "docs/example.ts": 'import { x } from "../apps/notes/x.ts";',
+        "packages/data/README.md": 'import { x } from "../../apps/www/x.ts";',
+        "docs/example.ts": 'import { x } from "../apps/www/x.ts";',
       }),
     ).toStrictEqual([]);
   });

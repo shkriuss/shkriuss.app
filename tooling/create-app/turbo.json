@@ -1,0 +1,26 @@
+{
+  "$schema": "https://turborepo.com/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "test": {
+      // The tests make apps from both app templates, which are folders of their own: a change
+      // to either must run them again, not replay a cached result. What tools leave in them,
+      // which a new app does not get, does not count.
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/tooling/app-template/**",
+        "$TURBO_ROOT$/tooling/app-template-no-data/**",
+        "!$TURBO_ROOT$/tooling/app-template/node_modules/**",
+        "!$TURBO_ROOT$/tooling/app-template/dist/**",
+        "!$TURBO_ROOT$/tooling/app-template/test-results/**",
+        "!$TURBO_ROOT$/tooling/app-template/playwright-report/**",
+        "!$TURBO_ROOT$/tooling/app-template/.wrangler/**",
+        "!$TURBO_ROOT$/tooling/app-template-no-data/node_modules/**",
+        "!$TURBO_ROOT$/tooling/app-template-no-data/dist/**",
+        "!$TURBO_ROOT$/tooling/app-template-no-data/test-results/**",
+        "!$TURBO_ROOT$/tooling/app-template-no-data/playwright-report/**",
+        "!$TURBO_ROOT$/tooling/app-template-no-data/.wrangler/**"
+      ]
+    }
+  }
+}
