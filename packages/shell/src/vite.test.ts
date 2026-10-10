@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { build } from "vite";
@@ -150,6 +151,17 @@ describe("app", () => {
     await expect(buildApp(await createApp(), { ...NOTES, webAssembly: true })).rejects.toThrow(
       /declares webAssembly, but its build has no WebAssembly module/,
     );
+  });
+
+  it("lets the first page load 150 kB of JavaScript, gzipped, and that of an app with data 180 kB (ADR 0018)", async () => {
+    const root = await createApp();
+    // About 165 kB gzipped: random bytes as base64, which gzip shrinks only to their own size.
+    const text = randomBytes(165_000).toString("base64");
+    await writeFile(path.join(root, "main.js"), `console.info("${text}");\n`);
+    await expect(buildApp(root, { ...NOTES, keepsData: false })).rejects.toThrow(
+      /index\.html loads 16\d\.\d kB of JavaScript, gzipped, more than its budget of 150\.0 kB \(ADR 0018\)/,
+    );
+    await expect(buildApp(root, NOTES)).resolves.toBeTypeOf("function");
   });
 
   // One build in each test: under coverage, a build takes over a second here.

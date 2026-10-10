@@ -2,13 +2,19 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
-import type { Plugin } from "vite";
+import type { Logger, Plugin } from "vite";
+import { assertFirstPageBudget, kilobytes } from "./budget.ts";
 import { assertChunksLoadInSafari, assertWorkerBundleNames } from "./chunks.ts";
 import { appHost, STAGING_DOMAIN } from "./domains.ts";
 import { assertExcludedFiles, assertExcludedPackages } from "./excluded-packages.ts";
 import { appHeaderRules, headersFile } from "./headers-file.ts";
 import { type BrowserFeature, securityHeaders } from "./headers.ts";
-import { addScriptIntegrity, cspHashSource, subresourceIntegrity } from "./integrity.ts";
+import {
+  addScriptIntegrity,
+  cspHashSource,
+  pageScriptPaths,
+  subresourceIntegrity,
+} from "./integrity.ts";
 import { type CollectOptions, LICENSES_FILE, collectLicenses, licensesFile } from "./licenses.ts";
 import {
   buildManifest,
@@ -119,6 +125,13 @@ export interface EdgeOptions {
    * if the page, a worker or the service worker has any.
    */
   readonly excludedFiles?: readonly string[];
+  /**
+   * The most JavaScript that each page may load before it runs, gzipped at level 9, in bytes:
+   * the scripts of its HTML and the chunks that they import statically, but not the chunks that
+   * it loads later with `import()`, nor workers (ADR 0018, `FIRST_PAGE_BUDGETS`). The build
+   * fails above it.
+   */
+  readonly firstPageBudget?: number;
 }
 
 /**
@@ -168,6 +181,7 @@ export function edge(options: EdgeOptions = {}): Plugin {
   const workers = new Map<string, readonly string[]>();
   let licenseOptions: CollectOptions | undefined;
   let serviceWorker: ServiceWorkerApi | undefined;
+  let logger: Logger | undefined;
   return {
     name: "shkriuss:edge",
     apply: "build",
@@ -189,6 +203,7 @@ export function edge(options: EdgeOptions = {}): Plugin {
     },
     configResolved(config) {
       serviceWorker = serviceWorkerApi(config.plugins);
+      logger = config.logger;
       licenseOptions = {
         root: repositoryRoot(config.root),
         packageOf: (name) =>
@@ -223,7 +238,8 @@ export function edge(options: EdgeOptions = {}): Plugin {
         }
 
         const outputs = Object.values(bundle);
-        assertChunksLoadInSafari(outputs.filter((output) => output.type === "chunk"));
+        const chunks = outputs.filter((output) => output.type === "chunk");
+        assertChunksLoadInSafari(chunks);
         assertWorkerBundleNames(outputs);
 
         const files = Object.keys(bundle).toSorted();
@@ -245,11 +261,18 @@ export function edge(options: EdgeOptions = {}): Plugin {
         }
 
         const scriptHashes = new Set<string>();
+        // The scripts that each page loads, by the file names of the build.
+        const pageScripts = new Map<string, string[]>();
         for (const file of files.filter((name) => name.endsWith(".html"))) {
           const htmlPath = path.join(directory, file);
-          const { html, importMap } = addScriptIntegrity(await readFile(htmlPath, "utf8"), hashes);
+          const source = await readFile(htmlPath, "utf8");
+          const { html, importMap } = addScriptIntegrity(source, hashes);
           await writeFile(htmlPath, html);
           scriptHashes.add(cspHashSource(importMap));
+          pageScripts.set(
+            file,
+            pageScriptPaths(source).map((url) => url.slice(1)),
+          );
         }
         if (scriptHashes.size === 0) {
           throw new Error("The build has no HTML page to add integrity hashes to.");
@@ -321,6 +344,15 @@ export function edge(options: EdgeOptions = {}): Plugin {
           throw new Error(
             `Cloudflare serves files of at most 25 MiB (${String(MAX_FILE_BYTES)} bytes): ${sizes.join(", ")}.`,
           );
+        }
+        const budget = options.firstPageBudget;
+        if (budget !== undefined) {
+          const totals = await assertFirstPageBudget(directory, pageScripts, chunks, budget);
+          for (const [page, total] of totals) {
+            logger?.info(
+              `${page} loads ${kilobytes(total)} of JavaScript, gzipped, of its budget of ${kilobytes(budget)} (ADR 0018).`,
+            );
+          }
         }
         const rules = appHeaderRules({
           ...headerOptions,

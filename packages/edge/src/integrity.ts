@@ -69,6 +69,28 @@ function indentationAt(html: string, offset: number): string {
 }
 
 /**
+ * The URL paths of the scripts that a page's HTML loads, in order: those of its `<script src>`
+ * and `<link rel="modulepreload">` tags.
+ */
+export function pageScriptPaths(html: string): string[] {
+  const paths: string[] = [];
+  for (const match of html.matchAll(TAG)) {
+    const name = (match[1] ?? "").toLowerCase();
+    const attributes = parseAttributes(match[2] ?? "");
+    const url =
+      name === "script"
+        ? attributes.get("src")
+        : attributes.get("rel")?.toLowerCase() === "modulepreload"
+          ? attributes.get("href")
+          : undefined;
+    if (url !== undefined) {
+      paths.push(url);
+    }
+  }
+  return paths;
+}
+
+/**
  * Adds integrity attributes and the import map to a built `index.html`.
  *
  * @param hashes Integrity values of the built JavaScript and CSS files, keyed by the URL path

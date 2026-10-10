@@ -215,7 +215,7 @@ Every pull request must pass the gates in [ADR 0018](decisions/0018-quality-gate
 - Playwright end-to-end tests against the production build served with production headers, where any CSP or integrity violation, a worker's included, fails the run; the app template (`tooling/app-template`) is tested as every app is. CI runs them in six jobs at once, each browser's projects in two halves, and its check "End-to-end" passes once all six have;
 - accessibility checks (axe);
 - the repository checks (`pnpm check`), the workflow audit and dependency review;
-- budgets: the first page's JavaScript, gzipped, is at most 150 kB for the hub and for apps without data, and at most 180 kB for apps with data. A check in every build, which fails above them, is planned.
+- budgets: the first page's JavaScript, gzipped, is at most 150 kB for the hub and for apps without data, and at most 180 kB for apps with data. Every build measures it, and fails above its budget.
 
 CodeQL also runs on every pull request. Lighthouse is no gate: the budgets and the end-to-end tests in phone viewports cover what its lab scores would.
 

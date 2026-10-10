@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { edge } from "@shkriuss/edge";
+import { edge, FIRST_PAGE_BUDGETS } from "@shkriuss/edge";
 import { catalog, pageHead } from "@shkriuss/shell/vite";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
@@ -14,6 +14,7 @@ export default defineConfig({
     pageHead({ name: m.title(), description: m.lead() }),
     // The catalog reads every app's app.config.ts in apps/ (docs/specs/hub.md §2).
     catalog(fileURLToPath(new URL("..", import.meta.url))),
-    edge(),
+    // The hub keeps no data, so its first page has the smaller budget (ADR 0018).
+    edge({ firstPageBudget: FIRST_PAGE_BUDGETS.withoutData }),
   ],
 });
