@@ -4,12 +4,19 @@ import { isRecord, type Violation } from "./report.ts";
  * Package manifest policy (ADR 0002, ADR 0007):
  * - every workspace package is private, so nothing is ever published by accident;
  * - every package carries the repository license;
- * - every dependency comes from the pnpm catalog (one version for the whole repo) or the workspace.
+ * - every dependency comes from the pnpm catalog (one version for the whole repo) or the workspace,
+ *   peer dependencies too: pnpm installs a missing peer, which a range would take from outside the
+ *   catalog.
  */
 
 export const REPO_LICENSE = "AGPL-3.0-only";
 
-const DEPENDENCY_FIELDS = ["dependencies", "devDependencies", "optionalDependencies"] as const;
+const DEPENDENCY_FIELDS = [
+  "dependencies",
+  "devDependencies",
+  "optionalDependencies",
+  "peerDependencies",
+] as const;
 
 function isAllowedSpec(spec: string): boolean {
   return spec === "catalog:" || spec.startsWith("catalog:") || spec.startsWith("workspace:");

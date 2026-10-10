@@ -9,9 +9,18 @@ describe("checkManifest", () => {
     const source = manifest({
       dependencies: { react: "catalog:", "@shkriuss/ui": "workspace:*" },
       devDependencies: { vitest: "catalog:testing" },
-      peerDependencies: { react: "^19.0.0" },
+      peerDependencies: { react: "catalog:" },
     });
     expect(checkManifest("apps/notes/package.json", source)).toEqual([]);
+  });
+
+  it("rejects a peer dependency's range, which pnpm would install from outside the catalog", () => {
+    const violations = checkManifest(
+      "packages/ui/package.json",
+      manifest({ peerDependencies: { react: "^19.0.0" } }),
+    );
+    expect(violations).toHaveLength(1);
+    expect(violations[0]?.message).toContain("peerDependencies.react");
   });
 
   it("rejects versions written directly in package.json", () => {
