@@ -15,6 +15,7 @@ import {
   Screen,
   ScreenLink,
   SettingsScreen,
+  loadSettingsScreen,
   StartFailed,
   useObserved,
 } from "@shkriuss/shell";
@@ -246,6 +247,7 @@ function shellRouter(db: NotesDatabase) {
   const settings = createRoute({
     getParentRoute: () => root,
     path: "/settings",
+    loader: loadSettingsScreen,
     component: () => <Settings db={db} />,
   });
   return createRouter({
