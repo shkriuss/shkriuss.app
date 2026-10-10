@@ -79,8 +79,8 @@ catalogs:
       specifier: 7.0.2
       version: 7.0.2
     vite:
-      specifier: 8.3.2
-      version: 8.3.2
+      specifier: 8.3.3
+      version: 8.3.3
     vitest:
       specifier: 5.0.3
       version: 5.0.3
@@ -162,10 +162,10 @@ importers:
         version: 7.0.2
       vite:
         specifier: 'catalog:'
-        version: 8.3.2(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0)
+        version: 8.3.3(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0)
       vitest:
         specifier: 'catalog:'
-        version: 5.0.3(@types/node@24.19.1)(@vitest/coverage-v8@5.0.3)(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0))
+        version: 5.0.3(@types/node@24.19.1)(@vitest/coverage-v8@5.0.3)(vite@8.3.3(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0))
       wrangler:
         specifier: 'catalog:'
         version: 4.147.0(@types/node@24.19.1)
@@ -223,10 +223,10 @@ importers:
         version: 7.0.2
       vite:
         specifier: 'catalog:'
-        version: 8.3.2(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0)
+        version: 8.3.3(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0)
       vitest:
         specifier: 'catalog:'
-        version: 5.0.3(@types/node@24.19.1)(@vitest/coverage-v8@5.0.3)(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0))
+        version: 5.0.3(@types/node@24.19.1)(@vitest/coverage-v8@5.0.3)(vite@8.3.3(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0))
       wrangler:
         specifier: 'catalog:'
         version: 4.147.0(@types/node@24.19.1)
@@ -266,7 +266,7 @@ importers:
         version: link:../../packages/edge
       '@tailwindcss/vite':
         specifier: 'catalog:'
-        version: 4.3.3(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0))
+        version: 4.3.3(vite@8.3.3(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0))
       '@types/node':
         specifier: 'catalog:'
         version: 24.19.1
@@ -278,13 +278,13 @@ importers:
         version: 19.3.0(@types/react@19.3.0)
       '@vitejs/plugin-react':
         specifier: 'catalog:'
-        version: 6.1.1(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0))
+        version: 6.1.1(vite@8.3.3(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0))
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
       vite:
         specifier: 'catalog:'
-        version: 8.3.2(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0)
+        version: 8.3.3(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0)
       wrangler:
         specifier: 'catalog:'
         version: 4.147.0(@types/node@24.19.1)
@@ -321,10 +321,10 @@ importers:
         version: 7.0.2
       vite:
         specifier: 'catalog:'
-        version: 8.3.2(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0)
+        version: 8.3.3(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0)
       vitest:
         specifier: 'catalog:'
-        version: 5.0.3(@types/node@24.19.1)(@vitest/coverage-v8@5.0.3)(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0))
+        version: 5.0.3(@types/node@24.19.1)(@vitest/coverage-v8@5.0.3)(vite@8.3.3(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0))
 
   packages/config:
     devDependencies:
@@ -361,7 +361,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 'catalog:'
-        version: 5.0.3(@types/node@24.19.1)(@vitest/coverage-v8@5.0.3)(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0))
+        version: 5.0.3(@types/node@24.19.1)(@vitest/coverage-v8@5.0.3)(vite@8.3.3(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0))
 
   packages/edge:
     devDependencies:
@@ -376,10 +376,10 @@ importers:
         version: 7.0.2
       vite:
         specifier: 'catalog:'
-        version: 8.3.2(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0)
+        version: 8.3.3(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0)
       vitest:
         specifier: 'catalog:'
-        version: 5.0.3(@types/node@24.19.1)(@vitest/coverage-v8@5.0.3)(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0))
+        version: 5.0.3(@types/node@24.19.1)(@vitest/coverage-v8@5.0.3)(vite@8.3.3(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0))
 
   packages/i18n:
     devDependencies:
@@ -394,7 +394,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 'catalog:'
-        version: 5.0.3(@types/node@24.19.1)(@vitest/coverage-v8@5.0.3)(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0))
+        version: 5.0.3(@types/node@24.19.1)(@vitest/coverage-v8@5.0.3)(vite@8.3.3(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0))
 
   packages/pwa:
     dependencies:
@@ -419,10 +419,10 @@ importers:
         version: 7.0.2
       vite:
         specifier: 'catalog:'
-        version: 8.3.2(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0)
+        version: 8.3.3(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0)
       vitest:
         specifier: 'catalog:'
-        version: 5.0.3(@types/node@24.19.1)(@vitest/coverage-v8@5.0.3)(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0))
+        version: 5.0.3(@types/node@24.19.1)(@vitest/coverage-v8@5.0.3)(vite@8.3.3(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0))
 
   packages/shell:
     dependencies:
@@ -459,7 +459,7 @@ importers:
         version: link:../edge
       '@tailwindcss/vite':
         specifier: 'catalog:'
-        version: 4.3.3(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0))
+        version: 4.3.3(vite@8.3.3(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0))
       '@types/node':
         specifier: 'catalog:'
         version: 24.19.1
@@ -471,7 +471,7 @@ importers:
         version: 19.3.0(@types/react@19.3.0)
       '@vitejs/plugin-react':
         specifier: 'catalog:'
-        version: 6.1.1(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0))
+        version: 6.1.1(vite@8.3.3(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0))
       '@vitest/coverage-v8':
         specifier: 'catalog:'
         version: 5.0.3(vitest@5.0.3)
@@ -483,10 +483,10 @@ importers:
         version: 7.0.2
       vite:
         specifier: 'catalog:'
-        version: 8.3.2(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0)
+        version: 8.3.3(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0)
       vitest:
         specifier: 'catalog:'
-        version: 5.0.3(@types/node@24.19.1)(@vitest/coverage-v8@5.0.3)(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0))
+        version: 5.0.3(@types/node@24.19.1)(@vitest/coverage-v8@5.0.3)(vite@8.3.3(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0))
 
   packages/ui:
     dependencies:
@@ -517,7 +517,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 'catalog:'
-        version: 5.0.3(@types/node@24.19.1)(@vitest/coverage-v8@5.0.3)(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0))
+        version: 5.0.3(@types/node@24.19.1)(@vitest/coverage-v8@5.0.3)(vite@8.3.3(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0))
 
   tooling/app-template:
     dependencies:
@@ -569,7 +569,7 @@ importers:
         version: 7.0.2
       vite:
         specifier: 'catalog:'
-        version: 8.3.2(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0)
+        version: 8.3.3(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0)
       wrangler:
         specifier: 'catalog:'
         version: 4.147.0(@types/node@24.19.1)
@@ -621,7 +621,7 @@ importers:
         version: 7.0.2
       vite:
         specifier: 'catalog:'
-        version: 8.3.2(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0)
+        version: 8.3.3(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0)
       wrangler:
         specifier: 'catalog:'
         version: 4.147.0(@types/node@24.19.1)
@@ -645,7 +645,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 'catalog:'
-        version: 5.0.3(@types/node@24.19.1)(@vitest/coverage-v8@5.0.3)(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0))
+        version: 5.0.3(@types/node@24.19.1)(@vitest/coverage-v8@5.0.3)(vite@8.3.3(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0))
 
   tooling/create-app:
     devDependencies:
@@ -669,7 +669,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 'catalog:'
-        version: 5.0.3(@types/node@24.19.1)(@vitest/coverage-v8@5.0.3)(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0))
+        version: 5.0.3(@types/node@24.19.1)(@vitest/coverage-v8@5.0.3)(vite@8.3.3(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0))
 
   tooling/platform-e2e:
     dependencies:
@@ -715,7 +715,7 @@ importers:
         version: link:../../packages/edge
       '@tailwindcss/vite':
         specifier: 'catalog:'
-        version: 4.3.3(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0))
+        version: 4.3.3(vite@8.3.3(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0))
       '@types/node':
         specifier: 'catalog:'
         version: 24.19.1
@@ -727,13 +727,13 @@ importers:
         version: 19.3.0(@types/react@19.3.0)
       '@vitejs/plugin-react':
         specifier: 'catalog:'
-        version: 6.1.1(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0))
+        version: 6.1.1(vite@8.3.3(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0))
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
       vite:
         specifier: 'catalog:'
-        version: 8.3.2(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0)
+        version: 8.3.3(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0)
       wrangler:
         specifier: 'catalog:'
         version: 4.147.0(@types/node@24.19.1)
@@ -761,7 +761,7 @@ importers:
         version: 7.0.2
       vite:
         specifier: 'catalog:'
-        version: 8.3.2(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0)
+        version: 8.3.3(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0)
       wrangler:
         specifier: 'catalog:'
         version: 4.147.0(@types/node@24.19.1)
@@ -2454,8 +2454,8 @@ packages:
     peerDependencies:
       react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
 
-  vite@8.3.2:
-    resolution: {integrity: sha512-SQr1x6W5vVSbROg7vsyXIaxK9b0G7zsT68acdWWRmnBUsgDieLCRG+Rep9WdZgcposvv/GSnr4GUUBqB3vXq6w==}
+  vite@8.3.3:
+    resolution: {integrity: sha512-cTAldKPImjg6c+gk48U19POPn3GCBzZwpdsN8ZMEEcbpes+6/wvfqUd0C2y3qYY4wsj8PwgFwrZ/1jBPVttMSg==}
     engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
     peerDependencies:
@@ -3084,12 +3084,12 @@ snapshots:
       '@tailwindcss/oxide-win32-arm64-msvc': 4.3.3
       '@tailwindcss/oxide-win32-x64-msvc': 4.3.3
 
-  '@tailwindcss/vite@4.3.3(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0))':
+  '@tailwindcss/vite@4.3.3(vite@8.3.3(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0))':
     dependencies:
       '@tailwindcss/node': 4.3.3
       '@tailwindcss/oxide': 4.3.3
       tailwindcss: 4.3.3
-      vite: 8.3.2(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0)
+      vite: 8.3.3(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0)
 
   '@tanstack/history@1.162.4': {}
 
@@ -3227,10 +3227,10 @@ snapshots:
   '@typescript/typescript-win32-x64@7.0.2':
     optional: true
 
-  '@vitejs/plugin-react@6.1.1(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0))':
+  '@vitejs/plugin-react@6.1.1(vite@8.3.3(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0))':
     dependencies:
       '@rolldown/pluginutils': 1.0.1
-      vite: 8.3.2(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0)
+      vite: 8.3.3(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0)
 
   '@vitest/coverage-v8@5.0.3(vitest@5.0.3)':
     dependencies:
@@ -3242,7 +3242,7 @@ snapshots:
       obug: 2.2.1
       std-env: 4.3.0
       tinyrainbow: 3.2.0
-      vitest: 5.0.3(@types/node@24.19.1)(@vitest/coverage-v8@5.0.3)(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0))
+      vitest: 5.0.3(@types/node@24.19.1)(@vitest/coverage-v8@5.0.3)(vite@8.3.3(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0))
 
   '@vitest/istanbul-lib-coverage@1.0.2': {}
 
@@ -3250,14 +3250,14 @@ snapshots:
     dependencies:
       '@vitest/istanbul-lib-coverage': 1.0.2
 
-  '@vitest/mocker@5.0.3(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0))':
+  '@vitest/mocker@5.0.3(vite@8.3.3(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0))':
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
       '@vitest/spy': 5.0.3
       estree-walker: 3.0.3
       magic-string: 1.4.2
     optionalDependencies:
-      vite: 8.3.2(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0)
+      vite: 8.3.3(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0)
 
   '@vitest/spy@5.0.3': {}
 
@@ -3983,7 +3983,7 @@ snapshots:
     dependencies:
       react: 19.3.0
 
-  vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0):
+  vite@8.3.3(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0):
     dependencies:
       lightningcss: 1.33.0
       picomatch: 4.0.7
@@ -3996,10 +3996,10 @@ snapshots:
       fsevents: 2.3.3
       jiti: 2.7.0
 
-  vitest@5.0.3(@types/node@24.19.1)(@vitest/coverage-v8@5.0.3)(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0)):
+  vitest@5.0.3(@types/node@24.19.1)(@vitest/coverage-v8@5.0.3)(vite@8.3.3(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0)):
     dependencies:
       '@types/chai': 5.2.3
-      '@vitest/mocker': 5.0.3(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0))
+      '@vitest/mocker': 5.0.3(vite@8.3.3(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0))
       chai: 6.3.0
       es-module-lexer: 2.3.2
       expect-type: 1.4.0
@@ -4010,7 +4010,7 @@ snapshots:
       tinybench: 6.2.0
       tinyexec: 1.3.1
       tinyglobby: 0.2.17
-      vite: 8.3.2(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0)
+      vite: 8.3.3(@types/node@24.19.1)(esbuild@0.28.1)(jiti@2.7.0)
       why-is-node-running: 3.2.1
     optionalDependencies:
       '@types/node': 24.19.1
