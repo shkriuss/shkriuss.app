@@ -1,0 +1,169 @@
+# CI: runs every quality gate on each pull request and on main.
+# On main, when everything passes, it deploys every site to production.
+# Docs: docs/deployment.md and docs/quality.md
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Jobs get no permissions unless they ask for them below.
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.ref }}
+  # Cancel outdated PR runs, but never cancel a run on main (it may be deploying).
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  ASTRO_TELEMETRY_DISABLED: '1'
+  WRANGLER_SEND_METRICS: 'false'
+
+jobs:
+  checks:
+    name: Checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Check out code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up
+        uses: ./.github/actions/setup
+
+      - name: Formatting (Prettier)
+        run: pnpm format:check
+
+      - name: Lint (ESLint, including accessibility rules)
+        run: pnpm lint
+
+      - name: Type check
+        run: pnpm typecheck
+
+      - name: Unit tests (Vitest)
+        run: pnpm test
+
+      - name: Build every site
+        run: pnpm build
+
+      - name: CSP safety and size budgets
+        run: pnpm check:dist
+
+      - name: Install browser for end-to-end tests
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: End-to-end, accessibility, security and offline tests (Playwright)
+        run: pnpm test:e2e
+
+      - name: Upload test report (when tests fail)
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+      - name: Save the tested build for deployment
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist
+          path: apps/*/dist/
+          retention-days: 1
+          if-no-files-found: error
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    env:
+      GITLEAKS_VERSION: 8.30.1
+      GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+    steps:
+      - name: Check out code (full history)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install gitleaks (pinned version, checksum verified)
+        run: |
+          curl -sSfL -o gitleaks.tar.gz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  gitleaks.tar.gz" | sha256sum --check -
+          tar -xzf gitleaks.tar.gz gitleaks
+
+      - name: Scan every commit for secrets
+        run: ./gitleaks git --redact --no-banner --verbose .
+
+      - name: Check the workflows themselves for security problems (zizmor)
+        run: pipx run 'zizmor==1.31.1' --offline --min-severity medium .github/
+
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Check out code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up
+        uses: ./.github/actions/setup
+
+      - name: Check for known high or critical vulnerabilities
+        run: pnpm audit --audit-level high
+
+  deploy:
+    name: Deploy to production
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [checks, secrets]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    concurrency:
+      group: production
+      cancel-in-progress: false
+    env:
+      # Not a secret: it only says which Cloudflare account to deploy to.
+      CLOUDFLARE_ACCOUNT_ID: 29431d9d1143cc458db3ad0598c84302
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Check out code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Make sure the Cloudflare token is set up
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::error title=Missing secret::Add the CLOUDFLARE_API_TOKEN repository secret. See docs/deployment.md."
+            exit 1
+          fi
+
+      - name: Set up
+        uses: ./.github/actions/setup
+
+      - name: Get the tested build
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: apps/
+
+      - name: Deploy every site (one at a time)
+        run: pnpm -r --filter "./apps/*" --workspace-concurrency=1 run deploy:production
+
+      - name: Check the live sites
+        run: node scripts/smoke-test.ts
