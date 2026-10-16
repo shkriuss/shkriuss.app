@@ -1,0 +1,6 @@
+pnpm-lock.yaml
+dist/
+.astro/
+.wrangler/
+test-results/
+playwright-report/

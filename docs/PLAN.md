@@ -13,21 +13,21 @@ computer or a terminal.
 
 ## 1. Technology choices
 
-| Area | Choice | Why (one line) | Main alternative rejected |
-| --- | --- | --- | --- |
-| Language | **TypeScript 6.0** | JavaScript with type checking, which catches mistakes before they ship. | TypeScript 7.0 (the new native compiler). It's faster, but ESLint's TypeScript support and Astro's checker don't support it yet (they need `<6.1`). |
-| Framework | **Astro 7** (static output) | Builds plain HTML and CSS and ships zero JavaScript unless a page asks for it, so it's fast and private by default. Cloudflare recommends it for static sites. | SvelteKit or Next.js: more powerful, but heavier and more complex than these small apps need. |
-| Interactivity | **Plain TypeScript in Astro `<script>` tags** | No extra UI library to learn or update. | Svelte or Preact islands. These stay an option for a future app with complex UI, and adding one would get its own decision record. |
-| Package manager | **pnpm 12** | Fast, strict, built for monorepos ("workspaces"), with safe defaults: install scripts are blocked and packages younger than 1 day aren't installed. | npm workspaces. They work, but they're slower and have weaker protection against supply-chain attacks. |
-| Runtime for tools | **Node.js 24 LTS** | The current long-term-support version, required by Astro 7. | Node 26: not LTS yet. |
-| Hosting | **Cloudflare Workers with static assets** | Cloudflare now tells new projects to use Workers. Static files are served free and without limit. | Cloudflare Pages, which Cloudflare no longer recommends for new projects. |
-| Deploy tool | **Wrangler 4**, run from GitHub Actions | The official Cloudflare CLI. One workflow can deploy any number of apps. | Workers Builds (Cloudflare's Git integration). It would need dashboard setup for every new app. |
-| Lint and format | **ESLint 10 + Prettier 3**, with the Astro and accessibility plugins | The most popular and best-documented pair, with official Astro support. | Biome. It's one tool with fewer dependencies, but its Astro support is still partial. |
-| Unit tests | **Vitest 5** | Fast, and uses the same Vite tooling as Astro. | Jest: slower and needs extra setup for TypeScript. |
-| End-to-end and accessibility tests | **Playwright + axe-core** | Drives a real browser against the real Cloudflare runtime (`wrangler dev`), with WCAG 2.2 AA rules. | Cypress: heavier, with a weaker accessibility integration. |
-| Performance budgets | **A small size-budget script** (no dependency) | Checks exact, repeatable byte counts for HTML, CSS and JS on every pull request. | Lighthouse CI. Its scores are flaky on shared CI machines and it adds a large dependency. |
-| Secret scanning | **gitleaks** (pinned binary in CI) | Free, and works on private repos. | GitHub secret scanning, which isn't available for private repos on personal GitHub Free accounts. |
-| Dependency scanning | **Dependabot** + **`pnpm audit`** in CI | Both are free on private repos. | Snyk, a third-party account. |
+| Area                               | Choice                                                               | Why (one line)                                                                                                                                                 | Main alternative rejected                                                                                                                           |
+| ---------------------------------- | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Language                           | **TypeScript 6.0**                                                   | JavaScript with type checking, which catches mistakes before they ship.                                                                                        | TypeScript 7.0 (the new native compiler). It's faster, but ESLint's TypeScript support and Astro's checker don't support it yet (they need `<6.1`). |
+| Framework                          | **Astro 7** (static output)                                          | Builds plain HTML and CSS and ships zero JavaScript unless a page asks for it, so it's fast and private by default. Cloudflare recommends it for static sites. | SvelteKit or Next.js: more powerful, but heavier and more complex than these small apps need.                                                       |
+| Interactivity                      | **Plain TypeScript in Astro `<script>` tags**                        | No extra UI library to learn or update.                                                                                                                        | Svelte or Preact islands. These stay an option for a future app with complex UI, and adding one would get its own decision record.                  |
+| Package manager                    | **pnpm 12**                                                          | Fast, strict, built for monorepos ("workspaces"), with safe defaults: install scripts are blocked and packages younger than 1 day aren't installed.            | npm workspaces. They work, but they're slower and have weaker protection against supply-chain attacks.                                              |
+| Runtime for tools                  | **Node.js 24 LTS**                                                   | The current long-term-support version, required by Astro 7.                                                                                                    | Node 26: not LTS yet.                                                                                                                               |
+| Hosting                            | **Cloudflare Workers with static assets**                            | Cloudflare now tells new projects to use Workers. Static files are served free and without limit.                                                              | Cloudflare Pages, which Cloudflare no longer recommends for new projects.                                                                           |
+| Deploy tool                        | **Wrangler 4**, run from GitHub Actions                              | The official Cloudflare CLI. One workflow can deploy any number of apps.                                                                                       | Workers Builds (Cloudflare's Git integration). It would need dashboard setup for every new app.                                                     |
+| Lint and format                    | **ESLint 10 + Prettier 3**, with the Astro and accessibility plugins | The most popular and best-documented pair, with official Astro support.                                                                                        | Biome. It's one tool with fewer dependencies, but its Astro support is still partial.                                                               |
+| Unit tests                         | **Vitest 5**                                                         | Fast, and uses the same Vite tooling as Astro.                                                                                                                 | Jest: slower and needs extra setup for TypeScript.                                                                                                  |
+| End-to-end and accessibility tests | **Playwright + axe-core**                                            | Drives a real browser against the real Cloudflare runtime (`wrangler dev`), with WCAG 2.2 AA rules.                                                            | Cypress: heavier, with a weaker accessibility integration.                                                                                          |
+| Performance budgets                | **A small size-budget script** (no dependency)                       | Checks exact, repeatable byte counts for HTML, CSS and JS on every pull request.                                                                               | Lighthouse CI. Its scores are flaky on shared CI machines and it adds a large dependency.                                                           |
+| Secret scanning                    | **gitleaks** (pinned binary in CI)                                   | Free, and works on private repos.                                                                                                                              | GitHub secret scanning, which isn't available for private repos on personal GitHub Free accounts.                                                   |
+| Dependency scanning                | **Dependabot** + **`pnpm audit`** in CI                              | Both are free on private repos.                                                                                                                                | Snyk, a third-party account.                                                                                                                        |
 
 Privacy extras: Astro's and Wrangler's anonymous usage telemetry are turned off
 in CI (`ASTRO_TELEMETRY_DISABLED=1`, `WRANGLER_SEND_METRICS=false`).
@@ -121,17 +121,17 @@ third-party version (Astro, TypeScript, …) once for the whole repo.
 
 ### Headers (same for every site, generated from one file)
 
-| Header | Value (short) | What it does |
-| --- | --- | --- |
-| `Content-Security-Policy` | `default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; font-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests; require-trusted-types-for 'script'; trusted-types 'none'` | Only our own files can run or load. No inline scripts, no third parties, no framing. Trusted Types blocks the most common XSS sinks. |
-| `Strict-Transport-Security` | `max-age=63072000; includeSubDomains; preload` | HTTPS only. The `.app` domain is already HTTPS-only in browsers. |
-| `X-Content-Type-Options` | `nosniff` | Stops the browser from guessing file types. |
-| `Referrer-Policy` | `no-referrer` | Never tells other sites where a visitor came from. |
-| `Permissions-Policy` | camera, microphone, geolocation, payment, USB, … all `()` | Turns powerful browser features off. An app that needs one turns it on in its own config. |
-| `Cross-Origin-Opener-Policy` | `same-origin` | Isolates the page from pop-ups and other windows. |
-| `Cross-Origin-Resource-Policy` | `same-origin` | Other sites can't embed our files. |
-| `Cross-Origin-Embedder-Policy` | `require-corp` | Completes cross-origin isolation. |
-| `X-Frame-Options` | `DENY` | Anti-framing for older browsers. |
+| Header                         | Value (short)                                                                                                                                                                                                                                                                                                  | What it does                                                                                                                         |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `Content-Security-Policy`      | `default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; font-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests; require-trusted-types-for 'script'; trusted-types 'none'` | Only our own files can run or load. No inline scripts, no third parties, no framing. Trusted Types blocks the most common XSS sinks. |
+| `Strict-Transport-Security`    | `max-age=63072000; includeSubDomains; preload`                                                                                                                                                                                                                                                                 | HTTPS only. The `.app` domain is already HTTPS-only in browsers.                                                                     |
+| `X-Content-Type-Options`       | `nosniff`                                                                                                                                                                                                                                                                                                      | Stops the browser from guessing file types.                                                                                          |
+| `Referrer-Policy`              | `no-referrer`                                                                                                                                                                                                                                                                                                  | Never tells other sites where a visitor came from.                                                                                   |
+| `Permissions-Policy`           | camera, microphone, geolocation, payment, USB, … all `()`                                                                                                                                                                                                                                                      | Turns powerful browser features off. An app that needs one turns it on in its own config.                                            |
+| `Cross-Origin-Opener-Policy`   | `same-origin`                                                                                                                                                                                                                                                                                                  | Isolates the page from pop-ups and other windows.                                                                                    |
+| `Cross-Origin-Resource-Policy` | `same-origin`                                                                                                                                                                                                                                                                                                  | Other sites can't embed our files.                                                                                                   |
+| `Cross-Origin-Embedder-Policy` | `require-corp`                                                                                                                                                                                                                                                                                                 | Completes cross-origin isolation.                                                                                                    |
+| `X-Frame-Options`              | `DENY`                                                                                                                                                                                                                                                                                                         | Anti-framing for older browsers.                                                                                                     |
 
 Hashed build files (`/_astro/*`) are cached for a year. HTML is revalidated
 on every visit, so updates appear right away.
@@ -142,9 +142,9 @@ fails on any CSP violation or any request to another domain.
 
 ### Data storage per app
 
-| Site | Data stored | Where |
-| --- | --- | --- |
-| Hub | Theme choice (light, dark or system) | Your browser (`localStorage`), never sent anywhere |
+| Site  | Data stored                            | Where                                              |
+| ----- | -------------------------------------- | -------------------------------------------------- |
+| Hub   | Theme choice (light, dark or system)   | Your browser (`localStorage`), never sent anywhere |
 | Tally | Counter names and counts, theme choice | Your browser (`localStorage`), never sent anywhere |
 
 Rules for every app:
@@ -194,20 +194,20 @@ cost money, so I'd flag that first.
 
 ## 5. Quality gates (all run in GitHub Actions on every pull request)
 
-| Gate | Tool | Fails when… |
-| --- | --- | --- |
-| Formatting | Prettier | any file isn't formatted |
-| Linting | ESLint (TypeScript, Astro, jsx-a11y rules) | code or accessibility lint errors |
-| Type checking | `astro check` + `tsc` | type errors |
-| Unit tests | Vitest | a test fails (storage, registry, headers, generator, app logic) |
-| Build | Astro | any site fails to build |
-| CSP safety | build test | inline script or style found in built HTML |
-| Size budgets | `scripts/check-budgets.ts` | a page's JS, CSS or HTML (gzipped) exceeds its budget |
-| End-to-end | Playwright on `wrangler dev` | user flows break (for example, a tally count doesn't persist after reload) |
-| Accessibility | axe-core, WCAG 2.2 A/AA rules, light **and** dark mode | any violation on any page |
-| Security headers | Playwright | a header is missing, a CSP violation happens, or a request goes to another domain |
-| Dependencies | `pnpm audit --audit-level=high` | a known high or critical vulnerability |
-| Secrets | gitleaks | something that looks like a secret is committed |
+| Gate             | Tool                                                   | Fails when…                                                                       |
+| ---------------- | ------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| Formatting       | Prettier                                               | any file isn't formatted                                                          |
+| Linting          | ESLint (TypeScript, Astro, jsx-a11y rules)             | code or accessibility lint errors                                                 |
+| Type checking    | `astro check` + `tsc`                                  | type errors                                                                       |
+| Unit tests       | Vitest                                                 | a test fails (storage, registry, headers, generator, app logic)                   |
+| Build            | Astro                                                  | any site fails to build                                                           |
+| CSP safety       | build test                                             | inline script or style found in built HTML                                        |
+| Size budgets     | `scripts/check-budgets.ts`                             | a page's JS, CSS or HTML (gzipped) exceeds its budget                             |
+| End-to-end       | Playwright on `wrangler dev`                           | user flows break (for example, a tally count doesn't persist after reload)        |
+| Accessibility    | axe-core, WCAG 2.2 A/AA rules, light **and** dark mode | any violation on any page                                                         |
+| Security headers | Playwright                                             | a header is missing, a CSP violation happens, or a request goes to another domain |
+| Dependencies     | `pnpm audit --audit-level=high`                        | a known high or critical vulnerability                                            |
+| Secrets          | gitleaks                                               | something that looks like a secret is committed                                   |
 
 Shared browser tests in `tests/e2e/` run against **every** site automatically,
 so a new app gets accessibility, header and privacy checks without writing any
@@ -221,13 +221,13 @@ screen reader labels, zoom to 200%, and reduced motion.
 
 ## 6. CI/CD (GitHub Actions)
 
-| Workflow | Runs on | What it does |
-| --- | --- | --- |
-| `ci.yml` | every PR and every push to `main` | Runs all the quality gates above. On `main`, if everything passes, it **deploys every site to production**. |
-| `preview.yml` | PR opened or updated | Deploys a Cloudflare preview of every site and comments the links on the PR. |
-| `preview-cleanup.yml` | PR closed | Deletes that PR's previews. |
-| `new-app.yml` | started by hand (a **Run workflow** button in the GitHub app or website) | Runs the generator with the name you type, pushes a branch, and gives you a link to open the PR. |
-| Dependabot | weekly | Proposes grouped dependency updates as PRs. CI must pass before you merge. |
+| Workflow              | Runs on                                                                  | What it does                                                                                                |
+| --------------------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| `ci.yml`              | every PR and every push to `main`                                        | Runs all the quality gates above. On `main`, if everything passes, it **deploys every site to production**. |
+| `preview.yml`         | PR opened or updated                                                     | Deploys a Cloudflare preview of every site and comments the links on the PR.                                |
+| `preview-cleanup.yml` | PR closed                                                                | Deletes that PR's previews.                                                                                 |
+| `new-app.yml`         | started by hand (a **Run workflow** button in the GitHub app or website) | Runs the generator with the name you type, pushes a branch, and gives you a link to open the PR.            |
+| Dependabot            | weekly                                                                   | Proposes grouped dependency updates as PRs. CI must pass before you merge.                                  |
 
 **Branch protection:** on GitHub Free, protected branches and rulesets
 **aren't available for private repositories**. Instead:
@@ -298,15 +298,15 @@ CI pauses until the next month. It never charges you without a payment method.
 
 ## 9. Decisions that are yours (I went ahead with the default)
 
-| Decision | My default | Other option |
-| --- | --- | --- |
-| Repo visibility | **Keep private** (as you asked) | Public would add free GitHub secret scanning with push protection, code scanning, branch protection, and unlimited CI minutes. The code has no secrets, so this is safe if you're comfortable sharing it. |
-| GitHub plan | **Free** | Pro (~$4/month) adds branch protection for private repos. |
-| Example app | **Tally** (tap to count things, saved on your device) | Any other small app. |
-| Brand name on the hub | **"shkriuss"** | Any name. It's one line in the registry. |
-| Public contact on the privacy page | **None for now** | Add an email address later for privacy and security questions. |
-| PR preview links | **Public but unlisted** (`*.workers.dev`, not indexed) | Lock them behind Cloudflare Access login (free, more setup). |
-| Theme | **Follows your device**, with a manual light/dark/system switch | — |
+| Decision                           | My default                                                      | Other option                                                                                                                                                                                              |
+| ---------------------------------- | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Repo visibility                    | **Keep private** (as you asked)                                 | Public would add free GitHub secret scanning with push protection, code scanning, branch protection, and unlimited CI minutes. The code has no secrets, so this is safe if you're comfortable sharing it. |
+| GitHub plan                        | **Free**                                                        | Pro (~$4/month) adds branch protection for private repos.                                                                                                                                                 |
+| Example app                        | **Tally** (tap to count things, saved on your device)           | Any other small app.                                                                                                                                                                                      |
+| Brand name on the hub              | **"shkriuss"**                                                  | Any name. It's one line in the registry.                                                                                                                                                                  |
+| Public contact on the privacy page | **None for now**                                                | Add an email address later for privacy and security questions.                                                                                                                                            |
+| PR preview links                   | **Public but unlisted** (`*.workers.dev`, not indexed)          | Lock them behind Cloudflare Access login (free, more setup).                                                                                                                                              |
+| Theme                              | **Follows your device**, with a manual light/dark/system switch | —                                                                                                                                                                                                         |
 
 ## 10. Where your request conflicts with best practice
 

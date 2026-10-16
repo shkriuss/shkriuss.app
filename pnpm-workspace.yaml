@@ -1,0 +1,37 @@
+# pnpm workspace: every folder listed here is a package in the monorepo.
+packages:
+  - apps/*
+  - packages/*
+
+# One place for third-party versions. Packages use "catalog:" instead of a
+# version number, so upgrading Astro (for example) is a one-line change here.
+catalog:
+  '@astrojs/check': ^0.9.10
+  '@axe-core/playwright': ^4.13.0
+  '@eslint/js': ^10.0.1
+  '@playwright/test': ^1.64.0
+  '@types/node': ^24.19.0
+  astro: ^7.3.8
+  eslint: ^10.12.0
+  eslint-plugin-astro: ^3.2.1
+  eslint-plugin-jsx-a11y-x: ^0.2.0
+  globals: ^17.13.0
+  prettier: ^3.9.0
+  prettier-plugin-astro: ^1.1.1
+  sharp: ^0.35.5
+  # TypeScript 7 is out, but typescript-eslint and @astrojs/check still need 6.x.
+  typescript: ~6.0.3
+  typescript-eslint: ^8.71.0
+  vitest: ^5.0.4
+  wrangler: ^4.150.0
+
+# Supply-chain safety: only these dependencies may run install scripts.
+# (pnpm blocks all others by default.)
+allowBuilds:
+  esbuild: true
+  sharp: true
+  workerd: true
+
+# Don't install versions published less than 1 day ago (pnpm's default,
+# written out so it's visible).
+minimumReleaseAge: 1440
