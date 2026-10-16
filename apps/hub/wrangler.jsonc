@@ -1,0 +1,19 @@
+// Cloudflare Worker for the hub. Static files only: no server code runs.
+// Docs: docs/deployment.md
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "hub",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "404-page",
+    "html_handling": "auto-trailing-slash",
+  },
+  // The real address. Cloudflare creates the DNS record and certificate.
+  "routes": [{ "pattern": "shkriuss.app", "custom_domain": true }],
+  // No *.workers.dev address for production, but keep preview links for PRs.
+  "workers_dev": false,
+  "preview_urls": true,
+  // Settings for PR previews (`wrangler preview`). Empty: nothing differs.
+  "previews": {},
+}
