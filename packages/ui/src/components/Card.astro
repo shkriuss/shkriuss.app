@@ -1,0 +1,34 @@
+---
+/**
+ * A card. Give it `href` to make the whole card one big link (the title
+ * becomes the link text, so screen readers hear a short, clear name).
+ *
+ *   <Card title="Tally" href="https://tally.shkriuss.app/">Count things.</Card>
+ */
+interface Props {
+  title?: string | undefined;
+  href?: string | undefined;
+  /** Heading level for the title (default 2). */
+  level?: 2 | 3 | 4;
+  class?: string | undefined;
+}
+
+const { title, href, level = 2, class: className } = Astro.props;
+const Heading = `h${level}` as 'h2' | 'h3' | 'h4';
+---
+
+<article class:list={['card', href && 'card--link', 'stack', 'stack--sm', className]}>
+  {Astro.slots.has('media') && <slot name="media" />}
+  {title && (
+    <Heading class="card__title">
+      {href ? (
+        <a class="card__link" href={href}>
+          {title}
+        </a>
+      ) : (
+        title
+      )}
+    </Heading>
+  )}
+  <slot />
+</article>

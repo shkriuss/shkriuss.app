@@ -1,0 +1,120 @@
+---
+/**
+ * The page shell every page of every site uses: <head> tags, skip link,
+ * header, main content, footer with the theme switch, and offline support.
+ *
+ *   <AppShell title="Privacy">…page content…</AppShell>
+ *
+ * Site details (name, icon, colour) come from the registry entry of the
+ * current site, provided by @shkriuss/astro-config.
+ */
+import '../styles/index.css';
+import { hubOrigin, site } from 'virtual:shkriuss/site';
+import themeInitUrl from '../scripts/theme-init.js?url';
+import { backgroundColors } from '../icons/colors.ts';
+import AppIcon from '../components/AppIcon.astro';
+import Icon from '../components/Icon.astro';
+import ThemeSwitch from '../components/ThemeSwitch.astro';
+
+interface Props {
+  /** Page title. Leave empty on a site's home page. */
+  title?: string | undefined;
+  description?: string | undefined;
+  /** Use the wider content column (e.g. for grids). */
+  wide?: boolean;
+  /** Ask search engines not to index this page (e.g. 404). */
+  noindex?: boolean;
+}
+
+const { title, description = site.description, wide = false, noindex = false } = Astro.props;
+
+const isHub = site.kind === 'hub';
+const fullTitle = title ? `${title} · ${site.name}` : site.name;
+const canonical = new URL(Astro.url.pathname, site.origin).href;
+// On the hub, keep links relative so they also work in previews.
+const hubHome = isHub ? '/' : `${hubOrigin}/`;
+const privacyHref = isHub ? '/privacy/' : `${hubOrigin}/privacy/`;
+const currentPath = Astro.url.pathname;
+---
+
+<!doctype html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+    {noindex ? <meta name="robots" content="noindex" /> : <link rel="canonical" href={canonical} />}
+    <meta name="color-scheme" content="light dark" />
+    <meta
+      name="theme-color"
+      media="(prefers-color-scheme: light)"
+      content={backgroundColors.light}
+    />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content={backgroundColors.dark} />
+    <meta name="referrer" content="no-referrer" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="apple-mobile-web-app-title" content={site.name} />
+    <script is:inline src={themeInitUrl}></script>
+    <slot name="head" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">
+      Skip to content
+    </a>
+    <div class="shell">
+      <header class="site-header">
+        <div class="container container--wide site-header__inner">
+          <a class="site-brand" href="/" aria-current={currentPath === '/' ? 'page' : undefined}>
+            <AppIcon icon={site.icon} color={site.color} size="sm" />
+            <span>{site.name}</span>
+          </a>
+          <nav class="site-nav" aria-label="Main">
+            <slot name="nav" />
+            {!isHub && (
+              <a href={hubHome}>
+                <Icon name="grid" />
+                <span>All apps</span>
+              </a>
+            )}
+          </nav>
+        </div>
+      </header>
+
+      <main id="main" class="shell__main" tabindex="-1">
+        <div class:list={['container', wide && 'container--wide']}>
+          <slot />
+        </div>
+      </main>
+
+      <footer class="site-footer">
+        <div class="container container--wide cluster cluster--between">
+          <nav aria-label="Footer">
+            <ul role="list" class="cluster">
+              <li>
+                <a href={hubHome}>All apps</a>
+              </li>
+              <li>
+                <a
+                  href={privacyHref}
+                  aria-current={isHub && currentPath === '/privacy/' ? 'page' : undefined}
+                >
+                  Privacy
+                </a>
+              </li>
+            </ul>
+          </nav>
+          <ThemeSwitch />
+        </div>
+      </footer>
+    </div>
+
+    <script>
+      import { registerServiceWorker } from '../scripts/service-worker.ts';
+
+      if (import.meta.env.PROD) registerServiceWorker();
+    </script>
+  </body>
+</html>

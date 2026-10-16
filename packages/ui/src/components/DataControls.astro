@@ -1,0 +1,80 @@
+---
+/**
+ * "Your data" section for apps that store data on the device: download a copy
+ * (JSON file) or delete everything. Put it at the bottom of an app's page.
+ */
+import { site } from 'virtual:shkriuss/site';
+import Button from './Button.astro';
+
+interface Props {
+  /** Heading level for "Your data" (default 2). */
+  level?: 2 | 3;
+}
+
+const { level = 2 } = Astro.props;
+const Heading = `h${level}` as 'h2' | 'h3';
+---
+
+<section
+  class="stack"
+  aria-labelledby="data-controls-heading"
+  data-data-controls
+  data-app={site.slug}
+>
+  <Heading id="data-controls-heading">Your data</Heading>
+  <p class="muted">
+    Everything {site.name} saves stays in this browser on this device. Nothing is sent anywhere.
+  </p>
+  <div class="cluster">
+    <Button icon="download" data-action="export">
+      Download a copy
+    </Button>
+    <Button icon="trash" variant="danger" data-action="delete">
+      Delete all data
+    </Button>
+  </div>
+  <p class="muted" role="status" data-data-status></p>
+
+  <dialog class="dialog" aria-labelledby="data-delete-title" data-delete-dialog>
+    <form method="dialog" class="stack">
+      <h2 id="data-delete-title">Delete all data?</h2>
+      <p>This removes everything {site.name} has saved on this device. It can't be undone.</p>
+      <div class="cluster">
+        <Button type="submit" value="cancel">
+          Cancel
+        </Button>
+        <Button type="submit" variant="danger" value="confirm">
+          Delete everything
+        </Button>
+      </div>
+    </form>
+  </dialog>
+</section>
+
+<script>
+  import { deleteAll, downloadFile, exportAll } from '@shkriuss/storage';
+
+  for (const section of document.querySelectorAll<HTMLElement>('[data-data-controls]')) {
+    const app = section.dataset['app'] ?? 'app';
+    const status = section.querySelector<HTMLElement>('[data-data-status]');
+    const dialog = section.querySelector<HTMLDialogElement>('[data-delete-dialog]');
+
+    section.querySelector('[data-action="export"]')?.addEventListener('click', () => {
+      const file = exportAll(app);
+      const date = file.exportedAt.slice(0, 10);
+      downloadFile(`${app}-data-${date}.json`, JSON.stringify(file, null, 2));
+      if (status) status.textContent = 'Your data was downloaded as a file.';
+    });
+
+    section.querySelector('[data-action="delete"]')?.addEventListener('click', () => {
+      dialog?.showModal();
+    });
+
+    dialog?.addEventListener('close', () => {
+      if (dialog.returnValue !== 'confirm') return;
+      deleteAll();
+      // Reload so the app starts fresh from empty storage.
+      window.location.reload();
+    });
+  }
+</script>
