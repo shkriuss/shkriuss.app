@@ -1,0 +1,170 @@
+---
+import { AppShell, Button, DataControls, Icon } from '@shkriuss/ui';
+import { MAX_NAME_LENGTH } from '../lib/counters.ts';
+---
+
+<AppShell wide>
+  <div class="stack stack--lg">
+    <header class="stack stack--sm">
+      <h1>Tally</h1>
+      <p class="lead">Count anything with a tap. Your counts are saved on this device.</p>
+    </header>
+
+    <form class="add-form" data-add-form novalidate>
+      <div class="field add-form__field">
+        <label class="field__label" for="counter-name">
+          New counter
+        </label>
+        <input
+          class="input"
+          id="counter-name"
+          name="name"
+          type="text"
+          autocomplete="off"
+          enterkeyhint="done"
+          maxlength={MAX_NAME_LENGTH}
+          placeholder="e.g. Glasses of water"
+          aria-describedby="counter-name-error"
+          required
+        />
+        <p class="field__hint add-form__error" id="counter-name-error" data-name-error></p>
+      </div>
+      <Button type="submit" variant="primary" icon="plus" class="add-form__submit">
+        Add
+      </Button>
+    </form>
+
+    <section class="stack" aria-labelledby="counters-heading">
+      <h2 id="counters-heading" class="visually-hidden">
+        Your counters
+      </h2>
+      <p class="muted" data-empty>
+        No counters yet. Add one above to start counting.
+      </p>
+      <ul role="list" class="grid counters" data-counters></ul>
+    </section>
+
+    <DataControls />
+  </div>
+
+  <!-- Live region: tells screen reader users about count changes. -->
+  <p class="visually-hidden" role="status" data-announcer></p>
+
+  <!-- Markup for one counter, copied by the script for each counter. -->
+  <template data-counter-template>
+    <li class="card counter">
+      <div class="counter__header">
+        <h3 class="counter__name" data-name>
+          Counter
+        </h3>
+        <div class="counter__tools">
+          <button type="button" class="btn btn--ghost btn--icon" data-action="reset">
+            <Icon name="reset" />
+          </button>
+          <button type="button" class="btn btn--ghost btn--icon" data-action="delete">
+            <Icon name="trash" />
+          </button>
+        </div>
+      </div>
+      <p class="counter__value" data-value>
+        0
+      </p>
+      <div class="counter__controls">
+        <button type="button" class="btn btn--lg" data-action="decrement">
+          <Icon name="minus" />
+        </button>
+        <button type="button" class="btn btn--primary btn--lg" data-action="increment">
+          <Icon name="plus" />
+        </button>
+      </div>
+    </li>
+  </template>
+
+  <dialog class="dialog" aria-labelledby="delete-title" data-counter-dialog>
+    <form method="dialog" class="stack">
+      <h2 id="delete-title">Delete this counter?</h2>
+      <p>
+        “<span data-counter-dialog-name></span>” and its count will be removed.
+      </p>
+      <div class="cluster">
+        <Button type="submit" value="cancel">
+          Cancel
+        </Button>
+        <Button type="submit" variant="danger" value="confirm">
+          Delete
+        </Button>
+      </div>
+    </form>
+  </dialog>
+</AppShell>
+
+<script>
+  import { mountTally } from '../scripts/tally.ts';
+
+  mountTally(document);
+</script>
+
+<style>
+  .add-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: start;
+    gap: var(--space-3);
+  }
+
+  .add-form__field {
+    flex: 1 1 16rem;
+  }
+
+  /* Line the button up with the input (label height + small gap). */
+  .add-form__submit {
+    margin-block-start: calc(var(--text-base) * var(--leading-normal) + var(--space-1));
+  }
+
+  .add-form__error:not(:empty) {
+    color: var(--color-danger);
+    font-weight: var(--weight-semibold);
+  }
+
+  .counters {
+    --grid-min: 15rem;
+  }
+
+  .counter {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .counter__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+  }
+
+  .counter__name {
+    font-size: var(--text-lg);
+    overflow-wrap: anywhere;
+  }
+
+  .counter__tools {
+    display: flex;
+    flex: none;
+  }
+
+  .counter__value {
+    font-size: var(--text-display);
+    font-weight: var(--weight-bold);
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    text-align: center;
+    overflow-wrap: anywhere;
+  }
+
+  .counter__controls {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: var(--space-3);
+  }
+</style>
