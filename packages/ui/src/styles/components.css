@@ -15,10 +15,13 @@
 }
 
 /* Vertical rhythm: children spaced by --stack-gap. */
+/* Each layout primitive sets its own variables, so nested ones don't inherit
+   spacing from their parents. Override per element, e.g. .my-list { --grid-min: 12rem }. */
 .stack {
+  --stack-gap: var(--space-4);
   display: flex;
   flex-direction: column;
-  gap: var(--stack-gap, var(--space-4));
+  gap: var(--stack-gap);
 }
 
 .stack--sm {
@@ -31,10 +34,11 @@
 
 /* Horizontal group that wraps on small screens. */
 .cluster {
+  --cluster-gap: var(--space-3);
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--cluster-gap, var(--space-3));
+  gap: var(--cluster-gap);
 }
 
 .cluster--between {
@@ -43,9 +47,11 @@
 
 /* Responsive card grid: as many columns as fit. */
 .grid {
+  --grid-min: 16rem;
+  --grid-gap: var(--space-4);
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--grid-min, 16rem)), 1fr));
-  gap: var(--grid-gap, var(--space-4));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--grid-min)), 1fr));
+  gap: var(--grid-gap);
 }
 
 .muted {

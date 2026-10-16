@@ -1,0 +1,20 @@
+---
+/** The "page not found" page. Each site's src/pages/404.astro just renders this. */
+import { site } from 'virtual:shkriuss/site';
+import Button from '../components/Button.astro';
+import AppShell from './AppShell.astro';
+
+const homeLabel = site.kind === 'hub' ? 'Go to all apps' : `Back to ${site.name}`;
+---
+
+<AppShell title="Page not found" noindex>
+  <div class="stack">
+    <h1>Page not found</h1>
+    <p class="lead">This page doesn't exist. It may have moved, or the link may be wrong.</p>
+    <p>
+      <Button href="/" variant="primary" icon="home">
+        {homeLabel}
+      </Button>
+    </p>
+  </div>
+</AppShell>

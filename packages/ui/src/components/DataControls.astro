@@ -35,7 +35,7 @@ const Heading = `h${level}` as 'h2' | 'h3';
   </div>
   <p class="muted" role="status" data-data-status></p>
 
-  <dialog class="dialog" aria-labelledby="data-delete-title" data-delete-dialog>
+  <dialog class="dialog" aria-labelledby="data-delete-title" data-all-data-dialog>
     <form method="dialog" class="stack">
       <h2 id="data-delete-title">Delete all data?</h2>
       <p>This removes everything {site.name} has saved on this device. It can't be undone.</p>
@@ -57,7 +57,7 @@ const Heading = `h${level}` as 'h2' | 'h3';
   for (const section of document.querySelectorAll<HTMLElement>('[data-data-controls]')) {
     const app = section.dataset['app'] ?? 'app';
     const status = section.querySelector<HTMLElement>('[data-data-status]');
-    const dialog = section.querySelector<HTMLDialogElement>('[data-delete-dialog]');
+    const dialog = section.querySelector<HTMLDialogElement>('[data-all-data-dialog]');
 
     section.querySelector('[data-action="export"]')?.addEventListener('click', () => {
       const file = exportAll(app);

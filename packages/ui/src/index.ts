@@ -6,5 +6,6 @@ export { default as DataControls } from './components/DataControls.astro';
 export { default as Icon } from './components/Icon.astro';
 export { default as ThemeSwitch } from './components/ThemeSwitch.astro';
 export { default as AppShell } from './layouts/AppShell.astro';
+export { default as NotFound } from './layouts/NotFound.astro';
 export { icons, iconNames, isIconName, iconSvg, type IconName } from './icons/index.ts';
 export { iconColors, backgroundColors } from './icons/colors.ts';
