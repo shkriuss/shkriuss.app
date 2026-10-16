@@ -1,0 +1,21 @@
+{
+  "site": {
+    "name": "shkriuss",
+    "domain": "shkriuss.app",
+    "description": "Small, private web apps. Your data stays on your device.",
+    "icon": "grid",
+    "color": "teal"
+  },
+  "apps": [
+    {
+      "slug": "tally",
+      "name": "Tally",
+      "description": "Count anything with a tap. Your counts stay on your device.",
+      "icon": "tally",
+      "color": "indigo",
+      "status": "live",
+      "storage": "device",
+      "dataStored": ["Counter names and counts", "Your light or dark theme choice"]
+    }
+  ]
+}

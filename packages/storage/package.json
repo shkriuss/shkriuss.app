@@ -1,0 +1,13 @@
+{
+  "name": "@shkriuss/storage",
+  "version": "0.0.0",
+  "private": true,
+  "description": "On-device storage helpers: save, export and delete app data.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  }
+}
