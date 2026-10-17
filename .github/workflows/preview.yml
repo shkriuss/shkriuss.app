@@ -64,6 +64,9 @@ jobs:
 
       - name: Upload previews to Cloudflare
         if: steps.token.outputs.ready == 'true'
+        env:
+          # The PR's own latest commit (GITHUB_SHA is GitHub's temporary merge commit).
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: node scripts/previews.ts deploy "$PREVIEW_NAME" > preview-comment.md
 
       - name: Post the links on the pull request

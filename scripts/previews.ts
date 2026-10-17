@@ -45,7 +45,7 @@ if (command === 'deploy') {
     results.push({ slug, url });
   }
   // stdout is the PR comment; logs go to stderr.
-  console.log(previewComment(results, process.env['GITHUB_SHA']));
+  console.log(previewComment(results, process.env['HEAD_SHA'] ?? process.env['GITHUB_SHA']));
 } else {
   for (const slug of siteSlugs()) {
     const run = wrangler(slug, ['preview', 'delete', '--name', name, '--skip-confirmation']);
