@@ -7,6 +7,18 @@ import { MAX_NOTES_LENGTH, MAX_TITLE_LENGTH, REPEAT_LABELS, REPEATS } from '../l
   <h1 class="visually-hidden">Calendar</h1>
 
   <div class="stack stack--lg">
+    <!-- Reminders that are due: shown while Calendar is open. -->
+    <section class="notice stack stack--sm due" aria-labelledby="due-heading" data-due hidden>
+      <h2 id="due-heading" class="due__title">
+        <Icon name="bell" />
+        Reminders
+      </h2>
+      <ul role="list" class="event-list" data-due-list></ul>
+      <p>
+        <Button data-action="dismiss-reminders">Dismiss</Button>
+      </p>
+    </section>
+
     <div class="calendar-layout">
       <section class="stack month" aria-labelledby="month-heading">
         <div class="cluster cluster--between">
@@ -58,17 +70,42 @@ import { MAX_NOTES_LENGTH, MAX_TITLE_LENGTH, REPEAT_LABELS, REPEATS } from '../l
       </div>
     </div>
 
-    <section class="stack" aria-labelledby="export-heading">
-      <h2 id="export-heading">Use your events in other calendars</h2>
-      <p class="muted">
-        Download your events as an .ics file, which Google Calendar, Apple Calendar and Outlook can
-        import.
+    <section class="stack" aria-labelledby="notifications-heading">
+      <h2 id="notifications-heading">Notifications</h2>
+      <p data-notify-status>Reminders show on this page while Calendar is open.</p>
+      <p data-notify-enable hidden>
+        <Button icon="bell" data-action="enable-notifications">
+          Turn on notifications
+        </Button>
       </p>
-      <p>
+      <p class="muted">
+        When Calendar is closed, your phone may not let it run, so a reminder can arrive late, when
+        you next open Calendar. For reminders you can always count on, also add your events to your
+        phone’s own calendar app with the .ics file below: the reminders go with them.
+      </p>
+    </section>
+
+    <section class="stack" aria-labelledby="transfer-heading">
+      <h2 id="transfer-heading">Import and export</h2>
+      <p class="muted">
+        Move events between Calendar and other calendar apps, like Google Calendar, Apple Calendar
+        and Outlook, with .ics files.
+      </p>
+      <div class="cluster">
+        <Button icon="upload" data-action="import-ics">
+          Import .ics file
+        </Button>
         <Button icon="download" data-action="export-ics">
           Download .ics file
         </Button>
-      </p>
+      </div>
+      <input
+        type="file"
+        accept=".ics,text/calendar"
+        aria-label="Choose an .ics file to import"
+        hidden
+        data-import-file
+      />
     </section>
 
     <DataControls />
@@ -77,7 +114,7 @@ import { MAX_NOTES_LENGTH, MAX_TITLE_LENGTH, REPEAT_LABELS, REPEATS } from '../l
   <p class="visually-hidden" role="status" data-announcer></p>
 
   <!-- One event in a list, copied by the script for each event. Its accessible
-       name ("9:00 AM – 10:00 AM, Dentist, repeats") is set by the script. -->
+       name ("9:00 AM – 10:00 AM, Dentist, repeats, with a reminder") is set by the script. -->
   <template data-event-template>
     <li>
       <button type="button" class="event-item" data-action="edit">
@@ -85,8 +122,13 @@ import { MAX_NOTES_LENGTH, MAX_TITLE_LENGTH, REPEAT_LABELS, REPEATS } from '../l
         <span class="event-item__title" data-title>
           Event
         </span>
-        <span class="event-item__repeat" data-repeat hidden>
-          <Icon name="repeat" />
+        <span class="event-item__icons">
+          <span data-repeat hidden>
+            <Icon name="repeat" />
+          </span>
+          <span data-has-reminder hidden>
+            <Icon name="bell" />
+          </span>
         </span>
       </button>
     </li>
@@ -210,6 +252,22 @@ import { MAX_NOTES_LENGTH, MAX_TITLE_LENGTH, REPEAT_LABELS, REPEATS } from '../l
       </div>
 
       <div class="field">
+        <label class="field__label" for="event-reminder">
+          Reminder
+        </label>
+        <!-- Choices depend on "All day", so the script fills them in. -->
+        <select
+          class="input"
+          id="event-reminder"
+          name="reminder"
+          aria-describedby="event-reminder-error"
+        >
+          <option value="">No reminder</option>
+        </select>
+        <p class="field__error" id="event-reminder-error" data-error-for="reminder"></p>
+      </div>
+
+      <div class="field">
         <label class="field__label" for="event-notes">
           Notes (optional)
         </label>
@@ -247,6 +305,24 @@ import { MAX_NOTES_LENGTH, MAX_TITLE_LENGTH, REPEAT_LABELS, REPEATS } from '../l
         </Button>
         <Button type="submit" variant="danger" value="confirm">
           Delete
+        </Button>
+      </div>
+    </form>
+  </dialog>
+  <dialog class="dialog" aria-labelledby="import-title" data-import-dialog>
+    <form method="dialog" class="stack">
+      <h2 id="import-title">Import events</h2>
+      <div class="stack stack--sm" data-import-details></div>
+      <div class="stack stack--sm" data-import-skipped-block hidden>
+        <p>These can’t be imported:</p>
+        <ul class="import-skipped" data-import-skipped></ul>
+      </div>
+      <div class="cluster">
+        <Button type="submit" value="cancel" data-import-cancel>
+          Cancel
+        </Button>
+        <Button type="submit" variant="primary" value="confirm" data-import-confirm>
+          Import
         </Button>
       </div>
     </form>
@@ -370,8 +446,8 @@ import { MAX_NOTES_LENGTH, MAX_TITLE_LENGTH, REPEAT_LABELS, REPEATS } from '../l
     display: grid;
     grid-template-columns: 1fr auto;
     grid-template-areas:
-      'when repeat'
-      'title repeat';
+      'when icons'
+      'title icons';
     align-items: center;
     column-gap: var(--space-3);
     width: 100%;
@@ -404,9 +480,23 @@ import { MAX_NOTES_LENGTH, MAX_TITLE_LENGTH, REPEAT_LABELS, REPEATS } from '../l
     overflow-wrap: anywhere;
   }
 
-  .event-list :global(.event-item__repeat) {
-    grid-area: repeat;
+  .event-list :global(.event-item__icons) {
+    grid-area: icons;
+    display: flex;
+    gap: var(--space-1);
     color: var(--color-text-muted);
+  }
+
+  .due__title {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--text-lg);
+  }
+
+  .import-skipped {
+    padding-inline-start: var(--space-5);
+    overflow-wrap: anywhere;
   }
 
   .dialog__actions .dialog__delete {

@@ -50,6 +50,21 @@ const compactDate = (date: IsoDate): string => date.replaceAll('-', '');
 const compactDateTime = (date: IsoDate, time: IsoTime | '23:59:59'): string =>
   `${compactDate(date)}T${time.replaceAll(':', '').padEnd(6, '0')}`;
 
+/**
+ * A reminder as an iCalendar duration from the start (RFC 5545 §3.3.6):
+ * 15 minutes before → "-PT15M", 9:00 on an all-day event's day → "PT9H".
+ */
+export function triggerOf(minutesBefore: number): string {
+  if (minutesBefore === 0) return 'PT0S';
+  let rest = Math.abs(minutesBefore);
+  const days = Math.floor(rest / 1440);
+  rest -= days * 1440;
+  const hours = Math.floor(rest / 60);
+  const minutes = rest % 60;
+  const time = `${hours ? `${hours}H` : ''}${minutes ? `${minutes}M` : ''}`;
+  return `${minutesBefore > 0 ? '-' : ''}P${days ? `${days}D` : ''}${time ? `T${time}` : ''}`;
+}
+
 function stampOf(now: Date): string {
   return `${now.toISOString().replace(/[-:]/g, '').slice(0, 15)}Z`;
 }
@@ -81,6 +96,15 @@ function eventLines(event: CalendarEvent, stamp: string, domain: string): string
 
   lines.push(`SUMMARY:${escapeText(event.title)}`);
   if (event.notes) lines.push(`DESCRIPTION:${escapeText(event.notes)}`);
+  if (event.reminder !== null) {
+    lines.push(
+      'BEGIN:VALARM',
+      'ACTION:DISPLAY',
+      `DESCRIPTION:${escapeText(event.title)}`,
+      `TRIGGER:${triggerOf(event.reminder)}`,
+      'END:VALARM',
+    );
+  }
   lines.push('END:VEVENT');
   return lines;
 }

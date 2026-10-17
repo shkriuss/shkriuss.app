@@ -11,22 +11,40 @@ colour are in [`packages/registry/apps.json`](../../packages/registry/apps.json)
 - Events have a title, a start and end date, a time (or "All day") and notes.
   They can repeat every day, week, month or year, until a date if you like.
 - "Next 7 days" lists what's coming up.
-- "Download .ics file" saves your events in the standard calendar format, so
-  Google Calendar, Apple Calendar and Outlook can import them.
+- **Reminders**: each event can remind you, from "at the start time" to
+  "1 week before" (all-day events: at 9:00 on the day or before). Due
+  reminders show at the top of the page and, if you turn notifications on,
+  as phone notifications. Reminders missed while Calendar was closed show
+  when you open it again (up to 12 hours late, and only if the event isn't
+  over).
+- **Import**: "Import .ics file" reads a calendar file from Google Calendar,
+  Apple Calendar, Outlook or this app. You see what will be added (and what
+  can't be, and why) before anything changes. Importing the same file twice
+  doesn't make copies.
+- **Export**: "Download .ics file" saves your events, with their reminders,
+  in the standard calendar format for other calendar apps.
 - Weeks start on the day usual where you live, and times show as 12- or
   24-hour, both from the phone's language and region settings.
 
-Everything is saved in the browser on this device (`shkriuss:calendar`).
-Nothing is sent anywhere.
+Everything is saved in the browser on this device (`shkriuss:calendar` for
+events, `shkriuss:calendar-reminders` for when reminders were last checked).
+Nothing is sent anywhere: imported files are read on the device, and
+notifications are made by the browser on the device (no push server).
 
 ## Where things are
 
 - Page: `src/pages/index.astro`
-- Page behaviour: `src/scripts/calendar.ts`
+- Page behaviour: `src/scripts/`
+  - `calendar.ts`: the month, the lists and the event editor
+  - `reminder-alerts.ts`: due reminders and notifications
+  - `import-dialog.ts`: importing a file
+  - `shared.ts`: small helpers they share
 - Rules, as plain functions with unit tests next to them:
   - `src/lib/dates.ts`: date maths without time zones ("2026-10-17", "14:30")
   - `src/lib/events.ts`: checking, saving and repeating events
-  - `src/lib/ics.ts`: the .ics file format
+  - `src/lib/reminders.ts`: when reminders go off and what they're called
+  - `src/lib/ics.ts`: writing .ics files
+  - `src/lib/ics-import.ts`: reading .ics files
 - Browser tests: `e2e/` (the shared accessibility, security and offline
   checks run automatically too)
 - Build settings: `astro.config.ts` (shared, from `@shkriuss/astro-config`)
@@ -37,6 +55,18 @@ Nothing is sent anywhere.
 - Times are "floating": 9:00 stays 9:00 even if you travel to another time
   zone, like on a paper calendar.
 - Editing a repeating event changes every time it happens.
-- Not yet: reminders (notifications) and importing .ics files.
+- **Reminders while Calendar is closed.** A web app can't wake itself up at a
+  set time without a server, and phones pause apps in the background. So a
+  reminder may arrive late, when you next open Calendar. For reminders you
+  can always count on, add your events to the phone's own calendar app with
+  the .ics file: the reminders go with them. (Doing it with a server would
+  need an ADR first, and the events would leave the device.)
+- **On iPhone and iPad**, notifications only work after adding Calendar to
+  the Home Screen (iOS 16.4 or later).
+- **Import limits.** Calendar can't show everything a .ics file can say yet:
+  repeats like "every 2 weeks" or "Mondays and Wednesdays", and changes to
+  single dates of a repeating event, are listed as not imported. Times with a
+  time zone are moved to the phone's time zone.
+- Data saved before reminders existed (version 1) is upgraded automatically.
 
 See [docs/adding-an-app.md](../../docs/adding-an-app.md) for the full guide.

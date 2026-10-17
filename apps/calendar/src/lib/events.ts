@@ -20,11 +20,16 @@ import {
 export const REPEATS = ['none', 'daily', 'weekly', 'monthly', 'yearly'] as const;
 export type Repeat = (typeof REPEATS)[number];
 
+/** Version of the saved data. 2 added reminders. */
+export const DATA_VERSION = 2;
+
 export const MAX_TITLE_LENGTH = 100;
 export const MAX_NOTES_LENGTH = 1000;
 export const MAX_EVENTS = 2000;
 /** Longest an event may last, in days. */
 export const MAX_SPAN_DAYS = 366;
+/** Earliest reminder: 4 weeks before. */
+export const MAX_REMINDER_MINUTES = 4 * 7 * 1440;
 
 export interface CalendarEvent {
   id: string;
@@ -39,6 +44,11 @@ export interface CalendarEvent {
   repeat: Repeat;
   /** Last day a repeating event may start on (null = forever). */
   repeatUntil: IsoDate | null;
+  /**
+   * Minutes before the start to remind (null = no reminder). An all-day event
+   * starts at midnight, so -540 means 9:00 on the day and 900 means 9:00 the day before.
+   */
+  reminder: number | null;
   notes: string;
 }
 
@@ -51,7 +61,24 @@ export interface CalendarState {
 export const emptyState = (): CalendarState => ({ events: [] });
 
 export type DraftField =
-  'title' | 'endDate' | 'startDate' | 'startTime' | 'endTime' | 'repeatUntil' | 'notes' | 'form';
+  | 'title'
+  | 'endDate'
+  | 'startDate'
+  | 'startTime'
+  | 'endTime'
+  | 'repeatUntil'
+  | 'reminder'
+  | 'notes'
+  | 'form';
+
+/** Reminders run from 4 weeks before to the start (all-day: to 23:59 on the first day). */
+export function isValidReminder(minutes: unknown, allDay: boolean): minutes is number {
+  return (
+    Number.isInteger(minutes) &&
+    (minutes as number) <= MAX_REMINDER_MINUTES &&
+    (minutes as number) >= (allDay ? -1439 : 0)
+  );
+}
 
 /** The longest an event may last so it ends before it repeats. */
 function maxSpanFor(repeat: Repeat): number {
@@ -115,6 +142,8 @@ export function draftProblems(draft: EventDraft): Partial<Record<DraftField, str
       problems.repeatUntil = 'Repeating must end on or after the first day.';
     }
   }
+  if (draft.reminder !== null && !isValidReminder(draft.reminder, allDay))
+    problems.reminder = 'Choose when to be reminded.';
   if (draft.notes.length > MAX_NOTES_LENGTH)
     problems.notes = `Use ${MAX_NOTES_LENGTH} characters or fewer.`;
   return problems;
@@ -153,6 +182,7 @@ function isCalendarEvent(value: unknown): value is CalendarEvent {
     endTime: event['endTime'],
     repeat: event['repeat'],
     repeatUntil: event['repeatUntil'],
+    reminder: event['reminder'],
     notes: event['notes'],
   };
   if (typeof draft.title !== 'string' || typeof draft.notes !== 'string') return false;
@@ -164,6 +194,53 @@ export function isCalendarState(value: unknown): value is CalendarState {
   if (typeof value !== 'object' || value === null) return false;
   const { events } = value as Record<string, unknown>;
   return Array.isArray(events) && events.every(isCalendarEvent);
+}
+
+/** Turns data saved by an older version into the current shape, or undefined. */
+export function migrateState(data: unknown, version: number): CalendarState | undefined {
+  if (version !== 1 || typeof data !== 'object' || data === null) return undefined;
+  const { events } = data as Record<string, unknown>;
+  if (!Array.isArray(events)) return undefined;
+  // Version 1 had no reminders.
+  const migrated = {
+    events: events.map((event: unknown) => ({ ...(event as object), reminder: null })),
+  };
+  return isCalendarState(migrated) ? migrated : undefined;
+}
+
+export interface ImportResult {
+  state: CalendarState;
+  added: number;
+  /** Already in the calendar (same id). */
+  duplicates: number;
+  /** Left out because the calendar is full. */
+  overLimit: number;
+}
+
+/** Adds events from a file, skipping ones already here (same id) and anything over the limit. */
+export function importEvents(
+  state: CalendarState,
+  items: readonly { id: string; draft: EventDraft }[],
+): ImportResult {
+  const ids = new Set(state.events.map((event) => event.id));
+  const added: CalendarEvent[] = [];
+  let duplicates = 0;
+  let overLimit = 0;
+  for (const { id, draft } of items) {
+    if (ids.has(id)) duplicates += 1;
+    else if (Object.keys(draftProblems(draft)).length > 0) continue;
+    else if (state.events.length + added.length >= MAX_EVENTS) overLimit += 1;
+    else {
+      ids.add(id);
+      added.push({ id, ...clean(draft) });
+    }
+  }
+  return {
+    state: added.length ? { events: [...state.events, ...added] } : state,
+    added: added.length,
+    duplicates,
+    overLimit,
+  };
 }
 
 /** One appearance of an event (repeating events have many). */

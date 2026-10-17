@@ -1,6 +1,7 @@
 /**
  * Calendar's page behaviour: connects the HTML in pages/index.astro to the
- * rules in lib/ and saves everything on the device.
+ * rules in lib/ and saves everything on the device. Reminders and importing
+ * have their own files (reminder-alerts.ts and import-dialog.ts).
  */
 import { createStore, downloadFile } from '@shkriuss/storage';
 import {
@@ -19,14 +20,16 @@ import {
   today,
   weekday,
   type IsoDate,
-  type IsoTime,
 } from '../lib/dates.ts';
 import {
   addEvent,
+  DATA_VERSION,
   draftProblems,
   emptyState,
   isCalendarState,
+  isValidReminder,
   MAX_EVENTS,
+  migrateState,
   occurrencesBetween,
   onDay,
   removeEvent,
@@ -40,12 +43,34 @@ import {
   type Repeat,
 } from '../lib/events.ts';
 import { toIcs } from '../lib/ics.ts';
+import {
+  ALL_DAY_REMINDERS,
+  DEFAULT_REMINDER,
+  reminderLabel,
+  TIMED_REMINDERS,
+} from '../lib/reminders.ts';
+import { mountImportDialog } from './import-dialog.ts';
+import { mountReminderAlerts } from './reminder-alerts.ts';
+import {
+  formatTime,
+  longDate,
+  longDateThisYear,
+  monthFormat,
+  plural,
+  required,
+  shortDate,
+  utc,
+  weekdayLong,
+  weekdayShort,
+  type CalendarPage,
+} from './shared.ts';
 
 const store = createStore<CalendarState>({
   key: 'calendar',
-  version: 1,
+  version: DATA_VERSION,
   fallback: emptyState,
   validate: isCalendarState,
+  migrate: migrateState,
 });
 
 /** Days in the "Next 7 days" list (starting tomorrow). */
@@ -60,14 +85,9 @@ const FIELD_ORDER: DraftField[] = [
   'endDate',
   'endTime',
   'repeatUntil',
+  'reminder',
   'notes',
 ];
-
-function required<T extends Element>(root: ParentNode, selector: string): T {
-  const element = root.querySelector<T>(selector);
-  if (!element) throw new Error(`Calendar: missing element ${selector}`);
-  return element;
-}
 
 /** The day weeks start on in the person's region: 1 = Monday … 7 = Sunday. */
 function firstDayOfWeek(): number {
@@ -82,29 +102,6 @@ function firstDayOfWeek(): number {
     return 1;
   }
 }
-
-// Dates are formatted as UTC midnight so the device's time zone can't shift them.
-const utc = (date: IsoDate): Date => {
-  const { year, month, day } = parts(date);
-  return new Date(Date.UTC(year, month - 1, day));
-};
-const formatter = (options: Intl.DateTimeFormatOptions) =>
-  new Intl.DateTimeFormat(undefined, { ...options, timeZone: 'UTC' });
-
-const monthFormat = formatter({ month: 'long', year: 'numeric' });
-const longDate = formatter({ weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-const longDateThisYear = formatter({ weekday: 'long', day: 'numeric', month: 'long' });
-const shortDate = formatter({ weekday: 'short', day: 'numeric', month: 'short' });
-const weekdayShort = formatter({ weekday: 'short' });
-const weekdayLong = formatter({ weekday: 'long' });
-const timeFormat = formatter({ hour: 'numeric', minute: '2-digit' });
-
-const formatTime = (time: IsoTime): string => {
-  const [hours, minutes] = time.split(':').map(Number) as [number, number];
-  return timeFormat.format(new Date(Date.UTC(2000, 0, 1, hours, minutes)));
-};
-
-const plural = (count: number, word: string): string => `${count} ${word}${count === 1 ? '' : 's'}`;
 
 export function mountCalendar(root: Document): void {
   const monthTitle = required<HTMLElement>(root, '[data-month-title]');
@@ -135,6 +132,7 @@ export function mountCalendar(root: Document): void {
   const endTimeInput = input<HTMLInputElement>('endTime');
   const repeatInput = input<HTMLSelectElement>('repeat');
   const repeatUntilInput = input<HTMLInputElement>('repeatUntil');
+  const reminderInput = input<HTMLSelectElement>('reminder');
   const notesInput = input<HTMLTextAreaElement>('notes');
 
   const deleteDialog = required<HTMLDialogElement>(root, '[data-delete-dialog]');
@@ -167,6 +165,15 @@ export function mountCalendar(root: Document): void {
     render();
     return saved;
   };
+
+  const page: CalendarPage = {
+    state: () => state,
+    save,
+    announce,
+    eventItem,
+    newEventButton,
+  };
+  const alerts = mountReminderAlerts(root, page);
 
   // ---------- Showing the calendar ----------
 
@@ -250,8 +257,10 @@ export function mountCalendar(root: Document): void {
     required<HTMLElement>(item, '[data-when]').textContent = when;
     required<HTMLElement>(item, '[data-title]').textContent = event.title;
     required<HTMLElement>(item, '[data-repeat]').hidden = event.repeat === 'none';
+    required<HTMLElement>(item, '[data-has-reminder]').hidden = event.reminder === null;
     const name = [when, event.title];
     if (event.repeat !== 'none') name.push('repeats');
+    if (event.reminder !== null) name.push('with a reminder');
     required<HTMLButtonElement>(item, '[data-action="edit"]').setAttribute(
       'aria-label',
       name.join(', '),
@@ -283,6 +292,7 @@ export function mountCalendar(root: Document): void {
     renderMonth();
     renderDay();
     renderUpcoming();
+    alerts.render();
   }
 
   function focusDay(date: IsoDate): void {
@@ -315,6 +325,32 @@ export function mountCalendar(root: Document): void {
     repeatUntilInput.disabled = !repeats;
   }
 
+  /** Fills the reminder list with the choices for timed or all-day events. */
+  function fillReminders(allDay: boolean, value: number | null): void {
+    const choices: number[] = [...(allDay ? ALL_DAY_REMINDERS : TIMED_REMINDERS)];
+    // A reminder from an imported file may not be one of the usual choices.
+    if (value !== null && !choices.includes(value) && isValidReminder(value, allDay)) {
+      choices.push(value);
+      choices.sort((a, b) => a - b);
+    }
+    const option = (optionValue: string, label: string): HTMLOptionElement => {
+      const created = document.createElement('option');
+      created.value = optionValue;
+      created.textContent = label;
+      return created;
+    };
+    reminderInput.replaceChildren(
+      option('', 'No reminder'),
+      ...choices.map((minutes) =>
+        option(String(minutes), reminderLabel(minutes, allDay, formatTime)),
+      ),
+    );
+    reminderInput.value = value === null ? '' : String(value);
+  }
+
+  const readReminder = (): number | null =>
+    reminderInput.value === '' ? null : Number(reminderInput.value);
+
   function readDraft(): EventDraft {
     const allDay = allDayInput.checked;
     const repeat = repeatInput.value as Repeat;
@@ -327,6 +363,7 @@ export function mountCalendar(root: Document): void {
       endTime: allDay || !endTimeInput.value ? null : endTimeInput.value,
       repeat,
       repeatUntil: repeat === 'none' || !repeatUntilInput.value ? null : repeatUntilInput.value,
+      reminder: readReminder(),
       notes: notesInput.value,
     };
   }
@@ -366,6 +403,7 @@ export function mountCalendar(root: Document): void {
     endTimeInput.value = event ? (event.endTime ?? (event.startTime ? '' : '10:00')) : '10:00';
     repeatInput.value = event?.repeat ?? 'none';
     repeatUntilInput.value = event?.repeatUntil ?? '';
+    fillReminders(allDayInput.checked, event?.reminder ?? null);
     notesInput.value = event?.notes ?? '';
     lastStartDate = startDateInput.value;
     lastStartTime = startTimeInput.value;
@@ -416,7 +454,15 @@ export function mountCalendar(root: Document): void {
     lastStartTime = start;
   });
 
-  allDayInput.addEventListener('change', syncFields);
+  allDayInput.addEventListener('change', () => {
+    syncFields();
+    // "15 minutes before" means something else for an all-day event: switch to that kind's default.
+    const allDay = allDayInput.checked;
+    fillReminders(
+      allDay,
+      readReminder() === null ? null : allDay ? DEFAULT_REMINDER.allDay : DEFAULT_REMINDER.timed,
+    );
+  });
   repeatInput.addEventListener('change', syncFields);
 
   // Clear a field's error as soon as it is fixed.
@@ -447,6 +493,8 @@ export function mountCalendar(root: Document): void {
       viewMonth = shiftMonth(day, 0);
     }
     if (save(next)) announce(`Saved ${draft.title.trim()}.`);
+    // Asking now, right after choosing a reminder, makes the question clear.
+    if (draft.reminder !== null) alerts.offerNotifications();
     savedId = id;
     editor.close();
   });
@@ -482,15 +530,14 @@ export function mountCalendar(root: Document): void {
     openEditor(null);
   });
 
-  const openFromList = (clickEvent: Event): void => {
+  // Tapping an event in any list (the day, the next 7 days, reminders) opens it.
+  root.addEventListener('click', (clickEvent) => {
     const id = (clickEvent.target as Element)
       .closest('[data-action="edit"]')
       ?.closest<HTMLElement>('[data-id]')?.dataset['id'];
     const event = state.events.find((entry) => entry.id === id);
     if (event) openEditor(event);
-  };
-  dayList.addEventListener('click', openFromList);
-  upcomingList.addEventListener('click', openFromList);
+  });
 
   required<HTMLButtonElement>(root, '[data-action="prev-month"]').addEventListener('click', () => {
     showMonth(-1);
@@ -560,6 +607,8 @@ export function mountCalendar(root: Document): void {
       render();
     }
   });
+
+  mountImportDialog(root, page);
 
   renderWeekdays();
   render();

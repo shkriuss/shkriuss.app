@@ -1,15 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import {
   addDays,
+  addMinutes,
   daysBetween,
   daysInMonth,
   isIsoDate,
   isIsoTime,
   minutesOf,
   monthGrid,
+  nowStamp,
   sameDayInMonth,
   shiftMonth,
   shiftTime,
+  stampMinutes,
   today,
   weekday,
 } from './dates.ts';
@@ -111,5 +114,19 @@ describe('monthGrid', () => {
       expect(weeks.every((week) => week.length === 7)).toBe(true);
       expect(weeks.flat().filter(Boolean)).toHaveLength(daysInMonth(2026, month));
     }
+  });
+});
+
+describe('stamps', () => {
+  it('adds minutes across days, months and years', () => {
+    expect(addMinutes('2026-10-17T09:00', -15)).toBe('2026-10-17T08:45');
+    expect(addMinutes('2026-10-17T00:10', -20)).toBe('2026-10-16T23:50');
+    expect(addMinutes('2026-12-31T23:30', 45)).toBe('2027-01-01T00:15');
+    expect(addMinutes('2024-03-01T00:00', -1440)).toBe('2024-02-29T00:00');
+    expect(stampMinutes('1970-01-02T01:01')).toBe(1440 + 61);
+  });
+
+  it('reads the device clock to the minute', () => {
+    expect(nowStamp(new Date(2026, 9, 17, 7, 5, 59))).toBe('2026-10-17T07:05');
   });
 });

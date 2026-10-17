@@ -7,6 +7,7 @@
  */
 export const icons = {
   'arrow-left': '<path d="M19 12H5M11 6l-6 6 6 6"/>',
+  bell: '<path d="M6 16v-5a6 6 0 0 1 12 0v5l1.5 2.5h-15L6 16Z"/><path d="M10 21h4"/>',
   calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
   check: '<path d="m5 12.5 4.5 4.5L19 7"/>',
   'chevron-left': '<path d="m15 6-6 6 6 6"/>',

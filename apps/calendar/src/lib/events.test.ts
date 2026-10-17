@@ -3,7 +3,10 @@ import {
   addEvent,
   draftProblems,
   emptyState,
+  importEvents,
   isCalendarState,
+  MAX_EVENTS,
+  migrateState,
   occurrencesBetween,
   onDay,
   removeEvent,
@@ -21,6 +24,7 @@ const draft = (overrides: Partial<EventDraft> = {}): EventDraft => ({
   endTime: '10:00',
   repeat: 'none',
   repeatUntil: null,
+  reminder: null,
   notes: '',
   ...overrides,
 });
@@ -65,6 +69,70 @@ describe('draftProblems', () => {
       /before it repeats/,
     );
     expect(draftProblems(draft({ repeat: 'weekly', endDate: '2026-10-23' }))).toEqual({});
+  });
+});
+
+describe('reminders', () => {
+  it('accepts reminders from 4 weeks before to the start', () => {
+    expect(draftProblems(draft({ reminder: 0 }))).toEqual({});
+    expect(draftProblems(draft({ reminder: 40320 }))).toEqual({});
+    expect(draftProblems(draft({ reminder: 40321 })).reminder).toBeTruthy();
+    expect(draftProblems(draft({ reminder: -5 })).reminder).toBeTruthy();
+    expect(draftProblems(draft({ reminder: 1.5 })).reminder).toBeTruthy();
+  });
+
+  it('lets all-day events remind later on the first day', () => {
+    const allDay = { startTime: null, endTime: null };
+    expect(draftProblems(draft({ ...allDay, reminder: -540 }))).toEqual({});
+    expect(draftProblems(draft({ ...allDay, reminder: -1439 }))).toEqual({});
+    expect(draftProblems(draft({ ...allDay, reminder: -1440 })).reminder).toBeTruthy();
+  });
+});
+
+describe('saved data from older versions', () => {
+  it('adds "no reminder" to events saved by version 1', () => {
+    const { reminder: _, ...old } = { id: 'a', ...draft() };
+    const migrated = migrateState({ events: [old] }, 1);
+    expect(isCalendarState(migrated)).toBe(true);
+    expect(migrated).toEqual({ events: [{ ...old, reminder: null }] });
+    expect(isCalendarState({ events: [old] })).toBe(false);
+  });
+
+  it('gives up on data it does not know', () => {
+    expect(migrateState({ events: 'nope' }, 1)).toBeUndefined();
+    expect(migrateState({ events: [] }, 7)).toBeUndefined();
+    expect(migrateState(null, 1)).toBeUndefined();
+  });
+});
+
+describe('importEvents', () => {
+  it('adds new events and skips ones already there', () => {
+    const state = withEvents(draft());
+    const result = importEvents(state, [
+      { id: 'e0', draft: draft({ title: 'Same id' }) },
+      { id: 'new', draft: draft({ title: '  Gym ' }) },
+      { id: 'new', draft: draft({ title: 'Twice in the file' }) },
+      { id: 'bad', draft: draft({ title: '' }) },
+    ]);
+    expect(result).toMatchObject({ added: 1, duplicates: 2, overLimit: 0 });
+    expect(result.state.events.map((e) => `${e.id}:${e.title}`)).toEqual(['e0:Dentist', 'new:Gym']);
+  });
+
+  it('stops at the event limit', () => {
+    const full = {
+      events: Array.from({ length: MAX_EVENTS - 1 }, (_, i) => ({ id: `x${i}`, ...draft() })),
+    };
+    const result = importEvents(full, [
+      { id: 'a', draft: draft() },
+      { id: 'b', draft: draft() },
+    ]);
+    expect(result).toMatchObject({ added: 1, overLimit: 1 });
+    expect(result.state.events).toHaveLength(MAX_EVENTS);
+  });
+
+  it('returns the same state when nothing is added', () => {
+    const state = withEvents(draft());
+    expect(importEvents(state, []).state).toBe(state);
   });
 });
 
