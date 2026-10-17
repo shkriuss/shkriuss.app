@@ -26,7 +26,8 @@
       "status": "beta",
       "storage": "device",
       "dataStored": [
-        "Your events: titles, dates, times, repeats and notes",
+        "Your events: titles, dates, times, repeats, reminders and notes",
+        "When reminders were last checked, so each one shows only once",
         "Your light or dark theme choice"
       ]
     }

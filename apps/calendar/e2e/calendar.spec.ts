@@ -4,49 +4,13 @@
 // The browser's clock is fixed to Saturday 17 October 2026, and the locale is
 // en-US, so weeks start on Sunday and times read like "2:30 PM".
 import { readFile } from 'node:fs/promises';
-import type { Page } from '@playwright/test';
 import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
-import type { CalendarEvent } from '../src/lib/events.ts';
+import { day, dayList, editor, monthHeading, newEvent, save, seed, upcoming } from './helpers.ts';
 
 test.beforeEach(async ({ page }) => {
   await page.clock.setFixedTime(new Date('2026-10-17T10:00:00'));
   await page.goto('/');
 });
-
-/** Saves events straight into storage, then reloads the page. */
-async function seed(page: Page, events: Partial<CalendarEvent>[]): Promise<void> {
-  const full = events.map((event, index) => ({
-    id: `seed-${index}`,
-    title: 'Event',
-    startDate: '2026-10-17',
-    endDate: '2026-10-17',
-    startTime: '09:00',
-    endTime: '10:00',
-    repeat: 'none',
-    repeatUntil: null,
-    notes: '',
-    ...event,
-  }));
-  await page.evaluate((data) => {
-    localStorage.setItem('shkriuss:calendar', JSON.stringify({ v: 1, data: { events: data } }));
-  }, full);
-  await page.reload();
-}
-
-const editor = (page: Page) => page.getByRole('dialog', { name: /^(New|Edit) event$/ });
-const dayList = (page: Page) => page.locator('[data-day-events]');
-const upcoming = (page: Page) => page.locator('[data-upcoming]');
-const day = (page: Page, label: string | RegExp) =>
-  page.locator('[data-weeks]').getByRole('button', { name: label });
-const monthHeading = (page: Page) => page.locator('#month-heading');
-
-async function newEvent(page: Page, title: string): Promise<void> {
-  await page.getByRole('button', { name: 'New event' }).click();
-  await expect(editor(page)).toBeVisible();
-  await editor(page).getByLabel('Title').fill(title);
-}
-
-const save = (page: Page) => editor(page).getByRole('button', { name: 'Save' }).click();
 
 test('shows this month with today selected', async ({ page }) => {
   await expect(monthHeading(page)).toHaveText('October 2026');
@@ -264,7 +228,7 @@ test('downloads events as an .ics file', async ({ page }) => {
     page.getByRole('status').filter({ hasText: 'There are no events to download yet.' }),
   ).toBeAttached();
 
-  await seed(page, [{ title: 'Dentist', startTime: '14:30', endTime: '15:30' }]);
+  await seed(page, [{ title: 'Dentist', startTime: '14:30', endTime: '15:30', reminder: 15 }]);
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Download .ics file' }).click();
   const download = await downloadPromise;
@@ -273,6 +237,7 @@ test('downloads events as an .ics file', async ({ page }) => {
   expect(ics).toContain('BEGIN:VEVENT\r\n');
   expect(ics).toContain('SUMMARY:Dentist\r\n');
   expect(ics).toContain('DTSTART:20261017T143000\r\n');
+  expect(ics).toContain('TRIGGER:-PT15M\r\n');
 });
 
 test('passes accessibility checks with events, in both themes', async ({ page }) => {
