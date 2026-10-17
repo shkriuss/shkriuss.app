@@ -2,8 +2,10 @@
 //
 // Browsers in tests can't reach Google's or Apple's push services, so the
 // page gets a fake push subscription whose address is a small push receiver
-// run by this test. Everything else is real: the page encrypts, Calendar's
-// Worker and Durable Objects store and sign, and the receiver decrypts.
+// run by this test. Headless browsers also report notifications as blocked
+// whatever their settings, so the page is told they're allowed. Everything
+// else is real: the page encrypts, Calendar's Worker and Durable Objects store
+// and sign, and the receiver decrypts.
 import { createServer, type IncomingHttpHeaders, type Server } from 'node:http';
 import type { Page } from '@playwright/test';
 import { fromBase64Url, toBase64Url } from '../../../packages/push/src/base64.ts';
@@ -11,7 +13,7 @@ import { decryptPayload } from '../../../packages/push/src/encrypt.ts';
 import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
 import { dayList, editor, newEvent, save } from './helpers.ts';
 
-test.use({ serviceWorkers: 'allow', permissions: ['notifications'], timezoneId: 'Europe/Berlin' });
+test.use({ serviceWorkers: 'allow', timezoneId: 'Europe/Berlin' });
 
 interface Received {
   headers: IncomingHttpHeaders;
@@ -60,10 +62,12 @@ async function startRig(): Promise<PushRig> {
   };
 }
 
-/** Replaces the browser's push subscription with one pointing at the rig. */
+/** Allows notifications, and replaces the push subscription with one pointing at the rig. */
 async function fakeSubscription(page: Page, rig: PushRig, options: { fail?: boolean } = {}) {
   await page.addInitScript(
     ({ endpoint, p256dh, auth, fail }) => {
+      Object.defineProperty(Notification, 'permission', { get: () => 'granted' });
+      Notification.requestPermission = async () => 'granted';
       const bytes = (text: string) =>
         Uint8Array.from(atob(text.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0))
           .buffer;
@@ -246,7 +250,8 @@ test('device settings stay out of backups', async ({ page }) => {
 test('explains when this browser can’t get push', async ({ page }) => {
   await fakeSubscription(page, rig, { fail: true });
   await page.goto('/');
-  await closedSwitch(page).check();
+  // click(), not check(): the switch turns itself back off.
+  await closedSwitch(page).click();
   await expect(closedStatus(page)).toHaveText(/couldn’t connect to a push service.*IronFox/);
   await expect(closedSwitch(page)).not.toBeChecked();
   expect(rig.received).toHaveLength(0);
