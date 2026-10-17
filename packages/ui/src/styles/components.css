@@ -235,6 +235,14 @@
   padding: var(--space-2);
 }
 
+/* A toggle button that's on (aria-pressed="true") looks like a primary button. */
+.btn[aria-pressed='true'] {
+  --btn-bg: var(--color-accent);
+  --btn-fg: var(--color-on-accent);
+  --btn-border: var(--color-accent);
+  --btn-bg-hover: var(--color-accent-hover);
+}
+
 .btn--lg {
   min-height: 3.5rem;
   min-width: 3.5rem;

@@ -1,0 +1,199 @@
+---
+/**
+ * Notes: a list of notes, and an editor for one note. One view is shown at a
+ * time (data-view); "#note=<id>" in the address opens a note, so the back
+ * button returns to the list. Behaviour: ../scripts/notes.ts.
+ */
+import { AppShell, Button, DataControls, Icon, SyncControls } from '@shkriuss/ui';
+import { MAX_TEXT_LENGTH } from '../lib/notes.ts';
+---
+
+<AppShell wide>
+  <h1 class="page-title">Notes</h1>
+
+  <div class="stack stack--lg" data-view="list">
+    <p class="lead">Write things down. Your notes are saved on this device.</p>
+
+    <section class="stack" aria-labelledby="notes-heading">
+      <h2 id="notes-heading" class="visually-hidden">
+        Your notes
+      </h2>
+      <p>
+        <Button variant="primary" icon="plus" data-action="new">
+          New note
+        </Button>
+      </p>
+      <p class="notice" data-message hidden></p>
+      <div class="field search" data-search-field hidden>
+        <label class="field__label" for="search">
+          Search notes
+        </label>
+        <input
+          class="input"
+          id="search"
+          type="search"
+          autocomplete="off"
+          enterkeyhint="search"
+          data-search
+        />
+      </div>
+      <p class="muted" data-empty>
+        No notes yet. Tap “New note” to write one.
+      </p>
+      <p class="muted" data-no-results hidden></p>
+      <ul role="list" class="grid notes" data-notes></ul>
+    </section>
+
+    <SyncControls />
+
+    <DataControls />
+  </div>
+
+  <section class="stack editor" aria-labelledby="editor-heading" data-view="editor" hidden>
+    <div class="cluster cluster--between editor__bar">
+      <Button icon="arrow-left" data-action="back">
+        All notes
+      </Button>
+      <div class="cluster editor__tools">
+        <button type="button" class="btn" aria-pressed="false" data-action="pin">
+          <Icon name="pin" />
+          Pin
+        </button>
+        <Button variant="ghost" icon="trash" data-action="delete">
+          Delete
+        </Button>
+      </div>
+    </div>
+    <div class="field">
+      <h2 id="editor-heading" class="editor__heading" tabindex="-1">
+        <label for="note-text">Note</label>
+      </h2>
+      <p class="field__hint" id="note-text-hint">
+        The first line is the title.
+      </p>
+      <textarea
+        class="input editor__text"
+        id="note-text"
+        rows="12"
+        maxlength={MAX_TEXT_LENGTH}
+        aria-describedby="note-text-hint"
+        data-text
+      ></textarea>
+    </div>
+    <p class="muted" data-edited></p>
+  </section>
+
+  <!-- Live region: tells screen reader users what happened. -->
+  <p class="visually-hidden" role="status" data-announcer></p>
+
+  <!-- Markup for one note in the list, copied by the script for each note. -->
+  <template data-note-template>
+    <li class="card card--link note-card">
+      <h3 class="note-card__title">
+        <a class="card__link" href="#note=" data-open>
+          Note
+        </a>
+      </h3>
+      <p class="note-card__snippet" data-snippet></p>
+      <p class="cluster muted note-card__meta">
+        <span class="badge" data-pinned hidden>
+          <Icon name="pin" />
+          Pinned
+        </span>
+        <span data-edited></span>
+      </p>
+    </li>
+  </template>
+
+  <dialog class="dialog" aria-labelledby="delete-title" data-delete-dialog>
+    <form method="dialog" class="stack">
+      <h2 id="delete-title">Delete this note?</h2>
+      <p>
+        “<span data-delete-name></span>” will be removed. This can't be undone.
+      </p>
+      <div class="cluster">
+        <Button type="submit" value="cancel">
+          Cancel
+        </Button>
+        <Button type="submit" variant="danger" value="confirm">
+          Delete
+        </Button>
+      </div>
+    </form>
+  </dialog>
+</AppShell>
+
+<script>
+  import { mountNotes } from '../scripts/notes.ts';
+
+  mountNotes(document);
+</script>
+
+<style>
+  .page-title {
+    margin-block-end: var(--space-3);
+  }
+
+  .search {
+    max-width: 32rem;
+  }
+
+  .notes {
+    --grid-min: 16rem;
+  }
+
+  .note-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .note-card__title {
+    font-size: var(--text-lg);
+    overflow-wrap: anywhere;
+  }
+
+  .note-card__snippet {
+    overflow-wrap: anywhere;
+  }
+
+  .note-card__snippet:empty {
+    display: none;
+  }
+
+  .note-card__meta {
+    --cluster-gap: var(--space-2);
+    margin-block-start: auto;
+    font-size: var(--text-sm);
+  }
+
+  .note-card__meta .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+  }
+
+  .note-card__meta svg {
+    width: 1em;
+    height: 1em;
+  }
+
+  .editor__bar {
+    --cluster-gap: var(--space-2);
+  }
+
+  .editor__tools {
+    --cluster-gap: var(--space-2);
+  }
+
+  .editor__heading {
+    font-size: var(--text-xl);
+  }
+
+  /* Room to write; grows with the text where browsers can. */
+  .editor__text {
+    min-height: 50dvh;
+    field-sizing: content;
+    line-height: var(--leading-normal);
+  }
+</style>

@@ -39,6 +39,21 @@
       ],
       "pushNotifications": true,
       "sync": true
+    },
+    {
+      "slug": "notes",
+      "name": "Notes",
+      "description": "Write things down. Your notes stay on your device.",
+      "icon": "note",
+      "color": "orange",
+      "status": "beta",
+      "storage": "device",
+      "dataStored": [
+        "Your notes: their text, when each was written and last edited, and whether it's pinned",
+        "If you turn on sync: a copy of your notes on Notes' server, locked on your devices so only they can read it, and this device's sync key (never in backups)",
+        "Your light or dark theme choice"
+      ],
+      "sync": true
     }
   ]
 }

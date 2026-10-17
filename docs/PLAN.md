@@ -319,6 +319,8 @@ month. GitHub never charges you unless you add a payment method.
       repeats and notes, reminders and notifications, .ics import and export.
 - [x] **Notifications while an app is closed** (opt-in, encrypted on the
       device), shared by any app ([ADR 0009](adr/0009-push-notifications.md)).
+- [x] **Notes** (`notes.shkriuss.app`): write, search and pin notes; syncs
+      through the account.
 - Add more apps one at a time, each with its own small browser tests.
 - [x] **shkriuss account**, part 1: create an account, recovery key,
       passkeys, add devices with a QR code ([ADR 0010](adr/0010-account-and-sync.md)).

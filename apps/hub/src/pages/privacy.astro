@@ -6,6 +6,9 @@ import { AppShell } from '@shkriuss/ui';
 const sites = [getSite(HUB_SLUG), ...apps.map((app) => getSite(app.slug))];
 const pushSites = sites.filter((site) => site.pushNotifications);
 const syncSites = sites.filter((site) => site.sync);
+/** "Calendar, Notes and Tally" */
+const listOf = (names: string[]) =>
+  new Intl.ListFormat('en-GB', { type: 'conjunction' }).format(names);
 
 const whereLabel: Record<StorageKind, string> = {
   none: 'Nothing is stored',
@@ -131,9 +134,9 @@ const LAST_UPDATED = '17 October 2026';
       <>
         <h2 id="sync">Syncing an app between your devices (optional)</h2>
         <p>
-          {syncSites.map((site) => site.name).join(' and ')} can keep their data the same on your
-          devices through your account. It's off until you tap “Turn on sync” in the app, on each
-          device. When it's on:
+          {listOf(syncSites.map((site) => site.name))} can keep their data the same on your devices
+          through your account. It's off until you tap “Turn on sync” in the app, on each device.
+          When it's on:
         </p>
         <ul>
           <li>
