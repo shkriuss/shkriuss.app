@@ -2,7 +2,7 @@
   "name": "hub",
   "version": "0.0.0",
   "private": true,
-  "description": "The hub at shkriuss.app: lists every app.",
+  "description": "The hub at shkriuss.app: lists every app, and the optional shkriuss account.",
   "type": "module",
   "scripts": {
     "dev": "astro dev",
@@ -13,8 +13,10 @@
     "deploy:preview": "wrangler preview"
   },
   "dependencies": {
+    "@shkriuss/account": "workspace:*",
     "@shkriuss/astro-config": "workspace:*",
     "@shkriuss/registry": "workspace:*",
+    "@shkriuss/storage": "workspace:*",
     "@shkriuss/ui": "workspace:*",
     "astro": "catalog:"
   },

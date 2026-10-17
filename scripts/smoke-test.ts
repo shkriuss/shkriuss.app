@@ -1,7 +1,8 @@
 /**
  * After a production deploy, checks every live site: it answers, serves HTML
  * and sends our security headers. Apps with notifications while closed must
- * also answer /api/push/key with their public key. Retries for a few minutes because a brand
+ * also answer /api/push/key with their public key, and the hub its account
+ * service (/api/account/ping). Retries for a few minutes because a brand
  * new subdomain can take a moment to get its DNS record and certificate.
  *
  *   node scripts/smoke-test.ts
@@ -26,6 +27,10 @@ async function check(origin: string): Promise<string | undefined> {
       return 'missing or unexpected Content-Security-Policy header';
     }
     if (!response.headers.get('strict-transport-security')) return 'missing HSTS header';
+    if (origin === getSite(HUB_SLUG).origin) {
+      const ping = await fetch(`${origin}/api/account/ping`);
+      if (!ping.ok) return 'account service not answering';
+    }
     if (pushOrigins.has(origin)) {
       const key = await fetch(`${origin}/api/push/key`);
       const body = (await key.json().catch(() => ({}))) as { publicKey?: unknown };

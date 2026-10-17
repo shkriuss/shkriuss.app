@@ -73,6 +73,12 @@ const currentPath = Astro.url.pathname;
           </a>
           <nav class="site-nav" aria-label="Main">
             <slot name="nav" />
+            {isHub && (
+              <a href="/account/" aria-current={currentPath === '/account/' ? 'page' : undefined}>
+                <Icon name="user" />
+                <span>Account</span>
+              </a>
+            )}
             {!isHub && (
               <a href={hubHome}>
                 <Icon name="grid" />

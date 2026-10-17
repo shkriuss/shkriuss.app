@@ -238,7 +238,10 @@ export function getSite(slug: string): SiteInfo {
       color: hub.color,
       origin: hubOrigin,
       storage: 'device',
-      dataStored: ['Your light or dark theme choice'],
+      dataStored: [
+        'If you use a shkriuss account: its key, on this device only (never in backups)',
+        'Your light or dark theme choice',
+      ],
       pushNotifications: false,
     };
   }

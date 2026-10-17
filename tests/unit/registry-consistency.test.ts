@@ -31,6 +31,12 @@ const PUSH_BINDINGS = [
   { name: 'PUSH_KEYS', class_name: 'PushKeys' },
 ];
 
+/** The Durable Objects the hub's account service needs (packages/account). */
+const ACCOUNT_BINDINGS = [
+  { name: 'ACCOUNT_LINKS', class_name: 'AccountLink' },
+  { name: 'ACCOUNT_PASSKEYS', class_name: 'AccountPasskey' },
+];
+
 function wranglerConfig(slug: string): WranglerConfig {
   return parseJsonc(
     readFileSync(join(repoRoot, 'apps', slug, 'wrangler.jsonc'), 'utf8'),
@@ -79,23 +85,38 @@ describe.each(appFolders)('apps/%s', (slug) => {
   });
 
   const push = slug !== HUB_SLUG && apps.find((app) => app.slug === slug)?.pushNotifications;
-  it(push ? 'runs the notification service for /api/push' : 'serves static files only', () => {
+  const kind = slug === HUB_SLUG ? 'account' : push ? 'push' : 'static';
+  const expected = {
+    account: {
+      title: 'runs the account service for /api/account',
+      bindings: ACCOUNT_BINDINGS,
+      worker: "export { default, AccountLink, AccountPasskey } from '@shkriuss/account/worker'",
+    },
+    push: {
+      title: 'runs the notification service for /api/push',
+      bindings: PUSH_BINDINGS,
+      worker: "export { default, PushDevice, PushKeys } from '@shkriuss/push/worker'",
+    },
+    static: { title: 'serves static files only', bindings: [], worker: '' },
+  }[kind];
+
+  it(expected.title, () => {
     const config = wranglerConfig(slug);
-    if (!push) {
+    if (kind === 'static') {
       expect(config.main).toBeUndefined();
       expect(config.durable_objects).toBeUndefined();
       return;
     }
     expect(config.main).toBe('src/worker.ts');
     expect(config.assets.run_worker_first).toEqual(['/api/*']);
-    expect(config.durable_objects?.bindings).toEqual(PUSH_BINDINGS);
+    expect(config.durable_objects?.bindings).toEqual(expected.bindings);
     // PR previews need their own storage, or they'd have none.
-    expect(config.previews.durable_objects?.bindings).toEqual(PUSH_BINDINGS);
+    expect(config.previews.durable_objects?.bindings).toEqual(expected.bindings);
     const classes = (config.migrations ?? []).flatMap((m) => m.new_sqlite_classes ?? []);
-    expect(classes).toEqual(expect.arrayContaining(['PushDevice', 'PushKeys']));
-    const worker = readFileSync(join(repoRoot, 'apps', slug, 'src/worker.ts'), 'utf8');
-    expect(worker).toContain(
-      "export { default, PushDevice, PushKeys } from '@shkriuss/push/worker'",
+    expect(classes).toEqual(
+      expect.arrayContaining(expected.bindings.map((binding) => binding.class_name)),
     );
+    const worker = readFileSync(join(repoRoot, 'apps', slug, 'src/worker.ts'), 'utf8');
+    expect(worker).toContain(expected.worker);
   });
 });

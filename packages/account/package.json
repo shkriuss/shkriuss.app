@@ -1,0 +1,18 @@
+{
+  "name": "@shkriuss/account",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The optional shkriuss account: recovery key, passkeys, adding devices, and the hub's account service.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./worker": "./src/worker.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@shkriuss/crypto": "workspace:*",
+    "@shkriuss/server": "workspace:*"
+  }
+}
