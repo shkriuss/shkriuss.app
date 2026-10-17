@@ -28,6 +28,8 @@ on:
           - arrow-left
           - calendar
           - check
+          - chevron-left
+          - chevron-right
           - clock
           - download
           - external
@@ -41,6 +43,7 @@ on:
           - note
           - pencil
           - plus
+          - repeat
           - reset
           - shield
           - sun

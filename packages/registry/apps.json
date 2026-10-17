@@ -16,6 +16,19 @@
       "status": "live",
       "storage": "device",
       "dataStored": ["Counter names and counts", "Your light or dark theme choice"]
+    },
+    {
+      "slug": "calendar",
+      "name": "Calendar",
+      "description": "Plan your days. Your events stay on your device.",
+      "icon": "calendar",
+      "color": "blue",
+      "status": "beta",
+      "storage": "device",
+      "dataStored": [
+        "Your events: titles, dates, times, repeats and notes",
+        "Your light or dark theme choice"
+      ]
     }
   ]
 }

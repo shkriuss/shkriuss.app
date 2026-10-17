@@ -1,0 +1,415 @@
+---
+import { AppShell, Button, DataControls, Icon } from '@shkriuss/ui';
+import { MAX_NOTES_LENGTH, MAX_TITLE_LENGTH, REPEAT_LABELS, REPEATS } from '../lib/events.ts';
+---
+
+<AppShell wide>
+  <h1 class="visually-hidden">Calendar</h1>
+
+  <div class="stack stack--lg">
+    <div class="calendar-layout">
+      <section class="stack month" aria-labelledby="month-heading">
+        <div class="cluster cluster--between">
+          <h2 id="month-heading" class="month__title" aria-live="polite" data-month-title>
+            Calendar
+          </h2>
+          <div class="cluster month__nav">
+            <Button icon="chevron-left" label="Previous month" data-action="prev-month" />
+            <Button data-action="today">Today</Button>
+            <Button icon="chevron-right" label="Next month" data-action="next-month" />
+          </div>
+        </div>
+
+        <table class="month__grid" aria-labelledby="month-heading">
+          <thead>
+            <tr data-weekdays></tr>
+          </thead>
+          <tbody data-weeks></tbody>
+        </table>
+        <p class="muted month__hint">
+          Tip: with a keyboard, use the arrow keys to move between days, and Page Up or Page Down to
+          change month.
+        </p>
+      </section>
+
+      <div class="stack stack--lg">
+        <section class="stack" aria-labelledby="day-heading">
+          <div class="cluster cluster--between">
+            <h2 id="day-heading" data-day-heading>
+              Today
+            </h2>
+            <Button variant="primary" icon="plus" data-action="new-event">
+              New event
+            </Button>
+          </div>
+          <ul role="list" class="event-list" data-day-events></ul>
+          <p class="muted" data-day-empty>
+            Nothing planned on this day.
+          </p>
+        </section>
+
+        <section class="stack" aria-labelledby="upcoming-heading">
+          <h2 id="upcoming-heading">Next 7 days</h2>
+          <ul role="list" class="event-list" data-upcoming></ul>
+          <p class="muted" data-upcoming-empty>
+            Nothing planned in the next 7 days.
+          </p>
+        </section>
+      </div>
+    </div>
+
+    <section class="stack" aria-labelledby="export-heading">
+      <h2 id="export-heading">Use your events in other calendars</h2>
+      <p class="muted">
+        Download your events as an .ics file, which Google Calendar, Apple Calendar and Outlook can
+        import.
+      </p>
+      <p>
+        <Button icon="download" data-action="export-ics">
+          Download .ics file
+        </Button>
+      </p>
+    </section>
+
+    <DataControls />
+  </div>
+
+  <p class="visually-hidden" role="status" data-announcer></p>
+
+  <!-- One event in a list, copied by the script for each event. Its accessible
+       name ("9:00 AM – 10:00 AM, Dentist, repeats") is set by the script. -->
+  <template data-event-template>
+    <li>
+      <button type="button" class="event-item" data-action="edit">
+        <span class="event-item__when" data-when></span>
+        <span class="event-item__title" data-title>
+          Event
+        </span>
+        <span class="event-item__repeat" data-repeat hidden>
+          <Icon name="repeat" />
+        </span>
+      </button>
+    </li>
+  </template>
+
+  <dialog class="dialog" aria-labelledby="event-dialog-title" data-event-dialog>
+    <form class="stack" data-event-form novalidate>
+      <h2 id="event-dialog-title" data-dialog-title>
+        New event
+      </h2>
+      <p class="muted" data-repeat-note hidden>
+        This event repeats. Changes apply to every time it happens.
+      </p>
+
+      <div class="field">
+        <label class="field__label" for="event-title">
+          Title
+        </label>
+        <input
+          class="input"
+          id="event-title"
+          name="title"
+          type="text"
+          autocomplete="off"
+          maxlength={MAX_TITLE_LENGTH}
+          aria-describedby="event-title-error"
+          required
+        />
+        <p class="field__error" id="event-title-error" data-error-for="title"></p>
+      </div>
+
+      <label class="check">
+        <input type="checkbox" name="allDay" />
+        <span>All day</span>
+      </label>
+
+      <div class="field-row">
+        <div class="field">
+          <label class="field__label" for="event-start-date">
+            Starts
+          </label>
+          <input
+            class="input"
+            id="event-start-date"
+            name="startDate"
+            type="date"
+            aria-describedby="event-start-date-error"
+            required
+          />
+          <p class="field__error" id="event-start-date-error" data-error-for="startDate"></p>
+        </div>
+        <div class="field" data-time-field>
+          <label class="field__label" for="event-start-time">
+            Start time
+          </label>
+          <input
+            class="input"
+            id="event-start-time"
+            name="startTime"
+            type="time"
+            aria-describedby="event-start-time-error"
+          />
+          <p class="field__error" id="event-start-time-error" data-error-for="startTime"></p>
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label class="field__label" for="event-end-date">
+            Ends
+          </label>
+          <input
+            class="input"
+            id="event-end-date"
+            name="endDate"
+            type="date"
+            aria-describedby="event-end-date-error"
+            required
+          />
+          <p class="field__error" id="event-end-date-error" data-error-for="endDate"></p>
+        </div>
+        <div class="field" data-time-field>
+          <label class="field__label" for="event-end-time">
+            End time (optional)
+          </label>
+          <input
+            class="input"
+            id="event-end-time"
+            name="endTime"
+            type="time"
+            aria-describedby="event-end-time-error"
+          />
+          <p class="field__error" id="event-end-time-error" data-error-for="endTime"></p>
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label class="field__label" for="event-repeat">
+            Repeats
+          </label>
+          <select class="input" id="event-repeat" name="repeat">
+            {REPEATS.map((repeat) => (
+              <option value={repeat}>{REPEAT_LABELS[repeat]}</option>
+            ))}
+          </select>
+        </div>
+        <div class="field" data-until-field hidden>
+          <label class="field__label" for="event-repeat-until">
+            Until (optional)
+          </label>
+          <input
+            class="input"
+            id="event-repeat-until"
+            name="repeatUntil"
+            type="date"
+            aria-describedby="event-repeat-until-error"
+          />
+          <p class="field__error" id="event-repeat-until-error" data-error-for="repeatUntil"></p>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="field__label" for="event-notes">
+          Notes (optional)
+        </label>
+        <textarea
+          class="input"
+          id="event-notes"
+          name="notes"
+          maxlength={MAX_NOTES_LENGTH}
+          aria-describedby="event-notes-error"
+        ></textarea>
+        <p class="field__error" id="event-notes-error" data-error-for="notes"></p>
+      </div>
+
+      <p class="field__error" role="alert" data-error-for="form"></p>
+
+      <div class="cluster dialog__actions">
+        <Button type="submit" variant="primary">
+          Save
+        </Button>
+        <Button data-action="cancel">Cancel</Button>
+        <Button variant="danger" icon="trash" data-action="delete" class="dialog__delete">
+          Delete
+        </Button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="dialog" aria-labelledby="delete-event-title" data-delete-dialog>
+    <form method="dialog" class="stack">
+      <h2 id="delete-event-title">Delete this event?</h2>
+      <p data-delete-message>This event will be removed.</p>
+      <div class="cluster">
+        <Button type="submit" value="cancel">
+          Cancel
+        </Button>
+        <Button type="submit" variant="danger" value="confirm">
+          Delete
+        </Button>
+      </div>
+    </form>
+  </dialog>
+</AppShell>
+
+<script>
+  import { mountCalendar } from '../scripts/calendar.ts';
+
+  mountCalendar(document);
+</script>
+
+<style>
+  .calendar-layout {
+    display: grid;
+    gap: var(--space-6);
+    align-items: start;
+  }
+
+  @media (min-width: 60rem) {
+    .calendar-layout {
+      grid-template-columns: minmax(0, 3fr) minmax(18rem, 2fr);
+    }
+  }
+
+  .month__title {
+    font-size: var(--text-xl);
+  }
+
+  .month__nav {
+    --cluster-gap: var(--space-2);
+  }
+
+  .month__grid {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: separate;
+    border-spacing: 2px;
+  }
+
+  .month__grid :global(th) {
+    padding-block: var(--space-1);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-semibold);
+    color: var(--color-text-muted);
+    text-align: center;
+  }
+
+  .month__grid :global(td) {
+    padding: 0;
+    vertical-align: top;
+  }
+
+  .month__grid :global(.day-cell) {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 2px;
+    width: 100%;
+    min-height: clamp(2.75rem, 9vw, 4.5rem);
+    padding: var(--space-1) 0;
+    border: var(--border-width) solid transparent;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--color-text);
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+
+  .month__grid :global(.day-cell:hover) {
+    background: var(--color-surface-sunken);
+  }
+
+  .month__grid :global(.day-cell[aria-current='date']) {
+    border-color: var(--color-accent);
+    font-weight: var(--weight-bold);
+  }
+
+  .month__grid :global(.day-cell[aria-pressed='true']) {
+    background: var(--color-accent);
+    color: var(--color-on-accent);
+  }
+
+  .month__grid :global(.day-cell__dots) {
+    display: flex;
+    gap: 3px;
+  }
+
+  .month__grid :global(.day-cell__dot) {
+    width: 6px;
+    height: 6px;
+    border-radius: var(--radius-full);
+    background: currentColor;
+  }
+
+  .month__hint {
+    font-size: var(--text-sm);
+  }
+
+  @media (hover: none) {
+    .month__hint {
+      display: none;
+    }
+  }
+
+  .event-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .event-list:empty {
+    display: none;
+  }
+
+  /* Time on top, title below, repeat icon at the end: fits at 320px wide. */
+  .event-list :global(.event-item) {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      'when repeat'
+      'title repeat';
+    align-items: center;
+    column-gap: var(--space-3);
+    width: 100%;
+    min-height: var(--tap-target);
+    padding: var(--space-2) var(--space-3);
+    border: var(--border-width) solid var(--color-border);
+    border-left: 4px solid var(--color-accent);
+    border-radius: var(--radius);
+    background: var(--color-surface);
+    color: var(--color-text);
+    text-align: start;
+    cursor: pointer;
+  }
+
+  .event-list :global(.event-item:hover) {
+    border-color: var(--color-border-strong);
+    border-left-color: var(--color-accent);
+  }
+
+  .event-list :global(.event-item__when) {
+    grid-area: when;
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .event-list :global(.event-item__title) {
+    grid-area: title;
+    font-weight: var(--weight-semibold);
+    overflow-wrap: anywhere;
+  }
+
+  .event-list :global(.event-item__repeat) {
+    grid-area: repeat;
+    color: var(--color-text-muted);
+  }
+
+  .dialog__actions .dialog__delete {
+    margin-inline-start: auto;
+  }
+</style>

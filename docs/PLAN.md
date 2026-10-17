@@ -280,7 +280,7 @@ month. GitHub never charges you unless you add a payment method.
 
 ## 8. Roadmap
 
-**Milestone 1: pipeline proven (this PR plus your setup steps)**
+**Milestone 1: pipeline proven (done)**
 
 - [x] Plan, docs, decision records
 - [x] Monorepo, design system, registry, shared Astro config, storage helpers
@@ -288,10 +288,10 @@ month. GitHub never charges you unless you add a payment method.
 - [x] App template, generator and **New app** workflow; example app **Tally**
 - [x] CI quality gates, preview and production deploy workflows (all checks
       pass in my environment)
-- [ ] You: Cloudflare token, GitHub secret and settings (checklist below)
-- [ ] First production deploy: `shkriuss.app` and `tally.shkriuss.app` live
-- [ ] Preview links appear on a pull request
-- [ ] You, on your phone: install Tally to your home screen and try it in
+- [x] You: Cloudflare token, GitHub secret and settings (checklist below)
+- [x] First production deploy: `shkriuss.app` and `tally.shkriuss.app` live
+- [x] Preview links appear on a pull request
+- [x] You, on your phone: install Tally to your home screen and try it in
       airplane mode
 
 **Milestone 2: polish and hardening**
@@ -309,8 +309,9 @@ month. GitHub never charges you unless you add a payment method.
 
 **Milestone 3: real apps**
 
-- Add apps one at a time (for example, `calendar`), each with its own small
-  browser tests.
+- [x] **Calendar** (`calendar.shkriuss.app`): month view, events with times,
+      repeats and notes, .ics download. Later: reminders, .ics import.
+- Add more apps one at a time, each with its own small browser tests.
 - If an app needs sync, follow the path in section 4, starting with a
   decision record.
 
