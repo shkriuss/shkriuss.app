@@ -1,0 +1,15 @@
+{
+  "name": "@shkriuss/push",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Notifications while an app is closed: browser client, encryption and the per-app Worker routes.",
+  "type": "module",
+  "exports": {
+    ".": "./src/client.ts",
+    "./encrypt": "./src/encrypt.ts",
+    "./worker": "./src/worker.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  }
+}
