@@ -26,6 +26,7 @@ on:
         default: grid
         options:
           - arrow-left
+          - bell
           - calendar
           - check
           - chevron-left
