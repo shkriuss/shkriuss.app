@@ -3,6 +3,7 @@
  * Everything happens on the device; @shkriuss/storage/backup explains how
  * backup files are locked.
  */
+import { disablePush, isPushEnabled } from '@shkriuss/push';
 import { deleteAll, downloadFile, exportAll, type ExportFile } from '@shkriuss/storage';
 import {
   BackupError,
@@ -261,8 +262,13 @@ export function mountDataControls(section: HTMLElement): void {
 
   deleteDialog.addEventListener('close', () => {
     if (deleteDialog.returnValue !== 'confirm') return;
-    deleteAll();
-    // Reload so the app starts fresh from empty storage.
-    window.location.reload();
+    status.textContent = 'Deleting…';
+    // Notifications while the app is closed: delete them on the server too.
+    const push = isPushEnabled() ? disablePush() : Promise.resolve();
+    void push.finally(() => {
+      deleteAll();
+      // Reload so the app starts fresh from empty storage.
+      window.location.reload();
+    });
   });
 }

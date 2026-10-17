@@ -1,6 +1,7 @@
 /**
  * After a production deploy, checks every live site: it answers, serves HTML
- * and sends our security headers. Retries for a few minutes because a brand
+ * and sends our security headers. Apps with notifications while closed must
+ * also answer /api/push/key with their public key. Retries for a few minutes because a brand
  * new subdomain can take a moment to get its DNS record and certificate.
  *
  *   node scripts/smoke-test.ts
@@ -12,6 +13,10 @@ const ATTEMPTS = 10;
 const WAIT_MS = 30_000;
 const expectedCsp = contentSecurityPolicy();
 
+const pushOrigins = new Set(
+  apps.filter((app) => app.pushNotifications).map((app) => getSite(app.slug).origin),
+);
+
 async function check(origin: string): Promise<string | undefined> {
   try {
     const response = await fetch(`${origin}/`, { redirect: 'manual' });
@@ -21,6 +26,12 @@ async function check(origin: string): Promise<string | undefined> {
       return 'missing or unexpected Content-Security-Policy header';
     }
     if (!response.headers.get('strict-transport-security')) return 'missing HSTS header';
+    if (pushOrigins.has(origin)) {
+      const key = await fetch(`${origin}/api/push/key`);
+      const body = (await key.json().catch(() => ({}))) as { publicKey?: unknown };
+      if (!key.ok || typeof body.publicKey !== 'string')
+        return 'notification service not answering';
+    }
     return undefined;
   } catch (error) {
     return (error as Error).message;

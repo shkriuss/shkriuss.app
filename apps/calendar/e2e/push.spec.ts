@@ -1,0 +1,264 @@
+// "Also remind me when Calendar is closed" (packages/push, docs/adr/0009).
+//
+// Browsers in tests can't reach Google's or Apple's push services, so the
+// page gets a fake push subscription whose address is a small push receiver
+// run by this test. Everything else is real: the page encrypts, Calendar's
+// Worker and Durable Objects store and sign, and the receiver decrypts.
+import { createServer, type IncomingHttpHeaders, type Server } from 'node:http';
+import type { Page } from '@playwright/test';
+import { fromBase64Url, toBase64Url } from '../../../packages/push/src/base64.ts';
+import { decryptPayload } from '../../../packages/push/src/encrypt.ts';
+import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
+import { dayList, editor, newEvent, save } from './helpers.ts';
+
+test.use({ serviceWorkers: 'allow', permissions: ['notifications'], timezoneId: 'Europe/Berlin' });
+
+interface Received {
+  headers: IncomingHttpHeaders;
+  body: Uint8Array<ArrayBuffer>;
+}
+
+/** A pretend push service, and the keys of the pretend browser subscription. */
+interface PushRig {
+  endpoint: string;
+  received: Received[];
+  open(body: Uint8Array<ArrayBuffer>): Promise<Record<string, unknown>>;
+  server: Server;
+  p256dh: string;
+  auth: string;
+}
+
+async function startRig(): Promise<PushRig> {
+  const keys = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, [
+    'deriveBits',
+  ]);
+  const publicKey = new Uint8Array(await crypto.subtle.exportKey('raw', keys.publicKey));
+  const auth = crypto.getRandomValues(new Uint8Array(16));
+  const received: Received[] = [];
+  const server = createServer((request, response) => {
+    const chunks: Buffer[] = [];
+    request.on('data', (chunk: Buffer) => chunks.push(chunk));
+    request.on('end', () => {
+      received.push({ headers: request.headers, body: new Uint8Array(Buffer.concat(chunks)) });
+      response.writeHead(201).end();
+    });
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const { port } = server.address() as { port: number };
+  return {
+    endpoint: `http://127.0.0.1:${port}/push/device-1`,
+    received,
+    server,
+    p256dh: toBase64Url(publicKey),
+    auth: toBase64Url(auth),
+    open: async (body) =>
+      JSON.parse(
+        new TextDecoder().decode(
+          await decryptPayload(body, { privateKey: keys.privateKey, publicKey, auth }),
+        ),
+      ) as Record<string, unknown>,
+  };
+}
+
+/** Replaces the browser's push subscription with one pointing at the rig. */
+async function fakeSubscription(page: Page, rig: PushRig, options: { fail?: boolean } = {}) {
+  await page.addInitScript(
+    ({ endpoint, p256dh, auth, fail }) => {
+      const bytes = (text: string) =>
+        Uint8Array.from(atob(text.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0))
+          .buffer;
+      const target = window as unknown as Record<string, unknown>;
+      const make = (serverKey: string) => ({
+        endpoint,
+        options: { userVisibleOnly: true, applicationServerKey: bytes(serverKey) },
+        getKey: (name: string) =>
+          name === 'p256dh' ? bytes(p256dh) : name === 'auth' ? bytes(auth) : null,
+        unsubscribe: async () => {
+          sessionStorage.removeItem('fake-push');
+          target['unsubscribed'] = true;
+          return true;
+        },
+      });
+      PushManager.prototype.subscribe = async function (init?: PushSubscriptionOptionsInit) {
+        if (fail) throw new DOMException('push service not available', 'AbortError');
+        const key = new Uint8Array(init?.applicationServerKey as ArrayBuffer);
+        const serverKey = btoa(String.fromCharCode(...key))
+          .replace(/\+/g, '-')
+          .replace(/\//g, '_')
+          .replace(/=+$/, '');
+        sessionStorage.setItem('fake-push', serverKey);
+        return make(serverKey) as unknown as PushSubscription;
+      };
+      PushManager.prototype.getSubscription = async function () {
+        const serverKey = sessionStorage.getItem('fake-push');
+        return (serverKey ? make(serverKey) : null) as unknown as PushSubscription;
+      };
+    },
+    { endpoint: rig.endpoint, p256dh: rig.p256dh, auth: rig.auth, fail: options.fail ?? false },
+  );
+}
+
+const closedSwitch = (page: Page) => page.getByLabel('Also remind me when Calendar is closed');
+const closedStatus = (page: Page) => page.locator('[data-closed-status]');
+
+let rig: PushRig;
+test.beforeEach(async () => {
+  rig = await startRig();
+});
+test.afterEach(() => {
+  rig.server.close();
+});
+
+test('sends a test notification that only this device can read', async ({ page }) => {
+  await fakeSubscription(page, rig);
+  await page.goto('/');
+  await expect(closedStatus(page)).toHaveText(/^Off:/);
+  await closedSwitch(page).check();
+  await expect(closedStatus(page)).toHaveText(/^On: reminders arrive even when Calendar is closed/);
+  await checkA11y(page, 'reminders while closed: on');
+
+  await page.getByRole('button', { name: 'Send a test notification' }).click();
+  await expect(closedStatus(page)).toHaveText('Test sent. It should appear in a few seconds.');
+  await expect.poll(() => rig.received.length).toBe(1);
+  const [push] = rig.received;
+  if (!push) throw new Error('No push received');
+  expect(push.headers).toMatchObject({
+    'content-encoding': 'aes128gcm',
+    urgency: 'high',
+    ttl: '21600',
+  });
+  // Signed with this app's own key, the one browsers subscribe with.
+  const { publicKey } = (await (await page.request.get('/api/push/key')).json()) as {
+    publicKey: string;
+  };
+  expect(push.headers.authorization).toMatch(
+    new RegExp(`^vapid t=[\\w-]+\\.[\\w-]+\\.[\\w-]+, k=${publicKey}$`),
+  );
+  expect(new TextDecoder().decode(push.body)).not.toContain('Notifications are working');
+  expect(await rig.open(push.body)).toEqual({
+    title: 'Calendar',
+    body: 'Notifications are working.',
+    tag: 'test',
+    url: '/',
+  });
+});
+
+test('uploads reminders encrypted, never in plain text', async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-10-17T10:00:00+02:00'));
+  await fakeSubscription(page, rig);
+  await page.goto('/');
+  await closedSwitch(page).check();
+  await expect(closedStatus(page)).toHaveText(/^On:/);
+
+  const upload = page.waitForRequest(
+    (request) => request.url().endsWith('/api/push/schedule') && request.method() === 'PUT',
+  );
+  await newEvent(page, 'Secret dentist visit');
+  await editor(page).getByLabel('Start time').fill('14:30');
+  await editor(page)
+    .getByLabel('Reminder', { exact: true })
+    .selectOption({ label: '15 minutes before' });
+  await save(page);
+  await expect(dayList(page).getByRole('button', { name: /Secret dentist visit/ })).toBeVisible();
+
+  const request = await upload;
+  const text = request.postData() ?? '';
+  expect(text).not.toContain('Secret');
+  expect(text).not.toContain('dentist');
+  const body = JSON.parse(text) as {
+    endpoint: string;
+    timeZone: string;
+    entries: {
+      id: string;
+      start: string;
+      repeat: string;
+      until: null;
+      offset: number;
+      payload: string;
+    }[];
+  };
+  expect(body.endpoint).toBe(rig.endpoint);
+  expect(body.timeZone).toBe('Europe/Berlin');
+  expect(body.entries).toHaveLength(1);
+  const [entry] = body.entries;
+  expect(entry).toMatchObject({
+    start: '2026-10-17T14:30',
+    repeat: 'none',
+    until: null,
+    offset: 15,
+  });
+  expect(await rig.open(fromBase64Url(entry?.payload ?? ''))).toMatchObject({
+    title: 'Secret dentist visit',
+    body: expect.stringMatching(/^Sat, Oct 17 · 2:30\sPM – 3:30\sPM$/),
+  });
+  expect(request.headers()['authorization']).toMatch(/^Bearer [\w-]{43}$/);
+});
+
+test('turning it off, or deleting all data, removes it from the server', async ({ page }) => {
+  await fakeSubscription(page, rig);
+  await page.goto('/');
+  await closedSwitch(page).check();
+  await expect(closedStatus(page)).toHaveText(/^On:/);
+
+  let deleted = page.waitForRequest(
+    (request) => request.url().endsWith('/api/push/schedule') && request.method() === 'DELETE',
+  );
+  await closedSwitch(page).uncheck();
+  await deleted;
+  await expect(closedStatus(page)).toHaveText(/^Off:/);
+  expect(await page.evaluate(() => localStorage.getItem('shkriuss-device:push'))).toBeNull();
+  expect(
+    await page.evaluate(() => (window as unknown as Record<string, unknown>)['unsubscribed']),
+  ).toBe(true);
+
+  await closedSwitch(page).check();
+  await expect(closedStatus(page)).toHaveText(/^On:/);
+  deleted = page.waitForRequest(
+    (request) => request.url().endsWith('/api/push/schedule') && request.method() === 'DELETE',
+  );
+  await page.getByRole('button', { name: 'Delete all data' }).click();
+  await page
+    .getByRole('dialog', { name: 'Delete all data?' })
+    .getByRole('button', { name: 'Delete everything' })
+    .click();
+  await deleted;
+  await page.waitForLoadState('load');
+  await expect(closedSwitch(page)).not.toBeChecked();
+});
+
+test('device settings stay out of backups', async ({ page }) => {
+  await fakeSubscription(page, rig);
+  await page.goto('/');
+  await closedSwitch(page).check();
+  await expect(closedStatus(page)).toHaveText(/^On:/);
+  await page.getByRole('button', { name: 'Back up' }).click();
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download without a passphrase' }).click();
+  const file = await (await download).createReadStream();
+  const chunks: Buffer[] = [];
+  for await (const chunk of file) chunks.push(chunk as Buffer);
+  const text = Buffer.concat(chunks).toString('utf8');
+  expect(text).toContain('"app": "calendar"');
+  expect(text).not.toContain('shkriuss-device');
+  expect(text).not.toContain(rig.endpoint);
+});
+
+test('explains when this browser can’t get push', async ({ page }) => {
+  await fakeSubscription(page, rig, { fail: true });
+  await page.goto('/');
+  await closedSwitch(page).check();
+  await expect(closedStatus(page)).toHaveText(/couldn’t connect to a push service.*IronFox/);
+  await expect(closedSwitch(page)).not.toBeChecked();
+  expect(rig.received).toHaveLength(0);
+});
+
+test('says so when the browser has no push at all', async ({ page }) => {
+  await page.addInitScript(() => {
+    delete (window as unknown as Record<string, unknown>)['PushManager'];
+  });
+  await page.goto('/');
+  await expect(closedSwitch(page)).toBeDisabled();
+  await expect(closedStatus(page)).toHaveText(
+    'This browser can’t get notifications while Calendar is closed.',
+  );
+});

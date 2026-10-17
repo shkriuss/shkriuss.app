@@ -75,6 +75,17 @@ describe('validateRegistry', () => {
     }
   });
 
+  it('accepts an optional pushNotifications flag, true or false only', () => {
+    const registry = validateRegistry({
+      site: validSite,
+      apps: [{ ...validApp, pushNotifications: true }],
+    });
+    expect(registry.apps[0]?.pushNotifications).toBe(true);
+    expect(() =>
+      validateRegistry({ site: validSite, apps: [{ ...validApp, pushNotifications: 'yes' }] }),
+    ).toThrow(/pushNotifications must be true or false/);
+  });
+
   it('rejects non-objects', () => {
     expect(() => validateRegistry(null)).toThrow();
     expect(() => validateRegistry({ site: validSite, apps: {} })).toThrow(

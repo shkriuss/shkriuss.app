@@ -20,6 +20,7 @@
     "typecheck": "astro check --noSync"
   },
   "dependencies": {
+    "@shkriuss/push": "workspace:*",
     "@shkriuss/registry": "workspace:*",
     "@shkriuss/storage": "workspace:*"
   },

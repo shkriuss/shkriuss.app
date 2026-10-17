@@ -40,7 +40,9 @@ export default defineConfig({
   })),
 
   webServer: sites.map((site) => ({
-    command: `pnpm exec wrangler dev --port ${site.port} --ip 127.0.0.1 --inspector-port ${site.port + 1000} --log-level warn`,
+    // ALLOW_LOCAL_ENDPOINTS lets apps with notifications (packages/push) send to the
+    // test's local push receiver. Never set for real deploys.
+    command: `pnpm exec wrangler dev --port ${site.port} --ip 127.0.0.1 --inspector-port ${site.port + 1000} --log-level warn --var ALLOW_LOCAL_ENDPOINTS:true`,
     cwd: site.dir,
     url: `${site.baseURL}/`,
     reuseExistingServer: !isCI,

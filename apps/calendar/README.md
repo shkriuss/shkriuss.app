@@ -55,12 +55,15 @@ notifications are made by the browser on the device (no push server).
 - Times are "floating": 9:00 stays 9:00 even if you travel to another time
   zone, like on a paper calendar.
 - Editing a repeating event changes every time it happens.
-- **Reminders while Calendar is closed.** A web app can't wake itself up at a
-  set time without a server, and phones pause apps in the background. So a
-  reminder may arrive late, when you next open Calendar. For reminders you
-  can always count on, add your events to the phone's own calendar app with
-  the .ics file: the reminders go with them. (Doing it with a server would
-  need an ADR first, and the events would leave the device.)
+- **Reminders while Calendar is closed** (optional, under Notifications):
+  Calendar uploads its reminders to its own notification service
+  (`src/worker.ts`, `@shkriuss/push`), each one encrypted on the device so
+  only that device can read it, with when it's due and the time zone. The
+  service then sends them on time through the browser's push service. See
+  [ADR 0009](../../docs/adr/0009-push-notifications.md). Without it, a
+  reminder may only show when you next open Calendar.
+- **Phones without Google services** (like GrapheneOS): use a browser with
+  UnifiedPush, such as IronFox with the Sunup app.
 - **On iPhone and iPad**, notifications only work after adding Calendar to
   the Home Screen (iOS 16.4 or later).
 - **Import limits.** Calendar can't show everything a .ics file can say yet:

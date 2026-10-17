@@ -45,6 +45,11 @@ export interface AppEntry {
   storage: StorageKind;
   /** Plain-language list of what the app stores, for the privacy page. */
   dataStored: string[];
+  /**
+   * True if the app can send notifications while it's closed (optional, off
+   * until turned on). Its Worker then runs @shkriuss/push (docs/adr/0009).
+   */
+  pushNotifications?: boolean;
 }
 
 export interface HubEntry {
@@ -72,6 +77,7 @@ export interface SiteInfo {
   origin: string;
   storage: StorageKind;
   dataStored: string[];
+  pushNotifications: boolean;
 }
 
 export const HUB_SLUG = 'hub';
@@ -183,6 +189,9 @@ export function validateRegistry(input: unknown): Registry {
       } else if (app['storage'] !== 'none' && dataStored.length === 0) {
         problems.push(`${where}.dataStored must say what is stored when storage is not "none".`);
       }
+      if (app['pushNotifications'] !== undefined && typeof app['pushNotifications'] !== 'boolean') {
+        problems.push(`${where}.pushNotifications must be true or false.`);
+      }
     });
   }
 
@@ -230,6 +239,7 @@ export function getSite(slug: string): SiteInfo {
       origin: hubOrigin,
       storage: 'device',
       dataStored: ['Your light or dark theme choice'],
+      pushNotifications: false,
     };
   }
   const app = getApp(slug);
@@ -243,5 +253,6 @@ export function getSite(slug: string): SiteInfo {
     origin: appOrigin(app.slug),
     storage: app.storage,
     dataStored: app.dataStored,
+    pushNotifications: app.pushNotifications === true,
   };
 }

@@ -50,6 +50,7 @@ import {
   TIMED_REMINDERS,
 } from '../lib/reminders.ts';
 import { mountImportDialog } from './import-dialog.ts';
+import { mountPushReminders } from './push-reminders.ts';
 import { mountReminderAlerts } from './reminder-alerts.ts';
 import {
   formatTime,
@@ -163,6 +164,8 @@ export function mountCalendar(root: Document): void {
     const saved = store.save(state);
     if (!saved) announce('Could not save. Your browser may be blocking storage.');
     render();
+    // Update reminders for when Calendar is closed (if that's on).
+    pushReminders.sync();
     return saved;
   };
 
@@ -174,6 +177,9 @@ export function mountCalendar(root: Document): void {
     newEventButton,
   };
   const alerts = mountReminderAlerts(root, page);
+  const pushReminders = mountPushReminders(root, page, () => {
+    alerts.refreshStatus();
+  });
 
   // ---------- Showing the calendar ----------
 
@@ -596,6 +602,7 @@ export function mountCalendar(root: Document): void {
     if (storageEvent.key === store.key) {
       state = store.load();
       render();
+      pushReminders.sync();
     }
   });
 

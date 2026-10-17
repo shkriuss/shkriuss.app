@@ -28,8 +28,10 @@
       "dataStored": [
         "Your events: titles, dates, times, repeats, reminders and notes",
         "When reminders were last checked, so each one shows only once",
+        "If you turn on reminders while Calendar is closed: this device's notification settings and a random device key (never in backups)",
         "Your light or dark theme choice"
-      ]
+      ],
+      "pushNotifications": true
     }
   ]
 }
