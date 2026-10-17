@@ -43,7 +43,7 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
 - GitHub Actions are pinned to exact commit SHAs, workflows start with no
   permissions, and code checkout doesn't keep credentials.
 - pnpm only lets allow-listed packages run install scripts and won't install
-  versions published less than a day ago.
+  versions published less than 7 days ago.
 - Production deploys only happen from `main`, after every check passes.
 
 ## Known limits

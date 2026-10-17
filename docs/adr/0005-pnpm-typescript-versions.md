@@ -12,7 +12,9 @@ native compiler). Tooling support lags behind new majors.
 - **pnpm 10** (still maintained), because **Dependabot supports pnpm only up
   to v10**. Supply-chain settings are explicit in `pnpm-workspace.yaml`:
   `onlyBuiltDependencies` (allow-list for install scripts),
-  `strictDepBuilds`, and `minimumReleaseAge: 1440` (1 day).
+  `strictDepBuilds`, and `minimumReleaseAge: 10080` (7 days, equal to
+  Dependabot's cooldown: Dependabot applies its cooldown to the whole
+  lockfile, so anything younger makes its updates fail).
 - **TypeScript 6.0**, because `typescript-eslint` (needs `<6.1`) and
   `@astrojs/check` (needs `^5 || ^6`) don't support TypeScript 7 yet.
 - **Node.js 24 LTS** (`.node-version`).
@@ -27,6 +29,9 @@ native compiler). Tooling support lags behind new majors.
 
 - Move to a newer pnpm when Dependabot's supported-ecosystems page lists it.
 - Move to TypeScript 7 when both `typescript-eslint` and `@astrojs/check`
-  accept it in their peer dependencies.
+  accept it in their peer dependencies. Until then, `.github/dependabot.yml`
+  tells Dependabot to skip TypeScript major updates; remove that rule when
+  upgrading.
 - Move to Node 26 after it becomes LTS (late October 2026) and Astro supports
-  it.
+  it. At the same time, update `.node-version` and allow the matching
+  `@types/node` major in `.github/dependabot.yml`.
