@@ -1,6 +1,8 @@
 # 0006. User data stays on the device
 
-Status: Accepted (2026-10-16)
+Status: Accepted (2026-10-16). Extended by [ADR 0009](0009-push-notifications.md):
+an app may offer notifications while it's closed, opt-in, with messages
+encrypted on the device.
 
 ## Context
 

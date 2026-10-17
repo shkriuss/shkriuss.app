@@ -89,7 +89,8 @@ third-party version once for the whole repo.
 
 - **One Worker per site, static files only.** The hub and each app are
   separate Workers with no server code, just a folder of static files
-  (`dist/`). Requests for static files are **free and unlimited** on the Free
+  (`dist/`). (Exception: apps with notifications while closed also run
+  `/api/push/*`; see [ADR 0009](adr/0009-push-notifications.md).) Requests for static files are **free and unlimited** on the Free
   plan. If one app breaks, the others aren't affected.
 - **Custom domains.** Each site's `wrangler.jsonc` declares its address, for
   example `{ "pattern": "tally.shkriuss.app", "custom_domain": true }`. On
@@ -312,6 +313,8 @@ month. GitHub never charges you unless you add a payment method.
 
 - [x] **Calendar** (`calendar.shkriuss.app`): month view, events with times,
       repeats and notes, reminders and notifications, .ics import and export.
+- [x] **Notifications while an app is closed** (opt-in, encrypted on the
+      device), shared by any app ([ADR 0009](adr/0009-push-notifications.md)).
 - Add more apps one at a time, each with its own small browser tests.
 - If an app needs sync, follow the path in section 4, starting with a
   decision record.
