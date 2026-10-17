@@ -31,6 +31,17 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
   that expire after 10 minutes. There are no account ids, emails or
   passwords. Requests from other sites are refused (`Sec-Fetch-Site`), and
   bodies are limited to 1 KB.
+- Apps that can **sync** (Calendar, Tally) run `/api/sync/*` in their own
+  Worker, with one Durable Object per account holding one copy of the app's
+  data, sealed on the device (AES-256-GCM, compressed first). The account is
+  found by the SHA-256 hash of a token derived for that app, so copies in
+  different apps can't be linked. Uploads must name the version they were
+  based on, so a stale device can't overwrite newer data; changes are
+  rate-limited and size-limited.
+- An app connects by sending the person to the hub with a one-time ECDH
+  public key; after they confirm, the hub seals the app's key to it and sends
+  it back in the URL fragment, only to that app's real address. The app and
+  the hub never call each other's servers.
 - Each app is its own origin (`<app>.shkriuss.app`), so browsers keep each
   app's saved data separate. Apps never get the account secret, only a key
   for themselves.

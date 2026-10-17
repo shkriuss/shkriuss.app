@@ -22,6 +22,7 @@ packages/astro-config/ defineAppConfig(): headers, manifest, icons, service work
 packages/storage/    on-device storage helpers (createStore, export, backup, restore, delete)
 packages/push/       optional notifications while an app is closed (client + per-app Worker)
 packages/account/    optional shkriuss account: recovery key, passkeys, device links (+ hub Worker)
+packages/sync/       optional sync between devices through the account (client + per-app Worker)
 packages/crypto/     Web Crypto helpers (base64url, HKDF, AES-GCM seal/open), browser + Workers
 packages/server/     shared Worker helpers: createWorker() for /api/*, JSON, limits
 templates/app/       copied by `pnpm new-app` (placeholder slug: template-app)

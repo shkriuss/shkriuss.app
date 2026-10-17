@@ -1,8 +1,8 @@
 # 0010. The shkriuss account, and syncing apps between devices
 
-Status: Accepted (2026-10-17). Part 1 (the account) is built. Part 2 (apps
-syncing through it) comes in the next pull request, as described below; this
-record will be updated if its details change.
+Status: Accepted (2026-10-17). Part 1 (the account) and part 2 (Calendar and
+Tally syncing through it) are built. Part 3 (replacing the account key after
+losing a device) is planned.
 
 ## Context
 
@@ -28,7 +28,7 @@ The requirements:
   the device.
 - Every key comes from the secret with HKDF-SHA-256 and a label for its
   purpose. Code: `packages/account`, `packages/crypto`.
-- **Apps never see the account secret.** When an app connects (part 2), the
+- **Apps never see the account secret.** When an app connects, the
   hub gives it only that app's own key, derived with the app's name. A bug in
   one app can't expose the account or another app.
 
@@ -91,27 +91,61 @@ HKDF), like `K7Q2-M9XD`.
   - Only sealed values of the right shape are accepted.
   - Shared helpers live in `packages/server`.
 
-### Part 2: apps syncing through the account (next)
+### Syncing apps through the account
 
-- **Connecting an app.**
-  - The app makes a one-time ECDH P-256 key pair and sends the person to the
-    Account page with the public key.
-  - After the person confirms, the hub encrypts the app's own key to that
-    public key and sends them back to the app, with the result after `#`.
-  - The app and the hub never call each other's servers, and the CSP stays
-    `'self'`.
+Code: `packages/sync`, plus `<SyncControls />` in `@shkriuss/ui`. An app opts
+in with `sync: true` in `apps.json`.
+
+- **Connecting an app ("Turn on sync").**
+  - The app asks its own Worker where its hub is (`/api/sync/hub`; worked out
+    from the app's address, so PR previews pair with their own hub).
+  - It makes a one-time ECDH P-256 key pair, keeps the private half in this
+    tab, and opens `/account/?connect=<app>&from=<its address>&key=…&state=…`.
+  - The hub only continues if `from` is that app's real address (on the real
+    site, `https://<app>.shkriuss.app`; in a preview, the same preview's app).
+    After the person confirms, it derives the app's own key, seals it to the
+    one-time public key, and goes back to the app with the result after `#`.
+  - The app opens it, removes it from the address bar, and forgets the
+    one-time key. The app and the hub never call each other's servers, and
+    the CSP stays `'self'`.
 - **Storage.**
-  - Each app's own Worker keeps an encrypted copy of that app's data per
-    account, with a version number.
-  - Each copy is in a Durable Object named by the hash of a token derived for
-    that app. Different apps can't link their copies.
-  - Devices encrypt on upload and decrypt on download (AES-256-GCM).
-- **Merging.**
-  - The newest edit of each item wins, and deletions sync.
-  - Devices record when each item changed, inside the encrypted data.
-- **What app servers can see:** that an account uses the app, how big its data
-  is, and when it changes. Never the contents.
-- **What doesn't sync:** device settings, such as notifications.
+  - The app's own key gives two more keys: a token for its server, and a key
+    for the data.
+  - Each app's Worker keeps one sealed copy per account, in a Durable Object
+    (`SyncCopy`) named by the token's SHA-256 hash, with a version number.
+  - An upload must name the version it was based on. If another device wrote
+    first, the server says so (409) and the device merges again; nothing is
+    overwritten unseen.
+  - "Delete the online copy" deletes the data and leaves a small note, so
+    other devices learn it was deleted and turn sync off (keeping their data).
+  - Limits: about 1.4 MB of compressed data per app, and 120 changes per 10
+    minutes per account.
+- **The copy.** The data of every synced store, as JSON, compressed (gzip),
+  then sealed with AES-256-GCM, labelled with the app's name.
+- **Merging** (`packages/sync/src/merge.ts`).
+  - An app's data is a list of items with ids, such as Calendar's events or
+    Tally's counters.
+  - Each item carries the time it last changed, inside the encrypted copy.
+    When two devices both changed an item, the newest change wins.
+  - Deleting leaves a marker with the time, so deletions sync. Markers are
+    dropped after 180 days.
+  - The list's order is merged the same way; new items from the other device
+    go at the end.
+  - On a device's first sync, its items count as older than what's already
+    online, so turning on sync (say, after restoring an old backup) never
+    overwrites newer edits. Its other items are added.
+  - Data from a newer version of the app is never overwritten: the older
+    device waits until it updates. Older data is upgraded with the store's own
+    migration and checked with its own validation before it's saved.
+- **When devices sync:** when the app opens or comes back on screen, about
+  1.5 seconds after each change, every minute while it's open, and with
+  "Sync now".
+- **What app servers can see:** that an account uses the app, how big its
+  copy is, and when it changes. Never the contents, and not which account is
+  whose.
+- **What doesn't sync:** settings that belong to one device, such as
+  notifications, reminder bookkeeping and the theme. "Delete all data" turns
+  sync off on that device first, so the deletion doesn't spread.
 
 ## Consequences
 
@@ -122,7 +156,8 @@ HKDF), like `K7Q2-M9XD`.
 - It works without Google: the recovery key and QR codes work everywhere.
 - Free plan: Durable Object requests are counted against the same
   100,000-a-day allowance as notifications. An account uses a handful per
-  sign-in or linked device.
+  sign-in or linked device; an app with sync uses about one a minute while it's
+  open, and one or two per change.
 
 **Costs and limits**
 
@@ -133,6 +168,14 @@ HKDF), like `K7Q2-M9XD`.
   A planned "replace the account key" step (pull request 3) will lock it out.
 - **Passkey support varies.** Where a password manager can't do PRF, the
   recovery key and QR codes still work.
+- **Device clocks decide "newest".** A device whose clock is far off can win
+  or lose a conflict it shouldn't. Edits on different items never conflict.
+- **Same item, two devices.** When the same item is changed on two devices
+  before they sync, one change is kept whole (the newest), not combined. For
+  Tally, two devices counting the same counter at the same time keep one count.
+- **iPhone Home Screen apps** keep their own storage, separate from Safari. An
+  app added to the Home Screen may need its own sign-in on the hub when it
+  connects.
 - **Someone sees the QR code.** Anyone who sees a QR code within its 10 minutes
   could use it first. The first device then says it was used, while the
   person's own device sees an error, so it's noticed.
