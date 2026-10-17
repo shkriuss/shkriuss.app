@@ -9,6 +9,9 @@ import { defineConfig, devices } from '@playwright/test';
 import { sites } from './tests/e2e/sites.ts';
 
 const isCI = Boolean(process.env['CI']);
+// The hub's local address, for apps' "Turn on sync" (on the real site and in
+// previews, each app works it out from its own address).
+const hubURL = sites.find((site) => site.slug === 'hub')?.baseURL ?? '';
 // Lets this run with a browser that's already installed (e.g. in a sandbox).
 const executablePath = process.env['PW_CHROMIUM_PATH'];
 
@@ -41,8 +44,9 @@ export default defineConfig({
 
   webServer: sites.map((site) => ({
     // ALLOW_LOCAL_ENDPOINTS lets apps with notifications (packages/push) send to the
-    // test's local push receiver. Never set for real deploys.
-    command: `pnpm exec wrangler dev --port ${site.port} --ip 127.0.0.1 --inspector-port ${site.port + 1000} --log-level warn --var ALLOW_LOCAL_ENDPOINTS:true`,
+    // test's local push receiver; HUB_ORIGIN tells apps with sync where the hub
+    // is. Never set for real deploys.
+    command: `pnpm exec wrangler dev --port ${site.port} --ip 127.0.0.1 --inspector-port ${site.port + 1000} --log-level warn --var ALLOW_LOCAL_ENDPOINTS:true --var HUB_ORIGIN:${hubURL}`,
     cwd: site.dir,
     url: `${site.baseURL}/`,
     reuseExistingServer: !isCI,

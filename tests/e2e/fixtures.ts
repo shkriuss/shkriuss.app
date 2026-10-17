@@ -35,6 +35,8 @@ export async function checkA11y(page: Page, label = page.url()): Promise<void> {
 interface Guard {
   /** Console messages that are expected in this test (substring match). */
   allowConsole: (text: string) => void;
+  /** Another of our own sites this test visits (e.g. the hub, for the account). */
+  allowOrigin: (origin: string) => void;
 }
 
 export const test = base.extend<{ guard: Guard }>({
@@ -43,7 +45,7 @@ export const test = base.extend<{ guard: Guard }>({
       const errors: string[] = [];
       const external: string[] = [];
       const allowed: string[] = [];
-      const ownOrigin = new URL(baseURL ?? 'http://127.0.0.1').origin;
+      const origins = new Set([new URL(baseURL ?? 'http://127.0.0.1').origin]);
 
       page.on('pageerror', (error) => errors.push(`Page error: ${error.message}`));
       page.on('console', (message) => {
@@ -52,10 +54,13 @@ export const test = base.extend<{ guard: Guard }>({
       page.on('request', (request) => {
         const url = new URL(request.url());
         if (['data:', 'blob:'].includes(url.protocol)) return;
-        if (url.origin !== ownOrigin) external.push(request.url());
+        if (!origins.has(url.origin)) external.push(request.url());
       });
 
-      await use({ allowConsole: (text) => allowed.push(text) });
+      await use({
+        allowConsole: (text) => allowed.push(text),
+        allowOrigin: (origin) => origins.add(new URL(origin).origin),
+      });
 
       const unexpected = errors.filter((error) => !allowed.some((text) => error.includes(text)));
       expect(unexpected, 'Unexpected errors in the browser console').toEqual([]);

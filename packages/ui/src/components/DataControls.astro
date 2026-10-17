@@ -25,8 +25,9 @@ const Heading = `h${level}` as 'h2' | 'h3';
 >
   <Heading id="data-controls-heading">Your data</Heading>
   <p class="muted">
-    Everything {site.name} saves stays in this browser on this device. Nothing is sent anywhere.
-    Back up to keep a copy, or to move your data to another device.
+    {site.sync
+      ? `Everything ${site.name} saves stays in this browser on this device, unless you turn on sync. Back up to keep your own copy.`
+      : `Everything ${site.name} saves stays in this browser on this device. Nothing is sent anywhere. Back up to keep a copy, or to move your data to another device.`}
   </p>
   <div class="cluster">
     <Button icon="download" data-action="backup">
@@ -135,6 +136,9 @@ const Heading = `h${level}` as 'h2' | 'h3';
       <p class="notice notice--danger" data-restore-warning hidden>
         Restoring replaces everything {site.name} has saved on this device now.
       </p>
+      <p class="notice notice--danger" data-restore-sync-warning hidden>
+        Sync is on, so this also replaces {site.name}'s data on your other devices.
+      </p>
       <p class="muted" role="status" data-dialog-status></p>
       <div class="cluster">
         <Button type="submit" variant="primary" data-restore-submit>
@@ -152,6 +156,12 @@ const Heading = `h${level}` as 'h2' | 'h3';
         This removes everything {site.name} has saved on this device. It can't be undone. Back up
         first if you might want it later.
       </p>
+      {site.sync && (
+        <p>
+          If sync is on, it's turned off on this device first, so your other devices and the online
+          copy keep their data.
+        </p>
+      )}
       <div class="cluster">
         <Button type="submit" value="cancel">
           Cancel

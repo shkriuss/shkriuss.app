@@ -15,7 +15,8 @@
     "./tokens.css": "./src/styles/tokens.css",
     "./components/*": "./src/components/*",
     "./layouts/*": "./src/layouts/*",
-    "./qr-code": "./src/scripts/qr-code.ts"
+    "./qr-code": "./src/scripts/qr-code.ts",
+    "./sync-controls": "./src/scripts/sync-controls.ts"
   },
   "scripts": {
     "typecheck": "astro check --noSync"
@@ -23,7 +24,8 @@
   "dependencies": {
     "@shkriuss/push": "workspace:*",
     "@shkriuss/registry": "workspace:*",
-    "@shkriuss/storage": "workspace:*"
+    "@shkriuss/storage": "workspace:*",
+    "@shkriuss/sync": "workspace:*"
   },
   "devDependencies": {
     "@astrojs/check": "catalog:",

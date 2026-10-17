@@ -1,5 +1,5 @@
 ---
-import { AppShell, Button, DataControls, Icon } from '@shkriuss/ui';
+import { AppShell, Button, DataControls, Icon, SyncControls } from '@shkriuss/ui';
 import { MAX_NAME_LENGTH } from '../lib/counters.ts';
 ---
 
@@ -43,6 +43,8 @@ import { MAX_NAME_LENGTH } from '../lib/counters.ts';
       </p>
       <ul role="list" class="grid counters" data-counters></ul>
     </section>
+
+    <SyncControls />
 
     <DataControls />
   </div>

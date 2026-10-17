@@ -4,6 +4,9 @@
  * have their own files (reminder-alerts.ts and import-dialog.ts).
  */
 import { createStore, downloadFile } from '@shkriuss/storage';
+import { createSync, syncedStore } from '@shkriuss/sync';
+import { mountSyncControls } from '@shkriuss/ui/sync-controls';
+import { site } from 'virtual:shkriuss/site';
 import {
   addDays,
   daysBetween,
@@ -166,6 +169,8 @@ export function mountCalendar(root: Document): void {
     render();
     // Update reminders for when Calendar is closed (if that's on).
     pushReminders.sync();
+    // And the other devices (if sync is on).
+    sync.changed();
     return saved;
   };
 
@@ -180,6 +185,23 @@ export function mountCalendar(root: Document): void {
   const pushReminders = mountPushReminders(root, page, () => {
     alerts.refreshStatus();
   });
+  // Sync between devices through the shkriuss account (if turned on).
+  const sync = createSync({
+    app: site.slug,
+    stores: [
+      syncedStore({
+        store,
+        items: (value) => value.events,
+        withItems: (value, events) => ({ ...value, events }),
+      }),
+    ],
+    onChange: () => {
+      state = store.load();
+      render();
+      pushReminders.sync();
+    },
+  });
+  mountSyncControls(required<HTMLElement>(root, '[data-sync-controls]'), sync);
 
   // ---------- Showing the calendar ----------
 

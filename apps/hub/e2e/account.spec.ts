@@ -185,6 +185,24 @@ test('asks before switching a signed-in device to another account', async ({
   await other.close();
 });
 
+test('refuses to connect an app from the wrong address', async ({ page }) => {
+  await createAccount(page);
+  const key = 'B'.repeat(87);
+  const state = 'C'.repeat(22);
+  await page.goto(
+    `/account/?connect=calendar&from=${encodeURIComponent('https://evil.example')}&key=${key}&state=${state}`,
+  );
+  await expect(message(page)).toHaveText(/This link to connect an app doesn’t work/);
+  await expect(view(page, 'signed-in')).toBeVisible();
+  await expect(view(page, 'connect')).toBeHidden();
+
+  // An app that doesn't sync can't ask either.
+  await page.goto(
+    `/account/?connect=nope&from=${encodeURIComponent('http://127.0.0.1:1')}&key=${key}&state=${state}`,
+  );
+  await expect(message(page)).toHaveText(/This link to connect an app doesn’t work/);
+});
+
 test.describe('passkeys', () => {
   // Passkeys need a domain name (not 127.0.0.1); "localhost" counts as secure.
   const hub = sites.find((site) => site.slug === 'hub');

@@ -3,6 +3,9 @@
  * in lib/counters.ts and saves everything on the device.
  */
 import { createStore } from '@shkriuss/storage';
+import { createSync, syncedStore } from '@shkriuss/sync';
+import { mountSyncControls } from '@shkriuss/ui/sync-controls';
+import { site } from 'virtual:shkriuss/site';
 import {
   addCounter,
   changeCount,
@@ -54,6 +57,7 @@ export function mountTally(root: Document): void {
       announce('Could not save. Your browser may be blocking storage.');
     }
     render();
+    sync.changed();
   };
 
   function renderCounter(counter: Counter): HTMLLIElement {
@@ -159,6 +163,23 @@ export function mountTally(root: Document): void {
     if (counter) announce(`Deleted ${counter.name}.`);
     input.focus();
   });
+
+  // Sync between devices through the shkriuss account (if turned on).
+  const sync = createSync({
+    app: site.slug,
+    stores: [
+      syncedStore({
+        store,
+        items: (value) => value.counters,
+        withItems: (value, counters) => ({ ...value, counters }),
+      }),
+    ],
+    onChange: () => {
+      state = store.load();
+      render();
+    },
+  });
+  mountSyncControls(required<HTMLElement>(root, '[data-sync-controls]'), sync);
 
   // If Tally is open in two tabs, keep them in sync.
   window.addEventListener('storage', (event) => {

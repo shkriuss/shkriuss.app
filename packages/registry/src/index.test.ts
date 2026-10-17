@@ -86,6 +86,14 @@ describe('validateRegistry', () => {
     ).toThrow(/pushNotifications must be true or false/);
   });
 
+  it('accepts an optional sync flag, true or false only', () => {
+    const registry = validateRegistry({ site: validSite, apps: [{ ...validApp, sync: true }] });
+    expect(registry.apps[0]?.sync).toBe(true);
+    expect(() => validateRegistry({ site: validSite, apps: [{ ...validApp, sync: 1 }] })).toThrow(
+      /sync must be true or false/,
+    );
+  });
+
   it('rejects non-objects', () => {
     expect(() => validateRegistry(null)).toThrow();
     expect(() => validateRegistry({ site: validSite, apps: {} })).toThrow(
