@@ -36,10 +36,20 @@ export interface StoreOptions<T> {
 }
 
 export interface Store<T> {
+  /** The full key, e.g. "shkriuss:counters". */
   readonly key: string;
+  /** The current shape version of the data. */
+  readonly version: number;
   load(): T;
   save(value: T): boolean;
   clear(): void;
+  /** A fresh empty value (the store's fallback). */
+  empty(): T;
+  /**
+   * Checks data saved with `version` (here or on another device), migrating
+   * it if it's older. Undefined if it's invalid, or newer than this app.
+   */
+  read(version: number, data: unknown): T | undefined;
 }
 
 /**
@@ -62,8 +72,18 @@ export function createStore<T>(options: StoreOptions<T>): Store<T> {
   const fullKey = KEY_PREFIX + options.key;
   const storage = (): StorageLike | undefined => options.storage ?? getLocalStorage();
 
+  const read = (version: number, data: unknown): T | undefined => {
+    if (version === options.version) return options.validate(data) ? data : undefined;
+    if (!Number.isInteger(version) || version > options.version) return undefined;
+    const migrated = options.migrate?.(data, version);
+    return migrated !== undefined && options.validate(migrated) ? migrated : undefined;
+  };
+
   return {
     key: fullKey,
+    version: options.version,
+    empty: options.fallback,
+    read,
 
     load(): T {
       const raw = storage()?.getItem(fullKey);
@@ -74,11 +94,7 @@ export function createStore<T>(options: StoreOptions<T>): Store<T> {
           return options.fallback();
         }
         const { v, data } = parsed as Envelope<unknown>;
-        if (v === options.version) {
-          return options.validate(data) ? data : options.fallback();
-        }
-        const migrated = options.migrate?.(data, v);
-        return migrated !== undefined && options.validate(migrated) ? migrated : options.fallback();
+        return read(v, data) ?? options.fallback();
       } catch {
         return options.fallback();
       }
