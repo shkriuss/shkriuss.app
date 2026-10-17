@@ -50,6 +50,11 @@ export interface AppEntry {
    * until turned on). Its Worker then runs @shkriuss/push (docs/adr/0009).
    */
   pushNotifications?: boolean;
+  /**
+   * True if the app can sync between devices through the optional shkriuss
+   * account. Its Worker then runs @shkriuss/sync (docs/adr/0010).
+   */
+  sync?: boolean;
 }
 
 export interface HubEntry {
@@ -78,6 +83,7 @@ export interface SiteInfo {
   storage: StorageKind;
   dataStored: string[];
   pushNotifications: boolean;
+  sync: boolean;
 }
 
 export const HUB_SLUG = 'hub';
@@ -189,8 +195,10 @@ export function validateRegistry(input: unknown): Registry {
       } else if (app['storage'] !== 'none' && dataStored.length === 0) {
         problems.push(`${where}.dataStored must say what is stored when storage is not "none".`);
       }
-      if (app['pushNotifications'] !== undefined && typeof app['pushNotifications'] !== 'boolean') {
-        problems.push(`${where}.pushNotifications must be true or false.`);
+      for (const flag of ['pushNotifications', 'sync'] as const) {
+        if (app[flag] !== undefined && typeof app[flag] !== 'boolean') {
+          problems.push(`${where}.${flag} must be true or false.`);
+        }
       }
     });
   }
@@ -243,6 +251,7 @@ export function getSite(slug: string): SiteInfo {
         'Your light or dark theme choice',
       ],
       pushNotifications: false,
+      sync: false,
     };
   }
   const app = getApp(slug);
@@ -257,5 +266,6 @@ export function getSite(slug: string): SiteInfo {
     storage: app.storage,
     dataStored: app.dataStored,
     pushNotifications: app.pushNotifications === true,
+    sync: app.sync === true,
   };
 }

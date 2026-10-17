@@ -1,5 +1,5 @@
 ---
-import { AppShell, Button, DataControls, Icon } from '@shkriuss/ui';
+import { AppShell, Button, DataControls, Icon, SyncControls } from '@shkriuss/ui';
 import { hubOrigin } from 'virtual:shkriuss/site';
 import { MAX_NOTES_LENGTH, MAX_TITLE_LENGTH, REPEAT_LABELS, REPEATS } from '../lib/events.ts';
 ---
@@ -119,6 +119,8 @@ import { MAX_NOTES_LENGTH, MAX_TITLE_LENGTH, REPEAT_LABELS, REPEATS } from '../l
         data-import-file
       />
     </section>
+
+    <SyncControls />
 
     <DataControls />
   </div>

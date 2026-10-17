@@ -6,6 +6,7 @@ import {
   AccountError,
   accountCodeOf,
   addPasskey,
+  appSecretOf,
   claimLink,
   createLink,
   currentAccount,
@@ -25,10 +26,30 @@ import {
   type DeviceLink,
   type LinkState,
 } from '@shkriuss/account';
+import { apps, type AppEntry } from '@shkriuss/registry';
 import { downloadFile } from '@shkriuss/storage';
+import {
+  connectResultUrl,
+  parseConnectRequest,
+  sealForApp,
+  type ConnectRequest,
+} from '@shkriuss/sync/connect';
+import { isAppOrigin } from '@shkriuss/sync/origins';
 import { renderQrCode } from '@shkriuss/ui/qr-code';
 
-type View = 'loading' | 'signed-out' | 'recovery' | 'new' | 'link-confirm' | 'signed-in';
+type View =
+  'loading' | 'signed-out' | 'recovery' | 'new' | 'link-confirm' | 'signed-in' | 'connect';
+
+/** An app asking to connect (from its "Turn on sync"), if the request is real. */
+function connectRequestOf(
+  search: string,
+): { request: ConnectRequest; app: AppEntry } | 'invalid' | null {
+  const request = parseConnectRequest(search);
+  if (!request) return new URLSearchParams(search).has('connect') ? 'invalid' : null;
+  const app = apps.find((entry) => entry.slug === request.app && entry.sync === true);
+  if (!app || !isAppOrigin(request.from, app.slug, new URL(location.href))) return 'invalid';
+  return { request, app };
+}
 
 /** How often a shown code checks whether the other device has used it. */
 const LINK_POLL_MS = 2000;
@@ -110,6 +131,21 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
   const dialogStatus = required<HTMLElement>(keyDialog, '[data-dialog-status]');
   const signOutDialog = required<HTMLDialogElement>(root, '[data-sign-out-dialog]');
 
+  const connectNote = required<HTMLElement>(root, '[data-connect-note]');
+  const connectCode = required<HTMLElement>(root, '[data-connect-code]');
+  const connecting = connectRequestOf(location.search);
+  if (connecting === 'invalid') {
+    message.hidden = false;
+    message.classList.add('notice--danger');
+    message.textContent =
+      'This link to connect an app doesn’t work. Open the app and tap “Turn on sync” again.';
+  } else if (connecting) {
+    for (const name of root.querySelectorAll('[data-connect-app]')) {
+      name.textContent = connecting.app.name;
+    }
+    connectNote.hidden = false;
+  }
+
   let account: Account | null = await currentAccount();
   /** A new account's secret, until the person confirms they saved its key. */
   let pending: { secret: Uint8Array<ArrayBuffer>; key: string; code: string } | null = null;
@@ -134,7 +170,14 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
     if (focus) root.querySelector<HTMLElement>(`[data-view="${view}"] [tabindex="-1"]`)?.focus();
   }
 
-  const home = (focus = true) => show(account ? 'signed-in' : 'signed-out', focus);
+  function home(focus = true): void {
+    if (account && connecting && connecting !== 'invalid') {
+      connectCode.textContent = account.code;
+      show('connect', focus);
+    } else {
+      show(account ? 'signed-in' : 'signed-out', focus);
+    }
+  }
 
   async function signIn(secret: Uint8Array<ArrayBuffer>, done: string): Promise<void> {
     if (!saveAccount(secret)) {
@@ -146,7 +189,7 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
     }
     account = await currentAccount();
     stopLink();
-    show('signed-in');
+    home();
     say(done);
     announce(done);
   }
@@ -316,6 +359,18 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
           say(problemOf(error), !(error instanceof AccountError && error.code === 'cancelled'));
         }
       }),
+    'accept-connect': async (button) => {
+      if (!account || !connecting || connecting === 'invalid') return;
+      button.disabled = true;
+      const { request, app } = connecting;
+      const secret = await appSecretOf(account.secret, app.slug);
+      const result = await sealForApp(request, { secret, code: account.code });
+      location.replace(connectResultUrl(request.from, result));
+    },
+    'cancel-connect': () => {
+      if (!connecting || connecting === 'invalid') return;
+      location.replace(connectResultUrl(connecting.request.from, 'cancelled'));
+    },
     'accept-link': async () => {
       if (!linked) return;
       const secret = linked;

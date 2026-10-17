@@ -1,0 +1,81 @@
+---
+/**
+ * "Sync between your devices", for apps that can sync through the optional
+ * shkriuss account (docs/adr/0010; `sync: true` in apps.json). Put it above
+ * <DataControls />. The app's script creates the sync client and connects it:
+ *
+ *   import { createSync, syncedStore } from '@shkriuss/sync';
+ *   import { mountSyncControls } from '@shkriuss/ui/sync-controls';
+ *   const sync = createSync({ app: 'tally', stores: [syncedStore({ … })], onChange: render });
+ *   mountSyncControls(document.querySelector('[data-sync-controls]'), sync);
+ */
+import { hubOrigin, site } from 'virtual:shkriuss/site';
+import Button from './Button.astro';
+
+interface Props {
+  /** Heading level (default 2). */
+  level?: 2 | 3;
+}
+
+const { level = 2 } = Astro.props;
+const Heading = `h${level}` as 'h2' | 'h3';
+---
+
+<section class="stack" aria-labelledby="sync-heading" data-sync-controls data-app-name={site.name}>
+  <Heading id="sync-heading">Sync between your devices</Heading>
+  <div class="stack" data-sync-off>
+    <p>
+      Keep {site.name} the same on your phone, tablet and computer with a free
+      <a href={`${hubOrigin}/account/`}>shkriuss account</a>. Your data is locked on your devices
+      before it's sent, so only they can read it.
+    </p>
+    <p>
+      <Button variant="primary" icon="repeat" data-action="sync-on">
+        Turn on sync
+      </Button>
+    </p>
+  </div>
+  <div class="stack" data-sync-on hidden>
+    <p>
+      On, with the account <strong class="sync-code" data-sync-code></strong>.
+    </p>
+    <div class="cluster">
+      <Button icon="repeat" data-action="sync-now">
+        Sync now
+      </Button>
+      <Button data-action="sync-off">Turn off on this device</Button>
+      <Button variant="ghost" data-action="sync-delete">
+        Delete the online copy
+      </Button>
+    </div>
+  </div>
+  <p class="muted" role="status" data-sync-status></p>
+  <p class="muted">
+    <a href={`${hubOrigin}/privacy/#sync`}>What sync sends, and where</a>
+  </p>
+
+  <dialog class="dialog" aria-labelledby="sync-delete-title" data-sync-delete-dialog>
+    <form method="dialog" class="stack">
+      <h2 id="sync-delete-title">Delete the online copy?</h2>
+      <p>
+        This deletes {site.name}'s data from its server and turns off sync on this device. Your data
+        stays on this device. Your other devices keep theirs, but stop syncing.
+      </p>
+      <div class="cluster">
+        <Button type="submit" value="cancel">
+          Cancel
+        </Button>
+        <Button type="submit" variant="danger" value="confirm">
+          Delete the online copy
+        </Button>
+      </div>
+    </form>
+  </dialog>
+</section>
+
+<style>
+  .sync-code {
+    font-family: var(--font-mono);
+    letter-spacing: 0.04em;
+  }
+</style>

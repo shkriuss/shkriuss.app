@@ -1,0 +1,72 @@
+import { randomBytes, toBase64Url } from '@shkriuss/crypto';
+import { describe, expect, it } from 'vitest';
+import {
+  connectResultUrl,
+  connectUrl,
+  newConnectRequest,
+  openConnection,
+  parseConnectRequest,
+  parseConnectResult,
+  sealForApp,
+} from './connect.ts';
+import { observe } from './merge.ts';
+import { openStores, sealStores, syncKeys } from './snapshot.ts';
+
+describe('connecting an app', () => {
+  const connection = { secret: randomBytes(32), code: 'K7Q2-M9XD' };
+
+  it('gets the app’s key from the hub to the app, and only to that request', async () => {
+    const { request, pending } = await newConnectRequest(
+      'calendar',
+      'https://calendar.shkriuss.app',
+    );
+    const url = new URL(connectUrl('https://shkriuss.app', request));
+    expect(url.origin + url.pathname).toBe('https://shkriuss.app/account/');
+    expect(parseConnectRequest(url.search)).toEqual(request);
+
+    const result = await sealForApp(request, connection);
+    const back = new URL(connectResultUrl(request.from, result));
+    expect(back.origin).toBe('https://calendar.shkriuss.app');
+    const parsed = parseConnectResult(back.hash);
+    if (parsed?.kind !== 'sealed') throw new Error('Expected a sealed result');
+    expect(await openConnection('calendar', pending, parsed)).toEqual(connection);
+
+    // Another request's key pair can't open it, and it's tied to the app.
+    const other = await newConnectRequest('calendar', 'https://calendar.shkriuss.app');
+    await expect(openConnection('calendar', other.pending, parsed)).rejects.toThrow();
+    await expect(openConnection('tally', pending, parsed)).rejects.toThrow();
+  });
+
+  it('reads only well-formed requests and results', () => {
+    expect(parseConnectRequest('')).toBeNull();
+    expect(parseConnectRequest('?connect=calendar&from=x&key=short&state=short')).toBeNull();
+    expect(parseConnectResult('#connect=cancelled')).toEqual({ kind: 'cancelled' });
+    for (const hash of ['', '#connect=', '#connect=abc.def', '#link=x.y']) {
+      expect(parseConnectResult(hash), hash).toBeNull();
+    }
+  });
+});
+
+describe('sealed copies', () => {
+  it('round-trip, compressed, and only open with the right key and app', async () => {
+    const { key } = await syncKeys(randomBytes(32));
+    const items = Array.from({ length: 200 }, (_, index) => ({ id: `id-${index}`, name: 'Water' }));
+    const stores = { 'shkriuss:tally': observe(undefined, items, 1, 100).snapshot };
+    const sealed = await sealStores(key, 'tally', stores);
+    expect(sealed).not.toContain('Water');
+    expect(sealed.length).toBeLessThan(JSON.stringify(stores).length / 4);
+    expect(await openStores(key, 'tally', sealed)).toEqual(stores);
+    await expect(
+      openStores((await syncKeys(randomBytes(32))).key, 'tally', sealed),
+    ).rejects.toThrow();
+    await expect(openStores(key, 'calendar', sealed)).rejects.toThrow();
+  });
+
+  it('derive a different token and key for each app key', async () => {
+    const a = await syncKeys(randomBytes(32));
+    const b = await syncKeys(randomBytes(32));
+    expect(a.token).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(a.token).not.toBe(b.token);
+    expect(toBase64Url(a.key)).not.toBe(a.token);
+  });
+});

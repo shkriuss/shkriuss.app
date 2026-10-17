@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   accountCodeOf,
+  appSecretOf,
   generateSecret,
   parseRecoveryKey,
   RECOVERY_KEY_CHARS,
@@ -75,5 +76,16 @@ describe('account codes', () => {
   it('don’t appear in the recovery key', async () => {
     const code = (await accountCodeOf(fixed)).replace('-', '');
     expect((await recoveryKeyOf(fixed)).replace(/-/g, '')).not.toContain(code);
+  });
+});
+
+describe('app keys', () => {
+  it('are different for each app and each account, and the same every time', async () => {
+    const calendar = await appSecretOf(fixed, 'calendar');
+    expect(calendar).toHaveLength(32);
+    expect(await appSecretOf(new Uint8Array(fixed), 'calendar')).toEqual(calendar);
+    expect(await appSecretOf(fixed, 'tally')).not.toEqual(calendar);
+    expect(await appSecretOf(generateSecret(), 'calendar')).not.toEqual(calendar);
+    expect(calendar).not.toEqual(fixed);
   });
 });

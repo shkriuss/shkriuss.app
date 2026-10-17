@@ -22,9 +22,9 @@ import { AppShell, Button } from '@shkriuss/ui';
         Optional. Keep your apps the same on your phone, tablet and computer. Everything is locked
         on your devices before it's sent, so only your devices can read it.
       </p>
-      <p class="notice">
-        Coming next: syncing Calendar and Tally. For now, you can create your account and add your
-        devices.
+      <p class="muted">
+        To sync an app, open it and tap “Turn on sync”. Each app gets its own key from your account,
+        never the account itself.
       </p>
     </section>
 
@@ -39,6 +39,9 @@ import { AppShell, Button } from '@shkriuss/ui';
     </noscript>
 
     <section class="stack" aria-labelledby="start-heading" data-view="signed-out" hidden>
+      <p class="notice" data-connect-note hidden>
+        To sync <span data-connect-app></span>, sign in or create an account first.
+      </p>
       <h2 id="start-heading" tabindex="-1">
         Create an account
       </h2>
@@ -151,6 +154,28 @@ import { AppShell, Button } from '@shkriuss/ui';
           Add this device
         </Button>
         <Button data-action="back">Cancel</Button>
+      </div>
+    </section>
+
+    <section class="stack" aria-labelledby="connect-heading" data-view="connect" hidden>
+      <h2 id="connect-heading" tabindex="-1">
+        Sync <span data-connect-app></span> with your account?
+      </h2>
+      <p>
+        <span data-connect-app></span> will keep its data the same on every device where you turn on
+        sync. It's locked on your devices before it's sent, so only they can read it. The app gets
+        its own key from your account, not the account itself.
+      </p>
+      <p>
+        Account code: <strong class="account-code" data-connect-code></strong>
+      </p>
+      <div class="cluster">
+        <Button variant="primary" data-action="accept-connect">
+          <span>
+            Turn on sync for <span data-connect-app></span>
+          </span>
+        </Button>
+        <Button data-action="cancel-connect">Cancel</Button>
       </div>
     </section>
 

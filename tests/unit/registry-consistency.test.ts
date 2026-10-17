@@ -25,17 +25,31 @@ interface WranglerConfig {
   previews: { durable_objects?: { bindings: { name: string; class_name: string }[] } };
 }
 
-/** The Durable Objects an app with notifications needs (packages/push). */
-const PUSH_BINDINGS = [
-  { name: 'PUSH_DEVICES', class_name: 'PushDevice' },
-  { name: 'PUSH_KEYS', class_name: 'PushKeys' },
-];
-
-/** The Durable Objects the hub's account service needs (packages/account). */
-const ACCOUNT_BINDINGS = [
-  { name: 'ACCOUNT_LINKS', class_name: 'AccountLink' },
-  { name: 'ACCOUNT_PASSKEYS', class_name: 'AccountPasskey' },
-];
+/** What each server feature needs: its Durable Objects (packages/<feature>). */
+type Feature = 'account' | 'push' | 'sync';
+const FEATURES: Record<
+  Feature,
+  { service: string; bindings: { name: string; class_name: string }[] }
+> = {
+  account: {
+    service: 'the account service (/api/account)',
+    bindings: [
+      { name: 'ACCOUNT_LINKS', class_name: 'AccountLink' },
+      { name: 'ACCOUNT_PASSKEYS', class_name: 'AccountPasskey' },
+    ],
+  },
+  push: {
+    service: 'notifications (/api/push)',
+    bindings: [
+      { name: 'PUSH_DEVICES', class_name: 'PushDevice' },
+      { name: 'PUSH_KEYS', class_name: 'PushKeys' },
+    ],
+  },
+  sync: {
+    service: 'sync (/api/sync)',
+    bindings: [{ name: 'SYNC_COPIES', class_name: 'SyncCopy' }],
+  },
+};
 
 function wranglerConfig(slug: string): WranglerConfig {
   return parseJsonc(
@@ -84,39 +98,48 @@ describe.each(appFolders)('apps/%s', (slug) => {
     expect(config.previews).toBeDefined();
   });
 
-  const push = slug !== HUB_SLUG && apps.find((app) => app.slug === slug)?.pushNotifications;
-  const kind = slug === HUB_SLUG ? 'account' : push ? 'push' : 'static';
-  const expected = {
-    account: {
-      title: 'runs the account service for /api/account',
-      bindings: ACCOUNT_BINDINGS,
-      worker: "export { default, AccountLink, AccountPasskey } from '@shkriuss/account/worker'",
-    },
-    push: {
-      title: 'runs the notification service for /api/push',
-      bindings: PUSH_BINDINGS,
-      worker: "export { default, PushDevice, PushKeys } from '@shkriuss/push/worker'",
-    },
-    static: { title: 'serves static files only', bindings: [], worker: '' },
-  }[kind];
+  const entry = apps.find((app) => app.slug === slug);
+  const features: Feature[] =
+    slug === HUB_SLUG
+      ? ['account']
+      : [
+          ...(entry?.pushNotifications ? (['push'] as const) : []),
+          ...(entry?.sync ? (['sync'] as const) : []),
+        ];
+  const bindings = features.flatMap((feature) => FEATURES[feature].bindings);
 
-  it(expected.title, () => {
-    const config = wranglerConfig(slug);
-    if (kind === 'static') {
-      expect(config.main).toBeUndefined();
-      expect(config.durable_objects).toBeUndefined();
-      return;
-    }
-    expect(config.main).toBe('src/worker.ts');
-    expect(config.assets.run_worker_first).toEqual(['/api/*']);
-    expect(config.durable_objects?.bindings).toEqual(expected.bindings);
-    // PR previews need their own storage, or they'd have none.
-    expect(config.previews.durable_objects?.bindings).toEqual(expected.bindings);
-    const classes = (config.migrations ?? []).flatMap((m) => m.new_sqlite_classes ?? []);
-    expect(classes).toEqual(
-      expect.arrayContaining(expected.bindings.map((binding) => binding.class_name)),
-    );
-    const worker = readFileSync(join(repoRoot, 'apps', slug, 'src/worker.ts'), 'utf8');
-    expect(worker).toContain(expected.worker);
-  });
+  it(
+    features.length > 0
+      ? `runs ${features.map((feature) => FEATURES[feature].service).join(' and ')}`
+      : 'serves static files only',
+    () => {
+      const config = wranglerConfig(slug);
+      if (features.length === 0) {
+        expect(config.main).toBeUndefined();
+        expect(config.durable_objects).toBeUndefined();
+        return;
+      }
+      expect(config.main).toBe('src/worker.ts');
+      expect(config.assets.run_worker_first).toEqual(['/api/*']);
+      expect(config.durable_objects?.bindings).toEqual(bindings);
+      // PR previews need their own storage, or they'd have none.
+      expect(config.previews.durable_objects?.bindings).toEqual(bindings);
+      const classes = (config.migrations ?? []).flatMap((m) => m.new_sqlite_classes ?? []);
+      expect(classes).toEqual(
+        expect.arrayContaining(bindings.map((binding) => binding.class_name)),
+      );
+      // The Worker exports every storage class, and a default handler.
+      const worker = readFileSync(join(repoRoot, 'apps', slug, 'src/worker.ts'), 'utf8');
+      expect(worker).toMatch(/export default|export \{ default/);
+      for (const feature of features) {
+        for (const { class_name } of FEATURES[feature].bindings) {
+          expect(worker).toMatch(
+            new RegExp(
+              `export \\{[^}]*\\b${class_name}\\b[^}]*\\} from '@shkriuss/${feature}/worker'`,
+            ),
+          );
+        }
+      }
+    },
+  );
 });

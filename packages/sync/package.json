@@ -1,0 +1,22 @@
+{
+  "name": "@shkriuss/sync",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Syncing an app's data between devices through the shkriuss account, end-to-end encrypted: browser client, connect protocol and the per-app Worker routes.",
+  "type": "module",
+  "exports": {
+    ".": "./src/client.ts",
+    "./connect": "./src/connect.ts",
+    "./origins": "./src/origins.ts",
+    "./worker": "./src/worker.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@shkriuss/crypto": "workspace:*",
+    "@shkriuss/registry": "workspace:*",
+    "@shkriuss/server": "workspace:*",
+    "@shkriuss/storage": "workspace:*"
+  }
+}

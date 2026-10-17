@@ -5,6 +5,7 @@
  */
 import { disablePush, isPushEnabled } from '@shkriuss/push';
 import { deleteAll, downloadFile, exportAll, type ExportFile } from '@shkriuss/storage';
+import { isSyncOn, stopSync } from '@shkriuss/sync';
 import {
   BackupError,
   decryptBackup,
@@ -59,6 +60,7 @@ export function mountDataControls(section: HTMLElement): void {
   const unlock = find<HTMLElement>(restoreDialog, '[data-restore-unlock]');
   const restorePassphrase = find<HTMLInputElement>(restoreForm, '[name="passphrase"]');
   const restoreWarning = find<HTMLElement>(restoreDialog, '[data-restore-warning]');
+  const restoreSyncWarning = find<HTMLElement>(restoreDialog, '[data-restore-sync-warning]');
   const restoreSubmit = find<HTMLButtonElement>(restoreDialog, '[data-restore-submit]');
   const restoreCancel = find<HTMLButtonElement>(restoreDialog, '[data-action="cancel"]');
 
@@ -171,6 +173,7 @@ export function mountDataControls(section: HTMLElement): void {
     busy(restoreDialog, '');
     unlock.hidden = file?.kind !== 'encrypted';
     restoreWarning.hidden = file === null;
+    restoreSyncWarning.hidden = file === null || !isSyncOn();
     restoreSubmit.hidden = file === null;
     restoreCancel.textContent = file === null ? 'Close' : 'Cancel';
     restoreDialog.showModal();
@@ -266,6 +269,8 @@ export function mountDataControls(section: HTMLElement): void {
     // Notifications while the app is closed: delete them on the server too.
     const push = isPushEnabled() ? disablePush() : Promise.resolve();
     void push.finally(() => {
+      // Sync stops here first, so the deletion doesn't reach the other devices.
+      stopSync();
       deleteAll();
       // Reload so the app starts fresh from empty storage.
       window.location.reload();

@@ -86,6 +86,22 @@ describe('createStore', () => {
     expect(makeStore().save({ water: 1 })).toBe(false);
   });
 
+  it('checks data from elsewhere: valid, migrated, invalid or too new', () => {
+    const store = makeStore({
+      migrate: (old, version) =>
+        version === 1 && Array.isArray(old)
+          ? Object.fromEntries(old as [string, number][])
+          : undefined,
+    });
+    expect(store.version).toBe(2);
+    expect(store.empty()).toEqual({});
+    expect(store.read(2, { water: 1 })).toEqual({ water: 1 });
+    expect(store.read(1, [['water', 5]])).toEqual({ water: 5 });
+    expect(store.read(2, { water: 'lots' })).toBeUndefined();
+    expect(store.read(3, { water: 1 })).toBeUndefined();
+    expect(store.read(1.5, { water: 1 })).toBeUndefined();
+  });
+
   it('clears its key', () => {
     const store = makeStore();
     store.save({ a: 1 });

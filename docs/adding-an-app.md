@@ -92,6 +92,30 @@ is the example to copy. Ask Claude, or:
 The privacy page lists the app automatically, and "Delete all data" already
 removes the device from the server.
 
+## Sync between devices (optional)
+
+Apps can sync between a person's devices through their optional shkriuss
+account, end-to-end encrypted ([ADR 0010](adr/0010-account-and-sync.md)).
+Tally is the simplest example to copy. It works for data saved with
+`createStore` as a list of items that each have a string `id`. Ask Claude,
+or:
+
+1. In `apps.json`, add `"sync": true` to the app, and a line to `dataStored`
+   about the synced copy (see Tally's entry).
+2. Add `src/worker.ts`: `export { default, SyncCopy } from '@shkriuss/sync/worker';`
+   (an app with notifications too combines both, like Calendar's).
+3. In `wrangler.jsonc`, copy Tally's `main`, `assets.binding`,
+   `assets.run_worker_first`, `durable_objects`, `migrations` and `previews`.
+   A unit test checks these match.
+4. Add `"@shkriuss/sync": "workspace:*"` to the app's `package.json`.
+5. Put `<SyncControls />` above `<DataControls />`. In the page script, call
+   `createSync({ app: site.slug, stores: [syncedStore({ store, items, withItems })], onChange })`,
+   then `mountSyncControls(…)`, and `sync.changed()` after every save. See
+   `apps/tally/src/scripts/tally.ts`.
+
+The privacy page lists the app automatically. When an item is changed on two
+devices before they sync, the newest change wins.
+
 ## Going live
 
 When the app is ready, change its `"status"` in `apps.json` from `"beta"` to

@@ -22,6 +22,7 @@ export {
 } from './passkey.ts';
 export {
   accountCodeOf,
+  appSecretOf,
   generateSecret,
   parseRecoveryKey,
   recoveryKeyOf,

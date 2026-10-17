@@ -322,7 +322,8 @@ month. GitHub never charges you unless you add a payment method.
 - Add more apps one at a time, each with its own small browser tests.
 - [x] **shkriuss account**, part 1: create an account, recovery key,
       passkeys, add devices with a QR code ([ADR 0010](adr/0010-account-and-sync.md)).
-- **shkriuss account**, part 2: Calendar and Tally sync through it.
+- [x] **shkriuss account**, part 2: Calendar and Tally sync through it
+      (newest edit of each item wins, deletions sync).
 - **shkriuss account**, part 3: replace the account key (for a lost device),
   see which apps sync.
 

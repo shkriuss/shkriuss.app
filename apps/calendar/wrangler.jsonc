@@ -1,5 +1,6 @@
 // Cloudflare Worker for this app: the static site, plus /api/push/* for
-// notifications while Calendar is closed (docs/adr/0009-push-notifications.md).
+// notifications while Calendar is closed (docs/adr/0009-push-notifications.md)
+// and /api/sync/* for syncing between devices (docs/adr/0010-account-and-sync.md).
 // Docs: docs/deployment.md
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
@@ -14,15 +15,20 @@
     "not_found_handling": "404-page",
     "html_handling": "auto-trailing-slash",
   },
-  // One store per device (its scheduled notifications) and one for the
-  // app's signing keys. SQLite-backed, as the free plan requires.
+  // One store per device (its scheduled notifications), one for the app's
+  // signing keys, and one per synced account (its sealed copy of Calendar's
+  // data). SQLite-backed, as the free plan requires.
   "durable_objects": {
     "bindings": [
       { "name": "PUSH_DEVICES", "class_name": "PushDevice" },
       { "name": "PUSH_KEYS", "class_name": "PushKeys" },
+      { "name": "SYNC_COPIES", "class_name": "SyncCopy" },
     ],
   },
-  "migrations": [{ "tag": "push-v1", "new_sqlite_classes": ["PushDevice", "PushKeys"] }],
+  "migrations": [
+    { "tag": "push-v1", "new_sqlite_classes": ["PushDevice", "PushKeys"] },
+    { "tag": "sync-v1", "new_sqlite_classes": ["SyncCopy"] },
+  ],
   // The real address. Cloudflare creates the DNS record and certificate.
   "routes": [{ "pattern": "calendar.shkriuss.app", "custom_domain": true }],
   // No *.workers.dev address for production, but keep preview links for PRs.
@@ -36,6 +42,7 @@
       "bindings": [
         { "name": "PUSH_DEVICES", "class_name": "PushDevice" },
         { "name": "PUSH_KEYS", "class_name": "PushKeys" },
+        { "name": "SYNC_COPIES", "class_name": "SyncCopy" },
       ],
     },
   },

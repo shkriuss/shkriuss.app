@@ -5,6 +5,7 @@ import { AppShell } from '@shkriuss/ui';
 // The table is built from the registry, so it is always up to date.
 const sites = [getSite(HUB_SLUG), ...apps.map((app) => getSite(app.slug))];
 const pushSites = sites.filter((site) => site.pushNotifications);
+const syncSites = sites.filter((site) => site.sync);
 
 const whereLabel: Record<StorageKind, string> = {
   none: 'Nothing is stored',
@@ -55,7 +56,10 @@ const LAST_UPDATED = '17 October 2026';
                   'Nothing'
                 )}
               </td>
-              <td>{whereLabel[site.storage]}</td>
+              <td>
+                {whereLabel[site.storage]}
+                {site.sync && ' (and, if you turn on sync, a locked copy online)'}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -116,11 +120,36 @@ const LAST_UPDATED = '17 October 2026';
         That's all. There's no list of accounts, and nothing that connects an account to you, to
         your devices, or to your data in any app.
       </li>
-      <li>
-        Syncing apps through your account comes next. This page will explain exactly what it sends
-        before any app can sync.
-      </li>
     </ul>
+
+    {syncSites.length > 0 && (
+      <>
+        <h2 id="sync">Syncing an app between your devices (optional)</h2>
+        <p>
+          {syncSites.map((site) => site.name).join(' and ')} can keep their data the same on your
+          devices through your account. It's off until you tap “Turn on sync” in the app, on each
+          device. When it's on:
+        </p>
+        <ul>
+          <li>
+            The app gets its own key from your account (never the account key itself), and locks its
+            data with it on your device before sending it. Only your devices can unlock it.
+          </li>
+          <li>
+            The app's own server on Cloudflare keeps one locked copy of the app's data. It sees how
+            big the copy is and when it changes, but never what's in it. It can't tell which account
+            is yours, and each app's copy can't be linked to another app's.
+          </li>
+          <li>
+            Settings that belong to one device (like notifications and your theme) don't sync.
+          </li>
+          <li>
+            “Turn off on this device” stops syncing there and keeps your data. “Delete the online
+            copy” deletes the copy from the server; your devices keep their data.
+          </li>
+        </ul>
+      </>
+    )}
 
     <h2>What these apps never do</h2>
     <ul>

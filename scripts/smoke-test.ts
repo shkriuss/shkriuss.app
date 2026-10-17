@@ -2,7 +2,7 @@
  * After a production deploy, checks every live site: it answers, serves HTML
  * and sends our security headers. Apps with notifications while closed must
  * also answer /api/push/key with their public key, and the hub its account
- * service (/api/account/ping). Retries for a few minutes because a brand
+ * service (/api/account/ping), and apps with sync /api/sync/hub. Retries for a few minutes because a brand
  * new subdomain can take a moment to get its DNS record and certificate.
  *
  *   node scripts/smoke-test.ts
@@ -17,6 +17,7 @@ const expectedCsp = contentSecurityPolicy();
 const pushOrigins = new Set(
   apps.filter((app) => app.pushNotifications).map((app) => getSite(app.slug).origin),
 );
+const syncOrigins = new Set(apps.filter((app) => app.sync).map((app) => getSite(app.slug).origin));
 
 async function check(origin: string): Promise<string | undefined> {
   try {
@@ -30,6 +31,11 @@ async function check(origin: string): Promise<string | undefined> {
     if (origin === getSite(HUB_SLUG).origin) {
       const ping = await fetch(`${origin}/api/account/ping`);
       if (!ping.ok) return 'account service not answering';
+    }
+    if (syncOrigins.has(origin)) {
+      const hub = await fetch(`${origin}/api/sync/hub`);
+      const body = (await hub.json().catch(() => ({}))) as { origin?: unknown };
+      if (!hub.ok || body.origin !== getSite(HUB_SLUG).origin) return 'sync service not answering';
     }
     if (pushOrigins.has(origin)) {
       const key = await fetch(`${origin}/api/push/key`);
