@@ -9,6 +9,7 @@ import {
   monthGrid,
   sameDayInMonth,
   shiftMonth,
+  shiftTime,
   today,
   weekday,
 } from './dates.ts';
@@ -17,18 +18,30 @@ describe('validation', () => {
   it.each(['2026-10-17', '2024-02-29', '2000-02-29', '1999-12-31'])('accepts %s', (date) => {
     expect(isIsoDate(date)).toBe(true);
   });
-  it.each(['2026-13-01', '2026-02-29', '1900-02-29', '2026-4-1', '17/10/2026', '', 20261017])(
-    'rejects %j',
-    (date) => {
-      expect(isIsoDate(date)).toBe(false);
-    },
-  );
+  it.each([
+    '2026-13-01',
+    '2026-02-29',
+    '1900-02-29',
+    '2026-4-1',
+    '0050-01-01',
+    '17/10/2026',
+    '',
+    20261017,
+  ])('rejects %j', (date) => {
+    expect(isIsoDate(date)).toBe(false);
+  });
   it('validates times', () => {
     expect(isIsoTime('00:00')).toBe(true);
     expect(isIsoTime('23:59')).toBe(true);
     expect(isIsoTime('24:00')).toBe(false);
     expect(isIsoTime('9:30')).toBe(false);
     expect(minutesOf('14:30')).toBe(870);
+  });
+  it('moves times within the day only', () => {
+    expect(shiftTime('09:00', 330)).toBe('14:30');
+    expect(shiftTime('10:15', -615)).toBe('00:00');
+    expect(shiftTime('23:00', 60)).toBeNull();
+    expect(shiftTime('00:30', -31)).toBeNull();
   });
 });
 

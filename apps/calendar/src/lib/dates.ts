@@ -11,7 +11,8 @@ export type IsoDate = string;
 /** "HH:MM" (24-hour) */
 export type IsoTime = string;
 
-const DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
+// Years 1000–9999 only: date maths in JavaScript treats years below 100 specially.
+const DATE_PATTERN = /^([1-9]\d{3})-(\d{2})-(\d{2})$/;
 const TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
 const DAY_MS = 86_400_000;
 
@@ -120,4 +121,11 @@ export function today(now: Date = new Date()): IsoDate {
 export function minutesOf(time: IsoTime): number {
   const [h, m] = time.split(':').map(Number) as [number, number];
   return h * 60 + m;
+}
+
+/** A time moved by some minutes, or null if that leaves the day. */
+export function shiftTime(time: IsoTime, minutes: number): IsoTime | null {
+  const total = minutesOf(time) + minutes;
+  if (total < 0 || total >= 24 * 60) return null;
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
 }
