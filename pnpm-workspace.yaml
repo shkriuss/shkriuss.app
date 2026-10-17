@@ -17,13 +17,13 @@ catalog:
   eslint-plugin-jsx-a11y-x: ^0.2.0
   globals: ^17.13.0
   prettier: ^3.9.0
-  prettier-plugin-astro: ^1.1.1
+  prettier-plugin-astro: ^1.1.0
   sharp: ^0.35.5
   # TypeScript 7 is out, but typescript-eslint and @astrojs/check still need 6.x.
   typescript: ~6.0.3
   typescript-eslint: ^8.71.0
-  vitest: ^5.0.4
-  wrangler: ^4.150.0
+  vitest: ^5.0.3
+  wrangler: ^4.149.0
 
 # Supply-chain safety: only these dependencies may run install scripts
 # (pnpm blocks all others), and an unexpected one fails the install.
@@ -33,6 +33,9 @@ onlyBuiltDependencies:
   - workerd
 strictDepBuilds: true
 
-# Don't install versions published less than 1 day ago, so a hijacked release
-# is usually caught and pulled before it reaches us.
-minimumReleaseAge: 1440
+# Don't install versions published less than 7 days ago, so a hijacked or
+# broken release is usually caught and pulled before it reaches us. This must
+# match Dependabot's cooldown (.github/dependabot.yml): Dependabot applies its
+# cooldown to the whole lockfile, so a younger package here makes it fail.
+# For an urgent security fix, list the package under minimumReleaseAgeExclude.
+minimumReleaseAge: 10080

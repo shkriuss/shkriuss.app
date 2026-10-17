@@ -8,7 +8,8 @@ updates:
       interval: weekly
       day: monday
     # Wait a week after a release, so broken or malicious versions are
-    # usually caught by others first. Security fixes are not delayed.
+    # usually caught by others first. Keep this equal to minimumReleaseAge in
+    # pnpm-workspace.yaml (10080 minutes), or Dependabot's updates fail.
     cooldown:
       default-days: 7
     open-pull-requests-limit: 5
@@ -16,6 +17,14 @@ updates:
       # One PR for all minor and patch updates, so there's less to review.
       minor-and-patch:
         update-types: [minor, patch]
+    ignore:
+      # Node.js's types must match the Node.js we run (24 LTS, see .node-version).
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
+      # TypeScript 7 isn't supported by our lint and type-check tools yet.
+      # See docs/adr/0005-pnpm-typescript-versions.md for when to upgrade.
+      - dependency-name: typescript
+        update-types: ['version-update:semver-major']
 
   - package-ecosystem: github-actions
     directories: [/, /.github/actions/*]
