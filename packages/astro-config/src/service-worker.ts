@@ -9,6 +9,8 @@
  *   example airplane mode with a VPN on, or a very weak signal), the saved
  *   copy is shown instead, and a late network answer still updates the cache.
  * - When a new version is deployed, the old cache is deleted.
+ * - Push messages (notifications while the app is closed, docs/adr/0009)
+ *   are shown as notifications. The browser has already decrypted them.
  * - Tapping a notification (e.g. a Calendar reminder) opens the app, or
  *   switches to it if it's already open.
  */
@@ -113,12 +115,33 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
+self.addEventListener('push', (event) => {
+  let message = {};
+  try {
+    message = event.data ? event.data.json() : {};
+  } catch {
+    message = {};
+  }
+  const text = (value) => (typeof value === 'string' ? value : '');
+  // Only a path on this site can be opened (never another website).
+  const url = text(message.url).startsWith('/') && !text(message.url).startsWith('//') ? message.url : '/';
+  event.waitUntil(
+    self.registration.showNotification(text(message.title) || 'Reminder', {
+      body: text(message.body),
+      tag: text(message.tag) || undefined,
+      icon: '/icon-192.png',
+      data: { url },
+    }),
+  );
+});
+
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || '/';
   event.waitUntil(
     self.clients
       .matchAll({ type: 'window', includeUncontrolled: true })
-      .then((windows) => (windows[0] ? windows[0].focus() : self.clients.openWindow('/'))),
+      .then((windows) => (windows[0] ? windows[0].focus() : self.clients.openWindow(url))),
   );
 });
 `;
