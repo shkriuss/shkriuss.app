@@ -1,0 +1,21 @@
+# Settings for the "Secret scan" in CI (gitleaks reads this file by itself).
+#
+# All of gitleaks' own rules stay on. The only exceptions are values that are
+# published examples, not secrets. Each one is limited to one rule, one file
+# and the exact values, so anything else in that file is still caught. Never
+# add a real key here: if a real secret was committed, remove it and replace
+# it (docs/quality.md).
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "generic-api-key"
+
+[[rules.allowlists]]
+description = "Worked example from RFC 8291, Appendix A (public Web Push test keys)"
+condition = "AND"
+paths = ['''^packages/push/src/encrypt\.test\.ts$''']
+regexes = [
+  '''^(?:yfWPiYE-n46HLnH0KqZOF1fJJU3MYrct3AELtAQ-oRw|q1dXpw3UpT5VOmu_cf_v6ih07Aems3njxI-JWgLcM94|BTBZMqHH6r4Tts7J_aSIgg|DGv6ra1nlYgDCS1FRnbzlw)$''',
+]
