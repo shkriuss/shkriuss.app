@@ -75,8 +75,9 @@ Everything here fits Cloudflare's and GitHub's free plans:
   request uses roughly 4–6 minutes per push and a deploy about 3. If the
   minutes run out, workflows pause until next month. You're never charged
   unless you add a payment method and raise the spending limit.
-- Notifications while an app is closed use Durable Objects, free up to
-  100,000 requests a day (each notification sent is about two).
+- Notifications while an app is closed, and the optional account, use
+  Durable Objects, free up to 100,000 requests a day (each notification sent
+  is about two; signing in or adding a device takes a handful).
 - The domain renewal is your only regular cost.
 
 ## Troubleshooting
