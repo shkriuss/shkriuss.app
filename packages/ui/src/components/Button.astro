@@ -51,7 +51,7 @@ const ariaLabel = !hasText ? label : undefined;
 ---
 
 {href ? (
-  <a href={href} class:list={classes} aria-label={ariaLabel}>
+  <a href={href} class:list={classes} aria-label={ariaLabel} {...rest}>
     {icon && <Icon name={icon} />}
     <slot />
   </a>

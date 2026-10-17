@@ -1,7 +1,7 @@
 /**
  * Helpers for browser tests that use the shkriuss account (docs/adr/0010):
- * create one on the hub, sign in with a recovery key, and turn on sync in an
- * app (which goes to the hub's Account page and back).
+ * create one on the hub, sign in with a recovery key, turn on sync in an app
+ * (which goes to the hub's Account page and back), and replace the key.
  */
 import type { Browser, BrowserContext, Page } from '@playwright/test';
 import { expect } from './fixtures.ts';
@@ -41,6 +41,18 @@ export async function turnOnSync(page: Page, appName: string): Promise<void> {
   await page.waitForURL(`${appURL}/`);
   await expect(page.locator('[data-sync-on]')).toBeVisible();
   await expect(page.locator('[data-sync-status]')).toHaveText(/^(Sync is on|Synced just now)/);
+}
+
+/** On the hub's Account page, signed in: replaces the account key. Returns the new code. */
+export async function replaceKey(page: Page): Promise<string> {
+  await page.goto(`${hubURL}/account/`);
+  await page.getByRole('button', { name: 'Replace the account key' }).click();
+  await page.getByRole('button', { name: 'Get a new key' }).click();
+  await page.getByLabel("I've saved my recovery key").check();
+  await page.getByRole('button', { name: 'Replace the key' }).click();
+  const code = page.locator('[data-account-code]');
+  await expect(page.locator('[data-message]')).toHaveText(/^Your account key is replaced/);
+  return (await code.textContent()) ?? '';
 }
 
 /** A second device with its own storage. */

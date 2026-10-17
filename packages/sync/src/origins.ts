@@ -30,6 +30,17 @@ export function hubOriginFor(appUrl: URL, override?: string): string | null {
   return null;
 }
 
+/** The address of app `slug` for the hub at `hubUrl` (the real site or a PR preview), or null. */
+export function appOriginFor(hubUrl: URL, slug: string): string | null {
+  if (hubUrl.protocol !== 'https:') return null;
+  if (hubUrl.hostname === hub.domain) return `https://${slug}.${hub.domain}`;
+  const preview = PREVIEW.exec(hubUrl.hostname);
+  if (preview && preview[2] === HUB_SLUG) {
+    return `https://${preview[1] ?? ''}-${slug}.${preview[3] ?? ''}`;
+  }
+  return null;
+}
+
 /** True if `from` is the address of app `slug`, as seen by the hub at `hubUrl`. */
 export function isAppOrigin(from: string, slug: string, hubUrl: URL): boolean {
   let url: URL;
@@ -39,13 +50,8 @@ export function isAppOrigin(from: string, slug: string, hubUrl: URL): boolean {
     return false;
   }
   if (url.origin !== from) return false;
-  if (hubUrl.protocol === 'https:' && hubUrl.hostname === hub.domain) {
-    return from === `https://${slug}.${hub.domain}`;
-  }
-  const preview = PREVIEW.exec(hubUrl.hostname);
-  if (hubUrl.protocol === 'https:' && preview && preview[2] === HUB_SLUG) {
-    return from === `https://${preview[1] ?? ''}-${slug}.${preview[3] ?? ''}`;
-  }
+  const expected = appOriginFor(hubUrl, slug);
+  if (expected) return from === expected;
   // Local tests: everything runs on this computer.
   return LOOPBACK.has(hubUrl.hostname) && LOOPBACK.has(url.hostname) && url.protocol === 'http:';
 }

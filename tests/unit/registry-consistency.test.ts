@@ -36,6 +36,7 @@ const FEATURES: Record<
     bindings: [
       { name: 'ACCOUNT_LINKS', class_name: 'AccountLink' },
       { name: 'ACCOUNT_PASSKEYS', class_name: 'AccountPasskey' },
+      { name: 'ACCOUNT_STATUS', class_name: 'AccountStatus' },
     ],
   },
   push: {

@@ -8,6 +8,9 @@
  * - Passkey locks: the account secret sealed with a key that only a passkey
  *   can produce (WebAuthn PRF). Found by a lookup token from the same
  *   passkey, of which the server keeps only the SHA-256 hash.
+ * - Replaced keys: after someone replaces their account key (a lost device),
+ *   a note that the old one was replaced, so devices still holding it sign
+ *   out. Found by the hash of a token only the old key can make.
  *
  *   GET    /api/account/ping             is the service running?
  *   PUT    /api/account/link/<id>        store a link (once)
@@ -16,6 +19,8 @@
  *   PUT    /api/account/passkey          store a passkey lock (Bearer: lookup token)
  *   GET    /api/account/passkey          fetch it
  *   DELETE /api/account/passkey          delete it
+ *   GET    /api/account/status           { replaced } (Bearer: status token)
+ *   PUT    /api/account/status           mark this key as replaced (for good)
  *
  * There are no account ids, names, emails or passwords: nothing here can be
  * linked to a person, or to the data in any app.
@@ -42,6 +47,7 @@ import {
 export interface AccountEnv extends SiteEnv {
   ACCOUNT_LINKS: DurableObjectNamespace;
   ACCOUNT_PASSKEYS: DurableObjectNamespace;
+  ACCOUNT_STATUS: DurableObjectNamespace;
 }
 
 /** Requests to /api/account/*. */
@@ -84,6 +90,15 @@ export async function handleAccount(
     const checked = checkSealedBody(read.body, 'wrap');
     if (!checked.ok) return problem(400, checked.error);
     return stub.fetch('https://passkey/', { method: 'PUT', body: checked.value });
+  }
+
+  if (path === '/api/account/status') {
+    const token = bearerToken(request);
+    if (!token) return problem(401, 'Missing or malformed status token.');
+    const stub = env.ACCOUNT_STATUS.get(env.ACCOUNT_STATUS.idFromName(await sha256Text(token)));
+    if (request.method === 'GET') return stub.fetch('https://status/');
+    if (request.method === 'PUT') return stub.fetch('https://status/', { method: 'PUT' });
+    return problem(405, 'Use GET or PUT.');
   }
 
   return problem(404, 'Not found.');
@@ -160,5 +175,26 @@ export class AccountPasskey {
     }
     const wrap = await this.state.storage.get<string>('wrap');
     return wrap ? json({ wrap }) : problem(404, 'No account is connected to this passkey.');
+  }
+}
+
+// ---------- Whether an account key was replaced ----------
+
+export class AccountStatus {
+  readonly state: DurableObjectState;
+
+  constructor(state: DurableObjectState) {
+    this.state = state;
+  }
+
+  async fetch(request: Request): Promise<Response> {
+    if (request.method === 'PUT') {
+      // For good: a replaced key never becomes the account again.
+      if (!(await this.state.storage.get<number>('replaced'))) {
+        await this.state.storage.put('replaced', Date.now());
+      }
+      return noContent();
+    }
+    return json({ replaced: (await this.state.storage.get<number>('replaced')) !== undefined });
   }
 }

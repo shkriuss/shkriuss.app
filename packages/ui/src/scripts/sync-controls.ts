@@ -38,6 +38,7 @@ export function mountSyncControls(section: HTMLElement, sync: SyncClient): void 
     'update-needed': `Another device has a newer version of ${app}. Close ${app} and open it again to update, and it will sync.`,
     'too-big': `${app} has too much data to sync.`,
     deleted: `The online copy was deleted on another device, so sync is off here. ${app}'s data on this device is kept.`,
+    moved: `Your account key was replaced on another device, so sync is off here. ${app}'s data on this device is kept. Turn on sync again to keep syncing.`,
     storage: 'This browser won’t save. Is it in private mode, or is storage blocked?',
     'connect-failed': 'Turning on sync didn’t finish. Please try again.',
   };

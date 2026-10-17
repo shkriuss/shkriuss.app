@@ -30,7 +30,15 @@ export interface PendingConnect {
 export interface Connection {
   secret: Uint8Array<ArrayBuffer>;
   code: string;
+  /**
+   * The app's keys from account keys that this one replaced (a lost device),
+   * so the app can move its old online copy to the new key and delete it.
+   */
+  replaces: Uint8Array<ArrayBuffer>[];
 }
+
+/** At most this many replaced keys travel with a connection. */
+export const MAX_REPLACED = 5;
 
 /** What the hub is asked: which app, its address, its one-time public key. */
 export interface ConnectRequest {
@@ -98,7 +106,11 @@ export async function sealForApp(request: ConnectRequest, connection: Connection
   const hubKey = toBase64Url(new Uint8Array(await crypto.subtle.exportKey('raw', pair.publicKey)));
   const key = await sharedKey(pair.privateKey, request.key, request.app, request.state);
   const payload = utf8(
-    JSON.stringify({ secret: toBase64Url(connection.secret), code: connection.code }),
+    JSON.stringify({
+      secret: toBase64Url(connection.secret),
+      code: connection.code,
+      replaces: connection.replaces.slice(0, MAX_REPLACED).map(toBase64Url),
+    }),
   );
   return `${hubKey}.${await seal(key, payload, label(request.app, request.state))}`;
 }
@@ -129,11 +141,19 @@ export async function openConnection(
   const key = await sharedKey(privateKey, result.hubKey, app, pending.state);
   const payload = JSON.parse(
     new TextDecoder().decode(await open(key, result.sealed, label(app, pending.state))),
-  ) as { secret?: unknown; code?: unknown };
-  if (typeof payload.secret !== 'string' || typeof payload.code !== 'string') {
+  ) as { secret?: unknown; code?: unknown; replaces?: unknown };
+  const replaces = payload.replaces ?? [];
+  if (
+    typeof payload.secret !== 'string' ||
+    typeof payload.code !== 'string' ||
+    !Array.isArray(replaces) ||
+    replaces.length > MAX_REPLACED ||
+    !replaces.every((key) => typeof key === 'string')
+  ) {
     throw new Error('Not a connection');
   }
-  const secret = fromBase64Url(payload.secret);
-  if (secret.length !== 32) throw new Error('Not a connection');
-  return { secret, code: payload.code };
+  const keys = [payload.secret, ...(replaces as string[])].map(fromBase64Url);
+  if (keys.some((key) => key.length !== 32)) throw new Error('Not a connection');
+  const [secret, ...old] = keys as [Uint8Array<ArrayBuffer>, ...Uint8Array<ArrayBuffer>[]];
+  return { secret, code: payload.code, replaces: old };
 }

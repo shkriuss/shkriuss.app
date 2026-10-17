@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hubOriginFor, isAppOrigin } from './origins.ts';
+import { appOriginFor, hubOriginFor, isAppOrigin } from './origins.ts';
 
 const url = (text: string) => new URL(text);
 
@@ -29,6 +29,28 @@ describe('hubOriginFor', () => {
       'http://127.0.0.1:8788/',
     ]) {
       expect(hubOriginFor(url(address)), address).toBeNull();
+    }
+  });
+});
+
+describe('appOriginFor', () => {
+  it('finds an app from the real hub and from a preview’s hub', () => {
+    expect(appOriginFor(url('https://shkriuss.app/account/'), 'tally')).toBe(
+      'https://tally.shkriuss.app',
+    );
+    expect(appOriginFor(url('https://pr-12-hub.shkriuss.workers.dev/account/'), 'tally')).toBe(
+      'https://pr-12-tally.shkriuss.workers.dev',
+    );
+  });
+
+  it('gives up on anything else', () => {
+    for (const address of [
+      'http://shkriuss.app/',
+      'http://127.0.0.1:8787/',
+      'https://pr-12-calendar.shkriuss.workers.dev/',
+      'https://example.com/',
+    ]) {
+      expect(appOriginFor(url(address), 'tally'), address).toBeNull();
     }
   });
 });

@@ -5,10 +5,12 @@ import { randomBytes } from 'node:crypto';
 import type { Browser, BrowserContext, CDPSession, Page } from '@playwright/test';
 import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
 import { sites } from '../../../tests/e2e/sites.ts';
+import { apps, hub } from '../../../packages/registry/src/index.ts';
 
 const RECOVERY_KEY = /^([0-9A-HJKMNP-TV-Z]{4}-){13}[0-9A-HJKMNP-TV-Z]{4}$/;
 const ACCOUNT_CODE = /^[0-9A-HJKMNP-TV-Z]{4}-[0-9A-HJKMNP-TV-Z]{4}$/;
 
+const syncApps = apps.filter((app) => app.sync === true && app.status !== 'hidden');
 const view = (page: Page, name: string) => page.locator(`[data-view="${name}"]`);
 const accountCode = (page: Page) => page.locator('[data-account-code]');
 const message = (page: Page) => page.locator('[data-message]');
@@ -185,6 +187,106 @@ test('asks before switching a signed-in device to another account', async ({
   await other.close();
 });
 
+/** Fills in the recovery key form and submits it. */
+async function signInWithKey(page: Page, key: string): Promise<void> {
+  if (await view(page, 'signed-out').isVisible()) {
+    await page.getByRole('button', { name: 'Use my recovery key' }).click();
+  }
+  await page.getByRole('textbox', { name: 'Recovery key' }).fill(key);
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+}
+
+/** Replaces the account key on a signed-in page; returns the new recovery key and code. */
+async function replaceKey(page: Page): Promise<{ key: string; code: string }> {
+  await page.getByRole('button', { name: 'Replace the account key' }).click();
+  await expect(view(page, 'replace')).toBeVisible();
+  await page.getByRole('button', { name: 'Get a new key' }).click();
+  await expect(page.getByRole('heading', { name: 'Save your new recovery key' })).toBeVisible();
+  const key = (await page.locator('[data-new-key]').textContent()) ?? '';
+  await page.getByLabel("I've saved my recovery key").check();
+  await page.getByRole('button', { name: 'Replace the key' }).click();
+  await expect(message(page)).toHaveText(/^Your account key is replaced/);
+  return { key, code: (await accountCode(page).textContent()) ?? '' };
+}
+
+test('replacing the key signs out every device that has the old one', async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  const old = await createAccount(page);
+  const tablet = await (await otherDevice(browser, baseURL)).newPage();
+  await tablet.goto('/account/');
+  await signInWithKey(tablet, old.key);
+  await expect(accountCode(tablet)).toHaveText(old.code);
+
+  // On the phone: replace the key. Nothing changes until the new key is saved.
+  await page.getByRole('button', { name: 'Replace the account key' }).click();
+  await expect(view(page, 'replace')).toBeVisible();
+  await checkA11y(page, 'account: replace the key');
+  await page.getByRole('button', { name: 'Get a new key' }).click();
+  const key = (await page.locator('[data-new-key]').textContent()) ?? '';
+  expect(key).toMatch(RECOVERY_KEY);
+  expect(key).not.toBe(old.key);
+  const replace = page.getByRole('button', { name: 'Replace the key' });
+  await expect(replace).toBeDisabled();
+  await checkA11y(page, 'account: save the new recovery key');
+  await page.getByLabel("I've saved my recovery key").check();
+  await replace.click();
+  await expect(view(page, 'signed-in')).toBeVisible();
+  await expect(message(page)).toHaveText(/^Your account key is replaced/);
+  const code = (await accountCode(page).textContent()) ?? '';
+  expect(code).toMatch(ACCOUNT_CODE);
+  expect(code).not.toBe(old.code);
+  await page.reload();
+  await expect(accountCode(page)).toHaveText(code);
+
+  // The tablet is signed out the next time it opens the page, and the old key can't sign in.
+  await tablet.reload();
+  await expect(view(tablet, 'signed-out')).toBeVisible();
+  await expect(message(tablet)).toHaveText(/^Your account key was replaced on another device/);
+  await checkA11y(tablet, 'account: signed out after the key was replaced');
+  await signInWithKey(tablet, old.key);
+  await expect(message(tablet)).toHaveText(/^This key was replaced on another device/);
+  await expect(view(tablet, 'recovery')).toBeVisible();
+  await signInWithKey(tablet, key);
+  await expect(accountCode(tablet)).toHaveText(code);
+  await tablet.context().close();
+});
+
+test('lists the apps that sync, with links that turn on sync there', async ({ page }) => {
+  await createAccount(page);
+  for (const app of syncApps) {
+    // Here on this computer, the hub can't tell the app's test address: it links to the real one.
+    await expect(page.getByRole('link', { name: `Turn on sync in ${app.name}` })).toHaveAttribute(
+      'href',
+      `https://${app.slug}.${hub.domain}/#sync=connect`,
+    );
+  }
+});
+
+test('in a PR preview, links to that preview’s own apps', async ({ page, baseURL, guard }) => {
+  // Serve this hub as if it were PR 7's preview.
+  const preview = 'https://pr-7-hub.shkriuss.workers.dev';
+  guard.allowOrigin(preview);
+  await page.route(`${preview}/**`, async (route) => {
+    const url = new URL(route.request().url());
+    await route.fulfill({
+      response: await route.fetch({ url: `${baseURL ?? ''}${url.pathname}${url.search}` }),
+    });
+  });
+  await page.goto(`${preview}/account/`);
+  await page.getByRole('button', { name: 'Create an account' }).click();
+  await page.getByLabel("I've saved my recovery key").check();
+  await page.getByRole('button', { name: 'Continue' }).click();
+  for (const app of syncApps) {
+    await expect(page.getByRole('link', { name: `Turn on sync in ${app.name}` })).toHaveAttribute(
+      'href',
+      `https://pr-7-${app.slug}.shkriuss.workers.dev/#sync=connect`,
+    );
+  }
+});
+
 test('refuses to connect an app from the wrong address', async ({ page }) => {
   await createAccount(page);
   const key = 'B'.repeat(87);
@@ -250,6 +352,18 @@ test.describe('passkeys', () => {
     await expect(view(page, 'signed-out')).toBeVisible();
   });
 
+  test('a passkey for a replaced key can’t sign in', async ({ page }) => {
+    await authenticator(page, true);
+    await createAccount(page);
+    await page.getByRole('button', { name: 'Add a passkey' }).click();
+    await expect(page.locator('[data-passkey-status]')).toHaveText(/^Passkey added/);
+    await replaceKey(page);
+    await signOut(page);
+    await page.getByRole('button', { name: 'Sign in with a passkey' }).click();
+    await expect(message(page)).toHaveText(/^This passkey is for an account key that was replaced/);
+    await expect(view(page, 'signed-out')).toBeVisible();
+  });
+
   test('explains when a password manager can’t unlock accounts', async ({ page }) => {
     await authenticator(page, false);
     await createAccount(page);
@@ -274,6 +388,12 @@ test.describe('the account service', () => {
     expect((await put({ data: sealed }, { 'Sec-Fetch-Site': 'cross-site' })).status()).toBe(403);
     expect((await request.get('/api/account/link/not-an-id')).status()).toBe(404);
     expect((await request.get('/api/account/passkey')).status()).toBe(401);
+    expect((await request.get('/api/account/status')).status()).toBe(401);
+    const token = { Authorization: `Bearer ${randomBytes(32).toString('base64url')}` };
+    expect(await (await request.get('/api/account/status', { headers: token })).json()).toEqual({
+      replaced: false,
+    });
+    expect((await request.delete('/api/account/status', { headers: token })).status()).toBe(405);
     expect((await request.get('/api/account/nothing')).status()).toBe(404);
   });
 

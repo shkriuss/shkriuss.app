@@ -117,6 +117,11 @@ const LAST_UPDATED = '17 October 2026';
         as your other device uses it.
       </li>
       <li>
+        <strong>If you replace your account key</strong> (after losing a device): the server keeps a
+        note that the old key was replaced, so devices that still have it sign out. Your device
+        keeps the old key for a while, so your apps can move their synced data to the new one.
+      </li>
+      <li>
         That's all. There's no list of accounts, and nothing that connects an account to you, to
         your devices, or to your data in any app.
       </li>
@@ -146,6 +151,10 @@ const LAST_UPDATED = '17 October 2026';
           <li>
             “Turn off on this device” stops syncing there and keeps your data. “Delete the online
             copy” deletes the copy from the server; your devices keep their data.
+          </li>
+          <li>
+            If you replace your account key, turning on sync again moves the app's copy to the new
+            key and deletes the old copy.
           </li>
         </ul>
       </>

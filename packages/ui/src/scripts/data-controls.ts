@@ -244,6 +244,9 @@ export function mountDataControls(section: HTMLElement): void {
     void unlocked(pending).then((data) => {
       if (!data) return;
       try {
+        // Sync is off: forget what was synced before, so turning it on again
+        // doesn't treat the restored (older) data as new edits.
+        if (!isSyncOn()) stopSync();
         restoreAll(data);
       } catch (error) {
         busy(restoreDialog, '');

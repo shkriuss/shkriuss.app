@@ -1,8 +1,8 @@
 # 0010. The shkriuss account, and syncing apps between devices
 
-Status: Accepted (2026-10-17). Part 1 (the account) and part 2 (Calendar and
-Tally syncing through it) are built. Part 3 (replacing the account key after
-losing a device) is planned.
+Status: Accepted (2026-10-17). Built in three parts: the account, Calendar and
+Tally syncing through it, and replacing the account key after losing a
+device.
 
 ## Context
 
@@ -76,11 +76,14 @@ HKDF), like `K7Q2-M9XD`.
 
 - **On the device:** the account secret, in `localStorage` for the hub only,
   under `shkriuss-device:account`. It's never in backups, and signing out
-  deletes it.
+  deletes it. After the key is replaced, the old keys this device knows are
+  kept there too (at most 5), so apps can move their old copies.
 - **On the hub's server.** The hub's Worker runs only for `/api/account/*`,
-  with one Durable Object per link or passkey lock. It stores:
+  with one Durable Object per link, passkey lock or replaced key. It stores:
   - sealed passkey locks;
-  - sealed device links, for at most 10 minutes.
+  - sealed device links, for at most 10 minutes;
+  - a note that an account key was replaced, under the SHA-256 hash of a
+    token only that key can make.
 
   There is no list of accounts and no account id, and nothing ties an entry
   to a person or to any app's data.
@@ -90,6 +93,35 @@ HKDF), like `K7Q2-M9XD`.
   - Bodies are limited to 1 KB.
   - Only sealed values of the right shape are accepted.
   - Shared helpers live in `packages/server`.
+
+### Replacing the account key (a lost device)
+
+A lost or stolen signed-in device holds the account secret. On a device the
+person still has, **"Replace the account key"** on the Account page:
+
+1. Makes a new secret and shows its recovery key. Nothing changes until the
+   person confirms they saved it.
+2. Tells the account service that the old key is replaced, for good
+   (`PUT /api/account/status`, with a token derived from the old key).
+3. Signs this device in with the new key, and remembers the old one.
+
+Then:
+
+- **Every device with the old key** asks the account service when it opens
+  the Account page, and signs out if the key was replaced. The old recovery
+  key, links made with it, and passkeys that unlock it can't sign in any more.
+  If the service can't be reached, the device carries on and checks next time.
+- **Apps.** The Account page lists the apps that sync, each with a link that
+  opens the app and starts "Turn on sync" (`#sync=connect`). When an app
+  connects, the hub also gives it its keys from the replaced account keys.
+  The app's next sync brings the old online copy into the new one (merging as
+  usual), then deletes the old copy, marked as moved. Devices still using the
+  old copy turn sync off and say the key was replaced; their data stays.
+- **Sync history.** A device keeps what it knew at its last sync when sync is
+  turned off (by the person, or because the copy was deleted or moved), and
+  keeps noting edits and deletions while it's off. Turning sync on again, with
+  either key, then syncs those properly instead of starting over. "Delete all
+  data" and restoring a backup forget it, so older data never counts as new.
 
 ### Syncing apps through the account
 
@@ -118,6 +150,7 @@ in with `sync: true` in `apps.json`.
     overwritten unseen.
   - "Delete the online copy" deletes the data and leaves a small note, so
     other devices learn it was deleted and turn sync off (keeping their data).
+    Moving to a new account key does the same, with a note that it moved.
   - Limits: about 1.4 MB of compressed data per app, and 120 changes per 10
     minutes per account.
 - **The copy.** The data of every synced store, as JSON, compressed (gzip),
@@ -164,8 +197,16 @@ in with `sync: true` in `apps.json`.
 - **Lost recovery key.** If the person loses the recovery key and every
   signed-in device, the account and anything synced are gone for good. The
   Account page and the downloaded key file say so.
-- **Lost device.** A lost or stolen signed-in device holds the account secret.
-  A planned "replace the account key" step (pull request 3) will lock it out.
+- **Lost device.** Replacing the key protects what's synced from then on.
+  Anything synced before could already have been read on the lost device.
+  - Edits made on the lost device before an app moves its copy come along
+    with the move.
+  - Someone holding the lost device could replace the key first. Then the
+    person's own devices are signed out; they create a new account and turn
+    on sync again, and their data comes along from their devices.
+  - If the lost device also has the person's password manager, a new passkey
+    would reach it too. The Account page says to remove the device from the
+    password manager first.
 - **Passkey support varies.** Where a password manager can't do PRF, the
   recovery key and QR codes still work.
 - **Device clocks decide "newest".** A device whose clock is far off can win

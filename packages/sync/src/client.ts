@@ -5,6 +5,9 @@
  *   sync.changed();   // after every save: syncs a moment later
  *   sync.connect();   // "Turn on sync": goes to the hub's Account page and back
  *
+ * Opening the app with "#sync=connect" (from the hub's list of apps) starts
+ * "Turn on sync" straight away.
+ *
  * Each round: read this device's items, fetch the online copy if it changed,
  * merge (./merge.ts: newest edit of each item wins, deletions sync), save the
  * result here, and upload it if it differs. The copy is sealed on the device
@@ -12,13 +15,21 @@
  * server (version numbers) and simply merged again.
  *
  * This device's sync key and what it knew at the last sync are kept under
- * "shkriuss-device:", which backups skip.
+ * "shkriuss-device:", which backups skip. What it knew stays when sync is
+ * turned off, so turning it on again later still syncs what was edited or
+ * deleted here in between.
+ *
+ * After the account key is replaced (a lost device), connecting again gives
+ * the app its new key plus the old one. The next round brings the old online
+ * copy along into the new one, then deletes the old copy, so devices still
+ * using it turn sync off and say why.
  */
 import { fromBase64Url, toBase64Url } from '@shkriuss/crypto';
 import type { Store } from '@shkriuss/storage';
 import {
   CONNECT_LIFETIME_MS,
   connectUrl,
+  type Connection,
   newConnectRequest,
   openConnection,
   parseConnectResult,
@@ -74,6 +85,8 @@ export type SyncProblem =
   | 'too-big'
   /** The online copy was deleted on another device; sync is now off here. */
   | 'deleted'
+  /** The account key was replaced on another device, which moved the copy; sync is now off here. */
+  | 'moved'
   /** This browser won't save. */
   | 'storage'
   /** Coming back from the hub didn't work (took too long, or another tab). */
@@ -109,9 +122,9 @@ export interface SyncClient {
 // ---------- This device's sync state ----------
 
 interface DeviceState {
-  /** The app's own key (from the account), base64url. */
-  secret: string;
-  code: string;
+  /** The app's own key (from the account), base64url. Null while sync is off. */
+  secret: string | null;
+  code: string | null;
   /** The online copy's version and lineage when last seen. */
   remote: { version: number; epoch: string } | null;
   /** What this device knew at the last sync, per store key. */
@@ -119,23 +132,28 @@ interface DeviceState {
   /** True when `known` holds a merge that isn't online yet (the upload failed). */
   dirty: boolean;
   last: number | null;
+  /** The app's keys from replaced account keys: their online copies are moved here, then deleted. */
+  previous: string[];
 }
 
 function loadState(): DeviceState | null {
   try {
     const value: unknown = JSON.parse(localStorage.getItem(STATE_KEY) ?? 'null');
     if (typeof value !== 'object' || value === null) return null;
-    const state = value as Partial<DeviceState>;
-    return typeof state.secret === 'string' && typeof state.code === 'string'
-      ? {
-          secret: state.secret,
-          code: state.code,
-          remote: state.remote ?? null,
-          known: state.known ?? {},
-          dirty: state.dirty === true,
-          last: state.last ?? null,
-        }
-      : null;
+    const state = value as Partial<Record<keyof DeviceState, unknown>>;
+    const on = typeof state.secret === 'string' && typeof state.code === 'string';
+    if (!on && state.secret !== null) return null;
+    return {
+      secret: on ? (state.secret as string) : null,
+      code: on ? (state.code as string) : null,
+      remote: (state.remote as DeviceState['remote'] | undefined) ?? null,
+      known: (state.known as DeviceState['known'] | undefined) ?? {},
+      dirty: state.dirty === true,
+      last: typeof state.last === 'number' ? state.last : null,
+      previous: Array.isArray(state.previous)
+        ? state.previous.filter((key): key is string => typeof key === 'string')
+        : [],
+    };
   } catch {
     return null;
   }
@@ -152,11 +170,51 @@ function saveState(state: DeviceState | null): boolean {
 }
 
 /** Whether this device syncs this app. */
-export const isSyncOn = (): boolean => loadState() !== null;
+export const isSyncOn = (): boolean => typeof loadState()?.secret === 'string';
 
-/** Stops syncing on this device (e.g. when all data is deleted here). Never throws. */
+/**
+ * Stops syncing on this device and forgets what it knew, so a later "Turn on
+ * sync" starts like the first time (what's online wins). For when all data is
+ * deleted here, or replaced from a backup. Never throws.
+ */
 export function stopSync(): void {
   saveState(null);
+}
+
+/** Sync off, keeping what this device knew. */
+const offState = (state: DeviceState): DeviceState => ({
+  ...state,
+  secret: null,
+  code: null,
+  remote: null,
+  previous: [],
+});
+
+/**
+ * Saves the connection the hub sent (coming back from "Turn on sync").
+ * Connecting again with the same key changes nothing; with another key, this
+ * device's data is merged into that account's copy at the next sync. Keys
+ * the new one replaced are remembered until their copies are moved. Returns
+ * false if the browser won't save.
+ */
+export function saveConnection(connection: Connection): boolean {
+  const existing = loadState();
+  const secret = toBase64Url(connection.secret);
+  const previous = [
+    ...new Set([...(existing?.previous ?? []), ...connection.replaces.map(toBase64Url)]),
+  ].filter((key) => key !== secret);
+  if (existing?.secret === secret) {
+    return saveState({ ...existing, code: connection.code, previous });
+  }
+  return saveState({
+    secret,
+    code: connection.code,
+    remote: null,
+    known: existing?.known ?? {},
+    dirty: existing?.dirty ?? false,
+    last: null,
+    previous,
+  });
 }
 
 class SyncError extends Error {
@@ -183,6 +241,15 @@ async function api(path: string, init: RequestInit = {}, token?: string): Promis
   }
 }
 
+/** A 410 from the server: the copy was deleted, or moved to a new account key. */
+async function goneError(response: Response): Promise<SyncError> {
+  const body = (await response.json().catch(() => null)) as { moved?: unknown } | null;
+  return new SyncError(body?.moved === true ? 'moved' : 'deleted');
+}
+
+const isGone = (error: unknown): boolean =>
+  error instanceof SyncError && (error.problem === 'deleted' || error.problem === 'moved');
+
 /** The online copy, or why there isn't one. */
 type Remote =
   | { kind: 'same' }
@@ -208,7 +275,7 @@ export function createSync(options: {
   const status = (): SyncStatus => {
     const state = loadState();
     return {
-      on: state !== null,
+      on: typeof state?.secret === 'string',
       code: state?.code ?? null,
       last: state?.last ?? null,
       busy,
@@ -220,11 +287,14 @@ export function createSync(options: {
     for (const listener of listeners) listener(current, event);
   };
 
-  async function fetchRemote(state: DeviceState, token: string, key: Uint8Array<ArrayBuffer>) {
-    const since = state.remote ? `?since=${state.remote.version}` : '';
-    const response = await api(`/copy${since}`, {}, token);
+  async function fetchRemote(
+    since: number | null,
+    token: string,
+    key: Uint8Array<ArrayBuffer>,
+  ): Promise<Remote> {
+    const response = await api(`/copy${since === null ? '' : `?since=${since}`}`, {}, token);
     if (response.status === 204) return { kind: 'same' } as Remote;
-    if (response.status === 410) throw new SyncError('deleted');
+    if (response.status === 410) throw await goneError(response);
     if (!response.ok) throw new SyncError(response.status >= 500 ? 'offline' : 'server');
     const copy = (await response.json()) as { version: number; epoch?: string; data?: string };
     if (copy.data === undefined || copy.epoch === undefined) return { kind: 'none' } as Remote;
@@ -252,17 +322,26 @@ export function createSync(options: {
     return { ...remote, v: synced.store.version, items };
   }
 
-  /** One round. Returns false if it should run again (another device wrote first, or a local edit). */
-  async function round(): Promise<boolean> {
-    const state = loadState();
-    if (!state) return true;
-    const { token, key } = await syncKeys(fromBase64Url(state.secret));
-    const now = Date.now();
+  /** The online copies of replaced keys still to move here (gone ones have nothing to bring). */
+  async function fetchPrevious(previous: readonly string[]) {
+    const copies: { token: string; stores: Stores }[] = [];
+    for (const secret of previous) {
+      const { token, key } = await syncKeys(fromBase64Url(secret));
+      try {
+        const remote = await fetchRemote(null, token, key);
+        if (remote.kind === 'copy') copies.push({ token, stores: remote.stores });
+      } catch (error) {
+        if (!isGone(error)) throw error;
+      }
+    }
+    return copies;
+  }
 
-    // 1. This device.
+  /** What this device sees now, for each store, given what it knew. */
+  function observeAll(state: DeviceState, now: number) {
     const before: Record<string, string> = {};
     const local: Stores = {};
-    let localChanged = false;
+    let changed = false;
     for (const synced of stores) {
       const value = synced.store.load();
       before[synced.store.key] = canonical(value);
@@ -273,12 +352,25 @@ export function createSync(options: {
         now,
       );
       local[synced.store.key] = seen.snapshot;
-      localChanged ||= seen.changed;
+      changed ||= seen.changed;
     }
+    return { before, local, changed };
+  }
 
-    // 2. The online copy.
-    const remote = await fetchRemote(state, token, key);
-    if (remote.kind === 'same' && !localChanged && !state.dirty) {
+  /** One round. Returns false if it should run again (another device wrote first, or a local edit). */
+  async function round(): Promise<boolean> {
+    const state = loadState();
+    if (!state?.secret) return true;
+    const { token, key } = await syncKeys(fromBase64Url(state.secret));
+    const now = Date.now();
+
+    // 1. This device.
+    const { before, local, changed: localChanged } = observeAll(state, now);
+
+    // 2. The online copy, and any old copies to bring along.
+    const remote = await fetchRemote(state.remote?.version ?? null, token, key);
+    const moving = await fetchPrevious(state.previous);
+    if (remote.kind === 'same' && !localChanged && !state.dirty && state.previous.length === 0) {
       saveState({ ...state, last: now });
       return true;
     }
@@ -286,9 +378,13 @@ export function createSync(options: {
     // 3. Merge.
     const merged: Stores = {};
     for (const synced of stores) {
-      const mine = local[synced.store.key] as StoreSnapshot;
-      const theirs = remote.kind === 'copy' ? remote.stores[synced.store.key] : undefined;
-      merged[synced.store.key] = prune(theirs ? merge(mine, upgrade(synced, theirs)) : mine, now);
+      let result = local[synced.store.key] as StoreSnapshot;
+      const others = [remote.kind === 'copy' ? remote.stores : {}, ...moving.map((m) => m.stores)];
+      for (const other of others) {
+        const theirs = other[synced.store.key];
+        if (theirs) result = merge(result, upgrade(synced, theirs));
+      }
+      merged[synced.store.key] = prune(result, now);
     }
 
     // 4. Save the result here (unless the person edited something meanwhile).
@@ -310,7 +406,7 @@ export function createSync(options: {
       remote.kind === 'copy' ? { version: remote.version, epoch: remote.epoch } : state.remote;
     const same =
       remote.kind === 'same'
-        ? !localChanged && !state.dirty
+        ? !localChanged && !state.dirty && moving.length === 0
         : remote.kind === 'copy' &&
           stores.every(
             (synced) =>
@@ -335,19 +431,25 @@ export function createSync(options: {
         if (appChanged) options.onChange();
         return false;
       }
-      if (response.status === 410) throw new SyncError('deleted');
+      if (response.status === 410) throw await goneError(response);
       if (response.status === 413) throw new SyncError('too-big');
       if (!response.ok) throw new SyncError(response.status >= 500 ? 'offline' : 'server');
       online = (await response.json()) as { version: number; epoch: string };
     }
 
     // 6. Remember.
-    if (
-      !saveState({ ...state, remote: online, known: knownsOf(merged), dirty: false, last: now })
-    ) {
-      throw new SyncError('storage');
-    }
+    const saved = { ...state, remote: online, known: knownsOf(merged), dirty: false, last: now };
+    if (!saveState(saved)) throw new SyncError('storage');
     if (appChanged) options.onChange();
+
+    // 7. The old copies are in the new one now: delete them, so devices still using them stop.
+    if (state.previous.length > 0) {
+      for (const { token: old } of moving) {
+        const response = await api('/copy?moved', { method: 'DELETE' }, old);
+        if (!response.ok) throw new SyncError(response.status >= 500 ? 'offline' : 'server');
+      }
+      if (!saveState({ ...saved, previous: [] })) throw new SyncError('storage');
+    }
     return true;
   }
 
@@ -355,7 +457,7 @@ export function createSync(options: {
     Object.fromEntries(Object.entries(merged).map(([key, snapshot]) => [key, knownFrom(snapshot)]));
 
   async function run(): Promise<void> {
-    if (!loadState()) return;
+    if (!isSyncOn()) return;
     if (busy) {
       again = true;
       return;
@@ -371,7 +473,8 @@ export function createSync(options: {
       event = 'synced';
     } catch (error) {
       problem = error instanceof SyncError ? error.problem : 'server';
-      if (problem === 'deleted') stopSync();
+      const state = loadState();
+      if (state && isGone(error)) saveState(offState(state));
     } finally {
       busy = false;
     }
@@ -406,18 +509,7 @@ export function createSync(options: {
     try {
       if (!pending || Date.now() - pending.at > CONNECT_LIFETIME_MS) throw new Error('No request');
       const connection = await openConnection(options.app, pending, result);
-      if (
-        !saveState({
-          secret: toBase64Url(connection.secret),
-          code: connection.code,
-          remote: null,
-          known: {},
-          dirty: false,
-          last: null,
-        })
-      ) {
-        throw new SyncError('storage');
-      }
+      if (!saveConnection(connection)) throw new SyncError('storage');
       problem = null;
       emit('connected');
       await run();
@@ -434,7 +526,9 @@ export function createSync(options: {
       return () => listeners.delete(listener);
     },
     changed() {
-      if (loadState()) schedule(CHANGE_DELAY_MS);
+      const state = loadState();
+      if (state?.secret) schedule(CHANGE_DELAY_MS);
+      else if (state) rememberWhileOff(state);
     },
     syncNow: () => run(),
     async connect() {
@@ -450,21 +544,41 @@ export function createSync(options: {
       location.assign(connectUrl(origin, request));
     },
     turnOff() {
-      stopSync();
+      const state = loadState();
+      if (state) saveState(offState(state));
       problem = null;
       emit('turned-off');
     },
     async deleteOnline() {
       const state = loadState();
-      if (!state) return;
+      if (!state?.secret) return;
       const { token } = await syncKeys(fromBase64Url(state.secret));
       const response = await api('/copy', { method: 'DELETE' }, token);
       if (!response.ok) throw new SyncError(response.status >= 500 ? 'offline' : 'server');
-      stopSync();
+      saveState(offState(state));
       problem = null;
       emit('deleted-online');
     },
   };
+
+  /**
+   * Sync is off but was on before: keep track of when items are edited or
+   * deleted here, so turning it on again merges them properly.
+   */
+  function rememberWhileOff(state: DeviceState): void {
+    const now = Date.now();
+    const known = { ...state.known };
+    let changed = false;
+    for (const synced of stores) {
+      const before = known[synced.store.key];
+      if (!before) continue;
+      const seen = observe(before, synced.items(synced.store.load()), synced.store.version, now);
+      if (!seen.changed) continue;
+      known[synced.store.key] = knownFrom(prune(seen.snapshot, now));
+      changed = true;
+    }
+    if (changed) saveState({ ...state, known });
+  }
 
   // Keep up with other devices while the app is open.
   document.addEventListener('visibilitychange', () => {
@@ -479,7 +593,19 @@ export function createSync(options: {
   }, POLL_MS);
 
   // A moment later, so the page can subscribe first and see what happened.
-  if (parseConnectResult(location.hash)) window.setTimeout(() => void finishConnect(), 0);
-  else if (loadState()) schedule(0);
+  if (parseConnectResult(location.hash)) {
+    window.setTimeout(() => void finishConnect(), 0);
+  } else if (location.hash === '#sync=connect') {
+    // From the hub's list of apps: "Turn on sync" straight away.
+    history.replaceState(null, '', `${location.pathname}${location.search}`);
+    window.setTimeout(() => {
+      client.connect().catch(() => {
+        problem = 'connect-failed';
+        emit();
+      });
+    }, 0);
+  } else if (isSyncOn()) {
+    schedule(0);
+  }
   return client;
 }

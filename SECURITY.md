@@ -28,16 +28,20 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
   **shkriuss account** ([ADR 0010](docs/adr/0010-account-and-sync.md)). It
   only holds values sealed on the device (AES-256-GCM): passkey locks, under
   the hash of a token only the passkey can produce, and one-time device links
-  that expire after 10 minutes. There are no account ids, emails or
-  passwords. Requests from other sites are refused (`Sec-Fetch-Site`), and
-  bodies are limited to 1 KB.
+  that expire after 10 minutes. It also notes account keys that were
+  replaced (after a lost device), under the hash of a token only the old key
+  can make; devices holding a replaced key sign out, and it can't sign in
+  again. There are no account ids, emails or passwords. Requests from other
+  sites are refused (`Sec-Fetch-Site`), and bodies are limited to 1 KB.
 - Apps that can **sync** (Calendar, Tally) run `/api/sync/*` in their own
   Worker, with one Durable Object per account holding one copy of the app's
   data, sealed on the device (AES-256-GCM, compressed first). The account is
   found by the SHA-256 hash of a token derived for that app, so copies in
   different apps can't be linked. Uploads must name the version they were
   based on, so a stale device can't overwrite newer data; changes are
-  rate-limited and size-limited.
+  rate-limited and size-limited. After the account key is replaced, an app
+  moves its copy to the new key and deletes the old one, so devices still
+  using the old key stop syncing.
 - An app connects by sending the person to the hub with a one-time ECDH
   public key; after they confirm, the hub seals the app's key to it and sends
   it back in the URL fragment, only to that app's real address. The app and

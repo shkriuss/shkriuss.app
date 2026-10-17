@@ -77,7 +77,8 @@ Everything here fits Cloudflare's and GitHub's free plans:
   unless you add a payment method and raise the spending limit.
 - Notifications while an app is closed, the optional account and sync use
   Durable Objects, free up to 100,000 requests a day (each notification sent
-  is about two; signing in or adding a device takes a handful; an app with
+  is about two; signing in, adding a device or opening the Account page
+  takes a handful; an app with
   sync open uses about one a minute, plus one or two per change).
 - The domain renewal is your only regular cost.
 

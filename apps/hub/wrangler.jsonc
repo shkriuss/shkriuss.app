@@ -14,15 +14,20 @@
     "not_found_handling": "404-page",
     "html_handling": "auto-trailing-slash",
   },
-  // One store per device link (deleted after 10 minutes) and one per passkey
-  // lock. SQLite-backed, as the free plan requires.
+  // One store per device link (deleted after 10 minutes), one per passkey
+  // lock, and one per replaced account key. SQLite-backed, as the free plan
+  // requires.
   "durable_objects": {
     "bindings": [
       { "name": "ACCOUNT_LINKS", "class_name": "AccountLink" },
       { "name": "ACCOUNT_PASSKEYS", "class_name": "AccountPasskey" },
+      { "name": "ACCOUNT_STATUS", "class_name": "AccountStatus" },
     ],
   },
-  "migrations": [{ "tag": "account-v1", "new_sqlite_classes": ["AccountLink", "AccountPasskey"] }],
+  "migrations": [
+    { "tag": "account-v1", "new_sqlite_classes": ["AccountLink", "AccountPasskey"] },
+    { "tag": "account-v2", "new_sqlite_classes": ["AccountStatus"] },
+  ],
   // The real address. Cloudflare creates the DNS record and certificate.
   "routes": [{ "pattern": "shkriuss.app", "custom_domain": true }],
   // No *.workers.dev address for production, but keep preview links for PRs.
@@ -35,6 +40,7 @@
       "bindings": [
         { "name": "ACCOUNT_LINKS", "class_name": "AccountLink" },
         { "name": "ACCOUNT_PASSKEYS", "class_name": "AccountPasskey" },
+        { "name": "ACCOUNT_STATUS", "class_name": "AccountStatus" },
       ],
     },
   },

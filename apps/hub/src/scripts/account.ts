@@ -12,12 +12,16 @@ import {
   currentAccount,
   forgetAccount,
   generateSecret,
+  isReplaced,
   linkState,
+  noteReplaced,
   parseLinkFragment,
   parseRecoveryKey,
   passkeySupport,
   recoveryKeyOf,
   removePasskey,
+  replaceAccountKey,
+  replacedSecrets,
   sameSecret,
   saveAccount,
   signInWithPasskey,
@@ -34,11 +38,18 @@ import {
   sealForApp,
   type ConnectRequest,
 } from '@shkriuss/sync/connect';
-import { isAppOrigin } from '@shkriuss/sync/origins';
+import { appOriginFor, isAppOrigin } from '@shkriuss/sync/origins';
 import { renderQrCode } from '@shkriuss/ui/qr-code';
 
 type View =
-  'loading' | 'signed-out' | 'recovery' | 'new' | 'link-confirm' | 'signed-in' | 'connect';
+  | 'loading'
+  | 'signed-out'
+  | 'recovery'
+  | 'new'
+  | 'replace'
+  | 'link-confirm'
+  | 'signed-in'
+  | 'connect';
 
 /** An app asking to connect (from its "Turn on sync"), if the request is real. */
 function connectRequestOf(
@@ -66,6 +77,19 @@ const PROBLEMS: Record<AccountErrorCode, string> = {
 
 const problemOf = (error: unknown): string =>
   error instanceof AccountError ? (PROBLEMS[error.code] ?? PROBLEMS.server) : PROBLEMS.server;
+
+const SIGN_IN_AGAIN =
+  'Sign in with your new recovery key, or add this device with a code from one of your signed-in devices.';
+const REPLACED = {
+  here: `Your account key was replaced on another device, so this device is signed out. ${SIGN_IN_AGAIN}`,
+  key: `This key was replaced on another device, so it can’t sign in any more. ${SIGN_IN_AGAIN}`,
+  passkey: `This passkey is for an account key that was replaced on another device, so it can’t sign in any more. ${SIGN_IN_AGAIN} Then you can add a new passkey.`,
+  done: 'Your account key is replaced. Devices with the old key are signed out when they next open this page. Now turn on sync again in your apps (below), and add a new passkey if you use one.',
+};
+
+/** True if this key was replaced on another device (false if that can't be checked now). */
+const wasReplaced = (secret: Uint8Array<ArrayBuffer>): Promise<boolean> =>
+  isReplaced(secret).catch(() => false);
 
 const timeFormat = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
 
@@ -110,8 +134,11 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
   const recoveryInput = required<HTMLTextAreaElement>(recoveryForm, '[name="key"]');
   const recoveryError = required<HTMLElement>(recoveryForm, '[data-error-for="key"]');
 
+  const newTitle = required<HTMLElement>(root, '[data-new-title]');
   const newKey = required<HTMLElement>(root, '[data-new-key]');
   const newStatus = required<HTMLElement>(root, '[data-new-status]');
+  const replaceOnly = required<HTMLElement>(root, '[data-replace-only]');
+  const finishLabel = required<HTMLElement>(root, '[data-finish-label]');
   const savedCheck = required<HTMLInputElement>(root, '[data-saved-check]');
   const finishCreate = required<HTMLButtonElement>(root, '[data-action="finish-create"]');
 
@@ -146,9 +173,20 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
     connectNote.hidden = false;
   }
 
+  // The links to turn on sync in apps: to this hub's own apps (a PR preview's, in a preview).
+  for (const link of root.querySelectorAll<HTMLAnchorElement>('a[data-sync-app]')) {
+    const origin = appOriginFor(new URL(location.href), link.dataset['syncApp'] ?? '');
+    if (origin) link.href = `${origin}/#sync=connect`;
+  }
+
   let account: Account | null = await currentAccount();
-  /** A new account's secret, until the person confirms they saved its key. */
-  let pending: { secret: Uint8Array<ArrayBuffer>; key: string; code: string } | null = null;
+  /** A new key (a new account, or replacing this one), until the person confirms they saved it. */
+  let pending: {
+    secret: Uint8Array<ArrayBuffer>;
+    key: string;
+    code: string;
+    replacing: boolean;
+  } | null = null;
   /** A secret from a device link, until the person confirms. */
   let linked: Uint8Array<ArrayBuffer> | null = null;
   let link: DeviceLink | null = null;
@@ -179,19 +217,54 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
     }
   }
 
-  async function signIn(secret: Uint8Array<ArrayBuffer>, done: string): Promise<void> {
+  const STORAGE_BLOCKED =
+    'This browser won’t save the account. Is it in private mode, or is storage blocked?';
+
+  /**
+   * Signs in with `secret`, unless it was replaced (`replaced` is the message
+   * then; null for a new account, which can't be). Returns true if signed in.
+   */
+  async function signIn(
+    secret: Uint8Array<ArrayBuffer>,
+    done: string,
+    replaced: string | null = REPLACED.key,
+  ): Promise<boolean> {
+    // Only this device's own key is remembered as replaced (in noteReplaced):
+    // a key from someone else's link mustn't bring their data into this account.
+    if (replaced !== null && (await wasReplaced(secret))) {
+      say(replaced, true);
+      return false;
+    }
     if (!saveAccount(secret)) {
-      say(
-        'This browser won’t save the account. Is it in private mode, or is storage blocked?',
-        true,
-      );
-      return;
+      say(STORAGE_BLOCKED, true);
+      return false;
     }
     account = await currentAccount();
     stopLink();
     home();
     say(done);
     announce(done);
+    return true;
+  }
+
+  /** Shows a new recovery key to save, for a new account or to replace this one. */
+  async function showNewKey(replacing: boolean): Promise<void> {
+    say(null);
+    const secret = generateSecret();
+    pending = {
+      secret,
+      key: await recoveryKeyOf(secret),
+      code: await accountCodeOf(secret),
+      replacing,
+    };
+    newTitle.textContent = replacing ? 'Save your new recovery key' : 'Save your recovery key';
+    finishLabel.textContent = replacing ? 'Replace the key' : 'Continue';
+    replaceOnly.hidden = !replacing;
+    newKey.textContent = pending.key;
+    newStatus.textContent = '';
+    savedCheck.checked = false;
+    finishCreate.disabled = true;
+    show('new');
   }
 
   async function copy(text: string, status: HTMLElement): Promise<void> {
@@ -303,23 +376,41 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
   // ---------- Actions ----------
 
   const actions: Record<string, (button: HTMLButtonElement) => void | Promise<void>> = {
-    create: async () => {
-      say(null);
-      const secret = generateSecret();
-      pending = { secret, key: await recoveryKeyOf(secret), code: await accountCodeOf(secret) };
-      newKey.textContent = pending.key;
-      newStatus.textContent = '';
-      savedCheck.checked = false;
-      finishCreate.disabled = true;
-      show('new');
-    },
-    'finish-create': async () => {
+    create: () => showNewKey(false),
+    'finish-create': async (button) => {
       if (!pending) return;
-      const { secret } = pending;
+      const { secret, replacing } = pending;
+      if (!replacing) {
+        pending = null;
+        newKey.textContent = '';
+        await signIn(secret, 'Your account is ready, and this device is signed in.', null);
+        return;
+      }
+      if (!account) return;
+      button.disabled = true;
+      newStatus.textContent = 'Replacing the key…';
+      let saved: boolean;
+      try {
+        saved = await replaceAccountKey(account.secret, secret);
+      } catch (error) {
+        newStatus.textContent = problemOf(error);
+        button.disabled = false;
+        return;
+      }
       pending = null;
       newKey.textContent = '';
-      await signIn(secret, 'Your account is ready, and this device is signed in.');
+      account = await currentAccount();
+      stopLink();
+      linkStatus.textContent = '';
+      home();
+      say(saved ? REPLACED.done : STORAGE_BLOCKED, !saved);
+      announce(saved ? REPLACED.done : STORAGE_BLOCKED);
     },
+    replace: () => {
+      say(null);
+      show('replace');
+    },
+    'start-replace': () => showNewKey(true),
     'download-key': async () => {
       const source =
         pending ?? (account && { key: await recoveryKeyOf(account.secret), code: account.code });
@@ -354,7 +445,7 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
       withButton(button, async () => {
         say(null);
         try {
-          await signIn(await signInWithPasskey(), 'Signed in with your passkey.');
+          await signIn(await signInWithPasskey(), 'Signed in with your passkey.', REPLACED.passkey);
         } catch (error) {
           say(problemOf(error), !(error instanceof AccountError && error.code === 'cancelled'));
         }
@@ -364,7 +455,11 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
       button.disabled = true;
       const { request, app } = connecting;
       const secret = await appSecretOf(account.secret, app.slug);
-      const result = await sealForApp(request, { secret, code: account.code });
+      // Apps also get their keys from replaced account keys, to move their old copies.
+      const replaces = await Promise.all(
+        replacedSecrets().map((old) => appSecretOf(old, app.slug)),
+      );
+      const result = await sealForApp(request, { secret, code: account.code, replaces });
       location.replace(connectResultUrl(request.from, result));
     },
     'cancel-connect': () => {
@@ -449,8 +544,11 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
         recoveryInput.focus();
         return;
       }
-      recoveryInput.value = '';
-      await signIn(result.secret, 'Signed in with your recovery key.');
+      if (await signIn(result.secret, 'Signed in with your recovery key.')) {
+        recoveryInput.value = '';
+      } else {
+        recoveryInput.focus();
+      }
     })();
   });
 
@@ -480,6 +578,13 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
   });
 
   window.addEventListener('hashchange', () => void openLink(location.hash));
+
+  // Replaced on another device (a lost device): sign out here.
+  if (account && (await wasReplaced(account.secret))) {
+    noteReplaced(account.secret);
+    account = null;
+    say(REPLACED.here, true);
+  }
 
   if (!(await openLink(location.hash))) home(false);
 }

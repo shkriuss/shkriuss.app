@@ -6,6 +6,7 @@
  *   GET    /api/sync/copy?since=N   the account's sealed copy (204 if still N; version 0 if none yet)
  *   PUT    /api/sync/copy           replace it: { base, data } (409 if base is out of date)
  *   DELETE /api/sync/copy           delete it (leaves a note that it was deleted)
+ *   DELETE /api/sync/copy?moved     the same, after it was moved to a new account key
  *
  * The account is identified by a token derived from the app's own key
  * (a bearer token); the server stores only its SHA-256 hash, and each app's
@@ -54,7 +55,10 @@ export async function handleSync(request: Request, env: SyncEnv, path: string): 
     const since = new URL(request.url).searchParams.get('since') ?? '';
     return copy.fetch(`https://copy/?since=${encodeURIComponent(since)}`);
   }
-  if (request.method === 'DELETE') return copy.fetch('https://copy/', { method: 'DELETE' });
+  if (request.method === 'DELETE') {
+    const moved = new URL(request.url).searchParams.has('moved');
+    return copy.fetch(`https://copy/${moved ? '?moved' : ''}`, { method: 'DELETE' });
+  }
   if (request.method !== 'PUT') return problem(405, 'Use GET, PUT or DELETE.');
   const read = await jsonBody(request, MAX_REQUEST_BYTES);
   if (!read.ok) return read.response;
@@ -69,9 +73,15 @@ export default createWorker<SyncEnv>({ '/api/sync': handleSync });
 
 type Saved =
   | { version: number; epoch: string; data: string; at: number }
-  | { version: number; epoch: string; deleted: true; at: number };
+  | { version: number; epoch: string; deleted: true; moved?: true; at: number };
 
 const isDeleted = (saved: Saved): saved is Extract<Saved, { deleted: true }> => 'deleted' in saved;
+
+/** 410 Gone, saying whether the copy was deleted or moved to a new account key. */
+const gone = (saved: Saved | undefined): Response =>
+  saved && isDeleted(saved) && saved.moved
+    ? json({ error: 'The online copy was moved to a new account key.', moved: true }, 410)
+    : problem(410, 'The online copy was deleted.');
 
 export class SyncCopy {
   readonly state: DurableObjectState;
@@ -89,17 +99,19 @@ export class SyncCopy {
       if (request.method === 'GET') {
         // Nothing synced yet is normal (a first sync), so it isn't an error.
         if (!saved) return json({ version: 0 });
-        if (isDeleted(saved)) return problem(410, 'The online copy was deleted.');
+        if (isDeleted(saved)) return gone(saved);
         const since = new URL(request.url).searchParams.get('since');
         if (since === String(saved.version)) return noContent();
         return json({ version: saved.version, epoch: saved.epoch, data: saved.data });
       }
 
       if (request.method === 'DELETE') {
+        const moved = new URL(request.url).searchParams.has('moved');
         await this.state.storage.put('copy', {
           version: (saved?.version ?? 0) + 1,
           epoch: saved?.epoch ?? '',
           deleted: true,
+          ...(moved ? { moved: true as const } : {}),
           at: now,
         } satisfies Saved);
         return noContent();
@@ -135,7 +147,7 @@ export class SyncCopy {
         return json({ version: next.version, epoch: next.epoch });
       }
       if (!saved) return problem(404, 'Nothing synced yet.');
-      if (!live) return problem(410, 'The online copy was deleted.');
+      if (!live) return gone(saved);
       if (base !== live.version) {
         return json({ error: 'Someone else changed it first.', ...this.#current(live) }, 409);
       }

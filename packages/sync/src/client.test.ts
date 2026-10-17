@@ -6,7 +6,13 @@
 import { randomBytes, toBase64Url } from '@shkriuss/crypto';
 import { createStore, type StorageLike, type Store } from '@shkriuss/storage';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createSync, syncedStore, type SyncClient, type SyncStatus } from './client.ts';
+import {
+  createSync,
+  saveConnection,
+  syncedStore,
+  type SyncClient,
+  type SyncStatus,
+} from './client.ts';
 import worker, { SyncCopy, type SyncEnv } from './worker.ts';
 
 class MemoryStorage implements StorageLike {
@@ -130,6 +136,13 @@ class Device {
   set counters(counters: Counter[]) {
     this.use();
     this.store.save({ counters });
+    this.sync.changed();
+  }
+
+  /** Comes back from "Turn on sync" on the hub with this app key. */
+  connect(appSecret: Uint8Array<ArrayBuffer>, replaces: Uint8Array<ArrayBuffer>[] = []): void {
+    this.use();
+    expect(saveConnection({ secret: appSecret, code: 'N3W5-K3Y8', replaces })).toBe(true);
   }
 
   async syncNow(): Promise<SyncStatus> {
@@ -274,6 +287,100 @@ describe('syncing between devices', () => {
     expect(phone.sync.status().on).toBe(false);
     const status = await tablet.syncNow();
     expect(status).toMatchObject({ on: false, problem: 'deleted' });
+    expect(tablet.counters).toEqual([counter('water')]);
+  });
+
+  it('turned off and on again, still syncs what was deleted in between', async () => {
+    const secret = randomBytes(32);
+    const phone = new Device(secret);
+    const tablet = new Device(secret);
+    phone.counters = [counter('a'), counter('b')];
+    await phone.syncNow();
+    await tablet.syncNow();
+
+    tablet.use().sync.turnOff();
+    expect(tablet.sync.status().on).toBe(false);
+    vi.setSystemTime(Date.now() + 1000);
+    tablet.counters = [counter('a', 4)];
+    tablet.connect(secret);
+    await tablet.syncNow();
+    await phone.syncNow();
+    expect(phone.counters).toEqual([counter('a', 4)]);
+    vi.useRealTimers();
+  });
+
+  it('moves everything to a new account key, and stops the old copy', async () => {
+    const oldKey = randomBytes(32);
+    const newKey = randomBytes(32);
+    const lost = new Device(oldKey);
+    const tablet = new Device(oldKey);
+    const laptop = new Device(oldKey);
+    lost.counters = [counter('water')];
+    await lost.syncNow();
+    await tablet.syncNow();
+    await laptop.syncNow();
+    // Only the old copy has the laptop's latest changes.
+    vi.setSystemTime(Date.now() + 1000);
+    laptop.counters = [counter('water', 2), counter('steps')];
+    await laptop.syncNow();
+
+    // On the tablet, the account key is replaced, and the app connects again.
+    tablet.connect(newKey, [oldKey]);
+    expect((await tablet.syncNow()).problem).toBeNull();
+    expect(tablet.counters).toEqual([counter('water', 2), counter('steps')]);
+
+    // Devices still on the old key stop, and say why.
+    expect(await lost.syncNow()).toMatchObject({ on: false, problem: 'moved' });
+    expect(await laptop.syncNow()).toMatchObject({ on: false, problem: 'moved' });
+    expect(laptop.counters).toEqual([counter('water', 2), counter('steps')]);
+
+    // Edits on the laptop while sync was off come along when it connects again.
+    vi.setSystemTime(Date.now() + 2000);
+    laptop.counters = [counter('water', 3)];
+    laptop.connect(newKey, [oldKey]);
+    expect((await laptop.syncNow()).problem).toBeNull();
+    await tablet.syncNow();
+    expect(tablet.counters).toEqual([counter('water', 3)]);
+    vi.useRealTimers();
+  });
+
+  it('finishes moving to a new key after a dropped connection', async () => {
+    const oldKey = randomBytes(32);
+    const newKey = randomBytes(32);
+    const phone = new Device(oldKey);
+    const tablet = new Device(oldKey);
+    tablet.counters = [counter('water')];
+    await tablet.syncNow();
+
+    phone.connect(newKey, [oldKey]);
+    const realFetch = globalThis.fetch;
+    vi.stubGlobal('fetch', async (input: string, init?: RequestInit) => {
+      if (init?.method === 'DELETE') throw new TypeError('Failed to fetch');
+      return realFetch(input, init);
+    });
+    expect((await phone.syncNow()).problem).toBe('offline');
+    expect(phone.counters).toEqual([counter('water')]);
+    expect((await tablet.syncNow()).problem).toBeNull();
+
+    vi.stubGlobal('fetch', realFetch);
+    expect((await phone.syncNow()).problem).toBeNull();
+    expect((await tablet.syncNow()).problem).toBe('moved');
+  });
+
+  it('connecting to another account leaves the old one’s copy alone', async () => {
+    const mine = randomBytes(32);
+    const phone = new Device(mine);
+    const tablet = new Device(mine);
+    phone.counters = [counter('water')];
+    await phone.syncNow();
+    await tablet.syncNow();
+
+    const other = new Device(randomBytes(32));
+    other.counters = [counter('theirs')];
+    other.connect(randomBytes(32));
+    phone.connect(randomBytes(32));
+    expect((await phone.syncNow()).problem).toBeNull();
+    expect(await tablet.syncNow()).toMatchObject({ on: true, problem: null });
     expect(tablet.counters).toEqual([counter('water')]);
   });
 
