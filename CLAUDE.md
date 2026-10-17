@@ -19,7 +19,8 @@ apps/<slug>/         one folder per app → <slug>.shkriuss.app
 packages/ui/         design system: tokens, CSS, Astro components, icons, AppShell
 packages/registry/   apps.json = the single list of apps (+ validation)
 packages/astro-config/ defineAppConfig(): headers, manifest, icons, service worker
-packages/storage/    on-device storage helpers (createStore, export, delete)
+packages/storage/    on-device storage helpers (createStore, export, backup, restore, delete)
+packages/push/       optional notifications while an app is closed (client + per-app Worker)
 templates/app/       copied by `pnpm new-app` (placeholder slug: template-app)
 tests/e2e/           shared Playwright tests that run against EVERY site
 tests/unit/          cross-cutting unit tests (contrast, registry consistency, workflows)

@@ -69,6 +69,29 @@ deploy all read from the registry and the `apps/` folder.
   allow it in `astro.config.ts`:
   `defineAppConfig({ slug: 'notes', allowFeatures: ['screen-wake-lock'] })`.
 
+## Notifications while the app is closed (optional)
+
+Apps can send reminders even when they're closed, through the shared
+`@shkriuss/push` package ([ADR 0009](adr/0009-push-notifications.md)). Calendar
+is the example to copy. Ask Claude, or:
+
+1. In `apps.json`, add `"pushNotifications": true` to the app, and a line to
+   `dataStored` about the device key (see Calendar's entry).
+2. Add `src/worker.ts`:
+   `export { default, PushDevice, PushKeys } from '@shkriuss/push/worker';`
+3. In `wrangler.jsonc`, copy Calendar's `main`, `assets.binding`,
+   `assets.run_worker_first`, `durable_objects`, `migrations` and `previews`.
+   A unit test checks these match.
+4. Add `"@shkriuss/push": "workspace:*"` to the app's `package.json`.
+5. In the page script, call `enablePush()` from a switch, then
+   `syncPush(notices)` whenever the app's data changes, and `disablePush()`
+   when it's turned off. Each notice has a local start time, a repeat
+   pattern, minutes before, and the title and text to show. See
+   `apps/calendar/src/scripts/push-reminders.ts`.
+
+The privacy page lists the app automatically, and "Delete all data" already
+removes the device from the server.
+
 ## Going live
 
 When the app is ready, change its `"status"` in `apps.json` from `"beta"` to

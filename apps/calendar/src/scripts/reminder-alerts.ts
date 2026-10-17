@@ -6,9 +6,11 @@
  * notification. When Calendar opens again after being closed, it shows the
  * reminders it missed (up to LOOKBACK_MINUTES ago, for events not yet over).
  *
- * Browsers can't wake a closed web app at a set time without a server, so the
- * page also suggests adding events to the phone's own calendar app (.ics).
+ * When "Also remind me when Calendar is closed" is on (push-reminders.ts),
+ * the notification service sends them instead, so this file only lists them
+ * on the page (no second copy as a notification).
  */
+import { isPushEnabled } from '@shkriuss/push';
 import { createStore } from '@shkriuss/storage';
 import {
   addDays,
@@ -60,6 +62,8 @@ export interface ReminderAlerts {
   render(): void;
   /** Asks to show notifications if the person hasn't been asked. Call it from a tap or click. */
   offerNotifications(): void;
+  /** Updates the notifications status (after permission may have changed). */
+  refreshStatus(): void;
 }
 
 export function mountReminderAlerts(root: Document, page: CalendarPage): ReminderAlerts {
@@ -92,7 +96,8 @@ export function mountReminderAlerts(root: Document, page: CalendarPage): Reminde
   };
 
   async function notify(occurrences: Occurrence[]): Promise<void> {
-    if (permission() !== 'granted') return;
+    // With push on, the notification service sends these; don't show them twice.
+    if (permission() !== 'granted' || isPushEnabled()) return;
     // Phones only show notifications through the service worker (see sw.js).
     const registration =
       'serviceWorker' in navigator
@@ -201,5 +206,5 @@ export function mountReminderAlerts(root: Document, page: CalendarPage): Reminde
   renderStatus();
   check();
 
-  return { render, offerNotifications };
+  return { render, offerNotifications, refreshStatus: renderStatus };
 }

@@ -16,11 +16,20 @@ const appFolders = readdirSync(join(repoRoot, 'apps'), { withFileTypes: true })
 
 interface WranglerConfig {
   name: string;
+  main?: string;
   routes: { pattern: string; custom_domain: boolean }[];
-  assets: { directory: string; not_found_handling: string };
+  assets: { directory: string; not_found_handling: string; run_worker_first?: string[] };
   workers_dev: boolean;
-  previews: object;
+  durable_objects?: { bindings: { name: string; class_name: string }[] };
+  migrations?: { tag: string; new_sqlite_classes?: string[] }[];
+  previews: { durable_objects?: { bindings: { name: string; class_name: string }[] } };
 }
+
+/** The Durable Objects an app with notifications needs (packages/push). */
+const PUSH_BINDINGS = [
+  { name: 'PUSH_DEVICES', class_name: 'PushDevice' },
+  { name: 'PUSH_KEYS', class_name: 'PushKeys' },
+];
 
 function wranglerConfig(slug: string): WranglerConfig {
   return parseJsonc(
@@ -67,5 +76,26 @@ describe.each(appFolders)('apps/%s', (slug) => {
     expect(config.assets).toMatchObject({ directory: './dist', not_found_handling: '404-page' });
     expect(config.workers_dev).toBe(false);
     expect(config.previews).toBeDefined();
+  });
+
+  const push = slug !== HUB_SLUG && apps.find((app) => app.slug === slug)?.pushNotifications;
+  it(push ? 'runs the notification service for /api/push' : 'serves static files only', () => {
+    const config = wranglerConfig(slug);
+    if (!push) {
+      expect(config.main).toBeUndefined();
+      expect(config.durable_objects).toBeUndefined();
+      return;
+    }
+    expect(config.main).toBe('src/worker.ts');
+    expect(config.assets.run_worker_first).toEqual(['/api/*']);
+    expect(config.durable_objects?.bindings).toEqual(PUSH_BINDINGS);
+    // PR previews need their own storage, or they'd have none.
+    expect(config.previews.durable_objects?.bindings).toEqual(PUSH_BINDINGS);
+    const classes = (config.migrations ?? []).flatMap((m) => m.new_sqlite_classes ?? []);
+    expect(classes).toEqual(expect.arrayContaining(['PushDevice', 'PushKeys']));
+    const worker = readFileSync(join(repoRoot, 'apps', slug, 'src/worker.ts'), 'utf8');
+    expect(worker).toContain(
+      "export { default, PushDevice, PushKeys } from '@shkriuss/push/worker'",
+    );
   });
 });
