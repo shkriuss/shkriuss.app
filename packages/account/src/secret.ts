@@ -108,3 +108,14 @@ export async function accountCodeOf(secret: Uint8Array<ArrayBuffer>): Promise<st
 }
 
 export const sameSecret = (a: Uint8Array, b: Uint8Array): boolean => equalBytes(a, b);
+
+/**
+ * The key one app gets when it connects: different for every app, so an app
+ * never holds the account secret or another app's key.
+ */
+export async function appSecretOf(
+  secret: Uint8Array<ArrayBuffer>,
+  slug: string,
+): Promise<Uint8Array<ArrayBuffer>> {
+  return hkdf(secret, `shkriuss app v1 ${slug}`);
+}
