@@ -123,6 +123,11 @@ hr {
   outline-offset: 2px;
 }
 
+/* Headings and regions that scripts move focus to (tabindex="-1") aren't controls. */
+[tabindex='-1']:focus-visible {
+  outline: none;
+}
+
 [hidden] {
   display: none !important;
 }

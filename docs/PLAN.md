@@ -89,8 +89,10 @@ third-party version once for the whole repo.
 
 - **One Worker per site, static files only.** The hub and each app are
   separate Workers with no server code, just a folder of static files
-  (`dist/`). (Exception: apps with notifications while closed also run
-  `/api/push/*`; see [ADR 0009](adr/0009-push-notifications.md).) Requests for static files are **free and unlimited** on the Free
+  (`dist/`). (Exceptions: apps with notifications while closed also run
+  `/api/push/*`, see [ADR 0009](adr/0009-push-notifications.md); the hub runs
+  `/api/account/*` for the optional account, see
+  [ADR 0010](adr/0010-account-and-sync.md).) Requests for static files are **free and unlimited** on the Free
   plan. If one app breaks, the others aren't affected.
 - **Custom domains.** Each site's `wrangler.jsonc` declares its address, for
   example `{ "pattern": "tally.shkriuss.app", "custom_domain": true }`. On
@@ -172,7 +174,9 @@ on for these sites. The privacy page says so plainly.
 
 ### If an app later needs accounts or sync
 
-Don't build login from scratch. In order of preference:
+Done this way: an optional, end-to-end encrypted **shkriuss account** with no
+email or password ([ADR 0010](adr/0010-account-and-sync.md)). The original
+guidance, kept for reference:
 
 1. **Stay local and add file import** to go with the export. No server at all.
 2. **Encrypted sync.** Encrypt data on the device with a key the server never
@@ -316,8 +320,11 @@ month. GitHub never charges you unless you add a payment method.
 - [x] **Notifications while an app is closed** (opt-in, encrypted on the
       device), shared by any app ([ADR 0009](adr/0009-push-notifications.md)).
 - Add more apps one at a time, each with its own small browser tests.
-- If an app needs sync, follow the path in section 4, starting with a
-  decision record.
+- [x] **shkriuss account**, part 1: create an account, recovery key,
+      passkeys, add devices with a QR code ([ADR 0010](adr/0010-account-and-sync.md)).
+- **shkriuss account**, part 2: Calendar and Tally sync through it.
+- **shkriuss account**, part 3: replace the account key (for a lost device),
+  see which apps sync.
 
 ---
 

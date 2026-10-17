@@ -1,0 +1,13 @@
+{
+  "name": "@shkriuss/crypto",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Small Web Crypto helpers shared by the browser and the Workers: base64url, HKDF and AES-GCM.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  }
+}

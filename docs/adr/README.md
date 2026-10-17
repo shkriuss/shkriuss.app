@@ -16,6 +16,7 @@ mark them "Superseded by ADR N" instead.
 | [0007](0007-testing-strategy.md)                 | Testing: Vitest, Playwright on wrangler dev, axe, byte budgets                  | Accepted |
 | [0008](0008-encrypted-backups.md)                | Backup files locked with a passphrase (PBKDF2 + AES-GCM), restore in every app  | Accepted |
 | [0009](0009-push-notifications.md)               | Optional notifications while an app is closed: Web Push from each app's Worker  | Accepted |
+| [0010](0010-account-and-sync.md)                 | Optional shkriuss account on the hub (recovery key, passkeys, QR) and app sync  | Accepted |
 
 Template: **Context** (the problem), **Decision** (what we do), **Consequences**
 (good and bad), **Alternatives** (what we didn't pick and why).

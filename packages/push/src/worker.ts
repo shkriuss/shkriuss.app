@@ -14,7 +14,19 @@
  * token); the server stores just its SHA-256 hash. Messages arrive already
  * encrypted by the phone, so the server can't read them.
  */
-import { fromBase64Url, toBase64Url } from './base64.ts';
+import {
+  bearerToken,
+  createWorker,
+  json,
+  jsonBody,
+  noContent,
+  problem,
+  sha256Text,
+  type DurableObjectNamespace,
+  type DurableObjectState,
+  type SiteEnv,
+} from '@shkriuss/server';
+import { fromBase64Url } from './base64.ts';
 import { nextFireTime } from './schedule.ts';
 import {
   checkSchedule,
@@ -25,32 +37,7 @@ import {
 } from './validate.ts';
 import { generateVapidKeys, vapidAuthorization, type VapidKeys } from './vapid.ts';
 
-// ---------- The small part of the Workers runtime this uses ----------
-
-interface DurableObjectId {
-  toString(): string;
-}
-interface DurableObjectStub {
-  fetch(input: string, init?: RequestInit): Promise<Response>;
-}
-interface DurableObjectNamespace {
-  idFromName(name: string): DurableObjectId;
-  get(id: DurableObjectId): DurableObjectStub;
-}
-interface DurableObjectStorage {
-  get<T>(key: string): Promise<T | undefined>;
-  put(key: string, value: unknown): Promise<void>;
-  deleteAll(): Promise<void>;
-  setAlarm(time: number): Promise<void>;
-  deleteAlarm(): Promise<void>;
-}
-interface DurableObjectState {
-  storage: DurableObjectStorage;
-  blockConcurrencyWhile<T>(callback: () => Promise<T>): Promise<T>;
-}
-
-export interface PushEnv {
-  ASSETS: { fetch(request: Request): Promise<Response> };
+export interface PushEnv extends SiteEnv {
   PUSH_DEVICES: DurableObjectNamespace;
   PUSH_KEYS: DurableObjectNamespace;
   /** Only for local browser tests: lets the server send to http://127.0.0.1. */
@@ -74,48 +61,12 @@ const SENDS_PER_ALARM = 25;
 
 // ---------- Helpers ----------
 
-const SECURITY_HEADERS = {
-  'Cache-Control': 'no-store',
-  'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'",
-  'Cross-Origin-Resource-Policy': 'same-origin',
-  'Referrer-Policy': 'no-referrer',
-  'X-Content-Type-Options': 'nosniff',
-};
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json; charset=utf-8', ...SECURITY_HEADERS },
-  });
-}
-
-const problem = (status: number, error: string) => json({ error }, status);
-
-async function sha256(text: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-  return toBase64Url(new Uint8Array(digest));
-}
-
-/** The device's key from "Authorization: Bearer <key>": 32 random bytes, base64url. */
-function deviceKeyOf(request: Request): string | null {
-  const match = /^Bearer ([A-Za-z0-9_-]{43})$/.exec(request.headers.get('Authorization') ?? '');
-  return match?.[1] ?? null;
-}
-
-/** Reads a JSON body, refusing anything bigger than `limit` bytes. */
-async function readJson(request: Request, limit: number): Promise<unknown> {
-  const declared = Number(request.headers.get('Content-Length') ?? '0');
-  if (declared > limit) throw new RangeError('Too big');
-  const text = await request.text();
-  if (text.length > limit) throw new RangeError('Too big');
-  return JSON.parse(text);
-}
-
 const allowLocal = (env: PushEnv) => env.ALLOW_LOCAL_ENDPOINTS === 'true';
 
 // ---------- The Worker ----------
 
-async function handlePush(request: Request, env: PushEnv, path: string): Promise<Response> {
+/** Requests to /api/push/*. */
+export async function handlePush(request: Request, env: PushEnv, path: string): Promise<Response> {
   if (path === '/api/push/key') {
     if (request.method !== 'GET') return problem(405, 'Use GET.');
     const keys = env.PUSH_KEYS.get(env.PUSH_KEYS.idFromName('vapid'));
@@ -130,22 +81,18 @@ async function handlePush(request: Request, env: PushEnv, path: string): Promise
         : null;
   if (!route) return problem(404, 'Not found.');
 
-  const deviceKey = deviceKeyOf(request);
+  const deviceKey = bearerToken(request);
   if (!deviceKey) return problem(401, 'Missing or malformed device key.');
-  const device = env.PUSH_DEVICES.get(env.PUSH_DEVICES.idFromName(await sha256(deviceKey)));
+  const device = env.PUSH_DEVICES.get(env.PUSH_DEVICES.idFromName(await sha256Text(deviceKey)));
 
   if (route === 'DELETE') return device.fetch('https://device/schedule', { method: 'DELETE' });
 
-  let body: unknown;
-  try {
-    body = await readJson(request, LIMITS.requestBytes);
-  } catch (error) {
-    return error instanceof RangeError
-      ? problem(413, 'Request too big.')
-      : problem(400, 'Body must be JSON.');
-  }
+  const read = await jsonBody(request, LIMITS.requestBytes);
+  if (!read.ok) return read.response;
   const checked =
-    route === 'PUT' ? checkSchedule(body, allowLocal(env)) : checkTest(body, allowLocal(env));
+    route === 'PUT'
+      ? checkSchedule(read.body, allowLocal(env))
+      : checkTest(read.body, allowLocal(env));
   if (!checked.ok) return problem(400, checked.error);
   return device.fetch(route === 'PUT' ? 'https://device/schedule' : 'https://device/test', {
     method: route === 'PUT' ? 'PUT' : 'POST',
@@ -153,19 +100,7 @@ async function handlePush(request: Request, env: PushEnv, path: string): Promise
   });
 }
 
-export default {
-  async fetch(request: Request, env: PushEnv): Promise<Response> {
-    const { pathname } = new URL(request.url);
-    if (!pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
-    if (!pathname.startsWith('/api/push/')) return problem(404, 'Not found.');
-    try {
-      return await handlePush(request, env, pathname);
-    } catch {
-      // Never echo details (they could include someone's push address).
-      return problem(500, 'Something went wrong.');
-    }
-  },
-};
+export default createWorker<PushEnv>({ '/api/push': handlePush });
 
 // ---------- The app's signing keys (one per app) ----------
 
@@ -288,7 +223,7 @@ export class PushDevice {
 
     if (request.method === 'DELETE') {
       await this.#forget();
-      return new Response(null, { status: 204, headers: SECURITY_HEADERS });
+      return noContent();
     }
 
     if (pathname === '/test') {

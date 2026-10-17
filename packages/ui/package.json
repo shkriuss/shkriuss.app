@@ -14,7 +14,8 @@
     "./styles.css": "./src/styles/index.css",
     "./tokens.css": "./src/styles/tokens.css",
     "./components/*": "./src/components/*",
-    "./layouts/*": "./src/layouts/*"
+    "./layouts/*": "./src/layouts/*",
+    "./qr-code": "./src/scripts/qr-code.ts"
   },
   "scripts": {
     "typecheck": "astro check --noSync"

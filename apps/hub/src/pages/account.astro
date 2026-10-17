@@ -1,0 +1,300 @@
+---
+/**
+ * The optional shkriuss account (docs/adr/0010-account-and-sync.md): create
+ * one, save the recovery key, sign in with it or a passkey, add devices with
+ * a QR code, sign out. Behaviour: ../scripts/account.ts. One view is shown at
+ * a time (data-view); the script picks it.
+ */
+import { AppShell, Button } from '@shkriuss/ui';
+---
+
+<AppShell
+  title="Account"
+  description="An optional shkriuss account to keep your apps in sync, end-to-end encrypted."
+>
+  <div class="stack stack--lg" data-account>
+    <section class="stack" aria-labelledby="account-heading">
+      <h1 id="account-heading" class="cluster account-title">
+        <span>Your shkriuss account</span>
+        <span class="badge">Beta</span>
+      </h1>
+      <p class="lead">
+        Optional. Keep your apps the same on your phone, tablet and computer. Everything is locked
+        on your devices before it's sent, so only your devices can read it.
+      </p>
+      <p class="notice">
+        Coming next: syncing Calendar and Tally. For now, you can create your account and add your
+        devices.
+      </p>
+    </section>
+
+    <p class="visually-hidden" role="status" data-announcer></p>
+    <p class="notice" role="status" data-message hidden></p>
+
+    <p class="muted" data-view="loading">
+      Loading…
+    </p>
+    <noscript>
+      <p class="notice">The account needs JavaScript, which is turned off in this browser.</p>
+    </noscript>
+
+    <section class="stack" aria-labelledby="start-heading" data-view="signed-out" hidden>
+      <h2 id="start-heading" tabindex="-1">
+        Create an account
+      </h2>
+      <p>
+        No email, no password, no name. Your account is a key that only your devices have, and a
+        recovery key that you keep.
+      </p>
+      <p>
+        <Button variant="primary" icon="plus" data-action="create">
+          Create an account
+        </Button>
+      </p>
+      <h2>Already have one?</h2>
+      <div class="cluster">
+        <Button icon="key" data-action="passkey-sign-in" data-needs-passkey>
+          Sign in with a passkey
+        </Button>
+        <Button data-action="show-recovery-form">Use my recovery key</Button>
+      </div>
+      <p class="muted">
+        Or add this device from one that's signed in: open this page there, tap “Show a code”, and
+        scan the code with this device's camera.
+      </p>
+    </section>
+
+    <section class="stack" aria-labelledby="recovery-heading" data-view="recovery" hidden>
+      <h2 id="recovery-heading" tabindex="-1">
+        Sign in with your recovery key
+      </h2>
+      <form class="stack" data-recovery-form novalidate>
+        <div class="field">
+          <label class="field__label" for="recovery-key">
+            Recovery key
+          </label>
+          <p class="field__hint" id="recovery-key-hint">
+            56 letters and digits, in groups of 4. Spaces and dashes don't matter.
+          </p>
+          <textarea
+            class="input recovery-input"
+            id="recovery-key"
+            name="key"
+            rows="3"
+            autocomplete="off"
+            autocapitalize="characters"
+            spellcheck="false"
+            aria-describedby="recovery-key-hint recovery-key-error"
+          ></textarea>
+          <p class="field__error" id="recovery-key-error" data-error-for="key"></p>
+        </div>
+        <div class="cluster">
+          <Button type="submit" variant="primary">
+            Sign in
+          </Button>
+          <Button data-action="back">Back</Button>
+        </div>
+      </form>
+    </section>
+
+    <section class="stack" aria-labelledby="new-heading" data-view="new" hidden>
+      <h2 id="new-heading" tabindex="-1">
+        Save your recovery key
+      </h2>
+      <p>
+        This is the key to your account. With it you can sign in on any device. Keep it somewhere
+        safe: a password manager is best. You can also download it, or write it down.
+      </p>
+      <p class="notice notice--danger">
+        If you lose it and every signed-in device, nobody can get your account back, not even us.
+      </p>
+      <p class="code-text" data-new-key></p>
+      <div class="cluster">
+        <Button icon="download" data-action="download-key">
+          Download recovery key
+        </Button>
+        <Button icon="copy" data-action="copy-key">
+          Copy
+        </Button>
+      </div>
+      <p class="muted" role="status" data-new-status></p>
+      <label class="check">
+        <input type="checkbox" data-saved-check />
+        <span>I've saved my recovery key</span>
+      </label>
+      <div class="cluster">
+        <Button variant="primary" data-action="finish-create" disabled>
+          Continue
+        </Button>
+        <Button data-action="back">Cancel</Button>
+      </div>
+    </section>
+
+    <section class="stack" aria-labelledby="link-heading" data-view="link-confirm" hidden>
+      <h2 id="link-heading" tabindex="-1">
+        Add this device to your account?
+      </h2>
+      <p>
+        Account code: <strong class="account-code" data-link-code></strong>. Check that your other
+        device shows the same code.
+      </p>
+      <p class="notice">
+        Only continue if you just showed this code on your own device. If someone else sent you the
+        link, they could see what you sync.
+      </p>
+      <p class="notice notice--danger" data-link-replace hidden>
+        This device is signed in to a different account now. Continuing signs it in to this one
+        instead.
+      </p>
+      <div class="cluster">
+        <Button variant="primary" data-action="accept-link">
+          Add this device
+        </Button>
+        <Button data-action="back">Cancel</Button>
+      </div>
+    </section>
+
+    <section
+      class="stack stack--lg"
+      aria-labelledby="signed-in-heading"
+      data-view="signed-in"
+      hidden
+    >
+      <div class="stack">
+        <h2 id="signed-in-heading" tabindex="-1">
+          This device is signed in
+        </h2>
+        <p>
+          Account code: <strong class="account-code" data-account-code></strong>
+        </p>
+        <p class="muted">Every device on your account shows this same code.</p>
+      </div>
+
+      <section class="stack" aria-labelledby="add-device-heading">
+        <h3 id="add-device-heading">Add a device</h3>
+        <p>
+          Sign in on another phone, tablet or computer without typing anything: show a code here,
+          then scan it with the other device's camera.
+        </p>
+        <p>
+          <Button icon="qr" data-action="create-link">
+            Show a code
+          </Button>
+        </p>
+        <div class="stack" data-link-panel hidden>
+          <div data-link-qr></div>
+          <p>Or open this link on the other device:</p>
+          <p class="code-text link-text" data-link-url></p>
+          <div class="cluster">
+            <Button icon="copy" data-action="copy-link">
+              Copy link
+            </Button>
+            <Button data-action="close-link">Done</Button>
+          </div>
+        </div>
+        <p class="muted" role="status" data-link-status></p>
+      </section>
+
+      <section class="stack" aria-labelledby="passkeys-heading">
+        <h3 id="passkeys-heading">Passkeys</h3>
+        <p>
+          A passkey signs you in with your fingerprint, face or screen lock. Your password manager
+          (Google, Apple or another) keeps it, and your other devices with the same password manager
+          can use it too.
+        </p>
+        <div class="cluster" data-needs-passkey>
+          <Button icon="key" data-action="add-passkey">
+            Add a passkey
+          </Button>
+          <Button variant="ghost" data-action="remove-passkey">
+            Remove a passkey
+          </Button>
+        </div>
+        <p class="muted" role="status" data-passkey-status></p>
+      </section>
+
+      <section class="stack" aria-labelledby="key-heading">
+        <h3 id="key-heading">Recovery key</h3>
+        <p>Lost it? You can see it again here, on any signed-in device.</p>
+        <p>
+          <Button data-action="show-key">Show recovery key</Button>
+        </p>
+      </section>
+
+      <section class="stack" aria-labelledby="sign-out-heading">
+        <h3 id="sign-out-heading">Sign out</h3>
+        <p>Signs out this device only. Your account and your other devices stay as they are.</p>
+        <p>
+          <Button variant="danger" icon="log-out" data-action="sign-out">
+            Sign out of this device
+          </Button>
+        </p>
+      </section>
+    </section>
+
+    <dialog class="dialog" aria-labelledby="key-dialog-title" data-key-dialog>
+      <div class="stack">
+        <h2 id="key-dialog-title">Your recovery key</h2>
+        <p class="notice notice--danger">
+          Anyone who sees it can sign in to your account. Don't share it or post it.
+        </p>
+        <p class="code-text" data-dialog-key></p>
+        <div class="cluster">
+          <Button icon="download" data-action="download-key">
+            Download
+          </Button>
+          <Button icon="copy" data-action="copy-key">
+            Copy
+          </Button>
+          <Button data-action="close-dialog">Close</Button>
+        </div>
+        <p class="muted" role="status" data-dialog-status></p>
+      </div>
+    </dialog>
+
+    <dialog class="dialog" aria-labelledby="sign-out-title" data-sign-out-dialog>
+      <form method="dialog" class="stack">
+        <h2 id="sign-out-title">Sign out of this device?</h2>
+        <p>
+          To sign in again you'll need your recovery key, a passkey, or a code from another
+          signed-in device.
+        </p>
+        <div class="cluster">
+          <Button type="submit" value="cancel">
+            Cancel
+          </Button>
+          <Button type="submit" variant="danger" value="confirm">
+            Sign out
+          </Button>
+        </div>
+      </form>
+    </dialog>
+  </div>
+</AppShell>
+
+<script>
+  import { mountAccount } from '../scripts/account.ts';
+
+  const root = document.querySelector<HTMLElement>('[data-account]');
+  if (root) void mountAccount(root);
+</script>
+
+<style>
+  .account-title {
+    --cluster-gap: var(--space-3);
+  }
+
+  .account-code {
+    font-family: var(--font-mono);
+    letter-spacing: 0.04em;
+  }
+
+  .recovery-input {
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+  }
+
+  .link-text {
+    font-size: var(--text-sm);
+  }
+</style>

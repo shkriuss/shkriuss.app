@@ -49,6 +49,10 @@
   --icon-green: #15803d;
   --icon-slate: #334155;
 
+  /* QR codes: always dark on light, in both themes, the way cameras read them best */
+  --qr-dark: #000000;
+  --qr-light: #ffffff;
+
   /* Typography: system fonts only (fast, private, no downloads) */
   --font-sans:
     system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans', 'Helvetica Neue', Arial, sans-serif,

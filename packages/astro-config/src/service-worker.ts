@@ -74,6 +74,8 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
+  // The server's answers (accounts, notifications) are never cached.
+  if (url.pathname.startsWith('/api/')) return;
 
   if (url.pathname.startsWith('/_astro/')) {
     event.respondWith(caches.match(request).then((cached) => cached || fetch(request)));

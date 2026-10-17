@@ -24,10 +24,18 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
   and a time zone; each app has its own storage and signing key, generated
   by the server and never exported. Requests are size-limited, rate-limited
   and checked; push addresses must be https with a domain name.
+- The hub also runs a small Worker for `/api/account/*`, for the optional
+  **shkriuss account** ([ADR 0010](docs/adr/0010-account-and-sync.md)). It
+  only holds values sealed on the device (AES-256-GCM): passkey locks, under
+  the hash of a token only the passkey can produce, and one-time device links
+  that expire after 10 minutes. There are no account ids, emails or
+  passwords. Requests from other sites are refused (`Sec-Fetch-Site`), and
+  bodies are limited to 1 KB.
 - Each app is its own origin (`<app>.shkriuss.app`), so browsers keep each
-  app's saved data separate.
+  app's saved data separate. Apps never get the account secret, only a key
+  for themselves.
 - User data stays in the browser (`localStorage`). Nothing is sent anywhere
-  unless the user turns on notifications while closed.
+  unless the user turns on notifications while closed, or uses the account.
 
 **Browser protections (same headers on every site)**
 

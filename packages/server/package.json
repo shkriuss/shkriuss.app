@@ -1,0 +1,16 @@
+{
+  "name": "@shkriuss/server",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Shared helpers for each site's small Worker: routing /api/*, JSON responses with security headers, request limits.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@shkriuss/crypto": "workspace:*"
+  }
+}
