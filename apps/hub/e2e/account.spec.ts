@@ -10,6 +10,7 @@ import { apps, hub } from '../../../packages/registry/src/index.ts';
 const RECOVERY_KEY = /^([0-9A-HJKMNP-TV-Z]{4}-){13}[0-9A-HJKMNP-TV-Z]{4}$/;
 const ACCOUNT_CODE = /^[0-9A-HJKMNP-TV-Z]{4}-[0-9A-HJKMNP-TV-Z]{4}$/;
 
+const syncApps = apps.filter((app) => app.sync === true && app.status !== 'hidden');
 const view = (page: Page, name: string) => page.locator(`[data-view="${name}"]`);
 const accountCode = (page: Page) => page.locator('[data-account-code]');
 const message = (page: Page) => page.locator('[data-message]');
@@ -255,11 +256,33 @@ test('replacing the key signs out every device that has the old one', async ({
 
 test('lists the apps that sync, with links that turn on sync there', async ({ page }) => {
   await createAccount(page);
-  for (const app of apps.filter((entry) => entry.sync === true && entry.status !== 'hidden')) {
+  for (const app of syncApps) {
     // Here on this computer, the hub can't tell the app's test address: it links to the real one.
     await expect(page.getByRole('link', { name: `Turn on sync in ${app.name}` })).toHaveAttribute(
       'href',
       `https://${app.slug}.${hub.domain}/#sync=connect`,
+    );
+  }
+});
+
+test('in a PR preview, links to that preview’s own apps', async ({ page, baseURL, guard }) => {
+  // Serve this hub as if it were PR 7's preview.
+  const preview = 'https://pr-7-hub.shkriuss.workers.dev';
+  guard.allowOrigin(preview);
+  await page.route(`${preview}/**`, async (route) => {
+    const url = new URL(route.request().url());
+    await route.fulfill({
+      response: await route.fetch({ url: `${baseURL ?? ''}${url.pathname}${url.search}` }),
+    });
+  });
+  await page.goto(`${preview}/account/`);
+  await page.getByRole('button', { name: 'Create an account' }).click();
+  await page.getByLabel("I've saved my recovery key").check();
+  await page.getByRole('button', { name: 'Continue' }).click();
+  for (const app of syncApps) {
+    await expect(page.getByRole('link', { name: `Turn on sync in ${app.name}` })).toHaveAttribute(
+      'href',
+      `https://pr-7-${app.slug}.shkriuss.workers.dev/#sync=connect`,
     );
   }
 });
