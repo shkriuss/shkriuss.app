@@ -89,6 +89,10 @@ describe('design token contrast', () => {
     expect(plain.get(`icon-${name}`)).toBe(hex);
   });
 
+  it('QR codes are black on white in both themes', () => {
+    expect(contrast(plain.get('qr-dark') as string, plain.get('qr-light') as string)).toBe(21);
+  });
+
   it('page background colours match tokens.css', () => {
     expect(token('color-bg')).toEqual([backgroundColors.light, backgroundColors.dark]);
   });

@@ -462,6 +462,38 @@ select.input {
   background: var(--color-danger-soft);
 }
 
+/* ---------- Codes to copy or scan ---------- */
+
+/* A key or code to read out, copy or write down: monospace, wraps between groups. */
+.code-text {
+  font-family: var(--font-mono);
+  font-size: var(--text-lg);
+  letter-spacing: 0.04em;
+  word-spacing: 0.2em;
+  overflow-wrap: anywhere;
+  user-select: all;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius);
+  border: var(--border-width) solid var(--color-border);
+  background: var(--color-surface-sunken);
+}
+
+/* A QR code (scripts/qr-code.ts): always dark on light, so cameras can read it. */
+.qr-code {
+  display: block;
+  inline-size: min(100%, 16rem);
+  aspect-ratio: 1;
+  border-radius: var(--radius-sm);
+}
+
+.qr-code__light {
+  fill: var(--qr-light);
+}
+
+.qr-code__dark {
+  fill: var(--qr-dark);
+}
+
 /* ---------- Dialog ---------- */
 
 .dialog {

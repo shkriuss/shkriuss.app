@@ -47,6 +47,18 @@ import { AppShell, Button, Card, AppIcon, Icon, DataControls } from '@shkriuss/u
 Also available: `NotFound` (the 404 page) and `ThemeSwitch` (already in the
 footer).
 
+QR codes (for example to open a link on another device) are drawn by a
+script, since their content is usually made on the page:
+
+```ts
+import { renderQrCode } from '@shkriuss/ui/qr-code';
+
+renderQrCode(element, 'https://…', 'QR code to open this on another device');
+```
+
+They're always black on white (`--qr-dark`, `--qr-light`), the way cameras
+read them best, in both themes.
+
 ## CSS classes
 
 - Layout: `.container` (`.container--wide`), `.stack` (`--sm`, `--lg`),
@@ -55,7 +67,8 @@ footer).
 - Text: `.lead`, `.muted`, `.prose`, `.visually-hidden`.
 - Components: `.btn` (`--primary`, `--danger`, `--ghost`, `--icon`, `--lg`),
   `.card` (`--link`), `.badge`, `.notice` (`--danger`), `.dialog`,
-  `.app-icon`.
+  `.app-icon`, `.code-text` (a key or link to copy or write down, in a
+  monospace box) and `.qr-code`.
 - Forms: `.field` / `.field__label` / `.field__hint` / `.field__error`
   (hidden while empty), `.input` (also for `<select>` and `<textarea>`),
   `.field-row` (fields side by side that stack on narrow screens) and

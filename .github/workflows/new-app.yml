@@ -32,18 +32,22 @@ on:
           - chevron-left
           - chevron-right
           - clock
+          - copy
           - download
           - external
           - grid
           - home
           - info
+          - key
           - list
+          - log-out
           - minus
           - monitor
           - moon
           - note
           - pencil
           - plus
+          - qr
           - repeat
           - reset
           - shield
@@ -51,6 +55,7 @@ on:
           - tally
           - trash
           - upload
+          - user
           - x
       color:
         description: 'Icon colour'
