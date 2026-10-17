@@ -99,8 +99,15 @@ export function shkriussIntegration(options: IntegrationOptions): AstroIntegrati
 
         if (options.pwa) {
           const files = (await listFiles(distDir)).filter((file) => file !== '_headers');
-          const version = await hashFiles(distDir, files);
-          await write('sw.js', serviceWorkerSource({ files: precacheUrls(files), version }));
+          const urls = precacheUrls(files);
+          // The version covers the site's files and the worker's own code, so
+          // changing either one gives visitors a fresh saved copy.
+          const version = createHash('sha256')
+            .update(await hashFiles(distDir, files))
+            .update(serviceWorkerSource({ files: urls, version: '' }))
+            .digest('hex')
+            .slice(0, 12);
+          await write('sw.js', serviceWorkerSource({ files: urls, version }));
           logger.info(`Wrote sw.js (offline support, version ${version}).`);
         }
       },

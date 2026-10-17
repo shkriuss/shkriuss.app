@@ -28,7 +28,9 @@ On a computer, `pnpm verify` runs the same checks in the same order.
   cookies; no requests to any other website; build files are cached and pages
   aren't.
 - **Install and offline:** the manifest and every icon load, and the site
-  works offline after the first visit.
+  works offline after the first visit, including when the network hangs
+  instead of failing (for example, airplane mode with a VPN on): it then opens
+  the saved copy within 3 seconds.
 - **Not found:** unknown pages return status 404 with a helpful page.
 
 ## Manual checks (before calling an app "done")
