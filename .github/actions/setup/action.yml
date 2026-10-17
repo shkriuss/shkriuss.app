@@ -1,0 +1,22 @@
+# Shared setup for every workflow: pnpm, Node.js (version from .node-version)
+# and dependencies from the lockfile. Actions are pinned to exact commits;
+# Dependabot keeps them up to date.
+name: Setup
+description: Install pnpm, Node.js and dependencies
+runs:
+  using: composite
+  steps:
+    - name: Install pnpm (version from package.json)
+      uses: pnpm/action-setup@d9184bf108216479bc5a137cc391f4d7b14c870b # v6.1.0
+      with:
+        cache: true
+
+    - name: Install Node.js
+      uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      with:
+        node-version-file: .node-version
+        package-manager-cache: false
+
+    - name: Install dependencies
+      shell: bash
+      run: pnpm install --frozen-lockfile

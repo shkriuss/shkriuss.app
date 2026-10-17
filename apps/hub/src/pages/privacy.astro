@@ -1,0 +1,135 @@
+---
+import { apps, getSite, HUB_SLUG, type StorageKind } from '@shkriuss/registry';
+import { AppShell } from '@shkriuss/ui';
+
+// The table is built from the registry, so it is always up to date.
+const sites = [getSite(HUB_SLUG), ...apps.map((app) => getSite(app.slug))];
+
+const whereLabel: Record<StorageKind, string> = {
+  none: 'Nothing is stored',
+  device: 'Only in your browser, on your device',
+  server: 'On a server (explained in the app)',
+};
+
+const LAST_UPDATED = '16 October 2026';
+---
+
+<AppShell
+  title="Privacy"
+  description="What shkriuss.app apps store, where, and what they never do."
+>
+  <article class="prose">
+    <h1>Privacy</h1>
+    <p class="muted">Last updated: {LAST_UPDATED}</p>
+
+    <p class="lead">
+      Short version: these apps don't collect your personal data. There are no accounts, cookies,
+      analytics, ads or trackers. What you save in an app stays in your browser on your device.
+    </p>
+
+    <h2 id="what-is-stored">What each app stores</h2>
+    <div class="table-wrap" role="region" aria-labelledby="what-is-stored" tabindex="0">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Site</th>
+            <th scope="col">What it saves</th>
+            <th scope="col">Where</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sites.map((site) => (
+            <tr>
+              <th scope="row">{site.name}</th>
+              <td>
+                {site.dataStored.length > 0 ? (
+                  <ul>
+                    {site.dataStored.map((item) => (
+                      <li>{item}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  'Nothing'
+                )}
+              </td>
+              <td>{whereLabel[site.storage]}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+
+    <h2>What these apps never do</h2>
+    <ul>
+      <li>Set cookies.</li>
+      <li>
+        Use analytics, ads, tracking pixels, or anything loaded from another company (scripts, fonts
+        or embeds).
+      </li>
+      <li>Ask you to sign up or log in.</li>
+      <li>Sell or share your data. There is none to share.</li>
+    </ul>
+
+    <h2>Hosting</h2>
+    <p>
+      The sites are hosted by Cloudflare. Like any web host, Cloudflare's servers handle your IP
+      address and basic request details (such as which page was asked for and your browser type) to
+      deliver pages and protect against attacks. No Cloudflare analytics or logging is turned on for
+      these sites, and that data is not collected or looked at. See{' '}
+      <a href="https://www.cloudflare.com/privacypolicy/">Cloudflare's privacy policy</a>.
+    </p>
+
+    <h2>You're in control</h2>
+    <ul>
+      <li>
+        Each app that saves data has a “Your data” section to download a copy or delete it all.
+      </li>
+      <li>You can also clear a site's data in your browser settings.</li>
+      <li>
+        Because your data is only on your device, clearing your browser data or losing the device
+        deletes it. Download a copy if you want a backup.
+      </li>
+    </ul>
+
+    <h2>Changes</h2>
+    <p>
+      If this ever changes (for example, if an app adds optional sync between devices), this page
+      will be updated first, and the app will ask you before anything leaves your device.
+    </p>
+  </article>
+</AppShell>
+
+<style>
+  .table-wrap {
+    overflow-x: auto;
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-sm);
+  }
+
+  th,
+  td {
+    padding: var(--space-3);
+    text-align: start;
+    vertical-align: top;
+    border-bottom: var(--border-width) solid var(--color-border);
+  }
+
+  tbody tr:last-child > * {
+    border-bottom: 0;
+  }
+
+  thead th {
+    background: var(--color-surface-sunken);
+  }
+
+  td ul {
+    margin: 0;
+    padding-inline-start: var(--space-4);
+  }
+</style>

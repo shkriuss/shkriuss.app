@@ -1,0 +1,63 @@
+---
+/**
+ * A button, or a link styled as a button when `href` is given.
+ *
+ * Icon-only buttons must have a `label` (read out by screen readers).
+ *
+ *   <Button variant="primary" icon="plus">Add counter</Button>
+ *   <Button icon="trash" label="Delete" />
+ *   <Button href="/settings/">Settings</Button>
+ */
+import type { HTMLAttributes } from 'astro/types';
+import type { IconName } from '../icons/index.ts';
+import Icon from './Icon.astro';
+
+type Variant = 'default' | 'primary' | 'danger' | 'ghost';
+
+type Props = Omit<HTMLAttributes<'button'>, 'class'> & {
+  variant?: Variant;
+  size?: 'md' | 'lg';
+  icon?: IconName | undefined;
+  /** Accessible name for icon-only buttons. */
+  label?: string | undefined;
+  href?: string | undefined;
+  class?: string | undefined;
+};
+
+const {
+  variant = 'default',
+  size = 'md',
+  icon,
+  label,
+  href,
+  class: className,
+  type = 'button',
+  ...rest
+} = Astro.props;
+
+const hasText = Astro.slots.has('default');
+if (!hasText && !label) {
+  throw new Error('<Button> without text needs a `label` for screen readers.');
+}
+
+const classes = [
+  'btn',
+  variant !== 'default' && `btn--${variant}`,
+  size === 'lg' && 'btn--lg',
+  !hasText && 'btn--icon',
+  className,
+];
+const ariaLabel = !hasText ? label : undefined;
+---
+
+{href ? (
+  <a href={href} class:list={classes} aria-label={ariaLabel}>
+    {icon && <Icon name={icon} />}
+    <slot />
+  </a>
+) : (
+  <button type={type} class:list={classes} aria-label={ariaLabel} {...rest}>
+    {icon && <Icon name={icon} />}
+    <slot />
+  </button>
+)}

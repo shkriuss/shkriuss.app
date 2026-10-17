@@ -1,0 +1,24 @@
+---
+/** A rounded, coloured square with a white icon: the "logo" of an app. */
+import type { IconColor } from '@shkriuss/registry';
+import { isIconName } from '../icons/index.ts';
+import Icon from './Icon.astro';
+
+interface Props {
+  icon: string;
+  color: IconColor;
+  size?: 'sm' | 'md' | 'lg';
+}
+
+const { icon, color, size = 'md' } = Astro.props;
+if (!isIconName(icon)) {
+  throw new Error(`Unknown icon "${icon}". See packages/ui/src/icons/index.ts for the list.`);
+}
+---
+
+<span
+  class:list={['app-icon', `app-icon--${color}`, size !== 'md' && `app-icon--${size}`]}
+  aria-hidden="true"
+>
+  <Icon name={icon} size="100%" />
+</span>

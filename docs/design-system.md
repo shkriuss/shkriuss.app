@@ -1,0 +1,73 @@
+# Design system (`@shkriuss/ui`)
+
+One package styles the hub and every app. Change it once and every site
+changes on its next deploy.
+
+## Where things are
+
+| Path                                     | What                                                                                            |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `packages/ui/src/styles/tokens.css`      | **Design tokens**: colours (light and dark), fonts, type sizes, spacing, radii, shadows, motion |
+| `packages/ui/src/styles/base.css`        | Reset and defaults for plain HTML, focus ring, skip link, `.visually-hidden`                    |
+| `packages/ui/src/styles/components.css`  | Layout helpers and component classes                                                            |
+| `packages/ui/src/components/*.astro`     | Astro components                                                                                |
+| `packages/ui/src/layouts/AppShell.astro` | The page shell every page uses                                                                  |
+| `packages/ui/src/icons/index.ts`         | The icon set (24×24, 2px stroke)                                                                |
+| `packages/ui/src/icons/colors.ts`        | App icon colours as plain values (kept in sync with tokens by a test)                           |
+
+## Principles
+
+- **System fonts only.** Fast, private, and they look native on every phone.
+- **Light and dark** follow the device by default. The footer switch lets
+  people pick Light, Dark or System; the choice is saved on the device.
+- **Accessible by default:** WCAG 2.2 AA contrast (unit-tested for every
+  token pair in both themes), visible focus rings, 44px tap targets,
+  reduced motion respected, and semantic HTML in every component.
+- **CSS first.** Component classes work with plain HTML, so even markup
+  created by scripts (Tally's `<template>`) uses the same styles.
+
+## Components
+
+<!-- prettier-ignore -->
+```astro
+---
+import { AppShell, Button, Card, AppIcon, Icon, DataControls } from '@shkriuss/ui';
+---
+<AppShell title="Settings">  <!-- page shell; leave out title on the home page -->
+  <Button variant="primary" icon="plus">Add</Button>
+  <Button icon="trash" label="Delete" />          <!-- icon-only buttons need a label -->
+  <Button href="/about/">About</Button>           <!-- a link that looks like a button -->
+  <Card title="Tally" href="https://tally.shkriuss.app/">Count things.</Card>
+  <AppIcon icon="tally" color="indigo" size="lg" />
+  <Icon name="info" label="Information" />        <!-- decorative unless it has a label -->
+  <DataControls />                                <!-- "Your data": download / delete -->
+</AppShell>
+```
+
+Also available: `NotFound` (the 404 page) and `ThemeSwitch` (already in the
+footer).
+
+## CSS classes
+
+- Layout: `.container` (`.container--wide`), `.stack` (`--sm`, `--lg`),
+  `.cluster` (`--between`), `.grid`. Override spacing per element with the
+  variables `--stack-gap`, `--cluster-gap`, `--grid-min` and `--grid-gap`.
+- Text: `.lead`, `.muted`, `.prose`, `.visually-hidden`.
+- Components: `.btn` (`--primary`, `--danger`, `--ghost`, `--icon`, `--lg`),
+  `.card` (`--link`), `.badge`, `.field` / `.field__label` /
+  `.field__hint`, `.input`, `.notice` (`--danger`), `.dialog`, `.app-icon`.
+
+## Changing the look everywhere
+
+- **Accent colour:** change the `--color-accent*` and `--color-on-accent`
+  tokens in `tokens.css`. Run `pnpm test`: the contrast tests tell you if a
+  colour is too light or too dark in either theme.
+- **Corner roundness, spacing, type scale:** change the matching tokens.
+- **A component:** change it in `packages/ui`, never by overriding it in one
+  app. If an app needs something new, add it to the design system.
+
+## Adding an icon
+
+Add a line to `packages/ui/src/icons/index.ts` (SVG shapes on a 24×24 grid,
+stroke only), then add the same name to the icon list in
+`.github/workflows/new-app.yml`. A unit test checks the two lists match.

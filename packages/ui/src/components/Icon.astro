@@ -1,0 +1,35 @@
+---
+/**
+ * An icon from the shared set. Decorative by default (hidden from screen
+ * readers). Pass `label` when the icon is the only thing that carries meaning.
+ */
+import { icons, type IconName } from '../icons/index.ts';
+
+interface Props {
+  name: IconName;
+  label?: string | undefined;
+  size?: string | number | undefined;
+  class?: string | undefined;
+}
+
+const { name, label, size = '1.25em', class: className } = Astro.props;
+const a11y = label
+  ? { role: 'img' as const, 'aria-label': label }
+  : { 'aria-hidden': 'true' as const };
+---
+
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 24 24"
+  width={size}
+  height={size}
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  focusable="false"
+  class={className}
+  {...a11y}
+  set:html={icons[name]}
+/>

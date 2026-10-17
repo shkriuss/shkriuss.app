@@ -1,0 +1,40 @@
+---
+/**
+ * Light / dark / system theme picker. A real radio group, so it works with a
+ * keyboard and screen readers. Hidden until its script runs (it needs JS).
+ */
+import type { IconName } from '../icons/index.ts';
+import Icon from './Icon.astro';
+
+const options: { value: string; label: string; icon: IconName }[] = [
+  { value: 'system', label: 'System', icon: 'monitor' },
+  { value: 'light', label: 'Light', icon: 'sun' },
+  { value: 'dark', label: 'Dark', icon: 'moon' },
+];
+---
+
+<fieldset class="theme-switch" data-theme-switch hidden>
+  <legend class="visually-hidden">Colour theme</legend>
+  {options.map((option) => (
+    <label class="theme-switch__option">
+      <input type="radio" name="shkriuss-theme" value={option.value} />
+      <Icon name={option.icon} />
+      <span>{option.label}</span>
+    </label>
+  ))}
+</fieldset>
+
+<script>
+  import { applyTheme, readTheme, type ThemeChoice } from '../scripts/theme.ts';
+
+  for (const fieldset of document.querySelectorAll<HTMLFieldSetElement>('[data-theme-switch]')) {
+    const current = readTheme();
+    for (const input of fieldset.querySelectorAll<HTMLInputElement>('input[type="radio"]')) {
+      input.checked = input.value === current;
+      input.addEventListener('change', () => {
+        if (input.checked) applyTheme(input.value as ThemeChoice);
+      });
+    }
+    fieldset.hidden = false;
+  }
+</script>

@@ -1,0 +1,49 @@
+---
+import { appOrigin, listedApps } from '@shkriuss/registry';
+import { AppIcon, AppShell, Card } from '@shkriuss/ui';
+---
+
+<AppShell wide>
+  <div class="stack stack--lg">
+    <section class="stack hero" aria-labelledby="intro-heading">
+      <h1 id="intro-heading">Small apps that respect your privacy</h1>
+      <p class="lead">
+        Simple tools for everyday things. No accounts, no ads, no tracking. What you save stays on
+        your device.
+      </p>
+    </section>
+
+    <section class="stack" aria-labelledby="apps-heading">
+      <h2 id="apps-heading">Apps</h2>
+      {listedApps.length === 0 ? (
+        <p class="muted">No apps yet. Check back soon.</p>
+      ) : (
+        <ul role="list" class="grid">
+          {listedApps.map((app) => (
+            <li>
+              <Card title={app.name} href={`${appOrigin(app.slug)}/`} level={3}>
+                <AppIcon slot="media" icon={app.icon} color={app.color} />
+                <p>{app.description}</p>
+                <p class="cluster muted app-meta">
+                  <span>{app.slug}.shkriuss.app</span>
+                  {app.status === 'beta' && <span class="badge">Beta</span>}
+                </p>
+              </Card>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  </div>
+</AppShell>
+
+<style>
+  .hero {
+    padding-block: var(--space-4) var(--space-2);
+  }
+
+  .app-meta {
+    --cluster-gap: var(--space-2);
+    font-size: var(--text-sm);
+  }
+</style>

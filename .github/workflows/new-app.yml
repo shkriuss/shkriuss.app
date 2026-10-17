@@ -1,0 +1,126 @@
+# "New app" button: creates a new app from the template, from a phone.
+# GitHub → Actions → New app → Run workflow → fill in the form.
+# It pushes a branch; then open a pull request from the link in the summary.
+# Docs: docs/adding-an-app.md
+name: New app
+
+on:
+  workflow_dispatch:
+    inputs:
+      slug:
+        description: 'Short id, used for the address: <slug>.shkriuss.app (lowercase letters, digits, hyphens; e.g. "notes")'
+        required: true
+        type: string
+      name:
+        description: 'Name shown to people (e.g. "Notes")'
+        required: true
+        type: string
+      description:
+        description: 'One sentence about the app (shown on the hub)'
+        required: true
+        type: string
+      icon:
+        description: 'Icon'
+        required: true
+        type: choice
+        default: grid
+        options:
+          - arrow-left
+          - calendar
+          - check
+          - clock
+          - download
+          - external
+          - grid
+          - home
+          - info
+          - list
+          - minus
+          - monitor
+          - moon
+          - note
+          - pencil
+          - plus
+          - reset
+          - shield
+          - sun
+          - tally
+          - trash
+          - upload
+          - x
+      color:
+        description: 'Icon colour'
+        required: true
+        type: choice
+        default: teal
+        options:
+          - teal
+          - blue
+          - indigo
+          - violet
+          - pink
+          - red
+          - orange
+          - green
+          - slate
+      stores:
+        description: 'What it saves on the device, for the privacy page (e.g. "Your notes"). Leave empty if nothing.'
+        required: false
+        type: string
+
+permissions: {}
+
+jobs:
+  create:
+    name: Create app
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      # Inputs are passed as environment variables, never pasted into
+      # commands, so nothing typed in the form can run as code.
+      APP_SLUG: ${{ inputs.slug }}
+      APP_NAME: ${{ inputs.name }}
+      APP_DESCRIPTION: ${{ inputs.description }}
+      APP_ICON: ${{ inputs.icon }}
+      APP_COLOR: ${{ inputs.color }}
+      APP_STORES: ${{ inputs.stores }}
+    steps:
+      - name: Check out code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 # zizmor: ignore[artipacked]
+        with:
+          # Needed to push the new branch. This job uploads no artifacts.
+          persist-credentials: true
+
+      - name: Set up
+        uses: ./.github/actions/setup
+
+      - name: Create the app
+        run: |
+          args=("$APP_SLUG" --name "$APP_NAME" --description "$APP_DESCRIPTION" --icon "$APP_ICON" --color "$APP_COLOR")
+          if [ -n "$APP_STORES" ]; then args+=(--stores "$APP_STORES"); fi
+          pnpm new-app "${args[@]}"
+          pnpm install --no-frozen-lockfile
+
+      - name: Check the new app builds and passes unit tests
+        run: |
+          pnpm --filter "$APP_SLUG" build
+          pnpm test
+
+      - name: Push a branch
+        run: |
+          branch="new-app/$APP_SLUG"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git add -A
+          git commit -m "feat($APP_SLUG): add $APP_NAME from the template"
+          git push origin "$branch"
+          {
+            echo "## $APP_NAME is ready for review"
+            echo
+            echo "1. [Open a pull request for it](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/compare/main...${branch}?expand=1)."
+            echo "2. Wait for the checks and the preview links."
+            echo "3. Merge it. It goes live at https://${APP_SLUG}.shkriuss.app"
+          } >> "$GITHUB_STEP_SUMMARY"

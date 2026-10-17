@@ -1,0 +1,29 @@
+{
+  "name": "@shkriuss/astro-config",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Shared Astro config: security headers, icons, manifest and offline support for every site.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./headers": "./src/headers.ts",
+    "./service-worker": "./src/service-worker.ts",
+    "./app-icons": "./src/app-icons.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@shkriuss/registry": "workspace:*",
+    "@shkriuss/ui": "workspace:*",
+    "sharp": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "astro": "catalog:",
+    "typescript": "catalog:"
+  },
+  "peerDependencies": {
+    "astro": "^7.0.0"
+  }
+}

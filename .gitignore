@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+.astro/
+.wrangler/
+
+# Test output
+test-results/
+playwright-report/
+blob-report/
+coverage/
+
+# Local environment files (never commit secrets)
+.env
+.env.*
+.dev.vars
+.dev.vars.*
+
+# OS / editor
+.DS_Store
+*.log

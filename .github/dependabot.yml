@@ -1,0 +1,29 @@
+# Dependabot: opens pull requests to keep dependencies and GitHub Actions up
+# to date. CI must pass before you merge them.
+version: 2
+updates:
+  - package-ecosystem: npm # also handles pnpm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    # Wait a week after a release, so broken or malicious versions are
+    # usually caught by others first. Security fixes are not delayed.
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+    groups:
+      # One PR for all minor and patch updates, so there's less to review.
+      minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directories: [/, /.github/actions/*]
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns: ['*']
