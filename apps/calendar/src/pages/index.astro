@@ -1,0 +1,22 @@
+---
+import { site } from 'virtual:shkriuss/site';
+import { AppShell, DataControls } from '@shkriuss/ui';
+---
+
+<AppShell wide>
+  <div class="stack stack--lg">
+    <header class="stack stack--sm">
+      <h1>{site.name}</h1>
+      <p class="lead">{site.description}</p>
+    </header>
+
+    <section class="card stack" aria-labelledby="start-heading">
+      <h2 id="start-heading">Coming soon</h2>
+      <p>
+        This app was just created. Build it in <code>apps/calendar/src/pages/index.astro</code>.
+      </p>
+    </section>
+
+    <DataControls />
+  </div>
+</AppShell>
