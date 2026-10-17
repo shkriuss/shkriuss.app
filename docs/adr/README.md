@@ -14,6 +14,7 @@ mark them "Superseded by ADR N" instead.
 | [0005](0005-pnpm-typescript-versions.md)         | pnpm 10 and TypeScript 6 (not the newest majors, for now)                       | Accepted |
 | [0006](0006-local-first-data.md)                 | User data stays on the device                                                   | Accepted |
 | [0007](0007-testing-strategy.md)                 | Testing: Vitest, Playwright on wrangler dev, axe, byte budgets                  | Accepted |
+| [0008](0008-encrypted-backups.md)                | Backup files locked with a passphrase (PBKDF2 + AES-GCM), restore in every app  | Accepted |
 
 Template: **Context** (the problem), **Decision** (what we do), **Consequences**
 (good and bad), **Alternatives** (what we didn't pick and why).

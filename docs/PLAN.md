@@ -302,7 +302,8 @@ month. GitHub never charges you unless you add a payment method.
 - `security.txt` and email anti-spoofing DNS records (SPF `-all`, DMARC
   `reject`, null MX), since the domain sends no email. Needs your decision on
   a contact address.
-- Import-from-file for app data.
+- [x] Import-from-file for app data: **Back up** (locked with a passphrase)
+      and **Restore** in every app ([ADR 0008](adr/0008-encrypted-backups.md)).
 - Deploy only the apps that changed, if CI time becomes a problem.
 - Upgrades when tooling allows: Node 26 LTS, TypeScript 7, pnpm 11+
   ([ADR 0005](adr/0005-pnpm-typescript-versions.md)).

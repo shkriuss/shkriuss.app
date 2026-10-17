@@ -61,7 +61,8 @@ deploy all read from the registry and the `apps/` folder.
 - Use components and classes from `@shkriuss/ui` ([design system](design-system.md)).
 - Put logic in `src/lib/*.ts` with a unit test next to it (`*.test.ts`).
 - Save data with `createStore` from `@shkriuss/storage`, and keep
-  `<DataControls />` on the page so people can download or delete their data.
+  `<DataControls />` on the page so people can back up, restore or delete their
+  data.
 - Add browser tests in `apps/<slug>/e2e/`. `apps/tally` is the reference
   example for all of this.
 - If the app needs a browser feature (for example keeping the screen on),
