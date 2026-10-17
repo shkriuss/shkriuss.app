@@ -10,6 +10,8 @@
 export type IsoDate = string;
 /** "HH:MM" (24-hour) */
 export type IsoTime = string;
+/** A date and time, "YYYY-MM-DDTHH:MM". Stamps sort and compare as plain text. */
+export type Stamp = string;
 
 // Years 1000–9999 only: date maths in JavaScript treats years below 100 specially.
 const DATE_PATTERN = /^([1-9]\d{3})-(\d{2})-(\d{2})$/;
@@ -123,9 +125,32 @@ export function minutesOf(time: IsoTime): number {
   return h * 60 + m;
 }
 
+const pad = (value: number): string => String(value).padStart(2, '0');
+
+export const toStamp = (date: IsoDate, time: IsoTime = '00:00'): Stamp => `${date}T${time}`;
+
+/** Minutes since 1970-01-01 00:00, for stamp arithmetic. */
+export function stampMinutes(stamp: Stamp): number {
+  return toDayNumber(stamp.slice(0, 10)) * 1440 + minutesOf(stamp.slice(11, 16));
+}
+
+export function fromStampMinutes(total: number): Stamp {
+  const day = Math.floor(total / 1440);
+  const minutes = total - day * 1440;
+  return toStamp(fromDayNumber(day), `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`);
+}
+
+export const addMinutes = (stamp: Stamp, minutes: number): Stamp =>
+  fromStampMinutes(stampMinutes(stamp) + minutes);
+
+/** The device's current date and time, to the minute. */
+export function nowStamp(now: Date = new Date()): Stamp {
+  return toStamp(today(now), `${pad(now.getHours())}:${pad(now.getMinutes())}`);
+}
+
 /** A time moved by some minutes, or null if that leaves the day. */
 export function shiftTime(time: IsoTime, minutes: number): IsoTime | null {
   const total = minutesOf(time) + minutes;
   if (total < 0 || total >= 24 * 60) return null;
-  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+  return `${pad(Math.floor(total / 60))}:${pad(total % 60)}`;
 }

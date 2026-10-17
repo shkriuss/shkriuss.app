@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CalendarEvent } from './events.ts';
-import { escapeText, foldLine, toIcs } from './ics.ts';
+import { escapeText, foldLine, toIcs, triggerOf } from './ics.ts';
 
 const event = (overrides: Partial<CalendarEvent> = {}): CalendarEvent => ({
   id: 'abc',
@@ -11,6 +11,7 @@ const event = (overrides: Partial<CalendarEvent> = {}): CalendarEvent => ({
   endTime: '10:30',
   repeat: 'none',
   repeatUntil: null,
+  reminder: null,
   notes: '',
   ...overrides,
 });
@@ -59,6 +60,20 @@ describe('toIcs', () => {
     ).toContain('RRULE:FREQ=YEARLY;UNTIL=20301017');
   });
 
+  it('writes reminders as alarms', () => {
+    const lines = linesOf(toIcs([event({ reminder: 15 })], { now }));
+    const alarm = lines.slice(lines.indexOf('BEGIN:VALARM'), lines.indexOf('END:VALARM') + 1);
+    expect(alarm).toEqual([
+      'BEGIN:VALARM',
+      'ACTION:DISPLAY',
+      'DESCRIPTION:Dentist',
+      'TRIGGER:-PT15M',
+      'END:VALARM',
+    ]);
+    expect(lines.indexOf('END:VALARM')).toBe(lines.indexOf('END:VEVENT') - 1);
+    expect(toIcs([event()], { now })).not.toContain('VALARM');
+  });
+
   it('escapes text and keeps notes', () => {
     const lines = linesOf(
       toIcs([event({ title: 'Lunch; Anna, Ben', notes: 'Line 1\nC:\\path' })], { now }),
@@ -96,5 +111,18 @@ describe('foldLine', () => {
 describe('escapeText', () => {
   it('escapes backslashes first', () => {
     expect(escapeText('a\\;b')).toBe('a\\\\\\;b');
+  });
+});
+
+describe('triggerOf', () => {
+  it('writes reminders as durations from the start', () => {
+    expect(triggerOf(0)).toBe('PT0S');
+    expect(triggerOf(15)).toBe('-PT15M');
+    expect(triggerOf(90)).toBe('-PT1H30M');
+    expect(triggerOf(1440)).toBe('-P1D');
+    expect(triggerOf(10080)).toBe('-P7D');
+    expect(triggerOf(900)).toBe('-PT15H'); // all-day: 9:00 the day before
+    expect(triggerOf(-540)).toBe('PT9H'); // all-day: 9:00 on the day
+    expect(triggerOf(2340)).toBe('-P1DT15H');
   });
 });
