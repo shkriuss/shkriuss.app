@@ -5,7 +5,8 @@
   "description": "On-device storage helpers: save, export and delete app data.",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./backup": "./src/backup.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"

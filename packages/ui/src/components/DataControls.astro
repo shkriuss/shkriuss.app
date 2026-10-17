@@ -1,7 +1,9 @@
 ---
 /**
- * "Your data" section for apps that store data on the device: download a copy
- * (JSON file) or delete everything. Put it at the bottom of an app's page.
+ * "Your data" section for apps that store data on the device: back up (a file
+ * locked with a passphrase, or a plain copy), restore from a backup, or delete
+ * everything. Put it at the bottom of an app's page. The behaviour is in
+ * ../scripts/data-controls.ts.
  */
 import { site } from 'virtual:shkriuss/site';
 import Button from './Button.astro';
@@ -24,21 +26,132 @@ const Heading = `h${level}` as 'h2' | 'h3';
   <Heading id="data-controls-heading">Your data</Heading>
   <p class="muted">
     Everything {site.name} saves stays in this browser on this device. Nothing is sent anywhere.
+    Back up to keep a copy, or to move your data to another device.
   </p>
   <div class="cluster">
-    <Button icon="download" data-action="export">
-      Download a copy
+    <Button icon="download" data-action="backup">
+      Back up
+    </Button>
+    <Button icon="upload" data-action="restore">
+      Restore
     </Button>
     <Button icon="trash" variant="danger" data-action="delete">
       Delete all data
     </Button>
   </div>
   <p class="muted" role="status" data-data-status></p>
+  <input
+    type="file"
+    accept=".json,application/json"
+    aria-label="Choose a backup file"
+    hidden
+    data-restore-file
+  />
+
+  <dialog class="dialog" aria-labelledby="backup-title" data-backup-dialog>
+    <form class="stack" data-backup-form novalidate>
+      <h2 id="backup-title">Back up your data</h2>
+      <p>
+        A backup is a file with everything {site.name} saves. Lock it with a passphrase so only you
+        can open it.
+      </p>
+      <p class="notice">
+        Keep the passphrase somewhere safe, like a password manager. Without it the backup can’t be
+        opened, not even by us.
+      </p>
+      <div class="field">
+        <label class="field__label" for="backup-passphrase">
+          Passphrase
+        </label>
+        <p class="field__hint" id="backup-passphrase-hint">
+          At least 12 characters. A few random words work well.
+        </p>
+        <input
+          class="input"
+          id="backup-passphrase"
+          name="passphrase"
+          type="password"
+          autocomplete="new-password"
+          aria-describedby="backup-passphrase-hint backup-passphrase-error"
+        />
+        <p class="field__error" id="backup-passphrase-error" data-error-for="passphrase"></p>
+      </div>
+      <div class="field">
+        <label class="field__label" for="backup-repeat">
+          Type it again
+        </label>
+        <input
+          class="input"
+          id="backup-repeat"
+          name="repeat"
+          type="password"
+          autocomplete="new-password"
+          aria-describedby="backup-repeat-error"
+        />
+        <p class="field__error" id="backup-repeat-error" data-error-for="repeat"></p>
+      </div>
+      <label class="check">
+        <input type="checkbox" data-show-passphrase />
+        <span>Show passphrase</span>
+      </label>
+      <p class="muted" role="status" data-dialog-status></p>
+      <div class="cluster">
+        <Button type="submit" variant="primary" icon="download">
+          Download backup
+        </Button>
+        <Button data-action="cancel">Cancel</Button>
+      </div>
+      <div class="stack stack--sm">
+        <p class="muted">
+          Or download a plain copy without a passphrase. Anyone who gets that file can read it.
+        </p>
+        <p>
+          <Button variant="ghost" data-action="backup-plain">
+            Download without a passphrase
+          </Button>
+        </p>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="dialog" aria-labelledby="restore-title" data-restore-dialog>
+    <form class="stack" data-restore-form novalidate>
+      <h2 id="restore-title">Restore a backup</h2>
+      <p data-restore-summary></p>
+      <div class="field" data-restore-unlock hidden>
+        <label class="field__label" for="restore-passphrase">
+          Passphrase
+        </label>
+        <input
+          class="input"
+          id="restore-passphrase"
+          name="passphrase"
+          type="password"
+          autocomplete="current-password"
+          aria-describedby="restore-passphrase-error"
+        />
+        <p class="field__error" id="restore-passphrase-error" data-error-for="passphrase"></p>
+      </div>
+      <p class="notice notice--danger" data-restore-warning hidden>
+        Restoring replaces everything {site.name} has saved on this device now.
+      </p>
+      <p class="muted" role="status" data-dialog-status></p>
+      <div class="cluster">
+        <Button type="submit" variant="primary" data-restore-submit>
+          Restore
+        </Button>
+        <Button data-action="cancel">Cancel</Button>
+      </div>
+    </form>
+  </dialog>
 
   <dialog class="dialog" aria-labelledby="data-delete-title" data-all-data-dialog>
     <form method="dialog" class="stack">
       <h2 id="data-delete-title">Delete all data?</h2>
-      <p>This removes everything {site.name} has saved on this device. It can't be undone.</p>
+      <p>
+        This removes everything {site.name} has saved on this device. It can't be undone. Back up
+        first if you might want it later.
+      </p>
       <div class="cluster">
         <Button type="submit" value="cancel">
           Cancel
@@ -52,29 +165,9 @@ const Heading = `h${level}` as 'h2' | 'h3';
 </section>
 
 <script>
-  import { deleteAll, downloadFile, exportAll } from '@shkriuss/storage';
+  import { mountDataControls } from '../scripts/data-controls.ts';
 
   for (const section of document.querySelectorAll<HTMLElement>('[data-data-controls]')) {
-    const app = section.dataset['app'] ?? 'app';
-    const status = section.querySelector<HTMLElement>('[data-data-status]');
-    const dialog = section.querySelector<HTMLDialogElement>('[data-all-data-dialog]');
-
-    section.querySelector('[data-action="export"]')?.addEventListener('click', () => {
-      const file = exportAll(app);
-      const date = file.exportedAt.slice(0, 10);
-      downloadFile(`${app}-data-${date}.json`, JSON.stringify(file, null, 2));
-      if (status) status.textContent = 'Your data was downloaded as a file.';
-    });
-
-    section.querySelector('[data-action="delete"]')?.addEventListener('click', () => {
-      dialog?.showModal();
-    });
-
-    dialog?.addEventListener('close', () => {
-      if (dialog.returnValue !== 'confirm') return;
-      deleteAll();
-      // Reload so the app starts fresh from empty storage.
-      window.location.reload();
-    });
+    mountDataControls(section);
   }
 </script>

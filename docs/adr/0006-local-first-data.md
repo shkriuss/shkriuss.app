@@ -11,8 +11,8 @@ Collect as little data as possible; anyone may use the apps.
 - Apps save data in the browser's `localStorage` through `@shkriuss/storage`
   (versioned, validated, with migrations). Nothing is sent to a server.
 - Each app is its own origin, so apps can't read each other's data.
-- Every app that saves data shows **Your data** (`<DataControls />`): download
-  a JSON copy, or delete everything.
+- Every app that saves data shows **Your data** (`<DataControls />`): back up,
+  restore, or delete everything (backups: see [ADR 0008](0008-encrypted-backups.md)).
 - Each app lists what it stores in `apps.json` (`dataStored`); the privacy
   page is generated from that.
 - No cookies, no analytics.

@@ -87,21 +87,43 @@ test('passes accessibility checks with counters on the page', async ({ page }) =
   await checkA11y(page, 'with counters (dark)');
 });
 
-test('downloads a copy of the data, and deletes all data', async ({ page }) => {
+test('backs up, deletes and restores the data', async ({ page }) => {
   await addCounter(page, 'Water');
   await counter(page, 'Water').getByRole('button', { name: 'Add 1 to Water' }).click();
 
-  const downloadPromise = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Download a copy' }).click();
-  const download = await downloadPromise;
-  expect(download.suggestedFilename()).toMatch(/^tally-data-\d{4}-\d{2}-\d{2}\.json$/);
-  const file = JSON.parse(await readFile(await download.path(), 'utf8'));
+  // A backup locked with a passphrase.
+  await page.getByRole('button', { name: 'Back up' }).click();
+  const backupDialog = page.getByRole('dialog', { name: 'Back up your data' });
+  await backupDialog.getByLabel('Passphrase', { exact: true }).fill('tally test passphrase');
+  await backupDialog.getByLabel('Type it again').fill('tally test passphrase');
+  const backupDownload = page.waitForEvent('download');
+  await backupDialog.getByRole('button', { name: 'Download backup' }).click();
+  const backup = await backupDownload;
+  expect(backup.suggestedFilename()).toMatch(/^tally-backup-\d{4}-\d{2}-\d{2}\.json$/);
+  expect(await readFile(await backup.path(), 'utf8')).not.toContain('Water');
+
+  // A plain copy anyone can read.
+  await page.getByRole('button', { name: 'Back up' }).click();
+  const plainDownload = page.waitForEvent('download');
+  await backupDialog.getByRole('button', { name: 'Download without a passphrase' }).click();
+  const plain = await plainDownload;
+  expect(plain.suggestedFilename()).toMatch(/^tally-data-\d{4}-\d{2}-\d{2}\.json$/);
+  const file = JSON.parse(await readFile(await plain.path(), 'utf8'));
   expect(file.app).toBe('tally');
   expect(file.data['shkriuss:tally'].data.counters[0]).toMatchObject({ name: 'Water', count: 1 });
 
   await page.getByRole('button', { name: 'Delete all data' }).click();
-  const dialog = page.getByRole('dialog', { name: 'Delete all data?' });
-  await dialog.getByRole('button', { name: 'Delete everything' }).click();
+  const deleteDialog = page.getByRole('dialog', { name: 'Delete all data?' });
+  await deleteDialog.getByRole('button', { name: 'Delete everything' }).click();
   await page.waitForLoadState('load');
   await expect(page.getByText('No counters yet')).toBeVisible();
+
+  // Restore the locked backup.
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Restore' }).click();
+  await (await chooser).setFiles(await backup.path());
+  const restoreDialog = page.getByRole('dialog', { name: 'Restore a backup' });
+  await restoreDialog.getByLabel('Passphrase').fill('tally test passphrase');
+  await restoreDialog.getByRole('button', { name: 'Restore' }).click();
+  await expect(counter(page, 'Water').locator('[data-value]')).toHaveText('1');
 });
