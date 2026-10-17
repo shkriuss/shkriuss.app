@@ -404,6 +404,50 @@
   border-color: var(--color-danger);
 }
 
+textarea.input {
+  min-height: 6rem;
+  resize: vertical;
+}
+
+select.input {
+  cursor: pointer;
+}
+
+/* Error message under a field; empty until there is a problem. */
+.field__error {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--color-danger);
+}
+
+.field__error:empty {
+  display: none;
+}
+
+/* Fields side by side that stack on narrow screens (e.g. date + time). */
+.field-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
+  gap: var(--space-3);
+}
+
+/* Checkbox with its label, sized as a comfortable tap target. */
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--tap-target);
+  cursor: pointer;
+}
+
+.check input {
+  width: 1.25rem;
+  height: 1.25rem;
+  margin: 0;
+  accent-color: var(--color-accent);
+  cursor: pointer;
+}
+
 /* ---------- Notices ---------- */
 
 .notice {
@@ -421,7 +465,12 @@
 /* ---------- Dialog ---------- */
 
 .dialog {
+  /* Centred on screen (the reset in base.css removes the browser's own margin). */
+  margin: auto;
   width: min(100% - 2 * var(--gutter), 28rem);
+  /* Long forms scroll inside the dialog on small screens. */
+  max-height: calc(100dvh - 2 * var(--gutter));
+  overflow-y: auto;
   padding: var(--space-5);
   border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-lg);

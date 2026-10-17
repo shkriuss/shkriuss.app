@@ -54,8 +54,12 @@ footer).
   variables `--stack-gap`, `--cluster-gap`, `--grid-min` and `--grid-gap`.
 - Text: `.lead`, `.muted`, `.prose`, `.visually-hidden`.
 - Components: `.btn` (`--primary`, `--danger`, `--ghost`, `--icon`, `--lg`),
-  `.card` (`--link`), `.badge`, `.field` / `.field__label` /
-  `.field__hint`, `.input`, `.notice` (`--danger`), `.dialog`, `.app-icon`.
+  `.card` (`--link`), `.badge`, `.notice` (`--danger`), `.dialog`,
+  `.app-icon`.
+- Forms: `.field` / `.field__label` / `.field__hint` / `.field__error`
+  (hidden while empty), `.input` (also for `<select>` and `<textarea>`),
+  `.field-row` (fields side by side that stack on narrow screens) and
+  `.check` (a checkbox with its label).
 
 ## Changing the look everywhere
 
