@@ -310,7 +310,7 @@ month. GitHub never charges you unless you add a payment method.
 **Milestone 3: real apps**
 
 - [x] **Calendar** (`calendar.shkriuss.app`): month view, events with times,
-      repeats and notes, .ics download. Later: reminders, .ics import.
+      repeats and notes, reminders and notifications, .ics import and export.
 - Add more apps one at a time, each with its own small browser tests.
 - If an app needs sync, follow the path in section 4, starting with a
   decision record.
