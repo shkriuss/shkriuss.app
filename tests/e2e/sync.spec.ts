@@ -28,6 +28,7 @@ test('turns on through the account, and off again', async ({ page }, testInfo) =
   const { code } = await createAccount(page);
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Sync between your devices' })).toBeVisible();
+  await expect(page.locator('[data-sync-off]')).toContainText('with a free shkriuss account.');
   await checkA11y(page, 'sync: off');
 
   await turnOnSync(page, name);

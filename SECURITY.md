@@ -33,7 +33,7 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
   can make; devices holding a replaced key sign out, and it can't sign in
   again. There are no account ids, emails or passwords. Requests from other
   sites are refused (`Sec-Fetch-Site`), and bodies are limited to 1 KB.
-- Apps that can **sync** (Calendar, Tally) run `/api/sync/*` in their own
+- Apps that can **sync** (Calendar, Notes, Tally) run `/api/sync/*` in their own
   Worker, with one Durable Object per account holding one copy of the app's
   data, sealed on the device (AES-256-GCM, compressed first). The account is
   found by the SHA-256 hash of a token derived for that app, so copies in

@@ -65,7 +65,8 @@ read them best, in both themes.
   `.cluster` (`--between`), `.grid`. Override spacing per element with the
   variables `--stack-gap`, `--cluster-gap`, `--grid-min` and `--grid-gap`.
 - Text: `.lead`, `.muted`, `.prose`, `.visually-hidden`.
-- Components: `.btn` (`--primary`, `--danger`, `--ghost`, `--icon`, `--lg`),
+- Components: `.btn` (`--primary`, `--danger`, `--ghost`, `--icon`, `--lg`;
+  a toggle button with `aria-pressed="true"` looks like `--primary`),
   `.card` (`--link`), `.badge`, `.notice` (`--danger`), `.dialog`,
   `.app-icon`, `.code-text` (a key or link to copy or write down, in a
   monospace box) and `.qr-code`.
