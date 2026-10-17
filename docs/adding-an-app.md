@@ -113,8 +113,10 @@ or:
    then `mountSyncControls(…)`, and `sync.changed()` after every save. See
    `apps/tally/src/scripts/tally.ts`.
 
-The privacy page lists the app automatically. When an item is changed on two
-devices before they sync, the newest change wins.
+The privacy page and the Account page's list of apps that sync include the
+app automatically. When an item is changed on two devices before they sync,
+the newest change wins. Moving to a new account key (after a lost device)
+needs no extra code.
 
 ## Going live
 

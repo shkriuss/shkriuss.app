@@ -3,7 +3,14 @@
  * Account page; the server side is ./worker.ts.
  */
 export { AccountError, type AccountErrorCode } from './errors.ts';
-export { currentAccount, forgetAccount, saveAccount, type Account } from './device.ts';
+export {
+  currentAccount,
+  forgetAccount,
+  noteReplaced,
+  replacedSecrets,
+  saveAccount,
+  type Account,
+} from './device.ts';
 export {
   claimLink,
   createLink,
@@ -29,4 +36,5 @@ export {
   sameSecret,
   type RecoveryKeyResult,
 } from './secret.ts';
+export { isReplaced, replaceAccountKey } from './status.ts';
 export { LINK_LIFETIME_MS } from './validate.ts';

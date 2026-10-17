@@ -1,12 +1,19 @@
 /**
  * "Sync between your devices" in EVERY app that can sync (`sync: true` in
  * apps.json; docs/adr/0010): connecting through the hub, turning it off,
- * cancelling, and deleting the online copy. Each app's own tests check that
+ * cancelling, deleting the online copy, and moving to a new account key. Each app's own tests check that
  * its data really syncs.
  */
 import type { Page } from '@playwright/test';
 import { getSite } from '../../packages/registry/src/index.ts';
-import { createAccount, hubURL, otherDevice, signInWithKey, turnOnSync } from './account.ts';
+import {
+  createAccount,
+  hubURL,
+  otherDevice,
+  replaceKey,
+  signInWithKey,
+  turnOnSync,
+} from './account.ts';
 import { checkA11y, expect, test } from './fixtures.ts';
 
 test.beforeEach(({ guard }, testInfo) => {
@@ -39,7 +46,10 @@ test('turns on through the account, and off again', async ({ page }, testInfo) =
   await page.getByRole('button', { name: 'Turn off on this device' }).click();
   await expect(page.getByRole('button', { name: 'Turn on sync' })).toBeVisible();
   await expect(status(page)).toHaveText(/^Sync is off on this device/);
-  expect(await page.evaluate(() => localStorage.getItem('shkriuss-device:sync'))).toBeNull();
+  // The app's key is gone from this device.
+  expect(await page.evaluate(() => localStorage.getItem('shkriuss-device:sync'))).toContain(
+    '"secret":null',
+  );
 });
 
 test('asks to sign in first; cancelling leaves sync off', async ({ page }, testInfo) => {
@@ -87,6 +97,41 @@ test('deleting the online copy stops sync on every device, keeping their data', 
 
   await tablet.getByRole('button', { name: 'Sync now' }).click();
   await expect(status(tablet)).toHaveText(/^The online copy was deleted on another device/);
+  await expect(tablet.getByRole('button', { name: 'Turn on sync' })).toBeVisible();
+  await tablet.context().close();
+});
+
+test('after the account key is replaced, sync moves to the new key', async ({
+  page,
+  browser,
+}, testInfo) => {
+  const { name } = getSite(testInfo.project.name);
+  const { key } = await createAccount(page);
+  await page.goto('/');
+  const appURL = new URL(page.url()).origin;
+  await turnOnSync(page, name);
+
+  const tablet = await (await otherDevice(browser)).newPage();
+  await signInWithKey(tablet, key);
+  await tablet.goto(`${appURL}/`);
+  await turnOnSync(tablet, name);
+
+  // On the phone: replace the key, then turn on sync again (what the Account
+  // page's "Turn on sync in …" link opens).
+  const code = await replaceKey(page);
+  await page.goto(`${appURL}/#sync=connect`);
+  await expect(
+    page.getByRole('heading', { name: `Sync ${name} with your account?` }),
+  ).toBeVisible();
+  await expect(page.locator('[data-connect-code]')).toHaveText(code);
+  await page.getByRole('button', { name: `Turn on sync for ${name}` }).click();
+  await page.waitForURL(`${appURL}/`);
+  await expect(page.locator('[data-sync-code]')).toHaveText(code);
+  await expect(status(page)).toHaveText(/^(Sync is on|Synced just now)/);
+
+  // The tablet's copy was moved: it stops syncing, and says why.
+  await tablet.getByRole('button', { name: 'Sync now' }).click();
+  await expect(status(tablet)).toHaveText(/^Your account key was replaced on another device/);
   await expect(tablet.getByRole('button', { name: 'Turn on sync' })).toBeVisible();
   await tablet.context().close();
 });

@@ -6,6 +6,7 @@ import {
   createAccount,
   hubURL,
   otherDevice,
+  replaceKey,
   signInWithKey,
   turnOnSync,
 } from '../../../tests/e2e/account.ts';
@@ -69,5 +70,39 @@ test('counters from both devices are kept, and counts follow the latest change',
   upload = uploaded(page);
   await addCounter(page, 'Secret habit');
   expect((await upload).request().postData() ?? '').not.toContain('Secret habit');
+  await tablet.context().close();
+});
+
+test('counters move to the new key when the account key is replaced', async ({
+  page,
+  browser,
+  guard,
+}) => {
+  guard.allowOrigin(hubURL);
+  const { key } = await createAccount(page);
+  await page.goto('/');
+  const appURL = new URL(page.url()).origin;
+  await addCounter(page, 'Water');
+  await turnOnSync(page, 'Tally');
+
+  // The tablet adds a counter that only the old online copy has.
+  const tablet = await (await otherDevice(browser)).newPage();
+  await signInWithKey(tablet, key);
+  await tablet.goto(`${appURL}/`);
+  await turnOnSync(tablet, 'Tally');
+  const upload = uploaded(tablet);
+  await addCounter(tablet, 'Steps');
+  await upload;
+
+  // The phone replaces the key and turns on sync again: the tablet's counter comes along.
+  await replaceKey(page);
+  await page.goto(`${appURL}/#sync=connect`);
+  await page.getByRole('button', { name: 'Turn on sync for Tally' }).click();
+  await page.waitForURL(`${appURL}/`);
+  await expect(value(page, 'Steps')).toHaveText('0');
+  await expect(value(page, 'Water')).toHaveText('0');
+
+  await tablet.getByRole('button', { name: 'Sync now' }).click();
+  await expect(tablet.locator('[data-sync-status]')).toHaveText(/^Your account key was replaced/);
   await tablet.context().close();
 });

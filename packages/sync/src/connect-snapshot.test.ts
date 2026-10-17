@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   connectResultUrl,
   connectUrl,
+  MAX_REPLACED,
   newConnectRequest,
   openConnection,
   parseConnectRequest,
@@ -13,7 +14,7 @@ import { observe } from './merge.ts';
 import { openStores, sealStores, syncKeys } from './snapshot.ts';
 
 describe('connecting an app', () => {
-  const connection = { secret: randomBytes(32), code: 'K7Q2-M9XD' };
+  const connection = { secret: randomBytes(32), code: 'K7Q2-M9XD', replaces: [randomBytes(32)] };
 
   it('gets the app’s key from the hub to the app, and only to that request', async () => {
     const { request, pending } = await newConnectRequest(
@@ -35,6 +36,18 @@ describe('connecting an app', () => {
     const other = await newConnectRequest('calendar', 'https://calendar.shkriuss.app');
     await expect(openConnection('calendar', other.pending, parsed)).rejects.toThrow();
     await expect(openConnection('tally', pending, parsed)).rejects.toThrow();
+  });
+
+  it('carries at most a few replaced keys', async () => {
+    const { request, pending } = await newConnectRequest('tally', 'https://tally.shkriuss.app');
+    const replaces = Array.from({ length: MAX_REPLACED + 2 }, () => randomBytes(32));
+    const parsed = parseConnectResult(
+      `#connect=${await sealForApp(request, { ...connection, replaces })}`,
+    );
+    if (parsed?.kind !== 'sealed') throw new Error('Expected a sealed result');
+    expect((await openConnection('tally', pending, parsed)).replaces).toEqual(
+      replaces.slice(0, MAX_REPLACED),
+    );
   });
 
   it('reads only well-formed requests and results', () => {
