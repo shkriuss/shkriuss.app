@@ -10,7 +10,12 @@
  *   If the network fails, or doesn't answer within NETWORK_TIMEOUT_MS (for
  *   example airplane mode with a VPN on, or a very weak signal), the saved
  *   copy is shown instead, and a late network answer still updates the cache.
- * - When a new version is deployed, the old cache is deleted.
+ * - When a new version is deployed, the old cache is deleted. Caches an app
+ *   manages itself (names not starting with "shkriuss-") are kept.
+ * - Files under /on-demand/ are not saved: they're big, and an app downloads
+ *   them only when the person asks (e.g. Grammar's Deep check model, about
+ *   385 MB). The app saves them in its own cache, and they're served from
+ *   there like any other saved file (docs/adr/0012).
  * - Push messages (notifications while the app is closed, docs/adr/0009)
  *   are shown as notifications. The browser has already decrypted them.
  * - Tapping a notification (e.g. a Calendar reminder) opens the app, or
@@ -31,12 +36,18 @@ export const NETWORK_TIMEOUT_MS = 3000;
 const NOT_PRECACHED = new Set(['_headers', '_redirects', 'sw.js']);
 
 /**
+ * Folder in dist/ (and public/) for big files an app downloads only when the
+ * person asks. They're never in the precache.
+ */
+export const ON_DEMAND_DIR = 'on-demand/';
+
+/**
  * Turns built file paths into the URLs Cloudflare serves them at
  * ("privacy/index.html" → "/privacy/", "404.html" → "/404").
  */
 export function precacheUrls(distFiles: readonly string[]): string[] {
   return distFiles
-    .filter((file) => !NOT_PRECACHED.has(file))
+    .filter((file) => !NOT_PRECACHED.has(file) && !file.startsWith(ON_DEMAND_DIR))
     .map((file) => {
       if (file === 'index.html') return '/';
       if (file.endsWith('/index.html')) return `/${file.slice(0, -'index.html'.length)}`;
@@ -68,10 +79,12 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
+  // Only this worker's old caches: an app's own (e.g. a downloaded model) stay.
+  const old = (key) => key.startsWith('shkriuss-') && key !== CACHE;
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key))))
+      .then((keys) => Promise.all(keys.filter(old).map((key) => caches.delete(key))))
       .then(() => self.clients.claim()),
   );
 });
@@ -119,6 +132,8 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Anything else saved (in any cache, including an app's on-demand files),
+  // or the network.
   event.respondWith(
     caches.match(request).then((cached) => cached || fetch(request)),
   );

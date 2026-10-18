@@ -4,5 +4,5 @@
     "types": ["astro/client", "@shkriuss/ui/env"]
   },
   "include": [".astro/types.d.ts", "**/*"],
-  "exclude": ["dist"]
+  "exclude": ["dist", "public/on-demand"]
 }

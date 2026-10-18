@@ -44,12 +44,16 @@ test('the CSP blocks inline scripts and only allows our own files', () => {
   expect(csp).not.toContain('unsafe-eval');
 });
 
-test('apps that run WebAssembly may compile it, and nothing else changes', () => {
+test('apps that run WebAssembly may compile it and start threads, and nothing else changes', () => {
   const csp = contentSecurityPolicy({ webAssembly: true });
   expect(csp).toContain("script-src 'self' 'wasm-unsafe-eval';");
-  expect(csp.replace(" 'wasm-unsafe-eval'", '')).toBe(contentSecurityPolicy());
+  expect(csp).toContain('trusted-types shkriuss-sw shkriuss-worker default');
+  expect(csp.replace(" 'wasm-unsafe-eval'", '').replace(' default', '')).toBe(
+    contentSecurityPolicy(),
+  );
   expect(csp).not.toContain("'unsafe-eval'");
   expect(csp).not.toContain('unsafe-inline');
+  expect(csp).not.toContain("'allow-duplicates'");
 });
 
 test('pages set no cookies and load nothing from other websites', async ({ page, context }) => {

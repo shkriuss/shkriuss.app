@@ -26,7 +26,32 @@ The checking is done by [Harper](https://github.com/automattic/harper)
 - `e2e/grammar.spec.ts`: browser tests with the real checker. The shared
   accessibility, security and offline checks in `tests/e2e/` run too.
 
+## Deep check
+
+An optional, more thorough check by an AI model, GECToR Large (by
+Grammarly's researchers), also on the device. It's downloaded only when the
+person asks (381 MB), then works offline
+([ADR 0012](../../docs/adr/0012-deep-check-ai-model.md)).
+
+- `src/lib/sentences.ts`, `bpe.ts`, `gector.ts`, `changes.ts`: the steps, as
+  plain functions with unit tests: text → sentences and words → the model's
+  word pieces → its labels → corrected words → changes to the text.
+- `src/lib/deep-check.ts`: settings, the downloaded files' list
+  (`manifest.json`), and the messages between the page and the worker.
+- `src/scripts/deep-check.worker.ts`: runs the model with onnxruntime-web, in
+  a worker, on up to 4 cores.
+- `src/scripts/deep-check.ts`: the page part: download (checking every file's
+  SHA-256), check, accept or skip changes, remove.
+- `scripts/deep-check-files.ts`: runs before every build. Downloads the model
+  once into `.cache/` (pinned version, checksum checked), splits it into
+  parts Cloudflare can serve, and writes everything to
+  `public/on-demand/deep-check/` (not in git).
+- `deep-check/`: the model's small data files, as published (see its
+  README), and test data made with the tested Python code.
+- `e2e/deep-check.spec.ts`: browser tests with the real model, offline too.
+- `public/licenses/gector.txt`, `onnxruntime-web.txt`: their licences.
+
 `"webAssembly": true` in
 [`packages/registry/apps.json`](../../packages/registry/apps.json) lets this
-app's security policy compile WebAssembly; its name, description, icon and
-colour are there too.
+app's security policy compile WebAssembly and start its threads; its name,
+description, icon and colour are there too.

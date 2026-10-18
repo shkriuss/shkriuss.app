@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { budgetProblems, cspProblems, gzipSize, pageAssets } from './dist-checks.ts';
+import {
+  budgetProblems,
+  cspProblems,
+  fileSizeProblems,
+  gzipSize,
+  MAX_FILE_BYTES,
+  pageAssets,
+} from './dist-checks.ts';
 
 describe('cspProblems', () => {
   it('accepts external scripts and stylesheets', () => {
@@ -42,5 +49,19 @@ describe('budgets', () => {
 
   it('measures gzipped size', () => {
     expect(gzipSize('a'.repeat(10_000))).toBeLessThan(100);
+  });
+});
+
+describe('fileSizeProblems', () => {
+  it('reports files Cloudflare would refuse to serve', () => {
+    expect(
+      fileSizeProblems([
+        { path: 'index.html', bytes: 1000 },
+        { path: 'on-demand/part.bin', bytes: MAX_FILE_BYTES },
+        { path: 'big.bin', bytes: MAX_FILE_BYTES + 1 },
+      ]),
+    ).toEqual([
+      `big.bin is ${MAX_FILE_BYTES + 1} bytes: Cloudflare serves files up to ${MAX_FILE_BYTES} bytes (split it into parts)`,
+    ]);
   });
 });

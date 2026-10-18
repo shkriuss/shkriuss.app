@@ -1,7 +1,8 @@
 /**
  * Grammar's page behaviour: saves the text and settings on the device, sends
  * the text to the checker (checker.worker.ts, on this device) as it's typed,
- * and shows what it finds. Tapping a fix changes the text.
+ * and shows what it finds. Tapping a fix changes the text. Deep check, the
+ * optional AI model, is in deep-check.ts.
  */
 import { createStore } from '@shkriuss/storage';
 import { offlineCopySaved } from '@shkriuss/ui/service-worker';
@@ -26,6 +27,7 @@ import {
   type ToChecker,
 } from '../lib/grammar.ts';
 import checkerUrl from './checker.worker.ts?worker&url';
+import { mountDeepCheck } from './deep-check.ts';
 
 const store = createStore<GrammarState>({
   key: 'grammar',
@@ -229,6 +231,19 @@ export function mountGrammar(root: Document): void {
     check();
   }
 
+  // ---------- Deep check ----------
+
+  const deep = mountDeepCheck(root, {
+    textarea,
+    replaceText: (text) => {
+      textarea.value = text;
+      actionStatus.textContent = '';
+      saveText();
+      check();
+    },
+    announce,
+  });
+
   // ---------- Typing and settings ----------
 
   textarea.addEventListener('input', () => {
@@ -237,6 +252,7 @@ export function mountGrammar(root: Document): void {
     checkTimer = window.setTimeout(check, CHECK_DELAY_MS);
     window.clearTimeout(saveTimer);
     saveTimer = window.setTimeout(saveText, SAVE_DELAY_MS);
+    deep.textChanged();
   });
   window.addEventListener('pagehide', saveText);
   root.addEventListener('visibilitychange', () => {
@@ -288,6 +304,7 @@ export function mountGrammar(root: Document): void {
     focusAfterCheck = index;
     announce(fixDone(issue, fix));
     check();
+    deep.textChanged();
   });
 
   wordList.addEventListener('click', (event) => {
@@ -327,6 +344,7 @@ export function mountGrammar(root: Document): void {
     textarea.value = '';
     saveText();
     check();
+    deep.textChanged();
     tellDone('Cleared.');
     textarea.focus();
   });
@@ -335,7 +353,10 @@ export function mountGrammar(root: Document): void {
   window.addEventListener('storage', (event) => {
     if (event.key !== store.key) return;
     state = store.load();
-    if (textarea.value !== state.text) textarea.value = state.text;
+    if (textarea.value !== state.text) {
+      textarea.value = state.text;
+      deep.textChanged();
+    }
     for (const radio of radios) radio.checked = radio.value === state.english;
     tell({ type: 'english', english: state.english });
     tell({ type: 'words', words: state.words });

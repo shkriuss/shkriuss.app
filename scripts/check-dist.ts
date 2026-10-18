@@ -1,12 +1,19 @@
 /**
  * Checks every built site in apps/<slug>/dist (run `pnpm build` first):
- * CSP safety (nothing inline) and per-page size budgets.
+ * CSP safety (nothing inline), per-page size budgets, and that every file is
+ * small enough for Cloudflare to serve.
  *
  *   pnpm check:dist
  */
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
-import { budgetProblems, cspProblems, gzipSize, pageAssets } from './lib/dist-checks.ts';
+import {
+  budgetProblems,
+  cspProblems,
+  fileSizeProblems,
+  gzipSize,
+  pageAssets,
+} from './lib/dist-checks.ts';
 
 const repoRoot = new URL('..', import.meta.url).pathname;
 const appsDir = join(repoRoot, 'apps');
@@ -47,6 +54,15 @@ for (const slug of sites) {
     rows.push(`✗ ${slug}: no HTML pages in ${relative(repoRoot, dist)}`);
     failures += 1;
   }
+
+  const files = readdirSync(dist, { recursive: true, encoding: 'utf8' })
+    .map((path) => ({ path, stat: statSync(join(dist, path)) }))
+    .filter(({ stat }) => stat.isFile())
+    .map(({ path, stat }) => ({ path, bytes: stat.size }));
+  for (const problem of fileSizeProblems(files)) {
+    rows.push(`✗ ${slug}: ${problem}`);
+    failures += 1;
+  }
 }
 
 console.log(rows.join('\n'));
@@ -54,4 +70,6 @@ if (failures > 0) {
   console.error(`\n${failures} problem(s). See docs/quality.md for what these checks mean.`);
   process.exit(1);
 }
-console.log('\nAll pages are CSP-safe and within their size budgets.');
+console.log(
+  '\nAll pages are CSP-safe and within their size budgets, and every file can be served.',
+);

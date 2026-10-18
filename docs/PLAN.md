@@ -327,6 +327,9 @@ month. GitHub never charges you unless you add a payment method.
 - [x] **Grammar** (`grammar.shkriuss.app`): checks American or British
       English as you type, on the device, with Harper
       ([ADR 0011](adr/0011-on-device-grammar-checking.md)).
+- [x] **Grammar Deep check**: an optional AI model (GECToR Large, 381 MB,
+      downloaded on request) finds many more mistakes, also on the device
+      and offline ([ADR 0012](adr/0012-deep-check-ai-model.md)).
 - Add more apps one at a time, each with its own small browser tests.
 - [x] **shkriuss account**, part 1: create an account, recovery key,
       passkeys, add devices with a QR code ([ADR 0010](adr/0010-account-and-sync.md)).

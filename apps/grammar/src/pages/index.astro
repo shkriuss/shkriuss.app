@@ -3,6 +3,9 @@
  * Grammar: a text box checked as you type, in American or British English,
  * with suggestions to tap, and your own dictionary. The checking happens on
  * this device (Harper, in a worker). Behaviour: ../scripts/grammar.ts.
+ *
+ * Deep check, if downloaded, checks more thoroughly with an AI model, also on
+ * this device (docs/adr/0012). Behaviour: ../scripts/deep-check.ts.
  */
 import { AppShell, Button, DataControls, Icon } from '@shkriuss/ui';
 import { MAX_TEXT_LENGTH } from '../lib/grammar.ts';
@@ -70,6 +73,107 @@ import { MAX_TEXT_LENGTH } from '../lib/grammar.ts';
       <ul role="list" class="stack issues" data-issues></ul>
     </section>
 
+    <section class="stack" aria-labelledby="deep-heading" data-deep>
+      <h2 id="deep-heading" tabindex="-1">
+        Deep check
+      </h2>
+      <p>
+        Finds more mistakes, with an AI model that runs on this device. Your text still never leaves
+        it. Check its changes before you accept them: it’s right most of the time, not always.
+      </p>
+      <p class="notice notice--danger" data-deep-problem hidden></p>
+
+      <div class="stack stack--sm" data-deep-panel="absent">
+        <p>
+          It needs a one-time download of <strong data-deep-size>about 380 MB</strong>, best on
+          Wi‑Fi. Then it’s saved on this device and works offline.
+        </p>
+        <div class="cluster">
+          <Button variant="primary" icon="download" data-action="deep-download">
+            Download Deep check
+          </Button>
+        </div>
+      </div>
+
+      <div class="stack stack--sm" data-deep-panel="downloading" hidden>
+        <label class="field__label" for="deep-download-bar">
+          Downloading Deep check
+        </label>
+        <progress
+          class="progress"
+          id="deep-download-bar"
+          max="1"
+          value="0"
+          data-deep-download-bar
+        ></progress>
+        <p class="muted" data-deep-download-status></p>
+        <div class="cluster">
+          <Button icon="x" data-action="deep-stop">
+            Stop the download
+          </Button>
+        </div>
+      </div>
+
+      <div class="stack stack--sm" data-deep-panel="ready" hidden>
+        <div class="notice stack stack--sm" data-deep-update hidden>
+          <p>A newer version of Deep check is ready. Only the changed files download.</p>
+          <div class="cluster">
+            <Button icon="download" data-action="deep-update">
+              Update Deep check
+            </Button>
+          </div>
+        </div>
+        <div class="cluster">
+          <Button variant="primary" icon="text-check" data-action="deep-run">
+            Check my text
+          </Button>
+        </div>
+        <div class="stack stack--sm" data-deep-check-progress hidden>
+          <label class="field__label" for="deep-check-bar">
+            Checking the text
+          </label>
+          <progress class="progress" id="deep-check-bar" max="1" value="0"></progress>
+        </div>
+        <p data-deep-status></p>
+        <div class="cluster">
+          <button type="button" class="btn" data-action="deep-accept-all" hidden>
+            Accept all
+          </button>
+        </div>
+        <ul role="list" class="stack issues" data-deep-changes></ul>
+        <details class="disclosure">
+          <summary>Slow, or doesn’t start?</summary>
+          <div class="stack stack--sm">
+            <p>
+              Deep check needs the browser’s JavaScript speed-up, called “JIT”. Vanadium, the
+              browser on GrapheneOS, turns it off unless you allow it for a site:
+            </p>
+            <ol class="steps">
+              <li>Open grammar.shkriuss.app in Vanadium.</li>
+              <li>Tap the icon at the left of the address bar.</li>
+              <li>
+                Tap <strong>Permissions</strong>.
+              </li>
+              <li>
+                Turn on <strong>JavaScript JIT</strong>.
+              </li>
+              <li>Reload the page.</li>
+            </ol>
+            <p>While it checks, it needs about 1 GB of free memory. Closing other apps can help.</p>
+          </div>
+        </details>
+        <div class="cluster">
+          <Button variant="ghost" icon="trash" data-action="deep-remove">
+            Remove Deep check from this device
+          </Button>
+        </div>
+      </div>
+
+      <p data-deep-panel="unsupported" hidden>
+        Deep check doesn’t work in this browser. Updating the browser may help.
+      </p>
+    </section>
+
     <section class="stack" aria-labelledby="dictionary-heading">
       <h2 id="dictionary-heading">Your dictionary</h2>
       <p class="muted">
@@ -85,6 +189,8 @@ import { MAX_TEXT_LENGTH } from '../lib/grammar.ts';
     <p class="muted">
       The first time, Grammar downloads its checker (about 8 MB). After that it works offline.
       Checking is done by <a href="/licenses/harper.txt">Harper</a>, free and open-source software.
+      Deep check uses <a href="/licenses/gector.txt">GECToR</a>, by Grammarly’s researchers, run by
+      <a href="/licenses/onnxruntime-web.txt">ONNX Runtime</a>.
     </p>
 
     <DataControls />
@@ -119,6 +225,26 @@ import { MAX_TEXT_LENGTH } from '../lib/grammar.ts';
     </li>
   </template>
 
+  <!-- One Deep check change, copied by the script for each one. -->
+  <template data-change-template>
+    <li class="card stack stack--sm">
+      <p class="issue__context">
+        <span data-before></span>
+        <del class="change change--removed" data-removed></del>
+        <ins class="change change--added" data-added></ins>
+        <span data-after></span>
+      </p>
+      <div class="cluster">
+        <button type="button" class="btn" data-action="accept">
+          Accept
+        </button>
+        <button type="button" class="btn btn--ghost" data-action="skip">
+          Skip
+        </button>
+      </div>
+    </li>
+  </template>
+
   <template data-fix-template>
     <button type="button" class="btn" data-action="fix">
       Fix
@@ -148,6 +274,20 @@ import { MAX_TEXT_LENGTH } from '../lib/grammar.ts';
       </div>
     </form>
   </dialog>
+  <dialog class="dialog" aria-labelledby="deep-remove-title" data-deep-remove-dialog>
+    <form method="dialog" class="stack">
+      <h2 id="deep-remove-title">Remove Deep check?</h2>
+      <p>It’s removed from this device, freeing its space. You can download it again later.</p>
+      <div class="cluster">
+        <Button type="submit" value="cancel">
+          Cancel
+        </Button>
+        <Button type="submit" variant="danger" value="confirm">
+          Remove
+        </Button>
+      </div>
+    </form>
+  </dialog>
 </AppShell>
 
 <script>
@@ -173,8 +313,10 @@ import { MAX_TEXT_LENGTH } from '../lib/grammar.ts';
 
   /* Empty until there's something to show (no gap in the page meanwhile). */
   [data-action-status]:empty,
+  [data-deep-status]:empty,
   .issues:empty,
-  .words:empty {
+  .words:empty,
+  .change:empty {
     display: none;
   }
 
@@ -193,6 +335,29 @@ import { MAX_TEXT_LENGTH } from '../lib/grammar.ts';
     text-decoration-skip-ink: none;
     text-underline-offset: 0.2em;
     white-space: pre-wrap;
+  }
+
+  /* Deep check: what goes (struck through) and what comes (underlined). */
+  .change {
+    padding-inline: 0.15em;
+    border-radius: var(--radius-sm);
+    color: var(--color-text);
+    white-space: pre-wrap;
+    text-underline-offset: 0.2em;
+  }
+
+  .change--removed {
+    background: var(--color-danger-soft);
+    text-decoration: line-through;
+  }
+
+  .change--added {
+    background: var(--color-accent-soft);
+    text-decoration: underline;
+  }
+
+  .steps {
+    padding-inline-start: var(--space-5);
   }
 
   .words {
