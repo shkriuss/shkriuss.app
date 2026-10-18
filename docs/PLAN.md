@@ -324,6 +324,9 @@ month. GitHub never charges you unless you add a payment method.
 - [x] **Habits** (`habits.shkriuss.app`): tick habits off each day, streaks,
       the last 7 days, fix the last 2 weeks, reminders (also while closed);
       syncs through the account.
+- [x] **Grammar** (`grammar.shkriuss.app`): checks American or British
+      English as you type, on the device, with Harper
+      ([ADR 0011](adr/0011-on-device-grammar-checking.md)).
 - Add more apps one at a time, each with its own small browser tests.
 - [x] **shkriuss account**, part 1: create an account, recovery key,
       passkeys, add devices with a QR code ([ADR 0010](adr/0010-account-and-sync.md)).

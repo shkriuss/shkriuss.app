@@ -1,0 +1,355 @@
+/**
+ * Grammar's page behaviour: saves the text and settings on the device, sends
+ * the text to the checker (checker.worker.ts, on this device) as it's typed,
+ * and shows what it finds. Tapping a fix changes the text.
+ */
+import { createStore } from '@shkriuss/storage';
+import { offlineCopySaved } from '@shkriuss/ui/service-worker';
+import { startWorker } from '@shkriuss/ui/worker';
+import {
+  addWord,
+  applyFix,
+  contextOf,
+  emptyState,
+  fixDone,
+  fixesToShow,
+  fixLabel,
+  isGrammarState,
+  MAX_SHOWN,
+  removeWord,
+  summary,
+  wordToAdd,
+  type English,
+  type FromChecker,
+  type GrammarState,
+  type Issue,
+  type ToChecker,
+} from '../lib/grammar.ts';
+import checkerUrl from './checker.worker.ts?worker&url';
+
+const store = createStore<GrammarState>({
+  key: 'grammar',
+  version: 1,
+  fallback: () => emptyState(navigator.language),
+  validate: isGrammarState,
+});
+
+/** Checks this long after the last key press. */
+const CHECK_DELAY_MS = 400;
+/** Saves this long after the last key press (and straight away when leaving). */
+const SAVE_DELAY_MS = 500;
+
+const LOADING = 'Loading the grammar checker…';
+const EMPTY = 'Type or paste your text above, and suggestions show here.';
+const FAILED = 'The grammar checker couldn’t start in this browser. Updating the browser may help.';
+
+function required<T extends Element>(root: ParentNode, selector: string): T {
+  const element = root.querySelector<T>(selector);
+  if (!element) throw new Error(`Grammar: missing element ${selector}`);
+  return element;
+}
+
+/** "“a”", or "the space" when the text is only spaces. */
+const named = (text: string): string => (text.trim() === '' ? 'the space' : `“${text}”`);
+
+export function mountGrammar(root: Document): void {
+  const textarea = required<HTMLTextAreaElement>(root, '[data-text]');
+  const radios = [...root.querySelectorAll<HTMLInputElement>('input[name="english"]')];
+  const status = required<HTMLElement>(root, '[data-status]');
+  const heading = required<HTMLElement>(root, '[data-suggestions-heading]');
+  const list = required<HTMLUListElement>(root, '[data-issues]');
+  const issueTemplate = required<HTMLTemplateElement>(root, '[data-issue-template]');
+  const fixTemplate = required<HTMLTemplateElement>(root, '[data-fix-template]');
+  const wordTemplate = required<HTMLTemplateElement>(root, '[data-word-template]');
+  const wordList = required<HTMLUListElement>(root, '[data-words]');
+  const noWords = required<HTMLElement>(root, '[data-no-words]');
+  const actionStatus = required<HTMLElement>(root, '[data-action-status]');
+  const clearDialog = required<HTMLDialogElement>(root, '[data-clear-dialog]');
+  const announcer = required<HTMLElement>(root, '[data-announcer]');
+
+  let state = store.load();
+  /** What the checker found, and the text it found it in. */
+  let issues: Issue[] = [];
+  let checkedText: string | null = null;
+  /** The newest check asked for, and its text. */
+  let lastId = 0;
+  let lastText = '';
+  let phase: 'loading' | 'ready' | 'failed' = 'loading';
+  /** After a fix: the suggestion to move to once the text is checked again. */
+  let focusAfterCheck: number | null = null;
+  let checkTimer: number | undefined;
+  let saveTimer: number | undefined;
+
+  const announce = (message: string): void => {
+    announcer.textContent = message;
+  };
+  /** After copy or clear: shown under the buttons, and read out. */
+  const tellDone = (message: string): void => {
+    actionStatus.textContent = message;
+    announce(message);
+  };
+  const setStatus = (text: string): void => {
+    // Only when it changes, so screen readers don't repeat it after every pause.
+    if (status.textContent !== text) status.textContent = text;
+  };
+
+  function save(next: GrammarState): void {
+    state = next;
+    if (!store.save(state)) announce('Couldn’t save. Your browser may be blocking storage.');
+  }
+
+  function saveText(): void {
+    window.clearTimeout(saveTimer);
+    if (textarea.value !== state.text) save({ ...state, text: textarea.value });
+  }
+
+  // ---------- The checker ----------
+
+  let worker: Worker | undefined;
+  const tell = (message: ToChecker): void => {
+    worker?.postMessage(message);
+  };
+
+  function check(): void {
+    window.clearTimeout(checkTimer);
+    if (phase !== 'ready') return;
+    const text = textarea.value;
+    if (text.trim() === '') {
+      issues = [];
+      checkedText = text;
+      render();
+      return;
+    }
+    lastId += 1;
+    lastText = text;
+    tell({ type: 'check', id: lastId, text });
+  }
+
+  function heard(event: MessageEvent<FromChecker>): void {
+    const message = event.data;
+    if (message.type === 'ready') {
+      phase = 'ready';
+      check();
+    } else if (message.type === 'checked') {
+      if (message.id !== lastId) return;
+      issues = message.issues;
+      checkedText = lastText;
+      render();
+    } else {
+      phase = 'failed';
+      setStatus(FAILED);
+    }
+  }
+
+  function startChecker(): void {
+    worker = startWorker(checkerUrl);
+    worker.addEventListener('message', heard);
+    worker.addEventListener('error', () => {
+      phase = 'failed';
+      setStatus(FAILED);
+    });
+    tell({ type: 'start', english: state.english, words: state.words });
+  }
+
+  // ---------- Showing what it found ----------
+
+  function renderIssue(issue: Issue, index: number): HTMLLIElement {
+    const fragment = issueTemplate.content.cloneNode(true) as DocumentFragment;
+    const item = required<HTMLLIElement>(fragment, 'li');
+    item.dataset['index'] = String(index);
+    const context = contextOf(checkedText ?? '', issue);
+    required<HTMLElement>(item, '[data-kind]').textContent = issue.label;
+    required<HTMLElement>(item, '[data-before]').textContent = context.before;
+    required<HTMLElement>(item, '[data-problem]').textContent = context.problem;
+    required<HTMLElement>(item, '[data-after]').textContent = context.after;
+    required<HTMLElement>(item, '[data-message]').textContent = issue.message;
+
+    const fixes = required<HTMLElement>(item, '[data-fixes]');
+    fixes.replaceChildren(
+      ...fixesToShow(issue).map((fix, fixIndex) => {
+        const button = required<HTMLButtonElement>(
+          fixTemplate.content.cloneNode(true) as DocumentFragment,
+          'button',
+        );
+        button.textContent = fixLabel(issue, fix);
+        button.dataset['fix'] = String(fixIndex);
+        return button;
+      }),
+    );
+    fixes.hidden = fixes.childElementCount === 0;
+
+    required<HTMLElement>(item, '[data-action="show"]').setAttribute(
+      'aria-label',
+      `Show ${named(issue.problem)} in the text`,
+    );
+    const word = wordToAdd(issue);
+    const addButton = required<HTMLButtonElement>(item, '[data-action="add-word"]');
+    addButton.hidden = word === undefined || state.words.includes(word);
+    if (word !== undefined) addButton.setAttribute('aria-label', `Add “${word}” to my dictionary`);
+    return item;
+  }
+
+  function render(): void {
+    if (phase !== 'ready') return;
+    const shown = issues.slice(0, MAX_SHOWN);
+    list.replaceChildren(...shown.map(renderIssue));
+    setStatus(textarea.value.trim() === '' ? EMPTY : summary(issues.length));
+
+    if (focusAfterCheck !== null) {
+      const items = list.querySelectorAll<HTMLElement>('li');
+      const item = items[Math.min(focusAfterCheck, items.length - 1)];
+      (item?.querySelector<HTMLElement>('button:not([hidden])') ?? heading).focus();
+      focusAfterCheck = null;
+    }
+  }
+
+  function renderWords(): void {
+    wordList.replaceChildren(
+      ...state.words.map((word) => {
+        const item = required<HTMLLIElement>(
+          wordTemplate.content.cloneNode(true) as DocumentFragment,
+          'li',
+        );
+        item.dataset['word'] = word;
+        required<HTMLElement>(item, '[data-word]').textContent = word;
+        required<HTMLElement>(item, '[data-action="remove-word"]').setAttribute(
+          'aria-label',
+          `Remove “${word}” from my dictionary`,
+        );
+        return item;
+      }),
+    );
+    noWords.hidden = state.words.length > 0;
+  }
+
+  function setWords(words: string[]): void {
+    save({ ...state, words });
+    tell({ type: 'words', words });
+    renderWords();
+    check();
+  }
+
+  // ---------- Typing and settings ----------
+
+  textarea.addEventListener('input', () => {
+    actionStatus.textContent = '';
+    window.clearTimeout(checkTimer);
+    checkTimer = window.setTimeout(check, CHECK_DELAY_MS);
+    window.clearTimeout(saveTimer);
+    saveTimer = window.setTimeout(saveText, SAVE_DELAY_MS);
+  });
+  window.addEventListener('pagehide', saveText);
+  root.addEventListener('visibilitychange', () => {
+    if (root.visibilityState === 'hidden') saveText();
+  });
+
+  for (const radio of radios) {
+    radio.addEventListener('change', () => {
+      if (!radio.checked) return;
+      const english = radio.value as English;
+      save({ ...state, english });
+      tell({ type: 'english', english });
+      check();
+    });
+  }
+
+  // ---------- Fixing ----------
+
+  list.addEventListener('click', (event) => {
+    const button = (event.target as Element).closest<HTMLButtonElement>('button[data-action]');
+    const index = Number(button?.closest<HTMLElement>('[data-index]')?.dataset['index']);
+    const issue = issues[index];
+    if (!button || !issue) return;
+    // Typed since the last check: positions may have moved, so check again first.
+    if (textarea.value !== checkedText) {
+      announce('The text changed. Checking it again.');
+      check();
+      return;
+    }
+
+    const action = button.dataset['action'];
+    if (action === 'show') {
+      textarea.focus();
+      textarea.setSelectionRange(issue.start, issue.end);
+      return;
+    }
+    if (action === 'add-word') {
+      const word = wordToAdd(issue);
+      if (word === undefined) return;
+      focusAfterCheck = index;
+      setWords(addWord(state.words, word));
+      announce(`Added “${word}” to your dictionary.`);
+      return;
+    }
+    const fix = fixesToShow(issue)[Number(button.dataset['fix'])];
+    if (!fix) return;
+    textarea.value = applyFix(textarea.value, issue, fix);
+    saveText();
+    focusAfterCheck = index;
+    announce(fixDone(issue, fix));
+    check();
+  });
+
+  wordList.addEventListener('click', (event) => {
+    const item = (event.target as Element)
+      .closest('[data-action="remove-word"]')
+      ?.closest<HTMLElement>('[data-word]');
+    const word = item?.dataset['word'];
+    if (!item || word === undefined) return;
+    // Keep keyboard focus nearby: on the next word (or the one before).
+    const position = state.words.indexOf(word);
+    setWords(removeWord(state.words, word));
+    announce(`Removed “${word}” from your dictionary.`);
+    const buttons = wordList.querySelectorAll<HTMLElement>('button');
+    (buttons[Math.min(position, buttons.length - 1)] ?? textarea).focus();
+  });
+
+  // ---------- Copy and clear ----------
+
+  required<HTMLButtonElement>(root, '[data-action="copy"]').addEventListener('click', () => {
+    navigator.clipboard.writeText(textarea.value).then(
+      () => {
+        tellDone('Copied. You can paste it anywhere.');
+      },
+      () => {
+        tellDone('Couldn’t copy. Select the text and copy it yourself.');
+      },
+    );
+  });
+
+  required<HTMLButtonElement>(root, '[data-action="clear"]').addEventListener('click', () => {
+    clearDialog.returnValue = '';
+    clearDialog.showModal();
+  });
+
+  clearDialog.addEventListener('close', () => {
+    if (clearDialog.returnValue !== 'confirm') return;
+    textarea.value = '';
+    saveText();
+    check();
+    tellDone('Cleared.');
+    textarea.focus();
+  });
+
+  // If Grammar is open in two tabs, keep them the same.
+  window.addEventListener('storage', (event) => {
+    if (event.key !== store.key) return;
+    state = store.load();
+    if (textarea.value !== state.text) textarea.value = state.text;
+    for (const radio of radios) radio.checked = radio.value === state.english;
+    tell({ type: 'english', english: state.english });
+    tell({ type: 'words', words: state.words });
+    renderWords();
+    check();
+  });
+
+  // ---------- Start ----------
+
+  textarea.value = state.text;
+  for (const radio of radios) radio.checked = radio.value === state.english;
+  renderWords();
+  setStatus(LOADING);
+  // On a first visit, the offline copy includes the checker: let it finish
+  // first, so the 8 MB are downloaded once (then they come from the copy).
+  void offlineCopySaved().then(startChecker);
+}

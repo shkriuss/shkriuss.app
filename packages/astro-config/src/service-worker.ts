@@ -1,7 +1,9 @@
 /**
  * Builds /sw.js: a small service worker that makes each site work offline.
  *
- * - On install it saves every built file (the "precache").
+ * - On install it saves every built file (the "precache"). Hashed build
+ *   files already saved by the previous version are copied, not downloaded
+ *   again: they never change (Grammar's checker alone is 16 MB).
  * - Hashed build files (/_astro/…) are served from the cache first: they
  *   never change.
  * - Pages are fetched from the network first, so updates show up right away.
@@ -52,10 +54,15 @@ const NETWORK_TIMEOUT_MS = ${NETWORK_TIMEOUT_MS};
 const PRECACHE = ${JSON.stringify([...files].sort(), null, 2)};
 
 self.addEventListener('install', (event) => {
+  // Hashed build files never change: copy ones the previous version saved.
+  const save = (cache, url) =>
+    (url.startsWith('/_astro/') ? caches.match(url) : Promise.resolve(undefined)).then((saved) =>
+      saved ? cache.put(url, saved) : cache.add(url),
+    );
   event.waitUntil(
     caches
       .open(CACHE)
-      .then((cache) => cache.addAll(PRECACHE))
+      .then((cache) => Promise.all(PRECACHE.map((url) => save(cache, url))))
       .then(() => self.skipWaiting()),
   );
 });

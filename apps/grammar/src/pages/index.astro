@@ -1,0 +1,211 @@
+---
+/**
+ * Grammar: a text box checked as you type, in American or British English,
+ * with suggestions to tap, and your own dictionary. The checking happens on
+ * this device (Harper, in a worker). Behaviour: ../scripts/grammar.ts.
+ */
+import { AppShell, Button, DataControls, Icon } from '@shkriuss/ui';
+import { MAX_TEXT_LENGTH } from '../lib/grammar.ts';
+---
+
+<AppShell>
+  <div class="stack stack--lg">
+    <header class="stack stack--sm">
+      <h1>Grammar</h1>
+      <p class="lead">
+        Check your English: grammar, spelling and punctuation. Your text never leaves this device.
+      </p>
+    </header>
+
+    <fieldset class="stack stack--sm">
+      <legend class="field__label">English</legend>
+      <div class="cluster english">
+        <label class="check">
+          <input type="radio" name="english" value="american" />
+          <span>American (US)</span>
+        </label>
+        <label class="check">
+          <input type="radio" name="english" value="british" />
+          <span>British (UK)</span>
+        </label>
+      </div>
+    </fieldset>
+
+    <div class="field">
+      <label class="field__label" for="text">
+        Your text
+      </label>
+      <textarea
+        class="input text"
+        id="text"
+        rows="10"
+        maxlength={MAX_TEXT_LENGTH}
+        spellcheck="false"
+        autocapitalize="sentences"
+        aria-describedby="text-hint"
+        data-text
+      ></textarea>
+      <p class="field__hint" id="text-hint">
+        Type or paste your text. It’s checked as you type.
+      </p>
+    </div>
+
+    <div class="cluster">
+      <Button icon="copy" data-action="copy">
+        Copy text
+      </Button>
+      <Button icon="x" data-action="clear">
+        Clear
+      </Button>
+    </div>
+    <p class="muted" data-action-status></p>
+
+    <section class="stack" aria-labelledby="suggestions-heading">
+      <h2 id="suggestions-heading" tabindex="-1" data-suggestions-heading>
+        Suggestions
+      </h2>
+      <p role="status" data-status>
+        Loading the grammar checker…
+      </p>
+      <ul role="list" class="stack issues" data-issues></ul>
+    </section>
+
+    <section class="stack" aria-labelledby="dictionary-heading">
+      <h2 id="dictionary-heading">Your dictionary</h2>
+      <p class="muted">
+        Words here are never marked as misspelled. Add names and other words with “Add to my
+        dictionary” on a spelling suggestion.
+      </p>
+      <p class="muted" data-no-words>
+        No words yet.
+      </p>
+      <ul role="list" class="cluster words" data-words></ul>
+    </section>
+
+    <p class="muted">
+      The first time, Grammar downloads its checker (about 8 MB). After that it works offline.
+      Checking is done by <a href="/licenses/harper.txt">Harper</a>, free and open-source software.
+    </p>
+
+    <DataControls />
+  </div>
+
+  <!-- Live region: tells screen reader users what changed. -->
+  <p class="visually-hidden" role="status" data-announcer></p>
+
+  <!-- One suggestion, copied by the script for each problem found. -->
+  <template data-issue-template>
+    <li class="card stack stack--sm issue">
+      <p>
+        <span class="badge" data-kind>
+          Grammar
+        </span>
+      </p>
+      <p class="issue__context">
+        <span data-before></span>
+        <mark class="issue__problem" data-problem></mark>
+        <span data-after></span>
+      </p>
+      <p data-message>Problem</p>
+      <div class="cluster" data-fixes></div>
+      <div class="cluster">
+        <button type="button" class="btn btn--ghost" data-action="show">
+          Show in text
+        </button>
+        <button type="button" class="btn btn--ghost" data-action="add-word" hidden>
+          Add to my dictionary
+        </button>
+      </div>
+    </li>
+  </template>
+
+  <template data-fix-template>
+    <button type="button" class="btn" data-action="fix">
+      Fix
+    </button>
+  </template>
+
+  <template data-word-template>
+    <li class="word">
+      <span data-word>Word</span>
+      <button type="button" class="btn btn--ghost btn--icon" data-action="remove-word">
+        <Icon name="x" />
+      </button>
+    </li>
+  </template>
+
+  <dialog class="dialog" aria-labelledby="clear-title" data-clear-dialog>
+    <form method="dialog" class="stack">
+      <h2 id="clear-title">Clear the text?</h2>
+      <p>Everything in the text box will be removed.</p>
+      <div class="cluster">
+        <Button type="submit" value="cancel">
+          Cancel
+        </Button>
+        <Button type="submit" variant="danger" value="confirm">
+          Clear
+        </Button>
+      </div>
+    </form>
+  </dialog>
+</AppShell>
+
+<script>
+  import { mountGrammar } from '../scripts/grammar.ts';
+
+  mountGrammar(document);
+</script>
+
+<style>
+  fieldset {
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .english {
+    --cluster-gap: var(--space-1) var(--space-5);
+  }
+
+  .text {
+    min-height: 12rem;
+  }
+
+  /* Empty until there's something to show (no gap in the page meanwhile). */
+  [data-action-status]:empty,
+  .issues:empty,
+  .words:empty {
+    display: none;
+  }
+
+  .issue__context {
+    overflow-wrap: anywhere;
+    color: var(--color-text-muted);
+  }
+
+  /* The problem: underlined, and highlighted so a single space shows too. */
+  .issue__problem {
+    padding-inline: 0.15em;
+    border-radius: var(--radius-sm);
+    background: var(--color-danger-soft);
+    color: var(--color-text);
+    text-decoration: underline wavy var(--color-danger);
+    text-decoration-skip-ink: none;
+    text-underline-offset: 0.2em;
+    white-space: pre-wrap;
+  }
+
+  .words {
+    --cluster-gap: var(--space-2);
+  }
+
+  .word {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding-inline-start: var(--space-3);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-full);
+    overflow-wrap: anywhere;
+  }
+</style>
