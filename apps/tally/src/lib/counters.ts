@@ -2,6 +2,7 @@
  * Tally's data and rules, kept separate from the page so they're easy to test.
  * Every function returns a new state instead of changing the old one.
  */
+import { secondVersionName } from '@shkriuss/sync';
 
 export interface Counter {
   id: string;
@@ -80,6 +81,16 @@ export function resetCounter(state: TallyState, id: string): TallyState {
     ),
   };
 }
+
+/**
+ * A counter changed on two devices at once: this device's version, kept as
+ * its own counter next to the other device's (packages/sync, conflictCopy).
+ */
+export const secondVersion = (counter: Counter, id: string): Counter => ({
+  ...counter,
+  id,
+  name: secondVersionName(counter.name, MAX_NAME_LENGTH),
+});
 
 export function removeCounter(state: TallyState, id: string): TallyState {
   return { counters: state.counters.filter((counter) => counter.id !== id) };

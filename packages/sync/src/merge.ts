@@ -225,6 +225,23 @@ export function keepBoth(
   return { snapshot: { ...mine, items, order: { ...mine.order, ids } }, kept };
 }
 
+/**
+ * The name for this device's version of an item kept by keepBoth, e.g.
+ * "Shopping (second version)". Fits in `max` characters (as JavaScript
+ * counts them, never splitting an emoji) by shortening the name, so it
+ * passes the app's own checks.
+ */
+export function secondVersionName(name: string, max: number): string {
+  const suffix = ' (second version)';
+  let base = '';
+  for (const character of name.trim()) {
+    if (base.length + character.length > max - suffix.length) break;
+    base += character;
+  }
+  base = base.trimEnd();
+  return base ? `${base}${suffix}` : 'Second version'.slice(0, max);
+}
+
 /** The live items' values, in order. */
 export function valuesOf(snapshot: StoreSnapshot): unknown[] {
   return snapshot.order.ids.flatMap((id) => {

@@ -14,7 +14,9 @@ This is the example app: it shows the patterns every app should follow.
 - `e2e/tally.spec.ts`: browser tests for Tally. The shared accessibility,
   security and offline checks in `tests/e2e/` run automatically too.
 - Sync between devices (optional): `src/worker.ts` runs the shared sync
-  server, and the page script describes which data syncs (the counters). See
+  server, and the page script describes which data syncs (the counters).
+  When a counter is changed on two devices before they sync, both counts are
+  kept: the second becomes its own counter, "… (second version)". See
   [ADR 0010](../../docs/adr/0010-account-and-sync.md) and `e2e/sync.spec.ts`.
 
 Its name, description, icon and colour are in

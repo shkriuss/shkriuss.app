@@ -168,10 +168,12 @@ in with `sync: true` in `apps.json`.
     online, so turning on sync (say, after restoring an old backup) never
     overwrites newer edits. Its other items are added.
   - **Keeping both versions (optional, per app).** An app can ask for this
-    instead of "newest wins" (Notes does, with `conflictCopy`). When an item
-    was changed on this device and on another since this device's last sync,
-    the other device's version keeps the item and this device's becomes a
-    new item ("… (second version)" in Notes). A change also wins over a
+    instead of "newest wins" with `conflictCopy`; Calendar, Notes and Tally
+    all do. When an item was changed on this device and on another since
+    this device's last sync, the other device's version keeps the item and
+    this device's becomes a new item, named "… (second version)"
+    (`secondVersionName`, which shortens the name to fit the app's
+    limits). A change also wins over a
     deletion on another device, so no edit is lost. It starts from a
     device's second sync after updating to this version, because it needs to
     know which data version the device last synced.
@@ -220,10 +222,10 @@ in with `sync: true` in `apps.json`.
 - **Device clocks decide "newest".** A device whose clock is far off can win
   or lose a conflict it shouldn't. Edits on different items never conflict.
 - **Same item, two devices.** When the same item is changed on two devices
-  before they sync, changes aren't combined. Apps that keep both versions
-  (Notes) end up with two items to tidy by hand; the others keep the newest
-  whole. For Tally, two devices counting the same counter at the same time
-  keep one count.
+  before they sync, changes aren't combined: the person ends up with two
+  items to tidy by hand. For Tally, counting the same counter on two devices
+  at once gives two counters to add up. In Calendar, both events keep their
+  reminder until one is deleted.
 - **iPhone Home Screen apps** keep their own storage, separate from Safari. An
   app added to the Home Screen may need its own sign-in on the hub when it
   connects.

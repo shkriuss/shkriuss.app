@@ -43,6 +43,19 @@ export async function turnOnSync(page: Page, appName: string): Promise<void> {
   await expect(page.locator('[data-sync-status]')).toHaveText(/^(Sync is on|Synced just now)/);
 }
 
+/**
+ * After the account key is replaced and an app connects again: resolves once
+ * the app has moved its old online copy and deleted it (what makes other
+ * devices stop). Start waiting before connecting.
+ */
+export const oldCopyMoved = (page: Page) =>
+  page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/api/sync/copy?moved') &&
+      response.request().method() === 'DELETE' &&
+      response.ok(),
+  );
+
 /** On the hub's Account page, signed in: replaces the account key. Returns the new code. */
 export async function replaceKey(page: Page): Promise<string> {
   await page.goto(`${hubURL}/account/`);

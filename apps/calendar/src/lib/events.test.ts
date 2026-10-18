@@ -6,10 +6,12 @@ import {
   importEvents,
   isCalendarState,
   MAX_EVENTS,
+  MAX_TITLE_LENGTH,
   migrateState,
   occurrencesBetween,
   onDay,
   removeEvent,
+  secondVersion,
   timeLabel,
   updateEvent,
   type CalendarState,
@@ -160,6 +162,19 @@ describe('add, update and remove', () => {
     expect(isCalendarState({ events: [{ ...draft(), id: 'x', startDate: 'nope' }] })).toBe(false);
     expect(isCalendarState({ events: [draft()] })).toBe(false); // no id
     expect(isCalendarState(null)).toBe(false);
+  });
+});
+
+describe('secondVersion', () => {
+  it('keeps this device’s version as its own event, with a title that still fits', () => {
+    const [event] = withEvents(draft({ title: 'x'.repeat(MAX_TITLE_LENGTH) })).events;
+    if (!event) throw new Error('Expected an event');
+    const copy = secondVersion(event, 'copy');
+    expect(copy).toEqual({ ...event, id: 'copy', title: `${'x'.repeat(83)} (second version)` });
+    expect(isCalendarState({ events: [event, copy] })).toBe(true);
+    expect(secondVersion({ ...event, title: 'Dentist' }, 'c').title).toBe(
+      'Dentist (second version)',
+    );
   });
 });
 

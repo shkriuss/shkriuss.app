@@ -5,6 +5,7 @@ import type { Page } from '@playwright/test';
 import {
   createAccount,
   hubURL,
+  oldCopyMoved,
   otherDevice,
   replaceKey,
   signInWithKey,
@@ -97,12 +98,51 @@ test('counters move to the new key when the account key is replaced', async ({
   // The phone replaces the key and turns on sync again: the tablet's counter comes along.
   await replaceKey(page);
   await page.goto(`${appURL}/#sync=connect`);
+  const moved = oldCopyMoved(page);
   await page.getByRole('button', { name: 'Turn on sync for Tally' }).click();
   await page.waitForURL(`${appURL}/`);
   await expect(value(page, 'Steps')).toHaveText('0');
   await expect(value(page, 'Water')).toHaveText('0');
 
+  await moved;
   await tablet.getByRole('button', { name: 'Sync now' }).click();
   await expect(tablet.locator('[data-sync-status]')).toHaveText(/^Your account key was replaced/);
+  await tablet.context().close();
+});
+
+test('keeps both counts when a counter is changed on two devices at once', async ({
+  page,
+  browser,
+  guard,
+}) => {
+  guard.allowOrigin(hubURL);
+  guard.allowConsole('ERR_INTERNET_DISCONNECTED');
+  const { key } = await createAccount(page);
+  await page.goto('/');
+  await addCounter(page, 'Water');
+  await turnOnSync(page, 'Tally');
+
+  const tablet = await (await otherDevice(browser)).newPage();
+  await signInWithKey(tablet, key);
+  await tablet.goto(`${new URL(page.url()).origin}/`);
+  await turnOnSync(tablet, 'Tally');
+  await expect(value(tablet, 'Water')).toHaveText('0');
+
+  // The phone counts while offline; the tablet counts too.
+  await page.context().setOffline(true);
+  await page.getByRole('button', { name: 'Add 1 to Water' }).click();
+  const upload = uploaded(tablet);
+  await tablet.getByRole('button', { name: 'Add 1 to Water' }).click();
+  await tablet.getByRole('button', { name: 'Add 1 to Water' }).click();
+  await upload;
+
+  // Back online, the phone keeps its count as a second counter.
+  await page.context().setOffline(false);
+  await expect(page.locator('[data-sync-status]')).toHaveText(/both versions are kept/);
+  await expect(value(page, 'Water')).toHaveText('2');
+  await expect(value(page, 'Water (second version)')).toHaveText('1');
+
+  await tablet.getByRole('button', { name: 'Sync now' }).click();
+  await expect(value(tablet, 'Water (second version)')).toHaveText('1');
   await tablet.context().close();
 });

@@ -48,6 +48,8 @@ import {
   type StoreSnapshot,
 } from './merge.ts';
 import { openStores, sealStores, syncKeys, type Stores } from './snapshot.ts';
+
+export { secondVersionName } from './merge.ts';
 import { MAX_SEALED_CHARS } from './validate.ts';
 
 const STATE_KEY = 'shkriuss-device:sync';

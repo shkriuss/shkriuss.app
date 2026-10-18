@@ -82,6 +82,9 @@ describe('writing notes', () => {
       note('b', 'Plan (second version)', 'Mine', 5, true),
     );
     expect(secondVersion(note('a', '', 'Mine'), 'b').title).toBe('Second version');
+    expect(secondVersion(note('a', 't'.repeat(MAX_TITLE_LENGTH)), 'b').title).toBe(
+      `${'t'.repeat(MAX_TITLE_LENGTH - 17)} (second version)`,
+    );
   });
 });
 
