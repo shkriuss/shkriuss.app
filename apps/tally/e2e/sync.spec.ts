@@ -5,6 +5,7 @@ import type { Page } from '@playwright/test';
 import {
   createAccount,
   hubURL,
+  oldCopyMoved,
   otherDevice,
   replaceKey,
   signInWithKey,
@@ -97,11 +98,13 @@ test('counters move to the new key when the account key is replaced', async ({
   // The phone replaces the key and turns on sync again: the tablet's counter comes along.
   await replaceKey(page);
   await page.goto(`${appURL}/#sync=connect`);
+  const moved = oldCopyMoved(page);
   await page.getByRole('button', { name: 'Turn on sync for Tally' }).click();
   await page.waitForURL(`${appURL}/`);
   await expect(value(page, 'Steps')).toHaveText('0');
   await expect(value(page, 'Water')).toHaveText('0');
 
+  await moved;
   await tablet.getByRole('button', { name: 'Sync now' }).click();
   await expect(tablet.locator('[data-sync-status]')).toHaveText(/^Your account key was replaced/);
   await tablet.context().close();

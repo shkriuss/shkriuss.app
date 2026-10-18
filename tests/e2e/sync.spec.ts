@@ -9,6 +9,7 @@ import { getSite } from '../../packages/registry/src/index.ts';
 import {
   createAccount,
   hubURL,
+  oldCopyMoved,
   otherDevice,
   replaceKey,
   signInWithKey,
@@ -125,12 +126,14 @@ test('after the account key is replaced, sync moves to the new key', async ({
     page.getByRole('heading', { name: `Sync ${name} with your account?` }),
   ).toBeVisible();
   await expect(page.locator('[data-connect-code]')).toHaveText(code);
+  const moved = oldCopyMoved(page);
   await page.getByRole('button', { name: `Turn on sync for ${name}` }).click();
   await page.waitForURL(`${appURL}/`);
   await expect(page.locator('[data-sync-code]')).toHaveText(code);
   await expect(status(page)).toHaveText(/^(Sync is on|Synced just now)/);
 
-  // The tablet's copy was moved: it stops syncing, and says why.
+  // Once the phone has moved the old copy, the tablet stops syncing, and says why.
+  await moved;
   await tablet.getByRole('button', { name: 'Sync now' }).click();
   await expect(status(tablet)).toHaveText(/^Your account key was replaced on another device/);
   await expect(tablet.getByRole('button', { name: 'Turn on sync' })).toBeVisible();
