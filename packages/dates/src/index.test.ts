@@ -4,6 +4,7 @@ import {
   addMinutes,
   daysBetween,
   daysInMonth,
+  firstDayOfWeek,
   isIsoDate,
   isIsoTime,
   minutesOf,
@@ -15,7 +16,7 @@ import {
   stampMinutes,
   today,
   weekday,
-} from './dates.ts';
+} from './index.ts';
 
 describe('validation', () => {
   it.each(['2026-10-17', '2024-02-29', '2000-02-29', '1999-12-31'])('accepts %s', (date) => {
@@ -128,5 +129,13 @@ describe('stamps', () => {
 
   it('reads the device clock to the minute', () => {
     expect(nowStamp(new Date(2026, 9, 17, 7, 5, 59))).toBe('2026-10-17T07:05');
+  });
+});
+
+describe('firstDayOfWeek', () => {
+  it('knows where weeks start on Monday or Sunday, and falls back to Monday', () => {
+    expect(firstDayOfWeek('en-GB')).toBe(1);
+    expect(firstDayOfWeek('en-US')).toBe(7);
+    expect(firstDayOfWeek('not a language')).toBe(1);
   });
 });

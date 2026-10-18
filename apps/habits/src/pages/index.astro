@@ -1,0 +1,294 @@
+---
+/**
+ * Habits: today's habits with a "Done today" button, streaks and the last 7
+ * days, plus an edit dialog (name, days, the last two weeks, delete).
+ * Behaviour: ../scripts/habits.ts.
+ */
+import { AppShell, Button, DataControls, Icon, SyncControls } from '@shkriuss/ui';
+import { EDITABLE_DAYS, MAX_NAME_LENGTH } from '../lib/habits.ts';
+---
+
+<AppShell wide>
+  <div class="stack stack--lg">
+    <header class="stack stack--sm">
+      <h1>Habits</h1>
+      <p class="lead">Build habits one day at a time. Your progress is saved on this device.</p>
+    </header>
+
+    <form class="add-form" data-add-form novalidate>
+      <div class="field add-form__field">
+        <label class="field__label" for="habit-name">
+          New habit
+        </label>
+        <input
+          class="input"
+          id="habit-name"
+          name="name"
+          type="text"
+          autocomplete="off"
+          enterkeyhint="done"
+          maxlength={MAX_NAME_LENGTH}
+          placeholder="e.g. Drink water"
+          aria-describedby="habit-name-error"
+          required
+        />
+        <p class="field__error" id="habit-name-error" data-error-for="name"></p>
+      </div>
+      <Button type="submit" variant="primary" icon="plus" class="add-form__submit">
+        Add
+      </Button>
+    </form>
+
+    <section class="stack" aria-labelledby="today-heading">
+      <div class="stack stack--sm">
+        <h2 id="today-heading">Today</h2>
+        <p class="muted" data-today></p>
+      </div>
+      <p class="muted" data-empty>
+        No habits yet. Add one above, like “Drink water” or “Read 10 pages”.
+      </p>
+      <ul role="list" class="grid habits" data-habits></ul>
+    </section>
+
+    <SyncControls />
+
+    <DataControls />
+  </div>
+
+  <!-- Live region: tells screen reader users what changed. -->
+  <p class="visually-hidden" role="status" data-announcer></p>
+
+  <!-- Markup for one habit, copied by the script for each habit. -->
+  <template data-habit-template>
+    <li class="card habit">
+      <div class="habit__header">
+        <div class="stack stack--sm">
+          <h3 class="habit__name" data-name>
+            Habit
+          </h3>
+          <p class="muted habit__schedule" data-schedule></p>
+        </div>
+        <button type="button" class="btn btn--ghost btn--icon" data-action="edit">
+          <Icon name="pencil" />
+        </button>
+      </div>
+      <button type="button" class="btn btn--lg habit__done" aria-pressed="false" data-action="done">
+        <Icon name="check" />
+        Done today
+      </button>
+      <p class="muted" data-not-planned hidden>
+        Not planned for today, but you can still tick it.
+      </p>
+      <p class="habit__streak" data-streak></p>
+      <div class="habit__week" aria-hidden="true" data-week></div>
+      <p class="visually-hidden" data-week-summary></p>
+    </li>
+  </template>
+
+  <!-- One day in a habit's last 7 days (for the eye; the summary above is read out). -->
+  <template data-day-template>
+    <span class="day">
+      <span class="day__name" data-day-name></span>
+      <span class="day__mark" data-day-mark>
+        <Icon name="check" />
+      </span>
+    </span>
+  </template>
+
+  <template data-check-template>
+    <label class="check">
+      <input type="checkbox" />
+      <span data-check-label>Day</span>
+    </label>
+  </template>
+
+  <dialog class="dialog" aria-labelledby="edit-title" data-edit-dialog>
+    <form class="stack" data-edit-form novalidate>
+      <h2 id="edit-title">Edit habit</h2>
+      <div class="field">
+        <label class="field__label" for="edit-name">
+          Name
+        </label>
+        <input
+          class="input"
+          id="edit-name"
+          name="name"
+          type="text"
+          autocomplete="off"
+          maxlength={MAX_NAME_LENGTH}
+          aria-describedby="edit-name-error"
+          required
+        />
+        <p class="field__error" id="edit-name-error" data-error-for="name"></p>
+      </div>
+      <fieldset class="stack stack--sm" aria-describedby="edit-days-error">
+        <legend class="field__label">Planned days</legend>
+        <div class="cluster day-checks" data-day-checks></div>
+        <p class="field__error" id="edit-days-error" data-error-for="days"></p>
+      </fieldset>
+      <fieldset class="stack stack--sm" aria-describedby="edit-done-hint">
+        <legend class="field__label">Done on</legend>
+        <p class="field__hint" id="edit-done-hint">
+          Forgot to tick a day? Fix the last {EDITABLE_DAYS / 7} weeks here.
+        </p>
+        <div class="past-days" data-past-days></div>
+      </fieldset>
+      <div class="cluster dialog__actions">
+        <Button type="submit" variant="primary">
+          Save
+        </Button>
+        <Button data-action="cancel">Cancel</Button>
+        <Button variant="danger" icon="trash" data-action="delete" class="dialog__delete">
+          Delete
+        </Button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="dialog" aria-labelledby="delete-title" data-delete-dialog>
+    <form method="dialog" class="stack">
+      <h2 id="delete-title">Delete this habit?</h2>
+      <p>
+        “<span data-delete-name></span>” and all its check marks will be removed.
+      </p>
+      <div class="cluster">
+        <Button type="submit" value="cancel">
+          Cancel
+        </Button>
+        <Button type="submit" variant="danger" value="confirm">
+          Delete
+        </Button>
+      </div>
+    </form>
+  </dialog>
+</AppShell>
+
+<script>
+  import { mountHabits } from '../scripts/habits.ts';
+
+  mountHabits(document);
+</script>
+
+<style>
+  .add-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: start;
+    gap: var(--space-3);
+  }
+
+  .add-form__field {
+    flex: 1 1 16rem;
+  }
+
+  /* Line the button up with the input (label height + small gap). */
+  .add-form__submit {
+    margin-block-start: calc(var(--text-base) * var(--leading-normal) + var(--space-1));
+  }
+
+  .habits {
+    --grid-min: 17rem;
+  }
+
+  .habit {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .habit__header {
+    display: flex;
+    align-items: start;
+    justify-content: space-between;
+    gap: var(--space-2);
+  }
+
+  .habit__name {
+    font-size: var(--text-lg);
+    overflow-wrap: anywhere;
+  }
+
+  .habit__schedule {
+    font-size: var(--text-sm);
+  }
+
+  .habit__done {
+    width: 100%;
+  }
+
+  .habit__streak {
+    font-weight: var(--weight-semibold);
+  }
+
+  /* The last 7 days: a filled circle when done, a ring when planned, a dot when not. */
+  .habit__week {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: var(--space-1);
+    text-align: center;
+  }
+
+  .day {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-1);
+    font-size: var(--text-xs);
+    color: var(--color-text-muted);
+  }
+
+  .day--today {
+    color: var(--color-text);
+    font-weight: var(--weight-semibold);
+  }
+
+  .day__mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border: 2px solid var(--color-border-strong);
+    border-radius: var(--radius-full);
+  }
+
+  .day__mark svg {
+    width: 1rem;
+    height: 1rem;
+    visibility: hidden;
+  }
+
+  .day--done .day__mark {
+    border-color: var(--color-accent);
+    background: var(--color-accent);
+    color: var(--color-on-accent);
+  }
+
+  .day--done .day__mark svg {
+    visibility: visible;
+  }
+
+  .day--off .day__mark {
+    border-style: dotted;
+  }
+
+  .day-checks {
+    --cluster-gap: var(--space-1) var(--space-4);
+  }
+
+  .past-days {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+    column-gap: var(--space-4);
+  }
+
+  fieldset {
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .dialog__actions .dialog__delete {
+    margin-inline-start: auto;
+  }
+</style>
