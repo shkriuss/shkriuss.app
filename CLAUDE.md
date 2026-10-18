@@ -24,6 +24,7 @@ packages/push/       optional notifications while an app is closed (client + per
 packages/account/    optional shkriuss account: recovery key, passkeys, device links (+ hub Worker)
 packages/sync/       optional sync between devices through the account (client + per-app Worker)
 packages/crypto/     Web Crypto helpers (base64url, HKDF, AES-GCM seal/open), browser + Workers
+packages/dates/      calendar dates as plain "YYYY-MM-DD" strings (add days, weekdays, month grid)
 packages/server/     shared Worker helpers: createWorker() for /api/*, JSON, limits
 templates/app/       copied by `pnpm new-app` (placeholder slug: template-app)
 tests/e2e/           shared Playwright tests that run against EVERY site

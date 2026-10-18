@@ -11,6 +11,7 @@ import {
   addDays,
   daysBetween,
   daysInMonth,
+  firstDayOfWeek,
   isIsoDate,
   isIsoTime,
   makeDate,
@@ -94,20 +95,6 @@ const FIELD_ORDER: DraftField[] = [
   'notes',
 ];
 
-/** The day weeks start on in the person's region: 1 = Monday … 7 = Sunday. */
-function firstDayOfWeek(): number {
-  try {
-    const locale = new Intl.Locale(navigator.language) as unknown as {
-      getWeekInfo?: () => { firstDay?: number };
-      weekInfo?: { firstDay?: number };
-    };
-    const day = (locale.getWeekInfo?.() ?? locale.weekInfo)?.firstDay;
-    return day && day >= 1 && day <= 7 ? day : 1;
-  } catch {
-    return 1;
-  }
-}
-
 export function mountCalendar(root: Document): void {
   const monthTitle = required<HTMLElement>(root, '[data-month-title]');
   const weekdaysRow = required<HTMLTableRowElement>(root, '[data-weekdays]');
@@ -143,7 +130,7 @@ export function mountCalendar(root: Document): void {
   const deleteDialog = required<HTMLDialogElement>(root, '[data-delete-dialog]');
   const deleteMessage = required<HTMLElement>(deleteDialog, '[data-delete-message]');
 
-  const weekStart = firstDayOfWeek();
+  const weekStart = firstDayOfWeek(navigator.language);
   let state = store.load();
   let todayDate = today();
   let selected = todayDate;
