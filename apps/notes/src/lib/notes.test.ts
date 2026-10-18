@@ -6,42 +6,52 @@ import {
   editNote,
   emptyState,
   isNotesState,
+  MAX_BODY_LENGTH,
   MAX_NOTES,
-  MAX_TEXT_LENGTH,
+  MAX_TITLE_LENGTH,
+  migrateNotes,
   notesCount,
   removeNote,
+  secondVersion,
   setPinned,
-  snippetOf,
   titleOf,
   visibleNotes,
   type Note,
   type NotesState,
 } from './notes.ts';
 
-const note = (id: string, text: string, updated = 1000, pinned = false): Note => ({
+const note = (id: string, title: string, body = '', updated = 1000, pinned = false): Note => ({
   id,
-  text,
+  title,
+  body,
   created: 1000,
   updated,
   pinned,
 });
 
 describe('writing notes', () => {
-  it('adds an empty note, then edits it', () => {
+  it('adds an empty note, then edits its title and body', () => {
     let state = addNote(emptyState(), 'a', 1000);
     expect(state.notes).toEqual([note('a', '')]);
-    state = editNote(state, 'a', 'Shopping\nMilk', 2000);
-    expect(state.notes[0]).toEqual({ ...note('a', 'Shopping\nMilk'), updated: 2000 });
+    state = editNote(state, 'a', { title: 'Shopping' }, 2000);
+    state = editNote(state, 'a', { body: 'Milk\nEggs' }, 3000);
+    expect(state.notes[0]).toEqual(note('a', 'Shopping', 'Milk\nEggs', 3000));
   });
 
-  it('counts a note as edited only when its text changed', () => {
-    const state: NotesState = { notes: [note('a', 'Same')] };
-    expect(editNote(state, 'a', 'Same', 5000)).toEqual(state);
+  it('counts a note as edited only when something changed', () => {
+    const state: NotesState = { notes: [note('a', 'Same', 'Body')] };
+    expect(editNote(state, 'a', { title: 'Same', body: 'Body' }, 5000).notes).toEqual(state.notes);
   });
 
   it('cuts very long text, and stops adding notes at the limit', () => {
-    const long = editNote({ notes: [note('a', '')] }, 'a', 'x'.repeat(MAX_TEXT_LENGTH + 5), 2);
-    expect(long.notes[0]?.text).toHaveLength(MAX_TEXT_LENGTH);
+    const long = editNote(
+      { notes: [note('a', '')] },
+      'a',
+      { title: 't'.repeat(MAX_TITLE_LENGTH + 5), body: 'x'.repeat(MAX_BODY_LENGTH + 5) },
+      2,
+    );
+    expect(long.notes[0]?.title).toHaveLength(MAX_TITLE_LENGTH);
+    expect(long.notes[0]?.body).toHaveLength(MAX_BODY_LENGTH);
     const full: NotesState = {
       notes: Array.from({ length: MAX_NOTES }, (_, index) => note(`n${index}`, 'x')),
     };
@@ -58,42 +68,79 @@ describe('writing notes', () => {
   });
 
   it('drops a note left empty, and only an empty one', () => {
-    const state: NotesState = { notes: [note('a', '  \n '), note('b', 'Keep')] };
-    expect(dropIfEmpty(state, 'a').notes).toEqual([note('b', 'Keep')]);
+    const state: NotesState = {
+      notes: [note('a', ' ', '  \n '), note('b', '', 'Only a body'), note('c', 'Only a title')],
+    };
+    expect(dropIfEmpty(state, 'a').notes.map((entry) => entry.id)).toEqual(['b', 'c']);
     expect(dropIfEmpty(state, 'b')).toBe(state);
+    expect(dropIfEmpty(state, 'c')).toBe(state);
     expect(dropIfEmpty(state, 'missing')).toBe(state);
+  });
+
+  it('makes a second version of a note changed on two devices', () => {
+    expect(secondVersion(note('a', ' Plan ', 'Mine', 5, true), 'b')).toEqual(
+      note('b', 'Plan (second version)', 'Mine', 5, true),
+    );
+    expect(secondVersion(note('a', '', 'Mine'), 'b').title).toBe('Second version');
+  });
+});
+
+describe('notes saved by version 1', () => {
+  it('splits the old text: first line the title, the rest the body', () => {
+    const old = {
+      notes: [
+        { id: 'a', text: '\n  Shopping \n\nMilk\nEggs', created: 1, updated: 2, pinned: true },
+        { id: 'b', text: '', created: 1, updated: 2, pinned: false },
+        { id: 'c', text: 'Just a title', created: 1, updated: 2, pinned: false },
+      ],
+    };
+    const migrated = migrateNotes(old, 1);
+    expect(isNotesState(migrated)).toBe(true);
+    expect(migrated?.notes).toEqual([
+      { id: 'a', title: 'Shopping', body: 'Milk\nEggs', created: 1, updated: 2, pinned: true },
+      { id: 'b', title: '', body: '', created: 1, updated: 2, pinned: false },
+      { id: 'c', title: 'Just a title', body: '', created: 1, updated: 2, pinned: false },
+    ]);
+  });
+
+  it('gives up on anything else', () => {
+    expect(migrateNotes({ notes: [] }, 3)).toBeUndefined();
+    expect(migrateNotes(null, 1)).toBeUndefined();
+    expect(migrateNotes({ notes: 'x' }, 1)).toBeUndefined();
+    expect(isNotesState(migrateNotes({ notes: [{ id: 'a' }] }, 1))).toBe(false);
   });
 });
 
 describe('what the list shows', () => {
-  it('uses the first line as the title and the rest as a snippet', () => {
-    const shopping = note('a', '\n  Shopping   list \n\nMilk\n  Eggs  and   bread\n');
-    expect(titleOf(shopping)).toBe('Shopping list');
-    expect(snippetOf(shopping)).toBe('Milk Eggs and bread');
-    expect(titleOf(note('b', ''))).toBe('');
-    expect(snippetOf(note('b', 'Only a title'))).toBe('');
+  it('shows the title, or the start of the body without one', () => {
+    expect(titleOf(note('a', '  Shopping   list '))).toBe('Shopping list');
+    expect(titleOf(note('b', '', '\n  First line \nSecond'))).toBe('First line');
+    expect(titleOf(note('c', ''))).toBe('');
   });
 
-  it('shortens long titles and snippets without breaking emoji', () => {
-    const title = titleOf(note('a', `${'😀'.repeat(100)}`));
+  it('shortens long titles without breaking emoji', () => {
+    const title = titleOf(note('a', '😀'.repeat(100)));
     expect([...title]).toHaveLength(80);
     expect(title.endsWith('😀…')).toBe(true);
-    expect([...snippetOf(note('b', `Title\n${'word '.repeat(100)}`))]).toHaveLength(160);
   });
 
   it('lists pinned notes first, then the most recently edited', () => {
     const state: NotesState = {
-      notes: [note('old', 'Old', 1), note('new', 'New', 3), note('pinned', 'Pinned', 2, true)],
+      notes: [
+        note('old', 'Old', '', 1),
+        note('new', 'New', '', 3),
+        note('pinned', 'Pinned', '', 2, true),
+      ],
     };
     expect(visibleNotes(state).map((entry) => entry.id)).toEqual(['pinned', 'new', 'old']);
   });
 
-  it('finds notes containing every word, ignoring case and accents', () => {
+  it('finds notes with every word in the title or body, ignoring case and accents', () => {
     const state: NotesState = {
       notes: [
-        note('a', 'Café on Main Street'),
+        note('a', 'Café', 'on Main Street'),
         note('b', 'Coffee beans'),
-        note('c', 'Street food'),
+        note('c', 'Food', 'Street food'),
       ],
     };
     const found = (search: string) => visibleNotes(state, search).map((entry) => entry.id);
@@ -121,7 +168,7 @@ describe('what the list shows', () => {
 describe('isNotesState', () => {
   it('accepts saved notes', () => {
     expect(isNotesState(emptyState())).toBe(true);
-    expect(isNotesState({ notes: [note('a', 'Hi', 5, true)] })).toBe(true);
+    expect(isNotesState({ notes: [note('a', 'Hi', 'There', 5, true)] })).toBe(true);
   });
 
   it('refuses anything else', () => {
@@ -131,7 +178,9 @@ describe('isNotesState', () => {
       {},
       { notes: {} },
       { notes: [{ ...note('a', 'Hi'), id: '' }] },
-      { notes: [{ ...note('a', 'Hi'), text: 3 }] },
+      { notes: [{ ...note('a', 'Hi'), title: 3 }] },
+      { notes: [{ ...note('a', 'Hi'), body: undefined }] },
+      { notes: [{ id: 'a', text: 'Version 1', created: 1, updated: 1, pinned: false }] },
       { notes: [{ ...note('a', 'Hi'), updated: Number.NaN }] },
       { notes: [{ ...note('a', 'Hi'), pinned: 'yes' }] },
     ]) {

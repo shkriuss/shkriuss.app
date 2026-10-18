@@ -167,6 +167,14 @@ in with `sync: true` in `apps.json`.
   - On a device's first sync, its items count as older than what's already
     online, so turning on sync (say, after restoring an old backup) never
     overwrites newer edits. Its other items are added.
+  - **Keeping both versions (optional, per app).** An app can ask for this
+    instead of "newest wins" (Notes does, with `conflictCopy`). When an item
+    was changed on this device and on another since this device's last sync,
+    the other device's version keeps the item and this device's becomes a
+    new item ("… (second version)" in Notes). A change also wins over a
+    deletion on another device, so no edit is lost. It starts from a
+    device's second sync after updating to this version, because it needs to
+    know which data version the device last synced.
   - Data from a newer version of the app is never overwritten: the older
     device waits until it updates. Older data is upgraded with the store's own
     migration and checked with its own validation before it's saved.
@@ -212,8 +220,10 @@ in with `sync: true` in `apps.json`.
 - **Device clocks decide "newest".** A device whose clock is far off can win
   or lose a conflict it shouldn't. Edits on different items never conflict.
 - **Same item, two devices.** When the same item is changed on two devices
-  before they sync, one change is kept whole (the newest), not combined. For
-  Tally, two devices counting the same counter at the same time keep one count.
+  before they sync, changes aren't combined. Apps that keep both versions
+  (Notes) end up with two items to tidy by hand; the others keep the newest
+  whole. For Tally, two devices counting the same counter at the same time
+  keep one count.
 - **iPhone Home Screen apps** keep their own storage, separate from Safari. An
   app added to the Home Screen may need its own sign-in on the hub when it
   connects.

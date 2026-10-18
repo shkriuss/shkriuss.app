@@ -115,7 +115,8 @@ or:
 
 The privacy page and the Account page's list of apps that sync include the
 app automatically. When an item is changed on two devices before they sync,
-the newest change wins. Moving to a new account key (after a lost device)
+the newest change wins, unless the store passes `conflictCopy` to keep both
+versions (see Notes). Moving to a new account key (after a lost device)
 needs no extra code.
 
 ## Going live

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   canonical,
   fingerprint,
+  keepBoth,
   knownFrom,
   merge,
   observe,
@@ -188,6 +189,77 @@ describe('merge', () => {
   it('says when nothing changed', () => {
     const snapshot = observe(undefined, [counter('a')], 1, 100).snapshot;
     expect(sameSnapshot(merge(snapshot, snapshot), snapshot)).toBe(true);
+  });
+});
+
+describe('keepBoth', () => {
+  const copy = (mine: Identified) => ({ ...(mine as Counter), id: `${mine.id}-copy` });
+
+  /** Two devices that synced `items`, then each changed things. */
+  function synced(items: Counter[]) {
+    const phone = new Device(items);
+    const server = phone.sync(undefined, 1000);
+    const tablet = new Device();
+    tablet.sync(server, 1000);
+    return { phone, tablet, server };
+  }
+
+  it('keeps both versions of an item changed on two devices', () => {
+    const { phone, tablet } = synced([counter('a'), counter('b')]);
+    phone.items = [counter('a', 5), counter('b')];
+    const server = phone.sync(undefined, 2000);
+    tablet.items = [counter('a', 7), counter('b')];
+    const mine = tablet.snapshot(3000).snapshot;
+    const result = keepBoth(tablet.known as Known, mine, server, copy, 3000);
+    expect(result.kept).toBe(1);
+    const merged = merge(result.snapshot, server);
+    expect(valuesOf(merged)).toEqual([counter('a', 5), counter('b'), counter('a-copy', 7, 'a')]);
+  });
+
+  it('leaves items changed on one side only, or changed the same way, to the merge', () => {
+    const { phone, tablet } = synced([counter('a'), counter('b'), counter('c')]);
+    phone.items = [counter('a', 5), counter('b'), counter('c', 2)];
+    const server = phone.sync(undefined, 2000);
+    tablet.items = [counter('a'), counter('b', 3), counter('c', 2)];
+    const mine = tablet.snapshot(3000).snapshot;
+    const result = keepBoth(tablet.known as Known, mine, server, copy, 3000);
+    expect(result).toEqual({ snapshot: mine, kept: 0 });
+    expect(valuesOf(merge(result.snapshot, server))).toEqual([
+      counter('a', 5),
+      counter('b', 3),
+      counter('c', 2),
+    ]);
+  });
+
+  it('brings back an item deleted here but changed on the other device', () => {
+    const { phone, tablet } = synced([counter('a'), counter('b')]);
+    phone.items = [counter('a', 5), counter('b')];
+    const server = phone.sync(undefined, 2000);
+    tablet.items = [counter('b')];
+    const mine = tablet.snapshot(3000).snapshot;
+    const result = keepBoth(tablet.known as Known, mine, server, copy, 3000);
+    expect(valuesOf(merge(result.snapshot, server))).toEqual([counter('b'), counter('a', 5)]);
+  });
+
+  it('keeps an item changed here but deleted on the other device', () => {
+    const { phone, tablet } = synced([counter('a'), counter('b')]);
+    phone.items = [counter('b')];
+    const server = phone.sync(undefined, 3000);
+    tablet.items = [counter('a', 4), counter('b')];
+    const mine = tablet.snapshot(2000).snapshot;
+    const result = keepBoth(tablet.known as Known, mine, server, copy, 2000);
+    expect(valuesOf(merge(result.snapshot, server))).toEqual([counter('b'), counter('a', 4)]);
+  });
+
+  it('still syncs a deletion made on the other device', () => {
+    const { phone, tablet } = synced([counter('a'), counter('b')]);
+    phone.items = [counter('b')];
+    const server = phone.sync(undefined, 2000);
+    tablet.items = [counter('a'), counter('b', 1)];
+    const mine = tablet.snapshot(3000).snapshot;
+    const result = keepBoth(tablet.known as Known, mine, server, copy, 3000);
+    expect(result.kept).toBe(0);
+    expect(valuesOf(merge(result.snapshot, server))).toEqual([counter('b', 1)]);
   });
 });
 

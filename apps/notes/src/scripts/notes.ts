@@ -2,10 +2,13 @@
  * Notes' page behaviour: connects pages/index.astro to the rules in
  * lib/notes.ts and saves everything on the device.
  *
- * Two views: the list, and one note in the editor. "#note=<id>" in the
- * address opens a note, so the back button returns to the list. Typing is
- * saved a moment after the last key press, and straight away when leaving
- * the note or the page.
+ * Two views: the list (titles only), and one note in the editor. "#note=<id>"
+ * in the address opens a note, so the back button returns to the list.
+ * Typing is saved a moment after the last key press, and straight away when
+ * leaving the note or the page.
+ *
+ * When sync is on and a note was changed on two devices at once, both
+ * versions are kept (the second as its own note).
  */
 import { createStore } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
@@ -17,12 +20,15 @@ import {
   editedLabel,
   editNote,
   emptyState,
+  isEmpty,
   isNotesState,
   MAX_NOTES,
+  migrateNotes,
+  NOTES_VERSION,
   notesCount,
   removeNote,
+  secondVersion,
   setPinned,
-  snippetOf,
   titleOf,
   visibleNotes,
   type Note,
@@ -31,9 +37,10 @@ import {
 
 const store = createStore<NotesState>({
   key: 'notes',
-  version: 1,
+  version: NOTES_VERSION,
   fallback: emptyState,
   validate: isNotesState,
+  migrate: migrateNotes,
 });
 
 /** Typing is saved this long after the last key press. */
@@ -60,8 +67,8 @@ export function mountNotes(root: Document): void {
   const noResults = required<HTMLElement>(listView, '[data-no-results]');
   const list = required<HTMLUListElement>(listView, '[data-notes]');
   const template = required<HTMLTemplateElement>(root, '[data-note-template]');
-  const heading = required<HTMLElement>(editorView, '#editor-heading');
-  const text = required<HTMLTextAreaElement>(editorView, '[data-text]');
+  const titleField = required<HTMLInputElement>(editorView, '[data-title]');
+  const bodyField = required<HTMLTextAreaElement>(editorView, '[data-body]');
   const edited = required<HTMLElement>(editorView, '[data-edited]');
   const pinButton = required<HTMLButtonElement>(editorView, '[data-action="pin"]');
   const announcer = required<HTMLElement>(root, '[data-announcer]');
@@ -74,7 +81,7 @@ export function mountNotes(root: Document): void {
   let current: string | null = null;
   /** The note just left, to focus it in the list. */
   let left: string | null = null;
-  /** A note that was just made, so the editor starts in the text box. */
+  /** A note that was just made, so the editor starts in the title box. */
   let creating: string | null = null;
   /** True once the list was shown: "All notes" then goes back instead of adding to history. */
   let listShown = false;
@@ -101,24 +108,20 @@ export function mountNotes(root: Document): void {
 
   // ---------- The list ----------
 
-  function renderNote(note: Note, now: number): HTMLLIElement {
+  function renderNote(note: Note): HTMLLIElement {
     const fragment = template.content.cloneNode(true) as DocumentFragment;
     const item = required<HTMLLIElement>(fragment, 'li');
     item.dataset['id'] = note.id;
     const link = required<HTMLAnchorElement>(item, '[data-open]');
     link.href = `#note=${note.id}`;
     link.textContent = titleText(note);
-    required<HTMLElement>(item, '[data-snippet]').textContent = snippetOf(note);
     required<HTMLElement>(item, '[data-pinned]').hidden = !note.pinned;
-    required<HTMLElement>(item, '[data-edited]').textContent =
-      `Edited ${editedLabel(note.updated, now)}`;
     return item;
   }
 
   function renderList(): void {
     const notes = visibleNotes(state, search.value);
-    const now = Date.now();
-    list.replaceChildren(...notes.map((note) => renderNote(note, now)));
+    list.replaceChildren(...notes.map(renderNote));
     const none = state.notes.length === 0;
     empty.hidden = !none;
     searchField.hidden = none && search.value === '';
@@ -144,24 +147,25 @@ export function mountNotes(root: Document): void {
   // ---------- The editor ----------
 
   function showEdited(note: Note): void {
-    edited.textContent = note.text.trim() ? `Edited ${editedLabel(note.updated, Date.now())}` : '';
+    edited.textContent = isEmpty(note) ? '' : `Edited ${editedLabel(note.updated, Date.now())}`;
     document.title = `${titleText(note)} · ${pageTitle}`;
   }
 
   function openNote(note: Note): void {
     current = note.id;
     fromList = listShown;
-    text.value = note.text;
+    titleField.value = note.title;
+    bodyField.value = note.body;
     pinButton.setAttribute('aria-pressed', String(note.pinned));
     showEdited(note);
     listView.hidden = true;
     editorView.hidden = false;
     say(null);
     window.scrollTo(0, 0);
-    // A new note starts in the text box; an existing one at its heading, so
-    // the keyboard doesn't open just to read it.
-    if (creating === note.id) text.focus();
-    else heading.focus();
+    // A new note starts in the title box; an existing one just opens, so
+    // the keyboard doesn't pop up just to read it.
+    if (creating === note.id) titleField.focus();
+    else editorView.focus();
     creating = null;
   }
 
@@ -170,7 +174,7 @@ export function mountNotes(root: Document): void {
     if (current === null) return;
     const now = Date.now();
     const base = find(current) ? state : addNote(state, current, now);
-    save(editNote(base, current, text.value, now));
+    save(editNote(base, current, { title: titleField.value, body: bodyField.value }, now));
     const note = find(current);
     if (note) showEdited(note);
   }
@@ -227,6 +231,19 @@ export function mountNotes(root: Document): void {
     showList(wasEditing);
   }
 
+  /** Puts a changed value into a field, keeping the cursor where it was. */
+  function showValue(field: HTMLInputElement | HTMLTextAreaElement, value: string): void {
+    if (field.value === value) return;
+    const { selectionStart, selectionEnd } = field;
+    field.value = value;
+    if (root.activeElement === field && selectionStart !== null && selectionEnd !== null) {
+      field.setSelectionRange(
+        Math.min(selectionStart, value.length),
+        Math.min(selectionEnd, value.length),
+      );
+    }
+  }
+
   /** After changes from another device or tab. */
   function refresh(): void {
     state = store.load();
@@ -248,16 +265,8 @@ export function mountNotes(root: Document): void {
       announce('That note was deleted on another device.');
       return;
     }
-    if (note.text !== text.value) {
-      const { selectionStart, selectionEnd } = text;
-      text.value = note.text;
-      if (root.activeElement === text) {
-        text.setSelectionRange(
-          Math.min(selectionStart, note.text.length),
-          Math.min(selectionEnd, note.text.length),
-        );
-      }
-    }
+    showValue(titleField, note.title);
+    showValue(bodyField, note.body);
     pinButton.setAttribute('aria-pressed', String(note.pinned));
     showEdited(note);
   }
@@ -285,12 +294,19 @@ export function mountNotes(root: Document): void {
     }, ANNOUNCE_DELAY_MS);
   });
 
-  text.addEventListener('input', () => {
+  editorView.addEventListener('input', () => {
     window.clearTimeout(saveTimer);
     saveTimer = window.setTimeout(() => {
       saveTimer = undefined;
       saveText();
     }, SAVE_DELAY_MS);
+  });
+
+  // Enter in the title goes on to the note.
+  titleField.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' || event.isComposing) return;
+    event.preventDefault();
+    bodyField.focus();
   });
 
   editorView.addEventListener('click', (event) => {
@@ -348,6 +364,8 @@ export function mountNotes(root: Document): void {
         store,
         items: (value) => value.notes,
         withItems: (value, notes) => ({ ...value, notes }),
+        // Changed on two devices at once: keep this device's version as its own note.
+        conflictCopy: (mine) => secondVersion(mine, crypto.randomUUID()),
       }),
     ],
     onChange: refresh,
