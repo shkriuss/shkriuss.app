@@ -65,7 +65,8 @@ notifications are made by the browser on the device (no push server).
 - **Sync between devices** (optional, with a shkriuss account): events are
   locked on the device and kept in sync through Calendar's own server
   (`@shkriuss/sync`). When an event is changed on two devices before they
-  sync, the newest change wins. Turning on sync on another device also
+  sync, both versions are kept: the second becomes its own event, titled
+  "… (second version)", with its own reminder. Turning on sync on another device also
   updates its reminders while closed. See
   [ADR 0010](../../docs/adr/0010-account-and-sync.md).
 - **Phones without Google services** (like GrapheneOS): use a browser with

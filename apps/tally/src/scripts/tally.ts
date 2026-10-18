@@ -14,6 +14,7 @@ import {
   nameError,
   removeCounter,
   resetCounter,
+  secondVersion,
   type Counter,
   type TallyState,
 } from '../lib/counters.ts';
@@ -172,6 +173,8 @@ export function mountTally(root: Document): void {
         store,
         items: (value) => value.counters,
         withItems: (value, counters) => ({ ...value, counters }),
+        // Changed on two devices at once: keep this device's version as its own counter.
+        conflictCopy: (mine) => secondVersion(mine, crypto.randomUUID()),
       }),
     ],
     onChange: () => {

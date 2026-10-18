@@ -8,6 +8,7 @@ import {
   observe,
   prune,
   sameSnapshot,
+  secondVersionName,
   TOMBSTONE_DAYS,
   valuesOf,
   type Identified,
@@ -260,6 +261,19 @@ describe('keepBoth', () => {
     const result = keepBoth(tablet.known as Known, mine, server, copy, 3000);
     expect(result.kept).toBe(0);
     expect(valuesOf(merge(result.snapshot, server))).toEqual([counter('b', 1)]);
+  });
+});
+
+describe('secondVersionName', () => {
+  it('adds "(second version)", shortening the name to fit', () => {
+    expect(secondVersionName('  Shopping ', 60)).toBe('Shopping (second version)');
+    const long = secondVersionName('x'.repeat(100), 60);
+    expect(long).toBe(`${'x'.repeat(43)} (second version)`);
+    expect(long).toHaveLength(60);
+    const emoji = secondVersionName('😀'.repeat(30), 30);
+    expect(emoji.length).toBeLessThanOrEqual(30);
+    expect(emoji).toBe('😀😀😀😀😀😀 (second version)');
+    expect(secondVersionName('   ', 60)).toBe('Second version');
   });
 });
 

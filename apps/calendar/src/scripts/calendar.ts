@@ -36,6 +36,7 @@ import {
   occurrencesBetween,
   onDay,
   removeEvent,
+  secondVersion,
   timeLabel,
   updateEvent,
   type CalendarEvent,
@@ -193,6 +194,8 @@ export function mountCalendar(root: Document): void {
         store,
         items: (value) => value.events,
         withItems: (value, events) => ({ ...value, events }),
+        // Changed on two devices at once: keep this device's version as its own event.
+        conflictCopy: (mine) => secondVersion(mine, crypto.randomUUID()),
       }),
     ],
     onChange: () => {

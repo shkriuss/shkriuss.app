@@ -2,6 +2,7 @@
  * Calendar events and their rules, as plain functions (easy to test).
  * Every function returns new data instead of changing the old.
  */
+import { secondVersionName } from '@shkriuss/sync';
 import {
   addDays,
   compareDates,
@@ -165,6 +166,16 @@ export function updateEvent(state: CalendarState, id: string, draft: EventDraft)
     events: state.events.map((event) => (event.id === id ? { id, ...clean(draft) } : event)),
   };
 }
+
+/**
+ * An event changed on two devices at once: this device's version, kept as
+ * its own event next to the other device's (packages/sync, conflictCopy).
+ */
+export const secondVersion = (event: CalendarEvent, id: string): CalendarEvent => ({
+  ...event,
+  id,
+  title: secondVersionName(event.title, MAX_TITLE_LENGTH),
+});
 
 export function removeEvent(state: CalendarState, id: string): CalendarState {
   return { events: state.events.filter((event) => event.id !== id) };

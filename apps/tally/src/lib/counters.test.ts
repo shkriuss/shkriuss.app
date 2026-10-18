@@ -9,6 +9,7 @@ import {
   nameError,
   removeCounter,
   resetCounter,
+  secondVersion,
   type TallyState,
 } from './counters.ts';
 
@@ -67,6 +68,20 @@ describe('counters', () => {
     state = resetCounter(state, 'w');
     expect(state.counters[0]?.count).toBe(0);
     expect(removeCounter(state, 'w')).toEqual(emptyState());
+  });
+});
+
+describe('secondVersion', () => {
+  it('keeps this device’s count as its own counter, with a name that still fits', () => {
+    expect(secondVersion({ id: 'w', name: 'Water', count: 5 }, 'w2')).toEqual({
+      id: 'w2',
+      name: 'Water (second version)',
+      count: 5,
+    });
+    const long = secondVersion({ id: 'a', name: 'x'.repeat(MAX_NAME_LENGTH), count: 1 }, 'b');
+    expect(long.name).toHaveLength(MAX_NAME_LENGTH);
+    expect(nameError(long.name, emptyState())).toBeUndefined();
+    expect(isTallyState({ counters: [long] })).toBe(true);
   });
 });
 

@@ -4,6 +4,7 @@
  *
  * A note has a title and a body, both plain text.
  */
+import { secondVersionName } from '@shkriuss/sync';
 
 export interface Note {
   id: string;
@@ -134,14 +135,11 @@ export function dropIfEmpty(state: NotesState, id: string): NotesState {
  * A note changed on two devices at once: this device's version, kept as a
  * second note next to the other device's (packages/sync, conflictCopy).
  */
-export function secondVersion(note: Note, id: string): Note {
-  const title = note.title.trim();
-  return {
-    ...note,
-    id,
-    title: (title ? `${title} (second version)` : 'Second version').slice(0, MAX_TITLE_LENGTH),
-  };
-}
+export const secondVersion = (note: Note, id: string): Note => ({
+  ...note,
+  id,
+  title: secondVersionName(note.title, MAX_TITLE_LENGTH),
+});
 
 /** Cuts text to `max` characters (never in the middle of an emoji), adding "…". */
 function shorten(text: string, max: number): string {
