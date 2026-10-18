@@ -3,9 +3,12 @@
 Write things down. Lives at <https://notes.shkriuss.app>.
 
 - `src/lib/notes.ts`: the rules as plain functions, with unit tests next to
-  them (`notes.test.ts`). A note is plain text; its first line is its title.
+  them (`notes.test.ts`). A note has a title and a body, both plain text.
+  Data version 2; notes saved by version 1 (one text, its first line the
+  title) are split when loaded (`migrateNotes`).
 - `src/scripts/notes.ts`: connects the page to those rules and saves on the
-  device with `@shkriuss/storage`. Two views, the list and one note;
+  device with `@shkriuss/storage`. Two views, the list (titles only) and
+  one note;
   `#note=<id>` in the address opens a note, so the back button works.
   Typing is saved a moment after the last key press, and straight away when
   leaving the note or the page.
@@ -13,7 +16,8 @@ Write things down. Lives at <https://notes.shkriuss.app>.
   A `<template>` holds the markup for one note in the list.
 - Sync between devices (optional): `src/worker.ts` runs the shared sync
   server. When the same note is changed on two devices before they sync,
-  the newest change wins ([ADR 0010](../../docs/adr/0010-account-and-sync.md)).
+  both versions are kept: the second becomes its own note, titled
+  "… (second version)" ([ADR 0010](../../docs/adr/0010-account-and-sync.md)).
 - `e2e/notes.spec.ts` and `e2e/sync.spec.ts`: browser tests. The shared
   accessibility, security and offline checks in `tests/e2e/` run too.
 

@@ -5,7 +5,7 @@
  * button returns to the list. Behaviour: ../scripts/notes.ts.
  */
 import { AppShell, Button, DataControls, Icon, SyncControls } from '@shkriuss/ui';
-import { MAX_TEXT_LENGTH } from '../lib/notes.ts';
+import { MAX_BODY_LENGTH, MAX_TITLE_LENGTH } from '../lib/notes.ts';
 ---
 
 <AppShell wide>
@@ -49,7 +49,16 @@ import { MAX_TEXT_LENGTH } from '../lib/notes.ts';
     <DataControls />
   </div>
 
-  <section class="stack editor" aria-labelledby="editor-heading" data-view="editor" hidden>
+  <section
+    class="stack editor"
+    aria-labelledby="editor-heading"
+    tabindex="-1"
+    data-view="editor"
+    hidden
+  >
+    <h2 id="editor-heading" class="visually-hidden">
+      Note
+    </h2>
     <div class="cluster cluster--between editor__bar">
       <Button icon="arrow-left" data-action="back">
         All notes
@@ -65,19 +74,29 @@ import { MAX_TEXT_LENGTH } from '../lib/notes.ts';
       </div>
     </div>
     <div class="field">
-      <h2 id="editor-heading" class="editor__heading" tabindex="-1">
-        <label for="note-text">Note</label>
-      </h2>
-      <p class="field__hint" id="note-text-hint">
-        The first line is the title.
-      </p>
+      <label class="field__label" for="note-title">
+        Title
+      </label>
+      <input
+        class="input editor__title"
+        id="note-title"
+        type="text"
+        maxlength={MAX_TITLE_LENGTH}
+        autocomplete="off"
+        enterkeyhint="next"
+        data-title
+      />
+    </div>
+    <div class="field">
+      <label class="field__label" for="note-body">
+        Note
+      </label>
       <textarea
-        class="input editor__text"
-        id="note-text"
+        class="input editor__body"
+        id="note-body"
         rows="12"
-        maxlength={MAX_TEXT_LENGTH}
-        aria-describedby="note-text-hint"
-        data-text
+        maxlength={MAX_BODY_LENGTH}
+        data-body
       ></textarea>
     </div>
     <p class="muted" data-edited></p>
@@ -93,15 +112,10 @@ import { MAX_TEXT_LENGTH } from '../lib/notes.ts';
         <a class="card__link" href="#note=" data-open>
           Note
         </a>
-      </h3>
-      <p class="note-card__snippet" data-snippet></p>
-      <p class="cluster muted note-card__meta">
-        <span class="badge" data-pinned hidden>
+        <span class="note-card__pin" role="img" aria-label="Pinned" data-pinned hidden>
           <Icon name="pin" />
-          Pinned
         </span>
-        <span data-edited></span>
-      </p>
+      </h3>
     </li>
   </template>
 
@@ -142,40 +156,29 @@ import { MAX_TEXT_LENGTH } from '../lib/notes.ts';
     --grid-min: 16rem;
   }
 
+  /* Only the title, so the list is quick to scan. */
   .note-card {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
+    padding: var(--space-4);
   }
 
   .note-card__title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
     font-size: var(--text-lg);
     overflow-wrap: anywhere;
   }
 
-  .note-card__snippet {
-    overflow-wrap: anywhere;
-  }
-
-  .note-card__snippet:empty {
-    display: none;
-  }
-
-  .note-card__meta {
-    --cluster-gap: var(--space-2);
-    margin-block-start: auto;
-    font-size: var(--text-sm);
-  }
-
-  .note-card__meta .badge {
+  .note-card__pin {
     display: inline-flex;
-    align-items: center;
-    gap: var(--space-1);
+    flex: none;
+    color: var(--color-text-muted);
   }
 
-  .note-card__meta svg {
-    width: 1em;
-    height: 1em;
+  .note-card__pin svg {
+    width: 1.125rem;
+    height: 1.125rem;
   }
 
   .editor__bar {
@@ -186,12 +189,13 @@ import { MAX_TEXT_LENGTH } from '../lib/notes.ts';
     --cluster-gap: var(--space-2);
   }
 
-  .editor__heading {
-    font-size: var(--text-xl);
+  .editor__title {
+    font-size: var(--text-lg);
+    font-weight: var(--weight-semibold);
   }
 
   /* Room to write; grows with the text where browsers can. */
-  .editor__text {
+  .editor__body {
     min-height: 50dvh;
     field-sizing: content;
     line-height: var(--leading-normal);

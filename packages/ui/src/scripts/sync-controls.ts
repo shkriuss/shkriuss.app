@@ -47,6 +47,8 @@ export function mountSyncControls(section: HTMLElement, sync: SyncClient): void 
     cancelled: 'Sync wasn’t turned on.',
     'turned-off': `Sync is off on this device. ${app}'s data here is kept, and so is the online copy for your other devices.`,
     'deleted-online': 'The online copy is deleted, and sync is off on this device.',
+    'kept-both':
+      'Synced. Something was changed on two devices at once, so both versions are kept: check for a second copy.',
   };
 
   /** A message from the last thing that happened, shown until the next sync. */
@@ -66,7 +68,10 @@ export function mountSyncControls(section: HTMLElement, sync: SyncClient): void 
   sync.subscribe((status, event) => {
     const message = event ? EVENTS[event] : undefined;
     if (message) note = message;
-    else if (event === 'synced' && note !== EVENTS.connected) note = null;
+    // These stay until the person does something here: later syncs don't hide them.
+    else if (event === 'synced' && note !== EVENTS.connected && note !== EVENTS['kept-both']) {
+      note = null;
+    }
     render(status);
   });
 

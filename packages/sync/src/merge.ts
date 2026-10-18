@@ -44,6 +44,8 @@ export interface StoreSnapshot {
 export interface Known {
   items: Record<string, { h: string; t: number } | Tombstone>;
   order: Order;
+  /** The data version the fingerprints are of (missing in what older versions saved). */
+  v?: number;
 }
 
 /** An item in an app's data. */
@@ -171,6 +173,58 @@ export function merge(a: StoreSnapshot, b: StoreSnapshot): StoreSnapshot {
   return { v: a.v, items, order };
 }
 
+/**
+ * For apps that keep both versions instead of letting the newest win (like
+ * Notes): looks at what changed both here and on another device since this
+ * device's last sync, before merging.
+ *
+ * - Changed on both: the other device's version keeps the item, and this
+ *   device's version becomes a new item, made by `copy` (with a new id). Like
+ *   other new items, it goes at the end of the list.
+ * - Deleted on one device but changed on the other: the change wins, so no
+ *   edit is lost.
+ *
+ * Returns this device's snapshot to merge, and how many items it kept both of.
+ */
+export function keepBoth(
+  known: Known,
+  mine: StoreSnapshot,
+  theirs: StoreSnapshot,
+  copy: (mine: Identified, theirs: Identified) => Identified,
+  now: number,
+): { snapshot: StoreSnapshot; kept: number } {
+  const items = { ...mine.items };
+  const ids = [...mine.order.ids];
+  let kept = 0;
+  for (const [id, other] of Object.entries(theirs.items)) {
+    const before = known.items[id];
+    const here = mine.items[id];
+    if (!before || isTombstone(before) || !here) continue;
+    if (isTombstone(other)) {
+      // Deleted there but changed here: the change wins, even if it's older.
+      if (!isTombstone(here) && fingerprint(here.value) !== before.h && here.t <= other.t) {
+        items[id] = { ...here, t: other.t + 1 };
+      }
+      continue;
+    }
+    const otherValue = fingerprint(other.value);
+    if (otherValue === before.h) continue;
+    if (isTombstone(here)) {
+      items[id] = other;
+      continue;
+    }
+    const hereValue = fingerprint(here.value);
+    if (hereValue === before.h || hereValue === otherValue) continue;
+    const duplicate = copy(here.value as Identified, other.value as Identified);
+    if (duplicate.id in items || duplicate.id in theirs.items) continue;
+    items[id] = other;
+    items[duplicate.id] = { t: now, value: duplicate };
+    ids.push(duplicate.id);
+    kept += 1;
+  }
+  return { snapshot: { ...mine, items, order: { ...mine.order, ids } }, kept };
+}
+
 /** The live items' values, in order. */
 export function valuesOf(snapshot: StoreSnapshot): unknown[] {
   return snapshot.order.ids.flatMap((id) => {
@@ -194,7 +248,7 @@ export function knownFrom(snapshot: StoreSnapshot): Known {
   for (const [id, entry] of Object.entries(snapshot.items)) {
     items[id] = isTombstone(entry) ? entry : { h: fingerprint(entry.value), t: entry.t };
   }
-  return { items, order: snapshot.order };
+  return { items, order: snapshot.order, v: snapshot.v };
 }
 
 export const sameSnapshot = (a: StoreSnapshot, b: StoreSnapshot): boolean =>

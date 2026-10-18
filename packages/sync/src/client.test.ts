@@ -90,8 +90,9 @@ class Device {
   readonly sync: SyncClient;
   changes = 0;
   status: SyncStatus | undefined;
+  events: string[] = [];
 
-  constructor(appSecret: Uint8Array<ArrayBuffer>, version = 1) {
+  constructor(appSecret: Uint8Array<ArrayBuffer>, version = 1, keepBoth = false) {
     this.use();
     this.store = createStore<Counters>({
       key: 'tally',
@@ -111,14 +112,24 @@ class Device {
           store: this.store,
           items: (value) => value.counters,
           withItems: (value, counters) => ({ ...value, counters }),
+          ...(keepBoth
+            ? {
+                conflictCopy: (mine: Counter) => ({
+                  ...mine,
+                  id: `${mine.id}-2`,
+                  name: `${mine.name} (2)`,
+                }),
+              }
+            : {}),
         }),
       ],
       onChange: () => {
         this.changes += 1;
       },
     });
-    this.sync.subscribe((status) => {
+    this.sync.subscribe((status, event) => {
       this.status = status;
+      if (event) this.events.push(event);
     });
   }
 
@@ -382,6 +393,79 @@ describe('syncing between devices', () => {
     expect((await phone.syncNow()).problem).toBeNull();
     expect(await tablet.syncNow()).toMatchObject({ on: true, problem: null });
     expect(tablet.counters).toEqual([counter('water')]);
+  });
+
+  it('keeps both versions when an app asks to', async () => {
+    const secret = randomBytes(32);
+    const phone = new Device(secret, 1, true);
+    const tablet = new Device(secret, 1, true);
+    phone.counters = [counter('water'), counter('tea')];
+    await phone.syncNow();
+    await tablet.syncNow();
+
+    // Both change water, and the phone deletes tea while the tablet counts it.
+    vi.setSystemTime(Date.now() + 1000);
+    phone.counters = [counter('water', 2)];
+    tablet.counters = [counter('water', 5), counter('tea', 1)];
+    await phone.syncNow();
+    await tablet.syncNow();
+    expect(tablet.events).toContain('kept-both');
+    await phone.syncNow();
+    const both = [
+      counter('water', 2),
+      counter('tea', 1),
+      { ...counter('water-2', 5), name: 'water (2)' },
+    ];
+    expect(tablet.counters).toEqual(both);
+    expect(phone.counters).toEqual(both);
+
+    // Nothing more is copied on later syncs.
+    await tablet.syncNow();
+    await phone.syncNow();
+    expect(phone.counters).toEqual(both);
+    vi.useRealTimers();
+  });
+
+  it('makes no copies on the first sync after updating from an older version', async () => {
+    const secret = randomBytes(32);
+    const phone = new Device(secret, 1, true);
+    const tablet = new Device(secret, 1, true);
+    phone.counters = [counter('water')];
+    await phone.syncNow();
+    await tablet.syncNow();
+    // What older versions saved: no data version in what the tablet knew.
+    const saved = JSON.parse(tablet.storage.getItem('shkriuss-device:sync') ?? '{}') as {
+      known: Record<string, { v?: number }>;
+    };
+    for (const known of Object.values(saved.known)) delete known.v;
+    tablet.storage.setItem('shkriuss-device:sync', JSON.stringify(saved));
+
+    vi.setSystemTime(Date.now() + 1000);
+    phone.counters = [counter('water', 2)];
+    await phone.syncNow();
+    vi.setSystemTime(Date.now() + 1000);
+    tablet.counters = [counter('water', 5)];
+    await tablet.syncNow();
+    expect(tablet.counters).toEqual([counter('water', 5)]);
+    vi.useRealTimers();
+  });
+
+  it('lets the newest change win when keeping both isn’t asked for', async () => {
+    const secret = randomBytes(32);
+    const phone = new Device(secret);
+    const tablet = new Device(secret);
+    phone.counters = [counter('water')];
+    await phone.syncNow();
+    await tablet.syncNow();
+    vi.setSystemTime(Date.now() + 1000);
+    phone.counters = [counter('water', 2)];
+    await phone.syncNow();
+    vi.setSystemTime(Date.now() + 1000);
+    tablet.counters = [counter('water', 5)];
+    await tablet.syncNow();
+    await phone.syncNow();
+    expect(phone.counters).toEqual([counter('water', 5)]);
+    vi.useRealTimers();
   });
 
   it('keeps separate accounts apart', async () => {

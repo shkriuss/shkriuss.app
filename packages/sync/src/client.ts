@@ -37,6 +37,7 @@ import {
 } from './connect.ts';
 import {
   canonical,
+  keepBoth,
   knownFrom,
   merge,
   observe,
@@ -64,6 +65,13 @@ export interface SyncedStore<T = unknown, I extends Identified = Identified> {
   store: Store<T>;
   items(value: T): readonly I[];
   withItems(value: T, items: I[]): T;
+  /**
+   * Optional: when an item was changed on this device and on another before
+   * they synced, keep both instead of only the newest. Return this device's
+   * version as a new item, with a new id (the other device's version keeps
+   * the item). Edits then also win over deletions on another device.
+   */
+  conflictCopy?(mine: I, theirs: I): I;
 }
 
 /**
@@ -103,7 +111,14 @@ export interface SyncStatus {
 }
 
 /** Things that just happened, for a message. */
-export type SyncEvent = 'connected' | 'cancelled' | 'synced' | 'turned-off' | 'deleted-online';
+export type SyncEvent =
+  | 'connected'
+  | 'cancelled'
+  | 'synced'
+  /** Synced, and something changed on two devices at once was kept in both versions. */
+  | 'kept-both'
+  | 'turned-off'
+  | 'deleted-online';
 
 export interface SyncClient {
   status(): SyncStatus;
@@ -268,6 +283,8 @@ export function createSync(options: {
   const { stores } = options;
   const listeners = new Set<(status: SyncStatus, event?: SyncEvent) => void>();
   let busy = false;
+  /** Items kept in both versions during this run (see SyncedStore.conflictCopy). */
+  let keptBoth = 0;
   let again = false;
   let problem: SyncProblem | null = null;
   let timer: number | undefined;
@@ -377,11 +394,23 @@ export function createSync(options: {
 
     // 3. Merge.
     const merged: Stores = {};
+    let kept = 0;
     for (const synced of stores) {
       let result = local[synced.store.key] as StoreSnapshot;
-      const others = [remote.kind === 'copy' ? remote.stores : {}, ...moving.map((m) => m.stores)];
-      for (const other of others) {
-        const theirs = other[synced.store.key];
+      const known = state.known[synced.store.key];
+      const online = remote.kind === 'copy' ? remote.stores[synced.store.key] : undefined;
+      if (online) {
+        const theirs = upgrade(synced, online);
+        // Keeping both needs to know what this device had, in today's data version.
+        if (synced.conflictCopy && known?.v === synced.store.version) {
+          const both = keepBoth(known, result, theirs, synced.conflictCopy, now);
+          result = both.snapshot;
+          kept += both.kept;
+        }
+        result = merge(result, theirs);
+      }
+      for (const old of moving) {
+        const theirs = old.stores[synced.store.key];
         if (theirs) result = merge(result, upgrade(synced, theirs));
       }
       merged[synced.store.key] = prune(result, now);
@@ -400,6 +429,7 @@ export function createSync(options: {
       if (!synced.store.save(next)) throw new SyncError('storage');
       appChanged = true;
     }
+    keptBoth += kept;
 
     // 5. Upload, if the copy online isn't already this.
     let online =
@@ -463,6 +493,7 @@ export function createSync(options: {
       return;
     }
     busy = true;
+    keptBoth = 0;
     emit();
     let event: SyncEvent | undefined;
     try {
@@ -470,7 +501,7 @@ export function createSync(options: {
       for (let attempt = 0; attempt < MAX_ROUNDS && !done; attempt += 1) done = await round();
       if (!done) again = true;
       problem = null;
-      event = 'synced';
+      event = keptBoth > 0 ? 'kept-both' : 'synced';
     } catch (error) {
       problem = error instanceof SyncError ? error.problem : 'server';
       const state = loadState();
