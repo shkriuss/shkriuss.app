@@ -1,10 +1,10 @@
 ---
 /**
  * Habits: today's habits with a "Done today" button, streaks and the last 7
- * days, plus an edit dialog (name, days, the last two weeks, delete).
- * Behaviour: ../scripts/habits.ts.
+ * days, plus an edit dialog (name, days, reminder, the last two weeks,
+ * delete). Behaviour: ../scripts/habits.ts and ../scripts/reminders.ts.
  */
-import { AppShell, Button, DataControls, Icon, SyncControls } from '@shkriuss/ui';
+import { AppShell, Button, DataControls, Icon, PushControls, SyncControls } from '@shkriuss/ui';
 import { EDITABLE_DAYS, MAX_NAME_LENGTH } from '../lib/habits.ts';
 ---
 
@@ -50,6 +50,21 @@ import { EDITABLE_DAYS, MAX_NAME_LENGTH } from '../lib/habits.ts';
       <ul role="list" class="grid habits" data-habits></ul>
     </section>
 
+    <section class="stack" aria-labelledby="reminders-heading">
+      <h2 id="reminders-heading">Reminders</h2>
+      <p class="muted">
+        To get reminded, open a habit with its pencil button and turn on “Remind me”. Reminders come
+        on the days it’s planned for, unless it’s already done.
+      </p>
+      <p data-notify-status>Notifications are off.</p>
+      <p data-notify-enable hidden>
+        <Button icon="bell" data-action="enable-notifications">
+          Turn on notifications
+        </Button>
+      </p>
+      <PushControls />
+    </section>
+
     <SyncControls />
 
     <DataControls />
@@ -67,6 +82,10 @@ import { EDITABLE_DAYS, MAX_NAME_LENGTH } from '../lib/habits.ts';
             Habit
           </h3>
           <p class="muted habit__schedule" data-schedule></p>
+          <p class="muted habit__schedule habit__reminder" data-reminder hidden>
+            <Icon name="bell" />
+            <span data-reminder-time>Reminder</span>
+          </p>
         </div>
         <button type="button" class="btn btn--ghost btn--icon" data-action="edit">
           <Icon name="pencil" />
@@ -126,6 +145,29 @@ import { EDITABLE_DAYS, MAX_NAME_LENGTH } from '../lib/habits.ts';
         <div class="cluster day-checks" data-day-checks></div>
         <p class="field__error" id="edit-days-error" data-error-for="days"></p>
       </fieldset>
+      <div class="stack stack--sm">
+        <label class="check">
+          <input type="checkbox" name="remind" />
+          <span>Remind me</span>
+        </label>
+        <div class="field" data-reminder-field hidden>
+          <label class="field__label" for="edit-reminder">
+            Reminder time
+          </label>
+          <input
+            class="input reminder-time"
+            id="edit-reminder"
+            name="reminder"
+            type="time"
+            aria-describedby="edit-reminder-hint edit-reminder-error"
+            required
+          />
+          <p class="field__hint" id="edit-reminder-hint">
+            On planned days, if it isn’t done yet.
+          </p>
+          <p class="field__error" id="edit-reminder-error" data-error-for="reminder"></p>
+        </div>
+      </div>
       <fieldset class="stack stack--sm" aria-describedby="edit-done-hint">
         <legend class="field__label">Done on</legend>
         <p class="field__hint" id="edit-done-hint">
@@ -214,6 +256,21 @@ import { EDITABLE_DAYS, MAX_NAME_LENGTH } from '../lib/habits.ts';
 
   .habit__done {
     width: 100%;
+  }
+
+  .habit__reminder {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+  }
+
+  .habit__reminder svg {
+    width: 1em;
+    height: 1em;
+  }
+
+  .reminder-time {
+    max-inline-size: 12rem;
   }
 
   .habit__streak {

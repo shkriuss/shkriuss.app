@@ -4,6 +4,7 @@ export { default as Button } from './components/Button.astro';
 export { default as Card } from './components/Card.astro';
 export { default as DataControls } from './components/DataControls.astro';
 export { default as Icon } from './components/Icon.astro';
+export { default as PushControls } from './components/PushControls.astro';
 export { default as SyncControls } from './components/SyncControls.astro';
 export { default as ThemeSwitch } from './components/ThemeSwitch.astro';
 export { default as AppShell } from './layouts/AppShell.astro';

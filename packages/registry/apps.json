@@ -64,11 +64,13 @@
       "status": "beta",
       "storage": "device",
       "dataStored": [
-        "Your habits: their names and the days you plan them for",
+        "Your habits: their names, the days you plan them for and their reminder times",
         "Which days you marked each habit done",
+        "If you turn on reminders while Habits is closed: this device's notification settings and a random device key (never in backups)",
         "If you turn on sync: a copy of your habits and check marks on Habits' server, locked on your devices so only they can read it, and this device's sync key (never in backups)",
         "Your light or dark theme choice"
       ],
+      "pushNotifications": true,
       "sync": true
     }
   ]

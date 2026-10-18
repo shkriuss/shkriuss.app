@@ -72,22 +72,25 @@ deploy all read from the registry and the `apps/` folder.
 ## Notifications while the app is closed (optional)
 
 Apps can send reminders even when they're closed, through the shared
-`@shkriuss/push` package ([ADR 0009](adr/0009-push-notifications.md)). Calendar
-is the example to copy. Ask Claude, or:
+`@shkriuss/push` package ([ADR 0009](adr/0009-push-notifications.md)). Habits
+is the simplest example to copy. Ask Claude, or:
 
 1. In `apps.json`, add `"pushNotifications": true` to the app, and a line to
    `dataStored` about the device key (see Calendar's entry).
 2. Add `src/worker.ts`:
    `export { default, PushDevice, PushKeys } from '@shkriuss/push/worker';`
+   (an app with sync too combines both, like Habits' and Calendar's).
 3. In `wrangler.jsonc`, copy Calendar's `main`, `assets.binding`,
    `assets.run_worker_first`, `durable_objects`, `migrations` and `previews`.
-   A unit test checks these match.
+   A unit test checks these match. Migrations run in order, so if the app is
+   already live, add the new one after the ones it has (see Habits').
 4. Add `"@shkriuss/push": "workspace:*"` to the app's `package.json`.
-5. In the page script, call `enablePush()` from a switch, then
-   `syncPush(notices)` whenever the app's data changes, and `disablePush()`
-   when it's turned off. Each notice has a local start time, a repeat
-   pattern, minutes before, and the title and text to show. See
-   `apps/calendar/src/scripts/push-reminders.ts`.
+5. Put `<PushControls />` (the "Also remind me when … is closed" switch) in
+   the app's notifications section. In the page script, call
+   `mountPushControls(…, { notices, announce })` and its `sync()` whenever
+   the app's data changes. `notices()` returns the notifications as they are
+   now: each has a local start time, a repeat pattern, minutes before, and
+   the title and text to show. See `apps/habits/src/scripts/reminders.ts`.
 
 The privacy page lists the app automatically, and "Delete all data" already
 removes the device from the server.
@@ -116,7 +119,7 @@ or:
 The privacy page and the Account page's list of apps that sync include the
 app automatically. When an item is changed on two devices before they sync,
 the newest change wins, unless the store passes `conflictCopy` to keep both
-versions; every app so far does (see Tally: `secondVersion` in
+versions, as Calendar, Tally and Notes do (see Tally: `secondVersion` in
 `src/lib/counters.ts`). Moving to a new account key (after a lost device)
 needs no extra code.
 
