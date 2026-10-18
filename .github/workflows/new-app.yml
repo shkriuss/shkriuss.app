@@ -54,6 +54,7 @@ on:
           - shield
           - sun
           - tally
+          - text-check
           - trash
           - upload
           - user

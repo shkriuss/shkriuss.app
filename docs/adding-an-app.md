@@ -95,6 +95,24 @@ is the simplest example to copy. Ask Claude, or:
 The privacy page lists the app automatically, and "Delete all data" already
 removes the device from the server.
 
+## Heavy work and WebAssembly (optional)
+
+Work that takes more than a moment (like Grammar's checker) belongs in a web
+worker, so the page never freezes. Grammar is the example to copy:
+
+1. Write the worker as `src/scripts/<name>.worker.ts`, and start it from the
+   page script with
+   `startWorker(url)` from `@shkriuss/ui/worker`, where `url` comes from
+   `import url from './<name>.worker.ts?worker&url'`. Workers may only be
+   started from the site's own build files (Trusted Types checks this).
+2. Keep big libraries out of the page script: import them only in the
+   worker, so the page stays within its size budget.
+3. Only if the worker runs WebAssembly: add `"webAssembly": true` to the app
+   in `apps.json` (its CSP then allows compiling WebAssembly,
+   [ADR 0011](adr/0011-on-device-grammar-checking.md)). If the file is big,
+   wait for `offlineCopySaved()` from `@shkriuss/ui/service-worker` before
+   starting the worker, so it's downloaded once.
+
 ## Sync between devices (optional)
 
 Apps can sync between a person's devices through their optional shkriuss

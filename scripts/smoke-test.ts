@@ -12,19 +12,25 @@ import { contentSecurityPolicy } from '../packages/astro-config/src/headers.ts';
 
 const ATTEMPTS = 10;
 const WAIT_MS = 30_000;
-const expectedCsp = contentSecurityPolicy();
 
 const pushOrigins = new Set(
   apps.filter((app) => app.pushNotifications).map((app) => getSite(app.slug).origin),
 );
 const syncOrigins = new Set(apps.filter((app) => app.sync).map((app) => getSite(app.slug).origin));
+/** Each site's expected CSP (apps that run WebAssembly allow just that). */
+const expectedCsp = new Map(
+  [HUB_SLUG, ...apps.map((app) => app.slug)].map((slug) => {
+    const site = getSite(slug);
+    return [site.origin, contentSecurityPolicy({ webAssembly: site.webAssembly })];
+  }),
+);
 
 async function check(origin: string): Promise<string | undefined> {
   try {
     const response = await fetch(`${origin}/`, { redirect: 'manual' });
     if (response.status !== 200) return `status ${response.status}`;
     if (!response.headers.get('content-type')?.includes('text/html')) return 'not HTML';
-    if (response.headers.get('content-security-policy') !== expectedCsp) {
+    if (response.headers.get('content-security-policy') !== expectedCsp.get(origin)) {
       return 'missing or unexpected Content-Security-Policy header';
     }
     if (!response.headers.get('strict-transport-security')) return 'missing HSTS header';

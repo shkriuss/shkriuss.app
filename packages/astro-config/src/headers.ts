@@ -41,15 +41,24 @@ export type PermissionFeature = (typeof PERMISSION_FEATURES)[number];
 export interface HeaderOptions {
   /** Features this app needs, allowed for its own origin only, e.g. ['screen-wake-lock']. */
   allowFeatures?: readonly PermissionFeature[] | undefined;
+  /**
+   * The app runs WebAssembly (`webAssembly: true` in apps.json): its CSP adds
+   * 'wasm-unsafe-eval', which lets the browser compile WebAssembly files from
+   * the site's own origin. It doesn't allow eval() of JavaScript (docs/adr/0011).
+   */
+  webAssembly?: boolean | undefined;
 }
 
-/** Trusted Types policy names our own code creates (see @shkriuss/ui service-worker.ts). */
-export const TRUSTED_TYPES_POLICIES = ['shkriuss-sw'];
+/**
+ * Trusted Types policy names our own code creates (see @shkriuss/ui
+ * service-worker.ts and worker.ts).
+ */
+export const TRUSTED_TYPES_POLICIES = ['shkriuss-sw', 'shkriuss-worker'];
 
-export function contentSecurityPolicy(): string {
+export function contentSecurityPolicy(options: Pick<HeaderOptions, 'webAssembly'> = {}): string {
   const directives: Record<string, string> = {
     'default-src': "'none'",
-    'script-src': "'self'",
+    'script-src': options.webAssembly ? "'self' 'wasm-unsafe-eval'" : "'self'",
     'style-src': "'self'",
     'img-src': "'self' data: blob:",
     'font-src': "'self'",
@@ -77,7 +86,7 @@ export function permissionsPolicy(options: HeaderOptions = {}): string {
 /** Headers sent with every response. */
 export function securityHeaders(options: HeaderOptions = {}): Record<string, string> {
   return {
-    'Content-Security-Policy': contentSecurityPolicy(),
+    'Content-Security-Policy': contentSecurityPolicy(options),
     'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload',
     'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': 'DENY',

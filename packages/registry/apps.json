@@ -72,6 +72,22 @@
       ],
       "pushNotifications": true,
       "sync": true
+    },
+    {
+      "slug": "grammar",
+      "name": "Grammar",
+      "description": "Check your English, American or British. Your text never leaves your device.",
+      "icon": "text-check",
+      "color": "violet",
+      "status": "beta",
+      "storage": "device",
+      "dataStored": [
+        "The text you're checking, so it's still here when you come back",
+        "Whether you write American or British English",
+        "Words you added to your dictionary",
+        "Your light or dark theme choice"
+      ],
+      "webAssembly": true
     }
   ]
 }

@@ -3,10 +3,10 @@
  * _headers file served by Cloudflare's local runtime.
  */
 import { contentSecurityPolicy } from '../../packages/astro-config/src/headers.ts';
+import { getSite } from '../../packages/registry/src/index.ts';
 import { expect, test } from './fixtures.ts';
 
 const REQUIRED_HEADERS: Record<string, string | RegExp> = {
-  'content-security-policy': contentSecurityPolicy(),
   'strict-transport-security': /max-age=\d{8,}; includeSubDomains; preload/,
   'x-content-type-options': 'nosniff',
   'x-frame-options': 'DENY',
@@ -18,10 +18,16 @@ const REQUIRED_HEADERS: Record<string, string | RegExp> = {
 };
 
 for (const path of ['/', '/404', '/manifest.webmanifest', '/sw.js']) {
-  test(`security headers are sent for ${path}`, async ({ request }) => {
+  test(`security headers are sent for ${path}`, async ({ request }, testInfo) => {
     const response = await request.get(path, { maxRedirects: 0 });
     const headers = response.headers();
-    for (const [name, expected] of Object.entries(REQUIRED_HEADERS)) {
+    // Each project is one site, named by its slug.
+    const site = getSite(testInfo.project.name);
+    const expectedHeaders = {
+      ...REQUIRED_HEADERS,
+      'content-security-policy': contentSecurityPolicy({ webAssembly: site.webAssembly }),
+    };
+    for (const [name, expected] of Object.entries(expectedHeaders)) {
       if (typeof expected === 'string') expect(headers[name], name).toBe(expected);
       else expect(headers[name], name).toMatch(expected);
     }
@@ -31,11 +37,19 @@ for (const path of ['/', '/404', '/manifest.webmanifest', '/sw.js']) {
 test('the CSP blocks inline scripts and only allows our own files', () => {
   const csp = contentSecurityPolicy();
   expect(csp).toContain("default-src 'none'");
-  expect(csp).toContain("script-src 'self'");
+  expect(csp).toContain("script-src 'self';");
   expect(csp).toContain("frame-ancestors 'none'");
   expect(csp).toContain("require-trusted-types-for 'script'");
   expect(csp).not.toContain('unsafe-inline');
   expect(csp).not.toContain('unsafe-eval');
+});
+
+test('apps that run WebAssembly may compile it, and nothing else changes', () => {
+  const csp = contentSecurityPolicy({ webAssembly: true });
+  expect(csp).toContain("script-src 'self' 'wasm-unsafe-eval';");
+  expect(csp.replace(" 'wasm-unsafe-eval'", '')).toBe(contentSecurityPolicy());
+  expect(csp).not.toContain("'unsafe-eval'");
+  expect(csp).not.toContain('unsafe-inline');
 });
 
 test('pages set no cookies and load nothing from other websites', async ({ page, context }) => {

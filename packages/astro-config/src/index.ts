@@ -42,6 +42,9 @@ export function defineAppConfig(options: AppConfigOptions): AstroUserConfig {
         // Never inline small scripts or assets into the HTML (CSP again).
         assetsInlineLimit: 0,
       },
+      // Web workers are built as their own files (modules), started with
+      // startWorker() from @shkriuss/ui/worker.
+      worker: { format: 'es' },
     },
     devToolbar: { enabled: false },
     integrations: [
@@ -49,6 +52,7 @@ export function defineAppConfig(options: AppConfigOptions): AstroUserConfig {
         site,
         pwa: options.pwa ?? true,
         allowFeatures: options.allowFeatures,
+        webAssembly: site.webAssembly,
       }),
       ...(options.integrations ?? []),
     ],

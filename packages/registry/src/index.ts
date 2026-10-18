@@ -55,6 +55,12 @@ export interface AppEntry {
    * account. Its Worker then runs @shkriuss/sync (docs/adr/0010).
    */
   sync?: boolean;
+  /**
+   * True if the app runs WebAssembly (code compiled for the browser, such as
+   * Grammar's checker). Its security policy then allows that, and only that
+   * (docs/adr/0011).
+   */
+  webAssembly?: boolean;
 }
 
 export interface HubEntry {
@@ -84,6 +90,7 @@ export interface SiteInfo {
   dataStored: string[];
   pushNotifications: boolean;
   sync: boolean;
+  webAssembly: boolean;
 }
 
 export const HUB_SLUG = 'hub';
@@ -195,7 +202,7 @@ export function validateRegistry(input: unknown): Registry {
       } else if (app['storage'] !== 'none' && dataStored.length === 0) {
         problems.push(`${where}.dataStored must say what is stored when storage is not "none".`);
       }
-      for (const flag of ['pushNotifications', 'sync'] as const) {
+      for (const flag of ['pushNotifications', 'sync', 'webAssembly'] as const) {
         if (app[flag] !== undefined && typeof app[flag] !== 'boolean') {
           problems.push(`${where}.${flag} must be true or false.`);
         }
@@ -252,6 +259,7 @@ export function getSite(slug: string): SiteInfo {
       ],
       pushNotifications: false,
       sync: false,
+      webAssembly: false,
     };
   }
   const app = getApp(slug);
@@ -267,5 +275,6 @@ export function getSite(slug: string): SiteInfo {
     dataStored: app.dataStored,
     pushNotifications: app.pushNotifications === true,
     sync: app.sync === true,
+    webAssembly: app.webAssembly === true,
   };
 }

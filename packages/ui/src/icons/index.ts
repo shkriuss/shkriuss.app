@@ -37,6 +37,7 @@ export const icons = {
   shield: '<path d="M12 3 5 6v5c0 4.5 3 8.4 7 10 4-1.6 7-5.5 7-10V6l-7-3Z"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/>',
   tally: '<path d="M5.5 5v14M10 5v14M14.5 5v14M19 5v14"/><path d="M3 16.5 21 7.5"/>',
+  'text-check': '<path d="M4 6h16M4 11h16M4 16h6"/><path d="m13 16.5 3 3 5.5-6.5"/>',
   trash:
     '<path d="M4 7h16M10 11v6M14 11v6"/><path d="m6 7 1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/>',
   upload: '<path d="M12 20V9M7 14l5-5 5 5M5 4h14"/>',
