@@ -1,9 +1,9 @@
 /**
  * Habits' page behaviour: connects pages/index.astro to the rules in
  * lib/habits.ts, saves on the device, and syncs both lists (habits and check
- * marks) when sync is on.
+ * marks) when sync is on. Reminders: reminders.ts.
  */
-import { addDays, firstDayOfWeek, today, weekday, type IsoDate } from '@shkriuss/dates';
+import { addDays, firstDayOfWeek, isIsoTime, today, weekday, type IsoDate } from '@shkriuss/dates';
 import { createStore } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
@@ -26,6 +26,7 @@ import {
   scheduleLabel,
   setDone,
   streakLabel,
+  timeLabel,
   updateHabit,
   weekdayName,
   weekOrder,
@@ -33,6 +34,7 @@ import {
   type Habit,
   type HabitsState,
 } from '../lib/habits.ts';
+import { mountReminders } from './reminders.ts';
 
 const habitsStore = createStore<HabitsState>({
   key: 'habits',
@@ -48,6 +50,8 @@ const checksStore = createStore<ChecksState>({
   validate: isChecksState,
 });
 
+/** A new reminder starts at this time (it can be changed straight away). */
+const DEFAULT_REMINDER = '20:00';
 /** How often to check whether the day has changed while Habits is open. */
 const NEW_DAY_CHECK_MS = 60 * 1000;
 
@@ -86,6 +90,10 @@ export function mountHabits(root: Document): void {
   const editName = required<HTMLInputElement>(editForm, 'input[name="name"]');
   const nameErrorText = required<HTMLElement>(editForm, '[data-error-for="name"]');
   const daysErrorText = required<HTMLElement>(editForm, '[data-error-for="days"]');
+  const remindBox = required<HTMLInputElement>(editForm, 'input[name="remind"]');
+  const reminderField = required<HTMLElement>(editForm, '[data-reminder-field]');
+  const reminderInput = required<HTMLInputElement>(editForm, 'input[name="reminder"]');
+  const reminderErrorText = required<HTMLElement>(editForm, '[data-error-for="reminder"]');
   const dayChecks = required<HTMLElement>(editForm, '[data-day-checks]');
   const pastDays = required<HTMLElement>(editForm, '[data-past-days]');
   const deleteDialog = required<HTMLDialogElement>(root, '[data-delete-dialog]');
@@ -116,6 +124,7 @@ export function mountHabits(root: Document): void {
     }
     if (!ok) announce('Couldn’t save. Your browser may be blocking storage.');
     render();
+    reminders.changed();
     sync.changed();
   }
 
@@ -146,6 +155,12 @@ export function mountHabits(root: Document): void {
       habit.days,
       weekStart,
     );
+    const reminder = required<HTMLElement>(item, '[data-reminder]');
+    reminder.hidden = !habit.reminder;
+    if (habit.reminder) {
+      required<HTMLElement>(reminder, '[data-reminder-time]').textContent =
+        `Reminder at ${timeLabel(habit.reminder)}`;
+    }
     required<HTMLElement>(item, '[data-action="edit"]').setAttribute(
       'aria-label',
       `Edit ${habit.name}`,
@@ -241,12 +256,22 @@ export function mountHabits(root: Document): void {
     return element;
   }
 
+  function showReminderField(): void {
+    reminderField.hidden = !remindBox.checked;
+    reminderInput.disabled = !remindBox.checked;
+  }
+
   function openEditor(habit: Habit): void {
     editing = habit.id;
     editName.value = habit.name;
     editName.removeAttribute('aria-invalid');
     nameErrorText.textContent = '';
     daysErrorText.textContent = '';
+    remindBox.checked = habit.reminder !== undefined;
+    reminderInput.value = habit.reminder ?? DEFAULT_REMINDER;
+    reminderInput.removeAttribute('aria-invalid');
+    reminderErrorText.textContent = '';
+    showReminderField();
     dayChecks.replaceChildren(
       ...weekOrder(weekStart).map((weekDay) =>
         checkbox(weekdayName(weekDay, 'long'), String(weekDay), habit.days.includes(weekDay)),
@@ -277,12 +302,20 @@ export function mountHabits(root: Document): void {
     nameErrorText.textContent = nameProblem ?? '';
     editName.toggleAttribute('aria-invalid', nameProblem !== undefined);
     daysErrorText.textContent = days.length === 0 ? 'Choose at least one day.' : '';
+    const reminder = remindBox.checked ? reminderInput.value : null;
+    const reminderProblem = reminder !== null && !isIsoTime(reminder);
+    reminderErrorText.textContent = reminderProblem ? 'Choose a time for the reminder.' : '';
+    reminderInput.toggleAttribute('aria-invalid', reminderProblem);
     if (nameProblem) {
       editName.focus();
       return;
     }
     if (days.length === 0) {
       dayChecks.querySelector<HTMLInputElement>('input')?.focus();
+      return;
+    }
+    if (reminderProblem) {
+      reminderInput.focus();
       return;
     }
 
@@ -293,8 +326,14 @@ export function mountHabits(root: Document): void {
       }
     }
     editDialog.close();
-    save({ habits: updateHabit(habits, habit.id, { name, days }), checks: nextChecks });
+    save({ habits: updateHabit(habits, habit.id, { name, days, reminder }), checks: nextChecks });
     announce(`Saved ${name.trim()}.`);
+    if (reminder !== null) reminders.offerNotifications();
+  });
+
+  remindBox.addEventListener('change', () => {
+    showReminderField();
+    if (remindBox.checked && !reminderInput.value) reminderInput.value = DEFAULT_REMINDER;
   });
 
   editForm.addEventListener('click', (event) => {
@@ -332,6 +371,7 @@ export function mountHabits(root: Document): void {
     // The habit being edited was deleted on another device or tab.
     if (editing !== null && !find(editing)) editDialog.close();
     render();
+    reminders.changed();
   }
 
   // A new day while Habits is open (or when it comes back on screen).
@@ -370,6 +410,12 @@ export function mountHabits(root: Document): void {
     onChange: reload,
   });
   mountSyncControls(required<HTMLElement>(root, '[data-sync-controls]'), sync);
+
+  const reminders = mountReminders(root, {
+    habits: () => habits,
+    checks: () => checks,
+    announce,
+  });
 
   render();
 }

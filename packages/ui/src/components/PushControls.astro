@@ -1,0 +1,35 @@
+---
+/**
+ * "Also remind me when … is closed", for apps that send notifications while
+ * they're closed (docs/adr/0009; `pushNotifications: true` in apps.json). Put
+ * it in the app's "Notifications" section. The app's script connects it and
+ * says which notifications to schedule:
+ *
+ *   import { mountPushControls } from '@shkriuss/ui/push-controls';
+ *   const push = mountPushControls(document.querySelector('[data-push-controls]'), {
+ *     notices: () => noticesOf(state), announce,
+ *   });
+ *   push.sync(); // after every change to what's scheduled
+ */
+import { hubOrigin, site } from 'virtual:shkriuss/site';
+import Button from './Button.astro';
+---
+
+<div class="stack" data-push-controls data-app-name={site.name}>
+  <div class="stack stack--sm" data-closed-block>
+    <label class="check">
+      <input type="checkbox" data-closed-switch />
+      <span>Also remind me when {site.name} is closed</span>
+    </label>
+    <p class="muted" role="status" data-closed-status></p>
+    <p data-closed-test hidden>
+      <Button data-action="test-push">Send a test notification</Button>
+    </p>
+  </div>
+  <p class="muted">
+    To remind you while it’s closed, {site.name} sends its server your reminders locked so that only
+    this device can read them, with the times they’re due and your time zone.{' '}
+    <a href={`${hubOrigin}/privacy/#closed-notifications`}>More about this</a>. Turning it off, or
+    deleting all data, removes them from the server.
+  </p>
+</div>

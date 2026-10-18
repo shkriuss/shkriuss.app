@@ -322,7 +322,8 @@ month. GitHub never charges you unless you add a payment method.
 - [x] **Notes** (`notes.shkriuss.app`): write, search and pin notes; syncs
       through the account.
 - [x] **Habits** (`habits.shkriuss.app`): tick habits off each day, streaks,
-      the last 7 days, fix the last 2 weeks; syncs through the account.
+      the last 7 days, fix the last 2 weeks, reminders (also while closed);
+      syncs through the account.
 - Add more apps one at a time, each with its own small browser tests.
 - [x] **shkriuss account**, part 1: create an account, recovery key,
       passkeys, add devices with a QR code ([ADR 0010](adr/0010-account-and-sync.md)).

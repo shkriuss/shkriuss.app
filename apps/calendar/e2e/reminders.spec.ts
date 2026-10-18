@@ -1,41 +1,13 @@
 // Reminders: on the page, as notifications, and in the event editor.
 //
-// Notifications are replaced by a fake that records them (browsers in tests
-// can't show real ones), and the clock starts at 10:00 on Saturday 17 October 2026.
+// Notifications are replaced by a fake that records them
+// (tests/e2e/notifications.ts), and the clock starts at 10:00 on Saturday 17
+// October 2026.
 import type { Page } from '@playwright/test';
 import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
+import { fakeNotifications, shownNotifications } from '../../../tests/e2e/notifications.ts';
 import { dayList, editor, newEvent, save, seed } from './helpers.ts';
 
-type Permission = NotificationPermission | 'unsupported';
-
-/** Replaces the browser's notifications with a recorder. */
-async function fakeNotifications(page: Page, permission: Permission): Promise<void> {
-  await page.addInitScript((initial: Permission) => {
-    const target = window as unknown as Record<string, unknown>;
-    if (initial === 'unsupported') {
-      delete target['Notification'];
-      return;
-    }
-    let current = initial;
-    const shown: unknown[] = [];
-    target['shownNotifications'] = shown;
-    function FakeNotification(title: string, options: NotificationOptions): void {
-      shown.push({ title, ...options });
-    }
-    Object.defineProperty(FakeNotification, 'permission', { get: () => current });
-    Object.assign(FakeNotification, {
-      requestPermission: async () => {
-        target['permissionAsked'] = true;
-        current = 'granted';
-        return current;
-      },
-    });
-    target['Notification'] = FakeNotification;
-  }, permission);
-}
-
-const shownNotifications = (page: Page) =>
-  page.evaluate(() => (window as unknown as Record<string, unknown>)['shownNotifications']);
 const reminders = (page: Page) => page.getByRole('region', { name: 'Reminders' });
 const status = (page: Page) => page.locator('[data-notify-status]');
 

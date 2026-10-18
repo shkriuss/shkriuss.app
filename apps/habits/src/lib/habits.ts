@@ -7,14 +7,28 @@
  * - checks: one per habit per day it was done. A check's id is made from the
  *   habit and the date, so marking the same day done on two devices is the
  *   same check, never a conflict.
+ *
+ * A habit can have a reminder: a time of day, on the days it's planned for.
  */
-import { addDays, isIsoDate, weekday, type IsoDate } from '@shkriuss/dates';
+import {
+  addDays,
+  isIsoDate,
+  isIsoTime,
+  toStamp,
+  weekday,
+  type IsoDate,
+  type IsoTime,
+  type Stamp,
+} from '@shkriuss/dates';
+import type { Notice } from '@shkriuss/push';
 
 export interface Habit {
   id: string;
   name: string;
   /** Days of the week it's planned for: 1 = Monday … 7 = Sunday (at least one). */
   days: number[];
+  /** A reminder at this time ("20:00") on planned days not done yet; none if missing. */
+  reminder?: IsoTime;
 }
 
 export interface HabitsState {
@@ -53,8 +67,14 @@ const isDays = (value: unknown): value is number[] =>
 
 function isHabit(value: unknown): value is Habit {
   if (typeof value !== 'object' || value === null) return false;
-  const { id, name, days } = value as Record<string, unknown>;
-  return typeof id === 'string' && id.length > 0 && typeof name === 'string' && isDays(days);
+  const { id, name, days, reminder } = value as Record<string, unknown>;
+  return (
+    typeof id === 'string' &&
+    id.length > 0 &&
+    typeof name === 'string' &&
+    isDays(days) &&
+    (reminder === undefined || isIsoTime(reminder))
+  );
 }
 
 function isCheck(value: unknown): value is Check {
@@ -102,18 +122,27 @@ export function addHabit(state: HabitsState, name: string, id: string): HabitsSt
   return { habits: [...state.habits, { id, name: name.trim(), days: [...EVERY_DAY] }] };
 }
 
-/** Renames a habit and/or changes its days. Returns the same state if they aren't valid. */
+/**
+ * Renames a habit, changes its days and/or its reminder (null = no reminder,
+ * left out = as it was). Returns the same state if they aren't valid.
+ */
 export function updateHabit(
   state: HabitsState,
   id: string,
-  changes: { name: string; days: readonly number[] },
+  changes: { name: string; days: readonly number[]; reminder?: IsoTime | null },
 ): HabitsState {
   const days = [...new Set(changes.days)].sort((a, b) => a - b);
+  const { reminder } = changes;
   if (nameError(changes.name, state, id) || !isDays(days)) return state;
+  if (reminder !== undefined && reminder !== null && !isIsoTime(reminder)) return state;
   return {
-    habits: state.habits.map((habit) =>
-      habit.id === id ? { ...habit, name: changes.name.trim(), days } : habit,
-    ),
+    habits: state.habits.map((habit) => {
+      if (habit.id !== id) return habit;
+      const next: Habit = { id, name: changes.name.trim(), days };
+      const time = reminder === undefined ? habit.reminder : reminder;
+      if (time) next.reminder = time;
+      return next;
+    }),
   };
 }
 
@@ -248,4 +277,70 @@ export function dayLabel(date: IsoDate, today: IsoDate, locale?: string): string
     month: 'long',
     timeZone: 'UTC',
   }).format(Date.UTC(year, month - 1, day));
+}
+
+/** A time of day for people: "8:00 PM", or "20:00" where that's how times are written. */
+export function timeLabel(time: IsoTime, locale?: string): string {
+  const [hour, minute] = time.split(':').map(Number) as [number, number];
+  return new Intl.DateTimeFormat(locale, {
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone: 'UTC',
+  }).format(Date.UTC(2024, 0, 1, hour, minute));
+}
+
+/** What a reminder says under the habit's name (the same every time it's sent). */
+export const REMINDER_BODY = 'Time for this habit. Tap to open Habits.';
+
+const doneOn = (checks: ChecksState, habit: string, date: IsoDate): boolean =>
+  checks.checks.some((check) => check.id === checkId(habit, date));
+
+/**
+ * The reminders, for the notification service (@shkriuss/push): one a week
+ * for each planned day, at the reminder's time. A habit already done today
+ * isn't reminded today (its next one is in a week).
+ */
+export function reminderNotices(
+  habits: HabitsState,
+  checks: ChecksState,
+  today: IsoDate,
+): Notice[] {
+  return habits.habits.flatMap((habit) => {
+    const { reminder } = habit;
+    if (!reminder) return [];
+    const doneToday = doneOn(checks, habit.id, today);
+    return habit.days.map((day): Notice => {
+      let date = addDays(today, (day - weekday(today) + 7) % 7);
+      if (date === today && doneToday) date = addDays(today, 7);
+      return {
+        id: `${habit.id}~${day}`,
+        start: toStamp(date, reminder),
+        repeat: 'weekly',
+        until: null,
+        offset: 0,
+        title: habit.name,
+        body: REMINDER_BODY,
+        tag: habit.id,
+        url: '/',
+      };
+    });
+  });
+}
+
+/**
+ * Habits whose reminder time came after `from` and up to `to` (local times,
+ * the same day as `to`), planned that day and not done yet.
+ */
+export function dueReminders(
+  habits: HabitsState,
+  checks: ChecksState,
+  from: Stamp,
+  to: Stamp,
+): Habit[] {
+  const date = to.slice(0, 10);
+  return habits.habits.filter((habit) => {
+    if (!habit.reminder || !isPlanned(habit, date) || doneOn(checks, habit.id, date)) return false;
+    const due = toStamp(date, habit.reminder);
+    return from < due && due <= to;
+  });
 }

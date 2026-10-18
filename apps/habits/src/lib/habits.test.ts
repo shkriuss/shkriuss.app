@@ -7,6 +7,7 @@ import {
   currentStreak,
   dayLabel,
   doneDates,
+  dueReminders,
   emptyChecks,
   emptyHabits,
   EVERY_DAY,
@@ -16,10 +17,13 @@ import {
   MAX_NAME_LENGTH,
   nameError,
   recentDays,
+  REMINDER_BODY,
+  reminderNotices,
   removeHabit,
   scheduleLabel,
   setDone,
   streakLabel,
+  timeLabel,
   updateHabit,
   weekOrder,
   type ChecksState,
@@ -62,6 +66,25 @@ describe('habits', () => {
       name: 'WATER',
       days: [6, 7],
     });
+  });
+
+  it('sets, keeps and removes a reminder', () => {
+    const state = { habits: [daily] };
+    const withReminder = updateHabit(state, 'water', {
+      name: 'Water',
+      days: EVERY_DAY,
+      reminder: '20:00',
+    });
+    expect(withReminder.habits[0]?.reminder).toBe('20:00');
+    // Left out: stays as it was.
+    const renamed = updateHabit(withReminder, 'water', { name: 'Drink', days: EVERY_DAY });
+    expect(renamed.habits[0]).toEqual({ ...daily, name: 'Drink', reminder: '20:00' });
+    expect(
+      updateHabit(renamed, 'water', { name: 'Drink', days: EVERY_DAY, reminder: null }).habits[0],
+    ).toEqual({ ...daily, name: 'Drink' });
+    expect(updateHabit(state, 'water', { name: 'Water', days: EVERY_DAY, reminder: '25:00' })).toBe(
+      state,
+    );
   });
 
   it('removes a habit with its check marks', () => {
@@ -150,9 +173,61 @@ describe('days', () => {
   });
 });
 
+describe('reminders', () => {
+  const run: Habit = { ...weekdaysOnly, reminder: '07:30' };
+
+  it('schedules one a week for each planned day, from today on', () => {
+    const notices = reminderNotices({ habits: [run, daily] }, emptyChecks(), MONDAY);
+    expect(notices.map((notice) => [notice.id, notice.start])).toEqual([
+      ['run~1', '2026-10-19T07:30'],
+      ['run~2', '2026-10-20T07:30'],
+      ['run~3', '2026-10-21T07:30'],
+      ['run~4', '2026-10-22T07:30'],
+      ['run~5', '2026-10-23T07:30'],
+    ]);
+    expect(notices[0]).toEqual({
+      id: 'run~1',
+      start: '2026-10-19T07:30',
+      repeat: 'weekly',
+      until: null,
+      offset: 0,
+      title: 'Run',
+      body: REMINDER_BODY,
+      tag: 'run',
+      url: '/',
+    });
+  });
+
+  it('skips today’s once it’s done', () => {
+    const checks = setDone(emptyChecks(), 'run', MONDAY, true);
+    const notices = reminderNotices({ habits: [run] }, checks, MONDAY);
+    expect(notices.find((notice) => notice.id === 'run~1')?.start).toBe('2026-10-26T07:30');
+    expect(notices.find((notice) => notice.id === 'run~2')?.start).toBe('2026-10-20T07:30');
+  });
+
+  it('finds reminders that are due while Habits is open', () => {
+    const habits = { habits: [run, { ...daily, reminder: '07:45' }] };
+    const names = (from: string, to: string, checks = emptyChecks()) =>
+      dueReminders(habits, checks, from, to).map((habit) => habit.name);
+    expect(names('2026-10-19T07:00', '2026-10-19T07:30')).toEqual(['Run']);
+    expect(names('2026-10-19T07:30', '2026-10-19T07:44')).toEqual([]);
+    expect(names('2026-10-19T07:00', '2026-10-19T08:00')).toEqual(['Run', 'Water']);
+    // Done already, or not planned (Sunday): no reminder.
+    expect(
+      names('2026-10-19T07:00', '2026-10-19T08:00', setDone(emptyChecks(), 'run', MONDAY, true)),
+    ).toEqual(['Water']);
+    expect(names('2026-10-18T07:00', '2026-10-18T08:00')).toEqual(['Water']);
+  });
+
+  it('shows times the local way', () => {
+    expect(timeLabel('07:30', 'en-GB')).toBe('7:30');
+    expect(timeLabel('20:00', 'en-US')).toMatch(/^8:00\sPM$/);
+  });
+});
+
 describe('saved data', () => {
   it('accepts what Habits saves', () => {
-    expect(isHabitsState({ habits: [daily, weekdaysOnly] })).toBe(true);
+    expect(isHabitsState({ habits: [daily, { ...weekdaysOnly, reminder: '07:30' }] })).toBe(true);
     expect(isChecksState(setDone(emptyChecks(), 'water', MONDAY, true))).toBe(true);
   });
 
@@ -165,6 +240,7 @@ describe('saved data', () => {
       { habits: [{ ...daily, days: [1, 1] }] },
       { habits: [{ ...daily, days: [0] }] },
       { habits: [{ ...daily, name: 5 }] },
+      { habits: [{ ...daily, reminder: '8pm' }] },
     ]) {
       expect(isHabitsState(value), JSON.stringify(value)).toBe(false);
     }

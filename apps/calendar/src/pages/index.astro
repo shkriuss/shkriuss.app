@@ -1,6 +1,5 @@
 ---
-import { AppShell, Button, DataControls, Icon, SyncControls } from '@shkriuss/ui';
-import { hubOrigin } from 'virtual:shkriuss/site';
+import { AppShell, Button, DataControls, Icon, PushControls, SyncControls } from '@shkriuss/ui';
 import { MAX_NOTES_LENGTH, MAX_TITLE_LENGTH, REPEAT_LABELS, REPEATS } from '../lib/events.ts';
 ---
 
@@ -79,22 +78,7 @@ import { MAX_NOTES_LENGTH, MAX_TITLE_LENGTH, REPEAT_LABELS, REPEATS } from '../l
           Turn on notifications
         </Button>
       </p>
-      <div class="stack stack--sm" data-closed-block>
-        <label class="check">
-          <input type="checkbox" data-closed-switch />
-          <span>Also remind me when Calendar is closed</span>
-        </label>
-        <p class="muted" role="status" data-closed-status></p>
-        <p data-closed-test hidden>
-          <Button data-action="test-push">Send a test notification</Button>
-        </p>
-      </div>
-      <p class="muted">
-        To remind you while it’s closed, Calendar sends its server your reminders locked so that
-        only this device can read them, with the times they’re due and your time zone.
-        <a href={`${hubOrigin}/privacy/#closed-notifications`}>More about this</a>. Turning it off,
-        or deleting all data, removes them from the server.
-      </p>
+      <PushControls />
     </section>
 
     <section class="stack" aria-labelledby="transfer-heading">

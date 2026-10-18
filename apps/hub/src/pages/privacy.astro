@@ -73,9 +73,9 @@ const LAST_UPDATED = '17 October 2026';
       <>
         <h2 id="closed-notifications">Notifications while an app is closed (optional)</h2>
         <p>
-          {pushSites.map((site) => site.name).join(', ')} can remind you even when the app is
-          closed. This is off until you turn it on, separately in each app and on each device.
-          Phones only wake closed web apps for messages from a server, so when it's on:
+          {listOf(pushSites.map((site) => site.name))} can remind you even when the app is closed.
+          This is off until you turn it on, separately in each app and on each device. Phones only
+          wake closed web apps for messages from a server, so when it's on:
         </p>
         <ul>
           <li>
@@ -86,7 +86,7 @@ const LAST_UPDATED = '17 October 2026';
           <li>
             The server stores, for your device: the delivery address your browser's push service
             gave it, your time zone, and for each reminder when it's due and how it repeats. It
-            never gets your events themselves.
+            never gets what the reminders are about.
           </li>
           <li>
             Each reminder that won't happen again is deleted after it's sent. Turning the option
