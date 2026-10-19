@@ -1,7 +1,7 @@
 /**
  * Checks every built site in apps/<slug>/dist (run `pnpm build` first):
- * CSP safety (nothing inline), per-page size budgets, and that every file is
- * small enough for Cloudflare to serve.
+ * CSP safety (nothing inline), per-page size budgets, words running into
+ * links, and that every file is small enough for Cloudflare to serve.
  *
  *   pnpm check:dist
  */
@@ -13,6 +13,7 @@ import {
   fileSizeProblems,
   gzipSize,
   pageAssets,
+  spacingProblems,
 } from './lib/dist-checks.ts';
 
 const repoRoot = new URL('..', import.meta.url).pathname;
@@ -39,7 +40,7 @@ for (const slug of sites) {
     const sum = (files: string[]) =>
       files.reduce((total, file) => total + gzipSize(readFileSync(join(dist, file))), 0);
     const sizes = { html: gzipSize(html), css: sum(assets.css), js: sum(assets.js) };
-    const problems = [...cspProblems(html), ...budgetProblems(sizes)];
+    const problems = [...cspProblems(html), ...budgetProblems(sizes), ...spacingProblems(html)];
 
     const name = `${slug}/${page}`;
     rows.push(
