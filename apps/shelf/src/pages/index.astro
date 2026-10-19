@@ -1,0 +1,592 @@
+---
+/**
+ * Shelf: the things you buy and use (food, clothes, tech, personal care…),
+ * with their brands, how you like them, prices, shops and links. A list with
+ * search and filters, the brands you love, your categories, and forms to add
+ * or change an item or a category. Behaviour: ../scripts/shelf.ts (which
+ * also fills in the category lists).
+ */
+import { AppShell, Button, DataControls, Icon, SyncControls } from '@shkriuss/ui';
+import { CATEGORY_NAME_MAX } from '../lib/categories.ts';
+import { CURRENCIES, LIMITS, OPINIONS, OPINION_LABELS, SORTS, SORT_LABELS } from '../lib/items.ts';
+---
+
+<AppShell wide>
+  <div class="stack stack--lg">
+    <header class="stack stack--sm">
+      <h1>Shelf</h1>
+      <p class="lead">
+        The things you buy and love: brands, prices, shops and links. Saved on this device.
+      </p>
+    </header>
+
+    <section class="stack" aria-labelledby="items-heading">
+      <div class="cluster cluster--between">
+        <h2 id="items-heading" tabindex="-1" data-items-heading>
+          Your items
+        </h2>
+        <Button variant="primary" icon="plus" data-action="add">
+          Add item
+        </Button>
+      </div>
+      <p class="notice" data-message hidden></p>
+
+      <div class="filters" data-filters hidden>
+        <div class="field filters__search">
+          <label class="field__label" for="search">
+            Search
+          </label>
+          <input
+            class="input"
+            id="search"
+            type="search"
+            autocomplete="off"
+            enterkeyhint="search"
+            data-filter="search"
+          />
+        </div>
+        <div class="field">
+          <label class="field__label" for="filter-category">
+            Category
+          </label>
+          <select class="input" id="filter-category" data-filter="category">
+            <option value="all">All categories</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="field__label" for="filter-opinion">
+            How you like it
+          </label>
+          <select class="input" id="filter-opinion" data-filter="opinion">
+            <option value="all">Any</option>
+            {OPINIONS.map((opinion) => (
+              <option value={opinion}>{OPINION_LABELS[opinion]}</option>
+            ))}
+          </select>
+        </div>
+        <div class="field">
+          <label class="field__label" for="filter-sort">
+            Sort by
+          </label>
+          <select class="input" id="filter-sort" data-filter="sort">
+            {SORTS.map((sort) => (
+              <option value={sort}>{SORT_LABELS[sort]}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <p class="cluster brand-filter" data-brand-filter hidden>
+        <span>
+          Brand: <strong data-brand-name></strong>
+        </span>
+        <Button variant="ghost" icon="x" data-action="all-brands">
+          All brands
+        </Button>
+      </p>
+      <p class="muted" data-count></p>
+      <p class="muted" data-empty>
+        Nothing here yet. Tap “Add item” to add something you buy, use or want to try.
+      </p>
+      <ul role="list" class="grid items" data-items></ul>
+    </section>
+
+    <section class="stack" aria-labelledby="brands-heading" data-brands-section hidden>
+      <h2 id="brands-heading">Brands</h2>
+      <p class="muted">The ones you love most come first. Tap one to see its items.</p>
+      <ul role="list" class="cluster chips" data-brands></ul>
+    </section>
+
+    <section class="stack" aria-labelledby="categories-heading">
+      <div class="cluster cluster--between">
+        <h2 id="categories-heading">Categories</h2>
+        <Button icon="plus" data-action="add-category">
+          Add category
+        </Button>
+      </div>
+      <p class="muted" data-categories-hint>
+        Tap one to rename or delete it.
+      </p>
+      <p class="muted" data-categories-empty hidden>
+        No categories. Add one to sort your items.
+      </p>
+      <ul role="list" class="cluster chips" data-categories></ul>
+    </section>
+
+    <SyncControls />
+
+    <DataControls />
+  </div>
+
+  <!-- Live region: tells screen reader users what happened. -->
+  <p class="visually-hidden" role="status" data-announcer></p>
+
+  <!-- Suggestions while typing a brand or shop: the ones already used. -->
+  <datalist id="brand-names" data-brand-names></datalist>
+  <datalist id="shop-names" data-shop-names></datalist>
+
+  <!-- One item in the list, copied by the script for each item. -->
+  <template data-item-template>
+    <li class="card stack stack--sm item" data-id>
+      <p class="cluster item__tags">
+        <span class="badge" data-category>
+          Category
+        </span>
+        <span class="item__opinion" data-opinion>
+          <span class="item__heart" data-heart hidden>
+            <Icon name="heart" />
+          </span>
+          <span data-opinion-label>Use it</span>
+        </span>
+      </p>
+      <h3 class="item__name">
+        <button type="button" class="item__edit" data-action="edit">
+          Item
+        </button>
+      </h3>
+      <p class="item__brand" data-brand></p>
+      <p class="item__price" data-price></p>
+      <p class="muted item__details" data-details></p>
+      <p class="muted item__details" data-bought></p>
+      <p class="muted item__notes" data-notes></p>
+      <p data-link-row>
+        <!-- The script puts in the real address. -->
+        <a
+          class="btn btn--ghost item__link"
+          href="/"
+          target="_blank"
+          rel="noopener noreferrer"
+          data-link
+        >
+          <Icon name="external" />
+          <span data-link-host>Link</span>
+        </a>
+      </p>
+    </li>
+  </template>
+
+  <!-- One brand, copied by the script for each brand. -->
+  <template data-brand-template>
+    <li>
+      <button type="button" class="btn chip" data-action="brand">
+        <span class="chip__name" data-brand-label>
+          Brand
+        </span>
+        <span class="chip__counts" data-brand-counts></span>
+      </button>
+    </li>
+  </template>
+
+  <!-- One category, copied by the script for each category. -->
+  <template data-category-template>
+    <li>
+      <button type="button" class="btn chip" aria-haspopup="dialog" data-category-id>
+        <span class="chip__name" data-category-label>
+          Category
+        </span>
+        <span class="chip__counts" data-category-count></span>
+      </button>
+    </li>
+  </template>
+
+  <dialog class="dialog" aria-labelledby="item-dialog-title" data-item-dialog>
+    <form class="stack" data-item-form novalidate>
+      <h2 id="item-dialog-title" data-dialog-title>
+        New item
+      </h2>
+
+      <div class="field">
+        <label class="field__label" for="item-name">
+          Name
+        </label>
+        <input
+          class="input"
+          id="item-name"
+          name="name"
+          type="text"
+          autocomplete="off"
+          maxlength={LIMITS.name}
+          aria-describedby="item-name-error"
+          required
+        />
+        <p class="field__error" id="item-name-error" data-error-for="name"></p>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label class="field__label" for="item-brand">
+            Brand (optional)
+          </label>
+          <input
+            class="input"
+            id="item-brand"
+            name="brand"
+            type="text"
+            autocomplete="off"
+            list="brand-names"
+            maxlength={LIMITS.brand}
+          />
+        </div>
+        <div class="field">
+          <label class="field__label" for="item-category">
+            Category
+          </label>
+          <select class="input" id="item-category" name="category"></select>
+        </div>
+      </div>
+
+      <fieldset class="stack stack--sm">
+        <legend class="field__label">How you like it</legend>
+        <div class="cluster opinions">
+          {OPINIONS.map((opinion) => (
+            <label class="check">
+              <input type="radio" name="opinion" value={opinion} />
+              <span>{OPINION_LABELS[opinion]}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+
+      <div class="field-row">
+        <div class="field">
+          <label class="field__label" for="item-price">
+            Price (optional)
+          </label>
+          <input
+            class="input"
+            id="item-price"
+            name="price"
+            type="text"
+            inputmode="decimal"
+            autocomplete="off"
+            aria-describedby="item-price-error"
+          />
+          <p class="field__error" id="item-price-error" data-error-for="price"></p>
+        </div>
+        <div class="field">
+          <label class="field__label" for="item-currency">
+            Currency
+          </label>
+          <select class="input" id="item-currency" name="currency">
+            {CURRENCIES.map((currency) => (
+              <option value={currency}>{currency}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label class="field__label" for="item-shop">
+            Where to buy (optional)
+          </label>
+          <input
+            class="input"
+            id="item-shop"
+            name="shop"
+            type="text"
+            autocomplete="off"
+            list="shop-names"
+            maxlength={LIMITS.shop}
+          />
+        </div>
+        <div class="field">
+          <label class="field__label" for="item-variant">
+            Size or variant (optional)
+          </label>
+          <input
+            class="input"
+            id="item-variant"
+            name="variant"
+            type="text"
+            autocomplete="off"
+            maxlength={LIMITS.variant}
+          />
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="field__label" for="item-link">
+          Link (optional)
+        </label>
+        <input
+          class="input"
+          id="item-link"
+          name="link"
+          type="url"
+          inputmode="url"
+          autocomplete="off"
+          autocapitalize="off"
+          spellcheck="false"
+          maxlength={LIMITS.link}
+          aria-describedby="item-link-hint item-link-error"
+        />
+        <p class="field__hint" id="item-link-hint">
+          A page where you can see or buy it.
+        </p>
+        <p class="field__error" id="item-link-error" data-error-for="link"></p>
+      </div>
+
+      <div class="field">
+        <label class="field__label" for="item-bought">
+          Last bought (optional)
+        </label>
+        <input
+          class="input"
+          id="item-bought"
+          name="bought"
+          type="date"
+          aria-describedby="item-bought-error"
+        />
+        <p class="field__error" id="item-bought-error" data-error-for="bought"></p>
+      </div>
+
+      <div class="field">
+        <label class="field__label" for="item-notes">
+          Notes (optional)
+        </label>
+        <textarea
+          class="input"
+          id="item-notes"
+          name="notes"
+          rows="3"
+          maxlength={LIMITS.notes}
+        ></textarea>
+      </div>
+
+      <p class="field__error" role="alert" data-error-for="form"></p>
+
+      <div class="cluster dialog__actions">
+        <Button type="submit" variant="primary">
+          Save
+        </Button>
+        <Button data-action="cancel">Cancel</Button>
+        <Button variant="danger" icon="trash" data-action="delete" class="dialog__delete">
+          Delete
+        </Button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="dialog" aria-labelledby="delete-title" data-delete-dialog>
+    <form method="dialog" class="stack">
+      <h2 id="delete-title">Delete this item?</h2>
+      <p>
+        “<span data-delete-name></span>” will be removed. This can't be undone.
+      </p>
+      <div class="cluster">
+        <Button type="submit" value="cancel">
+          Cancel
+        </Button>
+        <Button type="submit" variant="danger" value="confirm">
+          Delete
+        </Button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="dialog" aria-labelledby="category-dialog-title" data-category-dialog>
+    <form class="stack" data-category-form novalidate>
+      <h2 id="category-dialog-title" data-category-title>
+        New category
+      </h2>
+      <div class="field">
+        <label class="field__label" for="category-name">
+          Name
+        </label>
+        <input
+          class="input"
+          id="category-name"
+          type="text"
+          autocomplete="off"
+          maxlength={CATEGORY_NAME_MAX}
+          aria-describedby="category-name-error"
+          required
+          data-category-name
+        />
+        <p class="field__error" id="category-name-error" data-category-error></p>
+      </div>
+      <div class="cluster dialog__actions">
+        <Button type="submit" variant="primary">
+          Save
+        </Button>
+        <Button data-action="cancel-category">Cancel</Button>
+        <Button variant="danger" icon="trash" data-action="delete-category" class="dialog__delete">
+          Delete
+        </Button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="dialog" aria-labelledby="category-delete-title" data-category-delete-dialog>
+    <form method="dialog" class="stack">
+      <h2 id="category-delete-title">Delete this category?</h2>
+      <p>
+        “<span data-category-delete-name></span>” will be removed. Its items stay.
+      </p>
+      <div class="field" data-move-field>
+        <label class="field__label" for="category-move">
+          Move its <span data-move-count>items</span> to
+        </label>
+        <select class="input" id="category-move" data-move-to></select>
+      </div>
+      <div class="cluster">
+        <Button type="submit" value="cancel">
+          Cancel
+        </Button>
+        <Button type="submit" variant="danger" value="confirm">
+          Delete
+        </Button>
+      </div>
+    </form>
+  </dialog>
+</AppShell>
+
+<script>
+  import { mountShelf } from '../scripts/shelf.ts';
+
+  mountShelf(document);
+</script>
+
+<style>
+  .filters {
+    display: grid;
+    gap: var(--space-3);
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
+  }
+
+  .filters__search {
+    grid-column: 1 / -1;
+    max-width: 32rem;
+  }
+
+  .brand-filter {
+    --cluster-gap: var(--space-2);
+  }
+
+  .items {
+    --grid-min: 17rem;
+  }
+
+  .item {
+    align-content: start;
+  }
+
+  .item__tags {
+    --cluster-gap: var(--space-2);
+    font-size: var(--text-sm);
+  }
+
+  .item__opinion {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    color: var(--color-text-muted);
+  }
+
+  .item__heart {
+    display: inline-flex;
+    color: var(--color-danger);
+  }
+
+  .item__heart :global(svg) {
+    width: 1rem;
+    height: 1rem;
+    fill: currentColor;
+  }
+
+  .item__name {
+    font-size: var(--text-lg);
+  }
+
+  /* The name opens the item: it reads as a heading, works as a button. */
+  .item__edit {
+    min-height: var(--tap-target);
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    overflow-wrap: anywhere;
+    cursor: pointer;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.2em;
+  }
+
+  .item__edit:hover {
+    color: var(--color-accent);
+  }
+
+  .item__brand {
+    font-weight: var(--weight-semibold);
+    overflow-wrap: anywhere;
+  }
+
+  .item__price {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .item__details,
+  .item__notes {
+    font-size: var(--text-sm);
+    overflow-wrap: anywhere;
+  }
+
+  /* Long notes: the start of them, the rest when the item is opened. */
+  .item__notes {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+  }
+
+  .item__brand:empty,
+  .item__price:empty,
+  .item__details:empty,
+  .item__notes:empty {
+    display: none;
+  }
+
+  .item__link {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  /* Brands and categories: a button each, with its name and how many items. */
+  .chips {
+    --cluster-gap: var(--space-2);
+  }
+
+  .chip {
+    flex-wrap: wrap;
+    gap: var(--space-1) var(--space-2);
+  }
+
+  .chip__name {
+    font-weight: var(--weight-semibold);
+    overflow-wrap: anywhere;
+  }
+
+  .chip__counts {
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+  }
+
+  fieldset,
+  legend {
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .opinions {
+    --cluster-gap: var(--space-1) var(--space-4);
+  }
+
+  .dialog__actions :global(.dialog__delete) {
+    margin-inline-start: auto;
+  }
+</style>
