@@ -35,6 +35,7 @@
         "When reminders were last checked, so each one shows only once",
         "If you turn on reminders while Calendar is closed: this device's notification settings and a random device key (never in backups)",
         "If you turn on sync: a copy of your events on Calendar's server, locked on your devices so only they can read it, and this device's sync key (never in backups)",
+        "Which holidays and fasts to show",
         "Your light or dark theme choice"
       ],
       "pushNotifications": true,
