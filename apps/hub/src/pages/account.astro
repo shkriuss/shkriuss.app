@@ -6,10 +6,10 @@
  * sign out. Behaviour: ../scripts/account.ts. One view is shown at a time
  * (data-view); the script picks it.
  */
-import { apps, hub } from '@shkriuss/registry';
+import { hub, listedApps } from '@shkriuss/registry';
 import { AppShell, Button } from '@shkriuss/ui';
 
-const syncApps = apps.filter((app) => app.sync === true && app.status !== 'hidden');
+const syncApps = listedApps.filter((app) => app.sync === true);
 ---
 
 <AppShell
@@ -18,10 +18,7 @@ const syncApps = apps.filter((app) => app.sync === true && app.status !== 'hidde
 >
   <div class="stack stack--lg" data-account>
     <section class="stack" aria-labelledby="account-heading">
-      <h1 id="account-heading" class="cluster account-title">
-        <span>Your shkriuss account</span>
-        <span class="badge">Beta</span>
-      </h1>
+      <h1 id="account-heading">Your shkriuss account</h1>
       <p class="lead">
         Optional. Keep your apps the same on your phone, tablet and computer. Everything is locked
         on your devices before it's sent, so only your devices can read it.
@@ -380,10 +377,6 @@ const syncApps = apps.filter((app) => app.sync === true && app.status !== 'hidde
 </script>
 
 <style>
-  .account-title {
-    --cluster-gap: var(--space-3);
-  }
-
   .account-code {
     font-family: var(--font-mono);
     letter-spacing: 0.04em;

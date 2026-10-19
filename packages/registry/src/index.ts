@@ -220,8 +220,14 @@ export const registry: Registry = validateRegistry(data);
 export const hub: HubEntry = registry.site;
 export const apps: readonly AppEntry[] = registry.apps;
 
-/** Apps shown on the hub (everything except "hidden"). */
-export const listedApps: readonly AppEntry[] = apps.filter((app) => app.status !== 'hidden');
+/** For lists of apps: alphabetical by name. */
+export const byName = (a: Pick<AppEntry, 'name'>, b: Pick<AppEntry, 'name'>): number =>
+  a.name.localeCompare(b.name, 'en');
+
+/** Apps shown on the hub (everything except "hidden"), in alphabetical order. */
+export const listedApps: readonly AppEntry[] = apps
+  .filter((app) => app.status !== 'hidden')
+  .sort(byName);
 
 export const hubOrigin = `https://${hub.domain}`;
 

@@ -1,9 +1,9 @@
 ---
-import { apps, getSite, HUB_SLUG, type StorageKind } from '@shkriuss/registry';
+import { apps, byName, getSite, HUB_SLUG, type StorageKind } from '@shkriuss/registry';
 import { AppShell } from '@shkriuss/ui';
 
 // The table is built from the registry, so it is always up to date.
-const sites = [getSite(HUB_SLUG), ...apps.map((app) => getSite(app.slug))];
+const sites = [getSite(HUB_SLUG), ...[...apps].sort(byName).map((app) => getSite(app.slug))];
 const pushSites = sites.filter((site) => site.pushNotifications);
 const syncSites = sites.filter((site) => site.sync);
 /** "Calendar, Notes and Tally" */

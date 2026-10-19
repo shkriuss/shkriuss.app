@@ -5,6 +5,9 @@ test('lists every listed app from the registry, linking to its subdomain', async
   await page.goto('/');
   const list = page.getByRole('region', { name: 'Apps' }).getByRole('list');
   await expect(list.getByRole('listitem')).toHaveCount(listedApps.length);
+  // In alphabetical order.
+  const names = listedApps.map((app) => app.name).sort((a, b) => a.localeCompare(b, 'en'));
+  await expect(list.getByRole('heading', { level: 3 })).toHaveText(names);
   for (const app of listedApps) {
     const link = list.getByRole('link', { name: app.name, exact: true });
     await expect(link).toHaveAttribute('href', `${appOrigin(app.slug)}/`);

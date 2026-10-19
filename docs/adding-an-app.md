@@ -53,7 +53,8 @@ pnpm --filter notes dev
 2. Adds the app to `packages/registry/apps.json` with `"status": "beta"`.
 
 That's all: the hub, the privacy page, the browser tests, the build and the
-deploy all read from the registry and the `apps/` folder.
+deploy all read from the registry and the `apps/` folder. The hub lists apps
+in alphabetical order, so where an entry sits in `apps.json` doesn't matter.
 
 ## Building the app
 
