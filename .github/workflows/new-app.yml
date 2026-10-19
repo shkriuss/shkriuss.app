@@ -26,6 +26,7 @@ on:
         default: grid
         options:
           - arrow-left
+          - bag
           - bell
           - calendar
           - check
@@ -36,6 +37,7 @@ on:
           - download
           - external
           - grid
+          - heart
           - home
           - info
           - key
