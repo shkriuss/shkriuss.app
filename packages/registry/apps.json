@@ -28,7 +28,7 @@
       "description": "Plan your days. Your events stay on your device.",
       "icon": "calendar",
       "color": "blue",
-      "status": "beta",
+      "status": "live",
       "storage": "device",
       "dataStored": [
         "Your events: titles, dates, times, repeats, reminders and notes",
@@ -46,7 +46,7 @@
       "description": "Write things down. Your notes stay on your device.",
       "icon": "note",
       "color": "orange",
-      "status": "beta",
+      "status": "live",
       "storage": "device",
       "dataStored": [
         "Your notes: their titles and text, when each was written and last edited, and whether it's pinned",
@@ -61,7 +61,7 @@
       "description": "Build habits one day at a time. Your progress stays on your device.",
       "icon": "check",
       "color": "green",
-      "status": "beta",
+      "status": "live",
       "storage": "device",
       "dataStored": [
         "Your habits: their names, the days you plan them for and their reminder times",
@@ -79,7 +79,7 @@
       "description": "Check your English, American or British. Your text never leaves your device.",
       "icon": "text-check",
       "color": "violet",
-      "status": "beta",
+      "status": "live",
       "storage": "device",
       "dataStored": [
         "The text you're checking, so it's still here when you come back",

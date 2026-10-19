@@ -123,6 +123,11 @@ describe('the real apps.json', () => {
     expect(listedApps.every((app) => app.status !== 'hidden')).toBe(true);
   });
 
+  it('lists apps in alphabetical order', () => {
+    const names = listedApps.map((app) => app.name);
+    expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b, 'en')));
+  });
+
   it('builds origins from the domain', () => {
     expect(hubOrigin).toBe('https://shkriuss.app');
     expect(appOrigin('tally')).toBe('https://tally.shkriuss.app');
