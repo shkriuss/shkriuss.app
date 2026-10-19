@@ -31,8 +31,7 @@ opens a pull request with preview links.
    **Open a pull request** link: tap it, then tap **Create pull request**.
 5. Wait for the checks (green ticks) and the **Preview links** comment.
 6. When you're happy, tap **Merge pull request**. A few minutes later the app
-   is live at `https://<slug>.shkriuss.app` and listed on the hub with a
-   **Beta** badge.
+   is live at `https://<slug>.shkriuss.app` and listed on the hub.
 
 The new app starts as a placeholder page. Ask Claude to build the real thing
 in that pull request, or in a new one.
@@ -50,7 +49,7 @@ pnpm --filter notes dev
 
 1. Copies `templates/app/` to `apps/<slug>/`, replacing `template-app` with
    the slug.
-2. Adds the app to `packages/registry/apps.json` with `"status": "beta"`.
+2. Adds the app to `packages/registry/apps.json` with `"status": "live"`.
 
 That's all: the hub, the privacy page, the browser tests, the build and the
 deploy all read from the registry and the `apps/` folder. The hub lists apps
@@ -152,11 +151,12 @@ versions, as Calendar, Tally and Notes do (see Tally: `secondVersion` in
 `src/lib/counters.ts`). Moving to a new account key (after a lost device)
 needs no extra code.
 
-## Going live
+## Listing it on the hub
 
-When the app is ready, change its `"status"` in `apps.json` from `"beta"` to
-`"live"` (this removes the Beta badge). To deploy an app without listing it
-on the hub, use `"hidden"`.
+A new app is listed on the hub as soon as it's merged (`"status": "live"`).
+To deploy an app without listing it, for example while it's still a
+placeholder, change its `"status"` in `apps.json` to `"hidden"`, and back to
+`"live"` when it's ready.
 
 ## Removing an app
 

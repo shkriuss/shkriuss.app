@@ -24,8 +24,8 @@ export const ICON_COLORS = [
 ] as const;
 export type IconColor = (typeof ICON_COLORS)[number];
 
-export const APP_STATUSES = ['live', 'beta', 'hidden'] as const;
-/** live = listed; beta = listed with a "Beta" badge; hidden = deployed but not listed. */
+export const APP_STATUSES = ['live', 'hidden'] as const;
+/** live = listed on the hub; hidden = deployed but not listed. */
 export type AppStatus = (typeof APP_STATUSES)[number];
 
 export const STORAGE_KINDS = ['none', 'device', 'server'] as const;

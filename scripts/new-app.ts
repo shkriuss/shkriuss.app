@@ -58,7 +58,7 @@ try {
 
   console.log(`
 Created ${entry.name} in ${relative(repoRoot, appDir)}/ and added it to packages/registry/apps.json.
-It is marked "beta"; change "status" to "live" in apps.json when it's ready.
+It's listed on the hub once merged. To deploy it without listing it, set "status" to "hidden" in apps.json.
 
 Next:
   1. pnpm install

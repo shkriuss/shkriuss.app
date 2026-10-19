@@ -101,7 +101,7 @@ export async function createApp(
     description: options.description.trim(),
     icon: options.icon,
     color: options.color as IconColor,
-    status: 'beta',
+    status: 'live',
     storage: dataStored.length > 0 ? 'device' : 'none',
     dataStored,
   };
