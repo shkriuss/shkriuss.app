@@ -24,10 +24,7 @@ import { AppIcon, AppShell, Card } from '@shkriuss/ui';
               <Card title={app.name} href={`${appOrigin(app.slug)}/`} level={3}>
                 <AppIcon slot="media" icon={app.icon} color={app.color} />
                 <p>{app.description}</p>
-                <p class="cluster muted app-meta">
-                  <span>{app.slug}.shkriuss.app</span>
-                  {app.status === 'beta' && <span class="badge">Beta</span>}
-                </p>
+                <p class="muted app-meta">{app.slug}.shkriuss.app</p>
               </Card>
             </li>
           ))}
@@ -43,7 +40,6 @@ import { AppIcon, AppShell, Card } from '@shkriuss/ui';
   }
 
   .app-meta {
-    --cluster-gap: var(--space-2);
     font-size: var(--text-sm);
   }
 </style>

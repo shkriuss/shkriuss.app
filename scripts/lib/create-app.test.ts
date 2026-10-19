@@ -95,7 +95,7 @@ describe('createApp', () => {
       description: 'Quick notes, saved on your device.',
       icon: 'note',
       color: 'blue',
-      status: 'beta',
+      status: 'live',
       storage: 'device',
       dataStored: ['Your notes'],
     });
