@@ -5,6 +5,10 @@ node_modules/
 dist/
 .astro/
 .wrangler/
+# Big downloads made by the build (e.g. Grammar's Deep check model), and the
+# files made from them for on-demand download
+.cache/
+apps/*/public/on-demand/
 
 # Test output
 test-results/

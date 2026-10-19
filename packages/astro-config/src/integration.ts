@@ -6,8 +6,8 @@
  *
  * - _headers: the shared security headers;
  * - manifest.webmanifest, favicon.svg and PNG icons, for installing the app;
- * - sw.js: the offline service worker (it lists every other file, so it is
- *   written last).
+ * - sw.js: the offline service worker (it lists every other file, except
+ *   on-demand ones, so it is written last).
  */
 import { createHash } from 'node:crypto';
 import { readdir, readFile, writeFile } from 'node:fs/promises';
@@ -18,7 +18,7 @@ import { hubOrigin, type SiteInfo } from '@shkriuss/registry';
 import { appIconSvg, ICON_VARIANTS, renderPng, type IconVariant } from './app-icons.ts';
 import { headersFile, type HeaderOptions } from './headers.ts';
 import { webManifest } from './manifest.ts';
-import { precacheUrls, serviceWorkerSource } from './service-worker.ts';
+import { ON_DEMAND_DIR, precacheUrls, serviceWorkerSource } from './service-worker.ts';
 
 const VIRTUAL_ID = 'virtual:shkriuss/site';
 const RESOLVED_VIRTUAL_ID = `\0${VIRTUAL_ID}`;
@@ -98,9 +98,11 @@ export function shkriussIntegration(options: IntegrationOptions): AstroIntegrati
         logger.info('Wrote _headers, manifest.webmanifest and icons.');
 
         if (options.pwa) {
-          const files = (await listFiles(distDir)).filter((file) => file !== '_headers');
+          const files = (await listFiles(distDir)).filter(
+            (file) => file !== '_headers' && !file.startsWith(ON_DEMAND_DIR),
+          );
           const urls = precacheUrls(files);
-          // The version covers the site's files and the worker's own code, so
+          // The version covers the saved files and the worker's own code, so
           // changing either one gives visitors a fresh saved copy.
           const version = createHash('sha256')
             .update(await hashFiles(distDir, files))

@@ -18,6 +18,7 @@ mark them "Superseded by ADR N" instead.
 | [0009](0009-push-notifications.md)               | Optional notifications while an app is closed: Web Push from each app's Worker  | Accepted |
 | [0010](0010-account-and-sync.md)                 | Optional shkriuss account on the hub (recovery key, passkeys, QR) and app sync  | Accepted |
 | [0011](0011-on-device-grammar-checking.md)       | Grammar checking on the device with Harper (WebAssembly in a worker)            | Accepted |
+| [0012](0012-deep-check-ai-model.md)              | Deep check: an AI grammar model on the device (GECToR), downloaded on request   | Accepted |
 
 Template: **Context** (the problem), **Decision** (what we do), **Consequences**
 (good and bad), **Alternatives** (what we didn't pick and why).

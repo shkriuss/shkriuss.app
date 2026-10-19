@@ -4,3 +4,5 @@ dist/
 .wrangler/
 test-results/
 playwright-report/
+# Data files used as published (Grammar's Deep check model word list)
+apps/grammar/deep-check/

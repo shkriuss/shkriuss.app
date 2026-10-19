@@ -85,6 +85,7 @@
         "The text you're checking, so it's still here when you come back",
         "Whether you write American or British English",
         "Words you added to your dictionary",
+        "The Deep check model, if you download it (about 380 MB), so it works offline. You can remove it any time",
         "Your light or dark theme choice"
       ],
       "webAssembly": true

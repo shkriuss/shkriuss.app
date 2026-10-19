@@ -45,6 +45,11 @@ export interface HeaderOptions {
    * The app runs WebAssembly (`webAssembly: true` in apps.json): its CSP adds
    * 'wasm-unsafe-eval', which lets the browser compile WebAssembly files from
    * the site's own origin. It doesn't allow eval() of JavaScript (docs/adr/0011).
+   *
+   * It may also run WebAssembly on several processor cores ("threads"), which
+   * start as workers from a plain URL. So its CSP also allows the Trusted Types
+   * policy named "default": allowThreadScripts() in @shkriuss/ui/worker
+   * creates it inside a worker, for exact URLs only (docs/adr/0012).
    */
   webAssembly?: boolean | undefined;
 }
@@ -54,6 +59,8 @@ export interface HeaderOptions {
  * service-worker.ts and worker.ts).
  */
 export const TRUSTED_TYPES_POLICIES = ['shkriuss-sw', 'shkriuss-worker'];
+/** For WebAssembly threads: only in apps with `webAssembly: true`. */
+export const THREADS_POLICY = 'default';
 
 export function contentSecurityPolicy(options: Pick<HeaderOptions, 'webAssembly'> = {}): string {
   const directives: Record<string, string> = {
@@ -69,7 +76,10 @@ export function contentSecurityPolicy(options: Pick<HeaderOptions, 'webAssembly'
     'form-action': "'self'",
     'frame-ancestors': "'none'",
     'require-trusted-types-for': "'script'",
-    'trusted-types': TRUSTED_TYPES_POLICIES.join(' '),
+    'trusted-types': [
+      ...TRUSTED_TYPES_POLICIES,
+      ...(options.webAssembly ? [THREADS_POLICY] : []),
+    ].join(' '),
   };
   return Object.entries(directives)
     .map(([name, value]) => `${name} ${value}`)

@@ -111,7 +111,17 @@ worker, so the page never freezes. Grammar is the example to copy:
    in `apps.json` (its CSP then allows compiling WebAssembly,
    [ADR 0011](adr/0011-on-device-grammar-checking.md)). If the file is big,
    wait for `offlineCopySaved()` from `@shkriuss/ui/service-worker` before
-   starting the worker, so it's downloaded once.
+   starting the worker, so it's downloaded once. WebAssembly that runs on
+   several cores starts its own workers: allow exactly their script URLs
+   with `allowThreadScripts()` inside your worker
+   ([ADR 0012](adr/0012-deep-check-ai-model.md)).
+4. Very big files that only some people need (like Grammar's Deep check
+   model) go in `public/on-demand/`: they're never in the offline copy, and
+   the app downloads them only when asked, into a cache of its own (any name
+   not starting with `shkriuss-`). Cloudflare serves files of up to 25 MiB,
+   so split bigger ones (`pnpm check:dist` checks). Grammar's
+   `scripts/deep-check-files.ts` and `src/scripts/deep-check.ts` show how,
+   including checking every file's SHA-256.
 
 ## Sync between devices (optional)
 

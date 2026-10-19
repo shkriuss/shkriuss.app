@@ -470,6 +470,48 @@ select.input {
   background: var(--color-danger-soft);
 }
 
+/* ---------- Progress ---------- */
+
+/* <progress class="progress" max="…" value="…">: how far a download or a long task has got. */
+.progress {
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 0.75rem;
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--radius-full);
+  background: var(--color-surface-sunken);
+  overflow: hidden;
+  accent-color: var(--color-accent);
+}
+
+.progress::-webkit-progress-bar {
+  background: var(--color-surface-sunken);
+}
+
+.progress::-webkit-progress-value {
+  background: var(--color-accent);
+}
+
+.progress::-moz-progress-bar {
+  background: var(--color-accent);
+}
+
+/* ---------- Disclosures ---------- */
+
+/* <details class="disclosure"><summary>Question?</summary>…</details>: help that opens on tap. */
+.disclosure > summary {
+  min-height: var(--tap-target);
+  padding-block: var(--space-2);
+  color: var(--color-accent);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+
+.disclosure > summary:hover {
+  color: var(--color-accent-hover);
+}
+
 /* ---------- Codes to copy or scan ---------- */
 
 /* A key or code to read out, copy or write down: monospace, wraps between groups. */

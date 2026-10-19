@@ -58,7 +58,12 @@ pnpm new-app <slug> --name "Name" --description "One sentence." --icon note --co
   `pnpm check:dist` and the e2e guard enforce this. Trusted Types are on.
   Heavy work goes in a worker started with `startWorker()` from
   `@shkriuss/ui/worker`; only apps with `"webAssembly": true` in `apps.json`
-  may compile WebAssembly ([ADR 0011](docs/adr/0011-on-device-grammar-checking.md)).
+  may compile WebAssembly ([ADR 0011](docs/adr/0011-on-device-grammar-checking.md))
+  or start WebAssembly threads with `allowThreadScripts()`.
+- **Big optional downloads** (like Grammar's Deep check model) go in an
+  app's `public/on-demand/`: never precached, downloaded only when the person
+  asks, checked by SHA-256, at most 25 MiB per file
+  ([ADR 0012](docs/adr/0012-deep-check-ai-model.md)).
 - **No third parties.** No analytics, trackers, CDNs, web fonts or embeds.
   Every request must go to the site's own origin (e2e enforced).
 - **Data stays on the device.** Use `createStore` from `@shkriuss/storage`

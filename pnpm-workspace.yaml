@@ -18,6 +18,8 @@ catalog:
   globals: ^17.13.0
   # Grammar's checker: runs on the device as WebAssembly (docs/adr/0011).
   harper.js: ^2.10.0
+  # Grammar's Deep check: runs its AI model on the device (docs/adr/0012).
+  onnxruntime-web: ^1.30.0
   prettier: ^3.9.0
   prettier-plugin-astro: ^1.1.0
   sharp: ^0.35.5
@@ -33,6 +35,10 @@ onlyBuiltDependencies:
   - esbuild
   - sharp
   - workerd
+# Install scripts we don't need, skipped on purpose (protobufjs's only prints
+# a version warning).
+ignoredBuiltDependencies:
+  - protobufjs
 strictDepBuilds: true
 
 # Don't install versions published less than 7 days ago, so a hijacked or

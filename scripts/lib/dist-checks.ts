@@ -5,6 +5,8 @@
  *    styles and inline event handlers, so built pages must not contain any.
  * 2. Size budgets: each page's HTML, CSS and JavaScript (gzipped) must stay
  *    under a limit, so sites stay fast on slow phones and networks.
+ * 3. File sizes: Cloudflare serves files of up to 25 MiB each, so bigger
+ *    ones (like a downloadable model) must be split into parts.
  */
 import { gzipSync } from 'node:zlib';
 
@@ -69,5 +71,17 @@ export function budgetProblems(sizes: PageSizes, budget: Budget = DEFAULT_BUDGET
     .filter((kind) => sizes[kind] > budget[kind])
     .map(
       (kind) => `${kind.toUpperCase()} is ${sizes[kind]} bytes gzipped (budget ${budget[kind]})`,
+    );
+}
+
+/** Cloudflare's limit for one static file (Workers static assets). */
+export const MAX_FILE_BYTES = 25 * 1024 * 1024;
+
+export function fileSizeProblems(files: readonly { path: string; bytes: number }[]): string[] {
+  return files
+    .filter((file) => file.bytes > MAX_FILE_BYTES)
+    .map(
+      (file) =>
+        `${file.path} is ${file.bytes} bytes: Cloudflare serves files up to ${MAX_FILE_BYTES} bytes (split it into parts)`,
     );
 }

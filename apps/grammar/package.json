@@ -5,12 +5,14 @@
   "description": "The grammar app at grammar.shkriuss.app.",
   "type": "module",
   "scripts": {
-    "dev": "astro dev",
-    "build": "astro build",
+    "dev": "node scripts/deep-check-files.ts && astro dev",
+    "build": "node scripts/deep-check-files.ts && astro build",
     "preview": "wrangler dev --port 8787",
     "typecheck": "astro check",
     "deploy:production": "wrangler deploy",
-    "deploy:preview": "wrangler preview"
+    "deploy:preview": "wrangler preview",
+    "deep-check-files": "node scripts/deep-check-files.ts",
+    "on-demand-into-dist": "node scripts/deep-check-files.ts dist/on-demand/deep-check/"
   },
   "dependencies": {
     "@shkriuss/astro-config": "workspace:*",
@@ -18,7 +20,8 @@
     "@shkriuss/storage": "workspace:*",
     "@shkriuss/ui": "workspace:*",
     "astro": "catalog:",
-    "harper.js": "catalog:"
+    "harper.js": "catalog:",
+    "onnxruntime-web": "catalog:"
   },
   "devDependencies": {
     "@astrojs/check": "catalog:",

@@ -11,6 +11,9 @@ export default tseslint.config(
       '**/.astro/',
       '**/.wrangler/',
       '**/node_modules/',
+      // Made by the build: big downloads (e.g. onnxruntime-web, as published).
+      '**/.cache/',
+      'apps/*/public/on-demand/',
       'templates/',
       'test-results/',
       'playwright-report/',
@@ -54,7 +57,7 @@ export default tseslint.config(
   },
   {
     // Scripts and config files run in Node and may log.
-    files: ['scripts/**', '*.config.*', 'tests/**'],
+    files: ['scripts/**', 'apps/*/scripts/**', '*.config.*', 'tests/**'],
     rules: { 'no-console': 'off' },
   },
 );
