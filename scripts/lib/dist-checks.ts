@@ -7,6 +7,9 @@
  *    under a limit, so sites stay fast on slow phones and networks.
  * 3. File sizes: Cloudflare serves files of up to 25 MiB each, so bigger
  *    ones (like a downloadable model) must be split into parts.
+ * 4. Spacing: a word running into a link ("run by<a"), which happens when a
+ *    line of text in an .astro file ends just before a link on the next
+ *    line. Write `{' '}` at the end of that line.
  */
 import { gzipSync } from 'node:zlib';
 
@@ -84,4 +87,18 @@ export function fileSizeProblems(files: readonly { path: string; bytes: number }
       (file) =>
         `${file.path} is ${file.bytes} bytes: Cloudflare serves files up to ${MAX_FILE_BYTES} bytes (split it into parts)`,
     );
+}
+
+/** Words that run into a link, or out of one: "run by<a …>", "</a>and". */
+export function spacingProblems(html: string): string[] {
+  const shown = (index: number) =>
+    html.slice(Math.max(0, index - 30), index + 30).replace(/\s+/g, ' ');
+  return [
+    ...[...html.matchAll(/[\p{L}\p{N}]<a\s/gu)].map(
+      (match) => `no space before a link: …${shown(match.index + 1)}…`,
+    ),
+    ...[...html.matchAll(/<\/a>[\p{L}\p{N}]/gu)].map(
+      (match) => `no space after a link: …${shown(match.index + 4)}…`,
+    ),
+  ];
 }

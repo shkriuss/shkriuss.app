@@ -6,6 +6,7 @@ import {
   gzipSize,
   MAX_FILE_BYTES,
   pageAssets,
+  spacingProblems,
 } from './dist-checks.ts';
 
 describe('cspProblems', () => {
@@ -63,5 +64,22 @@ describe('fileSizeProblems', () => {
     ).toEqual([
       `big.bin is ${MAX_FILE_BYTES + 1} bytes: Cloudflare serves files up to ${MAX_FILE_BYTES} bytes (split it into parts)`,
     ]);
+  });
+});
+
+describe('spacingProblems', () => {
+  it('finds words that run into or out of a link', () => {
+    const problems = spacingProblems('<p>run by<a href="/x">ONNX</a>and more</p>');
+    expect(problems).toHaveLength(2);
+    expect(problems[0]).toMatch(/^no space before a link: …<p>run by<a href/);
+    expect(problems[1]).toMatch(/^no space after a link:/);
+  });
+
+  it('accepts links with spaces or punctuation around them', () => {
+    expect(
+      spacingProblems(
+        '<p>run by <a href="/x">ONNX</a>. (<a href="/y">More</a>)</p><li><a href="/">Home</a></li>',
+      ),
+    ).toEqual([]);
   });
 });
