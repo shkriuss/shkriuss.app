@@ -2,20 +2,13 @@
 /**
  * Shelf: the things you buy and use (food, clothes, tech, personal care…),
  * with their brands, how you like them, prices, shops and links. A list with
- * search and filters, the brands you love, and a form to add or change an
- * item. Behaviour: ../scripts/shelf.ts.
+ * search and filters, the brands you love, your categories, and forms to add
+ * or change an item or a category. Behaviour: ../scripts/shelf.ts (which
+ * also fills in the category lists).
  */
 import { AppShell, Button, DataControls, Icon, SyncControls } from '@shkriuss/ui';
-import {
-  CATEGORIES,
-  CATEGORY_LABELS,
-  CURRENCIES,
-  LIMITS,
-  OPINIONS,
-  OPINION_LABELS,
-  SORTS,
-  SORT_LABELS,
-} from '../lib/items.ts';
+import { CATEGORY_NAME_MAX } from '../lib/categories.ts';
+import { CURRENCIES, LIMITS, OPINIONS, OPINION_LABELS, SORTS, SORT_LABELS } from '../lib/items.ts';
 ---
 
 <AppShell wide>
@@ -58,9 +51,6 @@ import {
           </label>
           <select class="input" id="filter-category" data-filter="category">
             <option value="all">All categories</option>
-            {CATEGORIES.map((category) => (
-              <option value={category}>{CATEGORY_LABELS[category]}</option>
-            ))}
           </select>
         </div>
         <div class="field">
@@ -104,7 +94,23 @@ import {
     <section class="stack" aria-labelledby="brands-heading" data-brands-section hidden>
       <h2 id="brands-heading">Brands</h2>
       <p class="muted">The ones you love most come first. Tap one to see its items.</p>
-      <ul role="list" class="cluster brands" data-brands></ul>
+      <ul role="list" class="cluster chips" data-brands></ul>
+    </section>
+
+    <section class="stack" aria-labelledby="categories-heading">
+      <div class="cluster cluster--between">
+        <h2 id="categories-heading">Categories</h2>
+        <Button icon="plus" data-action="add-category">
+          Add category
+        </Button>
+      </div>
+      <p class="muted" data-categories-hint>
+        Tap one to rename or delete it.
+      </p>
+      <p class="muted" data-categories-empty hidden>
+        No categories. Add one to sort your items.
+      </p>
+      <ul role="list" class="cluster chips" data-categories></ul>
     </section>
 
     <SyncControls />
@@ -162,11 +168,23 @@ import {
   <!-- One brand, copied by the script for each brand. -->
   <template data-brand-template>
     <li>
-      <button type="button" class="btn brand" data-action="brand">
-        <span class="brand__name" data-brand-label>
+      <button type="button" class="btn chip" data-action="brand">
+        <span class="chip__name" data-brand-label>
           Brand
         </span>
-        <span class="brand__counts" data-brand-counts></span>
+        <span class="chip__counts" data-brand-counts></span>
+      </button>
+    </li>
+  </template>
+
+  <!-- One category, copied by the script for each category. -->
+  <template data-category-template>
+    <li>
+      <button type="button" class="btn chip" aria-haspopup="dialog" data-category-id>
+        <span class="chip__name" data-category-label>
+          Category
+        </span>
+        <span class="chip__counts" data-category-count></span>
       </button>
     </li>
   </template>
@@ -213,11 +231,7 @@ import {
           <label class="field__label" for="item-category">
             Category
           </label>
-          <select class="input" id="item-category" name="category">
-            {CATEGORIES.map((category) => (
-              <option value={category}>{CATEGORY_LABELS[category]}</option>
-            ))}
-          </select>
+          <select class="input" id="item-category" name="category"></select>
         </div>
       </div>
 
@@ -370,6 +384,62 @@ import {
       </div>
     </form>
   </dialog>
+
+  <dialog class="dialog" aria-labelledby="category-dialog-title" data-category-dialog>
+    <form class="stack" data-category-form novalidate>
+      <h2 id="category-dialog-title" data-category-title>
+        New category
+      </h2>
+      <div class="field">
+        <label class="field__label" for="category-name">
+          Name
+        </label>
+        <input
+          class="input"
+          id="category-name"
+          type="text"
+          autocomplete="off"
+          maxlength={CATEGORY_NAME_MAX}
+          aria-describedby="category-name-error"
+          required
+          data-category-name
+        />
+        <p class="field__error" id="category-name-error" data-category-error></p>
+      </div>
+      <div class="cluster dialog__actions">
+        <Button type="submit" variant="primary">
+          Save
+        </Button>
+        <Button data-action="cancel-category">Cancel</Button>
+        <Button variant="danger" icon="trash" data-action="delete-category" class="dialog__delete">
+          Delete
+        </Button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="dialog" aria-labelledby="category-delete-title" data-category-delete-dialog>
+    <form method="dialog" class="stack">
+      <h2 id="category-delete-title">Delete this category?</h2>
+      <p>
+        “<span data-category-delete-name></span>” will be removed. Its items stay.
+      </p>
+      <div class="field" data-move-field>
+        <label class="field__label" for="category-move">
+          Move its <span data-move-count>items</span> to
+        </label>
+        <select class="input" id="category-move" data-move-to></select>
+      </div>
+      <div class="cluster">
+        <Button type="submit" value="cancel">
+          Cancel
+        </Button>
+        <Button type="submit" variant="danger" value="confirm">
+          Delete
+        </Button>
+      </div>
+    </form>
+  </dialog>
 </AppShell>
 
 <script>
@@ -485,21 +555,22 @@ import {
     overflow-wrap: anywhere;
   }
 
-  .brands {
+  /* Brands and categories: a button each, with its name and how many items. */
+  .chips {
     --cluster-gap: var(--space-2);
   }
 
-  .brand {
+  .chip {
     flex-wrap: wrap;
     gap: var(--space-1) var(--space-2);
   }
 
-  .brand__name {
+  .chip__name {
     font-weight: var(--weight-semibold);
     overflow-wrap: anywhere;
   }
 
-  .brand__counts {
+  .chip__counts {
     font-size: var(--text-sm);
     color: var(--color-text-muted);
   }

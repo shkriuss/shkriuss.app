@@ -8,17 +8,8 @@
 import { isIsoDate, parts, type IsoDate } from '@shkriuss/dates';
 import { secondVersionName } from '@shkriuss/sync';
 
-export const CATEGORIES = ['food', 'clothes', 'tech', 'care', 'personal', 'home', 'other'] as const;
-export type Category = (typeof CATEGORIES)[number];
-export const CATEGORY_LABELS: Record<Category, string> = {
-  food: 'Food and drink',
-  clothes: 'Clothes and shoes',
-  tech: 'Tech and appliances',
-  care: 'Personal care',
-  personal: 'Personal items',
-  home: 'Home',
-  other: 'Other',
-};
+/** An item's category when it has none. Categories themselves: ./categories.ts. */
+export const NO_CATEGORY = '';
 
 /** How you like it. */
 export const OPINIONS = ['love', 'use', 'want', 'avoid'] as const;
@@ -48,7 +39,8 @@ export interface Item {
   id: string;
   name: string;
   brand: string;
-  category: Category;
+  /** A category's id, or NO_CATEGORY. */
+  category: string;
   opinion: Opinion;
   /** In the currency's main unit (12.5 is 12.50), or null if not noted. */
   price: number | null;
@@ -91,7 +83,7 @@ function isItem(value: unknown): value is Item {
     typeof item['id'] === 'string' &&
     item['id'].length > 0 &&
     texts.every((key) => typeof item[key] === 'string') &&
-    oneOf(item['category'], CATEGORIES) &&
+    typeof item['category'] === 'string' &&
     oneOf(item['opinion'], OPINIONS) &&
     oneOf(item['currency'], CURRENCIES) &&
     (item['price'] === null ||
@@ -189,7 +181,7 @@ export function itemFromDraft(draft: ItemDraft, id: string, now: number, existin
     id,
     name: cut(draft.name, LIMITS.name),
     brand: cut(draft.brand, LIMITS.brand),
-    category: oneOf(draft.category, CATEGORIES) ? draft.category : 'other',
+    category: draft.category,
     opinion: oneOf(draft.opinion, OPINIONS) ? draft.opinion : 'use',
     price: parsePrice(draft.price) ?? null,
     currency: oneOf(draft.currency, CURRENCIES) ? draft.currency : DEFAULT_CURRENCY,
@@ -244,6 +236,13 @@ export function removeItem(state: ShelfState, id: string): ShelfState {
   return { items: state.items.filter((item) => item.id !== id) };
 }
 
+/** Moves every item in category `from` to `to` (NO_CATEGORY for none), when that category goes. */
+export function moveItems(state: ShelfState, from: string, to: string): ShelfState {
+  return {
+    items: state.items.map((item) => (item.category === from ? { ...item, category: to } : item)),
+  };
+}
+
 /**
  * An item changed on two devices at once: this device's version, kept as a
  * second item next to the other device's (packages/sync, conflictCopy).
@@ -260,12 +259,21 @@ export const secondVersion = (item: Item, id: string): Item => ({
 export const fold = (text: string): string =>
   text.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase().trim();
 
-const byText = (a: string, b: string): number =>
+/** Alphabetical order, without minding case or accents ("item 2" before "item 10"). */
+export const byText = (a: string, b: string): number =>
   a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true });
+
+/** The item's category, or NO_CATEGORY if it's not one of `known` (deleted on another device). */
+const categoryOf = (item: Item, known: ReadonlySet<string>): string =>
+  known.has(item.category) ? item.category : NO_CATEGORY;
+
+const idsOf = (categories: readonly { id: string }[]): Set<string> =>
+  new Set(categories.map((category) => category.id));
 
 export interface Filters {
   search: string;
-  category: Category | 'all';
+  /** A category's id, NO_CATEGORY for items without one, or 'all'. */
+  category: string;
   opinion: Opinion | 'all';
   /** Only this brand (any spelling of it), or null for all. */
   brand: string | null;
@@ -280,8 +288,16 @@ export const NO_FILTERS: Filters = {
   sort: 'recent',
 };
 
-/** The items to list: those matching every filter and every word searched for, sorted. */
-export function visibleItems(state: ShelfState, filters: Filters): Item[] {
+/**
+ * The items to list: those matching every filter and every word searched
+ * for, sorted. `categories` are the ones that exist now.
+ */
+export function visibleItems(
+  state: ShelfState,
+  filters: Filters,
+  categories: readonly { id: string }[],
+): Item[] {
+  const known = idsOf(categories);
   const words = fold(filters.search).split(/\s+/).filter(Boolean);
   const brand = filters.brand === null ? null : fold(filters.brand);
   const sorters: Record<Sort, (a: Item, b: Item) => number> = {
@@ -299,7 +315,7 @@ export function visibleItems(state: ShelfState, filters: Filters): Item[] {
   };
   return state.items
     .filter((item) => {
-      if (filters.category !== 'all' && item.category !== filters.category) return false;
+      if (filters.category !== 'all' && categoryOf(item, known) !== filters.category) return false;
       if (filters.opinion !== 'all' && item.opinion !== filters.opinion) return false;
       if (brand !== null && fold(item.brand) !== brand) return false;
       const text = fold([item.name, item.brand, item.shop, item.variant, item.notes].join('\n'));
@@ -343,6 +359,20 @@ export function brandsOf(state: ShelfState): Brand[] {
       return { name, items, loved };
     })
     .sort((a, b) => b.loved - a.loved || b.items - a.items || byText(a.name, b.name));
+}
+
+/** How many items each category has (NO_CATEGORY: those without one). */
+export function itemsPerCategory(
+  state: ShelfState,
+  categories: readonly { id: string }[],
+): Map<string, number> {
+  const known = idsOf(categories);
+  const counts = new Map<string, number>();
+  for (const item of state.items) {
+    const category = categoryOf(item, known);
+    counts.set(category, (counts.get(category) ?? 0) + 1);
+  }
+  return counts;
 }
 
 /** The currency of the item changed last (with a price), for the next item. */

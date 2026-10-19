@@ -83,6 +83,58 @@ test('items, changes and deletions reach the other device', async ({ page, brows
   await tablet.context().close();
 });
 
+test('categories reach the other device, and a new one brings none back', async ({
+  page,
+  browser,
+  guard,
+}) => {
+  guard.allowOrigin(hubURL);
+  const chips = (device: Page) => device.locator('[data-categories] button');
+  const editCategory = async (device: Page, name: string) => {
+    await chips(device).filter({ hasText: name }).click();
+    return device.getByRole('dialog', { name: 'Edit category' });
+  };
+
+  // Changed on the phone before sync was on: the tablet, which only has
+  // the starting categories, takes the phone's list.
+  await page.goto('/');
+  let category = await editCategory(page, 'Food and drink');
+  await category.getByLabel('Name').fill('Groceries');
+  await category.getByRole('button', { name: 'Save' }).click();
+  category = await editCategory(page, 'Home');
+  await category.getByRole('button', { name: 'Delete' }).click();
+  await page
+    .getByRole('dialog', { name: 'Delete this category?' })
+    .getByRole('button', { name: 'Delete' })
+    .click();
+  const tablet = await twoDevices(page, browser);
+  await tablet.getByRole('button', { name: 'Sync now' }).click();
+  const expected = [
+    /^Clothes/,
+    /^Groceries/,
+    /^Other/,
+    /^Personal care/,
+    /^Personal items/,
+    /^Tech/,
+  ];
+  await expect(chips(tablet)).toHaveText(expected);
+  await page.getByRole('button', { name: 'Sync now' }).click();
+  await expect(chips(page)).toHaveText(expected);
+
+  // Added on the tablet: on the phone too.
+  const upload = uploaded(tablet);
+  await tablet.getByRole('button', { name: 'Add category' }).click();
+  await tablet.getByRole('dialog', { name: 'New category' }).getByLabel('Name').fill('Books');
+  await tablet
+    .getByRole('dialog', { name: 'New category' })
+    .getByRole('button', { name: 'Save' })
+    .click();
+  await upload;
+  await page.getByRole('button', { name: 'Sync now' }).click();
+  await expect(chips(page).first()).toHaveText(/^Books/);
+  await tablet.context().close();
+});
+
 test('keeps both versions of an item changed on two devices at once', async ({
   page,
   browser,

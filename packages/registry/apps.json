@@ -101,7 +101,8 @@
       "storage": "device",
       "dataStored": [
         "Your items: names, brands, categories, how you like them, prices, shops, links, sizes, when you last bought them and notes",
-        "If you turn on sync: a copy of your items on Shelf's server, locked on your devices so only they can read it, and this device's sync key (never in backups)",
+        "Your categories: the ones you added, renamed or removed",
+        "If you turn on sync: a copy of your items and categories on Shelf's server, locked on your devices so only they can read it, and this device's sync key (never in backups)",
         "Your light or dark theme choice"
       ],
       "sync": true

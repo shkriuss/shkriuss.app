@@ -3,19 +3,35 @@
  * lib/items.ts and saves everything on the device.
  *
  * The list shows the items that match the search and filters; tapping an
- * item's name opens it in the form. Tapping a brand shows only its items.
- * When sync is on and an item was changed on two devices at once, both
- * versions are kept (the second as its own item).
+ * item's name opens it in the form. Tapping a brand shows only its items;
+ * tapping a category opens it to rename or delete it.
+ *
+ * Items and categories are saved apart (lib/categories.ts says why). When
+ * sync is on and an item was changed on two devices at once, both versions
+ * are kept (the second as its own item); for a category, the newest change
+ * wins.
  */
 import { createStore } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { site } from 'virtual:shkriuss/site';
 import {
+  addCategory,
+  categoriesOf,
+  CATEGORIES_VERSION,
+  categoryName,
+  categoryProblem,
+  isCategoriesState,
+  MAX_CATEGORIES,
+  noChanges,
+  removeCategory,
+  renameCategory,
+  type CategoriesState,
+  type Category,
+} from '../lib/categories.ts';
+import {
   addItem,
   brandsOf,
-  CATEGORIES,
-  CATEGORY_LABELS,
   draftOf,
   draftProblems,
   emptyState,
@@ -24,9 +40,12 @@ import {
   isShelfState,
   itemFromDraft,
   itemsCount,
+  itemsPerCategory,
   lastCurrency,
   linkHost,
   MAX_ITEMS,
+  moveItems,
+  NO_CATEGORY,
   NO_FILTERS,
   OPINIONS,
   OPINION_LABELS,
@@ -51,6 +70,15 @@ const store = createStore<ShelfState>({
   validate: isShelfState,
 });
 
+const categoriesStore = createStore<CategoriesState>({
+  key: 'shelf-categories',
+  version: CATEGORIES_VERSION,
+  fallback: noChanges,
+  validate: isCategoriesState,
+});
+
+const COULD_NOT_SAVE = 'Couldn’t save. Is this browser in private mode, or is storage blocked?';
+
 /** Search results are read out this long after the last key press. */
 const ANNOUNCE_DELAY_MS = 700;
 /** Form fields with a place for a problem, in the order they appear. */
@@ -64,6 +92,26 @@ function required<T extends Element>(root: ParentNode, selector: string): T {
 
 const oneOf = <T extends string>(value: string, options: readonly T[]): value is T =>
   (options as readonly string[]).includes(value);
+
+type Choice = [value: string, label: string];
+const choicesOf = (categories: readonly Category[]): Choice[] =>
+  categories.map((category) => [category.id, category.name]);
+
+/**
+ * Gives a select these options (only rebuilt when they changed, so an open
+ * list isn't disturbed), keeping its choice if it's still one of them.
+ */
+function setOptions(select: HTMLSelectElement, choices: Choice[], fallback: string): void {
+  const chosen = select.value;
+  const same =
+    select.options.length === choices.length &&
+    choices.every(([value, label], index) => {
+      const option = select.options[index];
+      return option?.value === value && option.text === label;
+    });
+  if (!same) select.replaceChildren(...choices.map(([value, label]) => new Option(label, value)));
+  select.value = choices.some(([value]) => value === chosen) ? chosen : fallback;
+}
 
 export function mountShelf(root: Document): void {
   const addButton = required<HTMLButtonElement>(root, '[data-action="add"]');
@@ -94,7 +142,31 @@ export function mountShelf(root: Document): void {
   const deleteDialog = required<HTMLDialogElement>(root, '[data-delete-dialog]');
   const deleteName = required<HTMLElement>(deleteDialog, '[data-delete-name]');
 
+  const addCategoryButton = required<HTMLButtonElement>(root, '[data-action="add-category"]');
+  const categoryList = required<HTMLUListElement>(root, '[data-categories]');
+  const categoriesHint = required<HTMLElement>(root, '[data-categories-hint]');
+  const categoriesEmpty = required<HTMLElement>(root, '[data-categories-empty]');
+  const categoryTemplate = required<HTMLTemplateElement>(root, '[data-category-template]');
+  const categoryEditor = required<HTMLDialogElement>(root, '[data-category-dialog]');
+  const categoryForm = required<HTMLFormElement>(categoryEditor, '[data-category-form]');
+  const categoryTitle = required<HTMLElement>(categoryEditor, '[data-category-title]');
+  const categoryInput = required<HTMLInputElement>(categoryForm, '[data-category-name]');
+  const categoryError = required<HTMLElement>(categoryForm, '[data-category-error]');
+  const deleteCategoryButton = required<HTMLButtonElement>(
+    categoryEditor,
+    '[data-action="delete-category"]',
+  );
+  const categoryDeleteDialog = required<HTMLDialogElement>(root, '[data-category-delete-dialog]');
+  const categoryDeleteName = required<HTMLElement>(
+    categoryDeleteDialog,
+    '[data-category-delete-name]',
+  );
+  const moveField = required<HTMLElement>(categoryDeleteDialog, '[data-move-field]');
+  const moveCount = required<HTMLElement>(categoryDeleteDialog, '[data-move-count]');
+  const moveTo = required<HTMLSelectElement>(categoryDeleteDialog, '[data-move-to]');
+
   let state = store.load();
+  let categoriesState = categoriesStore.load();
   let filters: Filters = { ...NO_FILTERS };
   /** The item open in the form (null for a new one). */
   let editingId: string | null = null;
@@ -102,6 +174,10 @@ export function mountShelf(root: Document): void {
   let opener: HTMLElement | null = null;
   /** The item just saved, so focus can go to it in the list. */
   let savedId: string | null = null;
+  /** The same for the category form. */
+  let editingCategoryId: string | null = null;
+  let categoryOpener: HTMLElement | null = null;
+  let savedCategoryId: string | null = null;
   let announceTimer: number | undefined;
 
   const announce = (text: string): void => {
@@ -116,7 +192,16 @@ export function mountShelf(root: Document): void {
   function save(next: ShelfState): boolean {
     state = next;
     const saved = store.save(state);
-    say(saved ? null : 'Couldn’t save. Is this browser in private mode, or is storage blocked?');
+    say(saved ? null : COULD_NOT_SAVE);
+    sync.changed();
+    render();
+    return saved;
+  }
+
+  function saveCategories(next: CategoriesState): boolean {
+    categoriesState = next;
+    const saved = categoriesStore.save(categoriesState);
+    say(saved ? null : COULD_NOT_SAVE);
     sync.changed();
     render();
     return saved;
@@ -124,14 +209,16 @@ export function mountShelf(root: Document): void {
 
   // ---------- The list ----------
 
-  function renderItem(item: Item): HTMLLIElement {
+  function renderItem(item: Item, categories: readonly Category[]): HTMLLIElement {
     const fragment = itemTemplate.content.cloneNode(true) as DocumentFragment;
     const card = required<HTMLLIElement>(fragment, 'li');
     card.dataset['id'] = item.id;
     const text = (selector: string, value: string): void => {
       required<HTMLElement>(card, selector).textContent = value;
     };
-    text('[data-category]', CATEGORY_LABELS[item.category]);
+    const category = categoryName(categories, item.category);
+    text('[data-category]', category);
+    required<HTMLElement>(card, '[data-category]').hidden = category === '';
     text('[data-opinion-label]', OPINION_LABELS[item.opinion]);
     required<HTMLElement>(card, '[data-heart]').hidden = item.opinion !== 'love';
     const edit = required<HTMLButtonElement>(card, '[data-action="edit"]');
@@ -166,6 +253,15 @@ export function mountShelf(root: Document): void {
     return entry;
   }
 
+  function renderCategory(category: Category, items: number): HTMLLIElement {
+    const fragment = categoryTemplate.content.cloneNode(true) as DocumentFragment;
+    const entry = required<HTMLLIElement>(fragment, 'li');
+    required<HTMLElement>(entry, '[data-category-id]').dataset['categoryId'] = category.id;
+    required<HTMLElement>(entry, '[data-category-label]').textContent = category.name;
+    required<HTMLElement>(entry, '[data-category-count]').textContent = itemsCount(items);
+    return entry;
+  }
+
   /** Suggestions for the brand and shop boxes: what's been typed before. */
   function fillSuggestions(target: HTMLDataListElement, values: string[]): void {
     const unique = [...new Set(values.map((value) => value.trim()).filter(Boolean))].sort((a, b) =>
@@ -181,8 +277,16 @@ export function mountShelf(root: Document): void {
   }
 
   function render(): void {
-    const items = visibleItems(state, filters);
-    list.replaceChildren(...items.map(renderItem));
+    const categories = categoriesOf(categoriesState);
+    const perCategory = itemsPerCategory(state, categories);
+    // A category that's gone can't stay chosen in the filter.
+    const filterChoices: Choice[] = [['all', 'All categories'], ...choicesOf(categories)];
+    if (perCategory.has(NO_CATEGORY)) filterChoices.push([NO_CATEGORY, 'No category']);
+    setOptions(categoryFilter, filterChoices, 'all');
+    filters = { ...filters, category: categoryFilter.value };
+
+    const items = visibleItems(state, filters, categories);
+    list.replaceChildren(...items.map((item) => renderItem(item, categories)));
     const total = state.items.length;
     const none = total === 0;
     empty.hidden = !none;
@@ -204,11 +308,17 @@ export function mountShelf(root: Document): void {
       shopNames,
       state.items.map((item) => item.shop),
     );
+
+    categoryList.replaceChildren(
+      ...categories.map((category) => renderCategory(category, perCategory.get(category.id) ?? 0)),
+    );
+    categoriesHint.hidden = categories.length === 0;
+    categoriesEmpty.hidden = categories.length > 0;
   }
 
   /** What the filters show, for screen readers. */
   function announceCount(): void {
-    const shown = visibleItems(state, filters).length;
+    const shown = visibleItems(state, filters, categoriesOf(categoriesState)).length;
     announce(`${itemsCount(shown)} shown.`);
   }
 
@@ -216,7 +326,7 @@ export function mountShelf(root: Document): void {
     filters = {
       ...filters,
       search: search.value,
-      category: oneOf(categoryFilter.value, CATEGORIES) ? categoryFilter.value : 'all',
+      category: categoryFilter.value,
       opinion: oneOf(opinionFilter.value, OPINIONS) ? opinionFilter.value : 'all',
       sort: oneOf(sortFilter.value, SORTS) ? sortFilter.value : 'recent',
     };
@@ -249,7 +359,15 @@ export function mountShelf(root: Document): void {
 
   function fillForm(draft: ItemDraft): void {
     for (const name of textFields) field<HTMLInputElement>(name).value = draft[name];
-    field<HTMLSelectElement>('category').value = draft.category;
+    const category = field<HTMLSelectElement>('category');
+    setOptions(
+      category,
+      [[NO_CATEGORY, 'No category'], ...choicesOf(categoriesOf(categoriesState))],
+      NO_CATEGORY,
+    );
+    category.value = draft.category;
+    // In a category that's gone (deleted on another device): none.
+    if (category.value !== draft.category) category.value = NO_CATEGORY;
     field<HTMLSelectElement>('currency').value = draft.currency;
     field<HTMLTextAreaElement>('notes').value = draft.notes;
     for (const radio of form.querySelectorAll<HTMLInputElement>('[name="opinion"]')) {
@@ -282,7 +400,7 @@ export function mountShelf(root: Document): void {
             name: '',
             brand: filters.brand ?? '',
             // Adding while looking at one category: the new item goes in it.
-            category: filters.category === 'all' ? 'food' : filters.category,
+            category: filters.category === 'all' ? NO_CATEGORY : filters.category,
             opinion: 'use',
             price: '',
             currency: lastCurrency(state),
@@ -331,7 +449,7 @@ export function mountShelf(root: Document): void {
     const existing = find(editingId);
     const item = itemFromDraft(draft, editingId ?? crypto.randomUUID(), now, existing);
     // A saved item that the filters would hide is still shown: clear them.
-    const hidden = !visibleItems({ items: [item] }, filters).length;
+    const hidden = !visibleItems({ items: [item] }, filters, categoriesOf(categoriesState)).length;
     if (hidden) {
       filters = { ...NO_FILTERS, sort: filters.sort };
       search.value = '';
@@ -400,7 +518,8 @@ export function mountShelf(root: Document): void {
     // Over to the list, which now shows only this brand.
     itemsHeading.focus();
     itemsHeading.scrollIntoView({ block: 'start' });
-    announce(`${itemsCount(visibleItems(state, filters).length)} by ${brand}.`);
+    const shown = visibleItems(state, filters, categoriesOf(categoriesState)).length;
+    announce(`${itemsCount(shown)} by ${brand}.`);
   });
 
   required<HTMLButtonElement>(root, '[data-action="all-brands"]').addEventListener('click', () => {
@@ -422,16 +541,134 @@ export function mountShelf(root: Document): void {
     });
   }
 
+  // ---------- Categories ----------
+
+  const findCategory = (id: string | null): Category | undefined =>
+    categoriesOf(categoriesState).find((category) => category.id === id);
+
+  function showCategoryProblem(text: string | null): void {
+    categoryError.textContent = text ?? '';
+    if (text) categoryInput.setAttribute('aria-invalid', 'true');
+    else categoryInput.removeAttribute('aria-invalid');
+  }
+
+  function openCategoryEditor(category: Category | null): void {
+    editingCategoryId = category?.id ?? null;
+    categoryOpener = root.activeElement instanceof HTMLElement ? root.activeElement : null;
+    showCategoryProblem(null);
+    categoryTitle.textContent = category ? 'Edit category' : 'New category';
+    deleteCategoryButton.hidden = category === null;
+    categoryInput.value = category?.name ?? '';
+    categoryEditor.showModal();
+    categoryInput.focus();
+  }
+
+  categoryEditor.addEventListener('close', () => {
+    const saved = savedCategoryId
+      ? categoryList.querySelector<HTMLElement>(
+          `[data-category-id="${CSS.escape(savedCategoryId)}"]`,
+        )
+      : null;
+    (saved ?? (categoryOpener?.isConnected ? categoryOpener : addCategoryButton)).focus();
+    savedCategoryId = null;
+    categoryOpener = null;
+  });
+
+  categoryInput.addEventListener('input', () => {
+    if (categoryInput.hasAttribute('aria-invalid')) {
+      showCategoryProblem(categoryProblem(categoriesState, categoryInput.value, editingCategoryId));
+    }
+  });
+
+  categoryForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const problem = categoryProblem(categoriesState, categoryInput.value, editingCategoryId);
+    showCategoryProblem(problem);
+    if (problem) {
+      categoryInput.focus();
+      return;
+    }
+    const id = editingCategoryId ?? crypto.randomUUID();
+    const next =
+      editingCategoryId === null
+        ? addCategory(categoriesState, id, categoryInput.value)
+        : renameCategory(categoriesState, id, categoryInput.value);
+    if (saveCategories(next)) announce(`Saved category ${categoryName(categoriesOf(next), id)}.`);
+    savedCategoryId = id;
+    categoryEditor.close();
+  });
+
+  required<HTMLButtonElement>(categoryEditor, '[data-action="cancel-category"]').addEventListener(
+    'click',
+    () => {
+      categoryEditor.close();
+    },
+  );
+
+  deleteCategoryButton.addEventListener('click', () => {
+    const category = findCategory(editingCategoryId);
+    if (!category) return;
+    const categories = categoriesOf(categoriesState);
+    const items = itemsPerCategory(state, categories).get(category.id) ?? 0;
+    categoryDeleteName.textContent = category.name;
+    // Its items can go to another category, or stay without one.
+    moveField.hidden = items === 0;
+    moveCount.textContent = itemsCount(items);
+    const others = categories.filter((entry) => entry.id !== category.id);
+    setOptions(moveTo, [[NO_CATEGORY, 'No category'], ...choicesOf(others)], NO_CATEGORY);
+    moveTo.value = NO_CATEGORY;
+    categoryDeleteDialog.returnValue = '';
+    // Opens on top of the form; "Cancel" goes back to it.
+    categoryDeleteDialog.showModal();
+  });
+
+  categoryDeleteDialog.addEventListener('close', () => {
+    const category = findCategory(editingCategoryId);
+    if (categoryDeleteDialog.returnValue !== 'confirm' || !category) return;
+    const to = findCategory(moveTo.value);
+    if (state.items.some((item) => item.category === category.id)) {
+      save(moveItems(state, category.id, to?.id ?? NO_CATEGORY));
+    }
+    saveCategories(removeCategory(categoriesState, category.id));
+    announce(
+      to
+        ? `Deleted category ${category.name}. Its items are in ${to.name} now.`
+        : `Deleted category ${category.name}.`,
+    );
+    editingCategoryId = null;
+    categoryOpener = addCategoryButton;
+    categoryEditor.close();
+  });
+
+  addCategoryButton.addEventListener('click', () => {
+    if (categoriesOf(categoriesState).length >= MAX_CATEGORIES) {
+      say(
+        `You have ${MAX_CATEGORIES} categories, the most Shelf can keep. Delete one to add another.`,
+      );
+      return;
+    }
+    openCategoryEditor(null);
+  });
+
+  categoryList.addEventListener('click', (event) => {
+    const id = (event.target as Element).closest<HTMLElement>('[data-category-id]')?.dataset[
+      'categoryId'
+    ];
+    const category = findCategory(id ?? null);
+    if (category) openCategoryEditor(category);
+  });
+
   /** After changes from another device or tab. */
   function refresh(): void {
     state = store.load();
+    categoriesState = categoriesStore.load();
     // The item open in the form was deleted elsewhere: saving adds it back.
     render();
   }
 
   // If Shelf is open in two tabs, keep them the same.
   window.addEventListener('storage', (event) => {
-    if (event.key === store.key) refresh();
+    if (event.key === store.key || event.key === categoriesStore.key) refresh();
   });
 
   // Sync between devices through the shkriuss account (if turned on).
@@ -444,6 +681,12 @@ export function mountShelf(root: Document): void {
         withItems: (value, items) => ({ ...value, items }),
         // Changed on two devices at once: keep this device's version as its own item.
         conflictCopy: (mine) => secondVersion(mine, crypto.randomUUID()),
+      }),
+      // A category renamed on two devices: the newest name wins.
+      syncedStore({
+        store: categoriesStore,
+        items: (value) => value.changes,
+        withItems: (value, changes) => ({ ...value, changes }),
       }),
     ],
     onChange: refresh,

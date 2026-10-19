@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { STARTING_CATEGORIES } from './categories.ts';
 import {
   addItem,
   brandsOf,
@@ -10,9 +11,12 @@ import {
   isShelfState,
   itemFromDraft,
   itemsCount,
+  itemsPerCategory,
   lastCurrency,
   linkHost,
   MAX_ITEMS,
+  moveItems,
+  NO_CATEGORY,
   NO_FILTERS,
   normalizeLink,
   parsePrice,
@@ -109,8 +113,9 @@ describe('the form', () => {
     expect(draftOf({ ...made, price: 250 }).price).toBe('250');
     expect(itemFromDraft(draftOf(made), 'a', 9000, made)).toEqual({ ...made, updated: 9000 });
     // Unknown choices fall back to safe ones.
-    const odd = itemFromDraft(draft({ category: 'x', opinion: 'y', currency: 'z' }), 'b', 1);
-    expect([odd.category, odd.opinion, odd.currency]).toEqual(['other', 'use', 'GEL']);
+    const odd = itemFromDraft(draft({ opinion: 'y', currency: 'z' }), 'b', 1);
+    expect([odd.opinion, odd.currency]).toEqual(['use', 'GEL']);
+    expect(itemFromDraft(draft({ category: NO_CATEGORY }), 'c', 1).category).toBe(NO_CATEGORY);
   });
 });
 
@@ -129,6 +134,16 @@ describe('changes', () => {
     expect(names(updateItem(state, shoes).items)).toEqual(['Running shoes', 'Greek yogurt']);
   });
 
+  it('moves the items of a category that goes', () => {
+    const yogurt = item({ category: 'food' });
+    const shoes = item({ category: 'clothes' });
+    const moved = moveItems(stateOf(yogurt, shoes), 'food', 'other');
+    expect(moved.items.map((entry) => entry.category)).toEqual(['other', 'clothes']);
+    // Nothing else changes, not even when it was last changed.
+    expect(moved.items[0]).toEqual({ ...yogurt, category: 'other' });
+    expect(moveItems(moved, 'other', NO_CATEGORY).items[0]?.category).toBe(NO_CATEGORY);
+  });
+
   it('keeps to the most items', () => {
     const full = stateOf(...Array.from({ length: MAX_ITEMS }, (_, index) => item({}, `i${index}`)));
     expect(addItem(full, item())).toBe(full);
@@ -145,7 +160,7 @@ describe('changes', () => {
 
   it('checks saved data', () => {
     expect(isShelfState(stateOf(item()))).toBe(true);
-    expect(isShelfState({ items: [{ ...item(), category: 'cars' }] })).toBe(false);
+    expect(isShelfState({ items: [{ ...item(), category: 42 }] })).toBe(false);
     expect(isShelfState({ items: [{ ...item(), price: -1 }] })).toBe(false);
     expect(isShelfState({ items: [{ ...item(), bought: 'yesterday' }] })).toBe(false);
     expect(isShelfState({})).toBe(false);
@@ -172,44 +187,52 @@ describe('finding items', () => {
   });
   const skyr = item({ name: 'Skyr', brand: 'fage', price: '3' });
   const state = stateOf(yogurt, shoes, cream, skyr);
+  const show = (filters: Partial<typeof NO_FILTERS>) =>
+    names(visibleItems(state, { ...NO_FILTERS, ...filters }, STARTING_CATEGORIES));
 
   it('lists the most recently changed first', () => {
-    expect(names(visibleItems(state, NO_FILTERS))).toEqual([
-      'Skyr',
-      'Face cream',
-      'Running shoes',
-      'Greek yogurt',
-    ]);
+    expect(show({})).toEqual(['Skyr', 'Face cream', 'Running shoes', 'Greek yogurt']);
   });
 
   it('searches names, brands, shops, sizes and notes, without minding accents or case', () => {
-    const search = (text: string) => names(visibleItems(state, { ...NO_FILTERS, search: text }));
+    const search = (text: string) => show({ search: text });
     expect(search('asics 43')).toEqual(['Running shoes']);
     expect(search('WINTER')).toEqual(['Face cream']);
     expect(search('posay')).toEqual(['Face cream']);
     expect(search('carrefour')).toHaveLength(4);
     expect(search('nothing like this')).toEqual([]);
     const café = stateOf(item({ name: 'Café crème' }));
-    expect(names(visibleItems(café, { ...NO_FILTERS, search: 'cafe creme' }))).toEqual([
+    expect(names(visibleItems(café, { ...NO_FILTERS, search: 'cafe creme' }, []))).toEqual([
       'Café crème',
     ]);
   });
 
   it('filters by category, how you like it, and brand (any spelling)', () => {
-    expect(names(visibleItems(state, { ...NO_FILTERS, category: 'care' }))).toEqual(['Face cream']);
-    expect(names(visibleItems(state, { ...NO_FILTERS, opinion: 'love' }))).toEqual([
-      'Skyr',
-      'Greek yogurt',
-    ]);
-    expect(names(visibleItems(state, { ...NO_FILTERS, brand: 'FAGE' }))).toEqual([
-      'Skyr',
-      'Greek yogurt',
-    ]);
+    expect(show({ category: 'care' })).toEqual(['Face cream']);
+    expect(show({ opinion: 'love' })).toEqual(['Skyr', 'Greek yogurt']);
+    expect(show({ brand: 'FAGE' })).toEqual(['Skyr', 'Greek yogurt']);
+  });
+
+  it('counts items without a category, or in one that’s gone, as having none', () => {
+    const loose = stateOf(
+      item({ name: 'Socks', category: NO_CATEGORY }),
+      item({ name: 'Old thing', category: 'deleted-elsewhere' }),
+      item({ name: 'Bread', category: 'food' }),
+    );
+    const filtered = (category: string) =>
+      names(visibleItems(loose, { ...NO_FILTERS, category }, STARTING_CATEGORIES));
+    expect(filtered(NO_CATEGORY)).toEqual(['Old thing', 'Socks']);
+    expect(filtered('food')).toEqual(['Bread']);
+    expect(itemsPerCategory(loose, STARTING_CATEGORIES)).toEqual(
+      new Map([
+        [NO_CATEGORY, 2],
+        ['food', 1],
+      ]),
+    );
   });
 
   it('sorts by name, brand or price (no price last)', () => {
-    const sorted = (sort: (typeof NO_FILTERS)['sort']) =>
-      names(visibleItems(state, { ...NO_FILTERS, sort }));
+    const sorted = (sort: (typeof NO_FILTERS)['sort']) => show({ sort });
     expect(sorted('name')).toEqual(['Face cream', 'Greek yogurt', 'Running shoes', 'Skyr']);
     expect(sorted('brand')).toEqual(['Running shoes', 'Greek yogurt', 'Skyr', 'Face cream']);
     expect(sorted('price')).toEqual(['Skyr', 'Greek yogurt', 'Face cream', 'Running shoes']);
