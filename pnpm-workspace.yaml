@@ -20,13 +20,13 @@ catalog:
   harper.js: ^2.10.0
   # Grammar's Deep check: runs its AI model on the device (docs/adr/0012).
   onnxruntime-web: ^1.30.0
-  prettier: ^3.9.0
+  prettier: ^3.9.10
   prettier-plugin-astro: ^1.1.0
   sharp: ^0.35.5
   # TypeScript 7 is out, but typescript-eslint and @astrojs/check still need 6.x.
   typescript: ~6.0.3
   typescript-eslint: ^8.71.0
-  vitest: ^5.0.3
+  vitest: ^5.0.4
   wrangler: ^4.149.0
 
 # Supply-chain safety: only these dependencies may run install scripts
