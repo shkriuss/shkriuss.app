@@ -23,11 +23,29 @@ colour are in [`packages/registry/apps.json`](../../packages/registry/apps.json)
   doesn't make copies.
 - **Export**: "Download .ics file" saves your events, with their reminders,
   in the standard calendar format for other calendar apps.
+- **Holidays and fasts in Georgia**, worked out on the device for 1901–2099
+  (nothing is downloaded), each kind shown unless turned off under "Holidays
+  and fasts":
+  - **Days off**: the public holidays in the Labour Code (Article 30), from
+    2024, when 17 May was added. On the month, the date is underlined in
+    red. Extra days off the government announces by decree (for example on
+    election days) can't be known ahead, so they aren't shown.
+  - **Orthodox holidays** of the Georgian Orthodox Church: a ring under the
+    date. The Church keeps the old (Julian) calendar, so Christmas is on
+    7 January; Easter is worked out the Orthodox way, and Palm Sunday,
+    Ascension and Pentecost follow it.
+  - **Fasts**: Great Lent and the Apostles', Dormition and Nativity fasts, and
+    the one-day fasts: a line along the bottom of each day. Every Wednesday
+    and Friday too, if you turn that on (not in the weeks without fasting).
+  - They show in the day's list (with their Georgian names) and in "Next 7
+    days" (a long fast only on its first day). They aren't events: they
+    can't be changed, and they're not in downloaded .ics files.
 - Weeks start on the day usual where you live, and times show as 12- or
   24-hour, both from the phone's language and region settings.
 
 Everything is saved in the browser on this device (`shkriuss:calendar` for
-events, `shkriuss:calendar-reminders` for when reminders were last checked).
+events, `shkriuss:calendar-reminders` for when reminders were last checked,
+`shkriuss:calendar-holidays` for which holidays and fasts to show).
 Nothing is sent anywhere: imported files are read on the device, and
 notifications are made by the browser on the device (no push server).
 
@@ -38,6 +56,7 @@ notifications are made by the browser on the device (no push server).
   - `calendar.ts`: the month, the lists and the event editor
   - `reminder-alerts.ts`: due reminders and notifications
   - `import-dialog.ts`: importing a file
+  - `special-days.ts`: holidays and fasts: what to show, and their list items
   - `shared.ts`: small helpers they share
 - Rules, as plain functions with unit tests next to them:
   - `src/lib/dates.ts`: date maths without time zones ("2026-10-17", "14:30")
@@ -45,6 +64,9 @@ notifications are made by the browser on the device (no push server).
   - `src/lib/reminders.ts`: when reminders go off and what they're called
   - `src/lib/ics.ts`: writing .ics files
   - `src/lib/ics-import.ts`: reading .ics files
+  - `src/lib/holidays.ts`: days off, Orthodox holidays and fasts in Georgia
+    (checked against the Labour Code on matsne.gov.ge and the Georgian
+    Orthodox Church's 2026 calendar on orthodoxy.ge)
 - Browser tests: `e2e/` (the shared accessibility, security and offline
   checks run automatically too)
 - Build settings: `astro.config.ts` (shared, from `@shkriuss/astro-config`)

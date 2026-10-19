@@ -1,7 +1,8 @@
 /**
  * Calendar's page behaviour: connects the HTML in pages/index.astro to the
- * rules in lib/ and saves everything on the device. Reminders and importing
- * have their own files (reminder-alerts.ts and import-dialog.ts).
+ * rules in lib/ and saves everything on the device. Reminders, importing, and
+ * holidays and fasts have their own files (reminder-alerts.ts,
+ * import-dialog.ts and special-days.ts).
  */
 import { createStore, downloadFile } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
@@ -47,6 +48,7 @@ import {
   type Occurrence,
   type Repeat,
 } from '../lib/events.ts';
+import { isNotable, type SpecialDay } from '../lib/holidays.ts';
 import { toIcs } from '../lib/ics.ts';
 import {
   ALL_DAY_REMINDERS,
@@ -57,6 +59,7 @@ import {
 import { mountImportDialog } from './import-dialog.ts';
 import { mountPushReminders } from './push-reminders.ts';
 import { mountReminderAlerts } from './reminder-alerts.ts';
+import { mountSpecialDays } from './special-days.ts';
 import {
   formatTime,
   longDate,
@@ -101,6 +104,7 @@ export function mountCalendar(root: Document): void {
   const weeksBody = required<HTMLTableSectionElement>(root, '[data-weeks]');
   const dayHeading = required<HTMLElement>(root, '[data-day-heading]');
   const dayList = required<HTMLUListElement>(root, '[data-day-events]');
+  const daySpecialList = required<HTMLUListElement>(root, '[data-day-special]');
   const dayEmpty = required<HTMLElement>(root, '[data-day-empty]');
   const upcomingList = required<HTMLUListElement>(root, '[data-upcoming]');
   const upcomingEmpty = required<HTMLElement>(root, '[data-upcoming-empty]');
@@ -192,6 +196,8 @@ export function mountCalendar(root: Document): void {
     },
   });
   mountSyncControls(required<HTMLElement>(root, '[data-sync-controls]'), sync);
+  // Holidays, days off and fasts in Georgia (shown unless turned off).
+  const special = mountSpecialDays(root, render);
 
   // ---------- Showing the calendar ----------
 
@@ -213,10 +219,11 @@ export function mountCalendar(root: Document): void {
     weekdaysRow.replaceChildren(...headers);
   }
 
-  function dayLabel(date: IsoDate, count: number): string {
+  function dayLabel(date: IsoDate, count: number, days: readonly SpecialDay[]): string {
     const label = [longDate.format(utc(date))];
     if (date === todayDate) label.push('today');
     if (count > 0) label.push(plural(count, 'event'));
+    label.push(...days.map(special.label));
     return label.join(', ');
   }
 
@@ -224,6 +231,7 @@ export function mountCalendar(root: Document): void {
     const { year, month } = parts(viewMonth);
     const monthEnd = makeDate(year, month, daysInMonth(year, month));
     const occurrences = occurrencesBetween(state, viewMonth, monthEnd);
+    const specials = special.between(viewMonth, monthEnd);
     // One day in the grid is reachable with Tab; arrow keys move between days.
     const tabbable = selected.startsWith(viewMonth.slice(0, 8)) ? selected : viewMonth;
 
@@ -232,7 +240,10 @@ export function mountCalendar(root: Document): void {
       const row = document.createElement('tr');
       for (const date of week) {
         const cell = document.createElement('td');
-        if (date) cell.append(dayButton(date, onDay(occurrences, date).length, tabbable));
+        if (date) {
+          const days = specials.get(date) ?? [];
+          cell.append(dayButton(date, onDay(occurrences, date).length, tabbable, days));
+        }
         row.append(cell);
       }
       return row;
@@ -240,15 +251,24 @@ export function mountCalendar(root: Document): void {
     weeksBody.replaceChildren(...rows);
   }
 
-  function dayButton(date: IsoDate, count: number, tabbable: IsoDate): HTMLButtonElement {
+  function dayButton(
+    date: IsoDate,
+    count: number,
+    tabbable: IsoDate,
+    days: readonly SpecialDay[],
+  ): HTMLButtonElement {
+    const marks = special.marks(days);
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'day-cell';
+    // A day off is underlined in red; a fast has a line along the bottom.
+    button.classList.toggle('day-cell--off', marks.dayOff);
+    button.classList.toggle('day-cell--fast', marks.fast);
     button.dataset['date'] = date;
     button.tabIndex = date === tabbable ? 0 : -1;
     button.setAttribute('aria-pressed', String(date === selected));
     if (date === todayDate) button.setAttribute('aria-current', 'date');
-    button.setAttribute('aria-label', dayLabel(date, count));
+    button.setAttribute('aria-label', dayLabel(date, count, days));
 
     const number = document.createElement('span');
     number.className = 'day-cell__number';
@@ -256,6 +276,12 @@ export function mountCalendar(root: Document): void {
     const dots = document.createElement('span');
     dots.className = 'day-cell__dots';
     dots.setAttribute('aria-hidden', 'true');
+    // An Orthodox holiday is a ring, before the dots for events.
+    if (marks.feast) {
+      const ring = document.createElement('span');
+      ring.className = 'day-cell__ring';
+      dots.append(ring);
+    }
     for (let index = 0; index < Math.min(count, MAX_DOTS); index += 1) {
       const dot = document.createElement('span');
       dot.className = 'day-cell__dot';
@@ -290,6 +316,9 @@ export function mountCalendar(root: Document): void {
     const sameYear = selected.slice(0, 4) === todayDate.slice(0, 4);
     const date = (sameYear ? longDateThisYear : longDate).format(utc(selected));
     dayHeading.textContent = selected === todayDate ? `Today, ${date}` : date;
+    daySpecialList.replaceChildren(
+      ...special.on(selected).map((day) => special.item(day, selected, false)),
+    );
     const occurrences = occurrencesBetween(state, selected, selected);
     dayList.replaceChildren(...occurrences.map((o) => eventItem(o, selected, false)));
     dayEmpty.hidden = occurrences.length > 0;
@@ -297,11 +326,22 @@ export function mountCalendar(root: Document): void {
 
   function renderUpcoming(): void {
     const from = addDays(todayDate, 1);
-    const occurrences = occurrencesBetween(state, from, addDays(todayDate, UPCOMING_DAYS));
-    upcomingList.replaceChildren(
+    const to = addDays(todayDate, UPCOMING_DAYS);
+    const occurrences = occurrencesBetween(state, from, to);
+    // Holidays first on their day, then events; a long fast only where it starts.
+    const items = [
+      ...[...special.between(from, to)].flatMap(([date, days]) =>
+        days.filter(isNotable).map((day) => ({ date, item: special.item(day, date, true) })),
+      ),
       // An event already under way tomorrow is listed on tomorrow.
-      ...occurrences.map((o) => eventItem(o, o.start < from ? from : o.start, true)),
-    );
+      ...occurrences.map((o) => {
+        const date = o.start < from ? from : o.start;
+        return { date, item: eventItem(o, date, true) };
+      }),
+    ];
+    // Sorting keeps holidays before events on the same day (it's stable).
+    items.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    upcomingList.replaceChildren(...items.map(({ item }) => item));
     upcomingEmpty.hidden = occurrences.length > 0;
   }
 

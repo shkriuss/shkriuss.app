@@ -61,6 +61,8 @@ const PAIRS: [string, string, number][] = [
   ['on-danger', 'danger-hover', TEXT],
   ['danger', 'bg', TEXT],
   ['danger', 'surface', TEXT],
+  // Calendar's days off, on a day being hovered.
+  ['danger', 'surface-sunken', TEXT],
   ['danger', 'danger-soft', TEXT],
   ['text', 'danger-soft', TEXT],
   ['text', 'accent-soft', TEXT],
