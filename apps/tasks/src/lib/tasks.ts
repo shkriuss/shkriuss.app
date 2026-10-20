@@ -447,6 +447,22 @@ export function inView(task: Task, view: View): boolean {
   return task.list === view.list;
 }
 
+/** The words searched for, as compared (lower case, without accents). */
+export const searchWords = (search: string): string[] => fold(search).split(/\s+/).filter(Boolean);
+
+/** True when every word searched for is in the task's title, notes or steps. */
+export function matchesSearch(task: Task, words: readonly string[]): boolean {
+  if (words.length === 0) return true;
+  const text = fold([task.title, task.notes, ...task.steps.map((step) => step.title)].join('\n'));
+  return words.every((word) => text.includes(word));
+}
+
+/** In the view, and found by the search ("" for no search). */
+const shown = (view: View, search: string) => {
+  const words = searchWords(search);
+  return (task: Task): boolean => inView(task, view) && matchesSearch(task, words);
+};
+
 export const WHENS = ['overdue', 'today', 'tomorrow', 'later', 'someday'] as const;
 export type When = (typeof WHENS)[number];
 export const WHEN_LABELS: Record<When, string> = {
@@ -481,8 +497,10 @@ export function openGroups(
   state: TasksState,
   view: View,
   today: IsoDate,
+  search = '',
 ): { when: When; tasks: Task[] }[] {
-  const open = state.tasks.filter((task) => task.done === null && inView(task, view)).sort(byDue);
+  const isShown = shown(view, search);
+  const open = state.tasks.filter((task) => task.done === null && isShown(task)).sort(byDue);
   return WHENS.map((when) => ({
     when,
     tasks: open.filter((task) => whenOf(task, today) === when),
@@ -510,14 +528,18 @@ export function isViewSettings(value: unknown): value is ViewSettings {
 }
 
 /** The tasks still to do in a view, in your own order ("My order"): new ones come first. */
-export const orderedTasks = (state: TasksState, view: View): Task[] =>
-  state.tasks.filter((task) => task.done === null && inView(task, view));
+export function orderedTasks(state: TasksState, view: View, search = ''): Task[] {
+  const isShown = shown(view, search);
+  return state.tasks.filter((task) => task.done === null && isShown(task));
+}
 
 /** The done tasks in a view, the most recently done first. */
-export const doneTasks = (state: TasksState, view: View): Task[] =>
-  state.tasks
-    .filter((task) => task.done !== null && inView(task, view))
+export function doneTasks(state: TasksState, view: View, search = ''): Task[] {
+  const isShown = shown(view, search);
+  return state.tasks
+    .filter((task) => task.done !== null && isShown(task))
     .sort((a, b) => (b.done ?? 0) - (a.done ?? 0) || (a.id < b.id ? -1 : 1));
+}
 
 /** How many tasks are still to do in each list (NO_LIST: those without one). */
 export function openPerList(state: TasksState): Map<string, number> {

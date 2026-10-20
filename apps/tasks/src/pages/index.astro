@@ -67,6 +67,19 @@ import {
             Rename or delete this list
           </Button>
         </p>
+        <div class="field search">
+          <label class="field__label" for="search">
+            Search
+          </label>
+          <input
+            class="input"
+            id="search"
+            type="search"
+            autocomplete="off"
+            enterkeyhint="search"
+            data-search
+          />
+        </div>
         <div class="order">
           <label class="field__label" for="order">
             Order
@@ -590,6 +603,10 @@ import {
     margin: 0;
     accent-color: var(--color-accent);
     cursor: pointer;
+  }
+
+  .search {
+    max-width: 32rem;
   }
 
   .order {
