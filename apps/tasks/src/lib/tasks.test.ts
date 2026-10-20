@@ -12,6 +12,7 @@ import {
   formatDay,
   isTasksState,
   isViewSettings,
+  matchesSearch,
   MAX_STEPS,
   MAX_TASKS,
   migrateTasks,
@@ -30,6 +31,7 @@ import {
   removeTask,
   removeTasks,
   reopenTask,
+  searchWords,
   repeatText,
   stepsText,
   taskFromDraft,
@@ -408,6 +410,33 @@ describe('showing them', () => {
     expect(titles(orderedTasks(stateOf(first, second, third), 'important'))).toEqual(['Third']);
     expect(isViewSettings({ order: 'mine' })).toBe(true);
     expect(isViewSettings({ order: 'random' })).toBe(false);
+  });
+
+  it('finds tasks by words in their title, notes or steps', () => {
+    const trip = task({
+      title: 'Prepare for the trip',
+      notes: 'Flight on Friday',
+      steps: [{ id: 's', title: 'Renew the passport', done: false }],
+    });
+    const café = task({ title: 'Café with Nino', list: 'home' });
+    const old = { ...task({ title: 'Old trip photos' }), done: 5 };
+    const found = (search: string) =>
+      [
+        ...openGroups(stateOf(trip, café, old), 'all', TODAY, search).flatMap(
+          (group) => group.tasks,
+        ),
+        ...doneTasks(stateOf(trip, café, old), 'all', search),
+      ].map((entry) => entry.title);
+    expect(found('trip')).toEqual(['Prepare for the trip', 'Old trip photos']);
+    expect(found('PASSPORT')).toEqual(['Prepare for the trip']);
+    expect(found('friday trip')).toEqual(['Prepare for the trip']);
+    // Accents don't matter.
+    expect(found('cafe nino')).toEqual(['Café with Nino']);
+    expect(found('nothing like this')).toEqual([]);
+    expect(found('  ')).toHaveLength(3);
+    // Only in what's shown.
+    expect(titles(orderedTasks(stateOf(trip, café), { list: 'home' }, 'trip'))).toEqual([]);
+    expect(matchesSearch(trip, searchWords(''))).toBe(true);
   });
 
   it('lists the most recently done first', () => {

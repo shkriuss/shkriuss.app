@@ -21,7 +21,9 @@ Your to-do list, with dates, lists and reminders. Lives at
   moves them to another list, or deletes them, as you choose.
 - `src/scripts/tasks.ts`: connects the page to those rules and saves with
   `@shkriuss/storage`. "Add" puts a task in what's shown (a list, or
-  Important). Tapping a task's title opens its form, where steps are added,
+  Important). Search finds tasks in what's shown by every word typed, in
+  their titles, notes and steps (`matchesSearch`; capitals and accents don't
+  matter). Tapping a task's title opens its form, where steps are added,
   renamed, ticked and removed (kept only on "Save"). In the list, a task's
   steps fold out under it and can be ticked there straight away. In "My
   order", a task is moved by dragging its handle (pointer events, so it

@@ -42,6 +42,7 @@ import {
   inView,
   isTasksState,
   isViewSettings,
+  matchesSearch,
   MAX_STEPS,
   MAX_TASKS,
   migrateTasks,
@@ -55,6 +56,7 @@ import {
   removeTask,
   removeTasks,
   reopenTask,
+  searchWords,
   repeatText,
   everyUnit,
   parseEvery,
@@ -113,6 +115,8 @@ const DRAG_START_PX = 6;
 /** While dragging this close (px) to the top or bottom of the screen, it scrolls. */
 const SCROLL_EDGE_PX = 64;
 const SCROLL_STEP_PX = 16;
+/** Search results are read out this long after the last key press. */
+const ANNOUNCE_DELAY_MS = 700;
 
 function required<T extends Element>(root: ParentNode, selector: string): T {
   const element = root.querySelector<T>(selector);
@@ -143,6 +147,7 @@ export function mountTasks(root: Document): void {
   const stepTemplate = required<HTMLTemplateElement>(root, '[data-step-template]');
   const stepEditTemplate = required<HTMLTemplateElement>(root, '[data-step-edit-template]');
   const announcer = required<HTMLElement>(root, '[data-announcer]');
+  const searchInput = required<HTMLInputElement>(root, '[data-search]');
   const orderSelect = required<HTMLSelectElement>(root, '[data-order]');
   const moveHint = required<HTMLElement>(root, '[data-move-hint]');
   const orderedTemplate = required<HTMLTemplateElement>(root, '[data-ordered-template]');
@@ -176,6 +181,9 @@ export function mountTasks(root: Document): void {
   let lists = listsStore.load();
   let view: View = 'all';
   let settings = viewStore.load();
+  /** What's typed in Search ("" for everything). */
+  let search = '';
+  let announceTimer: number | undefined;
   let day = todayOf();
   /** The task showing Move up / Move down, and the one being dragged. */
   let movingId: string | null = null;
@@ -360,21 +368,27 @@ export function mountTasks(root: Document): void {
     moveHint.hidden = !mine;
     let open: number;
     if (mine) {
-      const ordered = orderedTasks(tasks, view);
+      const ordered = orderedTasks(tasks, view, search);
       const fragment = orderedTemplate.content.cloneNode(true) as DocumentFragment;
       const list = required<HTMLElement>(fragment, '[data-ordered]');
       list.replaceChildren(...ordered.map(renderTask));
       groupsBox.replaceChildren(...(ordered.length > 0 ? [list] : []));
       open = ordered.length;
     } else {
-      const groups = openGroups(tasks, view, day);
+      const groups = openGroups(tasks, view, day, search);
       groupsBox.replaceChildren(...groups.map((group) => renderGroup(group.when, group.tasks)));
       open = groups.length;
     }
-    const done = doneTasks(tasks, view);
+    const done = doneTasks(tasks, view, search);
     empty.hidden = open > 0;
-    empty.textContent =
-      done.length > 0 ? 'All done here.' : 'Nothing to do here. Add a task above.';
+    const searched = search.trim();
+    if (searched === '') {
+      empty.textContent =
+        done.length > 0 ? 'All done here.' : 'Nothing to do here. Add a task above.';
+    } else {
+      empty.textContent =
+        done.length > 0 ? `Nothing to do matches “${searched}”.` : `No tasks match “${searched}”.`;
+    }
     doneSection.hidden = done.length === 0;
     doneSummary.textContent = `Done (${done.length})`;
     doneList.replaceChildren(...done.map(renderTask));
@@ -401,6 +415,11 @@ export function mountTasks(root: Document): void {
       list: typeof view === 'string' ? NO_LIST : view.list,
       important: view === 'important',
     });
+    // A search the new task doesn't match would hide it: clear the search.
+    if (!matchesSearch(task, searchWords(search))) {
+      search = '';
+      searchInput.value = '';
+    }
     if (saveTasks(addTask(tasks, task))) {
       announce(`Added ${task.title}. Tap it to give it a date or a reminder.`);
     }
@@ -494,14 +513,14 @@ export function mountTasks(root: Document): void {
     const next = moveTask(tasks, task.id, target);
     if (next !== tasks) saveTasks(next);
     control(task.id, focus)?.focus();
-    const ordered = orderedTasks(tasks, view);
+    const ordered = orderedTasks(tasks, view, search);
     const position = ordered.findIndex((entry) => entry.id === task.id) + 1;
     announce(`${task.title}: ${position} of ${ordered.length}.`);
   }
 
   /** One place up (-1) or down (1) among the tasks shown. */
   function moveBy(task: Task, step: -1 | 1, focus: string): void {
-    const ordered = orderedTasks(tasks, view);
+    const ordered = orderedTasks(tasks, view, search);
     const neighbour = ordered[ordered.findIndex((entry) => entry.id === task.id) + step];
     if (!neighbour) {
       announce(step < 0 ? `${task.title} is first already.` : `${task.title} is last already.`);
@@ -625,6 +644,31 @@ export function mountTasks(root: Document): void {
 
   // ---------- What's shown ----------
 
+  /** How many tasks the search found, for screen readers. */
+  function announceFound(): void {
+    if (search.trim() === '') return;
+    const found = orderedTasks(tasks, view, search).length + doneTasks(tasks, view, search).length;
+    announce(`${tasksCount(found)} found.`);
+  }
+
+  searchInput.addEventListener('input', () => {
+    search = searchInput.value;
+    movingId = null;
+    render();
+    window.clearTimeout(announceTimer);
+    announceTimer = window.setTimeout(announceFound, ANNOUNCE_DELAY_MS);
+  });
+
+  // Escape clears the search (as browsers do for search boxes, in every browser).
+  searchInput.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape' || searchInput.value === '') return;
+    event.preventDefault();
+    searchInput.value = '';
+    search = '';
+    render();
+    announce('Search cleared.');
+  });
+
   viewList.addEventListener('click', (event) => {
     const key = (event.target as Element).closest<HTMLElement>('[data-view]')?.dataset['view'];
     if (key === undefined) return;
@@ -634,7 +678,7 @@ export function mountTasks(root: Document): void {
   });
 
   required<HTMLButtonElement>(root, '[data-action="clear-done"]').addEventListener('click', () => {
-    const count = doneTasks(tasks, view).length;
+    const count = doneTasks(tasks, view, search).length;
     clearText.textContent =
       count === 1
         ? 'The done task shown here will be removed. This can’t be undone.'
@@ -645,7 +689,7 @@ export function mountTasks(root: Document): void {
 
   clearDialog.addEventListener('close', () => {
     if (clearDialog.returnValue !== 'confirm') return;
-    const done = doneTasks(tasks, view);
+    const done = doneTasks(tasks, view, search);
     saveTasks(removeTasks(tasks, new Set(done.map((task) => task.id))));
     announce(`Deleted ${done.length} done ${done.length === 1 ? 'task' : 'tasks'}.`);
     viewHeading.focus();
