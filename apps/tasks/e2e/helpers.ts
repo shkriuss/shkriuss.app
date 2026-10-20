@@ -30,6 +30,7 @@ const sample = (task: Partial<Task>, index: number): Task => ({
   id: `seed-${index}`,
   title: 'Task',
   notes: '',
+  steps: [],
   list: '',
   important: false,
   date: null,
@@ -46,7 +47,7 @@ const sample = (task: Partial<Task>, index: number): Task => ({
 export async function seed(page: Page, tasks: Partial<Task>[], lists: List[] = []): Promise<void> {
   await page.evaluate(
     ([data, listsData]) => {
-      localStorage.setItem('shkriuss:tasks', JSON.stringify({ v: 1, data }));
+      localStorage.setItem('shkriuss:tasks', JSON.stringify({ v: 2, data }));
       localStorage.setItem('shkriuss:task-lists', JSON.stringify({ v: 1, data: listsData }));
     },
     [{ tasks: tasks.map(sample) }, { lists }] as const,

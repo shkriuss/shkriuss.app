@@ -10,7 +10,9 @@ import {
   emptyTasks,
   formatDay,
   isTasksState,
+  MAX_STEPS,
   MAX_TASKS,
+  migrateTasks,
   moveTasks,
   newTask,
   nextDate,
@@ -23,8 +25,10 @@ import {
   removeTask,
   removeTasks,
   reopenTask,
+  stepsText,
   taskFromDraft,
   tasksCount,
+  tickStep,
   updateTask,
   whenOf,
   type Task,
@@ -38,6 +42,7 @@ const TODAY = '2026-10-20';
 const draft = (changes: Partial<TaskDraft> = {}): TaskDraft => ({
   title: 'Pay rent',
   notes: '',
+  steps: [],
   list: NO_LIST,
   important: false,
   date: '',
@@ -92,6 +97,7 @@ describe('the form', () => {
       id: 'a',
       title: 'Pay rent',
       notes: 'Transfer to the landlord',
+      steps: [],
       list: 'home',
       important: true,
       date: '2026-11-01',
@@ -109,6 +115,35 @@ describe('the form', () => {
     // Unknown choices fall back to safe ones.
     const odd = taskFromDraft(draft({ date: TODAY, repeat: 'hourly', reminder: '7' }), 'b', 1);
     expect([odd.repeat, odd.reminder]).toEqual(['none', null]);
+  });
+
+  it('keeps the steps written, without empty ones', () => {
+    const trip = taskFromDraft(
+      draft({
+        title: 'Prepare for the trip',
+        steps: [
+          { id: 's1', title: ' Book the hotel ', done: true },
+          { id: 's2', title: '   ', done: false },
+          { id: 's3', title: 'Pack', done: false },
+        ],
+      }),
+      't',
+      1,
+    );
+    expect(trip.steps).toEqual([
+      { id: 's1', title: 'Book the hotel', done: true },
+      { id: 's3', title: 'Pack', done: false },
+    ]);
+    expect(stepsText(trip)).toBe('1 of 2 steps');
+    expect(stepsText({ ...trip, steps: trip.steps.slice(0, 1) })).toBe('1 of 1 step');
+    expect(stepsText(task())).toBe('');
+    // Up to MAX_STEPS.
+    const many = Array.from({ length: MAX_STEPS + 5 }, (_, index) => ({
+      id: `s${index}`,
+      title: `Step ${index}`,
+      done: false,
+    }));
+    expect(taskFromDraft(draft({ steps: many }), 'm', 1).steps).toHaveLength(MAX_STEPS);
   });
 
   it('adds a task with just a title', () => {
@@ -152,13 +187,48 @@ describe('changes', () => {
     expect(reopenTask(state, rent.id, 7000).tasks).toEqual([{ ...rent, updated: 7000 }]);
   });
 
+  it('ticks steps', () => {
+    const trip = task({
+      title: 'Prepare for the trip',
+      steps: [
+        { id: 'hotel', title: 'Book the hotel', done: false },
+        { id: 'pack', title: 'Pack', done: false },
+      ],
+    });
+    const state = tickStep(stateOf(trip), trip.id, 'hotel', true, 5000);
+    expect(state.tasks[0]).toEqual({
+      ...trip,
+      steps: [
+        { id: 'hotel', title: 'Book the hotel', done: true },
+        { id: 'pack', title: 'Pack', done: false },
+      ],
+      updated: 5000,
+    });
+    // Nothing to change: the same state.
+    expect(tickStep(state, trip.id, 'hotel', true, 6000)).toBe(state);
+    expect(tickStep(state, trip.id, 'gone', true, 6000)).toBe(state);
+    expect(tickStep(state, trip.id, 'hotel', false, 7000).tasks[0]?.steps[0]?.done).toBe(false);
+  });
+
   it('moves a repeating task on to its next date, keeping a done copy', () => {
-    const plants = task({ title: 'Water plants', date: TODAY, repeat: 'weekly', reminder: '0' });
+    const plants = task({
+      title: 'Water plants',
+      date: TODAY,
+      repeat: 'weekly',
+      reminder: '0',
+      steps: [{ id: 'balcony', title: 'Balcony', done: true }],
+    });
     const { state, next } = completeTask(stateOf(plants), plants.id, 5000, TODAY, 'copy');
     expect(next).toBe('2026-10-27');
     expect(state.tasks).toEqual([
       { ...plants, id: 'copy', repeat: 'none', done: 5000, created: 5000, updated: 5000 },
-      { ...plants, date: '2026-10-27', updated: 5000 },
+      // Its steps start again.
+      {
+        ...plants,
+        date: '2026-10-27',
+        steps: [{ id: 'balcony', title: 'Balcony', done: false }],
+        updated: 5000,
+      },
     ]);
   });
 
@@ -188,11 +258,21 @@ describe('changes', () => {
     expect(moved.tasks.map((entry) => entry.list)).toEqual([NO_LIST, 'work']);
   });
 
+  it('reads tasks saved before there were steps', () => {
+    const { steps: _, ...old } = task({ title: 'From version 1' });
+    const migrated = migrateTasks({ tasks: [old] }, 1);
+    expect(migrated?.tasks).toEqual([{ ...old, steps: [] }]);
+    expect(isTasksState(migrated)).toBe(true);
+    expect(migrateTasks({ tasks: [old] }, 7)).toBeUndefined();
+    expect(migrateTasks({}, 1)).toBeUndefined();
+  });
+
   it('checks saved data', () => {
     expect(isTasksState(stateOf(task({ date: TODAY, time: '09:30', reminder: '10' })))).toBe(true);
     expect(isTasksState({ tasks: [{ ...task(), repeat: 'hourly' }] })).toBe(false);
     expect(isTasksState({ tasks: [{ ...task(), reminder: 7 }] })).toBe(false);
     expect(isTasksState({ tasks: [{ ...task(), date: 'tomorrow' }] })).toBe(false);
+    expect(isTasksState({ tasks: [{ ...task(), steps: [{ id: 's', title: 'x' }] }] })).toBe(false);
     expect(isTasksState({})).toBe(false);
   });
 });
