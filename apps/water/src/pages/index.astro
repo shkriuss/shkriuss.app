@@ -1,0 +1,384 @@
+---
+/**
+ * Water: today's total against the daily goal, quick "Glass" and "Bottle"
+ * buttons (and any other amount), today's drinks, the last 7 days, the goal
+ * and sizes, and reminders. Behaviour: ../scripts/water.ts and
+ * ../scripts/reminders.ts.
+ */
+import { AppShell, Button, DataControls, Icon, PushControls, SyncControls } from '@shkriuss/ui';
+import { DEFAULT_REMINDERS, EVERY_CHOICES, everyLabel } from '../lib/water.ts';
+---
+
+<AppShell>
+  <div class="stack stack--lg">
+    <header class="stack stack--sm">
+      <h1>Water</h1>
+      <p class="lead">Drink enough water each day. What you drink is saved on this device.</p>
+    </header>
+
+    <section class="card stack" aria-labelledby="today-heading">
+      <div class="stack stack--sm">
+        <h2 id="today-heading">Today</h2>
+        <p class="muted" data-date></p>
+      </div>
+      <p class="total">
+        <span class="total__amount" data-total>
+          0 ml
+        </span>
+        <span class="muted">
+          of <span data-goal>2,000 ml</span>
+        </span>
+      </p>
+      <progress
+        class="progress total__progress"
+        max="2000"
+        value="0"
+        aria-label="Today’s goal"
+        data-progress
+      ></progress>
+      <p class="total__left" data-left></p>
+      <div class="quick">
+        <Button variant="primary" size="lg" icon="plus" data-add="glass">
+          <span>Glass</span>
+          <span class="quick__size" data-size="glass">
+            250 ml
+          </span>
+        </Button>
+        <Button variant="primary" size="lg" icon="plus" data-add="bottle">
+          <span>Bottle</span>
+          <span class="quick__size" data-size="bottle">
+            500 ml
+          </span>
+        </Button>
+        <Button size="lg" data-action="other">
+          Other amount
+        </Button>
+      </div>
+      <p class="muted" data-none>
+        Nothing yet today.
+      </p>
+      <ul role="list" class="drinks" aria-label="Today’s drinks" data-drinks></ul>
+    </section>
+
+    <section class="stack" aria-labelledby="history-heading">
+      <h2 id="history-heading">Last 7 days</h2>
+      <p class="history__streak" data-streak hidden></p>
+      <p class="muted" data-average></p>
+      <ul role="list" class="days" data-days></ul>
+    </section>
+
+    <section class="stack" aria-labelledby="settings-heading">
+      <h2 id="settings-heading">Goal and sizes</h2>
+      <form class="stack" data-settings-form novalidate>
+        <fieldset class="stack stack--sm">
+          <legend class="field__label">Units</legend>
+          <div class="cluster units">
+            <label class="check">
+              <input type="radio" name="unit" value="ml" />
+              <span>Millilitres (ml)</span>
+            </label>
+            <label class="check">
+              <input type="radio" name="unit" value="oz" />
+              <span>US fluid ounces (fl oz)</span>
+            </label>
+          </div>
+        </fieldset>
+        <div class="field-row">
+          {(
+            [
+              ['goal', 'Daily goal'],
+              ['glass', 'Glass'],
+              ['bottle', 'Bottle'],
+            ] as const
+          ).map(([amount, label]) => (
+            <div class="field">
+              <label class="field__label" for={`setting-${amount}`}>
+                {label} (<span data-unit-label>ml</span>)
+              </label>
+              <input
+                class="input"
+                id={`setting-${amount}`}
+                name={amount}
+                type="number"
+                inputmode="decimal"
+                step="any"
+                aria-describedby={`setting-${amount}-error`}
+                data-amount={amount}
+              />
+              <p class="field__error" id={`setting-${amount}-error`} data-error-for={amount} />
+            </div>
+          ))}
+        </div>
+      </form>
+    </section>
+
+    <section class="stack" aria-labelledby="reminders-heading">
+      <div class="stack stack--sm">
+        <h2 id="reminders-heading">Reminders</h2>
+        <p class="muted">
+          Get reminded to drink during the day. Once you reach your goal, there are no more
+          reminders that day.
+        </p>
+        <p class="muted">
+          With sync on, your reminders are the same on all your devices. Each device reminds you
+          once notifications are turned on there.
+        </p>
+      </div>
+      <label class="check">
+        <input type="checkbox" data-reminders-on />
+        <span>Remind me to drink</span>
+      </label>
+      <div class="field-row">
+        <div class="field">
+          <label class="field__label" for="reminder-every">
+            How often
+          </label>
+          <select class="input" id="reminder-every" data-reminder="every">
+            {EVERY_CHOICES.map((minutes) => (
+              <option value={minutes} selected={minutes === DEFAULT_REMINDERS.every}>
+                {everyLabel(minutes)}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div class="field">
+          <label class="field__label" for="reminder-from">
+            From
+          </label>
+          <input
+            class="input"
+            id="reminder-from"
+            type="time"
+            value={DEFAULT_REMINDERS.from}
+            aria-describedby="reminder-error"
+            data-reminder="from"
+          />
+        </div>
+        <div class="field">
+          <label class="field__label" for="reminder-until">
+            Until
+          </label>
+          <input
+            class="input"
+            id="reminder-until"
+            type="time"
+            value={DEFAULT_REMINDERS.until}
+            aria-describedby="reminder-error"
+            data-reminder="until"
+          />
+        </div>
+      </div>
+      <p class="field__error" id="reminder-error" data-reminder-error></p>
+      <p data-notify-status>Notifications are off.</p>
+      <p data-notify-enable hidden>
+        <Button icon="bell" data-action="enable-notifications">
+          Turn on notifications
+        </Button>
+      </p>
+      <PushControls />
+    </section>
+
+    <SyncControls />
+
+    <DataControls />
+  </div>
+
+  <!-- Live region: tells screen reader users what changed. -->
+  <p class="visually-hidden" role="status" data-announcer></p>
+
+  <!-- One of today's drinks, copied by the script for each. -->
+  <template data-drink-template>
+    <li class="drink">
+      <span class="drink__time" data-time></span>
+      <span class="drink__amount" data-amount></span>
+      <button type="button" class="btn btn--ghost btn--icon" data-action="remove">
+        <Icon name="x" />
+      </button>
+    </li>
+  </template>
+
+  <!-- One of the last 7 days. -->
+  <template data-day-template>
+    <li class="day">
+      <div class="day__line">
+        <span class="day__name" data-day-name></span>
+        <span class="day__total">
+          <span data-day-total></span>
+          <span class="day__reached" data-day-reached>
+            <Icon name="check" />
+            <span class="visually-hidden">, goal reached</span>
+          </span>
+        </span>
+      </div>
+      <progress class="progress" aria-hidden="true" data-day-progress></progress>
+    </li>
+  </template>
+
+  <dialog class="dialog" aria-labelledby="other-title" data-other-dialog>
+    <form class="stack" data-other-form novalidate>
+      <h2 id="other-title">Add a drink</h2>
+      <div class="field">
+        <label class="field__label" for="other-amount">
+          Amount (<span data-unit-label>ml</span>)
+        </label>
+        <input
+          class="input other__amount"
+          id="other-amount"
+          name="amount"
+          type="number"
+          inputmode="decimal"
+          step="any"
+          aria-describedby="other-amount-error"
+          required
+        />
+        <p class="field__error" id="other-amount-error" data-error-for="amount"></p>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label class="field__label" for="other-day">
+            Day
+          </label>
+          <select class="input" id="other-day" name="day" data-other-day></select>
+        </div>
+        <div class="field">
+          <label class="field__label" for="other-time">
+            Time
+          </label>
+          <input
+            class="input"
+            id="other-time"
+            name="time"
+            type="time"
+            aria-describedby="other-time-error"
+            required
+          />
+          <p class="field__error" id="other-time-error" data-error-for="time"></p>
+        </div>
+      </div>
+      <p class="field__error" data-error-for="day"></p>
+      <div class="cluster">
+        <Button type="submit" variant="primary">
+          Add
+        </Button>
+        <Button data-action="cancel">Cancel</Button>
+      </div>
+    </form>
+  </dialog>
+</AppShell>
+
+<script>
+  import { mountWater } from '../scripts/water.ts';
+
+  mountWater(document);
+</script>
+
+<style>
+  .total {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-2);
+  }
+
+  .total__amount {
+    font-size: var(--text-3xl);
+    font-weight: var(--weight-bold);
+    line-height: 1.1;
+  }
+
+  .total__progress {
+    height: 1rem;
+  }
+
+  .total__left {
+    font-weight: var(--weight-semibold);
+  }
+
+  .quick {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
+    gap: var(--space-2);
+  }
+
+  .quick__size {
+    font-weight: var(--weight-normal);
+  }
+
+  .drinks {
+    display: flex;
+    flex-direction: column;
+    border-block-start: var(--border-width) solid var(--color-border);
+  }
+
+  .drink {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding-block: var(--space-1);
+    border-block-end: var(--border-width) solid var(--color-border);
+  }
+
+  .drink__time {
+    min-inline-size: 5.5rem;
+    color: var(--color-text-muted);
+  }
+
+  .drink__amount {
+    flex: 1;
+    font-weight: var(--weight-semibold);
+  }
+
+  .history__streak {
+    font-weight: var(--weight-semibold);
+  }
+
+  .days {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .day {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  .day__line {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: var(--space-2);
+  }
+
+  .day__total {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    font-weight: var(--weight-semibold);
+  }
+
+  .day__reached {
+    display: inline-flex;
+    color: var(--color-accent);
+  }
+
+  .day__reached svg {
+    width: 1.1em;
+    height: 1.1em;
+  }
+
+  .units {
+    --cluster-gap: var(--space-1) var(--space-4);
+  }
+
+  .other__amount {
+    max-inline-size: 12rem;
+  }
+
+  fieldset {
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+</style>
