@@ -2,11 +2,15 @@
  * Grammar's page behaviour: saves the text and settings on the device, sends
  * the text to the checker (checker.worker.ts, on this device) as it's typed,
  * and shows what it finds. Tapping a fix changes the text. Deep check, the
- * optional AI model, is in deep-check.ts.
+ * optional AI model, is in deep-check.ts. With sync on, the English choice
+ * and the dictionary sync between devices; the text stays here.
  */
 import { createStore } from '@shkriuss/storage';
+import { createSync, syncedStore } from '@shkriuss/sync';
 import { offlineCopySaved } from '@shkriuss/ui/service-worker';
+import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { startWorker } from '@shkriuss/ui/worker';
+import { site } from 'virtual:shkriuss/site';
 import {
   addWord,
   applyFix,
@@ -19,6 +23,8 @@ import {
   MAX_SHOWN,
   removeWord,
   summary,
+  syncedSettings,
+  withSyncedSettings,
   wordToAdd,
   type English,
   type FromChecker,
@@ -226,7 +232,17 @@ export function mountGrammar(root: Document): void {
 
   function setWords(words: string[]): void {
     save({ ...state, words });
+    sync.changed();
     tell({ type: 'words', words });
+    renderWords();
+    check();
+  }
+
+  /** The English choice or the dictionary changed elsewhere (another tab or device). */
+  function settingsChanged(): void {
+    for (const radio of radios) radio.checked = radio.value === state.english;
+    tell({ type: 'english', english: state.english });
+    tell({ type: 'words', words: state.words });
     renderWords();
     check();
   }
@@ -264,6 +280,7 @@ export function mountGrammar(root: Document): void {
       if (!radio.checked) return;
       const english = radio.value as English;
       save({ ...state, english });
+      sync.changed();
       tell({ type: 'english', english });
       check();
     });
@@ -357,12 +374,20 @@ export function mountGrammar(root: Document): void {
       textarea.value = state.text;
       deep.textChanged();
     }
-    for (const radio of radios) radio.checked = radio.value === state.english;
-    tell({ type: 'english', english: state.english });
-    tell({ type: 'words', words: state.words });
-    renderWords();
-    check();
+    settingsChanged();
   });
+
+  // Sync between devices through the shkriuss account (if turned on).
+  const sync = createSync({
+    app: site.slug,
+    stores: [syncedStore({ store, items: syncedSettings, withItems: withSyncedSettings })],
+    onChange: () => {
+      // Only settings come in: the text box keeps what's being typed.
+      state = { ...store.load(), text: state.text };
+      settingsChanged();
+    },
+  });
+  mountSyncControls(required<HTMLElement>(root, '[data-sync-controls]'), sync);
 
   // ---------- Start ----------
 

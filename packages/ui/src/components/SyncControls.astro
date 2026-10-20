@@ -8,6 +8,13 @@
  *   import { mountSyncControls } from '@shkriuss/ui/sync-controls';
  *   const sync = createSync({ app: 'tally', stores: [syncedStore({ … })], onChange: render });
  *   mountSyncControls(document.querySelector('[data-sync-controls]'), sync);
+ *
+ * If only some of the app's data syncs, say what with `what`, and anything
+ * else to know in the slot:
+ *
+ *   <SyncControls what="your dictionary">
+ *     <p class="muted">Your text isn't synced.</p>
+ *   </SyncControls>
  */
 import { hubOrigin, site } from 'virtual:shkriuss/site';
 import Button from './Button.astro';
@@ -15,9 +22,11 @@ import Button from './Button.astro';
 interface Props {
   /** Heading level (default 2). */
   level?: 2 | 3;
+  /** What syncs, if not all of the app's data, e.g. "your dictionary". */
+  what?: string;
 }
 
-const { level = 2 } = Astro.props;
+const { level = 2, what = site.name } = Astro.props;
 const Heading = `h${level}` as 'h2' | 'h3';
 ---
 
@@ -25,7 +34,7 @@ const Heading = `h${level}` as 'h2' | 'h3';
   <Heading id="sync-heading">Sync between your devices</Heading>
   <div class="stack" data-sync-off>
     <p>
-      Keep {site.name} the same on your phone, tablet and computer with a free{' '}
+      Keep {what} the same on your phone, tablet and computer with a free{' '}
       <a href={`${hubOrigin}/account/`}>shkriuss account</a>. Your data is locked on your devices
       before it's sent, so only they can read it.
     </p>
@@ -49,6 +58,7 @@ const Heading = `h${level}` as 'h2' | 'h3';
       </Button>
     </div>
   </div>
+  <slot />
   <p class="muted" role="status" data-sync-status></p>
   <p class="muted">
     <a href={`${hubOrigin}/privacy/#sync`}>What sync sends, and where</a>

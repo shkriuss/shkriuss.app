@@ -18,6 +18,7 @@
     "@shkriuss/astro-config": "workspace:*",
     "@shkriuss/registry": "workspace:*",
     "@shkriuss/storage": "workspace:*",
+    "@shkriuss/sync": "workspace:*",
     "@shkriuss/ui": "workspace:*",
     "astro": "catalog:",
     "harper.js": "catalog:",

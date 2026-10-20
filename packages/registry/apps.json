@@ -86,10 +86,12 @@
         "The text you're checking, so it's still here when you come back",
         "Whether you write American or British English",
         "Words you added to your dictionary",
+        "If you turn on sync: a copy of your dictionary and your English choice (never your text) on Grammar's server, locked on your devices so only they can read it, and this device's sync key (never in backups)",
         "The Deep check model, if you download it (about 380 MB), so it works offline. You can remove it any time",
         "Your light or dark theme choice"
       ],
-      "webAssembly": true
+      "webAssembly": true,
+      "sync": true
     },
     {
       "slug": "shelf",

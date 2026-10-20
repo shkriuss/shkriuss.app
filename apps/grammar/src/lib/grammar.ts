@@ -169,6 +169,38 @@ export function addWord(words: readonly string[], word: string): string[] {
 export const removeWord = (words: readonly string[], word: string): string[] =>
   words.filter((entry) => entry !== word);
 
+// ---------- Sync ----------
+
+/**
+ * What syncs between devices (with the optional account): the English choice
+ * and the dictionary, as items with ids. The text isn't one of them, so it
+ * never leaves this device.
+ */
+export type SyncedSetting =
+  { id: 'english'; english: English } | { id: `word:${string}`; word: string };
+
+export const syncedSettings = (state: GrammarState): SyncedSetting[] => [
+  { id: 'english', english: state.english },
+  ...state.words.map((word): SyncedSetting => ({ id: `word:${word}`, word })),
+];
+
+/** `state` with the settings that came back from syncing (its text stays as it is). */
+export function withSyncedSettings(
+  state: GrammarState,
+  settings: readonly SyncedSetting[],
+): GrammarState {
+  let { english } = state;
+  const words = new Set<string>();
+  for (const setting of settings) {
+    if (setting.id === 'english') {
+      if (ENGLISHES.includes(setting.english)) english = setting.english;
+    } else if (typeof setting.word === 'string') {
+      words.add(setting.word);
+    }
+  }
+  return { ...state, english, words: [...words].sort((a, b) => a.localeCompare(b)) };
+}
+
 /** Messages from the page to the checker (scripts/checker.worker.ts). */
 export type ToChecker =
   | { type: 'start'; english: English; words: string[] }

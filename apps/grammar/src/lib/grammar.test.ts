@@ -14,8 +14,11 @@ import {
   plainMessage,
   removeWord,
   summary,
+  syncedSettings,
+  withSyncedSettings,
   wordToAdd,
   type Issue,
+  type SyncedSetting,
 } from './grammar.ts';
 
 /** An issue for `problem` where it first appears in `text`. */
@@ -154,5 +157,42 @@ describe('settings', () => {
     ]) {
       expect(isGrammarState(value), JSON.stringify(value)).toBe(false);
     }
+  });
+});
+
+describe('sync', () => {
+  const phone = { text: 'My secret diary entry.', english: 'british' as const, words: ['Tbilisi'] };
+
+  it('sends the English choice and the dictionary, never the text', () => {
+    const settings = syncedSettings(phone);
+    expect(settings).toEqual([
+      { id: 'english', english: 'british' },
+      { id: 'word:Tbilisi', word: 'Tbilisi' },
+    ]);
+    expect(JSON.stringify(settings)).not.toContain('secret');
+  });
+
+  it('takes the settings that come back, keeping this device’s text', () => {
+    const tablet = { text: 'A letter.', english: 'american' as const, words: ['Kutaisi'] };
+    const merged: SyncedSetting[] = [
+      { id: 'english', english: 'british' },
+      { id: 'word:Tbilisi', word: 'Tbilisi' },
+      { id: 'word:Daviti', word: 'Daviti' },
+    ];
+    expect(withSyncedSettings(tablet, merged)).toEqual({
+      text: 'A letter.',
+      english: 'british',
+      // In alphabetical order, as the dictionary keeps them; Kutaisi was deleted elsewhere.
+      words: ['Daviti', 'Tbilisi'],
+    });
+    expect(withSyncedSettings(tablet, syncedSettings(tablet))).toEqual(tablet);
+  });
+
+  it('ignores settings it can’t use', () => {
+    const odd = [
+      { id: 'english', english: 'canadian' },
+      { id: 'word:x', word: 1 },
+    ] as unknown as SyncedSetting[];
+    expect(withSyncedSettings(phone, odd)).toEqual({ ...phone, words: [] });
   });
 });

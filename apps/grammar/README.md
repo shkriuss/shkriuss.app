@@ -19,6 +19,11 @@ The checking is done by [Harper](https://github.com/automattic/harper)
   after typing stops, and applies fixes. On a first visit it starts the
   checker once the offline copy is saved (`offlineCopySaved()`), so the big
   file is downloaded once and then comes from that copy, offline too.
+- Sync ([ADR 0010](../../docs/adr/0010-account-and-sync.md)): with sync on,
+  the English choice and the dictionary sync between devices
+  (`syncedSettings` in `grammar.ts`; the newest change wins). The text never
+  does: it isn't one of the synced items, and typing sends nothing.
+  `src/worker.ts` runs the shared sync server; `e2e/sync.spec.ts` tests it.
 - `src/pages/index.astro`: the page, built from `@shkriuss/ui` components.
   `<template>`s hold the markup for one suggestion, one fix and one word.
 - `public/licenses/harper.txt`: Harper's licence (Apache 2.0), linked from
