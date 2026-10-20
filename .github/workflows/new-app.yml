@@ -65,6 +65,7 @@ on:
           - trash
           - upload
           - user
+          - utensils
           - x
       color:
         description: 'Icon colour'

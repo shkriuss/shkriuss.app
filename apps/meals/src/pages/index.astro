@@ -1,0 +1,518 @@
+---
+/**
+ * Meals: the week's plan (what you'll eat each day, at breakfast, lunch,
+ * dinner or as a snack), the shopping list made from it, and your meals with
+ * their ingredients. Behaviour: ../scripts/meals.ts.
+ */
+import { AppShell, Button, DataControls, Icon, SyncControls } from '@shkriuss/ui';
+import { LIMITS, MAX_INGREDIENTS, SLOTS, SLOT_LABELS } from '../lib/meals.ts';
+---
+
+<AppShell wide>
+  <div class="stack stack--lg">
+    <header class="stack stack--sm">
+      <h1>Meals</h1>
+      <p class="lead">
+        Plan your meals for the week, and what to buy for them. Saved on this device.
+      </p>
+    </header>
+
+    <section class="stack" aria-labelledby="week-heading">
+      <div class="stack stack--sm">
+        <h2 id="week-heading" tabindex="-1" data-week-heading>
+          This week
+        </h2>
+        <p class="muted" data-week-dates></p>
+      </div>
+      <div class="cluster week-nav">
+        <Button icon="chevron-left" data-action="previous-week">
+          <span>
+            Previous<span class="visually-hidden"> week</span>
+          </span>
+        </Button>
+        <Button data-action="next-week">
+          <span>
+            Next<span class="visually-hidden"> week</span>
+          </span>
+          <Icon name="chevron-right" />
+        </Button>
+        <Button data-action="this-week" hidden>
+          This week
+        </Button>
+      </div>
+      <p class="notice" data-message hidden></p>
+      <div class="cluster" data-copy-week hidden>
+        <p>Nothing planned yet.</p>
+        <Button icon="copy" data-action="copy-week">
+          Copy last week’s meals
+        </Button>
+      </div>
+      <ol role="list" class="days" data-days></ol>
+    </section>
+
+    <section class="stack" aria-labelledby="shopping-heading">
+      <div class="stack stack--sm">
+        <h2 id="shopping-heading">Shopping list</h2>
+        <p class="muted" data-shopping-for></p>
+      </div>
+      <p class="muted" data-shopping-empty>
+        Nothing to buy yet. Give your meals their ingredients, and they come here when you plan
+        them. Or add things yourself.
+      </p>
+      <ul role="list" class="shopping" data-shopping></ul>
+      <form class="add-form" data-extra-form novalidate>
+        <div class="field add-form__field">
+          <label class="field__label" for="extra">
+            Add to the list
+          </label>
+          <input
+            class="input"
+            id="extra"
+            type="text"
+            autocomplete="off"
+            enterkeyhint="done"
+            maxlength={LIMITS.ingredient}
+            placeholder="e.g. Milk"
+            aria-describedby="extra-error"
+            data-extra
+          />
+          <p class="field__error" id="extra-error" data-extra-error></p>
+        </div>
+        <Button type="submit" icon="plus" class="add-form__submit">
+          Add
+        </Button>
+      </form>
+      <div class="cluster">
+        <Button icon="copy" data-action="copy-list">
+          Copy the list
+        </Button>
+      </div>
+      <p class="muted" role="status" data-shopping-status></p>
+    </section>
+
+    <section class="stack" aria-labelledby="meals-heading">
+      <div class="stack stack--sm">
+        <h2 id="meals-heading">Your meals</h2>
+        <p class="muted">
+          Meals you make, with their ingredients. When you plan one, its ingredients go on the
+          shopping list.
+        </p>
+      </div>
+      <p>
+        <Button icon="plus" data-action="new-meal">
+          New meal
+        </Button>
+      </p>
+      <p class="muted" data-no-meals>
+        No meals yet.
+      </p>
+      <ul role="list" class="meal-list" data-meals></ul>
+    </section>
+
+    <SyncControls />
+
+    <DataControls />
+  </div>
+
+  <!-- Live region: tells screen reader users what happened. -->
+  <p class="visually-hidden" role="status" data-announcer></p>
+
+  <!-- Names to suggest when planning: your meals, and meals planned before. -->
+  <datalist id="meal-names" data-suggestions></datalist>
+
+  <!-- One day of the week, copied by the script. -->
+  <template data-day-template>
+    <li class="day" data-date>
+      <div class="day__head">
+        <h3 class="day__title" data-day-title>
+          Monday
+        </h3>
+        <span class="badge" data-today hidden>
+          Today
+        </span>
+      </div>
+      <ul role="list" class="day__meals" data-day-meals></ul>
+      <p class="muted" data-day-empty>
+        Nothing planned.
+      </p>
+      <p>
+        <Button variant="ghost" icon="plus" data-action="plan" class="day__add">
+          <span>
+            Add a meal<span class="visually-hidden" data-plan-day></span>
+          </span>
+        </Button>
+      </p>
+    </li>
+  </template>
+
+  <!-- One planned meal: what it is for, and its name to change it. -->
+  <template data-planned-template>
+    <li class="planned" data-id>
+      <span class="planned__slot" data-slot>
+        Dinner
+      </span>
+      <button
+        type="button"
+        class="planned__name"
+        aria-haspopup="dialog"
+        data-action="edit-planned"
+        data-name
+      >
+        Meal
+      </button>
+    </li>
+  </template>
+
+  <!-- One line of the shopping list. -->
+  <template data-row-template>
+    <li class="row" data-key>
+      <label class="row__check">
+        <input type="checkbox" data-row-done />
+        <span class="row__name" data-row-name>
+          Item
+        </span>
+        <span class="muted row__for" data-row-for></span>
+      </label>
+      <Button variant="ghost" icon="x" label="Remove" data-action="remove-extra" />
+    </li>
+  </template>
+
+  <!-- One of your meals. -->
+  <template data-meal-template>
+    <li class="meal" data-id>
+      <button type="button" class="meal__name" aria-haspopup="dialog" data-action="edit-meal">
+        Meal
+      </button>
+      <span class="muted meal__meta" data-meal-meta></span>
+    </li>
+  </template>
+
+  <dialog class="dialog" aria-labelledby="plan-title" data-plan-dialog>
+    <form class="stack" data-plan-form novalidate>
+      <h2 id="plan-title" data-plan-title>
+        Add a meal
+      </h2>
+
+      <div class="field">
+        <label class="field__label" for="plan-name">
+          Meal
+        </label>
+        <input
+          class="input"
+          id="plan-name"
+          name="name"
+          type="text"
+          list="meal-names"
+          autocomplete="off"
+          maxlength={LIMITS.name}
+          placeholder="e.g. Spaghetti bolognese"
+          aria-describedby="plan-name-hint plan-name-error"
+          required
+        />
+        <p class="field__hint" id="plan-name-hint" data-plan-hint></p>
+        <p class="field__error" id="plan-name-error" data-error-for="name"></p>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label class="field__label" for="plan-date">
+            Day
+          </label>
+          <select class="input" id="plan-date" name="date"></select>
+        </div>
+        <div class="field">
+          <label class="field__label" for="plan-slot">
+            For
+          </label>
+          <select class="input" id="plan-slot" name="slot">
+            {SLOTS.map((slot) => (
+              <option value={slot}>{SLOT_LABELS[slot]}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <p class="field__error" role="alert" data-error-for="form"></p>
+
+      <div class="cluster dialog__actions">
+        <Button type="submit" variant="primary">
+          Save
+        </Button>
+        <Button data-action="cancel-plan">Cancel</Button>
+        <Button variant="danger" icon="trash" data-action="remove-planned" class="dialog__delete">
+          Remove
+        </Button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="dialog" aria-labelledby="meal-title" data-meal-dialog>
+    <form class="stack" data-meal-form novalidate>
+      <h2 id="meal-title" data-meal-title>
+        New meal
+      </h2>
+
+      <div class="field">
+        <label class="field__label" for="meal-name">
+          Name
+        </label>
+        <input
+          class="input"
+          id="meal-name"
+          name="name"
+          type="text"
+          autocomplete="off"
+          maxlength={LIMITS.name}
+          placeholder="e.g. Spaghetti bolognese"
+          aria-describedby="meal-name-error"
+          required
+        />
+        <p class="field__error" id="meal-name-error" data-error-for="name"></p>
+      </div>
+
+      <div class="field">
+        <label class="field__label" for="meal-ingredients">
+          Ingredients (optional)
+        </label>
+        <p class="field__hint" id="meal-ingredients-hint">
+          One per line, like “500 g minced beef”. Up to {MAX_INGREDIENTS}.
+        </p>
+        <textarea
+          class="input"
+          id="meal-ingredients"
+          name="ingredients"
+          rows="6"
+          aria-describedby="meal-ingredients-hint meal-ingredients-error"
+        ></textarea>
+        <p class="field__error" id="meal-ingredients-error" data-error-for="ingredients"></p>
+      </div>
+
+      <div class="field">
+        <label class="field__label" for="meal-notes">
+          Notes (optional)
+        </label>
+        <p class="field__hint" id="meal-notes-hint">
+          How to make it, or where the recipe is.
+        </p>
+        <textarea
+          class="input"
+          id="meal-notes"
+          name="notes"
+          rows="4"
+          maxlength={LIMITS.notes}
+          aria-describedby="meal-notes-hint meal-notes-error"
+        ></textarea>
+        <p class="field__error" id="meal-notes-error" data-error-for="notes"></p>
+      </div>
+
+      <p class="field__error" role="alert" data-error-for="form"></p>
+
+      <div class="cluster dialog__actions">
+        <Button type="submit" variant="primary">
+          Save
+        </Button>
+        <Button data-action="cancel-meal">Cancel</Button>
+        <Button icon="calendar" data-action="plan-meal">
+          Plan it
+        </Button>
+        <Button variant="danger" icon="trash" data-action="delete-meal" class="dialog__delete">
+          Delete
+        </Button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="dialog" aria-labelledby="delete-title" data-delete-dialog>
+    <form method="dialog" class="stack">
+      <h2 id="delete-title">Delete this meal?</h2>
+      <p>
+        “<span data-delete-name></span>” will be removed from your meals. If it’s in your plan, it
+        stays there, without its ingredients.
+      </p>
+      <div class="cluster">
+        <Button type="submit" value="cancel">
+          Cancel
+        </Button>
+        <Button type="submit" variant="danger" value="confirm">
+          Delete
+        </Button>
+      </div>
+    </form>
+  </dialog>
+</AppShell>
+
+<script>
+  import { mountMeals } from '../scripts/meals.ts';
+
+  mountMeals(document);
+</script>
+
+<style>
+  .week-nav {
+    --cluster-gap: var(--space-2);
+  }
+
+  .days {
+    display: grid;
+    gap: var(--space-3);
+    /* Two or more columns on wide screens; one on phones. */
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr));
+  }
+
+  .day {
+    display: grid;
+    align-content: start;
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-4);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius);
+    background: var(--color-surface);
+  }
+
+  .day--today {
+    border-color: var(--color-accent);
+  }
+
+  .day__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .day__title {
+    font-size: var(--text-base);
+  }
+
+  .day__meals {
+    display: grid;
+  }
+
+  .planned {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-2);
+  }
+
+  .planned__slot {
+    flex: none;
+    width: 5.5rem;
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+  }
+
+  /* The name opens the planned meal: it reads as text, works as a button. */
+  .planned__name,
+  .meal__name {
+    min-height: var(--tap-target);
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    overflow-wrap: anywhere;
+    cursor: pointer;
+  }
+
+  .planned__name:hover,
+  .meal__name:hover {
+    color: var(--color-accent);
+  }
+
+  .day__add {
+    margin-inline-start: calc(-1 * var(--space-3));
+  }
+
+  .day [data-day-empty] {
+    font-size: var(--text-sm);
+  }
+
+  .add-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: start;
+    gap: var(--space-3);
+  }
+
+  .add-form__field {
+    flex: 1 1 14rem;
+    max-width: 32rem;
+  }
+
+  /* Line the button up with the input (label height + small gap). */
+  .add-form__submit {
+    margin-block-start: calc(var(--text-base) * var(--leading-normal) + var(--space-1));
+  }
+
+  .shopping {
+    display: grid;
+  }
+
+  .row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    border-block-end: var(--border-width) solid var(--color-border);
+  }
+
+  /* The box, with the name and what it's for under it; all of it can be tapped. */
+  .row__check {
+    display: grid;
+    flex: 1;
+    grid-template-columns: auto 1fr;
+    align-items: start;
+    gap: 0 var(--space-2);
+    min-height: var(--tap-target);
+    padding-block: var(--space-2);
+    overflow-wrap: anywhere;
+    cursor: pointer;
+  }
+
+  .row__check input {
+    grid-row: span 2;
+    width: 1.25rem;
+    height: 1.25rem;
+    margin: 0.15em 0 0;
+    accent-color: var(--color-accent);
+    cursor: pointer;
+  }
+
+  .row__for {
+    grid-column: 2;
+    font-size: var(--text-sm);
+  }
+
+  .row__for:empty {
+    display: none;
+  }
+
+  .row__check input:checked ~ .row__name {
+    color: var(--color-text-muted);
+    text-decoration: line-through;
+  }
+
+  .meal-list {
+    display: grid;
+  }
+
+  .meal {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 var(--space-3);
+    border-block-end: var(--border-width) solid var(--color-border);
+  }
+
+  .meal__name {
+    font-weight: var(--weight-semibold);
+  }
+
+  .meal__meta {
+    font-size: var(--text-sm);
+  }
+
+  .dialog__actions :global(.dialog__delete) {
+    margin-inline-start: auto;
+  }
+</style>
