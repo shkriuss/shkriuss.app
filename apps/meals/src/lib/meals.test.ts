@@ -5,8 +5,10 @@ import {
   addPlanned,
   copyWeek,
   defaultSlot,
+  dueReminders,
   emptyMeals,
   emptyPlan,
+  emptyReminders,
   emptyShopping,
   extraProblem,
   findMeal,
@@ -15,6 +17,7 @@ import {
   ingredientsText,
   isMealsState,
   isPlanState,
+  isRemindersState,
   isShoppingState,
   MAX_INGREDIENTS,
   mealDraftOf,
@@ -29,9 +32,13 @@ import {
   removeExtra,
   removeMeal,
   removePlanned,
+  REMINDER_BODY,
+  reminderNotices,
+  reminderTime,
   renamePlanned,
   secondVersion,
   setDone,
+  setReminder,
   shoppingList,
   shoppingText,
   sortedMeals,
@@ -41,6 +48,7 @@ import {
   weekDays,
   weekName,
   weekStartOf,
+  withReminders,
   type Meal,
   type MealsState,
   type Planned,
@@ -349,5 +357,71 @@ describe('shopping', () => {
     expect(
       isShoppingState({ items: [{ id: 'a', week: MONDAY, name: 'A', extra: 1, done: false }] }),
     ).toBe(false);
+  });
+});
+
+describe('reminders', () => {
+  const plan: PlanState = {
+    planned: [
+      planned('Lentil soup', '2026-10-21', 'dinner'),
+      planned('Salad', '2026-10-21', 'dinner'),
+      planned('Porridge', '2026-10-21', 'breakfast'),
+      planned('Porridge', '2026-10-22', 'breakfast'),
+      planned('Toast', '2026-10-20', 'breakfast'),
+      planned('Pizza', '2026-10-23', 'lunch'),
+    ],
+  };
+  let reminders = setReminder(emptyReminders(), 'dinner', '18:00');
+  reminders = setReminder(reminders, 'breakfast', '07:30');
+
+  it('keeps a time, or none, for each meal of the day', () => {
+    // Nothing until one is set, so a new device holds nothing to sync.
+    expect(emptyReminders().reminders).toEqual([]);
+    expect(reminderTime(reminders, 'dinner')).toBe('18:00');
+    expect(reminderTime(reminders, 'lunch')).toBeNull();
+    // Turned off: kept as off, so that syncs too.
+    expect(setReminder(reminders, 'dinner', null).reminders).toEqual([
+      { id: 'breakfast', time: '07:30' },
+      { id: 'dinner', time: null },
+    ]);
+    // Whatever comes back from syncing: each meal of the day at most once, in order.
+    expect(
+      withReminders([
+        { id: 'snack', time: '16:00' },
+        { id: 'lunch', time: 'noon' as never },
+      ]).reminders,
+    ).toEqual([
+      { id: 'lunch', time: null },
+      { id: 'snack', time: '16:00' },
+    ]);
+    expect(isRemindersState(reminders)).toBe(true);
+    expect(isRemindersState({ reminders: [{ id: 'tea', time: null }] })).toBe(false);
+  });
+
+  it('schedules what’s planned, at its meal’s time, from now on', () => {
+    const notices = reminderNotices(plan, reminders, '2026-10-21T10:00');
+    expect(notices.map((notice) => [notice.start, notice.title])).toEqual([
+      ['2026-10-21T18:00', 'Dinner: Lentil soup, Salad'],
+      ['2026-10-22T07:30', 'Breakfast: Porridge'],
+    ]);
+    expect(notices[0]).toEqual({
+      id: '2026-10-21~dinner',
+      start: '2026-10-21T18:00',
+      repeat: 'none',
+      until: null,
+      offset: 0,
+      title: 'Dinner: Lentil soup, Salad',
+      body: REMINDER_BODY,
+      tag: '2026-10-21~dinner',
+      url: '/',
+    });
+    expect(reminderNotices(plan, emptyReminders(), '2026-10-21T10:00')).toEqual([]);
+  });
+
+  it('says which reminders are due', () => {
+    expect(dueReminders(plan, reminders, '2026-10-21T07:00', '2026-10-21T07:30')).toEqual([
+      { id: '2026-10-21~breakfast', title: 'Breakfast: Porridge' },
+    ]);
+    expect(dueReminders(plan, reminders, '2026-10-21T07:30', '2026-10-21T17:59')).toEqual([]);
   });
 });
