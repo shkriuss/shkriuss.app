@@ -34,7 +34,9 @@ Your to-do list, with dates, lists and reminders. Lives at
 - `src/scripts/reminders.ts`: reminders while Tasks is open, and, if "Also
   remind me when Tasks is closed" is on, through the shared notification
   service ([ADR 0009](../../docs/adr/0009-push-notifications.md)). Without a
-  time, a task is reminded about at 9:00.
+  time, a task is reminded about at 9:00. A reminder is part of its task, so
+  it syncs too; each device then uploads it to its own notification service,
+  the next time Tasks opens there (`e2e/sync.spec.ts` checks this).
 - `src/pages/index.astro`: the page, built from `@shkriuss/ui` components.
   `<template>`s hold the markup for a group, a task, a step (in the list and
   in the form) and a list button; the forms are dialogs.
