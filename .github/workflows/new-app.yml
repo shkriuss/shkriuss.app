@@ -38,6 +38,7 @@ on:
           - clock
           - copy
           - download
+          - droplet
           - external
           - grid
           - grip

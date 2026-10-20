@@ -1,0 +1,30 @@
+{
+  "name": "water",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The water app at water.shkriuss.app.",
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "wrangler dev --port 8787",
+    "typecheck": "astro check",
+    "deploy:production": "wrangler deploy",
+    "deploy:preview": "wrangler preview"
+  },
+  "dependencies": {
+    "@shkriuss/astro-config": "workspace:*",
+    "@shkriuss/dates": "workspace:*",
+    "@shkriuss/push": "workspace:*",
+    "@shkriuss/registry": "workspace:*",
+    "@shkriuss/server": "workspace:*",
+    "@shkriuss/storage": "workspace:*",
+    "@shkriuss/sync": "workspace:*",
+    "@shkriuss/ui": "workspace:*",
+    "astro": "catalog:"
+  },
+  "devDependencies": {
+    "@astrojs/check": "catalog:",
+    "typescript": "catalog:"
+  }
+}
