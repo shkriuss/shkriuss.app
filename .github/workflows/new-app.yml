@@ -31,13 +31,16 @@ on:
           - calendar
           - check
           - checklist
+          - chevron-down
           - chevron-left
           - chevron-right
+          - chevron-up
           - clock
           - copy
           - download
           - external
           - grid
+          - grip
           - heart
           - home
           - info

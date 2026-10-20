@@ -1,8 +1,9 @@
 ---
 /**
  * Tasks: a quick "Add" box, the tasks still to do grouped by when they're
- * due (overdue, today, tomorrow, later, no date) with their steps, your
- * lists, the done ones, and forms to change a task or a list. Behaviour: ../scripts/tasks.ts
+ * due (overdue, today, tomorrow, later, no date) or in your own order (moved
+ * by dragging), with their steps, your lists, the done ones, and forms to
+ * change a task or a list. Behaviour: ../scripts/tasks.ts
  * and ../scripts/reminders.ts.
  */
 import { AppShell, Button, DataControls, Icon, PushControls, SyncControls } from '@shkriuss/ui';
@@ -66,6 +67,19 @@ import {
             Rename or delete this list
           </Button>
         </p>
+        <div class="order">
+          <label class="field__label" for="order">
+            Order
+          </label>
+          <select class="input order__select" id="order" data-order>
+            <option value="date">By date</option>
+            <option value="mine">My order</option>
+          </select>
+        </div>
+        <p class="muted" id="move-hint" data-move-hint hidden>
+          Drag a task by its handle to move it. Or tap the handle for “Move up” and “Move down”, or
+          use the arrow keys on it.
+        </p>
       </div>
 
       <p class="muted" data-empty>
@@ -119,6 +133,11 @@ import {
     </div>
   </template>
 
+  <!-- The tasks in your own order ("My order"), copied by the script. -->
+  <template data-ordered-template>
+    <ul role="list" class="tasks" data-ordered></ul>
+  </template>
+
   <!-- One task, copied by the script for each task. -->
   <template data-task-template>
     <li class="task" data-id>
@@ -161,6 +180,22 @@ import {
           </summary>
           <ul role="list" class="steps__list" data-steps-list></ul>
         </details>
+      </div>
+      <!-- In "My order": the handle to drag it, and Move up / Move down. -->
+      <div class="task__order" data-order-controls hidden>
+        <div class="task__move" data-move-buttons hidden>
+          <Button variant="ghost" icon="chevron-up" label="Move up" data-action="move-up" />
+          <Button variant="ghost" icon="chevron-down" label="Move down" data-action="move-down" />
+        </div>
+        <button
+          type="button"
+          class="task__handle"
+          aria-expanded="false"
+          aria-describedby="move-hint"
+          data-handle
+        >
+          <Icon name="grip" />
+        </button>
       </div>
     </li>
   </template>
@@ -555,6 +590,62 @@ import {
     margin: 0;
     accent-color: var(--color-accent);
     cursor: pointer;
+  }
+
+  .order {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .order__select {
+    width: auto;
+  }
+
+  .task__order {
+    display: flex;
+    flex: none;
+    align-items: center;
+  }
+
+  .task__move {
+    display: flex;
+  }
+
+  /* Drag it by this: the page doesn't scroll while a finger moves it. */
+  .task__handle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--tap-target);
+    height: var(--tap-target);
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius);
+    background: none;
+    color: var(--color-text-muted);
+    cursor: grab;
+    touch-action: none;
+  }
+
+  .task__handle:active {
+    cursor: grabbing;
+  }
+
+  .task__handle :global(svg) {
+    width: 1.5rem;
+    height: 1.5rem;
+  }
+
+  .task--dragging {
+    border-color: var(--color-accent);
+    box-shadow: var(--shadow);
+  }
+
+  .tasks--dragging {
+    -webkit-user-select: none;
+    user-select: none;
   }
 
   .task__body {

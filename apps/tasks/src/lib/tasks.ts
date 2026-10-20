@@ -406,6 +406,26 @@ export function reopenTask(state: TasksState, id: string, now: number): TasksSta
   return updateTask(state, { ...task, done: null, updated: now });
 }
 
+/**
+ * Moves a task to just before or just after another one ("My order"). The
+ * order of the tasks themselves is the order you put them in; sync keeps it
+ * too (the newest order wins).
+ */
+export function moveTask(
+  state: TasksState,
+  id: string,
+  target: { before: string } | { after: string },
+): TasksState {
+  const task = state.tasks.find((entry) => entry.id === id);
+  const targetId = 'before' in target ? target.before : target.after;
+  if (!task || targetId === id || !state.tasks.some((entry) => entry.id === targetId)) {
+    return state;
+  }
+  const rest = state.tasks.filter((entry) => entry.id !== id);
+  const index = rest.findIndex((entry) => entry.id === targetId) + ('after' in target ? 1 : 0);
+  return { tasks: [...rest.slice(0, index), task, ...rest.slice(index)] };
+}
+
 /** Moves the tasks of a list that goes to another list (NO_LIST for none). */
 export function moveTasks(state: TasksState, from: string, to: string): TasksState {
   return { tasks: state.tasks.map((task) => (task.list === from ? { ...task, list: to } : task)) };
@@ -468,6 +488,30 @@ export function openGroups(
     tasks: open.filter((task) => whenOf(task, today) === when),
   })).filter((group) => group.tasks.length > 0);
 }
+
+/** How tasks still to do are shown: by date (grouped), or in your own order. */
+export const ORDERS = ['date', 'mine'] as const;
+export type Order = (typeof ORDERS)[number];
+
+/** Settings for this device only (not synced). */
+export interface ViewSettings {
+  order: Order;
+}
+
+export const VIEW_SETTINGS_VERSION = 1;
+export const defaultViewSettings = (): ViewSettings => ({ order: 'date' });
+
+export function isViewSettings(value: unknown): value is ViewSettings {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    oneOf((value as Record<string, unknown>)['order'], ORDERS)
+  );
+}
+
+/** The tasks still to do in a view, in your own order ("My order"): new ones come first. */
+export const orderedTasks = (state: TasksState, view: View): Task[] =>
+  state.tasks.filter((task) => task.done === null && inView(task, view));
 
 /** The done tasks in a view, the most recently done first. */
 export const doneTasks = (state: TasksState, view: View): Task[] =>

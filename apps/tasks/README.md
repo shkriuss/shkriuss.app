@@ -9,8 +9,10 @@ Your to-do list, with dates, lists and reminders. Lives at
   and time, a repeat (every day, weekday, week, month or year, or every so
   many: "every 2 weeks", up to 99), a reminder, a list and an "important"
   star. Saved on the device under `shkriuss:tasks` (data version 3; older
-  versions, without steps or "every", are read by `migrateTasks`). Tasks still to do are grouped by when they're due:
-  overdue, today, tomorrow, later, and no date. Ticking off a repeating
+  versions, without steps or "every", are read by `migrateTasks`). Tasks
+  still to do are grouped by when they're due (overdue, today, tomorrow,
+  later, no date), or shown in your own order ("My order": the order of the
+  saved tasks, so sync keeps it too; `moveTask`). Ticking off a repeating
   task moves it to its next date after today, with its steps unticked, and
   keeps a done copy.
 - `src/lib/lists.ts`: your lists ("Work", "Home"…), with tests
@@ -21,7 +23,12 @@ Your to-do list, with dates, lists and reminders. Lives at
   `@shkriuss/storage`. "Add" puts a task in what's shown (a list, or
   Important). Tapping a task's title opens its form, where steps are added,
   renamed, ticked and removed (kept only on "Save"). In the list, a task's
-  steps fold out under it and can be ticked there straight away.
+  steps fold out under it and can be ticked there straight away. In "My
+  order", a task is moved by dragging its handle (pointer events, so it
+  works with a finger, a mouse or a pen), by tapping the handle for "Move
+  up" and "Move down", or with the arrow keys on the handle. Whether the
+  list is by date or in your order is a setting for this device only
+  (`shkriuss:task-view`, not synced).
 - `src/scripts/reminders.ts`: reminders while Tasks is open, and, if "Also
   remind me when Tasks is closed" is on, through the shared notification
   service ([ADR 0009](../../docs/adr/0009-push-notifications.md)). Without a

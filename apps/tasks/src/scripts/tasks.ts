@@ -5,7 +5,9 @@
  * "Add" puts a task in what's being shown (a list, or Important). Ticking a
  * task's box marks it done (a repeating one moves on to its next date);
  * unticking it under "Done" brings it back. A task's steps fold out under
- * it and can be ticked there. Tapping a title opens the task.
+ * it and can be ticked there. Tapping a title opens the task. In "My order",
+ * tasks are moved by dragging their handle (or Move up / Move down, or the
+ * arrow keys on the handle); the order is the order of the saved tasks.
  * When sync is on, the newest change to each task and list wins.
  */
 import { today as todayOf } from '@shkriuss/dates';
@@ -30,6 +32,7 @@ import {
 import {
   addTask,
   completeTask,
+  defaultViewSettings,
   doneTasks,
   draftOf,
   draftProblems,
@@ -38,14 +41,17 @@ import {
   formatDay,
   inView,
   isTasksState,
+  isViewSettings,
   MAX_STEPS,
   MAX_TASKS,
   migrateTasks,
+  moveTask,
   moveTasks,
   newTask,
   NO_LIST,
   openGroups,
   openPerList,
+  orderedTasks,
   removeTask,
   removeTasks,
   reopenTask,
@@ -58,6 +64,7 @@ import {
   TASKS_VERSION,
   tickStep,
   updateTask,
+  VIEW_SETTINGS_VERSION,
   WHEN_LABELS,
   whenOf,
   type DraftField,
@@ -66,6 +73,7 @@ import {
   type TaskDraft,
   type TasksState,
   type View,
+  type ViewSettings,
   type When,
 } from '../lib/tasks.ts';
 import { mountReminders } from './reminders.ts';
@@ -85,6 +93,14 @@ const listsStore = createStore<ListsState>({
   validate: isListsState,
 });
 
+/** How tasks are shown on this device (by date or in your own order); not synced. */
+const viewStore = createStore<ViewSettings>({
+  key: 'task-view',
+  version: VIEW_SETTINGS_VERSION,
+  fallback: defaultViewSettings,
+  validate: isViewSettings,
+});
+
 const COULD_NOT_SAVE = 'Couldn’t save. Is this browser in private mode, or is storage blocked?';
 /** Form fields with a place for a problem, in the order they appear. */
 const FIELD_ORDER: DraftField[] = ['title', 'date', 'time', 'every'];
@@ -92,6 +108,11 @@ const FIELD_ORDER: DraftField[] = ['title', 'date', 'time', 'every'];
 const DELETE_TASKS = 'delete';
 /** How often to look for a new day (the groups change at midnight). */
 const NEW_DAY_CHECK_MS = 60_000;
+/** A handle has to move this far (px) before it counts as dragging, not a tap. */
+const DRAG_START_PX = 6;
+/** While dragging this close (px) to the top or bottom of the screen, it scrolls. */
+const SCROLL_EDGE_PX = 64;
+const SCROLL_STEP_PX = 16;
 
 function required<T extends Element>(root: ParentNode, selector: string): T {
   const element = root.querySelector<T>(selector);
@@ -122,6 +143,9 @@ export function mountTasks(root: Document): void {
   const stepTemplate = required<HTMLTemplateElement>(root, '[data-step-template]');
   const stepEditTemplate = required<HTMLTemplateElement>(root, '[data-step-edit-template]');
   const announcer = required<HTMLElement>(root, '[data-announcer]');
+  const orderSelect = required<HTMLSelectElement>(root, '[data-order]');
+  const moveHint = required<HTMLElement>(root, '[data-move-hint]');
+  const orderedTemplate = required<HTMLTemplateElement>(root, '[data-ordered-template]');
 
   const editor = required<HTMLDialogElement>(root, '[data-task-dialog]');
   const form = required<HTMLFormElement>(editor, '[data-task-form]');
@@ -151,7 +175,20 @@ export function mountTasks(root: Document): void {
   let tasks = tasksStore.load();
   let lists = listsStore.load();
   let view: View = 'all';
+  let settings = viewStore.load();
   let day = todayOf();
+  /** The task showing Move up / Move down, and the one being dragged. */
+  let movingId: string | null = null;
+  let drag: {
+    id: string;
+    row: HTMLElement;
+    list: HTMLElement;
+    pointerId: number;
+    startY: number;
+    moved: boolean;
+  } | null = null;
+  /** A drag ends with a click on the handle; that click isn't a tap. */
+  let suppressClick = false;
   /** The task open in the form, where focus goes back to, and the task just saved. */
   let editingId: string | null = null;
   let opener: HTMLElement | null = null;
@@ -234,6 +271,21 @@ export function mountTasks(root: Document): void {
       !task.important && task.date === null && task.repeat === 'none' && list === '';
     required<HTMLElement>(row, '[data-notes]').textContent = task.notes;
 
+    // In "My order": the handle, and Move up / Move down once it's tapped.
+    required<HTMLElement>(row, '[data-order-controls]').hidden = done || settings.order !== 'mine';
+    const handle = required<HTMLElement>(row, '[data-handle]');
+    handle.setAttribute('aria-label', `Move ${task.title}`);
+    handle.setAttribute('aria-expanded', String(movingId === task.id));
+    required<HTMLElement>(row, '[data-move-buttons]').hidden = movingId !== task.id;
+    required<HTMLElement>(row, '[data-action="move-up"]').setAttribute(
+      'aria-label',
+      `Move ${task.title} up`,
+    );
+    required<HTMLElement>(row, '[data-action="move-down"]').setAttribute(
+      'aria-label',
+      `Move ${task.title} down`,
+    );
+
     const steps = required<HTMLDetailsElement>(row, '[data-steps]');
     steps.hidden = task.steps.length === 0;
     steps.open = openSteps.has(task.id);
@@ -301,10 +353,26 @@ export function mountTasks(root: Document): void {
     viewHeading.textContent = viewName(view);
     editListButton.hidden = typeof view === 'string';
 
-    const groups = openGroups(tasks, view, day);
-    groupsBox.replaceChildren(...groups.map((group) => renderGroup(group.when, group.tasks)));
+    // Changes from elsewhere end a drag.
+    drag = null;
+    const mine = settings.order === 'mine';
+    orderSelect.value = settings.order;
+    moveHint.hidden = !mine;
+    let open: number;
+    if (mine) {
+      const ordered = orderedTasks(tasks, view);
+      const fragment = orderedTemplate.content.cloneNode(true) as DocumentFragment;
+      const list = required<HTMLElement>(fragment, '[data-ordered]');
+      list.replaceChildren(...ordered.map(renderTask));
+      groupsBox.replaceChildren(...(ordered.length > 0 ? [list] : []));
+      open = ordered.length;
+    } else {
+      const groups = openGroups(tasks, view, day);
+      groupsBox.replaceChildren(...groups.map((group) => renderGroup(group.when, group.tasks)));
+      open = groups.length;
+    }
     const done = doneTasks(tasks, view);
-    empty.hidden = groups.length > 0;
+    empty.hidden = open > 0;
     empty.textContent =
       done.length > 0 ? 'All done here.' : 'Nothing to do here. Add a task above.';
     doneSection.hidden = done.length === 0;
@@ -414,6 +482,146 @@ export function mountTasks(root: Document): void {
       if (task) openEditor(task);
     });
   }
+
+  // ---------- My order: dragging, Move up / Move down, arrow keys ----------
+
+  /** Moves a task, then puts focus back on the same control and says where it is. */
+  function commitMove(
+    task: Task,
+    target: { before: string } | { after: string },
+    focus: string,
+  ): void {
+    const next = moveTask(tasks, task.id, target);
+    if (next !== tasks) saveTasks(next);
+    control(task.id, focus)?.focus();
+    const ordered = orderedTasks(tasks, view);
+    const position = ordered.findIndex((entry) => entry.id === task.id) + 1;
+    announce(`${task.title}: ${position} of ${ordered.length}.`);
+  }
+
+  /** One place up (-1) or down (1) among the tasks shown. */
+  function moveBy(task: Task, step: -1 | 1, focus: string): void {
+    const ordered = orderedTasks(tasks, view);
+    const neighbour = ordered[ordered.findIndex((entry) => entry.id === task.id) + step];
+    if (!neighbour) {
+      announce(step < 0 ? `${task.title} is first already.` : `${task.title} is last already.`);
+      return;
+    }
+    commitMove(task, step < 0 ? { before: neighbour.id } : { after: neighbour.id }, focus);
+  }
+
+  const taskOf = (element: Element): Task | undefined =>
+    find(element.closest<HTMLElement>('[data-id]')?.dataset['id'] ?? null);
+
+  groupsBox.addEventListener('pointerdown', (event) => {
+    suppressClick = false;
+    const handle = (event.target as Element).closest<HTMLElement>('[data-handle]');
+    const row = handle?.closest<HTMLElement>('[data-id]');
+    if (!handle || !row?.parentElement || event.button !== 0) return;
+    drag = {
+      id: row.dataset['id'] ?? '',
+      row,
+      list: row.parentElement,
+      pointerId: event.pointerId,
+      startY: event.clientY,
+      moved: false,
+    };
+    handle.setPointerCapture(event.pointerId);
+  });
+
+  groupsBox.addEventListener('pointermove', (event) => {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    if (!drag.moved) {
+      if (Math.abs(event.clientY - drag.startY) < DRAG_START_PX) return;
+      drag.moved = true;
+      drag.row.classList.add('task--dragging');
+      drag.list.classList.add('tasks--dragging');
+    }
+    event.preventDefault();
+    // Past the middle of the task under the pointer: that task moves the
+    // other way, so the dragged one (and its handle) stays where it is.
+    for (const other of drag.list.children) {
+      if (other === drag.row || !(other instanceof HTMLElement)) continue;
+      const box = other.getBoundingClientRect();
+      if (event.clientY < box.top || event.clientY > box.bottom) continue;
+      const middle = box.top + box.height / 2;
+      const above =
+        (other.compareDocumentPosition(drag.row) & Node.DOCUMENT_POSITION_FOLLOWING) > 0;
+      if (above && event.clientY < middle) drag.list.insertBefore(other, drag.row.nextSibling);
+      else if (!above && event.clientY > middle) drag.list.insertBefore(other, drag.row);
+      break;
+    }
+    // Near the top or bottom of the screen: scroll, to reach tasks out of view.
+    // (Straight away, not smoothly, to keep up with the finger.)
+    if (event.clientY < SCROLL_EDGE_PX) {
+      window.scrollBy({ top: -SCROLL_STEP_PX, behavior: 'instant' });
+    } else if (event.clientY > window.innerHeight - SCROLL_EDGE_PX) {
+      window.scrollBy({ top: SCROLL_STEP_PX, behavior: 'instant' });
+    }
+  });
+
+  function endDrag(event: PointerEvent, cancelled: boolean): void {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    const { id, row, list, moved } = drag;
+    drag = null;
+    row.classList.remove('task--dragging');
+    list.classList.remove('tasks--dragging');
+    // Not moved: a tap, and the click that follows shows Move up / Move down.
+    if (!moved) return;
+    suppressClick = true;
+    const task = find(id);
+    if (cancelled || !task) {
+      render();
+      return;
+    }
+    const next = (row.nextElementSibling as HTMLElement | null)?.dataset['id'];
+    const previous = (row.previousElementSibling as HTMLElement | null)?.dataset['id'];
+    if (next) commitMove(task, { before: next }, '[data-handle]');
+    else if (previous) commitMove(task, { after: previous }, '[data-handle]');
+  }
+
+  groupsBox.addEventListener('pointerup', (event) => endDrag(event, false));
+  groupsBox.addEventListener('pointercancel', (event) => endDrag(event, true));
+
+  groupsBox.addEventListener('click', (event) => {
+    const clicked = (event.target as Element).closest<HTMLElement>(
+      '[data-handle], [data-action="move-up"], [data-action="move-down"]',
+    );
+    const task = clicked ? taskOf(clicked) : undefined;
+    if (!clicked || !task) return;
+    if (clicked.matches('[data-handle]')) {
+      if (suppressClick) {
+        suppressClick = false;
+        return;
+      }
+      movingId = movingId === task.id ? null : task.id;
+      render();
+      control(task.id, movingId ? '[data-action="move-up"]' : '[data-handle]')?.focus();
+      return;
+    }
+    const up = clicked.matches('[data-action="move-up"]');
+    moveBy(task, up ? -1 : 1, up ? '[data-action="move-up"]' : '[data-action="move-down"]');
+  });
+
+  groupsBox.addEventListener('keydown', (event) => {
+    const handle = (event.target as Element).closest<HTMLElement>('[data-handle]');
+    const task = handle ? taskOf(handle) : undefined;
+    if (!task || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) return;
+    event.preventDefault();
+    moveBy(task, event.key === 'ArrowUp' ? -1 : 1, '[data-handle]');
+  });
+
+  orderSelect.addEventListener('change', () => {
+    settings = { order: orderSelect.value === 'mine' ? 'mine' : 'date' };
+    viewStore.save(settings);
+    movingId = null;
+    render();
+    announce(
+      settings.order === 'mine'
+        ? 'Showing your own order. Drag a task by its handle to move it.'
+        : 'Showing tasks by date.',
+    );
+  });
 
   // ---------- What's shown ----------
 
@@ -805,7 +1013,9 @@ export function mountTasks(root: Document): void {
 
   // If Tasks is open in two tabs, keep them the same.
   window.addEventListener('storage', (event) => {
+    if (event.key === viewStore.key) settings = viewStore.load();
     if (event.key === tasksStore.key || event.key === listsStore.key) refresh();
+    else if (event.key === viewStore.key) render();
   });
 
   // At midnight, "Tomorrow" becomes "Today".
