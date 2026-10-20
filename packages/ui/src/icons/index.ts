@@ -11,6 +11,8 @@ export const icons = {
   bell: '<path d="M6 16v-5a6 6 0 0 1 12 0v5l1.5 2.5h-15L6 16Z"/><path d="M10 21h4"/>',
   calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
   check: '<path d="m5 12.5 4.5 4.5L19 7"/>',
+  checklist:
+    '<path d="m3.5 6.5 1.5 1.5 3-3M3.5 12.5 5 14l3-3M3.5 18.5 5 20l3-3M11.5 6.5H20M11.5 12.5H20M11.5 18.5H20"/>',
   'chevron-left': '<path d="m15 6-6 6 6 6"/>',
   'chevron-right': '<path d="m9 6 6 6-6 6"/>',
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
@@ -38,6 +40,7 @@ export const icons = {
     '<path d="m17 3 3 3-3 3"/><path d="M4 11V9a3 3 0 0 1 3-3h13"/><path d="m7 21-3-3 3-3"/><path d="M20 13v2a3 3 0 0 1-3 3H4"/>',
   reset: '<path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4 4v4.5h4.5"/>',
   shield: '<path d="M12 3 5 6v5c0 4.5 3 8.4 7 10 4-1.6 7-5.5 7-10V6l-7-3Z"/>',
+  star: '<path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9L12 3.5Z"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/>',
   tally: '<path d="M5.5 5v14M10 5v14M14.5 5v14M19 5v14"/><path d="M3 16.5 21 7.5"/>',
   'text-check': '<path d="M4 6h16M4 11h16M4 16h6"/><path d="m13 16.5 3 3 5.5-6.5"/>',

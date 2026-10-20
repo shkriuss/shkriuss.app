@@ -30,6 +30,7 @@ on:
           - bell
           - calendar
           - check
+          - checklist
           - chevron-left
           - chevron-right
           - clock
@@ -54,6 +55,7 @@ on:
           - repeat
           - reset
           - shield
+          - star
           - sun
           - tally
           - text-check

@@ -106,6 +106,24 @@
         "Your light or dark theme choice"
       ],
       "sync": true
+    },
+    {
+      "slug": "tasks",
+      "name": "Tasks",
+      "description": "Your to-do list, with due dates, lists and reminders. It stays on your device.",
+      "icon": "checklist",
+      "color": "teal",
+      "status": "live",
+      "storage": "device",
+      "dataStored": [
+        "Your tasks: their titles, notes, dates and times, how they repeat, reminders, lists, which are important and when you finished them",
+        "Your lists: their names",
+        "If you turn on reminders while Tasks is closed: this device's notification settings and a random device key (never in backups)",
+        "If you turn on sync: a copy of your tasks and lists on Tasks' server, locked on your devices so only they can read it, and this device's sync key (never in backups)",
+        "Your light or dark theme choice"
+      ],
+      "pushNotifications": true,
+      "sync": true
     }
   ]
 }
