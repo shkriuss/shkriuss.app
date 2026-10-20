@@ -2,10 +2,17 @@
 /**
  * Meals: the week's plan (what you'll eat each day, at breakfast, lunch,
  * dinner or as a snack), the shopping list made from it, and your meals with
- * their ingredients. Behaviour: ../scripts/meals.ts.
+ * their ingredients, and reminders of what's planned. Behaviour:
+ * ../scripts/meals.ts and ../scripts/reminders.ts.
  */
-import { AppShell, Button, DataControls, Icon, SyncControls } from '@shkriuss/ui';
-import { LIMITS, MAX_INGREDIENTS, SLOTS, SLOT_LABELS } from '../lib/meals.ts';
+import { AppShell, Button, DataControls, Icon, PushControls, SyncControls } from '@shkriuss/ui';
+import {
+  DEFAULT_REMINDER_TIMES,
+  LIMITS,
+  MAX_INGREDIENTS,
+  SLOTS,
+  SLOT_LABELS,
+} from '../lib/meals.ts';
 ---
 
 <AppShell wide>
@@ -107,6 +114,46 @@ import { LIMITS, MAX_INGREDIENTS, SLOTS, SLOT_LABELS } from '../lib/meals.ts';
         No meals yet.
       </p>
       <ul role="list" class="meal-list" data-meals></ul>
+    </section>
+
+    <section class="stack" aria-labelledby="reminders-heading">
+      <div class="stack stack--sm">
+        <h2 id="reminders-heading">Reminders</h2>
+        <p class="muted">
+          Get told what’s planned, at the time you choose for each meal. On days with nothing
+          planned for it, there’s no reminder.
+        </p>
+      </div>
+      <fieldset class="stack stack--sm">
+        <legend class="field__label">Remind me of</legend>
+        <ul role="list" class="reminders">
+          {SLOTS.map((slot) => (
+            <li class="reminder">
+              <label class="check reminder__check">
+                <input type="checkbox" data-reminder-on={slot} />
+                <span>{SLOT_LABELS[slot]}</span>
+              </label>
+              <label class="visually-hidden" for={`reminder-${slot}`}>
+                {SLOT_LABELS[slot]} reminder time
+              </label>
+              <input
+                class="input reminder__time"
+                id={`reminder-${slot}`}
+                type="time"
+                value={DEFAULT_REMINDER_TIMES[slot]}
+                data-reminder-time={slot}
+              />
+            </li>
+          ))}
+        </ul>
+      </fieldset>
+      <p data-notify-status>Notifications are off.</p>
+      <p data-notify-enable hidden>
+        <Button icon="bell" data-action="enable-notifications">
+          Turn on notifications
+        </Button>
+      </p>
+      <PushControls />
     </section>
 
     <SyncControls />
@@ -510,6 +557,33 @@ import { LIMITS, MAX_INGREDIENTS, SLOTS, SLOT_LABELS } from '../lib/meals.ts';
 
   .meal__meta {
     font-size: var(--text-sm);
+  }
+
+  fieldset {
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .reminders {
+    display: grid;
+    gap: var(--space-2);
+  }
+
+  .reminder {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2) var(--space-3);
+  }
+
+  .reminder__check {
+    min-width: 7rem;
+  }
+
+  .reminder__time {
+    width: auto;
   }
 
   .dialog__actions :global(.dialog__delete) {

@@ -2,7 +2,7 @@
  * Meals' data and rules, kept separate from the page so they're easy to test.
  * Every function returns new data instead of changing the old.
  *
- * Three lists, saved and synced separately:
+ * Four lists, saved and synced separately:
  * - your meals: dishes you make, each with its ingredients and notes;
  * - the plan: what you'll eat on a day, at breakfast, lunch, dinner or as a
  *   snack. A planned meal is just a name: it uses the ingredients of your
@@ -11,16 +11,22 @@
  * - shopping: what's ticked off on a week's shopping list, and what was
  *   added to it by hand. The list itself is made from that week's planned
  *   meals. A tick's id is made from the week and the ingredient, so ticking
- *   the same thing on two devices is the same tick, never a conflict.
+ *   the same thing on two devices is the same tick, never a conflict;
+ * - reminders: for each meal of the day, a time to be told what's planned.
  */
 import {
   addDays,
   compareDates,
   daysBetween,
   isIsoDate,
+  isIsoTime,
+  toStamp,
   weekday,
   type IsoDate,
+  type IsoTime,
+  type Stamp,
 } from '@shkriuss/dates';
+import type { Notice } from '@shkriuss/push';
 import { secondVersionName } from '@shkriuss/sync';
 
 export const LIMITS = { name: 100, ingredient: 100, notes: 5000 } as const;
@@ -515,6 +521,128 @@ export const shoppingText = (rows: readonly ShoppingRow[]): string =>
     .filter((row) => !row.done)
     .map(rowText)
     .join('\n');
+
+// ---------- Reminders ----------
+
+/** When to be told what's planned for a meal of the day (null: turned off). */
+export interface Reminder {
+  id: Slot;
+  time: IsoTime | null;
+}
+
+/**
+ * Only the meals of the day whose reminder was ever set: a device that never
+ * had one doesn't hold "off" for it, which could win over another device's
+ * time when the two first sync.
+ */
+export interface RemindersState {
+  reminders: Reminder[];
+}
+
+export const REMINDERS_VERSION = 1;
+/** The time offered when a reminder is turned on. */
+export const DEFAULT_REMINDER_TIMES: Record<Slot, IsoTime> = {
+  breakfast: '07:30',
+  lunch: '12:00',
+  dinner: '18:00',
+  snack: '16:00',
+};
+export const REMINDER_BODY = 'Tap to see today’s meals.';
+/** At most this many reminders go to the notification service (the soonest). */
+export const MAX_NOTICES = 100;
+
+/** What was saved or synced: each meal of the day at most once, in order. */
+export const withReminders = (items: readonly Reminder[]): RemindersState => ({
+  reminders: SLOTS.flatMap((id) => {
+    const item = items.find((entry) => entry.id === id);
+    if (!item) return [];
+    return [{ id, time: isIsoTime(item.time) ? item.time : null }];
+  }),
+});
+
+export const emptyReminders = (): RemindersState => ({ reminders: [] });
+
+export const isRemindersState = (value: unknown): value is RemindersState =>
+  typeof value === 'object' &&
+  value !== null &&
+  Array.isArray((value as RemindersState).reminders) &&
+  (value as RemindersState).reminders.every(
+    (item: unknown) =>
+      typeof item === 'object' &&
+      item !== null &&
+      isSlot((item as Reminder).id) &&
+      ((item as Reminder).time === null || isIsoTime((item as Reminder).time)),
+  );
+
+export const reminderTime = (state: RemindersState, slot: Slot): IsoTime | null =>
+  state.reminders.find((item) => item.id === slot)?.time ?? null;
+
+export const setReminder = (
+  state: RemindersState,
+  slot: Slot,
+  time: IsoTime | null,
+): RemindersState =>
+  withReminders([...state.reminders.filter((item) => item.id !== slot), { id: slot, time }]);
+
+/** What's planned for one meal of one day, and when to remind of it. */
+interface Due {
+  id: string;
+  at: Stamp;
+  /** "Dinner: Lentil soup, Salad" */
+  title: string;
+}
+
+/** Each day and meal of the day with something planned and a reminder, soonest first. */
+function remindersOf(plan: PlanState, reminders: RemindersState): Due[] {
+  const groups = new Map<string, Due>();
+  for (const entry of [...plan.planned].sort(bySlot)) {
+    const time = reminderTime(reminders, entry.slot);
+    if (time === null) continue;
+    const id = `${entry.date}~${entry.slot}`;
+    const due = groups.get(id);
+    if (due) due.title += `, ${entry.name}`;
+    else {
+      groups.set(id, {
+        id,
+        at: toStamp(entry.date, time),
+        title: `${SLOT_LABELS[entry.slot]}: ${entry.name}`,
+      });
+    }
+  }
+  return [...groups.values()].sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
+}
+
+/**
+ * The reminders still to come after `now`, for the notification service
+ * (@shkriuss/push): one for each day and meal of the day with something
+ * planned, at that meal's reminder time.
+ */
+export const reminderNotices = (plan: PlanState, reminders: RemindersState, now: Stamp): Notice[] =>
+  remindersOf(plan, reminders)
+    .filter((due) => due.at > now)
+    .slice(0, MAX_NOTICES)
+    .map((due) => ({
+      id: due.id,
+      start: due.at,
+      repeat: 'none',
+      until: null,
+      offset: 0,
+      title: due.title,
+      body: REMINDER_BODY,
+      tag: due.id,
+      url: '/',
+    }));
+
+/** The reminders whose time came after `from` and up to `to` (local times). */
+export const dueReminders = (
+  plan: PlanState,
+  reminders: RemindersState,
+  from: Stamp,
+  to: Stamp,
+): { id: string; title: string }[] =>
+  remindersOf(plan, reminders)
+    .filter((due) => from < due.at && due.at <= to)
+    .map(({ id, title }) => ({ id, title }));
 
 // ---------- Showing dates ----------
 

@@ -6,9 +6,11 @@
  * are): each day with what's planned, then that week's shopping list, then
  * your meals. "Add a meal" on a day plans something; tapping a planned meal
  * changes or removes it. A planned meal with the name of one of your meals
- * puts that meal's ingredients on the shopping list. When sync is on, the
- * newest change to each planned meal and shopping tick wins; a meal changed
- * on two devices at once is kept in both versions.
+ * puts that meal's ingredients on the shopping list. Reminders tell what's
+ * planned at the time chosen for each meal of the day (./reminders.ts). When
+ * sync is on, the newest change to each planned meal, shopping tick and
+ * reminder time wins; a meal changed on two devices at once is kept in both
+ * versions.
  */
 import { addDays, firstDayOfWeek, today as todayOf, type IsoDate } from '@shkriuss/dates';
 import { createStore } from '@shkriuss/storage';
@@ -20,9 +22,11 @@ import {
   addMeal,
   addPlanned,
   copyWeek,
+  DEFAULT_REMINDER_TIMES,
   defaultSlot,
   emptyMeals,
   emptyPlan,
+  emptyReminders,
   emptyShopping,
   extraProblem,
   findMeal,
@@ -31,6 +35,7 @@ import {
   ingredientsText,
   isMealsState,
   isPlanState,
+  isRemindersState,
   isShoppingState,
   mealDraftOf,
   mealFromDraft,
@@ -42,6 +47,8 @@ import {
   plannedOn,
   planProblems,
   pruneShopping,
+  REMINDERS_VERSION,
+  reminderTime,
   removeExtra,
   removeMeal,
   removePlanned,
@@ -49,10 +56,12 @@ import {
   rowText,
   secondVersion,
   setDone,
+  setReminder,
   SHOPPING_VERSION,
   SHOPPING_WEEKS_KEPT,
   shoppingList,
   shoppingText,
+  SLOTS,
   SLOT_LABELS,
   sortedMeals,
   suggestions,
@@ -61,6 +70,7 @@ import {
   weekDays,
   weekName,
   weekStartOf,
+  withReminders,
   type Meal,
   type MealDraft,
   type MealField,
@@ -69,10 +79,12 @@ import {
   type PlanDraft,
   type PlanField,
   type PlanState,
+  type RemindersState,
   type ShoppingRow,
   type ShoppingState,
   type Slot,
 } from '../lib/meals.ts';
+import { mountReminders } from './reminders.ts';
 
 const mealsStore = createStore<MealsState>({
   key: 'meals',
@@ -93,6 +105,14 @@ const shoppingStore = createStore<ShoppingState>({
   version: SHOPPING_VERSION,
   fallback: emptyShopping,
   validate: isShoppingState,
+});
+
+/** When to be reminded of what's planned (synced between devices). */
+const remindersStore = createStore<RemindersState>({
+  key: 'meal-reminders',
+  version: REMINDERS_VERSION,
+  fallback: emptyReminders,
+  validate: isRemindersState,
 });
 
 const COULD_NOT_SAVE = 'Couldn’t save. Is this browser in private mode, or is storage blocked?';
@@ -164,6 +184,7 @@ export function mountMeals(root: Document): void {
   let meals = mealsStore.load();
   let plan = planStore.load();
   let shopping = shoppingStore.load();
+  let reminders = remindersStore.load();
   /** What's on the shown week's shopping list, as last drawn. */
   let rows: ShoppingRow[] = [];
 
@@ -196,6 +217,7 @@ export function mountMeals(root: Document): void {
     plan = next;
     say(planStore.save(plan) ? null : COULD_NOT_SAVE);
     sync.changed();
+    reminderControls.changed();
   }
 
   function saveShopping(next: ShoppingState): void {
@@ -299,10 +321,61 @@ export function mountMeals(root: Document): void {
     );
   }
 
+  // ---------- Reminders ----------
+
+  const reminderControls = mountReminders(root, {
+    plan: () => plan,
+    reminders: () => reminders,
+    announce,
+  });
+
+  const reminderBox = (slot: Slot) =>
+    required<HTMLInputElement>(root, `[data-reminder-on="${slot}"]`);
+  const reminderInput = (slot: Slot) =>
+    required<HTMLInputElement>(root, `[data-reminder-time="${slot}"]`);
+
+  function renderReminders(): void {
+    for (const slot of SLOTS) {
+      const time = reminderTime(reminders, slot);
+      reminderBox(slot).checked = time !== null;
+      if (time !== null) reminderInput(slot).value = time;
+    }
+  }
+
+  function setReminderTime(slot: Slot, time: string | null): void {
+    reminders = setReminder(reminders, slot, time);
+    say(remindersStore.save(reminders) ? null : COULD_NOT_SAVE);
+    sync.changed();
+    reminderControls.changed();
+    renderReminders();
+    const saved = reminderTime(reminders, slot);
+    if (saved === null) {
+      announce(`No ${SLOT_LABELS[slot].toLowerCase()} reminder.`);
+    } else {
+      reminderControls.offerNotifications();
+      announce(`${SLOT_LABELS[slot]} reminder at ${saved}.`);
+    }
+  }
+
+  for (const slot of SLOTS) {
+    reminderBox(slot).addEventListener('change', () => {
+      const typed = reminderInput(slot).value;
+      setReminderTime(
+        slot,
+        reminderBox(slot).checked ? typed || DEFAULT_REMINDER_TIMES[slot] : null,
+      );
+    });
+    // Choosing a time turns the reminder on (clearing it turns it off).
+    reminderInput(slot).addEventListener('change', () => {
+      setReminderTime(slot, reminderInput(slot).value || null);
+    });
+  }
+
   function render(): void {
     renderWeek();
     renderShopping();
     renderMeals();
+    renderReminders();
   }
 
   function showWeek(start: IsoDate): void {
@@ -599,6 +672,8 @@ export function mountMeals(root: Document): void {
     meals = mealsStore.load();
     plan = planStore.load();
     shopping = shoppingStore.load();
+    reminders = remindersStore.load();
+    reminderControls.changed();
     render();
   }
 
@@ -618,7 +693,7 @@ export function mountMeals(root: Document): void {
   window.addEventListener('storage', (event) => {
     if (
       event.key === null ||
-      [mealsStore.key, planStore.key, shoppingStore.key].includes(event.key)
+      [mealsStore.key, planStore.key, shoppingStore.key, remindersStore.key].includes(event.key)
     ) {
       reload();
     }
@@ -644,6 +719,11 @@ export function mountMeals(root: Document): void {
         store: shoppingStore,
         items: (value) => value.items,
         withItems: (value, items) => ({ ...value, items }),
+      }),
+      syncedStore({
+        store: remindersStore,
+        items: (value) => value.reminders,
+        withItems: (_value, items) => withReminders(items),
       }),
     ],
     onChange: reload,
