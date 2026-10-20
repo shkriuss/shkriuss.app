@@ -49,7 +49,9 @@ import {
   removeTask,
   removeTasks,
   reopenTask,
-  REPEAT_SHORT,
+  repeatText,
+  everyUnit,
+  parseEvery,
   stepsText,
   taskFromDraft,
   tasksCount,
@@ -85,7 +87,7 @@ const listsStore = createStore<ListsState>({
 
 const COULD_NOT_SAVE = 'Couldn’t save. Is this browser in private mode, or is storage blocked?';
 /** Form fields with a place for a problem, in the order they appear. */
-const FIELD_ORDER: DraftField[] = ['title', 'date', 'time'];
+const FIELD_ORDER: DraftField[] = ['title', 'date', 'time', 'every'];
 /** When deleting a list: its tasks go too. */
 const DELETE_TASKS = 'delete';
 /** How often to look for a new day (the groups change at midnight). */
@@ -124,6 +126,8 @@ export function mountTasks(root: Document): void {
   const editor = required<HTMLDialogElement>(root, '[data-task-dialog]');
   const form = required<HTMLFormElement>(editor, '[data-task-form]');
   const listField = required<HTMLElement>(form, '[data-list-field]');
+  const everyField = required<HTMLElement>(form, '[data-every-field]');
+  const everyUnitText = required<HTMLElement>(form, '[data-every-unit]');
   const stepEditList = required<HTMLUListElement>(form, '[data-step-edit-list]');
   const newStep = required<HTMLInputElement>(form, '[data-new-step]');
   const stepError = required<HTMLElement>(form, '[data-step-error]');
@@ -219,7 +223,7 @@ export function mountTasks(root: Document): void {
     due.classList.toggle('task__due--overdue', !done && whenOf(task, day) === 'overdue');
     required<HTMLElement>(row, '[data-star]').hidden = !task.important;
     required<HTMLElement>(row, '[data-repeat-tag]').hidden = task.repeat === 'none';
-    required<HTMLElement>(row, '[data-repeat]').textContent = REPEAT_SHORT[task.repeat];
+    required<HTMLElement>(row, '[data-repeat]').textContent = repeatText(task.repeat, task.every);
     const reminder = !done && task.date !== null && task.reminder !== null;
     required<HTMLElement>(row, '[data-reminder-tag]').hidden = !reminder;
     // In a list, its name would only repeat the heading.
@@ -456,6 +460,7 @@ export function mountTasks(root: Document): void {
       date: value('date'),
       time: value('time'),
       repeat: value('repeat'),
+      every: value('every'),
       reminder: value('reminder'),
     };
   }
@@ -468,6 +473,8 @@ export function mountTasks(root: Document): void {
     stepError.textContent = '';
     renderStepEdits();
     field<HTMLSelectElement>('repeat').value = draft.repeat;
+    field<HTMLInputElement>('every').value = draft.every;
+    showEvery();
     field<HTMLSelectElement>('reminder').value = draft.reminder;
     field<HTMLInputElement>('important').checked = draft.important;
     const list = field<HTMLSelectElement>('list');
@@ -480,6 +487,17 @@ export function mountTasks(root: Document): void {
     if (list.value !== draft.list) list.value = NO_LIST;
     listField.hidden = lists.lists.length === 0;
   }
+
+  /** "Repeat every … weeks": only for repeats that count days, weeks, months or years. */
+  function showEvery(): void {
+    const repeat = field<HTMLSelectElement>('repeat').value;
+    const unit = everyUnit(repeat, parseEvery(field<HTMLInputElement>('every').value) ?? 2);
+    everyField.hidden = unit === '';
+    everyUnitText.textContent = unit;
+  }
+
+  field<HTMLSelectElement>('repeat').addEventListener('change', showEvery);
+  field<HTMLInputElement>('every').addEventListener('input', showEvery);
 
   // ---------- Steps in the form ----------
 

@@ -129,7 +129,7 @@ test('changes a task: its date, time, repeat, reminder and importance', async ({
   await expect(editor(page).getByText('Give it a title.')).toBeVisible();
   await editor(page).getByLabel('Title').fill('Pay the rent');
   await editor(page).getByLabel('Notes (optional)').fill('Transfer to the landlord');
-  await editor(page).getByLabel('Repeat').selectOption({ label: 'Every month' });
+  await editor(page).getByLabel('Repeat', { exact: true }).selectOption({ label: 'Monthly' });
   await editor(page).getByLabel('Remind me').selectOption({ label: '1 hour before' });
   await editor(page).getByLabel('Important').check();
   await editor(page).getByRole('button', { name: 'Save' }).click();
@@ -163,9 +163,43 @@ test('changes a task: its date, time, repeat, reminder and importance', async ({
   await rent.getByRole('button', { name: 'Edit Pay the rent' }).click();
   await expect(editor(page).getByLabel('Date (optional)')).toHaveValue('2026-11-20');
   await expect(editor(page).getByLabel('Time (optional)')).toHaveValue('17:00');
-  await expect(editor(page).getByLabel('Repeat')).toHaveValue('monthly');
+  await expect(editor(page).getByLabel('Repeat', { exact: true })).toHaveValue('monthly');
   await expect(editor(page).getByLabel('Remind me')).toHaveValue('60');
   await expect(editor(page).getByLabel('Important')).toBeChecked();
+});
+
+test('repeats every 2 weeks, or however often', async ({ page }) => {
+  await seed(page, [{ title: 'Clean the gutters', date: '2026-10-20' }]);
+  await page.getByRole('button', { name: 'Edit Clean the gutters' }).click();
+  const repeat = editor(page).getByLabel('Repeat', { exact: true });
+  const every = editor(page).getByLabel('Repeat every');
+  await expect(every).toBeHidden();
+  await repeat.selectOption({ label: 'Weekly' });
+  await expect(every).toBeVisible();
+  await expect(every).toHaveValue('1');
+  await expect(editor(page).locator('[data-every-unit]')).toHaveText('week');
+  await every.fill('0');
+  await editor(page).getByRole('button', { name: 'Save' }).click();
+  await expect(editor(page).getByText('Write a number from 1 to 99.')).toBeVisible();
+  await expect(every).toBeFocused();
+  await every.fill('2');
+  await expect(editor(page).locator('[data-every-unit]')).toHaveText('weeks');
+  await expect(editor(page).getByText('Write a number from 1 to 99.')).toBeHidden();
+  // Every weekday has nothing to count.
+  await repeat.selectOption({ label: 'Every weekday (Monday to Friday)' });
+  await expect(every).toBeHidden();
+  await repeat.selectOption({ label: 'Weekly' });
+  await expect(every).toHaveValue('2');
+  await editor(page).getByRole('button', { name: 'Save' }).click();
+
+  const gutters = page
+    .locator('[data-groups] [data-id]')
+    .filter({ has: page.getByRole('button', { name: 'Edit Clean the gutters' }) });
+  await expect(gutters.locator('[data-repeat]')).toHaveText('Every 2 weeks');
+  await box(page, 'Clean the gutters').click();
+  await expect(gutters.locator('[data-due]')).toHaveText('Tue, Nov 3');
+  await gutters.getByRole('button', { name: 'Edit Clean the gutters' }).click();
+  await expect(every).toHaveValue('2');
 });
 
 test('deletes a task, and done ones, with a confirmation', async ({ page }) => {
