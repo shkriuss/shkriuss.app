@@ -127,6 +127,23 @@
       ],
       "pushNotifications": true,
       "sync": true
+    },
+    {
+      "slug": "meals",
+      "name": "Meals",
+      "description": "Plan your meals for the week, and what to buy for them. Your plan stays on your device.",
+      "icon": "utensils",
+      "color": "red",
+      "status": "live",
+      "storage": "device",
+      "dataStored": [
+        "Your meal plan: what you'll eat on which day",
+        "Your meals: their names, ingredients and notes",
+        "Your shopping lists: what you added and what you ticked off (kept for 8 weeks)",
+        "If you turn on sync: a copy of all of these on Meals' server, locked on your devices so only they can read it, and this device's sync key (never in backups)",
+        "Your light or dark theme choice"
+      ],
+      "sync": true
     }
   ]
 }
