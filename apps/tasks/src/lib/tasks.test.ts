@@ -11,15 +11,18 @@ import {
   everyUnit,
   formatDay,
   isTasksState,
+  isViewSettings,
   MAX_STEPS,
   MAX_TASKS,
   migrateTasks,
+  moveTask,
   moveTasks,
   newTask,
   nextDate,
   NO_LIST,
   openGroups,
   openPerList,
+  orderedTasks,
   parseEvery,
   reminderAt,
   reminderNotices,
@@ -302,6 +305,17 @@ describe('changes', () => {
     ]);
   });
 
+  it('moves a task before or after another (My order)', () => {
+    const state = stateOf(...['A', 'B', 'C', 'D'].map((title) => task({ title }, title)));
+    expect(titles(moveTask(state, 'D', { before: 'B' }).tasks)).toEqual(['A', 'D', 'B', 'C']);
+    expect(titles(moveTask(state, 'A', { after: 'C' }).tasks)).toEqual(['B', 'C', 'A', 'D']);
+    expect(titles(moveTask(state, 'B', { after: 'D' }).tasks)).toEqual(['A', 'C', 'D', 'B']);
+    // Nothing to move: the same state.
+    expect(moveTask(state, 'A', { before: 'A' })).toBe(state);
+    expect(moveTask(state, 'gone', { before: 'A' })).toBe(state);
+    expect(moveTask(state, 'A', { after: 'gone' })).toBe(state);
+  });
+
   it('moves the tasks of a list that goes', () => {
     const rent = task({ list: 'home' });
     const report = task({ list: 'work' });
@@ -384,6 +398,16 @@ describe('showing them', () => {
         ['work', 1],
       ]),
     );
+  });
+
+  it('keeps your own order, without done ones', () => {
+    const first = task({ title: 'First', list: 'home' });
+    const second = { ...task({ title: 'Second' }), done: 5 };
+    const third = task({ title: 'Third', list: 'home', important: true });
+    expect(titles(orderedTasks(stateOf(first, second, third), 'all'))).toEqual(['First', 'Third']);
+    expect(titles(orderedTasks(stateOf(first, second, third), 'important'))).toEqual(['Third']);
+    expect(isViewSettings({ order: 'mine' })).toBe(true);
+    expect(isViewSettings({ order: 'random' })).toBe(false);
   });
 
   it('lists the most recently done first', () => {
