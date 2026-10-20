@@ -7,7 +7,14 @@
  */
 import { AppShell, Button, DataControls, Icon, PushControls, SyncControls } from '@shkriuss/ui';
 import { LIST_NAME_MAX } from '../lib/lists.ts';
-import { LIMITS, REMINDERS, REMINDER_LABELS, REPEATS, REPEAT_LABELS } from '../lib/tasks.ts';
+import {
+  LIMITS,
+  MAX_EVERY,
+  REMINDERS,
+  REMINDER_LABELS,
+  REPEATS,
+  REPEAT_LABELS,
+} from '../lib/tasks.ts';
 ---
 
 <AppShell wide>
@@ -322,6 +329,31 @@ import { LIMITS, REMINDERS, REMINDER_LABELS, REPEATS, REPEAT_LABELS } from '../l
             Without a time: at 9:00.
           </p>
         </div>
+      </div>
+
+      <div class="field" data-every-field hidden>
+        <label class="field__label" for="task-every">
+          Repeat every
+        </label>
+        <div class="every">
+          <input
+            class="input every__number"
+            id="task-every"
+            name="every"
+            type="text"
+            inputmode="numeric"
+            autocomplete="off"
+            maxlength="2"
+            aria-describedby="task-every-unit task-every-hint task-every-error"
+          />
+          <span id="task-every-unit" data-every-unit>
+            weeks
+          </span>
+        </div>
+        <p class="field__hint" id="task-every-hint">
+          For example, 2 for every other one. Up to {MAX_EVERY}.
+        </p>
+        <p class="field__error" id="task-every-error" data-error-for="every"></p>
       </div>
 
       <div class="field" data-list-field>
@@ -649,6 +681,17 @@ import { LIMITS, REMINDERS, REMINDER_LABELS, REPEATS, REPEAT_LABELS } from '../l
   .step input:checked + .step__title {
     color: var(--color-text-muted);
     text-decoration: line-through;
+  }
+
+  .every {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .every__number {
+    max-inline-size: 5rem;
+    text-align: center;
   }
 
   .step-add {

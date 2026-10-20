@@ -6,10 +6,10 @@ Your to-do list, with dates, lists and reminders. Lives at
 - `src/lib/tasks.ts`: the rules as plain functions, with unit tests next to
   them (`tasks.test.ts`). A task has a title, plus optional notes, steps
   (smaller things to do in it, each with its own tick, up to 50), a date
-  and time, a repeat (every day, weekday, week, month or year), a reminder,
-  a list and an "important" star. Saved on the device under
-  `shkriuss:tasks` (data version 2; version 1 had no steps and is read by
-  `migrateTasks`). Tasks still to do are grouped by when they're due:
+  and time, a repeat (every day, weekday, week, month or year, or every so
+  many: "every 2 weeks", up to 99), a reminder, a list and an "important"
+  star. Saved on the device under `shkriuss:tasks` (data version 3; older
+  versions, without steps or "every", are read by `migrateTasks`). Tasks still to do are grouped by when they're due:
   overdue, today, tomorrow, later, and no date. Ticking off a repeating
   task moves it to its next date after today, with its steps unticked, and
   keeps a done copy.

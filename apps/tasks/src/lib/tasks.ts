@@ -30,21 +30,36 @@ export type Repeat = (typeof REPEATS)[number];
 /** In the form. */
 export const REPEAT_LABELS: Record<Repeat, string> = {
   none: 'Doesn’t repeat',
-  daily: 'Every day',
+  daily: 'Daily',
   weekdays: 'Every weekday (Monday to Friday)',
-  weekly: 'Every week',
-  monthly: 'Every month',
-  yearly: 'Every year',
+  weekly: 'Weekly',
+  monthly: 'Monthly',
+  yearly: 'Yearly',
 };
-/** On the task in the list. */
-export const REPEAT_SHORT: Record<Repeat, string> = {
-  none: '',
-  daily: 'Every day',
-  weekdays: 'Weekdays',
-  weekly: 'Every week',
-  monthly: 'Every month',
-  yearly: 'Every year',
+
+/** Repeats that can skip some ("every 2 weeks"), and what they count. */
+export const EVERY_UNITS: Partial<Record<Repeat, [one: string, many: string]>> = {
+  daily: ['day', 'days'],
+  weekly: ['week', 'weeks'],
+  monthly: ['month', 'months'],
+  yearly: ['year', 'years'],
 };
+export const MAX_EVERY = 99;
+
+/** "day" or "days", for "Repeat every … days" in the form ("" if it doesn't count). */
+export function everyUnit(repeat: string, every: number): string {
+  const units = EVERY_UNITS[repeat as Repeat];
+  return units ? units[every === 1 ? 0 : 1] : '';
+}
+
+/** How a task repeats, on the task in the list: "Every week", "Every 2 weeks", "Weekdays". */
+export function repeatText(repeat: Repeat, every: number): string {
+  if (repeat === 'none') return '';
+  if (repeat === 'weekdays') return 'Weekdays';
+  return every === 1
+    ? `Every ${everyUnit(repeat, 1)}`
+    : `Every ${every} ${everyUnit(repeat, every)}`;
+}
 
 /** Reminders: minutes before the task's time. */
 export const REMINDERS = [0, 10, 30, 60, 1440] as const;
@@ -81,6 +96,8 @@ export interface Task {
   date: IsoDate | null;
   time: IsoTime | null;
   repeat: Repeat;
+  /** Every how many days, weeks, months or years it repeats (1 for "every week"). */
+  every: number;
   /** Minutes before its time to remind, or null for no reminder. */
   reminder: number | null;
   /** When it was done (ms since 1970), or null while it's still to do. */
@@ -94,8 +111,8 @@ export interface TasksState {
   tasks: Task[];
 }
 
-/** Version 2 added steps. */
-export const TASKS_VERSION = 2;
+/** Version 2 added steps; version 3, repeats like "every 2 weeks". */
+export const TASKS_VERSION = 3;
 export const MAX_TASKS = 5000;
 export const MAX_STEPS = 50;
 export const LIMITS = { title: 300, notes: 5000, step: 200 };
@@ -133,6 +150,8 @@ function isTask(value: unknown): value is Task {
     (task['date'] === null || isIsoDate(task['date'])) &&
     (task['time'] === null || isIsoTime(task['time'])) &&
     oneOf(task['repeat'], REPEATS) &&
+    Number.isInteger(task['every']) &&
+    (task['every'] as number) >= 1 &&
     (task['reminder'] === null || oneOf(task['reminder'], REMINDERS)) &&
     (task['done'] === null || isTime(task['done'])) &&
     isTime(task['created']) &&
@@ -153,13 +172,15 @@ export function isTasksState(value: unknown): value is TasksState {
 
 /** Turns tasks saved by an older version into today's shape (undefined if it can't). */
 export function migrateTasks(old: unknown, version: number): TasksState | undefined {
-  if (version !== 1 || typeof old !== 'object' || old === null) return undefined;
+  if (version < 1 || version > 2 || typeof old !== 'object' || old === null) return undefined;
   const { tasks } = old as Record<string, unknown>;
   if (!Array.isArray(tasks)) return undefined;
-  // Version 1 had no steps.
+  // Version 1 had no steps; neither version 1 nor 2 had "every".
   return {
     tasks: tasks.map((task: unknown) =>
-      typeof task === 'object' && task !== null ? { ...task, steps: [] } : task,
+      typeof task === 'object' && task !== null
+        ? { ...(version === 1 ? { steps: [] } : {}), ...task, every: 1 }
+        : task,
     ) as Task[],
   };
 }
@@ -177,11 +198,19 @@ export interface TaskDraft {
   date: string;
   time: string;
   repeat: string;
+  /** Every how many (days, weeks…), as typed. */
+  every: string;
   /** Minutes before, as text, or "" for none. */
   reminder: string;
 }
 
-export type DraftField = 'title' | 'date' | 'time' | 'form';
+export type DraftField = 'title' | 'date' | 'time' | 'every' | 'form';
+
+/** "Every" as typed: a whole number from 1 to MAX_EVERY, or undefined. */
+export function parseEvery(text: string): number | undefined {
+  const every = Number(text.trim());
+  return /^\d+$/.test(text.trim()) && every >= 1 && every <= MAX_EVERY ? every : undefined;
+}
 
 /** What's wrong with the form, by field (empty when it can be saved). */
 export function draftProblems(draft: TaskDraft): Partial<Record<DraftField, string>> {
@@ -197,6 +226,9 @@ export function draftProblems(draft: TaskDraft): Partial<Record<DraftField, stri
   if (draft.time !== '' && !isIsoTime(draft.time)) {
     problems.time = 'Choose a time, or leave it empty.';
   }
+  if (EVERY_UNITS[draft.repeat as Repeat] && parseEvery(draft.every) === undefined) {
+    problems.every = `Write a number from 1 to ${MAX_EVERY}.`;
+  }
   return problems;
 }
 
@@ -205,6 +237,7 @@ const cut = (text: string, max: number): string => text.trim().slice(0, max);
 /** The task a (checked) draft describes. Keeps `created` and `done` from the task it changes. */
 export function taskFromDraft(draft: TaskDraft, id: string, now: number, existing?: Task): Task {
   const date = isIsoDate(draft.date) ? draft.date : null;
+  const repeat = date && oneOf(draft.repeat, REPEATS) ? draft.repeat : 'none';
   const reminder = Number(draft.reminder);
   return {
     id,
@@ -218,7 +251,8 @@ export function taskFromDraft(draft: TaskDraft, id: string, now: number, existin
     important: draft.important,
     date,
     time: date && isIsoTime(draft.time) ? draft.time : null,
-    repeat: date && oneOf(draft.repeat, REPEATS) ? draft.repeat : 'none',
+    repeat,
+    every: EVERY_UNITS[repeat] ? (parseEvery(draft.every) ?? 1) : 1,
     reminder: date && draft.reminder !== '' && oneOf(reminder, REMINDERS) ? reminder : null,
     done: existing?.done ?? null,
     created: existing?.created ?? now,
@@ -236,6 +270,7 @@ export const draftOf = (task: Task): TaskDraft => ({
   date: task.date ?? '',
   time: task.time ?? '',
   repeat: task.repeat,
+  every: String(task.every),
   reminder: task.reminder === null ? '' : String(task.reminder),
 });
 
@@ -255,6 +290,7 @@ export const newTask = (
   date: null,
   time: null,
   repeat: 'none',
+  every: 1,
   reminder: null,
   done: null,
   created: now,
@@ -295,26 +331,29 @@ export function tickStep(
 
 /**
  * The next date of a repeating task: the first one after its current date
- * that's also after today (so a task done late doesn't stay overdue). A
- * monthly task on the 31st moves to the end of shorter months.
+ * that's also after today (so a task done late doesn't stay overdue).
+ * `every` skips some: every 2 weeks counts on from its date in steps of 2
+ * weeks. A monthly task on the 31st moves to the end of shorter months.
  */
-export function nextDate(date: IsoDate, repeat: Repeat, today: IsoDate): IsoDate {
+export function nextDate(date: IsoDate, repeat: Repeat, today: IsoDate, every = 1): IsoDate {
   const after = compareDates(date, today) > 0 ? date : today;
+  const days = (step: number): IsoDate =>
+    addDays(date, (Math.floor(daysBetween(date, after) / step) + 1) * step);
   switch (repeat) {
     case 'none':
       return date;
     case 'daily':
-      return addDays(after, 1);
+      return days(every);
     case 'weekdays': {
       let next = addDays(after, 1);
       while (weekday(next) > 5) next = addDays(next, 1);
       return next;
     }
     case 'weekly':
-      return addDays(date, (Math.floor(daysBetween(date, after) / 7) + 1) * 7);
+      return days(7 * every);
     case 'monthly':
     case 'yearly': {
-      const step = repeat === 'monthly' ? 1 : 12;
+      const step = (repeat === 'monthly' ? 1 : 12) * every;
       const { year, month } = parts(date);
       const later = parts(after);
       // Start near `after`, not at `date`: a task can be years overdue.
@@ -344,8 +383,16 @@ export function completeTask(
   if (task.repeat === 'none' || task.date === null) {
     return { state: updateTask(state, { ...task, done: now, updated: now }), next: null };
   }
-  const next = nextDate(task.date, task.repeat, today);
-  const copy: Task = { ...task, id: copyId, repeat: 'none', done: now, created: now, updated: now };
+  const next = nextDate(task.date, task.repeat, today, task.every);
+  const copy: Task = {
+    ...task,
+    id: copyId,
+    repeat: 'none',
+    every: 1,
+    done: now,
+    created: now,
+    updated: now,
+  };
   // The next time, its steps start again.
   const steps = task.steps.map((step) => ({ ...step, done: false }));
   const moved = updateTask(state, { ...task, date: next, steps, updated: now });

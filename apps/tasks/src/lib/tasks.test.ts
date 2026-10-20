@@ -8,6 +8,7 @@ import {
   dueReminders,
   dueText,
   emptyTasks,
+  everyUnit,
   formatDay,
   isTasksState,
   MAX_STEPS,
@@ -19,12 +20,14 @@ import {
   NO_LIST,
   openGroups,
   openPerList,
+  parseEvery,
   reminderAt,
   reminderNotices,
   REMINDER_BODY,
   removeTask,
   removeTasks,
   reopenTask,
+  repeatText,
   stepsText,
   taskFromDraft,
   tasksCount,
@@ -48,6 +51,7 @@ const draft = (changes: Partial<TaskDraft> = {}): TaskDraft => ({
   date: '',
   time: '',
   repeat: 'none',
+  every: '1',
   reminder: '',
   ...changes,
 });
@@ -76,6 +80,16 @@ describe('the form', () => {
       'Choose the first date, so it can repeat.',
     );
     expect(draftProblems(draft({ reminder: '0' })).date).toBe('Choose a date to be reminded on.');
+    // How often: a whole number, only for repeats that count.
+    const weekly = { date: TODAY, repeat: 'weekly' };
+    for (const wrong of ['', '0', '1.5', '100', 'two']) {
+      expect(draftProblems(draft({ ...weekly, every: wrong })).every, wrong).toBe(
+        'Write a number from 1 to 99.',
+      );
+    }
+    expect(draftProblems(draft({ ...weekly, every: ' 2 ' }))).toEqual({});
+    expect(draftProblems(draft({ date: TODAY, repeat: 'weekdays', every: '' }))).toEqual({});
+    expect([parseEvery('3'), parseEvery('03'), parseEvery('-1')]).toEqual([3, 3, undefined]);
   });
 
   it('makes a task from the form, and the form from a task', () => {
@@ -88,6 +102,7 @@ describe('the form', () => {
         date: '2026-11-01',
         time: '10:00',
         repeat: 'monthly',
+        every: '3',
         reminder: '60',
       }),
       'a',
@@ -103,6 +118,7 @@ describe('the form', () => {
       date: '2026-11-01',
       time: '10:00',
       repeat: 'monthly',
+      every: 3,
       reminder: 60,
       done: null,
       created: 5000,
@@ -113,8 +129,16 @@ describe('the form', () => {
     const done = { ...made, done: 7000 };
     expect(taskFromDraft(draftOf(done), 'a', 9000, done).done).toBe(7000);
     // Unknown choices fall back to safe ones.
-    const odd = taskFromDraft(draft({ date: TODAY, repeat: 'hourly', reminder: '7' }), 'b', 1);
-    expect([odd.repeat, odd.reminder]).toEqual(['none', null]);
+    const odd = taskFromDraft(
+      draft({ date: TODAY, repeat: 'hourly', every: '5', reminder: '7' }),
+      'b',
+      1,
+    );
+    expect([odd.repeat, odd.every, odd.reminder]).toEqual(['none', 1, null]);
+    // "Every" only counts for days, weeks, months and years.
+    expect(
+      taskFromDraft(draft({ date: TODAY, repeat: 'weekdays', every: '4' }), 'c', 1).every,
+    ).toBe(1);
   });
 
   it('keeps the steps written, without empty ones', () => {
@@ -251,6 +275,33 @@ describe('changes', () => {
     expect(nextDate('2024-02-29', 'yearly', TODAY)).toBe('2027-02-28');
   });
 
+  it('skips some with “every”: every 2 weeks, every 3 months…', () => {
+    expect(nextDate(TODAY, 'daily', TODAY, 3)).toBe('2026-10-23');
+    expect(nextDate(TODAY, 'weekly', TODAY, 2)).toBe('2026-11-03');
+    expect(nextDate(TODAY, 'monthly', TODAY, 3)).toBe('2027-01-20');
+    expect(nextDate(TODAY, 'yearly', TODAY, 2)).toBe('2028-10-20');
+    // Done late: still on its own rhythm, after today.
+    expect(nextDate('2026-10-01', 'daily', TODAY, 3)).toBe('2026-10-22');
+    expect(nextDate('2026-09-29', 'weekly', TODAY, 2)).toBe('2026-10-27');
+    expect(nextDate('2026-01-31', 'monthly', TODAY, 2)).toBe('2026-11-30');
+    // Every weekday has nothing to skip.
+    expect(nextDate('2026-10-23', 'weekdays', '2026-10-23', 5)).toBe('2026-10-26');
+  });
+
+  it('says how a task repeats', () => {
+    expect(repeatText('weekly', 1)).toBe('Every week');
+    expect(repeatText('weekly', 2)).toBe('Every 2 weeks');
+    expect(repeatText('daily', 3)).toBe('Every 3 days');
+    expect(repeatText('yearly', 1)).toBe('Every year');
+    expect(repeatText('weekdays', 1)).toBe('Weekdays');
+    expect(repeatText('none', 1)).toBe('');
+    expect([everyUnit('monthly', 1), everyUnit('monthly', 6), everyUnit('none', 2)]).toEqual([
+      'month',
+      'months',
+      '',
+    ]);
+  });
+
   it('moves the tasks of a list that goes', () => {
     const rent = task({ list: 'home' });
     const report = task({ list: 'work' });
@@ -258,18 +309,37 @@ describe('changes', () => {
     expect(moved.tasks.map((entry) => entry.list)).toEqual([NO_LIST, 'work']);
   });
 
-  it('reads tasks saved before there were steps', () => {
-    const { steps: _, ...old } = task({ title: 'From version 1' });
-    const migrated = migrateTasks({ tasks: [old] }, 1);
-    expect(migrated?.tasks).toEqual([{ ...old, steps: [] }]);
-    expect(isTasksState(migrated)).toBe(true);
-    expect(migrateTasks({ tasks: [old] }, 7)).toBeUndefined();
+  it('reads tasks saved by older versions', () => {
+    // Version 1: no steps, no "every".
+    const { steps: _, every: __, ...first } = task({ title: 'From version 1' });
+    const fromFirst = migrateTasks({ tasks: [first] }, 1);
+    expect(fromFirst?.tasks).toEqual([{ ...first, steps: [], every: 1 }]);
+    expect(isTasksState(fromFirst)).toBe(true);
+    // Version 2: steps, but no "every".
+    const { every: ___, ...second } = task({
+      title: 'From version 2',
+      date: TODAY,
+      repeat: 'weekly',
+    });
+    const fromSecond = migrateTasks(
+      { tasks: [{ ...second, steps: [{ id: 's', title: 'Step', done: true }] }] },
+      2,
+    );
+    expect(fromSecond?.tasks[0]).toMatchObject({
+      every: 1,
+      repeat: 'weekly',
+      steps: [{ id: 's' }],
+    });
+    expect(isTasksState(fromSecond)).toBe(true);
+    expect(migrateTasks({ tasks: [first] }, 7)).toBeUndefined();
     expect(migrateTasks({}, 1)).toBeUndefined();
   });
 
   it('checks saved data', () => {
     expect(isTasksState(stateOf(task({ date: TODAY, time: '09:30', reminder: '10' })))).toBe(true);
     expect(isTasksState({ tasks: [{ ...task(), repeat: 'hourly' }] })).toBe(false);
+    expect(isTasksState({ tasks: [{ ...task(), every: 0 }] })).toBe(false);
+    expect(isTasksState({ tasks: [{ ...task(), every: 1.5 }] })).toBe(false);
     expect(isTasksState({ tasks: [{ ...task(), reminder: 7 }] })).toBe(false);
     expect(isTasksState({ tasks: [{ ...task(), date: 'tomorrow' }] })).toBe(false);
     expect(isTasksState({ tasks: [{ ...task(), steps: [{ id: 's', title: 'x' }] }] })).toBe(false);
