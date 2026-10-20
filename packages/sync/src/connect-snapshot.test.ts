@@ -8,7 +8,10 @@ import {
   openConnection,
   parseConnectRequest,
   parseConnectResult,
+  parseTurnOff,
   sealForApp,
+  turnOffProof,
+  turnOffUrl,
 } from './connect.ts';
 import { observe } from './merge.ts';
 import { openStores, sealStores, syncKeys } from './snapshot.ts';
@@ -57,6 +60,28 @@ describe('connecting an app', () => {
     for (const hash of ['', '#connect=', '#connect=abc.def', '#link=x.y']) {
       expect(parseConnectResult(hash), hash).toBeNull();
     }
+  });
+});
+
+describe('turning sync off from the hub', () => {
+  it('proves the link is from the account the app syncs with', async () => {
+    const secret = randomBytes(32);
+    const proof = await turnOffProof(secret);
+    expect(await turnOffProof(secret)).toBe(proof);
+    expect(await turnOffProof(randomBytes(32))).not.toBe(proof);
+    // Not the server's token: the proof never leaves the device.
+    expect(proof).not.toBe((await syncKeys(secret)).token);
+
+    const url = new URL(turnOffUrl('https://tally.shkriuss.app', proof));
+    expect(url.origin).toBe('https://tally.shkriuss.app');
+    expect(parseTurnOff(url.hash)).toBe(proof);
+  });
+
+  it('reads only well-formed links', () => {
+    for (const hash of ['', '#sync=off', '#sync=off&proof=short', '#sync=connect']) {
+      expect(parseTurnOff(hash), hash).toBeNull();
+    }
+    expect(parseTurnOff(`#sync=off&proof=${'A'.repeat(43)}&more`)).toBeNull();
   });
 });
 

@@ -46,6 +46,8 @@ export function mountSyncControls(section: HTMLElement, sync: SyncClient): void 
     connected: `Sync is on. ${app} is now the same on every device where you turn it on.`,
     cancelled: 'Sync wasn’t turned on.',
     'turned-off': `Sync is off on this device. ${app}'s data here is kept, and so is the online copy for your other devices.`,
+    'kept-on':
+      'Sync is still on. That link to turn it off came from a different shkriuss account. To turn sync off here, tap “Turn off on this device”.',
     'deleted-online': 'The online copy is deleted, and sync is off on this device.',
     'kept-both':
       'Synced. Something was changed on two devices at once, so both versions are kept: check for a second copy.',
@@ -53,6 +55,15 @@ export function mountSyncControls(section: HTMLElement, sync: SyncClient): void 
 
   /** A message from the last thing that happened, shown until the next sync. */
   let note: string | null = null;
+  /** These stay until the person does something here: later syncs don't hide them. */
+  const lasting = [EVENTS.connected, EVENTS['kept-both'], EVENTS['kept-on']];
+  /** What comes back from the hub's Account page, so it's scrolled into sight. */
+  const FROM_HUB: ReadonlySet<SyncEvent> = new Set([
+    'connected',
+    'cancelled',
+    'turned-off',
+    'kept-on',
+  ]);
 
   function render(status: SyncStatus): void {
     off.hidden = status.on;
@@ -68,12 +79,15 @@ export function mountSyncControls(section: HTMLElement, sync: SyncClient): void 
   sync.subscribe((status, event) => {
     const message = event ? EVENTS[event] : undefined;
     if (message) note = message;
-    // These stay until the person does something here: later syncs don't hide them.
-    else if (event === 'synced' && note !== EVENTS.connected && note !== EVENTS['kept-both']) {
-      note = null;
-    }
+    else if (event === 'synced' && !lasting.includes(note ?? undefined)) note = null;
     render(status);
+    if (event && FROM_HUB.has(event)) reveal();
   });
+
+  function reveal(): void {
+    const { top, bottom } = statusLine.getBoundingClientRect();
+    if (top < 0 || bottom > window.innerHeight) statusLine.scrollIntoView({ block: 'center' });
+  }
 
   button('sync-on').addEventListener('click', () => {
     note = null;

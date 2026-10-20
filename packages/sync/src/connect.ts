@@ -157,3 +157,23 @@ export async function openConnection(
   const [secret, ...old] = keys as [Uint8Array<ArrayBuffer>, ...Uint8Array<ArrayBuffer>[]];
   return { secret, code: payload.code, replaces: old };
 }
+
+// ---------- Turning sync off from the hub ----------
+
+/**
+ * The hub's list of apps also turns sync off in an app ("#sync=off&proof=…").
+ * The proof comes from the app's own key, so only the account the app syncs
+ * with can make it: a link from anyone else leaves sync on.
+ */
+export async function turnOffProof(appSecret: Uint8Array<ArrayBuffer>): Promise<string> {
+  return toBase64Url(await hkdf(appSecret, 'shkriuss sync turn off v1'));
+}
+
+/** The app's address that turns sync off there. */
+export const turnOffUrl = (appOrigin: string, proof: string): string =>
+  `${appOrigin}/#sync=off&proof=${proof}`;
+
+/** Reads the proof from "#sync=off&proof=…", or null if the address isn't one. */
+export function parseTurnOff(hash: string): string | null {
+  return /^#sync=off&proof=([A-Za-z0-9_-]{43})$/.exec(hash)?.[1] ?? null;
+}
