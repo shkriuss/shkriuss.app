@@ -4,7 +4,8 @@
  *
  * "Add" puts a task in what's being shown (a list, or Important). Ticking a
  * task's box marks it done (a repeating one moves on to its next date);
- * unticking it under "Done" brings it back. Tapping a title opens the task.
+ * unticking it under "Done" brings it back. A task's steps fold out under
+ * it and can be ticked there. Tapping a title opens the task.
  * When sync is on, the newest change to each task and list wins.
  */
 import { today as todayOf } from '@shkriuss/dates';
@@ -37,7 +38,9 @@ import {
   formatDay,
   inView,
   isTasksState,
+  MAX_STEPS,
   MAX_TASKS,
+  migrateTasks,
   moveTasks,
   newTask,
   NO_LIST,
@@ -47,13 +50,16 @@ import {
   removeTasks,
   reopenTask,
   REPEAT_SHORT,
+  stepsText,
   taskFromDraft,
   tasksCount,
   TASKS_VERSION,
+  tickStep,
   updateTask,
   WHEN_LABELS,
   whenOf,
   type DraftField,
+  type Step,
   type Task,
   type TaskDraft,
   type TasksState,
@@ -67,6 +73,7 @@ const tasksStore = createStore<TasksState>({
   version: TASKS_VERSION,
   fallback: emptyTasks,
   validate: isTasksState,
+  migrate: migrateTasks,
 });
 
 const listsStore = createStore<ListsState>({
@@ -110,11 +117,16 @@ export function mountTasks(root: Document): void {
   const groupTemplate = required<HTMLTemplateElement>(root, '[data-group-template]');
   const taskTemplate = required<HTMLTemplateElement>(root, '[data-task-template]');
   const viewTemplate = required<HTMLTemplateElement>(root, '[data-view-template]');
+  const stepTemplate = required<HTMLTemplateElement>(root, '[data-step-template]');
+  const stepEditTemplate = required<HTMLTemplateElement>(root, '[data-step-edit-template]');
   const announcer = required<HTMLElement>(root, '[data-announcer]');
 
   const editor = required<HTMLDialogElement>(root, '[data-task-dialog]');
   const form = required<HTMLFormElement>(editor, '[data-task-form]');
   const listField = required<HTMLElement>(form, '[data-list-field]');
+  const stepEditList = required<HTMLUListElement>(form, '[data-step-edit-list]');
+  const newStep = required<HTMLInputElement>(form, '[data-new-step]');
+  const stepError = required<HTMLElement>(form, '[data-step-error]');
   const deleteDialog = required<HTMLDialogElement>(root, '[data-delete-dialog]');
   const deleteName = required<HTMLElement>(deleteDialog, '[data-delete-name]');
 
@@ -140,6 +152,10 @@ export function mountTasks(root: Document): void {
   let editingId: string | null = null;
   let opener: HTMLElement | null = null;
   let savedId: string | null = null;
+  /** The steps in the task's form, as they're being changed (saved with "Save"). */
+  let draftSteps: Step[] = [];
+  /** Tasks whose steps are folded out in the list. */
+  const openSteps = new Set<string>();
   /** The same for the list form (null: a new list). */
   let editingListId: string | null = null;
   let listOpener: HTMLElement | null = null;
@@ -213,6 +229,23 @@ export function mountTasks(root: Document): void {
     required<HTMLElement>(row, '[data-meta]').hidden =
       !task.important && task.date === null && task.repeat === 'none' && list === '';
     required<HTMLElement>(row, '[data-notes]').textContent = task.notes;
+
+    const steps = required<HTMLDetailsElement>(row, '[data-steps]');
+    steps.hidden = task.steps.length === 0;
+    steps.open = openSteps.has(task.id);
+    required<HTMLElement>(steps, '[data-steps-of]').textContent = `Steps of ${task.title}:`;
+    required<HTMLElement>(steps, '[data-steps-count]').textContent = stepsText(task);
+    required<HTMLElement>(steps, '[data-steps-list]').replaceChildren(
+      ...task.steps.map((step) => {
+        const item = (stepTemplate.content.cloneNode(true) as DocumentFragment).firstElementChild;
+        if (!(item instanceof HTMLLIElement)) throw new Error('Tasks: bad step template');
+        const box = required<HTMLInputElement>(item, '[data-step-done]');
+        box.dataset['stepId'] = step.id;
+        box.checked = step.done;
+        required<HTMLElement>(item, '[data-step-title]').textContent = step.title;
+        return item;
+      }),
+    );
     return row;
   }
 
@@ -326,6 +359,19 @@ export function mountTasks(root: Document): void {
     announce(`Done: ${task.title}.`);
   }
 
+  function tick(task: Task, stepId: string, done: boolean): void {
+    saveTasks(tickStep(tasks, task.id, stepId, done, Date.now()));
+    control(task.id, `[data-step-id="${CSS.escape(stepId)}"]`)?.focus();
+    const ticked = find(task.id);
+    const step = ticked?.steps.find((entry) => entry.id === stepId);
+    if (!ticked || !step) return;
+    announce(
+      ticked.steps.every((entry) => entry.done)
+        ? `${step.title}: done. All steps of ${ticked.title} are done.`
+        : `${step.title}: ${done ? 'done' : 'not done'}. ${stepsText(ticked)}.`,
+    );
+  }
+
   function markToDo(task: Task): void {
     saveTasks(reopenTask(tasks, task.id, Date.now()));
     control(task.id, '[data-done]')?.focus();
@@ -334,12 +380,28 @@ export function mountTasks(root: Document): void {
 
   for (const box of [groupsBox, doneList]) {
     box.addEventListener('change', (event) => {
-      const checkbox = (event.target as Element).closest<HTMLInputElement>('[data-done]');
-      const task = find(checkbox?.closest<HTMLElement>('[data-id]')?.dataset['id'] ?? null);
-      if (!checkbox || !task) return;
-      if (checkbox.checked) markDone(task);
-      else markToDo(task);
+      const target = event.target as HTMLInputElement;
+      const task = find(target.closest<HTMLElement>('[data-id]')?.dataset['id'] ?? null);
+      if (!task) return;
+      const stepId = target.dataset['stepId'];
+      if (stepId !== undefined) tick(task, stepId, target.checked);
+      else if (target.matches('[data-done]')) {
+        if (target.checked) markDone(task);
+        else markToDo(task);
+      }
     });
+    // Remember which tasks have their steps folded out ("toggle" doesn't bubble).
+    box.addEventListener(
+      'toggle',
+      (event) => {
+        const steps = event.target as HTMLDetailsElement;
+        const id = steps.closest<HTMLElement>('[data-id]')?.dataset['id'];
+        if (!steps.matches('[data-steps]') || id === undefined) return;
+        if (steps.open) openSteps.add(id);
+        else openSteps.delete(id);
+      },
+      true,
+    );
     box.addEventListener('click', (event) => {
       const id = (event.target as Element)
         .closest('[data-action="edit"]')
@@ -388,6 +450,7 @@ export function mountTasks(root: Document): void {
     return {
       title: value('title'),
       notes: value('notes'),
+      steps: draftSteps.map((step) => ({ ...step })),
       list: value('list'),
       important: field<HTMLInputElement>('important').checked,
       date: value('date'),
@@ -400,6 +463,10 @@ export function mountTasks(root: Document): void {
   function fillForm(draft: TaskDraft): void {
     for (const name of textFields) field<HTMLInputElement>(name).value = draft[name];
     field<HTMLTextAreaElement>('notes').value = draft.notes;
+    draftSteps = draft.steps.map((step) => ({ ...step }));
+    newStep.value = '';
+    stepError.textContent = '';
+    renderStepEdits();
     field<HTMLSelectElement>('repeat').value = draft.repeat;
     field<HTMLSelectElement>('reminder').value = draft.reminder;
     field<HTMLInputElement>('important').checked = draft.important;
@@ -413,6 +480,99 @@ export function mountTasks(root: Document): void {
     if (list.value !== draft.list) list.value = NO_LIST;
     listField.hidden = lists.lists.length === 0;
   }
+
+  // ---------- Steps in the form ----------
+
+  function renderStepEdits(): void {
+    stepEditList.replaceChildren(
+      ...draftSteps.map((step, index) => {
+        const fragment = stepEditTemplate.content.cloneNode(true) as DocumentFragment;
+        const item = required<HTMLLIElement>(fragment, 'li');
+        item.dataset['stepId'] = step.id;
+        const number = index + 1;
+        required<HTMLInputElement>(item, '[data-step-done]').checked = step.done;
+        required<HTMLElement>(item, '[data-step-done-label]').textContent = `Step ${number} done`;
+        const title = required<HTMLInputElement>(item, '[data-step-title]');
+        title.value = step.title;
+        title.setAttribute('aria-label', `Step ${number}`);
+        required<HTMLElement>(item, '[data-action="remove-step"]').setAttribute(
+          'aria-label',
+          `Remove step ${number}`,
+        );
+        return item;
+      }),
+    );
+  }
+
+  const stepOf = (element: Element): Step | undefined => {
+    const id = element.closest<HTMLElement>('[data-step-id]')?.dataset['stepId'];
+    return draftSteps.find((step) => step.id === id);
+  };
+
+  function addStep(): void {
+    const title = newStep.value.trim();
+    let problem: string | null = null;
+    if (title === '') problem = 'Write the step first.';
+    else if (draftSteps.length >= MAX_STEPS) problem = `A task can have up to ${MAX_STEPS} steps.`;
+    stepError.textContent = problem ?? '';
+    if (problem) {
+      newStep.setAttribute('aria-invalid', 'true');
+      newStep.focus();
+      return;
+    }
+    newStep.removeAttribute('aria-invalid');
+    draftSteps.push({ id: crypto.randomUUID(), title, done: false });
+    renderStepEdits();
+    newStep.value = '';
+    newStep.focus();
+    announce(`Added step ${title}.`);
+  }
+
+  required<HTMLButtonElement>(form, '[data-action="add-step"]').addEventListener('click', addStep);
+
+  // Enter in a step adds it, or moves on to the next one, instead of saving the whole task.
+  form.addEventListener('keydown', (event) => {
+    const target = event.target as HTMLElement;
+    if (event.key !== 'Enter' || event.isComposing) return;
+    if (target === newStep) {
+      event.preventDefault();
+      addStep();
+    } else if (target.matches('[data-step-title]')) {
+      event.preventDefault();
+      newStep.focus();
+    }
+  });
+
+  stepEditList.addEventListener('input', (event) => {
+    const target = event.target as HTMLInputElement;
+    const step = stepOf(target);
+    if (step && target.matches('[data-step-title]')) step.title = target.value;
+  });
+
+  stepEditList.addEventListener('change', (event) => {
+    const target = event.target as HTMLInputElement;
+    const step = stepOf(target);
+    if (step && target.matches('[data-step-done]')) step.done = target.checked;
+  });
+
+  stepEditList.addEventListener('click', (event) => {
+    const remove = (event.target as Element).closest('[data-action="remove-step"]');
+    const step = remove ? stepOf(remove) : undefined;
+    if (!step) return;
+    const index = draftSteps.indexOf(step);
+    draftSteps.splice(index, 1);
+    renderStepEdits();
+    // Focus moves to the step that took its place, or the one before, or "New step".
+    const titles = stepEditList.querySelectorAll<HTMLElement>('[data-step-title]');
+    (titles[index] ?? titles[index - 1] ?? newStep).focus();
+    announce(`Removed step ${step.title || index + 1}.`);
+  });
+
+  newStep.addEventListener('input', () => {
+    if (newStep.value.trim() === '') return;
+    stepError.textContent = '';
+    newStep.removeAttribute('aria-invalid');
+  });
 
   /** Shows each problem next to its field. With `onlyClear`, only removes fixed ones. */
   function showProblems(problems: Partial<Record<DraftField, string>>, onlyClear = false): void {

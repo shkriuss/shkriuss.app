@@ -1,8 +1,8 @@
 ---
 /**
  * Tasks: a quick "Add" box, the tasks still to do grouped by when they're
- * due (overdue, today, tomorrow, later, no date), your lists, the done
- * ones, and forms to change a task or a list. Behaviour: ../scripts/tasks.ts
+ * due (overdue, today, tomorrow, later, no date) with their steps, your
+ * lists, the done ones, and forms to change a task or a list. Behaviour: ../scripts/tasks.ts
  * and ../scripts/reminders.ts.
  */
 import { AppShell, Button, DataControls, Icon, PushControls, SyncControls } from '@shkriuss/ui';
@@ -145,7 +145,48 @@ import { LIMITS, REMINDERS, REMINDER_LABELS, REPEATS, REPEAT_LABELS } from '../l
           </span>
         </p>
         <p class="muted task__notes" data-notes></p>
+        <details class="steps" data-steps>
+          <summary class="steps__summary">
+            <span class="visually-hidden" data-steps-of>
+              Steps of the task:
+            </span>
+            <span data-steps-count>Steps</span>
+          </summary>
+          <ul role="list" class="steps__list" data-steps-list></ul>
+        </details>
       </div>
+    </li>
+  </template>
+
+  <!-- One step under a task in the list, with its tick. -->
+  <template data-step-template>
+    <li>
+      <label class="check step">
+        <input type="checkbox" data-step-done />
+        <span class="step__title" data-step-title>
+          Step
+        </span>
+      </label>
+    </li>
+  </template>
+
+  <!-- One step in the task's form: tick, title and "Remove". -->
+  <template data-step-edit-template>
+    <li class="step-edit">
+      <label class="step-edit__check">
+        <input type="checkbox" data-step-done />
+        <span class="visually-hidden" data-step-done-label>
+          Done
+        </span>
+      </label>
+      <input
+        class="input step-edit__title"
+        type="text"
+        autocomplete="off"
+        maxlength={LIMITS.step}
+        data-step-title
+      />
+      <Button variant="ghost" icon="x" label="Remove step" data-action="remove-step" />
     </li>
   </template>
 
@@ -194,6 +235,33 @@ import { LIMITS, REMINDERS, REMINDER_LABELS, REPEATS, REPEAT_LABELS } from '../l
           maxlength={LIMITS.notes}
         ></textarea>
       </div>
+
+      <fieldset class="stack stack--sm">
+        <legend class="field__label">Steps (optional)</legend>
+        <ul role="list" class="stack stack--sm" data-step-edit-list></ul>
+        <div class="stack stack--sm">
+          <label class="field__label" for="new-step">
+            New step
+          </label>
+          <div class="step-add">
+            <input
+              class="input"
+              id="new-step"
+              type="text"
+              autocomplete="off"
+              enterkeyhint="enter"
+              maxlength={LIMITS.step}
+              placeholder="e.g. Book the hotel"
+              aria-describedby="new-step-error"
+              data-new-step
+            />
+            <Button icon="plus" data-action="add-step">
+              Add step
+            </Button>
+          </div>
+          <p class="field__error" id="new-step-error" data-step-error></p>
+        </div>
+      </fieldset>
 
       <div class="field-row">
         <div class="field">
@@ -539,11 +607,102 @@ import { LIMITS, REMINDERS, REMINDER_LABELS, REPEATS, REPEAT_LABELS } from '../l
     display: none;
   }
 
+  .steps__summary {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-height: var(--tap-target);
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+    cursor: pointer;
+  }
+
+  /* The summary is a flex box, so draw the open/closed arrow ourselves. */
+  .steps__summary::before {
+    content: '▸';
+    color: currentColor;
+  }
+
+  .steps[open] > .steps__summary::before {
+    content: '▾';
+  }
+
+  .steps__summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .steps__list {
+    display: grid;
+    padding-inline-start: var(--space-2);
+  }
+
+  .step {
+    align-items: start;
+    overflow-wrap: anywhere;
+  }
+
+  .step input {
+    flex: none;
+    margin-block-start: 0.15em;
+  }
+
+  .step input:checked + .step__title {
+    color: var(--color-text-muted);
+    text-decoration: line-through;
+  }
+
+  .step-add {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .step-add input {
+    flex: 1 1 10rem;
+    min-width: 0;
+  }
+
+  .step-edit {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+  }
+
+  .step-edit__check {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: var(--tap-target);
+    height: var(--tap-target);
+    cursor: pointer;
+  }
+
+  .step-edit__check input {
+    width: 1.25rem;
+    height: 1.25rem;
+    margin: 0;
+    accent-color: var(--color-accent);
+    cursor: pointer;
+  }
+
+  .step-edit__title {
+    flex: 1;
+    min-width: 0;
+  }
+
   .done-summary {
     min-height: var(--tap-target);
     padding-block: var(--space-2);
     font-weight: var(--weight-semibold);
     cursor: pointer;
+  }
+
+  fieldset,
+  legend {
+    margin: 0;
+    padding: 0;
+    border: 0;
   }
 
   .dialog__actions :global(.dialog__delete) {

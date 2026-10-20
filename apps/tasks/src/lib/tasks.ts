@@ -2,10 +2,11 @@
  * Tasks' data and rules, kept separate from the page so they're easy to
  * test. Every function returns a new state instead of changing the old one.
  *
- * A task has a title and, if you like, notes, a date (and a time), a
- * repeat, a reminder, a list and an "important" star. A done task keeps the
- * moment it was finished. A repeating task that's done moves on to its next
- * date, and a done copy of it is kept.
+ * A task has a title and, if you like, notes, steps (smaller things to do
+ * in it, each with its own tick), a date (and a time), a repeat, a
+ * reminder, a list and an "important" star. A done task keeps the moment it
+ * was finished. A repeating task that's done moves on to its next date with
+ * its steps unticked, and a done copy of it is kept.
  */
 import {
   addDays,
@@ -61,10 +62,18 @@ export const REMINDER_BODY = 'Tap to open Tasks.';
 /** A task's list when it has none. Lists themselves: ./lists.ts. */
 export const NO_LIST = '';
 
+/** A smaller thing to do inside a task ("Book the hotel"), with its own tick. */
+export interface Step {
+  id: string;
+  title: string;
+  done: boolean;
+}
+
 export interface Task {
   id: string;
   title: string;
   notes: string;
+  steps: Step[];
   /** A list's id, or NO_LIST. */
   list: string;
   important: boolean;
@@ -85,9 +94,11 @@ export interface TasksState {
   tasks: Task[];
 }
 
-export const TASKS_VERSION = 1;
+/** Version 2 added steps. */
+export const TASKS_VERSION = 2;
 export const MAX_TASKS = 5000;
-export const LIMITS = { title: 300, notes: 5000 };
+export const MAX_STEPS = 50;
+export const LIMITS = { title: 300, notes: 5000, step: 200 };
 
 export const emptyTasks = (): TasksState => ({ tasks: [] });
 
@@ -95,6 +106,17 @@ const oneOf = <T extends string | number>(value: unknown, options: readonly T[])
   (options as readonly unknown[]).includes(value);
 const isTime = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value) && value >= 0;
+
+function isStep(value: unknown): value is Step {
+  if (typeof value !== 'object' || value === null) return false;
+  const step = value as Record<string, unknown>;
+  return (
+    typeof step['id'] === 'string' &&
+    step['id'].length > 0 &&
+    typeof step['title'] === 'string' &&
+    typeof step['done'] === 'boolean'
+  );
+}
 
 function isTask(value: unknown): value is Task {
   if (typeof value !== 'object' || value === null) return false;
@@ -104,6 +126,8 @@ function isTask(value: unknown): value is Task {
     task['id'].length > 0 &&
     typeof task['title'] === 'string' &&
     typeof task['notes'] === 'string' &&
+    Array.isArray(task['steps']) &&
+    task['steps'].every(isStep) &&
     typeof task['list'] === 'string' &&
     typeof task['important'] === 'boolean' &&
     (task['date'] === null || isIsoDate(task['date'])) &&
@@ -127,12 +151,27 @@ export function isTasksState(value: unknown): value is TasksState {
   return Array.isArray(tasks) && tasks.every(isTask);
 }
 
+/** Turns tasks saved by an older version into today's shape (undefined if it can't). */
+export function migrateTasks(old: unknown, version: number): TasksState | undefined {
+  if (version !== 1 || typeof old !== 'object' || old === null) return undefined;
+  const { tasks } = old as Record<string, unknown>;
+  if (!Array.isArray(tasks)) return undefined;
+  // Version 1 had no steps.
+  return {
+    tasks: tasks.map((task: unknown) =>
+      typeof task === 'object' && task !== null ? { ...task, steps: [] } : task,
+    ) as Task[],
+  };
+}
+
 // ---------- The form ----------
 
 /** What the form holds, as typed. */
 export interface TaskDraft {
   title: string;
   notes: string;
+  /** Steps as typed (empty ones are dropped when saving). */
+  steps: Step[];
   list: string;
   important: boolean;
   date: string;
@@ -171,6 +210,10 @@ export function taskFromDraft(draft: TaskDraft, id: string, now: number, existin
     id,
     title: cut(draft.title, LIMITS.title),
     notes: draft.notes.trim().slice(0, LIMITS.notes),
+    steps: draft.steps
+      .map((step) => ({ ...step, title: cut(step.title, LIMITS.step) }))
+      .filter((step) => step.title !== '')
+      .slice(0, MAX_STEPS),
     list: draft.list,
     important: draft.important,
     date,
@@ -187,6 +230,7 @@ export function taskFromDraft(draft: TaskDraft, id: string, now: number, existin
 export const draftOf = (task: Task): TaskDraft => ({
   title: task.title,
   notes: task.notes,
+  steps: task.steps.map((step) => ({ ...step })),
   list: task.list,
   important: task.important,
   date: task.date ?? '',
@@ -205,6 +249,7 @@ export const newTask = (
   id,
   title: cut(title, LIMITS.title),
   notes: '',
+  steps: [],
   list: options.list ?? NO_LIST,
   important: options.important ?? false,
   date: null,
@@ -232,6 +277,20 @@ export function updateTask(state: TasksState, task: Task): TasksState {
 
 export function removeTask(state: TasksState, id: string): TasksState {
   return { tasks: state.tasks.filter((task) => task.id !== id) };
+}
+
+/** Ticks a task's step, or unticks it. */
+export function tickStep(
+  state: TasksState,
+  taskId: string,
+  stepId: string,
+  done: boolean,
+  now: number,
+): TasksState {
+  const task = state.tasks.find((entry) => entry.id === taskId);
+  if (!task?.steps.some((step) => step.id === stepId && step.done !== done)) return state;
+  const steps = task.steps.map((step) => (step.id === stepId ? { ...step, done } : step));
+  return updateTask(state, { ...task, steps, updated: now });
 }
 
 /**
@@ -287,7 +346,9 @@ export function completeTask(
   }
   const next = nextDate(task.date, task.repeat, today);
   const copy: Task = { ...task, id: copyId, repeat: 'none', done: now, created: now, updated: now };
-  const moved = updateTask(state, { ...task, date: next, updated: now });
+  // The next time, its steps start again.
+  const steps = task.steps.map((step) => ({ ...step, done: false }));
+  const moved = updateTask(state, { ...task, date: next, steps, updated: now });
   return { state: { tasks: [copy, ...moved.tasks] }, next };
 }
 
@@ -455,5 +516,13 @@ export const fold = (text: string): string =>
 /** Alphabetical order, without minding case or accents. */
 export const byText = (a: string, b: string): number =>
   a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true });
+
+/** "1 of 4 steps", or "" without steps. */
+export function stepsText(task: Task): string {
+  const total = task.steps.length;
+  if (total === 0) return '';
+  const done = task.steps.filter((step) => step.done).length;
+  return `${done} of ${total} ${total === 1 ? 'step' : 'steps'}`;
+}
 
 export const tasksCount = (count: number): string => `${count} ${count === 1 ? 'task' : 'tasks'}`;
