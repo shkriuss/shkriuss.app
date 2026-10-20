@@ -2,7 +2,7 @@
 /**
  * The optional shkriuss account (docs/adr/0010-account-and-sync.md): create
  * one, save the recovery key, sign in with it or a passkey, add devices with
- * a QR code, turn on sync in apps, replace the key after losing a device,
+ * a QR code, turn sync on and off in apps, replace the key after losing a device,
  * sign out. Behaviour: ../scripts/account.ts. One view is shown at a time
  * (data-view); the script picks it.
  */
@@ -238,8 +238,8 @@ const syncApps = listedApps.filter((app) => app.sync === true);
         <section class="stack" aria-labelledby="sync-apps-heading">
           <h3 id="sync-apps-heading">Apps that sync</h3>
           <p>
-            Turn on sync in each app, on each device. These open the app and turn it on there, after
-            you confirm here.
+            Turn sync on or off in each app, on each device. These open the app and do it there.
+            Turning on asks you to confirm here first.
           </p>
           <ul role="list" class="cluster">
             {syncApps.map((app) => (
@@ -253,6 +253,10 @@ const syncApps = listedApps.filter((app) => app.sync === true);
               </li>
             ))}
           </ul>
+          <p class="muted">
+            Turned sync off inside an app? This page can't see into apps, so it still says “Turn
+            off” there until you tap it.
+          </p>
         </section>
       )}
 

@@ -1,8 +1,9 @@
 /**
  * "Sync between your devices" in EVERY app that can sync (`sync: true` in
- * apps.json; docs/adr/0010): connecting through the hub, turning it off,
- * cancelling, deleting the online copy, and moving to a new account key. Each app's own tests check that
- * its data really syncs.
+ * apps.json; docs/adr/0010): connecting through the hub, turning it off
+ * (in the app, and from the hub's Account page), cancelling, deleting the
+ * online copy, and moving to a new account key. Each app's own tests check
+ * that its data really syncs.
  */
 import type { Page } from '@playwright/test';
 import { getSite } from '../../packages/registry/src/index.ts';
@@ -52,6 +53,36 @@ test('turns on through the account, and off again', async ({ page }, testInfo) =
   expect(await page.evaluate(() => localStorage.getItem('shkriuss-device:sync'))).toContain(
     '"secret":null',
   );
+});
+
+test('the Account page turns sync off where it turned it on', async ({ page }, testInfo) => {
+  const { name } = getSite(testInfo.project.name);
+  const link = (turn: 'on' | 'off') =>
+    page.getByRole('link', { name: `Turn ${turn} sync in ${name}` });
+  await createAccount(page);
+  await expect(link('on')).toBeVisible();
+  await page.goto('/');
+  const appURL = new URL(page.url()).origin;
+  await turnOnSync(page, name);
+
+  await page.goto(`${hubURL}/account/`);
+  const href = (await link('off').getAttribute('href')) ?? '';
+  expect(href.startsWith(`${appURL}/#sync=off&proof=`), href).toBe(true);
+
+  // A link like it from someone else (another account) leaves sync on.
+  await page.goto(`${appURL}/#sync=off&proof=${'A'.repeat(43)}`);
+  await expect(status(page)).toHaveText(/^Sync is still on\. That link to turn it off came from/);
+  await expect(page.locator('[data-sync-on]')).toBeVisible();
+  expect(page.url()).not.toContain('#');
+
+  await page.goto(`${hubURL}/account/`);
+  await link('off').click();
+  await page.waitForURL(`${appURL}/`);
+  await expect(status(page)).toHaveText(/^Sync is off on this device/);
+  await expect(status(page)).toBeInViewport();
+  await expect(page.getByRole('button', { name: 'Turn on sync' })).toBeVisible();
+  await page.goto(`${hubURL}/account/`);
+  await expect(link('on')).toBeVisible();
 });
 
 test('asks to sign in first; cancelling leaves sync off', async ({ page }, testInfo) => {

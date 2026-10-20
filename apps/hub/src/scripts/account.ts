@@ -15,6 +15,8 @@ import {
   isReplaced,
   linkState,
   noteReplaced,
+  noteSyncOff,
+  noteSyncOn,
   parseLinkFragment,
   parseRecoveryKey,
   passkeySupport,
@@ -25,6 +27,7 @@ import {
   sameSecret,
   saveAccount,
   signInWithPasskey,
+  syncedApps,
   type Account,
   type AccountErrorCode,
   type DeviceLink,
@@ -36,6 +39,8 @@ import {
   connectResultUrl,
   parseConnectRequest,
   sealForApp,
+  turnOffProof,
+  turnOffUrl,
   type ConnectRequest,
 } from '@shkriuss/sync/connect';
 import { appOriginFor, isAppOrigin } from '@shkriuss/sync/origins';
@@ -173,11 +178,16 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
     connectNote.hidden = false;
   }
 
-  // The links to turn on sync in apps: to this hub's own apps (a PR preview's, in a preview).
-  for (const link of root.querySelectorAll<HTMLAnchorElement>('a[data-sync-app]')) {
-    const origin = appOriginFor(new URL(location.href), link.dataset['syncApp'] ?? '');
-    if (origin) link.href = `${origin}/#sync=connect`;
-  }
+  // The links to turn sync on in apps: to this hub's own apps (a PR preview's, in a preview).
+  const syncLinks = [...root.querySelectorAll<HTMLAnchorElement>('a[data-sync-app]')].map(
+    (link) => {
+      const slug = link.dataset['syncApp'] ?? '';
+      const origin = appOriginFor(new URL(location.href), slug);
+      if (origin) link.href = `${origin}/#sync=connect`;
+      const name = apps.find((app) => app.slug === slug)?.name ?? slug;
+      return { link, slug, name, turnOn: link.href };
+    },
+  );
 
   let account: Account | null = await currentAccount();
   /** A new key (a new account, or replacing this one), until the person confirms they saved it. */
@@ -202,9 +212,41 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
     message.classList.toggle('notice--danger', danger);
   }
 
+  /**
+   * Each app's link turns sync off there if this device turned it on from
+   * here (with this account), and on otherwise.
+   */
+  async function showSyncApps(): Promise<void> {
+    const current = account;
+    if (!current) return;
+    const synced = syncedApps(current.code);
+    const here = new URL(location.href);
+    const links = await Promise.all(
+      syncLinks.map(async ({ slug, name, turnOn }) => {
+        const origin = synced.get(slug);
+        if (!origin || !isAppOrigin(origin, slug, here)) {
+          return { text: `Turn on sync in ${name}`, href: turnOn, off: false };
+        }
+        const proof = await turnOffProof(await appSecretOf(current.secret, slug));
+        return { text: `Turn off sync in ${name}`, href: turnOffUrl(origin, proof), off: true };
+      }),
+    );
+    if (account !== current) return;
+    syncLinks.forEach(({ link }, index) => {
+      const shown = links[index];
+      if (!shown) return;
+      link.textContent = shown.text;
+      link.href = shown.href;
+      link.toggleAttribute('data-turns-off', shown.off);
+    });
+  }
+
   function show(view: View, focus = true): void {
     for (const element of views) element.hidden = element.dataset['view'] !== view;
-    if (view === 'signed-in' && account) accountCode.textContent = account.code;
+    if (view === 'signed-in' && account) {
+      accountCode.textContent = account.code;
+      void showSyncApps();
+    }
     if (focus) root.querySelector<HTMLElement>(`[data-view="${view}"] [tabindex="-1"]`)?.focus();
   }
 
@@ -460,6 +502,7 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
         replacedSecrets().map((old) => appSecretOf(old, app.slug)),
       );
       const result = await sealForApp(request, { secret, code: account.code, replaces });
+      noteSyncOn(app.slug, account.code, request.from);
       location.replace(connectResultUrl(request.from, result));
     },
     'cancel-connect': () => {
@@ -525,6 +568,15 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
     const button = (event.target as Element).closest<HTMLButtonElement>('button[data-action]');
     const action = button && actions[button.dataset['action'] ?? ''];
     if (button && action) void action(button);
+    // "Turn off sync in …": the app turns it off as it opens. (The link
+    // itself mustn't change before it opens; see "pageshow".)
+    const turnOff = (event.target as Element).closest<HTMLAnchorElement>('a[data-turns-off]');
+    if (turnOff) noteSyncOff(turnOff.dataset['syncApp'] ?? '');
+  });
+
+  // Back from an app to this page as it was left: show what changed there.
+  window.addEventListener('pageshow', (event) => {
+    if (event.persisted) void showSyncApps();
   });
 
   savedCheck.addEventListener('change', () => {
@@ -567,8 +619,12 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
     announce('This device is signed out.');
   });
 
-  // Signed in or out in another tab: follow along.
+  // Signed in or out, or an app connected, in another tab: follow along.
   window.addEventListener('storage', (event) => {
+    if (event.key === 'shkriuss-device:synced-apps') {
+      void showSyncApps();
+      return;
+    }
     if (event.key !== null && event.key !== 'shkriuss-device:account') return;
     void currentAccount().then((current) => {
       account = current;

@@ -7,8 +7,11 @@ export {
   currentAccount,
   forgetAccount,
   noteReplaced,
+  noteSyncOff,
+  noteSyncOn,
   replacedSecrets,
   saveAccount,
+  syncedApps,
   type Account,
 } from './device.ts';
 export {

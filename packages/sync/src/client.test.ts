@@ -13,6 +13,7 @@ import {
   type SyncClient,
   type SyncStatus,
 } from './client.ts';
+import { turnOffProof } from './connect.ts';
 import worker, { SyncCopy, type SyncEnv } from './worker.ts';
 
 class MemoryStorage implements StorageLike {
@@ -318,6 +319,30 @@ describe('syncing between devices', () => {
     await phone.syncNow();
     expect(phone.counters).toEqual([counter('a', 4)]);
     vi.useRealTimers();
+  });
+
+  it('turns off from the Account page’s link, only if it’s from this account', async () => {
+    const secret = randomBytes(32);
+    // Run what the client starts "a moment later".
+    vi.stubGlobal('window', { ...window, setTimeout: (run: () => void) => void run() });
+    vi.stubGlobal('history', { replaceState: () => undefined });
+    const opened = (proof: string) => {
+      vi.stubGlobal('location', {
+        hash: `#sync=off&proof=${proof}`,
+        pathname: '/',
+        search: '',
+        origin: ORIGIN,
+      });
+      return new Device(secret);
+    };
+
+    const fromSomeoneElse = opened(await turnOffProof(randomBytes(32)));
+    await vi.waitFor(() => expect(fromSomeoneElse.events).toContain('kept-on'));
+    expect(fromSomeoneElse.sync.status().on).toBe(true);
+
+    const fromThisAccount = opened(await turnOffProof(secret));
+    await vi.waitFor(() => expect(fromThisAccount.events).toEqual(['turned-off']));
+    expect(fromThisAccount.sync.status().on).toBe(false);
   });
 
   it('moves everything to a new account key, and stops the old copy', async () => {

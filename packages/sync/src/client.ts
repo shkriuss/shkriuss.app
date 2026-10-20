@@ -6,7 +6,8 @@
  *   sync.connect();   // "Turn on sync": goes to the hub's Account page and back
  *
  * Opening the app with "#sync=connect" (from the hub's list of apps) starts
- * "Turn on sync" straight away.
+ * "Turn on sync" straight away; "#sync=off&proof=…" turns it off, if the
+ * proof is from the account this app syncs with (./connect.ts).
  *
  * Each round: read this device's items, fetch the online copy if it changed,
  * merge (./merge.ts: newest edit of each item wins, deletions sync), save the
@@ -33,7 +34,9 @@ import {
   newConnectRequest,
   openConnection,
   parseConnectResult,
+  parseTurnOff,
   type PendingConnect,
+  turnOffProof,
 } from './connect.ts';
 import {
   canonical,
@@ -120,6 +123,8 @@ export type SyncEvent =
   /** Synced, and something changed on two devices at once was kept in both versions. */
   | 'kept-both'
   | 'turned-off'
+  /** A link to turn sync off came from a different account, so sync stayed on. */
+  | 'kept-on'
   | 'deleted-online';
 
 export interface SyncClient {
@@ -552,6 +557,20 @@ export function createSync(options: {
     }
   }
 
+  /**
+   * From the hub's list of apps: "Turn off sync in …". Only the account this
+   * app syncs with can make the proof, so a link from anyone else can't.
+   */
+  async function turnOffFromHub(proof: string): Promise<void> {
+    const state = loadState();
+    if (state?.secret && proof !== (await turnOffProof(fromBase64Url(state.secret)))) {
+      emit('kept-on');
+      schedule(0);
+      return;
+    }
+    client.turnOff();
+  }
+
   const client: SyncClient = {
     status,
     subscribe(listener) {
@@ -626,6 +645,7 @@ export function createSync(options: {
   }, POLL_MS);
 
   // A moment later, so the page can subscribe first and see what happened.
+  const turnOff = parseTurnOff(location.hash);
   if (parseConnectResult(location.hash)) {
     window.setTimeout(() => void finishConnect(), 0);
   } else if (location.hash === '#sync=connect') {
@@ -637,6 +657,9 @@ export function createSync(options: {
         emit();
       });
     }, 0);
+  } else if (turnOff) {
+    history.replaceState(null, '', `${location.pathname}${location.search}`);
+    window.setTimeout(() => void turnOffFromHub(turnOff), 0);
   } else if (isSyncOn()) {
     schedule(0);
   }

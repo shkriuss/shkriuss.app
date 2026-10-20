@@ -140,6 +140,18 @@ in with `sync: true` in `apps.json`.
   - The app opens it, removes it from the address bar, and forgets the
     one-time key. The app and the hub never call each other's servers, and
     the CSP stays `'self'`.
+- **Turning sync off from the Account page.**
+  - The hub can't see inside apps: they're other sites, and there are no
+    cookies. So when the person confirms "Turn on sync for …", the hub
+    remembers on this device which app it was, at which address, with which
+    account code (`shkriuss-device:synced-apps`). Signing out forgets it, and
+    a new account key (another code) starts again with every app off.
+  - For those apps, the list of apps says "Turn off sync in …". The link opens
+    the app with `#sync=off&proof=…`. The proof comes from the app's own key
+    (HKDF, `turnOffProof`), so only the account the app syncs with can make
+    it: a link from anyone else leaves sync on, and the app says so.
+  - Sync turned off inside the app isn't seen by the hub. Its link still says
+    "Turn off" until it's tapped, which then finds sync already off.
 - **Storage.**
   - The app's own key gives two more keys: a token for its server, and a key
     for the data.
