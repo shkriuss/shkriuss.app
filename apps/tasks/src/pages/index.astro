@@ -1,0 +1,552 @@
+---
+/**
+ * Tasks: a quick "Add" box, the tasks still to do grouped by when they're
+ * due (overdue, today, tomorrow, later, no date), your lists, the done
+ * ones, and forms to change a task or a list. Behaviour: ../scripts/tasks.ts
+ * and ../scripts/reminders.ts.
+ */
+import { AppShell, Button, DataControls, Icon, PushControls, SyncControls } from '@shkriuss/ui';
+import { LIST_NAME_MAX } from '../lib/lists.ts';
+import { LIMITS, REMINDERS, REMINDER_LABELS, REPEATS, REPEAT_LABELS } from '../lib/tasks.ts';
+---
+
+<AppShell wide>
+  <div class="stack stack--lg">
+    <header class="stack stack--sm">
+      <h1>Tasks</h1>
+      <p class="lead">
+        What you need to do, with dates, lists and reminders. Saved on this device.
+      </p>
+    </header>
+
+    <form class="add-form" data-add-form novalidate>
+      <div class="field add-form__field">
+        <label class="field__label" for="new-task">
+          New task
+        </label>
+        <input
+          class="input"
+          id="new-task"
+          name="title"
+          type="text"
+          autocomplete="off"
+          enterkeyhint="done"
+          maxlength={LIMITS.title}
+          placeholder="e.g. Pay the electricity bill"
+          aria-describedby="new-task-error"
+          required
+        />
+        <p class="field__error" id="new-task-error" data-add-error></p>
+      </div>
+      <Button type="submit" variant="primary" icon="plus" class="add-form__submit">
+        Add
+      </Button>
+    </form>
+
+    <section class="stack" aria-labelledby="view-heading">
+      <h2 id="view-heading" tabindex="-1" data-view-heading>
+        All tasks
+      </h2>
+      <p class="notice" data-message hidden></p>
+
+      <div class="stack stack--sm">
+        <ul role="list" class="cluster chips" aria-label="Show" data-views></ul>
+        <p class="cluster view-actions">
+          <Button icon="plus" data-action="add-list">
+            New list
+          </Button>
+          <Button variant="ghost" icon="pencil" data-action="edit-list" hidden>
+            Rename or delete this list
+          </Button>
+        </p>
+      </div>
+
+      <p class="muted" data-empty>
+        Nothing to do here. Add a task above.
+      </p>
+      <div class="stack" data-groups></div>
+
+      <details class="stack stack--sm" data-done-section hidden>
+        <summary class="done-summary" data-done-summary>
+          Done
+        </summary>
+        <ul role="list" class="tasks" data-done-list></ul>
+        <p>
+          <Button variant="ghost" icon="trash" data-action="clear-done">
+            Delete done tasks
+          </Button>
+        </p>
+      </details>
+    </section>
+
+    <section class="stack" aria-labelledby="reminders-heading">
+      <h2 id="reminders-heading">Reminders</h2>
+      <p class="muted">
+        To get reminded, open a task, give it a date and choose “Remind me”. Without a time,
+        reminders come at 9:00.
+      </p>
+      <p data-notify-status>Notifications are off.</p>
+      <p data-notify-enable hidden>
+        <Button icon="bell" data-action="enable-notifications">
+          Turn on notifications
+        </Button>
+      </p>
+      <PushControls />
+    </section>
+
+    <SyncControls />
+
+    <DataControls />
+  </div>
+
+  <!-- Live region: tells screen reader users what happened. -->
+  <p class="visually-hidden" role="status" data-announcer></p>
+
+  <!-- A group of tasks ("Today"), copied by the script. -->
+  <template data-group-template>
+    <div class="stack stack--sm">
+      <h3 class="group-title" data-group-title>
+        Today
+      </h3>
+      <ul role="list" class="tasks" data-group-tasks></ul>
+    </div>
+  </template>
+
+  <!-- One task, copied by the script for each task. -->
+  <template data-task-template>
+    <li class="task" data-id>
+      <label class="task__check">
+        <input type="checkbox" data-done />
+        <span class="visually-hidden" data-done-label>
+          Done
+        </span>
+      </label>
+      <div class="task__body">
+        <button type="button" class="task__title" aria-haspopup="dialog" data-action="edit">
+          Task
+        </button>
+        <p class="muted task__meta" data-meta>
+          <span class="task__tag task__star" data-star>
+            <Icon name="star" />
+            <span class="visually-hidden">Important</span>
+          </span>
+          <span class="task__due" data-due></span>
+          <span class="task__tag" data-repeat-tag>
+            <Icon name="repeat" />
+            <span data-repeat></span>
+          </span>
+          <span class="task__tag" data-reminder-tag>
+            <Icon name="bell" />
+            <span class="visually-hidden">Reminder</span>
+          </span>
+          <span class="task__tag" data-list-tag>
+            <Icon name="list" />
+            <span data-list-name></span>
+          </span>
+        </p>
+        <p class="muted task__notes" data-notes></p>
+      </div>
+    </li>
+  </template>
+
+  <!-- A choice of what to show: all tasks, important ones, or a list. -->
+  <template data-view-template>
+    <li>
+      <button type="button" class="btn chip" aria-pressed="false" data-view>
+        <span class="chip__name" data-view-name>
+          All
+        </span>
+        <span class="chip__count" data-view-count></span>
+      </button>
+    </li>
+  </template>
+
+  <dialog class="dialog" aria-labelledby="task-dialog-title" data-task-dialog>
+    <form class="stack" data-task-form novalidate>
+      <h2 id="task-dialog-title">Edit task</h2>
+
+      <div class="field">
+        <label class="field__label" for="task-title">
+          Title
+        </label>
+        <input
+          class="input"
+          id="task-title"
+          name="title"
+          type="text"
+          autocomplete="off"
+          maxlength={LIMITS.title}
+          aria-describedby="task-title-error"
+          required
+        />
+        <p class="field__error" id="task-title-error" data-error-for="title"></p>
+      </div>
+
+      <div class="field">
+        <label class="field__label" for="task-notes">
+          Notes (optional)
+        </label>
+        <textarea
+          class="input"
+          id="task-notes"
+          name="notes"
+          rows="3"
+          maxlength={LIMITS.notes}
+        ></textarea>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label class="field__label" for="task-date">
+            Date (optional)
+          </label>
+          <input
+            class="input"
+            id="task-date"
+            name="date"
+            type="date"
+            aria-describedby="task-date-error"
+          />
+          <p class="field__error" id="task-date-error" data-error-for="date"></p>
+        </div>
+        <div class="field">
+          <label class="field__label" for="task-time">
+            Time (optional)
+          </label>
+          <input
+            class="input"
+            id="task-time"
+            name="time"
+            type="time"
+            aria-describedby="task-time-error"
+          />
+          <p class="field__error" id="task-time-error" data-error-for="time"></p>
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label class="field__label" for="task-repeat">
+            Repeat
+          </label>
+          <select class="input" id="task-repeat" name="repeat">
+            {REPEATS.map((repeat) => (
+              <option value={repeat}>{REPEAT_LABELS[repeat]}</option>
+            ))}
+          </select>
+        </div>
+        <div class="field">
+          <label class="field__label" for="task-reminder">
+            Remind me
+          </label>
+          <select
+            class="input"
+            id="task-reminder"
+            name="reminder"
+            aria-describedby="task-reminder-hint"
+          >
+            <option value="">No reminder</option>
+            {REMINDERS.map((minutes) => (
+              <option value={String(minutes)}>{REMINDER_LABELS[minutes]}</option>
+            ))}
+          </select>
+          <p class="field__hint" id="task-reminder-hint">
+            Without a time: at 9:00.
+          </p>
+        </div>
+      </div>
+
+      <div class="field" data-list-field>
+        <label class="field__label" for="task-list">
+          List
+        </label>
+        <select class="input" id="task-list" name="list"></select>
+      </div>
+
+      <label class="check">
+        <input type="checkbox" name="important" />
+        <span>Important</span>
+      </label>
+
+      <p class="field__error" role="alert" data-error-for="form"></p>
+
+      <div class="cluster dialog__actions">
+        <Button type="submit" variant="primary">
+          Save
+        </Button>
+        <Button data-action="cancel">Cancel</Button>
+        <Button variant="danger" icon="trash" data-action="delete" class="dialog__delete">
+          Delete
+        </Button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="dialog" aria-labelledby="delete-title" data-delete-dialog>
+    <form method="dialog" class="stack">
+      <h2 id="delete-title">Delete this task?</h2>
+      <p>
+        “<span data-delete-name></span>” will be removed. This can't be undone.
+      </p>
+      <div class="cluster">
+        <Button type="submit" value="cancel">
+          Cancel
+        </Button>
+        <Button type="submit" variant="danger" value="confirm">
+          Delete
+        </Button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="dialog" aria-labelledby="list-dialog-title" data-list-dialog>
+    <form class="stack" data-list-form novalidate>
+      <h2 id="list-dialog-title" data-list-title>
+        New list
+      </h2>
+      <div class="field">
+        <label class="field__label" for="list-name">
+          Name
+        </label>
+        <input
+          class="input"
+          id="list-name"
+          type="text"
+          autocomplete="off"
+          maxlength={LIST_NAME_MAX}
+          placeholder="e.g. Work, Home, Shopping"
+          aria-describedby="list-name-error"
+          required
+          data-list-name-input
+        />
+        <p class="field__error" id="list-name-error" data-list-error></p>
+      </div>
+      <div class="cluster dialog__actions">
+        <Button type="submit" variant="primary">
+          Save
+        </Button>
+        <Button data-action="cancel-list">Cancel</Button>
+        <Button variant="danger" icon="trash" data-action="delete-list" class="dialog__delete">
+          Delete
+        </Button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="dialog" aria-labelledby="list-delete-title" data-list-delete-dialog>
+    <form method="dialog" class="stack">
+      <h2 id="list-delete-title">Delete this list?</h2>
+      <p>
+        “<span data-list-delete-name></span>” will be removed.
+      </p>
+      <div class="field" data-list-tasks-field>
+        <label class="field__label" for="list-tasks">
+          Its <span data-list-tasks-count>tasks</span>
+        </label>
+        <select class="input" id="list-tasks" data-list-tasks></select>
+      </div>
+      <div class="cluster">
+        <Button type="submit" value="cancel">
+          Cancel
+        </Button>
+        <Button type="submit" variant="danger" value="confirm">
+          Delete
+        </Button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="dialog" aria-labelledby="clear-title" data-clear-dialog>
+    <form method="dialog" class="stack">
+      <h2 id="clear-title">Delete done tasks?</h2>
+      <p data-clear-text>The done tasks shown here will be removed. This can't be undone.</p>
+      <div class="cluster">
+        <Button type="submit" value="cancel">
+          Cancel
+        </Button>
+        <Button type="submit" variant="danger" value="confirm">
+          Delete
+        </Button>
+      </div>
+    </form>
+  </dialog>
+</AppShell>
+
+<script>
+  import { mountTasks } from '../scripts/tasks.ts';
+
+  mountTasks(document);
+</script>
+
+<style>
+  .add-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: start;
+    gap: var(--space-3);
+  }
+
+  .add-form__field {
+    flex: 1 1 16rem;
+  }
+
+  /* Line the button up with the input (label height + small gap). */
+  .add-form__submit {
+    margin-block-start: calc(var(--text-base) * var(--leading-normal) + var(--space-1));
+  }
+
+  /* All, Important and the lists: a button each, with how many tasks are left. */
+  .chips,
+  .view-actions {
+    --cluster-gap: var(--space-2);
+  }
+
+  .chip {
+    gap: var(--space-2);
+  }
+
+  .chip__name {
+    font-weight: var(--weight-semibold);
+    overflow-wrap: anywhere;
+  }
+
+  .chip__count {
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+  }
+
+  .chip[aria-pressed='true'] .chip__count {
+    color: inherit;
+  }
+
+  .group-title {
+    font-size: var(--text-base);
+  }
+
+  .tasks {
+    display: grid;
+    gap: var(--space-2);
+  }
+
+  .task {
+    display: flex;
+    align-items: start;
+    gap: var(--space-1);
+    padding: var(--space-1) var(--space-3) var(--space-1) var(--space-1);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius);
+    background: var(--color-surface);
+  }
+
+  /* The whole square around the box can be tapped. */
+  .task__check {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: var(--tap-target);
+    height: var(--tap-target);
+    cursor: pointer;
+  }
+
+  .task__check input {
+    width: 1.375rem;
+    height: 1.375rem;
+    margin: 0;
+    accent-color: var(--color-accent);
+    cursor: pointer;
+  }
+
+  .task__body {
+    display: grid;
+    flex: 1;
+    min-width: 0;
+    gap: var(--space-1);
+    padding-block-end: var(--space-1);
+  }
+
+  /* The title opens the task: it reads as text, works as a button. */
+  .task__title {
+    min-height: var(--tap-target);
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    overflow-wrap: anywhere;
+    cursor: pointer;
+  }
+
+  .task__title:hover {
+    color: var(--color-accent);
+  }
+
+  .task--done .task__title {
+    color: var(--color-text-muted);
+    text-decoration: line-through;
+  }
+
+  .task__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1) var(--space-3);
+    font-size: var(--text-sm);
+  }
+
+  .task__tag {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    overflow-wrap: anywhere;
+  }
+
+  .task__tag :global(svg) {
+    flex: none;
+    width: 1em;
+    height: 1em;
+  }
+
+  .task__star {
+    color: var(--color-accent);
+  }
+
+  .task__star :global(svg) {
+    fill: currentColor;
+  }
+
+  .task__due--overdue {
+    color: var(--color-danger);
+    font-weight: var(--weight-semibold);
+  }
+
+  .task__due:empty {
+    display: none;
+  }
+
+  /* Long notes: the start of them, the rest when the task is opened. */
+  .task__notes {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    font-size: var(--text-sm);
+    overflow-wrap: anywhere;
+  }
+
+  .task__notes:empty {
+    display: none;
+  }
+
+  .done-summary {
+    min-height: var(--tap-target);
+    padding-block: var(--space-2);
+    font-weight: var(--weight-semibold);
+    cursor: pointer;
+  }
+
+  .dialog__actions :global(.dialog__delete) {
+    margin-inline-start: auto;
+  }
+</style>
