@@ -24,7 +24,9 @@ worker from a `blob:` URL, which the CSP and Trusted Types also block.
 ## Decision
 
 - **Harper (`harper.js`) checks text in Grammar, on the device.** Nothing is
-  sent anywhere; a browser test checks that typing sends no request.
+  sent anywhere; a browser test checks that typing sends no request. (With
+  sync on, [ADR 0010](0010-account-and-sync.md), only the English choice and
+  the dictionary sync; the text still never leaves the device, also tested.)
 - **Only apps that need it may compile WebAssembly.** An app sets
   `"webAssembly": true` in `apps.json`; its CSP then has
   `script-src 'self' 'wasm-unsafe-eval'`. This keyword allows compiling

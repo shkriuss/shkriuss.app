@@ -6,8 +6,11 @@
  *
  * Deep check, if downloaded, checks more thoroughly with an AI model, also on
  * this device (docs/adr/0012). Behaviour: ../scripts/deep-check.ts.
+ *
+ * With sync on (docs/adr/0010), the English choice and the dictionary sync
+ * between devices; the text never does.
  */
-import { AppShell, Button, DataControls, Icon } from '@shkriuss/ui';
+import { AppShell, Button, DataControls, Icon, SyncControls } from '@shkriuss/ui';
 import { MAX_TEXT_LENGTH } from '../lib/grammar.ts';
 ---
 
@@ -193,6 +196,9 @@ import { MAX_TEXT_LENGTH } from '../lib/grammar.ts';
       <a href="/licenses/onnxruntime-web.txt">ONNX Runtime</a>.
     </p>
 
+    <SyncControls what="your dictionary and your choice of American or British English">
+      <p class="muted">Your text isn't synced: it never leaves this device.</p>
+    </SyncControls>
     <DataControls />
   </div>
 
