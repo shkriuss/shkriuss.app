@@ -33,6 +33,7 @@ export async function signInWithKey(page: Page, key: string): Promise<void> {
 /** On an app's page: "Turn on sync", confirm on the hub, and wait until it's synced. */
 export async function turnOnSync(page: Page, appName: string): Promise<void> {
   const appURL = new URL(page.url()).origin;
+  const since = await page.evaluate(() => Date.now());
   await page.getByRole('button', { name: 'Turn on sync' }).click();
   await expect(
     page.getByRole('heading', { name: `Sync ${appName} with your account?` }),
@@ -41,6 +42,15 @@ export async function turnOnSync(page: Page, appName: string): Promise<void> {
   await page.waitForURL(`${appURL}/`);
   await expect(page.locator('[data-sync-on]')).toBeVisible();
   await expect(page.locator('[data-sync-status]')).toHaveText(/^(Sync is on|Synced just now)/);
+  // "Sync is on" shows before the first sync is over. Wait for it, upload
+  // included: a test waiting for the upload of its next change mustn't get
+  // this one instead (and check the other device too early).
+  await page.waitForFunction((after) => {
+    const state = JSON.parse(localStorage.getItem('shkriuss-device:sync') ?? 'null') as {
+      last?: number | null;
+    } | null;
+    return (state?.last ?? 0) >= after;
+  }, since);
 }
 
 /**

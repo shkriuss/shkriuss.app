@@ -1,7 +1,8 @@
 // Calendar's events syncing between two devices through the account
-// (packages/sync, docs/adr/0010). The connect flow itself is tested for every
-// app in tests/e2e/sync.spec.ts.
-import type { Page } from '@playwright/test';
+// (packages/sync, docs/adr/0010), reminders included. The connect flow itself
+// is tested for every app in tests/e2e/sync.spec.ts.
+import type { Page, Request } from '@playwright/test';
+import { fromBase64Url } from '../../../packages/push/src/base64.ts';
 import {
   createAccount,
   hubURL,
@@ -10,6 +11,7 @@ import {
   turnOnSync,
 } from '../../../tests/e2e/account.ts';
 import { expect, test } from '../../../tests/e2e/fixtures.ts';
+import { fakeSubscription, startRig } from '../../../tests/e2e/notifications.ts';
 import { dayList, editor, newEvent, save } from './helpers.ts';
 
 test.use({ timezoneId: 'Europe/Berlin' });
@@ -22,6 +24,14 @@ const uploaded = (page: Page) =>
 
 const event = (page: Page, title: string) =>
   dayList(page).getByRole('button', { name: new RegExp(title) });
+
+/** The reminders a device handed to its notification service. */
+const entriesOf = async (request: Promise<Request>) =>
+  (
+    JSON.parse((await request).postData() ?? '{}') as {
+      entries: { start: string; repeat: string; offset: number; payload: string }[];
+    }
+  ).entries;
 
 test('events sync between devices: added, changed and deleted', async ({
   page,
@@ -119,4 +129,76 @@ test('keeps both versions of an event changed on two devices at once', async ({
   await expect(event(tablet, 'Team lunch \\(second version\\)')).toBeVisible();
   await expect(event(tablet, 'Team lunch')).toHaveCount(2);
   await tablet.context().close();
+});
+
+test('a reminder set on one device reminds on the others too', async ({ page, browser, guard }) => {
+  guard.allowOrigin(hubURL);
+  const rig = await startRig();
+  try {
+    const { key } = await createAccount(page);
+    await page.goto('/');
+    await turnOnSync(page, 'Calendar');
+
+    // The tablet reminds even while Calendar is closed there.
+    const tablet = await (
+      await browser.newContext({
+        locale: 'en-US',
+        timezoneId: 'Europe/Berlin',
+        serviceWorkers: 'allow',
+      })
+    ).newPage();
+    await fakeSubscription(tablet, rig);
+    await signInWithKey(tablet, key);
+    await tablet.goto(`${new URL(page.url()).origin}/`);
+    await tablet.getByLabel('Also remind me when Calendar is closed').check();
+    await expect(tablet.locator('[data-closed-status]')).toHaveText(/^On:/);
+    await turnOnSync(tablet, 'Calendar');
+
+    // Set on the phone: every week, so it's always still to come…
+    let upload = uploaded(page);
+    await newEvent(page, 'Piano lesson');
+    const date = await editor(page).getByLabel('Starts', { exact: true }).inputValue();
+    await editor(page).getByLabel('Start time').fill('17:00');
+    await editor(page).getByLabel('Repeats', { exact: true }).selectOption('weekly');
+    await editor(page)
+      .getByLabel('Reminder', { exact: true })
+      .selectOption({ label: '15 minutes before' });
+    await save(page);
+    await upload;
+
+    // …and on the tablet: shown, and handed to its own notification service.
+    const schedule = (match: string) =>
+      tablet.waitForRequest(
+        (request) =>
+          request.url().endsWith('/api/push/schedule') &&
+          request.method() === 'PUT' &&
+          (request.postData() ?? '').includes(match),
+      );
+    let request = schedule('"start"');
+    await tablet.getByRole('button', { name: 'Sync now' }).click();
+    await expect(event(tablet, 'Piano lesson, repeats, with a reminder')).toBeVisible();
+    const entries = await entriesOf(request);
+    expect(entries).toEqual([
+      expect.objectContaining({ start: `${date}T17:00`, repeat: 'weekly', offset: 15 }),
+    ]);
+    expect(await rig.open(fromBase64Url(entries[0]?.payload ?? ''))).toMatchObject({
+      title: 'Piano lesson',
+    });
+
+    // Turned off on the phone: off on the tablet too.
+    upload = uploaded(page);
+    await event(page, 'Piano lesson').click();
+    await editor(page)
+      .getByLabel('Reminder', { exact: true })
+      .selectOption({ label: 'No reminder' });
+    await save(page);
+    await upload;
+    request = schedule('"entries":[]');
+    await tablet.getByRole('button', { name: 'Sync now' }).click();
+    await expect(event(tablet, 'Piano lesson, repeats$')).toBeVisible();
+    expect(await entriesOf(request)).toEqual([]);
+    await tablet.context().close();
+  } finally {
+    rig.server.close();
+  }
 });

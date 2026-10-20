@@ -95,10 +95,11 @@ test('a reminder set on one device reminds on the others too', async ({ page, br
     await turnOnSync(tablet, 'Tasks');
     await expect(titles(tablet)).toHaveText(['Dentist']);
 
-    // Set on the phone…
+    // Set on the phone, well ahead so it's always still to come…
+    const date = new Date(Date.now() + 60 * 24 * 60 * 60_000).toISOString().slice(0, 10);
     const upload = uploaded(page);
     await page.getByRole('button', { name: 'Edit Dentist' }).click();
-    await editor(page).getByLabel('Date (optional)').fill('2026-12-01');
+    await editor(page).getByLabel('Date (optional)').fill(date);
     await editor(page).getByLabel('Time (optional)').fill('10:00');
     await editor(page).getByLabel('Remind me').selectOption({ label: '1 day before' });
     await editor(page).getByRole('button', { name: 'Save' }).click();
@@ -117,7 +118,7 @@ test('a reminder set on one device reminds on the others too', async ({ page, br
       entries: unknown[];
     };
     expect(entries).toEqual([
-      expect.objectContaining({ start: '2026-12-01T10:00', repeat: 'none', offset: 1440 }),
+      expect.objectContaining({ start: `${date}T10:00`, repeat: 'none', offset: 1440 }),
     ]);
     await tablet.context().close();
   } finally {
