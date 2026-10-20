@@ -1,6 +1,6 @@
 // Habits syncing between two devices through the account (packages/sync,
-// docs/adr/0010). The connect flow itself is tested for every app in
-// tests/e2e/sync.spec.ts.
+// docs/adr/0010), reminders included. The connect flow itself is tested for
+// every app in tests/e2e/sync.spec.ts.
 import type { Page } from '@playwright/test';
 import {
   createAccount,
@@ -10,6 +10,7 @@ import {
   turnOnSync,
 } from '../../../tests/e2e/account.ts';
 import { expect, test } from '../../../tests/e2e/fixtures.ts';
+import { fakeSubscription, startRig } from '../../../tests/e2e/notifications.ts';
 
 const card = (page: Page, name: string) =>
   page.getByRole('listitem').filter({ has: page.getByRole('heading', { name, exact: true }) });
@@ -71,4 +72,61 @@ test('habits and check marks sync, and the same day ticked twice stays one', asy
   await page.getByRole('button', { name: 'Add', exact: true }).click();
   expect((await upload).request().postData() ?? '').not.toContain('Secret habit');
   await tablet.context().close();
+});
+
+test('a reminder set on one device reminds on the others too', async ({ page, browser, guard }) => {
+  guard.allowOrigin(hubURL);
+  const rig = await startRig();
+  try {
+    const { key } = await createAccount(page);
+    await page.goto('/');
+    const appURL = new URL(page.url()).origin;
+    await page.getByLabel('New habit').fill('Walk');
+    await page.getByRole('button', { name: 'Add', exact: true }).click();
+    await turnOnSync(page, 'Habits');
+
+    // The tablet reminds even while Habits is closed there.
+    const tablet = await (
+      await browser.newContext({ locale: 'en-US', serviceWorkers: 'allow' })
+    ).newPage();
+    await fakeSubscription(tablet, rig);
+    await signInWithKey(tablet, key);
+    await tablet.goto(`${appURL}/`);
+    await tablet.getByLabel('Also remind me when Habits is closed').check();
+    await expect(tablet.locator('[data-closed-status]')).toHaveText(
+      'On: reminders arrive even when Habits is closed.',
+    );
+    await turnOnSync(tablet, 'Habits');
+    await expect(card(tablet, 'Walk')).toBeVisible();
+
+    // Set on the phone…
+    const upload = uploaded(page);
+    await page.getByRole('button', { name: 'Edit Walk' }).click();
+    const editor = page.getByRole('dialog', { name: 'Edit habit' });
+    await editor.getByLabel('Remind me').check();
+    await editor.getByLabel('Reminder time').fill('20:00');
+    await editor.getByRole('button', { name: 'Save' }).click();
+    await upload;
+
+    // …and on the tablet: shown, and handed to its own notification service.
+    const schedule = tablet.waitForRequest(
+      (request) =>
+        request.url().endsWith('/api/push/schedule') &&
+        request.method() === 'PUT' &&
+        (request.postData() ?? '').includes('"start"'),
+    );
+    await tablet.getByRole('button', { name: 'Sync now' }).click();
+    await expect(card(tablet, 'Walk')).toContainText(/Reminder at 8:00\sPM/);
+    const { entries } = JSON.parse((await schedule).postData() ?? '{}') as {
+      entries: { start: string; repeat: string }[];
+    };
+    // Every day: one a week for each day, at 20:00.
+    expect(entries).toHaveLength(7);
+    for (const entry of entries) {
+      expect(entry).toMatchObject({ start: expect.stringMatching(/T20:00$/), repeat: 'weekly' });
+    }
+    await tablet.context().close();
+  } finally {
+    rig.server.close();
+  }
 });
