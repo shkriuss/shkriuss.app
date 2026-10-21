@@ -166,6 +166,23 @@
       ],
       "pushNotifications": true,
       "sync": true
+    },
+    {
+      "slug": "reminders",
+      "name": "Reminders",
+      "description": "Get reminded at the right time, once or again and again. Your reminders stay on your device.",
+      "icon": "bell",
+      "color": "orange",
+      "status": "live",
+      "storage": "device",
+      "dataStored": [
+        "Your reminders: what to be reminded of, when, how often it repeats, and which are done",
+        "If you turn on reminders while Reminders is closed: this device's notification settings and a random device key (never in backups)",
+        "If you turn on sync: a copy of your reminders on Reminders' server, locked on your devices so only they can read it, and this device's sync key (never in backups)",
+        "Your light or dark theme choice"
+      ],
+      "pushNotifications": true,
+      "sync": true
     }
   ]
 }
