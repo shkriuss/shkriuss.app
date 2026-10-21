@@ -10,6 +10,7 @@ export const icons = {
   bag: '<path d="M5 8h14l-1.2 12.1a1 1 0 0 1-1 .9H7.2a1 1 0 0 1-1-.9L5 8Z"/><path d="M9 10V6.5a3 3 0 0 1 6 0V10"/>',
   bell: '<path d="M6 16v-5a6 6 0 0 1 12 0v5l1.5 2.5h-15L6 16Z"/><path d="M10 21h4"/>',
   calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  chart: '<path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 6-6"/><path d="M15 8h5v5"/>',
   check: '<path d="m5 12.5 4.5 4.5L19 7"/>',
   checklist:
     '<path d="m3.5 6.5 1.5 1.5 3-3M3.5 12.5 5 14l3-3M3.5 18.5 5 20l3-3M11.5 6.5H20M11.5 12.5H20M11.5 18.5H20"/>',

@@ -1,0 +1,35 @@
+// Cloudflare Worker for this app: the static site, plus /api/sync/* for
+// syncing between devices with the optional account (docs/adr/0010-account-and-sync.md).
+// Docs: docs/deployment.md
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "trades",
+  "compatibility_date": "2026-10-01",
+  "main": "src/worker.ts",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    // Only /api/* runs the Worker code; every other request is a static file.
+    "run_worker_first": ["/api/*"],
+    "not_found_handling": "404-page",
+    "html_handling": "auto-trailing-slash",
+  },
+  // One store per account: its sealed copy of Trades' data. SQLite-backed,
+  // as the free plan requires.
+  "durable_objects": {
+    "bindings": [{ "name": "SYNC_COPIES", "class_name": "SyncCopy" }],
+  },
+  "migrations": [{ "tag": "sync-v1", "new_sqlite_classes": ["SyncCopy"] }],
+  // The real address. Cloudflare creates the DNS record and certificate.
+  "routes": [{ "pattern": "trades.shkriuss.app", "custom_domain": true }],
+  // No *.workers.dev address for production, but keep preview links for PRs.
+  "workers_dev": false,
+  "preview_urls": true,
+  // Settings for PR previews (`wrangler preview`). Each preview gets its own,
+  // empty Durable Object storage: nothing is shared with the real site.
+  "previews": {
+    "durable_objects": {
+      "bindings": [{ "name": "SYNC_COPIES", "class_name": "SyncCopy" }],
+    },
+  },
+}

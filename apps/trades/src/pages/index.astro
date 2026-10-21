@@ -1,0 +1,535 @@
+---
+/**
+ * Trades: results for a period, open trades, closed trades (with search),
+ * results by setup and by month, the trade form, the currency and a
+ * spreadsheet download. Behaviour: ../scripts/trades.ts.
+ */
+import { AppShell, Button, DataControls, SyncControls } from '@shkriuss/ui';
+import { CURRENCIES, LIMITS, PERIOD_LABELS, PERIODS } from '../lib/trades.ts';
+
+const STAT_TILES = [
+  ['total', 'Net result'],
+  ['count', 'Closed trades'],
+  ['win-rate', 'Win rate'],
+  ['profit-factor', 'Profit factor'],
+  ['average-win', 'Average win'],
+  ['average-loss', 'Average loss'],
+  ['best', 'Best trade'],
+  ['worst', 'Worst trade'],
+  ['average-r', 'Average R'],
+] as const;
+---
+
+<AppShell wide>
+  <div class="stack stack--lg">
+    <header class="stack stack--sm">
+      <h1>Trades</h1>
+      <p class="lead">
+        Your trading journal: log your trades and see what works. It’s saved on this device.
+      </p>
+    </header>
+
+    <div class="cluster toolbar">
+      <Button variant="primary" icon="plus" data-action="new">
+        New trade
+      </Button>
+      <div class="field toolbar__period">
+        <label class="field__label" for="period">
+          Results for
+        </label>
+        <select class="input" id="period" data-period>
+          {PERIODS.map((period) => (
+            <option value={period}>{PERIOD_LABELS[period]}</option>
+          ))}
+        </select>
+      </div>
+    </div>
+
+    <section class="stack" aria-labelledby="results-heading">
+      <h2 id="results-heading">Results</h2>
+      <p class="muted" data-no-results>
+        No closed trades in this period yet.
+      </p>
+      <dl class="tiles" data-tiles>
+        {STAT_TILES.map(([key, label]) => (
+          <div class="tile" data-tile={key}>
+            <dt class="tile__label">{label}</dt>
+            <dd class="tile__value" data-value>
+              —
+            </dd>
+            <dd class="tile__note muted" data-note />
+          </div>
+        ))}
+      </dl>
+    </section>
+
+    <section class="stack" aria-labelledby="open-heading" data-open-section hidden>
+      <h2 id="open-heading">Open trades</h2>
+      <ul role="list" class="trades" data-open-list></ul>
+    </section>
+
+    <section class="stack" aria-labelledby="closed-heading">
+      <h2 id="closed-heading">Closed trades</h2>
+      <div class="field search">
+        <label class="field__label" for="search">
+          Search
+        </label>
+        <input
+          class="input"
+          id="search"
+          type="search"
+          autocomplete="off"
+          placeholder="Symbol, setup or notes"
+          data-search
+        />
+      </div>
+      <p class="muted" data-closed-empty>
+        No closed trades yet.
+      </p>
+      <ul role="list" class="trades" data-closed-list></ul>
+      <div data-more hidden>
+        <Button data-action="more">Show more</Button>
+      </div>
+    </section>
+
+    <section class="stack" aria-labelledby="setups-heading" data-setups-section hidden>
+      <h2 id="setups-heading">By setup</h2>
+      <ul role="list" class="groups" data-setups></ul>
+    </section>
+
+    <section class="stack" aria-labelledby="months-heading" data-months-section hidden>
+      <h2 id="months-heading">By month</h2>
+      <ul role="list" class="groups" data-months></ul>
+    </section>
+
+    <section class="stack" aria-labelledby="settings-heading">
+      <h2 id="settings-heading">Currency and spreadsheet</h2>
+      <div class="field currency">
+        <label class="field__label" for="currency">
+          Currency
+        </label>
+        <select class="input" id="currency" aria-describedby="currency-hint" data-currency>
+          {CURRENCIES.map((currency) => (
+            <option value={currency}>{currency}</option>
+          ))}
+        </select>
+        <p class="field__hint" id="currency-hint">
+          Shown with every amount. Prices and amounts aren’t converted.
+        </p>
+      </div>
+      <div>
+        <Button icon="download" data-action="csv">
+          Download as a spreadsheet (CSV)
+        </Button>
+      </div>
+    </section>
+
+    <SyncControls />
+
+    <DataControls />
+  </div>
+
+  <!-- Live region: tells screen reader users what changed. -->
+  <p class="visually-hidden" role="status" data-announcer></p>
+
+  <!-- One trade in a list, copied by the script for each. -->
+  <template data-trade-template>
+    <li class="trade">
+      <div class="trade__main">
+        <button type="button" class="trade__title" aria-haspopup="dialog" data-action="edit">
+          <span class="trade__symbol" data-symbol>
+            AAPL
+          </span>
+          <span class="badge" data-side>
+            Long
+          </span>
+        </button>
+        <p class="muted trade__meta" data-meta></p>
+        <p class="muted trade__setup" data-setup></p>
+      </div>
+      <div class="trade__result" data-result>
+        <span class="trade__profit" data-profit></span>
+        <span class="muted trade__extra" data-extra></span>
+      </div>
+      <div class="trade__close" data-close>
+        <Button data-action="close">Close</Button>
+      </div>
+    </li>
+  </template>
+
+  <!-- One line of "By setup" or "By month". -->
+  <template data-group-template>
+    <li class="group">
+      <span class="group__name" data-group-name></span>
+      <span class="group__total" data-group-total></span>
+      <span class="muted group__counts" data-group-counts></span>
+    </li>
+  </template>
+
+  <datalist id="setup-names" data-setup-names></datalist>
+
+  <dialog class="dialog trade-dialog" aria-labelledby="trade-title" data-trade-dialog>
+    <form class="stack" data-trade-form novalidate>
+      <h2 id="trade-title" data-trade-title>
+        New trade
+      </h2>
+      <div class="field-row">
+        <div class="field">
+          <label class="field__label" for="trade-symbol">
+            Symbol
+          </label>
+          <input
+            class="input trade-symbol"
+            id="trade-symbol"
+            name="symbol"
+            type="text"
+            autocomplete="off"
+            autocapitalize="characters"
+            spellcheck="false"
+            maxlength={LIMITS.symbol}
+            placeholder="e.g. AAPL"
+            aria-describedby="trade-symbol-error"
+            required
+          />
+          <p class="field__error" id="trade-symbol-error" data-error-for="symbol"></p>
+        </div>
+        <fieldset class="stack stack--sm" aria-describedby="trade-side-error">
+          <legend class="field__label">Direction</legend>
+          <div class="cluster sides">
+            <label class="check">
+              <input type="radio" name="side" value="long" checked />
+              <span>Long</span>
+            </label>
+            <label class="check">
+              <input type="radio" name="side" value="short" />
+              <span>Short</span>
+            </label>
+          </div>
+          <p class="field__error" id="trade-side-error" data-error-for="side"></p>
+        </fieldset>
+      </div>
+
+      <fieldset class="stack stack--sm">
+        <legend class="field__label">Entry</legend>
+        <div class="field-row">
+          {(
+            [
+              ['entryDate', 'Day', 'date', true],
+              ['entryPrice', 'Price', 'number', true],
+              ['quantity', 'Quantity', 'number', true],
+              ['stop', 'Stop loss (optional)', 'number', false],
+            ] as const
+          ).map(([name, label, type, needed]) => (
+            <div class="field">
+              <label class="field__label" for={`trade-${name}`}>
+                {label}
+              </label>
+              <input
+                class="input"
+                id={`trade-${name}`}
+                name={name}
+                type={type}
+                inputmode={type === 'number' ? 'decimal' : undefined}
+                step={type === 'number' ? 'any' : undefined}
+                aria-describedby={`trade-${name}-error`}
+                required={needed}
+              />
+              <p class="field__error" id={`trade-${name}-error`} data-error-for={name} />
+            </div>
+          ))}
+        </div>
+      </fieldset>
+
+      <fieldset class="stack stack--sm" aria-describedby="trade-exit-hint">
+        <legend class="field__label">Exit</legend>
+        <p class="field__hint" id="trade-exit-hint">
+          Leave both empty while the trade is open.
+        </p>
+        <div class="field-row">
+          {(
+            [
+              ['exitDate', 'Day', 'date'],
+              ['exitPrice', 'Price', 'number'],
+              ['fees', 'Fees (optional)', 'number'],
+            ] as const
+          ).map(([name, label, type]) => (
+            <div class="field">
+              <label class="field__label" for={`trade-${name}`}>
+                {label}
+              </label>
+              <input
+                class="input"
+                id={`trade-${name}`}
+                name={name}
+                type={type}
+                inputmode={type === 'number' ? 'decimal' : undefined}
+                step={type === 'number' ? 'any' : undefined}
+                aria-describedby={`trade-${name}-error`}
+              />
+              <p class="field__error" id={`trade-${name}-error`} data-error-for={name} />
+            </div>
+          ))}
+        </div>
+      </fieldset>
+
+      <div class="field">
+        <label class="field__label" for="trade-setup">
+          Setup (optional)
+        </label>
+        <input
+          class="input"
+          id="trade-setup"
+          name="setup"
+          type="text"
+          autocomplete="off"
+          list="setup-names"
+          maxlength={LIMITS.setup}
+          placeholder="e.g. Breakout"
+          aria-describedby="trade-setup-error"
+        />
+        <p class="field__error" id="trade-setup-error" data-error-for="setup"></p>
+      </div>
+      <div class="field">
+        <label class="field__label" for="trade-notes">
+          Notes (optional)
+        </label>
+        <textarea
+          class="input"
+          id="trade-notes"
+          name="notes"
+          rows="3"
+          maxlength={LIMITS.notes}
+          placeholder="Why you took it, how it went, what you learned"
+          aria-describedby="trade-notes-error"
+        ></textarea>
+        <p class="field__error" id="trade-notes-error" data-error-for="notes"></p>
+      </div>
+      <div class="cluster dialog__actions">
+        <Button type="submit" variant="primary">
+          Save
+        </Button>
+        <Button data-action="cancel">Cancel</Button>
+        <Button variant="danger" icon="trash" data-action="delete" class="dialog__delete">
+          Delete
+        </Button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="dialog" aria-labelledby="delete-title" data-delete-dialog>
+    <form method="dialog" class="stack">
+      <h2 id="delete-title">Delete this trade?</h2>
+      <p>
+        The <span data-delete-name></span> trade will be removed from your journal.
+      </p>
+      <div class="cluster">
+        <Button type="submit" value="cancel">
+          Cancel
+        </Button>
+        <Button type="submit" variant="danger" value="confirm">
+          Delete
+        </Button>
+      </div>
+    </form>
+  </dialog>
+</AppShell>
+
+<script>
+  import { mountTrades } from '../scripts/trades.ts';
+
+  mountTrades(document);
+</script>
+
+<style>
+  .toolbar {
+    align-items: end;
+    justify-content: space-between;
+  }
+
+  .toolbar__period {
+    min-inline-size: 11rem;
+  }
+
+  .tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 8rem), 1fr));
+    gap: var(--space-3);
+    margin: 0;
+  }
+
+  .tile {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    padding: var(--space-3);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius);
+    background: var(--color-surface);
+  }
+
+  .tile dd {
+    margin: 0;
+  }
+
+  .tile__label {
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+  }
+
+  .tile__value {
+    font-size: var(--text-xl);
+    font-weight: var(--weight-bold);
+    overflow-wrap: anywhere;
+  }
+
+  .tile__note {
+    font-size: var(--text-sm);
+    overflow-wrap: anywhere;
+  }
+
+  .tile__note:empty {
+    display: none;
+  }
+
+  .win {
+    color: var(--color-accent);
+  }
+
+  .loss {
+    color: var(--color-danger);
+  }
+
+  .search {
+    max-inline-size: 24rem;
+  }
+
+  .trades {
+    display: grid;
+    gap: var(--space-2);
+  }
+
+  .trade {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: start;
+    gap: var(--space-2) var(--space-4);
+    padding: var(--space-2) var(--space-3);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius);
+    background: var(--color-surface);
+  }
+
+  .trade__main {
+    display: grid;
+    flex: 1 1 12rem;
+    min-width: 0;
+    gap: var(--space-1);
+  }
+
+  /* The symbol opens the trade: it reads as text, works as a button. */
+  .trade__title {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-height: var(--tap-target);
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+  }
+
+  .trade__title:hover .trade__symbol {
+    color: var(--color-accent);
+  }
+
+  .trade__symbol {
+    font-weight: var(--weight-bold);
+    overflow-wrap: anywhere;
+  }
+
+  .trade__meta,
+  .trade__setup {
+    font-size: var(--text-sm);
+    overflow-wrap: anywhere;
+  }
+
+  .trade__setup:empty {
+    display: none;
+  }
+
+  .trade__result {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-1) var(--space-2);
+  }
+
+  .trade__profit {
+    font-weight: var(--weight-bold);
+  }
+
+  .trade__extra {
+    font-size: var(--text-sm);
+  }
+
+  .trade__close {
+    align-self: center;
+  }
+
+  .groups {
+    display: grid;
+    border-block-start: var(--border-width) solid var(--color-border);
+  }
+
+  .group {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0 var(--space-3);
+    padding-block: var(--space-2);
+    border-block-end: var(--border-width) solid var(--color-border);
+  }
+
+  .group__name {
+    font-weight: var(--weight-semibold);
+    overflow-wrap: anywhere;
+  }
+
+  .group__total {
+    font-weight: var(--weight-bold);
+    text-align: end;
+  }
+
+  .group__counts {
+    grid-column: 1 / -1;
+    font-size: var(--text-sm);
+  }
+
+  .currency {
+    max-inline-size: 16rem;
+  }
+
+  .trade-dialog {
+    max-inline-size: 40rem;
+  }
+
+  .trade-symbol {
+    text-transform: uppercase;
+  }
+
+  .sides {
+    --cluster-gap: var(--space-1) var(--space-4);
+  }
+
+  fieldset {
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .dialog__actions .dialog__delete {
+    margin-inline-start: auto;
+  }
+</style>

@@ -29,6 +29,7 @@ on:
           - bag
           - bell
           - calendar
+          - chart
           - check
           - checklist
           - chevron-down
