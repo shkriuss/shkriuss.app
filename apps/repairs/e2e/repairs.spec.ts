@@ -45,7 +45,7 @@ test('logs a repair with its parts, and suggests what was used before', async ({
   await dialog.getByRole('button', { name: 'Save' }).click();
   await expect(dialog.getByText('Enter the vehicle, like a bus number.')).toBeVisible();
   await expect(
-    dialog.getByText('Describe the damage found, the work done, or add a part.'),
+    dialog.getByText('Describe the damage found or the work done, or add a part or a photo.'),
   ).toBeVisible();
   await expect(dialog.getByLabel('Vehicle')).toBeFocused();
   await checkA11y(page, 'repair form problems');

@@ -12,8 +12,10 @@
  *   (nothing is converted). Each is saved only once changed (kilometres and
  *   US dollars until then).
  *
- * Version 2 of the repairs added the hours, the labour cost and part prices
- * (`migrateRepairs` fills them in as unknown).
+ * Version 2 of the repairs added the hours, the labour cost and part prices,
+ * version 3 the photos (`migrateRepairs` fills them in as unknown, or none).
+ * A repair keeps its photos' ids; the photos themselves are files on the
+ * device (scripts/photos.ts, docs/adr/0013-photos-on-the-device.md).
  *
  * A repair names its vehicle by id, so a vehicle can be renamed. Typing a new
  * vehicle in the repair form adds it.
@@ -61,6 +63,8 @@ export interface Repair {
   hours: number | null;
   /** Labour and other costs (not parts), or null if not noted. */
   labour: number | null;
+  /** Its photos' ids, in the order added. The photos may be on another device. */
+  photos: string[];
 }
 
 export interface RepairsState {
@@ -80,6 +84,7 @@ export const LIMITS = {
   quantity: 10_000,
   mileage: 9_999_999,
   hours: 1000,
+  photos: 10,
   money: 1_000_000_000,
   vehicles: 500,
   repairs: 10_000,
@@ -176,7 +181,10 @@ function isRepair(value: unknown): value is Repair {
     item['parts'].length <= LIMITS.parts &&
     item['parts'].every(isPart) &&
     (item['hours'] === null || isHours(item['hours'])) &&
-    isMoneyOrNull(item['labour'])
+    isMoneyOrNull(item['labour']) &&
+    Array.isArray(item['photos']) &&
+    item['photos'].length <= LIMITS.photos &&
+    item['photos'].every((photo) => isText(photo, 100) && photo !== '')
   );
 }
 
@@ -194,26 +202,29 @@ export function isRepairsState(value: unknown): value is RepairsState {
 
 /**
  * Repairs saved by an older version: version 1 had no hours, labour cost or
- * part prices, so they're unknown (null).
+ * part prices, so they're unknown (null); versions 1 and 2 had no photos.
  */
 export function migrateRepairs(old: unknown, version: number): RepairsState | undefined {
-  if (version !== 1 || typeof old !== 'object' || old === null) return undefined;
+  if (version < 1 || version > 2 || typeof old !== 'object' || old === null) return undefined;
   const { repairs } = old as Record<string, unknown>;
   if (!Array.isArray(repairs)) return undefined;
   return {
     repairs: repairs.map((repair: unknown) => {
       if (typeof repair !== 'object' || repair === null) return repair;
       const { parts } = repair as Record<string, unknown>;
-      return {
-        ...repair,
-        hours: null,
-        labour: null,
-        parts: Array.isArray(parts)
-          ? parts.map((part: unknown) =>
-              typeof part === 'object' && part !== null ? { ...part, price: null } : part,
-            )
-          : parts,
-      };
+      const costs =
+        version === 1
+          ? {
+              hours: null,
+              labour: null,
+              parts: Array.isArray(parts)
+                ? parts.map((part: unknown) =>
+                    typeof part === 'object' && part !== null ? { ...part, price: null } : part,
+                  )
+                : parts,
+            }
+          : {};
+      return { ...repair, ...costs, photos: [] };
     }) as Repair[],
   };
 }
@@ -328,6 +339,8 @@ export interface RepairForm {
   parts: PartForm[];
   hours: string;
   labour: string;
+  /** The photos' ids (the photos are handled by the page). */
+  photos: string[];
 }
 
 /**
@@ -426,8 +439,12 @@ export function readRepair(
   const labour = parseNumber(form.labour);
   if (!isMoneyOrNull(labour)) problems['labour'] = 'Enter an amount, or leave it empty.';
 
-  if (problem === '' && work === '' && parts.length === 0) {
-    problems['problem'] = 'Describe the damage found, the work done, or add a part.';
+  if (form.photos.length > LIMITS.photos) {
+    problems['photos'] = `Add up to ${LIMITS.photos} photos.`;
+  }
+
+  if (problem === '' && work === '' && parts.length === 0 && form.photos.length === 0) {
+    problems['problem'] = 'Describe the damage found or the work done, or add a part or a photo.';
   }
   const isNew = !repairs.repairs.some((repair) => repair.id === id);
   if (isNew && repairs.repairs.length >= LIMITS.repairs) {
@@ -447,6 +464,7 @@ export function readRepair(
       parts,
       hours,
       labour,
+      photos: [...form.photos],
     },
     newVehicle,
   };
@@ -472,6 +490,7 @@ export const toRepairForm = (repair: Repair, vehicles: VehiclesState): RepairFor
   parts: repair.parts.map(toPartForm),
   hours: numberText(repair.hours),
   labour: numberText(repair.labour),
+  photos: [...repair.photos],
 });
 
 export function saveRepair(state: RepairsState, repair: Repair): RepairsState {
@@ -691,6 +710,28 @@ export function systemNames(state: RepairsState): string[] {
     .sort(byName);
   return [...SYSTEMS, ...used];
 }
+
+// ---------- Photos ----------
+
+/** The longest side of a saved photo, and of its thumbnail, in pixels. */
+export const PHOTO_SIZES = { full: 1600, thumb: 320 };
+
+/** A width and height scaled down (never up) so the longest side is at most `max`. */
+export function fitWithin(
+  width: number,
+  height: number,
+  max: number,
+): { width: number; height: number } {
+  const scale = Math.min(1, max / Math.max(width, height));
+  return {
+    width: Math.max(1, Math.round(width * scale)),
+    height: Math.max(1, Math.round(height * scale)),
+  };
+}
+
+/** The photos of these repairs (to delete with them). */
+export const photosOf = (repairs: readonly Repair[]): string[] =>
+  repairs.flatMap((repair) => repair.photos);
 
 // ---------- For people ----------
 

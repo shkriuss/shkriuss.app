@@ -3,7 +3,8 @@
 Status: Accepted (2026-10-16). Extended by [ADR 0009](0009-push-notifications.md):
 an app may offer notifications while it's closed, opt-in, with messages
 encrypted on the device. Extended by [ADR 0010](0010-account-and-sync.md): an
-optional, end-to-end encrypted account to sync apps between devices.
+optional, end-to-end encrypted account to sync apps between devices. Extended
+by [ADR 0013](0013-photos-on-the-device.md): photos are kept in IndexedDB.
 
 ## Context
 

@@ -5,7 +5,7 @@
  * forms for a repair (with its parts) and a vehicle. Behaviour:
  * ../scripts/repairs.ts.
  */
-import { AppShell, Button, DataControls, SyncControls } from '@shkriuss/ui';
+import { AppShell, Button, DataControls, Icon, SyncControls } from '@shkriuss/ui';
 import { CURRENCIES, LIMITS, UNIT_LABELS, UNITS } from '../lib/repairs.ts';
 ---
 
@@ -171,6 +171,13 @@ import { CURRENCIES, LIMITS, UNIT_LABELS, UNITS } from '../lib/repairs.ts';
             <ul class="repair__parts" data-parts></ul>
           </dd>
         </div>
+        <div data-row="photos">
+          <dt>Photos</dt>
+          <dd class="stack stack--sm">
+            <ul role="list" class="photos" data-photos></ul>
+            <p class="muted photos__elsewhere" data-photos-elsewhere></p>
+          </dd>
+        </div>
         <div data-row="hours">
           <dt>Hours worked</dt>
           <dd data-hours></dd>
@@ -281,6 +288,23 @@ import { CURRENCIES, LIMITS, UNIT_LABELS, UNITS } from '../lib/repairs.ts';
           </Button>
         </div>
       </fieldset>
+    </li>
+  </template>
+
+  <!-- One photo of a repair: opens it. -->
+  <template data-thumb-template>
+    <li>
+      <button type="button" class="photo" aria-haspopup="dialog" data-action="view-photo">
+        <img class="photo__image" alt="" data-thumb />
+      </button>
+    </li>
+  </template>
+
+  <!-- One photo in the repair form. -->
+  <template data-form-photo-template>
+    <li class="form-photo">
+      <img class="form-photo__image" alt="" data-thumb />
+      <Button variant="ghost" icon="x" label="Remove photo" data-action="remove-photo" />
     </li>
   </template>
 
@@ -399,6 +423,24 @@ import { CURRENCIES, LIMITS, UNIT_LABELS, UNITS } from '../lib/repairs.ts';
         <div>
           <Button icon="plus" data-action="add-part">
             Add a part
+          </Button>
+        </div>
+      </fieldset>
+      <fieldset class="stack stack--sm">
+        <legend class="field__label">Photos</legend>
+        <ul role="list" class="photos" data-form-photos></ul>
+        <p class="field__hint" data-form-photos-elsewhere hidden></p>
+        <p class="field__hint">
+          Kept on this device only: they don’t sync to your other devices and aren’t in backups.
+        </p>
+        <p class="field__hint" data-photos-busy hidden>
+          Adding photos…
+        </p>
+        <p class="field__error" data-error-for="photos"></p>
+        <input type="file" accept="image/*" multiple hidden data-photo-input />
+        <div>
+          <Button icon="camera" data-action="add-photos">
+            Add photos
           </Button>
         </div>
       </fieldset>
@@ -529,6 +571,28 @@ import { CURRENCIES, LIMITS, UNIT_LABELS, UNITS } from '../lib/repairs.ts';
         </Button>
       </div>
     </form>
+  </dialog>
+
+  <dialog class="dialog photo-viewer" aria-labelledby="photo-title" data-photo-dialog>
+    <div class="stack">
+      <h2 id="photo-title" data-photo-title>
+        Photo
+      </h2>
+      <img class="photo-viewer__image" alt="" data-photo-image />
+      <div class="cluster">
+        <Button icon="chevron-left" data-action="previous-photo">
+          Previous
+        </Button>
+        <Button data-action="next-photo">
+          <span>Next</span>
+          <Icon name="chevron-right" />
+        </Button>
+        <Button icon="download" data-action="save-photo">
+          Save a copy
+        </Button>
+        <Button data-action="cancel">Close</Button>
+      </div>
+    </div>
   </dialog>
 
   <dialog class="dialog" aria-labelledby="delete-title" data-delete-dialog>
@@ -700,5 +764,69 @@ import { CURRENCIES, LIMITS, UNIT_LABELS, UNITS } from '../lib/repairs.ts';
 
   .dialog__actions .dialog__delete {
     margin-inline-start: auto;
+  }
+
+  .photos {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .photos:empty,
+  .photos__elsewhere:empty {
+    display: none;
+  }
+
+  /* A thumbnail: square, the photo cropped to fill it. */
+  .photo {
+    display: block;
+    width: 4.5rem;
+    height: 4.5rem;
+    padding: 0;
+    overflow: hidden;
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius);
+    background: var(--color-surface-sunken);
+    cursor: pointer;
+  }
+
+  .photo__image {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .form-photo {
+    display: grid;
+    justify-items: center;
+    gap: var(--space-1);
+  }
+
+  .form-photo__image {
+    display: block;
+    width: 4.5rem;
+    height: 4.5rem;
+    object-fit: cover;
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius);
+    background: var(--color-surface-sunken);
+  }
+
+  .photos__elsewhere {
+    font-size: var(--text-sm);
+  }
+
+  .photo-viewer {
+    width: min(100% - 2 * var(--gutter), 48rem);
+  }
+
+  .photo-viewer__image {
+    display: block;
+    width: 100%;
+    max-height: 65dvh;
+    object-fit: contain;
+    border-radius: var(--radius);
+    background: var(--color-surface-sunken);
   }
 </style>
