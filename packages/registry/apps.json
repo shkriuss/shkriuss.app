@@ -183,6 +183,22 @@
       ],
       "pushNotifications": true,
       "sync": true
+    },
+    {
+      "slug": "trades",
+      "name": "Trades",
+      "description": "Your trading journal: log your trades and see what works. It stays on your device.",
+      "icon": "chart",
+      "color": "green",
+      "status": "live",
+      "storage": "device",
+      "dataStored": [
+        "Your trades: symbols, long or short, dates, prices, amounts, stop losses, fees, setups and notes",
+        "Which currency to show amounts in",
+        "If you turn on sync: a copy of your trades and currency on Trades' server, locked on your devices so only they can read it, and this device's sync key (never in backups)",
+        "Your light or dark theme choice"
+      ],
+      "sync": true
     }
   ]
 }
