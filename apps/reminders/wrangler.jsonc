@@ -1,0 +1,50 @@
+// Cloudflare Worker for this app: the static site, plus /api/push/* for
+// reminders while Reminders is closed (docs/adr/0009-push-notifications.md) and
+// /api/sync/* for syncing between devices (docs/adr/0010-account-and-sync.md).
+// Docs: docs/deployment.md
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "reminders",
+  "compatibility_date": "2026-10-01",
+  "main": "src/worker.ts",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    // Only /api/* runs the Worker code; every other request is a static file.
+    "run_worker_first": ["/api/*"],
+    "not_found_handling": "404-page",
+    "html_handling": "auto-trailing-slash",
+  },
+  // One store per device (its scheduled reminders), one for the app's
+  // signing keys, and one per synced account (its sealed copy of
+  // Reminders' data). SQLite-backed, as the free plan requires.
+  "durable_objects": {
+    "bindings": [
+      { "name": "PUSH_DEVICES", "class_name": "PushDevice" },
+      { "name": "PUSH_KEYS", "class_name": "PushKeys" },
+      { "name": "SYNC_COPIES", "class_name": "SyncCopy" },
+    ],
+  },
+  // In the order they were added.
+  "migrations": [
+    { "tag": "sync-v1", "new_sqlite_classes": ["SyncCopy"] },
+    { "tag": "push-v1", "new_sqlite_classes": ["PushDevice", "PushKeys"] },
+  ],
+  // The real address. Cloudflare creates the DNS record and certificate.
+  "routes": [{ "pattern": "reminders.shkriuss.app", "custom_domain": true }],
+  // No *.workers.dev address for production, but keep preview links for PRs.
+  "workers_dev": false,
+  "preview_urls": true,
+  // Settings for PR previews (`wrangler preview`). Each preview gets its own,
+  // empty Durable Object storage (and so its own keys): nothing is shared
+  // with the real site.
+  "previews": {
+    "durable_objects": {
+      "bindings": [
+        { "name": "PUSH_DEVICES", "class_name": "PushDevice" },
+        { "name": "PUSH_KEYS", "class_name": "PushKeys" },
+        { "name": "SYNC_COPIES", "class_name": "SyncCopy" },
+      ],
+    },
+  },
+}

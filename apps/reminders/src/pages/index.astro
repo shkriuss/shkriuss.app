@@ -1,0 +1,387 @@
+---
+/**
+ * Reminders: a form to set one, your reminders by when they come next
+ * (overdue, today, tomorrow, later), the done ones, a form to change one, and
+ * notifications. Behaviour: ../scripts/reminders.ts and ../scripts/notify.ts.
+ */
+import { AppShell, Button, DataControls, Icon, PushControls, SyncControls } from '@shkriuss/ui';
+import { MAX_TEXT_LENGTH, REPEAT_CHOICES, REPEATS } from '../lib/reminders.ts';
+---
+
+<AppShell>
+  <div class="stack stack--lg">
+    <header class="stack stack--sm">
+      <h1>Reminders</h1>
+      <p class="lead">
+        Get reminded at the right time, once or again and again. Your reminders are saved on this
+        device.
+      </p>
+    </header>
+
+    <form class="card stack" aria-labelledby="add-heading" data-add-form novalidate>
+      <h2 id="add-heading">New reminder</h2>
+      <div class="field">
+        <label class="field__label" for="add-text">
+          Remind me to
+        </label>
+        <input
+          class="input"
+          id="add-text"
+          name="text"
+          type="text"
+          autocomplete="off"
+          enterkeyhint="done"
+          maxlength={MAX_TEXT_LENGTH}
+          placeholder="e.g. Take my pills"
+          aria-describedby="add-text-error"
+          required
+        />
+        <p class="field__error" id="add-text-error" data-error-for="text"></p>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label class="field__label" for="add-date">
+            Day
+          </label>
+          <input
+            class="input"
+            id="add-date"
+            name="date"
+            type="date"
+            aria-describedby="add-date-error"
+            required
+          />
+          <p class="field__error" id="add-date-error" data-error-for="date"></p>
+        </div>
+        <div class="field">
+          <label class="field__label" for="add-time">
+            Time
+          </label>
+          <input
+            class="input"
+            id="add-time"
+            name="time"
+            type="time"
+            aria-describedby="add-time-error"
+            required
+          />
+          <p class="field__error" id="add-time-error" data-error-for="time"></p>
+        </div>
+        <div class="field">
+          <label class="field__label" for="add-repeat">
+            Repeats
+          </label>
+          <select class="input" id="add-repeat" name="repeat">
+            {REPEATS.map((repeat) => (
+              <option value={repeat}>{REPEAT_CHOICES[repeat]}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <div>
+        <Button type="submit" variant="primary" icon="plus">
+          Add reminder
+        </Button>
+      </div>
+    </form>
+
+    <section class="stack" aria-labelledby="list-heading">
+      <h2 id="list-heading">Your reminders</h2>
+      <p class="muted" data-empty>
+        No reminders yet. Set one above, like “Take my pills”.
+      </p>
+      <div class="stack" data-groups></div>
+      <details class="disclosure" data-done-section hidden>
+        <summary>
+          Done (<span data-done-count>0</span>)
+        </summary>
+        <div class="stack stack--sm">
+          <ul role="list" class="reminders" aria-label="Done" data-done-list></ul>
+          <div>
+            <Button icon="trash" data-action="clear-done">
+              Clear done
+            </Button>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <section class="stack" aria-labelledby="notifications-heading">
+      <div class="stack stack--sm">
+        <h2 id="notifications-heading">Notifications</h2>
+        <p class="muted">
+          Each reminder comes as a notification at its time. Turn on “Also remind me when Reminders
+          is closed” below to get them even when Reminders isn’t open.
+        </p>
+        <p class="muted">
+          With sync on, your reminders are the same on all your devices. Each device reminds you
+          once notifications are turned on there.
+        </p>
+      </div>
+      <p data-notify-status>Notifications are off.</p>
+      <p data-notify-enable hidden>
+        <Button icon="bell" data-action="enable-notifications">
+          Turn on notifications
+        </Button>
+      </p>
+      <PushControls />
+    </section>
+
+    <SyncControls />
+
+    <DataControls />
+  </div>
+
+  <!-- Live region: tells screen reader users what changed. -->
+  <p class="visually-hidden" role="status" data-announcer></p>
+
+  <!-- A group of reminders: "Overdue", "Today", "Tomorrow" or "Later". -->
+  <template data-group-template>
+    <div class="stack stack--sm">
+      <h3 class="group-title" data-group-title>
+        Today
+      </h3>
+      <ul role="list" class="reminders" data-group-list></ul>
+    </div>
+  </template>
+
+  <!-- One reminder, copied by the script for each. -->
+  <template data-reminder-template>
+    <li class="reminder">
+      <label class="reminder__check" data-check>
+        <input type="checkbox" data-done />
+        <span class="visually-hidden" data-done-label>
+          Done
+        </span>
+      </label>
+      <span class="reminder__mark" aria-hidden="true" data-repeats-mark>
+        <Icon name="repeat" />
+      </span>
+      <div class="reminder__body">
+        <button type="button" class="reminder__text" aria-haspopup="dialog" data-action="edit">
+          Reminder
+        </button>
+        <p class="muted reminder__meta">
+          <span data-when></span>
+          <span class="reminder__tag" data-repeat-tag>
+            <Icon name="repeat" />
+            <span data-repeat></span>
+          </span>
+        </p>
+        <div class="cluster reminder__later" data-later>
+          <Button data-action="in-an-hour">In 1 hour</Button>
+          <Button data-action="tomorrow">Tomorrow</Button>
+        </div>
+      </div>
+    </li>
+  </template>
+
+  <dialog class="dialog" aria-labelledby="edit-title" data-edit-dialog>
+    <form class="stack" data-edit-form novalidate>
+      <h2 id="edit-title">Change reminder</h2>
+      <div class="field">
+        <label class="field__label" for="edit-text">
+          Remind me to
+        </label>
+        <input
+          class="input"
+          id="edit-text"
+          name="text"
+          type="text"
+          autocomplete="off"
+          maxlength={MAX_TEXT_LENGTH}
+          aria-describedby="edit-text-error"
+          required
+        />
+        <p class="field__error" id="edit-text-error" data-error-for="text"></p>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label class="field__label" for="edit-date">
+            Day
+          </label>
+          <input
+            class="input"
+            id="edit-date"
+            name="date"
+            type="date"
+            aria-describedby="edit-date-error"
+            required
+          />
+          <p class="field__error" id="edit-date-error" data-error-for="date"></p>
+        </div>
+        <div class="field">
+          <label class="field__label" for="edit-time">
+            Time
+          </label>
+          <input
+            class="input"
+            id="edit-time"
+            name="time"
+            type="time"
+            aria-describedby="edit-time-error"
+            required
+          />
+          <p class="field__error" id="edit-time-error" data-error-for="time"></p>
+        </div>
+        <div class="field">
+          <label class="field__label" for="edit-repeat">
+            Repeats
+          </label>
+          <select class="input" id="edit-repeat" name="repeat">
+            {REPEATS.map((repeat) => (
+              <option value={repeat}>{REPEAT_CHOICES[repeat]}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <div class="cluster dialog__actions">
+        <Button type="submit" variant="primary">
+          Save
+        </Button>
+        <Button data-action="cancel">Cancel</Button>
+        <Button variant="danger" icon="trash" data-action="delete" class="dialog__delete">
+          Delete
+        </Button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="dialog" aria-labelledby="delete-title" data-delete-dialog>
+    <form method="dialog" class="stack">
+      <h2 id="delete-title">Delete this reminder?</h2>
+      <p>
+        “<span data-delete-text></span>” will be removed.
+      </p>
+      <div class="cluster">
+        <Button type="submit" value="cancel">
+          Cancel
+        </Button>
+        <Button type="submit" variant="danger" value="confirm">
+          Delete
+        </Button>
+      </div>
+    </form>
+  </dialog>
+</AppShell>
+
+<script>
+  import { mountReminders } from '../scripts/reminders.ts';
+
+  mountReminders(document);
+</script>
+
+<style>
+  .group-title {
+    font-size: var(--text-base);
+  }
+
+  .reminders {
+    display: grid;
+    gap: var(--space-2);
+  }
+
+  .reminder {
+    display: flex;
+    align-items: start;
+    gap: var(--space-1);
+    padding: var(--space-1) var(--space-3) var(--space-1) var(--space-1);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius);
+    background: var(--color-surface);
+  }
+
+  .reminder__check,
+  .reminder__mark {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: var(--tap-target);
+    height: var(--tap-target);
+  }
+
+  .reminder__check {
+    cursor: pointer;
+  }
+
+  .reminder__check input {
+    width: 1.375rem;
+    height: 1.375rem;
+    margin: 0;
+    accent-color: var(--color-accent);
+    cursor: pointer;
+  }
+
+  .reminder__mark {
+    color: var(--color-text-muted);
+  }
+
+  .reminder__mark :global(svg) {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+
+  .reminder__body {
+    display: grid;
+    flex: 1;
+    min-width: 0;
+    gap: var(--space-1);
+    padding-block-end: var(--space-2);
+  }
+
+  /* The text opens the reminder: it reads as text, works as a button. */
+  .reminder__text {
+    min-height: var(--tap-target);
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-weight: var(--weight-medium);
+    text-align: start;
+    overflow-wrap: anywhere;
+    cursor: pointer;
+  }
+
+  .reminder__text:hover {
+    color: var(--color-accent);
+  }
+
+  .reminder--done .reminder__text {
+    color: var(--color-text-muted);
+    text-decoration: line-through;
+  }
+
+  .reminder__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1) var(--space-3);
+    font-size: var(--text-sm);
+  }
+
+  .reminder--overdue [data-when] {
+    color: var(--color-danger);
+    font-weight: var(--weight-semibold);
+  }
+
+  .reminder__tag {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+  }
+
+  .reminder__tag :global(svg) {
+    flex: none;
+    width: 1em;
+    height: 1em;
+  }
+
+  .reminder__later {
+    --cluster-gap: var(--space-2);
+  }
+
+  .dialog__actions .dialog__delete {
+    margin-inline-start: auto;
+  }
+</style>
