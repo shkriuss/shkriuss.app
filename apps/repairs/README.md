@@ -15,8 +15,9 @@ private car's service history. Lives at <https://repairs.shkriuss.app>.
     the day, the mileage, the system (brakes, doors…), the damage found, the
     work done, the parts replaced (name, part number, quantity, price each),
     the hours worked and the labour (and other) cost. Version 2 added the
-    hours, labour and prices; `migrateRepairs` upgrades version 1 (here, from
-    a backup, or from a device that synced before), leaving them unknown;
+    hours, labour and prices, version 3 the photos' ids; `migrateRepairs`
+    upgrades older versions (here, from a backup, or from a device that synced
+    before), leaving them unknown or empty;
   - settings (`shkriuss:repairs-settings`): kilometres or miles, and the
     currency, only for showing (nothing is converted). Saved only once
     changed.
@@ -37,6 +38,16 @@ private car's service history. Lives at <https://repairs.shkriuss.app>.
 - "Download as a spreadsheet (CSV)" saves every repair, one row each, with
   the hours and the parts, labour and total cost. Text a spreadsheet could
   read as a formula starts with `'`.
+- Photos (up to 10 a repair): picked with "Add photos" (the phone offers its
+  camera or its photo library), made smaller on the device (1,600 pixels on
+  the longest side, plus a 320-pixel thumbnail, saved again as JPEG, which
+  drops the location the camera wrote in) and kept in IndexedDB through
+  `@shkriuss/storage/files`
+  ([ADR 0013](../../docs/adr/0013-photos-on-the-device.md)). A repair keeps
+  only their ids (data version 3), so the ids sync but the photos don't:
+  another device says "1 photo on another device". Photos aren't in backups;
+  "Save a copy" saves one as a file. Deleting a repair or vehicle, or all
+  data, deletes its photos. `src/scripts/photos.ts` does the photo work.
 - `src/scripts/repairs.ts`: connects the page to those rules.
 - `src/pages/index.astro`: the page, built from `@shkriuss/ui` components.
   `<template>`s hold the markup for a day, a repair, a vehicle and a part row;

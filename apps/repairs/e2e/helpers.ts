@@ -97,6 +97,7 @@ export const repair = (overrides: Partial<Repair>): Repair => ({
   parts: [],
   hours: null,
   labour: null,
+  photos: [],
   ...overrides,
 });
 
@@ -107,7 +108,7 @@ export async function seed(
 ): Promise<void> {
   await page.evaluate(({ vehicles = [], repairs = [] }) => {
     localStorage.setItem('shkriuss:repairs-vehicles', JSON.stringify({ v: 1, data: { vehicles } }));
-    localStorage.setItem('shkriuss:repairs', JSON.stringify({ v: 2, data: { repairs } }));
+    localStorage.setItem('shkriuss:repairs', JSON.stringify({ v: 3, data: { repairs } }));
   }, data);
   await page.reload();
 }

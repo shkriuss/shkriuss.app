@@ -29,6 +29,7 @@ on:
           - bag
           - bell
           - calendar
+          - camera
           - chart
           - check
           - checklist

@@ -5,6 +5,7 @@
  */
 import { disablePush, isPushEnabled } from '@shkriuss/push';
 import { deleteAll, downloadFile, exportAll, type ExportFile } from '@shkriuss/storage';
+import { deleteAllFiles } from '@shkriuss/storage/files';
 import { isSyncOn, stopSync } from '@shkriuss/sync';
 import {
   BackupError,
@@ -275,8 +276,8 @@ export function mountDataControls(section: HTMLElement): void {
       // Sync stops here first, so the deletion doesn't reach the other devices.
       stopSync();
       deleteAll();
-      // Reload so the app starts fresh from empty storage.
-      window.location.reload();
+      // Files like photos too, then reload so the app starts fresh from empty storage.
+      void deleteAllFiles().then(() => window.location.reload());
     });
   });
 }

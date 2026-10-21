@@ -1,7 +1,7 @@
 /**
  * Repairs' page behaviour: connects pages/index.astro to the rules in
  * lib/repairs.ts, saves on the device, and syncs the vehicles, repairs and
- * settings when sync is on.
+ * settings when sync is on. Photos: photos.ts.
  */
 import { today } from '@shkriuss/dates';
 import { createStore, downloadFile } from '@shkriuss/storage';
@@ -28,10 +28,12 @@ import {
   isVehiclesState,
   knownPart,
   lastMileage,
+  LIMITS,
   migrateRepairs,
   modelNames,
   partLabel,
   partNames,
+  photosOf,
   readRepair,
   readVehicle,
   removeRepair,
@@ -59,6 +61,16 @@ import {
   type VehiclesState,
   type VehicleSummary,
 } from '../lib/repairs.ts';
+import {
+  deletePhotos,
+  getPhoto,
+  makePhoto,
+  NotAPhotoError,
+  rememberThumb,
+  savePhotos,
+  thumbUrl,
+  type PhotoFile,
+} from './photos.ts';
 
 const vehiclesStore = createStore<VehiclesState>({
   key: 'repairs-vehicles',
@@ -67,10 +79,10 @@ const vehiclesStore = createStore<VehiclesState>({
   validate: isVehiclesState,
 });
 
-// Version 2 added hours worked, labour cost and part prices.
+// Version 2 added hours worked, labour cost and part prices; version 3, photos.
 const repairsStore = createStore<RepairsState>({
   key: 'repairs',
-  version: 2,
+  version: 3,
   fallback: emptyRepairs,
   validate: isRepairsState,
   migrate: migrateRepairs,
@@ -122,6 +134,8 @@ export function mountRepairs(root: Document): void {
   const repairTemplate = required<HTMLTemplateElement>(root, '[data-repair-template]');
   const vehicleTemplate = required<HTMLTemplateElement>(root, '[data-vehicle-template]');
   const partTemplate = required<HTMLTemplateElement>(root, '[data-part-template]');
+  const thumbTemplate = required<HTMLTemplateElement>(root, '[data-thumb-template]');
+  const formPhotoTemplate = required<HTMLTemplateElement>(root, '[data-form-photo-template]');
   const suggestions = {
     vehicles: required<HTMLDataListElement>(root, '[data-vehicle-names]'),
     systems: required<HTMLDataListElement>(root, '[data-system-names]'),
@@ -137,6 +151,15 @@ export function mountRepairs(root: Document): void {
   const labourHint = required<HTMLElement>(repairForm, '[data-labour-hint]');
   const partRows = required<HTMLOListElement>(repairForm, '[data-part-rows]');
   const addPartButton = required<HTMLButtonElement>(repairForm, '[data-action="add-part"]');
+  const formPhotoList = required<HTMLUListElement>(repairForm, '[data-form-photos]');
+  const formPhotosElsewhere = required<HTMLElement>(repairForm, '[data-form-photos-elsewhere]');
+  const photosBusy = required<HTMLElement>(repairForm, '[data-photos-busy]');
+  const photoError = required<HTMLElement>(repairForm, '[data-error-for="photos"]');
+  const photoInput = required<HTMLInputElement>(repairForm, '[data-photo-input]');
+  const addPhotosButton = required<HTMLButtonElement>(repairForm, '[data-action="add-photos"]');
+  const photoDialog = required<HTMLDialogElement>(root, '[data-photo-dialog]');
+  const photoTitle = required<HTMLElement>(photoDialog, '[data-photo-title]');
+  const photoImage = required<HTMLImageElement>(photoDialog, '[data-photo-image]');
   const vehicleDialog = required<HTMLDialogElement>(root, '[data-vehicle-dialog]');
   const vehicleForm = required<HTMLFormElement>(vehicleDialog, '[data-vehicle-form]');
   const vehicleTitle = required<HTMLElement>(vehicleDialog, '[data-vehicle-title]');
@@ -152,6 +175,19 @@ export function mountRepairs(root: Document): void {
   let editingRepair: string | null = null;
   let editingVehicle: string | null = null;
   let deleting: { type: 'repair' | 'vehicle'; id: string } | null = null;
+  /** The repair form's photos: every id (some may be on another device)… */
+  let formPhotos: string[] = [];
+  /** …the ones picked but not saved yet… */
+  const pendingPhotos = new Map<string, PhotoFile>();
+  /** …and saved ones removed in the form (deleted once it's saved). */
+  let removedPhotos: string[] = [];
+  /** Picked photos being made smaller; saving waits for them. */
+  let addingPhotos: Promise<void> = Promise.resolve();
+  /** Counts the times the repair form was opened, so late photos don't land in the next one. */
+  let formSession = 0;
+  let saving = false;
+  /** The photo being looked at: its repair, the photos on this device, which one. */
+  let viewing: { repair: Repair; ids: string[]; index: number; url: string | null } | null = null;
 
   const announce = (message: string): void => {
     announcer.textContent = message;
@@ -243,7 +279,34 @@ export function mountRepairs(root: Document): void {
           ? `${money(cost.total)} · parts ${money(cost.parts)}, labour ${money(cost.labour)}`
           : money(cost.total);
     } else rows.cost.remove();
+    const photosRow = required<HTMLElement>(item, '[data-row="photos"]');
+    if (repair.photos.length > 0) void fillThumbs(photosRow, repair);
+    else photosRow.remove();
     return item;
+  }
+
+  /** Shows a repair's thumbnails (once they're loaded), and says how many are elsewhere. */
+  async function fillThumbs(row: HTMLElement, repair: Repair): Promise<void> {
+    const list = required<HTMLUListElement>(row, '[data-photos]');
+    const urls = await Promise.all(repair.photos.map(thumbUrl));
+    const shown = repair.photos.flatMap((id, index) => {
+      const url = urls[index];
+      return url ? [{ id, url }] : [];
+    });
+    list.replaceChildren(
+      ...shown.map(({ id, url }, index) => {
+        const fragment = thumbTemplate.content.cloneNode(true) as DocumentFragment;
+        const entry = required<HTMLLIElement>(fragment, 'li');
+        required<HTMLElement>(entry, '[data-action="view-photo"]').dataset['photo'] = id;
+        const image = required<HTMLImageElement>(entry, '[data-thumb]');
+        image.src = url;
+        image.alt = `Photo ${index + 1}`;
+        return entry;
+      }),
+    );
+    const elsewhere = repair.photos.length - shown.length;
+    required<HTMLElement>(row, '[data-photos-elsewhere]').textContent =
+      elsewhere === 0 ? '' : `${countLabel(elsewhere, 'photo', 'photos')} on another device`;
   }
 
   function renderRepairs(): void {
@@ -423,6 +486,100 @@ export function mountRepairs(root: Document): void {
     return true;
   }
 
+  // ---------- Photos in the repair form ----------
+
+  /** Shows the form's photos; says how many are on another device. */
+  async function renderFormPhotos(): Promise<void> {
+    const ids = [...formPhotos];
+    const urls = await Promise.all(ids.map(thumbUrl));
+    // Changed again meanwhile: that render shows the latest.
+    if (ids.join() !== formPhotos.join()) return;
+    const here = ids.flatMap((id, index) => {
+      const url = urls[index];
+      return url ? [{ id, url }] : [];
+    });
+    formPhotoList.replaceChildren(
+      ...here.map(({ id, url }, index) => {
+        const fragment = formPhotoTemplate.content.cloneNode(true) as DocumentFragment;
+        const entry = required<HTMLLIElement>(fragment, 'li');
+        entry.dataset['photo'] = id;
+        const image = required<HTMLImageElement>(entry, '[data-thumb]');
+        image.src = url;
+        image.alt = `Photo ${index + 1}`;
+        required<HTMLElement>(entry, '[data-action="remove-photo"]').ariaLabel =
+          `Remove photo ${index + 1}`;
+        return entry;
+      }),
+    );
+    const elsewhere = ids.length - here.length;
+    formPhotosElsewhere.hidden = elsewhere === 0;
+    formPhotosElsewhere.textContent =
+      elsewhere === 1
+        ? '1 photo is on another device. It stays with this repair.'
+        : `${elsewhere} photos are on another device. They stay with this repair.`;
+    addPhotosButton.hidden = ids.length >= LIMITS.photos;
+  }
+
+  function showPhotoProblem(problem: string): void {
+    photoError.textContent = problem;
+  }
+
+  /** Makes the picked files into photos, one at a time, and adds them. */
+  async function addPhotos(picked: readonly File[]): Promise<void> {
+    const session = formSession;
+    const room = LIMITS.photos - formPhotos.length;
+    const problems: string[] = [];
+    if (picked.length > room) {
+      problems.push(
+        `A repair can have up to ${LIMITS.photos} photos, so ${countLabel(picked.length - room, 'photo wasn’t', 'photos weren’t')} added.`,
+      );
+    }
+    photosBusy.hidden = false;
+    for (const file of picked.slice(0, Math.max(0, room))) {
+      try {
+        const photo = await makePhoto(file);
+        // The form was closed meanwhile: this photo isn't wanted.
+        if (session !== formSession) break;
+        pendingPhotos.set(photo.id, photo);
+        rememberThumb(photo);
+        formPhotos = [...formPhotos, photo.id];
+        await renderFormPhotos();
+      } catch (error) {
+        problems.push(
+          error instanceof NotAPhotoError ? error.message : 'Couldn’t read a photo. Try again.',
+        );
+      }
+    }
+    photosBusy.hidden = true;
+    if (session === formSession) showPhotoProblem(problems.join(' '));
+  }
+
+  photoInput.addEventListener('change', () => {
+    const picked = [...(photoInput.files ?? [])];
+    photoInput.value = '';
+    if (picked.length === 0) return;
+    showPhotoProblem('');
+    addingPhotos = addingPhotos.then(() => addPhotos(picked));
+  });
+
+  function removePhoto(id: string): void {
+    const index = formPhotos.indexOf(id);
+    formPhotos = formPhotos.filter((photo) => photo !== id);
+    if (pendingPhotos.delete(id)) void deletePhotos([id]);
+    else removedPhotos = [...removedPhotos, id];
+    void renderFormPhotos().then(() => {
+      // Keep keyboard focus nearby: the next photo's button, or "Add photos".
+      const buttons = formPhotoList.querySelectorAll<HTMLElement>('[data-action="remove-photo"]');
+      (buttons[Math.min(index, buttons.length - 1)] ?? addPhotosButton).focus();
+    });
+  }
+
+  /** Forgets photos picked in the form but not saved (it was closed without saving). */
+  function dropPendingPhotos(): void {
+    if (pendingPhotos.size > 0) void deletePhotos([...pendingPhotos.keys()]);
+    pendingPhotos.clear();
+  }
+
   function openRepair(repair: Repair | undefined): void {
     editingRepair = repair?.id ?? null;
     repairTitle.textContent = repair ? 'Change repair' : 'New repair';
@@ -439,6 +596,7 @@ export function mountRepairs(root: Document): void {
           parts: [EMPTY_PART],
           hours: '',
           labour: '',
+          photos: [],
         };
     for (const name of [
       'vehicle',
@@ -453,6 +611,14 @@ export function mountRepairs(root: Document): void {
       field<HTMLInputElement>(name).value = values[name];
     }
     renderParts(values.parts.length > 0 ? values.parts : [EMPTY_PART]);
+    formSession += 1;
+    dropPendingPhotos();
+    formPhotos = [...values.photos];
+    removedPhotos = [];
+    formPhotoList.replaceChildren();
+    void renderFormPhotos();
+    showPhotoProblem('');
+    photosBusy.hidden = true;
     required<HTMLElement>(repairForm, '[data-action="delete-repair"]').hidden = !repair;
     showRepairProblems({});
     renderMileageHint();
@@ -482,6 +648,15 @@ export function mountRepairs(root: Document): void {
 
   repairForm.addEventListener('submit', (event) => {
     event.preventDefault();
+    if (saving) return;
+    saving = true;
+    // Photos still being made smaller are waited for.
+    void addingPhotos.then(submitRepair).finally(() => {
+      saving = false;
+    });
+  });
+
+  async function submitRepair(): Promise<void> {
     const id = editingRepair ?? crypto.randomUUID();
     const read = readRepair(
       {
@@ -494,6 +669,7 @@ export function mountRepairs(root: Document): void {
         parts: partValues(),
         hours: field<HTMLInputElement>('hours').value,
         labour: field<HTMLInputElement>('labour').value,
+        photos: formPhotos,
       },
       id,
       repairs,
@@ -505,6 +681,16 @@ export function mountRepairs(root: Document): void {
       return;
     }
     const { repair, newVehicle } = read;
+    try {
+      await savePhotos([...pendingPhotos.values()]);
+    } catch {
+      showPhotoProblem('Couldn’t save the photos. Your device may be out of space.');
+      addPhotosButton.focus();
+      return;
+    }
+    pendingPhotos.clear();
+    void deletePhotos(removedPhotos);
+    removedPhotos = [];
     repairDialog.close();
     const name = newVehicle?.name ?? vehicleName(vehicles, repair.vehicle);
     save(
@@ -517,6 +703,62 @@ export function mountRepairs(root: Document): void {
         : `Saved the repair on ${name}.`,
     );
     focusItem(daysList, repair.id, 'edit-repair', newRepairButton);
+  }
+
+  // ---------- Looking at a photo ----------
+
+  async function showPhoto(): Promise<void> {
+    if (!viewing) return;
+    const { repair, ids, index } = viewing;
+    const photo = await getPhoto(ids[index] ?? '');
+    if (!viewing || viewing.index !== index) return;
+    if (viewing.url) URL.revokeObjectURL(viewing.url);
+    viewing.url = photo ? URL.createObjectURL(photo.full) : null;
+    photoImage.src = viewing.url ?? '';
+    const what = `the repair on ${vehicleName(vehicles, repair.vehicle)} on ${dateLabel(repair.date)}`;
+    photoTitle.textContent = ids.length === 1 ? 'Photo' : `Photo ${index + 1} of ${ids.length}`;
+    photoImage.alt =
+      ids.length === 1 ? `From ${what}` : `${index + 1} of ${ids.length}, from ${what}`;
+  }
+
+  async function openPhoto(repair: Repair, id: string): Promise<void> {
+    const urls = await Promise.all(repair.photos.map(thumbUrl));
+    const ids = repair.photos.filter((_, index) => urls[index]);
+    viewing = { repair, ids, index: Math.max(0, ids.indexOf(id)), url: null };
+    for (const action of ['previous-photo', 'next-photo']) {
+      required<HTMLElement>(photoDialog, `[data-action="${action}"]`).hidden = ids.length < 2;
+    }
+    await showPhoto();
+    photoDialog.showModal();
+  }
+
+  function stepPhoto(by: number): void {
+    if (!viewing) return;
+    viewing.index = (viewing.index + by + viewing.ids.length) % viewing.ids.length;
+    void showPhoto();
+  }
+
+  /** "Save a copy": the photo as a file, named after the repair. */
+  async function savePhotoCopy(): Promise<void> {
+    if (!viewing) return;
+    const { repair, ids, index } = viewing;
+    const photo = await getPhoto(ids[index] ?? '');
+    if (!photo) return;
+    const name = `${vehicleName(vehicles, repair.vehicle)}-${repair.date}-photo-${index + 1}`
+      .toLowerCase()
+      .replace(/[^a-z0-9-]+/g, '-');
+    const url = URL.createObjectURL(photo.full);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${name}.jpg`;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  }
+
+  photoDialog.addEventListener('close', () => {
+    if (viewing?.url) URL.revokeObjectURL(viewing.url);
+    viewing = null;
+    photoImage.removeAttribute('src');
   });
 
   // ---------- The vehicle form ----------
@@ -595,14 +837,18 @@ export function mountRepairs(root: Document): void {
     if (deleteDialog.returnValue !== 'confirm' || !target) return;
     if (target.type === 'repair') {
       repairDialog.close();
-      if (!findRepair(target.id)) return;
-      save({ repairs: removeRepair(repairs, target.id) }, 'Deleted the repair.');
+      const repair = findRepair(target.id);
+      if (!repair) return;
+      save({ repairs: removeRepair(repairs, repair.id) }, 'Deleted the repair.');
+      void deletePhotos(repair.photos);
       newRepairButton.focus();
     } else {
       const vehicle = findVehicle(target.id);
       vehicleDialog.close();
       if (!vehicle) return;
-      const count = repairs.repairs.filter((repair) => repair.vehicle === vehicle.id).length;
+      const own = repairs.repairs.filter((repair) => repair.vehicle === vehicle.id);
+      const count = own.length;
+      void deletePhotos(photosOf(own));
       save(
         removeVehicle(vehicles, repairs, vehicle.id),
         count === 0
@@ -661,6 +907,29 @@ export function mountRepairs(root: Document): void {
         shown += PAGE_SIZE;
         renderRepairs();
         break;
+      case 'add-photos':
+        photoInput.click();
+        break;
+      case 'remove-photo': {
+        const photo = button?.closest<HTMLElement>('li[data-photo]')?.dataset['photo'];
+        if (photo) removePhoto(photo);
+        break;
+      }
+      case 'view-photo': {
+        const repair = findRepair(id);
+        const photo = button?.dataset['photo'];
+        if (repair && photo) void openPhoto(repair, photo);
+        break;
+      }
+      case 'previous-photo':
+        stepPhoto(-1);
+        break;
+      case 'next-photo':
+        stepPhoto(1);
+        break;
+      case 'save-photo':
+        void savePhotoCopy();
+        break;
       case 'cancel':
         button?.closest('dialog')?.close();
         break;
@@ -693,6 +962,9 @@ export function mountRepairs(root: Document): void {
 
   repairDialog.addEventListener('close', () => {
     editingRepair = null;
+    formSession += 1;
+    // While saving, the photos are being kept: not dropped.
+    if (!saving) dropPendingPhotos();
   });
   vehicleDialog.addEventListener('close', () => {
     editingVehicle = null;

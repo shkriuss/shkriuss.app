@@ -147,10 +147,16 @@ test('keeps repairs saved before there were hours and costs', async ({ page }) =
   await expect(item.locator('[data-hours]')).toHaveText('1.5 hours');
   const saved = await page.evaluate(() => localStorage.getItem('shkriuss:repairs'));
   expect(JSON.parse(saved ?? '{}')).toMatchObject({
-    v: 2,
+    v: 3,
     data: {
       repairs: [
-        { id: 'old', hours: 1.5, labour: null, parts: [{ name: 'Brake pads', price: null }] },
+        {
+          id: 'old',
+          hours: 1.5,
+          labour: null,
+          parts: [{ name: 'Brake pads', price: null }],
+          photos: [],
+        },
       ],
     },
   });

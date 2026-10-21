@@ -3,6 +3,7 @@ import {
   byDay,
   currencyOf,
   dateLabel,
+  fitWithin,
   dayLabel,
   emptyRepairs,
   emptySettings,
@@ -20,6 +21,7 @@ import {
   modelNames,
   partLabel,
   partNames,
+  photosOf,
   readRepair,
   readVehicle,
   removeRepair,
@@ -71,6 +73,7 @@ const repair = (overrides: Partial<Repair>): Repair => ({
   parts: [],
   hours: null,
   labour: null,
+  photos: [],
   ...overrides,
 });
 const repairs = (...list: Repair[]): RepairsState => ({ repairs: list });
@@ -84,6 +87,7 @@ const form = (overrides: Partial<RepairForm>): RepairForm => ({
   parts: [],
   hours: '',
   labour: '',
+  photos: [],
   ...overrides,
 });
 let ids = 0;
@@ -214,6 +218,7 @@ describe('repairs', () => {
       ],
       hours: null,
       labour: null,
+      photos: [],
     });
   });
 
@@ -230,7 +235,7 @@ describe('repairs', () => {
       vehicle: 'Enter the vehicle, like a bus number.',
       date: 'Choose the day.',
       mileage: 'Enter the mileage as a whole number, or leave it empty.',
-      problem: 'Describe the damage found, the work done, or add a part.',
+      problem: 'Describe the damage found or the work done, or add a part or a photo.',
     });
     expect(
       readRepair(
@@ -577,9 +582,65 @@ describe('hours worked and costs', () => {
       labour: null,
       parts: [{ name: 'Brake pads', number: 'BP-1', quantity: 2, price: null }],
     });
+    expect(upgraded?.repairs[0]?.photos).toEqual([]);
     expect(isRepairsState(upgraded)).toBe(true);
     expect(isRepairsState(old)).toBe(false);
-    expect(migrateRepairs(old, 2)).toBeUndefined();
+    expect(migrateRepairs(old, 3)).toBeUndefined();
     expect(migrateRepairs(null, 1)).toBeUndefined();
+  });
+});
+
+describe('photos', () => {
+  it('upgrades repairs saved before photos, keeping their costs', () => {
+    const saved = {
+      repairs: [
+        {
+          id: 'a',
+          vehicle: 'b105',
+          date: '2026-10-21',
+          mileage: null,
+          system: '',
+          problem: '',
+          work: 'Pads',
+          parts: [{ name: 'Brake pads', number: '', quantity: 2, price: 45 }],
+          hours: 1.5,
+          labour: 20,
+        },
+      ],
+    };
+    const upgraded = migrateRepairs(saved, 2);
+    expect(upgraded?.repairs[0]).toMatchObject({
+      hours: 1.5,
+      labour: 20,
+      parts: [{ price: 45 }],
+      photos: [],
+    });
+    expect(isRepairsState(upgraded)).toBe(true);
+  });
+
+  it('keeps up to 10 photos, and a photo alone is enough', () => {
+    const ten = Array.from({ length: 10 }, (_, index) => `p${index}`);
+    expect(
+      readRepair(form({ work: '', photos: ten }), 'r', emptyRepairs(), vehicles, newId).repair
+        ?.photos,
+    ).toEqual(ten);
+    expect(
+      readRepair(form({ photos: [...ten, 'p10'] }), 'r', emptyRepairs(), vehicles, newId).problems,
+    ).toEqual({ photos: 'Add up to 10 photos.' });
+    expect(isRepairsState(repairs(repair({ photos: [...ten, 'p10'] })))).toBe(false);
+    expect(isRepairsState(repairs(repair({ photos: [''] })))).toBe(false);
+    expect(toRepairForm(repair({ photos: ['p1', 'p2'] }), vehicles).photos).toEqual(['p1', 'p2']);
+    expect(photosOf([repair({ photos: ['p1'] }), repair({ photos: ['p2', 'p3'] })])).toEqual([
+      'p1',
+      'p2',
+      'p3',
+    ]);
+  });
+
+  it('are made smaller, never bigger', () => {
+    expect(fitWithin(4000, 3000, 1600)).toEqual({ width: 1600, height: 1200 });
+    expect(fitWithin(3000, 4000, 320)).toEqual({ width: 240, height: 320 });
+    expect(fitWithin(800, 600, 1600)).toEqual({ width: 800, height: 600 });
+    expect(fitWithin(10_000, 1, 320)).toEqual({ width: 320, height: 1 });
   });
 });

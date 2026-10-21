@@ -19,7 +19,7 @@ apps/<slug>/         one folder per app → <slug>.shkriuss.app
 packages/ui/         design system: tokens, CSS, Astro components, icons, AppShell
 packages/registry/   apps.json = the single list of apps (+ validation)
 packages/astro-config/ defineAppConfig(): headers, manifest, icons, service worker
-packages/storage/    on-device storage helpers (createStore, export, backup, restore, delete)
+packages/storage/    on-device storage helpers (createStore, export, backup, restore, delete; files/photos)
 packages/push/       optional notifications while an app is closed (client + per-app Worker)
 packages/account/    optional shkriuss account: recovery key, passkeys, device links (+ hub Worker)
 packages/sync/       optional sync between devices through the account (client + per-app Worker)
@@ -67,7 +67,8 @@ pnpm new-app <slug> --name "Name" --description "One sentence." --icon note --co
 - **No third parties.** No analytics, trackers, CDNs, web fonts or embeds.
   Every request must go to the site's own origin (e2e enforced).
 - **Data stays on the device.** Use `createStore` from `@shkriuss/storage`
-  (keys are prefixed `shkriuss:`). Apps that store data show `<DataControls />`
+  (keys are prefixed `shkriuss:`); photos and other big files go in
+  `@shkriuss/storage/files` ([ADR 0013](docs/adr/0013-photos-on-the-device.md)). Apps that store data show `<DataControls />`
   and list what they store in `apps.json` (`dataStored`), which feeds the
   privacy page. Anything server-side needs an ADR first.
 - **Accessibility is WCAG 2.2 AA.** Semantic HTML, labels on every control,
