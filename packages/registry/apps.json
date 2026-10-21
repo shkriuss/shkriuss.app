@@ -211,10 +211,12 @@
       "dataStored": [
         "Your expenses and income: amounts, days, categories and notes",
         "Your categories and their monthly limits",
-        "Which currency to show amounts in",
+        "Which currency to show amounts in, and your monthly reminder settings",
+        "If you turn on reminders while Budget is closed: this device's notification settings and a random device key (never in backups)",
         "If you turn on sync: a copy of your budget on Budget's server, locked on your devices so only they can read it, and this device's sync key (never in backups)",
         "Your light or dark theme choice"
       ],
+      "pushNotifications": true,
       "sync": true
     }
   ]

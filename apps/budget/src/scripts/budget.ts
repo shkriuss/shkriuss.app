@@ -1,9 +1,9 @@
 /**
  * Budget's page behaviour: connects pages/index.astro to the rules in
  * lib/budget.ts, saves on the device, and syncs the categories, entries and
- * currency when sync is on.
+ * settings when sync is on. The monthly reminder: reminders.ts.
  */
-import { today } from '@shkriuss/dates';
+import { isIsoTime, nowStamp, today } from '@shkriuss/dates';
 import { createStore, downloadFile } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
@@ -25,18 +25,24 @@ import {
   KINDS,
   monthLabel,
   monthOf,
+  nextReminder,
   readCategory,
   readEntry,
   removeCategory,
   removeEntry,
+  REMINDER_DAYS,
+  reminderOf,
+  reminderSentence,
   saveCategory,
   saveEntry,
   setCurrency,
+  setReminder,
   shiftMonth,
   suggestedDay,
   summary,
   toCsv,
   toEntryForm,
+  whenLabel,
   withSettings,
   type CategoriesState,
   type Category,
@@ -44,8 +50,10 @@ import {
   type EntriesState,
   type Entry,
   type Kind,
+  type Reminder,
   type SettingsState,
 } from '../lib/budget.ts';
+import { mountReminders } from './reminders.ts';
 
 const categoriesStore = createStore<CategoriesState>({
   key: 'budget-categories',
@@ -124,6 +132,11 @@ export function mountBudget(root: Document): void {
   const noEntries = required<HTMLElement>(root, '[data-no-entries]');
   const entryList = required<HTMLUListElement>(root, '[data-entries]');
   const currencySelect = required<HTMLSelectElement>(root, '[data-currency]');
+  const reminderOn = required<HTMLInputElement>(root, '[data-reminder-on]');
+  const reminderDay = required<HTMLSelectElement>(root, '[data-reminder="day"]');
+  const reminderTime = required<HTMLInputElement>(root, '[data-reminder="time"]');
+  const reminderError = required<HTMLElement>(root, '[data-reminder-error]');
+  const reminderNext = required<HTMLElement>(root, '[data-reminder-next]');
   const categoryTemplate = required<HTMLTemplateElement>(root, '[data-category-template]');
   const entryTemplate = required<HTMLTemplateElement>(root, '[data-entry-template]');
 
@@ -180,6 +193,7 @@ export function mountBudget(root: Document): void {
     }
     announce(ok ? message : COULD_NOT_SAVE);
     render();
+    if (next.settings) reminders.changed();
     sync.changed();
   }
 
@@ -260,6 +274,21 @@ export function mountBudget(root: Document): void {
     noEntries.hidden = monthEntries.length > 0;
     entryList.replaceChildren(...monthEntries.map(renderEntry));
     currencySelect.value = currencyOf(settings);
+    renderReminder();
+  }
+
+  function renderReminder(): void {
+    const reminder = reminderOf(settings);
+    reminderOn.checked = reminder.on;
+    if (reminderDay !== root.activeElement) reminderDay.value = String(reminder.day);
+    if (reminderTime !== root.activeElement) {
+      reminderTime.value = reminder.time;
+      reminderError.textContent = '';
+      reminderTime.removeAttribute('aria-invalid');
+    }
+    const next = nextReminder(settings, nowStamp());
+    reminderNext.hidden = next === null;
+    reminderNext.textContent = next ? `Next reminder: ${whenLabel(next)}.` : '';
   }
 
   /** After saving: focus a button in the list, or `fallback` if it isn't shown. */
@@ -485,6 +514,29 @@ export function mountBudget(root: Document): void {
     save({ settings: setCurrency(settings, chosen) }, `Amounts are shown in ${chosen} now.`);
   });
 
+  // ---------- The monthly reminder ----------
+
+  function commitReminder(): void {
+    const time = reminderTime.value;
+    const wrong = !isIsoTime(time);
+    reminderError.textContent = wrong ? 'Choose a time for the reminder.' : '';
+    if (wrong) reminderTime.setAttribute('aria-invalid', 'true');
+    else reminderTime.removeAttribute('aria-invalid');
+    if (wrong) return;
+    const next: Reminder = {
+      on: reminderOn.checked,
+      day: REMINDER_DAYS.find((day) => String(day) === reminderDay.value) ?? 1,
+      time,
+    };
+    if (JSON.stringify(reminderOf(settings)) === JSON.stringify(next)) return;
+    save({ settings: setReminder(settings, next) }, reminderSentence(next));
+    if (next.on) reminders.offerNotifications();
+  }
+
+  for (const control of [reminderOn, reminderDay, reminderTime]) {
+    control.addEventListener('change', commitReminder);
+  }
+
   // ---------- Keeping up ----------
 
   function reload(): void {
@@ -495,6 +547,7 @@ export function mountBudget(root: Document): void {
     if (editingEntry !== null && !findEntry(editingEntry)) entryDialog.close();
     if (editingCategory !== null && !findCategory(editingCategory)) categoryDialog.close();
     render();
+    reminders.changed();
   }
 
   // "This month" moves on with the calendar.
@@ -509,8 +562,8 @@ export function mountBudget(root: Document): void {
   });
 
   // Sync between devices through the shkriuss account (if turned on). The
-  // newest change to each entry and category wins (an entry changed on two
-  // devices at once isn't kept twice: that would count it twice).
+  // newest change to each entry, category and setting wins (an entry changed
+  // on two devices at once isn't kept twice: that would count it twice).
   const sync = createSync({
     app: site.slug,
     stores: [
@@ -533,6 +586,8 @@ export function mountBudget(root: Document): void {
     onChange: reload,
   });
   mountSyncControls(required<HTMLElement>(root, '[data-sync-controls]'), sync);
+
+  const reminders = mountReminders(root, { settings: () => settings, announce });
 
   render();
 }

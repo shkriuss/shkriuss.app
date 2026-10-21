@@ -15,7 +15,9 @@
   "dependencies": {
     "@shkriuss/astro-config": "workspace:*",
     "@shkriuss/dates": "workspace:*",
+    "@shkriuss/push": "workspace:*",
     "@shkriuss/registry": "workspace:*",
+    "@shkriuss/server": "workspace:*",
     "@shkriuss/storage": "workspace:*",
     "@shkriuss/sync": "workspace:*",
     "@shkriuss/ui": "workspace:*",
