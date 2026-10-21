@@ -218,6 +218,23 @@
       ],
       "pushNotifications": true,
       "sync": true
+    },
+    {
+      "slug": "repairs",
+      "name": "Repairs",
+      "description": "Keep a record of every repair, vehicle by vehicle. Your records stay on your device.",
+      "icon": "wrench",
+      "color": "slate",
+      "status": "live",
+      "storage": "device",
+      "dataStored": [
+        "Your repair records: the vehicle, day, mileage, damage found, work done and parts replaced",
+        "Your vehicles: their names or numbers, and the model, plate and notes you add",
+        "Whether to show distances in kilometres or miles",
+        "If you turn on sync: a copy of your records on Repairs' server, locked on your devices so only they can read it, and this device's sync key (never in backups)",
+        "Your light or dark theme choice"
+      ],
+      "sync": true
     }
   ]
 }

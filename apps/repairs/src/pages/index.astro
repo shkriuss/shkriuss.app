@@ -1,0 +1,610 @@
+---
+/**
+ * Repairs: every repair, the latest day first, with search and a filter for
+ * one vehicle; the vehicles; kilometres or miles and a spreadsheet download;
+ * forms for a repair (with its parts) and a vehicle. Behaviour:
+ * ../scripts/repairs.ts.
+ */
+import { AppShell, Button, DataControls, SyncControls } from '@shkriuss/ui';
+import { LIMITS, UNIT_LABELS, UNITS } from '../lib/repairs.ts';
+---
+
+<AppShell>
+  <div class="stack stack--lg">
+    <header class="stack stack--sm">
+      <h1>Repairs</h1>
+      <p class="lead">
+        A record of every repair, vehicle by vehicle. Your records are saved on this device.
+      </p>
+    </header>
+
+    <div>
+      <Button variant="primary" icon="plus" data-action="new-repair">
+        New repair
+      </Button>
+    </div>
+
+    <section class="stack" aria-labelledby="repairs-heading">
+      <h2 id="repairs-heading" tabindex="-1" data-repairs-heading>
+        Repair history
+      </h2>
+      <div class="field-row filters">
+        <div class="field">
+          <label class="field__label" for="search">
+            Search
+          </label>
+          <input
+            class="input"
+            id="search"
+            type="search"
+            autocomplete="off"
+            placeholder="Bus number, damage, part…"
+            data-search
+          />
+        </div>
+        <div class="field">
+          <label class="field__label" for="vehicle-filter">
+            Vehicle
+          </label>
+          <select class="input" id="vehicle-filter" data-vehicle-filter>
+            <option value="">All vehicles</option>
+          </select>
+        </div>
+      </div>
+      <p class="muted" data-result-count hidden></p>
+      <p class="muted" data-no-repairs>
+        No repairs yet. Tap “New repair” to add your first.
+      </p>
+      <p class="muted" data-no-matches hidden>
+        No repairs match your search.
+      </p>
+      <div class="stack" data-days></div>
+      <div data-more hidden>
+        <Button data-action="more">Show more</Button>
+      </div>
+    </section>
+
+    <section class="stack" aria-labelledby="vehicles-heading">
+      <h2 id="vehicles-heading">Vehicles</h2>
+      <p class="muted" data-no-vehicles>
+        No vehicles yet. A vehicle is added when you save its first repair, or add one here.
+      </p>
+      <ul role="list" class="vehicles" data-vehicles></ul>
+      <div>
+        <Button icon="plus" data-action="new-vehicle">
+          Add vehicle
+        </Button>
+      </div>
+    </section>
+
+    <section class="stack" aria-labelledby="settings-heading">
+      <h2 id="settings-heading">Distance and spreadsheet</h2>
+      <div class="field unit">
+        <label class="field__label" for="unit">
+          Distance
+        </label>
+        <select class="input" id="unit" aria-describedby="unit-hint" data-unit>
+          {UNITS.map((unit) => (
+            <option value={unit}>{UNIT_LABELS[unit]}</option>
+          ))}
+        </select>
+        <p class="field__hint" id="unit-hint">
+          Shown with every mileage. Numbers aren’t converted.
+        </p>
+      </div>
+      <div>
+        <Button icon="download" data-action="csv">
+          Download as a spreadsheet (CSV)
+        </Button>
+      </div>
+    </section>
+
+    <SyncControls />
+
+    <DataControls />
+  </div>
+
+  <!-- Live region: tells screen reader users what changed. -->
+  <p class="visually-hidden" role="status" data-announcer></p>
+
+  <!-- Suggestions for the forms, filled in by the script. -->
+  <datalist id="vehicle-names" data-vehicle-names></datalist>
+  <datalist id="system-names" data-system-names></datalist>
+  <datalist id="part-names" data-part-names></datalist>
+  <datalist id="model-names" data-model-names></datalist>
+
+  <!-- One day of repairs, copied by the script for each. -->
+  <template data-day-template>
+    <div class="stack stack--sm">
+      <h3 class="day__heading" data-day-heading>
+        Day
+      </h3>
+      <ul role="list" class="repairs" data-day-list></ul>
+    </div>
+  </template>
+
+  <!-- One repair. -->
+  <template data-repair-template>
+    <li class="repair">
+      <div class="repair__top">
+        <button
+          type="button"
+          class="repair__title"
+          aria-haspopup="dialog"
+          data-action="edit-repair"
+          data-title
+        >
+          Vehicle
+        </button>
+        <span class="muted repair__meta" data-meta></span>
+      </div>
+      <dl class="repair__details">
+        <div data-row="problem">
+          <dt>Damage found</dt>
+          <dd data-problem></dd>
+        </div>
+        <div data-row="work">
+          <dt>Work done</dt>
+          <dd data-work></dd>
+        </div>
+        <div data-row="parts">
+          <dt>Parts replaced</dt>
+          <dd>
+            <ul class="repair__parts" data-parts></ul>
+          </dd>
+        </div>
+      </dl>
+    </li>
+  </template>
+
+  <!-- One vehicle. -->
+  <template data-vehicle-template>
+    <li class="vehicle">
+      <div class="vehicle__text">
+        <span class="vehicle__name" data-name>
+          Vehicle
+        </span>
+        <span class="muted" data-details></span>
+        <span class="muted" data-summary></span>
+      </div>
+      <div class="cluster vehicle__actions">
+        <Button data-action="show-vehicle">
+          <span>
+            Show repairs<span class="visually-hidden" data-hidden-name></span>
+          </span>
+        </Button>
+        <Button icon="pencil" data-action="edit-vehicle">
+          <span>
+            Edit<span class="visually-hidden" data-hidden-name></span>
+          </span>
+        </Button>
+      </div>
+    </li>
+  </template>
+
+  <!-- One part in the repair form. -->
+  <template data-part-template>
+    <li class="part-row">
+      <fieldset class="stack stack--sm">
+        <legend class="field__label" data-legend>
+          Part
+        </legend>
+        <div class="field">
+          <label class="field">
+            <span class="field__label">Name</span>
+            <input
+              class="input"
+              type="text"
+              list="part-names"
+              autocomplete="off"
+              maxlength={LIMITS.partName}
+              placeholder="e.g. Brake pads"
+              data-part="name"
+            />
+          </label>
+          <p class="field__error" data-error="name"></p>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label class="field">
+              <span class="field__label">Part number (optional)</span>
+              <input
+                class="input"
+                type="text"
+                autocomplete="off"
+                maxlength={LIMITS.partNumber}
+                data-part="number"
+              />
+            </label>
+            <p class="field__error" data-error="number"></p>
+          </div>
+          <div class="field">
+            <label class="field">
+              <span class="field__label">Quantity</span>
+              <input
+                class="input"
+                type="number"
+                inputmode="decimal"
+                step="any"
+                min="0"
+                data-part="quantity"
+              />
+            </label>
+            <p class="field__error" data-error="quantity"></p>
+          </div>
+        </div>
+        <div>
+          <Button variant="ghost" icon="x" data-action="remove-part">
+            <span>
+              Remove<span class="visually-hidden" data-hidden-part></span>
+            </span>
+          </Button>
+        </div>
+      </fieldset>
+    </li>
+  </template>
+
+  <dialog class="dialog" aria-labelledby="repair-title" data-repair-dialog>
+    <form class="stack" data-repair-form novalidate>
+      <h2 id="repair-title" data-repair-title>
+        New repair
+      </h2>
+      <div class="field-row">
+        <div class="field">
+          <label class="field__label" for="repair-vehicle">
+            Vehicle
+          </label>
+          <input
+            class="input"
+            id="repair-vehicle"
+            name="vehicle"
+            type="text"
+            list="vehicle-names"
+            autocomplete="off"
+            maxlength={LIMITS.vehicle}
+            placeholder="e.g. Bus 105"
+            aria-describedby="repair-vehicle-hint repair-vehicle-error"
+            required
+          />
+          <p class="field__hint" id="repair-vehicle-hint">
+            A bus number, plate or name. A new one is added to your vehicles.
+          </p>
+          <p class="field__error" id="repair-vehicle-error" data-error-for="vehicle"></p>
+        </div>
+        <div class="field">
+          <label class="field__label" for="repair-date">
+            Day
+          </label>
+          <input
+            class="input"
+            id="repair-date"
+            name="date"
+            type="date"
+            aria-describedby="repair-date-error"
+            required
+          />
+          <p class="field__error" id="repair-date-error" data-error-for="date"></p>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label class="field__label" for="repair-mileage" data-mileage-label>
+            Mileage (km)
+          </label>
+          <input
+            class="input"
+            id="repair-mileage"
+            name="mileage"
+            type="number"
+            inputmode="numeric"
+            step="1"
+            min="0"
+            aria-describedby="repair-mileage-hint repair-mileage-error"
+          />
+          <p class="field__hint" id="repair-mileage-hint" data-mileage-hint></p>
+          <p class="field__error" id="repair-mileage-error" data-error-for="mileage"></p>
+        </div>
+        <div class="field">
+          <label class="field__label" for="repair-system">
+            System (optional)
+          </label>
+          <input
+            class="input"
+            id="repair-system"
+            name="system"
+            type="text"
+            list="system-names"
+            autocomplete="off"
+            maxlength={LIMITS.system}
+            placeholder="e.g. Brakes"
+            aria-describedby="repair-system-error"
+          />
+          <p class="field__error" id="repair-system-error" data-error-for="system"></p>
+        </div>
+      </div>
+      <div class="field">
+        <label class="field__label" for="repair-problem">
+          Damage found
+        </label>
+        <textarea
+          class="input"
+          id="repair-problem"
+          name="problem"
+          rows="3"
+          maxlength={LIMITS.text}
+          placeholder="What was wrong"
+          aria-describedby="repair-problem-error"
+        ></textarea>
+        <p class="field__error" id="repair-problem-error" data-error-for="problem"></p>
+      </div>
+      <div class="field">
+        <label class="field__label" for="repair-work">
+          Work done
+        </label>
+        <textarea
+          class="input"
+          id="repair-work"
+          name="work"
+          rows="3"
+          maxlength={LIMITS.text}
+          placeholder="What you repaired, adjusted or checked"
+          aria-describedby="repair-work-error"
+        ></textarea>
+        <p class="field__error" id="repair-work-error" data-error-for="work"></p>
+      </div>
+      <fieldset class="stack stack--sm parts">
+        <legend class="field__label">Parts replaced</legend>
+        <ol role="list" class="stack stack--sm part-rows" data-part-rows></ol>
+        <p class="field__error" data-error-for="parts"></p>
+        <div>
+          <Button icon="plus" data-action="add-part">
+            Add a part
+          </Button>
+        </div>
+      </fieldset>
+      <div class="cluster dialog__actions">
+        <Button type="submit" variant="primary">
+          Save
+        </Button>
+        <Button data-action="cancel">Cancel</Button>
+        <Button variant="danger" icon="trash" data-action="delete-repair" class="dialog__delete">
+          Delete
+        </Button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="dialog" aria-labelledby="vehicle-title" data-vehicle-dialog>
+    <form class="stack" data-vehicle-form novalidate>
+      <h2 id="vehicle-title" data-vehicle-title>
+        Add vehicle
+      </h2>
+      <div class="field">
+        <label class="field__label" for="vehicle-name">
+          Name or number
+        </label>
+        <input
+          class="input"
+          id="vehicle-name"
+          name="name"
+          type="text"
+          autocomplete="off"
+          maxlength={LIMITS.vehicle}
+          placeholder="e.g. Bus 105"
+          aria-describedby="vehicle-name-error"
+          required
+        />
+        <p class="field__error" id="vehicle-name-error" data-error-for="name"></p>
+      </div>
+      <div class="field">
+        <label class="field__label" for="vehicle-model">
+          Model (optional)
+        </label>
+        <input
+          class="input"
+          id="vehicle-model"
+          name="model"
+          type="text"
+          list="model-names"
+          autocomplete="off"
+          maxlength={LIMITS.model}
+          aria-describedby="vehicle-model-error"
+        />
+        <p class="field__error" id="vehicle-model-error" data-error-for="model"></p>
+      </div>
+      <div class="field">
+        <label class="field__label" for="vehicle-plate">
+          Number plate (optional)
+        </label>
+        <input
+          class="input"
+          id="vehicle-plate"
+          name="plate"
+          type="text"
+          autocomplete="off"
+          maxlength={LIMITS.plate}
+          aria-describedby="vehicle-plate-error"
+        />
+        <p class="field__error" id="vehicle-plate-error" data-error-for="plate"></p>
+      </div>
+      <div class="field">
+        <label class="field__label" for="vehicle-notes">
+          Notes (optional)
+        </label>
+        <textarea
+          class="input"
+          id="vehicle-notes"
+          name="notes"
+          rows="3"
+          maxlength={LIMITS.notes}
+          aria-describedby="vehicle-notes-error"
+        ></textarea>
+        <p class="field__error" id="vehicle-notes-error" data-error-for="notes"></p>
+      </div>
+      <div class="cluster dialog__actions">
+        <Button type="submit" variant="primary">
+          Save
+        </Button>
+        <Button data-action="cancel">Cancel</Button>
+        <Button variant="danger" icon="trash" data-action="delete-vehicle" class="dialog__delete">
+          Delete
+        </Button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="dialog" aria-labelledby="delete-title" data-delete-dialog>
+    <form method="dialog" class="stack">
+      <h2 id="delete-title" data-delete-title>
+        Delete this?
+      </h2>
+      <p data-delete-text></p>
+      <div class="cluster">
+        <Button type="submit" value="cancel">
+          Cancel
+        </Button>
+        <Button type="submit" variant="danger" value="confirm">
+          Delete
+        </Button>
+      </div>
+    </form>
+  </dialog>
+</AppShell>
+
+<script>
+  import { mountRepairs } from '../scripts/repairs.ts';
+
+  mountRepairs(document);
+</script>
+
+<style>
+  .filters {
+    max-inline-size: 36rem;
+  }
+
+  .day__heading {
+    font-size: var(--text-base);
+    color: var(--color-text-muted);
+  }
+
+  .repairs,
+  .vehicles {
+    display: grid;
+    gap: var(--space-2);
+  }
+
+  .repair,
+  .vehicle {
+    display: grid;
+    gap: var(--space-1);
+    padding: var(--space-2) var(--space-3);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius);
+    background: var(--color-surface);
+  }
+
+  .repair__top {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0 var(--space-3);
+  }
+
+  /* The vehicle opens the repair: it reads as text, works as a button. */
+  .repair__title {
+    min-height: var(--tap-target);
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-weight: var(--weight-bold);
+    text-align: start;
+    overflow-wrap: anywhere;
+    cursor: pointer;
+  }
+
+  .repair__title:hover {
+    color: var(--color-accent);
+  }
+
+  .repair__meta {
+    font-size: var(--text-sm);
+  }
+
+  .repair__details {
+    display: grid;
+    gap: var(--space-2);
+    margin: 0;
+    padding-block-end: var(--space-1);
+  }
+
+  .repair__details dt {
+    font-size: var(--text-sm);
+    font-weight: var(--weight-semibold);
+    color: var(--color-text-muted);
+  }
+
+  .repair__details dd {
+    margin: 0;
+    white-space: pre-line;
+    overflow-wrap: anywhere;
+  }
+
+  .repair__parts {
+    margin: 0;
+    padding-inline-start: var(--space-5);
+  }
+
+  .vehicle {
+    gap: var(--space-2);
+  }
+
+  .vehicle__text {
+    display: grid;
+    gap: var(--space-1);
+    overflow-wrap: anywhere;
+  }
+
+  .vehicle__text .muted {
+    font-size: var(--text-sm);
+  }
+
+  .vehicle__text .muted:empty {
+    display: none;
+  }
+
+  .vehicle__name {
+    font-weight: var(--weight-bold);
+  }
+
+  .vehicle__actions {
+    --cluster-gap: var(--space-2);
+  }
+
+  .unit {
+    max-inline-size: 16rem;
+  }
+
+  fieldset {
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .part-row {
+    padding: var(--space-3);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius);
+  }
+
+  .part-rows:empty {
+    display: none;
+  }
+
+  .dialog__actions .dialog__delete {
+    margin-inline-start: auto;
+  }
+</style>

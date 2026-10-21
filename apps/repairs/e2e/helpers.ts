@@ -1,0 +1,101 @@
+// Shared by Repairs' browser tests: the day it is, finding things on the
+// page, filling in the forms, and saving records straight into storage.
+import type { Page } from '@playwright/test';
+import type { Repair, Vehicle } from '../src/lib/repairs.ts';
+
+/** Wednesday 21 October 2026, 10:00 in Tbilisi (the tests' time zone). */
+export const NOW = new Date('2026-10-21T10:00:00+04:00');
+export const TIME_ZONE = 'Asia/Tbilisi';
+
+export const repairDialog = (page: Page) => page.locator('[data-repair-dialog]');
+export const vehicleDialog = (page: Page) => page.locator('[data-vehicle-dialog]');
+/** The repairs shown, in order. */
+export const repairItems = (page: Page) => page.locator('[data-days] li.repair');
+/** A vehicle in the Vehicles list, by its name. */
+export const vehicleItem = (page: Page, name: string) =>
+  page.locator('[data-vehicles] li').filter({
+    has: page.locator('[data-name]', { hasText: new RegExp(`^${name}$`) }),
+  });
+/** A part in the open repair form (1 is the first). */
+export const partRow = (page: Page, number: number) =>
+  repairDialog(page).getByRole('group', { name: `Part ${number}`, exact: true });
+
+export interface PartFields {
+  name?: string;
+  number?: string;
+  quantity?: string;
+}
+
+/** Fills in the open repair form (only the fields given) and saves. */
+export async function fillRepair(
+  page: Page,
+  fields: {
+    vehicle?: string;
+    date?: string;
+    mileage?: string;
+    system?: string;
+    problem?: string;
+    work?: string;
+    parts?: PartFields[];
+  },
+): Promise<void> {
+  const dialog = repairDialog(page);
+  if (fields.vehicle !== undefined) await dialog.getByLabel('Vehicle').fill(fields.vehicle);
+  if (fields.date !== undefined) await dialog.getByLabel('Day').fill(fields.date);
+  if (fields.mileage !== undefined) await dialog.getByLabel(/^Mileage/).fill(fields.mileage);
+  if (fields.system !== undefined) await dialog.getByLabel('System (optional)').fill(fields.system);
+  if (fields.problem !== undefined) await dialog.getByLabel('Damage found').fill(fields.problem);
+  if (fields.work !== undefined) await dialog.getByLabel('Work done').fill(fields.work);
+  for (const [index, part] of (fields.parts ?? []).entries()) {
+    if ((await dialog.locator('[data-part-rows] > li').count()) <= index) {
+      await dialog.getByRole('button', { name: 'Add a part' }).click();
+    }
+    const row = partRow(page, index + 1);
+    if (part.name !== undefined) await row.getByLabel('Name').fill(part.name);
+    if (part.number !== undefined) await row.getByLabel('Part number (optional)').fill(part.number);
+    if (part.quantity !== undefined) await row.getByLabel('Quantity').fill(part.quantity);
+  }
+  await dialog.getByRole('button', { name: 'Save' }).click();
+}
+
+/** "New repair", filled in and saved. */
+export async function addRepair(
+  page: Page,
+  fields: Parameters<typeof fillRepair>[1],
+): Promise<void> {
+  await page.getByRole('button', { name: 'New repair' }).click();
+  await fillRepair(page, fields);
+}
+
+export const vehicle = (overrides: Partial<Vehicle>): Vehicle => ({
+  id: crypto.randomUUID(),
+  name: 'Bus 105',
+  model: 'Isuzu Novociti Life',
+  plate: '',
+  notes: '',
+  ...overrides,
+});
+
+export const repair = (overrides: Partial<Repair>): Repair => ({
+  id: crypto.randomUUID(),
+  vehicle: 'b105',
+  date: '2026-10-21',
+  mileage: 120_000,
+  system: 'Brakes',
+  problem: '',
+  work: 'Replaced the front pads',
+  parts: [],
+  ...overrides,
+});
+
+/** Saves vehicles and repairs straight into storage, then reloads. */
+export async function seed(
+  page: Page,
+  data: { vehicles?: Vehicle[]; repairs?: Repair[] },
+): Promise<void> {
+  await page.evaluate(({ vehicles = [], repairs = [] }) => {
+    localStorage.setItem('shkriuss:repairs-vehicles', JSON.stringify({ v: 1, data: { vehicles } }));
+    localStorage.setItem('shkriuss:repairs', JSON.stringify({ v: 1, data: { repairs } }));
+  }, data);
+  await page.reload();
+}
