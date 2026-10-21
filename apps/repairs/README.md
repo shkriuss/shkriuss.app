@@ -13,9 +13,13 @@ private car's service history. Lives at <https://repairs.shkriuss.app>.
     `newVehicle`). Deleting a vehicle deletes its repairs, after asking;
   - repairs (`shkriuss:repairs`): the vehicle (by id, so it can be renamed),
     the day, the mileage, the system (brakes, doors…), the damage found, the
-    work done and the parts replaced (name, part number, quantity);
-  - settings (`shkriuss:repairs-settings`): kilometres or miles, only for
-    showing mileage (nothing is converted). Saved only once changed.
+    work done, the parts replaced (name, part number, quantity, price each),
+    the hours worked and the labour (and other) cost. Version 2 added the
+    hours, labour and prices; `migrateRepairs` upgrades version 1 (here, from
+    a backup, or from a device that synced before), leaving them unknown;
+  - settings (`shkriuss:repairs-settings`): kilometres or miles, and the
+    currency, only for showing (nothing is converted). Saved only once
+    changed.
 - The list shows the latest day first. Search looks at every word typed in the
   vehicle (name, model, plate), system, damage, work and parts; a word of only
   letters and digits must start a word, so "7" finds Bus 7 but not a part
@@ -26,15 +30,22 @@ private car's service history. Lives at <https://repairs.shkriuss.app>.
   when the name is chosen (`partNames`); the vehicles; the models
   (`MODELS`, plus the ones used). The mileage field shows the last mileage
   noted for the vehicle (`lastMileage`).
-- "Download as a spreadsheet (CSV)" saves every repair, one row each. Text a
-  spreadsheet could read as a formula starts with `'`.
+- Costs: a repair's cost is its priced parts (quantity × price) plus labour
+  (`repairCost`); nothing priced means no cost, not zero. Hours and costs are
+  added up for each day, for what the list shows, and for each vehicle
+  (`totals`). A part chosen from the suggestions gets its last price too.
+- "Download as a spreadsheet (CSV)" saves every repair, one row each, with
+  the hours and the parts, labour and total cost. Text a spreadsheet could
+  read as a formula starts with `'`.
 - `src/scripts/repairs.ts`: connects the page to those rules.
 - `src/pages/index.astro`: the page, built from `@shkriuss/ui` components.
   `<template>`s hold the markup for a day, a repair, a vehicle and a part row;
   the forms are dialogs.
 - `src/worker.ts`: runs the shared sync server
   ([ADR 0010](../../docs/adr/0010-account-and-sync.md)). The newest change to
-  each vehicle, repair and setting wins.
+  each vehicle, repair and setting wins. Vehicles and repairs reach
+  `withItems` unchecked, so ones from an older version can be upgraded first;
+  they're checked after.
 - `e2e/`: browser tests (`helpers.ts` is shared by them). The shared
   accessibility, security, offline and sync checks in `tests/e2e/` run too.
 

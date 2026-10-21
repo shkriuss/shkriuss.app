@@ -24,6 +24,7 @@ export interface PartFields {
   name?: string;
   number?: string;
   quantity?: string;
+  price?: string;
 }
 
 /** Fills in the open repair form (only the fields given) and saves. */
@@ -37,6 +38,8 @@ export async function fillRepair(
     problem?: string;
     work?: string;
     parts?: PartFields[];
+    hours?: string;
+    labour?: string;
   },
 ): Promise<void> {
   const dialog = repairDialog(page);
@@ -54,6 +57,13 @@ export async function fillRepair(
     if (part.name !== undefined) await row.getByLabel('Name').fill(part.name);
     if (part.number !== undefined) await row.getByLabel('Part number (optional)').fill(part.number);
     if (part.quantity !== undefined) await row.getByLabel('Quantity').fill(part.quantity);
+    if (part.price !== undefined) await row.getByLabel('Price each (optional)').fill(part.price);
+  }
+  if (fields.hours !== undefined) {
+    await dialog.getByLabel('Hours worked (optional)').fill(fields.hours);
+  }
+  if (fields.labour !== undefined) {
+    await dialog.getByLabel('Labour and other costs (optional)').fill(fields.labour);
   }
   await dialog.getByRole('button', { name: 'Save' }).click();
 }
@@ -85,6 +95,8 @@ export const repair = (overrides: Partial<Repair>): Repair => ({
   problem: '',
   work: 'Replaced the front pads',
   parts: [],
+  hours: null,
+  labour: null,
   ...overrides,
 });
 
@@ -95,7 +107,7 @@ export async function seed(
 ): Promise<void> {
   await page.evaluate(({ vehicles = [], repairs = [] }) => {
     localStorage.setItem('shkriuss:repairs-vehicles', JSON.stringify({ v: 1, data: { vehicles } }));
-    localStorage.setItem('shkriuss:repairs', JSON.stringify({ v: 1, data: { repairs } }));
+    localStorage.setItem('shkriuss:repairs', JSON.stringify({ v: 2, data: { repairs } }));
   }, data);
   await page.reload();
 }

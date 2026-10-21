@@ -1,17 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import {
   byDay,
+  currencyOf,
   dateLabel,
   dayLabel,
   emptyRepairs,
   emptySettings,
   emptyVehicles,
   findRepairs,
+  formatHours,
   formatMileage,
+  formatMoney,
   isRepairsState,
   isVehiclesState,
+  knownPart,
   LIMITS,
   lastMileage,
+  migrateRepairs,
   modelNames,
   partLabel,
   partNames,
@@ -19,19 +24,20 @@ import {
   readVehicle,
   removeRepair,
   removeVehicle,
+  repairCost,
   saveRepair,
   saveVehicle,
+  setCurrency,
   setUnit,
   SYSTEMS,
   systemNames,
   toCsv,
   toRepairForm,
+  totals,
   unitOf,
   vehicleName,
   vehicleSummaries,
-  withRepairs,
   withSettings,
-  withVehicles,
   type Repair,
   type RepairForm,
   type RepairsState,
@@ -63,6 +69,8 @@ const repair = (overrides: Partial<Repair>): Repair => ({
   problem: '',
   work: 'Replaced the front pads',
   parts: [],
+  hours: null,
+  labour: null,
   ...overrides,
 });
 const repairs = (...list: Repair[]): RepairsState => ({ repairs: list });
@@ -74,6 +82,8 @@ const form = (overrides: Partial<RepairForm>): RepairForm => ({
   problem: '',
   work: 'Checked the doors',
   parts: [],
+  hours: '',
+  labour: '',
   ...overrides,
 });
 let ids = 0;
@@ -178,10 +188,10 @@ describe('repairs', () => {
         problem: ' Grinding noise at the front ',
         work: 'Replaced pads and discs.\nBled the brakes.',
         parts: [
-          { name: 'Brake pads', number: '8-97366-123-0', quantity: '2' },
-          { name: '', number: '', quantity: '1' },
-          { name: 'Brake fluid', number: '', quantity: '0,5' },
-          { name: ' Disc ', number: 'abc 1', quantity: '' },
+          { name: 'Brake pads', number: '8-97366-123-0', quantity: '2', price: '' },
+          { name: '', number: '', quantity: '1', price: '' },
+          { name: 'Brake fluid', number: '', quantity: '0,5', price: '' },
+          { name: ' Disc ', number: 'abc 1', quantity: '', price: '' },
         ],
       }),
       'r',
@@ -198,10 +208,12 @@ describe('repairs', () => {
       problem: 'Grinding noise at the front',
       work: 'Replaced pads and discs.\nBled the brakes.',
       parts: [
-        { name: 'Brake pads', number: '8-97366-123-0', quantity: 2 },
-        { name: 'Brake fluid', number: '', quantity: 0.5 },
-        { name: 'Disc', number: 'ABC 1', quantity: 1 },
+        { name: 'Brake pads', number: '8-97366-123-0', quantity: 2, price: null },
+        { name: 'Brake fluid', number: '', quantity: 0.5, price: null },
+        { name: 'Disc', number: 'ABC 1', quantity: 1, price: null },
       ],
+      hours: null,
+      labour: null,
     });
   });
 
@@ -224,8 +236,8 @@ describe('repairs', () => {
       readRepair(
         form({
           parts: [
-            { name: '', number: 'X-1', quantity: '1' },
-            { name: 'Bulb', number: '', quantity: '0' },
+            { name: '', number: 'X-1', quantity: '1', price: '' },
+            { name: 'Bulb', number: '', quantity: '0', price: '' },
           ],
         }),
         'r',
@@ -240,7 +252,7 @@ describe('repairs', () => {
     // A part alone is enough.
     expect(
       readRepair(
-        form({ work: '', parts: [{ name: 'Wiper blade', number: '', quantity: '2' }] }),
+        form({ work: '', parts: [{ name: 'Wiper blade', number: '', quantity: '2', price: '' }] }),
         'r',
         emptyRepairs(),
         vehicles,
@@ -252,11 +264,11 @@ describe('repairs', () => {
   it('shows a saved repair in the form again', () => {
     const saved = repair({
       mileage: null,
-      parts: [{ name: 'Brake pads', number: 'BP-1', quantity: 2 }],
+      parts: [{ name: 'Brake pads', number: 'BP-1', quantity: 2, price: null }],
     });
     const again = toRepairForm(saved, vehicles);
     expect(again).toMatchObject({ vehicle: 'Bus 105', mileage: '', system: 'Brakes' });
-    expect(again.parts).toEqual([{ name: 'Brake pads', number: 'BP-1', quantity: '2' }]);
+    expect(again.parts).toEqual([{ name: 'Brake pads', number: 'BP-1', quantity: '2', price: '' }]);
     expect(readRepair(again, 'r', repairs(saved), vehicles, newId).repair).toEqual(saved);
   });
 
@@ -276,12 +288,13 @@ describe('repairs', () => {
     expect(isRepairsState(repairs(repair({ mileage: -1 })))).toBe(false);
     expect(isVehiclesState(vehicles)).toBe(true);
     expect(isVehiclesState({ vehicles: [{ id: 'x', name: '' }] })).toBe(false);
-    expect(withRepairs([repair({}), { id: 'bad' }]).repairs).toHaveLength(1);
-    expect(withVehicles([vehicle({}), null]).vehicles).toHaveLength(1);
+    expect(isRepairsState(repairs(repair({ hours: 0 })))).toBe(false);
+    expect(isRepairsState(repairs(repair({ labour: -1 })))).toBe(false);
     const many = Array.from({ length: LIMITS.parts + 1 }, () => ({
       name: 'Bolt',
       number: '',
       quantity: 1,
+      price: null,
     }));
     expect(isRepairsState(repairs(repair({ parts: many })))).toBe(false);
   });
@@ -294,7 +307,7 @@ describe('finding repairs', () => {
       id: 'b',
       date: '2026-10-21',
       vehicle: 'b12',
-      parts: [{ name: 'Brake pads', number: '8-97366-123-0', quantity: 2 }],
+      parts: [{ name: 'Brake pads', number: '8-97366-123-0', quantity: 2, price: null }],
     }),
     repair({ id: 'c', date: '2026-10-21', work: 'Fixed the A/C', system: 'A/C and heating' }),
     repair({ id: 'd', date: '2026-10-19', vehicle: 'car', work: 'Oil change', system: '' }),
@@ -343,21 +356,21 @@ describe('finding repairs', () => {
     const used = repairs(
       repair({
         date: '2026-10-01',
-        parts: [{ name: 'Oil filter', number: 'OF-1', quantity: 1 }],
+        parts: [{ name: 'Oil filter', number: 'OF-1', quantity: 1, price: null }],
         system: 'Gearbox',
       }),
       repair({
         date: '2026-10-10',
         parts: [
-          { name: 'oil filter', number: '', quantity: 1 },
-          { name: 'Air filter', number: 'AF-2', quantity: 1 },
+          { name: 'oil filter', number: '', quantity: 1, price: null },
+          { name: 'Air filter', number: 'AF-2', quantity: 1, price: null },
         ],
         system: 'brakes',
       }),
     );
     expect(partNames(used)).toEqual([
-      { name: 'Air filter', number: 'AF-2' },
-      { name: 'oil filter', number: 'OF-1' },
+      { name: 'Air filter', number: 'AF-2', price: null },
+      { name: 'oil filter', number: 'OF-1', price: null },
     ]);
     expect(systemNames(used)).toEqual([...SYSTEMS, 'Gearbox']);
   });
@@ -367,11 +380,13 @@ describe('for people', () => {
   it('formats mileage, parts and days', () => {
     expect(formatMileage(123_456, 'km', 'en-US')).toBe('123,456 km');
     expect(formatMileage(80_000, 'mi', 'en-US')).toBe('80,000 mi');
-    expect(partLabel({ name: 'Brake pads', number: 'BP-1', quantity: 2 }, 'en-US')).toBe(
-      'Brake pads × 2 (BP-1)',
+    expect(
+      partLabel({ name: 'Brake pads', number: 'BP-1', quantity: 2, price: null }, 'en-US'),
+    ).toBe('Brake pads × 2 (BP-1)');
+    expect(partLabel({ name: 'Oil', number: '', quantity: 0.5, price: null }, 'en-US')).toBe(
+      'Oil × 0.5',
     );
-    expect(partLabel({ name: 'Oil', number: '', quantity: 0.5 }, 'en-US')).toBe('Oil × 0.5');
-    expect(partLabel({ name: 'Bulb', number: '', quantity: 1 })).toBe('Bulb');
+    expect(partLabel({ name: 'Bulb', number: '', quantity: 1, price: null })).toBe('Bulb');
     expect(dayLabel('2026-10-21', 'en-US')).toBe('Wednesday, October 21, 2026');
     expect(dateLabel('2026-10-21', 'en-US')).toBe('Oct 21, 2026');
   });
@@ -387,25 +402,184 @@ describe('for people', () => {
           system: '',
           work: 'Pads',
           parts: [
-            { name: 'Brake pads', number: 'BP-1', quantity: 2 },
-            { name: 'Clip', number: '', quantity: 1 },
+            { name: 'Brake pads', number: 'BP-1', quantity: 2, price: 45 },
+            { name: 'Clip', number: '', quantity: 1, price: null },
           ],
+          hours: 1.5,
+          labour: 20,
         }),
       ),
       vehicles,
-      'km',
+      setCurrency(emptySettings(), 'GEL'),
     );
     expect(csv.split('\r\n')).toEqual([
-      'Date,Vehicle,Model,Plate,Mileage (km),System,Damage found,Work done,Parts replaced',
-      '2026-10-21,Bus 12,Isuzu Novociti Life,TB-012-BB,,,,Pads,Brake pads × 2 (BP-1); Clip',
-      `2026-10-20,Bus 105,Isuzu Novociti Life,,120000,Brakes,'=cmd,"Fixed, ""properly""",`,
+      'Date,Vehicle,Model,Plate,Mileage (km),System,Damage found,Work done,Parts replaced,Hours worked,Parts cost (GEL),Labour cost (GEL),Total cost (GEL)',
+      '2026-10-21,Bus 12,Isuzu Novociti Life,TB-012-BB,,,,Pads,Brake pads × 2 (BP-1); Clip,1.5,90,20,110',
+      `2026-10-20,Bus 105,Isuzu Novociti Life,,120000,Brakes,'=cmd,"Fixed, ""properly""",,,,,`,
       '',
     ]);
   });
 
-  it('uses kilometres until miles are chosen', () => {
+  it('uses kilometres and dollars until others are chosen', () => {
     expect(unitOf(emptySettings())).toBe('km');
-    expect(unitOf(setUnit(emptySettings(), 'mi'))).toBe('mi');
+    expect(currencyOf(emptySettings())).toBe('USD');
+    const both = setCurrency(setUnit(emptySettings(), 'mi'), 'GEL');
+    expect(unitOf(both)).toBe('mi');
+    expect(currencyOf(both)).toBe('GEL');
+    expect(unitOf(setCurrency(both, 'EUR'))).toBe('mi');
     expect(withSettings([{ id: 'unit', unit: 'leagues' }]).settings).toEqual([]);
+    expect(
+      withSettings([
+        { id: 'currency', currency: 'GEL' },
+        { id: 'unit', unit: 'mi' },
+        { id: 'unit', unit: 'km' },
+      ]).settings,
+    ).toEqual([
+      { id: 'unit', unit: 'mi' },
+      { id: 'currency', currency: 'GEL' },
+    ]);
+  });
+});
+
+describe('hours worked and costs', () => {
+  it('reads the hours, labour and part prices', () => {
+    const read = readRepair(
+      form({
+        hours: '1,5',
+        labour: '20',
+        parts: [
+          { name: 'Brake pads', number: '', quantity: '2', price: '45.50' },
+          { name: 'Clip', number: '', quantity: '4', price: '' },
+        ],
+      }),
+      'r',
+      emptyRepairs(),
+      vehicles,
+      newId,
+    ).repair;
+    expect(read).toMatchObject({
+      hours: 1.5,
+      labour: 20,
+      parts: [
+        { name: 'Brake pads', number: '', quantity: 2, price: 45.5 },
+        { name: 'Clip', number: '', quantity: 4, price: null },
+      ],
+    });
+    expect(toRepairForm(read as Repair, vehicles)).toMatchObject({
+      hours: '1.5',
+      labour: '20',
+      parts: [{ price: '45.5' }, { price: '' }],
+    });
+  });
+
+  it('says what’s wrong with them', () => {
+    expect(
+      readRepair(
+        form({
+          hours: '0',
+          labour: '-5',
+          parts: [
+            { name: 'Bulb', number: '', quantity: '1', price: 'x' },
+            { name: '', number: '', quantity: '1', price: '3' },
+          ],
+        }),
+        'r',
+        emptyRepairs(),
+        vehicles,
+        newId,
+      ).problems,
+    ).toEqual({
+      hours: 'Enter the hours as a number above 0, or leave it empty.',
+      labour: 'Enter an amount, or leave it empty.',
+      'part-price-0': 'Enter a price, or leave it empty.',
+      'part-name-1': 'Enter the part’s name.',
+    });
+  });
+
+  it('works out what a repair cost', () => {
+    expect(
+      repairCost(
+        repair({
+          parts: [
+            { name: 'Brake pads', number: '', quantity: 2, price: 45.5 },
+            { name: 'Clip', number: '', quantity: 4, price: null },
+          ],
+          labour: 20,
+        }),
+      ),
+    ).toEqual({ parts: 91, labour: 20, total: 111 });
+    expect(repairCost(repair({ labour: 0 }))).toEqual({ parts: 0, labour: 0, total: 0 });
+    expect(
+      repairCost(repair({ parts: [{ name: 'Clip', number: '', quantity: 1, price: null }] })),
+    ).toBeNull();
+  });
+
+  it('adds up hours and costs, by day and by vehicle', () => {
+    expect(
+      totals([
+        repair({ hours: 0.1, labour: 10.1 }),
+        repair({ hours: 0.2, labour: 20.2 }),
+        repair({}),
+      ]),
+    ).toEqual({ hours: 0.3, cost: 30.3 });
+    expect(totals([repair({})])).toEqual({ hours: null, cost: null });
+    const summaries = vehicleSummaries(
+      vehicles,
+      repairs(repair({ id: 'a', labour: 50 }), repair({ id: 'b', vehicle: 'b12' })),
+    );
+    expect(summaries.map((summary) => summary.cost)).toEqual([null, 50, null]);
+  });
+
+  it('remembers each part’s last number and price', () => {
+    const used = repairs(
+      repair({
+        date: '2026-10-01',
+        parts: [{ name: 'Oil filter', number: 'OF-1', quantity: 1, price: 12 }],
+      }),
+      repair({
+        date: '2026-10-10',
+        parts: [{ name: 'oil filter', number: '', quantity: 1, price: null }],
+      }),
+    );
+    expect(knownPart(used, 'OIL FILTER')).toEqual({
+      name: 'oil filter',
+      number: 'OF-1',
+      price: 12,
+    });
+    expect(knownPart(used, 'Air filter')).toBeUndefined();
+  });
+
+  it('in words', () => {
+    expect(formatHours(1, 'en-US')).toBe('1 hour');
+    expect(formatHours(2.5, 'en-US')).toBe('2.5 hours');
+    expect(formatMoney(1234.5, 'USD', 'en-US')).toBe('$1,234.50');
+    expect(formatMoney(80, 'GEL', 'en-US')).toMatch(/^GEL\s80\.00$/);
+  });
+
+  it('upgrades repairs saved before hours and costs', () => {
+    const old = {
+      repairs: [
+        {
+          id: 'a',
+          vehicle: 'b105',
+          date: '2026-10-21',
+          mileage: 120_000,
+          system: 'Brakes',
+          problem: '',
+          work: 'Pads',
+          parts: [{ name: 'Brake pads', number: 'BP-1', quantity: 2 }],
+        },
+      ],
+    };
+    const upgraded = migrateRepairs(old, 1);
+    expect(upgraded?.repairs[0]).toMatchObject({
+      hours: null,
+      labour: null,
+      parts: [{ name: 'Brake pads', number: 'BP-1', quantity: 2, price: null }],
+    });
+    expect(isRepairsState(upgraded)).toBe(true);
+    expect(isRepairsState(old)).toBe(false);
+    expect(migrateRepairs(old, 2)).toBeUndefined();
+    expect(migrateRepairs(null, 1)).toBeUndefined();
   });
 });

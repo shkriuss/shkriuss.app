@@ -136,7 +136,7 @@ test('finds repairs by search and by vehicle', async ({ page }) => {
         date: '2026-10-21',
         vehicle: 'b12',
         mileage: 301_000,
-        parts: [{ name: 'Brake pads', number: '8-97366-123-0', quantity: 2 }],
+        parts: [{ name: 'Brake pads', number: '8-97366-123-0', quantity: 2, price: null }],
       }),
       repair({ date: '2026-10-19', vehicle: 'car', mileage: 80_000, work: 'Oil change' }),
     ],
@@ -201,8 +201,8 @@ test('changes and deletes repairs and vehicles', async ({ page }) => {
         id: 'a',
         vehicle: 'b12',
         parts: [
-          { name: 'Brake pads', number: 'BP-1', quantity: 2 },
-          { name: 'Clip', number: '', quantity: 4 },
+          { name: 'Brake pads', number: 'BP-1', quantity: 2, price: null },
+          { name: 'Clip', number: '', quantity: 4, price: null },
         ],
       }),
       repair({ id: 'b', date: '2026-10-20', work: 'Adjusted the door' }),
@@ -275,7 +275,7 @@ test('miles, and a spreadsheet of every repair', async ({ page }) => {
     repairs: [
       repair({
         problem: 'Door sensor fault, "intermittent"',
-        parts: [{ name: 'Door sensor', number: 'DS-4', quantity: 1 }],
+        parts: [{ name: 'Door sensor', number: 'DS-4', quantity: 1, price: null }],
       }),
     ],
   });
@@ -291,8 +291,8 @@ test('miles, and a spreadsheet of every repair', async ({ page }) => {
   expect(file.suggestedFilename()).toBe('repairs-2026-10-21.csv');
   const text = await readFile((await file.path()) ?? '', 'utf8');
   expect(text.split('\r\n')).toEqual([
-    'Date,Vehicle,Model,Plate,Mileage (mi),System,Damage found,Work done,Parts replaced',
-    '2026-10-21,Bus 105,Isuzu Novociti Life,,120000,Brakes,"Door sensor fault, ""intermittent""",Replaced the front pads,Door sensor (DS-4)',
+    'Date,Vehicle,Model,Plate,Mileage (mi),System,Damage found,Work done,Parts replaced,Hours worked,Parts cost (USD),Labour cost (USD),Total cost (USD)',
+    '2026-10-21,Bus 105,Isuzu Novociti Life,,120000,Brakes,"Door sensor fault, ""intermittent""",Replaced the front pads,Door sensor (DS-4),,,,',
     '',
   ]);
 });
