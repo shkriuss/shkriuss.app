@@ -9,6 +9,10 @@ const SAMPLE = { v: 1, data: { note: 'private sample text' } };
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
   test.skip((await page.locator('[data-data-controls]').count()) === 0, 'This site saves no data.');
+  test.skip(
+    await page.locator('[data-data-controls] [data-action="backup"]').isHidden(),
+    'This site’s data is too big for backups.',
+  );
   await page.evaluate((sample) => {
     localStorage.setItem('shkriuss:e2e-sample', JSON.stringify(sample));
     localStorage.setItem('shkriuss:theme', 'dark');

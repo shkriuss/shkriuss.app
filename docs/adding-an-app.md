@@ -62,7 +62,9 @@ in alphabetical order, so where an entry sits in `apps.json` doesn't matter.
 - Put logic in `src/lib/*.ts` with a unit test next to it (`*.test.ts`).
 - Save data with `createStore` from `@shkriuss/storage`, and keep
   `<DataControls />` on the page so people can back up, restore or delete their
-  data.
+  data. Apps whose data is too big for a backup file (like Photos) use
+  `<DataControls backup={false}>`, with a sentence inside saying what to do
+  instead.
 - Add browser tests in `apps/<slug>/e2e/`. `apps/tally` is the reference
   example for all of this.
 - If the app needs a browser feature (for example keeping the screen on),
