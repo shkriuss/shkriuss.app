@@ -69,6 +69,7 @@ on:
           - user
           - utensils
           - wallet
+          - wrench
           - x
       color:
         description: 'Icon colour'
