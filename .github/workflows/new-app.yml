@@ -68,6 +68,7 @@ on:
           - upload
           - user
           - utensils
+          - wallet
           - x
       color:
         description: 'Icon colour'

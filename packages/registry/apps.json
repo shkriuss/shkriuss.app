@@ -199,6 +199,23 @@
         "Your light or dark theme choice"
       ],
       "sync": true
+    },
+    {
+      "slug": "budget",
+      "name": "Budget",
+      "description": "See where your money goes, month by month. Your budget stays on your device.",
+      "icon": "wallet",
+      "color": "indigo",
+      "status": "live",
+      "storage": "device",
+      "dataStored": [
+        "Your expenses and income: amounts, days, categories and notes",
+        "Your categories and their monthly limits",
+        "Which currency to show amounts in",
+        "If you turn on sync: a copy of your budget on Budget's server, locked on your devices so only they can read it, and this device's sync key (never in backups)",
+        "Your light or dark theme choice"
+      ],
+      "sync": true
     }
   ]
 }

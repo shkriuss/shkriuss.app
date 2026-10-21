@@ -55,6 +55,7 @@ export const icons = {
   user: '<circle cx="12" cy="8" r="4"/><path d="M4.5 20c1.4-3.4 4.2-5 7.5-5s6.1 1.6 7.5 5"/>',
   utensils:
     '<path d="M5 3v5.5a3 3 0 0 0 6 0V3M8 3v18"/><path d="M19 15V3c-2.2.4-4 2.6-4 5.5V13a2 2 0 0 0 2 2h2Zm0 0v6"/>',
+  wallet: '<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M15.5 14.5h2.5"/>',
   x: '<path d="M6 6l12 12M18 6 6 18"/>',
 } as const satisfies Record<string, string>;
 
