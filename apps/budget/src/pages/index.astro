@@ -1,0 +1,509 @@
+---
+/**
+ * Budget: one month at a time. What was spent, earned and is left, each
+ * category against its limit, and the month's entries; forms for an entry
+ * and a category; the currency and a spreadsheet download. Behaviour:
+ * ../scripts/budget.ts.
+ */
+import { AppShell, Button, DataControls, Icon, SyncControls } from '@shkriuss/ui';
+import { CURRENCIES, LIMITS } from '../lib/budget.ts';
+---
+
+<AppShell>
+  <div class="stack stack--lg">
+    <header class="stack stack--sm">
+      <h1>Budget</h1>
+      <p class="lead">
+        See where your money goes, month by month. Your budget is saved on this device.
+      </p>
+    </header>
+
+    <section class="stack" aria-labelledby="month-heading">
+      <div class="stack stack--sm">
+        <h2 id="month-heading" tabindex="-1" data-month-heading>
+          This month
+        </h2>
+        <div class="cluster month-nav">
+          <Button icon="chevron-left" data-action="previous-month">
+            <span>
+              Previous<span class="visually-hidden"> month</span>
+            </span>
+          </Button>
+          <Button data-action="next-month">
+            <span>
+              Next<span class="visually-hidden"> month</span>
+            </span>
+            <Icon name="chevron-right" />
+          </Button>
+          <Button data-action="this-month" hidden>
+            This month
+          </Button>
+        </div>
+      </div>
+
+      <dl class="totals card">
+        <div class="total total--spent">
+          <dt>Spent</dt>
+          <dd data-spent>$0.00</dd>
+        </div>
+        <div class="total">
+          <dt>Income</dt>
+          <dd data-income>$0.00</dd>
+        </div>
+        <div class="total">
+          <dt>Left</dt>
+          <dd data-left>$0.00</dd>
+        </div>
+        <div class="total total--budget" data-budget-line hidden>
+          <dt class="visually-hidden">Budgeted</dt>
+          <dd>
+            <progress
+              class="progress"
+              aria-label="Spent of the month’s budget"
+              data-budget-progress
+            ></progress>
+            <span class="muted" data-budget-text></span>
+          </dd>
+        </div>
+      </dl>
+
+      <div class="cluster">
+        <Button variant="primary" icon="plus" data-action="add-expense">
+          Add expense
+        </Button>
+        <Button icon="plus" data-action="add-income">
+          Add income
+        </Button>
+      </div>
+    </section>
+
+    <section class="stack" aria-labelledby="categories-heading">
+      <h2 id="categories-heading">Categories</h2>
+      <div class="stack stack--sm" data-no-categories>
+        <p class="muted">
+          No categories yet. Add your own, or start with some common ones and change them as you
+          like.
+        </p>
+        <div>
+          <Button data-action="suggested">Add suggested categories</Button>
+        </div>
+      </div>
+      <ul role="list" class="categories" data-categories></ul>
+      <div>
+        <Button icon="plus" data-action="new-category">
+          New category
+        </Button>
+      </div>
+    </section>
+
+    <section class="stack" aria-labelledby="entries-heading">
+      <h2 id="entries-heading">Entries</h2>
+      <p class="muted" data-no-entries>
+        Nothing this month yet.
+      </p>
+      <ul role="list" class="entries" data-entries></ul>
+    </section>
+
+    <section class="stack" aria-labelledby="settings-heading">
+      <h2 id="settings-heading">Currency and spreadsheet</h2>
+      <div class="field currency">
+        <label class="field__label" for="currency">
+          Currency
+        </label>
+        <select class="input" id="currency" aria-describedby="currency-hint" data-currency>
+          {CURRENCIES.map((currency) => (
+            <option value={currency}>{currency}</option>
+          ))}
+        </select>
+        <p class="field__hint" id="currency-hint">
+          Shown with every amount. Amounts aren’t converted.
+        </p>
+      </div>
+      <div>
+        <Button icon="download" data-action="csv">
+          Download as a spreadsheet (CSV)
+        </Button>
+      </div>
+    </section>
+
+    <SyncControls />
+
+    <DataControls />
+  </div>
+
+  <!-- Live region: tells screen reader users what changed. -->
+  <p class="visually-hidden" role="status" data-announcer></p>
+
+  <!-- One category with this month's spending, copied by the script for each. -->
+  <template data-category-template>
+    <li class="category">
+      <div class="category__line">
+        <button
+          type="button"
+          class="category__name"
+          aria-haspopup="dialog"
+          data-action="edit-category"
+        >
+          Category
+        </button>
+        <span class="category__spent" data-spent></span>
+      </div>
+      <progress class="progress" aria-hidden="true" data-progress></progress>
+      <p class="muted category__note" data-note></p>
+    </li>
+  </template>
+
+  <!-- One entry of the month. -->
+  <template data-entry-template>
+    <li class="entry">
+      <button type="button" class="entry__main" aria-haspopup="dialog" data-action="edit-entry">
+        <span class="entry__title" data-title></span>
+        <span class="muted entry__meta" data-meta></span>
+      </button>
+      <span class="entry__amount" data-amount></span>
+    </li>
+  </template>
+
+  <dialog class="dialog" aria-labelledby="entry-title" data-entry-dialog>
+    <form class="stack" data-entry-form novalidate>
+      <h2 id="entry-title" data-entry-title>
+        Add expense
+      </h2>
+      <fieldset class="stack stack--sm">
+        <legend class="field__label">Type</legend>
+        <div class="cluster kinds">
+          <label class="check">
+            <input type="radio" name="kind" value="expense" checked />
+            <span>Expense</span>
+          </label>
+          <label class="check">
+            <input type="radio" name="kind" value="income" />
+            <span>Income</span>
+          </label>
+        </div>
+      </fieldset>
+      <div class="field-row">
+        <div class="field">
+          <label class="field__label" for="entry-amount">
+            Amount
+          </label>
+          <input
+            class="input"
+            id="entry-amount"
+            name="amount"
+            type="number"
+            inputmode="decimal"
+            step="any"
+            min="0"
+            aria-describedby="entry-amount-error"
+            required
+          />
+          <p class="field__error" id="entry-amount-error" data-error-for="amount"></p>
+        </div>
+        <div class="field">
+          <label class="field__label" for="entry-date">
+            Day
+          </label>
+          <input
+            class="input"
+            id="entry-date"
+            name="date"
+            type="date"
+            aria-describedby="entry-date-error"
+            required
+          />
+          <p class="field__error" id="entry-date-error" data-error-for="date"></p>
+        </div>
+      </div>
+      <div class="field" data-category-field>
+        <label class="field__label" for="entry-category">
+          Category
+        </label>
+        <select class="input" id="entry-category" name="category" data-category-select></select>
+      </div>
+      <div class="field">
+        <label class="field__label" for="entry-note">
+          Note (optional)
+        </label>
+        <input
+          class="input"
+          id="entry-note"
+          name="note"
+          type="text"
+          autocomplete="off"
+          maxlength={LIMITS.note}
+          aria-describedby="entry-note-error"
+        />
+        <p class="field__error" id="entry-note-error" data-error-for="note"></p>
+      </div>
+      <p class="field__error" data-error-for="kind"></p>
+      <div class="cluster dialog__actions">
+        <Button type="submit" variant="primary">
+          Save
+        </Button>
+        <Button data-action="cancel">Cancel</Button>
+        <Button variant="danger" icon="trash" data-action="delete-entry" class="dialog__delete">
+          Delete
+        </Button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="dialog" aria-labelledby="category-title" data-category-dialog>
+    <form class="stack" data-category-form novalidate>
+      <h2 id="category-title" data-category-title>
+        New category
+      </h2>
+      <div class="field">
+        <label class="field__label" for="category-name">
+          Name
+        </label>
+        <input
+          class="input"
+          id="category-name"
+          name="name"
+          type="text"
+          autocomplete="off"
+          maxlength={LIMITS.name}
+          placeholder="e.g. Groceries"
+          aria-describedby="category-name-error"
+          required
+        />
+        <p class="field__error" id="category-name-error" data-error-for="name"></p>
+      </div>
+      <div class="field">
+        <label class="field__label" for="category-limit">
+          Monthly limit (optional)
+        </label>
+        <input
+          class="input"
+          id="category-limit"
+          name="limit"
+          type="number"
+          inputmode="decimal"
+          step="any"
+          min="0"
+          aria-describedby="category-limit-hint category-limit-error"
+        />
+        <p class="field__hint" id="category-limit-hint">
+          The most to spend on it each month.
+        </p>
+        <p class="field__error" id="category-limit-error" data-error-for="limit"></p>
+      </div>
+      <div class="cluster dialog__actions">
+        <Button type="submit" variant="primary">
+          Save
+        </Button>
+        <Button data-action="cancel">Cancel</Button>
+        <Button variant="danger" icon="trash" data-action="delete-category" class="dialog__delete">
+          Delete
+        </Button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="dialog" aria-labelledby="delete-title" data-delete-dialog>
+    <form method="dialog" class="stack">
+      <h2 id="delete-title" data-delete-title>
+        Delete this?
+      </h2>
+      <p data-delete-text></p>
+      <div class="cluster">
+        <Button type="submit" value="cancel">
+          Cancel
+        </Button>
+        <Button type="submit" variant="danger" value="confirm">
+          Delete
+        </Button>
+      </div>
+    </form>
+  </dialog>
+</AppShell>
+
+<script>
+  import { mountBudget } from '../scripts/budget.ts';
+
+  mountBudget(document);
+</script>
+
+<style>
+  .month-nav {
+    --cluster-gap: var(--space-2);
+  }
+
+  .totals {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 7rem), 1fr));
+    gap: var(--space-3);
+    margin: 0;
+  }
+
+  .total {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    min-width: 0;
+  }
+
+  .total dt {
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+  }
+
+  .total dd {
+    margin: 0;
+    font-size: var(--text-lg);
+    font-weight: var(--weight-bold);
+    overflow-wrap: anywhere;
+  }
+
+  .total--spent dd {
+    font-size: var(--text-xl);
+  }
+
+  .total--budget {
+    grid-column: 1 / -1;
+  }
+
+  .total--budget dd {
+    display: grid;
+    gap: var(--space-1);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-normal);
+  }
+
+  .win {
+    color: var(--color-accent);
+  }
+
+  .loss {
+    color: var(--color-danger);
+  }
+
+  .categories {
+    display: grid;
+    gap: var(--space-3);
+  }
+
+  .category {
+    display: grid;
+    gap: var(--space-1);
+  }
+
+  .category__line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0 var(--space-3);
+  }
+
+  /* The name opens the category: it reads as text, works as a button. */
+  .category__name,
+  .entry__main {
+    min-height: var(--tap-target);
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+  }
+
+  .category__name {
+    font-weight: var(--weight-semibold);
+    overflow-wrap: anywhere;
+  }
+
+  .category__name:hover,
+  .entry__main:hover .entry__title {
+    color: var(--color-accent);
+  }
+
+  .category__spent {
+    font-weight: var(--weight-semibold);
+  }
+
+  .category__note {
+    font-size: var(--text-sm);
+  }
+
+  .category__note:empty {
+    display: none;
+  }
+
+  .category--over .category__note {
+    color: var(--color-danger);
+    font-weight: var(--weight-semibold);
+  }
+
+  /* Over the limit: the bar is red. */
+  .category--over .progress,
+  .total--over .progress {
+    accent-color: var(--color-danger);
+  }
+
+  .category--over .progress::-webkit-progress-value,
+  .total--over .progress::-webkit-progress-value {
+    background: var(--color-danger);
+  }
+
+  .category--over .progress::-moz-progress-bar,
+  .total--over .progress::-moz-progress-bar {
+    background: var(--color-danger);
+  }
+
+  .entries {
+    display: grid;
+    border-block-start: var(--border-width) solid var(--color-border);
+  }
+
+  .entry {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding-block: var(--space-1);
+    border-block-end: var(--border-width) solid var(--color-border);
+  }
+
+  .entry__main {
+    display: grid;
+    flex: 1;
+    min-width: 0;
+    padding-block: var(--space-1);
+  }
+
+  .entry__title {
+    font-weight: var(--weight-semibold);
+    overflow-wrap: anywhere;
+  }
+
+  .entry__meta {
+    font-size: var(--text-sm);
+    overflow-wrap: anywhere;
+  }
+
+  .entry__amount {
+    font-weight: var(--weight-bold);
+    white-space: nowrap;
+  }
+
+  .currency {
+    max-inline-size: 16rem;
+  }
+
+  .kinds {
+    --cluster-gap: var(--space-1) var(--space-4);
+  }
+
+  fieldset {
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .dialog__actions .dialog__delete {
+    margin-inline-start: auto;
+  }
+</style>
