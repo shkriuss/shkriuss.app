@@ -4,6 +4,7 @@
  *   hkdf(secret, 'purpose')     a separate 32-byte key for each purpose
  *   seal(key, bytes, 'label')   AES-256-GCM: encrypt and authenticate
  *   open(key, sealed, 'label')  decrypt, or throw if anything was changed
+ *   sealBytes / openBytes       the same, as bytes instead of text (for big files)
  *
  * The label is checked along with the data ("additional authenticated data"),
  * so something sealed for one purpose can't be passed off as another.
@@ -91,21 +92,49 @@ async function aesKey(key: Uint8Array<ArrayBuffer>, usage: KeyUsage): Promise<Cr
 }
 
 /**
- * Encrypts with AES-256-GCM under a fresh random IV. Returns base64url of
+ * Encrypts with AES-256-GCM under a fresh random IV. Returns
  * IV ‖ ciphertext ‖ tag. `label` must be given again to open it.
  */
-export async function seal(
+export async function sealBytes(
   key: Uint8Array<ArrayBuffer>,
   plaintext: Uint8Array<ArrayBuffer>,
   label: string,
-): Promise<string> {
+): Promise<Uint8Array<ArrayBuffer>> {
   const iv = randomBytes(IV_BYTES);
   const ciphertext = await crypto.subtle.encrypt(
     { name: 'AES-GCM', iv, additionalData: utf8(label) },
     await aesKey(key, 'encrypt'),
     plaintext,
   );
-  return toBase64Url(concat(iv, new Uint8Array(ciphertext)));
+  return concat(iv, new Uint8Array(ciphertext));
+}
+
+/** Opens what sealBytes() made. Throws SealError if anything doesn't match. */
+export async function openBytes(
+  key: Uint8Array<ArrayBuffer>,
+  sealed: Uint8Array<ArrayBuffer>,
+  label: string,
+): Promise<Uint8Array<ArrayBuffer>> {
+  if (sealed.length < IV_BYTES + 16) throw new SealError();
+  try {
+    const plaintext = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: sealed.slice(0, IV_BYTES), additionalData: utf8(label) },
+      await aesKey(key, 'decrypt'),
+      sealed.slice(IV_BYTES),
+    );
+    return new Uint8Array(plaintext);
+  } catch {
+    throw new SealError();
+  }
+}
+
+/** sealBytes() as base64url text, for JSON. */
+export async function seal(
+  key: Uint8Array<ArrayBuffer>,
+  plaintext: Uint8Array<ArrayBuffer>,
+  label: string,
+): Promise<string> {
+  return toBase64Url(await sealBytes(key, plaintext, label));
 }
 
 /** Opens what seal() made. Throws SealError if anything doesn't match. */
@@ -120,15 +149,5 @@ export async function open(
   } catch {
     throw new SealError();
   }
-  if (bytes.length < IV_BYTES + 16) throw new SealError();
-  try {
-    const plaintext = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: bytes.slice(0, IV_BYTES), additionalData: utf8(label) },
-      await aesKey(key, 'decrypt'),
-      bytes.slice(IV_BYTES),
-    );
-    return new Uint8Array(plaintext);
-  } catch {
-    throw new SealError();
-  }
+  return openBytes(key, bytes, label);
 }

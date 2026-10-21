@@ -430,8 +430,9 @@ import { CURRENCIES, LIMITS, UNIT_LABELS, UNITS } from '../lib/repairs.ts';
         <legend class="field__label">Photos</legend>
         <ul role="list" class="photos" data-form-photos></ul>
         <p class="field__hint" data-form-photos-elsewhere hidden></p>
-        <p class="field__hint">
-          Kept on this device only: they don’t sync to your other devices and aren’t in backups.
+        <p class="field__hint" data-photos-sync-hint>
+          Kept on this device, and not in backups. Turn on sync to have them on your other devices
+          too.
         </p>
         <p class="field__hint" data-photos-busy hidden>
           Adding photos…

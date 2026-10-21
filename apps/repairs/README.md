@@ -44,16 +44,24 @@ private car's service history. Lives at <https://repairs.shkriuss.app>.
   drops the location the camera wrote in) and kept in IndexedDB through
   `@shkriuss/storage/files`
   ([ADR 0013](../../docs/adr/0013-photos-on-the-device.md)). A repair keeps
-  only their ids (data version 3), so the ids sync but the photos don't:
-  another device says "1 photo on another device". Photos aren't in backups;
+  only their ids (data version 3). With sync on, the photos sync too
+  ([ADR 0014](../../docs/adr/0014-syncing-photos.md)): each one as two files
+  sealed on the device, `<id>.thumb` and `<id>.full` (`photoFiles`). Another
+  device downloads the thumbnail when the list shows it and the full photo
+  when it's opened, and says "1 photo hasn't arrived yet" until it can (with
+  sync off: "1 photo on another device"). A photo is saved small enough to
+  sync (`MAX_PHOTO_BYTES`, `PHOTO_QUALITIES`). Photos aren't in backups;
   "Save a copy" saves one as a file. Deleting a repair or vehicle, or all
-  data, deletes its photos. `src/scripts/photos.ts` does the photo work.
+  data, deletes its photos (online too, with sync on), and a photo taken off
+  a repair on another device is deleted here at the next sync.
+  `src/scripts/photos.ts` does the photo work.
 - `src/scripts/repairs.ts`: connects the page to those rules.
 - `src/pages/index.astro`: the page, built from `@shkriuss/ui` components.
   `<template>`s hold the markup for a day, a repair, a vehicle and a part row;
   the forms are dialogs.
 - `src/worker.ts`: runs the shared sync server
-  ([ADR 0010](../../docs/adr/0010-account-and-sync.md)). The newest change to
+  ([ADR 0010](../../docs/adr/0010-account-and-sync.md)), with files on for the
+  photos (`syncHandler({ files: true })`). The newest change to
   each vehicle, repair and setting wins. Vehicles and repairs reach
   `withItems` unchecked, so ones from an older version can be upgraded first;
   they're checked after.

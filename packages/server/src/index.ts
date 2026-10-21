@@ -24,6 +24,7 @@ export interface DurableObjectNamespace {
 export interface DurableObjectStorage {
   get<T>(key: string): Promise<T | undefined>;
   put(key: string, value: unknown): Promise<void>;
+  delete(key: string): Promise<boolean>;
   deleteAll(): Promise<void>;
   setAlarm(time: number): Promise<void>;
   deleteAlarm(): Promise<void>;
@@ -99,6 +100,20 @@ export async function jsonBody(
           : problem(400, 'Body must be JSON.'),
     };
   }
+}
+
+/**
+ * Reads a body of raw bytes (like a sealed file), refusing anything bigger
+ * than `limit` bytes: the 413 to send back instead.
+ */
+export async function bytesBody(
+  request: Request,
+  limit: number,
+): Promise<{ ok: true; body: Uint8Array<ArrayBuffer> } | { ok: false; response: Response }> {
+  const tooBig = { ok: false as const, response: problem(413, 'Request too big.') };
+  if (Number(request.headers.get('Content-Length') ?? '0') > limit) return tooBig;
+  const body = new Uint8Array(await request.arrayBuffer());
+  return body.length > limit ? tooBig : { ok: true, body };
 }
 
 /**

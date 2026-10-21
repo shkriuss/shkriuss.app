@@ -4,6 +4,7 @@ import {
   currencyOf,
   dateLabel,
   fitWithin,
+  fromPhotoFile,
   dayLabel,
   emptyRepairs,
   emptySettings,
@@ -21,6 +22,7 @@ import {
   modelNames,
   partLabel,
   partNames,
+  photoFiles,
   photosOf,
   readRepair,
   readVehicle,
@@ -635,6 +637,17 @@ describe('photos', () => {
       'p2',
       'p3',
     ]);
+  });
+
+  it('sync as a thumbnail and a full photo, each a file', () => {
+    const id = '6f1c2d3e-0000-4000-8000-000000000000';
+    expect(photoFiles([id, 'p2'])).toEqual([`${id}.thumb`, `${id}.full`, 'p2.thumb', 'p2.full']);
+    // Not one this app made: it can't be a file, so it never syncs.
+    expect(photoFiles(['a/b', 'x'.repeat(65)])).toEqual([]);
+    expect(fromPhotoFile(`${id}.full`)).toEqual({ photo: id, part: 'full' });
+    expect(fromPhotoFile('p2.thumb')).toEqual({ photo: 'p2', part: 'thumb' });
+    for (const file of ['p2', 'p2.png', '.thumb', 'a/b.full'])
+      expect(fromPhotoFile(file)).toBeNull();
   });
 
   it('are made smaller, never bigger', () => {

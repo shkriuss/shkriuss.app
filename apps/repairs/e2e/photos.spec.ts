@@ -4,12 +4,17 @@
 import type { Page } from '@playwright/test';
 import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
 import {
+  addPhotos,
   fillRepair,
+  jpeg,
+  naturalWidth,
   NOW,
+  picture,
   repair,
   repairDialog,
   repairItems,
   seed,
+  storedPhotos,
   TIME_ZONE,
   vehicle,
 } from './helpers.ts';
@@ -22,60 +27,6 @@ test.beforeEach(async ({ page }) => {
 });
 
 const status = (page: Page, text: string) => page.getByRole('status').filter({ hasText: text });
-
-/** A JPEG made in the browser: camera-sized by default (3000 × 2000). */
-async function picture(page: Page, width = 3000, height = 2000): Promise<Buffer> {
-  const base64 = await page.evaluate(
-    async ([w, h]) => {
-      const canvas = new OffscreenCanvas(w, h);
-      const context = canvas.getContext('2d');
-      if (!context) throw new Error('No canvas');
-      context.fillStyle = '#c33';
-      context.fillRect(0, 0, w, h);
-      const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.9 });
-      let text = '';
-      for (const byte of new Uint8Array(await blob.arrayBuffer()))
-        text += String.fromCharCode(byte);
-      return btoa(text);
-    },
-    [width, height] as const,
-  );
-  return Buffer.from(base64, 'base64');
-}
-
-const jpeg = (name: string, buffer: Buffer) => ({ name, mimeType: 'image/jpeg', buffer });
-
-/** Picks files with the open repair form's "Add photos". */
-async function addPhotos(page: Page, files: ReturnType<typeof jpeg>[]): Promise<void> {
-  const chooser = page.waitForEvent('filechooser');
-  await repairDialog(page).getByRole('button', { name: 'Add photos' }).click();
-  await (await chooser).setFiles(files);
-}
-
-/** How many photos are kept on this device. */
-const storedPhotos = (page: Page) =>
-  page.evaluate(
-    () =>
-      new Promise<number>((resolve) => {
-        const request = indexedDB.open('shkriuss-files');
-        request.onsuccess = () => {
-          const database = request.result;
-          if (!database.objectStoreNames.contains('files')) {
-            database.close();
-            resolve(0);
-            return;
-          }
-          const count = database.transaction('files').objectStore('files').count();
-          count.onsuccess = () => {
-            database.close();
-            resolve(count.result);
-          };
-        };
-      }),
-  );
-
-const naturalWidth = (image: ReturnType<Page['locator']>) =>
-  image.evaluate((element) => (element as HTMLImageElement).naturalWidth);
 
 test('adds photos to a repair, made smaller, and keeps them on the device', async ({ page }) => {
   const big = await picture(page);

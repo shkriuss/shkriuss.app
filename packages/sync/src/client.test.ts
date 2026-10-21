@@ -3,7 +3,8 @@
  * talking to the real server code (worker.ts) kept in memory. Devices take
  * turns, like phones that sync one after another.
  */
-import { randomBytes, toBase64Url } from '@shkriuss/crypto';
+import { equalBytes, randomBytes, toBase64Url, utf8 } from '@shkriuss/crypto';
+import { createWorker } from '@shkriuss/server';
 import { createStore, type StorageLike, type Store } from '@shkriuss/storage';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -14,7 +15,12 @@ import {
   type SyncStatus,
 } from './client.ts';
 import { turnOffProof } from './connect.ts';
-import worker, { SyncCopy, type SyncEnv } from './worker.ts';
+import { syncKeys } from './snapshot.ts';
+import type { FileList } from './validate.ts';
+import worker, { SyncCopy, syncHandler, type SyncEnv } from './worker.ts';
+
+/** An app's Worker with files on (worker.ts's default has them off). */
+const withFiles = createWorker<SyncEnv>({ '/api/sync': syncHandler({ files: true }) });
 
 class MemoryStorage implements StorageLike {
   #map = new Map<string, string>();
@@ -44,6 +50,7 @@ function memoryServer(): SyncEnv {
     return {
       get: async <T>(key: string) => structuredClone(map.get(key)) as T | undefined,
       put: async (key: string, value: unknown) => void map.set(key, structuredClone(value)),
+      delete: async (key: string) => map.delete(key),
       deleteAll: async () => map.clear(),
       setAlarm: async () => undefined,
       deleteAlarm: async () => undefined,
@@ -76,6 +83,8 @@ interface Counter {
   id: string;
   name: string;
   count: number;
+  /** Ids of files, for apps with files. */
+  photos?: string[];
 }
 interface Counters {
   counters: Counter[];
@@ -92,8 +101,15 @@ class Device {
   changes = 0;
   status: SyncStatus | undefined;
   events: string[] = [];
+  /** Files on this device, for apps with files. */
+  readonly files = new Map<string, Uint8Array<ArrayBuffer>>();
 
-  constructor(appSecret: Uint8Array<ArrayBuffer>, version = 1, keepBoth = false) {
+  constructor(
+    appSecret: Uint8Array<ArrayBuffer>,
+    version = 1,
+    keepBoth = false,
+    withFiles = false,
+  ) {
     this.use();
     this.store = createStore<Counters>({
       key: 'tally',
@@ -127,6 +143,14 @@ class Device {
       onChange: () => {
         this.changes += 1;
       },
+      ...(withFiles
+        ? {
+            files: {
+              wanted: () => new Set(this.counters.flatMap((item) => item.photos ?? [])),
+              read: async (id: string) => this.files.get(id) ?? null,
+            },
+          }
+        : {}),
     });
     this.sync.subscribe((status, event) => {
       this.status = status;
@@ -162,6 +186,27 @@ class Device {
     await this.sync.syncNow();
     return this.sync.status();
   }
+
+  /** Saves a file here, used by an item, as an app does. */
+  addFile(item: string, id: string, bytes: Uint8Array<ArrayBuffer>): void {
+    this.use();
+    this.files.set(id, bytes);
+    this.sync.filesAdded([id]);
+    this.counters = this.counters.map((counter) =>
+      counter.id === item ? { ...counter, photos: [...(counter.photos ?? []), id] } : counter,
+    );
+  }
+
+  /** Deletes a file here, and from its item. */
+  removeFile(id: string): void {
+    this.use();
+    this.files.delete(id);
+    this.sync.filesRemoved([id]);
+    this.counters = this.counters.map((counter) => ({
+      ...counter,
+      photos: (counter.photos ?? []).filter((photo) => photo !== id),
+    }));
+  }
 }
 
 const counter = (id: string, count = 0): Counter => ({ id, name: id, count });
@@ -181,7 +226,7 @@ beforeEach(() => {
   vi.stubGlobal('sessionStorage', new MemoryStorage());
   vi.stubGlobal('fetch', async (input: string, init?: RequestInit) => {
     if (offline) throw new TypeError('Failed to fetch');
-    return worker.fetch(new Request(new URL(input, ORIGIN), init), server);
+    return withFiles.fetch(new Request(new URL(input, ORIGIN), init), server);
   });
 });
 
@@ -502,5 +547,247 @@ describe('syncing between devices', () => {
     await theirs.syncNow();
     await mine.syncNow();
     expect(mine.counters).toEqual([counter('mine')]);
+  });
+});
+
+// ---------- Files, like photos ----------
+
+/** A request straight to the server, as the account with this app key. */
+async function call(
+  secret: Uint8Array<ArrayBuffer>,
+  path: string,
+  init: RequestInit = {},
+  app = withFiles,
+): Promise<Response> {
+  const { token } = await syncKeys(secret);
+  const headers = { Authorization: `Bearer ${token}` };
+  return app.fetch(new Request(`${ORIGIN}/api/sync${path}`, { ...init, headers }), server);
+}
+
+/** The ids of the account's files online, or the error status. */
+async function fileIds(secret: Uint8Array<ArrayBuffer>): Promise<string[] | number> {
+  const response = await call(secret, '/files');
+  if (!response.ok) return response.status;
+  return Object.keys(((await response.json()) as FileList).files).sort();
+}
+
+const photo = (text: string) => utf8(text.repeat(100));
+const HOUR = 60 * 60 * 1000;
+
+/** Answers some requests itself, for as long as `answer` returns a response. */
+function intercept(answer: (path: string, init?: RequestInit) => Response | undefined) {
+  const realFetch = globalThis.fetch;
+  vi.stubGlobal(
+    'fetch',
+    async (input: string, init?: RequestInit) => answer(input, init) ?? realFetch(input, init),
+  );
+  return () => vi.stubGlobal('fetch', realFetch);
+}
+
+describe('syncing files', () => {
+  it('uploads files saved here, sealed, downloads them elsewhere, and deletes them', async () => {
+    const secret = randomBytes(32);
+    const phone = new Device(secret, 1, false, true);
+    const tablet = new Device(secret, 1, false, true);
+    phone.counters = [counter('door')];
+    await phone.syncNow();
+    await tablet.syncNow();
+
+    const puts: string[] = [];
+    const restore = intercept((path, init) => {
+      if (init?.method === 'PUT') puts.push(path);
+      return undefined;
+    });
+    phone.addFile('door', 'p1', photo('cracked glass'));
+    expect((await phone.syncNow()).problem).toBeNull();
+    restore();
+    // The photo first, so it's there when another device gets the data that uses it.
+    expect(puts).toEqual(['/api/sync/files/p1', '/api/sync/copy']);
+    expect(await fileIds(secret)).toEqual(['p1']);
+    // Sealed on the phone: the server can't read it.
+    const stored = new Uint8Array(await (await call(secret, '/files/p1')).arrayBuffer());
+    expect(stored.length).toBe(1300 + 28);
+    expect(new TextDecoder().decode(stored)).not.toContain('cracked glass');
+
+    await tablet.syncNow();
+    expect(tablet.counters[0]?.photos).toEqual(['p1']);
+    tablet.use();
+    const downloaded = await tablet.sync.download('p1');
+    expect(downloaded && equalBytes(downloaded, photo('cracked glass'))).toBe(true);
+    expect(await tablet.sync.download('nothing-like-it')).toBeNull();
+
+    phone.removeFile('p1');
+    await phone.syncNow();
+    expect(await fileIds(secret)).toEqual([]);
+    tablet.use();
+    expect(await tablet.sync.download('p1')).toBeNull();
+  });
+
+  it('keeps a file online that another device still uses', async () => {
+    const secret = randomBytes(32);
+    const phone = new Device(secret, 1, false, true);
+    const tablet = new Device(secret, 1, false, true);
+    phone.counters = [counter('door')];
+    phone.addFile('door', 'p1', photo('glass'));
+    await phone.syncNow();
+    await tablet.syncNow();
+
+    // The phone takes the photo off, but deleting it online doesn't get through…
+    vi.setSystemTime(Date.now() + 1000);
+    const restore = intercept((path, init) => {
+      if (init?.method === 'DELETE' && path.includes('/files/')) throw new TypeError('offline');
+      return undefined;
+    });
+    phone.removeFile('p1');
+    expect((await phone.syncNow()).problem).toBe('offline');
+    restore();
+    // …and the tablet, which still had it, changes the same item later, photo and all.
+    vi.setSystemTime(Date.now() + 1000);
+    tablet.counters = [{ ...counter('door', 4), photos: ['p1'] }];
+    await tablet.syncNow();
+    expect((await phone.syncNow()).problem).toBeNull();
+    expect(phone.counters[0]?.photos).toEqual(['p1']);
+    expect(await fileIds(secret)).toEqual(['p1']);
+    vi.useRealTimers();
+  });
+
+  it('only deletes a file while the copy is the version the device synced', async () => {
+    const secret = randomBytes(32);
+    const phone = new Device(secret, 1, false, true);
+    phone.counters = [counter('door')];
+    phone.addFile('door', 'p1', photo('glass'));
+    await phone.syncNow();
+    const { version } = (await (await call(secret, '/files')).json()) as FileList;
+    const remove = (base: number) => call(secret, `/files/p1?base=${base}`, { method: 'DELETE' });
+    expect((await remove(version + 1)).status).toBe(409);
+    expect(await fileIds(secret)).toEqual(['p1']);
+    expect((await remove(version)).status).toBe(204);
+    expect(await fileIds(secret)).toEqual([]);
+  });
+
+  it('checks every file once a day: brings up missing ones, deletes unused ones', async () => {
+    const secret = randomBytes(32);
+    const phone = new Device(secret, 1, false, true);
+    // Saved before sync was turned on: the first check brings it up.
+    phone.use().files.set('p1', photo('glass'));
+    phone.counters = [{ ...counter('door'), photos: ['p1'] }];
+    await phone.syncNow();
+    expect(await fileIds(secret)).toEqual(['p1']);
+
+    // Online, but nothing uses it (say its item was deleted on a phone that then broke).
+    await call(secret, '/files/stray', { method: 'PUT', body: randomBytes(100) });
+    await phone.syncNow();
+    expect(await fileIds(secret)).toEqual(['p1', 'stray']);
+    vi.setSystemTime(Date.now() + 25 * HOUR);
+    // Just added: another device may be about to use it.
+    await call(secret, '/files/fresh', { method: 'PUT', body: randomBytes(100) });
+    await phone.syncNow();
+    expect(await fileIds(secret)).toEqual(['fresh', 'p1']);
+    vi.useRealTimers();
+  });
+
+  it('deleting the online copy deletes its files', async () => {
+    const secret = randomBytes(32);
+    const phone = new Device(secret, 1, false, true);
+    phone.counters = [counter('door')];
+    phone.addFile('door', 'p1', photo('glass'));
+    await phone.syncNow();
+    await phone.sync.deleteOnline();
+    expect(await fileIds(secret)).toBe(410);
+    expect(
+      (await call(secret, '/files/p2', { method: 'PUT', body: randomBytes(100) })).status,
+    ).toBe(410);
+    expect(phone.files.has('p1')).toBe(true);
+  });
+
+  it('moves files to a new account key', async () => {
+    const oldKey = randomBytes(32);
+    const newKey = randomBytes(32);
+    const lost = new Device(oldKey, 1, false, true);
+    const tablet = new Device(oldKey, 1, false, true);
+    lost.counters = [counter('door')];
+    lost.addFile('door', 'p1', photo('glass'));
+    await lost.syncNow();
+    // The tablet has the data, but never downloaded the photo.
+    await tablet.syncNow();
+
+    tablet.connect(newKey, [oldKey]);
+    expect((await tablet.syncNow()).problem).toBeNull();
+    expect(await fileIds(newKey)).toEqual(['p1']);
+    expect(await fileIds(oldKey)).toBe(410);
+    tablet.use();
+    const moved = await tablet.sync.download('p1');
+    expect(moved && equalBytes(moved, photo('glass'))).toBe(true);
+  });
+
+  it('says when there’s no room online, and tries again the next day', async () => {
+    const secret = randomBytes(32);
+    const phone = new Device(secret, 1, false, true);
+    phone.counters = [counter('door')];
+    await phone.syncNow();
+    let tries = 0;
+    const restore = intercept((path, init) => {
+      if (init?.method !== 'PUT' || !path.includes('/files/')) return undefined;
+      tries += 1;
+      return new Response(null, { status: 507 });
+    });
+    phone.addFile('door', 'p1', photo('glass'));
+    expect((await phone.syncNow()).problem).toBe('files-full');
+    expect(phone.files.has('p1')).toBe(true);
+    // Not tried again at every sync.
+    expect((await phone.syncNow()).problem).toBeNull();
+    expect(tries).toBe(1);
+
+    restore();
+    vi.setSystemTime(Date.now() + 25 * HOUR);
+    await phone.syncNow();
+    expect(await fileIds(secret)).toEqual(['p1']);
+    vi.useRealTimers();
+  });
+
+  it('waits a while when the server says there are too many changes', async () => {
+    const secret = randomBytes(32);
+    const phone = new Device(secret, 1, false, true);
+    phone.counters = [counter('door')];
+    await phone.syncNow();
+    let tries = 0;
+    const restore = intercept((path, init) => {
+      if (init?.method !== 'PUT' || !path.includes('/files/')) return undefined;
+      tries += 1;
+      return new Response(null, { status: 429 });
+    });
+    phone.addFile('door', 'p1', photo('glass'));
+    expect((await phone.syncNow()).problem).toBeNull();
+    await phone.syncNow();
+    expect(tries).toBe(1);
+
+    restore();
+    vi.setSystemTime(Date.now() + 11 * 60 * 1000);
+    await phone.syncNow();
+    expect(await fileIds(secret)).toEqual(['p1']);
+    vi.useRealTimers();
+  });
+
+  it('the server: files only for apps that turn them on, and only sensible ones', async () => {
+    const secret = randomBytes(32);
+    const put = (path: string, body: Uint8Array<ArrayBuffer>) =>
+      call(secret, path, { method: 'PUT', body });
+    expect((await call(secret, '/files', {}, worker)).status).toBe(404);
+    // Files go up before the data, so even before there's a copy; deleting needs one.
+    expect((await put('/files/p0', randomBytes(100))).status).toBe(204);
+    expect((await call(secret, '/files/p0?base=1', { method: 'DELETE' })).status).toBe(409);
+
+    const phone = new Device(secret, 1, false, true);
+    phone.counters = [counter('door')];
+    await phone.syncNow();
+    expect((await put('/files/.hidden', randomBytes(100))).status).toBe(400);
+    expect((await put('/files/a%2Fb', randomBytes(100))).status).toBe(400);
+    expect((await put('/files/p1', randomBytes(20))).status).toBe(400);
+    expect((await put('/files/p1', new Uint8Array(1_500_001))).status).toBe(413);
+    expect((await call(secret, '/files/p1', { method: 'DELETE' })).status).toBe(400);
+    expect((await call(secret, '/files', { method: 'POST' })).status).toBe(405);
+    expect((await call(secret, '/files/p1')).status).toBe(404);
+    expect((await put('/files/p1', randomBytes(100))).status).toBe(204);
+    expect((await call(secret, '/files/p1')).status).toBe(200);
   });
 });

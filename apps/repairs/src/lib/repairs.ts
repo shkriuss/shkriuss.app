@@ -15,7 +15,8 @@
  * Version 2 of the repairs added the hours, the labour cost and part prices,
  * version 3 the photos (`migrateRepairs` fills them in as unknown, or none).
  * A repair keeps its photos' ids; the photos themselves are files on the
- * device (scripts/photos.ts, docs/adr/0013-photos-on-the-device.md).
+ * device (scripts/photos.ts, docs/adr/0013-photos-on-the-device.md), synced
+ * as files of their own (docs/adr/0014-syncing-photos.md).
  *
  * A repair names its vehicle by id, so a vehicle can be renamed. Typing a new
  * vehicle in the repair form adds it.
@@ -732,6 +733,38 @@ export function fitWithin(
 /** The photos of these repairs (to delete with them). */
 export const photosOf = (repairs: readonly Repair[]): string[] =>
   repairs.flatMap((repair) => repair.photos);
+
+/**
+ * The biggest a saved photo may be, in bytes: the sync server takes files up
+ * to 1.5 MB, sealed. Photos come out far smaller; a very detailed one is
+ * saved again at a lower JPEG quality (PHOTO_QUALITIES, best first).
+ */
+export const MAX_PHOTO_BYTES = 1_400_000;
+export const PHOTO_QUALITIES = [0.82, 0.65, 0.5];
+
+/**
+ * With sync on, a photo goes to the other devices as two files
+ * (docs/adr/0014-syncing-photos.md): its thumbnail, fetched as soon as the
+ * list shows it, and the full photo, fetched when it's opened.
+ */
+export type PhotoPart = 'thumb' | 'full';
+
+const PHOTO_ID = /^[A-Za-z0-9-]{1,64}$/;
+
+/** A photo part's file id: "<photo id>.thumb" or "<photo id>.full". */
+export const photoFile = (photo: string, part: PhotoPart): string => `${photo}.${part}`;
+
+/** Every file of these photos (an id that couldn't be a file is left out). */
+export const photoFiles = (photos: readonly string[]): string[] =>
+  photos
+    .filter((photo) => PHOTO_ID.test(photo))
+    .flatMap((photo) => [photoFile(photo, 'thumb'), photoFile(photo, 'full')]);
+
+/** Which photo, and which part of it, a file is. */
+export function fromPhotoFile(file: string): { photo: string; part: PhotoPart } | null {
+  const match = /^([A-Za-z0-9-]{1,64})\.(thumb|full)$/.exec(file);
+  return match ? { photo: match[1] as string, part: match[2] as PhotoPart } : null;
+}
 
 // ---------- For people ----------
 

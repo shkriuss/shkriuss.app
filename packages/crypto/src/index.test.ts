@@ -5,8 +5,10 @@ import {
   fromBase64Url,
   hkdf,
   open,
+  openBytes,
   randomBytes,
   seal,
+  sealBytes,
   SealError,
   toBase64Url,
   utf8,
@@ -80,6 +82,17 @@ describe('seal and open', () => {
 
   it('only takes 32-byte keys', async () => {
     await expect(seal(randomBytes(16), utf8('x'), 'label')).rejects.toThrow();
+  });
+
+  it('works on bytes too: 28 bytes bigger, and opened by either', async () => {
+    const key = randomBytes(32);
+    const plaintext = randomBytes(1000);
+    const sealed = await sealBytes(key, plaintext, 'file');
+    expect(sealed.length).toBe(1028);
+    expect(equalBytes(await openBytes(key, sealed, 'file'), plaintext)).toBe(true);
+    expect(equalBytes(await open(key, toBase64Url(sealed), 'file'), plaintext)).toBe(true);
+    await expect(openBytes(key, sealed, 'other file')).rejects.toBeInstanceOf(SealError);
+    await expect(openBytes(key, sealed.slice(0, 20), 'file')).rejects.toBeInstanceOf(SealError);
   });
 });
 

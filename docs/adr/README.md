@@ -20,6 +20,7 @@ mark them "Superseded by ADR N" instead.
 | [0011](0011-on-device-grammar-checking.md)       | Grammar checking on the device with Harper (WebAssembly in a worker)            | Accepted |
 | [0012](0012-deep-check-ai-model.md)              | Deep check: an AI grammar model on the device (GECToR), downloaded on request   | Accepted |
 | [0013](0013-photos-on-the-device.md)             | Photos on the device: IndexedDB through @shkriuss/storage/files, made smaller   | Accepted |
+| [0014](0014-syncing-photos.md)                   | Syncing photos: each sealed on the device, kept with the account's online copy  | Accepted |
 
 Template: **Context** (the problem), **Decision** (what we do), **Consequences**
 (good and bad), **Alternatives** (what we didn't pick and why).

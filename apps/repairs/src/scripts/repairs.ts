@@ -1,7 +1,7 @@
 /**
  * Repairs' page behaviour: connects pages/index.astro to the rules in
- * lib/repairs.ts, saves on the device, and syncs the vehicles, repairs and
- * settings when sync is on. Photos: photos.ts.
+ * lib/repairs.ts, saves on the device, and syncs the vehicles, repairs,
+ * settings and photos when sync is on. Photos: photos.ts.
  */
 import { today } from '@shkriuss/dates';
 import { createStore, downloadFile } from '@shkriuss/storage';
@@ -33,6 +33,7 @@ import {
   modelNames,
   partLabel,
   partNames,
+  photoFiles,
   photosOf,
   readRepair,
   readVehicle,
@@ -63,9 +64,11 @@ import {
 } from '../lib/repairs.ts';
 import {
   deletePhotos,
+  downloadPhotosWith,
   getPhoto,
   makePhoto,
   NotAPhotoError,
+  readPhotoFile,
   rememberThumb,
   savePhotos,
   thumbUrl,
@@ -153,6 +156,7 @@ export function mountRepairs(root: Document): void {
   const addPartButton = required<HTMLButtonElement>(repairForm, '[data-action="add-part"]');
   const formPhotoList = required<HTMLUListElement>(repairForm, '[data-form-photos]');
   const formPhotosElsewhere = required<HTMLElement>(repairForm, '[data-form-photos-elsewhere]');
+  const photosSyncHint = required<HTMLElement>(repairForm, '[data-photos-sync-hint]');
   const photosBusy = required<HTMLElement>(repairForm, '[data-photos-busy]');
   const photoError = required<HTMLElement>(repairForm, '[data-error-for="photos"]');
   const photoInput = required<HTMLInputElement>(repairForm, '[data-photo-input]');
@@ -160,6 +164,7 @@ export function mountRepairs(root: Document): void {
   const photoDialog = required<HTMLDialogElement>(root, '[data-photo-dialog]');
   const photoTitle = required<HTMLElement>(photoDialog, '[data-photo-title]');
   const photoImage = required<HTMLImageElement>(photoDialog, '[data-photo-image]');
+  const savePhotoButton = required<HTMLElement>(photoDialog, '[data-action="save-photo"]');
   const vehicleDialog = required<HTMLDialogElement>(root, '[data-vehicle-dialog]');
   const vehicleForm = required<HTMLFormElement>(vehicleDialog, '[data-vehicle-form]');
   const vehicleTitle = required<HTMLElement>(vehicleDialog, '[data-vehicle-title]');
@@ -188,6 +193,7 @@ export function mountRepairs(root: Document): void {
   let saving = false;
   /** The photo being looked at: its repair, the photos on this device, which one. */
   let viewing: { repair: Repair; ids: string[]; index: number; url: string | null } | null = null;
+  let syncWasOn = false;
 
   const announce = (message: string): void => {
     announcer.textContent = message;
@@ -305,8 +311,23 @@ export function mountRepairs(root: Document): void {
       }),
     );
     const elsewhere = repair.photos.length - shown.length;
+    // With sync on, they come later (refreshMissingThumbs).
+    row.toggleAttribute('data-missing', elsewhere > 0);
     required<HTMLElement>(row, '[data-photos-elsewhere]').textContent =
-      elsewhere === 0 ? '' : `${countLabel(elsewhere, 'photo', 'photos')} on another device`;
+      elsewhere === 0
+        ? ''
+        : sync.status().on
+          ? `${countLabel(elsewhere, 'photo hasn’t', 'photos haven’t')} arrived yet`
+          : `${countLabel(elsewhere, 'photo', 'photos')} on another device`;
+  }
+
+  /** After a sync: tries again to show photos that hadn't arrived (where focus isn't). */
+  function refreshMissingThumbs(): void {
+    for (const row of daysList.querySelectorAll<HTMLElement>('[data-row="photos"][data-missing]')) {
+      if (row.contains(document.activeElement)) continue;
+      const repair = findRepair(row.closest<HTMLElement>('li[data-id]')?.dataset['id']);
+      if (repair) void fillThumbs(row, repair);
+    }
   }
 
   function renderRepairs(): void {
@@ -512,11 +533,18 @@ export function mountRepairs(root: Document): void {
       }),
     );
     const elsewhere = ids.length - here.length;
+    const syncing = sync.status().on;
     formPhotosElsewhere.hidden = elsewhere === 0;
-    formPhotosElsewhere.textContent =
-      elsewhere === 1
+    formPhotosElsewhere.textContent = syncing
+      ? elsewhere === 1
+        ? '1 photo hasn’t arrived on this device yet. It stays with this repair.'
+        : `${elsewhere} photos haven’t arrived on this device yet. They stay with this repair.`
+      : elsewhere === 1
         ? '1 photo is on another device. It stays with this repair.'
         : `${elsewhere} photos are on another device. They stay with this repair.`;
+    photosSyncHint.textContent = syncing
+      ? 'They sync to your other devices, locked so only you can see them. They aren’t in backups.'
+      : 'Kept on this device, and not in backups. Turn on sync to have them on your other devices too.';
     addPhotosButton.hidden = ids.length >= LIMITS.photos;
   }
 
@@ -688,8 +716,10 @@ export function mountRepairs(root: Document): void {
       addPhotosButton.focus();
       return;
     }
+    sync.filesAdded(photoFiles([...pendingPhotos.keys()]));
     pendingPhotos.clear();
     void deletePhotos(removedPhotos);
+    sync.filesRemoved(photoFiles(removedPhotos));
     removedPhotos = [];
     repairDialog.close();
     const name = newVehicle?.name ?? vehicleName(vehicles, repair.vehicle);
@@ -713,8 +743,10 @@ export function mountRepairs(root: Document): void {
     const photo = await getPhoto(ids[index] ?? '');
     if (!viewing || viewing.index !== index) return;
     if (viewing.url) URL.revokeObjectURL(viewing.url);
-    viewing.url = photo ? URL.createObjectURL(photo.full) : null;
+    viewing.url = photo ? URL.createObjectURL(photo.blob) : null;
     photoImage.src = viewing.url ?? '';
+    // Only the full photo can be saved: without a connection, it's the thumbnail here.
+    savePhotoButton.hidden = !photo?.full;
     const what = `the repair on ${vehicleName(vehicles, repair.vehicle)} on ${dateLabel(repair.date)}`;
     photoTitle.textContent = ids.length === 1 ? 'Photo' : `Photo ${index + 1} of ${ids.length}`;
     photoImage.alt =
@@ -743,11 +775,11 @@ export function mountRepairs(root: Document): void {
     if (!viewing) return;
     const { repair, ids, index } = viewing;
     const photo = await getPhoto(ids[index] ?? '');
-    if (!photo) return;
+    if (!photo?.full) return;
     const name = `${vehicleName(vehicles, repair.vehicle)}-${repair.date}-photo-${index + 1}`
       .toLowerCase()
       .replace(/[^a-z0-9-]+/g, '-');
-    const url = URL.createObjectURL(photo.full);
+    const url = URL.createObjectURL(photo.blob);
     const link = document.createElement('a');
     link.href = url;
     link.download = `${name}.jpg`;
@@ -841,6 +873,7 @@ export function mountRepairs(root: Document): void {
       if (!repair) return;
       save({ repairs: removeRepair(repairs, repair.id) }, 'Deleted the repair.');
       void deletePhotos(repair.photos);
+      sync.filesRemoved(photoFiles(repair.photos));
       newRepairButton.focus();
     } else {
       const vehicle = findVehicle(target.id);
@@ -849,6 +882,7 @@ export function mountRepairs(root: Document): void {
       const own = repairs.repairs.filter((repair) => repair.vehicle === vehicle.id);
       const count = own.length;
       void deletePhotos(photosOf(own));
+      sync.filesRemoved(photoFiles(photosOf(own)));
       save(
         removeVehicle(vehicles, repairs, vehicle.id),
         count === 0
@@ -1006,7 +1040,8 @@ export function mountRepairs(root: Document): void {
   // Sync between devices through the shkriuss account (if turned on). The
   // newest change to each vehicle, repair and setting wins. Vehicles and
   // repairs are passed on as they come: repairs from an older version of
-  // Repairs are upgraded (migrateRepairs) and checked after.
+  // Repairs are upgraded (migrateRepairs) and checked after. Photos sync as
+  // files of their own (docs/adr/0014-syncing-photos.md).
   const sync = createSync({
     app: site.slug,
     stores: [
@@ -1026,9 +1061,32 @@ export function mountRepairs(root: Document): void {
         withItems: (_value, items) => withSettings(items),
       }),
     ],
-    onChange: reload,
+    onChange() {
+      const before = photosOf(repairs.repairs);
+      reload();
+      // Photos taken off repairs on another device (or with them) aren't needed
+      // here now, unless the repair form being filled in has them.
+      const inForm = repairDialog.open ? [...formPhotos, ...pendingPhotos.keys()] : [];
+      const used = new Set([...photosOf(repairs.repairs), ...inForm]);
+      const unused = before.filter((id) => !used.has(id));
+      if (unused.length > 0) void deletePhotos(unused);
+    },
+    files: {
+      wanted: () => new Set(photoFiles(photosOf(repairsStore.load().repairs))),
+      read: readPhotoFile,
+    },
   });
+  downloadPhotosWith(sync);
+  syncWasOn = sync.status().on;
   mountSyncControls(required<HTMLElement>(root, '[data-sync-controls]'), sync);
+  sync.subscribe((status, event) => {
+    if (event === 'synced' || event === 'kept-both') refreshMissingThumbs();
+    // Turned on or off: photos say where they are.
+    if (status.on !== syncWasOn) {
+      syncWasOn = status.on;
+      render();
+    }
+  });
 
   render();
 }
