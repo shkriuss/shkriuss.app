@@ -24,8 +24,13 @@
  * the app its new key plus the old one. The next round brings the old online
  * copy along into the new one, then deletes the old copy, so devices still
  * using it turn sync off and say why.
+ *
+ * Apps with files, like photos, pass `files` too (docs/adr/0014): after each
+ * sync, files saved here go online and files deleted here are deleted online,
+ * each sealed on its own. Other devices download a file when they first need
+ * it (download()).
  */
-import { fromBase64Url, toBase64Url } from '@shkriuss/crypto';
+import { fromBase64Url, openBytes, sealBytes, toBase64Url } from '@shkriuss/crypto';
 import type { Store } from '@shkriuss/storage';
 import {
   CONNECT_LIFETIME_MS,
@@ -50,12 +55,13 @@ import {
   type Known,
   type StoreSnapshot,
 } from './merge.ts';
-import { openStores, sealStores, syncKeys, type Stores } from './snapshot.ts';
+import { fileLabel, openStores, sealStores, syncKeys, type Stores } from './snapshot.ts';
 
 export { secondVersionName } from './merge.ts';
-import { MAX_SEALED_CHARS } from './validate.ts';
+import { FILE_ID, MAX_FILE_BYTES, MAX_SEALED_CHARS, type FileList } from './validate.ts';
 
 const STATE_KEY = 'shkriuss-device:sync';
+const FILES_KEY = 'shkriuss-device:sync-files';
 const PENDING_KEY = 'shkriuss-device:connect';
 const API = '/api/sync';
 /** After a change, wait this long so quick edits go up together. */
@@ -64,6 +70,15 @@ const CHANGE_DELAY_MS = 1500;
 const POLL_MS = 60 * 1000;
 /** Merge again at most this many times in a row when another device writes first. */
 const MAX_ROUNDS = 3;
+/** Check every file against the online list this often (and once sync is turned on). */
+const CHECK_FILES_MS = 24 * 60 * 60 * 1000;
+/**
+ * The daily check leaves files this new alone: they go online before the
+ * data that uses them, so another device may not have sent that data yet.
+ */
+const NEW_FILE_MS = 24 * 60 * 60 * 1000;
+/** After the server says "too many changes", leave files alone this long. */
+const FILES_PAUSE_MS = 10 * 60 * 1000;
 
 /** A store whose data is a list of items with ids, and how to get the list in and out. */
 export interface SyncedStore<T = unknown, I extends Identified = Identified> {
@@ -77,6 +92,17 @@ export interface SyncedStore<T = unknown, I extends Identified = Identified> {
    * the item). Edits then also win over deletions on another device.
    */
   conflictCopy?(mine: I, theirs: I): I;
+}
+
+/**
+ * Files that go with an app's data, like photos: too big for the copy, so
+ * each one is sealed and kept online on its own (docs/adr/0014).
+ */
+export interface SyncedFiles {
+  /** The ids of every file the app's data uses now, whether it's on this device or not. */
+  wanted(): ReadonlySet<string>;
+  /** This device's copy of a file, or null if it hasn't got it. */
+  read(id: string): Promise<Uint8Array<ArrayBuffer> | null>;
 }
 
 /**
@@ -102,6 +128,8 @@ export type SyncProblem =
   | 'moved'
   /** This browser won't save. */
   | 'storage'
+  /** There's no room online for more files: new ones stay on this device. */
+  | 'files-full'
   /** Coming back from the hub didn't work (took too long, or another tab). */
   | 'connect-failed';
 
@@ -137,8 +165,14 @@ export interface SyncClient {
   connect(): Promise<void>;
   /** Stops syncing on this device; the online copy stays for other devices. */
   turnOff(): void;
-  /** Deletes the online copy and stops syncing on this device. Data here stays. */
+  /** Deletes the online copy (and its files) and stops syncing on this device. Data here stays. */
   deleteOnline(): Promise<void>;
+  /** After saving files here that the data uses: they go online at the next sync. */
+  filesAdded(ids: readonly string[]): void;
+  /** After deleting files here that the data no longer uses: they're deleted online too. */
+  filesRemoved(ids: readonly string[]): void;
+  /** A file from another device, or null if it isn't online (or sync is off, or there's no connection). */
+  download(id: string): Promise<Uint8Array<ArrayBuffer> | null>;
 }
 
 // ---------- This device's sync state ----------
@@ -158,6 +192,9 @@ interface DeviceState {
   previous: string[];
 }
 
+const strings = (value: unknown): string[] =>
+  Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+
 function loadState(): DeviceState | null {
   try {
     const value: unknown = JSON.parse(localStorage.getItem(STATE_KEY) ?? 'null');
@@ -172,9 +209,7 @@ function loadState(): DeviceState | null {
       known: (state.known as DeviceState['known'] | undefined) ?? {},
       dirty: state.dirty === true,
       last: typeof state.last === 'number' ? state.last : null,
-      previous: Array.isArray(state.previous)
-        ? state.previous.filter((key): key is string => typeof key === 'string')
-        : [],
+      previous: strings(state.previous),
     };
   } catch {
     return null;
@@ -191,6 +226,55 @@ function saveState(state: DeviceState | null): boolean {
   }
 }
 
+/** Files to bring up to date online (apps with files only), kept apart so a sync can't overwrite them. */
+interface FileState {
+  /** Saved here; not online yet. */
+  uploads: string[];
+  /** Deleted here; maybe still online. */
+  removals: string[];
+  /** When every file was last checked against the online list (null: not since sync was turned on). */
+  checked: number | null;
+  /** The server said "too many changes": files wait until then (ms). */
+  paused: number | null;
+}
+
+function loadFiles(): FileState {
+  try {
+    const value: unknown = JSON.parse(localStorage.getItem(FILES_KEY) ?? 'null');
+    const files = (typeof value === 'object' && value !== null ? value : {}) as Partial<
+      Record<keyof FileState, unknown>
+    >;
+    const time = (time: unknown) => (typeof time === 'number' ? time : null);
+    return {
+      uploads: strings(files.uploads),
+      removals: strings(files.removals),
+      checked: time(files.checked),
+      paused: time(files.paused),
+    };
+  } catch {
+    return { uploads: [], removals: [], checked: null, paused: null };
+  }
+}
+
+/** Changes the file lists in one go (nothing else runs in between). */
+function updateFiles(change: (files: FileState) => FileState): boolean {
+  try {
+    localStorage.setItem(FILES_KEY, JSON.stringify(change(loadFiles())));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Sync was turned off, or on with another key: start again with a full check. */
+function forgetFiles(): void {
+  try {
+    localStorage.removeItem(FILES_KEY);
+  } catch {
+    // Nothing saved, so nothing to forget.
+  }
+}
+
 /** Whether this device syncs this app. */
 export const isSyncOn = (): boolean => typeof loadState()?.secret === 'string';
 
@@ -201,6 +285,7 @@ export const isSyncOn = (): boolean => typeof loadState()?.secret === 'string';
  */
 export function stopSync(): void {
   saveState(null);
+  forgetFiles();
 }
 
 /** Sync off, keeping what this device knew. */
@@ -228,6 +313,7 @@ export function saveConnection(connection: Connection): boolean {
   if (existing?.secret === secret) {
     return saveState({ ...existing, code: connection.code, previous });
   }
+  forgetFiles();
   return saveState({
     secret,
     code: connection.code,
@@ -250,7 +336,8 @@ class SyncError extends Error {
 async function api(path: string, init: RequestInit = {}, token?: string): Promise<Response> {
   const headers = new Headers(init.headers);
   if (token) headers.set('Authorization', `Bearer ${token}`);
-  if (init.body) headers.set('Content-Type', 'application/json');
+  if (typeof init.body === 'string') headers.set('Content-Type', 'application/json');
+  else if (init.body) headers.set('Content-Type', 'application/octet-stream');
   try {
     return await fetch(`${API}${path}`, {
       ...init,
@@ -272,6 +359,19 @@ async function goneError(response: Response): Promise<SyncError> {
 const isGone = (error: unknown): boolean =>
   error instanceof SyncError && (error.problem === 'deleted' || error.problem === 'moved');
 
+/** Any other failed response, as a SyncError. */
+const failed = (response: Response): SyncError =>
+  new SyncError(response.status >= 500 ? 'offline' : 'server');
+
+/** An account's keys for one app (./snapshot.ts). */
+interface Keys {
+  token: string;
+  key: Uint8Array<ArrayBuffer>;
+}
+
+/** Thrown when the server says "too many changes": files wait a while. */
+class PausedError extends Error {}
+
 /** The online copy, or why there isn't one. */
 type Remote =
   | { kind: 'same' }
@@ -286,14 +386,18 @@ export function createSync(options: {
   stores: readonly SyncedStore[];
   /** Called after changes from other devices were saved here: show them. */
   onChange: () => void;
+  /** Files that go with the data, like photos. The app's Worker must allow them. */
+  files?: SyncedFiles;
 }): SyncClient {
-  const { stores } = options;
+  const { stores, files } = options;
   const listeners = new Set<(status: SyncStatus, event?: SyncEvent) => void>();
   let busy = false;
   /** Items kept in both versions during this run (see SyncedStore.conflictCopy). */
   let keptBoth = 0;
   let again = false;
   let problem: SyncProblem | null = null;
+  /** Set when a file had no room online during this run. */
+  let noRoom = false;
   let timer: number | undefined;
 
   const status = (): SyncStatus => {
@@ -348,12 +452,12 @@ export function createSync(options: {
 
   /** The online copies of replaced keys still to move here (gone ones have nothing to bring). */
   async function fetchPrevious(previous: readonly string[]) {
-    const copies: { token: string; stores: Stores }[] = [];
+    const copies: (Keys & { stores: Stores })[] = [];
     for (const secret of previous) {
       const { token, key } = await syncKeys(fromBase64Url(secret));
       try {
         const remote = await fetchRemote(null, token, key);
-        if (remote.kind === 'copy') copies.push({ token, stores: remote.stores });
+        if (remote.kind === 'copy') copies.push({ token, key, stores: remote.stores });
       } catch (error) {
         if (!isGone(error)) throw error;
       }
@@ -479,11 +583,13 @@ export function createSync(options: {
     if (!saveState(saved)) throw new SyncError('storage');
     if (appChanged) options.onChange();
 
-    // 7. The old copies are in the new one now: delete them, so devices still using them stop.
+    // 7. The old copies are in the new one now (and their files, re-sealed with
+    // the new key): delete them, so devices still using them stop.
     if (state.previous.length > 0) {
-      for (const { token: old } of moving) {
-        const response = await api('/copy?moved', { method: 'DELETE' }, old);
-        if (!response.ok) throw new SyncError(response.status >= 500 ? 'offline' : 'server');
+      for (const old of moving) {
+        if (files) await moveFiles(files, old, { token, key });
+        const response = await api('/copy?moved', { method: 'DELETE' }, old.token);
+        if (!response.ok) throw failed(response);
       }
       if (!saveState({ ...saved, previous: [] })) throw new SyncError('storage');
     }
@@ -492,6 +598,169 @@ export function createSync(options: {
 
   const knownsOf = (merged: Stores): Record<string, Known> =>
     Object.fromEntries(Object.entries(merged).map(([key, snapshot]) => [key, knownFrom(snapshot)]));
+
+  // ---------- Files ----------
+
+  /** The account's files online, and the copy's version. */
+  async function listFiles(token: string): Promise<FileList> {
+    const response = await api('/files', {}, token);
+    if (response.status === 410) throw await goneError(response);
+    if (response.status === 429) throw new PausedError();
+    if (!response.ok) throw failed(response);
+    return (await response.json()) as FileList;
+  }
+
+  /** One file from online, opened; null if it isn't there. */
+  async function fetchFile({ token, key }: Keys, id: string) {
+    const response = await api(`/files/${id}`, {}, token);
+    if (response.status === 404) return null;
+    if (response.status === 429) throw new PausedError();
+    if (!response.ok) throw failed(response);
+    const sealed = new Uint8Array(await response.arrayBuffer());
+    return openBytes(key, sealed, fileLabel(options.app, id)).catch(() => null);
+  }
+
+  /** Seals a file and puts it online (one too big to sync just stays here). */
+  async function putFile({ token, key }: Keys, id: string, bytes: Uint8Array<ArrayBuffer>) {
+    const sealed = await sealBytes(key, bytes, fileLabel(options.app, id));
+    if (sealed.length > MAX_FILE_BYTES) return;
+    const response = await api(`/files/${id}`, { method: 'PUT', body: sealed }, token);
+    if (response.status === 413) return;
+    if (response.status === 507) throw new SyncError('files-full');
+    if (response.status === 410) throw await goneError(response);
+    if (response.status === 429) throw new PausedError();
+    if (!response.ok) throw failed(response);
+  }
+
+  /** Puts this device's copy of a file online, if it has one. */
+  async function uploadFile(synced: SyncedFiles, keys: Keys, id: string) {
+    const bytes = await synced.read(id).catch(() => null);
+    if (bytes) await putFile(keys, id, bytes);
+  }
+
+  /**
+   * Deletes a file online, but only if the copy is still the one this device
+   * synced (the server checks): false if it changed, so a file another device
+   * has just started using again is never deleted. Sync again first.
+   */
+  async function deleteFile({ token }: Keys, id: string, base: number) {
+    const response = await api(`/files/${id}?base=${base}`, { method: 'DELETE' }, token);
+    if (response.status === 409) return false;
+    if (response.status === 410) throw await goneError(response);
+    if (response.status === 429) throw new PausedError();
+    if (!response.ok) throw failed(response);
+    return true;
+  }
+
+  /** The device's keys and file lists, unless files wait (sync off, or "too many changes"). */
+  async function fileWork(now: number) {
+    const state = loadState();
+    const lists = loadFiles();
+    if (!state?.secret || (lists.paused !== null && now < lists.paused)) return null;
+    return { state, lists, keys: await syncKeys(fromBase64Url(state.secret)) };
+  }
+
+  const dequeue = (list: 'uploads' | 'removals', id: string) =>
+    updateFiles((current) => ({ ...current, [list]: current[list].filter((x) => x !== id) }));
+
+  /** Puts a file online; false if there's no room for it (the daily check tries again). */
+  async function upload(synced: SyncedFiles, keys: Keys, id: string): Promise<boolean> {
+    try {
+      await uploadFile(synced, keys, id);
+      return true;
+    } catch (error) {
+      if (!(error instanceof SyncError && error.problem === 'files-full')) throw error;
+      noRoom = true;
+      return false;
+    }
+  }
+
+  /** "Too many changes": files wait a while, without bothering anyone. */
+  function pauseOn(error: unknown): void {
+    if (!(error instanceof PausedError)) throw error;
+    updateFiles((current) => ({ ...current, paused: Date.now() + FILES_PAUSE_MS }));
+  }
+
+  /**
+   * Before a sync: files saved here go online, so other devices find them
+   * as soon as the data that uses them arrives.
+   */
+  async function uploadFiles(synced: SyncedFiles): Promise<void> {
+    const work = await fileWork(Date.now());
+    if (!work || work.lists.uploads.length === 0) return;
+    // Read together with the list, so a file just saved is in both or neither.
+    const wanted = synced.wanted();
+    try {
+      for (const id of work.lists.uploads) {
+        if (wanted.has(id) && !(await upload(synced, work.keys, id))) {
+          dequeue('uploads', id);
+          return;
+        }
+        dequeue('uploads', id);
+      }
+    } catch (error) {
+      pauseOn(error);
+    }
+  }
+
+  /**
+   * After a sync: files deleted here are deleted online, and once a day every
+   * file is checked against the online list (missing ones go up, unused ones
+   * older than a day are deleted). Deleting only works while the copy online
+   * is still the one this device just synced (the server checks), so a file
+   * another device has started using again is never deleted. Returns false
+   * if it should run again after another sync.
+   */
+  async function tidyFiles(synced: SyncedFiles): Promise<boolean> {
+    const now = Date.now();
+    const work = await fileWork(now);
+    if (!work?.state.remote) return true;
+    const { removals, checked } = work.lists;
+    const due = checked === null || now - checked >= CHECK_FILES_MS;
+    if (removals.length === 0 && !due) return true;
+    const wanted = synced.wanted();
+    const { keys } = work;
+    const base = work.state.remote.version;
+    try {
+      for (const id of removals) {
+        if (!wanted.has(id) && !(await deleteFile(keys, id, base))) return false;
+        dequeue('removals', id);
+      }
+      if (!due) return true;
+      const online = await listFiles(keys.token);
+      for (const id of wanted) {
+        if (Object.hasOwn(online.files, id) || !FILE_ID.test(id)) continue;
+        if (!(await upload(synced, keys, id))) break;
+      }
+      if (online.version !== base) return false;
+      for (const [id, [, at]] of Object.entries(online.files)) {
+        if (wanted.has(id) || online.now - at < NEW_FILE_MS) continue;
+        if (!(await deleteFile(keys, id, base))) return false;
+      }
+      updateFiles((current) => ({ ...current, checked: now }));
+    } catch (error) {
+      pauseOn(error);
+    }
+    return true;
+  }
+
+  /** Brings a replaced key's files to the new key, re-sealed (the ones the data uses). */
+  async function moveFiles(synced: SyncedFiles, from: Keys, to: Keys): Promise<void> {
+    let theirs: FileList;
+    try {
+      theirs = await listFiles(from.token);
+    } catch (error) {
+      if (isGone(error)) return;
+      throw error;
+    }
+    const ours = await listFiles(to.token);
+    const wanted = synced.wanted();
+    for (const id of Object.keys(theirs.files)) {
+      if (!wanted.has(id) || Object.hasOwn(ours.files, id)) continue;
+      const bytes = (await synced.read(id).catch(() => null)) ?? (await fetchFile(from, id));
+      if (bytes) await putFile(to, id, bytes);
+    }
+  }
 
   async function run(): Promise<void> {
     if (!isSyncOn()) return;
@@ -504,15 +773,21 @@ export function createSync(options: {
     emit();
     let event: SyncEvent | undefined;
     try {
+      noRoom = false;
+      if (files) await uploadFiles(files);
       let done = false;
       for (let attempt = 0; attempt < MAX_ROUNDS && !done; attempt += 1) done = await round();
+      if (done && files) done = await tidyFiles(files);
       if (!done) again = true;
-      problem = null;
+      problem = noRoom ? 'files-full' : null;
       event = keptBoth > 0 ? 'kept-both' : 'synced';
     } catch (error) {
       problem = error instanceof SyncError ? error.problem : 'server';
       const state = loadState();
-      if (state && isGone(error)) saveState(offState(state));
+      if (state && isGone(error)) {
+        saveState(offState(state));
+        forgetFiles();
+      }
     } finally {
       busy = false;
     }
@@ -598,6 +873,7 @@ export function createSync(options: {
     turnOff() {
       const state = loadState();
       if (state) saveState(offState(state));
+      forgetFiles();
       problem = null;
       emit('turned-off');
     },
@@ -606,10 +882,36 @@ export function createSync(options: {
       if (!state?.secret) return;
       const { token } = await syncKeys(fromBase64Url(state.secret));
       const response = await api('/copy', { method: 'DELETE' }, token);
-      if (!response.ok) throw new SyncError(response.status >= 500 ? 'offline' : 'server');
+      if (!response.ok) throw failed(response);
       saveState(offState(state));
+      forgetFiles();
       problem = null;
       emit('deleted-online');
+    },
+    filesAdded(ids) {
+      if (files && isSyncOn() && ids.length > 0) {
+        updateFiles((current) => ({
+          ...current,
+          uploads: [...new Set([...current.uploads, ...ids])],
+        }));
+      }
+    },
+    filesRemoved(ids) {
+      if (files && isSyncOn() && ids.length > 0) {
+        updateFiles((current) => ({
+          ...current,
+          removals: [...new Set([...current.removals, ...ids])],
+        }));
+      }
+    },
+    async download(id) {
+      const state = loadState();
+      if (!files || !state?.secret || !FILE_ID.test(id)) return null;
+      try {
+        return await fetchFile(await syncKeys(fromBase64Url(state.secret)), id);
+      } catch {
+        return null;
+      }
     },
   };
 

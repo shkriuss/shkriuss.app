@@ -2,7 +2,8 @@
 
 Status: Accepted (2026-10-17). Built in three parts: the account, Calendar and
 Tally syncing through it, and replacing the account key after losing a
-device.
+device. Extended by [ADR 0014](0014-syncing-photos.md): files like photos
+sync too, each sealed on its own.
 
 ## Context
 

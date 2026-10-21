@@ -2,7 +2,8 @@
  * The copy of an app's data that travels between devices: the merge snapshot
  * of every synced store (./merge.ts), as JSON, compressed, then sealed with
  * AES-256-GCM using a key only the account's devices have. The server stores
- * only the sealed text.
+ * only the sealed text. Files, like photos, are sealed one by one with the
+ * same key (fileLabel).
  */
 import { hkdf, open, seal, toBase64Url, utf8 } from '@shkriuss/crypto';
 import type { StoreSnapshot } from './merge.ts';
@@ -36,6 +37,12 @@ async function pipe(bytes: Uint8Array<ArrayBuffer>, stream: GenericTransformStre
 }
 
 const label = (app: string) => `shkriuss sync v1 ${app}`;
+
+/**
+ * What a file (like a photo) is sealed with, along with the data key: the
+ * app and the file's id, so the server can't pass one file off as another.
+ */
+export const fileLabel = (app: string, id: string) => `shkriuss sync file v1 ${app} ${id}`;
 
 export async function sealStores(
   key: Uint8Array<ArrayBuffer>,

@@ -28,6 +28,7 @@ function memoryEnv(): AccountEnv {
           storage: {
             get: async <T>(key: string) => map.get(key) as T | undefined,
             put: async (key, value) => void map.set(key, value),
+            delete: async (key) => map.delete(key),
             deleteAll: async () => map.clear(),
             setAlarm: async () => undefined,
             deleteAlarm: async () => undefined,

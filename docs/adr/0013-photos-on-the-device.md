@@ -1,6 +1,8 @@
 # 0013. Photos on the device
 
 Status: Accepted (2026-10-21). Extends [ADR 0006](0006-local-first-data.md).
+Extended by [ADR 0014](0014-syncing-photos.md): with sync on, photos sync
+too, each sealed on the device.
 
 ## Context
 
@@ -23,8 +25,9 @@ read it, and "Delete all data" must delete it.
   320-pixel thumbnail for lists. Saving it again also drops what the camera
   wrote into the file, like the GPS location.
 - **The record keeps the ids:** a repair lists its photos' ids. The ids sync
-  with the repair; the photos themselves don't (below), so another device
-  shows "1 photo on another device".
+  with the repair; the photos themselves sync on their own
+  ([ADR 0014](0014-syncing-photos.md)). With sync off, another device shows
+  "1 photo on another device".
 - **Deleting:** deleting a repair or a vehicle deletes its photos; "Delete
   all data" (`DataControls`) deletes the whole database
   (`deleteAllFiles()`), in every app.
@@ -35,9 +38,8 @@ read it, and "Delete all data" must delete it.
 ## Consequences
 
 - Photos work offline and never leave the device: no server, no cost.
-- **They don't sync** between devices. Syncing them needs storage for large
-  encrypted files on the server (for example Cloudflare R2, free up to
-  10 GB), which needs its own ADR.
+- They didn't sync between devices at first; [ADR 0014](0014-syncing-photos.md)
+  added that, for when sync is on.
 - **They aren't in backup files** (backups hold `localStorage` only, up to
   20 MB). Each photo can be saved as a copy instead. Adding them to backups
   means a bigger, multi-file backup format.

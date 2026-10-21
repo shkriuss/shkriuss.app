@@ -229,10 +229,10 @@
       "storage": "device",
       "dataStored": [
         "Your repair records: the vehicle, day, mileage, damage found, work done, parts replaced (with prices), hours worked and costs",
-        "Photos you add to repairs, made smaller on this device (they don't sync and aren't in backups)",
+        "Photos you add to repairs, made smaller on this device (they aren't in backups)",
         "Your vehicles: their names or numbers, and the model, plate and notes you add",
         "Whether to show distances in kilometres or miles, and which currency to show costs in",
-        "If you turn on sync: a copy of your records on Repairs' server, locked on your devices so only they can read it, and this device's sync key (never in backups)",
+        "If you turn on sync: a copy of your records and photos on Repairs' server, locked on your devices so only they can read it, and this device's sync key (never in backups)",
         "Your light or dark theme choice"
       ],
       "sync": true

@@ -22,7 +22,7 @@ packages/astro-config/ defineAppConfig(): headers, manifest, icons, service work
 packages/storage/    on-device storage helpers (createStore, export, backup, restore, delete; files/photos)
 packages/push/       optional notifications while an app is closed (client + per-app Worker)
 packages/account/    optional shkriuss account: recovery key, passkeys, device links (+ hub Worker)
-packages/sync/       optional sync between devices through the account (client + per-app Worker)
+packages/sync/       optional sync between devices through the account (client + per-app Worker; photos too)
 packages/crypto/     Web Crypto helpers (base64url, HKDF, AES-GCM seal/open), browser + Workers
 packages/dates/      calendar dates as plain "YYYY-MM-DD" strings (add days, weekdays, month grid)
 packages/server/     shared Worker helpers: createWorker() for /api/*, JSON, limits
