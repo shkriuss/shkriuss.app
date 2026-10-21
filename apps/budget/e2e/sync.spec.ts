@@ -1,4 +1,4 @@
-// Budget's categories, entries and currency syncing between two devices
+// Budget's categories, entries and settings syncing between two devices
 // through the account (packages/sync, docs/adr/0010). The connect flow itself
 // is tested for every app in tests/e2e/sync.spec.ts.
 import { createAccount, hubURL, signInWithKey, turnOnSync } from '../../../tests/e2e/account.ts';
@@ -7,7 +7,7 @@ import { addCategory, addEntry, categoryItem, NOW, TIME_ZONE, total } from './he
 
 test.use({ timezoneId: TIME_ZONE });
 
-test('categories, entries and the currency sync between devices', async ({
+test('categories, entries, the currency and the reminder sync between devices', async ({
   page,
   browser,
   guard,
@@ -19,6 +19,8 @@ test('categories, entries and the currency sync between devices', async ({
   await addCategory(page, 'Groceries', '400');
   await addEntry(page, { amount: '84.30', category: 'Groceries' });
   await page.getByLabel('Currency', { exact: true }).selectOption('EUR');
+  await page.getByLabel('Day of the month').selectOption({ label: 'Last day' });
+  await page.getByRole('checkbox', { name: 'Remind me to check my budget' }).check();
   await turnOnSync(page, 'Budget');
 
   const tablet = await (
@@ -30,6 +32,10 @@ test('categories, entries and the currency sync between devices', async ({
   await turnOnSync(tablet, 'Budget');
   await expect(categoryItem(tablet, 'Groceries')).toContainText('€315.70 left of €400.00');
   await expect(tablet.getByLabel('Currency', { exact: true })).toHaveValue('EUR');
+  await expect(
+    tablet.getByRole('checkbox', { name: 'Remind me to check my budget' }),
+  ).toBeChecked();
+  await expect(tablet.getByLabel('Day of the month')).toHaveValue('last');
 
   // Added on the tablet; the phone sees it.
   const uploaded = tablet.waitForResponse(

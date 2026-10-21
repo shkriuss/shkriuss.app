@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { nextFireTime } from '../../../../packages/push/src/schedule.ts';
 import {
   addSuggested,
   byCategory,
   currencyOf,
+  dayChoiceLabel,
   dayLabel,
   emptyCategories,
   emptyEntries,
@@ -13,19 +15,26 @@ import {
   isEntriesState,
   LIMITS,
   monthLabel,
+  nextReminder,
   readCategory,
   readEntry,
   removeCategory,
   removeEntry,
+  reminderDue,
+  reminderNotices,
+  reminderOf,
+  reminderSentence,
   saveCategory,
   saveEntry,
   setCurrency,
+  setReminder,
   shiftMonth,
   suggestedDay,
   SUGGESTED,
   summary,
   toCsv,
   toEntryForm,
+  whenLabel,
   withSettings,
   type CategoriesState,
   type Entry,
@@ -267,5 +276,129 @@ describe('settings', () => {
     expect(currencyOf(emptySettings())).toBe('USD');
     expect(currencyOf(setCurrency(emptySettings(), 'GEL'))).toBe('GEL');
     expect(withSettings([{ id: 'currency', currency: 'XYZ' }]).settings).toEqual([]);
+  });
+
+  it('keeps the currency and the reminder side by side', () => {
+    const both = setReminder(setCurrency(emptySettings(), 'EUR'), {
+      on: true,
+      day: 'last',
+      time: '20:00',
+    });
+    expect(currencyOf(both)).toBe('EUR');
+    expect(reminderOf(both)).toEqual({ on: true, day: 'last', time: '20:00' });
+    expect(currencyOf(setCurrency(both, 'GBP'))).toBe('GBP');
+    expect(reminderOf(setCurrency(both, 'GBP')).on).toBe(true);
+    // From sync: once each, and only ones that look right.
+    expect(
+      withSettings([
+        { id: 'reminder', on: true, day: 29, time: '09:00' },
+        { id: 'reminder', on: 'yes', day: 1, time: '09:00' },
+        { id: 'currency', currency: 'EUR' },
+        { id: 'currency', currency: 'GBP' },
+      ]).settings,
+    ).toEqual([{ id: 'currency', currency: 'EUR' }]);
+  });
+});
+
+describe('monthly reminder', () => {
+  const settings = (day: number | 'last', time = '09:00', on = true) =>
+    setReminder(emptySettings(), { on, day, time });
+
+  it('is off until it’s turned on', () => {
+    expect(reminderOf(emptySettings())).toEqual({ on: false, day: 1, time: '09:00' });
+    expect(reminderNotices(emptySettings(), '2026-10-21')).toEqual([]);
+    expect(reminderDue(emptySettings(), '2026-11-01T08:59', '2026-11-01T09:00')).toBe(false);
+    expect(nextReminder(emptySettings(), '2026-10-21T10:00')).toBeNull();
+    // Days 29 to 31 aren't in every month: not allowed.
+    expect(setReminder(emptySettings(), { on: true, day: 30, time: '09:00' })).toEqual(
+      emptySettings(),
+    );
+    expect(setReminder(emptySettings(), { on: true, day: 1, time: '' })).toEqual(emptySettings());
+  });
+
+  it('is sent once a month', () => {
+    expect(reminderNotices(settings(15, '18:30'), '2026-10-21')).toEqual([
+      {
+        id: 'reminder',
+        start: '2026-10-15T18:30',
+        repeat: 'monthly',
+        until: null,
+        offset: 0,
+        title: 'Check your budget',
+        body: 'Tap to see where your money went.',
+        tag: 'budget',
+        url: '/',
+      },
+    ]);
+    // The last day: a day before each 1st, so February's is the 28th or 29th.
+    expect(reminderNotices(settings('last', '20:00'), '2026-12-05')[0]).toMatchObject({
+      start: '2027-01-01T20:00',
+      repeat: 'monthly',
+      offset: 1440,
+    });
+  });
+
+  it('comes on the last day of every month, however long', () => {
+    const [notice] = reminderNotices(settings('last', '20:00'), '2027-01-10');
+    if (!notice) throw new Error('No reminder');
+    const times: string[] = [];
+    let after = Date.parse('2027-01-10T00:00:00+04:00');
+    for (let index = 0; index < 3; index += 1) {
+      after = nextFireTime(notice, 'Asia/Tbilisi', after) ?? Infinity;
+      times.push(new Date(after).toISOString());
+    }
+    // 20:00 in Tbilisi is 16:00 UTC.
+    expect(times).toEqual([
+      '2027-01-31T16:00:00.000Z',
+      '2027-02-28T16:00:00.000Z',
+      '2027-03-31T16:00:00.000Z',
+    ]);
+  });
+
+  it('knows when it’s due while Budget is open', () => {
+    expect(reminderDue(settings(1), '2026-11-01T08:59', '2026-11-01T09:00')).toBe(true);
+    expect(reminderDue(settings(1), '2026-11-01T09:00', '2026-11-01T09:01')).toBe(false);
+    expect(reminderDue(settings(1), '2026-11-02T08:59', '2026-11-02T09:00')).toBe(false);
+    expect(reminderDue(settings(1, '09:00', false), '2026-11-01T08:59', '2026-11-01T09:00')).toBe(
+      false,
+    );
+    expect(reminderDue(settings('last'), '2028-02-29T08:59', '2028-02-29T09:00')).toBe(true);
+    expect(reminderDue(settings('last'), '2027-02-28T08:59', '2027-02-28T09:00')).toBe(true);
+    expect(reminderDue(settings('last'), '2026-10-30T08:59', '2026-10-30T09:00')).toBe(false);
+  });
+
+  it('says when it’s next', () => {
+    expect(nextReminder(settings(21, '11:00'), '2026-10-21T10:00')).toBe('2026-10-21T11:00');
+    expect(nextReminder(settings(21, '09:00'), '2026-10-21T10:00')).toBe('2026-11-21T09:00');
+    expect(nextReminder(settings(1), '2026-12-15T10:00')).toBe('2027-01-01T09:00');
+    expect(nextReminder(settings('last'), '2027-02-10T10:00')).toBe('2027-02-28T09:00');
+    expect(nextReminder(settings('last'), '2026-10-31T10:00')).toBe('2026-11-30T09:00');
+  });
+
+  it('in words', () => {
+    expect([1, 2, 3, 4, 11, 12, 13, 21, 22, 23, 28].map(dayChoiceLabel)).toEqual([
+      '1st',
+      '2nd',
+      '3rd',
+      '4th',
+      '11th',
+      '12th',
+      '13th',
+      '21st',
+      '22nd',
+      '23rd',
+      '28th',
+    ]);
+    expect(dayChoiceLabel('last')).toBe('Last day');
+    expect(reminderSentence({ on: true, day: 1, time: '09:00' }, 'en-US')).toBe(
+      'Reminder on the 1st of every month, at 9:00 AM.',
+    );
+    expect(reminderSentence({ on: true, day: 'last', time: '20:30' }, 'en-US')).toBe(
+      'Reminder on the last day of every month, at 8:30 PM.',
+    );
+    expect(reminderSentence({ on: false, day: 1, time: '09:00' })).toBe(
+      'The monthly reminder is off.',
+    );
+    expect(whenLabel('2026-11-01T09:00', 'en-US')).toBe('Sunday, November 1, at 9:00 AM');
   });
 });

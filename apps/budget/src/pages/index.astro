@@ -2,11 +2,17 @@
 /**
  * Budget: one month at a time. What was spent, earned and is left, each
  * category against its limit, and the month's entries; forms for an entry
- * and a category; the currency and a spreadsheet download. Behaviour:
- * ../scripts/budget.ts.
+ * and a category; the currency and a spreadsheet download; the monthly
+ * reminder. Behaviour: ../scripts/budget.ts and ../scripts/reminders.ts.
  */
-import { AppShell, Button, DataControls, Icon, SyncControls } from '@shkriuss/ui';
-import { CURRENCIES, LIMITS } from '../lib/budget.ts';
+import { AppShell, Button, DataControls, Icon, PushControls, SyncControls } from '@shkriuss/ui';
+import {
+  CURRENCIES,
+  dayChoiceLabel,
+  DEFAULT_REMINDER,
+  LIMITS,
+  REMINDER_DAYS,
+} from '../lib/budget.ts';
 ---
 
 <AppShell>
@@ -124,6 +130,65 @@ import { CURRENCIES, LIMITS } from '../lib/budget.ts';
           Download as a spreadsheet (CSV)
         </Button>
       </div>
+    </section>
+
+    <section class="stack" aria-labelledby="reminder-heading">
+      <div class="stack stack--sm">
+        <h2 id="reminder-heading">Monthly reminder</h2>
+        <p class="muted">Get a reminder once a month to look over your budget.</p>
+        <p class="muted">
+          With sync on, the reminder is the same on all your devices. Each device reminds you once
+          notifications are turned on there.
+        </p>
+      </div>
+      <label class="check">
+        <input type="checkbox" data-reminder-on />
+        <span>Remind me to check my budget</span>
+      </label>
+      <div class="field-row">
+        <div class="field">
+          <label class="field__label" for="reminder-day">
+            Day of the month
+          </label>
+          <select
+            class="input"
+            id="reminder-day"
+            aria-describedby="reminder-day-hint"
+            data-reminder="day"
+          >
+            {REMINDER_DAYS.map((day) => (
+              <option value={day} selected={day === DEFAULT_REMINDER.day}>
+                {dayChoiceLabel(day)}
+              </option>
+            ))}
+          </select>
+          <p class="field__hint" id="reminder-day-hint">
+            For the end of the month, choose “Last day”.
+          </p>
+        </div>
+        <div class="field">
+          <label class="field__label" for="reminder-time">
+            Time
+          </label>
+          <input
+            class="input"
+            id="reminder-time"
+            type="time"
+            value={DEFAULT_REMINDER.time}
+            aria-describedby="reminder-error"
+            data-reminder="time"
+          />
+          <p class="field__error" id="reminder-error" data-reminder-error></p>
+        </div>
+      </div>
+      <p class="muted" data-reminder-next hidden></p>
+      <p data-notify-status>Notifications are off.</p>
+      <p data-notify-enable hidden>
+        <Button icon="bell" data-action="enable-notifications">
+          Turn on notifications
+        </Button>
+      </p>
+      <PushControls />
     </section>
 
     <SyncControls />

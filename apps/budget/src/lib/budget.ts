@@ -6,14 +6,27 @@
  * - categories: a name and, optionally, a limit for each month;
  * - entries: an expense (in a category, or none) or income, with an amount,
  *   a day and a note;
- * - settings: the currency amounts are shown in. Saved only once changed
- *   (US dollars until then), so a new device has nothing that could win over
- *   another device's choice when they first sync.
+ * - settings: the currency amounts are shown in, and the monthly reminder.
+ *   Each is saved only once changed (US dollars and no reminder until then),
+ *   so a new device has nothing that could win over another device's choice
+ *   when they first sync.
  *
  * A month is "YYYY-MM". Categories don't belong to a month: their limits are
  * the same every month.
  */
-import { isIsoDate, type IsoDate } from '@shkriuss/dates';
+import {
+  addDays,
+  daysInMonth,
+  isIsoDate,
+  isIsoTime,
+  makeDate,
+  parts,
+  toStamp,
+  type IsoDate,
+  type IsoTime,
+  type Stamp,
+} from '@shkriuss/dates';
+import type { Notice } from '@shkriuss/push';
 
 export type Kind = 'expense' | 'income';
 export const KINDS: readonly Kind[] = ['expense', 'income'];
@@ -396,10 +409,25 @@ export function toCsv(entries: EntriesState, categories: CategoriesState): strin
 
 // ---------- Settings ----------
 
-export interface Setting {
-  id: 'currency';
-  currency: Currency;
+/** A day of the month for the reminder: 1 to 28 (in every month), or the last day. */
+export type ReminderDay = number | 'last';
+export const REMINDER_DAYS: readonly ReminderDay[] = [
+  ...Array.from({ length: 28 }, (_, index) => index + 1),
+  'last',
+];
+
+/** The monthly reminder to check the budget. */
+export interface Reminder {
+  on: boolean;
+  day: ReminderDay;
+  time: IsoTime;
 }
+
+export const DEFAULT_REMINDER: Reminder = { on: false, day: 1, time: '09:00' };
+
+export type Setting = { id: 'currency'; currency: Currency } | ({ id: 'reminder' } & Reminder);
+
+const SETTING_IDS: readonly Setting['id'][] = ['currency', 'reminder'];
 
 export interface SettingsState {
   /** Only the settings ever changed. */
@@ -408,11 +436,23 @@ export interface SettingsState {
 
 export const emptySettings = (): SettingsState => ({ settings: [] });
 
-const isSetting = (value: unknown): value is Setting =>
-  typeof value === 'object' &&
-  value !== null &&
-  (value as Record<string, unknown>)['id'] === 'currency' &&
-  CURRENCIES.includes((value as Record<string, unknown>)['currency'] as Currency);
+const isReminderDay = (value: unknown): value is ReminderDay =>
+  REMINDER_DAYS.includes(value as ReminderDay);
+
+function isSetting(value: unknown): value is Setting {
+  if (typeof value !== 'object' || value === null) return false;
+  const item = value as Record<string, unknown>;
+  switch (item['id']) {
+    case 'currency':
+      return CURRENCIES.includes(item['currency'] as Currency);
+    case 'reminder':
+      return (
+        typeof item['on'] === 'boolean' && isReminderDay(item['day']) && isIsoTime(item['time'])
+      );
+    default:
+      return false;
+  }
+}
 
 export function isSettingsState(value: unknown): value is SettingsState {
   if (typeof value !== 'object' || value === null) return false;
@@ -420,13 +460,132 @@ export function isSettingsState(value: unknown): value is SettingsState {
   return Array.isArray(settings) && settings.every(isSetting);
 }
 
-/** Settings from sync: the ones that look right. */
+/** Settings from sync: the ones that look right, once each, in a fixed order. */
 export const withSettings = (items: readonly unknown[]): SettingsState => ({
-  settings: items.filter(isSetting).slice(0, 1),
+  settings: SETTING_IDS.flatMap((id) => {
+    const item = items.find((entry): entry is Setting => isSetting(entry) && entry.id === id);
+    return item ? [item] : [];
+  }),
 });
+
+const withSetting = (state: SettingsState, setting: Setting): SettingsState =>
+  withSettings([...state.settings.filter((item) => item.id !== setting.id), setting]);
 
 export const currencyOf = (state: SettingsState): Currency =>
   state.settings.find((setting) => setting.id === 'currency')?.currency ?? 'USD';
 
 export const setCurrency = (state: SettingsState, currency: Currency): SettingsState =>
-  CURRENCIES.includes(currency) ? { settings: [{ id: 'currency', currency }] } : state;
+  CURRENCIES.includes(currency) ? withSetting(state, { id: 'currency', currency }) : state;
+
+export function reminderOf(state: SettingsState): Reminder {
+  const saved = state.settings.find((setting) => setting.id === 'reminder');
+  if (!saved) return { ...DEFAULT_REMINDER };
+  const { on, day, time } = saved;
+  return { on, day, time };
+}
+
+/** Sets the reminder. Returns the same state if it isn't valid. */
+export function setReminder(state: SettingsState, reminder: Reminder): SettingsState {
+  const setting = { id: 'reminder' as const, ...reminder };
+  return isSetting(setting) ? withSetting(state, setting) : state;
+}
+
+// ---------- The monthly reminder ----------
+
+export const REMINDER_TITLE = 'Check your budget';
+export const REMINDER_BODY = 'Tap to see where your money went.';
+/** Reminders replace each other: only the latest shows. */
+export const REMINDER_TAG = 'budget';
+
+/** The day the reminder is on in this date's month. */
+function reminderDate(day: ReminderDay, date: IsoDate): IsoDate {
+  const { year, month } = parts(date);
+  return makeDate(year, month, day === 'last' ? daysInMonth(year, month) : day);
+}
+
+/**
+ * The reminder, for the notification service (@shkriuss/push): once a month.
+ * The last day is sent as a day before the 1st, so it's right in every month,
+ * however long.
+ */
+export function reminderNotices(settings: SettingsState, today: IsoDate): Notice[] {
+  const reminder = reminderOf(settings);
+  if (!reminder.on) return [];
+  const { year, month } = parts(today);
+  const last = reminder.day === 'last';
+  const start = last
+    ? toStamp(addDays(makeDate(year, month, daysInMonth(year, month)), 1), reminder.time)
+    : toStamp(reminderDate(reminder.day, today), reminder.time);
+  return [
+    {
+      id: 'reminder',
+      start,
+      repeat: 'monthly',
+      until: null,
+      offset: last ? 24 * 60 : 0,
+      title: REMINDER_TITLE,
+      body: REMINDER_BODY,
+      tag: REMINDER_TAG,
+      url: '/',
+    },
+  ];
+}
+
+/** Whether the reminder went off after `from` and up to `to` (local times, the same day as `to`). */
+export function reminderDue(settings: SettingsState, from: Stamp, to: Stamp): boolean {
+  const reminder = reminderOf(settings);
+  if (!reminder.on) return false;
+  const date = to.slice(0, 10);
+  if (reminderDate(reminder.day, date) !== date) return false;
+  const due = toStamp(date, reminder.time);
+  return from < due && due <= to;
+}
+
+/** When the reminder goes off next, after `now` (local time), or null if it's off. */
+export function nextReminder(settings: SettingsState, now: Stamp): Stamp | null {
+  const reminder = reminderOf(settings);
+  if (!reminder.on) return null;
+  const date = now.slice(0, 10);
+  const thisMonth = toStamp(reminderDate(reminder.day, date), reminder.time);
+  if (thisMonth > now) return thisMonth;
+  const { year, month } = parts(date);
+  const nextMonth = addDays(makeDate(year, month, daysInMonth(year, month)), 1);
+  return toStamp(reminderDate(reminder.day, nextMonth), reminder.time);
+}
+
+/** "1st", "2nd", "23rd"… or "Last day". */
+export function dayChoiceLabel(day: ReminderDay): string {
+  if (day === 'last') return 'Last day';
+  const suffix = { one: 'st', two: 'nd', few: 'rd', other: 'th' } as Record<string, string>;
+  return `${day}${suffix[new Intl.PluralRules('en-US', { type: 'ordinal' }).select(day)] ?? 'th'}`;
+}
+
+/** "9:00 AM" (in the person's own style). */
+export function timeLabel(time: IsoTime, locale?: string): string {
+  const [hour, minute] = time.split(':').map(Number) as [number, number];
+  return new Intl.DateTimeFormat(locale, {
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone: 'UTC',
+  }).format(Date.UTC(2024, 0, 1, hour, minute));
+}
+
+/** "Reminder on the 1st of every month, at 9:00 AM." or that it's off. */
+export function reminderSentence(reminder: Reminder, locale?: string): string {
+  if (!reminder.on) return 'The monthly reminder is off.';
+  const day = reminder.day === 'last' ? 'the last day' : `the ${dayChoiceLabel(reminder.day)}`;
+  return `Reminder on ${day} of every month, at ${timeLabel(reminder.time, locale)}.`;
+}
+
+/** "Sunday, November 1, at 9:00 AM" */
+export function whenLabel(stamp: Stamp, locale?: string): string {
+  const [date, time] = stamp.split('T') as [IsoDate, IsoTime];
+  const { year, month, day } = parts(date);
+  const dayText = new Intl.DateTimeFormat(locale, {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    timeZone: 'UTC',
+  }).format(Date.UTC(year, month - 1, day));
+  return `${dayText}, at ${timeLabel(time, locale)}`;
+}
