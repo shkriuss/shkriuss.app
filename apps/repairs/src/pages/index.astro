@@ -6,7 +6,7 @@
  * ../scripts/repairs.ts.
  */
 import { AppShell, Button, DataControls, SyncControls } from '@shkriuss/ui';
-import { LIMITS, UNIT_LABELS, UNITS } from '../lib/repairs.ts';
+import { CURRENCIES, LIMITS, UNIT_LABELS, UNITS } from '../lib/repairs.ts';
 ---
 
 <AppShell>
@@ -78,19 +78,34 @@ import { LIMITS, UNIT_LABELS, UNITS } from '../lib/repairs.ts';
     </section>
 
     <section class="stack" aria-labelledby="settings-heading">
-      <h2 id="settings-heading">Distance and spreadsheet</h2>
-      <div class="field unit">
-        <label class="field__label" for="unit">
-          Distance
-        </label>
-        <select class="input" id="unit" aria-describedby="unit-hint" data-unit>
-          {UNITS.map((unit) => (
-            <option value={unit}>{UNIT_LABELS[unit]}</option>
-          ))}
-        </select>
-        <p class="field__hint" id="unit-hint">
-          Shown with every mileage. Numbers aren’t converted.
-        </p>
+      <h2 id="settings-heading">Units and spreadsheet</h2>
+      <div class="field-row units">
+        <div class="field">
+          <label class="field__label" for="unit">
+            Distance
+          </label>
+          <select class="input" id="unit" aria-describedby="unit-hint" data-unit>
+            {UNITS.map((unit) => (
+              <option value={unit}>{UNIT_LABELS[unit]}</option>
+            ))}
+          </select>
+          <p class="field__hint" id="unit-hint">
+            Shown with every mileage. Numbers aren’t converted.
+          </p>
+        </div>
+        <div class="field">
+          <label class="field__label" for="currency">
+            Currency
+          </label>
+          <select class="input" id="currency" aria-describedby="currency-hint" data-currency>
+            {CURRENCIES.map((currency) => (
+              <option value={currency}>{currency}</option>
+            ))}
+          </select>
+          <p class="field__hint" id="currency-hint">
+            Shown with every cost. Amounts aren’t converted.
+          </p>
+        </div>
       </div>
       <div>
         <Button icon="download" data-action="csv">
@@ -116,9 +131,12 @@ import { LIMITS, UNIT_LABELS, UNITS } from '../lib/repairs.ts';
   <!-- One day of repairs, copied by the script for each. -->
   <template data-day-template>
     <div class="stack stack--sm">
-      <h3 class="day__heading" data-day-heading>
-        Day
-      </h3>
+      <div class="day__top">
+        <h3 class="day__heading" data-day-heading>
+          Day
+        </h3>
+        <span class="muted day__total" data-day-total></span>
+      </div>
       <ul role="list" class="repairs" data-day-list></ul>
     </div>
   </template>
@@ -152,6 +170,14 @@ import { LIMITS, UNIT_LABELS, UNITS } from '../lib/repairs.ts';
           <dd>
             <ul class="repair__parts" data-parts></ul>
           </dd>
+        </div>
+        <div data-row="hours">
+          <dt>Hours worked</dt>
+          <dd data-hours></dd>
+        </div>
+        <div data-row="cost">
+          <dt>Cost</dt>
+          <dd data-cost></dd>
         </div>
       </dl>
     </li>
@@ -231,6 +257,20 @@ import { LIMITS, UNIT_LABELS, UNITS } from '../lib/repairs.ts';
               />
             </label>
             <p class="field__error" data-error="quantity"></p>
+          </div>
+          <div class="field">
+            <label class="field">
+              <span class="field__label">Price each (optional)</span>
+              <input
+                class="input"
+                type="number"
+                inputmode="decimal"
+                step="any"
+                min="0"
+                data-part="price"
+              />
+            </label>
+            <p class="field__error" data-error="price"></p>
           </div>
         </div>
         <div>
@@ -362,6 +402,44 @@ import { LIMITS, UNIT_LABELS, UNITS } from '../lib/repairs.ts';
           </Button>
         </div>
       </fieldset>
+      <div class="field-row">
+        <div class="field">
+          <label class="field__label" for="repair-hours">
+            Hours worked (optional)
+          </label>
+          <input
+            class="input"
+            id="repair-hours"
+            name="hours"
+            type="number"
+            inputmode="decimal"
+            step="any"
+            min="0"
+            placeholder="e.g. 1.5"
+            aria-describedby="repair-hours-error"
+          />
+          <p class="field__error" id="repair-hours-error" data-error-for="hours"></p>
+        </div>
+        <div class="field">
+          <label class="field__label" for="repair-labour">
+            Labour and other costs (optional)
+          </label>
+          <input
+            class="input"
+            id="repair-labour"
+            name="labour"
+            type="number"
+            inputmode="decimal"
+            step="any"
+            min="0"
+            aria-describedby="repair-labour-hint repair-labour-error"
+          />
+          <p class="field__hint" id="repair-labour-hint" data-labour-hint>
+            In USD. Each part’s price goes with the part.
+          </p>
+          <p class="field__error" id="repair-labour-error" data-error-for="labour"></p>
+        </div>
+      </div>
       <div class="cluster dialog__actions">
         <Button type="submit" variant="primary">
           Save
@@ -482,9 +560,25 @@ import { LIMITS, UNIT_LABELS, UNITS } from '../lib/repairs.ts';
     max-inline-size: 36rem;
   }
 
+  .day__top {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0 var(--space-3);
+  }
+
   .day__heading {
     font-size: var(--text-base);
     color: var(--color-text-muted);
+  }
+
+  .day__total {
+    font-size: var(--text-sm);
+  }
+
+  .day__total:empty {
+    display: none;
   }
 
   .repairs,
@@ -583,8 +677,8 @@ import { LIMITS, UNIT_LABELS, UNITS } from '../lib/repairs.ts';
     --cluster-gap: var(--space-2);
   }
 
-  .unit {
-    max-inline-size: 16rem;
+  .units {
+    max-inline-size: 32rem;
   }
 
   fieldset {

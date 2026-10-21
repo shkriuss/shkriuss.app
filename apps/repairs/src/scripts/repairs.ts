@@ -11,6 +11,8 @@ import { site } from 'virtual:shkriuss/site';
 import {
   byDay,
   countLabel,
+  CURRENCIES,
+  currencyOf,
   dateLabel,
   dayLabel,
   emptyRepairs,
@@ -18,11 +20,15 @@ import {
   emptyVehicles,
   findRepairs,
   findVehicleByName,
+  formatHours,
   formatMileage,
+  formatMoney,
   isRepairsState,
   isSettingsState,
   isVehiclesState,
+  knownPart,
   lastMileage,
+  migrateRepairs,
   modelNames,
   partLabel,
   partNames,
@@ -30,23 +36,25 @@ import {
   readVehicle,
   removeRepair,
   removeVehicle,
+  repairCost,
   saveRepair,
   saveVehicle,
+  setCurrency,
   setUnit,
   systemNames,
   toCsv,
   toRepairForm,
+  totals,
   unitOf,
   UNITS,
   vehicleName,
   vehicleSummaries,
-  withRepairs,
   withSettings,
-  withVehicles,
   type PartForm,
   type Repair,
   type RepairsState,
   type SettingsState,
+  type Totals,
   type Vehicle,
   type VehiclesState,
   type VehicleSummary,
@@ -59,11 +67,13 @@ const vehiclesStore = createStore<VehiclesState>({
   validate: isVehiclesState,
 });
 
+// Version 2 added hours worked, labour cost and part prices.
 const repairsStore = createStore<RepairsState>({
   key: 'repairs',
-  version: 1,
+  version: 2,
   fallback: emptyRepairs,
   validate: isRepairsState,
+  migrate: migrateRepairs,
 });
 
 const settingsStore = createStore<SettingsState>({
@@ -76,7 +86,8 @@ const settingsStore = createStore<SettingsState>({
 const COULD_NOT_SAVE = 'Couldn’t save. Your browser may be blocking storage, or it may be full.';
 /** Repairs shown at first, and added by "Show more". */
 const PAGE_SIZE = 50;
-const EMPTY_PART: PartForm = { name: '', number: '', quantity: '1' };
+const EMPTY_PART: PartForm = { name: '', number: '', quantity: '1', price: '' };
+const PART_FIELDS = ['name', 'number', 'quantity', 'price'] as const;
 
 function required<T extends Element>(root: ParentNode, selector: string): T {
   const element = root.querySelector<T>(selector);
@@ -106,6 +117,7 @@ export function mountRepairs(root: Document): void {
   const vehicleList = required<HTMLUListElement>(root, '[data-vehicles]');
   const newVehicleButton = required<HTMLButtonElement>(root, '[data-action="new-vehicle"]');
   const unitSelect = required<HTMLSelectElement>(root, '[data-unit]');
+  const currencySelect = required<HTMLSelectElement>(root, '[data-currency]');
   const dayTemplate = required<HTMLTemplateElement>(root, '[data-day-template]');
   const repairTemplate = required<HTMLTemplateElement>(root, '[data-repair-template]');
   const vehicleTemplate = required<HTMLTemplateElement>(root, '[data-vehicle-template]');
@@ -122,6 +134,7 @@ export function mountRepairs(root: Document): void {
   const repairTitle = required<HTMLElement>(repairDialog, '[data-repair-title]');
   const mileageLabel = required<HTMLElement>(repairForm, '[data-mileage-label]');
   const mileageHint = required<HTMLElement>(repairForm, '[data-mileage-hint]');
+  const labourHint = required<HTMLElement>(repairForm, '[data-labour-hint]');
   const partRows = required<HTMLOListElement>(repairForm, '[data-part-rows]');
   const addPartButton = required<HTMLButtonElement>(repairForm, '[data-action="add-part"]');
   const vehicleDialog = required<HTMLDialogElement>(root, '[data-vehicle-dialog]');
@@ -144,6 +157,12 @@ export function mountRepairs(root: Document): void {
     announcer.textContent = message;
   };
   const mileage = (value: number) => formatMileage(value, unitOf(settings));
+  const money = (amount: number) => formatMoney(amount, currencyOf(settings));
+  /** "6.5 hours · $250.00", or "" if neither was noted. */
+  const totalsText = ({ hours, cost }: Totals): string =>
+    [hours === null ? '' : formatHours(hours), cost === null ? '' : money(cost)]
+      .filter(Boolean)
+      .join(' · ');
   const findVehicle = (id: string | null | undefined) =>
     vehicles.vehicles.find((vehicle) => vehicle.id === id);
   const findRepair = (id: string | null | undefined) =>
@@ -194,6 +213,8 @@ export function mountRepairs(root: Document): void {
       problem: required<HTMLElement>(item, '[data-row="problem"]'),
       work: required<HTMLElement>(item, '[data-row="work"]'),
       parts: required<HTMLElement>(item, '[data-row="parts"]'),
+      hours: required<HTMLElement>(item, '[data-row="hours"]'),
+      cost: required<HTMLElement>(item, '[data-row="cost"]'),
     };
     if (repair.problem) required<HTMLElement>(rows.problem, 'dd').textContent = repair.problem;
     else rows.problem.remove();
@@ -203,11 +224,25 @@ export function mountRepairs(root: Document): void {
       required<HTMLUListElement>(rows.parts, '[data-parts]').replaceChildren(
         ...repair.parts.map((part) => {
           const line = document.createElement('li');
-          line.textContent = partLabel(part);
+          line.textContent =
+            part.price === null
+              ? partLabel(part)
+              : `${partLabel(part)} · ${money(part.quantity * part.price)}`;
           return line;
         }),
       );
     } else rows.parts.remove();
+    if (repair.hours !== null) {
+      required<HTMLElement>(rows.hours, 'dd').textContent = formatHours(repair.hours);
+    } else rows.hours.remove();
+    const cost = repairCost(repair);
+    if (cost) {
+      // "$140.00 · parts $90.00, labour $50.00" when it's both.
+      required<HTMLElement>(rows.cost, 'dd').textContent =
+        cost.parts > 0 && cost.labour > 0
+          ? `${money(cost.total)} · parts ${money(cost.parts)}, labour ${money(cost.labour)}`
+          : money(cost.total);
+    } else rows.cost.remove();
     return item;
   }
 
@@ -222,13 +257,18 @@ export function mountRepairs(root: Document): void {
     const count = countLabel(found.length, 'repair', 'repairs');
     const on = only ? ` on ${vehicleName(vehicles, only)}` : '';
     const matching = query.trim() ? ` ${found.length === 1 ? 'matches' : 'match'} your search` : '';
-    resultCount.textContent = filtered ? `${count}${on}${matching}.` : `${count} in all.`;
+    const sums = totalsText(totals(found));
+    resultCount.textContent =
+      (filtered ? `${count}${on}${matching}` : `${count} in all`) + (sums ? ` · ${sums}.` : '.');
 
     daysList.replaceChildren(
       ...byDay(found.slice(0, shown)).map((day) => {
         const fragment = dayTemplate.content.cloneNode(true) as DocumentFragment;
         const block = required<HTMLElement>(fragment, 'div');
         required<HTMLElement>(block, '[data-day-heading]').textContent = dayLabel(day.date);
+        required<HTMLElement>(block, '[data-day-total]').textContent = totalsText(
+          totals(day.repairs),
+        );
         required<HTMLUListElement>(block, '[data-day-list]').replaceChildren(
           ...day.repairs.map(renderRepair),
         );
@@ -244,6 +284,7 @@ export function mountRepairs(root: Document): void {
       countLabel(summary.repairs, 'repair', 'repairs'),
       summary.lastDate ? `last on ${dateLabel(summary.lastDate)}` : '',
       summary.lastMileage === null ? '' : mileage(summary.lastMileage),
+      summary.cost === null ? '' : `${money(summary.cost)} in all`,
     ]
       .filter(Boolean)
       .join(' · ');
@@ -286,7 +327,9 @@ export function mountRepairs(root: Document): void {
     renderVehicles();
     renderRepairs();
     unitSelect.value = unitOf(settings);
+    currencySelect.value = currencyOf(settings);
     mileageLabel.textContent = `Mileage (${unitOf(settings)})`;
+    labourHint.textContent = `In ${currencyOf(settings)}. Each part’s price goes with the part.`;
     fillList(
       suggestions.vehicles,
       vehicleSummaries(vehicles, repairs).map((summary) => summary.vehicle.name),
@@ -318,6 +361,7 @@ export function mountRepairs(root: Document): void {
       name: required<HTMLInputElement>(row, '[data-part="name"]').value,
       number: required<HTMLInputElement>(row, '[data-part="number"]').value,
       quantity: required<HTMLInputElement>(row, '[data-part="quantity"]').value,
+      price: required<HTMLInputElement>(row, '[data-part="price"]').value,
     }));
   }
 
@@ -329,7 +373,7 @@ export function mountRepairs(root: Document): void {
         const row = required<HTMLLIElement>(fragment, 'li');
         required<HTMLElement>(row, '[data-legend]').textContent = `Part ${index + 1}`;
         required<HTMLElement>(row, '[data-hidden-part]').textContent = ` part ${index + 1}`;
-        for (const key of ['name', 'number', 'quantity'] as const) {
+        for (const key of PART_FIELDS) {
           const id = `part-${key}-${index}`;
           const input = required<HTMLInputElement>(row, `[data-part="${key}"]`);
           const error = required<HTMLElement>(row, `[data-error="${key}"]`);
@@ -358,15 +402,13 @@ export function mountRepairs(root: Document): void {
         : '';
   }
 
-  const REPAIR_FIELDS = ['vehicle', 'date', 'mileage', 'system', 'problem', 'work', 'parts'];
-
   /** Shows the form's problems; focuses the first. Returns true if there are any. */
   function showRepairProblems(problems: Partial<Record<string, string>>): boolean {
+    // In the form's order.
     const names = [
-      ...REPAIR_FIELDS,
-      ...partValues().flatMap((_, index) =>
-        ['name', 'number', 'quantity'].map((key) => `part-${key}-${index}`),
-      ),
+      ...['vehicle', 'date', 'mileage', 'system', 'problem', 'work'],
+      ...partValues().flatMap((_, index) => PART_FIELDS.map((key) => `part-${key}-${index}`)),
+      ...['parts', 'hours', 'labour'],
     ];
     for (const name of names) {
       const error = repairForm.querySelector<HTMLElement>(`[data-error-for="${name}"]`);
@@ -395,8 +437,19 @@ export function mountRepairs(root: Document): void {
           problem: '',
           work: '',
           parts: [EMPTY_PART],
+          hours: '',
+          labour: '',
         };
-    for (const name of ['vehicle', 'date', 'mileage', 'system', 'problem', 'work'] as const) {
+    for (const name of [
+      'vehicle',
+      'date',
+      'mileage',
+      'system',
+      'problem',
+      'work',
+      'hours',
+      'labour',
+    ] as const) {
       field<HTMLInputElement>(name).value = values[name];
     }
     renderParts(values.parts.length > 0 ? values.parts : [EMPTY_PART]);
@@ -412,16 +465,19 @@ export function mountRepairs(root: Document): void {
     if ((event.target as HTMLInputElement).name === 'vehicle') renderMileageHint();
   });
 
-  // A part used before: fill in its part number.
+  // A part used before: fill in its part number and price, if they're empty.
   repairForm.addEventListener('change', (event) => {
     const input = event.target as HTMLInputElement;
     const match = /^part-name-(\d+)$/.exec(input.name);
     if (!match) return;
+    const known = knownPart(repairs, input.value);
+    if (!known) return;
     const number = partInput(Number(match[1]), 'number');
-    if (!number || number.value.trim() !== '') return;
-    const key = input.value.trim().toLowerCase();
-    const known = partNames(repairs).find((part) => part.name.toLowerCase() === key);
-    if (known?.number) number.value = known.number;
+    if (number && number.value.trim() === '') number.value = known.number;
+    const price = partInput(Number(match[1]), 'price');
+    if (price && price.value.trim() === '' && known.price !== null) {
+      price.value = String(known.price);
+    }
   });
 
   repairForm.addEventListener('submit', (event) => {
@@ -436,6 +492,8 @@ export function mountRepairs(root: Document): void {
         problem: field<HTMLTextAreaElement>('problem').value,
         work: field<HTMLTextAreaElement>('work').value,
         parts: partValues(),
+        hours: field<HTMLInputElement>('hours').value,
+        labour: field<HTMLInputElement>('labour').value,
       },
       id,
       repairs,
@@ -617,11 +675,7 @@ export function mountRepairs(root: Document): void {
           announce('There’s nothing to download yet.');
           break;
         }
-        downloadFile(
-          `repairs-${today()}.csv`,
-          toCsv(repairs, vehicles, unitOf(settings)),
-          'text/csv',
-        );
+        downloadFile(`repairs-${today()}.csv`, toCsv(repairs, vehicles, settings), 'text/csv');
         announce('Downloaded your repairs as a spreadsheet.');
         break;
     }
@@ -653,6 +707,12 @@ export function mountRepairs(root: Document): void {
     );
   });
 
+  currencySelect.addEventListener('change', () => {
+    const chosen = CURRENCIES.find((currency) => currency === currencySelect.value);
+    if (!chosen || chosen === currencyOf(settings)) return;
+    save({ settings: setCurrency(settings, chosen) }, `Costs are shown in ${chosen} now.`);
+  });
+
   // ---------- Keeping up ----------
 
   function reload(): void {
@@ -672,19 +732,21 @@ export function mountRepairs(root: Document): void {
   });
 
   // Sync between devices through the shkriuss account (if turned on). The
-  // newest change to each vehicle, repair and setting wins.
+  // newest change to each vehicle, repair and setting wins. Vehicles and
+  // repairs are passed on as they come: repairs from an older version of
+  // Repairs are upgraded (migrateRepairs) and checked after.
   const sync = createSync({
     app: site.slug,
     stores: [
       syncedStore({
         store: vehiclesStore,
         items: (value) => value.vehicles,
-        withItems: (_value, items) => withVehicles(items),
+        withItems: (value, list) => ({ ...value, vehicles: list }),
       }),
       syncedStore({
         store: repairsStore,
         items: (value) => value.repairs,
-        withItems: (_value, items) => withRepairs(items),
+        withItems: (value, list) => ({ ...value, repairs: list }),
       }),
       syncedStore({
         store: settingsStore,
