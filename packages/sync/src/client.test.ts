@@ -5,11 +5,12 @@
  */
 import { equalBytes, randomBytes, toBase64Url, utf8 } from '@shkriuss/crypto';
 import { createWorker } from '@shkriuss/server';
-import { createStore, type StorageLike, type Store } from '@shkriuss/storage';
+import { createStore, deleteAll, type StorageLike, type Store } from '@shkriuss/storage';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createSync,
   saveConnection,
+  stopSync,
   syncedStore,
   type LinkedData,
   type SyncClient,
@@ -235,6 +236,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 describe('syncing between devices', () => {
@@ -575,6 +577,67 @@ describe('syncing between devices', () => {
     await mine.syncNow();
     expect(mine.counters).toEqual([counter('mine')]);
   });
+});
+
+describe('turning sync off while a sync is under way', () => {
+  it('“Delete all data” stays done, and the other devices keep their data', async () => {
+    const secret = randomBytes(32);
+    const phone = new Device(secret);
+    const tablet = new Device(secret);
+    phone.counters = [counter('a'), counter('b')];
+    await phone.syncNow();
+    await tablet.syncNow();
+
+    // The person confirms "Delete all data" while the tablet's sync waits for
+    // the server (DataControls: stopSync, then deleteAll).
+    let deleted = false;
+    const restore = intercept((path) => {
+      if (!deleted && path.startsWith('/api/sync/copy')) {
+        deleted = true;
+        stopSync();
+        deleteAll();
+      }
+      return undefined;
+    });
+    await tablet.syncNow();
+    restore();
+    expect(tablet.sync.status().on).toBe(false);
+
+    // The page reloads, empty as asked, and the phone syncs.
+    expect((await tablet.syncNow()).on).toBe(false);
+    await phone.syncNow();
+    expect(phone.counters).toEqual([counter('a'), counter('b')]);
+  });
+
+  for (const during of ['GET', 'PUT']) {
+    it(`“Turn off” stays off (tapped during the ${during})`, async () => {
+      const secret = randomBytes(32);
+      const phone = new Device(secret);
+      const tablet = new Device(secret);
+      phone.counters = [counter('a')];
+      await phone.syncNow();
+      await tablet.syncNow();
+
+      vi.setSystemTime(Date.now() + 1000);
+      phone.counters = [counter('a', 1)];
+      await phone.syncNow();
+      tablet.counters = [counter('a'), counter('b')];
+      let tapped = false;
+      const restore = intercept((path, init) => {
+        if (!tapped && path.startsWith('/api/sync/copy') && (init?.method ?? 'GET') === during) {
+          tapped = true;
+          tablet.sync.turnOff();
+        }
+        return undefined;
+      });
+      await tablet.syncNow();
+      restore();
+      expect(tablet.sync.status()).toMatchObject({ on: false, problem: null });
+      // Nothing from the online copy is saved here once sync is off.
+      if (during === 'GET') expect(tablet.counters).toEqual([counter('a'), counter('b')]);
+      vi.useRealTimers();
+    });
+  }
 });
 
 // ---------- Files, like photos ----------

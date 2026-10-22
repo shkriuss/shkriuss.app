@@ -351,6 +351,26 @@ class SyncError extends Error {
   }
 }
 
+/** Sync was turned off, or on with another key, while a round waited for the server. */
+class StoppedError extends Error {}
+
+/**
+ * A round reads this device's state at the start, then waits for the server.
+ * Meanwhile the person may turn sync off, or delete all data (which turns it
+ * off first): then the round stops without saving anything, so that stays
+ * done. Call this before every save after waiting.
+ */
+function checkStillOn(secret: string): void {
+  if (loadState()?.secret !== secret) throw new StoppedError();
+}
+
+/** Saves what a round learned onto the state as it is now (see checkStillOn). False if the browser won't save. */
+function updateState(secret: string, change: Partial<DeviceState>): boolean {
+  const current = loadState();
+  if (current?.secret !== secret) throw new StoppedError();
+  return saveState({ ...current, ...change });
+}
+
 async function api(path: string, init: RequestInit = {}, token?: string): Promise<Response> {
   const headers = new Headers(init.headers);
   if (token) headers.set('Authorization', `Bearer ${token}`);
@@ -510,7 +530,8 @@ export function createSync(options: {
   async function round(): Promise<boolean> {
     const state = loadState();
     if (!state?.secret) return true;
-    const { token, key } = await syncKeys(fromBase64Url(state.secret));
+    const { secret } = state;
+    const { token, key } = await syncKeys(fromBase64Url(secret));
     const now = Date.now();
 
     // 1. This device.
@@ -520,7 +541,7 @@ export function createSync(options: {
     const remote = await fetchRemote(state.remote?.version ?? null, token, key);
     const moving = await fetchPrevious(state.previous);
     if (remote.kind === 'same' && !localChanged && !state.dirty && state.previous.length === 0) {
-      saveState({ ...state, last: now });
+      updateState(secret, { last: now });
       return true;
     }
 
@@ -548,7 +569,9 @@ export function createSync(options: {
       merged[synced.store.key] = prune(result, now);
     }
 
-    // 4. Save the result here (unless the person edited something meanwhile).
+    // 4. Save the result here (unless the person edited something, or turned
+    // sync off, meanwhile).
+    checkStillOn(secret);
     let appChanged = false;
     for (const synced of stores) {
       const result = merged[synced.store.key] as StoreSnapshot;
@@ -577,7 +600,7 @@ export function createSync(options: {
     if (!same) {
       // Remember the merge first: if the upload fails, the next round uploads it
       // as it is, instead of mistaking it for new edits made on this device.
-      if (!saveState({ ...state, known: knownsOf(merged), dirty: true })) {
+      if (!updateState(secret, { known: knownsOf(merged), dirty: true })) {
         throw new SyncError('storage');
       }
       const data = await sealStores(key, options.app, merged);
@@ -600,8 +623,8 @@ export function createSync(options: {
     }
 
     // 6. Remember.
-    const saved = { ...state, remote: online, known: knownsOf(merged), dirty: false, last: now };
-    if (!saveState(saved)) throw new SyncError('storage');
+    const saved = { remote: online, known: knownsOf(merged), dirty: false, last: now };
+    if (!updateState(secret, saved)) throw new SyncError('storage');
     if (appChanged) options.onChange();
 
     // 7. The old copies are in the new one now (and their files, re-sealed with
@@ -610,11 +633,11 @@ export function createSync(options: {
     if (state.previous.length > 0) {
       for (const old of moving) {
         if (files) await moveFiles(files, old, { token, key });
-        if (linked) await linked.move(old.secret, fromBase64Url(state.secret));
+        if (linked) await linked.move(old.secret, fromBase64Url(secret));
         const response = await api('/copy?moved', { method: 'DELETE' }, old.token);
         if (!response.ok) throw failed(response);
       }
-      if (!saveState({ ...saved, previous: [] })) throw new SyncError('storage');
+      if (!updateState(secret, { previous: [] })) throw new SyncError('storage');
     }
     return true;
   }
@@ -805,7 +828,9 @@ export function createSync(options: {
       problem = noRoom ? 'files-full' : null;
       event = keptBoth > 0 ? 'kept-both' : 'synced';
     } catch (error) {
-      problem = error instanceof SyncError ? error.problem : 'server';
+      // Stopped: sync was turned off meanwhile, which says so itself.
+      if (error instanceof StoppedError) problem = null;
+      else problem = error instanceof SyncError ? error.problem : 'server';
       const state = loadState();
       if (state && isGone(error)) {
         saveState(offState(state));
