@@ -1011,6 +1011,14 @@ export function createSync(options: {
     async deleteOnline() {
       const state = loadState();
       if (!state?.secret) return;
+      // Copies of replaced keys not moved here yet go too, with their linked
+      // data: the lost device that has the old key could still read them.
+      for (const encoded of state.previous) {
+        const old = fromBase64Url(encoded);
+        if (linked) await linked.delete(old);
+        const response = await api('/copy', { method: 'DELETE' }, (await syncKeys(old)).token);
+        if (!response.ok) throw failed(response);
+      }
       if (linked) await linked.delete(fromBase64Url(state.secret));
       const { token } = await syncKeys(fromBase64Url(state.secret));
       const response = await api('/copy', { method: 'DELETE' }, token);

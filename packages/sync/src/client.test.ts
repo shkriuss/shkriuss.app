@@ -510,6 +510,32 @@ describe('syncing between devices', () => {
     expect((await tablet.syncNow()).problem).toBe('moved');
   });
 
+  it('deleting the online copy before a move finishes deletes the old copy too', async () => {
+    const oldKey = randomBytes(32);
+    const newKey = randomBytes(32);
+    const lost = new Device(oldKey);
+    const tablet = new Device(oldKey);
+    lost.counters = [counter('water')];
+    await lost.syncNow();
+    await tablet.syncNow();
+
+    // The key is replaced, but the tablet's first sync with the new one fails.
+    tablet.connect(newKey, [oldKey]);
+    const realFetch = globalThis.fetch;
+    vi.stubGlobal('fetch', async () => {
+      throw new TypeError('Failed to fetch');
+    });
+    expect((await tablet.syncNow()).problem).toBe('offline');
+    vi.stubGlobal('fetch', realFetch);
+
+    tablet.use();
+    await tablet.sync.deleteOnline();
+    // The old copy is gone too, so the lost device can't read it.
+    expect((await call(oldKey, '/copy', {}, worker)).status).toBe(410);
+    expect((await lost.syncNow()).on).toBe(false);
+    expect(tablet.counters).toEqual([counter('water')]);
+  });
+
   it('connecting to another account leaves the old one’s copy alone', async () => {
     const mine = randomBytes(32);
     const phone = new Device(mine);
