@@ -176,7 +176,9 @@ in with `sync: true` in `apps.json`.
   - An app's data is a list of items with ids, such as Calendar's events or
     Tally's counters.
   - Each item carries the time it last changed, inside the encrypted copy.
-    When two devices both changed an item, the newest change wins.
+    When two devices both changed an item, the newest change wins. A change
+    always gets a time after the version it was made from, so a device
+    whose clock is behind doesn't lose its own edits.
   - Deleting leaves a marker with the time, so deletions sync. Markers are
     dropped after 180 days.
   - The list's order is merged the same way; new items from the other device

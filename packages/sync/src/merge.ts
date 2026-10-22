@@ -4,7 +4,8 @@
  * - Data is a list of items, each with a string `id` (Calendar's events,
  *   Tally's counters).
  * - Each item carries the time it last changed. When both devices have an
- *   item, the newest edit wins.
+ *   item, the newest edit wins. An edit's time is always after the version
+ *   it was made from, even if this device's clock is behind.
  * - Deleting an item leaves a small marker (a "tombstone") with the time, so
  *   the deletion reaches the other devices instead of the item coming back.
  *   Markers are dropped after 180 days.
@@ -107,7 +108,9 @@ const sameIds = (a: readonly string[], b: readonly string[]) =>
 /**
  * This device's items as a snapshot: items that differ from what was known
  * at the last sync (or are new) get the time `now`, and items that are gone
- * become tombstones. Also returns whether anything changed.
+ * become tombstones. If this device's clock is behind, a change still gets a
+ * time just after the version it was made from. Also returns whether
+ * anything changed.
  *
  * On a device's first sync (nothing known yet) everything gets time 0: what's
  * already online wins for items both have (say, after restoring an old
@@ -120,28 +123,31 @@ export function observe(
   now: number,
 ): { snapshot: StoreSnapshot; changed: boolean } {
   const items = byId<Entry>();
-  const stamp = known === undefined ? 0 : now;
+  // A change made from a version counts as newer than it, even on a device
+  // whose clock is behind the one that made that version.
+  const stamp = (previous: { t: number } | undefined) =>
+    known === undefined ? 0 : Math.max(now, previous ? previous.t + 1 : 0);
   let changed = known === undefined;
   for (const item of current) {
     const previous = known && own(known.items, item.id);
     const h = fingerprint(item);
     const same = previous !== undefined && !isTombstone(previous) && previous.h === h;
     if (!same) changed = true;
-    items[item.id] = { t: same ? previous.t : stamp, value: item };
+    items[item.id] = { t: same ? previous.t : stamp(previous), value: item };
   }
   for (const [id, previous] of Object.entries(known?.items ?? {})) {
     if (id in items) continue;
     if (isTombstone(previous)) {
       items[id] = previous;
     } else {
-      items[id] = { t: now, deleted: true };
+      items[id] = { t: stamp(previous), deleted: true };
       changed = true;
     }
   }
   const ids = current.map((item) => item.id);
   const orderSame = known !== undefined && sameIds(known.order.ids, ids);
   if (!orderSame) changed = true;
-  const order = { ids, t: orderSame ? known.order.t : stamp };
+  const order = { ids, t: orderSame ? known.order.t : stamp(known?.order) };
   return { snapshot: { v: version, items, order }, changed };
 }
 

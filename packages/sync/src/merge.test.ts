@@ -100,6 +100,22 @@ describe('observe', () => {
     expect(later.snapshot.items['b']).toEqual({ t: 200, deleted: true });
   });
 
+  it('stamps a change later than the version it was made from, even with a clock behind', () => {
+    const synced: StoreSnapshot = {
+      v: 1,
+      items: { a: { t: 1000, value: counter('a') }, b: { t: 1000, value: counter('b') } },
+      order: { ids: ['a', 'b'], t: 1000 },
+    };
+    // This device's clock says 400.
+    const next = observe(knownFrom(synced), [counter('a', 5)], 1, 400).snapshot;
+    expect(next.items).toEqual({
+      a: { t: 1001, value: counter('a', 5) },
+      b: { t: 1001, deleted: true },
+    });
+    expect(next.order.t).toBe(1001);
+    expect(valuesOf(merge(synced, next))).toEqual([counter('a', 5)]);
+  });
+
   it('notices a new order', () => {
     const known = knownFrom(observe(undefined, [counter('a'), counter('b')], 1, 100).snapshot);
     const moved = observe(known, [counter('b'), counter('a')], 1, 200);

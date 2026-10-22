@@ -937,6 +937,44 @@ describe('items with any id', () => {
   });
 });
 
+describe('a device whose clock is behind', () => {
+  const MINUTE = 60 * 1000;
+  const T0 = Date.UTC(2026, 9, 1, 12);
+  /** The tablet's clock is 10 minutes slow (set by hand, say). */
+  const SLOW = -10 * MINUTE;
+
+  for (const keepBoth of [false, true]) {
+    it(`keeps the edits it makes after syncing${keepBoth ? ' (keeping both)' : ''}`, async () => {
+      const secret = randomBytes(32);
+      const phone = new Device(secret, 1, keepBoth);
+      const tablet = new Device(secret, 1, keepBoth);
+      vi.setSystemTime(T0 - HOUR);
+      phone.counters = [counter('milk'), counter('eggs')];
+      await phone.syncNow();
+      vi.setSystemTime(T0 - HOUR + SLOW);
+      await tablet.syncNow();
+
+      // The phone counts both, and the tablet syncs…
+      vi.setSystemTime(T0);
+      phone.counters = [counter('milk', 1), counter('eggs', 1)];
+      await phone.syncNow();
+      vi.setSystemTime(T0 + MINUTE + SLOW);
+      await tablet.syncNow();
+      expect(tablet.counters).toEqual([counter('milk', 1), counter('eggs', 1)]);
+
+      // …then, a minute later, milk is corrected on the tablet and eggs deleted.
+      // Nobody else changed them since, so that must stay.
+      vi.setSystemTime(T0 + 2 * MINUTE + SLOW);
+      tablet.counters = [counter('milk', 3)];
+      await tablet.syncNow();
+      vi.setSystemTime(T0 + 3 * MINUTE);
+      await phone.syncNow();
+      expect(phone.counters).toEqual([counter('milk', 3)]);
+      expect(tablet.counters).toEqual([counter('milk', 3)]);
+    });
+  }
+});
+
 // ---------- Files, like photos ----------
 
 /** A request straight to the server, as the account with this app key. */
