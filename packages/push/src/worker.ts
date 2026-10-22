@@ -71,6 +71,11 @@ const UPDATE_WINDOW_MS = 10 * 60 * 1000;
 const TEST_GAP_MS = 10 * 1000;
 /** Messages sent per wake-up; the rest go out straight after (keeps each wake-up short). */
 const SENDS_PER_ALARM = 25;
+/**
+ * A device whose schedule hasn't been uploaded for this long (about 13
+ * months) is forgotten. Apps upload it at least weekly while they're used.
+ */
+const UNUSED_MS = 396 * DAY_MS;
 
 // ---------- Helpers ----------
 
@@ -205,7 +210,11 @@ export class PushDevice {
       return;
     }
     await this.state.storage.setAlarm(
-      Math.min(...record.entries.map((entry) => entry.retryAt ?? entry.next)),
+      Math.min(
+        ...record.entries.map((entry) => entry.retryAt ?? entry.next),
+        // Wakes up to forget it, too, if it isn't uploaded again in time.
+        record.updates.windowStart + UNUSED_MS,
+      ),
     );
     await this.state.storage.put('device', record);
   }
@@ -282,6 +291,8 @@ export class PushDevice {
       const lastTest = (await this.state.storage.get<number>('lastTest')) ?? 0;
       if (now - lastTest < TEST_GAP_MS) return problem(429, 'Wait a few seconds.');
       await this.state.storage.put('lastTest', now);
+      // Without a schedule, the test's time is kept only as long as it's needed.
+      if (!record) await this.state.storage.setAlarm(now + TEST_GAP_MS);
       const signed = await this.#sign(endpoint, 1);
       if (signed === 'limit') return problem(429, 'No more notifications today; try tomorrow.');
       const result =
@@ -327,8 +338,13 @@ export class PushDevice {
 
   async #sendDue(): Promise<void> {
     const record = await this.#record();
-    if (!record) return;
     const now = Date.now();
+    // No schedule (only a test's time), or not uploaded for 13 months
+    // (updates.windowStart is the last upload, give or take 10 minutes).
+    if (!record || now - record.updates.windowStart >= UNUSED_MS) {
+      await this.#forget();
+      return;
+    }
     // What's due (at most SENDS_PER_ALARM; the rest go out straight after), and
     // how many of those to send: ones more than an hour late are skipped.
     const due = new Set(

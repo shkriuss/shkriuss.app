@@ -154,6 +154,32 @@ describe('devices whose messages don’t get through', () => {
   });
 });
 
+describe('what’s kept for how long', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ now: Date.UTC(2026, 9, 22), toFake: ['Date'] });
+  });
+
+  it('forgets a device whose schedule isn’t uploaded again for 13 months', async () => {
+    pushService();
+    // Next due on 29 February 2028, well after that.
+    const leapDay = entry({ start: '2028-02-29T09:00', repeat: 'yearly' });
+    expect((await device().schedule([leapDay])).status).toBe(200);
+    const kept = () => [...server.devices.values()].map(({ storage }) => storage.map.size);
+    await passDays(395);
+    expect(kept()).toEqual([1]);
+    await passDays(2);
+    expect(kept()).toEqual([0]);
+    expect([...server.devices.values()].map(({ storage }) => storage.alarm)).toEqual([null]);
+  });
+
+  it('keeps nothing for a device that only sent a test', async () => {
+    pushService();
+    expect((await device().test()).status).toBe(200);
+    await passDays(1);
+    expect([...server.devices.values()].map(({ storage }) => storage.map.size)).toEqual([0]);
+  });
+});
+
 describe('the app’s daily limit', () => {
   it('signs once per wake-up, not once per message', async () => {
     vi.useFakeTimers({ now: Date.UTC(2026, 9, 22), toFake: ['Date'] });
