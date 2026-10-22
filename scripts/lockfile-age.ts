@@ -17,7 +17,7 @@ const rules = releaseAgeRules(readFileSync('pnpm-workspace.yaml', 'utf8'));
 
 const published = new Map<string, number | undefined>();
 for (const name of new Set(added.map(([name]) => name))) {
-  const response = await fetch(`https://registry.npmjs.org/${name.replace('/', '%2F')}`);
+  const response = await fetch(`https://registry.npmjs.org/${name.replaceAll('/', '%2F')}`);
   if (!response.ok) throw new Error(`The npm registry answered ${response.status} for ${name}.`);
   const { time = {} } = (await response.json()) as { time?: Record<string, string> };
   for (const [entry, version] of added) {
