@@ -10,6 +10,7 @@
  * Water's, so a new device has nothing to win over another's when syncing).
  */
 import { addDays, isIsoDate, type IsoDate } from '@shkriuss/dates';
+import { parseDecimal } from '@shkriuss/ui/numbers';
 
 export type Side = 'long' | 'short';
 export const SIDES: readonly Side[] = ['long', 'short'];
@@ -95,9 +96,8 @@ export interface TradeForm {
 
 export type Problems = Partial<Record<keyof TradeForm, string>>;
 
-/** A typed number: null when empty, NaN when it isn't one. */
-const parseNumber = (text: string): number | null =>
-  text.trim() === '' ? null : Number(text.trim());
+/** A typed number: null when empty, NaN when it isn't one ("1,25" is 1.25). */
+const parseNumber = parseDecimal;
 
 /**
  * Reads the form into a trade (with the given id), or says what's wrong,

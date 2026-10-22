@@ -22,6 +22,7 @@
  * vehicle in the repair form adds it.
  */
 import { isIsoDate, type IsoDate } from '@shkriuss/dates';
+import { parseDecimal } from '@shkriuss/ui/numbers';
 
 export interface Vehicle {
   id: string;
@@ -351,10 +352,7 @@ export interface RepairForm {
 export type RepairProblems = Partial<Record<string, string>>;
 
 /** A typed number: null when empty, NaN when it isn't one. A comma works as a decimal point. */
-const parseNumber = (text: string): number | null => {
-  const tidy = text.trim().replace(/\s/g, '').replace(',', '.');
-  return tidy === '' ? null : Number(tidy);
-};
+const parseNumber = parseDecimal;
 
 /**
  * Reads the repair form into a repair (with the given id), or says what's

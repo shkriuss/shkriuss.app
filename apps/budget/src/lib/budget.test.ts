@@ -74,6 +74,9 @@ describe('categories', () => {
       name: 'Enter a name for the category.',
       limit: 'Enter an amount above 0.',
     });
+    expect(readCategory({ name: 'Rent', limit: '0.001' }, 'p', categories).problems).toEqual({
+      limit: 'Enter at least 0.01.',
+    });
     expect(readCategory({ name: 'groceries', limit: '' }, 'p', categories).problems).toEqual({
       name: 'You already have a category with that name.',
     });
@@ -127,7 +130,8 @@ describe('entries', () => {
     note: ' Bread ',
   };
 
-  it('reads the form', () => {
+  it('reads the form, with a point or a comma before the cents', () => {
+    expect(readEntry({ ...form, amount: '12,50' }, 'x', 0, categories).entry?.amount).toBe(12.5);
     expect(readEntry(form, 'x', 0, categories)).toEqual({
       entry: {
         id: 'x',
@@ -154,6 +158,13 @@ describe('entries', () => {
     });
     expect(readEntry({ ...form, amount: '0' }, 'x', 0, categories).problems).toEqual({
       amount: 'Enter an amount above 0.',
+    });
+    // Kept to the cent, so it would be saved as 0, which saved data never holds.
+    expect(readEntry({ ...form, amount: '0.004' }, 'x', 0, categories).problems).toEqual({
+      amount: 'Enter at least 0.01.',
+    });
+    expect(readEntry({ ...form, amount: '1.234,50' }, 'x', 0, categories).problems).toEqual({
+      amount: 'Enter a number, like 12.50 or 12,50.',
     });
     expect(readEntry({ ...form, amount: '2000000000' }, 'x', 0, categories).problems).toEqual({
       amount: 'Enter a smaller amount.',

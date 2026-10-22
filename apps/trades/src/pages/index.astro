@@ -228,9 +228,9 @@ const STAT_TILES = [
                 class="input"
                 id={`trade-${name}`}
                 name={name}
-                type={type}
+                type={type === 'number' ? 'text' : type}
                 inputmode={type === 'number' ? 'decimal' : undefined}
-                step={type === 'number' ? 'any' : undefined}
+                autocomplete={type === 'number' ? 'off' : undefined}
                 aria-describedby={`trade-${name}-error`}
                 required={needed}
               />
@@ -261,9 +261,9 @@ const STAT_TILES = [
                 class="input"
                 id={`trade-${name}`}
                 name={name}
-                type={type}
+                type={type === 'number' ? 'text' : type}
                 inputmode={type === 'number' ? 'decimal' : undefined}
-                step={type === 'number' ? 'any' : undefined}
+                autocomplete={type === 'number' ? 'off' : undefined}
                 aria-describedby={`trade-${name}-error`}
               />
               <p class="field__error" id={`trade-${name}-error`} data-error-for={name} />

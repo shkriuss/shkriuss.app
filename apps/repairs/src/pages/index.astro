@@ -256,10 +256,9 @@ import { CURRENCIES, LIMITS, UNIT_LABELS, UNITS } from '../lib/repairs.ts';
               <span class="field__label">Quantity</span>
               <input
                 class="input"
-                type="number"
+                type="text"
                 inputmode="decimal"
-                step="any"
-                min="0"
+                autocomplete="off"
                 data-part="quantity"
               />
             </label>
@@ -270,10 +269,9 @@ import { CURRENCIES, LIMITS, UNIT_LABELS, UNITS } from '../lib/repairs.ts';
               <span class="field__label">Price each (optional)</span>
               <input
                 class="input"
-                type="number"
+                type="text"
                 inputmode="decimal"
-                step="any"
-                min="0"
+                autocomplete="off"
                 data-part="price"
               />
             </label>
@@ -454,10 +452,9 @@ import { CURRENCIES, LIMITS, UNIT_LABELS, UNITS } from '../lib/repairs.ts';
             class="input"
             id="repair-hours"
             name="hours"
-            type="number"
+            type="text"
             inputmode="decimal"
-            step="any"
-            min="0"
+            autocomplete="off"
             placeholder="e.g. 1.5"
             aria-describedby="repair-hours-error"
           />
@@ -471,10 +468,9 @@ import { CURRENCIES, LIMITS, UNIT_LABELS, UNITS } from '../lib/repairs.ts';
             class="input"
             id="repair-labour"
             name="labour"
-            type="number"
+            type="text"
             inputmode="decimal"
-            step="any"
-            min="0"
+            autocomplete="off"
             aria-describedby="repair-labour-hint repair-labour-error"
           />
           <p class="field__hint" id="repair-labour-hint" data-labour-hint>

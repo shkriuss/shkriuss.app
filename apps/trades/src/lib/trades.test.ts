@@ -93,6 +93,13 @@ describe('reading the form', () => {
       0,
     );
     expect(closed.trade).toMatchObject({ exitDate: '2026-10-03', exitPrice: 155, fees: 2.5 });
+    // A comma before the decimals reads the same ("2,5" isn't 25).
+    const comma = readTrade(
+      { ...form, exitDate: '2026-10-03', exitPrice: '155', fees: '2,5' },
+      'a',
+      0,
+    );
+    expect(comma.trade?.fees).toBe(2.5);
     expect(toForm(closed.trade as Trade)).toEqual({
       ...form,
       symbol: 'AAPL',
