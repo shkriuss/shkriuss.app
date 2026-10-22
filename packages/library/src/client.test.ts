@@ -219,6 +219,36 @@ describe('a replaced account key', () => {
     expect((await failure(phone.api.changes(0))).problem).toBe('moved');
     expect((await usableRecord(newKey, saved))?.library).toBe(phone.record.library);
   });
+
+  it('a device with the old key that moves the library first takes it: the move says so, without failing', async () => {
+    const oldKey = randomBytes(32);
+    const newKey = randomBytes(32);
+    const phone = await device(oldKey);
+    await phone.api.unlock(CODE);
+    await phone.api.upload('photo-0001', photo, parts());
+    // The lost device, with an account of its own.
+    await linkedLibrary(() => [phone.record]).move(oldKey, randomBytes(32));
+
+    let saved: readonly LibraryRecord[] = [phone.record];
+    const linked = linkedLibrary(
+      () => saved,
+      (records) => {
+        saved = records;
+        return true;
+      },
+    );
+    await linked.move(oldKey, newKey);
+    expect(saved).toEqual([{ ...phone.record, taken: true }]);
+    expect(isLibraryRecord(saved[0])).toBe(true);
+    // So a new library is started with the new key, and that's the one deleted with the copy.
+    const next = await useLibrary(newKey, saved, true);
+    expect(next.record?.library).not.toBe(phone.record.library);
+    expect(next.records).toEqual([...saved, next.record]);
+    const fresh = await device(newKey, next.record);
+    const { epoch } = await fresh.api.changes(0);
+    await linkedLibrary(() => next.records).delete(newKey);
+    expect((await fresh.api.changes(0)).epoch).not.toBe(epoch);
+  });
 });
 
 describe('deleting with the online copy', () => {
@@ -238,6 +268,20 @@ describe('deleting with the online copy', () => {
     await phone.api.changes(0);
     await linkedLibrary(() => [phone.record]).delete(secret);
     expect((await phone.api.changes(0)).wiping).toBe(false);
+  });
+
+  it('fails, instead of saying it’s done, when the library was taken', async () => {
+    const oldKey = randomBytes(32);
+    const newKey = randomBytes(32);
+    const phone = await device(oldKey);
+    await phone.api.unlock(CODE);
+    await phone.api.upload('photo-0001', photo, parts());
+    // The record has the new key (as older versions added it), but a device
+    // with the old key took the library before it was moved.
+    const record = await libraryRecord(newKey, phone.record);
+    await linkedLibrary(() => [phone.record]).move(oldKey, randomBytes(32));
+    const error = await failure(linkedLibrary(() => [record]).delete(newKey));
+    expect(error.status).toBe(403);
   });
 });
 
@@ -444,6 +488,32 @@ describe('with sync, as Photos uses it', () => {
     expect(used.library).toBe(real.library);
     const changes = await libraryApi(await libraryAccess(newKey, used)).changes(0);
     expect(changes.changes.map((change) => change.id)).toEqual(['photo-0001']);
+  });
+
+  it('a lost device that takes the library first: the person’s device finds out, and starts a new one', async () => {
+    const oldKey = randomBytes(32);
+    const newKey = randomBytes(32);
+    const tablet = new Device(oldKey);
+    await tablet.syncNow();
+    const real = (await tablet.library()) as LibraryRecord;
+    await tablet.syncNow();
+    const lost = new Device(oldKey);
+    await lost.syncNow();
+
+    // The key is replaced on the tablet. Before it opens Photos again, the
+    // lost device makes an account of its own and turns on sync with it: that
+    // moves the old copy, and the library, to its own new key.
+    lost.connect(randomBytes(32), [oldKey]);
+    expect((await lost.syncNow()).problem).toBeNull();
+
+    // The tablet connects with the new key: there's no old copy left to bring,
+    // but it still moves the library, and learns that it was taken.
+    tablet.connect(newKey, [oldKey]);
+    expect((await tablet.syncNow()).problem).toBeNull();
+    expect(tablet.records).toEqual([{ ...real, taken: true }]);
+    const next = (await tablet.library()) as LibraryRecord;
+    expect(next.library).not.toBe(real.library);
+    expect(tablet.records).toEqual([{ ...real, taken: true }, next]);
   });
 
   it('keeps using the library in the record saved by the version before', async () => {

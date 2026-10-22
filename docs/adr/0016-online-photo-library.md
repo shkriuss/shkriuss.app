@@ -117,10 +117,23 @@ every device. That's far beyond what sync can hold:
   (410, "moved"). Nothing in R2 moves. New photos are sealed with a key from
   the new account key, so the lost device can't read them; older photos
   keep their key.
+- **When the lost device moves the library first.** The old key's token
+  proves the move, and the lost device has the old key too. So if it moves
+  a library first (say, by making an account of its own and turning on sync
+  in Photos), the library is theirs, and the server refuses the person's
+  move (403). The person's device then marks the library as taken in its
+  record, still retires the old copy, and starts a new library with the new
+  key. Photos says plainly what happened, photos on the person's devices go
+  up to the new library, and photos that were only online are lost to them.
+  A device tries the move even when another device moved the old copy
+  first, since that may have been the lost one.
 - **"Delete the online copy"** deletes the account's libraries first: each
   list is cleared at once, then the files are deleted in batches of 1,000
   (a Durable Object alarm). Photos on each device stay; those only online
-  are gone. `packages/sync` gains a `linked` option for this: data an app keeps
+  are gone. A library known to be taken is left alone; if one refuses
+  (another device took it), the copy stays, and the device says it
+  couldn't delete the online copy instead of saying it's done.
+  `packages/sync` gains a `linked` option for this: data an app keeps
   online beside its copy, deleted and moved with it.
 
 ## Consequences
@@ -128,7 +141,8 @@ every device. That's far beyond what sync can hold:
 - All libraries together can grow to 1 TB, about $15 a month at most. Below
   10 GB it costs nothing. Until the owner's device moves the library after
   the account key is replaced, the old key can still read, delete or take
-  it ([ADR 0010](0010-account-and-sync.md)).
+  it ([ADR 0010](0010-account-and-sync.md)); if it takes it, the owner's
+  devices start a new one, as above.
 - **What the servers can see:** how many photos, how big each part is, and
   when they're added or deleted. Never what they show, their names or
   dates.

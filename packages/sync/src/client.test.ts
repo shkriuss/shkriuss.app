@@ -1258,6 +1258,28 @@ describe('data linked to the copy', () => {
     await tablet.syncNow();
     expect(linked.calls).toEqual([move, move]);
   });
+
+  it('is moved even when another device moved the old copy first (it may have been the lost one)', async () => {
+    const oldKey = randomBytes(32);
+    const newKey = randomBytes(32);
+    const linked = recorder();
+    const tablet = new Device(oldKey, 1, false, false, linked.linked);
+    const lost = new Device(oldKey);
+    tablet.counters = [counter('water')];
+    await tablet.syncNow();
+    await lost.syncNow();
+
+    // The lost device moves the old copy to an account of its own first.
+    lost.connect(randomBytes(32), [oldKey]);
+    expect((await lost.syncNow()).problem).toBeNull();
+
+    tablet.connect(newKey, [oldKey]);
+    expect((await tablet.syncNow()).problem).toBeNull();
+    const move = `move ${toBase64Url(oldKey)} ${toBase64Url(newKey)}`;
+    expect(linked.calls).toEqual([move]);
+    await tablet.syncNow();
+    expect(linked.calls).toEqual([move]);
+  });
 });
 
 const photo = (text: string) => utf8(text.repeat(100));

@@ -228,6 +228,48 @@ test('after the account key is replaced, every device keeps to the library with 
   await tablet.context().close();
 });
 
+test('a device with the old account key took the library: Photos says so, and starts a new one', async ({
+  page,
+  browser,
+  guard,
+}) => {
+  // The lost phone moved the old copy (410), and moving the library is refused: it's theirs now (403).
+  guard.allowConsole('status of 410 (Gone)');
+  guard.allowConsole('status of 403 (Forbidden)');
+  const { key } = await createAccount(page);
+  await page.goto('/');
+  const appURL = new URL(page.url()).origin;
+  await photoOnline(page, 'IMG_0007.JPG');
+  const lost = await (await otherDevice(browser)).newPage();
+  await signInWithKey(lost, key);
+  await lost.goto(`${appURL}/`);
+  await turnOnSync(lost, 'Photos');
+  await expect(tiles(lost)).toHaveCount(1, ONLINE);
+
+  // That phone is lost, and the key is replaced on this tablet. Before the
+  // tablet opens Photos again, someone with the phone makes an account of
+  // their own, and turns on sync in Photos with it.
+  await replaceKey(page);
+  await lost.goto(`${hubURL}/account/`);
+  await expect(lost.locator('[data-message]')).toHaveText(/^Your account key was replaced/);
+  await createAccount(lost);
+  const takenAway = oldCopyMoved(lost);
+  await connectAgain(lost, appURL);
+  await takenAway;
+  await lost.context().close();
+
+  // The tablet turns on sync again: Photos says what happened, and its photo
+  // goes up to a new library.
+  await connectAgain(page, appURL);
+  await expect(onlineStatus(page)).toHaveText(
+    /^Your online library was taken by a device that still had your old account key, perhaps the lost one/,
+    ONLINE,
+  );
+  await expect(onlineStatus(page)).toContainText('To keep photos online, enter the storage code.');
+  await unlock(page);
+  await expect(onlineStatus(page)).toContainText('Online: 1 photo · ', ONLINE);
+});
+
 test('signed in to another account, photos go up to that account’s library', async ({ page }) => {
   await createAccount(page);
   await page.goto('/');

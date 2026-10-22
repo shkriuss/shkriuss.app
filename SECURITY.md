@@ -51,7 +51,9 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
   list, with each photo's details sealed too. It only ever sees hashes of the
   library's id and token. The first token to reach a library is its only
   one; after the account key is replaced it moves to the new token, proven
-  with the old one, which is refused from then on. Adding photos needs the
+  with the old one, which is refused from then on. If a device with the old
+  key (a lost one) moves it first, it's theirs: Photos says so and starts a
+  new library. Adding photos needs the
   storage code (20 wrong tries an hour from each internet address, so a
   stranger can't lock others out; the code is five or more random words),
   and changing the code locks

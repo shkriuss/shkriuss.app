@@ -121,6 +121,11 @@ export function startOnline(list: PhotoList): Online {
   let synced = false;
   /** The library in use (its id). */
   let inUse = '';
+  /**
+   * The library this device used was taken by a device with an old account
+   * key: the status line says so until Photos closes.
+   */
+  let taken = false;
 
   const emit = () => {
     for (const listener of listeners) listener();
@@ -208,8 +213,12 @@ export function startOnline(list: PhotoList): Online {
     for (;;) {
       const before = await loadProgress();
       if (before && before.library !== library) {
-        // Another library now (another account's, or an older one of this
-        // account's): photos here are found in it, or go up to it again.
+        // Another library now (another account's, an older one of this
+        // account's, or a new one: the old one was taken): photos here are
+        // found in it, or go up to it again.
+        if (allRecords().some((record) => record.library === before.library && record.taken)) {
+          taken = true;
+        }
         await forgetOnline(library, before.removals);
         continue;
       }
@@ -436,6 +445,7 @@ export function startOnline(list: PhotoList): Online {
       tooBig: tooBig.size,
       problem,
       retryAt,
+      taken,
     }),
     subscribe(listener) {
       listeners.add(listener);

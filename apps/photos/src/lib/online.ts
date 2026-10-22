@@ -159,11 +159,20 @@ export interface OnlineState {
   problem: OnlineProblem | null;
   /** For 'daily-limit': when uploads start again (ms). */
   retryAt: number | null;
+  /** The library this device used was taken by a device with an old account key. */
+  taken: boolean;
 }
 
 const timeFormat = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
 
-export function onlineMessage(state: OnlineState): string {
+const TAKEN =
+  'Your online library was taken by a device that still had your old account key, perhaps the lost one, so it can’t be used any more. Photos that were only in it can’t be brought back. Photos on this device go into a new online library.';
+
+/** The status line: what happened to the library this device used, if it was taken, then how it's going. */
+export const onlineMessage = (state: OnlineState): string =>
+  state.taken ? `${TAKEN} ${statusOf(state)}` : statusOf(state);
+
+function statusOf(state: OnlineState): string {
   const tooBig =
     state.tooBig > 0
       ? ` ${countLabel(state.tooBig, 'photo is', 'photos are')} too big to keep online (over 95 MB), so ${state.tooBig === 1 ? 'it stays' : 'they stay'} on this device.`

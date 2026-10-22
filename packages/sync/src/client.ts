@@ -119,7 +119,9 @@ export interface LinkedData {
   delete(secret: Uint8Array<ArrayBuffer>): Promise<void>;
   /**
    * After the account key was replaced: the old copy is in the new one, and
-   * is deleted next. If it throws, the next sync tries again.
+   * is deleted next. Also when another device moved the old copy first: if
+   * that was a lost device, it may have moved this data for itself, which
+   * the app needs to find out. If it throws, the next sync tries again.
    */
   move(from: Uint8Array<ArrayBuffer>, to: Uint8Array<ArrayBuffer>): Promise<void>;
 }
@@ -549,9 +551,13 @@ export function createSync(options: {
     return { ...remote, v: synced.store.version, items };
   }
 
-  /** The online copies of replaced keys still to move here (gone ones have nothing to bring). */
+  /**
+   * The online copies of replaced keys still to move here (gone ones have
+   * nothing to bring), and the replaced keys whose copy another device moved.
+   */
   async function fetchPrevious(previous: readonly string[]) {
     const copies: (Keys & { secret: Uint8Array<ArrayBuffer>; stores: Stores })[] = [];
+    const movedAway: Uint8Array<ArrayBuffer>[] = [];
     for (const encoded of previous) {
       const secret = fromBase64Url(encoded);
       const { token, key } = await syncKeys(secret);
@@ -560,9 +566,10 @@ export function createSync(options: {
         if (remote.kind === 'copy') copies.push({ secret, token, key, stores: remote.stores });
       } catch (error) {
         if (!isGone(error)) throw error;
+        if (error instanceof SyncError && error.problem === 'moved') movedAway.push(secret);
       }
     }
-    return copies;
+    return { copies, movedAway };
   }
 
   /** What this device sees now, for each store, given what it knew. */
@@ -601,7 +608,7 @@ export function createSync(options: {
 
     // 2. The online copy, and any old copies to bring along.
     const remote = await fetchRemote(state.remote?.version ?? null, token, key);
-    const moving = await fetchPrevious(state.previous);
+    const { copies: moving, movedAway } = await fetchPrevious(state.previous);
     if (remote.kind === 'same' && !localChanged && !state.dirty && state.previous.length === 0) {
       const upgraded = state.known !== stored.known;
       updateState(secret, upgraded ? { last: now, known: state.known } : { last: now });
@@ -712,13 +719,17 @@ export function createSync(options: {
 
     // 7. The old copies are in the new one now (and their files, re-sealed with
     // the new key, and the app's linked data): delete them, so devices still
-    // using them stop.
+    // using them stop. Old copies another device moved first get their linked
+    // data moved too: that device may have been the lost one.
     if (state.previous.length > 0) {
       for (const old of moving) {
         if (files) await moveFiles(files, old, { token, key });
         if (linked) await linked.move(old.secret, fromBase64Url(secret));
         const response = await api('/copy?moved', { method: 'DELETE' }, old.token);
         if (!response.ok) throw failed(response);
+      }
+      if (linked) {
+        for (const old of movedAway) await linked.move(old, fromBase64Url(secret));
       }
       if (!updateState(secret, { previous: [] })) throw new SyncError('storage');
     }

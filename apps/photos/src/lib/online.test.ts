@@ -167,6 +167,7 @@ describe('the status line', () => {
     tooBig: 0,
     problem: null,
     retryAt: null,
+    taken: false,
     ...overrides,
   });
 
@@ -195,5 +196,11 @@ describe('the status line', () => {
       'Couldn’t reach the online library: no connection. It will try again.',
     );
     expect(onlineMessage(state({ problem: 'not-set-up' }))).toMatch(/^Online storage isn’t set up/);
+  });
+
+  it('says plainly when a device with the old account key took the library', () => {
+    expect(onlineMessage(state({ taken: true, unlocked: false, usage: null }))).toBe(
+      'Your online library was taken by a device that still had your old account key, perhaps the lost one, so it can’t be used any more. Photos that were only in it can’t be brought back. Photos on this device go into a new online library. To keep photos online, enter the storage code.',
+    );
   });
 });
