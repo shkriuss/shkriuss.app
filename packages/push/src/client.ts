@@ -13,7 +13,7 @@
 import { fromBase64Url, toBase64Url } from './base64.ts';
 import { encryptPayload, MAX_PLAINTEXT_BYTES } from './encrypt.ts';
 import { nextFireTime, type Repeat } from './schedule.ts';
-import { LIMITS } from './validate.ts';
+import { LIMITS, timingProblem } from './validate.ts';
 
 const STORAGE_KEY = 'shkriuss-device:push';
 const API = '/api/push';
@@ -23,7 +23,7 @@ const SERVICE_WORKER_TIMEOUT_MS = 10_000;
 
 /** One scheduled notification, in the app's own local time. */
 export interface Notice {
-  /** Unique within the app, e.g. an event id. */
+  /** Unique within the app, e.g. an event id. It stays on the device. */
   id: string;
   /** When the thing starts, local time "YYYY-MM-DDTHH:MM". */
   start: string;
@@ -42,7 +42,8 @@ export interface Notice {
 
 export type PushSupport = 'supported' | 'needs-home-screen' | 'unsupported';
 
-export type PushErrorCode = 'unsupported' | 'denied' | 'unavailable' | 'server';
+/** 'server': it couldn't be reached. 'refused': it answered, but with a problem. */
+export type PushErrorCode = 'unsupported' | 'denied' | 'unavailable' | 'server' | 'refused';
 
 export class PushError extends Error {
   readonly code: PushErrorCode;
@@ -146,7 +147,7 @@ export async function enablePush(): Promise<void> {
     throw new PushError('denied', 'Notifications are blocked.');
   }
   const response = await api('/key', { method: 'GET' });
-  if (!response.ok) throw new PushError('server', 'The notification service isn’t answering.');
+  if (!response.ok) throw new PushError('refused', 'The notification service isn’t working.');
   const { publicKey } = (await response.json()) as { publicKey: string };
 
   const worker = await registration();
@@ -233,6 +234,8 @@ export async function syncPush(
   // Only ones that will still happen, soonest first, up to the server's limit.
   const now = Date.now();
   const upcoming = notices
+    // Leave out any the server would turn down, so one odd reminder can't stop the rest.
+    .filter((notice) => timingProblem(notice) === undefined)
     .map((notice) => ({ notice, next: nextFireTime(notice, timeZone, now) }))
     .filter((item): item is { notice: Notice; next: number } => item.next !== null)
     .sort((a, b) => a.next - b.next)
@@ -245,10 +248,11 @@ export async function syncPush(
   }
   const target = { p256dh: fromBase64Url(state.p256dh), auth: fromBase64Url(state.auth) };
   const entries = [];
-  for (const notice of upcoming) {
+  for (const [index, notice] of upcoming.entries()) {
     const payload = toBase64Url(await encryptPayload(messageOf(notice), target));
-    const { id, start, repeat, until, offset } = notice;
-    entries.push({ id, start, repeat, until, offset, payload });
+    const { start, repeat, until, offset } = notice;
+    // A number, never the app's own id: an imported event's id can say where it came from.
+    entries.push({ id: String(index + 1), start, repeat, until, offset, payload });
   }
   const response = await api(
     '/schedule',
@@ -256,7 +260,7 @@ export async function syncPush(
     state.deviceKey,
   );
   if (!response.ok)
-    throw new PushError('server', 'The notification service didn’t accept the update.');
+    throw new PushError('refused', 'The notification service didn’t accept the update.');
   store({ ...state, synced: { hash, at: now } });
   return upcoming.length;
 }
@@ -274,7 +278,7 @@ export async function sendTestPush(title: string, body: string): Promise<void> {
     { method: 'POST', body: JSON.stringify({ endpoint: state.endpoint, payload }) },
     state.deviceKey,
   );
-  if (!response.ok) throw new PushError('server', 'The test notification couldn’t be sent.');
+  if (!response.ok) throw new PushError('refused', 'The test notification couldn’t be sent.');
 }
 
 /** Deletes this device's data on the server and unsubscribes. Never throws. */

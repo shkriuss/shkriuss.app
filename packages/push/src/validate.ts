@@ -22,7 +22,7 @@ export const LIMITS = {
 } as const;
 
 export interface ScheduleEntry extends Timing {
-  /** The app's own id for this notification, e.g. an event id. */
+  /** Tells the entries apart. Today's apps send a number, never their own ids. */
   id: string;
   /** The encrypted message (encrypt.ts), base64url. */
   payload: string;
@@ -87,10 +87,12 @@ function payloadProblem(payload: unknown): string | undefined {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-function entryProblem(entry: unknown): string | undefined {
-  if (!isRecord(entry)) return 'Each entry must be an object.';
-  const { id, start, repeat, until, offset } = entry;
-  if (typeof id !== 'string' || id.length === 0 || id.length > LIMITS.idLength) return 'Bad id.';
+/**
+ * A reason the server won't take this timing, or undefined. Apps check their
+ * reminders with it too, so one odd reminder can't stop the others.
+ */
+export function timingProblem(timing: Record<keyof Timing, unknown>): string | undefined {
+  const { start, repeat, until, offset } = timing;
   if (typeof start !== 'string' || !parseStamp(start)) return 'Bad start.';
   if (typeof repeat !== 'string' || !REPEATS.includes(repeat as Timing['repeat'])) {
     return 'Bad repeat.';
@@ -103,7 +105,14 @@ function entryProblem(entry: unknown): string | undefined {
   ) {
     return 'Bad offset.';
   }
-  return payloadProblem(entry['payload']);
+  return undefined;
+}
+
+function entryProblem(entry: unknown): string | undefined {
+  if (!isRecord(entry)) return 'Each entry must be an object.';
+  const { id, start, repeat, until, offset } = entry;
+  if (typeof id !== 'string' || id.length === 0 || id.length > LIMITS.idLength) return 'Bad id.';
+  return timingProblem({ start, repeat, until, offset }) ?? payloadProblem(entry['payload']);
 }
 
 /** Checks a "replace my schedule" request. */

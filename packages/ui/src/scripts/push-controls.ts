@@ -60,6 +60,7 @@ export function mountPushControls(block: HTMLElement, options: PushControlsOptio
     unavailable:
       'This browser couldn’t connect to a push service. On phones without Google services, like GrapheneOS, use a browser with UnifiedPush, such as IronFox.',
     server: `Couldn’t reach ${app}'s notification service. Check your connection and try again.`,
+    refused: `${app}'s notification service had a problem. Please try again later.`,
   };
   const problemOf = (error: unknown): string =>
     error instanceof PushError ? PROBLEMS[error.code] : 'Something went wrong. Please try again.';

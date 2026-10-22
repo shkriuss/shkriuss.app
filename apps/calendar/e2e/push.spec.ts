@@ -4,7 +4,7 @@ import type { Page } from '@playwright/test';
 import { fromBase64Url } from '../../../packages/push/src/base64.ts';
 import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
 import { fakeSubscription, startRig, type PushRig } from '../../../tests/e2e/notifications.ts';
-import { dayList, editor, newEvent, save } from './helpers.ts';
+import { dayList, editor, newEvent, save, seed } from './helpers.ts';
 
 test.use({ serviceWorkers: 'allow', timezoneId: 'Europe/Berlin' });
 
@@ -102,6 +102,29 @@ test('uploads reminders encrypted, never in plain text', async ({ page }) => {
     body: expect.stringMatching(/^Sat, Oct 17 · 2:30\sPM – 3:30\sPM$/),
   });
   expect(request.headers()['authorization']).toMatch(/^Bearer [\w-]{43}$/);
+});
+
+test('an imported event’s calendar id stays on the device, even a long one', async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-10-17T10:00:00+02:00'));
+  await fakeSubscription(page, rig);
+  await page.goto('/');
+  // Outlook gives events 112-character ids, kept as the event's id when imported.
+  const uid = `040000008200E00074C5B7101A82E008${'0'.repeat(80)}`;
+  await seed(page, [
+    { id: uid, title: 'Booked', startDate: '2026-10-20', endDate: '2026-10-20', reminder: 15 },
+  ]);
+  const upload = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/api/push/schedule') && response.request().method() === 'PUT',
+  );
+  await closedSwitch(page).check();
+  const response = await upload;
+  expect(response.status()).toBe(200);
+  const text = response.request().postData() ?? '';
+  expect(text).not.toContain(uid);
+  const body = JSON.parse(text) as { entries: { id: string }[] };
+  expect(body.entries.map((entry) => entry.id)).toEqual(['1']);
+  await expect(closedStatus(page)).toHaveText(/^On:/);
 });
 
 test('turning it off, or deleting all data, removes it from the server', async ({ page }) => {

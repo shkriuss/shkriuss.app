@@ -28,9 +28,11 @@ browsers like IronFox receive Web Push through **UnifiedPush**.
   UnifiedPush server) can read a title or time label.
 - **What the server stores, per device:** the push address (a URL from the
   push service), the phone's time zone, and for each scheduled notification:
-  an id, its local start time, repeat pattern (none, daily, weekly, monthly,
-  yearly), last day, how many minutes before to notify, and the encrypted
-  message. A device is addressed by a random key that only the phone has
+  a number to tell it apart (never the app's own id, which for an imported
+  event can say where it came from), its local start time, repeat pattern
+  (none, daily, weekly, monthly, yearly), last day, how many minutes before
+  to notify, and the encrypted message. Its tag and the page to open are
+  inside the encrypted message. A device is addressed by a random key that only the phone has
   (sent as a bearer token; the server keeps only its SHA-256 hash).
 - **Repeating notifications keep working** without opening the app: the server
   computes each next time from the pattern, in the phone's time zone (so
