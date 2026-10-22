@@ -14,8 +14,10 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
 
 **What runs where**
 
-- Every site is static files on Cloudflare Workers static assets.
-- The one exception is optional: apps that offer **notifications while
+- Every site's pages and files are static files on Cloudflare Workers
+  static assets. Worker code runs only for `/api/*`, for these optional
+  features.
+- Apps that offer **notifications while
   closed** (`"pushNotifications": true` in `apps.json`: Calendar, Habits,
   Tasks, Meals, Water, Reminders and Budget) also run a small Worker for
   `/api/push/*`, with one

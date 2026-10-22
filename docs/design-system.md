@@ -44,8 +44,16 @@ import { AppShell, Button, Card, AppIcon, Icon, DataControls } from '@shkriuss/u
 </AppShell>
 ```
 
-Also available: `NotFound` (the 404 page) and `ThemeSwitch` (already in the
-footer).
+Also available: `NotFound` (the 404 page), `ThemeSwitch` (already in the
+footer), `SyncControls` (sync with the account, for apps with `"sync": true`)
+and `PushControls` (notifications while closed, for apps with
+`"pushNotifications": true`).
+
+Script helpers, imported from TypeScript: `@shkriuss/ui/numbers`
+(`parseDecimal`, for amounts typed with a point or a comma),
+`@shkriuss/ui/worker` (`startWorker`, for heavy work), `@shkriuss/ui/qr-code`,
+`@shkriuss/ui/service-worker`, `@shkriuss/ui/sync-controls` and
+`@shkriuss/ui/push-controls`.
 
 QR codes (for example to open a link on another device) are drawn by a
 script, since their content is usually made on the page:

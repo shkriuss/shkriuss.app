@@ -39,23 +39,31 @@ in CI (`ASTRO_TELEMETRY_DISABLED=1`, `WRANGLER_SEND_METRICS=false`).
 
 ## 2. Monorepo structure
 
+The full, current layout is in [`CLAUDE.md`](../CLAUDE.md#layout); the list
+of apps is `packages/registry/apps.json`. In short:
+
 ```
 shkriuss.app/
 ├── apps/
-│   ├── hub/                 → shkriuss.app (lists every app, privacy page)
-│   └── tally/               → tally.shkriuss.app (the example app)
+│   ├── hub/                 → shkriuss.app (lists every app, privacy page, account)
+│   └── <slug>/              → <slug>.shkriuss.app, one folder per app (Tally is the example)
 ├── packages/
 │   ├── ui/                  @shkriuss/ui: design system (tokens, CSS, components, layouts, icons)
 │   ├── registry/            @shkriuss/registry: THE list of apps (apps.json) + validation
 │   ├── astro-config/        @shkriuss/astro-config: shared Astro config + build step
 │   │                        (security headers, web manifest, icons, service worker)
-│   └── storage/             @shkriuss/storage: on-device data helpers (save, export, delete)
+│   ├── storage/             @shkriuss/storage: on-device data (save, back up, restore, delete; photos)
+│   ├── server/              shared Worker helpers for /api/*
+│   ├── account/, sync/      the optional account, and sync between devices (ADR 0010)
+│   ├── push/                notifications while an app is closed (ADR 0009)
+│   ├── library/             Photos' online library in R2 (ADR 0016)
+│   └── crypto/, dates/      Web Crypto helpers; calendar dates as "YYYY-MM-DD"
 ├── templates/app/           starting files for a new app (copied by the generator)
-├── scripts/                 new-app generator, dist checks, previews, live-site smoke test
+├── scripts/                 new-app, dist checks, deploys, buckets, previews, smoke test
 ├── tests/e2e/               browser tests that run against EVERY site automatically
 ├── tests/unit/              repo-wide checks (colour contrast, registry, workflows)
 ├── docs/                    plan, guides, decision records (adr/)
-└── .github/                 workflows, shared setup action, Dependabot config
+└── .github/                 workflows, shared setup actions, Dependabot config
 ```
 
 How the shared packages work:
@@ -87,13 +95,14 @@ third-party version once for the whole repo.
 
 ## 3. Cloudflare architecture
 
-- **One Worker per site, static files only.** The hub and each app are
-  separate Workers with no server code, just a folder of static files
-  (`dist/`). (Exceptions: apps with notifications while closed also run
-  `/api/push/*`, see [ADR 0009](adr/0009-push-notifications.md); the hub runs
-  `/api/account/*` for the optional account, see
-  [ADR 0010](adr/0010-account-and-sync.md).) Requests for static files are **free and unlimited** on the Free
-  plan. If one app breaks, the others aren't affected.
+- **One Worker per site.** The hub and each app are separate Workers. Pages
+  and files are a folder of static files (`dist/`), and requests for them are
+  **free and unlimited** on the Free plan. Worker code runs only for
+  `/api/*`, for optional features: sync in every app that has it and the
+  hub's account ([ADR 0010](adr/0010-account-and-sync.md)), notifications
+  while an app is closed ([ADR 0009](adr/0009-push-notifications.md)), and
+  Photos' online library in R2 ([ADR 0016](adr/0016-online-photo-library.md)).
+  If one app breaks, the others aren't affected.
 - **Custom domains.** Each site's `wrangler.jsonc` declares its address, for
   example `{ "pattern": "tally.shkriuss.app", "custom_domain": true }`. On
   deploy, Cloudflare creates the DNS record and HTTPS certificate itself, so
@@ -155,10 +164,11 @@ domain.
 
 ### Data storage per app
 
-| Site  | Data stored                            | Where                                              |
-| ----- | -------------------------------------- | -------------------------------------------------- |
-| Hub   | Theme choice (light, dark or system)   | Your browser (`localStorage`), never sent anywhere |
-| Tally | Counter names and counts, theme choice | Your browser (`localStorage`), never sent anywhere |
+Each app lists what it stores in `apps.json` (`dataStored`), and the
+[privacy page](https://shkriuss.app/privacy/) shows the table for every site,
+made from that list. Data is in the browser (`localStorage`, and IndexedDB for
+photos), and leaves the device only for the optional sync, notifications and
+online library, locked on the device first.
 
 Rules for every app ([ADR 0006](adr/0006-local-first-data.md)):
 
@@ -277,7 +287,8 @@ they ran out.)
   rolling back, costs, and troubleshooting.
 - [`docs/quality.md`](quality.md): every check, and what to do when one
   fails.
-- [`docs/adr/`](adr/): seven short decision records.
+- [`docs/adr/`](adr/): short decision records, listed in
+  [`docs/adr/README.md`](adr/README.md).
 
 ---
 
@@ -376,9 +387,11 @@ they ran out.)
 Step-by-step instructions for a phone or tablet are in my status message and
 in [deployment.md](deployment.md#setup-one-time).
 
-1. **Create the Cloudflare API token** (Workers Scripts: Edit; Workers
-   Routes: Edit on `shkriuss.app` only).
-2. **Save it in GitHub** as the Actions secret `CLOUDFLARE_API_TOKEN`.
+1. **Create the Cloudflare API token** with the permissions listed in
+   [deployment.md](deployment.md#create-the-cloudflare-api-token) (Workers
+   Scripts, Workers R2 Storage and Workers Routes, on `shkriuss.app` only).
+2. **Save it in GitHub** as the `CLOUDFLARE_API_TOKEN` secret of the
+   `production` and `preview` environments (deployment.md says how).
 3. **Turn on Dependabot alerts and security updates** in the repository
    settings.
 4. **Merge the first pull request.** That triggers the first production
