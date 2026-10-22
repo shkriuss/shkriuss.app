@@ -71,12 +71,21 @@ every device. That's far beyond what sync can hold:
   `PHOTOS_STORAGE_CODE`. CI gives it to the production Worker as
   `LIBRARY_STORAGE_CODE`. Previews never get it: they run a pull request's
   code before it's merged, so their library stays locked. Without it, a
-  library can be read and deleted,
-  never added to. 10 wrong tries an hour per library; the code is compared
-  in constant time.
-- **Limits per library:** 1 TB, 400,000 photos, 95 MB per photo (Cloudflare
-  takes at most 100 MB in one request), and 20,000 uploads a day, so a big
-  import can't use up the free daily requests every app shares.
+  library can be read and deleted, never added to. The code is compared in
+  constant time.
+- **A library stays unlocked only for the code it was unlocked with.**
+  Changing `PHOTOS_STORAGE_CODE` locks every library, and each account gives
+  the new code once.
+- **Limits across all libraries,** because anyone can make up a library, so
+  limits kept in each would protect nothing. One more Durable Object
+  (`LibraryGate`) keeps them: 20 wrong codes an hour, 1 TB stored and
+  20,000 uploads a day in all. The upload limit keeps a big import from
+  using up the free daily requests every app shares.
+- **Limits per library:** 400,000 photos, and 95 MB per photo (Cloudflare
+  takes at most 100 MB in one request).
+- **A library that was never unlocked costs nothing in R2.** Thumbnails and
+  parts are read only for items its list has, deleting it lists no files,
+  and "remove" leaves no markers in it.
 - **Access:** requests carry a token from the app's own key (HKDF). The
   first one to reach a new library becomes its token; others are refused.
 
@@ -97,8 +106,10 @@ every device. That's far beyond what sync can hold:
 
 ## Consequences
 
-- The library can grow to 1 TB at about $15 a month at most. Below 10 GB it
-  costs nothing.
+- All libraries together can grow to 1 TB, about $15 a month at most. Below
+  10 GB it costs nothing. Until the owner's device moves the library after
+  the account key is replaced, the old key can still read, delete or take
+  it ([ADR 0010](0010-account-and-sync.md)).
 - **What the servers can see:** how many photos, how big each part is, and
   when they're added or deleted. Never what they show, their names or
   dates.

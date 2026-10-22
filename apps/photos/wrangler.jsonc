@@ -15,15 +15,20 @@
     "not_found_handling": "404-page",
     "html_handling": "auto-trailing-slash",
   },
-  // One store per account for the synced copy, and one per library for its
-  // list of photos. SQLite-backed, as the free plan requires.
+  // One store per account for the synced copy, one per library for its list
+  // of photos, and one for the limits across all libraries. SQLite-backed, as
+  // the free plan requires.
   "durable_objects": {
     "bindings": [
       { "name": "SYNC_COPIES", "class_name": "SyncCopy" },
       { "name": "LIBRARIES", "class_name": "Library" },
+      { "name": "LIBRARY_GATE", "class_name": "LibraryGate" },
     ],
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["SyncCopy", "Library"] }],
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["SyncCopy", "Library"] },
+    { "tag": "v2", "new_sqlite_classes": ["LibraryGate"] },
+  ],
   // The photos themselves, sealed on the device. CI creates the bucket, and
   // gives the Worker the storage code (LIBRARY_STORAGE_CODE) as a secret.
   "r2_buckets": [{ "binding": "LIBRARY_FILES", "bucket_name": "shkriuss-photos" }],
@@ -40,6 +45,7 @@
       "bindings": [
         { "name": "SYNC_COPIES", "class_name": "SyncCopy" },
         { "name": "LIBRARIES", "class_name": "Library" },
+        { "name": "LIBRARY_GATE", "class_name": "LibraryGate" },
       ],
     },
     "r2_buckets": [{ "binding": "LIBRARY_FILES", "bucket_name": "shkriuss-photos-preview" }],

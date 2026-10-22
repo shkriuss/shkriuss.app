@@ -56,7 +56,10 @@ const FEATURES: Record<
   },
   library: {
     service: 'an online library (/api/library)',
-    bindings: [{ name: 'LIBRARIES', class_name: 'Library' }],
+    bindings: [
+      { name: 'LIBRARIES', class_name: 'Library' },
+      { name: 'LIBRARY_GATE', class_name: 'LibraryGate' },
+    ],
   },
 };
 

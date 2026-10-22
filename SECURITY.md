@@ -48,8 +48,10 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
   library's id and token. The first token to reach a library is its only
   one; after the account key is replaced it moves to the new token, proven
   with the old one, which is refused from then on. Adding photos needs the
-  storage code, and the library has hard limits (1 TB, 400,000 photos,
-  95 MB each, 20,000 uploads a day), so nobody can run up the bill.
+  storage code (20 wrong tries an hour, in all), and changing the code locks
+  every library. Hard limits across all libraries (1 TB, 20,000 uploads a
+  day), plus 400,000 photos per library and 95 MB each, mean nobody can run
+  up the bill.
 - An app connects by sending the person to the hub with a one-time ECDH
   public key; after they confirm, the hub seals the app's key to it and sends
   it back in the URL fragment, only to that app's real address. The app and

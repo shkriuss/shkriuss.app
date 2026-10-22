@@ -16,10 +16,14 @@ export const SEAL_BYTES = 28;
 export const LIMITS = {
   /** One item, all its parts sealed. Cloudflare takes at most 100 MB in one request. */
   itemBytes: 95_000_000,
-  /** Per library: items, and bytes (1 TB is about $15 a month in R2). */
+  /** Items per library. */
   items: 400_000,
+  /** Bytes, all libraries together (1 TB is about $15 a month in R2). */
   bytes: 1_000_000_000_000,
-  /** Uploads per library per day (UTC), so the free plan's daily requests last for every app. */
+  /**
+   * Uploads per day (UTC), all libraries together, so the free plan's daily
+   * requests last for every app.
+   */
   uploadsPerDay: 20_000,
   /** Sealed details, in base64url characters. */
   detailsChars: 4000,
@@ -31,8 +35,8 @@ export const LIMITS = {
   firstParts: 40,
   firstPartBytes: 1_000_000,
   remove: 100,
-  /** Wrong storage codes per library per hour. */
-  unlockTries: 10,
+  /** Wrong storage codes per hour, all libraries together (anyone can make up a library). */
+  unlockTries: 20,
 } as const;
 
 /** One item in the list of changes. Parts are the sealed sizes, in the order they're stored. */

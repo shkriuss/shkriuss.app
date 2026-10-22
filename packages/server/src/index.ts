@@ -36,6 +36,8 @@ export interface DurableObjectState {
 
 /** Storage that can also list its keys in order, for Durable Objects that keep lists. */
 export interface DurableObjectListStorage extends DurableObjectStorage {
+  /** When the alarm will run (ms), or null if none is set. */
+  getAlarm(): Promise<number | null>;
   /** Keys in order, from `startAfter` (not included), with `prefix`, at most `limit`. */
   list<T>(options: {
     prefix?: string;
