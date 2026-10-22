@@ -90,15 +90,21 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
   merged. Photos' storage code is a secret of `production` only, handed to
   its Worker at deploy in a temporary file that's deleted straight after;
   previews never get it.
-- gitleaks scans every commit for secrets; zizmor checks the workflows;
+- gitleaks scans every commit for secrets; zizmor checks the workflows,
+  including that each pinned commit really belongs to its action;
   `pnpm audit` checks for known vulnerabilities; Dependabot proposes updates
   (after a 7-day cooldown).
 - GitHub Actions are pinned to exact commit SHAs, workflows start with no
   permissions, and code checkout doesn't keep credentials.
 - pnpm only lets allow-listed packages run install scripts and won't pick
-  versions published less than 7 days ago when it updates the lockfile.
+  versions published less than 7 days ago when it updates the lockfile. CI
+  also refuses a pull request that adds a version that new to the lockfile
+  by other means (`scripts/lockfile-age.ts`).
 - Production deploys only happen from `main`, after every check passes,
-  including the dependency audit. Only the deploy steps see the token.
+  including the dependency audit, and only for `main`'s newest commit (so
+  re-running an older run can't put older code back). Only the deploy steps
+  see the token, and the deploy job installs without the shared package
+  cache.
 
 ## Known limits
 

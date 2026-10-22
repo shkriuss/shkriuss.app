@@ -12,7 +12,10 @@ import { iconNames } from '../../packages/ui/src/icons/index.ts';
 const github = join(import.meta.dirname, '../../.github');
 const workflowFiles = [
   ...readdirSync(join(github, 'workflows')).map((file) => join(github, 'workflows', file)),
-  join(github, 'actions/setup/action.yml'),
+  // Every shared action, not only "setup".
+  ...readdirSync(join(github, 'actions')).map((name) =>
+    join(github, 'actions', name, 'action.yml'),
+  ),
 ];
 
 describe('GitHub Actions are pinned to commits', () => {

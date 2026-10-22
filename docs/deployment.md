@@ -100,7 +100,9 @@ Never paste the token anywhere else, including chat.
    your bill.
 
 To change the storage code, change the secret: the next deploy gives the
-new one to the Worker.
+new one to the Worker. To deploy again without merging anything, open the
+newest **CI** run on `main` → **Re-run all jobs**. Only the newest commit on
+`main` deploys: re-running an older run checks it but deploys nothing.
 
 ### GitHub settings
 
