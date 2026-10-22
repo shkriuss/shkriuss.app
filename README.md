@@ -6,8 +6,10 @@ Small, private web apps, all in one place.
 - **Apps:** each lives on its own address, for example
   <https://tally.shkriuss.app>.
 
-No accounts, ads, analytics or trackers. What you save in an app stays on your
-device. See the [privacy page](https://shkriuss.app/privacy/).
+No ads, analytics or trackers, and no account needed. What you save in an app
+stays on your device, unless you turn on sync (an optional account, with
+everything locked on your devices first). See the
+[privacy page](https://shkriuss.app/privacy/).
 
 ## How it works (short version)
 

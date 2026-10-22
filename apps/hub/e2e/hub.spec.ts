@@ -1,4 +1,4 @@
-import { apps, appOrigin, listedApps } from '@shkriuss/registry';
+import { apps, appOrigin, hubOrigin, listedApps } from '@shkriuss/registry';
 import { expect, test } from '../../../tests/e2e/fixtures.ts';
 
 test('lists every listed app from the registry, linking to its subdomain', async ({ page }) => {
@@ -26,4 +26,19 @@ test('the privacy page lists what every app stores', async ({ page }) => {
     await expect(row).toBeVisible();
     for (const item of app.dataStored) await expect(row).toContainText(item);
   }
+});
+
+test('says where to report a security problem (security.txt)', async ({ request }) => {
+  const response = await request.get('/.well-known/security.txt');
+  expect(response.status()).toBe(200);
+  expect(response.headers()['content-type']).toMatch(/^text\/plain/);
+  const text = await response.text();
+  expect(text).toContain(
+    'Contact: https://github.com/shkriuss/shkriuss.app/security/advisories/new',
+  );
+  expect(text).toContain(`Canonical: ${hubOrigin}/.well-known/security.txt`);
+  // RFC 9116: "Expires" must be in the future, and less than a year away.
+  const expires = Date.parse(/^Expires: (.+)$/m.exec(text)?.[1] ?? '');
+  expect(expires).toBeGreaterThan(Date.now() + 30 * 24 * 60 * 60 * 1000);
+  expect(expires).toBeLessThan(Date.now() + 365 * 24 * 60 * 60 * 1000);
 });

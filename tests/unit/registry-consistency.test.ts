@@ -20,6 +20,7 @@ interface WranglerConfig {
   routes: { pattern: string; custom_domain: boolean }[];
   assets: { directory: string; not_found_handling: string; run_worker_first?: string[] };
   workers_dev: boolean;
+  observability?: { enabled: boolean };
   durable_objects?: { bindings: { name: string; class_name: string }[] };
   migrations?: { tag: string; new_sqlite_classes?: string[] }[];
   r2_buckets?: { binding: string; bucket_name: string }[];
@@ -107,6 +108,8 @@ describe.each(appFolders)('apps/%s', (slug) => {
     expect(config.routes).toEqual([{ pattern: domain, custom_domain: true }]);
     expect(config.assets).toMatchObject({ directory: './dist', not_found_handling: '404-page' });
     expect(config.workers_dev).toBe(false);
+    // No logs or traces of requests (the privacy page says so).
+    expect(config.observability).toEqual({ enabled: false });
     expect(config.previews).toBeDefined();
   });
 

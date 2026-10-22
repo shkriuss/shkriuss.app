@@ -2,7 +2,7 @@
   "site": {
     "name": "shkriuss",
     "domain": "shkriuss.app",
-    "description": "Small, private web apps. Your data stays on your device.",
+    "description": "Small, private web apps. Your data stays on your device unless you choose to sync it.",
     "icon": "grid",
     "color": "teal"
   },
@@ -10,7 +10,7 @@
     {
       "slug": "tally",
       "name": "Tally",
-      "description": "Count anything with a tap. Your counts stay on your device.",
+      "description": "Count anything with a tap. Your counts stay on your device unless you turn on sync.",
       "icon": "tally",
       "color": "indigo",
       "status": "live",
@@ -25,7 +25,7 @@
     {
       "slug": "calendar",
       "name": "Calendar",
-      "description": "Plan your days. Your events stay on your device.",
+      "description": "Plan your days. Your events stay on your device unless you turn on sync.",
       "icon": "calendar",
       "color": "blue",
       "status": "live",
@@ -44,7 +44,7 @@
     {
       "slug": "notes",
       "name": "Notes",
-      "description": "Write things down. Your notes stay on your device.",
+      "description": "Write things down. Your notes stay on your device unless you turn on sync.",
       "icon": "note",
       "color": "orange",
       "status": "live",
@@ -59,7 +59,7 @@
     {
       "slug": "habits",
       "name": "Habits",
-      "description": "Build habits one day at a time. Your progress stays on your device.",
+      "description": "Build habits one day at a time. Your progress stays on your device unless you turn on sync.",
       "icon": "check",
       "color": "green",
       "status": "live",
@@ -96,7 +96,7 @@
     {
       "slug": "shelf",
       "name": "Shelf",
-      "description": "Keep track of what you buy and love. Your list stays on your device.",
+      "description": "Keep track of what you buy and love. Your list stays on your device unless you turn on sync.",
       "icon": "bag",
       "color": "pink",
       "status": "live",
@@ -112,7 +112,7 @@
     {
       "slug": "tasks",
       "name": "Tasks",
-      "description": "Your to-do list, with due dates, lists and reminders. It stays on your device.",
+      "description": "Your to-do list, with due dates, lists and reminders. It stays on your device unless you turn on sync.",
       "icon": "checklist",
       "color": "teal",
       "status": "live",
@@ -131,7 +131,7 @@
     {
       "slug": "meals",
       "name": "Meals",
-      "description": "Plan your meals for the week, and what to buy for them. Your plan stays on your device.",
+      "description": "Plan your meals for the week, and what to buy for them. Your plan stays on your device unless you turn on sync.",
       "icon": "utensils",
       "color": "red",
       "status": "live",
@@ -151,7 +151,7 @@
     {
       "slug": "water",
       "name": "Water",
-      "description": "Drink enough water each day. Your log stays on your device.",
+      "description": "Drink enough water each day. Your log stays on your device unless you turn on sync.",
       "icon": "droplet",
       "color": "blue",
       "status": "live",
@@ -170,7 +170,7 @@
     {
       "slug": "reminders",
       "name": "Reminders",
-      "description": "Get reminded at the right time, once or again and again. Your reminders stay on your device.",
+      "description": "Get reminded at the right time, once or again and again. Your reminders stay on your device unless you turn on sync.",
       "icon": "bell",
       "color": "orange",
       "status": "live",
@@ -187,7 +187,7 @@
     {
       "slug": "trades",
       "name": "Trades",
-      "description": "Your trading journal: log your trades and see what works. It stays on your device.",
+      "description": "Your trading journal: log your trades and see what works. It stays on your device unless you turn on sync.",
       "icon": "chart",
       "color": "green",
       "status": "live",
@@ -203,7 +203,7 @@
     {
       "slug": "budget",
       "name": "Budget",
-      "description": "See where your money goes, month by month. Your budget stays on your device.",
+      "description": "See where your money goes, month by month. Your budget stays on your device unless you turn on sync.",
       "icon": "wallet",
       "color": "indigo",
       "status": "live",
@@ -222,7 +222,7 @@
     {
       "slug": "repairs",
       "name": "Repairs",
-      "description": "Keep a record of every repair, vehicle by vehicle. Your records stay on your device.",
+      "description": "Keep a record of every repair, vehicle by vehicle. Your records stay on your device unless you turn on sync.",
       "icon": "wrench",
       "color": "slate",
       "status": "live",

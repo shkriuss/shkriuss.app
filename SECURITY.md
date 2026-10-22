@@ -16,7 +16,9 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
 
 - Every site is static files on Cloudflare Workers static assets.
 - The one exception is optional: apps that offer **notifications while
-  closed** (Calendar) also run a small Worker for `/api/push/*`, with one
+  closed** (`"pushNotifications": true` in `apps.json`: Calendar, Habits,
+  Tasks, Meals, Water, Reminders and Budget) also run a small Worker for
+  `/api/push/*`, with one
   Durable Object per device ([ADR 0009](docs/adr/0009-push-notifications.md)).
   It only ever holds messages encrypted on the user's device, delivery times
   and a time zone; each app has its own storage and signing key, generated
@@ -59,8 +61,9 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
 - Each app is its own origin (`<app>.shkriuss.app`), so browsers keep each
   app's saved data separate. Apps never get the account secret, only a key
   for themselves.
-- User data stays in the browser (`localStorage`). Nothing is sent anywhere
-  unless the user turns on notifications while closed, or uses the account.
+- User data stays in the browser (`localStorage`, and IndexedDB for photos).
+  Nothing is sent anywhere unless the user turns on notifications while
+  closed, or uses the account (sync, and Photos' online library).
 
 **Browser protections (same headers on every site)**
 
@@ -101,7 +104,14 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
   Public repositories also get GitHub's own secret scanning, push protection,
   code scanning and rulesets; [docs/deployment.md](docs/deployment.md#github-settings)
   lists the settings to turn on.
-- Cloudflare, as the host, sees visitors' IP addresses to deliver pages. No
-  Cloudflare analytics or logging is turned on for these sites.
-- Preview links (`*.workers.dev`) are public, but not listed anywhere and not
-  indexed by search engines. They contain the same code as production.
+- Cloudflare, as the host, sees visitors' IP addresses to deliver pages and
+  answer the Workers. It always keeps traffic statistics (numbers of
+  requests), and a short record (IP address, country, browser, page) of
+  requests its firewall blocks as likely attacks. No extra Cloudflare
+  analytics or logging is turned on: every Worker sets
+  `"observability": { "enabled": false }`, and the owner doesn't use what's
+  kept.
+- Preview links (`*.workers.dev`) are public, and are posted in the pull
+  request's comments, which are public too. Search engines are told not to
+  index them. They run a pull request's code, never touch production's
+  storage, and get no storage code.
