@@ -75,18 +75,21 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
 - No secrets in the repository. The Cloudflare API token is stored only as a
   GitHub Actions secret, with just three permissions: _Workers Scripts: Edit_
   and _Workers R2 Storage: Edit_ (account), and _Workers Routes: Edit_ (the
-  `shkriuss.app` zone only). Photos' storage code is a GitHub Actions secret
-  too, handed to its Worker at deploy in a temporary file that's deleted
-  straight after; the Worker compares codes in constant time and allows 10
-  wrong tries an hour per library.
+  `shkriuss.app` zone only). It's a secret of two environments: `production`,
+  which only `main` can use, and `preview`, which waits for the owner's
+  approval, because a preview runs a pull request's code before it's
+  merged. Photos' storage code is a secret of `production` only, handed to
+  its Worker at deploy in a temporary file that's deleted straight after;
+  previews never get it.
 - gitleaks scans every commit for secrets; zizmor checks the workflows;
   `pnpm audit` checks for known vulnerabilities; Dependabot proposes updates
   (after a 7-day cooldown).
 - GitHub Actions are pinned to exact commit SHAs, workflows start with no
   permissions, and code checkout doesn't keep credentials.
-- pnpm only lets allow-listed packages run install scripts and won't install
-  versions published less than 7 days ago.
-- Production deploys only happen from `main`, after every check passes.
+- pnpm only lets allow-listed packages run install scripts and won't pick
+  versions published less than 7 days ago when it updates the lockfile.
+- Production deploys only happen from `main`, after every check passes,
+  including the dependency audit. Only the deploy steps see the token.
 
 ## Known limits
 

@@ -23,8 +23,9 @@ device. See the [privacy page](https://shkriuss.app/privacy/).
 You never need a computer:
 
 - **Ask Claude** to make a change. It opens a pull request.
-- **Review it:** open the pull request on GitHub, tap the preview links, and
-  check the green ticks.
+- **Review it:** open the pull request on GitHub and check the green ticks.
+  To try it first, approve its preview links
+  ([how](docs/deployment.md#seeing-a-preview)).
 - **Ship it:** tap **Merge pull request**. The sites update a minute or two
   later.
 - **New app:** ask Claude, or use **Actions → New app → Run workflow**

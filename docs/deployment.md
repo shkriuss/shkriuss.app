@@ -3,9 +3,11 @@
 ## How it works
 
 ```
-pull request ──► CI checks ──► preview links (pr-<n>-<site>.shkriuss.workers.dev)
+pull request ──► CI checks
+      │       └──► (when you approve) preview links (pr-<n>-<site>.shkriuss.workers.dev)
       │
    merge to main ──► CI checks ──► deploy every site ──► check the live sites
+                                                      └──► delete previews of closed pull requests
 ```
 
 - **Hosting:** each site (the hub and every app) is its own Cloudflare Worker
@@ -18,22 +20,29 @@ pull request ──► CI checks ──► preview links (pr-<n>-<site>.shkriuss
 - **Production:** `.github/workflows/ci.yml`. On every push to `main` it runs
   every check, then deploys the exact files it tested, one site at a time,
   then checks that every live site answers with the right security headers.
-- **Previews:** `.github/workflows/preview.yml`. Each pull request gets
-  Cloudflare Worker Previews named `pr-<number>`. A bot comment lists the
-  links, and they update on every push. They are deleted when the pull
-  request closes. They're public but unlisted, and `workers.dev` tells search
-  engines not to index them.
+- **Previews:** `.github/workflows/preview.yml`. A pull request gets
+  Cloudflare Worker Previews named `pr-<number>` once you approve them (see
+  "Seeing a preview" below). A bot comment lists the links. They're public
+  but unlisted, and `workers.dev` tells search engines not to index them.
+  Previews of closed pull requests are deleted by the next production
+  deploy.
+  - **Why approval:** the Cloudflare token can change production too, and a
+    preview runs the pull request's own code before anyone has merged it.
+    So the token is kept in an environment that waits for you.
+  - Previews get no storage code, so Photos' online library stays locked in
+    them.
 - **Storage for Photos' online library** ([ADR 0016](adr/0016-online-photo-library.md)):
   two R2 buckets, `shkriuss-photos` and `shkriuss-photos-preview` (for
   previews; its files are deleted after 7 days). `scripts/buckets.ts`
-  creates them before deploying if they aren't there. At each deploy,
-  `scripts/deploy.ts` and `scripts/previews.ts` give Photos' Worker the
-  storage code as its secret `LIBRARY_STORAGE_CODE`.
+  creates them before deploying if they aren't there. At each production
+  deploy, `scripts/deploy.ts` gives Photos' Worker the storage code as its
+  secret `LIBRARY_STORAGE_CODE`.
 
 ## Setup (one time)
 
 The workflows need two secrets: `CLOUDFLARE_API_TOKEN`, and
-`PHOTOS_STORAGE_CODE` for Photos' online library. The account ID isn't
+`PHOTOS_STORAGE_CODE` for Photos' online library. They're kept in GitHub
+_environments_, which decide which runs may use them. The account ID isn't
 secret, so it's written in the workflows.
 
 ### Create the Cloudflare API token
@@ -56,11 +65,22 @@ secret, so it's written in the workflows.
 
 ### Save it in GitHub
 
-1. Open the repository on GitHub → **Settings** → **Secrets and variables**
-   → **Actions**.
-2. Tap **New repository secret**.
-3. **Name:** `CLOUDFLARE_API_TOKEN`. **Secret:** paste the token. Tap
-   **Add secret**.
+Open the repository on GitHub → **Settings** → **Environments**.
+
+1. **New environment**, named `production`:
+   - **Deployment branches and tags** → **Selected branches and tags** →
+     **Add deployment branch or tag rule** → `main`. Only runs on `main` can
+     use this environment.
+   - **Environment secrets** → **Add environment secret**: name
+     `CLOUDFLARE_API_TOKEN`, value: the token.
+2. **New environment**, named `preview`:
+   - Tick **Required reviewers**, add yourself, and tap **Save protection
+     rules**. Leave **Prevent self-review** off.
+   - **Environment secrets** → **Add environment secret**: name
+     `CLOUDFLARE_API_TOKEN`, value: the same token. Never the storage code.
+3. **Settings** → **Secrets and variables** → **Actions**: delete any
+   _repository_ secret named `CLOUDFLARE_API_TOKEN` or `PHOTOS_STORAGE_CODE`.
+   Repository secrets reach every run, whatever its environment.
 
 Never paste the token anywhere else, including chat.
 
@@ -70,14 +90,15 @@ Never paste the token anywhere else, including chat.
    R2 Plan** (it asks for a payment method; the first 10 GB a month are
    free).
 2. **The storage code:** make up a long passphrase (five random words is
-   good) and keep it in your password manager. In GitHub, add a repository
-   secret (as above) named `PHOTOS_STORAGE_CODE` with it. You type it once in
+   good) and keep it in your password manager. In GitHub, add it as a secret
+   of the `production` environment (as above), named `PHOTOS_STORAGE_CODE`.
+   You type it once in
    Photos to let your account add photos online; without it, nobody (you
    included) can add to the online library, so nobody else can fill it on
    your bill.
 
 To change the storage code, change the secret: the next deploy gives the
-new one to the Worker. Libraries already unlocked stay unlocked.
+new one to the Worker.
 
 ### GitHub settings
 
@@ -105,6 +126,17 @@ version of the site):
    pass** with **Checks**, **Secret scan** and **Dependency audit**.
 4. **Settings → General → Features:** Wikis, Projects and Issues are off.
    Security reports come through private vulnerability reporting.
+
+## Seeing a preview
+
+Open the pull request, scroll to its checks, and tap **Deploy previews** (it
+says it's waiting). Tap **Review deployments**, tick **preview**, and tap
+**Approve and deploy**. A few minutes later the bot comment lists the links.
+Each later push waits for approval again. A pull request you don't need to
+look at doesn't need approving: merging doesn't wait for previews.
+
+Approve only pull requests you trust: the preview runs that pull request's
+code with the Cloudflare token.
 
 ## Rolling back
 
@@ -138,12 +170,12 @@ Everything here fits Cloudflare's and GitHub's free plans:
 
 ## Troubleshooting
 
-| Problem                                                            | Fix                                                                                                                                                                      |
-| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Deploy fails with "Add the CLOUDFLARE_API_TOKEN repository secret" | Do the setup above.                                                                                                                                                      |
-| Deploy fails with "Authentication error [code: 10000]"             | The token is missing a permission or the zone. Edit it in Cloudflare (**My Profile** → **API Tokens** → **Edit**) and check both permission rows and both resource rows. |
-| "Custom domain … already exists / conflicting DNS record"          | A DNS record already uses that name. Delete it in Cloudflare (**shkriuss.app** → **DNS** → **Records**) and re-run the workflow.                                         |
-| A new app's address doesn't work right after the first deploy      | DNS and certificates can take a few minutes. The smoke test retries for about 5 minutes.                                                                                 |
-| No preview links on a pull request                                 | Dependabot pull requests don't get previews (no secret access). Otherwise check the **Preview** workflow run.                                                            |
-| "Could not create the R2 bucket …"                                 | Turn on R2 in Cloudflare, and give the token `Account` · `Workers R2 Storage` · `Edit` (see setup).                                                                      |
-| Photos says "Online storage isn't set up yet"                      | Add the `PHOTOS_STORAGE_CODE` secret (see setup), then run the **CI** workflow again so the Worker gets it.                                                              |
+| Problem                                                       | Fix                                                                                                                                                                      |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Deploy fails with "Add the CLOUDFLARE_API_TOKEN secret"       | Add it to the `production` environment (see setup).                                                                                                                      |
+| Deploy fails with "Authentication error [code: 10000]"        | The token is missing a permission or the zone. Edit it in Cloudflare (**My Profile** → **API Tokens** → **Edit**) and check both permission rows and both resource rows. |
+| "Custom domain … already exists / conflicting DNS record"     | A DNS record already uses that name. Delete it in Cloudflare (**shkriuss.app** → **DNS** → **Records**) and re-run the workflow.                                         |
+| A new app's address doesn't work right after the first deploy | DNS and certificates can take a few minutes. The smoke test retries for about 5 minutes.                                                                                 |
+| No preview links on a pull request                            | Previews wait for your approval (see "Seeing a preview"). Dependabot's pull requests never get previews.                                                                 |
+| "Could not create the R2 bucket …"                            | Turn on R2 in Cloudflare, and give the token `Account` · `Workers R2 Storage` · `Edit` (see setup).                                                                      |
+| Photos says "Online storage isn't set up yet"                 | Add the `PHOTOS_STORAGE_CODE` secret to the `production` environment (see setup). The next merge to `main` gives it to the Worker.                                       |

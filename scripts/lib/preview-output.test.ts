@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { previewComment, previewUrlFromJson } from './preview-output.ts';
+import { closedPreviews, previewComment, previewUrlFromJson } from './preview-output.ts';
 
 describe('previewUrlFromJson', () => {
   it('reads the preview URL, ignoring log lines around the JSON', () => {
@@ -38,5 +38,15 @@ describe('previewComment', () => {
     expect(comment).toContain('| hub | https://pr-3-hub.shkriuss.workers.dev |');
     expect(comment).toContain('| tally | ❌ failed');
     expect(comment).toContain('commit 0123456');
+  });
+});
+
+describe('closedPreviews', () => {
+  it('finds previews of pull requests that are no longer open, and nothing else', () => {
+    expect(closedPreviews(['pr-3', 'pr-12', 'pr-50', 'main', 'pr-x'], [12, 51])).toEqual([
+      'pr-3',
+      'pr-50',
+    ]);
+    expect(closedPreviews([], [1])).toEqual([]);
   });
 });

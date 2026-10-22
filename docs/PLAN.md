@@ -103,12 +103,13 @@ third-party version once for the whole repo.
 - **Production deploys.** On every merge to `main`, once every check passes,
   GitHub Actions deploys the exact files it tested, then checks that every
   live site answers with the right security headers.
-- **Previews for pull requests.** Every pull request gets Cloudflare Worker
-  Previews (`wrangler preview --name pr-<number>`) for every site. A bot
-  comment lists the links, for example
-  `https://pr-7-tally.shkriuss.workers.dev`. They update on every push and
-  are deleted when the pull request closes. Search engines are told not to
-  index them.
+- **Previews for pull requests.** A pull request gets Cloudflare Worker
+  Previews (`wrangler preview --name pr-<number>`) for every site once the
+  owner approves them, since they run its code with the Cloudflare token
+  ([deployment](deployment.md#seeing-a-preview)). A bot comment lists the
+  links, for example `https://pr-7-tally.shkriuss.workers.dev`. The next
+  production deploy after the pull request closes deletes them. Search
+  engines are told not to index them.
 - **`workers.dev` is off for production.** Each site's real address is only
   its custom domain. Previews still use `workers.dev`.
 - **How it scales.** The Free plan allows 100 Workers and 100 custom domains
@@ -243,7 +244,7 @@ reader, 200% zoom and large text, and reduced motion
 | Workflow      | Runs on                                                | What it does                                                                                                                                   |
 | ------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | `ci.yml`      | every pull request and every push to `main`            | Runs every quality gate. On `main`, if checks and the secret scan pass, it **deploys every site to production** and then tests the live sites. |
-| `preview.yml` | pull request opened, updated or closed                 | Deploys previews of every site and comments the links on the PR. When the PR closes, it deletes them.                                          |
+| `preview.yml` | pull request opened or updated, once you approve it    | Deploys previews of every site and comments the links on the PR. The production deploy deletes previews of closed PRs.                         |
 | `new-app.yml` | started by hand (**Actions → New app → Run workflow**) | Runs the generator with the details you type, pushes a branch, and gives you a link to open the PR.                                            |
 | Dependabot    | weekly                                                 | Proposes grouped dependency and action updates as PRs. CI must pass before you merge.                                                          |
 

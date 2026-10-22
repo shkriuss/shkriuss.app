@@ -101,6 +101,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
+      # To push the new app's branch.
       contents: write
     env:
       # Inputs are passed as environment variables, never pasted into
@@ -113,10 +114,11 @@ jobs:
       APP_STORES: ${{ inputs.stores }}
     steps:
       - name: Check out code
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 # zizmor: ignore[artipacked]
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # Needed to push the new branch. This job uploads no artifacts.
-          persist-credentials: true
+          # The token to push is given only to the last step, not kept on disk
+          # while dependencies install and the app builds.
+          persist-credentials: false
 
       - name: Set up
         uses: ./.github/actions/setup
@@ -134,6 +136,8 @@ jobs:
           pnpm test
 
       - name: Push a branch
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           branch="new-app/$APP_SLUG"
           git config user.name "github-actions[bot]"
@@ -141,7 +145,7 @@ jobs:
           git switch -c "$branch"
           git add -A
           git commit -m "feat($APP_SLUG): add $APP_NAME from the template"
-          git push origin "$branch"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)" push origin "$branch"
           {
             echo "## $APP_NAME is ready for review"
             echo

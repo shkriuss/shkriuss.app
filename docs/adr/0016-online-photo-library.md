@@ -68,8 +68,10 @@ every device. That's far beyond what sync can hold:
 
 - **A storage code.** Uploading needs the library to be unlocked once with
   the storage code, a passphrase the owner keeps as the GitHub secret
-  `PHOTOS_STORAGE_CODE`. CI gives it to the Worker as `LIBRARY_STORAGE_CODE`
-  (production and previews). Without it, a library can be read and deleted,
+  `PHOTOS_STORAGE_CODE`. CI gives it to the production Worker as
+  `LIBRARY_STORAGE_CODE`. Previews never get it: they run a pull request's
+  code before it's merged, so their library stays locked. Without it, a
+  library can be read and deleted,
   never added to. 10 wrong tries an hour per library; the code is compared
   in constant time.
 - **Limits per library:** 1 TB, 400,000 photos, 95 MB per photo (Cloudflare

@@ -33,7 +33,6 @@ catalog:
 # (pnpm blocks all others), and an unexpected one fails the install.
 onlyBuiltDependencies:
   - esbuild
-  - sharp
   - workerd
 # Install scripts we don't need, skipped on purpose (protobufjs's only prints
 # a version warning).

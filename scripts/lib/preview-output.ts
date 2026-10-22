@@ -36,6 +36,15 @@ export function previewComment(results: readonly PreviewResult[], sha?: string):
     '| --- | --- |',
     ...rows,
     '',
-    `Built from ${sha ? `commit ${sha.slice(0, 7)}` : 'the latest commit'}. These links update on every push and are deleted when this pull request is closed. They are public but hidden from search engines.`,
+    `Built from ${sha ? `commit ${sha.slice(0, 7)}` : 'the latest commit'}. These links update on every approved push and are deleted after this pull request is closed. They are public but hidden from search engines. The Photos preview's online library stays locked: previews get no storage code.`,
   ].join('\n');
+}
+
+/** Pull request previews ("pr-<number>") whose pull request is no longer open. */
+export function closedPreviews(
+  previews: readonly string[],
+  openNumbers: readonly number[],
+): string[] {
+  const open = new Set(openNumbers.map((number) => `pr-${number}`));
+  return previews.filter((name) => /^pr-\d+$/.test(name) && !open.has(name));
 }

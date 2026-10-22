@@ -136,18 +136,23 @@ jobs:
   deploy:
     name: Deploy to production
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [checks, secrets]
+    needs: [checks, secrets, audit]
+    # The Cloudflare token and the storage code are secrets of the "production"
+    # environment, which only main can use (docs/deployment.md). Only the steps
+    # that need the token get it.
+    environment: production
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: read
+      # To list open pull requests, so previews of closed ones are deleted.
+      pull-requests: read
     concurrency:
       group: production
       cancel-in-progress: false
     env:
       # Not a secret: it only says which Cloudflare account to deploy to.
       CLOUDFLARE_ACCOUNT_ID: 29431d9d1143cc458db3ad0598c84302
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
     steps:
       - name: Check out code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -155,9 +160,11 @@ jobs:
           persist-credentials: false
 
       - name: Make sure the Cloudflare token is set up
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
-            echo "::error title=Missing secret::Add the CLOUDFLARE_API_TOKEN repository secret. See docs/deployment.md."
+            echo "::error title=Missing secret::Add the CLOUDFLARE_API_TOKEN secret to the production environment. See docs/deployment.md."
             exit 1
           fi
 
@@ -174,13 +181,23 @@ jobs:
         run: pnpm -r --filter "./apps/*" --if-present run on-demand-into-dist
 
       - name: Create storage buckets (if they aren't there yet)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: node scripts/buckets.ts production
 
       - name: Deploy every site (one at a time)
         env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           # The online photo library's storage code (docs/adr/0016-online-photo-library.md).
           PHOTOS_STORAGE_CODE: ${{ secrets.PHOTOS_STORAGE_CODE }}
         run: pnpm -r --filter "./apps/*" --workspace-concurrency=1 run deploy:production
 
       - name: Check the live sites
         run: node scripts/smoke-test.ts
+
+      - name: Delete previews of closed pull requests
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: node scripts/previews.ts prune
