@@ -907,6 +907,36 @@ describe('the first sync after a data version change', () => {
   });
 });
 
+describe('items with any id', () => {
+  it('sync, even "__proto__" (a calendar file can give an event that id)', async () => {
+    const secret = randomBytes(32);
+    const phone = new Device(secret, 1, true);
+    const tablet = new Device(secret, 1, true);
+    phone.counters = [counter('a')];
+    await phone.syncNow();
+    await tablet.syncNow();
+    vi.setSystemTime(Date.now() + 1000);
+    phone.counters = [counter('a'), counter('__proto__'), counter('constructor')];
+    expect((await phone.syncNow()).problem).toBeNull();
+    vi.setSystemTime(Date.now() + 1000);
+    phone.counters = [counter('a', 1), counter('__proto__', 2), counter('constructor')];
+    expect((await phone.syncNow()).problem).toBeNull();
+    expect((await tablet.syncNow()).problem).toBeNull();
+    expect(tablet.counters).toEqual([
+      counter('a', 1),
+      counter('__proto__', 2),
+      counter('constructor'),
+    ]);
+
+    // Deleted on the tablet: gone on the phone too.
+    vi.setSystemTime(Date.now() + 1000);
+    tablet.counters = [counter('a', 1)];
+    await tablet.syncNow();
+    await phone.syncNow();
+    expect(phone.counters).toEqual([counter('a', 1)]);
+  });
+});
+
 // ---------- Files, like photos ----------
 
 /** A request straight to the server, as the account with this app key. */

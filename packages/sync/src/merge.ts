@@ -62,6 +62,18 @@ export const TOMBSTONE_DAYS = 180;
 export const isTombstone = (entry: Entry | Known['items'][string]): entry is Tombstone =>
   'deleted' in entry && entry.deleted;
 
+/**
+ * Items by id, kept in an object without a prototype, so every id is just a
+ * key. A calendar file can give an event any id: "__proto__" or
+ * "constructor" must never reach an object's built-in parts.
+ */
+export const byId = <T>(from: Record<string, T> = {}): Record<string, T> =>
+  Object.assign(Object.create(null) as Record<string, T>, from);
+
+/** A record's own entry for an id (what's read from JSON still has a prototype). */
+const own = <T>(record: Record<string, T>, id: string): T | undefined =>
+  Object.hasOwn(record, id) ? record[id] : undefined;
+
 /** JSON with object keys sorted, so equal values always give equal text. */
 export function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
@@ -107,11 +119,11 @@ export function observe(
   version: number,
   now: number,
 ): { snapshot: StoreSnapshot; changed: boolean } {
-  const items: Record<string, Entry> = {};
+  const items = byId<Entry>();
   const stamp = known === undefined ? 0 : now;
   let changed = known === undefined;
   for (const item of current) {
-    const previous = known?.items[item.id];
+    const previous = known && own(known.items, item.id);
     const h = fingerprint(item);
     const same = previous !== undefined && !isTombstone(previous) && previous.h === h;
     if (!same) changed = true;
@@ -153,7 +165,7 @@ export function upgradeKnown(
   version: number,
 ): Known {
   const here = new Map(current.map((item) => [item.id, item]));
-  const items: Known['items'] = { ...known.items };
+  const items = byId(known.items);
   for (const [id, entry] of Object.entries(known.items)) {
     if (isTombstone(entry)) continue;
     const now = here.get(id);
@@ -175,7 +187,7 @@ function newer(a: Entry, b: Entry): Entry {
 
 /** Merges two devices' snapshots of one store (same data version). */
 export function merge(a: StoreSnapshot, b: StoreSnapshot): StoreSnapshot {
-  const items: Record<string, Entry> = { ...a.items };
+  const items = byId(a.items);
   for (const [id, entry] of Object.entries(b.items)) {
     const other = items[id];
     items[id] = other ? newer(other, entry) : entry;
@@ -227,12 +239,12 @@ export function keepBoth(
   copy: (mine: Identified, theirs: Identified) => Identified,
   now: number,
 ): { snapshot: StoreSnapshot; kept: number } {
-  const items = { ...mine.items };
+  const items = byId(mine.items);
   const ids = [...mine.order.ids];
   let kept = 0;
   for (const [id, other] of Object.entries(theirs.items)) {
-    const before = known.items[id];
-    const here = mine.items[id];
+    const before = own(known.items, id);
+    const here = items[id];
     // Without what the item was at the last sync, there's no telling where it changed.
     if (!before || isTombstone(before) || before.h === '' || !here) continue;
     if (isTombstone(other)) {
@@ -251,7 +263,7 @@ export function keepBoth(
     const hereValue = fingerprint(here.value);
     if (hereValue === before.h || hereValue === otherValue) continue;
     const duplicate = copy(here.value as Identified, other.value as Identified);
-    if (duplicate.id in items || duplicate.id in theirs.items) continue;
+    if (duplicate.id in items || Object.hasOwn(theirs.items, duplicate.id)) continue;
     items[id] = other;
     items[duplicate.id] = { t: now, value: duplicate };
     ids.push(duplicate.id);
@@ -280,7 +292,7 @@ export function secondVersionName(name: string, max: number): string {
 /** The live items' values, in order. */
 export function valuesOf(snapshot: StoreSnapshot): unknown[] {
   return snapshot.order.ids.flatMap((id) => {
-    const entry = snapshot.items[id];
+    const entry = own(snapshot.items, id);
     return entry && !isTombstone(entry) ? [entry.value] : [];
   });
 }
@@ -288,15 +300,16 @@ export function valuesOf(snapshot: StoreSnapshot): unknown[] {
 /** Drops deletion markers older than TOMBSTONE_DAYS. */
 export function prune(snapshot: StoreSnapshot, now: number): StoreSnapshot {
   const cutoff = now - TOMBSTONE_DAYS * 24 * 60 * 60 * 1000;
-  const items = Object.fromEntries(
-    Object.entries(snapshot.items).filter(([, entry]) => !isTombstone(entry) || entry.t >= cutoff),
-  );
+  const items = byId<Entry>();
+  for (const [id, entry] of Object.entries(snapshot.items)) {
+    if (!isTombstone(entry) || entry.t >= cutoff) items[id] = entry;
+  }
   return { ...snapshot, items };
 }
 
 /** What a device should remember after a sync that ended with `snapshot`. */
 export function knownFrom(snapshot: StoreSnapshot): Known {
-  const items: Known['items'] = {};
+  const items = byId<Known['items'][string]>();
   for (const [id, entry] of Object.entries(snapshot.items)) {
     items[id] = isTombstone(entry) ? entry : { h: fingerprint(entry.value), t: entry.t };
   }

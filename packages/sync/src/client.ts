@@ -44,6 +44,7 @@ import {
   turnOffProof,
 } from './connect.ts';
 import {
+  byId,
   canonical,
   keepBoth,
   knownFrom,
@@ -527,7 +528,7 @@ export function createSync(options: {
     const values = valuesOf(remote) as Identified[];
     const upgraded = synced.store.read(remote.v, synced.withItems(synced.store.empty(), values));
     if (upgraded === undefined) throw new SyncError('server');
-    const items = { ...remote.items };
+    const items = byId(remote.items);
     for (const item of synced.items(upgraded)) {
       const entry = items[item.id];
       if (entry && !('deleted' in entry)) items[item.id] = { t: entry.t, value: item };

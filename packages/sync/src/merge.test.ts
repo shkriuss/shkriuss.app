@@ -265,6 +265,35 @@ describe('keepBoth', () => {
   });
 });
 
+describe('ids', () => {
+  // A calendar file can give an event any id, such as "__proto__".
+  const odd = [counter('__proto__'), counter('constructor'), counter('toString')];
+
+  it('are only ever keys, whatever they are', () => {
+    const mine = observe(undefined, [counter('a'), ...odd], 1, 100).snapshot;
+    const theirs = observe(undefined, [counter('a')], 1, 100).snapshot;
+    const merged = merge(mine, theirs);
+    expect(valuesOf(merged)).toEqual([counter('a'), ...odd]);
+    expect(valuesOf(prune(merged, 200))).toEqual([counter('a'), ...odd]);
+
+    // Deleted, and remembered through the device's saved state (JSON).
+    const known = JSON.parse(JSON.stringify(knownFrom(merged))) as Known;
+    const deleted = observe(known, [counter('a')], 1, 300).snapshot;
+    for (const { id } of odd) expect(deleted.items[id]).toEqual({ t: 300, deleted: true });
+    expect(valuesOf(merge(deleted, merged))).toEqual([counter('a')]);
+  });
+
+  it('that aren’t there never match something else', () => {
+    const known = JSON.parse(JSON.stringify(knownFrom(observe(undefined, [], 1, 100).snapshot)));
+    const added = observe(known as Known, odd, 1, 200).snapshot;
+    for (const { id } of odd) expect(added.items[id]).toEqual({ t: 200, value: counter(id) });
+    const empty = observe(undefined, [], 1, 100).snapshot;
+    expect(valuesOf(merge(empty, added))).toEqual(odd);
+    const copy = (item: Identified) => ({ ...item, id: `${item.id}-copy` });
+    expect(keepBoth(known as Known, added, empty, copy, 300).kept).toBe(0);
+  });
+});
+
 describe('upgradeKnown', () => {
   // Data version 2 adds a colour to every counter.
   const v2 = (item: Counter) => ({ ...item, color: null });
