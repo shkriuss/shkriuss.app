@@ -4,6 +4,7 @@ import { createStore, type StorageLike } from '@shkriuss/storage';
 import { describe, expect, it } from 'vitest';
 import {
   applyChanges,
+  canFreeUp,
   freeable,
   onlineMessage,
   onlyOnline,
@@ -130,6 +131,26 @@ describe('this device’s photos', () => {
     const { photos: freed, bytes } = freeable(photos);
     expect(freed.map((one) => one.id)).toEqual(['b', 'c']);
     expect(bytes).toBe(7_000_000);
+  });
+
+  it('are freed up only once the library has answered, and while it’s there', () => {
+    const state: OnlineState = {
+      checked: true,
+      unlocked: true,
+      usage: null,
+      waiting: 0,
+      tooBig: 0,
+      problem: null,
+      retryAt: null,
+      taken: false,
+    };
+    expect(canFreeUp(state)).toBe(true);
+    expect(canFreeUp({ ...state, checked: false })).toBe(false);
+    for (const problem of ['wiping', 'moved', 'offline', 'server', 'storage'] as const) {
+      expect(canFreeUp({ ...state, problem })).toBe(false);
+    }
+    // What only stops photos going up doesn't change what's online.
+    expect(canFreeUp({ ...state, problem: 'full', unlocked: false })).toBe(true);
   });
 });
 

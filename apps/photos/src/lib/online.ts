@@ -163,6 +163,17 @@ export interface OnlineState {
   taken: boolean;
 }
 
+/** Problems that only stop photos going up: what's online is still there. */
+const UPLOADS_ONLY: ReadonlySet<OnlineProblem> = new Set(['full', 'daily-limit', 'not-set-up']);
+
+/**
+ * Whether "Free up space" can be offered: only once the library in use has
+ * answered since Photos opened, and while it isn't being deleted, moved or
+ * out of reach. Before anything goes, it's asked again.
+ */
+export const canFreeUp = (state: OnlineState): boolean =>
+  state.checked && (state.problem === null || UPLOADS_ONLY.has(state.problem));
+
 const timeFormat = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
 
 const TAKEN =

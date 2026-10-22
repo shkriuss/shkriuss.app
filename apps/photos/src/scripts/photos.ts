@@ -6,7 +6,7 @@
  * device's online.
  */
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
-import { freeable, onlineMessage } from '../lib/online.ts';
+import { canFreeUp, freeable, onlineMessage } from '../lib/online.ts';
 import {
   addedMessage,
   byMonth,
@@ -128,7 +128,8 @@ export function mountPhotos(root: Document): void {
     if (!state.on) return;
     onlineStatus.textContent = onlineMessage(state);
     unlockForm.hidden = !state.checked || state.unlocked || state.problem === 'not-set-up';
-    freeUp.hidden = freeable(photos).photos.length === 0;
+    // Only once the library has answered: this device's note that photos are online may be old.
+    freeUp.hidden = !canFreeUp(state) || freeable(photos).photos.length === 0;
   }
 
   unlockForm.addEventListener('submit', (event) => {
@@ -497,7 +498,7 @@ export function mountPhotos(root: Document): void {
 
   function askToFreeUp(): void {
     const { photos: list, bytes } = freeable(photos);
-    if (list.length === 0) return;
+    if (list.length === 0 || !canFreeUp(online.state())) return;
     freeUpText.textContent =
       list.length === 1
         ? `This removes the original of 1 photo (${formatBytes(bytes)}) from this device. It stays in your online library: the photo still shows here, and “Save original” downloads it again.`
@@ -508,9 +509,8 @@ export function mountPhotos(root: Document): void {
 
   freeUpDialog.addEventListener('close', () => {
     if (freeUpDialog.returnValue !== 'confirm') return;
-    const { photos: list, bytes } = freeable(photos);
-    void online.freeUpSpace(list).then(
-      () => {
+    void online.freeUpSpace(freeable(photos).photos).then(
+      (bytes) => {
         announce(`Freed up ${formatBytes(bytes)} on this device.`);
         libraryHeading.focus();
       },

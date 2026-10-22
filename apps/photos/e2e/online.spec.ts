@@ -5,7 +5,7 @@
 // each device uses the right library. The shared tests (tests/e2e/sync.spec.ts)
 // cover turning sync on and off, deleting the online copy and a new account key.
 import { readFile } from 'node:fs/promises';
-import type { Page } from '@playwright/test';
+import type { Page, Route } from '@playwright/test';
 import {
   createAccount,
   hubURL,
@@ -189,6 +189,44 @@ test('frees up space on this device, and the photos still show', async ({ page }
   const download = page.waitForEvent('download');
   await dialog.getByRole('button', { name: 'Save original' }).click();
   expect((await readFile(await (await download).path())).equals(original)).toBe(true);
+});
+
+test('frees up space only when the online library has just said the photos are there', async ({
+  page,
+  guard,
+}) => {
+  // The online library is cut off on purpose.
+  guard.allowConsole('net::ERR_FAILED');
+  await createAccount(page);
+  await page.goto('/');
+  await photoOnline(page, 'IMG_0008.JPG');
+  const freeUp = page.getByRole('button', { name: 'Free up space on this device' });
+  await expect(freeUp).toBeVisible();
+
+  // Opened again while the library can't be reached: nothing is offered.
+  const cutOff = (route: Route) => route.abort();
+  await page.route('**/api/library/changes*', cutOff);
+  await page.reload();
+  await expect(onlineStatus(page)).toHaveText(
+    'Couldn’t reach the online library: no connection. It will try again.',
+    ONLINE,
+  );
+  await expect(freeUp).toBeHidden();
+
+  // Once it answers, it's offered, and asked again before anything is removed.
+  await page.unroute('**/api/library/changes*', cutOff);
+  await page.getByRole('button', { name: 'Sync now' }).click();
+  await expect(freeUp).toBeVisible(ONLINE);
+  await freeUp.click();
+  await page.route('**/api/library/changes*', cutOff);
+  await page
+    .getByRole('dialog', { name: 'Free up space on this device?' })
+    .getByRole('button', { name: 'Free up space' })
+    .click();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Couldn’t free up space. Please try again.' }),
+  ).toBeAttached();
+  expect(await originalsHere(page)).toBe(1);
 });
 
 test('after the account key is replaced, every device keeps to the library with the photos', async ({

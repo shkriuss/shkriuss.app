@@ -70,7 +70,11 @@ every device. That's far beyond what sync can hold:
 - **Deleting a photo deletes it everywhere:** online at once, and on every
   device at its next check.
 - **"Free up space on this device"** removes originals (and screen-sized
-  copies) that are safely online, keeping thumbnails. Only when tapped.
+  copies) that are safely online, keeping thumbnails. Only when tapped, and
+  only once the library has answered since Photos opened, while it isn't
+  being deleted, moved or out of reach: what this device noted earlier may
+  be out of date. Just before anything is removed, the library is asked
+  again, and only photos it still has are freed.
 - **The same photo twice:** a device skips a photo already in the library
   (same SHA-256). If two devices add it at once, the one with the larger id
   is deleted.

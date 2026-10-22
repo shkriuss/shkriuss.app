@@ -28,6 +28,8 @@ import { createStore } from '@shkriuss/storage';
 import { createSync, syncedStore, type SyncClient } from '@shkriuss/sync';
 import {
   applyChanges,
+  canFreeUp,
+  freeable,
   RECORDS,
   waitingToGoUp,
   type OnlineProblem,
@@ -79,8 +81,12 @@ export interface Online {
   thumb(photo: Photo): Promise<string | null>;
   /** The screen-sized copy or the original, downloaded (null if it can't be). */
   download(photo: Photo, part: 'view' | 'original'): Promise<Blob | null>;
-  /** Removes originals (and screen-sized copies) that are online from this device. */
-  freeUpSpace(photos: readonly Photo[]): Promise<void>;
+  /**
+   * Removes originals (and screen-sized copies) that are online from this
+   * device, once the library has just said they're still there. Returns the
+   * bytes freed; throws if it couldn't free any.
+   */
+  freeUpSpace(photos: readonly Photo[]): Promise<number>;
 }
 
 const isStorageError = (error: unknown) => error instanceof DOMException;
@@ -130,6 +136,14 @@ export function startOnline(list: PhotoList): Online {
   const emit = () => {
     for (const listener of listeners) listener();
   };
+
+  /** Rounds and "Free up space" take turns, so neither sees the photos half changed. */
+  let turn: Promise<unknown> = Promise.resolve();
+  function inTurn<T>(work: () => Promise<T>): Promise<T> {
+    const run = turn.then(work);
+    turn = run.catch(() => undefined);
+    return run;
+  }
 
   /** Changes to how far this device has got, one at a time, so none is lost. */
   let progressLock: Promise<unknown> = Promise.resolve();
@@ -330,19 +344,21 @@ export function startOnline(list: PhotoList): Online {
     }
     running = true;
     try {
-      const record = await ensureRecord();
-      // Another library only once a sync has finished: until then, the records may be half moved.
-      const api = record && (synced || record.library === inUse) ? await connect(record) : null;
-      if (!record || !api) {
-        // No library to use yet: a check of another one doesn't count.
-        checked = false;
-        return;
-      }
-      inUse = record.library;
-      problem = null;
-      await pull(api, record.library);
-      await sendRemovals(api);
-      await goUp(api);
+      await inTurn(async () => {
+        const record = await ensureRecord();
+        // Another library only once a sync has finished: until then, the records may be half moved.
+        const api = record && (synced || record.library === inUse) ? await connect(record) : null;
+        if (!record || !api) {
+          // No library to use yet: a check of another one doesn't count.
+          checked = false;
+          return;
+        }
+        inUse = record.library;
+        problem = null;
+        await pull(api, record.library);
+        await sendRemovals(api);
+        await goUp(api);
+      });
     } catch (error) {
       if (error instanceof LibraryError) problem = asProblem(error.problem);
       else problem = isStorageError(error) ? 'storage' : 'server';
@@ -434,19 +450,21 @@ export function startOnline(list: PhotoList): Online {
     }
   }
 
+  const state = (): OnlineState & { on: boolean } => ({
+    on: sync.status().on,
+    checked,
+    unlocked,
+    usage,
+    waiting: waitingToGoUp(list.all(), skip).length,
+    tooBig: tooBig.size,
+    problem,
+    retryAt,
+    taken,
+  });
+
   return {
     sync,
-    state: () => ({
-      on: sync.status().on,
-      checked,
-      unlocked,
-      usage,
-      waiting: waitingToGoUp(list.all(), skip).length,
-      tooBig: tooBig.size,
-      problem,
-      retryAt,
-      taken,
-    }),
+    state,
     subscribe(listener) {
       listeners.add(listener);
     },
@@ -505,9 +523,26 @@ export function startOnline(list: PhotoList): Online {
         return null;
       }
     },
-    async freeUpSpace(photos) {
-      await removeOriginals(photos);
-      list.changed({ save: photos.map((photo) => ({ ...photo, here: false })) });
-    },
+    freeUpSpace: (photos) =>
+      inTurn(async () => {
+        // Only with the library that answered since Photos opened, asked again
+        // now: an original goes only if its photo is still online.
+        const secret = sync.secret();
+        const record = secret ? await usableRecord(secret, allRecords()) : undefined;
+        const api = record?.library === inUse && canFreeUp(state()) ? await connect(record) : null;
+        if (!record || !api) throw new Error('The online library hasn’t answered.');
+        try {
+          await pull(api, record.library);
+        } finally {
+          // The status line catches up, whatever happened.
+          schedule();
+        }
+        const chosen = new Set(photos.map((photo) => photo.id));
+        const still = freeable(list.all()).photos.filter((photo) => chosen.has(photo.id));
+        if (!canFreeUp(state()) || still.length === 0) throw new Error('Nothing to free up.');
+        await removeOriginals(still);
+        list.changed({ save: still.map((photo) => ({ ...photo, here: false })) });
+        return still.reduce((sum, photo) => sum + photo.size, 0);
+      }),
   };
 }
