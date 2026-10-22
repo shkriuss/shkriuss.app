@@ -42,12 +42,33 @@ describe('serviceWorkerSource', () => {
 const ORIGIN = 'https://tally.shkriuss.app';
 type Listener = (event: Record<string, unknown>) => void;
 
-/** Runs the generated worker with in-memory caches and the given network. */
-function running(network: (url: string) => Response) {
+type Stores = Map<string, Map<string, Response>>;
+
+/**
+ * Runs the generated worker with in-memory caches and the given network. Pass
+ * the same `stores` to run a newer version in the same pretend browser.
+ */
+function running(
+  network: (url: string) => Response,
+  { version = 'v1', files = ['/'], stores = new Map() as Stores } = {},
+) {
   const listeners = new Map<string, Listener>();
-  const stores = new Map<string, Map<string, Response>>();
   const keyOf = (request: string | { url: string }) =>
     typeof request === 'string' ? new URL(request, ORIGIN).href : request.url;
+  const find = (
+    store: Map<string, Response>,
+    request: string | { url: string },
+    options?: { ignoreSearch?: boolean },
+  ) => {
+    const wanted = new URL(keyOf(request));
+    if (options?.ignoreSearch) wanted.search = '';
+    for (const [key, response] of store) {
+      const url = new URL(key);
+      if (options?.ignoreSearch) url.search = '';
+      if (url.href === wanted.href) return response.clone();
+    }
+    return undefined;
+  };
   const caches = {
     open: async (name: string) => {
       const store = stores.get(name) ?? new Map<string, Response>();
@@ -55,18 +76,17 @@ function running(network: (url: string) => Response) {
       return {
         put: async (request: string | { url: string }, response: Response) =>
           void store.set(keyOf(request), response),
-        add: async () => undefined,
+        add: async (url: string) => void store.set(keyOf(url), network(keyOf(url))),
+        keys: async () => [...store.keys()].map((url) => ({ url })),
+        match: async (request: string | { url: string }) => find(store, request),
       };
     },
+    keys: async () => [...stores.keys()],
+    delete: async (name: string) => stores.delete(name),
     match: async (request: string | { url: string }, options?: { ignoreSearch?: boolean }) => {
-      const wanted = new URL(keyOf(request));
-      if (options?.ignoreSearch) wanted.search = '';
       for (const store of stores.values()) {
-        for (const [key, response] of store) {
-          const url = new URL(key);
-          if (options?.ignoreSearch) url.search = '';
-          if (url.href === wanted.href) return response.clone();
-        }
+        const found = find(store, request, options);
+        if (found) return found;
       }
       return undefined;
     },
@@ -79,17 +99,30 @@ function running(network: (url: string) => Response) {
       showNotification: async (title: string, options: { data: { url: string } }) =>
         void shown.push({ title, options }),
     },
+    skipWaiting: async () => undefined,
+    clients: { claim: async () => undefined },
   };
   const fetch = async (request: { url: string }) => network(request.url);
-  new Function('self', 'caches', 'fetch', serviceWorkerSource({ files: ['/'], version: 'v1' }))(
+  new Function('self', 'caches', 'fetch', serviceWorkerSource({ files, version }))(
     self,
     caches,
     fetch,
   );
+  const lifecycle = async (type: string) => {
+    const waits: Promise<unknown>[] = [];
+    listeners.get(type)?.({ waitUntil: (promise: Promise<unknown>) => waits.push(promise) });
+    await Promise.all(waits);
+  };
 
   return {
     caches,
+    stores,
     shown,
+    /** Installs and takes over, as a new version does. */
+    async start(): Promise<void> {
+      await lifecycle('install');
+      await lifecycle('activate');
+    },
     /** Opens a page, and resolves with what the worker shows. */
     async open(path: string): Promise<Response> {
       let answer: Promise<Response> | undefined;
@@ -102,6 +135,16 @@ function running(network: (url: string) => Response) {
       const response = await (answer as Promise<Response>);
       await Promise.all(waits);
       return response;
+    },
+    /** Asks for a build file, as a page does. */
+    async file(path: string): Promise<Response> {
+      let answer: Promise<Response> | undefined;
+      listeners.get('fetch')?.({
+        request: { method: 'GET', url: new URL(path, ORIGIN).href, mode: 'no-cors' },
+        respondWith: (response: Promise<Response>) => (answer = response),
+        waitUntil: () => undefined,
+      });
+      return answer as Promise<Response>;
     },
     async push(message: unknown): Promise<void> {
       const waits: Promise<unknown>[] = [];
@@ -119,27 +162,63 @@ const page = (body: string, status = 200) =>
 
 describe('the service worker', () => {
   it('shows the saved copy of a page when the server has a problem', async () => {
-    let answer = page('fresh');
+    let answer = page('saved');
     const worker = running(() => answer);
-    expect(await (await worker.open('/')).text()).toBe('fresh');
+    await worker.start();
+    answer = page('fresh');
+    expect(await (await worker.open('/?utm=1')).text()).toBe('fresh');
     answer = page('Server error', 503);
-    expect(await (await worker.open('/')).text()).toBe('fresh');
+    expect(await (await worker.open('/?utm=2')).text()).toBe('saved');
     // With nothing saved, the error is shown as it is.
     expect((await worker.open('/other/')).status).toBe(503);
   });
 
-  it('saves one copy per page, whatever its query string, and only pages', async () => {
-    const worker = running((url) =>
-      url.includes('/on-demand/')
-        ? new Response('model', { headers: { 'content-type': 'application/octet-stream' } })
-        : page(url),
-    );
-    await worker.open('/?utm=1');
-    await worker.open('/?utm=2');
-    expect(await (await worker.caches.match(`${ORIGIN}/`))?.text()).toBe(`${ORIGIN}/?utm=2`);
-    expect(await worker.caches.match(`${ORIGIN}/?utm=1`)).toBeUndefined();
+  it('saves pages only with their own version’s files, never from the network', async () => {
+    let online = true;
+    let version = 'N';
+    const worker = running(() => {
+      if (!online) throw new TypeError('offline');
+      return page(`page ${version}`);
+    });
+    await worker.start();
+    // A newer version's page, shown online before its worker is installed…
+    version = 'N+1';
+    expect(await (await worker.open('/')).text()).toBe('page N+1');
     await worker.open('/on-demand/model.bin');
+    // …isn't saved: offline, the page saved with this version's scripts is shown.
+    online = false;
+    expect(await (await worker.open('/')).text()).toBe('page N');
     expect(await worker.caches.match(`${ORIGIN}/on-demand/model.bin`)).toBeUndefined();
+  });
+
+  it('keeps the previous version’s build files for pages still open, until the next', async () => {
+    const network = (url: string) =>
+      new URL(url).pathname.startsWith('/_astro/') ? new Response(url) : page('');
+    const first = running(network, {
+      version: 'v1',
+      files: ['/', '/_astro/a1.js', '/_astro/s.js'],
+    });
+    await first.start();
+    const { stores } = first;
+    const second = running(network, {
+      version: 'v2',
+      files: ['/', '/_astro/a2.js', '/_astro/s.js'],
+      stores,
+    });
+    await second.start();
+    expect([...stores.keys()].sort()).toEqual(['shkriuss-previous', 'shkriuss-v2']);
+    // A page still open from v1 starts its worker: the file is there, offline too.
+    const kept = [...(stores.get('shkriuss-previous')?.keys() ?? [])];
+    expect(kept).toEqual([`${ORIGIN}/_astro/a1.js`]);
+    expect(await (await second.file('/_astro/a1.js')).text()).toBe(`${ORIGIN}/_astro/a1.js`);
+
+    const third = running(network, { version: 'v3', files: ['/', '/_astro/a3.js'], stores });
+    await third.start();
+    expect([...stores.keys()].sort()).toEqual(['shkriuss-previous', 'shkriuss-v3']);
+    expect([...(stores.get('shkriuss-previous')?.keys() ?? [])].sort()).toEqual([
+      `${ORIGIN}/_astro/a2.js`,
+      `${ORIGIN}/_astro/s.js`,
+    ]);
   });
 
   it('opens only pages on its own site from a notification', async () => {
