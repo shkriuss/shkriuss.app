@@ -151,6 +151,10 @@ export const storedPhotos = (page: Page) =>
     () =>
       new Promise<number>((resolve) => {
         const request = indexedDB.open('shkriuss-files');
+        // Not made yet: leave that to the app. Made here, it would have no
+        // table, and the app (finding it already there) couldn't save photos.
+        request.onupgradeneeded = () => request.transaction?.abort();
+        request.onerror = () => resolve(0);
         request.onsuccess = () => {
           const database = request.result;
           if (!database.objectStoreNames.contains('files')) {

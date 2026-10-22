@@ -29,6 +29,8 @@ test.beforeEach(async ({ page }) => {
 const status = (page: Page, text: string) => page.getByRole('status').filter({ hasText: text });
 
 test('adds photos to a repair, made smaller, and keeps them on the device', async ({ page }) => {
+  // Counted before the app has made its files: counting mustn't get in its way.
+  expect(await storedPhotos(page)).toBe(0);
   const big = await picture(page);
   await page.getByRole('button', { name: 'New repair' }).click();
   const dialog = repairDialog(page);
