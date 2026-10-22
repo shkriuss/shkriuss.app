@@ -8,7 +8,8 @@
  *   it was made from, even if this device's clock is behind.
  * - Deleting an item leaves a small marker (a "tombstone") with the time, so
  *   the deletion reaches the other devices instead of the item coming back.
- *   Markers are dropped after 180 days.
+ *   Markers are dropped after 180 days. A device away longer still deletes
+ *   an item it saw online that the copy no longer has (dropForgotten).
  * - The order of the list is one more thing that changes over time: the
  *   newest order wins, and new items from the other device go at the end.
  *
@@ -57,7 +58,7 @@ export interface Identified {
   id: string;
 }
 
-/** Deleted items are forgotten after this long (devices offline longer may bring them back). */
+/** Deletion markers are dropped after this long (dropForgotten handles devices away longer). */
 export const TOMBSTONE_DAYS = 180;
 
 export const isTombstone = (entry: Entry | Known['items'][string]): entry is Tombstone =>
@@ -301,6 +302,29 @@ export function valuesOf(snapshot: StoreSnapshot): unknown[] {
     const entry = own(snapshot.items, id);
     return entry && !isTombstone(entry) ? [entry.value] : [];
   });
+}
+
+/**
+ * Items this device saw in the online copy (`seen`) that the same copy no
+ * longer has, not even as a deletion marker: they were deleted on another
+ * device so long ago that the marker was dropped (TOMBSTONE_DAYS). Unless
+ * they were changed here since, they're deleted here too, instead of coming
+ * back. Only for the very copy that was seen: one started again (a new
+ * epoch) never had them.
+ */
+export function dropForgotten(
+  mine: StoreSnapshot,
+  theirs: StoreSnapshot,
+  seen: Known,
+): StoreSnapshot {
+  const items = byId(mine.items);
+  for (const [id, entry] of Object.entries(mine.items)) {
+    const before = own(seen.items, id);
+    if (isTombstone(entry) || !before || isTombstone(before)) continue;
+    if (Object.hasOwn(theirs.items, id) || fingerprint(entry.value) !== before.h) continue;
+    items[id] = { t: before.t, deleted: true };
+  }
+  return { ...mine, items };
 }
 
 /** Drops deletion markers older than TOMBSTONE_DAYS. */

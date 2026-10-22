@@ -46,6 +46,7 @@ import {
 import {
   byId,
   canonical,
+  dropForgotten,
   keepBoth,
   knownFrom,
   merge,
@@ -624,6 +625,8 @@ export function createSync(options: {
         // what it knew, if it last saw another copy), in today's data version.
         const sameCopy = remote.kind === 'copy' && state.base?.epoch === remote.epoch;
         const base = sameCopy ? state.base?.stores[synced.store.key] : known;
+        // Deleted elsewhere longer ago than the markers last: deleted here too.
+        if (sameCopy && base) result = dropForgotten(result, theirs, base);
         if (synced.conflictCopy && known?.v === version && base?.v === version) {
           const both = keepBoth(base, result, theirs, synced.conflictCopy, now);
           result = both.snapshot;

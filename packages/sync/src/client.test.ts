@@ -1058,6 +1058,88 @@ describe('a device whose clock is behind', () => {
   }
 });
 
+describe('deletions older than the markers (180 days)', () => {
+  const T0 = Date.UTC(2026, 0, 10, 12);
+  const DAY = 24 * HOUR;
+
+  it('reach a device that hasn’t synced since', async () => {
+    const secret = randomBytes(32);
+    const phone = new Device(secret);
+    const tablet = new Device(secret);
+    vi.setSystemTime(T0);
+    phone.counters = [counter('a'), counter('old-bill'), counter('kept')];
+    await phone.syncNow();
+    await tablet.syncNow();
+    // The tablet goes in a drawer, after one more edit that it keeps.
+    vi.setSystemTime(T0 + HOUR);
+    tablet.counters = [counter('a'), counter('old-bill'), counter('kept', 1)];
+    offline = true;
+    await tablet.syncNow();
+    offline = false;
+
+    // On the phone: old-bill and kept deleted, then months of use (any
+    // sync drops markers older than 180 days).
+    vi.setSystemTime(T0 + DAY);
+    phone.counters = [counter('a')];
+    await phone.syncNow();
+    vi.setSystemTime(T0 + 200 * DAY);
+    phone.counters = [counter('a', 1)];
+    await phone.syncNow();
+
+    vi.setSystemTime(T0 + 210 * DAY);
+    await tablet.syncNow();
+    await phone.syncNow();
+    // Changed on the tablet since: that stays, like any edit made after a deletion.
+    expect(phone.counters).toEqual([counter('a', 1), counter('kept', 1)]);
+    expect(tablet.counters).toEqual(phone.counters);
+  });
+
+  it('made while sync was off, still reach the other devices', async () => {
+    const secret = randomBytes(32);
+    const phone = new Device(secret);
+    const tablet = new Device(secret);
+    vi.setSystemTime(T0);
+    phone.counters = [counter('a'), counter('b')];
+    await phone.syncNow();
+    await tablet.syncNow();
+
+    tablet.sync.turnOff();
+    vi.setSystemTime(T0 + DAY);
+    tablet.counters = [counter('a')];
+    vi.setSystemTime(T0 + 200 * DAY);
+    tablet.connect(secret);
+    await tablet.syncNow();
+    vi.setSystemTime(T0 + 200 * DAY + HOUR);
+    await phone.syncNow();
+    await tablet.syncNow();
+    expect(phone.counters).toEqual([counter('a')]);
+    expect(tablet.counters).toEqual([counter('a')]);
+  });
+
+  it('don’t touch a copy that was started again', async () => {
+    const secret = randomBytes(32);
+    const phone = new Device(secret);
+    const tablet = new Device(secret);
+    vi.setSystemTime(T0);
+    phone.counters = [counter('a'), counter('b')];
+    await phone.syncNow();
+    await tablet.syncNow();
+
+    // "Delete the online copy" on the phone, then sync on again: a new copy without b.
+    phone.use();
+    await phone.sync.deleteOnline();
+    vi.setSystemTime(T0 + DAY);
+    phone.counters = [counter('a')];
+    phone.connect(secret);
+    await phone.syncNow();
+    // The tablet stops; turned on again, it brings its data into the new copy.
+    expect((await tablet.syncNow()).problem).toBe('deleted');
+    tablet.connect(secret);
+    await tablet.syncNow();
+    expect(tablet.counters).toEqual([counter('a'), counter('b')]);
+  });
+});
+
 // ---------- Files, like photos ----------
 
 /** A request straight to the server, as the account with this app key. */

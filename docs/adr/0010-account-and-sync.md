@@ -180,7 +180,9 @@ in with `sync: true` in `apps.json`.
     always gets a time after the version it was made from, so a device
     whose clock is behind doesn't lose its own edits.
   - Deleting leaves a marker with the time, so deletions sync. Markers are
-    dropped after 180 days.
+    dropped after 180 days. A device away longer still deletes an item it
+    saw in the copy that the same copy no longer has, unless it changed the
+    item since.
   - The list's order is merged the same way; new items from the other device
     go at the end.
   - On a device's first sync, its items count as older than what's already

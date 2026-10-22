@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   canonical,
+  dropForgotten,
   fingerprint,
   keepBoth,
   knownFrom,
@@ -12,6 +13,7 @@ import {
   TOMBSTONE_DAYS,
   upgradeKnown,
   valuesOf,
+  type Entry,
   type Identified,
   type Known,
   type StoreSnapshot,
@@ -365,6 +367,39 @@ describe('secondVersionName', () => {
     expect(emoji.length).toBeLessThanOrEqual(30);
     expect(emoji).toBe('😀😀😀😀😀😀 (second version)');
     expect(secondVersionName('   ', 60)).toBe('Second version');
+  });
+});
+
+describe('dropForgotten', () => {
+  it('deletes what the copy lost without a marker, unless it was changed here', () => {
+    const online = observe(
+      undefined,
+      [counter('gone'), counter('edited'), counter('marked'), counter('kept')],
+      1,
+      100,
+    ).snapshot;
+    const seen = knownFrom(online);
+    // The copy now: "gone" and "edited" dropped without a marker, "marked" with one.
+    const theirs: StoreSnapshot = {
+      v: 1,
+      items: { marked: { t: 200, deleted: true }, kept: online.items['kept'] as Entry },
+      order: { ids: ['kept'], t: 200 },
+    };
+    const here = [
+      counter('gone'),
+      counter('edited', 5),
+      counter('marked'),
+      counter('kept'),
+      counter('new'),
+    ];
+    const mine = observe(seen, here, 1, 300).snapshot;
+    const result = dropForgotten(mine, theirs, seen);
+    expect(result.items['gone']).toEqual({ t: 0, deleted: true });
+    expect(valuesOf(merge(result, theirs))).toEqual([
+      counter('edited', 5),
+      counter('kept'),
+      counter('new'),
+    ]);
   });
 });
 
