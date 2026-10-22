@@ -1,0 +1,305 @@
+---
+/**
+ * Photos: the library grouped by the month each photo was taken, newest
+ * first; adding photos (each original is kept as it is); looking at one, with
+ * its details; choosing several to save or delete. Behaviour:
+ * ../scripts/photos.ts.
+ */
+import { AppShell, Button, DataControls, Icon } from '@shkriuss/ui';
+---
+
+<AppShell wide>
+  <div class="stack stack--lg">
+    <header class="stack stack--sm">
+      <h1>Photos</h1>
+      <p class="lead">Your photos, kept as the original files. They’re saved on this device.</p>
+    </header>
+
+    <div class="cluster">
+      <Button variant="primary" icon="plus" data-action="add-photos">
+        Add photos
+      </Button>
+      <Button icon="check" data-action="select" hidden>
+        Select
+      </Button>
+    </div>
+    <input type="file" accept="image/*" multiple hidden data-photo-input />
+
+    <section class="stack" aria-labelledby="library-heading">
+      <div class="stack stack--sm">
+        <h2 id="library-heading" tabindex="-1" data-library-heading>
+          Library
+        </h2>
+        <p class="muted" data-summary></p>
+        <p class="muted" data-adding hidden></p>
+      </div>
+      <p class="muted" data-empty>
+        No photos yet. Tap “Add photos” to choose some from this device.
+      </p>
+      <div class="selection cluster" data-selection hidden>
+        <p class="selection__count" data-selected-count>
+          Tap photos to choose them.
+        </p>
+        <Button icon="download" data-action="save-selected">
+          Save originals
+        </Button>
+        <Button variant="danger" icon="trash" data-action="delete-selected">
+          Delete
+        </Button>
+        <Button data-action="done-selecting">Done</Button>
+      </div>
+      <div class="stack" data-months></div>
+      <div>
+        <Button data-action="show-more" hidden>
+          Show more
+        </Button>
+      </div>
+      <p class="muted" data-space></p>
+    </section>
+
+    <DataControls backup={false}>
+      <p class="muted">
+        Photos are too big for backup files. To keep one somewhere else too, open it and tap “Save
+        original”, or choose several with “Select”.
+      </p>
+    </DataControls>
+  </div>
+
+  <p class="visually-hidden" role="status" data-announcer></p>
+
+  <!-- One month of photos. -->
+  <template data-month-template>
+    <section class="month stack stack--sm">
+      <h3 class="month__heading">
+        <span data-month></span>
+        <span class="month__count" data-count></span>
+      </h3>
+      <ul role="list" class="grid" data-grid></ul>
+    </section>
+  </template>
+
+  <!-- One photo in the grid: opens it, or (while choosing) chooses it. -->
+  <template data-tile-template>
+    <li>
+      <button type="button" class="tile" data-action="tile">
+        <img class="tile__image" alt="" data-thumb />
+        <span class="tile__format" data-format hidden></span>
+        <span class="tile__check" aria-hidden="true">
+          <Icon name="check" />
+        </span>
+      </button>
+    </li>
+  </template>
+
+  <dialog class="dialog viewer" aria-labelledby="viewer-title" data-viewer>
+    <div class="stack">
+      <h2 id="viewer-title" data-viewer-title>
+        Photo
+      </h2>
+      <img class="viewer__image" alt="" data-viewer-image />
+      <p class="viewer__none" data-viewer-none hidden>
+        This browser can’t show this kind of photo. “Save original” saves it as it is, to open in
+        another app.
+      </p>
+      <dl class="viewer__details">
+        <div>
+          <dt>Name</dt>
+          <dd data-detail="name"></dd>
+        </div>
+        <div>
+          <dt>Size</dt>
+          <dd data-detail="size"></dd>
+        </div>
+        <div>
+          <dt>Kind</dt>
+          <dd data-detail="kind"></dd>
+        </div>
+      </dl>
+      <div class="cluster">
+        <Button icon="chevron-left" data-action="previous-photo">
+          Previous
+        </Button>
+        <Button data-action="next-photo">
+          <span>Next</span>
+          <Icon name="chevron-right" />
+        </Button>
+        <Button icon="download" data-action="save-original">
+          Save original
+        </Button>
+        <Button variant="danger" icon="trash" data-action="delete-photo">
+          Delete
+        </Button>
+        <Button data-action="close-viewer">Close</Button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog class="dialog" aria-labelledby="delete-title" data-delete-dialog>
+    <form method="dialog" class="stack">
+      <h2 id="delete-title" data-delete-title>
+        Delete this photo?
+      </h2>
+      <p>The original and its copies are deleted from this device. This can’t be undone.</p>
+      <div class="cluster">
+        <Button type="submit" value="cancel">
+          Cancel
+        </Button>
+        <Button type="submit" variant="danger" value="confirm">
+          Delete
+        </Button>
+      </div>
+    </form>
+  </dialog>
+</AppShell>
+
+<script>
+  import { mountPhotos } from '../scripts/photos.ts';
+
+  mountPhotos(document);
+</script>
+
+<style>
+  .month__heading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 var(--space-2);
+    font-size: var(--text-base);
+  }
+
+  .month__count {
+    font-size: var(--text-sm);
+    font-weight: var(--weight-normal);
+    color: var(--color-text-muted);
+  }
+
+  /* Three across on a phone, more on wider screens. */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(5.5rem, 1fr));
+    gap: var(--space-1);
+    margin: 0;
+    padding: 0;
+  }
+
+  .tile {
+    position: relative;
+    display: grid;
+    place-items: center;
+    inline-size: 100%;
+    aspect-ratio: 1;
+    padding: 0;
+    overflow: hidden;
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface-sunken);
+    color: var(--color-text-muted);
+    cursor: pointer;
+  }
+
+  .tile__image {
+    position: absolute;
+    inset: 0;
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+  }
+
+  .tile__image:not([src]) {
+    display: none;
+  }
+
+  .tile__format {
+    font-size: var(--text-sm);
+    font-weight: var(--weight-semibold);
+  }
+
+  /* While choosing: a tick on the chosen ones. */
+  .tile__check {
+    position: absolute;
+    inset-block-start: var(--space-1);
+    inset-inline-end: var(--space-1);
+    display: none;
+    place-items: center;
+    inline-size: 1.75rem;
+    block-size: 1.75rem;
+    border: 2px solid var(--color-surface);
+    border-radius: var(--radius-full);
+    background: var(--color-accent);
+    color: var(--color-on-accent);
+  }
+
+  .tile[aria-pressed='true'] {
+    border-color: var(--color-accent);
+    outline: 3px solid var(--color-accent);
+    outline-offset: -3px;
+  }
+
+  .tile[aria-pressed='true'] .tile__check {
+    display: grid;
+  }
+
+  .tile[aria-pressed='true'] .tile__image {
+    opacity: 0.75;
+  }
+
+  /* Stays in sight at the bottom while choosing. */
+  .selection {
+    position: sticky;
+    inset-block-end: var(--space-3);
+    z-index: 1;
+    padding: var(--space-2) var(--space-3);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius);
+    background: var(--color-surface);
+    box-shadow: var(--shadow);
+  }
+
+  .selection__count {
+    flex: 1 1 100%;
+    margin: 0;
+    font-weight: var(--weight-semibold);
+  }
+
+  .viewer {
+    width: min(100% - 2 * var(--gutter), 60rem);
+  }
+
+  .viewer__image {
+    display: block;
+    width: 100%;
+    max-height: 65dvh;
+    object-fit: contain;
+    border-radius: var(--radius);
+    background: var(--color-surface-sunken);
+  }
+
+  .viewer__image:not([src]) {
+    display: none;
+  }
+
+  .viewer__none {
+    padding: var(--space-5) var(--space-3);
+    border-radius: var(--radius);
+    background: var(--color-surface-sunken);
+    text-align: center;
+  }
+
+  .viewer__details {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+    gap: var(--space-2);
+    margin: 0;
+  }
+
+  .viewer__details dt {
+    font-size: var(--text-sm);
+    font-weight: var(--weight-semibold);
+    color: var(--color-text-muted);
+  }
+
+  .viewer__details dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+</style>

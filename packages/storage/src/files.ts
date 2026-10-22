@@ -18,6 +18,8 @@ export interface StoredFile {
 
 export interface FileStore<T extends StoredFile> {
   get(id: string): Promise<T | undefined>;
+  /** Every file of this kind (for small records, like a list of photos' details). */
+  all(): Promise<T[]>;
   /** Saves several files together: all are saved, or none. */
   putAll(files: readonly T[]): Promise<void>;
   removeAll(ids: readonly string[]): Promise<void>;
@@ -66,12 +68,17 @@ async function transact<R>(
 /** Files of one kind, e.g. createFileStore("repair-photos"). */
 export function createFileStore<T extends StoredFile>(kind: string): FileStore<T> {
   const keyOf = (id: string) => `${kind}:${id}`;
+  // Every key from "<kind>:" up to "<kind>;" (the next character) is this kind's.
+  const range = () => IDBKeyRange.bound(`${kind}:`, `${kind};`, false, true);
   return {
     async get(id) {
       return (
         (await transact<T>('readonly', (table) => table.get(keyOf(id)) as IDBRequest<T>)) ??
         undefined
       );
+    },
+    async all() {
+      return (await transact<T[]>('readonly', (table) => table.getAll(range()))) ?? [];
     },
     async putAll(files) {
       if (files.length === 0) return;

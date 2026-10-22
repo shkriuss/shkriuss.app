@@ -46,6 +46,7 @@ on:
           - grip
           - heart
           - home
+          - image
           - info
           - key
           - list

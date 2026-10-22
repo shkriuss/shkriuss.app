@@ -30,6 +30,8 @@ export const icons = {
   heart:
     '<path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.4a4.3 4.3 0 0 1 7.5 2.4C19.5 15.4 12 20 12 20Z"/>',
   home: '<path d="M4 11 12 4l8 7"/><path d="M6 9.5V20h12V9.5"/>',
+  image:
+    '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="m21 15.5-4.5-4.5L6 20"/>',
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',
   key: '<circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M16 7l3 3M13.5 9.5l2 2"/>',
   list: '<path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/>',

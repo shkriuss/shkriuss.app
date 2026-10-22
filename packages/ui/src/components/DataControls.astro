@@ -11,9 +11,14 @@ import Button from './Button.astro';
 interface Props {
   /** Heading level for "Your data" (default 2). */
   level?: 2 | 3;
+  /**
+   * False for apps whose data is too big for a backup file (like Photos):
+   * no "Back up" or "Restore". Put what to do instead in the slot.
+   */
+  backup?: boolean;
 }
 
-const { level = 2 } = Astro.props;
+const { level = 2, backup = true } = Astro.props;
 const Heading = `h${level}` as 'h2' | 'h3';
 ---
 
@@ -25,15 +30,18 @@ const Heading = `h${level}` as 'h2' | 'h3';
 >
   <Heading id="data-controls-heading">Your data</Heading>
   <p class="muted">
-    {site.sync
-      ? `Everything ${site.name} saves stays in this browser on this device, unless you turn on sync. Back up to keep your own copy.`
-      : `Everything ${site.name} saves stays in this browser on this device. Nothing is sent anywhere. Back up to keep a copy, or to move your data to another device.`}
+    {!backup
+      ? `Everything ${site.name} saves stays in this browser on this device${site.sync ? ', unless you turn on sync' : '. Nothing is sent anywhere'}.`
+      : site.sync
+        ? `Everything ${site.name} saves stays in this browser on this device, unless you turn on sync. Back up to keep your own copy.`
+        : `Everything ${site.name} saves stays in this browser on this device. Nothing is sent anywhere. Back up to keep a copy, or to move your data to another device.`}
   </p>
+  <slot />
   <div class="cluster">
-    <Button icon="download" data-action="backup">
+    <Button icon="download" data-action="backup" hidden={!backup}>
       Back up
     </Button>
-    <Button icon="upload" data-action="restore">
+    <Button icon="upload" data-action="restore" hidden={!backup}>
       Restore
     </Button>
     <Button icon="trash" variant="danger" data-action="delete">

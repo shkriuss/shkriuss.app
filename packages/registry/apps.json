@@ -236,6 +236,20 @@
         "Your light or dark theme choice"
       ],
       "sync": true
+    },
+    {
+      "slug": "photos",
+      "name": "Photos",
+      "description": "Your photos, kept as the original files. Everything stays on your device.",
+      "icon": "image",
+      "color": "violet",
+      "status": "live",
+      "storage": "device",
+      "dataStored": [
+        "The photos you add, as the original files (with what the camera saved in them, like the date and the place)",
+        "A small copy of each photo for the grid, and a screen-sized one for looking at it",
+        "Your light or dark theme choice"
+      ]
     }
   ]
 }

@@ -1,0 +1,27 @@
+{
+  "name": "photos",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The photos app at photos.shkriuss.app.",
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "wrangler dev --port 8787",
+    "typecheck": "astro check",
+    "deploy:production": "wrangler deploy",
+    "deploy:preview": "wrangler preview"
+  },
+  "dependencies": {
+    "@shkriuss/astro-config": "workspace:*",
+    "@shkriuss/crypto": "workspace:*",
+    "@shkriuss/registry": "workspace:*",
+    "@shkriuss/storage": "workspace:*",
+    "@shkriuss/ui": "workspace:*",
+    "astro": "catalog:"
+  },
+  "devDependencies": {
+    "@astrojs/check": "catalog:",
+    "typescript": "catalog:"
+  }
+}

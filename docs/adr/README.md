@@ -21,6 +21,7 @@ mark them "Superseded by ADR N" instead.
 | [0012](0012-deep-check-ai-model.md)              | Deep check: an AI grammar model on the device (GECToR), downloaded on request   | Accepted |
 | [0013](0013-photos-on-the-device.md)             | Photos on the device: IndexedDB through @shkriuss/storage/files, made smaller   | Accepted |
 | [0014](0014-syncing-photos.md)                   | Syncing photos: each sealed on the device, kept with the account's online copy  | Accepted |
+| [0015](0015-photos-app.md)                       | The Photos app: original files in IndexedDB, read in a worker, never twice      | Accepted |
 
 Template: **Context** (the problem), **Decision** (what we do), **Consequences**
 (good and bad), **Alternatives** (what we didn't pick and why).
