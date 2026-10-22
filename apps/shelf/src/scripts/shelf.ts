@@ -13,6 +13,7 @@
  */
 import { createStore } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
+import { withEdits } from '@shkriuss/sync/edits';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { site } from 'virtual:shkriuss/site';
 import {
@@ -170,6 +171,8 @@ export function mountShelf(root: Document): void {
   let filters: Filters = { ...NO_FILTERS };
   /** The item open in the form (null for a new one). */
   let editingId: string | null = null;
+  /** The form as it opened, to tell what the person changed (see withEdits). */
+  let openedDraft: ItemDraft | null = null;
   /** Where keyboard focus goes back to when the form closes. */
   let opener: HTMLElement | null = null;
   /** The item just saved, so focus can go to it in the list. */
@@ -389,6 +392,7 @@ export function mountShelf(root: Document): void {
 
   function openEditor(item: Item | null): void {
     editingId = item?.id ?? null;
+    openedDraft = item ? draftOf(item) : null;
     opener = root.activeElement instanceof HTMLElement ? root.activeElement : null;
     showProblems({});
     editorTitle.textContent = item ? 'Edit item' : 'New item';
@@ -447,7 +451,11 @@ export function mountShelf(root: Document): void {
 
     const now = Date.now();
     const existing = find(editingId);
-    const item = itemFromDraft(draft, editingId ?? crypto.randomUUID(), now, existing);
+    // A sync while the form was open may have changed the item on another
+    // device: keep those changes, and put on only what was changed here.
+    const edited =
+      existing && openedDraft ? withEdits(openedDraft, draft, draftOf(existing)) : draft;
+    const item = itemFromDraft(edited, editingId ?? crypto.randomUUID(), now, existing);
     // A saved item that the filters would hide is still shown: clear them.
     const hidden = !visibleItems({ items: [item] }, filters, categoriesOf(categoriesState)).length;
     if (hidden) {
