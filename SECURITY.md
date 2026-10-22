@@ -3,11 +3,9 @@
 ## Reporting a problem
 
 If you find a security or privacy problem in shkriuss.app or any of its apps,
-please report it privately to the owner and don't share it publicly first.
-
-This repository is private, so there's no public reporting channel yet. A
-public contact address (and a `/.well-known/security.txt` file) is planned once
-the owner chooses one (see [docs/PLAN.md](docs/PLAN.md#8-roadmap)).
+please report it privately, and don't share it publicly first: on GitHub, open
+this repository's **Security** tab and choose **Report a vulnerability**. Only
+the owner sees the report.
 
 ## Security model (summary)
 
@@ -33,7 +31,7 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
   can make; devices holding a replaced key sign out, and it can't sign in
   again. There are no account ids, emails or passwords. Requests from other
   sites are refused (`Sec-Fetch-Site`), and bodies are limited to 1 KB.
-- Apps that can **sync** (Calendar, Notes, Tally) run `/api/sync/*` in their own
+- Apps that can **sync** (`"sync": true` in `apps.json`) run `/api/sync/*` in their own
   Worker, with one Durable Object per account holding one copy of the app's
   data, sealed on the device (AES-256-GCM, compressed first). The account is
   found by the SHA-256 hash of a token derived for that app, so copies in
@@ -78,9 +76,12 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
 
 ## Known limits
 
-- The repository is private on GitHub Free, so GitHub's own secret scanning,
-  push protection and branch protection aren't available. The checks above
-  are free replacements. See [docs/PLAN.md](docs/PLAN.md#10-where-your-request-conflicts-with-best-practice).
+- The repository is public, so anyone can read the code and its history. It
+  holds no secrets (gitleaks checks every commit); the only secrets are in
+  GitHub Actions, which pull requests from other people's copies never get.
+  Public repositories also get GitHub's own secret scanning, push protection,
+  code scanning and rulesets; [docs/deployment.md](docs/deployment.md#github-settings)
+  lists the settings to turn on.
 - Cloudflare, as the host, sees visitors' IP addresses to deliver pages. No
   Cloudflare analytics or logging is turned on for these sites.
 - Preview links (`*.workers.dev`) are public, but not listed anywhere and not

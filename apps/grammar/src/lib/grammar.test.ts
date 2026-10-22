@@ -127,10 +127,10 @@ describe('dictionary', () => {
 
   it('adds each word once, in order, and removes it again', () => {
     let words = addWord([], 'Tbilisi');
-    words = addWord(words, 'Daviti');
+    words = addWord(words, 'Mtskheta');
     words = addWord(words, 'Tbilisi');
-    expect(words).toEqual(['Daviti', 'Tbilisi']);
-    expect(removeWord(words, 'Daviti')).toEqual(['Tbilisi']);
+    expect(words).toEqual(['Mtskheta', 'Tbilisi']);
+    expect(removeWord(words, 'Mtskheta')).toEqual(['Tbilisi']);
     const full = Array.from({ length: MAX_WORDS }, (_, index) => `w${index}`);
     expect(addWord(full, 'more')).toHaveLength(MAX_WORDS);
   });
@@ -177,13 +177,13 @@ describe('sync', () => {
     const merged: SyncedSetting[] = [
       { id: 'english', english: 'british' },
       { id: 'word:Tbilisi', word: 'Tbilisi' },
-      { id: 'word:Daviti', word: 'Daviti' },
+      { id: 'word:Mtskheta', word: 'Mtskheta' },
     ];
     expect(withSyncedSettings(tablet, merged)).toEqual({
       text: 'A letter.',
       english: 'british',
       // In alphabetical order, as the dictionary keeps them; Kutaisi was deleted elsewhere.
-      words: ['Daviti', 'Tbilisi'],
+      words: ['Mtskheta', 'Tbilisi'],
     });
     expect(withSyncedSettings(tablet, syncedSettings(tablet))).toEqual(tablet);
   });
