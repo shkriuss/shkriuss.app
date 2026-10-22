@@ -105,6 +105,18 @@ describe('checkSchedule', () => {
     });
   });
 
+  it('turns down messages too big to keep in all', () => {
+    // 500 messages of 4 KB: about 2.7 million characters.
+    const big = toBase64Url(new Uint8Array(LIMITS.payloadBytes));
+    const entries = Array.from({ length: 500 }, (_, index) =>
+      entry({ id: `e${index}`, payload: big }),
+    );
+    expect(checkSchedule(request({ entries }))).toEqual({
+      ok: false,
+      error: 'Messages too big in all.',
+    });
+  });
+
   it('keeps the time zone under its own name, however it was spelt', () => {
     const result = checkSchedule(request({ timeZone: 'aSiA/tBiLiSi' }));
     expect(result.ok && result.value.timeZone).toBe('Asia/Tbilisi');

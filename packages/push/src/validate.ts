@@ -17,8 +17,13 @@ export const LIMITS = {
   /** Reminders up to 4 weeks before, or up to a day after (all-day events at 9:00). */
   maxOffsetBefore: 4 * 7 * 1440,
   maxOffsetAfter: 1440,
-  /** A whole request (500 messages of 4 KB as base64 is about 2.8 MB). */
-  requestBytes: 3_000_000,
+  /**
+   * All of a device's messages together, as sent (base64url characters). The
+   * server keeps a schedule as one value, which can be at most 2 MB.
+   */
+  payloadsLength: 1_500_000,
+  /** A whole request: the messages, and room for the rest (about 200 characters an entry). */
+  requestBytes: 1_650_000,
 } as const;
 
 export interface ScheduleEntry extends Timing {
@@ -131,12 +136,16 @@ export function checkSchedule(value: unknown, allowLocal = false): Checked<Sched
     return { ok: false, error: `Up to ${LIMITS.entries} entries.` };
   }
   const ids = new Set<string>();
+  let payloadsLength = 0;
   for (const [index, entry] of entries.entries()) {
     const error = entryProblem(entry);
     if (error) return { ok: false, error: `Entry ${index}: ${error}` };
-    const id = (entry as ScheduleEntry).id;
+    const { id, payload } = entry as ScheduleEntry;
     if (ids.has(id)) return { ok: false, error: `Entry ${index}: id used twice.` };
     ids.add(id);
+    payloadsLength += payload.length;
+    if (payloadsLength > LIMITS.payloadsLength)
+      return { ok: false, error: 'Messages too big in all.' };
   }
   // Keep only the fields we know (nothing else gets stored).
   const clean = (entries as ScheduleEntry[]).map(

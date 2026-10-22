@@ -52,8 +52,9 @@ browsers like IronFox receive Web Push through **UnifiedPush**.
   (every message fails or is refused), the device is forgotten too: a real
   push service accepts them. One signature covers a whole wake-up (it lasts
   12 hours), not one per message.
-- **Limits:** 500 scheduled notifications per device, 4 KB per message,
-  https push addresses with a domain name only (no redirects), schedule
+- **Limits:** 500 scheduled notifications per device, 4 KB per message and
+  1.5 MB of messages in all (so a schedule fits in one stored value; the app
+  sends the soonest ones that fit), https push addresses with a domain name only (no redirects), schedule
   changes rate-limited, and at most 2,000 messages per app per day (UTC):
   past that, sending waits until 00:00 UTC.
 - **Not stored in backups:** the device key and subscription keys live under

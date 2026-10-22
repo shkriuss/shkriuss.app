@@ -6,6 +6,7 @@
 import { randomBytes, toBase64Url } from '@shkriuss/crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { deviceKey, memoryPush } from './testing.ts';
+import { LIMITS } from './validate.ts';
 
 const ORIGIN = 'https://calendar.example';
 const ENDPOINT = 'https://push.example.com/device-1';
@@ -209,6 +210,31 @@ describe('the app’s daily limit', () => {
     expect(perDay).toEqual([2000, 2000]);
     // Every device is still there, waiting for its next time.
     expect([...server.devices.values()].every(({ storage }) => storage.alarm !== null)).toBe(true);
+  });
+});
+
+describe('size', () => {
+  it('keeps the biggest schedule the checks allow, in one stored value', async () => {
+    // 500 entries with the longest ids, and messages adding up to the limit.
+    const payload = toBase64Url(randomBytes(((LIMITS.payloadsLength / LIMITS.entries) * 3) / 4));
+    const entries = Array.from({ length: LIMITS.entries }, (_, index) =>
+      entry({
+        id: String(index).padStart(LIMITS.idLength, '0'),
+        repeat: 'monthly',
+        until: '2099-12-31',
+        offset: -LIMITS.maxOffsetAfter,
+        payload,
+      }),
+    );
+    expect((await device().schedule(entries)).status).toBe(200);
+  });
+
+  it('turns down a schedule too big to keep, instead of failing', async () => {
+    const payload = toBase64Url(randomBytes(LIMITS.payloadBytes));
+    const entries = Array.from({ length: LIMITS.entries }, (_, index) =>
+      entry({ id: `e${index}`, payload }),
+    );
+    expect((await device().schedule(entries)).status).toBe(413);
   });
 });
 

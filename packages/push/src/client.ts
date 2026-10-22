@@ -248,8 +248,12 @@ export async function syncPush(
   }
   const target = { p256dh: fromBase64Url(state.p256dh), auth: fromBase64Url(state.auth) };
   const entries = [];
+  let payloadsLength = 0;
   for (const [index, notice] of upcoming.entries()) {
     const payload = toBase64Url(await encryptPayload(messageOf(notice), target));
+    // Only as many as the server can keep (very long texts make big messages).
+    payloadsLength += payload.length;
+    if (payloadsLength > LIMITS.payloadsLength) break;
     const { start, repeat, until, offset } = notice;
     // A number, never the app's own id: an imported event's id can say where it came from.
     entries.push({ id: String(index + 1), start, repeat, until, offset, payload });
@@ -262,7 +266,7 @@ export async function syncPush(
   if (!response.ok)
     throw new PushError('refused', 'The notification service didn’t accept the update.');
   store({ ...state, synced: { hash, at: now } });
-  return upcoming.length;
+  return entries.length;
 }
 
 /** Sends one notification to this device right now. */

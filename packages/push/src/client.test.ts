@@ -122,6 +122,22 @@ describe('syncPush', () => {
     expect(storedIds()).toEqual(['1', '2', '3']);
   });
 
+  it('sends only as many very long reminders as the server can keep', async () => {
+    // Texts that make messages of about 4 KB each (characters written as \u0001).
+    const long = (index: number) =>
+      notice({
+        id: `n${index}`,
+        start: `2099-01-01T${String(Math.floor(index / 60) % 24).padStart(2, '0')}:${String(index % 60).padStart(2, '0')}`,
+        repeat: 'yearly',
+        title: '\u0001'.repeat(200),
+        body: '\u0001'.repeat(450),
+      });
+    const scheduled = await syncPush(Array.from({ length: 500 }, (_, index) => long(index)));
+    expect(scheduled).toBeGreaterThan(200);
+    expect(scheduled).toBeLessThan(500);
+    expect(storedIds()).toHaveLength(scheduled);
+  });
+
   it('tells a server that answers with a problem apart from one it can’t reach', async () => {
     network = 'failing';
     const failing = await syncPush([notice()], { force: true }).catch((error: unknown) => error);
