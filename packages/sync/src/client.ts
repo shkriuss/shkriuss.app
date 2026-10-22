@@ -209,6 +209,12 @@ interface DeviceState {
   known: Record<string, Known>;
   /** True when `known` holds a merge that isn't online yet (the upload failed). */
   dirty: boolean;
+  /**
+   * The online copy as this device last saw it (its epoch, and per store key
+   * what it held). `known` runs ahead of it after a failed upload, or edits
+   * while sync was off; keeping both versions needs to know what was online.
+   */
+  base: { epoch: string; stores: Record<string, Known> } | null;
   last: number | null;
   /** The app's keys from replaced account keys: their online copies are moved here, then deleted. */
   previous: string[];
@@ -224,12 +230,17 @@ function loadState(): DeviceState | null {
     const state = value as Partial<Record<keyof DeviceState, unknown>>;
     const on = typeof state.secret === 'string' && typeof state.code === 'string';
     if (!on && state.secret !== null) return null;
+    const base = state.base as Partial<NonNullable<DeviceState['base']>> | null | undefined;
     return {
       secret: on ? (state.secret as string) : null,
       code: on ? (state.code as string) : null,
       remote: (state.remote as DeviceState['remote'] | undefined) ?? null,
       known: (state.known as DeviceState['known'] | undefined) ?? {},
       dirty: state.dirty === true,
+      base:
+        typeof base?.epoch === 'string' && typeof base.stores === 'object' && base.stores !== null
+          ? (base as DeviceState['base'])
+          : null,
       last: typeof state.last === 'number' ? state.last : null,
       previous: strings(state.previous),
     };
@@ -342,6 +353,7 @@ export function saveConnection(connection: Connection): boolean {
     remote: null,
     known: existing?.known ?? {},
     dirty: existing?.dirty ?? false,
+    base: existing?.base ?? null,
     last: null,
     previous,
   });
@@ -597,16 +609,23 @@ export function createSync(options: {
 
     // 3. Merge.
     const merged: Stores = {};
+    /** What the online copy holds now, as this device has seen it. */
+    const seen: Record<string, Known> = {};
     let kept = 0;
     for (const synced of stores) {
+      const { version } = synced.store;
       let result = local[synced.store.key] as StoreSnapshot;
       const known = state.known[synced.store.key];
       const online = remote.kind === 'copy' ? remote.stores[synced.store.key] : undefined;
       if (online) {
         const theirs = upgrade(synced, online);
-        // Keeping both needs to know what this device had, in today's data version.
-        if (synced.conflictCopy && known?.v === synced.store.version) {
-          const both = keepBoth(known, result, theirs, synced.conflictCopy, now);
+        seen[synced.store.key] = knownFrom(theirs);
+        // Keeping both compares with the copy as this device last saw it (or
+        // what it knew, if it last saw another copy), in today's data version.
+        const sameCopy = remote.kind === 'copy' && state.base?.epoch === remote.epoch;
+        const base = sameCopy ? state.base?.stores[synced.store.key] : known;
+        if (synced.conflictCopy && known?.v === version && base?.v === version) {
+          const both = keepBoth(base, result, theirs, synced.conflictCopy, now);
           result = both.snapshot;
           kept += both.kept;
         }
@@ -653,10 +672,18 @@ export function createSync(options: {
             (synced) =>
               canonical(merged[synced.store.key]) === canonical(remote.stores[synced.store.key]),
           );
+    const knowns = knownsOf(merged);
     if (!same) {
       // Remember the merge first: if the upload fails, the next round uploads it
       // as it is, instead of mistaking it for new edits made on this device.
-      if (!updateState(secret, { known: knownsOf(merged), dirty: true })) {
+      // And remember what was online, for keeping both versions.
+      const seenOnline =
+        remote.kind === 'copy'
+          ? { epoch: remote.epoch, stores: seen }
+          : remote.kind === 'none'
+            ? null
+            : state.base;
+      if (!updateState(secret, { known: knowns, dirty: true, base: seenOnline })) {
         throw new SyncError('storage');
       }
       const data = await sealStores(key, options.app, merged);
@@ -675,8 +702,9 @@ export function createSync(options: {
       online = (await response.json()) as { version: number; epoch: string };
     }
 
-    // 6. Remember.
-    const saved = { remote: online, known: knownsOf(merged), dirty: false, last: now };
+    // 6. Remember. The copy online is now the merge.
+    const base = online ? { epoch: online.epoch, stores: knowns } : null;
+    const saved = { remote: online, known: knowns, dirty: false, base, last: now };
     if (!updateState(secret, saved)) throw new SyncError('storage');
 
     // 7. The old copies are in the new one now (and their files, re-sealed with

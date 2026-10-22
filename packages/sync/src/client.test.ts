@@ -558,6 +558,89 @@ describe('syncing between devices', () => {
     vi.useRealTimers();
   });
 
+  it('keeps both versions when this device’s upload had failed', async () => {
+    const secret = randomBytes(32);
+    const phone = new Device(secret, 1, true);
+    const tablet = new Device(secret, 1, true);
+    phone.counters = [counter('water')];
+    await phone.syncNow();
+    await tablet.syncNow();
+
+    // The tablet's change doesn't get online: its upload fails.
+    vi.setSystemTime(Date.now() + 1000);
+    tablet.counters = [counter('water', 5)];
+    const restore = intercept((_path, init) =>
+      init?.method === 'PUT' ? new Response('{}', { status: 503 }) : undefined,
+    );
+    expect((await tablet.syncNow()).problem).toBe('offline');
+    restore();
+    // Meanwhile the phone changes it too.
+    vi.setSystemTime(Date.now() + 1000);
+    phone.counters = [counter('water', 2)];
+    await phone.syncNow();
+
+    vi.setSystemTime(Date.now() + 1000);
+    await tablet.syncNow();
+    expect(tablet.counters).toEqual([
+      counter('water', 2),
+      { ...counter('water-2', 5), name: 'water (2)' },
+    ]);
+  });
+
+  it('makes no copies of another device’s edits merged in before an upload failed', async () => {
+    const secret = randomBytes(32);
+    const phone = new Device(secret, 1, true);
+    const tablet = new Device(secret, 1, true);
+    phone.counters = [counter('water'), counter('tea')];
+    await phone.syncNow();
+    await tablet.syncNow();
+
+    // The tablet merges in the phone's change, but its own upload fails.
+    vi.setSystemTime(Date.now() + 1000);
+    phone.counters = [counter('water', 2), counter('tea')];
+    await phone.syncNow();
+    tablet.counters = [counter('water'), counter('tea', 1)];
+    const restore = intercept((_path, init) =>
+      init?.method === 'PUT' ? new Response('{}', { status: 503 }) : undefined,
+    );
+    await tablet.syncNow();
+    restore();
+    expect(tablet.counters).toEqual([counter('water', 2), counter('tea', 1)]);
+
+    // The phone changes water again: only the phone changed it.
+    vi.setSystemTime(Date.now() + 1000);
+    phone.counters = [counter('water', 3), counter('tea')];
+    await phone.syncNow();
+    vi.setSystemTime(Date.now() + 1000);
+    await tablet.syncNow();
+    expect(tablet.counters).toEqual([counter('water', 3), counter('tea', 1)]);
+    expect(tablet.events).not.toContain('kept-both');
+  });
+
+  it('keeps both versions of what was changed while sync was off', async () => {
+    const secret = randomBytes(32);
+    const phone = new Device(secret, 1, true);
+    const tablet = new Device(secret, 1, true);
+    phone.counters = [counter('water')];
+    await phone.syncNow();
+    await tablet.syncNow();
+
+    tablet.sync.turnOff();
+    vi.setSystemTime(Date.now() + 1000);
+    tablet.counters = [counter('water', 5)];
+    vi.setSystemTime(Date.now() + 1000);
+    phone.counters = [counter('water', 2)];
+    await phone.syncNow();
+
+    vi.setSystemTime(Date.now() + 1000);
+    tablet.connect(secret);
+    await tablet.syncNow();
+    expect(tablet.counters).toEqual([
+      counter('water', 2),
+      { ...counter('water-2', 5), name: 'water (2)' },
+    ]);
+  });
+
   it('makes no copies on the first sync after updating from an older version', async () => {
     const secret = randomBytes(32);
     const phone = new Device(secret, 1, true);
