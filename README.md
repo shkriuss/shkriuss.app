@@ -39,6 +39,7 @@ You never need a computer:
 | [docs/design-system.md](docs/design-system.md) | Colours, components, and changing the look everywhere               |
 | [docs/deployment.md](docs/deployment.md)       | Cloudflare, previews, production deploys, rolling back              |
 | [docs/quality.md](docs/quality.md)             | Every automatic check and what to do when one fails                 |
+| [docs/audit/](docs/audit/)                     | The audit brief, and the prompts for auditing with AI tools         |
 | [docs/adr/](docs/adr/)                         | Short records of the main decisions and why                         |
 | [SECURITY.md](SECURITY.md)                     | Security model and how to report a problem                          |
 | [CLAUDE.md](CLAUDE.md)                         | Rules and commands for AI assistants and developers                 |
