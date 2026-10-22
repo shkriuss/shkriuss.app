@@ -112,11 +112,18 @@ test('backs up, deletes and restores the data', async ({ page }) => {
   expect(file.app).toBe('tally');
   expect(file.data['shkriuss:tally'].data.counters[0]).toMatchObject({ name: 'Water', count: 1 });
 
+  // Something an app downloaded into its own cache (like Grammar's model), and the offline copy.
+  await page.evaluate(async () => {
+    await (await caches.open('downloads')).put('/big-file', new Response('model'));
+    await (await caches.open('shkriuss-offline-copy')).put('/', new Response('page'));
+  });
   await page.getByRole('button', { name: 'Delete all data' }).click();
   const deleteDialog = page.getByRole('dialog', { name: 'Delete all data?' });
   await deleteDialog.getByRole('button', { name: 'Delete everything' }).click();
   await page.waitForLoadState('load');
   await expect(page.getByText('No counters yet')).toBeVisible();
+  // The download is gone too; the offline copy of the site stays.
+  expect(await page.evaluate(() => caches.keys())).toEqual(['shkriuss-offline-copy']);
 
   // Restore the locked backup.
   const chooser = page.waitForEvent('filechooser');

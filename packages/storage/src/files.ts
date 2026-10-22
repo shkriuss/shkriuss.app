@@ -140,11 +140,14 @@ export function keepFiles(): Promise<void> {
 }
 
 /**
- * Deletes every file this site saved ("Delete all data"). Resolves when it's
- * done, or after `waitMs` if the browser is slow to: the caller reloads anyway.
+ * Deletes every file this site saved ("Delete all data"): the files database,
+ * and what an app downloaded into its own cache, like Grammar's Deep check
+ * model. The offline copy of the site (caches named "shkriuss-…") stays.
+ * Resolves when it's done, or after `waitMs` if the browser is slow to: the
+ * caller reloads anyway.
  */
 export function deleteAllFiles(waitMs = 3000): Promise<void> {
-  return new Promise<void>((resolve) => {
+  const database = new Promise<void>((resolve) => {
     const done = () => resolve();
     window.setTimeout(done, waitMs);
     try {
@@ -158,4 +161,17 @@ export function deleteAllFiles(waitMs = 3000): Promise<void> {
       done();
     }
   });
+  return Promise.all([database, deleteDownloads()]).then(() => undefined);
+}
+
+/** Caches an app keeps itself (not the offline copy, "shkriuss-…"). */
+async function deleteDownloads(): Promise<void> {
+  try {
+    const names = await caches.keys();
+    await Promise.all(
+      names.filter((name) => !name.startsWith('shkriuss-')).map((name) => caches.delete(name)),
+    );
+  } catch {
+    // No Cache Storage here: nothing was downloaded into it.
+  }
 }
