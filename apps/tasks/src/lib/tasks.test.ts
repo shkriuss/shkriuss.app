@@ -124,6 +124,7 @@ describe('the form', () => {
       time: '10:00',
       repeat: 'monthly',
       every: 3,
+      day: 1,
       reminder: 60,
       done: null,
       created: 5000,
@@ -259,6 +260,49 @@ describe('changes', () => {
         updated: 5000,
       },
     ]);
+  });
+
+  it('comes back to its day of the month after a short month', () => {
+    const tickedOnTime = (start: Task, times: number) => {
+      let current = start;
+      const dates: (string | null)[] = [];
+      for (let time = 0; time < times; time += 1) {
+        const due = current.date ?? '';
+        const { state } = completeTask(stateOf(current), current.id, 5000, due, `copy${time}`);
+        current = state.tasks.find((entry) => entry.id === start.id) ?? current;
+        dates.push(current.date);
+      }
+      return dates;
+    };
+    const rent = task({ title: 'Pay rent', date: '2026-01-31', repeat: 'monthly' });
+    expect(rent.day).toBe(31);
+    expect(tickedOnTime(rent, 5)).toEqual([
+      '2026-02-28',
+      '2026-03-31',
+      '2026-04-30',
+      '2026-05-31',
+      '2026-06-30',
+    ]);
+    const leap = task({ title: 'Birthday', date: '2024-02-29', repeat: 'yearly' });
+    expect(tickedOnTime(leap, 4)).toEqual(['2025-02-28', '2026-02-28', '2027-02-28', '2028-02-29']);
+    // Saved before tasks kept their day: from its date's day, which it then keeps.
+    const { day: _day, ...older } = { ...rent, date: '2026-02-28' as const };
+    expect(tickedOnTime(older as Task, 2)).toEqual(['2026-03-28', '2026-04-28']);
+  });
+
+  it('keeps its day of the month when edited, unless its date is changed', () => {
+    const rent = task({ title: 'Pay rent', date: '2026-01-31', repeat: 'monthly' });
+    const moved = completeTask(stateOf(rent), rent.id, 5000, '2026-01-31', 'copy').state.tasks[1];
+    expect(moved).toMatchObject({ date: '2026-02-28', day: 31 });
+    const draft = draftOf(moved as Task);
+    expect(taskFromDraft({ ...draft, title: 'Rent' }, rent.id, 6000, moved).day).toBe(31);
+    expect(taskFromDraft({ ...draft, date: '2026-03-15' }, rent.id, 6000, moved).day).toBe(15);
+    expect(taskFromDraft({ ...draft, repeat: 'weekly' }, rent.id, 6000, moved)).not.toHaveProperty(
+      'day',
+    );
+    expect(isTasksState(stateOf({ ...rent, day: 31 }))).toBe(true);
+    expect(isTasksState(stateOf({ ...rent, day: 32 }))).toBe(false);
+    expect(isTasksState(stateOf({ ...rent, day: 1.5 }))).toBe(false);
   });
 
   it('is simply done when there’s no next date before 9999-12-31', () => {
