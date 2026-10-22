@@ -17,6 +17,7 @@
     "./layouts/*": "./src/layouts/*",
     "./push-controls": "./src/scripts/push-controls.ts",
     "./numbers": "./src/lib/numbers.ts",
+    "./text": "./src/lib/text.ts",
     "./qr-code": "./src/scripts/qr-code.ts",
     "./service-worker": "./src/scripts/service-worker.ts",
     "./sync-controls": "./src/scripts/sync-controls.ts",

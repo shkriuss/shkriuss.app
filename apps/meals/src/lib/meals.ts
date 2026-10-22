@@ -28,6 +28,7 @@ import {
 } from '@shkriuss/dates';
 import type { Notice } from '@shkriuss/push';
 import { secondVersionName } from '@shkriuss/sync';
+import { compareText } from '@shkriuss/ui/text';
 
 export const LIMITS = { name: 100, ingredient: 100, notes: 5000 } as const;
 export const MAX_INGREDIENTS = 60;
@@ -44,8 +45,7 @@ export const fold = (text: string): string =>
   text.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase().trim().replace(/\s+/g, ' ');
 
 /** Alphabetical order, without minding case or accents. */
-export const byText = (a: string, b: string): number =>
-  a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true });
+export const byText = compareText;
 
 /** Trimmed, with runs of spaces made one. */
 const tidy = (text: string): string => text.trim().replace(/\s+/g, ' ');

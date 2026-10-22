@@ -23,6 +23,7 @@
  */
 import { isIsoDate, type IsoDate } from '@shkriuss/dates';
 import { parseDecimal } from '@shkriuss/ui/numbers';
+import { compareText } from '@shkriuss/ui/text';
 
 export interface Vehicle {
   id: string;
@@ -246,8 +247,7 @@ const fold = (text: string): string =>
 const oneLine = (text: string): string => text.trim().replace(/\s+/g, ' ');
 
 /** "Bus 2" before "Bus 10". */
-const byName = (a: string, b: string): number =>
-  a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+const byName = compareText;
 
 // ---------- Vehicles ----------
 

@@ -391,8 +391,13 @@ export function mountTasks(root: Document): void {
     }
     doneSection.hidden = done.length === 0;
     doneSummary.textContent = `Done (${done.length})`;
-    doneList.replaceChildren(...done.map(renderTask));
+    // Done tasks are drawn only while their list is open: there can be thousands.
+    doneList.replaceChildren(...(doneSection.open ? done.map(renderTask) : []));
   }
+
+  doneSection.addEventListener('toggle', () => {
+    if (doneSection.open) render();
+  });
 
   // ---------- Adding, and ticking off ----------
 

@@ -24,6 +24,7 @@ import {
   type Stamp,
 } from '@shkriuss/dates';
 import type { Notice } from '@shkriuss/push';
+import { compareText } from '@shkriuss/ui/text';
 
 export const REPEATS = ['none', 'daily', 'weekdays', 'weekly', 'monthly', 'yearly'] as const;
 export type Repeat = (typeof REPEATS)[number];
@@ -668,8 +669,7 @@ export const fold = (text: string): string =>
   text.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase().trim();
 
 /** Alphabetical order, without minding case or accents. */
-export const byText = (a: string, b: string): number =>
-  a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true });
+export const byText = compareText;
 
 /** "1 of 4 steps", or "" without steps. */
 export function stepsText(task: Task): string {

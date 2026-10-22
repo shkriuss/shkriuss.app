@@ -7,6 +7,7 @@
  */
 import { isIsoDate, parts, type IsoDate } from '@shkriuss/dates';
 import { secondVersionName } from '@shkriuss/sync';
+import { compareText } from '@shkriuss/ui/text';
 
 /** An item's category when it has none. Categories themselves: ./categories.ts. */
 export const NO_CATEGORY = '';
@@ -261,8 +262,7 @@ export const fold = (text: string): string =>
   text.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase().trim();
 
 /** Alphabetical order, without minding case or accents ("item 2" before "item 10"). */
-export const byText = (a: string, b: string): number =>
-  a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true });
+export const byText = compareText;
 
 /** The item's category, or NO_CATEGORY if it's not one of `known` (deleted on another device). */
 const categoryOf = (item: Item, known: ReadonlySet<string>): string =>
