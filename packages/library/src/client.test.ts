@@ -326,18 +326,24 @@ function recordsStore(version: 1 | 2) {
     if (!isRecords(data) || from > version) return undefined;
     return from === version ? data : { items: [...tidyRecords(data.items)] };
   };
+  const saved = () =>
+    JSON.parse(localStorage.getItem(key) ?? 'null') as { v: number; data: unknown } | null;
   return {
     key,
     version,
     empty: (): Records => ({ items: [] }),
     read,
     load(): Records {
-      const saved = JSON.parse(localStorage.getItem(key) ?? 'null') as {
-        v: number;
-        data: unknown;
-      } | null;
-      return (saved && read(saved.v, saved.data)) ?? { items: [] };
+      const raw = saved();
+      return (raw && read(raw.v, raw.data)) ?? { items: [] };
     },
+    status(): 'empty' | 'ok' | 'newer' | 'unreadable' {
+      const raw = saved();
+      if (raw === null) return 'empty';
+      if (raw.v > version) return 'newer';
+      return read(raw.v, raw.data) ? 'ok' : 'unreadable';
+    },
+    raw: () => saved(),
     save(value: Records): boolean {
       localStorage.setItem(key, JSON.stringify({ v: version, data: value }));
       return true;
