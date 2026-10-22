@@ -1,0 +1,36 @@
+# Keeps Grammar's Deep check model (361 MB, from Hugging Face) between runs,
+# so builds and deploys don't need Hugging Face once it's been downloaded
+# (audit finding Z-3). The cache is named after the model's SHA-256, and the
+# build checks that checksum whatever the cache holds
+# (apps/grammar/scripts/deep-check-files.ts). Only the checks job saves to
+# the cache; jobs that deploy only read it.
+name: Deep check model
+description: Restore Grammar's Deep check model from the cache (and save it, if asked)
+inputs:
+  save:
+    description: '"true" to also save the model to the cache when the job ends'
+    required: false
+    default: 'false'
+runs:
+  using: composite
+  steps:
+    - name: Find the model's checksum
+      id: model
+      shell: bash
+      run: |
+        sha256=$(grep -oE "sha256: '[0-9a-f]{64}'" apps/grammar/scripts/deep-check-files.ts | grep -oE '[0-9a-f]{64}' | head -1)
+        echo "sha256=${sha256}" >> "$GITHUB_OUTPUT"
+
+    - name: Restore the model (and save it after the job)
+      if: inputs.save == 'true'
+      uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+      with:
+        path: apps/grammar/.cache
+        key: deep-check-model-${{ steps.model.outputs.sha256 }}
+
+    - name: Restore the model
+      if: inputs.save != 'true'
+      uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+      with:
+        path: apps/grammar/.cache
+        key: deep-check-model-${{ steps.model.outputs.sha256 }}

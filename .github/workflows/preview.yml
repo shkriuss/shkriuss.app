@@ -67,6 +67,10 @@ jobs:
         if: steps.token.outputs.ready == 'true'
         uses: ./.github/actions/setup
 
+      - name: Grammar's Deep check model, from the cache
+        if: steps.token.outputs.ready == 'true'
+        uses: ./.github/actions/deep-check-model
+
       - name: Build every site
         if: steps.token.outputs.ready == 'true'
         run: pnpm build

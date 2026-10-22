@@ -88,6 +88,7 @@ The prompts to give each AI tool are in [prompts.md](prompts.md).
 | A file someone imports                              | Calendar files (`.ics`), backups, photos (Exif) and data synced from another device are untrusted input.                       |
 | A pull request from someone's fork, or a dependency | Try to run code in CI with secrets, or ship code to production (supply chain).                                                 |
 | Someone with a person's unlocked, signed-in device  | Out of scope, except that "Replace the account key" must shut that device out, and "Delete all data" must delete it.           |
+| An outside service we depend on                     | Hugging Face, npm, the push services or GitHub can fail, slow down or disappear. That mustn't stop a fix from being deployed.  |
 
 **Security goals:**
 
@@ -99,6 +100,9 @@ The prompts to give each AI tool are in [prompts.md](prompts.md).
 5. Pages run only our own code, and load nothing from other websites.
 6. "Delete" deletes, on the device and online.
 7. Only code that passed every check in CI reaches production.
+8. No stranger can lock people out of a feature (a limit that protects the
+   bill must not let one person block everyone), and no outside service can
+   stop a fix from being deployed.
 
 ## Intentional choices
 

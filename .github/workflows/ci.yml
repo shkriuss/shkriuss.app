@@ -40,6 +40,11 @@ jobs:
       - name: Set up
         uses: ./.github/actions/setup
 
+      - name: Grammar's Deep check model, from the cache
+        uses: ./.github/actions/deep-check-model
+        with:
+          save: 'true'
+
       - name: Formatting (Prettier)
         run: pnpm format:check
 
@@ -176,6 +181,9 @@ jobs:
         with:
           name: dist
           path: apps/
+
+      - name: Grammar's Deep check model, from the cache
+        uses: ./.github/actions/deep-check-model
 
       - name: Add the on-demand downloads (left out of the saved build)
         run: pnpm -r --filter "./apps/*" --if-present run on-demand-into-dist
