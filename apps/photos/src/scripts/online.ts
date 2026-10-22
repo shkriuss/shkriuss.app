@@ -1,7 +1,8 @@
 /**
  * Photos' online library (docs/adr/0016-online-photo-library.md). Sync
- * through the shkriuss account (@shkriuss/sync) carries the library's id and
- * keys; @shkriuss/library talks to its server. After each sync, this:
+ * through the shkriuss account (@shkriuss/sync) carries the libraries' ids
+ * and keys; @shkriuss/library says which library to use, and talks to its
+ * server. After each sync, this:
  *
  *   1. brings in changes from other devices (lib/online.ts),
  *   2. deletes online what was deleted here,
@@ -12,12 +13,13 @@
  * only to save it.
  */
 import {
-  isLibraryRecord,
   libraryAccess,
   libraryApi,
   LibraryError,
-  libraryRecord,
   linkedLibrary,
+  tidyRecords,
+  usableRecord,
+  useLibrary,
   type LibraryApi,
   type LibraryProblem,
   type LibraryRecord,
@@ -26,9 +28,11 @@ import { createStore } from '@shkriuss/storage';
 import { createSync, syncedStore, type SyncClient } from '@shkriuss/sync';
 import {
   applyChanges,
+  RECORDS,
   waitingToGoUp,
   type OnlineProblem,
   type OnlineState,
+  type Records,
 } from '../lib/online.ts';
 import { detailsOf, PARTS, type Photo } from '../lib/photos.ts';
 import {
@@ -48,21 +52,9 @@ const UPLOADS_PER_ROUND = 10;
 /** Thumbnails asked for within this long go in one request. */
 const THUMBS_DELAY_MS = 50;
 
-/** The library's record, kept in the synced copy (it moves with a new account key). */
-interface Records {
-  items: LibraryRecord[];
-}
-const records = createStore<Records>({
-  key: 'library',
-  version: 1,
-  fallback: () => ({ items: [] }),
-  validate: (value): value is Records =>
-    typeof value === 'object' &&
-    value !== null &&
-    Array.isArray((value as Records).items) &&
-    (value as Records).items.every(isLibraryRecord),
-});
-const currentRecord = () => records.load().items.find((item) => item.id === 'library');
+/** The libraries' records, kept in the synced copy (they move with a new account key). */
+const records = createStore<Records>(RECORDS);
+const allRecords = () => tidyRecords(records.load().items);
 
 /** The page's photos, and how to show changes to them (already saved on the device). */
 export interface PhotoList {
@@ -122,6 +114,13 @@ export function startOnline(list: PhotoList): Online {
   let running = false;
   let again = false;
   let timer: number | undefined;
+  /**
+   * A sync with the account finished since Photos opened (or connected): a
+   * library is only started, or another one used, after one.
+   */
+  let synced = false;
+  /** The library in use (its id). */
+  let inUse = '';
 
   const emit = () => {
     for (const listener of listeners) listener();
@@ -147,37 +146,45 @@ export function startOnline(list: PhotoList): Online {
     removals,
   });
 
-  async function connect(): Promise<LibraryApi | null> {
+  /** Talks to `record`'s library, or else to the one to use now, if there's one. */
+  async function connect(record?: LibraryRecord): Promise<LibraryApi | null> {
     const secret = sync.secret();
-    const record = currentRecord();
-    return secret && record ? libraryApi(await libraryAccess(secret, record)) : null;
+    const found = record ?? (secret ? await usableRecord(secret, allRecords()) : undefined);
+    return secret && found ? libraryApi(await libraryAccess(secret, found)) : null;
   }
 
-  /** The library's record: made by the first device, gaining each new account key. */
-  async function ensureRecord(): Promise<boolean> {
+  /**
+   * The library to use: the oldest this account can (useLibrary). The first
+   * device makes it, once a sync has finished and found none; records saved
+   * by older versions are tidied.
+   */
+  async function ensureRecord(): Promise<LibraryRecord | undefined> {
     const secret = sync.secret();
-    if (!secret) return false;
-    const existing = currentRecord();
-    const next = await libraryRecord(secret, existing);
-    if (next === existing) return true;
-    const others = records.load().items.filter((item) => item.id !== 'library');
-    if (!records.save({ items: [...others, next] })) {
-      problem = 'storage';
-      return false;
+    if (!secret) return undefined;
+    const saved = records.load().items;
+    const chosen = await useLibrary(secret, saved, synced);
+    if (chosen.records !== saved) {
+      if (!records.save({ items: [...chosen.records] })) {
+        problem = 'storage';
+        return undefined;
+      }
+      sync.changed();
     }
-    sync.changed();
-    return true;
+    return chosen.record;
   }
 
-  /** What was online is gone (the library was deleted): photos only there go too. */
-  async function forgetOnline(): Promise<void> {
+  /**
+   * What was online is gone (the library was deleted), or in another library
+   * now: photos only there go too, and those here go up again.
+   */
+  async function forgetOnline(library?: string, removals: string[] = []): Promise<void> {
     const all = list.all();
     const gone = all.filter((photo) => !photo.here).map((photo) => photo.id);
     const stay = all.filter((photo) => photo.here && photo.online);
     const offline = stay.map((photo) => ({ ...photo, online: null }));
     if (offline.length > 0) await saveDetails(offline);
     if (gone.length > 0) await deletePhotos(gone);
-    await updateProgress((current) => fresh(current?.library ?? ''));
+    await updateProgress((current) => fresh(library ?? current?.library ?? '', removals));
     list.changed({ save: offline, remove: gone });
   }
 
@@ -197,12 +204,16 @@ export function startOnline(list: PhotoList): Online {
   }
 
   /** Brings in changes from other devices, a page at a time. */
-  async function pull(api: LibraryApi): Promise<void> {
-    const library = currentRecord()?.library ?? '';
+  async function pull(api: LibraryApi, library: string): Promise<void> {
     for (;;) {
       const before = await loadProgress();
-      const progress =
-        before && before.library === library ? before : fresh(library, before?.removals);
+      if (before && before.library !== library) {
+        // Another library now (another account's, or an older one of this
+        // account's): photos here are found in it, or go up to it again.
+        await forgetOnline(library, before.removals);
+        continue;
+      }
+      const progress = before ?? fresh(library);
       const page = await api.changes(progress.since);
       checked = true;
       unlocked = page.unlocked;
@@ -238,7 +249,7 @@ export function startOnline(list: PhotoList): Online {
     await api.remove(removals);
     const sent = new Set(removals);
     await updateProgress((current) => ({
-      ...(current ?? fresh(currentRecord()?.library ?? '')),
+      ...(current ?? fresh(inUse)),
       removals: (current?.removals ?? []).filter((id) => !sent.has(id)),
     }));
   }
@@ -263,7 +274,7 @@ export function startOnline(list: PhotoList): Online {
         if (!now) {
           // Deleted here while it was going up.
           await updateProgress((current) => ({
-            ...(current ?? fresh(currentRecord()?.library ?? '')),
+            ...(current ?? fresh(inUse)),
             removals: [...(current?.removals ?? []), photo.id],
           }));
           again = true;
@@ -285,7 +296,7 @@ export function startOnline(list: PhotoList): Online {
           // Online already (an answer that got lost): the list says where, from the start.
           skip.add(photo.id);
           await updateProgress((current) => ({
-            ...(current ?? fresh(currentRecord()?.library ?? '')),
+            ...(current ?? fresh(inUse)),
             since: 0,
           }));
           again = true;
@@ -310,11 +321,17 @@ export function startOnline(list: PhotoList): Online {
     }
     running = true;
     try {
-      if (!(await ensureRecord())) return;
-      const api = await connect();
-      if (!api) return;
+      const record = await ensureRecord();
+      // Another library only once a sync has finished: until then, the records may be half moved.
+      const api = record && (synced || record.library === inUse) ? await connect(record) : null;
+      if (!record || !api) {
+        // No library to use yet: a check of another one doesn't count.
+        checked = false;
+        return;
+      }
+      inUse = record.library;
       problem = null;
-      await pull(api);
+      await pull(api, record.library);
       await sendRemovals(api);
       await goUp(api);
     } catch (error) {
@@ -345,15 +362,28 @@ export function startOnline(list: PhotoList): Online {
       }),
     ],
     onChange: () => schedule(),
-    linked: linkedLibrary(currentRecord),
+    linked: linkedLibrary(allRecords, (items) => {
+      if (!records.save({ items: [...items] })) return false;
+      sync.changed();
+      return true;
+    }),
   });
 
   sync.subscribe((status, event) => {
-    // Only after a sync: the record from other devices (or an old key) is in by then.
-    if (event === 'synced' || event === 'kept-both') schedule();
+    // Only after a sync: the records from other devices (or an old key) are in by then.
+    if (event === 'synced' || event === 'kept-both') {
+      synced = true;
+      schedule();
+    }
+    // Connected again, maybe to another account: what this device knew is from before.
+    if (event === 'connected') {
+      synced = false;
+      checked = false;
+    }
     if (event === 'deleted-online' || status.problem === 'deleted') void forgetOnline();
     else if (event === 'turned-off' || status.problem === 'moved') void hideOnlyOnline();
     if (!status.on) {
+      synced = false;
       checked = false;
       problem = null;
     }
@@ -417,7 +447,7 @@ export function startOnline(list: PhotoList): Online {
       const online = photos.filter((photo) => photo.online).map((photo) => photo.id);
       if (online.length === 0) return;
       await updateProgress((current) => ({
-        ...(current ?? fresh(currentRecord()?.library ?? '')),
+        ...(current ?? fresh(inUse)),
         removals: [...new Set([...(current?.removals ?? []), ...online])],
       }));
       if (sync.status().on) schedule();

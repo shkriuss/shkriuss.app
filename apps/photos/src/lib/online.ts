@@ -2,10 +2,17 @@
  * The online library's rules for Photos, as plain functions
  * (docs/adr/0016-online-photo-library.md): what changes from other devices
  * do to this device's photos, which photos go up next, what "Free up space"
- * frees, and what the status line says. The work itself is in
- * ../scripts/online.ts.
+ * frees, and what the status line says; and how the libraries' records are
+ * kept. The work itself is in ../scripts/online.ts.
  */
-import type { LibraryChange, LibraryProblem } from '@shkriuss/library';
+import {
+  isLibraryRecord,
+  tidyRecords,
+  type LibraryChange,
+  type LibraryProblem,
+  type LibraryRecord,
+} from '@shkriuss/library';
+import type { StoreOptions } from '@shkriuss/storage';
 import {
   countLabel,
   detailsOf,
@@ -14,6 +21,31 @@ import {
   type OnlinePlace,
   type Photo,
 } from './photos.ts';
+
+/** The online libraries' records, kept in the synced copy (they move with a new account key). */
+export interface Records {
+  items: LibraryRecord[];
+}
+
+const isRecords = (value: unknown): value is Records =>
+  typeof value === 'object' &&
+  value !== null &&
+  Array.isArray((value as Records).items) &&
+  (value as Records).items.every(isLibraryRecord);
+
+/**
+ * The records' store. Version 2 keeps one record per library; version 1's
+ * one record ("library") becomes the record of its library. Records of
+ * version 1 can still come from other devices, and are tidied the same way.
+ */
+export const RECORDS: StoreOptions<Records> = {
+  key: 'library',
+  version: 2,
+  fallback: () => ({ items: [] }),
+  validate: isRecords,
+  migrate: (old, version) =>
+    version === 1 && isRecords(old) ? { items: [...tidyRecords(old.items)] } : undefined,
+};
 
 /** What a page of changes from the online library does here. */
 export interface Applied {

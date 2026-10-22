@@ -37,11 +37,22 @@ every device. That's far beyond what sync can hold:
   sizes of its three parts. A deleted photo leaves a small marker, so other
   devices learn of it, and its id can't be used again.
 - **The library's id and keys: in the app's synced copy**
-  ([ADR 0010](0010-account-and-sync.md)), a small store with one record:
-  the library's random-looking id and the keys photos are sealed with. Both
-  come from the app's own key (HKDF) when the library is first made, so two
-  devices starting at once make the same one. The server never sees the
-  keys, and only the account's devices know the id.
+  ([ADR 0010](0010-account-and-sync.md)), a small store with one record per
+  library (`library:<id>`, so a merge keeps every library's): the library's
+  random-looking id and the keys photos are sealed with. Both come from the
+  app's own key (HKDF) when the library is first made, so two devices
+  starting at once make the same one. A device only makes one once a sync
+  has finished and found none it can use. The server never sees the keys,
+  and only the account's devices know the id. (Version 1 of the store had a
+  single record, `library`; it's read as its library's record.)
+- **Which library a device uses:** one whose record has the device's own
+  key, because the library was made with it or moved to it. So a record
+  that came from another account is never used. Of several, the oldest: the
+  one that has come through the most account keys. When the library a
+  device uses changes (it joined another account, or an older library turned
+  up), its photos are looked for in the new one, and go up to it if they
+  aren't there. Photos that were only online in the other one stop showing
+  on that device; its record, with its keys, is kept.
 
 ### Using it
 
@@ -98,17 +109,18 @@ every device. That's far beyond what sync can hold:
 
 ### Changing the account key, and deleting
 
-- **Replacing the account key:** sync moves the copy (with the library's id
-  and keys) to the new key ([ADR 0010](0010-account-and-sync.md)). Just
-  before the old copy is deleted, the device tells the library its new
-  token, proven with the old one; the old token is refused from then on
+- **Replacing the account key:** sync moves the copy (with the libraries'
+  ids and keys) to the new key ([ADR 0010](0010-account-and-sync.md)). Just
+  before the old copy is deleted, the device tells every library the old key
+  had (not only the one in use) its new token, proven with the old one, and
+  adds the new key to their records; the old token is refused from then on
   (410, "moved"). Nothing in R2 moves. New photos are sealed with a key from
   the new account key, so the lost device can't read them; older photos
   keep their key.
-- **"Delete the online copy"** deletes the library first: the list is
-  cleared at once, then the files are deleted in batches of 1,000 (a
-  Durable Object alarm). Photos on each device stay; those only online are
-  gone. `packages/sync` gains a `linked` option for this: data an app keeps
+- **"Delete the online copy"** deletes the account's libraries first: each
+  list is cleared at once, then the files are deleted in batches of 1,000
+  (a Durable Object alarm). Photos on each device stay; those only online
+  are gone. `packages/sync` gains a `linked` option for this: data an app keeps
   online beside its copy, deleted and moved with it.
 
 ## Consequences

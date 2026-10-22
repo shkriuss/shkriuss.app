@@ -1,20 +1,27 @@
 /**
  * The library's browser side (client.ts) against the real server code in
  * memory (testing.ts): keys, sealing, changes, downloads, moving to a new
- * account key, and deleting.
+ * account key, and deleting; and, with the real sync client and server,
+ * which library devices use as their records sync.
  */
-import { randomBytes, utf8 } from '@shkriuss/crypto';
+import { randomBytes, toBase64Url, utf8 } from '@shkriuss/crypto';
+import { createSync, saveConnection, syncedStore, type SyncClient } from '@shkriuss/sync';
+import syncWorker, { SyncCopy, type SyncEnv } from '@shkriuss/sync/worker';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  isLibraryRecord,
   libraryAccess,
   libraryApi,
   LibraryError,
   libraryRecord,
   linkedLibrary,
+  tidyRecords,
+  usableRecord,
+  useLibrary,
   type LibraryItem,
   type LibraryRecord,
 } from './client.ts';
-import { memoryLibrary } from './testing.ts';
+import { memoryLibrary, MemoryListStorage } from './testing.ts';
 
 const ORIGIN = 'https://photos.example';
 const CODE = 'correct horse battery staple';
@@ -61,6 +68,54 @@ describe('the library record', () => {
     expect(replaced.library).toBe(first.library);
     expect(replaced.keys.length).toBe(2);
     expect(replaced.keys[0]).toEqual(first.keys[0]);
+  });
+
+  it('is one per library, so a merge keeps every library’s', async () => {
+    const one = await libraryRecord(randomBytes(32), undefined);
+    const other = await libraryRecord(randomBytes(32), undefined);
+    expect(one.id).toBe(`library:${one.library}`);
+    expect(other.id).not.toBe(one.id);
+    expect(isLibraryRecord(one)).toBe(true);
+    expect(isLibraryRecord({ ...one, id: `library:${other.library}` })).toBe(false);
+  });
+
+  it('saved by the version before (one record, "library") becomes its library’s', async () => {
+    const record = await libraryRecord(randomBytes(32), undefined);
+    const older = { ...record, id: 'library' };
+    expect(isLibraryRecord(older)).toBe(true);
+    expect(tidyRecords([older])).toEqual([record]);
+    // Both, from two devices: one record, with every key.
+    const moved = await libraryRecord(randomBytes(32), record);
+    expect(tidyRecords([older, moved])).toEqual([moved]);
+    const tidy = [record];
+    expect(tidyRecords(tidy)).toBe(tidy);
+  });
+
+  it('this key uses the oldest library it can, never another account’s', async () => {
+    const [oldKey, newKey, otherAccount] = [randomBytes(32), randomBytes(32), randomBytes(32)];
+    const real = await libraryRecord(newKey, await libraryRecord(oldKey, undefined));
+    const own = await libraryRecord(newKey, undefined);
+    const theirs = await libraryRecord(otherAccount, undefined);
+    const records = [own, theirs, real];
+    expect((await usableRecord(newKey, records))?.library).toBe(real.library);
+    expect((await usableRecord(otherAccount, records))?.library).toBe(theirs.library);
+    // A record that wasn't moved to the new key (or is another account's) isn't used.
+    expect(await usableRecord(newKey, [theirs, await libraryRecord(oldKey, undefined)])).toBe(
+      undefined,
+    );
+  });
+
+  it('a new library is started only once a sync found none, and other accounts’ stay as they are', async () => {
+    const secret = randomBytes(32);
+    expect(await useLibrary(secret, [], false)).toEqual({ record: undefined, records: [] });
+    const made = await useLibrary(secret, [], true);
+    expect(made.record).toEqual(await libraryRecord(secret, undefined));
+    expect(made.records).toEqual([made.record]);
+    expect(await useLibrary(secret, made.records, true)).toEqual(made);
+
+    const theirs = await libraryRecord(randomBytes(32), undefined);
+    const mine = await useLibrary(secret, [theirs], true);
+    expect(mine.records).toEqual([theirs, made.record]);
   });
 });
 
@@ -128,7 +183,7 @@ describe('a replaced account key', () => {
     await phone.api.upload('photo-0001', photo, parts());
 
     const record = await libraryRecord(newKey, phone.record);
-    await linkedLibrary(() => record).move(oldKey, newKey);
+    await linkedLibrary(() => [record]).move(oldKey, newKey);
     const tablet = await device(newKey, record);
     await tablet.api.upload('photo-0002', { ...photo, name: 'new' }, parts());
     const changes = await tablet.api.changes(0);
@@ -141,6 +196,29 @@ describe('a replaced account key', () => {
     expect((await failure(phone.api.changes(0))).problem).toBe('moved');
     expect((await failure(phone.api.part(newer as LibraryItem, 2))).problem).toBe('moved');
   });
+
+  it('moves every library the old key had, not only the one in use, and adds the new key', async () => {
+    const oldKey = randomBytes(32);
+    const newKey = randomBytes(32);
+    const phone = await device(oldKey);
+    await phone.api.changes(0);
+    // A library a device with only the new key started meanwhile, and another account's.
+    const own = await device(newKey);
+    await own.api.changes(0);
+    const theirs = await libraryRecord(randomBytes(32), undefined);
+
+    let saved: readonly LibraryRecord[] = [own.record, theirs, phone.record];
+    await linkedLibrary(
+      () => saved,
+      (records) => {
+        saved = records;
+        return true;
+      },
+    ).move(oldKey, newKey);
+    expect(saved).toEqual([own.record, theirs, await libraryRecord(newKey, phone.record)]);
+    expect((await failure(phone.api.changes(0))).problem).toBe('moved');
+    expect((await usableRecord(newKey, saved))?.library).toBe(phone.record.library);
+  });
 });
 
 describe('deleting with the online copy', () => {
@@ -149,16 +227,245 @@ describe('deleting with the online copy', () => {
     const phone = await device(secret);
     await phone.api.unlock(CODE);
     await phone.api.upload('photo-0001', photo, parts());
-    await linkedLibrary(() => phone.record).delete(secret);
+    await linkedLibrary(() => [phone.record]).delete(secret);
     expect(await phone.api.changes(0)).toMatchObject({ wiping: true, changes: [] });
   });
 
   it('does nothing without a library, or for one that isn’t this key’s', async () => {
     const secret = randomBytes(32);
-    await linkedLibrary(() => undefined).delete(secret);
+    await linkedLibrary(() => []).delete(secret);
     const phone = await device(randomBytes(32));
     await phone.api.changes(0);
-    await linkedLibrary(() => phone.record).delete(secret);
+    await linkedLibrary(() => [phone.record]).delete(secret);
     expect((await phone.api.changes(0)).wiping).toBe(false);
+  });
+});
+
+// ---------- With sync, as Photos uses it ----------
+
+/** Web Storage in memory: each pretend device has its own. */
+class MemoryStorage {
+  readonly map = new Map<string, string>();
+  get length(): number {
+    return this.map.size;
+  }
+  key(index: number): string | null {
+    return [...this.map.keys()][index] ?? null;
+  }
+  getItem(key: string): string | null {
+    return this.map.get(key) ?? null;
+  }
+  setItem(key: string, value: string): void {
+    this.map.set(key, value);
+  }
+  removeItem(key: string): void {
+    this.map.delete(key);
+  }
+}
+
+interface Records {
+  items: LibraryRecord[];
+}
+const isRecords = (value: unknown): value is Records =>
+  typeof value === 'object' &&
+  value !== null &&
+  Array.isArray((value as Records).items) &&
+  (value as Records).items.every(isLibraryRecord);
+
+/**
+ * The records' store as Photos keeps it (apps/photos/src/lib/online.ts):
+ * version 2 keeps one record per library; version 1 is the version before.
+ */
+function recordsStore(version: 1 | 2) {
+  const key = 'shkriuss:library';
+  const read = (from: number, data: unknown): Records | undefined => {
+    if (!isRecords(data) || from > version) return undefined;
+    return from === version ? data : { items: [...tidyRecords(data.items)] };
+  };
+  return {
+    key,
+    version,
+    empty: (): Records => ({ items: [] }),
+    read,
+    load(): Records {
+      const saved = JSON.parse(localStorage.getItem(key) ?? 'null') as {
+        v: number;
+        data: unknown;
+      } | null;
+      return (saved && read(saved.v, saved.data)) ?? { items: [] };
+    },
+    save(value: Records): boolean {
+      localStorage.setItem(key, JSON.stringify({ v: version, data: value }));
+      return true;
+    },
+    clear(): void {
+      localStorage.removeItem(key);
+    },
+  };
+}
+
+/** A device with Photos' sync: the libraries' records in its copy, and the libraries linked to it. */
+class Device {
+  readonly storage = new MemoryStorage();
+  readonly store: ReturnType<typeof recordsStore>;
+  readonly sync: SyncClient;
+
+  constructor(secret: Uint8Array<ArrayBuffer>, version: 1 | 2 = 2) {
+    this.store = recordsStore(version);
+    this.use();
+    this.storage.setItem(
+      'shkriuss-device:sync',
+      JSON.stringify({ secret: toBase64Url(secret), code: 'K7Q2-M9XD' }),
+    );
+    this.sync = createSync({
+      app: 'photos',
+      stores: [
+        syncedStore({
+          store: this.store,
+          items: (value) => value.items,
+          withItems: (value, items) => ({ ...value, items }),
+        }),
+      ],
+      onChange: () => undefined,
+      linked: linkedLibrary(
+        () => this.records,
+        (saved) => {
+          this.records = [...saved];
+          return true;
+        },
+      ),
+    });
+  }
+
+  use(): this {
+    vi.stubGlobal('localStorage', this.storage);
+    return this;
+  }
+
+  get records(): LibraryRecord[] {
+    return this.use().store.load().items;
+  }
+
+  set records(items: LibraryRecord[]) {
+    this.use().store.save({ items });
+  }
+
+  /** Comes back from "Turn on sync" on the hub with this app key. */
+  connect(secret: Uint8Array<ArrayBuffer>, replaces: Uint8Array<ArrayBuffer>[] = []): void {
+    this.use();
+    expect(saveConnection({ secret, code: 'N3W5-K3Y8', replaces })).toBe(true);
+  }
+
+  async syncNow() {
+    await this.use().sync.syncNow();
+    return this.sync.status();
+  }
+
+  /** What Photos does after each sync: the library to use, started if there's none. */
+  async library(): Promise<LibraryRecord | undefined> {
+    const secret = this.use().sync.secret();
+    if (!secret) return undefined;
+    const chosen = await useLibrary(secret, this.records, true);
+    this.records = [...chosen.records];
+    return chosen.record;
+  }
+}
+
+describe('with sync, as Photos uses it', () => {
+  beforeEach(() => {
+    const copies = new Map<string, SyncCopy>();
+    const env: SyncEnv = {
+      ASSETS: { fetch: async () => new Response('page') },
+      SYNC_COPIES: {
+        idFromName: (name) => ({ toString: () => name }),
+        get: (id) => ({
+          fetch: (input, init) => {
+            const copy =
+              copies.get(id.toString()) ??
+              new SyncCopy({
+                storage: new MemoryListStorage(),
+                blockConcurrencyWhile: (run) => run(),
+              });
+            copies.set(id.toString(), copy);
+            return copy.fetch(new Request(input, init));
+          },
+        }),
+      },
+    };
+    const libraryFetch = globalThis.fetch;
+    vi.stubGlobal('fetch', async (input: string, init?: RequestInit) =>
+      input.startsWith('/api/sync')
+        ? syncWorker.fetch(new Request(new URL(input, ORIGIN), init), env)
+        : libraryFetch(input, init),
+    );
+    const noop = () => 0;
+    vi.stubGlobal('window', {
+      setTimeout: noop,
+      clearTimeout: noop,
+      setInterval: noop,
+      addEventListener: noop,
+    });
+    vi.stubGlobal('document', { addEventListener: noop, visibilityState: 'visible' });
+    vi.stubGlobal('location', { hash: '', pathname: '/', search: '', origin: ORIGIN });
+    vi.stubGlobal('sessionStorage', new MemoryStorage());
+  });
+
+  it('a device with only the new account key can’t replace the real library', async () => {
+    const oldKey = randomBytes(32);
+    const newKey = randomBytes(32);
+    // The tablet's library, with a photo in it.
+    const tablet = new Device(oldKey);
+    await tablet.syncNow();
+    const real = (await tablet.library()) as LibraryRecord;
+    await tablet.syncNow();
+    const before = libraryApi(await libraryAccess(oldKey, real));
+    await before.unlock(CODE);
+    await before.upload('photo-0001', photo, parts());
+
+    // A phone is lost and the key replaced. A new phone, with only the new key,
+    // turns on sync before the tablet opens Photos again: it starts a library.
+    const newPhone = new Device(newKey);
+    await newPhone.syncNow();
+    expect((await newPhone.library())?.library).not.toBe(real.library);
+    await newPhone.syncNow();
+
+    // The tablet connects with the new key (and the old one): it brings its old
+    // copy along, and moves its library to the new key. It keeps using it.
+    tablet.connect(newKey, [oldKey]);
+    expect((await tablet.syncNow()).problem).toBeNull();
+    expect(tablet.records).toHaveLength(2);
+    expect((await tablet.library())?.library).toBe(real.library);
+    await tablet.syncNow();
+    expect((await failure(before.changes(0))).problem).toBe('moved');
+
+    // So does the new phone, once it syncs: it sees the photo.
+    await newPhone.syncNow();
+    const used = (await newPhone.library()) as LibraryRecord;
+    expect(used.library).toBe(real.library);
+    const changes = await libraryApi(await libraryAccess(newKey, used)).changes(0);
+    expect(changes.changes.map((change) => change.id)).toEqual(['photo-0001']);
+  });
+
+  it('keeps using the library in the record saved by the version before', async () => {
+    const secret = randomBytes(32);
+    const record = await libraryRecord(secret, undefined);
+    // The version before kept one record, "library", in version 1 of the store.
+    const older = new Device(secret, 1);
+    older.records = [{ ...record, id: 'library' }];
+    await older.syncNow();
+
+    // A device with this version: its own record, saved by the version before…
+    const here = new Device(secret);
+    const saved = { v: 1, data: { items: [{ ...record, id: 'library' }] } };
+    here.storage.setItem('shkriuss:library', JSON.stringify(saved));
+    expect(here.records).toEqual([record]);
+    // …and the older device's, from the copy.
+    const fresh = new Device(secret);
+    await fresh.syncNow();
+    expect((await fresh.library())?.library).toBe(record.library);
+    expect(fresh.records).toEqual([record]);
+    await fresh.syncNow();
+    expect(await here.syncNow()).toMatchObject({ problem: null });
+    expect(here.records).toEqual([record]);
   });
 });

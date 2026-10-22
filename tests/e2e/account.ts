@@ -66,16 +66,20 @@ export const oldCopyMoved = (page: Page) =>
       response.ok(),
   );
 
-/** On the hub's Account page, signed in: replaces the account key. Returns the new code. */
-export async function replaceKey(page: Page): Promise<string> {
+/**
+ * On the hub's Account page, signed in: replaces the account key. Returns the
+ * new recovery key and account code.
+ */
+export async function replaceKey(page: Page): Promise<{ key: string; code: string }> {
   await page.goto(`${hubURL}/account/`);
   await page.getByRole('button', { name: 'Replace the account key' }).click();
   await page.getByRole('button', { name: 'Get a new key' }).click();
+  const key = (await page.locator('[data-new-key]').textContent()) ?? '';
   await page.getByLabel("I've saved my recovery key").check();
   await page.getByRole('button', { name: 'Replace the key' }).click();
   const code = page.locator('[data-account-code]');
   await expect(page.locator('[data-message]')).toHaveText(/^Your account key is replaced/);
-  return (await code.textContent()) ?? '';
+  return { key, code: (await code.textContent()) ?? '' };
 }
 
 /** A second device with its own storage. */

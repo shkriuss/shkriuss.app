@@ -157,7 +157,7 @@ test('after the account key is replaced, sync moves to the new key', async ({
 
   // On the phone: replace the key, then turn on sync again (what the Account
   // page's "Turn on sync in …" link opens).
-  const code = await replaceKey(page);
+  const { code } = await replaceKey(page);
   // The Account page says this app here is still on the old key.
   await expect(
     page.getByRole('link', { name: `Turn on sync in ${name} again (it’s still on the old key)` }),
