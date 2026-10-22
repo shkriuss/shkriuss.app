@@ -428,6 +428,30 @@ describe('syncing between devices', () => {
     vi.useRealTimers();
   });
 
+  it('a lost device can’t start the moved copy again', async () => {
+    const oldKey = randomBytes(32);
+    const newKey = randomBytes(32);
+    const tablet = new Device(oldKey);
+    const laptop = new Device(oldKey);
+    tablet.counters = [counter('water')];
+    await tablet.syncNow();
+    await laptop.syncNow();
+    tablet.connect(newKey, [oldKey]);
+    expect((await tablet.syncNow()).problem).toBeNull();
+
+    // The lost device still has the old key: it tries to start that copy again,
+    // first deleting the note that it moved.
+    const restart = { method: 'PUT', body: JSON.stringify({ base: null, data: 'A'.repeat(40) }) };
+    expect((await call(oldKey, '/copy', restart, worker)).status).toBe(410);
+    expect((await call(oldKey, '/copy', { method: 'DELETE' }, worker)).status).toBe(204);
+    const again = await call(oldKey, '/copy', restart, worker);
+    expect(again.status).toBe(410);
+    expect(await again.json()).toMatchObject({ moved: true });
+
+    // So the person's other devices still hear that it moved.
+    expect(await laptop.syncNow()).toMatchObject({ on: false, problem: 'moved' });
+  });
+
   it('finishes moving to a new key after a dropped connection', async () => {
     const oldKey = randomBytes(32);
     const newKey = randomBytes(32);
