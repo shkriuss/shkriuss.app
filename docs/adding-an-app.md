@@ -13,7 +13,7 @@ any extra work.
 | **description** | `Quick notes, saved on your device.` | One sentence for the hub card. Up to 160 characters.                                                                                                                                    |
 | **icon**        | `note`                               | One of the icons in `packages/ui/src/icons/index.ts`.                                                                                                                                   |
 | **color**       | `blue`                               | teal, blue, indigo, violet, pink, red, orange, green or slate.                                                                                                                          |
-| **stores**      | `Your notes`                         | What the app saves on the device, in plain words. This goes on the privacy page. Leave it empty if the app saves nothing.                                                               |
+| **stores**      | `Your notes`                         | What the app saves on the device, in plain words, for the privacy page. Separate several with `;`. The theme choice is always added (every page saves it).                              |
 
 ## Option A: ask Claude
 

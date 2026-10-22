@@ -86,6 +86,28 @@ describe('registry and folders', () => {
   });
 });
 
+describe('browser tests', () => {
+  // The shared fixtures fail a test on console errors, CSP problems and
+  // requests to other websites; Playwright's own test and expect don't.
+  const specs = [
+    ...appFolders.flatMap((slug) => {
+      const folder = join(repoRoot, 'apps', slug, 'e2e');
+      return existsSync(folder)
+        ? readdirSync(folder)
+            .filter((file) => file.endsWith('.spec.ts'))
+            .map((file) => join('apps', slug, 'e2e', file))
+        : [];
+    }),
+    'templates/app/e2e/app.spec.ts',
+  ];
+
+  it.each(specs)('%s takes test and expect from the shared fixtures', (spec) => {
+    const source = readFileSync(join(repoRoot, spec), 'utf8');
+    expect(source).toMatch(/from '(\.\.\/)+tests\/e2e\/fixtures\.ts'/);
+    expect(source).not.toMatch(/import \{[^}]*\b(test|expect)\b[^}]*\} from '@playwright\/test'/);
+  });
+});
+
 describe.each(appFolders)('apps/%s', (slug) => {
   const domain = slug === HUB_SLUG ? hub.domain : `${slug}.${hub.domain}`;
 

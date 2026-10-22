@@ -2,7 +2,13 @@ import { cp, mkdtemp, readFile, rm, writeFile, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createApp, optionProblems, TEMPLATE_SLUG, type NewAppOptions } from './create-app.ts';
+import {
+  createApp,
+  optionProblems,
+  TEMPLATE_SLUG,
+  THEME_CHOICE,
+  type NewAppOptions,
+} from './create-app.ts';
 
 const repoRoot = join(import.meta.dirname, '../..');
 
@@ -97,13 +103,35 @@ describe('createApp', () => {
       color: 'blue',
       status: 'live',
       storage: 'device',
-      dataStored: ['Your notes'],
+      dataStored: ['Your notes', 'Your light or dark theme choice'],
     });
   });
 
-  it('marks storage as "none" when nothing is stored', async () => {
+  it('always lists the theme choice, which every page saves', async () => {
     const { entry } = await createApp(root, { ...options, dataStored: [] });
-    expect(entry.storage).toBe('none');
+    expect(entry).toMatchObject({
+      storage: 'device',
+      dataStored: ['Your light or dark theme choice'],
+    });
+  });
+
+  it('splits several things saved, given in one line with ";"', async () => {
+    const { entry } = await createApp(root, {
+      ...options,
+      dataStored: ['Your notes; Your settings ;', 'Your light or dark theme choice'],
+    });
+    expect(entry.dataStored).toEqual([
+      'Your notes',
+      'Your settings',
+      'Your light or dark theme choice',
+    ]);
+  });
+
+  it('matches what every app in the registry lists', async () => {
+    const registry = JSON.parse(
+      await readFile(join(repoRoot, 'packages/registry/apps.json'), 'utf8'),
+    ) as { apps: { dataStored: string[] }[] };
+    for (const app of registry.apps) expect(app.dataStored).toContain(THEME_CHOICE);
   });
 
   it('refuses to overwrite an existing folder', async () => {

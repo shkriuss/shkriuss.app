@@ -68,6 +68,9 @@ export interface CreateAppResult {
   entry: AppEntry;
 }
 
+/** What every page saves (its theme switch), so every app lists it on the privacy page. */
+export const THEME_CHOICE = 'Your light or dark theme choice';
+
 /** Copies the template, replaces the slug and appends the app to apps.json. */
 export async function createApp(
   repoRoot: string,
@@ -94,7 +97,13 @@ export async function createApp(
     }
   }
 
-  const dataStored = options.dataStored.map((item) => item.trim()).filter(Boolean);
+  // Every page has the theme switch, which saves the choice on the device.
+  const dataStored = [
+    ...new Set([
+      ...options.dataStored.flatMap((item) => item.split(';')).map((item) => item.trim()),
+      THEME_CHOICE,
+    ]),
+  ].filter(Boolean);
   const entry: AppEntry = {
     slug: options.slug,
     name: options.name.trim(),
@@ -102,7 +111,7 @@ export async function createApp(
     icon: options.icon,
     color: options.color as IconColor,
     status: 'live',
-    storage: dataStored.length > 0 ? 'device' : 'none',
+    storage: 'device',
     dataStored,
   };
   const updated = { ...registry, apps: [...registry.apps, entry] };

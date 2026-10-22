@@ -89,7 +89,7 @@ on:
           - green
           - slate
       stores:
-        description: 'What it saves on the device, for the privacy page (e.g. "Your notes"). Leave empty if nothing.'
+        description: 'What it saves on the device, for the privacy page (e.g. "Your notes; Your settings"). The theme choice is always added.'
         required: false
         type: string
 
