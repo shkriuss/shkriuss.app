@@ -19,8 +19,10 @@ for (const match of tokensCss.matchAll(
 )) {
   themed.set(match[1] as string, [match[2] as string, match[3] as string]);
 }
+// The fallback for browsers without light-dark(), checked below; not plain tokens.
+const [mainCss = '', fallbackCss = ''] = tokensCss.split('@supports not (color: light-dark(');
 const plain = new Map<string, string>();
-for (const match of tokensCss.matchAll(/--([\w-]+):\s*(#[0-9a-f]{6});/gi)) {
+for (const match of mainCss.matchAll(/--([\w-]+):\s*(#[0-9a-f]{6});/gi)) {
   plain.set(match[1] as string, match[2] as string);
 }
 
@@ -97,5 +99,35 @@ describe('design token contrast', () => {
 
   it('page background colours match tokens.css', () => {
     expect(token('color-bg')).toEqual([backgroundColors.light, backgroundColors.dark]);
+  });
+});
+
+describe('colours for browsers without light-dark()', () => {
+  // The @supports block: light values, then dark (device setting), then dark (chosen).
+  const blocks = [...fallbackCss.matchAll(/\{([^{}]*)\}/g)]
+    .map(
+      (match) =>
+        new Map(
+          [...(match[1] ?? '').matchAll(/--([\w-]+):\s*(#[0-9a-f]{6});/gi)].map(
+            (entry) => [entry[1] as string, entry[2] as string] as const,
+          ),
+        ),
+    )
+    .filter((block) => block.size > 0);
+
+  it('are the same as the light-dark() pairs, in both themes', () => {
+    expect(blocks).toHaveLength(3);
+    const [light, dark, chosenDark] = blocks as [
+      Map<string, string>,
+      Map<string, string>,
+      Map<string, string>,
+    ];
+    expect(themed.size).toBeGreaterThan(10);
+    for (const [name, [lightValue, darkValue]] of themed) {
+      expect(light.get(name), name).toBe(lightValue);
+      expect(dark.get(name), name).toBe(darkValue);
+      expect(chosenDark.get(name), name).toBe(darkValue);
+    }
+    for (const block of blocks) expect(block.size).toBe(themed.size);
   });
 });
