@@ -35,9 +35,32 @@ export const LIMITS = {
   firstParts: 40,
   firstPartBytes: 1_000_000,
   remove: 100,
-  /** Wrong storage codes per hour, all libraries together (anyone can make up a library). */
+  /**
+   * Wrong storage codes per hour from one internet address (one network, for
+   * IPv6), whatever the library: anyone can make up a library. Counted per
+   * address, not for everyone together, so a stranger can't lock others out.
+   */
   unlockTries: 20,
 } as const;
+
+/**
+ * The network an address belongs to, for counting wrong storage codes: an
+ * IPv4 address as it is, an IPv6 address cut to its first 64 bits (one
+ * connection usually has all of those). "" when there's no address.
+ */
+export function callerNetwork(address: string | null): string {
+  const text = (address ?? '').trim().toLowerCase();
+  if (!text.includes(':')) return text;
+  const [head = '', tail] = text.split('::');
+  const left = head === '' ? [] : head.split(':');
+  const right = tail === undefined || tail === '' ? [] : tail.split(':');
+  const middle =
+    tail === undefined ? [] : Array<string>(Math.max(0, 8 - left.length - right.length)).fill('0');
+  return [...left, ...middle, ...right]
+    .slice(0, 4)
+    .map((group) => group.replace(/^0+(?=.)/, ''))
+    .join(':');
+}
 
 /** One item in the list of changes. Parts are the sealed sizes, in the order they're stored. */
 export interface ItemRow {

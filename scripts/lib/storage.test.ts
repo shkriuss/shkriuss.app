@@ -31,17 +31,29 @@ describe('secrets', () => {
   it('give a site with a library its storage code, from the GitHub secret', () => {
     expect(storageCodeSecret('photos')).toBe('PHOTOS_STORAGE_CODE');
     expect(storageCodeSecret('my-app')).toBe('MY_APP_STORAGE_CODE');
-    expect(workerSecrets('photos', true, { PHOTOS_STORAGE_CODE: 'five words' })).toEqual({
-      secrets: { LIBRARY_STORAGE_CODE: 'five words' },
+    const code = 'gravy tusk elbow mantle orbit';
+    expect(workerSecrets('photos', true, { PHOTOS_STORAGE_CODE: code })).toEqual({
+      secrets: { LIBRARY_STORAGE_CODE: code },
       missing: [],
+      weak: [],
     });
     expect(workerSecrets('photos', true, {})).toEqual({
       secrets: {},
       missing: ['PHOTOS_STORAGE_CODE'],
+      weak: [],
     });
     expect(workerSecrets('tally', false, { TALLY_STORAGE_CODE: 'x' })).toEqual({
       secrets: {},
       missing: [],
+      weak: [],
+    });
+  });
+
+  it('say when a storage code is too short to be safe, and still give it', () => {
+    expect(workerSecrets('photos', true, { PHOTOS_STORAGE_CODE: 'photos2026' })).toEqual({
+      secrets: { LIBRARY_STORAGE_CODE: 'photos2026' },
+      missing: [],
+      weak: ['PHOTOS_STORAGE_CODE'],
     });
   });
 

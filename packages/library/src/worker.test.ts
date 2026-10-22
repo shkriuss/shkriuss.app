@@ -22,11 +22,12 @@ const token = () => toBase64Url(randomBytes(32));
 const libraryId = () => toBase64Url(randomBytes(32));
 const details = 'D'.repeat(60);
 
-/** A device's way into one library. */
-function client(library: string, bearer: string) {
+/** A device's way into one library, from an internet address. */
+function client(library: string, bearer: string, address = '203.0.113.7') {
   const headers = (more: Record<string, string> = {}) => ({
     Authorization: `Bearer ${bearer}`,
     'X-Library': library,
+    'CF-Connecting-IP': address,
     ...more,
   });
   const call = (path: string, init: RequestInit = {}) =>
@@ -139,7 +140,7 @@ describe('the storage code', () => {
     expect((await device.put(ITEM, [100])).status).toBe(200);
   });
 
-  it('allows 20 wrong tries an hour, counting every library together', async () => {
+  it('allows 20 wrong tries an hour from one address, counting every library together', async () => {
     vi.useFakeTimers({ now: Date.UTC(2026, 9, 22, 12) });
     // Anyone can make up libraries, so a new one doesn't mean more tries.
     for (let attempt = 0; attempt < LIMITS.unlockTries; attempt += 1) {
@@ -148,9 +149,38 @@ describe('the storage code', () => {
     const device = client(libraryId(), token());
     const tooMany = await device.unlock();
     expect(tooMany.status).toBe(429);
-    expect(await tooMany.json()).toMatchObject({ tooMany: true });
+    expect(await tooMany.json()).toMatchObject({
+      tooMany: true,
+      retryAt: Date.UTC(2026, 9, 22, 13),
+    });
     vi.setSystemTime(Date.UTC(2026, 9, 22, 13, 1));
     expect((await device.unlock()).status).toBe(204);
+  });
+
+  it('a stranger’s wrong tries can’t stop the right code from anywhere else', async () => {
+    vi.useFakeTimers({ now: Date.UTC(2026, 9, 22, 12) });
+    // One IPv6 connection has a whole network: changing the last 64 bits doesn't help.
+    for (let attempt = 0; attempt < LIMITS.unlockTries; attempt += 1) {
+      const stranger = client(libraryId(), token(), `2001:db8:1:2::${attempt.toString(16)}`);
+      expect((await stranger.unlock('guess')).status).toBe(403);
+    }
+    const sameNetwork = client(libraryId(), token(), '2001:db8:1:2:ffff::1');
+    expect((await sameNetwork.unlock()).status).toBe(429);
+    expect((await client(libraryId(), token(), '2001:db8:1:3::1').unlock()).status).toBe(204);
+    expect((await client(libraryId(), token(), '198.51.100.4').unlock()).status).toBe(204);
+  });
+
+  it('forgets wrong tries when their hour is over, and keeps no addresses', async () => {
+    vi.useFakeTimers({ now: Date.UTC(2026, 9, 22, 12, 30) });
+    expect((await client(libraryId(), token(), '198.51.100.4').unlock('guess')).status).toBe(403);
+    const kept = [...server.gateStorage.map.keys()].filter((key) => key.startsWith('try:'));
+    expect(kept).toHaveLength(1);
+    expect(JSON.stringify([...server.gateStorage.map])).not.toContain('198.51.100');
+    expect(server.gateStorage.alarm).toBe(Date.UTC(2026, 9, 22, 13));
+
+    vi.setSystemTime(Date.UTC(2026, 9, 22, 13));
+    await server.gate.alarm();
+    expect([...server.gateStorage.map.keys()].filter((key) => key.startsWith('try:'))).toEqual([]);
   });
 
   it('unlocks only while it’s still the code: changing it locks every library', async () => {

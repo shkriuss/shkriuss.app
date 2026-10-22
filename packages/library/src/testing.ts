@@ -122,6 +122,7 @@ export function memoryLibrary(code: string | null = 'correct horse battery stapl
     env,
     bucket,
     objects,
+    gate,
     gateStorage,
     fetch: (request: Request) => worker.fetch(request, env),
   };

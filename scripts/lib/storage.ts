@@ -36,22 +36,28 @@ export const storageCodeSecret = (slug: string): string =>
   `${slug.toUpperCase().replaceAll('-', '_')}_STORAGE_CODE`;
 
 /**
+ * A storage code shorter than this is probably not five random words. The
+ * code is what really stops guessing (ADR 0016), so the deploy warns.
+ */
+export const MIN_STORAGE_CODE_LENGTH = 24;
+
+/**
  * The secrets a site's Worker gets when it's deployed (by their names in the
- * Worker), from the environment (GitHub Actions secrets), and the GitHub
- * secrets that are missing. Sites with an online library get its storage
- * code; others, nothing.
+ * Worker), from the environment (GitHub Actions secrets), the GitHub secrets
+ * that are missing, and those that look too short to be safe. Sites with an
+ * online library get its storage code; others, nothing.
  */
 export function workerSecrets(
   slug: string,
   library: boolean,
   env: Readonly<Record<string, string | undefined>> = process.env,
-): { secrets: Record<string, string>; missing: string[] } {
-  if (!library) return { secrets: {}, missing: [] };
+): { secrets: Record<string, string>; missing: string[]; weak: string[] } {
+  if (!library) return { secrets: {}, missing: [], weak: [] };
   const name = storageCodeSecret(slug);
   const code = env[name];
-  return code
-    ? { secrets: { LIBRARY_STORAGE_CODE: code }, missing: [] }
-    : { secrets: {}, missing: [name] };
+  if (!code) return { secrets: {}, missing: [name], weak: [] };
+  const weak = code.trim().length < MIN_STORAGE_CODE_LENGTH ? [name] : [];
+  return { secrets: { LIBRARY_STORAGE_CODE: code }, missing: [], weak };
 }
 
 /**

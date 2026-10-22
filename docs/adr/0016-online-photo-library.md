@@ -78,9 +78,16 @@ every device. That's far beyond what sync can hold:
   the new code once.
 - **Limits across all libraries,** because anyone can make up a library, so
   limits kept in each would protect nothing. One more Durable Object
-  (`LibraryGate`) keeps them: 20 wrong codes an hour, 1 TB stored and
-  20,000 uploads a day in all. The upload limit keeps a big import from
-  using up the free daily requests every app shares.
+  (`LibraryGate`) keeps them: 1 TB stored and 20,000 uploads a day in all.
+  The upload limit keeps a big import from using up the free daily requests
+  every app shares.
+- **20 wrong codes an hour from each internet address** (for IPv6, each
+  network: the first 64 bits), whatever the library. Not 20 for everyone
+  together: then a stranger could use them up every hour and nobody could
+  give the right code. The gate keeps only a hash of the address mixed with
+  the code, and deletes it when the hour is over. Someone with many
+  addresses gets more tries, so what really stops guessing is the code
+  itself: five or more random words (about 64 bits), far too many to guess.
 - **Limits per library:** 400,000 photos, and 95 MB per photo (Cloudflare
   takes at most 100 MB in one request).
 - **A library that was never unlocked costs nothing in R2.** Thumbnails and

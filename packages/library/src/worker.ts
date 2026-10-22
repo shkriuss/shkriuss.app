@@ -20,9 +20,10 @@
  * the library's id. Everything arrives sealed, so the server can't read it.
  *
  * Anyone can make up a library, so what protects the bill is kept across all
- * of them, in one more Durable Object (LibraryGate): wrong storage codes per
- * hour, bytes stored and uploads per day. A library stays unlocked only for
- * the storage code it was unlocked with: changing the code locks them all.
+ * of them, in one more Durable Object (LibraryGate): bytes stored and uploads
+ * per day, and wrong storage codes per hour from each internet address. A
+ * library stays unlocked only for the storage code it was unlocked with:
+ * changing the code locks them all.
  */
 import { equalBytes, sha256, utf8 } from '@shkriuss/crypto';
 import {
@@ -36,11 +37,11 @@ import {
   sha256Text,
   type DurableObjectListState,
   type DurableObjectNamespace,
-  type DurableObjectState,
   type R2Bucket,
   type SiteEnv,
 } from '@shkriuss/server';
 import {
+  callerNetwork,
   checkFirstParts,
   checkMove,
   checkRemove,
@@ -82,6 +83,15 @@ async function isStorageCode(given: string, code: string): Promise<boolean> {
 /** Which storage code is set ("" for none): a library unlocked with another is locked. */
 async function codeId(code: string | undefined): Promise<string> {
   return code ? (await sha256Text(`shkriuss library storage code v1 ${code}`)).slice(0, 16) : '';
+}
+
+/**
+ * Who is trying a storage code: their network (callerNetwork), hashed with
+ * the code, so the gate never keeps an address it could read back.
+ */
+async function callerId(request: Request, code: string): Promise<string> {
+  const network = callerNetwork(request.headers.get('CF-Connecting-IP'));
+  return (await sha256Text(`shkriuss library caller v1 ${code} ${network}`)).slice(0, 16);
 }
 
 /** Requests to /api/library and /api/library/*. */
@@ -157,10 +167,14 @@ export async function handleLibrary(
     if (!code) return json({ error: 'Online storage isn’t set up.', notSetUp: true }, 503);
     const given = await body(checkUnlock);
     if (given instanceof Response) return given;
-    // Only the library's own token may try, and every wrong try counts, whatever the library.
+    // Only the library's own token may try, and wrong tries from one address
+    // count together, whatever the library.
     const allowed = await call('check');
     if (!allowed.ok) return allowed;
-    const tried = await gate('try', { ok: await isStorageCode(given.value, code) });
+    const tried = await gate('try', {
+      ok: await isStorageCode(given.value, code),
+      caller: await callerId(request, code),
+    });
     return tried.ok ? call('unlock') : tried;
   }
   if (path === '/api/library/move') {
@@ -287,8 +301,6 @@ export default createWorker<LibraryEnv>({ '/api/library': handleLibrary });
 // ---------- Limits across all libraries ----------
 
 interface GateState {
-  /** Wrong storage codes since `start` (ms). */
-  tries: { start: number; count: number };
   /** Bytes stored, all libraries together. */
   bytes: number;
   /** Uploads on `day` (UTC). */
@@ -296,40 +308,59 @@ interface GateState {
   uploads: number;
 }
 
+/** Wrong storage codes from one caller in one hour: "try:<hour>:<callerId>" → count. */
+const tryKey = (hour: number, caller: string) => `try:${String(hour).padStart(8, '0')}:${caller}`;
+
 /**
  * What protects the bill, kept across every library: anyone can make up a
  * library, so limits kept in each would protect nothing. One object, named
  * "gate"; the Worker asks it before each upload and each try of the code.
+ * Wrong tries are kept per caller and deleted when their hour is over.
  */
 export class LibraryGate {
-  readonly state: DurableObjectState;
+  readonly state: DurableObjectListState;
 
-  constructor(state: DurableObjectState) {
+  constructor(state: DurableObjectListState) {
     this.state = state;
   }
 
   async fetch(request: Request): Promise<Response> {
     return this.state.blockConcurrencyWhile(async () => {
       const op = new URL(request.url).pathname.slice(1);
-      const body = (await request.json()) as { ok?: boolean; size?: number; bytes?: number };
+      const body = (await request.json()) as {
+        ok?: boolean;
+        caller?: string;
+        size?: number;
+        bytes?: number;
+      };
+      const storage = this.state.storage;
       const now = Date.now();
       const today = utcDay(now);
-      const saved = (await this.state.storage.get<GateState>('gate')) ?? {
-        tries: { start: 0, count: 0 },
-        bytes: 0,
+      const saved = await storage.get<GateState>('gate');
+      const gate: GateState = {
+        bytes: saved?.bytes ?? 0,
         day: today,
-        uploads: 0,
+        uploads: saved?.day === today ? saved.uploads : 0,
       };
-      const gate = saved.day === today ? saved : { ...saved, day: today, uploads: 0 };
-      const save = (next: GateState) => this.state.storage.put('gate', next);
+      const save = (next: GateState) => storage.put('gate', next);
 
       if (op === 'try') {
-        const tries = now - gate.tries.start < HOUR_MS ? gate.tries : { start: now, count: 0 };
-        if (tries.count >= LIMITS.unlockTries) {
-          return json({ error: 'Too many wrong codes; try again in an hour.', tooMany: true }, 429);
+        const hour = Math.floor(now / HOUR_MS);
+        const key = tryKey(hour, body.caller ?? '');
+        const tries = (await storage.get<number>(key)) ?? 0;
+        if (tries >= LIMITS.unlockTries) {
+          return json(
+            {
+              error: 'Too many wrong codes; try again in an hour.',
+              tooMany: true,
+              retryAt: (hour + 1) * HOUR_MS,
+            },
+            429,
+          );
         }
         if (body.ok === true) return noContent();
-        await save({ ...gate, tries: { ...tries, count: tries.count + 1 } });
+        await storage.put(key, tries + 1);
+        if ((await storage.getAlarm()) === null) await storage.setAlarm((hour + 1) * HOUR_MS);
         return json({ error: 'That isn’t the storage code.', wrong: true }, 403);
       }
       const size = Math.max(0, Number(body.size ?? body.bytes ?? 0));
@@ -354,6 +385,22 @@ export class LibraryGate {
         return noContent();
       }
       return problem(404, 'Not found.');
+    });
+  }
+
+  /** When an hour is over: forget its wrong tries. */
+  async alarm(): Promise<void> {
+    await this.state.blockConcurrencyWhile(async () => {
+      const storage = this.state.storage;
+      const hour = Math.floor(Date.now() / HOUR_MS);
+      for (;;) {
+        const keys = [...(await storage.list({ prefix: 'try:', limit: 128 })).keys()];
+        const old = keys.filter((key) => key < tryKey(hour, ''));
+        if (old.length === 0) break;
+        for (const key of old) await storage.delete(key);
+      }
+      const left = await storage.list({ prefix: 'try:', limit: 1 });
+      if (left.size > 0) await storage.setAlarm((hour + 1) * HOUR_MS);
     });
   }
 }

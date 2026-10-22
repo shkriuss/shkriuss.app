@@ -50,7 +50,9 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
   library's id and token. The first token to reach a library is its only
   one; after the account key is replaced it moves to the new token, proven
   with the old one, which is refused from then on. Adding photos needs the
-  storage code (20 wrong tries an hour, in all), and changing the code locks
+  storage code (20 wrong tries an hour from each internet address, so a
+  stranger can't lock others out; the code is five or more random words),
+  and changing the code locks
   every library. Hard limits across all libraries (1 TB, 20,000 uploads a
   day), plus 400,000 photos per library and 95 MB each, mean nobody can run
   up the bill.

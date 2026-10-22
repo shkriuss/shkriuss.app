@@ -89,8 +89,10 @@ Never paste the token anywhere else, including chat.
 1. **Turn on R2:** Cloudflare dashboard → **R2 Object Storage** → **Purchase
    R2 Plan** (it asks for a payment method; the first 10 GB a month are
    free).
-2. **The storage code:** make up a long passphrase (five random words is
-   good) and keep it in your password manager. In GitHub, add it as a secret
+2. **The storage code:** make up a long passphrase of five or more random
+   words (a password manager's "passphrase" generator does this; not a
+   sentence you'd say, at least 24 characters, or the deploy warns) and keep
+   it in your password manager. In GitHub, add it as a secret
    of the `production` environment (as above), named `PHOTOS_STORAGE_CODE`.
    You type it once in
    Photos to let your account add photos online; without it, nobody (you
