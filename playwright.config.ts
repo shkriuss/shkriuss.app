@@ -50,7 +50,9 @@ export default defineConfig({
     command: `pnpm exec wrangler dev --port ${site.port} --ip 127.0.0.1 --inspector-port ${site.port + 1000} --log-level warn --var ALLOW_LOCAL_ENDPOINTS:true --var HUB_ORIGIN:${hubURL} --var "LIBRARY_STORAGE_CODE:${TEST_STORAGE_CODE}"`,
     cwd: site.dir,
     url: `${site.baseURL}/`,
-    reuseExistingServer: !isCI,
+    // Only when asked: a server already on the port may be another checkout's,
+    // which would quietly test its build instead (set E2E_PORT_BASE instead).
+    reuseExistingServer: !isCI && process.env['E2E_REUSE'] === '1',
     timeout: 90_000,
     env: { WRANGLER_SEND_METRICS: 'false' },
     stdout: 'ignore',

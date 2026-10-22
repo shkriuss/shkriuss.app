@@ -108,7 +108,10 @@ test('asks to sign in first; cancelling leaves sync off', async ({ page }, testI
 test('deleting the online copy stops sync on every device, keeping their data', async ({
   page,
   browser,
+  guard,
 }, testInfo) => {
+  // The tablet learns the copy is gone from the server's answer, 410 Gone.
+  guard.allowConsole('status of 410');
   const { name } = getSite(testInfo.project.name);
   const { key } = await createAccount(page);
   await page.goto('/');
@@ -137,7 +140,10 @@ test('deleting the online copy stops sync on every device, keeping their data', 
 test('after the account key is replaced, sync moves to the new key', async ({
   page,
   browser,
+  guard,
 }, testInfo) => {
+  // The tablet learns the copy moved from the server's answer, 410 Gone.
+  guard.allowConsole('status of 410');
   const { name } = getSite(testInfo.project.name);
   const { key } = await createAccount(page);
   await page.goto('/');
