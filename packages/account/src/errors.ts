@@ -5,8 +5,10 @@ export type AccountErrorCode =
   | 'no-prf'
   /** No account is connected to the passkey that was used. */
   | 'unknown-passkey'
-  /** The device link was already used, has expired, or doesn't exist. */
+  /** The device link has expired, or doesn't exist (or doesn't work). */
   | 'link-used'
+  /** Someone already used the device link: maybe not the person. */
+  | 'link-taken'
   /** The account service couldn't be reached or refused the request. */
   | 'server';
 

@@ -224,8 +224,12 @@ in with `sync: true` in `apps.json`.
 - **Lost recovery key.** If the person loses the recovery key and every
   signed-in device, the account and anything synced are gone for good. The
   Account page and the downloaded key file say so.
-- **Lost device.** Replacing the key protects what's synced from then on.
-  Anything synced before could already have been read on the lost device.
+- **Lost device.** Replacing the key protects each app from the moment its
+  sync is turned on again (on any of the person's devices), which moves its
+  copy to the new key. Until then, the lost device can still see and change
+  that app's online copy, so the Account page lists the apps still on the
+  old key. Anything synced before could already have been read on the lost
+  device.
   - Edits made on the lost device before an app moves its copy come along
     with the move.
   - Someone holding the lost device could replace the key first. Then the
@@ -247,8 +251,16 @@ in with `sync: true` in `apps.json`.
   app added to the Home Screen may need its own sign-in on the hub when it
   connects.
 - **Someone sees the QR code.** Anyone who sees a QR code within its 10 minutes
-  could use it first. The first device then says it was used, while the
-  person's own device sees an error, so it's noticed.
+  could use it first. The device showing it then says a device used it and
+  to replace the key if it wasn't the one meant, and the person's own device
+  says someone already used the code, so it's noticed.
+- **The account code is 8 characters (40 bits).** It catches a link from
+  someone else by mistake, but a determined attacker who knows a person's
+  code could make an account with the same code by brute force. Linking only
+  from a code you just made on your own device is what's safe.
+- **Signing out** forgets the account on that device, but each app there
+  keeps its own key and syncs until its sync is turned off; the sign-out
+  dialog lists those apps.
 - **Free quota.** As with [ADR 0009](0009-push-notifications.md), someone
   determined could use up the daily free quota. Things would pause until the
   next day; nothing is exposed and nothing costs money.

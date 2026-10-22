@@ -63,7 +63,9 @@ export function parseLinkFragment(hash: string): LinkInFragment | null {
 export async function claimLink(link: LinkInFragment): Promise<Uint8Array<ArrayBuffer>> {
   const response = await api(`/link/${link.id}`);
   if (response.status === 410 || response.status === 404) {
-    throw new AccountError('link-used', 'This link was already used or has expired.');
+    const body = (await response.json().catch(() => ({}))) as { used?: unknown };
+    if (body.used === true) throw new AccountError('link-taken', 'This link was already used.');
+    throw new AccountError('link-used', 'This link has expired.');
   }
   if (!response.ok) throw new AccountError('server', 'Couldn’t open the link.');
   const { data } = (await response.json()) as { data: string };

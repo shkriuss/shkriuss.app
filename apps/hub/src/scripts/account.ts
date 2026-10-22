@@ -76,7 +76,9 @@ const PROBLEMS: Record<AccountErrorCode, string> = {
     'This browser or password manager can’t use a passkey to unlock an account. Use your recovery key, or add this device with a code from another one. (Google Password Manager on Android and iCloud Keychain on iPhone, iPad and Mac can.)',
   'unknown-passkey':
     'That passkey isn’t connected to a shkriuss account. Try another passkey, or use your recovery key.',
-  'link-used': 'This code was already used, or has expired. Show a new one on your other device.',
+  'link-used': 'This code has expired. Show a new one on your other device.',
+  'link-taken':
+    'Someone already used this code. If it wasn’t you, replace your account key on your other device now: whoever used it can see what you sync.',
   server: 'Couldn’t reach shkriuss.app. Check your connection and try again.',
 };
 
@@ -89,7 +91,7 @@ const REPLACED = {
   here: `Your account key was replaced on another device, so this device is signed out. ${SIGN_IN_AGAIN}`,
   key: `This key was replaced on another device, so it can’t sign in any more. ${SIGN_IN_AGAIN}`,
   passkey: `This passkey is for an account key that was replaced on another device, so it can’t sign in any more. ${SIGN_IN_AGAIN} Then you can add a new passkey.`,
-  done: 'Your account key is replaced. Devices with the old key are signed out when they next open this page. Now turn on sync again in your apps (below), and add a new passkey if you use one.',
+  done: 'Your account key is replaced. Devices with the old key are signed out when they next open this page. Now turn on sync again in each app (below), on each of your devices: until then, a lost device can still see that app’s changes. Add a new passkey if you use one.',
 };
 
 /** True if this key was replaced on another device (false if that can't be checked now). */
@@ -162,6 +164,8 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
   const dialogKey = required<HTMLElement>(keyDialog, '[data-dialog-key]');
   const dialogStatus = required<HTMLElement>(keyDialog, '[data-dialog-status]');
   const signOutDialog = required<HTMLDialogElement>(root, '[data-sign-out-dialog]');
+  const signOutApps = required<HTMLElement>(root, '[data-sign-out-apps]');
+  const signOutAppNames = required<HTMLElement>(root, '[data-sign-out-app-names]');
 
   const connectNote = required<HTMLElement>(root, '[data-connect-note]');
   const connectCode = required<HTMLElement>(root, '[data-connect-code]');
@@ -220,12 +224,19 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
     const current = account;
     if (!current) return;
     const synced = syncedApps(current.code);
+    // Apps here still on a replaced key: until they're turned on again, a
+    // lost device with that key can still see their changes.
+    const oldCodes = await Promise.all(replacedSecrets().map((old) => accountCodeOf(old)));
+    const stillOld = new Set(oldCodes.flatMap((code) => [...syncedApps(code).keys()]));
     const here = new URL(location.href);
     const links = await Promise.all(
       syncLinks.map(async ({ slug, name, turnOn }) => {
         const origin = synced.get(slug);
         if (!origin || !isAppOrigin(origin, slug, here)) {
-          return { text: `Turn on sync in ${name}`, href: turnOn, off: false };
+          const text = stillOld.has(slug)
+            ? `Turn on sync in ${name} again (it’s still on the old key)`
+            : `Turn on sync in ${name}`;
+          return { text, href: turnOn, off: false };
         }
         const proof = await turnOffProof(await appSecretOf(current.secret, slug));
         return { text: `Turn off sync in ${name}`, href: turnOffUrl(origin, proof), off: true };
@@ -342,7 +353,8 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
     if (link !== shown) return;
     if (state === 'used') {
       stopLink();
-      linkStatus.textContent = 'Your other device is signed in.';
+      linkStatus.textContent =
+        'A device used this code and is now signed in. If it wasn’t the one you meant, replace your account key now (below).';
     } else if (state === 'expired' || Date.now() > shown.expiresAt) {
       stopLink();
       linkStatus.textContent = 'The code expired. Show a new one if you still need it.';
@@ -559,6 +571,11 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
       keyDialog.close();
     },
     'sign-out': () => {
+      // Apps keep their own keys: signing out here doesn't stop them syncing.
+      const synced = account ? syncedApps(account.code) : new Map<string, string>();
+      const names = syncLinks.filter(({ slug }) => synced.has(slug)).map(({ name }) => name);
+      signOutApps.hidden = names.length === 0;
+      signOutAppNames.textContent = names.join(', ');
       signOutDialog.returnValue = '';
       signOutDialog.showModal();
     },

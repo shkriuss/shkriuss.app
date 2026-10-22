@@ -315,7 +315,9 @@ const syncApps = listedApps.filter((app) => app.sync === true);
         <h3 id="replace-key-heading">Lost a device?</h3>
         <p>
           If a signed-in device is lost or stolen, replace your account key. That signs out every
-          device with the old key and stops it syncing.
+          device with the old key when it next opens this page. Each app stops syncing with the old
+          key once you turn on sync in it again, with the links above: do that for every app, on
+          each of your devices. Until then, the lost device can still see that app's changes.
         </p>
         <p>
           <Button data-action="replace">Replace the account key</Button>
@@ -359,6 +361,10 @@ const syncApps = listedApps.filter((app) => app.sync === true);
         <p>
           To sign in again you'll need your recovery key, a passkey, or a code from another
           signed-in device.
+        </p>
+        <p data-sign-out-apps hidden>
+          Apps on this device keep syncing after you sign out. To stop that, cancel, and use the
+          "Turn off sync in …" links on this page first: <span data-sign-out-app-names></span>.
         </p>
         <div class="cluster">
           <Button type="submit" value="cancel">
