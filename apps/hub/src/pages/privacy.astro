@@ -63,6 +63,10 @@ const LAST_UPDATED = '22 October 2026';
               <td>
                 {whereLabel[site.storage]}
                 {site.sync && ' (and, if you turn on sync, a locked copy online)'}
+                {site.pushNotifications &&
+                  ' (and, if you turn on reminders while it’s closed, your reminders, locked, on its server)'}
+                {site.slug === HUB_SLUG &&
+                  ' (and, if you add a passkey, your account key, locked, on its server)'}
               </td>
             </tr>
           ))}
@@ -124,11 +128,14 @@ const LAST_UPDATED = '22 October 2026';
       <li>
         <strong>If you replace your account key</strong> (after losing a device): the server keeps a
         note that the old key was replaced, so devices that still have it sign out. Your device
-        keeps the old key for a while, so your apps can move their synced data to the new one.
+        keeps the old key until you sign out, so your apps can move their synced data to the new
+        one.
       </li>
       <li>
-        That's all. There's no list of accounts, and nothing that connects an account to you, to
-        your devices, or to your data in any app.
+        That's all. There's no list of accounts, and nothing stored that connects an account to you,
+        to your devices, or to your data in any app. Like any web request, each request comes with
+        your device's internet address and the time: Cloudflare's servers handle them to answer it,
+        and nothing here keeps them.
       </li>
     </ul>
 
@@ -147,8 +154,9 @@ const LAST_UPDATED = '22 October 2026';
           </li>
           <li>
             The app's own server on Cloudflare keeps one locked copy of the app's data. It sees how
-            big the copy is and when it changes, but never what's in it. It can't tell which account
-            is yours, and each app's copy can't be linked to another app's.
+            big the copy is and when it changes, but never what's in it. Nothing it stores says
+            which account is yours, or links one app's copy to another's (each sync comes with your
+            internet address and the time, which aren't kept).
           </li>
           <li>
             In apps with photos, each photo is locked on your device in the same way and kept with
@@ -193,15 +201,16 @@ const LAST_UPDATED = '22 October 2026';
       </li>
       <li>Send anything off your device unless you turn on an option that says it does.</li>
       <li>Make you sign up or log in. The account is optional and needs no email or name.</li>
-      <li>Sell or share your data. There is none to share.</li>
+      <li>Sell or share your data. We can't read it, so there's nothing to share.</li>
     </ul>
 
     <h2>Hosting</h2>
     <p>
       The sites are hosted by Cloudflare. Like any web host, Cloudflare's servers handle your IP
       address and basic request details (such as which page was asked for and your browser type) to
-      deliver pages and protect against attacks. No Cloudflare analytics or logging is turned on for
-      these sites, and that data is not collected or looked at. See{' '}
+      deliver pages and protect against attacks. Cloudflare keeps overall counts (like requests per
+      day) and a record of requests its firewall blocks. No logs of individual visits are turned on
+      for these sites, and nobody looks at that data. See{' '}
       <a href="https://www.cloudflare.com/privacypolicy/">Cloudflare's privacy policy</a>.
     </p>
 
@@ -209,6 +218,8 @@ const LAST_UPDATED = '22 October 2026';
     <ul>
       <li>
         Each app that saves data has a “Your data” section to back up, restore or delete it all.
+        Photos can only delete there: its photos are too big for a backup file, and its copy is its
+        online library, with sync on.
       </li>
       <li>
         Backups are files you download. By default they're locked with a passphrase you choose, on
@@ -217,8 +228,8 @@ const LAST_UPDATED = '22 October 2026';
       </li>
       <li>You can also clear a site's data in your browser settings.</li>
       <li>
-        Because your data is only on your device, clearing your browser data or losing the device
-        deletes it. Back up if you want to keep a copy or move to a new device.
+        Unless you turn on sync, your data is only on your device, so clearing your browser data or
+        losing the device deletes it. Back up if you want to keep a copy or move to a new device.
       </li>
       <li>
         Safari also deletes a website's data when it isn't opened for 7 days, unless it's on your
@@ -229,8 +240,8 @@ const LAST_UPDATED = '22 October 2026';
 
     <h2>Changes</h2>
     <p>
-      If this ever changes (for example, when apps start syncing through your account), this page
-      will be updated first, and the app will ask you before anything leaves your device.
+      If what leaves your device ever changes, this page is updated first, and the app asks you
+      before anything new leaves your device.
     </p>
   </article>
 </AppShell>
