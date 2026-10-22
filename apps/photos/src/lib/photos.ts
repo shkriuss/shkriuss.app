@@ -242,6 +242,8 @@ export function downloadName(photo: Pick<Photo, 'name' | 'type' | 'taken'>): str
 /** What happened when photos were picked, for a message. */
 export interface Added {
   added: number;
+  /** Photos that were only online: the same file puts their original back here. */
+  restored?: number;
   /** Already in the library (the same file). */
   duplicates: number;
   /** Files that aren't pictures. */
@@ -250,9 +252,19 @@ export interface Added {
   failed: number;
 }
 
-export function addedMessage({ added, duplicates, notPhotos, failed }: Added): string {
+export function addedMessage({
+  added,
+  restored = 0,
+  duplicates,
+  notPhotos,
+  failed,
+}: Added): string {
   const parts = [
-    added > 0 ? `Added ${countLabel(added, 'photo', 'photos')}.` : 'No photos were added.',
+    added > 0 || restored > 0 ? '' : 'No photos were added.',
+    added > 0 ? `Added ${countLabel(added, 'photo', 'photos')}.` : '',
+    restored > 0
+      ? `${countLabel(restored, 'original is', 'originals are')} back on this device.`
+      : '',
     duplicates > 0 ? `${countLabel(duplicates, 'photo was', 'photos were')} already here.` : '',
     notPhotos > 0 ? `${countLabel(notPhotos, 'file isn’t a photo', 'files aren’t photos')}.` : '',
     failed > 0 ? `${countLabel(failed, 'photo couldn’t', 'photos couldn’t')} be saved.` : '',

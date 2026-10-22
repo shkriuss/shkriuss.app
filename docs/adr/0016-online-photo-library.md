@@ -77,7 +77,9 @@ every device. That's far beyond what sync can hold:
   again, and only photos it still has are freed.
 - **The same photo twice:** a device skips a photo already in the library
   (same SHA-256). If two devices add it at once, the one with the larger id
-  is deleted.
+  is deleted. Picking a photo again whose original isn't on the device
+  (it's only online, say after "Free up space") puts the picked file back
+  as its original: the same SHA-256 means the same bytes.
 
 ### Protecting the bill
 

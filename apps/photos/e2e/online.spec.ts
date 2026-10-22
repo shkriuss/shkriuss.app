@@ -189,6 +189,16 @@ test('frees up space on this device, and the photos still show', async ({ page }
   const download = page.waitForEvent('download');
   await dialog.getByRole('button', { name: 'Save original' }).click();
   expect((await readFile(await (await download).path())).equals(original)).toBe(true);
+  await dialog.getByRole('button', { name: 'Close' }).click();
+
+  // Picking the same photo again puts its original back on this device.
+  await addPhotos(page, [jpeg('IMG_0003.JPG', original)]);
+  await expect(
+    page.getByRole('status').filter({ hasText: '1 original is back on this device.' }),
+  ).toBeAttached();
+  expect(await originalsHere(page)).toBe(1);
+  await expect(tiles(page)).toHaveCount(1);
+  await expect(freeUp).toBeVisible();
 });
 
 test('frees up space only when the online library has just said the photos are there', async ({

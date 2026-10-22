@@ -242,33 +242,46 @@ export function mountPhotos(root: Document): void {
     if (picked.length > 0 && !busy) void addPhotos(picked);
   });
 
-  /** Reads and saves picked photos one at a time; the same photo isn't added twice. */
+  /**
+   * Reads and saves picked photos one at a time. The same photo isn't added
+   * twice: picking one that's only online (after "Free up space") puts its
+   * original back here, as it's the same file (the same SHA-256).
+   */
   async function addPhotos(picked: readonly File[]): Promise<void> {
     busy = true;
     addButton.disabled = true;
-    const result: Added = { added: 0, duplicates: 0, notPhotos: 0, failed: 0 };
-    const hashes = new Set(photos.map((photo) => photo.hash));
+    const result: Required<Added> = {
+      added: 0,
+      restored: 0,
+      duplicates: 0,
+      notPhotos: 0,
+      failed: 0,
+    };
+    const byHash = new Map(photos.map((photo) => [photo.hash, photo]));
     for (const [index, file] of picked.entries()) {
       adding.hidden = false;
       adding.textContent = `Adding photos… ${index + 1} of ${picked.length}`;
       const read = await processFile(file);
+      const known = read.kind === 'photo' ? byHash.get(read.hash) : undefined;
       if (read.kind === 'not-a-photo') result.notPhotos += 1;
       else if (read.kind === 'failed') result.failed += 1;
-      else if (hashes.has(read.hash)) result.duplicates += 1;
+      else if (known?.here) result.duplicates += 1;
       else {
-        const photo: Photo = {
-          id: crypto.randomUUID(),
-          taken: read.taken ?? localDateTime(new Date(file.lastModified || Date.now())),
-          added: Date.now(),
-          name: file.name,
-          type: file.type,
-          size: file.size,
-          width: read.width,
-          height: read.height,
-          hash: read.hash,
-          online: null,
-          here: true,
-        };
+        const photo: Photo = known
+          ? { ...known, here: true }
+          : {
+              id: crypto.randomUUID(),
+              taken: read.taken ?? localDateTime(new Date(file.lastModified || Date.now())),
+              added: Date.now(),
+              name: file.name,
+              type: file.type,
+              size: file.size,
+              width: read.width,
+              height: read.height,
+              hash: read.hash,
+              online: null,
+              here: true,
+            };
         try {
           await savePhoto(photo, {
             id: photo.id,
@@ -276,9 +289,10 @@ export function mountPhotos(root: Document): void {
             view: read.view,
             thumb: read.thumb,
           });
-          hashes.add(photo.hash);
-          photos = [...photos, photo].sort(byNewest);
-          result.added += 1;
+          byHash.set(photo.hash, photo);
+          photos = [...photos.filter((one) => one.id !== photo.id), photo].sort(byNewest);
+          if (known) result.restored += 1;
+          else result.added += 1;
           render();
         } catch {
           result.failed += 1;

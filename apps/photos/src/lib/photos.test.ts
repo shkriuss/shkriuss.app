@@ -140,4 +140,12 @@ describe('for people', () => {
       'No photos were added. 1 photo was already here.',
     );
   });
+
+  it('says when picking a photo again put its original back', () => {
+    const none = { added: 0, duplicates: 0, notPhotos: 0, failed: 0 };
+    expect(addedMessage({ ...none, restored: 1 })).toBe('1 original is back on this device.');
+    expect(addedMessage({ ...none, added: 2, restored: 3, duplicates: 1 })).toBe(
+      'Added 2 photos. 3 originals are back on this device. 1 photo was already here.',
+    );
+  });
 });
