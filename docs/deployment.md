@@ -142,6 +142,15 @@ look at doesn't need approving: merging doesn't wait for previews.
 Approve only pull requests you trust: the preview runs that pull request's
 code with the Cloudflare token.
 
+**Old version addresses.** Before the sites had server code, Cloudflare gave
+each production deploy of the hub, Calendar, Grammar, Photos and Tally a
+permanent address like `1a2b3c4d-tally.shkriuss.workers.dev` (36 of them,
+audit finding I-6). They serve only that old version's static files: no
+data, and no way to reach anyone's. Cloudflare can't delete single versions,
+and no new ones are made. To hide them anyway, turn on Cloudflare Access for
+those Workers' preview addresses (**Workers & Pages** → the Worker →
+**Settings** → **Domains & Routes** → **Preview URLs**).
+
 ## Rolling back
 
 - **Easiest:** revert the pull request on GitHub (open the merged pull
