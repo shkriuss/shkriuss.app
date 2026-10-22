@@ -261,6 +261,16 @@ describe('changes', () => {
     ]);
   });
 
+  it('is simply done when there’s no next date before 9999-12-31', () => {
+    for (const repeat of ['yearly', 'daily'] as const) {
+      const last = task({ title: 'Far away', date: '9999-12-31', repeat });
+      const { state, next } = completeTask(stateOf(last), last.id, 5000, '9999-12-31', 'copy');
+      expect(next).toBeNull();
+      expect(state.tasks).toEqual([{ ...last, done: 5000, updated: 5000 }]);
+      expect(isTasksState(state)).toBe(true);
+    }
+  });
+
   it('works out the next date of each kind of repeat', () => {
     // Due today (Tuesday).
     expect(nextDate(TODAY, 'daily', TODAY)).toBe('2026-10-21');

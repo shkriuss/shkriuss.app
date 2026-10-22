@@ -116,8 +116,16 @@ export function draftProblems(draft: EventDraft): Partial<Record<DraftField, str
 
   if (!problems.startDate && !problems.endDate) {
     const span = daysBetween(draft.startDate, draft.endDate);
+    // A timed event may end on the day it repeats, before its start time: a
+    // daily 22:00–06:00 shift still ends before the next one starts.
+    const overnight =
+      draft.repeat !== 'none' &&
+      !allDay &&
+      isIsoTime(draft.startTime) &&
+      isIsoTime(draft.endTime) &&
+      (draft.endTime as string) <= (draft.startTime as string);
     if (span < 0) problems.endDate = 'The end date must be on or after the start date.';
-    else if (span > maxSpanFor(draft.repeat)) {
+    else if (span > maxSpanFor(draft.repeat) + (overnight ? 1 : 0)) {
       problems.endDate =
         draft.repeat === 'none'
           ? `An event can last up to ${MAX_SPAN_DAYS} days.`

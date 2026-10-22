@@ -71,6 +71,15 @@ describe('draftProblems', () => {
       /before it repeats/,
     );
     expect(draftProblems(draft({ repeat: 'weekly', endDate: '2026-10-23' }))).toEqual({});
+    // Overnight: it ends the next day, before the next one starts.
+    const shift = { startTime: '22:00', endTime: '06:00', endDate: '2026-10-18' } as const;
+    expect(draftProblems(draft({ ...shift, repeat: 'daily' }))).toEqual({});
+    expect(draftProblems(draft({ ...shift, repeat: 'daily', endTime: '22:30' })).endDate).toMatch(
+      /before it repeats/,
+    );
+    expect(
+      draftProblems(draft({ ...shift, repeat: 'weekly', endDate: '2026-10-24', endTime: '08:00' })),
+    ).toEqual({});
   });
 });
 

@@ -361,8 +361,13 @@ export function nextDate(date: IsoDate, repeat: Repeat, today: IsoDate, every = 
         step,
         Math.floor(((later.year - year) * 12 + later.month - month) / step) * step,
       );
-      while (compareDates(sameDayInMonth(date, months), after) <= 0) months += step;
-      return sameDayInMonth(date, months);
+      let next = sameDayInMonth(date, months);
+      // Dates end at 9999-12-31: past that, the caller sees it isn't a date.
+      while (isIsoDate(next) && compareDates(next, after) <= 0) {
+        months += step;
+        next = sameDayInMonth(date, months);
+      }
+      return next;
     }
   }
 }
@@ -384,6 +389,10 @@ export function completeTask(
     return { state: updateTask(state, { ...task, done: now, updated: now }), next: null };
   }
   const next = nextDate(task.date, task.repeat, today, task.every);
+  // No next date before the last one there is (9999-12-31): it's simply done.
+  if (!isIsoDate(next)) {
+    return { state: updateTask(state, { ...task, done: now, updated: now }), next: null };
+  }
   const copy: Task = {
     ...task,
     id: copyId,

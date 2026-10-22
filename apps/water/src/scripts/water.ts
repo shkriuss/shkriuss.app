@@ -30,6 +30,7 @@ import {
   emptySettings,
   everyLabel,
   formatAmount,
+  goalReached,
   inUnit,
   isDrinksState,
   isSettingsState,
@@ -224,8 +225,8 @@ export function mountWater(root: Document): void {
 
   function renderHistory(): void {
     const goal = amountOf(settings, 'goal');
-    const days = recentDays(drinks, goal, day);
-    const count = streak(drinks, goal, day);
+    const days = recentDays(drinks, goal, day, 7, unit());
+    const count = streak(drinks, goal, day, unit());
     streakLine.textContent = streakText(count);
     streakLine.hidden = count === 0;
     averageLine.textContent = days.some((entry) => entry.ml > 0)
@@ -281,7 +282,9 @@ export function mountWater(root: Document): void {
     const total = totalOn(next, day);
     const when = date === day ? '' : ` ${dayLabel(date, day).toLowerCase()}`;
     let message = `Added ${amount(ml)}${when}. ${amount(total)} of ${amount(goal)} today.`;
-    if (before < goal && total >= goal) message += ' Goal reached. Well done!';
+    if (!goalReached(before, goal, unit()) && goalReached(total, goal, unit())) {
+      message += ' Goal reached. Well done!';
+    }
     save({ drinks: next }, message);
   }
 
