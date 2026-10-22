@@ -108,13 +108,43 @@ export function bearerToken(request: Request): string | null {
   return match?.[1] ?? null;
 }
 
+/**
+ * The body's bytes, read as they arrive: null as soon as there are more than
+ * `limit`, so a big body sent without Content-Length is never held whole.
+ */
+async function readLimited(
+  request: Request,
+  limit: number,
+): Promise<Uint8Array<ArrayBuffer> | null> {
+  if (Number(request.headers.get('Content-Length') ?? '0') > limit) return null;
+  if (!request.body) return new Uint8Array(0);
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.length;
+    if (size > limit) {
+      await reader.cancel().catch(() => undefined);
+      return null;
+    }
+    chunks.push(value);
+  }
+  const body = new Uint8Array(size);
+  let at = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, at);
+    at += chunk.length;
+  }
+  return body;
+}
+
 /** Reads a JSON body, refusing anything bigger than `limit` bytes (throws RangeError). */
 export async function readJson(request: Request, limit: number): Promise<unknown> {
-  const declared = Number(request.headers.get('Content-Length') ?? '0');
-  if (declared > limit) throw new RangeError('Too big');
-  const text = await request.text();
-  if (text.length > limit) throw new RangeError('Too big');
-  return JSON.parse(text);
+  const bytes = await readLimited(request, limit);
+  if (!bytes) throw new RangeError('Too big');
+  return JSON.parse(new TextDecoder().decode(bytes));
 }
 
 /** readJson() as a response: the parsed body, or the 413/400 to send back. */
@@ -143,10 +173,8 @@ export async function bytesBody(
   request: Request,
   limit: number,
 ): Promise<{ ok: true; body: Uint8Array<ArrayBuffer> } | { ok: false; response: Response }> {
-  const tooBig = { ok: false as const, response: problem(413, 'Request too big.') };
-  if (Number(request.headers.get('Content-Length') ?? '0') > limit) return tooBig;
-  const body = new Uint8Array(await request.arrayBuffer());
-  return body.length > limit ? tooBig : { ok: true, body };
+  const body = await readLimited(request, limit);
+  return body ? { ok: true, body } : { ok: false, response: problem(413, 'Request too big.') };
 }
 
 /**
