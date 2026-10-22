@@ -20,9 +20,44 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+const DAY = 86_400_000;
+
+/** The push service answers every message with `status` (201: delivered). */
+function pushService(status: number | (() => number) = 201) {
+  const sent = vi.fn(
+    async (_input: string, _init?: RequestInit) =>
+      new Response(null, { status: typeof status === 'number' ? status : status() }),
+  );
+  vi.stubGlobal('fetch', sent);
+  return sent;
+}
+
+/** Lets `days` days pass, waking each device's object whenever its alarm is due. */
+async function passDays(days: number): Promise<void> {
+  const end = Date.now() + days * DAY;
+  for (;;) {
+    const alarms = [...server.devices.values()]
+      .map(({ storage }) => storage.alarm)
+      .filter((alarm): alarm is number => alarm !== null && alarm <= end);
+    if (alarms.length === 0) break;
+    vi.setSystemTime(Math.max(Date.now(), Math.min(...alarms)));
+    await server.runAlarms();
+  }
+  vi.setSystemTime(end);
+}
+
+/** `count` daily reminders, a minute apart from 09:00 UTC. */
+const daily = (count: number) =>
+  Array.from({ length: count }, (_, index) =>
+    entry({
+      id: `e${index}`,
+      start: `2026-10-01T${String(9 + Math.floor(index / 60)).padStart(2, '0')}:${String(index % 60).padStart(2, '0')}`,
+    }),
+  );
+
 const entry = (overrides: Record<string, unknown> = {}) => ({
   id: 'e1',
-  start: '2026-11-01T09:00',
+  start: '2026-10-01T09:00',
   repeat: 'daily',
   until: null,
   offset: 0,
@@ -70,6 +105,84 @@ describe('one request at a time', () => {
       );
     const statuses = await Promise.all([change(), change()]);
     expect(statuses.map((response) => response.status).sort()).toEqual([200, 429]);
+  });
+});
+
+describe('devices whose messages don’t get through', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ now: Date.UTC(2026, 9, 22), toFake: ['Date'] });
+  });
+
+  it('is forgotten after two days when its push address doesn’t exist', async () => {
+    const sent = vi.fn(async () => {
+      throw new TypeError('getaddrinfo ENOTFOUND');
+    });
+    vi.stubGlobal('fetch', sent);
+    expect((await device().schedule(daily(50))).status).toBe(200);
+    await passDays(3);
+    expect(
+      [...server.devices.values()].map(({ storage }) => [storage.map.size, storage.alarm]),
+    ).toEqual([[0, null]]);
+    // Each wake-up asked for one signature at most, however many it sent.
+    expect(server.counts.signs).toBeLessThanOrEqual(server.counts.wakes);
+    // And nothing more after that.
+    const attempts = sent.mock.calls.length;
+    await passDays(7);
+    expect(sent.mock.calls.length).toBe(attempts);
+  });
+
+  it('is forgotten after two days when its push service refuses every message', async () => {
+    pushService(400);
+    expect((await device().schedule(daily(3))).status).toBe(200);
+    await passDays(3);
+    expect([...server.devices.values()].map(({ storage }) => storage.map.size)).toEqual([0]);
+  });
+
+  it('is kept while some messages get through', async () => {
+    // The push service fails all day on 23 and 26 October.
+    const badDays = ['2026-10-23', '2026-10-26'];
+    const sent = pushService(() =>
+      badDays.includes(new Date(Date.now()).toISOString().slice(0, 10)) ? 503 : 201,
+    );
+    expect((await device().schedule(daily(1))).status).toBe(200);
+    await passDays(5);
+    expect([...server.devices.values()].map(({ storage }) => storage.map.has('device'))).toEqual([
+      true,
+    ]);
+    // Once on 22, 24 and 25 October, and four tries on each bad day.
+    expect(sent.mock.calls).toHaveLength(11);
+  });
+});
+
+describe('the app’s daily limit', () => {
+  it('signs once per wake-up, not once per message', async () => {
+    vi.useFakeTimers({ now: Date.UTC(2026, 9, 22), toFake: ['Date'] });
+    const sent = pushService();
+    const entries = Array.from({ length: 30 }, (_, index) => entry({ id: `e${index}` }));
+    expect((await device().schedule(entries)).status).toBe(200);
+    await passDays(1);
+    // 25 messages in the first wake-up, the other 5 straight after.
+    expect(sent.mock.calls).toHaveLength(30);
+    expect(server.counts.signs).toBe(2);
+  });
+
+  it('stops sending until 00:00 UTC once the app has sent 2,000 messages that day', async () => {
+    vi.useFakeTimers({ now: Date.UTC(2026, 9, 22), toFake: ['Date'] });
+    const sent = pushService();
+    // Five devices with 500 reminders each, all at 09:00.
+    const entries = Array.from({ length: 500 }, (_, index) => entry({ id: `e${index}` }));
+    for (let index = 0; index < 5; index += 1) {
+      expect((await device().schedule(entries)).status).toBe(200);
+    }
+    const perDay: number[] = [];
+    for (let day = 0; day < 2; day += 1) {
+      const before = sent.mock.calls.length;
+      await passDays(1);
+      perDay.push(sent.mock.calls.length - before);
+    }
+    expect(perDay).toEqual([2000, 2000]);
+    // Every device is still there, waiting for its next time.
+    expect([...server.devices.values()].every(({ storage }) => storage.alarm !== null)).toBe(true);
   });
 });
 

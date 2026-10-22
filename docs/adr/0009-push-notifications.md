@@ -43,9 +43,14 @@ browsers like IronFox receive Web Push through **UnifiedPush**.
 - **Sending:** messages go with `TTL` 6 hours and `Urgency: high`. If the push
   service says the subscription is gone (404/410), everything for that device
   is deleted. Busy or failing push services are retried 3 times. A message
-  more than an hour late is skipped.
+  more than an hour late is skipped. If nothing gets through for two days
+  (every message fails or is refused), the device is forgotten too: a real
+  push service accepts them. One signature covers a whole wake-up (it lasts
+  12 hours), not one per message.
 - **Limits:** 500 scheduled notifications per device, 4 KB per message,
-  https push addresses with a domain name only, schedule changes rate-limited.
+  https push addresses with a domain name only (no redirects), schedule
+  changes rate-limited, and at most 2,000 messages per app per day (UTC):
+  past that, sending waits until 00:00 UTC.
 - **Not stored in backups:** the device key and subscription keys live under
   `shkriuss-device:` in `localStorage`, which backups skip, so restoring on
   another phone can't take over this one's notifications.
@@ -58,14 +63,18 @@ browsers like IronFox receive Web Push through **UnifiedPush**.
 - The server learns when notifications are due, how many, the time zone, and
   the push address; never their content. The privacy page says so.
 - Free within Cloudflare's free plan (Durable Objects: 100,000 requests a
-  day; each notification sent is about two).
+  day; each wake-up of a device is about two: the wake-up, and one signature
+  for up to 25 messages).
 - New code to maintain on the server side, covered by unit tests (encryption
   test vector, schedules, signing, request checks) and browser tests with a
   local push receiver.
 - Anyone can call `/api/push/*` (that's how phones reach it), and push
-  addresses can be any https server (UnifiedPush servers are). Someone
-  determined could use up the free daily quota; notifications would then
-  pause until the next day (00:00 UTC). It can't cost money on the free plan
+  addresses can be any https server (UnifiedPush servers are), so anyone can
+  upload a made-up schedule. One whose push address never accepts a message
+  is forgotten after two days, and one app sends at most 2,000 messages a
+  day in all. So someone determined can use up only that app's messages for
+  the day (its notifications then pause until 00:00 UTC), not the Durable
+  Object requests the other apps need. It can't cost money on the free plan
   and can't reveal anything. If it ever happens, add Cloudflare's rate
   limiting in front of `/api/push/*`.
 

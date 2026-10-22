@@ -46,12 +46,25 @@ export interface PushEnv extends SiteEnv {
 
 // ---------- Settings ----------
 
+const DAY_MS = 24 * 60 * 60 * 1000;
 /** How long a push service keeps a message for an offline phone. */
 const TTL_SECONDS = 6 * 60 * 60;
 /** Messages more than this late (the phone was off, the server busy) are skipped. */
 const LATE_LIMIT_MS = 60 * 60 * 1000;
 /** Retries when a push service is busy or failing, a minute apart, then two. */
 const RETRIES = 3;
+/**
+ * A device whose messages have all failed or been refused for this long is
+ * forgotten: a real push service accepts them. Without this, a schedule made
+ * up by a stranger would wake the server every day, for good.
+ */
+const GIVE_UP_MS = 2 * DAY_MS;
+/**
+ * Messages one app may send in a day (UTC), from all its devices together.
+ * Past it, sending waits until 00:00 UTC, so made-up schedules can't use up
+ * the free plan's daily Durable Object requests, which every app shares.
+ */
+const DAILY_SENDS = 2000;
 /** Schedule changes per device in 10 minutes; test messages need 10 seconds between them. */
 const UPDATES_PER_WINDOW = 60;
 const UPDATE_WINDOW_MS = 10 * 60 * 1000;
@@ -129,10 +142,23 @@ export class PushKeys {
     const keys = await this.#load();
     if (pathname === '/public-key') return json({ publicKey: keys.publicKey });
     if (pathname === '/sign' && request.method === 'POST') {
-      const { endpoint } = (await request.json()) as { endpoint: string };
+      const { endpoint, sends } = (await request.json()) as { endpoint: string; sends: number };
+      if (!(await this.#count(sends))) return problem(429, 'Today’s messages are used up.');
       return json({ authorization: await vapidAuthorization(endpoint, keys) });
     }
     return problem(404, 'Not found.');
+  }
+
+  /** Counts `sends` more messages today (UTC); false if that would go over the limit. */
+  async #count(sends: number): Promise<boolean> {
+    return this.state.blockConcurrencyWhile(async () => {
+      const today = Math.floor(Date.now() / DAY_MS);
+      const saved = await this.state.storage.get<{ day: number; sends: number }>('sent');
+      const sent = saved?.day === today ? saved.sends : 0;
+      if (sent + sends > DAILY_SENDS) return false;
+      await this.state.storage.put('sent', { day: today, sends: sent + sends });
+      return true;
+    });
   }
 }
 
@@ -151,9 +177,13 @@ interface DeviceRecord {
   timeZone: string;
   entries: StoredEntry[];
   updates: { windowStart: number; count: number };
+  /** Since when every message has failed or been refused (null: the last one got through). */
+  failingSince?: number | null;
 }
 
 type SendResult = 'sent' | 'gone' | 'rejected' | 'retry';
+/** The Authorization header for messages, or why there's none. */
+type Signed = { authorization: string } | 'limit' | 'failed';
 
 export class PushDevice {
   readonly state: DurableObjectState;
@@ -185,24 +215,36 @@ export class PushDevice {
     await this.state.storage.deleteAll();
   }
 
-  /** Sends one encrypted message to the device's push service. */
-  async #send(endpoint: string, payload: string): Promise<SendResult> {
+  /**
+   * Signs for `sends` messages to `endpoint`. One signature lasts 12 hours, so
+   * a whole wake-up needs only one. 'limit': the app's messages for today
+   * are used up.
+   */
+  async #sign(endpoint: string, sends: number): Promise<Signed> {
     const keys = this.env.PUSH_KEYS.get(this.env.PUSH_KEYS.idFromName('vapid'));
+    try {
+      const response = await keys.fetch('https://keys/sign', {
+        method: 'POST',
+        body: JSON.stringify({ endpoint, sends }),
+      });
+      if (response.status === 429) return 'limit';
+      return response.ok ? ((await response.json()) as { authorization: string }) : 'failed';
+    } catch {
+      return 'failed';
+    }
+  }
+
+  /** Sends one encrypted message to the device's push service. */
+  async #send(endpoint: string, payload: string, authorization: string): Promise<SendResult> {
     let response: Response;
     try {
-      const signed = (await (
-        await keys.fetch('https://keys/sign', {
-          method: 'POST',
-          body: JSON.stringify({ endpoint }),
-        })
-      ).json()) as { authorization: string };
       response = await fetch(endpoint, {
         method: 'POST',
         // Push services never redirect. Following one could lead anywhere (plain
         // http, an IP address), so a redirect is refused like any other answer.
         redirect: 'manual',
         headers: {
-          Authorization: signed.authorization,
+          Authorization: authorization,
           'Content-Encoding': 'aes128gcm',
           'Content-Type': 'application/octet-stream',
           TTL: String(TTL_SECONDS),
@@ -240,7 +282,10 @@ export class PushDevice {
       const lastTest = (await this.state.storage.get<number>('lastTest')) ?? 0;
       if (now - lastTest < TEST_GAP_MS) return problem(429, 'Wait a few seconds.');
       await this.state.storage.put('lastTest', now);
-      const result = await this.#send(endpoint, payload);
+      const signed = await this.#sign(endpoint, 1);
+      if (signed === 'limit') return problem(429, 'No more notifications today; try tomorrow.');
+      const result =
+        signed === 'failed' ? 'retry' : await this.#send(endpoint, payload, signed.authorization);
       if (result === 'gone') {
         await this.#forget();
         return problem(410, 'This device is no longer subscribed.');
@@ -268,6 +313,8 @@ export class PushDevice {
       timeZone: schedule.timeZone,
       entries,
       updates,
+      // Still failing for the same push address: an upload doesn't start the count again.
+      failingSince: record?.endpoint === schedule.endpoint ? (record.failingSince ?? null) : null,
     });
     return json({ scheduled: entries.length });
   }
@@ -282,22 +329,49 @@ export class PushDevice {
     const record = await this.#record();
     if (!record) return;
     const now = Date.now();
+    // What's due (at most SENDS_PER_ALARM; the rest go out straight after), and
+    // how many of those to send: ones more than an hour late are skipped.
+    const due = new Set(
+      record.entries
+        .filter((entry) => (entry.retryAt ?? entry.next) <= now)
+        .slice(0, SENDS_PER_ALARM),
+    );
+    const sends = [...due].filter((entry) => now - entry.next <= LATE_LIMIT_MS).length;
+    // One signature for them all (none needed if all are too late).
+    const signed = sends > 0 ? await this.#sign(record.endpoint, sends) : 'failed';
+    if (signed === 'limit') {
+      // The app's messages for today are used up: try again after 00:00 UTC.
+      await this.state.storage.setAlarm((Math.floor(now / DAY_MS) + 1) * DAY_MS);
+      return;
+    }
+    let failingSince = record.failingSince ?? null;
     const entries: StoredEntry[] = [];
-    let sends = 0;
     for (const entry of record.entries) {
-      if ((entry.retryAt ?? entry.next) > now || sends >= SENDS_PER_ALARM) {
+      if (!due.has(entry)) {
         entries.push(entry);
         continue;
       }
-      sends += 1;
-      let result: SendResult = 'rejected';
+      let result: SendResult | 'late' = 'late';
       if (now - entry.next <= LATE_LIMIT_MS) {
-        result = await this.#send(record.endpoint, entry.payload);
+        // If signing failed (our side), try again as if the push service were busy.
+        result =
+          signed === 'failed'
+            ? 'retry'
+            : await this.#send(record.endpoint, entry.payload, signed.authorization);
       }
       if (result === 'gone') {
         // The phone unsubscribed or the browser data was cleared: forget everything.
         await this.#forget();
         return;
+      }
+      if (result === 'sent') failingSince = null;
+      else if (result !== 'late' && signed !== 'failed') {
+        // Nothing has got through for two days: a made-up or long-dead push address.
+        failingSince ??= now;
+        if (now - failingSince >= GIVE_UP_MS) {
+          await this.#forget();
+          return;
+        }
       }
       if (result === 'retry' && entry.attempts < RETRIES) {
         const attempts = entry.attempts + 1;
@@ -308,6 +382,6 @@ export class PushDevice {
       const next = nextFireTime(entry, record.timeZone, Math.max(entry.next, now));
       if (next !== null) entries.push({ ...entry, next, attempts: 0, retryAt: null });
     }
-    await this.#save({ ...record, entries });
+    await this.#save({ ...record, entries, failingSince });
   }
 }

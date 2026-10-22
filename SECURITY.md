@@ -25,7 +25,9 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
   It only ever holds messages encrypted on the user's device, delivery times
   and a time zone; each app has its own storage and signing key, generated
   by the server and never exported. Requests are size-limited, rate-limited
-  and checked; push addresses must be https with a domain name.
+  and checked; push addresses must be https with a domain name, and
+  redirects are refused. A device whose messages all fail or are refused for
+  two days is forgotten, and each app sends at most 2,000 messages a day.
 - The hub also runs a small Worker for `/api/account/*`, for the optional
   **shkriuss account** ([ADR 0010](docs/adr/0010-account-and-sync.md)). It
   only holds values sealed on the device (AES-256-GCM): passkey locks, under
