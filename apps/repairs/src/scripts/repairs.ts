@@ -345,13 +345,15 @@ export function mountRepairs(root: Document): void {
     resultCount.textContent =
       (filtered ? `${count}${on}${matching}` : `${count} in all`) + (sums ? ` · ${sums}.` : '.');
 
+    // Each day's total counts all its repairs, also those after "Show more".
+    const dayTotals = new Map(byDay(found).map((day) => [day.date, totals(day.repairs)]));
     daysList.replaceChildren(
       ...byDay(found.slice(0, shown)).map((day) => {
         const fragment = dayTemplate.content.cloneNode(true) as DocumentFragment;
         const block = required<HTMLElement>(fragment, 'div');
         required<HTMLElement>(block, '[data-day-heading]').textContent = dayLabel(day.date);
         required<HTMLElement>(block, '[data-day-total]').textContent = totalsText(
-          totals(day.repairs),
+          dayTotals.get(day.date) ?? totals(day.repairs),
         );
         required<HTMLUListElement>(block, '[data-day-list]').replaceChildren(
           ...day.repairs.map(renderRepair),

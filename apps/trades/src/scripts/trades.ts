@@ -36,6 +36,7 @@ import {
   saveTrade,
   setCurrency,
   setupNames,
+  shownRate,
   SIDE_LABELS,
   stats,
   toCsv,
@@ -80,7 +81,15 @@ const FIELDS: readonly (keyof TradeForm)[] = [
   'setup',
   'notes',
 ];
-const percent = new Intl.NumberFormat(undefined, { style: 'percent', maximumFractionDigits: 0 });
+/** A win rate: whole percent, never rounded to 100% with a loss or to 0% with a win. */
+function rateText(rate: number): string {
+  const { value, digits } = shownRate(rate);
+  return new Intl.NumberFormat(undefined, {
+    style: 'percent',
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(value);
+}
 
 function required<T extends Element>(root: ParentNode, selector: string): T {
   const element = root.querySelector<T>(selector);
@@ -169,7 +178,7 @@ export function mountTrades(root: Document): void {
     if (found.count === 0) return;
     tile('total', money(found.total, true), '', found.total);
     tile('count', String(found.count), `${found.wins} won, ${found.losses} lost`);
-    tile('win-rate', found.winRate === null ? '—' : percent.format(found.winRate));
+    tile('win-rate', found.winRate === null ? '—' : rateText(found.winRate));
     tile(
       'profit-factor',
       found.profitFactor === null ? '—' : found.profitFactor.toFixed(2),
@@ -276,7 +285,7 @@ export function mountTrades(root: Document): void {
         total.textContent = money(group.total, true);
         tone(total, group.total);
         required<HTMLElement>(item, '[data-group-counts]').textContent =
-          `${group.count} ${group.count === 1 ? 'trade' : 'trades'}, ${percent.format(group.wins / group.count)} won`;
+          `${group.count} ${group.count === 1 ? 'trade' : 'trades'}, ${rateText(group.wins / group.count)} won`;
         return item;
       }),
     );
