@@ -12,6 +12,7 @@ import {
   migrateNotes,
   notesCount,
   removeNote,
+  keepOtherVersion,
   secondVersion,
   setPinned,
   titleOf,
@@ -75,6 +76,17 @@ describe('writing notes', () => {
     expect(dropIfEmpty(state, 'b')).toBe(state);
     expect(dropIfEmpty(state, 'c')).toBe(state);
     expect(dropIfEmpty(state, 'missing')).toBe(state);
+  });
+
+  it('keeps the other device’s version as a second note while typing goes on here', () => {
+    const state = { notes: [note('a', 'Trip', 'Theirs', 5, false)] };
+    expect(keepOtherVersion(state, 'a', 'b')).toEqual({
+      notes: [
+        note('a', 'Trip', 'Theirs', 5, false),
+        note('b', 'Trip (second version)', 'Theirs', 5, false),
+      ],
+    });
+    expect(keepOtherVersion(state, 'gone', 'b')).toBe(state);
   });
 
   it('makes a second version of a note changed on two devices', () => {

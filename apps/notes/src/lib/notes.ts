@@ -141,6 +141,16 @@ export const secondVersion = (note: Note, id: string): Note => ({
   title: secondVersionName(note.title, MAX_TITLE_LENGTH),
 });
 
+/**
+ * A note changed on another device while it was being typed here: that
+ * version is kept as a second note (with id `copyId`), so the typing can go
+ * on in this one without losing it.
+ */
+export function keepOtherVersion(state: NotesState, id: string, copyId: string): NotesState {
+  const note = state.notes.find((entry) => entry.id === id);
+  return note ? { notes: [...state.notes, secondVersion(note, copyId)] } : state;
+}
+
 /** Cuts text to `max` characters (never in the middle of an emoji), adding "…". */
 function shorten(text: string, max: number): string {
   const characters = [...text];

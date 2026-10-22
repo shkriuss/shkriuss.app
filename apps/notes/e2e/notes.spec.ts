@@ -181,3 +181,32 @@ test('keeps notes saved by the first version, splitting off their titles', async
   await expect(titleBox(page)).toHaveValue('Groceries');
   await expect(bodyBox(page)).toHaveValue('Milk\nEggs');
 });
+
+test('typing doesn’t overwrite a change made elsewhere: that version is kept too', async ({
+  page,
+}) => {
+  // Typing here waits a moment before it's saved: hold that moment still.
+  await page.clock.install();
+  await page.reload();
+  await writeNote(page, 'Trip', 'Pack bags');
+  // The same note open in a second tab (the same as a sync bringing a change).
+  const other = await page.context().newPage();
+  await other.goto('/');
+  await other.getByRole('link', { name: 'Trip', exact: true }).click();
+  await page.getByRole('link', { name: 'Trip', exact: true }).click();
+
+  // Typing here, not saved yet, when the other tab saves its change.
+  await bodyBox(page).pressSequentially(' and tickets');
+  await bodyBox(other).fill('Pack bags and passports');
+  await other.getByRole('button', { name: 'All notes' }).click();
+
+  await page.getByRole('button', { name: 'All notes' }).click();
+  await expect
+    .poll(async () => (await titles(page)).sort())
+    .toEqual(['Trip', 'Trip (second version)']);
+  await card(page, 'Trip').getByRole('link').click();
+  await expect(bodyBox(page)).toHaveValue('Pack bags and tickets');
+  await page.getByRole('button', { name: 'All notes' }).click();
+  await card(page, 'Trip (second version)').getByRole('link').click();
+  await expect(bodyBox(page)).toHaveValue('Pack bags and passports');
+});

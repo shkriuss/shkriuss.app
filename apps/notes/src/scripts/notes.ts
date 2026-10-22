@@ -22,6 +22,7 @@ import {
   emptyState,
   isEmpty,
   isNotesState,
+  keepOtherVersion,
   MAX_NOTES,
   migrateNotes,
   NOTES_VERSION,
@@ -179,6 +180,9 @@ export function mountNotes(root: Document): void {
     if (note) showEdited(note);
   }
 
+  /** What the note was when the typing that's waiting to be saved began. */
+  let typingFrom: { title: string; body: string } | null = null;
+
   /** Saves typing now instead of a moment later. */
   function flush(): void {
     if (saveTimer === undefined) return;
@@ -251,8 +255,18 @@ export function mountNotes(root: Document): void {
       if (!listView.hidden) renderList();
       return;
     }
-    // Typing here is newer than what came in: keep it.
+    // Typing here is newer than what came in: keep it. If the note changed
+    // on another device meanwhile, that version is kept as a second note.
     if (saveTimer !== undefined) {
+      const stored = find(current);
+      if (
+        stored &&
+        typingFrom &&
+        (stored.title !== typingFrom.title || stored.body !== typingFrom.body)
+      ) {
+        state = keepOtherVersion(state, current, crypto.randomUUID());
+        announce('This note was changed on another device: that version is kept as a second note.');
+      }
       flush();
       return;
     }
@@ -295,6 +309,10 @@ export function mountNotes(root: Document): void {
   });
 
   editorView.addEventListener('input', () => {
+    if (saveTimer === undefined) {
+      const note = current === null ? undefined : find(current);
+      typingFrom = note ? { title: note.title, body: note.body } : null;
+    }
     window.clearTimeout(saveTimer);
     saveTimer = window.setTimeout(() => {
       saveTimer = undefined;
