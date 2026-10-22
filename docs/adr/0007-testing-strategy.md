@@ -21,7 +21,17 @@ reach production, and new apps should get strong checks without extra work.
   cross-origin requests, no cookies, 320px reflow, skip link, manifest,
   icons and offline support.
 - **`pnpm check:dist`**: no inline code in built HTML, plus gzipped byte
-  budgets per page (HTML 20 KB, CSS 15 KB, JS 25 KB).
+  budgets per page (HTML 20 KB, CSS 15 KB, JS 35 KB). The JS counts every
+  file a page's scripts import before they run.
+
+  _Changed in October 2026 (audit findings J-4 and Z-6):_ the JS budget was
+  25 KB, but it counted only the files named in the HTML, not the shared
+  files they import, like the sync client (about 10 KB) that every app with
+  sync loads. So Calendar really loaded 32 KB while the check said 21 KB.
+  The check now counts what really loads, and the budget is 35 KB, which
+  every page meets today (Calendar is the biggest). Scripts started later,
+  like workers and Grammar's checker, aren't counted: they're not part of
+  opening the page.
 
 ## Consequences
 
