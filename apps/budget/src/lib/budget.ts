@@ -79,8 +79,13 @@ const tidy = (value: number): number => Math.round(value * 100) / 100;
 
 // ---------- Checking ----------
 
+/**
+ * A saved amount. The form never saves 0, but older versions could (0.001
+ * was kept as 0), so 0 is still read: refusing it would make all of Budget
+ * unreadable on that device.
+ */
 const isAmount = (value: unknown): value is number =>
-  typeof value === 'number' && Number.isFinite(value) && value > 0 && value <= LIMITS.amount;
+  typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= LIMITS.amount;
 
 function isCategory(value: unknown): value is Category {
   if (typeof value !== 'object' || value === null) return false;

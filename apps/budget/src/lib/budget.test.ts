@@ -116,7 +116,9 @@ describe('categories', () => {
 
   it('checks saved categories', () => {
     expect(isCategoriesState(categories)).toBe(true);
-    expect(isCategoriesState({ categories: [{ id: 'a', name: 'A', limit: 0 }] })).toBe(false);
+    // Older versions could save a limit of 0 (from 0.001): it's still read.
+    expect(isCategoriesState({ categories: [{ id: 'a', name: 'A', limit: 0 }] })).toBe(true);
+    expect(isCategoriesState({ categories: [{ id: 'a', name: 'A', limit: -1 }] })).toBe(false);
     expect(isCategoriesState({})).toBe(false);
   });
 });
@@ -186,6 +188,7 @@ describe('entries', () => {
     expect(isEntriesState(entries(entry({})))).toBe(true);
     expect(isEntriesState(entries(entry({ kind: 'income', category: 'food' })))).toBe(false);
     expect(isEntriesState(entries(entry({ amount: -1 })))).toBe(false);
+    expect(isEntriesState(entries(entry({ amount: 0 })))).toBe(true);
   });
 });
 
