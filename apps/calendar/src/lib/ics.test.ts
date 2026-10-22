@@ -81,6 +81,15 @@ describe('toIcs', () => {
     expect(lines).toContain('SUMMARY:Lunch\\; Anna\\, Ben');
     expect(lines).toContain('DESCRIPTION:Line 1\\nC:\\\\path');
   });
+
+  it('escapes ids, so one from a backup or another device can’t add lines', () => {
+    const id = 'x\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nSUMMARY:Injected';
+    const lines = linesOf(toIcs([event({ id })], { now }));
+    expect(lines).toContain(
+      'UID:x\\nEND:VEVENT\\nBEGIN:VEVENT\\nSUMMARY:Injected@calendar.shkriuss.app',
+    );
+    expect(lines.filter((line) => line === 'BEGIN:VEVENT')).toHaveLength(1);
+  });
 });
 
 describe('foldLine', () => {

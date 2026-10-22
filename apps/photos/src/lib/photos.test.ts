@@ -118,6 +118,9 @@ describe('for people', () => {
     expect(downloadName(photo({ name: '', type: 'image/png' }))).toBe(
       'photo-2026-10-21-14-03-22.png',
     );
+    // Invisible direction marks and zero-width characters, which can hide the real extension.
+    expect(downloadName(photo({ name: 'holiday‮gpj.exe' }))).toBe('holiday-gpj.exe');
+    expect(downloadName(photo({ name: 'a​b⁦c.jpg' }))).toBe('a-b-c.jpg');
   });
 
   it('makes pictures smaller, never bigger', () => {

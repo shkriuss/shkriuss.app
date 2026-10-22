@@ -240,6 +240,8 @@ function offsetOf(ms: number, timeZone: string): number {
 
 /** The moment when clocks in `timeZone` show `wall` (a UTC-based number), or null. */
 function zonedToUtc(wall: number, timeZone: string): number | null {
+  // Zone names are short. A long one isn't a time zone, and would be slow to search.
+  if (timeZone.length > 100) return null;
   // Old Thunderbird files write zones like "/mozilla.org/20050126_1/Europe/Berlin".
   const zones = [timeZone, /[A-Za-z_]+(?:\/[A-Za-z_-]+){1,2}$/.exec(timeZone)?.[0]];
   for (const zone of zones) {

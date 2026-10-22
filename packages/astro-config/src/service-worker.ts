@@ -103,14 +103,20 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (request.mode === 'navigate') {
-    const saved = () => caches.match(request, { ignoreSearch: true });
+    // One copy per page, whatever its query string.
+    const page = url.origin + url.pathname;
+    const saved = () => caches.match(page, { ignoreSearch: true });
     // Fetch the page and save a fresh copy for next time.
     const network = fetch(request).then((response) => {
-      if (!response.ok) return response;
+      // A server error: the saved copy is better, if there is one.
+      if (response.status >= 500) return saved().then((cached) => cached || response);
+      // Only pages are saved, not other files opened directly (like a big download).
+      const isPage = (response.headers.get('content-type') || '').startsWith('text/html');
+      if (!response.ok || !isPage) return response;
       const copy = response.clone();
       return caches
         .open(CACHE)
-        .then((cache) => cache.put(request, copy))
+        .then((cache) => cache.put(page, copy))
         .then(
           () => response,
           () => response,
@@ -147,8 +153,14 @@ self.addEventListener('push', (event) => {
     message = {};
   }
   const text = (value) => (typeof value === 'string' ? value : '');
-  // Only a path on this site can be opened (never another website).
-  const url = text(message.url).startsWith('/') && !text(message.url).startsWith('//') ? message.url : '/';
+  // Only a page on this site can be opened (never another website).
+  let url = '/';
+  try {
+    const target = new URL(text(message.url) || '/', self.location.origin);
+    if (target.origin === self.location.origin) url = target.pathname + target.search + target.hash;
+  } catch {
+    url = '/';
+  }
   event.waitUntil(
     self.registration.showNotification(text(message.title) || 'Reminder', {
       body: text(message.body),

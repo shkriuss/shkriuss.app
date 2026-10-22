@@ -51,7 +51,11 @@ The requirements:
      a lookup token.
    - The server keeps the account secret sealed with the wrap key (AES-256-GCM),
      stored under the SHA-256 hash of the lookup token.
-   - The passkey belongs to the hub's own domain.
+   - The passkey belongs to the hub's own domain, `shkriuss.app`. Browsers let
+     any subdomain ask for a passkey of its parent domain, so only the hub's
+     pages allow passkeys (their `Permissions-Policy` header). Every app's
+     pages refuse them, and `defineAppConfig` won't build an app that asks. So
+     no subdomain may ever be served by anyone but these Workers.
    - A passkey that can't do PRF is refused, and the browser is asked to forget
      it (WebAuthn "signal" API, where supported).
    - "Remove a passkey" deletes its lock.

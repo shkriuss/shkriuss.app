@@ -71,7 +71,8 @@ function stampOf(now: Date): string {
 
 function eventLines(event: CalendarEvent, stamp: string, domain: string): string[] {
   const allDay = event.startTime === null;
-  const lines = ['BEGIN:VEVENT', `UID:${event.id}@${domain}`, `DTSTAMP:${stamp}`];
+  // Ids can come from backups and other devices: escaped, so one can't add lines.
+  const lines = ['BEGIN:VEVENT', `UID:${escapeText(event.id)}@${domain}`, `DTSTAMP:${stamp}`];
 
   if (allDay) {
     lines.push(`DTSTART;VALUE=DATE:${compactDate(event.startDate)}`);

@@ -400,7 +400,10 @@ export function formatDate(date: IsoDate, locale?: string): string {
 /** The website a link goes to, without "www." ("shop.ge"). */
 export function linkHost(link: string): string {
   try {
-    return new URL(link).hostname.replace(/^www\./, '');
+    // Links from backups and other devices skip the form's check: only web links show.
+    const url = new URL(link);
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return '';
+    return url.hostname.replace(/^www\./, '');
   } catch {
     return '';
   }

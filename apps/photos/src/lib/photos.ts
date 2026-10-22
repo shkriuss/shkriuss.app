@@ -223,8 +223,11 @@ export function formatLabel(photo: Pick<Photo, 'name' | 'type'>): string {
 /** The name to save the original as: its own name, made safe, with an extension. */
 export function downloadName(photo: Pick<Photo, 'name' | 'type' | 'taken'>): string {
   // Characters files can't have in their names, and invisible ones, become "-".
+  // Invisible ones include direction marks, which can make "gpj.exe" show as "exe.jpg".
   const safe = [...photo.name]
-    .map((char) => (char.charCodeAt(0) < 32 || '\\/:*?"<>|'.includes(char) ? '-' : char))
+    .map((char) =>
+      /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(char) || '\\/:*?"<>|'.includes(char) ? '-' : char,
+    )
     .join('')
     .replace(/-{2,}/g, '-')
     .replace(/^[.\s]+/, '')

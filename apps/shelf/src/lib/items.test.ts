@@ -270,6 +270,10 @@ describe('showing items', () => {
     expect(linkHost('https://www.amazon.com/dp/B0')).toBe('amazon.com');
     expect(linkHost('https://shop.ge/x')).toBe('shop.ge');
     expect(linkHost('')).toBe('');
+    // Saved data from a backup or another device: only web links are shown.
+    expect(linkHost('javascript://shop.example/%0Aalert(1)')).toBe('');
+    expect(linkHost('intent://shop.example/#Intent;end')).toBe('');
+    expect(linkHost('file://shop.example/x')).toBe('');
   });
 
   it('counts items', () => {
