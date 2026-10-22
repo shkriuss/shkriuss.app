@@ -198,6 +198,9 @@ export class PushDevice {
       ).json()) as { authorization: string };
       response = await fetch(endpoint, {
         method: 'POST',
+        // Push services never redirect. Following one could lead anywhere (plain
+        // http, an IP address), so a redirect is refused like any other answer.
+        redirect: 'manual',
         headers: {
           Authorization: signed.authorization,
           'Content-Encoding': 'aes128gcm',
@@ -217,6 +220,12 @@ export class PushDevice {
   }
 
   async fetch(request: Request): Promise<Response> {
+    // One request at a time, and never during a wake-up, so none of them works
+    // from a copy that another has just changed.
+    return this.state.blockConcurrencyWhile(() => this.#handle(request));
+  }
+
+  async #handle(request: Request): Promise<Response> {
     const { pathname } = new URL(request.url);
     const now = Date.now();
     const record = await this.#record();
