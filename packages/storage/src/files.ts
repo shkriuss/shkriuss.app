@@ -8,6 +8,8 @@
  * "<kind>:<id>", e.g. "repair-photos:6f1c…". Browser only.
  */
 
+import { keepData } from './index.ts';
+
 const DATABASE = 'shkriuss-files';
 const TABLE = 'files';
 
@@ -132,12 +134,9 @@ export function createFileStore<T extends StoredFile>(kind: string): FileStore<T
  * space (it may say no). Worth asking once someone saves something they'd
  * miss, like a photo.
  */
-export async function keepFiles(): Promise<void> {
-  try {
-    if (!(await navigator.storage.persisted())) await navigator.storage.persist();
-  } catch {
-    // Not supported: the files are kept as long as the browser allows.
-  }
+export function keepFiles(): Promise<void> {
+  keepData();
+  return Promise.resolve();
 }
 
 /**

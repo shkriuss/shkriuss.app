@@ -97,6 +97,26 @@ const made = new Map<string, Pick<Store<unknown>, 'version' | 'read'>>();
  */
 export const madeStores: ReadonlyMap<string, Pick<Store<unknown>, 'version' | 'read'>> = made;
 
+let askedToKeep = false;
+
+/**
+ * Asks the browser, once per page, to keep this site's data: when the device
+ * is short of space, and (as far as it decides) after a week without a visit,
+ * when Safari otherwise deletes a website's data unless it's on the Home
+ * Screen. It may say no, and some browsers ask the person. Called after the
+ * first save, when there's something worth keeping.
+ */
+export function keepData(): void {
+  if (askedToKeep) return;
+  askedToKeep = true;
+  const storage = globalThis.navigator?.storage;
+  if (typeof storage?.persist !== 'function') return;
+  void storage
+    .persisted()
+    .then((kept) => (kept ? undefined : storage.persist()))
+    .catch(() => undefined);
+}
+
 export function createStore<T>(options: StoreOptions<T>): Store<T> {
   const fullKey = KEY_PREFIX + options.key;
   const storage = (): StorageLike | undefined => options.storage ?? getLocalStorage();
@@ -170,6 +190,7 @@ export function createStore<T>(options: StoreOptions<T>): Store<T> {
         }
         target.setItem(fullKey, text);
         fine = text;
+        keepData();
         return true;
       } catch {
         // Quota exceeded or storage blocked.
