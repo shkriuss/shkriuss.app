@@ -2,8 +2,10 @@
  * After a production deploy, checks every live site: it answers, serves HTML
  * and sends our security headers. Apps with notifications while closed must
  * also answer /api/push/key with their public key, and the hub its account
- * service (/api/account/ping), and apps with sync /api/sync/hub. Retries for a few minutes because a brand
- * new subdomain can take a moment to get its DNS record and certificate.
+ * service (/api/account/ping), and apps with sync /api/sync/hub, and apps
+ * with an online library /api/library/* (asking for a token). Retries for a
+ * few minutes because a brand new subdomain can take a moment to get its DNS
+ * record and certificate.
  *
  *   node scripts/smoke-test.ts
  */
@@ -17,6 +19,9 @@ const pushOrigins = new Set(
   apps.filter((app) => app.pushNotifications).map((app) => getSite(app.slug).origin),
 );
 const syncOrigins = new Set(apps.filter((app) => app.sync).map((app) => getSite(app.slug).origin));
+const libraryOrigins = new Set(
+  apps.filter((app) => app.library).map((app) => getSite(app.slug).origin),
+);
 /** Each site's expected CSP (apps that run WebAssembly allow just that). */
 const expectedCsp = new Map(
   [HUB_SLUG, ...apps.map((app) => app.slug)].map((slug) => {
@@ -42,6 +47,14 @@ async function check(origin: string): Promise<string | undefined> {
       const hub = await fetch(`${origin}/api/sync/hub`);
       const body = (await hub.json().catch(() => ({}))) as { origin?: unknown };
       if (!hub.ok || body.origin !== getSite(HUB_SLUG).origin) return 'sync service not answering';
+    }
+    if (libraryOrigins.has(origin)) {
+      // Without a token it must refuse, as JSON: the library's code is running.
+      const changes = await fetch(`${origin}/api/library/changes`);
+      const body = (await changes.json().catch(() => ({}))) as { error?: unknown };
+      if (changes.status !== 401 || typeof body.error !== 'string') {
+        return 'online library not answering';
+      }
     }
     if (pushOrigins.has(origin)) {
       const key = await fetch(`${origin}/api/push/key`);

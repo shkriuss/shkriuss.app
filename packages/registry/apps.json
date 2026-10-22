@@ -240,7 +240,7 @@
     {
       "slug": "photos",
       "name": "Photos",
-      "description": "Your photos, kept as the original files. Everything stays on your device.",
+      "description": "Your photos, kept as the original files. On your device, and online too if you turn on sync.",
       "icon": "image",
       "color": "violet",
       "status": "live",
@@ -248,8 +248,11 @@
       "dataStored": [
         "The photos you add, as the original files (with what the camera saved in them, like the date and the place)",
         "A small copy of each photo for the grid, and a screen-sized one for looking at it",
+        "If you turn on sync: every photo in your online library, locked on your devices so only they can read it, and on this device the thumbnails of photos added on your other devices, how far it has caught up, and its sync key (never in backups)",
         "Your light or dark theme choice"
-      ]
+      ],
+      "sync": true,
+      "library": true
     }
   ]
 }

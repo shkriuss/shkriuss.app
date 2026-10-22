@@ -15,6 +15,9 @@
  *   <SyncControls what="your dictionary">
  *     <p class="muted">Your text isn't synced.</p>
  *   </SyncControls>
+ *
+ * If "Delete the online copy" deletes more than the copy (like Photos' online
+ * library), say what in `deleteText`.
  */
 import { hubOrigin, site } from 'virtual:shkriuss/site';
 import Button from './Button.astro';
@@ -24,9 +27,15 @@ interface Props {
   level?: 2 | 3;
   /** What syncs, if not all of the app's data, e.g. "your dictionary". */
   what?: string;
+  /** What "Delete the online copy" deletes, if more than the copy (like Photos' online library). */
+  deleteText?: string;
 }
 
-const { level = 2, what = site.name } = Astro.props;
+const {
+  level = 2,
+  what = site.name,
+  deleteText = `This deletes ${site.name}'s data from its server and turns off sync on this device. Your data stays on this device. Your other devices keep theirs, but stop syncing.`,
+} = Astro.props;
 const Heading = `h${level}` as 'h2' | 'h3';
 ---
 
@@ -67,10 +76,7 @@ const Heading = `h${level}` as 'h2' | 'h3';
   <dialog class="dialog" aria-labelledby="sync-delete-title" data-sync-delete-dialog>
     <form method="dialog" class="stack">
       <h2 id="sync-delete-title">Delete the online copy?</h2>
-      <p>
-        This deletes {site.name}'s data from its server and turns off sync on this device. Your data
-        stays on this device. Your other devices keep theirs, but stop syncing.
-      </p>
+      <p>{deleteText}</p>
       <div class="cluster">
         <Button type="submit" value="cancel">
           Cancel

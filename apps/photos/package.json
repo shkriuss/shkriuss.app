@@ -9,14 +9,17 @@
     "build": "astro build",
     "preview": "wrangler dev --port 8787",
     "typecheck": "astro check",
-    "deploy:production": "wrangler deploy",
+    "deploy:production": "node ../../scripts/deploy.ts",
     "deploy:preview": "wrangler preview"
   },
   "dependencies": {
     "@shkriuss/astro-config": "workspace:*",
     "@shkriuss/crypto": "workspace:*",
+    "@shkriuss/library": "workspace:*",
     "@shkriuss/registry": "workspace:*",
+    "@shkriuss/server": "workspace:*",
     "@shkriuss/storage": "workspace:*",
+    "@shkriuss/sync": "workspace:*",
     "@shkriuss/ui": "workspace:*",
     "astro": "catalog:"
   },

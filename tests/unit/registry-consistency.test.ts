@@ -22,11 +22,15 @@ interface WranglerConfig {
   workers_dev: boolean;
   durable_objects?: { bindings: { name: string; class_name: string }[] };
   migrations?: { tag: string; new_sqlite_classes?: string[] }[];
-  previews: { durable_objects?: { bindings: { name: string; class_name: string }[] } };
+  r2_buckets?: { binding: string; bucket_name: string }[];
+  previews: {
+    durable_objects?: { bindings: { name: string; class_name: string }[] };
+    r2_buckets?: { binding: string; bucket_name: string }[];
+  };
 }
 
 /** What each server feature needs: its Durable Objects (packages/<feature>). */
-type Feature = 'account' | 'push' | 'sync';
+type Feature = 'account' | 'push' | 'sync' | 'library';
 const FEATURES: Record<
   Feature,
   { service: string; bindings: { name: string; class_name: string }[] }
@@ -49,6 +53,10 @@ const FEATURES: Record<
   sync: {
     service: 'sync (/api/sync)',
     bindings: [{ name: 'SYNC_COPIES', class_name: 'SyncCopy' }],
+  },
+  library: {
+    service: 'an online library (/api/library)',
+    bindings: [{ name: 'LIBRARIES', class_name: 'Library' }],
   },
 };
 
@@ -106,6 +114,7 @@ describe.each(appFolders)('apps/%s', (slug) => {
       : [
           ...(entry?.pushNotifications ? (['push'] as const) : []),
           ...(entry?.sync ? (['sync'] as const) : []),
+          ...(entry?.library ? (['library'] as const) : []),
         ];
   const bindings = features.flatMap((feature) => FEATURES[feature].bindings);
 
@@ -141,6 +150,26 @@ describe.each(appFolders)('apps/%s', (slug) => {
           );
         }
       }
+    },
+  );
+
+  it(
+    entry?.library
+      ? 'keeps its library’s files in R2, with another bucket for previews'
+      : 'has no R2 bucket',
+    () => {
+      const config = wranglerConfig(slug);
+      if (!entry?.library) {
+        expect(config.r2_buckets).toBeUndefined();
+        return;
+      }
+      const [real] = config.r2_buckets ?? [];
+      const [preview] = config.previews.r2_buckets ?? [];
+      expect(real?.binding).toBe('LIBRARY_FILES');
+      expect(preview?.binding).toBe('LIBRARY_FILES');
+      expect(real?.bucket_name).toBe(`shkriuss-${slug}`);
+      // Previews never touch the real photos.
+      expect(preview?.bucket_name).toBe(`shkriuss-${slug}-preview`);
     },
   );
 });

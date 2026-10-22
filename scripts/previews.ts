@@ -5,12 +5,16 @@
  *   node scripts/previews.ts delete pr-12   # remove that PR's previews
  *
  * Needs CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID in the environment,
- * and `pnpm build` to have run first (for deploy).
+ * and `pnpm build` to have run first (for deploy). Apps with an online
+ * library get their storage code too (scripts/lib/storage.ts), and need
+ * their preview bucket (scripts/buckets.ts preview).
  */
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
+import { getSite } from '../packages/registry/src/index.ts';
 import { previewComment, previewUrlFromJson, type PreviewResult } from './lib/preview-output.ts';
 import { repoRoot, siteSlugs } from './lib/sites.ts';
+import { withSecretsFile, workerSecrets } from './lib/storage.ts';
 
 const [command, name] = process.argv.slice(2);
 if (
@@ -36,7 +40,13 @@ let failed = false;
 if (command === 'deploy') {
   const results: PreviewResult[] = [];
   for (const slug of siteSlugs()) {
-    const run = wrangler(slug, ['preview', '--name', name, '--json']);
+    const { secrets, missing } = workerSecrets(slug, getSite(slug).library);
+    for (const secret of missing) {
+      console.error(`${secret} isn't set: the ${slug} preview can't add to its online library.`);
+    }
+    const run = withSecretsFile(secrets, (args) =>
+      wrangler(slug, ['preview', '--name', name, '--json', ...args]),
+    );
     const url = run.status === 0 ? previewUrlFromJson(run.stdout) : undefined;
     if (!url) {
       failed = true;

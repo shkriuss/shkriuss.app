@@ -106,6 +106,22 @@ export interface SyncedFiles {
 }
 
 /**
+ * Data an app keeps online beside its copy, in a way of its own (like Photos'
+ * library, docs/adr/0016): deleted with the copy, and moved with it to a new
+ * account key. Each gets the app's own keys from the account, to derive what
+ * it needs.
+ */
+export interface LinkedData {
+  /** Before "Delete the online copy" deletes the copy. If it throws, nothing is deleted. */
+  delete(secret: Uint8Array<ArrayBuffer>): Promise<void>;
+  /**
+   * After the account key was replaced: the old copy is in the new one, and
+   * is deleted next. If it throws, the next sync tries again.
+   */
+  move(from: Uint8Array<ArrayBuffer>, to: Uint8Array<ArrayBuffer>): Promise<void>;
+}
+
+/**
  * Describes one store to sync, e.g.
  *   syncedStore({ store, items: (state) => state.events, withItems: (state, events) => ({ ...state, events }) })
  * Values from other devices are checked with the store's own validation before they're saved.
@@ -173,6 +189,8 @@ export interface SyncClient {
   filesRemoved(ids: readonly string[]): void;
   /** A file from another device, or null if it isn't online (or sync is off, or there's no connection). */
   download(id: string): Promise<Uint8Array<ArrayBuffer> | null>;
+  /** The app's own key from the account while sync is on (for LinkedData); null when it's off. */
+  secret(): Uint8Array<ArrayBuffer> | null;
 }
 
 // ---------- This device's sync state ----------
@@ -388,8 +406,10 @@ export function createSync(options: {
   onChange: () => void;
   /** Files that go with the data, like photos. The app's Worker must allow them. */
   files?: SyncedFiles;
+  /** Data the app keeps online beside the copy, deleted and moved with it. */
+  linked?: LinkedData;
 }): SyncClient {
-  const { stores, files } = options;
+  const { stores, files, linked } = options;
   const listeners = new Set<(status: SyncStatus, event?: SyncEvent) => void>();
   let busy = false;
   /** Items kept in both versions during this run (see SyncedStore.conflictCopy). */
@@ -452,12 +472,13 @@ export function createSync(options: {
 
   /** The online copies of replaced keys still to move here (gone ones have nothing to bring). */
   async function fetchPrevious(previous: readonly string[]) {
-    const copies: (Keys & { stores: Stores })[] = [];
-    for (const secret of previous) {
-      const { token, key } = await syncKeys(fromBase64Url(secret));
+    const copies: (Keys & { secret: Uint8Array<ArrayBuffer>; stores: Stores })[] = [];
+    for (const encoded of previous) {
+      const secret = fromBase64Url(encoded);
+      const { token, key } = await syncKeys(secret);
       try {
         const remote = await fetchRemote(null, token, key);
-        if (remote.kind === 'copy') copies.push({ token, key, stores: remote.stores });
+        if (remote.kind === 'copy') copies.push({ secret, token, key, stores: remote.stores });
       } catch (error) {
         if (!isGone(error)) throw error;
       }
@@ -584,10 +605,12 @@ export function createSync(options: {
     if (appChanged) options.onChange();
 
     // 7. The old copies are in the new one now (and their files, re-sealed with
-    // the new key): delete them, so devices still using them stop.
+    // the new key, and the app's linked data): delete them, so devices still
+    // using them stop.
     if (state.previous.length > 0) {
       for (const old of moving) {
         if (files) await moveFiles(files, old, { token, key });
+        if (linked) await linked.move(old.secret, fromBase64Url(state.secret));
         const response = await api('/copy?moved', { method: 'DELETE' }, old.token);
         if (!response.ok) throw failed(response);
       }
@@ -880,6 +903,7 @@ export function createSync(options: {
     async deleteOnline() {
       const state = loadState();
       if (!state?.secret) return;
+      if (linked) await linked.delete(fromBase64Url(state.secret));
       const { token } = await syncKeys(fromBase64Url(state.secret));
       const response = await api('/copy', { method: 'DELETE' }, token);
       if (!response.ok) throw failed(response);
@@ -912,6 +936,10 @@ export function createSync(options: {
       } catch {
         return null;
       }
+    },
+    secret() {
+      const secret = loadState()?.secret;
+      return secret ? fromBase64Url(secret) : null;
     },
   };
 

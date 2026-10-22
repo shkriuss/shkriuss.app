@@ -56,6 +56,12 @@ export interface AppEntry {
    */
   sync?: boolean;
   /**
+   * True if the app keeps an online library through the account, like
+   * Photos (needs `sync`, which carries its keys). Its Worker then runs
+   * @shkriuss/library, with an R2 bucket (docs/adr/0016).
+   */
+  library?: boolean;
+  /**
    * True if the app runs WebAssembly (code compiled for the browser, such as
    * Grammar's checker). Its security policy then allows that, and only that
    * (docs/adr/0011).
@@ -90,6 +96,7 @@ export interface SiteInfo {
   dataStored: string[];
   pushNotifications: boolean;
   sync: boolean;
+  library: boolean;
   webAssembly: boolean;
 }
 
@@ -202,10 +209,13 @@ export function validateRegistry(input: unknown): Registry {
       } else if (app['storage'] !== 'none' && dataStored.length === 0) {
         problems.push(`${where}.dataStored must say what is stored when storage is not "none".`);
       }
-      for (const flag of ['pushNotifications', 'sync', 'webAssembly'] as const) {
+      for (const flag of ['pushNotifications', 'sync', 'library', 'webAssembly'] as const) {
         if (app[flag] !== undefined && typeof app[flag] !== 'boolean') {
           problems.push(`${where}.${flag} must be true or false.`);
         }
+      }
+      if (app['library'] === true && app['sync'] !== true) {
+        problems.push(`${where}.library needs sync: true (sync carries the library's keys).`);
       }
     });
   }
@@ -265,6 +275,7 @@ export function getSite(slug: string): SiteInfo {
       ],
       pushNotifications: false,
       sync: false,
+      library: false,
       webAssembly: false,
     };
   }
@@ -281,6 +292,7 @@ export function getSite(slug: string): SiteInfo {
     dataStored: app.dataStored,
     pushNotifications: app.pushNotifications === true,
     sync: app.sync === true,
+    library: app.library === true,
     webAssembly: app.webAssembly === true,
   };
 }

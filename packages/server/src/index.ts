@@ -34,6 +34,37 @@ export interface DurableObjectState {
   blockConcurrencyWhile<T>(callback: () => Promise<T>): Promise<T>;
 }
 
+/** Storage that can also list its keys in order, for Durable Objects that keep lists. */
+export interface DurableObjectListStorage extends DurableObjectStorage {
+  /** Keys in order, from `startAfter` (not included), with `prefix`, at most `limit`. */
+  list<T>(options: {
+    prefix?: string;
+    startAfter?: string;
+    limit?: number;
+  }): Promise<Map<string, T>>;
+}
+export interface DurableObjectListState extends DurableObjectState {
+  storage: DurableObjectListStorage;
+}
+
+/** An R2 bucket binding (Cloudflare's file storage), the parts we use. */
+export interface R2Bucket {
+  /** A stream must have a known length (a request body with Content-Length does). */
+  put(key: string, value: ReadableStream | Uint8Array | null): Promise<unknown>;
+  /** The whole file, or `length` bytes from `offset`; null if there's no such file. */
+  get(
+    key: string,
+    options?: { range?: { offset: number; length: number } },
+  ): Promise<{ body: ReadableStream<Uint8Array>; arrayBuffer(): Promise<ArrayBuffer> } | null>;
+  /** One file, or up to 1,000 at once. */
+  delete(keys: string | string[]): Promise<void>;
+  list(options: {
+    prefix?: string;
+    cursor?: string;
+    limit?: number;
+  }): Promise<{ objects: { key: string }[]; truncated: boolean; cursor?: string }>;
+}
+
 /** Every site's static files (the "ASSETS" binding in wrangler.jsonc). */
 export interface SiteEnv {
   ASSETS: { fetch(request: Request): Promise<Response> };

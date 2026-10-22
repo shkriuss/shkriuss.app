@@ -97,6 +97,20 @@ describe('validateRegistry', () => {
     ).toThrow(/webAssembly must be true or false/);
   });
 
+  it('accepts an optional library flag, only with sync', () => {
+    const registry = validateRegistry({
+      site: validSite,
+      apps: [{ ...validApp, sync: true, library: true }],
+    });
+    expect(registry.apps[0]?.library).toBe(true);
+    expect(() =>
+      validateRegistry({ site: validSite, apps: [{ ...validApp, library: true }] }),
+    ).toThrow(/library needs sync: true/);
+    expect(() =>
+      validateRegistry({ site: validSite, apps: [{ ...validApp, sync: true, library: 'yes' }] }),
+    ).toThrow(/library must be true or false/);
+  });
+
   it('accepts an optional sync flag, true or false only', () => {
     const registry = validateRegistry({ site: validSite, apps: [{ ...validApp, sync: true }] });
     expect(registry.apps[0]?.sync).toBe(true);

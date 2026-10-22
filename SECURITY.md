@@ -40,6 +40,16 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
   rate-limited and size-limited. After the account key is replaced, an app
   moves its copy to the new key and deletes the old one, so devices still
   using the old key stop syncing.
+- Photos' **online library** (`"library": true`,
+  [ADR 0016](docs/adr/0016-online-photo-library.md)) runs `/api/library/*`:
+  each photo is sealed on the device (AES-256-GCM, each part with its own
+  label) and kept in Cloudflare R2; one Durable Object per library keeps the
+  list, with each photo's details sealed too. It only ever sees hashes of the
+  library's id and token. The first token to reach a library is its only
+  one; after the account key is replaced it moves to the new token, proven
+  with the old one, which is refused from then on. Adding photos needs the
+  storage code, and the library has hard limits (1 TB, 400,000 photos,
+  95 MB each, 20,000 uploads a day), so nobody can run up the bill.
 - An app connects by sending the person to the hub with a one-time ECDH
   public key; after they confirm, the hub seals the app's key to it and sends
   it back in the URL fragment, only to that app's real address. The app and
@@ -63,8 +73,12 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
 **Supply chain and repository**
 
 - No secrets in the repository. The Cloudflare API token is stored only as a
-  GitHub Actions secret, with just two permissions: _Workers Scripts: Edit_
-  (account) and _Workers Routes: Edit_ (the `shkriuss.app` zone only).
+  GitHub Actions secret, with just three permissions: _Workers Scripts: Edit_
+  and _Workers R2 Storage: Edit_ (account), and _Workers Routes: Edit_ (the
+  `shkriuss.app` zone only). Photos' storage code is a GitHub Actions secret
+  too, handed to its Worker at deploy in a temporary file that's deleted
+  straight after; the Worker compares codes in constant time and allows 10
+  wrong tries an hour per library.
 - gitleaks scans every commit for secrets; zizmor checks the workflows;
   `pnpm audit` checks for known vulnerabilities; Dependabot proposes updates
   (after a 7-day cooldown).

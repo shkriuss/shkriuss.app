@@ -1,0 +1,19 @@
+{
+  "name": "@shkriuss/library",
+  "version": "0.0.0",
+  "private": true,
+  "description": "An app's online library through the shkriuss account (like Photos'): items sealed on the device and kept in Cloudflare R2, with a list of changes per library. Browser client and the per-app Worker routes.",
+  "type": "module",
+  "exports": {
+    ".": "./src/client.ts",
+    "./worker": "./src/worker.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@shkriuss/crypto": "workspace:*",
+    "@shkriuss/server": "workspace:*",
+    "@shkriuss/sync": "workspace:*"
+  }
+}

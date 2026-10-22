@@ -1,8 +1,12 @@
 /**
  * Photos' page behaviour: connects pages/index.astro to the rules in
  * lib/photos.ts and the library on this device (library.ts). Picked photos
- * are read in a worker (process.ts), one at a time.
+ * are read in a worker (process.ts), one at a time. With sync on, the
+ * online library (online.ts) adds photos from other devices and takes this
+ * device's online.
  */
+import { mountSyncControls } from '@shkriuss/ui/sync-controls';
+import { freeable, onlineMessage } from '../lib/online.ts';
 import {
   addedMessage,
   byMonth,
@@ -21,6 +25,7 @@ import {
   type Photo,
 } from '../lib/photos.ts';
 import { deletePhotos, getFiles, loadLibrary, savePhoto, thumbUrl } from './library.ts';
+import { startOnline } from './online.ts';
 import { processFile } from './process.ts';
 
 function required<T extends Element>(root: ParentNode, selector: string): T {
@@ -38,6 +43,12 @@ function saveFile(file: Blob, name: string): void {
   link.click();
   // Give the browser time to start the download before freeing the file.
   window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+/** Where a photo is, for the viewer's details. */
+function whereLabel(photo: Photo): string {
+  if (!photo.here) return 'Online (the original isn’t on this device)';
+  return photo.online ? 'On this device and online' : 'On this device';
 }
 
 export function mountPhotos(root: Document): void {
@@ -62,6 +73,16 @@ export function mountPhotos(root: Document): void {
   const viewerNone = required<HTMLElement>(viewer, '[data-viewer-none]');
   const deleteDialog = required<HTMLDialogElement>(root, '[data-delete-dialog]');
   const deleteTitle = required<HTMLElement>(deleteDialog, '[data-delete-title]');
+  const deleteText = required<HTMLElement>(deleteDialog, '[data-delete-text]');
+  const onlineOff = required<HTMLElement>(root, '[data-online-off]');
+  const onlineSection = required<HTMLElement>(root, '[data-online]');
+  const onlineStatus = required<HTMLElement>(root, '[data-online-status]');
+  const unlockForm = required<HTMLFormElement>(root, '[data-unlock-form]');
+  const storageCode = required<HTMLInputElement>(unlockForm, '[data-storage-code]');
+  const unlockError = required<HTMLElement>(unlockForm, '[data-unlock-error]');
+  const freeUp = required<HTMLElement>(root, '[data-free-up]');
+  const freeUpDialog = required<HTMLDialogElement>(root, '[data-free-up-dialog]');
+  const freeUpText = required<HTMLElement>(freeUpDialog, '[data-free-up-text]');
 
   /** Every photo, newest first. */
   let photos: Photo[] = [];
@@ -74,13 +95,72 @@ export function mountPhotos(root: Document): void {
   let viewing: { id: string; url: string | null } | null = null;
   /** What the delete dialog would delete. */
   let deleting: string[] = [];
+  let renderTimer: number | undefined;
 
   const announce = (message: string): void => {
     announcer.textContent = message;
   };
   const find = (id: string | undefined) => photos.find((photo) => photo.id === id);
 
+  // ---------- The online library ----------
+
+  const online = startOnline({
+    all: () => photos,
+    get: find,
+    changed({ save = [], remove = [] }) {
+      if (save.length === 0 && remove.length === 0) return;
+      const gone = new Set([...remove, ...save.map((photo) => photo.id)]);
+      photos = [...photos.filter((photo) => !gone.has(photo.id)), ...save].sort(byNewest);
+      for (const id of remove) chosen.delete(id);
+      if (viewing && remove.includes(viewing.id) && viewer.open) viewer.close();
+      // Many changes can come in a row: show them together.
+      window.clearTimeout(renderTimer);
+      renderTimer = window.setTimeout(render, 100);
+    },
+  });
+  mountSyncControls(required<HTMLElement>(root, '[data-sync-controls]'), online.sync);
+  online.subscribe(renderOnline);
+
+  function renderOnline(): void {
+    const state = online.state();
+    onlineOff.hidden = state.on;
+    onlineSection.hidden = !state.on;
+    if (!state.on) return;
+    onlineStatus.textContent = onlineMessage(state);
+    unlockForm.hidden = !state.checked || state.unlocked || state.problem === 'not-set-up';
+    freeUp.hidden = freeable(photos).photos.length === 0;
+  }
+
+  unlockForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const code = storageCode.value;
+    if (!code) return;
+    unlockError.textContent = '';
+    storageCode.removeAttribute('aria-invalid');
+    void online.unlock(code).then((result) => {
+      if (result === 'ok') {
+        storageCode.value = '';
+        announce('Online storage is unlocked. Your photos are going online.');
+        onlineStatus.focus();
+        return;
+      }
+      unlockError.textContent = {
+        wrong: 'That isn’t the storage code. Check it and try again.',
+        'too-many': 'Too many wrong tries. Try again in an hour.',
+        'not-set-up': 'Online storage isn’t set up yet.',
+        offline: 'Couldn’t reach the online library. Check your connection and try again.',
+      }[result];
+      storageCode.setAttribute('aria-invalid', 'true');
+      storageCode.focus();
+    });
+  });
+
   // ---------- Showing the library ----------
+
+  /** A photo's thumbnail: from this device, or (only online) downloaded. */
+  async function photoThumb(photo: Photo): Promise<string | null> {
+    return (await thumbUrl(photo.id)) ?? (photo.here ? null : online.thumb(photo));
+  }
 
   function renderTile(photo: Photo): HTMLLIElement {
     const fragment = tileTemplate.content.cloneNode(true) as DocumentFragment;
@@ -92,7 +172,7 @@ export function mountPhotos(root: Document): void {
     const format = required<HTMLElement>(item, '[data-format]');
     format.textContent = formatLabel(photo);
     const image = required<HTMLImageElement>(item, '[data-thumb]');
-    void thumbUrl(photo.id).then((url) => {
+    void photoThumb(photo).then((url) => {
       if (url) image.src = url;
       else format.hidden = false;
     });
@@ -126,6 +206,7 @@ export function mountPhotos(root: Document): void {
     showMoreButton.hidden = photos.length <= shown;
     selectButton.hidden = photos.length === 0 || choosing;
     renderChoosing();
+    renderOnline();
     void renderSpace();
   }
 
@@ -184,6 +265,8 @@ export function mountPhotos(root: Document): void {
           width: read.width,
           height: read.height,
           hash: read.hash,
+          online: null,
+          here: true,
         };
         try {
           await savePhoto(photo, {
@@ -210,6 +293,7 @@ export function mountPhotos(root: Document): void {
         : addedMessage(result),
     );
     addButton.focus();
+    if (result.added > 0) online.added();
   }
 
   // ---------- Choosing several ----------
@@ -252,8 +336,13 @@ export function mountPhotos(root: Document): void {
   /** Saves each chosen photo's original, one after the other. */
   async function saveChosen(): Promise<void> {
     const list = photos.filter((photo) => chosen.has(photo.id));
-    for (const photo of list) await saveOriginal(photo);
-    announce(`Saved ${countLabel(list.length, 'original', 'originals')}.`);
+    let saved = 0;
+    for (const photo of list) if (await saveOriginal(photo, false)) saved += 1;
+    announce(
+      saved === list.length
+        ? `Saved ${countLabel(saved, 'original', 'originals')}.`
+        : `Saved ${countLabel(saved, 'original', 'originals')}. ${countLabel(list.length - saved, 'couldn’t', 'couldn’t')} be downloaded: check your connection and try again.`,
+    );
   }
 
   // ---------- Looking at a photo ----------
@@ -263,13 +352,9 @@ export function mountPhotos(root: Document): void {
     if (!photo) return;
     if (viewing?.url) URL.revokeObjectURL(viewing.url);
     viewing = { id, url: null };
-    const files = await getFiles(id);
-    if (viewing.id !== id) return;
-    viewing.url = files?.view ? URL.createObjectURL(files.view) : null;
-    if (viewing.url) viewerImage.src = viewing.url;
-    else viewerImage.removeAttribute('src');
+    viewerImage.removeAttribute('src');
     viewerImage.alt = photoAlt(photo);
-    viewerNone.hidden = viewing.url !== null;
+    viewerNone.hidden = true;
     viewerTitle.textContent = takenLabel(photo.taken);
     const index = photos.indexOf(photo);
     required<HTMLElement>(viewer, '[data-detail="name"]').textContent = photo.name || 'No name';
@@ -279,15 +364,26 @@ export function mountPhotos(root: Document): void {
         : formatBytes(photo.size);
     required<HTMLElement>(viewer, '[data-detail="kind"]').textContent =
       `${formatLabel(photo)} · ${index + 1} of ${photos.length.toLocaleString()}`;
+    required<HTMLElement>(viewer, '[data-detail="where"]').textContent = whereLabel(photo);
     for (const action of ['previous-photo', 'next-photo']) {
       required<HTMLElement>(viewer, `[data-action="${action}"]`).hidden = photos.length < 2;
     }
+    // The screen-sized copy: from this device, or downloaded (photos only online).
+    const view =
+      (await getFiles(id))?.view ?? (photo.online ? await online.download(photo, 'view') : null);
+    if (viewing.id !== id) return;
+    viewing.url = view ? URL.createObjectURL(view) : null;
+    if (viewing.url) viewerImage.src = viewing.url;
+    viewerNone.textContent =
+      photo.here || photo.online?.parts[1] === 0
+        ? 'This browser can’t show this kind of photo. “Save original” saves it as it is, to open in another app.'
+        : 'Couldn’t download this photo. Check your connection and try again.';
+    viewerNone.hidden = viewing.url !== null;
   }
 
   function openPhoto(id: string): void {
-    void showPhoto(id).then(() => {
-      if (!viewer.open) viewer.showModal();
-    });
+    if (!viewer.open) viewer.showModal();
+    void showPhoto(id);
   }
 
   function stepPhoto(by: number): void {
@@ -316,14 +412,29 @@ export function mountPhotos(root: Document): void {
     (monthsList.querySelector<HTMLElement>(`[data-id="${id ?? ''}"]`) ?? libraryHeading).focus();
   });
 
-  /** Saves the original file, exactly as it was added. */
-  async function saveOriginal(photo: Photo): Promise<void> {
-    const files = await getFiles(photo.id);
-    if (!files) {
-      announce('Couldn’t find that photo’s original on this device.');
-      return;
+  /**
+   * Saves the original file, exactly as it was added: from this device, or
+   * downloaded from the online library. False if it couldn't be.
+   */
+  async function saveOriginal(photo: Photo, say = true): Promise<boolean> {
+    let original = (await getFiles(photo.id))?.original ?? null;
+    if (!original && photo.online) {
+      if (say) announce('Downloading the original…');
+      original = await online.download(photo, 'original');
     }
-    saveFile(files.original, downloadName(photo));
+    if (!original) {
+      if (say) {
+        announce(
+          photo.here
+            ? 'Couldn’t find that photo’s original on this device.'
+            : 'Couldn’t download the original. Check your connection and try again.',
+        );
+      }
+      return false;
+    }
+    saveFile(original, downloadName(photo));
+    if (say && !photo.here) announce('Downloaded the original.');
+    return true;
   }
 
   // ---------- Deleting ----------
@@ -334,6 +445,9 @@ export function mountPhotos(root: Document): void {
       ids.length === 1
         ? 'Delete this photo?'
         : `Delete ${countLabel(ids.length, 'photo', 'photos')}?`;
+    deleteText.textContent = online.state().on
+      ? `${ids.length === 1 ? 'It’s' : 'They’re'} deleted from this device and from your online library, so from your other devices too. This can’t be undone.`
+      : `The original${ids.length === 1 ? ' and its copies are' : 's and their copies are'} deleted from this device. This can’t be undone.`;
     deleteDialog.returnValue = '';
     deleteDialog.showModal();
   }
@@ -348,13 +462,15 @@ export function mountPhotos(root: Document): void {
   async function removePhotos(ids: readonly string[]): Promise<void> {
     // Where to go next in the viewer: the photo after the deleted one.
     const at = viewing ? photos.findIndex((photo) => photo.id === viewing?.id) : -1;
+    const gone = new Set(ids);
     try {
+      // Online too (now, or when sync is on again).
+      await online.removed(photos.filter((photo) => gone.has(photo.id)));
       await deletePhotos(ids);
     } catch {
       announce('Couldn’t delete. Please try again.');
       return;
     }
-    const gone = new Set(ids);
     photos = photos.filter((photo) => !gone.has(photo.id));
     for (const id of ids) chosen.delete(id);
     if (choosing && photos.length === 0) choosing = false;
@@ -376,6 +492,31 @@ export function mountPhotos(root: Document): void {
       (photos.length > 0 ? selectButton : addButton).focus();
     }
   }
+
+  // ---------- Freeing up space ----------
+
+  function askToFreeUp(): void {
+    const { photos: list, bytes } = freeable(photos);
+    if (list.length === 0) return;
+    freeUpText.textContent =
+      list.length === 1
+        ? `This removes the original of 1 photo (${formatBytes(bytes)}) from this device. It stays in your online library: the photo still shows here, and “Save original” downloads it again.`
+        : `This removes the originals of ${countLabel(list.length, 'photo', 'photos')} (${formatBytes(bytes)}) from this device. They stay in your online library: every photo still shows here, and “Save original” downloads it again.`;
+    freeUpDialog.returnValue = '';
+    freeUpDialog.showModal();
+  }
+
+  freeUpDialog.addEventListener('close', () => {
+    if (freeUpDialog.returnValue !== 'confirm') return;
+    const { photos: list, bytes } = freeable(photos);
+    void online.freeUpSpace(list).then(
+      () => {
+        announce(`Freed up ${formatBytes(bytes)} on this device.`);
+        libraryHeading.focus();
+      },
+      () => announce('Couldn’t free up space. Please try again.'),
+    );
+  });
 
   // ---------- Buttons ----------
 
@@ -414,6 +555,9 @@ export function mountPhotos(root: Document): void {
       case 'close-viewer':
         viewer.close();
         break;
+      case 'free-up-space':
+        askToFreeUp();
+        break;
     }
   });
 
@@ -422,11 +566,20 @@ export function mountPhotos(root: Document): void {
     if (!busy) void reload();
   });
 
+  /** What the list shows about each photo, to see whether a reload changed anything. */
+  const shape = (list: readonly Photo[]) =>
+    list.map((photo) => `${photo.id}:${photo.here}:${photo.online ? 1 : 0}`).join();
+
   async function reload(): Promise<void> {
     try {
-      const loaded = await loadLibrary();
-      const before = photos.map((photo) => photo.id).join();
-      if (loaded.map((photo) => photo.id).join() === before) return;
+      let loaded = await loadLibrary();
+      // Photos only online need sync: without it, they can't be seen here.
+      if (!online.state().on && loaded.some((photo) => !photo.here)) {
+        const hidden = loaded.filter((photo) => !photo.here).map((photo) => photo.id);
+        await deletePhotos(hidden);
+        loaded = loaded.filter((photo) => photo.here);
+      }
+      if (shape(loaded) === shape(photos)) return;
       photos = loaded;
       const known = new Set(photos.map((photo) => photo.id));
       for (const id of chosen) if (!known.has(id)) chosen.delete(id);

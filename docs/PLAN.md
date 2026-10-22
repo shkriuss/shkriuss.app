@@ -194,8 +194,10 @@ flag that before starting.
 - No secrets in the repo. The Cloudflare token lives only in **GitHub Actions
   secrets**. The Cloudflare account ID is written in the workflows because
   it isn't secret.
-- The Cloudflare API token has only **Workers Scripts: Edit** (your account)
-  and **Workers Routes: Edit** (only the `shkriuss.app` zone).
+- The Cloudflare API token has only **Workers Scripts: Edit** and **Workers
+  R2 Storage: Edit** (your account), and **Workers Routes: Edit** (only the
+  `shkriuss.app` zone). Photos' storage code (`PHOTOS_STORAGE_CODE`) is the
+  only other secret ([ADR 0016](adr/0016-online-photo-library.md)).
 - GitHub Actions are pinned to exact commits (a unit test enforces this).
   Workflows start with no permissions and ask only for what each job needs.
   Checkout doesn't keep credentials, except in the **New app** workflow,

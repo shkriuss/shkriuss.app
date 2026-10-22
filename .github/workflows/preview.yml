@@ -62,11 +62,17 @@ jobs:
         if: steps.token.outputs.ready == 'true'
         run: pnpm build
 
+      - name: Create the preview storage buckets (if they aren't there yet)
+        if: steps.token.outputs.ready == 'true'
+        run: node scripts/buckets.ts preview
+
       - name: Upload previews to Cloudflare
         if: steps.token.outputs.ready == 'true'
         env:
           # The PR's own latest commit (GITHUB_SHA is GitHub's temporary merge commit).
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          # The online photo library's storage code (docs/adr/0016-online-photo-library.md).
+          PHOTOS_STORAGE_CODE: ${{ secrets.PHOTOS_STORAGE_CODE }}
         run: node scripts/previews.ts deploy "$PREVIEW_NAME" > preview-comment.md
 
       - name: Post the links on the pull request
