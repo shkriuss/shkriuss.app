@@ -122,7 +122,11 @@ export function canonicalTimeZone(timeZone: string): string | null {
 /** The moment when clocks in `timeZone` show `wall`. In a daylight-saving gap, an hour later. */
 export function zonedMoment(wall: number, timeZone: string): number {
   const guess = wall - (wallClock(wall, timeZone) - wall);
-  return wall - (wallClock(guess, timeZone) - guess);
+  const moment = wall - (wallClock(guess, timeZone) - guess);
+  // West of UTC, a time that doesn't exist that night lands an hour early
+  // (the clocks show 01:30 for 02:30): move it past the gap.
+  const shown = wallClock(moment, timeZone);
+  return shown < wall ? moment + (wall - shown) : moment;
 }
 
 /** Start times (wall ms) of each occurrence that starts on or after `fromDay` (days since 1970). */

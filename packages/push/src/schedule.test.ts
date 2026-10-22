@@ -52,6 +52,27 @@ describe('nextFireTime', () => {
     ]);
   });
 
+  it('moves a time that doesn’t exist that night an hour later, west of UTC too', () => {
+    // Berlin skips 02:00–03:00 on 29 March: 02:30 becomes 03:30 (01:30 UTC).
+    const berlin = timing({ start: '2026-03-29T02:30' });
+    expect(iso(nextFireTime(berlin, 'Europe/Berlin', at('2026-03-28T00:00:00Z')))).toBe(
+      '2026-03-29T01:30:00.000Z',
+    );
+    // New York skips 02:00–03:00 on 8 March: 02:30 becomes 03:30 EDT, not 01:30 EST.
+    const newYork = timing({ start: '2026-03-08T02:30' });
+    expect(iso(nextFireTime(newYork, 'America/New_York', at('2026-03-07T00:00:00Z')))).toBe(
+      '2026-03-08T07:30:00.000Z',
+    );
+    // Santiago skips 00:00–01:00 on 6 September: a daily 00:30 reminder goes off at
+    // 01:30 that morning, not at 23:30 the evening before.
+    const daily = timing({ start: '2026-09-01T00:30', repeat: 'daily' });
+    expect(fires(daily, 'America/Santiago', '2026-09-05T00:00:00Z', 3)).toEqual([
+      '2026-09-05T04:30:00.000Z',
+      '2026-09-06T04:30:00.000Z',
+      '2026-09-07T03:30:00.000Z',
+    ]);
+  });
+
   it('stops after the last day', () => {
     const walk = timing({ start: '2026-10-17T07:00', repeat: 'daily', until: '2026-10-19' });
     expect(fires(walk, 'UTC', '2026-10-16T00:00:00Z', 5)).toEqual([
