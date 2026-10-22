@@ -148,6 +148,12 @@ code with the Cloudflare token.
 - **Fastest (one site):** Cloudflare dashboard → **Workers & Pages** → the
   site → **Deployments** → pick an earlier version → **Rollback**. The next
   merge to `main` deploys over it again.
+- **Don't roll back past a change to how an app saves its data** (a pull
+  request that raised a store's `version` and added a migration). Fix
+  forward instead. Anyone who opened the newer version has their data saved
+  in the new shape, which the older version can't read: it keeps that data
+  safe, but shows nothing, and can't save or sync, until the newer version
+  is back.
 
 ## Costs
 

@@ -136,6 +136,8 @@ export type SyncProblem =
   | 'server'
   /** Another device has a newer version of the app: wait for this one to update. */
   | 'update-needed'
+  /** This version of the app can't read the data saved here: it's kept as it is, unsynced. */
+  | 'unreadable'
   /** Too much data to sync. */
   | 'too-big'
   /** The online copy was deleted on another device; sync is now off here. */
@@ -388,6 +390,18 @@ async function api(path: string, init: RequestInit = {}, token?: string): Promis
   }
 }
 
+/**
+ * Why a store's data here can't be synced, if it can't: it's from a newer
+ * version of the app (or this device last synced with a newer version), or
+ * this version can't read it. The store then loads as empty, which would
+ * look as if everything had been deleted here.
+ */
+function unsyncable(synced: SyncedStore, known: Known | undefined): SyncProblem | null {
+  const status = synced.store.status();
+  if (status === 'newer' || (known?.v ?? 0) > synced.store.version) return 'update-needed';
+  return status === 'unreadable' ? 'unreadable' : null;
+}
+
 /** A 410 from the server: the copy was deleted, or moved to a new account key. */
 async function goneError(response: Response): Promise<SyncError> {
   const body = (await response.json().catch(() => null)) as { moved?: unknown } | null;
@@ -512,6 +526,8 @@ export function createSync(options: {
     const local: Stores = {};
     let changed = false;
     for (const synced of stores) {
+      const problem = unsyncable(synced, state.known[synced.store.key]);
+      if (problem) throw new SyncError(problem);
       const value = synced.store.load();
       before[synced.store.key] = canonical(value);
       const seen = observe(
@@ -980,7 +996,7 @@ export function createSync(options: {
     let changed = false;
     for (const synced of stores) {
       const before = known[synced.store.key];
-      if (!before) continue;
+      if (!before || unsyncable(synced, before)) continue;
       const seen = observe(before, synced.items(synced.store.load()), synced.store.version, now);
       if (!seen.changed) continue;
       known[synced.store.key] = knownFrom(prune(seen.snapshot, now));

@@ -35,13 +35,33 @@ export interface StoreOptions<T> {
   storage?: StorageLike | undefined;
 }
 
+/** What a store finds saved (Store.status). */
+export type StoreStatus =
+  /** Nothing saved yet. */
+  | 'empty'
+  /** Saved data this version of the app reads. */
+  | 'ok'
+  /** Saved by a newer version of the app (say, before a rollback): update this one. */
+  | 'newer'
+  /** Saved data this version can't read: it fails the store's checks, or its migration failed. */
+  | 'unreadable';
+
 export interface Store<T> {
   /** The full key, e.g. "shkriuss:counters". */
   readonly key: string;
   /** The current shape version of the data. */
   readonly version: number;
+  /** The saved data, or the fallback if nothing is saved or it can't be read (see status()). */
   load(): T;
+  /**
+   * Saves `value`; false if it wasn't saved. Data that's saved but can't be
+   * read (status() "newer" or "unreadable") is never saved over, so an
+   * update can still read it. A value that fails the store's own checks is
+   * never saved either: it couldn't be read back.
+   */
   save(value: T): boolean;
+  /** Whether the saved data can be read. When it can't, load() gives the fallback. */
+  status(): StoreStatus;
   clear(): void;
   /** A fresh empty value (the store's fallback). */
   empty(): T;
@@ -68,44 +88,75 @@ export function getLocalStorage(): StorageLike | undefined {
   }
 }
 
+const made = new Map<string, Pick<Store<unknown>, 'version' | 'read'>>();
+/**
+ * Every store made on this page, by full key, so a backup can be checked
+ * with them before it replaces anything (restoreAll in ./backup.ts).
+ */
+export const madeStores: ReadonlyMap<string, Pick<Store<unknown>, 'version' | 'read'>> = made;
+
 export function createStore<T>(options: StoreOptions<T>): Store<T> {
   const fullKey = KEY_PREFIX + options.key;
   const storage = (): StorageLike | undefined => options.storage ?? getLocalStorage();
+  /** The saved text this store last read or wrote as fine, so save() needn't check it again. */
+  let fine: string | null = null;
 
   const read = (version: number, data: unknown): T | undefined => {
-    if (version === options.version) return options.validate(data) ? data : undefined;
-    if (!Number.isInteger(version) || version > options.version) return undefined;
-    const migrated = options.migrate?.(data, version);
-    return migrated !== undefined && options.validate(migrated) ? migrated : undefined;
+    try {
+      if (version === options.version) return options.validate(data) ? data : undefined;
+      if (!Number.isInteger(version) || version > options.version) return undefined;
+      const migrated = options.migrate?.(data, version);
+      return migrated !== undefined && options.validate(migrated) ? migrated : undefined;
+    } catch {
+      // A check or a migration that breaks on odd data: it can't be read.
+      return undefined;
+    }
   };
 
-  return {
+  /** What's saved, and the value this version makes of it. */
+  const inspect = (raw: string | null | undefined): { status: StoreStatus; value?: T } => {
+    if (raw == null) return { status: 'empty' };
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return { status: 'unreadable' };
+    }
+    if (typeof parsed !== 'object' || parsed === null || !('v' in parsed)) {
+      return { status: 'unreadable' };
+    }
+    const { v, data } = parsed as Envelope<unknown>;
+    if (typeof v === 'number' && v > options.version) return { status: 'newer' };
+    const value = read(v, data);
+    if (value === undefined) return { status: 'unreadable' };
+    fine = raw;
+    return { status: 'ok', value };
+  };
+
+  const store: Store<T> = {
     key: fullKey,
     version: options.version,
     empty: options.fallback,
     read,
+    status: () => inspect(storage()?.getItem(fullKey)).status,
 
     load(): T {
-      const raw = storage()?.getItem(fullKey);
-      if (raw == null) return options.fallback();
-      try {
-        const parsed: unknown = JSON.parse(raw);
-        if (typeof parsed !== 'object' || parsed === null || !('v' in parsed)) {
-          return options.fallback();
-        }
-        const { v, data } = parsed as Envelope<unknown>;
-        return read(v, data) ?? options.fallback();
-      } catch {
-        return options.fallback();
-      }
+      return inspect(storage()?.getItem(fullKey)).value ?? options.fallback();
     },
 
     save(value: T): boolean {
-      const envelope: Envelope<T> = { v: options.version, data: value };
       try {
         const target = storage();
         if (!target) return false;
-        target.setItem(fullKey, JSON.stringify(envelope));
+        const saved = target.getItem(fullKey);
+        if (saved !== null && saved !== fine && inspect(saved).status !== 'ok') return false;
+        const text = JSON.stringify({ v: options.version, data: value } satisfies Envelope<T>);
+        // Checked as it will be read back (JSON turns NaN into null, say).
+        if (read(options.version, (JSON.parse(text) as Envelope<unknown>).data) === undefined) {
+          return false;
+        }
+        target.setItem(fullKey, text);
+        fine = text;
         return true;
       } catch {
         // Quota exceeded or storage blocked.
@@ -117,6 +168,8 @@ export function createStore<T>(options: StoreOptions<T>): Store<T> {
       storage()?.removeItem(fullKey);
     },
   };
+  made.set(fullKey, store);
+  return store;
 }
 
 /** Every key this app has saved through these helpers. */

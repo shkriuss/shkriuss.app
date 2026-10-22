@@ -197,6 +197,9 @@ in with `sync: true` in `apps.json`.
   - Data from a newer version of the app is never overwritten: the older
     device waits until it updates. Older data is upgraded with the store's own
     migration and checked with its own validation before it's saved.
+  - Data on the device that this version can't read (from a newer version,
+    after a rollback, or failing its own checks) is never saved over or
+    synced: the device says so and waits for an update.
 - **When devices sync:** when the app opens or comes back on screen, about
   1.5 seconds after each change, every minute while it's open, and with
   "Sync now".

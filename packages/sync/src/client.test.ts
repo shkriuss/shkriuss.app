@@ -87,19 +87,24 @@ interface Counter {
   count: number;
   /** Ids of files, for apps with files. */
   photos?: string[];
+  /** Added by data version 2, in tests with a migration. */
+  color?: string | null;
 }
 interface Counters {
   counters: Counter[];
 }
+/** A store's migration of data saved with an older data version. */
+type Migrate = (old: unknown, version: number) => Counters | undefined;
 
 const ORIGIN = 'https://tally.shkriuss.app';
 let server: SyncEnv;
 let offline = false;
 
 class Device {
-  readonly storage = new MemoryStorage();
+  readonly storage: MemoryStorage;
   readonly store: Store<Counters>;
   readonly sync: SyncClient;
+  readonly keepBoth: boolean;
   changes = 0;
   /** What the page shows: like the real apps, it keeps its own copy and reloads it in onChange. */
   shown: Counter[];
@@ -108,25 +113,35 @@ class Device {
   /** Files on this device, for apps with files. */
   readonly files = new Map<string, Uint8Array<ArrayBuffer>>();
 
+  /** `reopened`: the browser storage of an earlier Device, after the app was updated (see reopen()). */
   constructor(
-    appSecret: Uint8Array<ArrayBuffer>,
+    appSecret: Uint8Array<ArrayBuffer> | null,
     version = 1,
     keepBoth = false,
     withFiles = false,
     linked?: LinkedData,
+    reopened?: { storage: MemoryStorage; migrate?: Migrate },
   ) {
+    this.storage = reopened?.storage ?? new MemoryStorage();
+    this.keepBoth = keepBoth;
     this.use();
     this.store = createStore<Counters>({
       key: 'tally',
       version,
       fallback: () => ({ counters: [] }),
       validate: (value): value is Counters =>
-        typeof value === 'object' && value !== null && Array.isArray((value as Counters).counters),
+        typeof value === 'object' &&
+        value !== null &&
+        Array.isArray((value as Counters).counters) &&
+        (value as Counters).counters.every((item) => typeof item?.count === 'number'),
+      ...(reopened?.migrate ? { migrate: reopened.migrate } : {}),
     });
-    this.storage.setItem(
-      'shkriuss-device:sync',
-      JSON.stringify({ secret: toBase64Url(appSecret), code: 'K7Q2-M9XD' }),
-    );
+    if (appSecret) {
+      this.storage.setItem(
+        'shkriuss-device:sync',
+        JSON.stringify({ secret: toBase64Url(appSecret), code: 'K7Q2-M9XD' }),
+      );
+    }
     this.sync = createSync({
       app: 'tally',
       stores: [
@@ -172,6 +187,12 @@ class Device {
     this.shown = change(this.shown);
     this.store.save({ counters: this.shown });
     this.sync.changed();
+  }
+
+  /** This browser, after the app was updated (or rolled back) to another data version. */
+  reopen(version: number, migrate?: Migrate): Device {
+    const reopened = { storage: this.storage, ...(migrate ? { migrate } : {}) };
+    return new Device(null, version, this.keepBoth, false, undefined, reopened);
   }
 
   /** Makes this device's storage the one the code sees. */
@@ -708,6 +729,103 @@ describe('showing changes from other devices', () => {
     await tablet.syncNow();
     await phone.syncNow();
     expect(phone.counters).toEqual([counter('a', 2), counter('c')]);
+  });
+});
+
+describe('data this version of the app can’t read', () => {
+  /** Two devices in step with a and b. */
+  async function inStep(version = 1) {
+    const secret = randomBytes(32);
+    const phone = new Device(secret, version);
+    const tablet = new Device(secret, version);
+    phone.counters = [counter('a'), counter('b')];
+    await phone.syncNow();
+    await tablet.syncNow();
+    return { secret, phone, tablet };
+  }
+  const TALLY = 'shkriuss:tally';
+
+  it('from a newer version (after a rollback) is never synced or saved over', async () => {
+    const { phone, tablet } = await inStep(2);
+    vi.setSystemTime(Date.now() + 1000);
+    tablet.counters = [counter('a', 1), counter('b')];
+    await tablet.syncNow();
+
+    // The change that brought data version 2 is rolled back. The app syncs as
+    // it opens: it must wait, not upload its empty view of the data.
+    const rolledBack = tablet.reopen(1);
+    expect(await rolledBack.syncNow()).toMatchObject({ on: true, problem: 'update-needed' });
+    expect(rolledBack.store.save({ counters: [counter('c')] })).toBe(false);
+    expect((await rolledBack.syncNow()).problem).toBe('update-needed');
+    await phone.syncNow();
+    expect(phone.counters).toEqual([counter('a', 1), counter('b')]);
+
+    // The fix is deployed: version 2 again, and nothing was lost.
+    const fixed = tablet.reopen(2);
+    expect((await fixed.syncNow()).problem).toBeNull();
+    expect(fixed.counters).toEqual([counter('a', 1), counter('b')]);
+    await phone.syncNow();
+    expect(phone.counters).toEqual([counter('a', 1), counter('b')]);
+  });
+
+  it('waits, too, when this device last synced with a newer version', async () => {
+    const { phone, tablet } = await inStep();
+    // What a newer version remembers after syncing (its data here unchanged).
+    const state = JSON.parse(tablet.storage.getItem('shkriuss-device:sync') ?? '{}') as {
+      known: Record<string, { v?: number }>;
+    };
+    for (const known of Object.values(state.known)) known.v = 2;
+    tablet.storage.setItem('shkriuss-device:sync', JSON.stringify(state));
+    expect((await tablet.syncNow()).problem).toBe('update-needed');
+    await phone.syncNow();
+    expect(phone.counters).toEqual([counter('a'), counter('b')]);
+  });
+
+  it('that it can’t read (a migration that fails, or one bad value) is kept, not synced', async () => {
+    const { phone, tablet } = await inStep();
+    const broken = tablet.reopen(2, () => {
+      throw new TypeError('Cannot read properties of undefined');
+    });
+    expect(broken.counters).toEqual([]);
+    expect((await broken.syncNow()).problem).toBe('unreadable');
+    await phone.syncNow();
+    expect(phone.counters).toEqual([counter('a'), counter('b')]);
+
+    // Saved by a version that didn't check a value (like Budget's amount of 0).
+    const saved = tablet.storage.getItem(TALLY);
+    const bad = { ...counter('b'), count: 'lots' };
+    tablet.storage.setItem(
+      TALLY,
+      JSON.stringify({ v: 1, data: { counters: [counter('a'), bad] } }),
+    );
+    expect((await tablet.syncNow()).problem).toBe('unreadable');
+    await phone.syncNow();
+    expect(phone.counters).toEqual([counter('a'), counter('b')]);
+    tablet.storage.setItem(TALLY, saved ?? '');
+    expect((await tablet.syncNow()).problem).toBeNull();
+  });
+
+  it('while sync is off, isn’t taken as everything deleted', async () => {
+    const { secret, phone, tablet } = await inStep();
+    tablet.sync.turnOff();
+    const saved = tablet.storage.getItem(TALLY);
+    const bad = { ...counter('b'), count: 'lots' };
+    tablet.storage.setItem(
+      TALLY,
+      JSON.stringify({ v: 1, data: { counters: [counter('a'), bad] } }),
+    );
+    tablet.edit((counters) => [...counters, counter('c')]); // couldn't save
+    // An update reads it again. Meanwhile a was counted on the phone.
+    tablet.storage.setItem(TALLY, saved ?? '');
+    vi.setSystemTime(Date.now() + 1000);
+    phone.counters = [counter('a', 5), counter('b')];
+    await phone.syncNow();
+
+    vi.setSystemTime(Date.now() + 1000);
+    tablet.connect(secret);
+    expect((await tablet.syncNow()).problem).toBeNull();
+    await phone.syncNow();
+    expect(phone.counters).toEqual([counter('a', 5), counter('b')]);
   });
 });
 

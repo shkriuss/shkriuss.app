@@ -13,9 +13,11 @@ import {
   deleteAll,
   getLocalStorage,
   KEY_PREFIX,
+  madeStores,
   ownKeys,
   type ExportFile,
   type StorageLike,
+  type Store,
 } from './index.ts';
 
 export const BACKUP_FORMAT = 'shkriuss-backup';
@@ -45,7 +47,13 @@ export type BackupFile =
   { kind: 'encrypted'; backup: EncryptedBackup } | { kind: 'plain'; file: ExportFile };
 
 export type BackupErrorCode =
-  'not-a-backup' | 'wrong-app' | 'wrong-passphrase' | 'weak-passphrase' | 'storage-unavailable';
+  | 'not-a-backup'
+  | 'wrong-app'
+  | 'wrong-passphrase'
+  | 'weak-passphrase'
+  | 'storage-unavailable'
+  /** Made by a newer version of the app: update this one first. */
+  | 'newer-version';
 
 export class BackupError extends Error {
   readonly code: BackupErrorCode;
@@ -236,19 +244,47 @@ export function readBackup(text: string, app: string): BackupFile {
 }
 
 /**
- * Replaces everything the app saved with the backup's data. If the browser
- * refuses part-way (for example, storage is full), the old data is put back.
- * Returns how many items were restored.
+ * Checks a store's data from a backup with the store itself, so a backup
+ * the app can't read is refused before anything is replaced.
+ */
+function checkWith(store: Pick<Store<unknown>, 'version' | 'read'>, saved: unknown): void {
+  const envelope: Record<string, unknown> = isRecord(saved) ? saved : {};
+  const v = envelope['v'];
+  if (typeof v === 'number' && v > store.version) {
+    throw new BackupError(
+      'newer-version',
+      'This backup is from a newer version of the app. Close the app and open it again to update it, then restore the backup. Nothing was changed.',
+    );
+  }
+  if (typeof v !== 'number' || store.read(v, envelope['data']) === undefined) {
+    throw new BackupError(
+      'not-a-backup',
+      'Part of this backup can’t be read, so it wasn’t restored. Nothing was changed.',
+    );
+  }
+}
+
+/**
+ * Replaces everything the app saved with the backup's data. First, the data
+ * of each store made on this page is checked with that store: a backup from
+ * a newer version of the app, or one it can't read, is refused and nothing
+ * changes. If the browser refuses part-way (for example, storage is full),
+ * the old data is put back. Returns how many items were restored.
  */
 export function restoreAll(
   file: ExportFile,
   storage: StorageLike | undefined = getLocalStorage(),
+  stores: typeof madeStores = madeStores,
 ): number {
   if (!storage) {
     throw new BackupError(
       'storage-unavailable',
       'This browser isn’t letting the app save data, so the backup can’t be restored.',
     );
+  }
+  for (const [key, value] of Object.entries(file.data)) {
+    const store = stores.get(key);
+    if (store) checkWith(store, value);
   }
   // Values that weren't JSON (like the theme, "dark") were exported as plain text.
   const serialize = (value: unknown): string =>
