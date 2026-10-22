@@ -146,7 +146,8 @@ export function parsePrice(text: string): number | null | undefined {
 export function normalizeLink(text: string): string | undefined {
   const trimmed = text.trim();
   if (trimmed === '') return '';
-  const withScheme = /^[a-z][a-z\d+.-]*:/i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  // "shop.ge:8080/x" has no scheme: one with a dot in it is a host and port.
+  const withScheme = /^[a-z][a-z\d+-]*:/i.test(trimmed) ? trimmed : `https://${trimmed}`;
   try {
     const url = new URL(withScheme);
     if (url.protocol !== 'https:' && url.protocol !== 'http:') return undefined;
@@ -307,9 +308,11 @@ export function visibleItems(
       Number(a.brand === '') - Number(b.brand === '') ||
       byText(a.brand, b.brand) ||
       byText(a.name, b.name),
-    // Without a price: last.
+    // Without a price: last. Prices in different currencies can't be compared
+    // (no exchange rates), so each currency's come together.
     price: (a, b) =>
       Number(a.price === null) - Number(b.price === null) ||
+      byText(a.currency, b.currency) ||
       (a.price ?? 0) - (b.price ?? 0) ||
       byText(a.name, b.name),
   };

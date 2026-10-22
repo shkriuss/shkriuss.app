@@ -69,6 +69,8 @@ describe('the form', () => {
     expect(normalizeLink('shop.ge/item?id=4')).toBe('https://shop.ge/item?id=4');
     expect(normalizeLink(' https://www.amazon.com/dp/B0 ')).toBe('https://www.amazon.com/dp/B0');
     expect(normalizeLink('http://example.com')).toBe('http://example.com/');
+    // A host and port, not a scheme.
+    expect(normalizeLink('shop.ge:8080/item')).toBe('https://shop.ge:8080/item');
     // Nothing that could run code or open something else.
     for (const wrong of ['javascript:alert(1)', 'data:text/html,hi', 'mailto:a@b.ge', 'notalink']) {
       expect(normalizeLink(wrong), wrong).toBeUndefined();
@@ -236,6 +238,17 @@ describe('finding items', () => {
     expect(sorted('name')).toEqual(['Face cream', 'Greek yogurt', 'Running shoes', 'Skyr']);
     expect(sorted('brand')).toEqual(['Running shoes', 'Greek yogurt', 'Skyr', 'Face cream']);
     expect(sorted('price')).toEqual(['Skyr', 'Greek yogurt', 'Face cream', 'Running shoes']);
+    // Prices in different currencies aren't compared: each currency's come together.
+    const mixed = stateOf(
+      item({ name: 'Lari 30', price: '30', currency: 'GEL' }, 'a'),
+      item({ name: 'Dollar 20', price: '20', currency: 'USD' }, 'b'),
+      item({ name: 'Lari 10', price: '10', currency: 'GEL' }, 'c'),
+    );
+    expect(names(visibleItems(mixed, { ...NO_FILTERS, sort: 'price' }, []))).toEqual([
+      'Lari 10',
+      'Lari 30',
+      'Dollar 20',
+    ]);
   });
 
   it('lists brands, the most loved first, spelled the usual way', () => {

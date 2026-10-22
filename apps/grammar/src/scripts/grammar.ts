@@ -123,6 +123,8 @@ export function mountGrammar(root: Document): void {
     if (phase !== 'ready') return;
     const text = textarea.value;
     if (text.trim() === '') {
+      // An answer for older text may still come: it no longer counts.
+      lastId += 1;
       issues = [];
       checkedText = text;
       render();

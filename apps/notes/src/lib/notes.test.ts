@@ -118,6 +118,15 @@ describe('notes saved by version 1', () => {
     ]);
   });
 
+  it('keeps a first line too long for a title in the text', () => {
+    const long = 'x'.repeat(250);
+    const migrated = migrateNotes(
+      { notes: [{ id: 'a', text: `${long}\nMore`, created: 1, updated: 2, pinned: false }] },
+      1,
+    );
+    expect(migrated?.notes[0]).toMatchObject({ title: '', body: `${long}\nMore` });
+  });
+
   it('gives up on anything else', () => {
     expect(migrateNotes({ notes: [] }, 3)).toBeUndefined();
     expect(migrateNotes(null, 1)).toBeUndefined();

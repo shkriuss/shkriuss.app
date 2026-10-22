@@ -64,9 +64,12 @@ function splitText(text: string): { title: string; body: string } {
   const lines = text.split(/\r?\n/);
   const first = lines.findIndex((line) => line.trim() !== '');
   if (first === -1) return { title: '', body: '' };
+  const title = (lines[first] ?? '').trim();
+  // Too long for a title: it all stays in the text, so nothing is cut off later.
+  if (title.length > MAX_TITLE_LENGTH) return { title: '', body: lines.slice(first).join('\n') };
   const rest = lines.slice(first + 1);
   while (rest.length > 0 && rest[0]?.trim() === '') rest.shift();
-  return { title: (lines[first] ?? '').trim(), body: rest.join('\n') };
+  return { title, body: rest.join('\n') };
 }
 
 /** Turns notes saved by an older version into today's shape (undefined if it can't). */

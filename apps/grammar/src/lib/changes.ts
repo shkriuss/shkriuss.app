@@ -139,7 +139,12 @@ export function sentenceChanges(
         // Removing words: also remove one space next to them.
         if (previous && spaceBefore && (spaceAfter || !next || joinsLeft(next.model))) {
           start = previous.end;
-        } else if (next && spaceAfter && !previous) {
+        } else if (
+          next &&
+          spaceAfter &&
+          (!previous || (!spaceBefore && joinsRight(previous.model)))
+        ) {
+          // At the start, or just after "(" or an opening quote: the space after goes.
           end = next.start;
         } else if (
           previous &&
