@@ -3,7 +3,7 @@
  * Requests come from anyone on the internet, so the limits matter.
  */
 import { fromBase64Url } from './base64.ts';
-import { isDate, isTimeZone, parseStamp, REPEATS, type Timing } from './schedule.ts';
+import { canonicalTimeZone, isDate, parseStamp, REPEATS, type Timing } from './schedule.ts';
 
 export const LIMITS = {
   /** Scheduled notifications per device. */
@@ -111,10 +111,13 @@ export function checkSchedule(value: unknown, allowLocal = false): Checked<Sched
   if (!isRecord(value)) return { ok: false, error: 'Expected an object.' };
   const endpointError = endpointProblem(value['endpoint'], allowLocal);
   if (endpointError) return { ok: false, error: endpointError };
-  const { timeZone, entries } = value;
-  if (typeof timeZone !== 'string' || timeZone.length > 64 || !isTimeZone(timeZone)) {
-    return { ok: false, error: 'Unknown time zone.' };
-  }
+  const { entries } = value;
+  // Kept, and worked with, under the zone's own name only (however it was spelt).
+  const timeZone =
+    typeof value['timeZone'] === 'string' && value['timeZone'].length <= 64
+      ? canonicalTimeZone(value['timeZone'])
+      : null;
+  if (!timeZone) return { ok: false, error: 'Unknown time zone.' };
   if (!Array.isArray(entries) || entries.length > LIMITS.entries) {
     return { ok: false, error: `Up to ${LIMITS.entries} entries.` };
   }

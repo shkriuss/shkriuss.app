@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { isDate, isTimeZone, nextFireTime, parseStamp, type Timing } from './schedule.ts';
+import {
+  cachedTimeZones,
+  canonicalTimeZone,
+  isDate,
+  nextFireTime,
+  parseStamp,
+  type Timing,
+} from './schedule.ts';
 
 const at = (iso: string) => Date.parse(iso);
 const iso = (moment: number | null) => (moment === null ? null : new Date(moment).toISOString());
@@ -111,8 +118,23 @@ describe('checks', () => {
     expect(isDate('2026-13-01')).toBe(false);
   });
 
-  it('knows real time zones', () => {
-    expect(isTimeZone('Asia/Tbilisi')).toBe(true);
-    expect(isTimeZone('Mars/Olympus_Mons')).toBe(false);
+  it('knows real time zones, by their own names', () => {
+    expect(canonicalTimeZone('Asia/Tbilisi')).toBe('Asia/Tbilisi');
+    expect(canonicalTimeZone('Mars/Olympus_Mons')).toBeNull();
+    expect(canonicalTimeZone('aMeRiCa/nEw_YoRk')).toBe('America/New_York');
+    expect(canonicalTimeZone('+03:00')).toBeNull();
+  });
+
+  it('keeps one clock reader per time zone, however it’s spelt', () => {
+    // 256 ways to write America/New_York, with capitals in different places.
+    for (let n = 0; n < 256; n += 1) {
+      const spelling = [...'america/new_york']
+        .map((letter, index) => ((n >> index) & 1 ? letter.toUpperCase() : letter))
+        .join('');
+      expect(canonicalTimeZone(spelling)).toBe('America/New_York');
+    }
+    expect(cachedTimeZones().filter((name) => /new_york/i.test(name))).toEqual([
+      'America/New_York',
+    ]);
   });
 });

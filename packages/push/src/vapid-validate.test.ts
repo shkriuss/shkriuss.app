@@ -105,6 +105,11 @@ describe('checkSchedule', () => {
     });
   });
 
+  it('keeps the time zone under its own name, however it was spelt', () => {
+    const result = checkSchedule(request({ timeZone: 'aSiA/tBiLiSi' }));
+    expect(result.ok && result.value.timeZone).toBe('Asia/Tbilisi');
+  });
+
   it('explains what is wrong', () => {
     const error = (value: unknown) => {
       const result = checkSchedule(value);
@@ -112,6 +117,7 @@ describe('checkSchedule', () => {
     };
     expect(error(null)).toBe('Expected an object.');
     expect(error(request({ timeZone: 'Mars/Olympus_Mons' }))).toBe('Unknown time zone.');
+    expect(error(request({ timeZone: '+04:00' }))).toBe('Unknown time zone.');
     expect(error(request({ entries: Array.from({ length: 501 }, () => entry()) }))).toMatch(/500/);
     expect(error(request({ entries: [entry(), entry()] }))).toMatch(/id used twice/);
     expect(error(request({ entries: [entry({ start: '2026-02-30T10:00' })] }))).toMatch(
