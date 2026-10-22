@@ -570,19 +570,25 @@ export function createSync(options: {
     }
 
     // 4. Save the result here (unless the person edited something, or turned
-    // sync off, meanwhile).
+    // sync off, meanwhile), and show it straight away. The page keeps its own
+    // copy of the data and saves from it: it must never save what it showed
+    // before over the merge, even if the upload below fails.
     checkStillOn(secret);
     let appChanged = false;
-    for (const synced of stores) {
-      const result = merged[synced.store.key] as StoreSnapshot;
-      const current = synced.store.load();
-      if (canonical(current) !== before[synced.store.key]) return false;
-      const next = synced.withItems(current, valuesOf(result) as Identified[]);
-      if (synced.store.read(synced.store.version, next) === undefined)
-        throw new SyncError('server');
-      if (canonical(next) === before[synced.store.key]) continue;
-      if (!synced.store.save(next)) throw new SyncError('storage');
-      appChanged = true;
+    try {
+      for (const synced of stores) {
+        const result = merged[synced.store.key] as StoreSnapshot;
+        const current = synced.store.load();
+        if (canonical(current) !== before[synced.store.key]) return false;
+        const next = synced.withItems(current, valuesOf(result) as Identified[]);
+        if (synced.store.read(synced.store.version, next) === undefined)
+          throw new SyncError('server');
+        if (canonical(next) === before[synced.store.key]) continue;
+        if (!synced.store.save(next)) throw new SyncError('storage');
+        appChanged = true;
+      }
+    } finally {
+      if (appChanged) options.onChange();
     }
     keptBoth += kept;
 
@@ -611,11 +617,8 @@ export function createSync(options: {
         { method: 'PUT', body: JSON.stringify({ base, data }) },
         token,
       );
-      if (response.status === 409) {
-        // Another device wrote first: merge again with the newer copy.
-        if (appChanged) options.onChange();
-        return false;
-      }
+      // Another device wrote first: merge again with the newer copy.
+      if (response.status === 409) return false;
       if (response.status === 410) throw await goneError(response);
       if (response.status === 413) throw new SyncError('too-big');
       if (!response.ok) throw new SyncError(response.status >= 500 ? 'offline' : 'server');
@@ -625,7 +628,6 @@ export function createSync(options: {
     // 6. Remember.
     const saved = { remote: online, known: knownsOf(merged), dirty: false, last: now };
     if (!updateState(secret, saved)) throw new SyncError('storage');
-    if (appChanged) options.onChange();
 
     // 7. The old copies are in the new one now (and their files, re-sealed with
     // the new key, and the app's linked data): delete them, so devices still

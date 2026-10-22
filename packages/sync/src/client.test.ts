@@ -101,6 +101,8 @@ class Device {
   readonly store: Store<Counters>;
   readonly sync: SyncClient;
   changes = 0;
+  /** What the page shows: like the real apps, it keeps its own copy and reloads it in onChange. */
+  shown: Counter[];
   status: SyncStatus | undefined;
   events: string[] = [];
   /** Files on this device, for apps with files. */
@@ -145,6 +147,7 @@ class Device {
       ],
       onChange: () => {
         this.changes += 1;
+        this.shown = this.store.load().counters;
       },
       ...(withFiles
         ? {
@@ -160,6 +163,15 @@ class Device {
       this.status = status;
       if (event) this.events.push(event);
     });
+    this.shown = this.store.load().counters;
+  }
+
+  /** The person changes something on the page, which saves what it shows. */
+  edit(change: (counters: Counter[]) => Counter[]): void {
+    this.use();
+    this.shown = change(this.shown);
+    this.store.save({ counters: this.shown });
+    this.sync.changed();
   }
 
   /** Makes this device's storage the one the code sees. */
@@ -638,6 +650,65 @@ describe('turning sync off while a sync is under way', () => {
       vi.useRealTimers();
     });
   }
+});
+
+describe('showing changes from other devices', () => {
+  /** Two devices with a and b; then the phone adds c and deletes b. */
+  async function phoneAddsCDeletesB() {
+    const secret = randomBytes(32);
+    const phone = new Device(secret);
+    const tablet = new Device(secret);
+    phone.counters = [counter('a'), counter('b')];
+    await phone.syncNow();
+    await tablet.syncNow();
+    expect(tablet.shown).toEqual([counter('a'), counter('b')]);
+    vi.setSystemTime(Date.now() + 1000);
+    phone.counters = [counter('a'), counter('c')];
+    await phone.syncNow();
+    vi.setSystemTime(Date.now() + 1000);
+    return { phone, tablet };
+  }
+  const count = (id: string, value: number) => (counters: Counter[]) =>
+    counters.map((item) => (item.id === id ? { ...item, count: value } : item));
+
+  it('as soon as they’re saved here, even if the upload then fails', async () => {
+    const { phone, tablet } = await phoneAddsCDeletesB();
+    // The tablet counts a. Its sync merges in the phone's changes, but the
+    // upload fails ("too many changes", or a weak signal).
+    tablet.edit(count('a', 1));
+    const restore = intercept((_path, init) =>
+      init?.method === 'PUT' ? new Response('{}', { status: 429 }) : undefined,
+    );
+    expect((await tablet.syncNow()).problem).toBe('server');
+    restore();
+    expect(tablet.shown).toEqual([counter('a', 1), counter('c')]);
+
+    // The next count is saved from what the page shows: c stays, b stays deleted.
+    vi.setSystemTime(Date.now() + 1000);
+    tablet.edit(count('a', 2));
+    await tablet.syncNow();
+    await phone.syncNow();
+    expect(phone.counters).toEqual([counter('a', 2), counter('c')]);
+  });
+
+  it('before the upload, so an edit made while it uploads keeps them', async () => {
+    const { phone, tablet } = await phoneAddsCDeletesB();
+    tablet.edit(count('a', 1));
+    let tapped = false;
+    const restore = intercept((_path, init) => {
+      if (init?.method === 'PUT' && !tapped) {
+        tapped = true;
+        tablet.edit(count('a', 2));
+      }
+      return undefined;
+    });
+    await tablet.syncNow();
+    restore();
+    vi.setSystemTime(Date.now() + 1000);
+    await tablet.syncNow();
+    await phone.syncNow();
+    expect(phone.counters).toEqual([counter('a', 2), counter('c')]);
+  });
 });
 
 // ---------- Files, like photos ----------
