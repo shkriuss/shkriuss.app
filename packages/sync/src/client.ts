@@ -50,6 +50,7 @@ import {
   merge,
   observe,
   prune,
+  upgradeKnown,
   valuesOf,
   type Identified,
   type Known,
@@ -402,6 +403,36 @@ function unsyncable(synced: SyncedStore, known: Known | undefined): SyncProblem 
   return status === 'unreadable' ? 'unreadable' : null;
 }
 
+/** The items of data saved in an older data version, by id; null if they can't be read. */
+function oldItems(synced: SyncedStore, data: unknown): Map<string, unknown> | null {
+  try {
+    const items: unknown = synced.items(data);
+    if (!Array.isArray(items)) return null;
+    return new Map(items.map((item: Partial<Identified> | null) => [item?.id ?? '', item]));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * What this device knew, brought to each store's current data version after
+ * an update that changed it (merge.ts upgradeKnown). It compares with the
+ * data as still saved in the old version, if the app hasn't saved since.
+ */
+function knownNow(stores: readonly SyncedStore[], known: Record<string, Known>) {
+  let result = known;
+  for (const synced of stores) {
+    const { key, version } = synced.store;
+    const before = known[key];
+    if (before?.v === undefined || before.v >= version || unsyncable(synced, before)) continue;
+    const saved = synced.store.raw();
+    const old = saved?.v === before.v ? oldItems(synced, saved.data) : null;
+    const current = synced.items(synced.store.load());
+    result = { ...result, [key]: upgradeKnown(before, current, old, version) };
+  }
+  return result;
+}
+
 /** A 410 from the server: the copy was deleted, or moved to a new account key. */
 async function goneError(response: Response): Promise<SyncError> {
   const body = (await response.json().catch(() => null)) as { moved?: unknown } | null;
@@ -544,9 +575,10 @@ export function createSync(options: {
 
   /** One round. Returns false if it should run again (another device wrote first, or a local edit). */
   async function round(): Promise<boolean> {
-    const state = loadState();
-    if (!state?.secret) return true;
-    const { secret } = state;
+    const stored = loadState();
+    if (!stored?.secret) return true;
+    const { secret } = stored;
+    const state = { ...stored, known: knownNow(stores, stored.known) };
     const { token, key } = await syncKeys(fromBase64Url(secret));
     const now = Date.now();
 
@@ -557,7 +589,8 @@ export function createSync(options: {
     const remote = await fetchRemote(state.remote?.version ?? null, token, key);
     const moving = await fetchPrevious(state.previous);
     if (remote.kind === 'same' && !localChanged && !state.dirty && state.previous.length === 0) {
-      updateState(secret, { last: now });
+      const upgraded = state.known !== stored.known;
+      updateState(secret, upgraded ? { last: now, known: state.known } : { last: now });
       return true;
     }
 
@@ -1003,6 +1036,15 @@ export function createSync(options: {
       changed = true;
     }
     if (changed) saveState({ ...state, known });
+  }
+
+  // After an update that changed a data version: bring what this device knew
+  // to the new version now, while the data is still saved in the old one (the
+  // app's next save changes that), even if sync is off or there's no connection.
+  const start = loadState();
+  if (start) {
+    const known = knownNow(stores, start.known);
+    if (known !== start.known) saveState({ ...start, known });
   }
 
   // Keep up with other devices while the app is open.

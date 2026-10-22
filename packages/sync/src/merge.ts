@@ -40,7 +40,10 @@ export interface StoreSnapshot {
   order: Order;
 }
 
-/** What a device remembers about each item since the last sync. */
+/**
+ * What a device remembers about each item since the last sync: a fingerprint
+ * of its value then (empty if that's unknown, see upgradeKnown), and its time.
+ */
 export interface Known {
   items: Record<string, { h: string; t: number } | Tombstone>;
   order: Order;
@@ -130,6 +133,37 @@ export function observe(
   return { snapshot: { v: version, items, order }, changed };
 }
 
+/**
+ * After an update that changed the data version: what a device knew from
+ * its last sync are fingerprints of the old version's values, so every item
+ * would look edited, and win over newer edits on other devices. This brings
+ * them to `version`. An item still as it was then gets the fingerprint of
+ * its upgraded value, keeping its time. An item changed (or deleted) here
+ * since gets an empty fingerprint: it counts as edited, and as its value
+ * then is unknown, keepBoth leaves it to the newest edit.
+ *
+ * `old` is this device's items as still saved in the old version, by id, to
+ * tell which changed. If they're gone (the app has saved since), the items
+ * here are taken as unchanged, rather than all counting as edited.
+ */
+export function upgradeKnown(
+  known: Known,
+  current: readonly Identified[],
+  old: ReadonlyMap<string, unknown> | null,
+  version: number,
+): Known {
+  const here = new Map(current.map((item) => [item.id, item]));
+  const items: Known['items'] = { ...known.items };
+  for (const [id, entry] of Object.entries(known.items)) {
+    if (isTombstone(entry)) continue;
+    const now = here.get(id);
+    const unchanged =
+      now !== undefined && (old === null || (old.has(id) && fingerprint(old.get(id)) === entry.h));
+    items[id] = { h: unchanged ? fingerprint(now) : '', t: entry.t };
+  }
+  return { ...known, items, v: version };
+}
+
 /** Which of two entries for the same item wins: the newer one; ties broken the same way on every device. */
 function newer(a: Entry, b: Entry): Entry {
   if (a.t !== b.t) return a.t > b.t ? a : b;
@@ -199,7 +233,8 @@ export function keepBoth(
   for (const [id, other] of Object.entries(theirs.items)) {
     const before = known.items[id];
     const here = mine.items[id];
-    if (!before || isTombstone(before) || !here) continue;
+    // Without what the item was at the last sync, there's no telling where it changed.
+    if (!before || isTombstone(before) || before.h === '' || !here) continue;
     if (isTombstone(other)) {
       // Deleted there but changed here: the change wins, even if it's older.
       if (!isTombstone(here) && fingerprint(here.value) !== before.h && here.t <= other.t) {

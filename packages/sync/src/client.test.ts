@@ -829,6 +829,84 @@ describe('data this version of the app can’t read', () => {
   });
 });
 
+describe('the first sync after a data version change', () => {
+  // Version 2 adds a colour to every counter, the way Calendar 2 added reminders.
+  const toVersion2: Migrate = (old, version) =>
+    version === 1
+      ? { counters: (old as Counters).counters.map((item) => ({ ...item, color: null })) }
+      : undefined;
+  const v2 = (item: Counter): Counter => ({ ...item, color: null });
+  const DAY = 24 * HOUR;
+
+  for (const keepBoth of [false, true]) {
+    it(`doesn’t count every item as edited${keepBoth ? ' (keeping both)' : ''}`, async () => {
+      const secret = randomBytes(32);
+      const phone = new Device(secret, 1, keepBoth);
+      const tablet = new Device(secret, 1, keepBoth);
+      phone.counters = [counter('a'), counter('b')];
+      await phone.syncNow();
+      await tablet.syncNow();
+
+      // A week of use on the phone: a counted, b deleted.
+      vi.setSystemTime(Date.now() + 7 * DAY);
+      phone.counters = [counter('a', 9)];
+      await phone.syncNow();
+
+      // The app is updated. A day later the tablet opens it and syncs; nothing
+      // was changed on it, so the phone's newer edits must stay.
+      vi.setSystemTime(Date.now() + DAY);
+      const updated = tablet.reopen(2, toVersion2);
+      expect((await updated.syncNow()).problem).toBeNull();
+      expect(updated.counters).toEqual([v2(counter('a', 9))]);
+      const phoneUpdated = phone.reopen(2, toVersion2);
+      await phoneUpdated.syncNow();
+      expect(phoneUpdated.counters).toEqual([v2(counter('a', 9))]);
+    });
+
+    it(`still counts what was changed here before updating${keepBoth ? ' (keeping both)' : ''}`, async () => {
+      const secret = randomBytes(32);
+      const phone = new Device(secret, 1, keepBoth);
+      const tablet = new Device(secret, 1, keepBoth);
+      phone.counters = [counter('a'), counter('b')];
+      await phone.syncNow();
+      await tablet.syncNow();
+
+      // On the tablet, with no connection: a counted, b deleted.
+      vi.setSystemTime(Date.now() + 1000);
+      offline = true;
+      tablet.counters = [counter('a', 3)];
+      await tablet.syncNow();
+      offline = false;
+
+      vi.setSystemTime(Date.now() + 1000);
+      expect((await tablet.reopen(2, toVersion2).syncNow()).problem).toBeNull();
+      const phoneUpdated = phone.reopen(2, toVersion2);
+      await phoneUpdated.syncNow();
+      expect(phoneUpdated.counters).toEqual([v2(counter('a', 3))]);
+    });
+  }
+
+  it('still counts an edit made after updating, before the first sync', async () => {
+    const secret = randomBytes(32);
+    const phone = new Device(secret);
+    const tablet = new Device(secret);
+    phone.counters = [counter('a'), counter('b')];
+    await phone.syncNow();
+    await tablet.syncNow();
+
+    // Opened after the update, and counted straight away (saved in version 2).
+    vi.setSystemTime(Date.now() + 1000);
+    const updated = tablet.reopen(2, toVersion2);
+    updated.edit((counters) =>
+      counters.map((item) => (item.id === 'a' ? { ...item, count: 4 } : item)),
+    );
+    expect((await updated.syncNow()).problem).toBeNull();
+    const phoneUpdated = phone.reopen(2, toVersion2);
+    await phoneUpdated.syncNow();
+    expect(phoneUpdated.counters).toEqual([v2(counter('a', 4)), v2(counter('b'))]);
+  });
+});
+
 // ---------- Files, like photos ----------
 
 /** A request straight to the server, as the account with this app key. */

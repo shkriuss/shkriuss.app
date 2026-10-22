@@ -10,6 +10,7 @@ import {
   sameSnapshot,
   secondVersionName,
   TOMBSTONE_DAYS,
+  upgradeKnown,
   valuesOf,
   type Identified,
   type Known,
@@ -261,6 +262,51 @@ describe('keepBoth', () => {
     const result = keepBoth(tablet.known as Known, mine, server, copy, 3000);
     expect(result.kept).toBe(0);
     expect(valuesOf(merge(result.snapshot, server))).toEqual([counter('b', 1)]);
+  });
+});
+
+describe('upgradeKnown', () => {
+  // Data version 2 adds a colour to every counter.
+  const v2 = (item: Counter) => ({ ...item, color: null });
+  const known = knownFrom(
+    observe(undefined, [counter('a'), counter('b'), counter('c')], 1, 100).snapshot,
+  );
+  // Since the last sync, here: b changed and c deleted, still saved in version 1.
+  const old = new Map([
+    ['a', counter('a')],
+    ['b', counter('b', 5)],
+  ]);
+  const current = [v2(counter('a')), v2(counter('b', 5))];
+
+  it('counts only what changed here since the last sync as edited', () => {
+    const next = upgradeKnown(known, current, old, 2);
+    expect(next.v).toBe(2);
+    expect(next.items).toEqual({
+      a: { h: fingerprint(v2(counter('a'))), t: 0 },
+      b: { h: '', t: 0 },
+      c: { h: '', t: 0 },
+    });
+    expect(observe(next, current, 2, 500).snapshot.items).toEqual({
+      a: { t: 0, value: v2(counter('a')) },
+      b: { t: 500, value: v2(counter('b', 5)) },
+      c: { t: 500, deleted: true },
+    });
+  });
+
+  it('takes items as unchanged when the old data is gone', () => {
+    expect(upgradeKnown(known, current, null, 2).items).toEqual({
+      a: { h: fingerprint(v2(counter('a'))), t: 0 },
+      b: { h: fingerprint(v2(counter('b', 5))), t: 0 },
+      c: { h: '', t: 0 },
+    });
+  });
+
+  it('leaves items whose value at the last sync is unknown to the newest edit', () => {
+    const next = upgradeKnown(known, current, old, 2);
+    const mine = observe(next, current, 2, 500).snapshot;
+    const theirs = observe(knownFrom(mine), [v2(counter('a')), v2(counter('b', 7))], 2, 400);
+    const copy = (item: Identified) => ({ ...item, id: `${item.id}-copy` });
+    expect(keepBoth(next, mine, theirs.snapshot, copy, 500).kept).toBe(0);
   });
 });
 

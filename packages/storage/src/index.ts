@@ -62,6 +62,8 @@ export interface Store<T> {
   save(value: T): boolean;
   /** Whether the saved data can be read. When it can't, load() gives the fallback. */
   status(): StoreStatus;
+  /** What's saved, as it was saved (not migrated or checked): its data version and data. */
+  raw(): { v: number; data: unknown } | null;
   clear(): void;
   /** A fresh empty value (the store's fallback). */
   empty(): T;
@@ -139,6 +141,17 @@ export function createStore<T>(options: StoreOptions<T>): Store<T> {
     empty: options.fallback,
     read,
     status: () => inspect(storage()?.getItem(fullKey)).status,
+
+    raw() {
+      try {
+        const parsed: unknown = JSON.parse(storage()?.getItem(fullKey) ?? 'null');
+        if (typeof parsed !== 'object' || parsed === null) return null;
+        const { v, data } = parsed as Partial<Envelope<unknown>>;
+        return typeof v === 'number' ? { v, data } : null;
+      } catch {
+        return null;
+      }
+    },
 
     load(): T {
       return inspect(storage()?.getItem(fullKey)).value ?? options.fallback();

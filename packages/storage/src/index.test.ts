@@ -115,6 +115,15 @@ describe('createStore', () => {
     expect(store.status()).toBe('unreadable');
   });
 
+  it('gives what’s saved as it was saved, for sync after a data version change', () => {
+    const store = makeStore();
+    expect(store.raw()).toBeNull();
+    storage.setItem('shkriuss:counts', '{"v":1,"data":[["water",5]]}');
+    expect(store.raw()).toEqual({ v: 1, data: [['water', 5]] });
+    storage.setItem('shkriuss:counts', 'not json');
+    expect(store.raw()).toBeNull();
+  });
+
   it('never saves over data from a newer version of the app (say, after a rollback)', () => {
     makeStore({ version: 3 }).save({ water: 5, tea: 2 });
     const saved = storage.getItem('shkriuss:counts');

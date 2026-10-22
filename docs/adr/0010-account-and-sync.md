@@ -196,7 +196,9 @@ in with `sync: true` in `apps.json`.
     know which data version the device last synced.
   - Data from a newer version of the app is never overwritten: the older
     device waits until it updates. Older data is upgraded with the store's own
-    migration and checked with its own validation before it's saved.
+    migration and checked with its own validation before it's saved. After
+    such an update, only what was really changed on a device counts as
+    edited: it compares with its data as still saved in the old version.
   - Data on the device that this version can't read (from a newer version,
     after a rollback, or failing its own checks) is never saved over or
     synced: the device says so and waits for an update.
