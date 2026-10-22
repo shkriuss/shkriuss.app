@@ -113,6 +113,7 @@ test('photos sync between devices, and deleting one deletes it on both', async (
   await uploaded;
 
   // On the tablet: no connection for photos, so it says so…
+  guard.allowConsole('net::ERR_FAILED');
   await tablet.route('**/api/sync/files/*', (route) => route.abort());
   await tablet.getByRole('button', { name: 'Sync now' }).click();
   const item = repairItems(tablet).first();

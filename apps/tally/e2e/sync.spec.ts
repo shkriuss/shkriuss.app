@@ -80,6 +80,8 @@ test('counters move to the new key when the account key is replaced', async ({
   guard,
 }) => {
   guard.allowOrigin(hubURL);
+  // The tablet, still on the old key, learns the copy moved from a 410 Gone.
+  guard.allowConsole('status of 410');
   const { key } = await createAccount(page);
   await page.goto('/');
   const appURL = new URL(page.url()).origin;
