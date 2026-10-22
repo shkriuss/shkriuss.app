@@ -56,6 +56,33 @@ secret, so it's written in the workflows.
 
 Never paste the token anywhere else, including chat.
 
+### GitHub settings
+
+The repository is public, so CI is free, and anyone can read the code (never
+the secrets). On github.com (some settings are easier to find on the desktop
+version of the site):
+
+1. **Settings → Advanced Security** (or **Code security**): turn on
+   **Private vulnerability reporting**, **Dependabot alerts**, **Dependabot
+   security updates**, **Secret Protection** with **Push protection**, and
+   **Code scanning → CodeQL → Default setup**.
+2. **Settings → Actions → General:**
+   - Fork pull request workflows from outside collaborators: **Require
+     approval for all external contributors**, so nobody else's code runs in
+     CI until you allow it.
+   - Workflow permissions: **Read repository contents and packages
+     permissions**, and untick **Allow GitHub Actions to create and approve
+     pull requests** (the workflows ask for anything more themselves).
+   - If it's there, tick **Require actions to be pinned to a full-length
+     commit SHA** (ours all are).
+3. **Settings → Rules → Rulesets → New branch ruleset:** name `main`,
+   **Active**, target the **default branch**, and tick **Restrict deletions**,
+   **Block force pushes**, **Require a pull request before merging** (0
+   approvals: you can't approve your own) and **Require status checks to
+   pass** with **Checks**, **Secret scan** and **Dependency audit**.
+4. **Settings → General → Features:** Wikis, Projects and Issues are off.
+   Security reports come through private vulnerability reporting.
+
 ## Rolling back
 
 - **Easiest:** revert the pull request on GitHub (open the merged pull
@@ -71,10 +98,9 @@ Everything here fits Cloudflare's and GitHub's free plans:
 
 - Cloudflare Workers Free: static files are free and unlimited; up to 100
   Workers (so about 99 apps) and 100 custom domains per zone.
-- GitHub Actions on a private repo: 2,000 free minutes per month. A pull
-  request uses roughly 4–6 minutes per push and a deploy about 3. If the
-  minutes run out, workflows pause until next month. You're never charged
-  unless you add a payment method and raise the spending limit.
+- GitHub Actions: free and unlimited on GitHub's standard machines, because
+  the repository is public. (Private repositories get 2,000 minutes a month,
+  which ran out, so it was made public on 22 October 2026.)
 - Notifications while an app is closed, the optional account and sync use
   Durable Objects, free up to 100,000 requests a day (each notification sent
   is about two; signing in, adding a device or opening the Account page

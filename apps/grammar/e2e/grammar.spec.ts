@@ -71,19 +71,19 @@ test('checks American or British English', async ({ page }) => {
 test('words in my dictionary aren’t marked as misspelled', async ({ page }) => {
   await open(page);
   await page.getByLabel('American (US)').check();
-  await text(page).fill('Daviti lives in Tbilisi.');
-  await expect(suggestion(page, 'Daviti')).toBeVisible();
-  await suggestion(page, 'Daviti')
-    .getByRole('button', { name: 'Add “Daviti” to my dictionary' })
+  await text(page).fill('Mtskheta is near Tbilisi.');
+  await expect(suggestion(page, 'Mtskheta')).toBeVisible();
+  await suggestion(page, 'Mtskheta')
+    .getByRole('button', { name: 'Add “Mtskheta” to my dictionary' })
     .click();
-  await expect(suggestion(page, 'Daviti')).toHaveCount(0);
-  await expect(page.locator('[data-words]')).toContainText('Daviti');
+  await expect(suggestion(page, 'Mtskheta')).toHaveCount(0);
+  await expect(page.locator('[data-words]')).toContainText('Mtskheta');
 
   await page.reload();
   await expect(status(page)).not.toHaveText(/Loading/, { timeout: 30_000 });
-  await expect(suggestion(page, 'Daviti')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Remove “Daviti” from my dictionary' }).click();
-  await expect(suggestion(page, 'Daviti')).toBeVisible();
+  await expect(suggestion(page, 'Mtskheta')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Remove “Mtskheta” from my dictionary' }).click();
+  await expect(suggestion(page, 'Mtskheta')).toBeVisible();
   await expect(page.getByText('No words yet.')).toBeVisible();
 });
 

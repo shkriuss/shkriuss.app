@@ -28,7 +28,7 @@ Decision records with more detail are in [`docs/adr/`](adr/).
 | Unit tests                      | **Vitest 5**                                                      | Fast, and uses the same Vite tooling as Astro.                                                                                                                            | Jest: slower, and needs extra setup for TypeScript.                                                                                                                         |
 | Browser and accessibility tests | **Playwright + axe-core**                                         | Drives a real browser against Cloudflare's local runtime (`wrangler dev`), with WCAG 2.2 AA rules.                                                                        | Cypress: heavier, with a weaker accessibility integration.                                                                                                                  |
 | Performance budgets             | **A small byte-budget script** (`pnpm check:dist`, no dependency) | Exact, repeatable sizes for HTML, CSS and JS on every pull request.                                                                                                       | Lighthouse CI: its scores are flaky on shared CI machines, and it adds a large dependency.                                                                                  |
-| Secret scanning                 | **gitleaks** (pinned, checksum-verified binary in CI)             | Free, and works on private repos.                                                                                                                                         | GitHub secret scanning, which isn't available for private repos on personal GitHub Free accounts.                                                                           |
+| Secret scanning                 | **gitleaks** (pinned, checksum-verified binary in CI)             | Free, and works on private repos too.                                                                                                                                     | GitHub secret scanning alone: it wasn't available while the repo was private, and runs as well now that it's public.                                                        |
 | Dependency scanning             | **Dependabot** + **`pnpm audit`**                                 | Both are free on private repos.                                                                                                                                           | Snyk (a third-party account).                                                                                                                                               |
 | Workflow security               | **zizmor** (in CI)                                                | Catches risky patterns in GitHub Actions workflows.                                                                                                                       | Nothing (most projects skip this).                                                                                                                                          |
 
@@ -245,20 +245,15 @@ reader, 200% zoom and large text, and reduced motion
 | `new-app.yml` | started by hand (**Actions → New app → Run workflow**) | Runs the generator with the details you type, pushes a branch, and gives you a link to open the PR.                                            |
 | Dependabot    | weekly                                                 | Proposes grouped dependency and action updates as PRs. CI must pass before you merge.                                                          |
 
-**Branch protection:** on GitHub Free, protected branches and rulesets
-**aren't available for private repositories**. Instead:
+**Branch protection:** the repository is public (since 22 October 2026), so
+a ruleset can protect `main`: no deleting or force-pushing it, changes only
+through pull requests whose checks pass ([deployment.md](deployment.md#github-settings)).
+Production deploys also only happen when the checks and the secret scan pass
+on `main` (the deploy job depends on them).
 
-- production deploys only happen when the checks and the secret scan pass on
-  `main` (the deploy job depends on them);
-- all changes go through pull requests with checks and previews.
-
-If you upgrade to GitHub Pro later (about US $4/month), I'll turn on "require
-status checks to pass before merging". This is optional.
-
-**CI minutes:** private repos on GitHub Free get 2,000 Actions minutes per
-month. A PR push uses about 4 to 6 minutes, a production deploy about 3. That's
-plenty for personal use. If it ever runs out, workflows pause until the next
-month. GitHub never charges you unless you add a payment method.
+**CI minutes:** free and unlimited for public repositories on GitHub's
+standard machines. (As a private repository it had 2,000 minutes a month, and
+they ran out.)
 
 ---
 
@@ -342,23 +337,23 @@ month. GitHub never charges you unless you add a payment method.
 
 ## 9. Decisions that are yours (I went ahead with the default)
 
-| Decision               | My default                                               | Other option                                                                                                                                                                                     |
-| ---------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Repo visibility        | **Keep it private** (as you asked)                       | Public adds free GitHub secret scanning with push protection, code scanning, branch protection and unlimited CI minutes. The code has no secrets, so it's safe if you're comfortable sharing it. |
-| GitHub plan            | **Free**                                                 | Pro (~$4/month) adds branch protection for private repos.                                                                                                                                        |
-| Example app            | **Tally** (tap to count things, saved on your device)    | Any other small app.                                                                                                                                                                             |
-| Brand name on the hub  | **"shkriuss"**                                           | Any name. It's one line in `apps.json`.                                                                                                                                                          |
-| Public contact address | **None for now**                                         | Add an email for privacy and security questions (and `security.txt`).                                                                                                                            |
-| PR preview links       | **Public but unlisted** (`*.workers.dev`, not indexed)   | Put them behind a Cloudflare Access login (free, more setup).                                                                                                                                    |
-| `www.shkriuss.app`     | **Not set up**                                           | Redirect it to `shkriuss.app` (one dashboard rule).                                                                                                                                              |
-| Theme                  | **Follows your device**, with a Light/Dark/System switch | —                                                                                                                                                                                                |
+| Decision               | My default                                               | Other option                                                                                          |
+| ---------------------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Repo visibility        | **Public** (since 22 October 2026, for unlimited CI)     | Private: 2,000 CI minutes a month, and no branch protection or GitHub secret scanning on GitHub Free. |
+| GitHub plan            | **Free**                                                 | Pro (~$4/month) is only needed for branch protection on private repos.                                |
+| Example app            | **Tally** (tap to count things, saved on your device)    | Any other small app.                                                                                  |
+| Brand name on the hub  | **"shkriuss"**                                           | Any name. It's one line in `apps.json`.                                                               |
+| Public contact address | **None for now**                                         | Add an email for privacy and security questions (and `security.txt`).                                 |
+| PR preview links       | **Public but unlisted** (`*.workers.dev`, not indexed)   | Put them behind a Cloudflare Access login (free, more setup).                                         |
+| `www.shkriuss.app`     | **Not set up**                                           | Redirect it to `shkriuss.app` (one dashboard rule).                                                   |
+| Theme                  | **Follows your device**, with a Light/Dark/System switch | —                                                                                                     |
 
 ## 10. Where your request conflicts with best practice
 
-1. **Private repo on GitHub Free.** You lose branch protection, secret
-   scanning and push protection. I added free replacements (gitleaks, zizmor,
-   Dependabot, `pnpm audit`, deploys gated on checks), but a public repo is
-   the stronger option if you're comfortable with it.
+1. **Private repo on GitHub Free** (until 22 October 2026). It had no branch
+   protection, secret scanning or push protection, and only 2,000 CI minutes a
+   month, which ran out; it's public now. The free checks added at the start
+   (gitleaks, zizmor, Dependabot, `pnpm audit`, deploys gated on checks) stay.
 2. **"WCAG 2.2 AA" can't be proven by tools alone.** Automated checks catch
    only some issues, so manual checks are part of finishing an app.
 3. **"No third parties" vs hosting.** Cloudflare necessarily processes visitor
