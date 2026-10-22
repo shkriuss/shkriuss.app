@@ -22,6 +22,7 @@ mark them "Superseded by ADR N" instead.
 | [0013](0013-photos-on-the-device.md)             | Photos on the device: IndexedDB through @shkriuss/storage/files, made smaller   | Accepted |
 | [0014](0014-syncing-photos.md)                   | Syncing photos: each sealed on the device, kept with the account's online copy  | Accepted |
 | [0015](0015-photos-app.md)                       | The Photos app: original files in IndexedDB, read in a worker, never twice      | Accepted |
+| [0016](0016-online-photo-library.md)             | The online photo library: sealed photos in R2, a list per library, storage code | Accepted |
 
 Template: **Context** (the problem), **Decision** (what we do), **Consequences**
 (good and bad), **Alternatives** (what we didn't pick and why).

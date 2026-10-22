@@ -360,12 +360,21 @@ importers:
       '@shkriuss/crypto':
         specifier: workspace:*
         version: link:../../packages/crypto
+      '@shkriuss/library':
+        specifier: workspace:*
+        version: link:../../packages/library
       '@shkriuss/registry':
         specifier: workspace:*
         version: link:../../packages/registry
+      '@shkriuss/server':
+        specifier: workspace:*
+        version: link:../../packages/server
       '@shkriuss/storage':
         specifier: workspace:*
         version: link:../../packages/storage
+      '@shkriuss/sync':
+        specifier: workspace:*
+        version: link:../../packages/sync
       '@shkriuss/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -649,6 +658,18 @@ importers:
   packages/crypto: {}
 
   packages/dates: {}
+
+  packages/library:
+    dependencies:
+      '@shkriuss/crypto':
+        specifier: workspace:*
+        version: link:../crypto
+      '@shkriuss/server':
+        specifier: workspace:*
+        version: link:../server
+      '@shkriuss/sync':
+        specifier: workspace:*
+        version: link:../sync
 
   packages/push:
     dependencies:

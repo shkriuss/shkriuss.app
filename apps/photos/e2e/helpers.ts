@@ -96,5 +96,30 @@ export const stored = (page: Page) =>
       }),
   );
 
+/** How many photos have their original on this device (photos only online don't). */
+export const originalsHere = (page: Page) =>
+  page.evaluate(
+    () =>
+      new Promise<number>((resolve) => {
+        const request = indexedDB.open('shkriuss-files');
+        request.onupgradeneeded = () => request.transaction?.abort();
+        request.onerror = () => resolve(0);
+        request.onsuccess = () => {
+          const database = request.result;
+          if (!database.objectStoreNames.contains('files')) {
+            database.close();
+            resolve(0);
+            return;
+          }
+          const range = IDBKeyRange.bound('photo-files:', 'photo-files;', false, true);
+          const files = database.transaction('files').objectStore('files').getAll(range);
+          files.onsuccess = () => {
+            database.close();
+            resolve(files.result.filter((file: { original: Blob | null }) => file.original).length);
+          };
+        };
+      }),
+  );
+
 export const naturalWidth = (image: ReturnType<Page['locator']>) =>
   image.evaluate((element) => (element as HTMLImageElement).naturalWidth);

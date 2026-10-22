@@ -6,7 +6,7 @@
  * Every site runs the shared tests in tests/e2e/ plus its own apps/<slug>/e2e/.
  */
 import { defineConfig, devices } from '@playwright/test';
-import { sites } from './tests/e2e/sites.ts';
+import { sites, TEST_STORAGE_CODE } from './tests/e2e/sites.ts';
 
 const isCI = Boolean(process.env['CI']);
 // The hub's local address, for apps' "Turn on sync" (on the real site and in
@@ -45,8 +45,9 @@ export default defineConfig({
   webServer: sites.map((site) => ({
     // ALLOW_LOCAL_ENDPOINTS lets apps with notifications (packages/push) send to the
     // test's local push receiver; HUB_ORIGIN tells apps with sync where the hub
-    // is. Never set for real deploys.
-    command: `pnpm exec wrangler dev --port ${site.port} --ip 127.0.0.1 --inspector-port ${site.port + 1000} --log-level warn --var ALLOW_LOCAL_ENDPOINTS:true --var HUB_ORIGIN:${hubURL}`,
+    // is; LIBRARY_STORAGE_CODE unlocks apps' online libraries (packages/library;
+    // a secret on the real site). Never set for real deploys.
+    command: `pnpm exec wrangler dev --port ${site.port} --ip 127.0.0.1 --inspector-port ${site.port + 1000} --log-level warn --var ALLOW_LOCAL_ENDPOINTS:true --var HUB_ORIGIN:${hubURL} --var "LIBRARY_STORAGE_CODE:${TEST_STORAGE_CODE}"`,
     cwd: site.dir,
     url: `${site.baseURL}/`,
     reuseExistingServer: !isCI,

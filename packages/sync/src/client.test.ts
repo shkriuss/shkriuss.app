@@ -11,6 +11,7 @@ import {
   createSync,
   saveConnection,
   syncedStore,
+  type LinkedData,
   type SyncClient,
   type SyncStatus,
 } from './client.ts';
@@ -109,6 +110,7 @@ class Device {
     version = 1,
     keepBoth = false,
     withFiles = false,
+    linked?: LinkedData,
   ) {
     this.use();
     this.store = createStore<Counters>({
@@ -151,6 +153,7 @@ class Device {
             },
           }
         : {}),
+      ...(linked ? { linked } : {}),
     });
     this.sync.subscribe((status, event) => {
       this.status = status;
@@ -570,6 +573,79 @@ async function fileIds(secret: Uint8Array<ArrayBuffer>): Promise<string[] | numb
   if (!response.ok) return response.status;
   return Object.keys(((await response.json()) as FileList).files).sort();
 }
+
+describe('data linked to the copy', () => {
+  /** What the app's linked data was asked to do, in order. */
+  function recorder(fail = { delete: false, move: false }) {
+    const calls: string[] = [];
+    const linked: LinkedData = {
+      delete: async (secret) => {
+        calls.push(`delete ${toBase64Url(secret)}`);
+        if (fail.delete) throw new Error('offline');
+      },
+      move: async (from, to) => {
+        calls.push(`move ${toBase64Url(from)} ${toBase64Url(to)}`);
+        if (fail.move) throw new Error('offline');
+      },
+    };
+    return { calls, linked, fail };
+  }
+
+  it('gives the app its own key while sync is on', async () => {
+    const secret = randomBytes(32);
+    const phone = new Device(secret);
+    expect(equalBytes(phone.sync.secret() ?? new Uint8Array(), secret)).toBe(true);
+    phone.sync.turnOff();
+    expect(phone.sync.secret()).toBeNull();
+  });
+
+  it('is deleted before the copy; if that fails, nothing is deleted', async () => {
+    const secret = randomBytes(32);
+    const linked = recorder({ delete: true, move: false });
+    const phone = new Device(secret, 1, false, false, linked.linked);
+    const tablet = new Device(secret);
+    phone.counters = [counter('water')];
+    await phone.syncNow();
+
+    phone.use();
+    await expect(phone.sync.deleteOnline()).rejects.toThrow();
+    expect(phone.sync.status().on).toBe(true);
+    expect((await tablet.syncNow()).problem).toBeNull();
+
+    linked.fail.delete = false;
+    phone.use();
+    await phone.sync.deleteOnline();
+    expect(linked.calls).toEqual([
+      `delete ${toBase64Url(secret)}`,
+      `delete ${toBase64Url(secret)}`,
+    ]);
+    expect(await tablet.syncNow()).toMatchObject({ on: false, problem: 'deleted' });
+  });
+
+  it('moves to a new account key before the old copy is deleted, and only once', async () => {
+    const oldKey = randomBytes(32);
+    const newKey = randomBytes(32);
+    const linked = recorder({ delete: false, move: true });
+    const tablet = new Device(oldKey, 1, false, false, linked.linked);
+    const laptop = new Device(oldKey);
+    tablet.counters = [counter('water')];
+    await tablet.syncNow();
+    await laptop.syncNow();
+
+    // The move fails (say, no connection): the old copy stays until it works.
+    tablet.connect(newKey, [oldKey]);
+    await tablet.syncNow();
+    expect((await laptop.syncNow()).problem).toBeNull();
+
+    linked.fail.move = false;
+    expect((await tablet.syncNow()).problem).toBeNull();
+    const move = `move ${toBase64Url(oldKey)} ${toBase64Url(newKey)}`;
+    expect(linked.calls).toEqual([move, move]);
+    expect(await laptop.syncNow()).toMatchObject({ on: false, problem: 'moved' });
+    await tablet.syncNow();
+    expect(linked.calls).toEqual([move, move]);
+  });
+});
 
 const photo = (text: string) => utf8(text.repeat(100));
 const HOUR = 60 * 60 * 1000;

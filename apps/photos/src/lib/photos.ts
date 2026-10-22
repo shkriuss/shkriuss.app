@@ -2,10 +2,12 @@
  * Photos' rules, as plain functions: a photo's details, the library grouped
  * by month (newest first), and how things are shown. The photos themselves
  * (the original file, a thumbnail and a screen-sized copy) are files on the
- * device: ../scripts/library.ts and docs/adr/0015-photos-app.md.
+ * device: ../scripts/library.ts and docs/adr/0015-photos-app.md. The online
+ * library's rules are in online.ts.
  */
 
-export interface Photo {
+/** What every device knows about a photo (sent to the online library sealed). */
+export interface PhotoDetails {
   id: string;
   /**
    * When it was taken: "YYYY-MM-DDTHH:MM:SS" in the camera's local time, from
@@ -25,6 +27,24 @@ export interface Photo {
   hash: string;
 }
 
+/** Where a photo is in the online library: which key sealed it, and its parts' sealed sizes. */
+export interface OnlinePlace {
+  key: string;
+  /** Thumbnail, screen-sized copy, original (0: that part is empty). */
+  parts: number[];
+}
+
+/** A photo in this device's library. */
+export interface Photo extends PhotoDetails {
+  /** Its place in the online library; null if it isn't online (yet). */
+  online: OnlinePlace | null;
+  /** Whether its original is on this device (false: it's only online). */
+  here: boolean;
+}
+
+/** The parts of a photo online, in order. */
+export const PARTS = { thumb: 0, view: 1, original: 2 } as const;
+
 /** The longest side of the thumbnail (for the grid) and of the copy for looking at it. */
 export const SIZES = { thumb: 512, view: 2048 } as const;
 export const QUALITY = { thumb: 0.8, view: 0.85 } as const;
@@ -35,8 +55,8 @@ const TAKEN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/;
 const isSize = (value: unknown) =>
   value === null || (Number.isSafeInteger(value) && (value as number) > 0);
 
-/** Checks a photo's details read back from the device. */
-export function isPhoto(value: unknown): value is Photo {
+/** Checks a photo's details, read back from the device or from another device. */
+export function isPhotoDetails(value: unknown): value is PhotoDetails {
   if (typeof value !== 'object' || value === null) return false;
   const photo = value as Record<string, unknown>;
   return (
@@ -54,6 +74,37 @@ export function isPhoto(value: unknown): value is Photo {
     typeof photo['hash'] === 'string'
   );
 }
+
+const isOnlinePlace = (value: unknown): value is OnlinePlace =>
+  typeof value === 'object' &&
+  value !== null &&
+  typeof (value as OnlinePlace).key === 'string' &&
+  Array.isArray((value as OnlinePlace).parts) &&
+  (value as OnlinePlace).parts.length === 3 &&
+  (value as OnlinePlace).parts.every((size) => Number.isSafeInteger(size) && size >= 0);
+
+/**
+ * A photo read back from the device, or null if it isn't one. Photos saved
+ * before the online library are on this device, and not online.
+ */
+export function toPhoto(value: unknown): Photo | null {
+  if (!isPhotoDetails(value)) return null;
+  const { online, here } = value as Partial<Photo>;
+  return { ...value, online: isOnlinePlace(online) ? online : null, here: here !== false };
+}
+
+/** Just the details, as sent to the online library. */
+export const detailsOf = ({
+  id,
+  taken,
+  added,
+  name,
+  type,
+  size,
+  width,
+  height,
+  hash,
+}: PhotoDetails): PhotoDetails => ({ id, taken, added, name, type, size, width, height, hash });
 
 const pad = (value: number) => String(value).padStart(2, '0');
 

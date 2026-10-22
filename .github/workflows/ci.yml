@@ -173,7 +173,13 @@ jobs:
       - name: Add the on-demand downloads (left out of the saved build)
         run: pnpm -r --filter "./apps/*" --if-present run on-demand-into-dist
 
+      - name: Create storage buckets (if they aren't there yet)
+        run: node scripts/buckets.ts production
+
       - name: Deploy every site (one at a time)
+        env:
+          # The online photo library's storage code (docs/adr/0016-online-photo-library.md).
+          PHOTOS_STORAGE_CODE: ${{ secrets.PHOTOS_STORAGE_CODE }}
         run: pnpm -r --filter "./apps/*" --workspace-concurrency=1 run deploy:production
 
       - name: Check the live sites

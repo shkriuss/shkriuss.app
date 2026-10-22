@@ -1,0 +1,421 @@
+/**
+ * An app's online library, browser side (docs/adr/0016-online-photo-library.md).
+ * The app keeps its own list of what's in it (Photos: its photo database)
+ * and drives it; this does the rest:
+ *
+ *   const access = await libraryAccess(sync.secret(), record);  // keys and token
+ *   const api = libraryApi(access);
+ *   await api.changes(since);           // what changed, details opened
+ *   await api.upload(id, details, parts);
+ *   await api.firstParts([...]);        // thumbnails, several at once
+ *
+ * Every key comes from the app's own key from the account (sync). The
+ * library's id and the keys its items were sealed with are kept in the
+ * app's synced copy (a LibraryRecord), so they move with it to a new
+ * account key; new items are always sealed with the newest key.
+ */
+import {
+  fromBase64Url,
+  hkdf,
+  open,
+  openBytes,
+  seal,
+  sealBytes,
+  toBase64Url,
+  utf8,
+} from '@shkriuss/crypto';
+import type { LinkedData } from '@shkriuss/sync';
+import { isDeletedRow, LIMITS, type Changes } from './validate.ts';
+
+export { LIMITS } from './validate.ts';
+
+const API = '/api/library';
+
+// ---------- Keys ----------
+
+export interface LibraryKey {
+  /** Short, so each item can say which key sealed it. */
+  id: string;
+  /** 32 bytes, base64url. */
+  key: string;
+}
+
+/** Kept in the app's synced copy: which library, and every key its items were sealed with. */
+export interface LibraryRecord {
+  id: 'library';
+  library: string;
+  keys: LibraryKey[];
+}
+
+export const isLibraryRecord = (value: unknown): value is LibraryRecord => {
+  if (typeof value !== 'object' || value === null) return false;
+  const record = value as Record<string, unknown>;
+  return (
+    record['id'] === 'library' &&
+    typeof record['library'] === 'string' &&
+    /^[A-Za-z0-9_-]{43}$/.test(record['library']) &&
+    Array.isArray(record['keys']) &&
+    record['keys'].every(
+      (key: unknown) =>
+        typeof key === 'object' &&
+        key !== null &&
+        typeof (key as LibraryKey).id === 'string' &&
+        typeof (key as LibraryKey).key === 'string' &&
+        /^[A-Za-z0-9_-]{43}$/.test((key as LibraryKey).key),
+    )
+  );
+};
+
+/** What the app's own key gives: a token for the server, and the newest key for sealing. */
+async function fromSecret(secret: Uint8Array<ArrayBuffer>) {
+  const key = await hkdf(secret, 'shkriuss library key v1');
+  return {
+    token: toBase64Url(await hkdf(secret, 'shkriuss library token v1')),
+    /** The library's id, if this key makes the library. */
+    library: toBase64Url(await hkdf(secret, 'shkriuss library id v1')),
+    key: {
+      id: toBase64Url(await hkdf(key, 'shkriuss library key id v1', 9)),
+      key: toBase64Url(key),
+    },
+  };
+}
+
+/**
+ * The record to keep in the copy: a new library made from this key, or the
+ * one there is, with this key added if it isn't in it yet (after the account
+ * key was replaced). Two devices with the same key make the same record.
+ */
+export async function libraryRecord(
+  secret: Uint8Array<ArrayBuffer>,
+  existing: LibraryRecord | undefined,
+): Promise<LibraryRecord> {
+  const mine = await fromSecret(secret);
+  if (!existing) return { id: 'library', library: mine.library, keys: [mine.key] };
+  if (existing.keys.some((key) => key.id === mine.key.id)) return existing;
+  return { ...existing, keys: [...existing.keys, mine.key] };
+}
+
+export interface LibraryAccess {
+  token: string;
+  library: string;
+  /** Every key the record knows, by id, for opening. */
+  keys: ReadonlyMap<string, Uint8Array<ArrayBuffer>>;
+  /** For sealing new items. */
+  current: { id: string; key: Uint8Array<ArrayBuffer> };
+}
+
+/** How to reach the library in `record` with the app's own key. */
+export async function libraryAccess(
+  secret: Uint8Array<ArrayBuffer>,
+  record: LibraryRecord,
+): Promise<LibraryAccess> {
+  const mine = await fromSecret(secret);
+  const keys = new Map(record.keys.map((key) => [key.id, fromBase64Url(key.key)]));
+  const current = { id: mine.key.id, key: fromBase64Url(mine.key.key) };
+  keys.set(current.id, current.key);
+  return { token: mine.token, library: record.library, keys, current };
+}
+
+const label = (library: string, id: string, part: string) =>
+  `shkriuss library v1 ${library} ${id} ${part}`;
+
+// ---------- Talking to the server ----------
+
+export type LibraryProblem =
+  /** No connection, or the server didn't answer. */
+  | 'offline'
+  /** The server refused, or what came back couldn't be read. */
+  | 'server'
+  /** The account key was replaced on another device. */
+  | 'moved'
+  /** The storage code hasn't been given for this library. */
+  | 'locked'
+  | 'wrong-code'
+  | 'too-many-tries'
+  /** The server has no storage code: nothing can be added. */
+  | 'not-set-up'
+  | 'full'
+  /** That's all the uploads for today (see `retryAt`). */
+  | 'daily-limit'
+  | 'too-big'
+  /** The item was deleted on another device. */
+  | 'deleted'
+  /** The item is already in the library. */
+  | 'exists'
+  /** The library is being deleted. */
+  | 'wiping';
+
+export class LibraryError extends Error {
+  readonly problem: LibraryProblem;
+  /** For 'daily-limit': when uploads can start again (ms). */
+  readonly retryAt: number | null;
+  constructor(problem: LibraryProblem, retryAt: number | null = null) {
+    super(problem);
+    this.problem = problem;
+    this.retryAt = retryAt;
+  }
+}
+
+/** A failed response as a LibraryError, from its status and body. */
+async function failure(response: Response): Promise<LibraryError> {
+  const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+  const flag = (name: string) => body[name] === true;
+  if (response.status === 410) return new LibraryError('moved');
+  if (response.status === 423) return new LibraryError('locked');
+  if (response.status === 507) return new LibraryError('full');
+  if (response.status === 413) return new LibraryError('too-big');
+  if (response.status === 409) return new LibraryError(flag('deleted') ? 'deleted' : 'exists');
+  if (response.status === 403 && flag('wrong')) return new LibraryError('wrong-code');
+  if (response.status === 429) {
+    if (flag('tooMany')) return new LibraryError('too-many-tries');
+    const retryAt = typeof body['retryAt'] === 'number' ? body['retryAt'] : null;
+    return new LibraryError('daily-limit', retryAt);
+  }
+  if (response.status === 503 && flag('notSetUp')) return new LibraryError('not-set-up');
+  if (response.status === 503 && flag('wiping')) return new LibraryError('wiping');
+  return new LibraryError(response.status >= 500 ? 'offline' : 'server');
+}
+
+/** An item from the list of changes, its details opened. */
+export interface LibraryItem {
+  id: string;
+  seq: number;
+  /** When it was added online (ms). */
+  at: number;
+  /** Which key sealed it (for reading its parts). */
+  key: string;
+  details: unknown;
+  /** Its parts' sealed sizes, in order (0: that part is empty). */
+  parts: number[];
+}
+export type LibraryChange = LibraryItem | { id: string; seq: number; deleted: true };
+
+export interface LibraryChanges extends Omit<Changes, 'rows'> {
+  changes: LibraryChange[];
+  /** Items whose details couldn't be opened (sealed with a key this record doesn't have). */
+  unreadable: number;
+  /** The last change in this page, readable or not: ask for the next page after it. */
+  last: number;
+}
+
+/** Where a part starts in an item's file. */
+export const partOffset = (parts: readonly number[], index: number): number =>
+  parts.slice(0, index).reduce((sum, size) => sum + size, 0);
+
+async function bytesOf(part: Blob | Uint8Array<ArrayBuffer>): Promise<Uint8Array<ArrayBuffer>> {
+  return part instanceof Uint8Array ? part : new Uint8Array(await part.arrayBuffer());
+}
+
+export function libraryApi(access: LibraryAccess) {
+  async function call(path: string, init: RequestInit = {}): Promise<Response> {
+    const headers = new Headers(init.headers);
+    headers.set('Authorization', `Bearer ${access.token}`);
+    headers.set('X-Library', access.library);
+    if (typeof init.body === 'string') headers.set('Content-Type', 'application/json');
+    let response: Response;
+    try {
+      response = await fetch(`${API}${path}`, {
+        ...init,
+        headers,
+        credentials: 'omit',
+        cache: 'no-store',
+      });
+    } catch {
+      throw new LibraryError('offline');
+    }
+    if (!response.ok) throw await failure(response);
+    return response;
+  }
+  const post = (path: string, body: unknown) =>
+    call(path, { method: 'POST', body: JSON.stringify(body) });
+
+  /** One sealed part, opened with the key that sealed its item; null if it can't be. */
+  async function openPart(
+    id: string,
+    keyId: string,
+    index: number,
+    sealed: Uint8Array<ArrayBuffer>,
+  ) {
+    const key = access.keys.get(keyId);
+    if (!key) return null;
+    return openBytes(key, sealed, label(access.library, id, `part ${index}`)).catch(() => null);
+  }
+
+  return {
+    /** What changed after change `since`, oldest first (a page at a time: see `more`). */
+    async changes(since: number): Promise<LibraryChanges> {
+      const page = (await (await call(`/changes?since=${since}`)).json()) as Changes;
+      const changes: LibraryChange[] = [];
+      let unreadable = 0;
+      for (const row of page.rows) {
+        if (isDeletedRow(row)) {
+          changes.push({ id: row.id, seq: row.seq, deleted: true });
+          continue;
+        }
+        const key = access.keys.get(row.key);
+        try {
+          if (!key) throw new Error('No key');
+          const opened = await open(key, row.details, label(access.library, row.id, 'details'));
+          const details: unknown = JSON.parse(new TextDecoder().decode(opened));
+          changes.push({
+            id: row.id,
+            seq: row.seq,
+            at: row.at,
+            key: row.key,
+            details,
+            parts: row.parts,
+          });
+        } catch {
+          unreadable += 1;
+        }
+      }
+      const { rows, ...rest } = page;
+      return { ...rest, changes, unreadable, last: rows.at(-1)?.seq ?? since };
+    },
+
+    /** Gives the storage code, once per library. */
+    async unlock(code: string): Promise<void> {
+      await post('/unlock', { code });
+    },
+
+    /**
+     * Seals an item (its details, and each part on its own) and adds it.
+     * Empty (null) parts stay empty. Returns its change number and its
+     * parts' sealed sizes.
+     */
+    async upload(
+      id: string,
+      details: unknown,
+      parts: readonly (Blob | Uint8Array<ArrayBuffer> | null)[],
+    ): Promise<{ seq: number; key: string; parts: number[] }> {
+      const { current, library } = access;
+      const sealedDetails = await seal(
+        current.key,
+        utf8(JSON.stringify(details)),
+        label(library, id, 'details'),
+      );
+      if (sealedDetails.length > LIMITS.detailsChars) throw new LibraryError('too-big');
+      const sealed: Uint8Array<ArrayBuffer>[] = [];
+      for (const [index, part] of parts.entries()) {
+        sealed.push(
+          part
+            ? await sealBytes(current.key, await bytesOf(part), label(library, id, `part ${index}`))
+            : new Uint8Array(0),
+        );
+      }
+      const sizes = sealed.map((part) => part.length);
+      if (sizes.reduce((sum, size) => sum + size, 0) > LIMITS.itemBytes) {
+        throw new LibraryError('too-big');
+      }
+      const response = await call(`/items/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        body: new Blob(sealed),
+        headers: {
+          'Content-Type': 'application/octet-stream',
+          'X-Library-Key': current.id,
+          'X-Library-Details': sealedDetails,
+          'X-Library-Parts': sizes.join(','),
+        },
+      });
+      const { seq } = (await response.json()) as { seq: number };
+      return { seq, key: current.id, parts: sizes };
+    },
+
+    /** Deletes items everywhere (their ids can't be used again). */
+    async remove(ids: readonly string[]): Promise<void> {
+      for (let start = 0; start < ids.length; start += LIMITS.remove) {
+        await post('/remove', { ids: ids.slice(start, start + LIMITS.remove) });
+      }
+    },
+
+    /**
+     * Several items' first parts (like thumbnails), opened. Items without one,
+     * or whose part couldn't be read, are left out.
+     */
+    async firstParts(
+      items: readonly { id: string; key: string; parts: readonly number[] }[],
+    ): Promise<Map<string, Uint8Array<ArrayBuffer>>> {
+      const found = new Map<string, Uint8Array<ArrayBuffer>>();
+      const wanted = items.filter(
+        (item) => (item.parts[0] ?? 0) > 0 && (item.parts[0] ?? 0) <= LIMITS.firstPartBytes,
+      );
+      for (let start = 0; start < wanted.length; start += LIMITS.firstParts) {
+        const batch = wanted.slice(start, start + LIMITS.firstParts);
+        const response = await post('/first-parts', {
+          items: batch.map((item) => [item.id, item.parts[0]]),
+        });
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        const view = new DataView(bytes.buffer);
+        let at = 0;
+        for (const item of batch) {
+          if (at + 4 > bytes.length) break;
+          const size = view.getUint32(at);
+          const sealed = bytes.slice(at + 4, at + 4 + size);
+          at += 4 + size;
+          const opened = size > 0 ? await openPart(item.id, item.key, 0, sealed) : null;
+          if (opened) found.set(item.id, opened);
+        }
+      }
+      return found;
+    },
+
+    /** One part of an item, opened; null if it's empty, gone, or can't be read. */
+    async part(
+      item: { id: string; key: string; parts: readonly number[] },
+      index: number,
+    ): Promise<Uint8Array<ArrayBuffer> | null> {
+      const size = item.parts[index] ?? 0;
+      if (size === 0) return null;
+      let response: Response;
+      try {
+        response = await call(
+          `/items/${encodeURIComponent(item.id)}?offset=${partOffset(item.parts, index)}&length=${size}`,
+        );
+      } catch (error) {
+        if (error instanceof LibraryError && error.problem === 'server') return null;
+        throw error;
+      }
+      return openPart(item.id, item.key, index, new Uint8Array(await response.arrayBuffer()));
+    },
+
+    /** After the account key was replaced: this key's token takes over from `fromToken`. */
+    async move(fromToken: string): Promise<void> {
+      await post('/move', { from: fromToken });
+    },
+
+    /** Deletes everything in the library (files go over the next minutes). */
+    async wipe(): Promise<void> {
+      await call('', { method: 'DELETE' });
+    },
+  };
+}
+
+export type LibraryApi = ReturnType<typeof libraryApi>;
+
+/**
+ * For createSync's `linked` option: the library is deleted with the app's
+ * online copy, and moved with it to a new account key. `record` reads the
+ * library's record from the synced copy.
+ */
+export function linkedLibrary(record: () => LibraryRecord | undefined): LinkedData {
+  return {
+    async delete(secret) {
+      const found = record();
+      if (!found) return;
+      try {
+        await libraryApi(await libraryAccess(secret, found)).wipe();
+      } catch (error) {
+        // Not this key's library (or moved away from it): nothing of ours to delete.
+        if (!(error instanceof LibraryError && ['server', 'moved'].includes(error.problem))) {
+          throw error;
+        }
+      }
+    },
+    async move(from, to) {
+      const found = record();
+      if (!found) return;
+      const old = await libraryAccess(from, found);
+      await libraryApi(await libraryAccess(to, found)).move(old.token);
+    },
+  };
+}

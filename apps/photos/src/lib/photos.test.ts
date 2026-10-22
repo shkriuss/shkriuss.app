@@ -4,15 +4,17 @@ import {
   byMonth,
   byNewest,
   downloadName,
+  detailsOf,
   fitWithin,
   formatBytes,
   formatLabel,
-  isPhoto,
+  isPhotoDetails,
   librarySummary,
   localDateTime,
   monthLabel,
   photoAlt,
   takenLabel,
+  toPhoto,
   type Photo,
 } from './photos.ts';
 
@@ -26,19 +28,39 @@ const photo = (overrides: Partial<Photo>): Photo => ({
   width: 4032,
   height: 3024,
   hash: 'abc',
+  online: null,
+  here: true,
   ...overrides,
 });
 
 describe('a photo’s details', () => {
   it('are checked when read back', () => {
-    expect(isPhoto(photo({}))).toBe(true);
-    expect(isPhoto(photo({ width: null, height: null }))).toBe(true);
-    expect(isPhoto(photo({ taken: '2026-10-21' }))).toBe(false);
-    expect(isPhoto(photo({ id: '' }))).toBe(false);
-    expect(isPhoto(photo({ size: -1 }))).toBe(false);
-    expect(isPhoto(photo({ width: 0 }))).toBe(false);
-    expect(isPhoto({ ...photo({}), hash: undefined })).toBe(false);
-    expect(isPhoto(null)).toBe(false);
+    expect(isPhotoDetails(photo({}))).toBe(true);
+    expect(isPhotoDetails(photo({ width: null, height: null }))).toBe(true);
+    expect(isPhotoDetails(photo({ taken: '2026-10-21' }))).toBe(false);
+    expect(isPhotoDetails(photo({ id: '' }))).toBe(false);
+    expect(isPhotoDetails(photo({ size: -1 }))).toBe(false);
+    expect(isPhotoDetails(photo({ width: 0 }))).toBe(false);
+    expect(isPhotoDetails({ ...photo({}), hash: undefined })).toBe(false);
+    expect(isPhotoDetails(null)).toBe(false);
+  });
+
+  it('say where the photo is; ones saved before the online library are here only', () => {
+    const { online: _online, here: _here, ...before } = photo({});
+    expect(toPhoto(before)).toEqual(photo({}));
+    const place = { key: 'k1', parts: [100, 0, 4_200_028] };
+    expect(toPhoto(photo({ online: place, here: false }))).toEqual(
+      photo({ online: place, here: false }),
+    );
+    expect(toPhoto({ ...photo({}), online: { key: 'k1', parts: [1] } })).toEqual(photo({}));
+    expect(toPhoto({ id: 'p' })).toBeNull();
+  });
+
+  it('go online without where the photo is', () => {
+    const details = detailsOf(photo({ online: { key: 'k1', parts: [1, 2, 3] }, here: false }));
+    expect(details).not.toHaveProperty('online');
+    expect(details).not.toHaveProperty('here');
+    expect(details.hash).toBe('abc');
   });
 
   it('keep the time as this device shows it', () => {

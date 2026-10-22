@@ -2,17 +2,20 @@
 /**
  * Photos: the library grouped by the month each photo was taken, newest
  * first; adding photos (each original is kept as it is); looking at one, with
- * its details; choosing several to save or delete. Behaviour:
- * ../scripts/photos.ts.
+ * its details; choosing several to save or delete; and, with sync on, the
+ * online library (docs/adr/0016). Behaviour: ../scripts/photos.ts.
  */
-import { AppShell, Button, DataControls, Icon } from '@shkriuss/ui';
+import { AppShell, Button, DataControls, Icon, SyncControls } from '@shkriuss/ui';
 ---
 
 <AppShell wide>
   <div class="stack stack--lg">
     <header class="stack stack--sm">
       <h1>Photos</h1>
-      <p class="lead">Your photos, kept as the original files. They’re saved on this device.</p>
+      <p class="lead">
+        Your photos, kept as the original files. They’re saved on this device, and online too if you
+        turn on sync.
+      </p>
     </header>
 
     <div class="cluster">
@@ -57,10 +60,54 @@ import { AppShell, Button, DataControls, Icon } from '@shkriuss/ui';
       <p class="muted" data-space></p>
     </section>
 
+    <SyncControls
+      what="your photo library"
+      deleteText="This deletes your online library: every photo in it, including any that are only online and not on this device. It also turns off sync on this device. Photos on this device stay. Your other devices keep the photos they have, but stop syncing."
+    >
+      <p class="muted" data-online-off>
+        With sync on, your photos are kept online too, as the original files, so every device can
+        see them.
+      </p>
+      <div class="stack" data-online hidden>
+        <p data-online-status></p>
+        <form class="stack" data-unlock-form hidden>
+          <p>
+            Adding photos to the online library costs money, so it needs the storage code. Enter it
+            once: your other devices won’t need it.
+          </p>
+          <div class="field">
+            <label class="field__label" for="storage-code">
+              Storage code
+            </label>
+            <input
+              class="input"
+              id="storage-code"
+              name="code"
+              type="password"
+              autocomplete="current-password"
+              required
+              aria-describedby="storage-code-error"
+              data-storage-code
+            />
+            <p class="field__error" id="storage-code-error" data-unlock-error></p>
+          </div>
+          <div>
+            <Button type="submit" variant="primary">
+              Unlock online storage
+            </Button>
+          </div>
+        </form>
+        <div data-free-up hidden>
+          <Button data-action="free-up-space">Free up space on this device</Button>
+        </div>
+      </div>
+    </SyncControls>
+
     <DataControls backup={false}>
       <p class="muted">
-        Photos are too big for backup files. To keep one somewhere else too, open it and tap “Save
-        original”, or choose several with “Select”.
+        Photos are too big for backup files. To keep them somewhere else too, turn on sync to keep
+        them online, or save originals: open one and tap “Save original”, or choose several with
+        “Select”.
       </p>
     </DataControls>
   </div>
@@ -114,6 +161,10 @@ import { AppShell, Button, DataControls, Icon } from '@shkriuss/ui';
           <dt>Kind</dt>
           <dd data-detail="kind"></dd>
         </div>
+        <div>
+          <dt>Where</dt>
+          <dd data-detail="where"></dd>
+        </div>
       </dl>
       <div class="cluster">
         <Button icon="chevron-left" data-action="previous-photo">
@@ -139,13 +190,30 @@ import { AppShell, Button, DataControls, Icon } from '@shkriuss/ui';
       <h2 id="delete-title" data-delete-title>
         Delete this photo?
       </h2>
-      <p>The original and its copies are deleted from this device. This can’t be undone.</p>
+      <p data-delete-text>
+        The original and its copies are deleted from this device. This can’t be undone.
+      </p>
       <div class="cluster">
         <Button type="submit" value="cancel">
           Cancel
         </Button>
         <Button type="submit" variant="danger" value="confirm">
           Delete
+        </Button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="dialog" aria-labelledby="free-up-title" data-free-up-dialog>
+    <form method="dialog" class="stack">
+      <h2 id="free-up-title">Free up space on this device?</h2>
+      <p data-free-up-text></p>
+      <div class="cluster">
+        <Button type="submit" value="cancel">
+          Cancel
+        </Button>
+        <Button type="submit" variant="primary" value="confirm">
+          Free up space
         </Button>
       </div>
     </form>

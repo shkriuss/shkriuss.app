@@ -23,10 +23,17 @@ pull request ──► CI checks ──► preview links (pr-<n>-<site>.shkriuss
   links, and they update on every push. They are deleted when the pull
   request closes. They're public but unlisted, and `workers.dev` tells search
   engines not to index them.
+- **Storage for Photos' online library** ([ADR 0016](adr/0016-online-photo-library.md)):
+  two R2 buckets, `shkriuss-photos` and `shkriuss-photos-preview` (for
+  previews; its files are deleted after 7 days). `scripts/buckets.ts`
+  creates them before deploying if they aren't there. At each deploy,
+  `scripts/deploy.ts` and `scripts/previews.ts` give Photos' Worker the
+  storage code as its secret `LIBRARY_STORAGE_CODE`.
 
 ## Setup (one time)
 
-The workflows need one secret, `CLOUDFLARE_API_TOKEN`. The account ID isn't
+The workflows need two secrets: `CLOUDFLARE_API_TOKEN`, and
+`PHOTOS_STORAGE_CODE` for Photos' online library. The account ID isn't
 secret, so it's written in the workflows.
 
 ### Create the Cloudflare API token
@@ -36,8 +43,9 @@ secret, so it's written in the workflows.
 2. Tap **Create Token**, then next to **Create Custom Token** tap
    **Get started**.
 3. **Token name:** `github-actions-deploy`.
-4. **Permissions** (tap **+ Add more** for the second row):
+4. **Permissions** (tap **+ Add more** for each extra row):
    - `Account` · `Workers Scripts` · `Edit`
+   - `Account` · `Workers R2 Storage` · `Edit` (to create Photos' buckets)
    - `Zone` · `Workers Routes` · `Edit`
 5. **Account Resources:** `Include` · `shkriuss` (your account).
 6. **Zone Resources:** `Include` · `Specific zone` · `shkriuss.app`.
@@ -55,6 +63,21 @@ secret, so it's written in the workflows.
    **Add secret**.
 
 Never paste the token anywhere else, including chat.
+
+### Photos' online library
+
+1. **Turn on R2:** Cloudflare dashboard → **R2 Object Storage** → **Purchase
+   R2 Plan** (it asks for a payment method; the first 10 GB a month are
+   free).
+2. **The storage code:** make up a long passphrase (five random words is
+   good) and keep it in your password manager. In GitHub, add a repository
+   secret (as above) named `PHOTOS_STORAGE_CODE` with it. You type it once in
+   Photos to let your account add photos online; without it, nobody (you
+   included) can add to the online library, so nobody else can fill it on
+   your bill.
+
+To change the storage code, change the secret: the next deploy gives the
+new one to the Worker. Libraries already unlocked stay unlocked.
 
 ### GitHub settings
 
@@ -106,7 +129,12 @@ Everything here fits Cloudflare's and GitHub's free plans:
   is about two; signing in, adding a device or opening the Account page
   takes a handful; an app with
   sync open uses about one a minute, plus one or two per change).
-- The domain renewal is your only regular cost.
+- Photos' online library uses R2: free up to 10 GB, then about $0.015 per GB
+  a month (about $15 a month for 1 TB, the most it holds), and downloads are
+  free. Each photo put online is one Worker request and two Durable Object
+  requests; at most 20,000 photos go up a day, so the free daily requests
+  last for every app.
+- The domain renewal, and R2 above 10 GB, are your only regular costs.
 
 ## Troubleshooting
 
@@ -117,3 +145,5 @@ Everything here fits Cloudflare's and GitHub's free plans:
 | "Custom domain … already exists / conflicting DNS record"          | A DNS record already uses that name. Delete it in Cloudflare (**shkriuss.app** → **DNS** → **Records**) and re-run the workflow.                                         |
 | A new app's address doesn't work right after the first deploy      | DNS and certificates can take a few minutes. The smoke test retries for about 5 minutes.                                                                                 |
 | No preview links on a pull request                                 | Dependabot pull requests don't get previews (no secret access). Otherwise check the **Preview** workflow run.                                                            |
+| "Could not create the R2 bucket …"                                 | Turn on R2 in Cloudflare, and give the token `Account` · `Workers R2 Storage` · `Edit` (see setup).                                                                      |
+| Photos says "Online storage isn't set up yet"                      | Add the `PHOTOS_STORAGE_CODE` secret (see setup), then run the **CI** workflow again so the Worker gets it.                                                              |
