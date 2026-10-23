@@ -5,6 +5,7 @@
  *   syncPush(notices)   upload the app's scheduled notifications, encrypted
  *   sendTestPush()      one notification right now
  *   disablePush()       forget this device on the server and unsubscribe
+ *   finishPushDelete()  try again to forget it, if the server couldn't be reached
  *
  * Every message is encrypted here, to this device's own subscription, before
  * it's uploaded. The device key and subscription keys are kept under
@@ -16,6 +17,8 @@ import { nextFireTime, type Repeat } from './schedule.ts';
 import { LIMITS, timingProblem } from './validate.ts';
 
 const STORAGE_KEY = 'shkriuss-device:push';
+/** Device keys whose reminders are still on the server (it couldn't be reached to delete them). */
+const DELETE_KEY = 'shkriuss-device:push-delete';
 const API = '/api/push';
 /** Re-upload at least this often, even if nothing changed (keeps the server's copy fresh). */
 const REFRESH_MS = 7 * 24 * 60 * 60 * 1000;
@@ -92,6 +95,24 @@ function store(state: DeviceState | null): void {
   }
 }
 
+function pendingDeletes(): string[] {
+  try {
+    const value: unknown = JSON.parse(localStorage.getItem(DELETE_KEY) ?? '[]');
+    return Array.isArray(value) ? value.filter((key) => typeof key === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function storePendingDeletes(keys: readonly string[]): void {
+  try {
+    if (keys.length > 0) localStorage.setItem(DELETE_KEY, JSON.stringify(keys));
+    else localStorage.removeItem(DELETE_KEY);
+  } catch {
+    // Storage blocked: the deletion can't be tried again later.
+  }
+}
+
 /** Whether this browser can get notifications while the app is closed. */
 export function pushSupport(): PushSupport {
   if ('serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window) {
@@ -105,6 +126,9 @@ export function pushSupport(): PushSupport {
 }
 
 export const isPushEnabled = (): boolean => load() !== null;
+
+/** True while reminders turned off on this device are still on the server. */
+export const isPushDeletePending = (): boolean => pendingDeletes().length > 0;
 
 async function registration(): Promise<ServiceWorkerRegistration> {
   const timeout = new Promise<never>((_, reject) => {
@@ -228,6 +252,8 @@ export async function syncPush(
   notices: readonly Notice[],
   options: { force?: boolean } = {},
 ): Promise<number> {
+  // An earlier copy still on the server (turned off while offline) would send twice.
+  if (isPushDeletePending()) await finishPushDelete();
   const state = await current();
   if (!state) return 0;
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -285,17 +311,34 @@ export async function sendTestPush(title: string, body: string): Promise<void> {
   if (!response.ok) throw new PushError('refused', 'The test notification couldn’t be sent.');
 }
 
-/** Deletes this device's data on the server and unsubscribes. Never throws. */
-export async function disablePush(): Promise<void> {
-  const state = load();
-  store(null);
-  if (state) {
-    await api('/schedule', { method: 'DELETE' }, state.deviceKey).catch(() => undefined);
+/**
+ * Deletes reminders the server still has from when they were turned off on
+ * this device without reaching it. True when none are left there.
+ */
+export async function finishPushDelete(): Promise<boolean> {
+  for (const deviceKey of pendingDeletes()) {
+    const response = await api('/schedule', { method: 'DELETE' }, deviceKey).catch(() => null);
+    if (response?.ok) storePendingDeletes(pendingDeletes().filter((key) => key !== deviceKey));
   }
+  return !isPushDeletePending();
+}
+
+/**
+ * Deletes this device's data on the server and unsubscribes. Never throws.
+ * False if the server couldn't be reached: the deletion is kept, to be
+ * finished later by finishPushDelete().
+ */
+export async function disablePush(): Promise<boolean> {
+  const state = load();
+  // Noted before the device key is gone, so the deletion can be tried again.
+  if (state) storePendingDeletes([...pendingDeletes(), state.deviceKey]);
+  store(null);
+  const deleted = await finishPushDelete();
   try {
     const subscription = await (await registration()).pushManager.getSubscription();
     await subscription?.unsubscribe();
   } catch {
     // Nothing to unsubscribe.
   }
+  return deleted;
 }

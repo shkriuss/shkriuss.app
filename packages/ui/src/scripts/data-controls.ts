@@ -3,7 +3,7 @@
  * Everything happens on the device; @shkriuss/storage/backup explains how
  * backup files are locked.
  */
-import { disablePush, isPushEnabled } from '@shkriuss/push';
+import { disablePush, isPushDeletePending, isPushEnabled } from '@shkriuss/push';
 import { deleteAll, downloadFile, exportAll, type ExportFile } from '@shkriuss/storage';
 import { deleteAllFiles } from '@shkriuss/storage/files';
 import { isSyncOn, stopSync } from '@shkriuss/sync';
@@ -270,8 +270,9 @@ export function mountDataControls(section: HTMLElement): void {
   deleteDialog.addEventListener('close', () => {
     if (deleteDialog.returnValue !== 'confirm') return;
     status.textContent = 'Deleting…';
-    // Notifications while the app is closed: delete them on the server too.
-    const push = isPushEnabled() ? disablePush() : Promise.resolve();
+    // Notifications while the app is closed: delete them on the server too. If it
+    // can't be reached, the app tries again (and says so) once it has reloaded.
+    const push = isPushEnabled() || isPushDeletePending() ? disablePush() : Promise.resolve(true);
     void push.finally(() => {
       // Sync stops here first, so the deletion doesn't reach the other devices.
       stopSync();

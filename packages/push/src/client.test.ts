@@ -4,7 +4,16 @@
  * the real server code, kept in memory (testing.ts).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { enablePush, PushError, syncPush, type Notice } from './client.ts';
+import {
+  disablePush,
+  enablePush,
+  finishPushDelete,
+  isPushDeletePending,
+  isPushEnabled,
+  PushError,
+  syncPush,
+  type Notice,
+} from './client.ts';
 import { memoryPush } from './testing.ts';
 
 const ORIGIN = 'https://calendar.example';
@@ -146,5 +155,45 @@ describe('syncPush', () => {
     network = 'down';
     const down = await syncPush([notice()], { force: true }).catch((error: unknown) => error);
     expect((down as PushError).code).toBe('server');
+  });
+});
+
+describe('disablePush', () => {
+  /** How many devices the server keeps reminders for. */
+  const devicesKept = () =>
+    [...server.devices.values()].filter(({ storage }) => storage.map.has('device')).length;
+
+  it('deletes the reminders on the server', async () => {
+    await syncPush([notice()]);
+    expect(await disablePush()).toBe(true);
+    expect(devicesKept()).toBe(0);
+    expect(isPushDeletePending()).toBe(false);
+  });
+
+  it('says so when the server can’t be reached, and finishes later', async () => {
+    await syncPush([notice()]);
+    network = 'down';
+    expect(await disablePush()).toBe(false);
+    expect(isPushEnabled()).toBe(false);
+    expect(isPushDeletePending()).toBe(true);
+    expect(devicesKept()).toBe(1);
+    // Still failing: still waiting.
+    network = 'failing';
+    expect(await finishPushDelete()).toBe(false);
+    network = 'up';
+    expect(await finishPushDelete()).toBe(true);
+    expect(isPushDeletePending()).toBe(false);
+    expect(devicesKept()).toBe(0);
+  });
+
+  it('deletes the copy left behind before turning on again, so nothing arrives twice', async () => {
+    await syncPush([notice()]);
+    network = 'down';
+    await disablePush();
+    network = 'up';
+    await enablePush();
+    await syncPush([notice()]);
+    expect(devicesKept()).toBe(1);
+    expect(isPushDeletePending()).toBe(false);
   });
 });

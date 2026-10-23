@@ -15,7 +15,9 @@ browsers like IronFox receive Web Push through **UnifiedPush**.
 
 - **Opt-in, per app and per device.** "Also remind me when the app is closed"
   is off until switched on. Switching it off, or **Delete all data**, deletes
-  the device's data on the server.
+  the device's data on the server. If the server can't be reached then, the
+  app says so, keeps the device key (and nothing else) and tries again each
+  time it's opened or back online.
 - **Shared code, separate servers.** The code lives in `@shkriuss/push`. Each
   app that uses it runs the routes in its **own** Worker
   (`apps/<slug>/src/worker.ts`, `/api/push/*`; everything else is still

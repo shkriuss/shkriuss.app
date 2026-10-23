@@ -159,6 +159,34 @@ test('turning it off, or deleting all data, removes it from the server', async (
   await expect(closedSwitch(page)).not.toBeChecked();
 });
 
+test('says so when turning it off can’t reach the server, and finishes later', async ({ page }) => {
+  await fakeSubscription(page, rig);
+  await page.goto('/');
+  await closedSwitch(page).check();
+  await expect(closedStatus(page)).toHaveText(/^On:/);
+
+  // The deletion can't get through (offline, say).
+  await page.route('**/api/push/schedule', (route) =>
+    route.request().method() === 'DELETE' ? route.abort() : route.continue(),
+  );
+  await closedSwitch(page).uncheck();
+  await expect(closedStatus(page)).toHaveText(
+    "Off, but your reminders couldn’t be removed from Calendar's server yet. Calendar will try again when it’s open and online.",
+  );
+  await checkA11y(page, 'reminders while closed: deletion pending');
+
+  // Next time Calendar is open, it tries again.
+  await page.unroute('**/api/push/schedule');
+  const deleted = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/api/push/schedule') && response.request().method() === 'DELETE',
+  );
+  await page.reload();
+  expect((await deleted).status()).toBe(204);
+  await expect(closedStatus(page)).toHaveText(/^Off:/);
+  expect(await page.evaluate(() => localStorage.getItem('shkriuss-device:push-delete'))).toBeNull();
+});
+
 test('device settings stay out of backups', async ({ page }) => {
   await fakeSubscription(page, rig);
   await page.goto('/');

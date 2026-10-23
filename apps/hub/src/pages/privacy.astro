@@ -95,8 +95,14 @@ const LAST_UPDATED = '22 October 2026';
           </li>
           <li>
             Each reminder that won't happen again is deleted after it's sent. Turning the option
-            off, deleting all data in the app, or blocking notifications deletes everything for that
-            device.
+            off, or deleting all data in the app, deletes everything for that device. If the server
+            can't be reached then, the app says so and tries again each time it's opened.
+          </li>
+          <li>
+            Blocking notifications deletes everything for that device the next time you open the
+            app, or when a reminder is due and the push service says the device no longer takes
+            them. The server also deletes everything for a device when none of its reminders can be
+            delivered for two days.
           </li>
           <li>
             The app sends your reminders again each week while you use it. If you don't open the app

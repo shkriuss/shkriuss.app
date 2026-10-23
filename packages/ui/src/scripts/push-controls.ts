@@ -10,6 +10,8 @@
 import {
   disablePush,
   enablePush,
+  finishPushDelete,
+  isPushDeletePending,
   isPushEnabled,
   PushError,
   pushSupport,
@@ -54,6 +56,7 @@ export function mountPushControls(block: HTMLElement, options: PushControlsOptio
 
   const ON = `On: reminders arrive even when ${app} is closed.`;
   const OFF = `Off: reminders only arrive while ${app} is open.`;
+  const OFF_NOT_DELETED = `Off, but your reminders couldn’t be removed from ${app}'s server yet. ${app} will try again when it’s open and online.`;
   const PROBLEMS: Record<PushErrorCode, string> = {
     unsupported: `This browser can’t get notifications while ${app} is closed.`,
     denied: `Notifications are blocked for ${app}. To allow them, change this site’s settings in your browser.`,
@@ -69,7 +72,7 @@ export function mountPushControls(block: HTMLElement, options: PushControlsOptio
     const on = isPushEnabled();
     toggle.checked = on;
     testRow.hidden = !on;
-    status.textContent = message ?? (on ? ON : OFF);
+    status.textContent = message ?? (on ? ON : isPushDeletePending() ? OFF_NOT_DELETED : OFF);
   }
 
   function upload(force = false): void {
@@ -86,6 +89,20 @@ export function mountPushControls(block: HTMLElement, options: PushControlsOptio
         ),
       () => undefined,
     );
+  }
+
+  /**
+   * Brings the server up to date: refreshes its copy now and then (and
+   * notices a renewed subscription), or finishes deleting reminders that
+   * were turned off while it couldn't be reached.
+   */
+  function refresh(): void {
+    if (isPushEnabled()) upload();
+    else if (isPushDeletePending()) {
+      void finishPushDelete().then(() => {
+        if (!isPushEnabled()) render();
+      });
+    }
   }
 
   function sync(): void {
@@ -118,7 +135,8 @@ export function mountPushControls(block: HTMLElement, options: PushControlsOptio
     } else {
       status.textContent = 'Turning off…';
       void disablePush().finally(() => {
-        render(OFF);
+        // Says so if the reminders couldn't be removed from the server yet.
+        render();
         toggle.disabled = false;
         options.onChange?.();
       });
@@ -144,8 +162,8 @@ export function mountPushControls(block: HTMLElement, options: PushControlsOptio
   const support = pushSupport();
   if (support === 'supported') {
     render();
-    // Refresh the server's copy now and then (and notice a renewed subscription).
-    if (isPushEnabled()) upload();
+    refresh();
+    window.addEventListener('online', refresh);
   } else {
     toggle.disabled = true;
     status.textContent =
