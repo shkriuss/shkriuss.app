@@ -74,20 +74,51 @@ export interface Store<T> {
   read(version: number, data: unknown): T | undefined;
 }
 
+/** Whether an error from storage means it's full (each browser names it its own way). */
+const isFull = (error: unknown): boolean =>
+  error instanceof DOMException &&
+  (error.name === 'QuotaExceededError' || error.name === 'NS_ERROR_DOM_QUOTA_REACHED');
+
 /**
  * Returns localStorage, or undefined when it is unavailable (some private
  * browsing modes, or storage disabled). Apps then still work for the session.
+ * Storage that's full is still returned: what's saved can be read.
  */
 export function getLocalStorage(): StorageLike | undefined {
+  let storage: Storage | undefined;
   try {
-    const storage = globalThis.localStorage;
+    storage = globalThis.localStorage;
     const probe = `${KEY_PREFIX}__probe__`;
     storage.setItem(probe, '1');
     storage.removeItem(probe);
     return storage;
-  } catch {
-    return undefined;
+  } catch (error) {
+    return storage && isFull(error) ? storage : undefined;
   }
+}
+
+/** Why a save didn't work (lastSaveProblem). */
+export type SaveProblem =
+  /** No storage: blocked in the browser's settings, or a private mode without it. */
+  | 'unavailable'
+  /** The browser has no more room for this site's data. */
+  | 'full'
+  /** What's saved was saved by a newer version of the app, so it isn't saved over. */
+  | 'newer'
+  /** What's saved can't be read by this version, so it isn't saved over. */
+  | 'unreadable'
+  /** The value fails the store's own checks: a mistake in the app. */
+  | 'invalid';
+
+let lastProblem: SaveProblem = 'unavailable';
+
+/**
+ * Why the latest save on this page that didn't work didn't work, for
+ * telling the person (reportSave in @shkriuss/ui/problem). Ask it right
+ * after a save() that gave false.
+ */
+export function lastSaveProblem(): SaveProblem {
+  return lastProblem;
 }
 
 const made = new Map<string, Pick<Store<unknown>, 'version' | 'read'>>();
@@ -178,23 +209,30 @@ export function createStore<T>(options: StoreOptions<T>): Store<T> {
     },
 
     save(value: T): boolean {
+      const fail = (problem: SaveProblem): false => {
+        lastProblem = problem;
+        return false;
+      };
       try {
         const target = storage();
-        if (!target) return false;
+        if (!target) return fail('unavailable');
         const saved = target.getItem(fullKey);
-        if (saved !== null && saved !== fine && inspect(saved).status !== 'ok') return false;
+        if (saved !== null && saved !== fine) {
+          const { status } = inspect(saved);
+          if (status === 'newer' || status === 'unreadable') return fail(status);
+        }
         const text = JSON.stringify({ v: options.version, data: value } satisfies Envelope<T>);
         // Checked as it will be read back (JSON turns NaN into null, say).
         if (read(options.version, (JSON.parse(text) as Envelope<unknown>).data) === undefined) {
-          return false;
+          return fail('invalid');
         }
         target.setItem(fullKey, text);
         fine = text;
         keepData();
         return true;
-      } catch {
+      } catch (error) {
         // Quota exceeded or storage blocked.
-        return false;
+        return fail(isFull(error) ? 'full' : 'unavailable');
       }
     },
 

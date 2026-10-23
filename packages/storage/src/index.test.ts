@@ -1,5 +1,13 @@
-import { beforeEach, describe, expect, it } from 'vitest';
-import { createStore, deleteAll, exportAll, ownKeys, type StorageLike } from './index.ts';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import {
+  createStore,
+  deleteAll,
+  exportAll,
+  getLocalStorage,
+  lastSaveProblem,
+  ownKeys,
+  type StorageLike,
+} from './index.ts';
 
 /** In-memory stand-in for localStorage. */
 class MemoryStorage implements StorageLike {
@@ -81,9 +89,27 @@ describe('createStore', () => {
     expect(makeStore().load()).toEqual({});
   });
 
-  it('reports failed writes instead of throwing', () => {
+  it('reports failed writes instead of throwing, and says why', () => {
     storage.failWrites = true;
     expect(makeStore().save({ water: 1 })).toBe(false);
+    expect(lastSaveProblem()).toBe('full');
+    storage.setItem = () => {
+      throw new DOMException('The operation is insecure.', 'SecurityError');
+    };
+    expect(makeStore().save({ water: 1 })).toBe(false);
+    expect(lastSaveProblem()).toBe('unavailable');
+  });
+
+  it('says why it didn’t save: data it mustn’t save over, or a value that fails its checks', () => {
+    storage.setItem('shkriuss:counts', '{"v":3,"data":{"water":1}}');
+    expect(makeStore().save({ water: 2 })).toBe(false);
+    expect(lastSaveProblem()).toBe('newer');
+    storage.setItem('shkriuss:counts', 'not json');
+    expect(makeStore().save({ water: 2 })).toBe(false);
+    expect(lastSaveProblem()).toBe('unreadable');
+    storage.removeItem('shkriuss:counts');
+    expect(makeStore().save({ water: Number.NaN })).toBe(false);
+    expect(lastSaveProblem()).toBe('invalid');
   });
 
   it('checks data from elsewhere: valid, migrated, invalid or too new', () => {
@@ -199,5 +225,51 @@ describe('exportAll / deleteAll', () => {
     expect(ownKeys(undefined)).toEqual([]);
     expect(deleteAll(undefined)).toBe(0);
     expect(exportAll('x', undefined, new Date(0)).data).toEqual({});
+  });
+});
+
+describe('getLocalStorage', () => {
+  const original = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  const use = (value: unknown) =>
+    Object.defineProperty(globalThis, 'localStorage', { value, configurable: true });
+  afterEach(() => {
+    if (original) Object.defineProperty(globalThis, 'localStorage', original);
+    else Reflect.deleteProperty(globalThis, 'localStorage');
+  });
+
+  it('gives storage that works', () => {
+    use(storage);
+    expect(getLocalStorage()).toBe(storage);
+  });
+
+  it('still gives storage that’s full, so what’s saved can be read', () => {
+    storage.setItem('shkriuss:counts', '{"v":2,"data":{"water":3}}');
+    storage.failWrites = true;
+    use(storage);
+    expect(getLocalStorage()).toBe(storage);
+    const store = createStore<Counts>({
+      key: 'counts',
+      version: 2,
+      fallback: () => ({}),
+      validate: isCounts,
+    });
+    expect(store.load()).toEqual({ water: 3 });
+    expect(store.save({ water: 4 })).toBe(false);
+    expect(lastSaveProblem()).toBe('full');
+  });
+
+  it('gives nothing when storage is blocked', () => {
+    storage.setItem = () => {
+      throw new DOMException('The operation is insecure.', 'SecurityError');
+    };
+    use(storage);
+    expect(getLocalStorage()).toBeUndefined();
+    Object.defineProperty(globalThis, 'localStorage', {
+      get() {
+        throw new DOMException('Access is denied.', 'SecurityError');
+      },
+      configurable: true,
+    });
+    expect(getLocalStorage()).toBeUndefined();
   });
 });
