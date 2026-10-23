@@ -130,6 +130,58 @@ version of the site):
    pass** with **Checks**, **Secret scan** and **Dependency audit**.
 4. **Settings → General → Features:** Wikis, Projects and Issues are off.
    Security reports come through private vulnerability reporting.
+5. **Settings → General → Pull Requests:** keep only **Allow squash
+   merging**, and tick **Automatically delete head branches**. In the `main`
+   ruleset, set **Allowed merge methods** to **Squash** too.
+6. Optional, in the `main` ruleset: **Require code scanning results**, with
+   CodeQL and alerts **High or higher**; and under **Settings → Advanced
+   Security → Secret Protection**, **Scan for non-provider patterns** and
+   **Validity checks**, if they're offered.
+
+### Domain and Cloudflare settings
+
+These keep the domain yours and stop others from misusing it. They're found
+in the Cloudflare dashboard (<https://dash.cloudflare.com>), mostly under
+**shkriuss.app** (the zone). Each takes a few minutes, once (audit findings
+I-1 to I-10).
+
+1. **Keep the domain:** **Domain Registration → Manage Domains →
+   shkriuss.app → Configuration → Auto renew: On.** Check under **Billing →
+   Payment info** that the card on file won't expire before the renewal
+   date. Without this, the domain lapses after a year and every app stops.
+2. **Say the domain sends no email**, so nobody can send convincing fake
+   mail "from" shkriuss.app. **DNS → Records → Add record**, three times:
+   - type `MX`, name `@`, mail server `.`, priority `0`;
+   - type `TXT`, name `@`, content `v=spf1 -all`;
+   - type `TXT`, name `_dmarc`, content
+     `v=DMARC1; p=reject; sp=reject; adkim=s; aspf=s`.
+
+   Then **Email → Email Routing → Routing rules**: delete the `security@`
+   and `support@` rules (mail to them doesn't arrive anyway). Security reports
+   come through GitHub, as `/.well-known/security.txt` says.
+
+3. **Only Cloudflare's certificate authorities may issue certificates:**
+   **DNS → Records → Add record**, type `CAA`, name `@`, flags `0`, tag
+   **Only allow specific hostnames**, three times, with `letsencrypt.org`,
+   `pki.goog` and `ssl.com`. All three are needed: Cloudflare uses each of
+   them for some of the sites' certificates. Then **SSL/TLS → Edge
+   Certificates → Certificate Transparency Monitoring: On**, which emails you
+   when a certificate is issued for the domain.
+4. **Nothing rewrites the pages:** turn off **SSL/TLS → Edge Certificates →
+   Automatic HTTPS Rewrites**, **Scrape Shield → Server-side Excludes** (if
+   it's there) and **Security → Settings → Replace insecure JavaScript
+   libraries**. Delete the site under **Analytics & Logs → Web Analytics**,
+   and leave Zaraz and Rocket Loader off. The pages already work without
+   them, and the security rules would block what they add. The live check
+   after each deploy fails if a page has changed.
+5. **Limit requests to the servers:** **Security → WAF → Rate limiting
+   rules → Create rule**: "URI Path starts with `/api/`", 30 requests per 10
+   seconds, action **Block**. It stops one fast script from using up the free
+   daily requests that all the apps share.
+6. **Account safety:** **Manage Account → Members → Enforce two-factor
+   authentication: On.** And **Notifications → Add → Usage Based Billing →
+   R2**: an alert when storage passes 20 GB, so unusual uploads show up before
+   they cost anything.
 
 ## Seeing a preview
 
