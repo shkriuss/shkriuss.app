@@ -42,6 +42,10 @@ test('adds a habit, marks today done, and remembers it', async ({ page }) => {
   await expect(card(page, 'Drink water').locator('[data-week-summary]')).toHaveText(
     'Last 7 days: done 1 time.',
   );
+  // Only the day that's done shows a tick; the others are rings (audit G-5).
+  const marks = card(page, 'Drink water').locator('[data-day-mark] svg');
+  await expect(marks).toHaveCount(7);
+  await expect(marks.filter({ visible: true })).toHaveCount(1);
   await expect(
     page.getByRole('status').filter({ hasText: 'Drink water: done today.' }),
   ).toBeAttached();
@@ -55,6 +59,18 @@ test('adds a habit, marks today done, and remembers it', async ({ page }) => {
   // Tapping again takes it back.
   await doneToday(page, 'Drink water').click();
   await expect(streak(page, 'Drink water')).toHaveText('No streak yet');
+});
+
+test('in a Windows contrast theme, “Done today” still shows when it’s on', async ({ page }) => {
+  // Contrast themes replace backgrounds with the theme's own colours (audit G-6).
+  await addHabit(page, 'Drink water');
+  await addHabit(page, 'Read');
+  await doneToday(page, 'Read').click();
+  await page.emulateMedia({ forcedColors: 'active' });
+  const backgroundOf = (element: Element) => getComputedStyle(element).backgroundColor;
+  const on = await doneToday(page, 'Read').evaluate(backgroundOf);
+  const off = await doneToday(page, 'Drink water').evaluate(backgroundOf);
+  expect(on).not.toBe(off);
 });
 
 test('explains problems with a name', async ({ page }) => {

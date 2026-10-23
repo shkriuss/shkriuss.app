@@ -11,8 +11,10 @@
 }
 
 html {
-  -webkit-text-size-adjust: none;
-  text-size-adjust: none;
+  /* No bigger text when a phone is turned sideways. 100%, not none: none has
+     been known to switch off browsers' own text-size settings (audit G-13). */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
   hanging-punctuation: first last;
   scroll-padding-top: var(--space-6);
 }

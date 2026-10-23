@@ -23,6 +23,16 @@ changes on its next deploy.
 - **Accessible by default:** WCAG 2.2 AA contrast (unit-tested for every
   token pair in both themes), visible focus rings, 44px tap targets,
   reduced motion respected, and semantic HTML in every component.
+  - The one exception to 44px: Calendar's days on screens narrower than
+    about 340px, where seven columns can't each be 44px wide. They stay 44px
+    tall, well above WCAG's 24px minimum.
+  - Pages fit a 320px screen, and a 360px one with text at 200%, without
+    sideways scrolling (tested on every page).
+  - States shown only by colour (a pressed toggle, a selected day) also get
+    a rule for Windows contrast themes (`@media (forced-colors: active)`),
+    which replace backgrounds.
+  - A page's `<style>` only reaches elements written in that page: style an
+    `<Icon>` inside it with `:global(svg)` (a unit test checks this).
 - **CSS first.** Component classes work with plain HTML, so even markup
   created by scripts (Tally's `<template>`) uses the same styles.
 

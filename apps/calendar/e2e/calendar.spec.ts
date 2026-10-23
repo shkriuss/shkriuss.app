@@ -23,6 +23,21 @@ test('shows this month with today selected', async ({ page }) => {
   await expect(page.getByText('Nothing planned in the next 7 days.')).toBeVisible();
 });
 
+test('in a Windows contrast theme, the chosen day and event dots still show', async ({ page }) => {
+  // Contrast themes replace backgrounds with the theme's own colours (audit G-6).
+  await seed(page, [{ startDate: '2026-10-20', endDate: '2026-10-20' }]);
+  await page.emulateMedia({ forcedColors: 'active' });
+  const canvas = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  const backgroundOf = (element: Element) => getComputedStyle(element).backgroundColor;
+  const chosen = await day(page, /^Saturday, October 17, 2026/).evaluate(backgroundOf);
+  expect(chosen).not.toBe(canvas);
+  expect(chosen).not.toMatch(/^rgba\(.*, 0\)$|transparent/);
+  const dot = day(page, /^Tuesday, October 20, 2026/).locator('.day-cell__dot');
+  const dotColour = await dot.evaluate(backgroundOf);
+  expect(dotColour).not.toBe(canvas);
+  expect(dotColour).not.toMatch(/^rgba\(.*, 0\)$|transparent/);
+});
+
 test('adds an event and remembers it after a reload', async ({ page }) => {
   await newEvent(page, 'Dentist');
   await editor(page).getByLabel('Start time').fill('14:30');

@@ -88,3 +88,26 @@ test('content reflows at 320px wide without sideways scrolling', async ({ page }
     expect(overflow, `Horizontal overflow on ${path}`).toBeLessThanOrEqual(0);
   }
 });
+
+test('with text at 200%, pages fit a phone without sideways scrolling', async ({ page }) => {
+  // Text made larger in the browser's or the phone's settings (audit G-11).
+  await page.setViewportSize({ width: 360, height: 640 });
+  for (const path of await discoverPages(page)) {
+    await page.goto(path);
+    const overflow = await page.evaluate(() => {
+      document.documentElement.style.fontSize = '200%';
+      return document.documentElement.scrollWidth - document.documentElement.clientWidth;
+    });
+    expect(overflow, `Horizontal overflow on ${path} with 200% text`).toBeLessThanOrEqual(0);
+  }
+});
+
+test('the footer links are big enough to tap', async ({ page }) => {
+  // The project's 44px rule (audit G-12).
+  await page.goto('/');
+  const links = page.getByRole('navigation', { name: 'Footer' }).getByRole('link');
+  await expect(links).toHaveCount(2);
+  for (const link of await links.all()) {
+    expect((await link.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+  }
+});
