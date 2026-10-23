@@ -44,6 +44,7 @@ import {
   type ConnectRequest,
 } from '@shkriuss/sync/connect';
 import { appOriginFor, isAppOrigin } from '@shkriuss/sync/origins';
+import { focusProblem } from '@shkriuss/ui/problem';
 import { renderQrCode } from '@shkriuss/ui/qr-code';
 import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
@@ -611,7 +612,7 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
             ? 'That isn’t a recovery key. It has 56 letters and digits, in groups of 4.'
             : 'There’s a mistake in it. Check each group against your saved key.';
         recoveryInput.setAttribute('aria-invalid', 'true');
-        recoveryInput.focus();
+        focusProblem(recoveryInput, recoveryError.textContent ?? '');
         return;
       }
       if (await signIn(result.secret, 'Signed in with your recovery key.')) {

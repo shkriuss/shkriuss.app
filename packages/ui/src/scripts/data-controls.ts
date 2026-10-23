@@ -17,6 +17,7 @@ import {
   type BackupFile,
 } from '@shkriuss/storage/backup';
 import { DATE_LOCALE } from '../lib/locale.ts';
+import { focusProblem } from './problem.ts';
 
 /** Backup files bigger than this are turned down (apps save far less). */
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
@@ -133,11 +134,11 @@ export function mountDataControls(section: HTMLElement): void {
     setError(backupForm, 'passphrase', problems.passphrase);
     setError(backupForm, 'repeat', problems.passphrase ? '' : problems.repeat);
     if (problems.passphrase) {
-      passphrase.focus();
+      focusProblem(passphrase, problems.passphrase);
       return;
     }
     if (problems.repeat) {
-      repeat.focus();
+      focusProblem(repeat, problems.repeat);
       return;
     }
     busy(backupDialog, 'Locking your backup…');

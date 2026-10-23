@@ -51,6 +51,11 @@ test('a locked backup restores everything, only with its passphrase', async ({ p
   await again.fill('something else entirely');
   await dialog.getByRole('button', { name: 'Download backup' }).click();
   await expect(again).toHaveAccessibleDescription('The two passphrases don’t match.');
+  // Enter in the field: focus is there already, so the problem is read out (audit G-3).
+  await again.press('Enter');
+  await expect(dialog.getByRole('alert')).toHaveText(
+    'Type it again: The two passphrases don’t match.',
+  );
   await checkA11y(page, 'backup dialog with problems');
 
   await dialog.getByLabel('Show passphrase').check();
