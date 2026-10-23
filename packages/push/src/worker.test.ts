@@ -87,6 +87,73 @@ function device(key = deviceKey()) {
   };
 }
 
+describe('a schedule sent to the Worker', () => {
+  // Checking the biggest schedule takes more than the free plan's 10 ms of CPU
+  // time for the Worker, so only the device's object (with 30 seconds) does it.
+  it('reaches its device as it was sent, with only its size checked first', async () => {
+    const { PUSH_DEVICES } = server.env;
+    const received: string[] = [];
+    server.env.PUSH_DEVICES = {
+      idFromName: (name) => PUSH_DEVICES.idFromName(name),
+      get: (id) => ({
+        fetch: async (input, init) => {
+          received.push(await new Request(input, init).text());
+          return PUSH_DEVICES.get(id).fetch(input, init);
+        },
+      }),
+    };
+    const body = `{ "timeZone": "UTC", "entries": ${JSON.stringify([entry()])},\n  "endpoint": "${ENDPOINT}" }`;
+    const request = new Request(`${ORIGIN}/api/push/schedule`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${deviceKey()}` },
+      body,
+    });
+    expect((await server.fetch(request)).status).toBe(200);
+    expect(received).toContain(body);
+  });
+
+  it('is checked by its device, which keeps nothing when it’s wrong', async () => {
+    const key = deviceKey();
+    const send = async (path: string, body: string) => {
+      const response = await server.fetch(
+        new Request(`${ORIGIN}/api/push${path}`, {
+          method: path === '/test' ? 'POST' : 'PUT',
+          headers: { Authorization: `Bearer ${key}` },
+          body,
+        }),
+      );
+      return [response.status, ((await response.json()) as { error: string }).error];
+    };
+    const schedule = (more: Record<string, unknown>) =>
+      JSON.stringify({ endpoint: ENDPOINT, timeZone: 'UTC', entries: [entry()], ...more });
+    expect(await send('/schedule', '{"entries": [')).toEqual([400, 'Body must be JSON.']);
+    expect(await send('/schedule', schedule({ timeZone: 'Mars/Olympus' }))).toEqual([
+      400,
+      'Unknown time zone.',
+    ]);
+    expect(await send('/schedule', schedule({ entries: [entry({ start: 'soon' })] }))).toEqual([
+      400,
+      'Entry 0: Bad start.',
+    ]);
+    expect(await send('/schedule', schedule({ endpoint: 'http://push.example.com/x' }))).toEqual([
+      400,
+      'Push address must be https with a domain name.',
+    ]);
+    expect(
+      await send('/test', JSON.stringify({ endpoint: ENDPOINT, payload: 'not a message!' })),
+    ).toEqual([400, 'Message is not base64url.']);
+    expect(await send('/schedule', 'x'.repeat(LIMITS.requestBytes + 1))).toEqual([
+      413,
+      'Request too big.',
+    ]);
+    const kept = [...server.devices.values()].filter(
+      ({ storage }) => storage.map.size > 0 || storage.alarm !== null,
+    );
+    expect(kept).toEqual([]);
+    expect(server.meter.map.size).toBe(0);
+  });
+});
+
 describe('one request at a time', () => {
   it('keeps the limit on changes when two arrive together', async () => {
     vi.useFakeTimers({ now: Date.UTC(2026, 9, 22, 8), toFake: ['Date'] });

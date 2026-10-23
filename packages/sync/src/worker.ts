@@ -64,7 +64,6 @@ import {
   roomFor,
   type FileIndex,
   type FileList,
-  type PutRequest,
 } from './validate.ts';
 
 export interface SyncEnv extends SiteEnv {
@@ -143,11 +142,12 @@ export async function handleSync(
     return copy.fetch(`https://copy/${moved ? '?moved' : ''}`, { method: 'DELETE' });
   }
   if (request.method !== 'PUT') return problem(405, 'Use GET, PUT or DELETE.');
-  const read = await jsonBody(request, MAX_REQUEST_BYTES);
+  // Only the size is checked here, and the copy checks the rest: checking a
+  // full-size copy here took about 8 ms of the free plan's 10 ms of CPU time
+  // (audit finding B-9), while the copy's object has 30 seconds.
+  const read = await bytesBody(request, MAX_REQUEST_BYTES);
   if (!read.ok) return read.response;
-  const checked = checkPut(read.body);
-  if (!checked.ok) return problem(400, checked.error);
-  return copy.fetch('https://copy/', { method: 'PUT', body: JSON.stringify(checked.value) });
+  return copy.fetch('https://copy/', { method: 'PUT', body: read.body });
 }
 
 /** /api/sync/files (id undefined) and /api/sync/files/<id>. */
@@ -281,8 +281,12 @@ export class SyncCopy {
         return noContent();
       }
 
-      // PUT
-      const { base, data } = (await request.json()) as PutRequest;
+      // PUT, checked here rather than in the Worker (handleSync), before anything is kept.
+      const read = await jsonBody(request, MAX_REQUEST_BYTES);
+      if (!read.ok) return read.response;
+      const checked = checkPut(read.body);
+      if (!checked.ok) return problem(400, checked.error);
+      const { base, data } = checked.value;
       const live = saved && !isDeleted(saved) ? saved : undefined;
       if (base === null) {
         // Starting a copy: only when there isn't one. A deleted one can be started
