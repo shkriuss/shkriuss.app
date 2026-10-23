@@ -6,8 +6,10 @@ Small, private web apps, all in one place.
 - **Apps:** each lives on its own address, for example
   <https://tally.shkriuss.app>.
 
-No accounts, ads, analytics or trackers. What you save in an app stays on your
-device. See the [privacy page](https://shkriuss.app/privacy/).
+No ads, analytics or trackers, and no account needed. What you save in an app
+stays on your device, unless you turn on sync (an optional account, with
+everything locked on your devices first). See the
+[privacy page](https://shkriuss.app/privacy/).
 
 ## How it works (short version)
 
@@ -23,8 +25,9 @@ device. See the [privacy page](https://shkriuss.app/privacy/).
 You never need a computer:
 
 - **Ask Claude** to make a change. It opens a pull request.
-- **Review it:** open the pull request on GitHub, tap the preview links, and
-  check the green ticks.
+- **Review it:** open the pull request on GitHub and check the green ticks.
+  To try it first, approve its preview links
+  ([how](docs/deployment.md#seeing-a-preview)).
 - **Ship it:** tap **Merge pull request**. The sites update a minute or two
   later.
 - **New app:** ask Claude, or use **Actions → New app → Run workflow**
@@ -39,6 +42,7 @@ You never need a computer:
 | [docs/design-system.md](docs/design-system.md) | Colours, components, and changing the look everywhere               |
 | [docs/deployment.md](docs/deployment.md)       | Cloudflare, previews, production deploys, rolling back              |
 | [docs/quality.md](docs/quality.md)             | Every automatic check and what to do when one fails                 |
+| [docs/audit/](docs/audit/)                     | The audit brief, and the prompts for auditing with AI tools         |
 | [docs/adr/](docs/adr/)                         | Short records of the main decisions and why                         |
 | [SECURITY.md](SECURITY.md)                     | Security model and how to report a problem                          |
 | [CLAUDE.md](CLAUDE.md)                         | Rules and commands for AI assistants and developers                 |

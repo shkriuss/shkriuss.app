@@ -1,10 +1,14 @@
-import type { LibraryChange } from '@shkriuss/library';
+import { randomBytes } from '@shkriuss/crypto';
+import { libraryRecord, type LibraryChange } from '@shkriuss/library';
+import { createStore, type StorageLike } from '@shkriuss/storage';
 import { describe, expect, it } from 'vitest';
 import {
   applyChanges,
+  canFreeUp,
   freeable,
   onlineMessage,
   onlyOnline,
+  RECORDS,
   waitingToGoUp,
   type OnlineState,
 } from './online.ts';
@@ -128,6 +132,51 @@ describe('this device’s photos', () => {
     expect(freed.map((one) => one.id)).toEqual(['b', 'c']);
     expect(bytes).toBe(7_000_000);
   });
+
+  it('are freed up only once the library has answered, and while it’s there', () => {
+    const state: OnlineState = {
+      checked: true,
+      unlocked: true,
+      usage: null,
+      waiting: 0,
+      tooBig: 0,
+      problem: null,
+      retryAt: null,
+      taken: false,
+    };
+    expect(canFreeUp(state)).toBe(true);
+    expect(canFreeUp({ ...state, checked: false })).toBe(false);
+    for (const problem of ['wiping', 'moved', 'offline', 'server', 'storage'] as const) {
+      expect(canFreeUp({ ...state, problem })).toBe(false);
+    }
+    // What only stops photos going up doesn't change what's online.
+    expect(canFreeUp({ ...state, problem: 'full', unlocked: false })).toBe(true);
+  });
+});
+
+describe('the libraries’ records', () => {
+  it('saved by the version before (one record, "library") become their library’s', async () => {
+    const record = await libraryRecord(randomBytes(32), undefined);
+    const older = { ...record, id: 'library' };
+    const saved = new Map([
+      ['shkriuss:library', JSON.stringify({ v: 1, data: { items: [older] } })],
+    ]);
+    const storage: StorageLike = {
+      get length() {
+        return saved.size;
+      },
+      key: (index) => [...saved.keys()][index] ?? null,
+      getItem: (key) => saved.get(key) ?? null,
+      setItem: (key, value) => void saved.set(key, value),
+      removeItem: (key) => void saved.delete(key),
+    };
+    const store = createStore({ ...RECORDS, storage });
+    expect(store.load()).toEqual({ items: [record] });
+    // From another device that hasn't updated yet: the same.
+    expect(store.read(1, { items: [older] })).toEqual({ items: [record] });
+    // One already in this version's data (merged from such a device) is still read, to be tidied.
+    expect(store.read(2, { items: [older] })).toEqual({ items: [older] });
+  });
 });
 
 describe('the status line', () => {
@@ -139,6 +188,7 @@ describe('the status line', () => {
     tooBig: 0,
     problem: null,
     retryAt: null,
+    taken: false,
     ...overrides,
   });
 
@@ -167,5 +217,11 @@ describe('the status line', () => {
       'Couldn’t reach the online library: no connection. It will try again.',
     );
     expect(onlineMessage(state({ problem: 'not-set-up' }))).toMatch(/^Online storage isn’t set up/);
+  });
+
+  it('says plainly when a device with the old account key took the library', () => {
+    expect(onlineMessage(state({ taken: true, unlocked: false, usage: null }))).toBe(
+      'Your online library was taken by a device that still had your old account key, perhaps the lost one, so it can’t be used any more. Photos that were only in it can’t be brought back. Photos on this device go into a new online library. To keep photos online, enter the storage code.',
+    );
   });
 });

@@ -6,7 +6,9 @@ import {
   gzipSize,
   MAX_FILE_BYTES,
   pageAssets,
+  scriptsLoaded,
   spacingProblems,
+  staticImports,
 } from './dist-checks.ts';
 
 describe('cspProblems', () => {
@@ -38,6 +40,34 @@ describe('pageAssets', () => {
     const html = `<link rel="stylesheet" href="/_astro/a.css"><link rel="icon" href="/favicon.svg">
       <script src="/_astro/b.js"></script><script src="https://example.com/x.js"></script>`;
     expect(pageAssets(html)).toEqual({ css: ['/_astro/a.css'], js: ['/_astro/b.js'] });
+  });
+});
+
+describe('scripts a page loads', () => {
+  it('finds the files a script imports before it runs, not those it starts later', () => {
+    const script =
+      'import{a as b}from"./client.D4.js";import"./side.js";export{c}from"../x/y.js";' +
+      'const w=import("./later.js");new Worker(new URL("./worker.js",import.meta.url));';
+    expect(staticImports(script, '/_astro/page.js')).toEqual([
+      '/_astro/client.D4.js',
+      '/_astro/side.js',
+      '/x/y.js',
+    ]);
+  });
+
+  it('counts each file once, following imports of imports', () => {
+    const files: Record<string, string> = {
+      '/_astro/a.js': 'import"./shared.js";',
+      '/_astro/b.js': 'import{x}from"./shared.js";',
+      '/_astro/shared.js': 'import"./deep.js";',
+      '/_astro/deep.js': 'export const d=1;',
+    };
+    expect(scriptsLoaded(['/_astro/a.js', '/_astro/b.js'], (path) => files[path] ?? '')).toEqual([
+      '/_astro/a.js',
+      '/_astro/b.js',
+      '/_astro/shared.js',
+      '/_astro/deep.js',
+    ]);
   });
 });
 

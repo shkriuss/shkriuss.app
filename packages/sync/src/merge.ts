@@ -4,10 +4,12 @@
  * - Data is a list of items, each with a string `id` (Calendar's events,
  *   Tally's counters).
  * - Each item carries the time it last changed. When both devices have an
- *   item, the newest edit wins.
+ *   item, the newest edit wins. An edit's time is always after the version
+ *   it was made from, even if this device's clock is behind.
  * - Deleting an item leaves a small marker (a "tombstone") with the time, so
  *   the deletion reaches the other devices instead of the item coming back.
- *   Markers are dropped after 180 days.
+ *   Markers are dropped after 180 days. A device away longer still deletes
+ *   an item it saw online that the copy no longer has (dropForgotten).
  * - The order of the list is one more thing that changes over time: the
  *   newest order wins, and new items from the other device go at the end.
  *
@@ -40,7 +42,10 @@ export interface StoreSnapshot {
   order: Order;
 }
 
-/** What a device remembers about each item since the last sync. */
+/**
+ * What a device remembers about each item since the last sync: a fingerprint
+ * of its value then (empty if that's unknown, see upgradeKnown), and its time.
+ */
 export interface Known {
   items: Record<string, { h: string; t: number } | Tombstone>;
   order: Order;
@@ -53,11 +58,23 @@ export interface Identified {
   id: string;
 }
 
-/** Deleted items are forgotten after this long (devices offline longer may bring them back). */
+/** Deletion markers are dropped after this long (dropForgotten handles devices away longer). */
 export const TOMBSTONE_DAYS = 180;
 
 export const isTombstone = (entry: Entry | Known['items'][string]): entry is Tombstone =>
   'deleted' in entry && entry.deleted;
+
+/**
+ * Items by id, kept in an object without a prototype, so every id is just a
+ * key. A calendar file can give an event any id: "__proto__" or
+ * "constructor" must never reach an object's built-in parts.
+ */
+export const byId = <T>(from: Record<string, T> = {}): Record<string, T> =>
+  Object.assign(Object.create(null) as Record<string, T>, from);
+
+/** A record's own entry for an id (what's read from JSON still has a prototype). */
+const own = <T>(record: Record<string, T>, id: string): T | undefined =>
+  Object.hasOwn(record, id) ? record[id] : undefined;
 
 /** JSON with object keys sorted, so equal values always give equal text. */
 export function canonical(value: unknown): string {
@@ -92,7 +109,9 @@ const sameIds = (a: readonly string[], b: readonly string[]) =>
 /**
  * This device's items as a snapshot: items that differ from what was known
  * at the last sync (or are new) get the time `now`, and items that are gone
- * become tombstones. Also returns whether anything changed.
+ * become tombstones. If this device's clock is behind, a change still gets a
+ * time just after the version it was made from. Also returns whether
+ * anything changed.
  *
  * On a device's first sync (nothing known yet) everything gets time 0: what's
  * already online wins for items both have (say, after restoring an old
@@ -104,30 +123,64 @@ export function observe(
   version: number,
   now: number,
 ): { snapshot: StoreSnapshot; changed: boolean } {
-  const items: Record<string, Entry> = {};
-  const stamp = known === undefined ? 0 : now;
+  const items = byId<Entry>();
+  // A change made from a version counts as newer than it, even on a device
+  // whose clock is behind the one that made that version.
+  const stamp = (previous: { t: number } | undefined) =>
+    known === undefined ? 0 : Math.max(now, previous ? previous.t + 1 : 0);
   let changed = known === undefined;
   for (const item of current) {
-    const previous = known?.items[item.id];
+    const previous = known && own(known.items, item.id);
     const h = fingerprint(item);
     const same = previous !== undefined && !isTombstone(previous) && previous.h === h;
     if (!same) changed = true;
-    items[item.id] = { t: same ? previous.t : stamp, value: item };
+    items[item.id] = { t: same ? previous.t : stamp(previous), value: item };
   }
   for (const [id, previous] of Object.entries(known?.items ?? {})) {
     if (id in items) continue;
     if (isTombstone(previous)) {
       items[id] = previous;
     } else {
-      items[id] = { t: now, deleted: true };
+      items[id] = { t: stamp(previous), deleted: true };
       changed = true;
     }
   }
   const ids = current.map((item) => item.id);
   const orderSame = known !== undefined && sameIds(known.order.ids, ids);
   if (!orderSame) changed = true;
-  const order = { ids, t: orderSame ? known.order.t : stamp };
+  const order = { ids, t: orderSame ? known.order.t : stamp(known?.order) };
   return { snapshot: { v: version, items, order }, changed };
+}
+
+/**
+ * After an update that changed the data version: what a device knew from
+ * its last sync are fingerprints of the old version's values, so every item
+ * would look edited, and win over newer edits on other devices. This brings
+ * them to `version`. An item still as it was then gets the fingerprint of
+ * its upgraded value, keeping its time. An item changed (or deleted) here
+ * since gets an empty fingerprint: it counts as edited, and as its value
+ * then is unknown, keepBoth leaves it to the newest edit.
+ *
+ * `old` is this device's items as still saved in the old version, by id, to
+ * tell which changed. If they're gone (the app has saved since), the items
+ * here are taken as unchanged, rather than all counting as edited.
+ */
+export function upgradeKnown(
+  known: Known,
+  current: readonly Identified[],
+  old: ReadonlyMap<string, unknown> | null,
+  version: number,
+): Known {
+  const here = new Map(current.map((item) => [item.id, item]));
+  const items = byId(known.items);
+  for (const [id, entry] of Object.entries(known.items)) {
+    if (isTombstone(entry)) continue;
+    const now = here.get(id);
+    const unchanged =
+      now !== undefined && (old === null || (old.has(id) && fingerprint(old.get(id)) === entry.h));
+    items[id] = { h: unchanged ? fingerprint(now) : '', t: entry.t };
+  }
+  return { ...known, items, v: version };
 }
 
 /** Which of two entries for the same item wins: the newer one; ties broken the same way on every device. */
@@ -141,7 +194,7 @@ function newer(a: Entry, b: Entry): Entry {
 
 /** Merges two devices' snapshots of one store (same data version). */
 export function merge(a: StoreSnapshot, b: StoreSnapshot): StoreSnapshot {
-  const items: Record<string, Entry> = { ...a.items };
+  const items = byId(a.items);
   for (const [id, entry] of Object.entries(b.items)) {
     const other = items[id];
     items[id] = other ? newer(other, entry) : entry;
@@ -193,13 +246,14 @@ export function keepBoth(
   copy: (mine: Identified, theirs: Identified) => Identified,
   now: number,
 ): { snapshot: StoreSnapshot; kept: number } {
-  const items = { ...mine.items };
+  const items = byId(mine.items);
   const ids = [...mine.order.ids];
   let kept = 0;
   for (const [id, other] of Object.entries(theirs.items)) {
-    const before = known.items[id];
-    const here = mine.items[id];
-    if (!before || isTombstone(before) || !here) continue;
+    const before = own(known.items, id);
+    const here = items[id];
+    // Without what the item was at the last sync, there's no telling where it changed.
+    if (!before || isTombstone(before) || before.h === '' || !here) continue;
     if (isTombstone(other)) {
       // Deleted there but changed here: the change wins, even if it's older.
       if (!isTombstone(here) && fingerprint(here.value) !== before.h && here.t <= other.t) {
@@ -216,7 +270,7 @@ export function keepBoth(
     const hereValue = fingerprint(here.value);
     if (hereValue === before.h || hereValue === otherValue) continue;
     const duplicate = copy(here.value as Identified, other.value as Identified);
-    if (duplicate.id in items || duplicate.id in theirs.items) continue;
+    if (duplicate.id in items || Object.hasOwn(theirs.items, duplicate.id)) continue;
     items[id] = other;
     items[duplicate.id] = { t: now, value: duplicate };
     ids.push(duplicate.id);
@@ -245,23 +299,47 @@ export function secondVersionName(name: string, max: number): string {
 /** The live items' values, in order. */
 export function valuesOf(snapshot: StoreSnapshot): unknown[] {
   return snapshot.order.ids.flatMap((id) => {
-    const entry = snapshot.items[id];
+    const entry = own(snapshot.items, id);
     return entry && !isTombstone(entry) ? [entry.value] : [];
   });
+}
+
+/**
+ * Items this device saw in the online copy (`seen`) that the same copy no
+ * longer has, not even as a deletion marker: they were deleted on another
+ * device so long ago that the marker was dropped (TOMBSTONE_DAYS). Unless
+ * they were changed here since, they're deleted here too, instead of coming
+ * back. Only for the very copy that was seen: one started again (a new
+ * epoch) never had them.
+ */
+export function dropForgotten(
+  mine: StoreSnapshot,
+  theirs: StoreSnapshot,
+  seen: Known,
+): StoreSnapshot {
+  const items = byId(mine.items);
+  for (const [id, entry] of Object.entries(mine.items)) {
+    const before = own(seen.items, id);
+    if (isTombstone(entry) || !before || isTombstone(before)) continue;
+    if (Object.hasOwn(theirs.items, id) || fingerprint(entry.value) !== before.h) continue;
+    items[id] = { t: before.t, deleted: true };
+  }
+  return { ...mine, items };
 }
 
 /** Drops deletion markers older than TOMBSTONE_DAYS. */
 export function prune(snapshot: StoreSnapshot, now: number): StoreSnapshot {
   const cutoff = now - TOMBSTONE_DAYS * 24 * 60 * 60 * 1000;
-  const items = Object.fromEntries(
-    Object.entries(snapshot.items).filter(([, entry]) => !isTombstone(entry) || entry.t >= cutoff),
-  );
+  const items = byId<Entry>();
+  for (const [id, entry] of Object.entries(snapshot.items)) {
+    if (!isTombstone(entry) || entry.t >= cutoff) items[id] = entry;
+  }
   return { ...snapshot, items };
 }
 
 /** What a device should remember after a sync that ended with `snapshot`. */
 export function knownFrom(snapshot: StoreSnapshot): Known {
-  const items: Known['items'] = {};
+  const items = byId<Known['items'][string]>();
   for (const [id, entry] of Object.entries(snapshot.items)) {
     items[id] = isTombstone(entry) ? entry : { h: fingerprint(entry.value), t: entry.t };
   }

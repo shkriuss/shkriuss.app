@@ -44,17 +44,21 @@ import {
   turnOffProof,
 } from './connect.ts';
 import {
+  byId,
   canonical,
+  dropForgotten,
   keepBoth,
   knownFrom,
   merge,
   observe,
   prune,
+  upgradeKnown,
   valuesOf,
   type Identified,
   type Known,
   type StoreSnapshot,
 } from './merge.ts';
+import { fetchWithLimit, isTimeout } from './request.ts';
 import { fileLabel, openStores, sealStores, syncKeys, type Stores } from './snapshot.ts';
 
 export { secondVersionName } from './merge.ts';
@@ -116,7 +120,9 @@ export interface LinkedData {
   delete(secret: Uint8Array<ArrayBuffer>): Promise<void>;
   /**
    * After the account key was replaced: the old copy is in the new one, and
-   * is deleted next. If it throws, the next sync tries again.
+   * is deleted next. Also when another device moved the old copy first: if
+   * that was a lost device, it may have moved this data for itself, which
+   * the app needs to find out. If it throws, the next sync tries again.
    */
   move(from: Uint8Array<ArrayBuffer>, to: Uint8Array<ArrayBuffer>): Promise<void>;
 }
@@ -136,6 +142,8 @@ export type SyncProblem =
   | 'server'
   /** Another device has a newer version of the app: wait for this one to update. */
   | 'update-needed'
+  /** This version of the app can't read the data saved here: it's kept as it is, unsynced. */
+  | 'unreadable'
   /** Too much data to sync. */
   | 'too-big'
   /** The online copy was deleted on another device; sync is now off here. */
@@ -205,6 +213,12 @@ interface DeviceState {
   known: Record<string, Known>;
   /** True when `known` holds a merge that isn't online yet (the upload failed). */
   dirty: boolean;
+  /**
+   * The online copy as this device last saw it (its epoch, and per store key
+   * what it held). `known` runs ahead of it after a failed upload, or edits
+   * while sync was off; keeping both versions needs to know what was online.
+   */
+  base: { epoch: string; stores: Record<string, Known> } | null;
   last: number | null;
   /** The app's keys from replaced account keys: their online copies are moved here, then deleted. */
   previous: string[];
@@ -220,12 +234,17 @@ function loadState(): DeviceState | null {
     const state = value as Partial<Record<keyof DeviceState, unknown>>;
     const on = typeof state.secret === 'string' && typeof state.code === 'string';
     if (!on && state.secret !== null) return null;
+    const base = state.base as Partial<NonNullable<DeviceState['base']>> | null | undefined;
     return {
       secret: on ? (state.secret as string) : null,
       code: on ? (state.code as string) : null,
       remote: (state.remote as DeviceState['remote'] | undefined) ?? null,
       known: (state.known as DeviceState['known'] | undefined) ?? {},
       dirty: state.dirty === true,
+      base:
+        typeof base?.epoch === 'string' && typeof base.stores === 'object' && base.stores !== null
+          ? (base as DeviceState['base'])
+          : null,
       last: typeof state.last === 'number' ? state.last : null,
       previous: strings(state.previous),
     };
@@ -338,6 +357,7 @@ export function saveConnection(connection: Connection): boolean {
     remote: null,
     known: existing?.known ?? {},
     dirty: existing?.dirty ?? false,
+    base: existing?.base ?? null,
     last: null,
     previous,
   });
@@ -351,13 +371,34 @@ class SyncError extends Error {
   }
 }
 
+/** Sync was turned off, or on with another key, while a round waited for the server. */
+class StoppedError extends Error {}
+
+/**
+ * A round reads this device's state at the start, then waits for the server.
+ * Meanwhile the person may turn sync off, or delete all data (which turns it
+ * off first): then the round stops without saving anything, so that stays
+ * done. Call this before every save after waiting.
+ */
+function checkStillOn(secret: string): void {
+  if (loadState()?.secret !== secret) throw new StoppedError();
+}
+
+/** Saves what a round learned onto the state as it is now (see checkStillOn). False if the browser won't save. */
+function updateState(secret: string, change: Partial<DeviceState>): boolean {
+  const current = loadState();
+  if (current?.secret !== secret) throw new StoppedError();
+  return saveState({ ...current, ...change });
+}
+
 async function api(path: string, init: RequestInit = {}, token?: string): Promise<Response> {
   const headers = new Headers(init.headers);
   if (token) headers.set('Authorization', `Bearer ${token}`);
   if (typeof init.body === 'string') headers.set('Content-Type', 'application/json');
   else if (init.body) headers.set('Content-Type', 'application/octet-stream');
   try {
-    return await fetch(`${API}${path}`, {
+    // No answer in time (a network that hangs) counts as no connection too.
+    return await fetchWithLimit(`${API}${path}`, {
       ...init,
       headers,
       credentials: 'omit',
@@ -366,6 +407,52 @@ async function api(path: string, init: RequestInit = {}, token?: string): Promis
   } catch {
     throw new SyncError('offline');
   }
+}
+
+/** Why a round failed. An answer that stopped coming in time is no connection. */
+const problemOf = (error: unknown): SyncProblem =>
+  error instanceof SyncError ? error.problem : isTimeout(error) ? 'offline' : 'server';
+
+/**
+ * Why a store's data here can't be synced, if it can't: it's from a newer
+ * version of the app (or this device last synced with a newer version), or
+ * this version can't read it. The store then loads as empty, which would
+ * look as if everything had been deleted here.
+ */
+function unsyncable(synced: SyncedStore, known: Known | undefined): SyncProblem | null {
+  const status = synced.store.status();
+  if (status === 'newer' || (known?.v ?? 0) > synced.store.version) return 'update-needed';
+  return status === 'unreadable' ? 'unreadable' : null;
+}
+
+/** The items of data saved in an older data version, by id; null if they can't be read. */
+function oldItems(synced: SyncedStore, data: unknown): Map<string, unknown> | null {
+  try {
+    const items: unknown = synced.items(data);
+    if (!Array.isArray(items)) return null;
+    return new Map(items.map((item: Partial<Identified> | null) => [item?.id ?? '', item]));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * What this device knew, brought to each store's current data version after
+ * an update that changed it (merge.ts upgradeKnown). It compares with the
+ * data as still saved in the old version, if the app hasn't saved since.
+ */
+function knownNow(stores: readonly SyncedStore[], known: Record<string, Known>) {
+  let result = known;
+  for (const synced of stores) {
+    const { key, version } = synced.store;
+    const before = known[key];
+    if (before?.v === undefined || before.v >= version || unsyncable(synced, before)) continue;
+    const saved = synced.store.raw();
+    const old = saved?.v === before.v ? oldItems(synced, saved.data) : null;
+    const current = synced.items(synced.store.load());
+    result = { ...result, [key]: upgradeKnown(before, current, old, version) };
+  }
+  return result;
 }
 
 /** A 410 from the server: the copy was deleted, or moved to a new account key. */
@@ -443,7 +530,7 @@ export function createSync(options: {
     const response = await api(`/copy${since === null ? '' : `?since=${since}`}`, {}, token);
     if (response.status === 204) return { kind: 'same' } as Remote;
     if (response.status === 410) throw await goneError(response);
-    if (!response.ok) throw new SyncError(response.status >= 500 ? 'offline' : 'server');
+    if (!response.ok) throw failed(response);
     const copy = (await response.json()) as { version: number; epoch?: string; data?: string };
     if (copy.data === undefined || copy.epoch === undefined) return { kind: 'none' } as Remote;
     let opened: Stores;
@@ -462,7 +549,7 @@ export function createSync(options: {
     const values = valuesOf(remote) as Identified[];
     const upgraded = synced.store.read(remote.v, synced.withItems(synced.store.empty(), values));
     if (upgraded === undefined) throw new SyncError('server');
-    const items = { ...remote.items };
+    const items = byId(remote.items);
     for (const item of synced.items(upgraded)) {
       const entry = items[item.id];
       if (entry && !('deleted' in entry)) items[item.id] = { t: entry.t, value: item };
@@ -470,9 +557,13 @@ export function createSync(options: {
     return { ...remote, v: synced.store.version, items };
   }
 
-  /** The online copies of replaced keys still to move here (gone ones have nothing to bring). */
+  /**
+   * The online copies of replaced keys still to move here (gone ones have
+   * nothing to bring), and the replaced keys whose copy another device moved.
+   */
   async function fetchPrevious(previous: readonly string[]) {
     const copies: (Keys & { secret: Uint8Array<ArrayBuffer>; stores: Stores })[] = [];
+    const movedAway: Uint8Array<ArrayBuffer>[] = [];
     for (const encoded of previous) {
       const secret = fromBase64Url(encoded);
       const { token, key } = await syncKeys(secret);
@@ -481,9 +572,10 @@ export function createSync(options: {
         if (remote.kind === 'copy') copies.push({ secret, token, key, stores: remote.stores });
       } catch (error) {
         if (!isGone(error)) throw error;
+        if (error instanceof SyncError && error.problem === 'moved') movedAway.push(secret);
       }
     }
-    return copies;
+    return { copies, movedAway };
   }
 
   /** What this device sees now, for each store, given what it knew. */
@@ -492,6 +584,8 @@ export function createSync(options: {
     const local: Stores = {};
     let changed = false;
     for (const synced of stores) {
+      const problem = unsyncable(synced, state.known[synced.store.key]);
+      if (problem) throw new SyncError(problem);
       const value = synced.store.load();
       before[synced.store.key] = canonical(value);
       const seen = observe(
@@ -508,9 +602,11 @@ export function createSync(options: {
 
   /** One round. Returns false if it should run again (another device wrote first, or a local edit). */
   async function round(): Promise<boolean> {
-    const state = loadState();
-    if (!state?.secret) return true;
-    const { token, key } = await syncKeys(fromBase64Url(state.secret));
+    const stored = loadState();
+    if (!stored?.secret) return true;
+    const { secret } = stored;
+    const state = { ...stored, known: knownNow(stores, stored.known) };
+    const { token, key } = await syncKeys(fromBase64Url(secret));
     const now = Date.now();
 
     // 1. This device.
@@ -518,24 +614,34 @@ export function createSync(options: {
 
     // 2. The online copy, and any old copies to bring along.
     const remote = await fetchRemote(state.remote?.version ?? null, token, key);
-    const moving = await fetchPrevious(state.previous);
+    const { copies: moving, movedAway } = await fetchPrevious(state.previous);
     if (remote.kind === 'same' && !localChanged && !state.dirty && state.previous.length === 0) {
-      saveState({ ...state, last: now });
+      const upgraded = state.known !== stored.known;
+      updateState(secret, upgraded ? { last: now, known: state.known } : { last: now });
       return true;
     }
 
     // 3. Merge.
     const merged: Stores = {};
+    /** What the online copy holds now, as this device has seen it. */
+    const seen: Record<string, Known> = {};
     let kept = 0;
     for (const synced of stores) {
+      const { version } = synced.store;
       let result = local[synced.store.key] as StoreSnapshot;
       const known = state.known[synced.store.key];
       const online = remote.kind === 'copy' ? remote.stores[synced.store.key] : undefined;
       if (online) {
         const theirs = upgrade(synced, online);
-        // Keeping both needs to know what this device had, in today's data version.
-        if (synced.conflictCopy && known?.v === synced.store.version) {
-          const both = keepBoth(known, result, theirs, synced.conflictCopy, now);
+        seen[synced.store.key] = knownFrom(theirs);
+        // Keeping both compares with the copy as this device last saw it (or
+        // what it knew, if it last saw another copy), in today's data version.
+        const sameCopy = remote.kind === 'copy' && state.base?.epoch === remote.epoch;
+        const base = sameCopy ? state.base?.stores[synced.store.key] : known;
+        // Deleted elsewhere longer ago than the markers last: deleted here too.
+        if (sameCopy && base) result = dropForgotten(result, theirs, base);
+        if (synced.conflictCopy && known?.v === version && base?.v === version) {
+          const both = keepBoth(base, result, theirs, synced.conflictCopy, now);
           result = both.snapshot;
           kept += both.kept;
         }
@@ -548,18 +654,26 @@ export function createSync(options: {
       merged[synced.store.key] = prune(result, now);
     }
 
-    // 4. Save the result here (unless the person edited something meanwhile).
+    // 4. Save the result here (unless the person edited something, or turned
+    // sync off, meanwhile), and show it straight away. The page keeps its own
+    // copy of the data and saves from it: it must never save what it showed
+    // before over the merge, even if the upload below fails.
+    checkStillOn(secret);
     let appChanged = false;
-    for (const synced of stores) {
-      const result = merged[synced.store.key] as StoreSnapshot;
-      const current = synced.store.load();
-      if (canonical(current) !== before[synced.store.key]) return false;
-      const next = synced.withItems(current, valuesOf(result) as Identified[]);
-      if (synced.store.read(synced.store.version, next) === undefined)
-        throw new SyncError('server');
-      if (canonical(next) === before[synced.store.key]) continue;
-      if (!synced.store.save(next)) throw new SyncError('storage');
-      appChanged = true;
+    try {
+      for (const synced of stores) {
+        const result = merged[synced.store.key] as StoreSnapshot;
+        const current = synced.store.load();
+        if (canonical(current) !== before[synced.store.key]) return false;
+        const next = synced.withItems(current, valuesOf(result) as Identified[]);
+        if (synced.store.read(synced.store.version, next) === undefined)
+          throw new SyncError('server');
+        if (canonical(next) === before[synced.store.key]) continue;
+        if (!synced.store.save(next)) throw new SyncError('storage');
+        appChanged = true;
+      }
+    } finally {
+      if (appChanged) options.onChange();
     }
     keptBoth += kept;
 
@@ -574,10 +688,18 @@ export function createSync(options: {
             (synced) =>
               canonical(merged[synced.store.key]) === canonical(remote.stores[synced.store.key]),
           );
+    const knowns = knownsOf(merged);
     if (!same) {
       // Remember the merge first: if the upload fails, the next round uploads it
       // as it is, instead of mistaking it for new edits made on this device.
-      if (!saveState({ ...state, known: knownsOf(merged), dirty: true })) {
+      // And remember what was online, for keeping both versions.
+      const seenOnline =
+        remote.kind === 'copy'
+          ? { epoch: remote.epoch, stores: seen }
+          : remote.kind === 'none'
+            ? null
+            : state.base;
+      if (!updateState(secret, { known: knowns, dirty: true, base: seenOnline })) {
         throw new SyncError('storage');
       }
       const data = await sealStores(key, options.app, merged);
@@ -588,33 +710,34 @@ export function createSync(options: {
         { method: 'PUT', body: JSON.stringify({ base, data }) },
         token,
       );
-      if (response.status === 409) {
-        // Another device wrote first: merge again with the newer copy.
-        if (appChanged) options.onChange();
-        return false;
-      }
+      // Another device wrote first: merge again with the newer copy.
+      if (response.status === 409) return false;
       if (response.status === 410) throw await goneError(response);
       if (response.status === 413) throw new SyncError('too-big');
-      if (!response.ok) throw new SyncError(response.status >= 500 ? 'offline' : 'server');
+      if (!response.ok) throw failed(response);
       online = (await response.json()) as { version: number; epoch: string };
     }
 
-    // 6. Remember.
-    const saved = { ...state, remote: online, known: knownsOf(merged), dirty: false, last: now };
-    if (!saveState(saved)) throw new SyncError('storage');
-    if (appChanged) options.onChange();
+    // 6. Remember. The copy online is now the merge.
+    const base = online ? { epoch: online.epoch, stores: knowns } : null;
+    const saved = { remote: online, known: knowns, dirty: false, base, last: now };
+    if (!updateState(secret, saved)) throw new SyncError('storage');
 
     // 7. The old copies are in the new one now (and their files, re-sealed with
     // the new key, and the app's linked data): delete them, so devices still
-    // using them stop.
+    // using them stop. Old copies another device moved first get their linked
+    // data moved too: that device may have been the lost one.
     if (state.previous.length > 0) {
       for (const old of moving) {
         if (files) await moveFiles(files, old, { token, key });
-        if (linked) await linked.move(old.secret, fromBase64Url(state.secret));
+        if (linked) await linked.move(old.secret, fromBase64Url(secret));
         const response = await api('/copy?moved', { method: 'DELETE' }, old.token);
         if (!response.ok) throw failed(response);
       }
-      if (!saveState({ ...saved, previous: [] })) throw new SyncError('storage');
+      if (linked) {
+        for (const old of movedAway) await linked.move(old, fromBase64Url(secret));
+      }
+      if (!updateState(secret, { previous: [] })) throw new SyncError('storage');
     }
     return true;
   }
@@ -805,7 +928,9 @@ export function createSync(options: {
       problem = noRoom ? 'files-full' : null;
       event = keptBoth > 0 ? 'kept-both' : 'synced';
     } catch (error) {
-      problem = error instanceof SyncError ? error.problem : 'server';
+      // Stopped: sync was turned off meanwhile, which says so itself.
+      if (error instanceof StoppedError) problem = null;
+      else problem = problemOf(error);
       const state = loadState();
       if (state && isGone(error)) {
         saveState(offState(state));
@@ -903,6 +1028,14 @@ export function createSync(options: {
     async deleteOnline() {
       const state = loadState();
       if (!state?.secret) return;
+      // Copies of replaced keys not moved here yet go too, with their linked
+      // data: the lost device that has the old key could still read them.
+      for (const encoded of state.previous) {
+        const old = fromBase64Url(encoded);
+        if (linked) await linked.delete(old);
+        const response = await api('/copy', { method: 'DELETE' }, (await syncKeys(old)).token);
+        if (!response.ok) throw failed(response);
+      }
       if (linked) await linked.delete(fromBase64Url(state.secret));
       const { token } = await syncKeys(fromBase64Url(state.secret));
       const response = await api('/copy', { method: 'DELETE' }, token);
@@ -953,13 +1086,22 @@ export function createSync(options: {
     let changed = false;
     for (const synced of stores) {
       const before = known[synced.store.key];
-      if (!before) continue;
+      if (!before || unsyncable(synced, before)) continue;
       const seen = observe(before, synced.items(synced.store.load()), synced.store.version, now);
       if (!seen.changed) continue;
       known[synced.store.key] = knownFrom(prune(seen.snapshot, now));
       changed = true;
     }
     if (changed) saveState({ ...state, known });
+  }
+
+  // After an update that changed a data version: bring what this device knew
+  // to the new version now, while the data is still saved in the old one (the
+  // app's next save changes that), even if sync is off or there's no connection.
+  const start = loadState();
+  if (start) {
+    const known = knownNow(stores, start.known);
+    if (known !== start.known) saveState({ ...start, known });
   }
 
   // Keep up with other devices while the app is open.

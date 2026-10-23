@@ -27,6 +27,9 @@ test('sets reminders and lists them by when they come next', async ({ page }) =>
   await form.getByRole('button', { name: 'Add reminder' }).click();
   await expect(form.getByText('Write what to be reminded of.')).toBeVisible();
   await expect(form.getByLabel('Remind me to')).toBeFocused();
+  // Enter in the field: focus is there already, so the problem is read out (audit G-3).
+  await form.getByLabel('Remind me to').press('Enter');
+  await expect(form.getByRole('alert')).toHaveText('Remind me to: Write what to be reminded of.');
   await addReminder(page, 'Call the dentist', { time: '09:00' });
   await expect(form.getByText('Choose a time that’s still to come.')).toBeVisible();
   await expect(form.getByLabel('Time')).toBeFocused();
@@ -65,6 +68,23 @@ test('sets reminders and lists them by when they come next', async ({ page }) =>
 
   await page.reload();
   await expect(page.locator('li[data-id]')).toHaveCount(4);
+});
+
+test.describe('on a phone set to Georgian', () => {
+  test.use({ locale: 'ka-GE' });
+
+  test('dates are in English like the rest of the page, with its 24-hour clock', async ({
+    page,
+  }) => {
+    await addReminder(page, 'Water the garden', {
+      date: '2026-10-28',
+      time: '18:30',
+      repeat: 'Every week',
+    });
+    await expect(meta(page, 'Water the garden')).toHaveText(
+      /^Wednesday,? 28 October at 18:30\s*Every Wednesday$/,
+    );
+  });
 });
 
 test('ticks reminders done, puts off overdue ones, and clears done ones', async ({ page }) => {
@@ -108,7 +128,21 @@ test('ticks reminders done, puts off overdue ones, and clears done ones', async 
 
   // Done again: the list of done ones is still open.
   await page.getByRole('checkbox', { name: 'Buy bread: done' }).click();
-  await page.getByRole('button', { name: 'Clear done' }).click();
+
+  // Clearing asks first, and Cancel keeps them (audit G-4).
+  const clearDone = page.getByRole('button', { name: 'Clear done' });
+  await clearDone.click();
+  const ask = page.getByRole('dialog', { name: 'Clear the done reminders?' });
+  await expect(ask).toContainText('The done reminder will be removed. This can’t be undone.');
+  await expect(ask.getByRole('button', { name: 'Cancel' })).toBeFocused();
+  await checkA11y(page, 'clear done dialog');
+  await ask.getByRole('button', { name: 'Cancel' }).click();
+  await expect(ask).toBeHidden();
+  await expect(clearDone).toBeFocused();
+  await expect(done.locator('summary')).toHaveText('Done (1)');
+
+  await clearDone.click();
+  await ask.getByRole('button', { name: 'Clear done' }).click();
   await expect(status(page, 'Cleared the done reminders.')).toBeAttached();
   await expect(done).toBeHidden();
   await expect(page.getByRole('button', { name: 'Buy bread' })).toHaveCount(0);

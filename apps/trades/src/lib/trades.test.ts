@@ -25,6 +25,7 @@ import {
   saveTrade,
   setCurrency,
   setupNames,
+  shownRate,
   stats,
   toCsv,
   toForm,
@@ -93,6 +94,13 @@ describe('reading the form', () => {
       0,
     );
     expect(closed.trade).toMatchObject({ exitDate: '2026-10-03', exitPrice: 155, fees: 2.5 });
+    // A comma before the decimals reads the same ("2,5" isn't 25).
+    const comma = readTrade(
+      { ...form, exitDate: '2026-10-03', exitPrice: '155', fees: '2,5' },
+      'a',
+      0,
+    );
+    expect(comma.trade?.fees).toBe(2.5);
     expect(toForm(closed.trade as Trade)).toEqual({
       ...form,
       symbol: 'AAPL',
@@ -290,12 +298,61 @@ describe('words and numbers', () => {
     expect(formatMoney(1500, 'JPY', { locale: 'en-US' })).toBe('¥1,500');
     expect(formatNumber(1.08523, 'en-US')).toBe('1.08523');
     expect(formatNumber(0.00001234, 'en-US')).toBe('0.00001234');
+    // Tiny prices (some tokens) keep their digits, not "0".
+    expect(formatNumber(1.234e-9, 'en-US')).toBe('0.000000001234');
+    expect(formatNumber(1_000_000_000_000, 'en-US')).toBe('1,000,000,000,000');
     expect(formatPercent(3.2, 'en-US')).toBe('+3.2%');
     expect(formatPercent(-1.05, 'en-US')).toBe('-1.05%');
     expect(formatR(2)).toBe('+2.0R');
     expect(formatR(-0.5)).toBe('-0.5R');
     expect(monthLabel('2026-10', 'en-US')).toBe('October 2026');
     expect(dateLabel('2026-10-19', 'en-US')).toBe('Oct 19, 2026');
+  });
+});
+
+describe('number sizes', () => {
+  it('refuses numbers too big to work with', () => {
+    const big = '2000000000000';
+    expect(readTrade({ ...form, entryPrice: big }, 'a', 0).problems?.entryPrice).toBe(
+      'Enter a smaller number.',
+    );
+    expect(readTrade({ ...form, quantity: big }, 'a', 0).problems?.quantity).toBe(
+      'Enter a smaller number.',
+    );
+    expect(readTrade({ ...form, fees: big }, 'a', 0).problems?.fees).toBe(
+      'Enter a smaller number.',
+    );
+    expect(readTrade({ ...form, quantity: '1000000000000' }, 'a', 0).trade?.quantity).toBe(1e12);
+  });
+});
+
+describe('win rates as shown', () => {
+  it('are whole percent, never 100% with a loss or 0% with a win', () => {
+    expect(shownRate(0.5)).toEqual({ value: 0.5, digits: 0 });
+    expect(shownRate(1)).toEqual({ value: 1, digits: 0 });
+    expect(shownRate(0)).toEqual({ value: 0, digits: 0 });
+    expect(shownRate(249 / 250)).toEqual({ value: 0.996, digits: 1 });
+    expect(shownRate(9999 / 10000)).toEqual({ value: 0.999, digits: 1 });
+    expect(shownRate(1 / 400)).toEqual({ value: 0.003, digits: 1 });
+  });
+});
+
+describe('setups', () => {
+  it('are one setup however they’re capitalised or spaced', () => {
+    const trades = [
+      trade({ id: 'a', setup: 'Breakout', exitPrice: 110 }),
+      trade({ id: 'b', setup: 'breakout', exitPrice: 90 }),
+      trade({ id: 'c', setup: 'Breakout  retest', exitPrice: 110 }),
+      trade({ id: 'd', setup: 'Breakout retest', exitPrice: 110 }),
+    ];
+    expect(bySetup(trades).map((group) => [group.key, group.count])).toEqual([
+      ['Breakout retest', 2],
+      ['Breakout', 2],
+    ]);
+    expect(setupNames(state(...trades))).toEqual(['Breakout', 'Breakout retest']);
+    expect(readTrade({ ...form, setup: '  Breakout   retest ' }, 'a', 0).trade?.setup).toBe(
+      'Breakout retest',
+    );
   });
 });
 

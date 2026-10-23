@@ -5,8 +5,10 @@
  * online library (online.ts) adds photos from other devices and takes this
  * device's online.
  */
+import { focusProblem, showProblem } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
-import { freeable, onlineMessage } from '../lib/online.ts';
+import { setBusy } from '@shkriuss/ui/busy';
+import { canFreeUp, freeable, onlineMessage } from '../lib/online.ts';
 import {
   addedMessage,
   byMonth,
@@ -71,6 +73,8 @@ export function mountPhotos(root: Document): void {
   const viewerTitle = required<HTMLElement>(viewer, '[data-viewer-title]');
   const viewerImage = required<HTMLImageElement>(viewer, '[data-viewer-image]');
   const viewerNone = required<HTMLElement>(viewer, '[data-viewer-none]');
+  const viewerStatus = required<HTMLElement>(viewer, '[data-viewer-status]');
+  const saveOriginalButton = required<HTMLButtonElement>(viewer, '[data-action="save-original"]');
   const deleteDialog = required<HTMLDialogElement>(root, '[data-delete-dialog]');
   const deleteTitle = required<HTMLElement>(deleteDialog, '[data-delete-title]');
   const deleteText = required<HTMLElement>(deleteDialog, '[data-delete-text]');
@@ -100,6 +104,19 @@ export function mountPhotos(root: Document): void {
   const announce = (message: string): void => {
     announcer.textContent = message;
   };
+  /**
+   * Tells the person something that went wrong, where they are: in the photo
+   * viewer while it's open (the page behind it can't be seen or heard), else
+   * in the page's notice.
+   */
+  const problem = (message: string): void => {
+    if (viewer.open) tellInViewer(message, true);
+    else showProblem(message);
+  };
+  function tellInViewer(message: string, isProblem = false): void {
+    viewerStatus.textContent = message;
+    viewerStatus.toggleAttribute('data-problem', isProblem);
+  }
   const find = (id: string | undefined) => photos.find((photo) => photo.id === id);
 
   // ---------- The online library ----------
@@ -128,7 +145,8 @@ export function mountPhotos(root: Document): void {
     if (!state.on) return;
     onlineStatus.textContent = onlineMessage(state);
     unlockForm.hidden = !state.checked || state.unlocked || state.problem === 'not-set-up';
-    freeUp.hidden = freeable(photos).photos.length === 0;
+    // Only once the library has answered: this device's note that photos are online may be old.
+    freeUp.hidden = !canFreeUp(state) || freeable(photos).photos.length === 0;
   }
 
   unlockForm.addEventListener('submit', (event) => {
@@ -151,7 +169,7 @@ export function mountPhotos(root: Document): void {
         offline: 'Couldn’t reach the online library. Check your connection and try again.',
       }[result];
       storageCode.setAttribute('aria-invalid', 'true');
-      storageCode.focus();
+      focusProblem(storageCode, unlockError.textContent ?? '');
     });
   });
 
@@ -241,33 +259,47 @@ export function mountPhotos(root: Document): void {
     if (picked.length > 0 && !busy) void addPhotos(picked);
   });
 
-  /** Reads and saves picked photos one at a time; the same photo isn't added twice. */
+  /**
+   * Reads and saves picked photos one at a time. The same photo isn't added
+   * twice: picking one that's only online (after "Free up space") puts its
+   * original back here, as it's the same file (the same SHA-256).
+   */
   async function addPhotos(picked: readonly File[]): Promise<void> {
     busy = true;
-    addButton.disabled = true;
-    const result: Added = { added: 0, duplicates: 0, notPhotos: 0, failed: 0 };
-    const hashes = new Set(photos.map((photo) => photo.hash));
+    // Busy, not disabled, so focus stays on it while photos are added (audit G-7).
+    setBusy(addButton, true);
+    const result: Required<Added> = {
+      added: 0,
+      restored: 0,
+      duplicates: 0,
+      notPhotos: 0,
+      failed: 0,
+    };
+    const byHash = new Map(photos.map((photo) => [photo.hash, photo]));
     for (const [index, file] of picked.entries()) {
       adding.hidden = false;
       adding.textContent = `Adding photos… ${index + 1} of ${picked.length}`;
       const read = await processFile(file);
+      const known = read.kind === 'photo' ? byHash.get(read.hash) : undefined;
       if (read.kind === 'not-a-photo') result.notPhotos += 1;
       else if (read.kind === 'failed') result.failed += 1;
-      else if (hashes.has(read.hash)) result.duplicates += 1;
+      else if (known?.here) result.duplicates += 1;
       else {
-        const photo: Photo = {
-          id: crypto.randomUUID(),
-          taken: read.taken ?? localDateTime(new Date(file.lastModified || Date.now())),
-          added: Date.now(),
-          name: file.name,
-          type: file.type,
-          size: file.size,
-          width: read.width,
-          height: read.height,
-          hash: read.hash,
-          online: null,
-          here: true,
-        };
+        const photo: Photo = known
+          ? { ...known, here: true }
+          : {
+              id: crypto.randomUUID(),
+              taken: read.taken ?? localDateTime(new Date(file.lastModified || Date.now())),
+              added: Date.now(),
+              name: file.name,
+              type: file.type,
+              size: file.size,
+              width: read.width,
+              height: read.height,
+              hash: read.hash,
+              online: null,
+              here: true,
+            };
         try {
           await savePhoto(photo, {
             id: photo.id,
@@ -275,9 +307,10 @@ export function mountPhotos(root: Document): void {
             view: read.view,
             thumb: read.thumb,
           });
-          hashes.add(photo.hash);
-          photos = [...photos, photo].sort(byNewest);
-          result.added += 1;
+          byHash.set(photo.hash, photo);
+          photos = [...photos.filter((one) => one.id !== photo.id), photo].sort(byNewest);
+          if (known) result.restored += 1;
+          else result.added += 1;
           render();
         } catch {
           result.failed += 1;
@@ -286,12 +319,10 @@ export function mountPhotos(root: Document): void {
     }
     adding.hidden = true;
     busy = false;
-    addButton.disabled = false;
-    announce(
-      result.failed > 0
-        ? `${addedMessage(result)} This device may be out of space.`
-        : addedMessage(result),
-    );
+    setBusy(addButton, false);
+    // Photos that couldn't be saved show in the page's notice too.
+    if (result.failed > 0) showProblem(`${addedMessage(result)} This device may be out of space.`);
+    else announce(addedMessage(result));
     addButton.focus();
     if (result.added > 0) online.added();
   }
@@ -338,11 +369,12 @@ export function mountPhotos(root: Document): void {
     const list = photos.filter((photo) => chosen.has(photo.id));
     let saved = 0;
     for (const photo of list) if (await saveOriginal(photo, false)) saved += 1;
-    announce(
-      saved === list.length
-        ? `Saved ${countLabel(saved, 'original', 'originals')}.`
-        : `Saved ${countLabel(saved, 'original', 'originals')}. ${countLabel(list.length - saved, 'couldn’t', 'couldn’t')} be downloaded: check your connection and try again.`,
-    );
+    if (saved === list.length) announce(`Saved ${countLabel(saved, 'original', 'originals')}.`);
+    else {
+      problem(
+        `Saved ${countLabel(saved, 'original', 'originals')}. ${countLabel(list.length - saved, 'couldn’t', 'couldn’t')} be downloaded: check your connection and try again.`,
+      );
+    }
   }
 
   // ---------- Looking at a photo ----------
@@ -368,6 +400,7 @@ export function mountPhotos(root: Document): void {
     for (const action of ['previous-photo', 'next-photo']) {
       required<HTMLElement>(viewer, `[data-action="${action}"]`).hidden = photos.length < 2;
     }
+    renderSaveOriginal();
     // The screen-sized copy: from this device, or downloaded (photos only online).
     const view =
       (await getFiles(id))?.view ?? (photo.online ? await online.download(photo, 'view') : null);
@@ -402,6 +435,7 @@ export function mountPhotos(root: Document): void {
     const id = viewing?.id;
     if (viewing?.url) URL.revokeObjectURL(viewing.url);
     viewing = null;
+    tellInViewer('');
     viewerImage.removeAttribute('src');
     // Back to the photo in the grid (showing it, if it's further down).
     const at = photos.findIndex((photo) => photo.id === id);
@@ -412,19 +446,39 @@ export function mountPhotos(root: Document): void {
     (monthsList.querySelector<HTMLElement>(`[data-id="${id ?? ''}"]`) ?? libraryHeading).focus();
   });
 
+  /** Photos whose originals are downloading: "Save original" waits for them. */
+  const downloading = new Set<string>();
+
+  /** "Save original" looks unavailable while its photo's original downloads (it still keeps focus). */
+  function renderSaveOriginal(): void {
+    if (viewing && downloading.has(viewing.id)) {
+      saveOriginalButton.setAttribute('aria-disabled', 'true');
+    } else saveOriginalButton.removeAttribute('aria-disabled');
+  }
+
   /**
    * Saves the original file, exactly as it was added: from this device, or
-   * downloaded from the online library. False if it couldn't be.
+   * downloaded from the online library. False if it couldn't be. With `say`,
+   * the viewer shows how it's going ("Downloading the original…").
    */
   async function saveOriginal(photo: Photo, say = true): Promise<boolean> {
-    let original = (await getFiles(photo.id))?.original ?? null;
-    if (!original && photo.online) {
-      if (say) announce('Downloading the original…');
-      original = await online.download(photo, 'original');
+    if (downloading.has(photo.id)) return false;
+    downloading.add(photo.id);
+    let original: Blob | null;
+    try {
+      original = (await getFiles(photo.id))?.original ?? null;
+      if (!original && photo.online) {
+        if (say) tellInViewer('Downloading the original…');
+        renderSaveOriginal();
+        original = await online.download(photo, 'original');
+      }
+    } finally {
+      downloading.delete(photo.id);
+      renderSaveOriginal();
     }
     if (!original) {
       if (say) {
-        announce(
+        problem(
           photo.here
             ? 'Couldn’t find that photo’s original on this device.'
             : 'Couldn’t download the original. Check your connection and try again.',
@@ -433,7 +487,10 @@ export function mountPhotos(root: Document): void {
       return false;
     }
     saveFile(original, downloadName(photo));
-    if (say && !photo.here) announce('Downloaded the original.');
+    if (say && !photo.here) {
+      if (viewer.open) tellInViewer('Downloaded the original.');
+      else announce('Downloaded the original.');
+    }
     return true;
   }
 
@@ -468,7 +525,7 @@ export function mountPhotos(root: Document): void {
       await online.removed(photos.filter((photo) => gone.has(photo.id)));
       await deletePhotos(ids);
     } catch {
-      announce('Couldn’t delete. Please try again.');
+      problem('Couldn’t delete. Please try again.');
       return;
     }
     photos = photos.filter((photo) => !gone.has(photo.id));
@@ -497,7 +554,7 @@ export function mountPhotos(root: Document): void {
 
   function askToFreeUp(): void {
     const { photos: list, bytes } = freeable(photos);
-    if (list.length === 0) return;
+    if (list.length === 0 || !canFreeUp(online.state())) return;
     freeUpText.textContent =
       list.length === 1
         ? `This removes the original of 1 photo (${formatBytes(bytes)}) from this device. It stays in your online library: the photo still shows here, and “Save original” downloads it again.`
@@ -508,13 +565,12 @@ export function mountPhotos(root: Document): void {
 
   freeUpDialog.addEventListener('close', () => {
     if (freeUpDialog.returnValue !== 'confirm') return;
-    const { photos: list, bytes } = freeable(photos);
-    void online.freeUpSpace(list).then(
-      () => {
+    void online.freeUpSpace(freeable(photos).photos).then(
+      (bytes) => {
         announce(`Freed up ${formatBytes(bytes)} on this device.`);
         libraryHeading.focus();
       },
-      () => announce('Couldn’t free up space. Please try again.'),
+      () => problem('Couldn’t free up space. Please try again.'),
     );
   });
 
@@ -547,7 +603,8 @@ export function mountPhotos(root: Document): void {
         stepPhoto(1);
         break;
       case 'save-original':
-        if (current) void saveOriginal(current);
+        // Not again while it's downloading (a second tap would start a second download).
+        if (current && !downloading.has(current.id)) void saveOriginal(current);
         break;
       case 'delete-photo':
         if (current) askToDelete([current.id]);
@@ -585,7 +642,7 @@ export function mountPhotos(root: Document): void {
       for (const id of chosen) if (!known.has(id)) chosen.delete(id);
       render();
     } catch {
-      announce('Couldn’t open the photos on this device. Is storage blocked in this browser?');
+      problem('Couldn’t open the photos on this device. Is storage blocked in this browser?');
     }
   }
 

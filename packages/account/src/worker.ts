@@ -143,7 +143,8 @@ export class AccountLink {
 
       // Fetch it, once.
       if (!record) return problem(410, 'This link has expired.');
-      if (record.data === null) return problem(410, 'This link was already used.');
+      if (record.data === null)
+        return json({ error: 'This link was already used.', used: true }, 410);
       await this.state.storage.put('link', { data: null, expiresAt: record.expiresAt });
       return json({ data: record.data });
     });

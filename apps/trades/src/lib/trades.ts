@@ -10,6 +10,8 @@
  * Water's, so a new device has nothing to win over another's when syncing).
  */
 import { addDays, isIsoDate, type IsoDate } from '@shkriuss/dates';
+import { parseDecimal } from '@shkriuss/ui/numbers';
+import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
 export type Side = 'long' | 'short';
 export const SIDES: readonly Side[] = ['long', 'short'];
@@ -39,7 +41,14 @@ export interface TradesState {
   trades: Trade[];
 }
 
-export const LIMITS = { symbol: 20, setup: 40, notes: 1000, trades: 2000 };
+export const LIMITS = {
+  symbol: 20,
+  setup: 40,
+  notes: 1000,
+  trades: 2000,
+  /** The biggest price, quantity or fee (results stay exact far beyond it). */
+  number: 1e12,
+};
 
 export const emptyTrades = (): TradesState => ({ trades: [] });
 
@@ -95,9 +104,8 @@ export interface TradeForm {
 
 export type Problems = Partial<Record<keyof TradeForm, string>>;
 
-/** A typed number: null when empty, NaN when it isn't one. */
-const parseNumber = (text: string): number | null =>
-  text.trim() === '' ? null : Number(text.trim());
+/** A typed number: null when empty, NaN when it isn't one ("1,25" is 1.25). */
+const parseNumber = parseDecimal;
 
 /**
  * Reads the form into a trade (with the given id), or says what's wrong,
@@ -130,6 +138,10 @@ export function readTrade(
       problems[field] = 'Enter a number above 0.';
       return null;
     }
+    if (value > LIMITS.number) {
+      problems[field] = 'Enter a smaller number.';
+      return null;
+    }
     return value;
   };
   const entryPrice = price('entryPrice', 'Enter the entry price.');
@@ -137,6 +149,7 @@ export function readTrade(
   const quantity = isPrice(quantityValue) ? quantityValue : null;
   if (quantityValue === null) problems.quantity = 'Enter how many.';
   else if (quantity === null) problems.quantity = 'Enter a number above 0.';
+  else if (quantity > LIMITS.number) problems.quantity = 'Enter a smaller number.';
 
   const stop = price('stop', '');
   if (stop !== null && entryPrice !== null && side) {
@@ -165,8 +178,10 @@ export function readTrade(
   const feesValue = parseNumber(form.fees);
   const fees = feesValue ?? 0;
   if (!Number.isFinite(fees) || fees < 0) problems.fees = 'Enter 0 or more.';
+  else if (fees > LIMITS.number) problems.fees = 'Enter a smaller number.';
 
-  const setup = form.setup.trim();
+  // One setup however it's typed: "Breakout  retest" is "Breakout retest".
+  const setup = form.setup.replace(/\s+/g, ' ').trim();
   if (setup.length > LIMITS.setup) problems.setup = `Use ${LIMITS.setup} characters or fewer.`;
   const notes = form.notes.trim();
   if (notes.length > LIMITS.notes) problems.notes = `Use ${LIMITS.notes} characters or fewer.`;
@@ -329,24 +344,37 @@ export interface Group {
   total: number;
 }
 
-function groupBy(trades: readonly Trade[], keyOf: (trade: Trade) => string): Group[] {
+/**
+ * Groups closed trades by `keyOf`. Keys that are the same by `same` (say,
+ * "Breakout" and "breakout") are one group, named as first seen.
+ */
+function groupBy(
+  trades: readonly Trade[],
+  keyOf: (trade: Trade) => string,
+  same: (key: string) => string = (key) => key,
+): Group[] {
   const groups = new Map<string, Group>();
   for (const trade of trades) {
     const result = profit(trade);
     if (result === null) continue;
     const key = keyOf(trade);
-    const group = groups.get(key) ?? { key, count: 0, wins: 0, total: 0 };
+    const group = groups.get(same(key)) ?? { key, count: 0, wins: 0, total: 0 };
     group.count += 1;
     if (result > 0) group.wins += 1;
     group.total = tidy(group.total + result);
-    groups.set(key, group);
+    groups.set(same(key), group);
   }
   return [...groups.values()];
 }
 
+/** A setup's name with single spaces (older trades may have more). */
+const setupName = (setup: string): string => setup.replace(/\s+/g, ' ').trim();
+/** A setup's name for comparing: also lower case, without accents. */
+const setupKey = (setup: string): string => fold(setupName(setup));
+
 /** Results for each setup, the best first. */
 export const bySetup = (trades: readonly Trade[]): Group[] =>
-  groupBy(trades, (trade) => trade.setup).sort(
+  groupBy(trades, (trade) => setupName(trade.setup), setupKey).sort(
     (a, b) => b.total - a.total || a.key.localeCompare(b.key),
   );
 
@@ -390,11 +418,14 @@ export function matchesSearch(trade: Trade, query: string): boolean {
     .every((word) => haystack.includes(word));
 }
 
-/** The setups used so far, for suggestions, in alphabetical order. */
-export const setupNames = (state: TradesState): string[] =>
-  [...new Set(state.trades.map((trade) => trade.setup).filter(Boolean))].sort((a, b) =>
-    a.localeCompare(b),
-  );
+/** The setups used so far, for suggestions, each once (as first typed), in alphabetical order. */
+export function setupNames(state: TradesState): string[] {
+  const names = new Map<string, string>();
+  for (const { setup } of state.trades) {
+    if (setup !== '' && !names.has(setupKey(setup))) names.set(setupKey(setup), setupName(setup));
+  }
+  return [...names.values()].sort((a, b) => a.localeCompare(b));
+}
 
 // ---------- Money and numbers for people ----------
 
@@ -414,9 +445,27 @@ export function formatMoney(
   }).format(amount);
 }
 
-/** A price or amount, with as many decimals as it has (up to 8). */
+/**
+ * A price or amount, with as many decimals as it has (up to 8). Below 1, up
+ * to 8 significant digits, so a price of 0.000000001234 isn't shown as 0.
+ */
 export const formatNumber = (value: number, locale?: string): string =>
-  new Intl.NumberFormat(locale, { maximumFractionDigits: 8 }).format(value);
+  new Intl.NumberFormat(
+    locale,
+    Math.abs(value) < 1 ? { maximumSignificantDigits: 8 } : { maximumFractionDigits: 8 },
+  ).format(value);
+
+/**
+ * A win rate as it's shown: in whole percent, except that it's never
+ * rounded to 100% with a loss, or to 0% with a win (249 won of 250 is
+ * 99.6%, not 100%). `digits` is how many decimals to show.
+ */
+export function shownRate(rate: number): { value: number; digits: number } {
+  const whole = Math.round(rate * 100);
+  if (whole === 100 && rate < 1) return { value: Math.floor(rate * 1000) / 1000, digits: 1 };
+  if (whole === 0 && rate > 0) return { value: Math.ceil(rate * 1000) / 1000, digits: 1 };
+  return { value: rate, digits: 0 };
+}
 
 /** "+3.2%", "-1.05%". */
 export const formatPercent = (value: number, locale?: string): string =>
@@ -429,7 +478,7 @@ export const formatR = (value: number): string =>
   `${value > 0 ? '+' : value < 0 ? '-' : ''}${Math.abs(value).toFixed(1)}R`;
 
 /** "October 2026". */
-export function monthLabel(month: string, locale?: string): string {
+export function monthLabel(month: string, locale = DATE_LOCALE): string {
   const [year, number] = month.split('-').map(Number) as [number, number];
   return new Intl.DateTimeFormat(locale, {
     month: 'long',
@@ -439,7 +488,7 @@ export function monthLabel(month: string, locale?: string): string {
 }
 
 /** "Oct 19, 2026"-style dates. */
-export function dateLabel(date: IsoDate, locale?: string): string {
+export function dateLabel(date: IsoDate, locale = DATE_LOCALE): string {
   const [year, month, day] = date.split('-').map(Number) as [number, number, number];
   return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(
     Date.UTC(year, month - 1, day),

@@ -3,7 +3,7 @@
  * Everything happens on the device; @shkriuss/storage/backup explains how
  * backup files are locked.
  */
-import { disablePush, isPushEnabled } from '@shkriuss/push';
+import { disablePush, isPushDeletePending, isPushEnabled } from '@shkriuss/push';
 import { deleteAll, downloadFile, exportAll, type ExportFile } from '@shkriuss/storage';
 import { deleteAllFiles } from '@shkriuss/storage/files';
 import { isSyncOn, stopSync } from '@shkriuss/sync';
@@ -16,11 +16,24 @@ import {
   restoreAll,
   type BackupFile,
 } from '@shkriuss/storage/backup';
+import { DATE_LOCALE } from '../lib/locale.ts';
+import { focusProblem } from './problem.ts';
+import { setBusy } from './busy.ts';
 
 /** Backup files bigger than this are turned down (apps save far less). */
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
+/**
+ * After "Delete all data", the page reloads once the notification server has
+ * deleted this device's reminders, or after this long (it's tried again later).
+ */
+const PUSH_WAIT_MS = 5000;
 
-const longDate = new Intl.DateTimeFormat(undefined, {
+const wait = (ms: number) =>
+  new Promise<void>((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+
+const longDate = new Intl.DateTimeFormat(DATE_LOCALE, {
   day: 'numeric',
   month: 'long',
   year: 'numeric',
@@ -54,6 +67,7 @@ export function mountDataControls(section: HTMLElement): void {
   const passphrase = find<HTMLInputElement>(backupForm, '[name="passphrase"]');
   const repeat = find<HTMLInputElement>(backupForm, '[name="repeat"]');
   const showPassphrase = find<HTMLInputElement>(backupForm, '[data-show-passphrase]');
+  const backupSubmit = find<HTMLButtonElement>(backupForm, 'button[type="submit"]');
 
   const restoreDialog = find<HTMLDialogElement>(section, '[data-restore-dialog]');
   const restoreForm = find<HTMLFormElement>(restoreDialog, '[data-restore-form]');
@@ -78,10 +92,13 @@ export function mountDataControls(section: HTMLElement): void {
     else input.removeAttribute('aria-invalid');
   }
 
-  /** While working, says what's happening and stops double taps. */
+  /**
+   * While working, says what's happening and stops double taps. The buttons
+   * are busy, not disabled, so focus stays where it is (audit G-7).
+   */
   function busy(dialog: HTMLDialogElement, message: string): void {
     find<HTMLElement>(dialog, '[data-dialog-status]').textContent = message;
-    for (const button of dialog.querySelectorAll('button')) button.disabled = message !== '';
+    for (const button of dialog.querySelectorAll('button')) setBusy(button, message !== '');
   }
 
   for (const dialog of [backupDialog, restoreDialog]) {
@@ -132,11 +149,11 @@ export function mountDataControls(section: HTMLElement): void {
     setError(backupForm, 'passphrase', problems.passphrase);
     setError(backupForm, 'repeat', problems.passphrase ? '' : problems.repeat);
     if (problems.passphrase) {
-      passphrase.focus();
+      focusProblem(passphrase, problems.passphrase);
       return;
     }
     if (problems.repeat) {
-      repeat.focus();
+      focusProblem(repeat, problems.repeat);
       return;
     }
     busy(backupDialog, 'Locking your backup…');
@@ -151,6 +168,8 @@ export function mountDataControls(section: HTMLElement): void {
         busy(backupDialog, '');
         find<HTMLElement>(backupDialog, '[data-dialog-status]').textContent =
           'Something went wrong while locking the backup. Please try again.';
+        // Focus stays where it was; if it was nowhere, it's on the button to try again.
+        if (!backupDialog.contains(document.activeElement)) backupSubmit.focus();
       },
     );
   });
@@ -177,6 +196,8 @@ export function mountDataControls(section: HTMLElement): void {
     restoreSyncWarning.hidden = file === null || !isSyncOn();
     restoreSubmit.hidden = file === null;
     restoreCancel.textContent = file === null ? 'Close' : 'Cancel';
+    // Focus starts on the passphrase, or "Cancel" (first in the dialog), never
+    // on "Restore", which replaces everything (audit G-10).
     restoreDialog.showModal();
   }
 
@@ -270,14 +291,18 @@ export function mountDataControls(section: HTMLElement): void {
   deleteDialog.addEventListener('close', () => {
     if (deleteDialog.returnValue !== 'confirm') return;
     status.textContent = 'Deleting…';
-    // Notifications while the app is closed: delete them on the server too.
-    const push = isPushEnabled() ? disablePush() : Promise.resolve();
-    void push.finally(() => {
-      // Sync stops here first, so the deletion doesn't reach the other devices.
-      stopSync();
-      deleteAll();
-      // Files like photos too, then reload so the app starts fresh from empty storage.
-      void deleteAllFiles().then(() => window.location.reload());
-    });
+    // Notifications while the app is closed: off here at once, and deleted on
+    // the server too. That's noted before anything waits, so if the server
+    // can't be reached, or the page reloads first, the app tries again (and
+    // says so) once it has reloaded.
+    const push = isPushEnabled() || isPushDeletePending() ? disablePush() : Promise.resolve(true);
+    // Everything on this device goes now, without waiting for the network
+    // (audit G-2). Sync stops first, so the deletion doesn't reach the other devices.
+    stopSync();
+    deleteAll();
+    // Files like photos too, then reload so the app starts fresh from empty storage.
+    void deleteAllFiles()
+      .then(() => Promise.race([push, wait(PUSH_WAIT_MS)]))
+      .then(() => window.location.reload());
   });
 }

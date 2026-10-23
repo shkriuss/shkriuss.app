@@ -68,7 +68,9 @@ const Heading = `h${level}` as 'h2' | 'h3';
     </div>
   </div>
   <slot />
-  <p class="muted" role="status" data-sync-status></p>
+  {/* Not a live region: it changes at every sync. What's worth hearing goes to the next one. */}
+  <p class="muted" data-sync-status></p>
+  <p class="visually-hidden" role="status" data-sync-announcer></p>
   <p class="muted">
     <a href={`${hubOrigin}/privacy/#sync`}>What sync sends, and where</a>
   </p>

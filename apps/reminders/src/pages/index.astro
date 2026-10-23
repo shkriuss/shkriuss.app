@@ -247,6 +247,21 @@ import { MAX_TEXT_LENGTH, REPEAT_CHOICES, REPEATS } from '../lib/reminders.ts';
     </form>
   </dialog>
 
+  <dialog class="dialog" aria-labelledby="clear-title" data-clear-dialog>
+    <form method="dialog" class="stack">
+      <h2 id="clear-title">Clear the done reminders?</h2>
+      <p data-clear-text>The done reminders will be removed. This can’t be undone.</p>
+      <div class="cluster">
+        <Button type="submit" value="cancel">
+          Cancel
+        </Button>
+        <Button type="submit" variant="danger" value="confirm">
+          Clear done
+        </Button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog class="dialog" aria-labelledby="delete-title" data-delete-dialog>
     <form method="dialog" class="stack">
       <h2 id="delete-title">Delete this reminder?</h2>

@@ -106,10 +106,16 @@
 
 .site-header__inner {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
   min-height: 3.5rem;
+}
+
+/* With large text, icons keep their size and the row wraps instead (audit G-11). */
+.site-header svg {
+  flex-shrink: 0;
 }
 
 .site-brand {
@@ -163,6 +169,9 @@
 }
 
 .site-footer a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap-target);
   color: var(--color-text);
 }
 
@@ -187,6 +196,10 @@
   color: var(--btn-fg);
   font-weight: var(--weight-semibold);
   line-height: 1.2;
+  text-align: center;
+  /* With very large text, a word longer than the screen breaks instead of
+     making the page scroll sideways (audit G-11). */
+  overflow-wrap: anywhere;
   text-decoration: none;
   cursor: pointer;
   user-select: none;
@@ -205,11 +218,33 @@
   transform: scale(0.97);
 }
 
+/* Unavailable, or busy for a moment (aria-disabled, which keeps focus; see
+   scripts/busy.ts). Plainer, but its text stays readable: --color-text-muted
+   on --color-surface-sunken is contrast-tested. */
 .btn:disabled,
 .btn[aria-disabled='true'] {
-  opacity: 0.55;
+  --btn-bg: var(--color-surface-sunken);
+  --btn-bg-hover: var(--color-surface-sunken);
+  --btn-fg: var(--color-text-muted);
+  --btn-border: var(--color-border-strong);
   cursor: not-allowed;
   transform: none;
+}
+
+.check:has(> input[aria-disabled='true']) {
+  color: var(--color-text-muted);
+}
+
+.check:has(> input[aria-disabled='true']),
+.check input[aria-disabled='true'] {
+  cursor: not-allowed;
+}
+
+@media (forced-colors: active) {
+  .btn[aria-disabled='true'] {
+    border-color: GrayText;
+    color: GrayText;
+  }
 }
 
 .btn--primary {
@@ -470,6 +505,54 @@ select.input {
   background: var(--color-danger-soft);
 }
 
+/*
+ * The page's problem notice ("Couldn’t save…", scripts/problem.ts): at the
+ * top of the page, and still in sight after scrolling down, unless it's too
+ * tall for the screen (large text): then it scrolls with the page
+ * (.problem--tall). Empty, and taking no room, while there's no problem.
+ */
+.problem {
+  position: sticky;
+  inset-block-start: var(--space-2);
+  z-index: 2;
+}
+
+.problem--tall {
+  position: static;
+}
+
+.problem:not(:empty) {
+  margin-block-end: var(--space-5);
+}
+
+.problem__notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding-inline-end: var(--space-1);
+  box-shadow: var(--shadow);
+}
+
+/* With large text, the button goes below the words instead of squeezing them. */
+.problem__notice > p {
+  flex: 1 1 12rem;
+  min-width: 0;
+  align-self: center;
+  font-weight: var(--weight-semibold);
+}
+
+.problem__hide {
+  flex: none;
+  margin-block: calc(-1 * var(--space-2));
+  margin-inline-start: auto;
+}
+
+/* While it stays in sight, what gets focus scrolls into view below it, not under it. */
+:root:has(.problem:not(:empty, .problem--tall)) {
+  scroll-padding-block-start: calc(var(--space-6) + 12rem);
+}
+
 /* ---------- Progress ---------- */
 
 /* <progress class="progress" max="…" value="…">: how far a download or a long task has got. */
@@ -569,10 +652,12 @@ select.input {
 
 .theme-switch {
   display: inline-flex;
+  flex-wrap: wrap;
   gap: var(--space-1);
   padding: var(--space-1);
   border: var(--border-width) solid var(--color-border-strong);
-  border-radius: var(--radius-full);
+  /* A pill on one row; with large text it wraps, with rounded corners (audit G-11). */
+  border-radius: calc(var(--tap-target) / 2 + var(--space-1));
 }
 
 .theme-switch__option {
@@ -613,5 +698,14 @@ select.input {
 @media (forced-colors: active) {
   .theme-switch__option:has(input:checked) {
     outline: 2px solid CanvasText;
+  }
+
+  /* Contrast themes replace backgrounds, so a toggle that's on uses the theme's
+     own "selected" colours (audit G-6). */
+  .btn[aria-pressed='true'] {
+    forced-color-adjust: none;
+    border-color: SelectedItem;
+    background: SelectedItem;
+    color: SelectedItemText;
   }
 }

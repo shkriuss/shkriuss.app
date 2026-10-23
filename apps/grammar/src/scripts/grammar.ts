@@ -7,6 +7,7 @@
  */
 import { createStore } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
+import { reportSave, type ReportSaveOptions } from '@shkriuss/ui/problem';
 import { offlineCopySaved } from '@shkriuss/ui/service-worker';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { startWorker } from '@shkriuss/ui/worker';
@@ -101,14 +102,16 @@ export function mountGrammar(root: Document): void {
     if (status.textContent !== text) status.textContent = text;
   };
 
-  function save(next: GrammarState): void {
+  /** Saves `next`; false (and the person is told) if it couldn't be saved. */
+  function save(next: GrammarState, options?: ReportSaveOptions): boolean {
     state = next;
-    if (!store.save(state)) announce('Couldn’t save. Your browser may be blocking storage.');
+    return reportSave(store.save(state), options);
   }
 
   function saveText(): void {
     window.clearTimeout(saveTimer);
-    if (textarea.value !== state.text) save({ ...state, text: textarea.value });
+    // Saved after each pause in typing: a problem is read out once, not at every pause.
+    if (textarea.value !== state.text) save({ ...state, text: textarea.value }, { repeat: false });
   }
 
   // ---------- The checker ----------
@@ -123,6 +126,8 @@ export function mountGrammar(root: Document): void {
     if (phase !== 'ready') return;
     const text = textarea.value;
     if (text.trim() === '') {
+      // An answer for older text may still come: it no longer counts.
+      lastId += 1;
       issues = [];
       checkedText = text;
       render();
@@ -230,12 +235,14 @@ export function mountGrammar(root: Document): void {
     noWords.hidden = state.words.length > 0;
   }
 
-  function setWords(words: string[]): void {
-    save({ ...state, words });
+  /** Changes the dictionary; false if it couldn't be saved. */
+  function setWords(words: string[]): boolean {
+    const saved = save({ ...state, words });
     sync.changed();
     tell({ type: 'words', words });
     renderWords();
     check();
+    return saved;
   }
 
   /** The English choice or the dictionary changed elsewhere (another tab or device). */
@@ -310,8 +317,7 @@ export function mountGrammar(root: Document): void {
       const word = wordToAdd(issue);
       if (word === undefined) return;
       focusAfterCheck = index;
-      setWords(addWord(state.words, word));
-      announce(`Added “${word}” to your dictionary.`);
+      if (setWords(addWord(state.words, word))) announce(`Added “${word}” to your dictionary.`);
       return;
     }
     const fix = fixesToShow(issue)[Number(button.dataset['fix'])];
@@ -332,8 +338,9 @@ export function mountGrammar(root: Document): void {
     if (!item || word === undefined) return;
     // Keep keyboard focus nearby: on the next word (or the one before).
     const position = state.words.indexOf(word);
-    setWords(removeWord(state.words, word));
-    announce(`Removed “${word}” from your dictionary.`);
+    if (setWords(removeWord(state.words, word))) {
+      announce(`Removed “${word}” from your dictionary.`);
+    }
     const buttons = wordList.querySelectorAll<HTMLElement>('button');
     (buttons[Math.min(position, buttons.length - 1)] ?? textarea).focus();
   });

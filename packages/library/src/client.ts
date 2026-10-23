@@ -11,8 +11,9 @@
  *
  * Every key comes from the app's own key from the account (sync). The
  * library's id and the keys its items were sealed with are kept in the
- * app's synced copy (a LibraryRecord), so they move with it to a new
- * account key; new items are always sealed with the newest key.
+ * app's synced copy (a LibraryRecord, one per library), so they move with it
+ * to a new account key; new items are always sealed with the newest key.
+ * useLibrary() says which library to use.
  */
 import {
   fromBase64Url,
@@ -40,18 +41,31 @@ export interface LibraryKey {
   key: string;
 }
 
-/** Kept in the app's synced copy: which library, and every key its items were sealed with. */
+/**
+ * Kept in the app's synced copy, one per library: which library, and every
+ * key its items were sealed with.
+ */
 export interface LibraryRecord {
-  id: 'library';
+  /**
+   * "library:" and the library's id, so a merge keeps every library's record
+   * (with one record for all, the newest could replace the real library's).
+   * Older versions saved one record, "library": see tidyRecords().
+   */
+  id: string;
   library: string;
   keys: LibraryKey[];
+  /** Another device with an old account key moved it first (perhaps a lost one): it's theirs now. */
+  taken?: true;
 }
+
+const recordId = (library: string) => `library:${library}`;
 
 export const isLibraryRecord = (value: unknown): value is LibraryRecord => {
   if (typeof value !== 'object' || value === null) return false;
   const record = value as Record<string, unknown>;
   return (
-    record['id'] === 'library' &&
+    (record['id'] === 'library' || record['id'] === recordId(String(record['library']))) &&
+    (record['taken'] === undefined || record['taken'] === true) &&
     typeof record['library'] === 'string' &&
     /^[A-Za-z0-9_-]{43}$/.test(record['library']) &&
     Array.isArray(record['keys']) &&
@@ -81,18 +95,91 @@ async function fromSecret(secret: Uint8Array<ArrayBuffer>) {
 }
 
 /**
- * The record to keep in the copy: a new library made from this key, or the
- * one there is, with this key added if it isn't in it yet (after the account
- * key was replaced). Two devices with the same key make the same record.
+ * The record to keep in the copy: a new library made from this key, or
+ * `existing` with this key added if it isn't in it yet (once the library was
+ * moved to it, after the account key was replaced). Two devices with the
+ * same key make the same record.
  */
 export async function libraryRecord(
   secret: Uint8Array<ArrayBuffer>,
   existing: LibraryRecord | undefined,
 ): Promise<LibraryRecord> {
   const mine = await fromSecret(secret);
-  if (!existing) return { id: 'library', library: mine.library, keys: [mine.key] };
+  if (!existing) return { id: recordId(mine.library), library: mine.library, keys: [mine.key] };
   if (existing.keys.some((key) => key.id === mine.key.id)) return existing;
   return { ...existing, keys: [...existing.keys, mine.key] };
+}
+
+/**
+ * Records as this version keeps them: one per library. The one record older
+ * versions saved ("library") gets its library's id, and two records of the
+ * same library become one. The same list if nothing changes.
+ */
+export function tidyRecords(records: readonly LibraryRecord[]): readonly LibraryRecord[] {
+  const libraries = new Set(records.map((record) => record.library));
+  if (
+    libraries.size === records.length &&
+    records.every((record) => record.id === recordId(record.library))
+  ) {
+    return records;
+  }
+  const byLibrary = new Map<string, LibraryRecord>();
+  for (const record of records) {
+    const known = byLibrary.get(record.library);
+    const keys = known?.keys ?? [];
+    const added = record.keys.filter((key) => !keys.some((other) => other.id === key.id));
+    const taken = known?.taken ?? record.taken;
+    byLibrary.set(record.library, {
+      id: recordId(record.library),
+      library: record.library,
+      keys: [...keys, ...added],
+      ...(taken ? { taken } : {}),
+    });
+  }
+  return [...byLibrary.values()];
+}
+
+/** Whether a key is in the record: the library was made with it, or moved to it. */
+const hasKey = (record: LibraryRecord, keyId: string) =>
+  record.keys.some((key) => key.id === keyId);
+
+/**
+ * The library this app key can use, of those in `records`: one it made or
+ * was moved to (a record from another account, or not moved yet, doesn't
+ * have its key), and that wasn't taken. Of several, the oldest: the one that
+ * has come through the most account keys, as each move adds one.
+ */
+export async function usableRecord(
+  secret: Uint8Array<ArrayBuffer>,
+  records: readonly LibraryRecord[],
+): Promise<LibraryRecord | undefined> {
+  const { key } = await fromSecret(secret);
+  return records
+    .filter((record) => !record.taken && hasKey(record, key.id))
+    .sort((a, b) => b.keys.length - a.keys.length || (a.library < b.library ? -1 : 1))[0];
+}
+
+/**
+ * Which library to use with this app key (usableRecord), and the records to
+ * keep, tidied. When there's none, a new library is made from this key, but
+ * only if `mayStart`: once a sync with the account has finished, so a
+ * library that's already there isn't missed. Records come back as they
+ * were if nothing changed.
+ */
+export async function useLibrary(
+  secret: Uint8Array<ArrayBuffer>,
+  records: readonly LibraryRecord[],
+  mayStart: boolean,
+): Promise<{ record: LibraryRecord | undefined; records: readonly LibraryRecord[] }> {
+  const tidy = tidyRecords(records);
+  const found = await usableRecord(secret, tidy);
+  if (found || !mayStart) return { record: found, records: tidy };
+  const made = await libraryRecord(secret, undefined);
+  // This key's own library is there, and was taken: there's no other to make.
+  if (tidy.some((record) => record.library === made.library)) {
+    return { record: undefined, records: tidy };
+  }
+  return { record: made, records: [...tidy, made] };
 }
 
 export interface LibraryAccess {
@@ -149,10 +236,17 @@ export class LibraryError extends Error {
   readonly problem: LibraryProblem;
   /** For 'daily-limit': when uploads can start again (ms). */
   readonly retryAt: number | null;
-  constructor(problem: LibraryProblem, retryAt: number | null = null) {
+  /** The server's answer, if it gave one. */
+  readonly status: number | null;
+  constructor(
+    problem: LibraryProblem,
+    retryAt: number | null = null,
+    status: number | null = null,
+  ) {
     super(problem);
     this.problem = problem;
     this.retryAt = retryAt;
+    this.status = status;
   }
 }
 
@@ -160,21 +254,26 @@ export class LibraryError extends Error {
 async function failure(response: Response): Promise<LibraryError> {
   const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
   const flag = (name: string) => body[name] === true;
-  if (response.status === 410) return new LibraryError('moved');
-  if (response.status === 423) return new LibraryError('locked');
-  if (response.status === 507) return new LibraryError('full');
-  if (response.status === 413) return new LibraryError('too-big');
-  if (response.status === 409) return new LibraryError(flag('deleted') ? 'deleted' : 'exists');
-  if (response.status === 403 && flag('wrong')) return new LibraryError('wrong-code');
+  const error = (problem: LibraryProblem, retryAt: number | null = null) =>
+    new LibraryError(problem, retryAt, response.status);
+  if (response.status === 410) return error('moved');
+  if (response.status === 423) return error('locked');
+  if (response.status === 507) return error('full');
+  if (response.status === 413) return error('too-big');
+  if (response.status === 409) return error(flag('deleted') ? 'deleted' : 'exists');
+  if (response.status === 403 && flag('wrong')) return error('wrong-code');
   if (response.status === 429) {
-    if (flag('tooMany')) return new LibraryError('too-many-tries');
-    const retryAt = typeof body['retryAt'] === 'number' ? body['retryAt'] : null;
-    return new LibraryError('daily-limit', retryAt);
+    if (flag('tooMany')) return error('too-many-tries');
+    return error('daily-limit', typeof body['retryAt'] === 'number' ? body['retryAt'] : null);
   }
-  if (response.status === 503 && flag('notSetUp')) return new LibraryError('not-set-up');
-  if (response.status === 503 && flag('wiping')) return new LibraryError('wiping');
-  return new LibraryError(response.status >= 500 ? 'offline' : 'server');
+  if (response.status === 503 && flag('notSetUp')) return error('not-set-up');
+  if (response.status === 503 && flag('wiping')) return error('wiping');
+  return error(response.status >= 500 ? 'offline' : 'server');
 }
+
+/** "This isn't your library": this key's token isn't the library's. */
+const isRefused = (error: unknown): boolean =>
+  error instanceof LibraryError && error.problem === 'server' && error.status === 403;
 
 /** An item from the list of changes, its details opened. */
 export interface LibraryItem {
@@ -393,29 +492,57 @@ export function libraryApi(access: LibraryAccess) {
 export type LibraryApi = ReturnType<typeof libraryApi>;
 
 /**
- * For createSync's `linked` option: the library is deleted with the app's
- * online copy, and moved with it to a new account key. `record` reads the
- * library's record from the synced copy.
+ * For createSync's `linked` option: the libraries are deleted with the app's
+ * online copy, and moved with it to a new account key. `load` reads the
+ * libraries' records from the synced copy; `save` saves them there (false if
+ * it couldn't).
  */
-export function linkedLibrary(record: () => LibraryRecord | undefined): LinkedData {
+export function linkedLibrary(
+  load: () => readonly LibraryRecord[],
+  save: (records: readonly LibraryRecord[]) => boolean = () => true,
+): LinkedData {
   return {
     async delete(secret) {
-      const found = record();
-      if (!found) return;
-      try {
-        await libraryApi(await libraryAccess(secret, found)).wipe();
-      } catch (error) {
-        // Not this key's library (or moved away from it): nothing of ours to delete.
-        if (!(error instanceof LibraryError && ['server', 'moved'].includes(error.problem))) {
-          throw error;
+      const { key } = await fromSecret(secret);
+      for (const found of tidyRecords(load())) {
+        // Another account's, not moved to this key, or taken: nothing of ours to delete.
+        if (found.taken || !hasKey(found, key.id)) continue;
+        try {
+          await libraryApi(await libraryAccess(secret, found)).wipe();
+        } catch (error) {
+          // Moved on to a newer key: not ours any more. Anything else, like a
+          // refusal, stops the deletion: it never says it's done when it isn't.
+          if (!(error instanceof LibraryError && error.problem === 'moved')) throw error;
         }
       }
     },
+    /**
+     * Every library the old key could reach (its record has that key), not
+     * only the one in use, gets the new key's token, and the new key in its
+     * record. Records without the old key can't be moved with it. A library
+     * that another device with the old key moved first (perhaps the lost one)
+     * is theirs: it's marked as taken, without failing, so the old copy is
+     * retired all the same and the app starts a new library.
+     */
     async move(from, to) {
-      const found = record();
-      if (!found) return;
-      const old = await libraryAccess(from, found);
-      await libraryApi(await libraryAccess(to, found)).move(old.token);
+      const old = await fromSecret(from);
+      const records = tidyRecords(load());
+      const moved: LibraryRecord[] = [];
+      for (const found of records) {
+        if (found.taken || !hasKey(found, old.key.id)) {
+          moved.push(found);
+          continue;
+        }
+        try {
+          await libraryApi(await libraryAccess(to, found)).move(old.token);
+          moved.push(await libraryRecord(to, found));
+        } catch (error) {
+          if (!isRefused(error)) throw error;
+          moved.push({ ...found, taken: true });
+        }
+      }
+      const changed = moved.some((found, index) => found !== records[index]);
+      if (changed && !save(moved)) throw new Error('Couldn’t save the library’s record.');
     },
   };
 }

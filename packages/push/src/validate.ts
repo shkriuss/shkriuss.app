@@ -3,7 +3,7 @@
  * Requests come from anyone on the internet, so the limits matter.
  */
 import { fromBase64Url } from './base64.ts';
-import { isDate, isTimeZone, parseStamp, REPEATS, type Timing } from './schedule.ts';
+import { canonicalTimeZone, isDate, parseStamp, REPEATS, type Timing } from './schedule.ts';
 
 export const LIMITS = {
   /** Scheduled notifications per device. */
@@ -17,12 +17,17 @@ export const LIMITS = {
   /** Reminders up to 4 weeks before, or up to a day after (all-day events at 9:00). */
   maxOffsetBefore: 4 * 7 * 1440,
   maxOffsetAfter: 1440,
-  /** A whole request (500 messages of 4 KB as base64 is about 2.8 MB). */
-  requestBytes: 3_000_000,
+  /**
+   * All of a device's messages together, as sent (base64url characters). The
+   * server keeps a schedule as one value, which can be at most 2 MB.
+   */
+  payloadsLength: 1_500_000,
+  /** A whole request: the messages, and room for the rest (about 200 characters an entry). */
+  requestBytes: 1_650_000,
 } as const;
 
 export interface ScheduleEntry extends Timing {
-  /** The app's own id for this notification, e.g. an event id. */
+  /** Tells the entries apart. Today's apps send a number, never their own ids. */
   id: string;
   /** The encrypted message (encrypt.ts), base64url. */
   payload: string;
@@ -87,10 +92,12 @@ function payloadProblem(payload: unknown): string | undefined {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-function entryProblem(entry: unknown): string | undefined {
-  if (!isRecord(entry)) return 'Each entry must be an object.';
-  const { id, start, repeat, until, offset } = entry;
-  if (typeof id !== 'string' || id.length === 0 || id.length > LIMITS.idLength) return 'Bad id.';
+/**
+ * A reason the server won't take this timing, or undefined. Apps check their
+ * reminders with it too, so one odd reminder can't stop the others.
+ */
+export function timingProblem(timing: Record<keyof Timing, unknown>): string | undefined {
+  const { start, repeat, until, offset } = timing;
   if (typeof start !== 'string' || !parseStamp(start)) return 'Bad start.';
   if (typeof repeat !== 'string' || !REPEATS.includes(repeat as Timing['repeat'])) {
     return 'Bad repeat.';
@@ -103,7 +110,14 @@ function entryProblem(entry: unknown): string | undefined {
   ) {
     return 'Bad offset.';
   }
-  return payloadProblem(entry['payload']);
+  return undefined;
+}
+
+function entryProblem(entry: unknown): string | undefined {
+  if (!isRecord(entry)) return 'Each entry must be an object.';
+  const { id, start, repeat, until, offset } = entry;
+  if (typeof id !== 'string' || id.length === 0 || id.length > LIMITS.idLength) return 'Bad id.';
+  return timingProblem({ start, repeat, until, offset }) ?? payloadProblem(entry['payload']);
 }
 
 /** Checks a "replace my schedule" request. */
@@ -111,20 +125,27 @@ export function checkSchedule(value: unknown, allowLocal = false): Checked<Sched
   if (!isRecord(value)) return { ok: false, error: 'Expected an object.' };
   const endpointError = endpointProblem(value['endpoint'], allowLocal);
   if (endpointError) return { ok: false, error: endpointError };
-  const { timeZone, entries } = value;
-  if (typeof timeZone !== 'string' || timeZone.length > 64 || !isTimeZone(timeZone)) {
-    return { ok: false, error: 'Unknown time zone.' };
-  }
+  const { entries } = value;
+  // Kept, and worked with, under the zone's own name only (however it was spelt).
+  const timeZone =
+    typeof value['timeZone'] === 'string' && value['timeZone'].length <= 64
+      ? canonicalTimeZone(value['timeZone'])
+      : null;
+  if (!timeZone) return { ok: false, error: 'Unknown time zone.' };
   if (!Array.isArray(entries) || entries.length > LIMITS.entries) {
     return { ok: false, error: `Up to ${LIMITS.entries} entries.` };
   }
   const ids = new Set<string>();
+  let payloadsLength = 0;
   for (const [index, entry] of entries.entries()) {
     const error = entryProblem(entry);
     if (error) return { ok: false, error: `Entry ${index}: ${error}` };
-    const id = (entry as ScheduleEntry).id;
+    const { id, payload } = entry as ScheduleEntry;
     if (ids.has(id)) return { ok: false, error: `Entry ${index}: id used twice.` };
     ids.add(id);
+    payloadsLength += payload.length;
+    if (payloadsLength > LIMITS.payloadsLength)
+      return { ok: false, error: 'Messages too big in all.' };
   }
   // Keep only the fields we know (nothing else gets stored).
   const clean = (entries as ScheduleEntry[]).map(

@@ -4,7 +4,8 @@
  * 1. CSP safety: our Content Security Policy blocks inline scripts, inline
  *    styles and inline event handlers, so built pages must not contain any.
  * 2. Size budgets: each page's HTML, CSS and JavaScript (gzipped) must stay
- *    under a limit, so sites stay fast on slow phones and networks.
+ *    under a limit, so sites stay fast on slow phones and networks. The JS
+ *    includes the files a page's scripts import before running.
  * 3. File sizes: Cloudflare serves files of up to 25 MiB each, so bigger
  *    ones (like a downloadable model) must be split into parts.
  * 4. Spacing: a word running into a link ("run by<a"), which happens when a
@@ -20,11 +21,15 @@ export interface Budget {
   js: number;
 }
 
-/** Per-page limits. Raise them only with a good reason (see docs/adr). */
+/**
+ * Per-page limits. Raise them only with a good reason (see docs/adr). JS
+ * counts every file a page's scripts import before they run (like the shared
+ * sync client), which wasn't counted before 35 KB replaced 25 KB (ADR 0007).
+ */
 export const DEFAULT_BUDGET: Budget = {
   html: 20_000,
   css: 15_000,
-  js: 25_000,
+  js: 35_000,
 };
 
 /** Returns a description of every CSP problem in the HTML (empty when clean). */
@@ -57,6 +62,38 @@ export function pageAssets(html: string): { css: string[]; js: string[] } {
     .map((match) => match[1])
     .filter((src): src is string => Boolean(src?.startsWith('/')));
   return { css, js };
+}
+
+/**
+ * Files a script imports before it runs ("./x.js" in `import … from`,
+ * `import "…"` and `export … from`), as paths from the site's root, given
+ * the script's own path. Imports run later (`import("…")`, like a worker or
+ * Grammar's checker) aren't included: they're not part of opening the page.
+ */
+export function staticImports(script: string, path: string): string[] {
+  const found = new Set<string>();
+  for (const match of script.matchAll(
+    /\b(?:import|export)\s*(?:[^'"();]*?\bfrom\s*)?["'](\.{1,2}\/[^"']+\.js)["']/g,
+  )) {
+    const specifier = match[1];
+    if (specifier) found.add(new URL(specifier, `https://site${path}`).pathname);
+  }
+  return [...found];
+}
+
+/** A page's scripts and every file they import before running, each once. */
+export function scriptsLoaded(
+  entries: readonly string[],
+  read: (path: string) => string,
+): string[] {
+  const seen = new Set<string>();
+  const queue = [...entries];
+  for (let path = queue.shift(); path !== undefined; path = queue.shift()) {
+    if (seen.has(path)) continue;
+    seen.add(path);
+    queue.push(...staticImports(read(path), path));
+  }
+  return [...seen];
 }
 
 export function gzipSize(content: string | Uint8Array): number {

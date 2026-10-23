@@ -10,6 +10,8 @@
 import {
   disablePush,
   enablePush,
+  finishPushDelete,
+  isPushDeletePending,
   isPushEnabled,
   PushError,
   pushSupport,
@@ -18,6 +20,7 @@ import {
   type Notice,
   type PushErrorCode,
 } from '@shkriuss/push';
+import { setBusy } from './busy.ts';
 
 /** Waits this long after a change before uploading, so quick edits go up together. */
 const SYNC_DELAY_MS = 800;
@@ -54,12 +57,14 @@ export function mountPushControls(block: HTMLElement, options: PushControlsOptio
 
   const ON = `On: reminders arrive even when ${app} is closed.`;
   const OFF = `Off: reminders only arrive while ${app} is open.`;
+  const OFF_NOT_DELETED = `Off, but your reminders couldn’t be removed from ${app}'s server yet. ${app} will try again when it’s open and online.`;
   const PROBLEMS: Record<PushErrorCode, string> = {
     unsupported: `This browser can’t get notifications while ${app} is closed.`,
     denied: `Notifications are blocked for ${app}. To allow them, change this site’s settings in your browser.`,
     unavailable:
       'This browser couldn’t connect to a push service. On phones without Google services, like GrapheneOS, use a browser with UnifiedPush, such as IronFox.',
     server: `Couldn’t reach ${app}'s notification service. Check your connection and try again.`,
+    refused: `${app}'s notification service had a problem. Please try again later.`,
   };
   const problemOf = (error: unknown): string =>
     error instanceof PushError ? PROBLEMS[error.code] : 'Something went wrong. Please try again.';
@@ -67,8 +72,10 @@ export function mountPushControls(block: HTMLElement, options: PushControlsOptio
   function render(message?: string): void {
     const on = isPushEnabled();
     toggle.checked = on;
+    // Turned off while focus is on "Send a test notification": it goes to the switch.
+    if (!on && testRow.contains(document.activeElement)) toggle.focus();
     testRow.hidden = !on;
-    status.textContent = message ?? (on ? ON : OFF);
+    status.textContent = message ?? (on ? ON : isPushDeletePending() ? OFF_NOT_DELETED : OFF);
   }
 
   function upload(force = false): void {
@@ -87,6 +94,20 @@ export function mountPushControls(block: HTMLElement, options: PushControlsOptio
     );
   }
 
+  /**
+   * Brings the server up to date: refreshes its copy now and then (and
+   * notices a renewed subscription), or finishes deleting reminders that
+   * were turned off while it couldn't be reached.
+   */
+  function refresh(): void {
+    if (isPushEnabled()) upload();
+    else if (isPushDeletePending()) {
+      void finishPushDelete().then(() => {
+        if (!isPushEnabled()) render();
+      });
+    }
+  }
+
   function sync(): void {
     if (!isPushEnabled()) return;
     window.clearTimeout(timer);
@@ -96,7 +117,8 @@ export function mountPushControls(block: HTMLElement, options: PushControlsOptio
   }
 
   toggle.addEventListener('change', () => {
-    toggle.disabled = true;
+    // Busy, not disabled, so focus stays on the switch while it waits (audit G-7).
+    setBusy(toggle, true);
     if (toggle.checked) {
       status.textContent = 'Turning on…';
       enablePush()
@@ -111,21 +133,22 @@ export function mountPushControls(block: HTMLElement, options: PushControlsOptio
           },
         )
         .finally(() => {
-          toggle.disabled = false;
+          setBusy(toggle, false);
           options.onChange?.();
         });
     } else {
       status.textContent = 'Turning off…';
       void disablePush().finally(() => {
-        render(OFF);
-        toggle.disabled = false;
+        // Says so if the reminders couldn't be removed from the server yet.
+        render();
+        setBusy(toggle, false);
         options.onChange?.();
       });
     }
   });
 
   testButton.addEventListener('click', () => {
-    testButton.disabled = true;
+    setBusy(testButton, true);
     sendTestPush(app, 'Notifications are working.')
       .then(
         () => {
@@ -136,15 +159,20 @@ export function mountPushControls(block: HTMLElement, options: PushControlsOptio
         },
       )
       .finally(() => {
-        testButton.disabled = false;
+        setBusy(testButton, false);
       });
   });
 
   const support = pushSupport();
   if (support === 'supported') {
     render();
-    // Refresh the server's copy now and then (and notice a renewed subscription).
-    if (isPushEnabled()) upload();
+    refresh();
+    window.addEventListener('online', refresh);
+    // Back on screen, maybe in another time zone after a trip: the server's copy
+    // follows (an unchanged schedule isn't sent again).
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') refresh();
+    });
   } else {
     toggle.disabled = true;
     status.textContent =

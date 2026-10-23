@@ -1,14 +1,17 @@
 // Photos' online library (docs/adr/0016-online-photo-library.md): photos go
 // online, sealed, once the storage code is given; other devices see them and
 // download only what they need; deleting goes everywhere; "Free up space"
-// keeps photos viewable. The shared tests (tests/e2e/sync.spec.ts) cover
-// turning sync on and off, deleting the online copy and a new account key.
+// keeps photos viewable; after a new account key or with another account,
+// each device uses the right library. The shared tests (tests/e2e/sync.spec.ts)
+// cover turning sync on and off, deleting the online copy and a new account key.
 import { readFile } from 'node:fs/promises';
-import type { Page } from '@playwright/test';
+import type { Page, Route } from '@playwright/test';
 import {
   createAccount,
   hubURL,
+  oldCopyMoved,
   otherDevice,
+  replaceKey,
   signInWithKey,
   turnOnSync,
 } from '../../../tests/e2e/account.ts';
@@ -41,6 +44,42 @@ async function unlock(page: Page, code = TEST_STORAGE_CODE): Promise<void> {
   await page.getByLabel('Storage code').fill(code);
   await page.getByRole('button', { name: 'Unlock online storage' }).click();
 }
+
+/** A photo on this device, online with the storage code given, after turning on sync. */
+async function photoOnline(page: Page, name: string): Promise<void> {
+  const taken = withExif(await picture(page, { width: 800, height: 600 }), '2026:10:21 14:03:22');
+  await addPhotos(page, [jpeg(name, taken)]);
+  await turnOnSync(page, 'Photos');
+  await unlock(page);
+  await expect(onlineStatus(page)).toHaveText(/^Online: 1 photo · /, ONLINE);
+}
+
+/** "Turn on sync" from the hub's list of apps, with whichever account the hub has now. */
+async function connectAgain(page: Page, appURL: string): Promise<void> {
+  await page.goto(`${appURL}/#sync=connect`);
+  await page.getByRole('button', { name: 'Turn on sync for Photos' }).click();
+  await page.waitForURL(`${appURL}/`);
+}
+
+/** Resolves once this device's next change to the online copy has gone up. */
+const copyUploaded = (page: Page) =>
+  page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/api/sync/copy') &&
+      response.request().method() === 'PUT' &&
+      response.ok(),
+  );
+
+/** Resolves once the record of a library this device started is in the online copy. */
+const recordUploaded = (page: Page) =>
+  page.waitForFunction(() => {
+    const state = JSON.parse(localStorage.getItem('shkriuss-device:sync') ?? 'null') as {
+      dirty?: boolean;
+      known?: Record<string, { items: Record<string, unknown> }>;
+    } | null;
+    const known = Object.keys(state?.known?.['shkriuss:library']?.items ?? {});
+    return state?.dirty === false && known.some((id) => id.startsWith('library'));
+  });
 
 test('puts photos online, and shows them on the other devices', async ({
   page,
@@ -147,7 +186,188 @@ test('frees up space on this device, and the photos still show', async ({ page }
   await tile.click();
   const dialog = page.locator('[data-viewer]');
   await expect.poll(() => naturalWidth(dialog.getByRole('img')), ONLINE).toBe(2048);
+
+  // While it downloads, the viewer says so, and another tap doesn't start a
+  // second download (audit G-8). The download waits here until let go.
+  const held: Route[] = [];
+  let letGo = (): void => undefined;
+  const goOn = new Promise<void>((resolve) => {
+    letGo = resolve;
+  });
+  await page.route('**/api/library/items/**', async (route) => {
+    held.push(route);
+    await goOn;
+    await route.continue();
+  });
   const download = page.waitForEvent('download');
-  await dialog.getByRole('button', { name: 'Save original' }).click();
+  const saveOriginal = dialog.getByRole('button', { name: 'Save original' });
+  await saveOriginal.click();
+  const viewerStatus = dialog.getByRole('status');
+  await expect(viewerStatus).toHaveText('Downloading the original…');
+  await expect(saveOriginal).toHaveAttribute('aria-disabled', 'true');
+  await expect(saveOriginal).toBeFocused();
+  await expect.poll(() => held.length).toBeGreaterThan(0);
+  const asked = held.length;
+  await saveOriginal.dispatchEvent('click');
+  await page.waitForTimeout(500);
+  expect(held.length).toBe(asked);
+  letGo();
   expect((await readFile(await (await download).path())).equals(original)).toBe(true);
+  await page.unroute('**/api/library/items/**');
+  await expect(viewerStatus).toHaveText('Downloaded the original.');
+  await expect(saveOriginal).not.toHaveAttribute('aria-disabled');
+  await dialog.getByRole('button', { name: 'Close' }).click();
+
+  // Picking the same photo again puts its original back on this device.
+  await addPhotos(page, [jpeg('IMG_0003.JPG', original)]);
+  await expect(
+    page.getByRole('status').filter({ hasText: '1 original is back on this device.' }),
+  ).toBeAttached();
+  expect(await originalsHere(page)).toBe(1);
+  await expect(tiles(page)).toHaveCount(1);
+  await expect(freeUp).toBeVisible();
+});
+
+test('frees up space only when the online library has just said the photos are there', async ({
+  page,
+  guard,
+}) => {
+  // The online library is cut off on purpose.
+  guard.allowConsole('net::ERR_FAILED');
+  await createAccount(page);
+  await page.goto('/');
+  await photoOnline(page, 'IMG_0008.JPG');
+  const freeUp = page.getByRole('button', { name: 'Free up space on this device' });
+  await expect(freeUp).toBeVisible();
+
+  // Opened again while the library can't be reached: nothing is offered.
+  const cutOff = (route: Route) => route.abort();
+  await page.route('**/api/library/changes*', cutOff);
+  await page.reload();
+  await expect(onlineStatus(page)).toHaveText(
+    'Couldn’t reach the online library: no connection. It will try again.',
+    ONLINE,
+  );
+  await expect(freeUp).toBeHidden();
+
+  // Once it answers, it's offered, and asked again before anything is removed.
+  await page.unroute('**/api/library/changes*', cutOff);
+  await page.getByRole('button', { name: 'Sync now' }).click();
+  await expect(freeUp).toBeVisible(ONLINE);
+  await freeUp.click();
+  await page.route('**/api/library/changes*', cutOff);
+  await page
+    .getByRole('dialog', { name: 'Free up space on this device?' })
+    .getByRole('button', { name: 'Free up space' })
+    .click();
+  // Shown at the top of the page, and read out (audit G-1).
+  await expect(
+    page.getByRole('alert').filter({ hasText: 'Couldn’t free up space. Please try again.' }),
+  ).toBeVisible();
+  expect(await originalsHere(page)).toBe(1);
+});
+
+test('after the account key is replaced, every device keeps to the library with the photos', async ({
+  page,
+  browser,
+}) => {
+  await createAccount(page);
+  await page.goto('/');
+  const appURL = new URL(page.url()).origin;
+  await photoOnline(page, 'IMG_0005.JPG');
+
+  // The key is replaced on this phone. A new tablet, signed in with the new
+  // recovery key, turns on sync before the phone does: it starts a library.
+  const { key } = await replaceKey(page);
+  const tablet = await (await otherDevice(browser)).newPage();
+  await signInWithKey(tablet, key);
+  await tablet.goto(`${appURL}/`);
+  await turnOnSync(tablet, 'Photos');
+  await expect(onlineStatus(tablet)).toHaveText(
+    'To keep photos online, enter the storage code.',
+    ONLINE,
+  );
+  await recordUploaded(tablet);
+
+  // The phone turns on sync again: it keeps its library, moved to the new key…
+  const moved = oldCopyMoved(page);
+  await connectAgain(page, appURL);
+  await moved;
+  const recordMoved = copyUploaded(page);
+  await expect(onlineStatus(page)).toHaveText(/^Online: 1 photo · /, ONLINE);
+  await recordMoved;
+
+  // …and the tablet uses it too, so it shows the photo.
+  await tablet.getByRole('button', { name: 'Sync now' }).click();
+  await expect(tiles(tablet)).toHaveCount(1, ONLINE);
+  await expect(onlineStatus(tablet)).toHaveText(/^Online: 1 photo · /, ONLINE);
+  await tablet.context().close();
+});
+
+test('a device with the old account key took the library: Photos says so, and starts a new one', async ({
+  page,
+  browser,
+  guard,
+}) => {
+  // The lost phone moved the old copy (410), and moving the library is refused: it's theirs now (403).
+  guard.allowConsole('status of 410 (Gone)');
+  guard.allowConsole('status of 403 (Forbidden)');
+  const { key } = await createAccount(page);
+  await page.goto('/');
+  const appURL = new URL(page.url()).origin;
+  await photoOnline(page, 'IMG_0007.JPG');
+  const lost = await (await otherDevice(browser)).newPage();
+  await signInWithKey(lost, key);
+  await lost.goto(`${appURL}/`);
+  await turnOnSync(lost, 'Photos');
+  await expect(tiles(lost)).toHaveCount(1, ONLINE);
+
+  // That phone is lost, and the key is replaced on this tablet. Before the
+  // tablet opens Photos again, someone with the phone makes an account of
+  // their own, and turns on sync in Photos with it.
+  await replaceKey(page);
+  await lost.goto(`${hubURL}/account/`);
+  await expect(lost.locator('[data-message]')).toHaveText(/^Your account key was replaced/);
+  await createAccount(lost);
+  const takenAway = oldCopyMoved(lost);
+  await connectAgain(lost, appURL);
+  await takenAway;
+  await lost.context().close();
+
+  // The tablet turns on sync again: Photos says what happened, and its photo
+  // goes up to a new library.
+  await connectAgain(page, appURL);
+  await expect(onlineStatus(page)).toHaveText(
+    /^Your online library was taken by a device that still had your old account key, perhaps the lost one/,
+    ONLINE,
+  );
+  await expect(onlineStatus(page)).toContainText('To keep photos online, enter the storage code.');
+  await unlock(page);
+  await expect(onlineStatus(page)).toContainText('Online: 1 photo · ', ONLINE);
+});
+
+test('signed in to another account, photos go up to that account’s library', async ({ page }) => {
+  await createAccount(page);
+  await page.goto('/');
+  const appURL = new URL(page.url()).origin;
+  await photoOnline(page, 'IMG_0006.JPG');
+
+  // This device signs in to another account, and Photos syncs with it.
+  await page.goto(`${hubURL}/account/`);
+  await page.getByRole('button', { name: 'Sign out of this device' }).click();
+  await page
+    .getByRole('dialog', { name: 'Sign out of this device?' })
+    .getByRole('button', { name: 'Sign out' })
+    .click();
+  await createAccount(page);
+  await connectAgain(page, appURL);
+
+  // That account's library is a new one: the photo isn't offered to free up, and goes up to it.
+  await expect(onlineStatus(page)).toHaveText(
+    'To keep photos online, enter the storage code.',
+    ONLINE,
+  );
+  await expect(page.getByRole('button', { name: 'Free up space on this device' })).toBeHidden();
+  await unlock(page);
+  await expect(onlineStatus(page)).toHaveText(/^Online: 1 photo · /, ONLINE);
 });

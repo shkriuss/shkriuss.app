@@ -27,6 +27,12 @@ export interface AppConfigOptions {
 
 export function defineAppConfig(options: AppConfigOptions): AstroUserConfig {
   const site = getSite(options.slug);
+  // The account's passkeys belong to shkriuss.app, so every subdomain could ask
+  // for them. Only the hub's pages may (docs/adr/0010-account-and-sync.md).
+  const passkeys = options.allowFeatures?.filter((name) => name.startsWith('publickey-')) ?? [];
+  if (options.slug !== 'hub' && passkeys.length > 0) {
+    throw new Error(`Only the hub may use passkeys, not ${options.slug} (${passkeys.join(', ')}).`);
+  }
 
   return {
     site: site.origin,

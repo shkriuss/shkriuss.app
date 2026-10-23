@@ -51,6 +51,11 @@ test('a locked backup restores everything, only with its passphrase', async ({ p
   await again.fill('something else entirely');
   await dialog.getByRole('button', { name: 'Download backup' }).click();
   await expect(again).toHaveAccessibleDescription('The two passphrases don’t match.');
+  // Enter in the field: focus is there already, so the problem is read out (audit G-3).
+  await again.press('Enter');
+  await expect(dialog.getByRole('alert')).toHaveText(
+    'Type it again: The two passphrases don’t match.',
+  );
   await checkA11y(page, 'backup dialog with problems');
 
   await dialog.getByLabel('Show passphrase').check();
@@ -74,6 +79,7 @@ test('a locked backup restores everything, only with its passphrase', async ({ p
   await expect(restoreDialog(page)).toContainText('Restoring replaces everything');
   await checkA11y(page, 'restore dialog');
   const unlock = restoreDialog(page).getByLabel('Passphrase');
+  await expect(unlock).toBeFocused();
   await unlock.fill('not the right passphrase');
   await restoreDialog(page).getByRole('button', { name: 'Restore' }).click();
   await expect(unlock).toHaveAccessibleDescription(/doesn’t unlock this backup/);
@@ -97,10 +103,59 @@ test('a plain copy restores without a passphrase', async ({ page }) => {
   await page.evaluate(() => localStorage.removeItem('shkriuss:e2e-sample'));
   await chooseBackup(page, file);
   await expect(restoreDialog(page).getByLabel('Passphrase')).toBeHidden();
+  // Focus starts on "Cancel": one press of Enter mustn't replace everything.
+  await expect(restoreDialog(page).getByRole('button', { name: 'Cancel' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(restoreDialog(page)).toBeHidden();
+  expect((await saved(page)).sample).toBeNull();
+
+  await chooseBackup(page, file);
   const reloaded = page.waitForEvent('load');
   await restoreDialog(page).getByRole('button', { name: 'Restore' }).click();
   await reloaded;
   expect(await saved(page)).toEqual({ sample: JSON.stringify(SAMPLE), theme: 'dark' });
+});
+
+test('keeps focus on “Download backup” while it locks, and after a problem', async ({ page }) => {
+  await page.getByRole('button', { name: 'Back up' }).click();
+  const dialog = backupDialog(page);
+  await dialog.getByLabel('Passphrase', { exact: true }).fill(PASSPHRASE);
+  await dialog.getByLabel('Type it again').fill(PASSPHRASE);
+  // Locking the backup will fail, when the test says so.
+  await page.evaluate(() => {
+    const target = window as unknown as { locks: number; failLocking: () => void };
+    target.locks = 0;
+    crypto.subtle.deriveKey = () =>
+      new Promise((_, reject) => {
+        target.locks += 1;
+        target.failLocking = () => {
+          reject(new Error('Locking failed'));
+        };
+      });
+  });
+  const locks = () => page.evaluate(() => (window as unknown as { locks: number }).locks);
+  const button = dialog.getByRole('button', { name: 'Download backup' });
+  await button.focus();
+  await page.keyboard.press('Enter');
+  await expect(dialog.getByRole('status')).toHaveText('Locking your backup…');
+  await expect(button).toHaveAttribute('aria-disabled', 'true');
+  await expect(button).toBeFocused();
+  await checkA11y(page, 'backup dialog while locking');
+  // Pressing it again meanwhile does nothing, nor does Enter in a field.
+  await page.keyboard.press('Enter');
+  await dialog.getByLabel('Type it again').press('Enter');
+  expect(await locks()).toBe(1);
+
+  await button.focus();
+  await page.evaluate(() => {
+    (window as unknown as { failLocking: () => void }).failLocking();
+  });
+  await expect(dialog.getByRole('status')).toHaveText(
+    'Something went wrong while locking the backup. Please try again.',
+  );
+  await expect(button).not.toHaveAttribute('aria-disabled');
+  await expect(button).toBeFocused();
+  await checkA11y(page, 'backup dialog after a problem');
 });
 
 test('turns down files that aren’t this app’s backups', async ({ page }) => {
@@ -108,6 +163,7 @@ test('turns down files that aren’t this app’s backups', async ({ page }) => 
   await chooseBackup(page, { name: 'other.json', buffer: Buffer.from(JSON.stringify(other)) });
   await expect(restoreDialog(page)).toContainText('This backup is from a different app');
   await expect(restoreDialog(page).getByRole('button', { name: 'Restore' })).toBeHidden();
+  await expect(restoreDialog(page).getByRole('button', { name: 'Close' })).toBeFocused();
   await restoreDialog(page).getByRole('button', { name: 'Close' }).click();
 
   await chooseBackup(page, { name: 'notes.json', buffer: Buffer.from('{"hello":"world"}') });

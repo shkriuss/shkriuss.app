@@ -76,6 +76,10 @@ test('hashed build files are cached for a year, pages are always revalidated', a
   const assetResponse = await request.get(asset as string);
   expect(assetResponse.headers()['cache-control']).toBe('public, max-age=31536000, immutable');
 
-  const pageResponse = await request.get('/');
-  expect(pageResponse.headers()['cache-control']).not.toContain('immutable');
+  // Pages and the service worker: never kept without asking the server again.
+  for (const path of ['/', '/sw.js']) {
+    const cacheControl = (await request.get(path)).headers()['cache-control'] ?? '';
+    expect(cacheControl, path).not.toContain('immutable');
+    expect(cacheControl, path).not.toMatch(/max-age=[1-9]/);
+  }
 });

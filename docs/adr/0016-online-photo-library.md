@@ -37,11 +37,22 @@ every device. That's far beyond what sync can hold:
   sizes of its three parts. A deleted photo leaves a small marker, so other
   devices learn of it, and its id can't be used again.
 - **The library's id and keys: in the app's synced copy**
-  ([ADR 0010](0010-account-and-sync.md)), a small store with one record:
-  the library's random-looking id and the keys photos are sealed with. Both
-  come from the app's own key (HKDF) when the library is first made, so two
-  devices starting at once make the same one. The server never sees the
-  keys, and only the account's devices know the id.
+  ([ADR 0010](0010-account-and-sync.md)), a small store with one record per
+  library (`library:<id>`, so a merge keeps every library's): the library's
+  random-looking id and the keys photos are sealed with. Both come from the
+  app's own key (HKDF) when the library is first made, so two devices
+  starting at once make the same one. A device only makes one once a sync
+  has finished and found none it can use. The server never sees the keys,
+  and only the account's devices know the id. (Version 1 of the store had a
+  single record, `library`; it's read as its library's record.)
+- **Which library a device uses:** one whose record has the device's own
+  key, because the library was made with it or moved to it. So a record
+  that came from another account is never used. Of several, the oldest: the
+  one that has come through the most account keys. When the library a
+  device uses changes (it joined another account, or an older library turned
+  up), its photos are looked for in the new one, and go up to it if they
+  aren't there. Photos that were only online in the other one stop showing
+  on that device; its record, with its keys, is kept.
 
 ### Using it
 
@@ -59,44 +70,85 @@ every device. That's far beyond what sync can hold:
 - **Deleting a photo deletes it everywhere:** online at once, and on every
   device at its next check.
 - **"Free up space on this device"** removes originals (and screen-sized
-  copies) that are safely online, keeping thumbnails. Only when tapped.
+  copies) that are safely online, keeping thumbnails. Only when tapped, and
+  only once the library has answered since Photos opened, while it isn't
+  being deleted, moved or out of reach: what this device noted earlier may
+  be out of date. Just before anything is removed, the library is asked
+  again, and only photos it still has are freed.
 - **The same photo twice:** a device skips a photo already in the library
   (same SHA-256). If two devices add it at once, the one with the larger id
-  is deleted.
+  is deleted. Picking a photo again whose original isn't on the device
+  (it's only online, say after "Free up space") puts the picked file back
+  as its original: the same SHA-256 means the same bytes.
 
 ### Protecting the bill
 
 - **A storage code.** Uploading needs the library to be unlocked once with
   the storage code, a passphrase the owner keeps as the GitHub secret
-  `PHOTOS_STORAGE_CODE`. CI gives it to the Worker as `LIBRARY_STORAGE_CODE`
-  (production and previews). Without it, a library can be read and deleted,
-  never added to. 10 wrong tries an hour per library; the code is compared
-  in constant time.
-- **Limits per library:** 1 TB, 400,000 photos, 95 MB per photo (Cloudflare
-  takes at most 100 MB in one request), and 20,000 uploads a day, so a big
-  import can't use up the free daily requests every app shares.
+  `PHOTOS_STORAGE_CODE`. CI gives it to the production Worker as
+  `LIBRARY_STORAGE_CODE`. Previews never get it: they run a pull request's
+  code before it's merged, so their library stays locked. Without it, a
+  library can be read and deleted, never added to. The code is compared in
+  constant time.
+- **A library stays unlocked only for the code it was unlocked with.**
+  Changing `PHOTOS_STORAGE_CODE` locks every library, and each account gives
+  the new code once.
+- **Limits across all libraries,** because anyone can make up a library, so
+  limits kept in each would protect nothing. One more Durable Object
+  (`LibraryGate`) keeps them: 1 TB stored and 20,000 uploads a day in all.
+  The upload limit keeps a big import from using up the free daily requests
+  every app shares.
+- **20 wrong codes an hour from each internet address** (for IPv6, each
+  network: the first 64 bits), whatever the library. Not 20 for everyone
+  together: then a stranger could use them up every hour and nobody could
+  give the right code. The gate keeps only a hash of the address mixed with
+  the code, and deletes it when the hour is over. Someone with many
+  addresses gets more tries, so what really stops guessing is the code
+  itself: five or more random words (about 64 bits), far too many to guess.
+- **Limits per library:** 400,000 photos, and 95 MB per photo (Cloudflare
+  takes at most 100 MB in one request).
+- **A library that was never unlocked costs nothing in R2.** Thumbnails and
+  parts are read only for items its list has, deleting it lists no files,
+  and "remove" leaves no markers in it.
 - **Access:** requests carry a token from the app's own key (HKDF). The
   first one to reach a new library becomes its token; others are refused.
 
 ### Changing the account key, and deleting
 
-- **Replacing the account key:** sync moves the copy (with the library's id
-  and keys) to the new key ([ADR 0010](0010-account-and-sync.md)). Just
-  before the old copy is deleted, the device tells the library its new
-  token, proven with the old one; the old token is refused from then on
+- **Replacing the account key:** sync moves the copy (with the libraries'
+  ids and keys) to the new key ([ADR 0010](0010-account-and-sync.md)). Just
+  before the old copy is deleted, the device tells every library the old key
+  had (not only the one in use) its new token, proven with the old one, and
+  adds the new key to their records; the old token is refused from then on
   (410, "moved"). Nothing in R2 moves. New photos are sealed with a key from
   the new account key, so the lost device can't read them; older photos
   keep their key.
-- **"Delete the online copy"** deletes the library first: the list is
-  cleared at once, then the files are deleted in batches of 1,000 (a
-  Durable Object alarm). Photos on each device stay; those only online are
-  gone. `packages/sync` gains a `linked` option for this: data an app keeps
+- **When the lost device moves the library first.** The old key's token
+  proves the move, and the lost device has the old key too. So if it moves
+  a library first (say, by making an account of its own and turning on sync
+  in Photos), the library is theirs, and the server refuses the person's
+  move (403). The person's device then marks the library as taken in its
+  record, still retires the old copy, and starts a new library with the new
+  key. Photos says plainly what happened, photos on the person's devices go
+  up to the new library, and photos that were only online are lost to them.
+  A device tries the move even when another device moved the old copy
+  first, since that may have been the lost one.
+- **"Delete the online copy"** deletes the account's libraries first: each
+  list is cleared at once, then the files are deleted in batches of 1,000
+  (a Durable Object alarm). Photos on each device stay; those only online
+  are gone. A library known to be taken is left alone; if one refuses
+  (another device took it), the copy stays, and the device says it
+  couldn't delete the online copy instead of saying it's done.
+  `packages/sync` gains a `linked` option for this: data an app keeps
   online beside its copy, deleted and moved with it.
 
 ## Consequences
 
-- The library can grow to 1 TB at about $15 a month at most. Below 10 GB it
-  costs nothing.
+- All libraries together can grow to 1 TB, about $15 a month at most. Below
+  10 GB it costs nothing. Until the owner's device moves the library after
+  the account key is replaced, the old key can still read, delete or take
+  it ([ADR 0010](0010-account-and-sync.md)); if it takes it, the owner's
+  devices start a new one, as above.
 - **What the servers can see:** how many photos, how big each part is, and
   when they're added or deleted. Never what they show, their names or
   dates.

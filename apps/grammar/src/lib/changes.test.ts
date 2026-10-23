@@ -62,6 +62,8 @@ describe('sentenceChanges', () => {
     expect(fixed('I like it too much.', 'I like it .')).toBe('I like it.');
     expect(fixed('The the cat sat.', 'The cat sat .')).toBe('The cat sat.');
     expect(fixed('Hello, world.', 'Hello world .')).toBe('Hello world.');
+    // Just after "(" or an opening quote: the space after it goes.
+    expect(fixed('I said (the yes) twice.', 'I said ( yes ) twice .')).toBe('I said (yes) twice.');
   });
 
   it('replaces a word with punctuation, and the other way round', () => {

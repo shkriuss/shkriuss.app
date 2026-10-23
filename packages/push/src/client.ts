@@ -5,6 +5,7 @@
  *   syncPush(notices)   upload the app's scheduled notifications, encrypted
  *   sendTestPush()      one notification right now
  *   disablePush()       forget this device on the server and unsubscribe
+ *   finishPushDelete()  try again to forget it, if the server couldn't be reached
  *
  * Every message is encrypted here, to this device's own subscription, before
  * it's uploaded. The device key and subscription keys are kept under
@@ -13,17 +14,32 @@
 import { fromBase64Url, toBase64Url } from './base64.ts';
 import { encryptPayload, MAX_PLAINTEXT_BYTES } from './encrypt.ts';
 import { nextFireTime, type Repeat } from './schedule.ts';
-import { LIMITS } from './validate.ts';
+import { LIMITS, timingProblem } from './validate.ts';
 
 const STORAGE_KEY = 'shkriuss-device:push';
+/** Device keys whose reminders are still on the server (it couldn't be reached to delete them). */
+const DELETE_KEY = 'shkriuss-device:push-delete';
 const API = '/api/push';
 /** Re-upload at least this often, even if nothing changed (keeps the server's copy fresh). */
 const REFRESH_MS = 7 * 24 * 60 * 60 * 1000;
 const SERVICE_WORKER_TIMEOUT_MS = 10_000;
+/** The server must answer within this long (plus the time to send what's uploaded). */
+const ANSWER_MS = 20_000;
+/** A slow connection that still works, in bytes per millisecond (32 KB a second, about 256 kbit/s). */
+const SLOW_BYTES_PER_MS = 32;
+
+/**
+ * How long a request that sends this many bytes may take before it counts
+ * as "couldn't reach the server". A network that hangs (a VPN with no
+ * connection, captive Wi-Fi, a very bad signal) would otherwise keep the app
+ * waiting for ever; a big upload on a slow connection still gets through.
+ */
+export const timeLimit = (bytes: number): number =>
+  ANSWER_MS + Math.ceil(bytes / SLOW_BYTES_PER_MS);
 
 /** One scheduled notification, in the app's own local time. */
 export interface Notice {
-  /** Unique within the app, e.g. an event id. */
+  /** Unique within the app, e.g. an event id. It stays on the device. */
   id: string;
   /** When the thing starts, local time "YYYY-MM-DDTHH:MM". */
   start: string;
@@ -42,7 +58,8 @@ export interface Notice {
 
 export type PushSupport = 'supported' | 'needs-home-screen' | 'unsupported';
 
-export type PushErrorCode = 'unsupported' | 'denied' | 'unavailable' | 'server';
+/** 'server': it couldn't be reached. 'refused': it answered, but with a problem. */
+export type PushErrorCode = 'unsupported' | 'denied' | 'unavailable' | 'server' | 'refused';
 
 export class PushError extends Error {
   readonly code: PushErrorCode;
@@ -91,6 +108,24 @@ function store(state: DeviceState | null): void {
   }
 }
 
+function pendingDeletes(): string[] {
+  try {
+    const value: unknown = JSON.parse(localStorage.getItem(DELETE_KEY) ?? '[]');
+    return Array.isArray(value) ? value.filter((key) => typeof key === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function storePendingDeletes(keys: readonly string[]): void {
+  try {
+    if (keys.length > 0) localStorage.setItem(DELETE_KEY, JSON.stringify(keys));
+    else localStorage.removeItem(DELETE_KEY);
+  } catch {
+    // Storage blocked: the deletion can't be tried again later.
+  }
+}
+
 /** Whether this browser can get notifications while the app is closed. */
 export function pushSupport(): PushSupport {
   if ('serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window) {
@@ -105,6 +140,9 @@ export function pushSupport(): PushSupport {
 
 export const isPushEnabled = (): boolean => load() !== null;
 
+/** True while reminders turned off on this device are still on the server. */
+export const isPushDeletePending = (): boolean => pendingDeletes().length > 0;
+
 async function registration(): Promise<ServiceWorkerRegistration> {
   const timeout = new Promise<never>((_, reject) => {
     setTimeout(() => {
@@ -118,9 +156,14 @@ async function api(path: string, init: RequestInit, deviceKey?: string): Promise
   const headers = new Headers(init.headers);
   if (deviceKey) headers.set('Authorization', `Bearer ${deviceKey}`);
   if (init.body) headers.set('Content-Type', 'application/json');
+  const bytes = typeof init.body === 'string' ? init.body.length : 0;
   let response: Response;
   try {
-    response = await fetch(`${API}${path}`, { ...init, headers });
+    response = await fetch(`${API}${path}`, {
+      ...init,
+      headers,
+      signal: AbortSignal.timeout(timeLimit(bytes)),
+    });
   } catch {
     throw new PushError('server', 'Couldn’t reach the notification service.');
   }
@@ -146,7 +189,7 @@ export async function enablePush(): Promise<void> {
     throw new PushError('denied', 'Notifications are blocked.');
   }
   const response = await api('/key', { method: 'GET' });
-  if (!response.ok) throw new PushError('server', 'The notification service isn’t answering.');
+  if (!response.ok) throw new PushError('refused', 'The notification service isn’t working.');
   const { publicKey } = (await response.json()) as { publicKey: string };
 
   const worker = await registration();
@@ -227,12 +270,16 @@ export async function syncPush(
   notices: readonly Notice[],
   options: { force?: boolean } = {},
 ): Promise<number> {
+  // An earlier copy still on the server (turned off while offline) would send twice.
+  if (isPushDeletePending()) await finishPushDelete();
   const state = await current();
   if (!state) return 0;
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   // Only ones that will still happen, soonest first, up to the server's limit.
   const now = Date.now();
   const upcoming = notices
+    // Leave out any the server would turn down, so one odd reminder can't stop the rest.
+    .filter((notice) => timingProblem(notice) === undefined)
     .map((notice) => ({ notice, next: nextFireTime(notice, timeZone, now) }))
     .filter((item): item is { notice: Notice; next: number } => item.next !== null)
     .sort((a, b) => a.next - b.next)
@@ -245,10 +292,15 @@ export async function syncPush(
   }
   const target = { p256dh: fromBase64Url(state.p256dh), auth: fromBase64Url(state.auth) };
   const entries = [];
-  for (const notice of upcoming) {
+  let payloadsLength = 0;
+  for (const [index, notice] of upcoming.entries()) {
     const payload = toBase64Url(await encryptPayload(messageOf(notice), target));
-    const { id, start, repeat, until, offset } = notice;
-    entries.push({ id, start, repeat, until, offset, payload });
+    // Only as many as the server can keep (very long texts make big messages).
+    payloadsLength += payload.length;
+    if (payloadsLength > LIMITS.payloadsLength) break;
+    const { start, repeat, until, offset } = notice;
+    // A number, never the app's own id: an imported event's id can say where it came from.
+    entries.push({ id: String(index + 1), start, repeat, until, offset, payload });
   }
   const response = await api(
     '/schedule',
@@ -256,9 +308,9 @@ export async function syncPush(
     state.deviceKey,
   );
   if (!response.ok)
-    throw new PushError('server', 'The notification service didn’t accept the update.');
+    throw new PushError('refused', 'The notification service didn’t accept the update.');
   store({ ...state, synced: { hash, at: now } });
-  return upcoming.length;
+  return entries.length;
 }
 
 /** Sends one notification to this device right now. */
@@ -274,20 +326,46 @@ export async function sendTestPush(title: string, body: string): Promise<void> {
     { method: 'POST', body: JSON.stringify({ endpoint: state.endpoint, payload }) },
     state.deviceKey,
   );
-  if (!response.ok) throw new PushError('server', 'The test notification couldn’t be sent.');
+  if (!response.ok) throw new PushError('refused', 'The test notification couldn’t be sent.');
 }
 
-/** Deletes this device's data on the server and unsubscribes. Never throws. */
-export async function disablePush(): Promise<void> {
-  const state = load();
-  store(null);
-  if (state) {
-    await api('/schedule', { method: 'DELETE' }, state.deviceKey).catch(() => undefined);
+/**
+ * Deletes reminders the server still has from when they were turned off on
+ * this device without reaching it. True when none are left there.
+ */
+export async function finishPushDelete(): Promise<boolean> {
+  for (const deviceKey of pendingDeletes()) {
+    const response = await api('/schedule', { method: 'DELETE' }, deviceKey).catch(() => null);
+    if (response?.ok) storePendingDeletes(pendingDeletes().filter((key) => key !== deviceKey));
   }
+  return !isPushDeletePending();
+}
+
+async function unsubscribe(): Promise<void> {
   try {
     const subscription = await (await registration()).pushManager.getSubscription();
     await subscription?.unsubscribe();
   } catch {
     // Nothing to unsubscribe.
   }
+}
+
+/**
+ * Deletes this device's data on the server and unsubscribes. Never throws.
+ * False if the server couldn't be reached: the deletion is kept, to be
+ * finished later by finishPushDelete().
+ *
+ * It's off on this device as soon as this is called: the deletion is noted
+ * before anything waits, so a caller doesn't need to wait for the server
+ * (like "Delete all data", which deletes everything here straight away).
+ */
+export async function disablePush(): Promise<boolean> {
+  const state = load();
+  // Noted before the device key is gone, so the deletion can be tried again.
+  if (state) storePendingDeletes([...pendingDeletes(), state.deviceKey]);
+  store(null);
+  // Unsubscribing doesn't wait for the server: then nothing more arrives on
+  // this device, even while the server can't be reached.
+  const [deleted] = await Promise.all([finishPushDelete(), unsubscribe()]);
+  return deleted;
 }

@@ -24,6 +24,8 @@ import {
   type Stamp,
 } from '@shkriuss/dates';
 import type { Notice } from '@shkriuss/push';
+import { compareText } from '@shkriuss/ui/text';
+import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
 export const REPEATS = ['none', 'daily', 'weekdays', 'weekly', 'monthly', 'yearly'] as const;
 export type Repeat = (typeof REPEATS)[number];
@@ -98,6 +100,13 @@ export interface Task {
   repeat: Repeat;
   /** Every how many days, weeks, months or years it repeats (1 for "every week"). */
   every: number;
+  /**
+   * For monthly and yearly repeats: the day of the month it keeps to. A
+   * shorter month moves it to its last day, and the next one moves it back
+   * (the 31st, then 28 February, then 31 March). Missing in tasks saved
+   * before this was added: then it's the day of its date.
+   */
+  day?: number;
   /** Minutes before its time to remind, or null for no reminder. */
   reminder: number | null;
   /** When it was done (ms since 1970), or null while it's still to do. */
@@ -135,6 +144,12 @@ function isStep(value: unknown): value is Step {
   );
 }
 
+const isDayOfMonth = (value: unknown): value is number =>
+  Number.isInteger(value) && (value as number) >= 1 && (value as number) <= 31;
+
+/** Whether a repeat keeps to a day of the month (Task.day). */
+const keepsDay = (repeat: Repeat): boolean => repeat === 'monthly' || repeat === 'yearly';
+
 function isTask(value: unknown): value is Task {
   if (typeof value !== 'object' || value === null) return false;
   const task = value as Record<string, unknown>;
@@ -152,6 +167,7 @@ function isTask(value: unknown): value is Task {
     oneOf(task['repeat'], REPEATS) &&
     Number.isInteger(task['every']) &&
     (task['every'] as number) >= 1 &&
+    (task['day'] === undefined || isDayOfMonth(task['day'])) &&
     (task['reminder'] === null || oneOf(task['reminder'], REMINDERS)) &&
     (task['done'] === null || isTime(task['done'])) &&
     isTime(task['created']) &&
@@ -239,6 +255,14 @@ export function taskFromDraft(draft: TaskDraft, id: string, now: number, existin
   const date = isIsoDate(draft.date) ? draft.date : null;
   const repeat = date && oneOf(draft.repeat, REPEATS) ? draft.repeat : 'none';
   const reminder = Number(draft.reminder);
+  // The day a monthly or yearly repeat keeps to: the date's, unless the date
+  // is the one it already had (which a short month may have moved).
+  const day =
+    date && keepsDay(repeat)
+      ? existing?.date === date && existing.day !== undefined
+        ? existing.day
+        : parts(date).day
+      : undefined;
   return {
     id,
     title: cut(draft.title, LIMITS.title),
@@ -253,6 +277,7 @@ export function taskFromDraft(draft: TaskDraft, id: string, now: number, existin
     time: date && isIsoTime(draft.time) ? draft.time : null,
     repeat,
     every: EVERY_UNITS[repeat] ? (parseEvery(draft.every) ?? 1) : 1,
+    ...(day === undefined ? {} : { day }),
     reminder: date && draft.reminder !== '' && oneOf(reminder, REMINDERS) ? reminder : null,
     done: existing?.done ?? null,
     created: existing?.created ?? now,
@@ -333,9 +358,16 @@ export function tickStep(
  * The next date of a repeating task: the first one after its current date
  * that's also after today (so a task done late doesn't stay overdue).
  * `every` skips some: every 2 weeks counts on from its date in steps of 2
- * weeks. A monthly task on the 31st moves to the end of shorter months.
+ * weeks. A monthly task on the 31st moves to the end of shorter months, and
+ * back to the 31st after them (`day`, Task.day).
  */
-export function nextDate(date: IsoDate, repeat: Repeat, today: IsoDate, every = 1): IsoDate {
+export function nextDate(
+  date: IsoDate,
+  repeat: Repeat,
+  today: IsoDate,
+  every = 1,
+  day = parts(date).day,
+): IsoDate {
   const after = compareDates(date, today) > 0 ? date : today;
   const days = (step: number): IsoDate =>
     addDays(date, (Math.floor(daysBetween(date, after) / step) + 1) * step);
@@ -361,8 +393,13 @@ export function nextDate(date: IsoDate, repeat: Repeat, today: IsoDate, every = 
         step,
         Math.floor(((later.year - year) * 12 + later.month - month) / step) * step,
       );
-      while (compareDates(sameDayInMonth(date, months), after) <= 0) months += step;
-      return sameDayInMonth(date, months);
+      let next = sameDayInMonth(date, months, day);
+      // Dates end at 9999-12-31: past that, the caller sees it isn't a date.
+      while (isIsoDate(next) && compareDates(next, after) <= 0) {
+        months += step;
+        next = sameDayInMonth(date, months, day);
+      }
+      return next;
     }
   }
 }
@@ -383,7 +420,12 @@ export function completeTask(
   if (task.repeat === 'none' || task.date === null) {
     return { state: updateTask(state, { ...task, done: now, updated: now }), next: null };
   }
-  const next = nextDate(task.date, task.repeat, today, task.every);
+  const day = task.day ?? parts(task.date).day;
+  const next = nextDate(task.date, task.repeat, today, task.every, day);
+  // No next date before the last one there is (9999-12-31): it's simply done.
+  if (!isIsoDate(next)) {
+    return { state: updateTask(state, { ...task, done: now, updated: now }), next: null };
+  }
   const copy: Task = {
     ...task,
     id: copyId,
@@ -395,7 +437,8 @@ export function completeTask(
   };
   // The next time, its steps start again.
   const steps = task.steps.map((step) => ({ ...step, done: false }));
-  const moved = updateTask(state, { ...task, date: next, steps, updated: now });
+  const kept = keepsDay(task.repeat) ? { day } : {};
+  const moved = updateTask(state, { ...task, date: next, steps, ...kept, updated: now });
   return { state: { tasks: [copy, ...moved.tasks] }, next };
 }
 
@@ -556,7 +599,7 @@ const utc = (date: IsoDate): Date => {
 };
 
 /** "14:30" or "2:30 PM", in the person's style. */
-export function formatTime(time: IsoTime, locale?: string): string {
+export function formatTime(time: IsoTime, locale = DATE_LOCALE): string {
   const [hour, minute] = time.split(':').map(Number) as [number, number];
   return new Intl.DateTimeFormat(locale, {
     hour: 'numeric',
@@ -566,7 +609,7 @@ export function formatTime(time: IsoTime, locale?: string): string {
 }
 
 /** "Today", "Tomorrow", "Yesterday", "Friday" (this week), or "Mon, 26 Oct" (with the year if not this one). */
-export function formatDay(date: IsoDate, today: IsoDate, locale?: string): string {
+export function formatDay(date: IsoDate, today: IsoDate, locale = DATE_LOCALE): string {
   const days = daysBetween(today, date);
   if (days === 0) return 'Today';
   if (days === 1) return 'Tomorrow';
@@ -584,7 +627,7 @@ export function formatDay(date: IsoDate, today: IsoDate, locale?: string): strin
 }
 
 /** When a task is due, for the list: "Today, 14:30". */
-export function dueText(task: Task, today: IsoDate, locale?: string): string {
+export function dueText(task: Task, today: IsoDate, locale = DATE_LOCALE): string {
   if (task.date === null) return '';
   const day = formatDay(task.date, today, locale);
   return task.time ? `${day}, ${formatTime(task.time, locale)}` : day;
@@ -627,8 +670,7 @@ export const fold = (text: string): string =>
   text.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase().trim();
 
 /** Alphabetical order, without minding case or accents. */
-export const byText = (a: string, b: string): number =>
-  a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true });
+export const byText = compareText;
 
 /** "1 of 4 steps", or "" without steps. */
 export function stepsText(task: Task): string {

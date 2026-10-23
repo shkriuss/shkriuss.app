@@ -15,6 +15,7 @@ import {
 } from '@shkriuss/dates';
 import { createStore } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
+import { focusProblem, reportSave } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { site } from 'virtual:shkriuss/site';
 import {
@@ -30,6 +31,7 @@ import {
   emptySettings,
   everyLabel,
   formatAmount,
+  goalReached,
   inUnit,
   isDrinksState,
   isSettingsState,
@@ -60,6 +62,7 @@ import {
   type Unit,
 } from '../lib/water.ts';
 import { mountReminders } from './reminders.ts';
+import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
 const drinksStore = createStore<DrinksState>({
   key: 'water',
@@ -77,7 +80,6 @@ const settingsStore = createStore<SettingsState>({
 
 /** How often to check whether the day has changed while Water is open. */
 const NEW_DAY_CHECK_MS = 60 * 1000;
-const COULD_NOT_SAVE = 'Couldn’t save. Your browser may be blocking storage.';
 const AMOUNT_LABELS: Record<Amount, string> = {
   goal: 'Daily goal',
   glass: 'Glass',
@@ -85,7 +87,7 @@ const AMOUNT_LABELS: Record<Amount, string> = {
 };
 const UNIT_NAMES: Record<Unit, string> = { ml: 'millilitres', oz: 'US fluid ounces' };
 
-const dateFormat = new Intl.DateTimeFormat(undefined, {
+const dateFormat = new Intl.DateTimeFormat(DATE_LOCALE, {
   weekday: 'long',
   day: 'numeric',
   month: 'long',
@@ -167,8 +169,7 @@ export function mountWater(root: Document): void {
       settings = next.settings;
       ok = settingsStore.save(settings) && ok;
     }
-    if (!ok) announce(COULD_NOT_SAVE);
-    else if (message) announce(message);
+    if (reportSave(ok) && message) announce(message);
     render();
     reminders.changed();
     sync.changed();
@@ -224,8 +225,8 @@ export function mountWater(root: Document): void {
 
   function renderHistory(): void {
     const goal = amountOf(settings, 'goal');
-    const days = recentDays(drinks, goal, day);
-    const count = streak(drinks, goal, day);
+    const days = recentDays(drinks, goal, day, 7, unit());
+    const count = streak(drinks, goal, day, unit());
     streakLine.textContent = streakText(count);
     streakLine.hidden = count === 0;
     averageLine.textContent = days.some((entry) => entry.ml > 0)
@@ -281,7 +282,9 @@ export function mountWater(root: Document): void {
     const total = totalOn(next, day);
     const when = date === day ? '' : ` ${dayLabel(date, day).toLowerCase()}`;
     let message = `Added ${amount(ml)}${when}. ${amount(total)} of ${amount(goal)} today.`;
-    if (before < goal && total >= goal) message += ' Goal reached. Well done!';
+    if (!goalReached(before, goal, unit()) && goalReached(total, goal, unit())) {
+      message += ' Goal reached. Well done!';
+    }
     save({ drinks: next }, message);
   }
 
@@ -336,9 +339,9 @@ export function mountWater(root: Document): void {
     showProblem(otherAmount, otherError('amount'), amountText);
     showProblem(otherTime, otherError('time'), timeText);
     otherError('day').textContent = dayText ?? '';
-    if (amountText) otherAmount.focus();
-    else if (timeText) otherTime.focus();
-    else if (dayText) otherDay.focus();
+    if (amountText) focusProblem(otherAmount, amountText);
+    else if (timeText) focusProblem(otherTime, timeText);
+    else if (dayText) focusProblem(otherDay, dayText);
     if (amountText || timeText || dayText) return;
     otherDialog.close();
     add(typedMl(otherAmount.value, unit()), date, time);
@@ -350,11 +353,15 @@ export function mountWater(root: Document): void {
 
   // ---------- Goal and sizes ----------
 
-  function commitAmount(name: Amount): void {
+  /** Saves a goal or size; `entered`: after Enter in its field, which reads a problem out. */
+  function commitAmount(name: Amount, entered = false): void {
     const input = amountInput(name);
     const problem = amountProblem(input.value, unit(), name === 'goal' ? 'goal' : 'drink');
     showProblem(input, amountError(name), problem);
-    if (problem) return;
+    if (problem) {
+      if (entered) focusProblem(input, problem);
+      return;
+    }
     const ml = typedMl(input.value, unit());
     if (ml === amountOf(settings, name)) return;
     save({ settings: setAmount(settings, name, ml) }, `${AMOUNT_LABELS[name]}: ${amount(ml)}.`);
@@ -367,7 +374,7 @@ export function mountWater(root: Document): void {
   settingsForm.addEventListener('submit', (event) => {
     event.preventDefault();
     const name = (root.activeElement as HTMLElement | null)?.dataset['amount'];
-    if (AMOUNTS.includes(name as Amount)) commitAmount(name as Amount);
+    if (AMOUNTS.includes(name as Amount)) commitAmount(name as Amount, true);
   });
 
   for (const radio of unitRadios) {
@@ -401,7 +408,12 @@ export function mountWater(root: Document): void {
       if (wrong) input.setAttribute('aria-invalid', 'true');
       else input.removeAttribute('aria-invalid');
     }
-    if (fromWrong || untilWrong) return;
+    if (fromWrong || untilWrong) {
+      // Changed while in one of the times: read the problem out (focus stays there).
+      const active = [reminderFrom, reminderUntil].find((input) => input === root.activeElement);
+      if (active) focusProblem(active, reminderError.textContent ?? '');
+      return;
+    }
     const before = remindersOf(settings);
     if (JSON.stringify(before) === JSON.stringify(next)) return;
     const message = next.on

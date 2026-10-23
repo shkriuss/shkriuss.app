@@ -44,7 +44,10 @@ import {
   type ConnectRequest,
 } from '@shkriuss/sync/connect';
 import { appOriginFor, isAppOrigin } from '@shkriuss/sync/origins';
+import { focusProblem } from '@shkriuss/ui/problem';
+import { setBusy } from '@shkriuss/ui/busy';
 import { renderQrCode } from '@shkriuss/ui/qr-code';
+import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
 type View =
   | 'loading'
@@ -69,6 +72,8 @@ function connectRequestOf(
 
 /** How often a shown code checks whether the other device has used it. */
 const LINK_POLL_MS = 2000;
+/** A message that appears is shown (and read out) this long after it's put on the page. */
+const SAY_DELAY_MS = 100;
 
 const PROBLEMS: Record<AccountErrorCode, string> = {
   cancelled: 'Cancelled.',
@@ -76,7 +81,9 @@ const PROBLEMS: Record<AccountErrorCode, string> = {
     'This browser or password manager can’t use a passkey to unlock an account. Use your recovery key, or add this device with a code from another one. (Google Password Manager on Android and iCloud Keychain on iPhone, iPad and Mac can.)',
   'unknown-passkey':
     'That passkey isn’t connected to a shkriuss account. Try another passkey, or use your recovery key.',
-  'link-used': 'This code was already used, or has expired. Show a new one on your other device.',
+  'link-used': 'This code has expired. Show a new one on your other device.',
+  'link-taken':
+    'Someone already used this code. If it wasn’t you, replace your account key on your other device now: whoever used it can see what you sync.',
   server: 'Couldn’t reach shkriuss.app. Check your connection and try again.',
 };
 
@@ -89,14 +96,14 @@ const REPLACED = {
   here: `Your account key was replaced on another device, so this device is signed out. ${SIGN_IN_AGAIN}`,
   key: `This key was replaced on another device, so it can’t sign in any more. ${SIGN_IN_AGAIN}`,
   passkey: `This passkey is for an account key that was replaced on another device, so it can’t sign in any more. ${SIGN_IN_AGAIN} Then you can add a new passkey.`,
-  done: 'Your account key is replaced. Devices with the old key are signed out when they next open this page. Now turn on sync again in your apps (below), and add a new passkey if you use one.',
+  done: 'Your account key is replaced. Devices with the old key are signed out when they next open this page. Now turn on sync again in each app (below), on each of your devices: until then, a lost device can still see that app’s changes. Add a new passkey if you use one.',
 };
 
 /** True if this key was replaced on another device (false if that can't be checked now). */
 const wasReplaced = (secret: Uint8Array<ArrayBuffer>): Promise<boolean> =>
   isReplaced(secret).catch(() => false);
 
-const timeFormat = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
+const timeFormat = new Intl.DateTimeFormat(DATE_LOCALE, { hour: 'numeric', minute: '2-digit' });
 
 function required<T extends Element>(root: ParentNode, selector: string): T {
   const element = root.querySelector<T>(selector);
@@ -156,12 +163,15 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
   const linkUrl = required<HTMLElement>(root, '[data-link-url]');
   const linkStatus = required<HTMLElement>(root, '[data-link-status]');
   const createLinkButton = required<HTMLButtonElement>(root, '[data-action="create-link"]');
+  const copyLinkButton = required<HTMLButtonElement>(linkPanel, '[data-action="copy-link"]');
   const passkeyStatus = required<HTMLElement>(root, '[data-passkey-status]');
 
   const keyDialog = required<HTMLDialogElement>(root, '[data-key-dialog]');
   const dialogKey = required<HTMLElement>(keyDialog, '[data-dialog-key]');
   const dialogStatus = required<HTMLElement>(keyDialog, '[data-dialog-status]');
   const signOutDialog = required<HTMLDialogElement>(root, '[data-sign-out-dialog]');
+  const signOutApps = required<HTMLElement>(root, '[data-sign-out-apps]');
+  const signOutAppNames = required<HTMLElement>(root, '[data-sign-out-app-names]');
 
   const connectNote = required<HTMLElement>(root, '[data-connect-note]');
   const connectCode = required<HTMLElement>(root, '[data-connect-code]');
@@ -206,10 +216,30 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
     announcer.textContent = text;
   };
 
+  /** Counts messages, so a newer one wins over one still waiting to be shown (see say). */
+  let said = 0;
+
+  /**
+   * Shows a message, which is read out (null hides it). The message is a
+   * live region, and one that appears with its text already in it isn't
+   * always read out. So when it was hidden, it's put on the page empty (and
+   * invisible) first, and its text follows a moment later. That way it needs
+   * no second live region saying the same thing (audit G-14).
+   */
   function say(text: string | null, danger = false): void {
-    message.hidden = text === null;
-    message.textContent = text ?? '';
+    said += 1;
+    const turn = said;
+    const appearing = text !== null && message.hidden !== false;
     message.classList.toggle('notice--danger', danger);
+    message.classList.toggle('visually-hidden', appearing);
+    message.hidden = text === null;
+    message.textContent = appearing ? '' : (text ?? '');
+    if (!appearing) return;
+    window.setTimeout(() => {
+      if (turn !== said) return;
+      message.classList.remove('visually-hidden');
+      message.textContent = text;
+    }, SAY_DELAY_MS);
   }
 
   /**
@@ -220,12 +250,19 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
     const current = account;
     if (!current) return;
     const synced = syncedApps(current.code);
+    // Apps here still on a replaced key: until they're turned on again, a
+    // lost device with that key can still see their changes.
+    const oldCodes = await Promise.all(replacedSecrets().map((old) => accountCodeOf(old)));
+    const stillOld = new Set(oldCodes.flatMap((code) => [...syncedApps(code).keys()]));
     const here = new URL(location.href);
     const links = await Promise.all(
       syncLinks.map(async ({ slug, name, turnOn }) => {
         const origin = synced.get(slug);
         if (!origin || !isAppOrigin(origin, slug, here)) {
-          return { text: `Turn on sync in ${name}`, href: turnOn, off: false };
+          const text = stillOld.has(slug)
+            ? `Turn on sync in ${name} again (it’s still on the old key)`
+            : `Turn on sync in ${name}`;
+          return { text, href: turnOn, off: false };
         }
         const proof = await turnOffProof(await appSecretOf(current.secret, slug));
         return { text: `Turn off sync in ${name}`, href: turnOffUrl(origin, proof), off: true };
@@ -285,7 +322,6 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
     stopLink();
     home();
     say(done);
-    announce(done);
     return true;
   }
 
@@ -342,7 +378,8 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
     if (link !== shown) return;
     if (state === 'used') {
       stopLink();
-      linkStatus.textContent = 'Your other device is signed in.';
+      linkStatus.textContent =
+        'A device used this code and is now signed in. If it wasn’t the one you meant, replace your account key now (below).';
     } else if (state === 'expired' || Date.now() > shown.expiresAt) {
       stopLink();
       linkStatus.textContent = 'The code expired. Show a new one if you still need it.';
@@ -352,7 +389,7 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
   async function startLink(): Promise<void> {
     if (!account) return;
     stopLink();
-    createLinkButton.disabled = true;
+    setBusy(createLinkButton, true);
     linkStatus.textContent = 'Making a code…';
     try {
       link = await createLink(account.secret);
@@ -360,12 +397,15 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
       linkStatus.textContent = problemOf(error);
       return;
     } finally {
-      createLinkButton.disabled = false;
+      setBusy(createLinkButton, false);
     }
     renderQrCode(linkQr, link.url, 'QR code to add another device to your account');
     linkUrl.textContent = link.url;
     linkPanel.hidden = false;
+    // The code takes the button's place: focus goes with it, to "Copy link".
+    const hadFocus = document.activeElement === createLinkButton;
     createLinkButton.hidden = true;
+    if (hadFocus) copyLinkButton.focus();
     linkStatus.textContent = `Waiting for your other device. The code works once, until ${timeFormat.format(link.expiresAt)}.`;
     poll = window.setInterval(() => void checkLink(), LINK_POLL_MS);
   }
@@ -406,12 +446,13 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
     passkeyStatus.textContent = 'This browser can’t use passkeys. Use your recovery key instead.';
   }
 
-  async function withButton(button: HTMLButtonElement, task: () => Promise<void>): Promise<void> {
-    button.disabled = true;
+  /** Runs `task` with `button` busy: presses do nothing meanwhile, and focus stays on it (audit G-7). */
+  async function withButton<T>(button: HTMLButtonElement, task: () => Promise<T>): Promise<T> {
+    setBusy(button, true);
     try {
-      await task();
+      return await task();
     } finally {
-      button.disabled = false;
+      setBusy(button, false);
     }
   }
 
@@ -429,14 +470,13 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
         return;
       }
       if (!account) return;
-      button.disabled = true;
+      const current = account;
       newStatus.textContent = 'Replacing the key…';
       let saved: boolean;
       try {
-        saved = await replaceAccountKey(account.secret, secret);
+        saved = await withButton(button, () => replaceAccountKey(current.secret, secret));
       } catch (error) {
         newStatus.textContent = problemOf(error);
-        button.disabled = false;
         return;
       }
       pending = null;
@@ -446,7 +486,6 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
       linkStatus.textContent = '';
       home();
       say(saved ? REPLACED.done : STORAGE_BLOCKED, !saved);
-      announce(saved ? REPLACED.done : STORAGE_BLOCKED);
     },
     replace: () => {
       say(null);
@@ -494,7 +533,8 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
       }),
     'accept-connect': async (button) => {
       if (!account || !connecting || connecting === 'invalid') return;
-      button.disabled = true;
+      // Stays busy: the page goes back to the app.
+      setBusy(button, true);
       const { request, app } = connecting;
       const secret = await appSecretOf(account.secret, app.slug);
       // Apps also get their keys from replaced account keys, to move their old copies.
@@ -559,6 +599,11 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
       keyDialog.close();
     },
     'sign-out': () => {
+      // Apps keep their own keys: signing out here doesn't stop them syncing.
+      const synced = account ? syncedApps(account.code) : new Map<string, string>();
+      const names = syncLinks.filter(({ slug }) => synced.has(slug)).map(({ name }) => name);
+      signOutApps.hidden = names.length === 0;
+      signOutAppNames.textContent = names.join(', ');
       signOutDialog.returnValue = '';
       signOutDialog.showModal();
     },
@@ -593,7 +638,7 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
             ? 'That isn’t a recovery key. It has 56 letters and digits, in groups of 4.'
             : 'There’s a mistake in it. Check each group against your saved key.';
         recoveryInput.setAttribute('aria-invalid', 'true');
-        recoveryInput.focus();
+        focusProblem(recoveryInput, recoveryError.textContent ?? '');
         return;
       }
       if (await signIn(result.secret, 'Signed in with your recovery key.')) {
@@ -616,7 +661,6 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
     linkStatus.textContent = '';
     show('signed-out');
     say('This device is signed out.');
-    announce('This device is signed out.');
   });
 
   // Signed in or out, or an app connected, in another tab: follow along.

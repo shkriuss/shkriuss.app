@@ -51,9 +51,10 @@ private car's service history. Lives at <https://repairs.shkriuss.app>.
   when it's opened, and says "1 photo hasn't arrived yet" until it can (with
   sync off: "1 photo on another device"). A photo is saved small enough to
   sync (`MAX_PHOTO_BYTES`, `PHOTO_QUALITIES`). Photos aren't in backups;
-  "Save a copy" saves one as a file. Deleting a repair or vehicle, or all
-  data, deletes its photos (online too, with sync on), and a photo taken off
-  a repair on another device is deleted here at the next sync.
+  "Save a copy" saves one as a file. Deleting a repair or vehicle deletes
+  its photos (online too, with sync on); "Delete all data" deletes them on
+  this device only (sync is turned off first). A photo taken off a repair on
+  another device is deleted here at the next sync.
   `src/scripts/photos.ts` does the photo work.
 - `src/scripts/repairs.ts`: connects the page to those rules.
 - `src/pages/index.astro`: the page, built from `@shkriuss/ui` components.

@@ -23,7 +23,10 @@ test.beforeEach(({ guard }, testInfo) => {
   guard.allowOrigin(hubURL);
 });
 
+/** The status line (shown, but not read out: it changes at every sync). */
 const status = (page: Page) => page.locator('[data-sync-status]');
+/** What's read out: what the person asked for, or needs to know. */
+const announced = (page: Page) => page.locator('[data-sync-announcer]');
 
 test('turns on through the account, and off again', async ({ page }, testInfo) => {
   const { name } = getSite(testInfo.project.name);
@@ -41,14 +44,17 @@ test('turns on through the account, and off again', async ({ page }, testInfo) =
   expect(page.url(), 'the key is taken out of the address bar').not.toContain('#');
   await checkA11y(page, 'sync: on');
 
-  // Still on after a reload.
+  // Still on after a reload. The sync as it opens isn't read out.
   await page.reload();
   await expect(page.locator('[data-sync-on]')).toBeVisible();
   await expect(status(page)).toHaveText(/Synced just now/);
+  await expect(status(page)).not.toHaveAttribute('role');
+  await expect(announced(page)).toBeEmpty();
 
   await page.getByRole('button', { name: 'Turn off on this device' }).click();
   await expect(page.getByRole('button', { name: 'Turn on sync' })).toBeVisible();
   await expect(status(page)).toHaveText(/^Sync is off on this device/);
+  await expect(announced(page)).toHaveText(/^Sync is off on this device/);
   // The app's key is gone from this device.
   expect(await page.evaluate(() => localStorage.getItem('shkriuss-device:sync'))).toContain(
     '"secret":null',
@@ -108,7 +114,10 @@ test('asks to sign in first; cancelling leaves sync off', async ({ page }, testI
 test('deleting the online copy stops sync on every device, keeping their data', async ({
   page,
   browser,
+  guard,
 }, testInfo) => {
+  // The tablet learns the copy is gone from the server's answer, 410 Gone.
+  guard.allowConsole('status of 410');
   const { name } = getSite(testInfo.project.name);
   const { key } = await createAccount(page);
   await page.goto('/');
@@ -128,7 +137,9 @@ test('deleting the online copy stops sync on every device, keeping their data', 
     'The online copy is deleted, and sync is off on this device.',
   );
 
-  await tablet.getByRole('button', { name: 'Sync now' }).click();
+  // Back on screen, the tablet syncs. It may have already (Photos checks its
+  // online library by itself), so the "Sync now" button may be gone.
+  await tablet.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
   await expect(status(tablet)).toHaveText(/^The online copy was deleted on another device/);
   await expect(tablet.getByRole('button', { name: 'Turn on sync' })).toBeVisible();
   await tablet.context().close();
@@ -137,7 +148,10 @@ test('deleting the online copy stops sync on every device, keeping their data', 
 test('after the account key is replaced, sync moves to the new key', async ({
   page,
   browser,
+  guard,
 }, testInfo) => {
+  // The tablet learns the copy moved from the server's answer, 410 Gone.
+  guard.allowConsole('status of 410');
   const { name } = getSite(testInfo.project.name);
   const { key } = await createAccount(page);
   await page.goto('/');
@@ -151,7 +165,11 @@ test('after the account key is replaced, sync moves to the new key', async ({
 
   // On the phone: replace the key, then turn on sync again (what the Account
   // page's "Turn on sync in …" link opens).
-  const code = await replaceKey(page);
+  const { code } = await replaceKey(page);
+  // The Account page says this app here is still on the old key.
+  await expect(
+    page.getByRole('link', { name: `Turn on sync in ${name} again (it’s still on the old key)` }),
+  ).toBeVisible();
   await page.goto(`${appURL}/#sync=connect`);
   await expect(
     page.getByRole('heading', { name: `Sync ${name} with your account?` }),
@@ -163,9 +181,11 @@ test('after the account key is replaced, sync moves to the new key', async ({
   await expect(page.locator('[data-sync-code]')).toHaveText(code);
   await expect(status(page)).toHaveText(/^(Sync is on|Synced just now)/);
 
-  // Once the phone has moved the old copy, the tablet stops syncing, and says why.
+  // Once the phone has moved the old copy, the tablet stops syncing at its next
+  // sync, and says why. Back on screen, it syncs; it may have already (Photos
+  // checks its online library by itself), so the "Sync now" button may be gone.
   await moved;
-  await tablet.getByRole('button', { name: 'Sync now' }).click();
+  await tablet.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
   await expect(status(tablet)).toHaveText(/^Your account key was replaced on another device/);
   await expect(tablet.getByRole('button', { name: 'Turn on sync' })).toBeVisible();
   await tablet.context().close();

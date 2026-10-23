@@ -21,6 +21,7 @@ import {
   type Stamp,
 } from '@shkriuss/dates';
 import type { Notice } from '@shkriuss/push';
+import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
 export interface Habit {
   id: string;
@@ -246,7 +247,7 @@ export const weekOrder = (firstDay: number): number[] =>
 export function weekdayName(
   day: number,
   style: 'narrow' | 'short' | 'long' = 'short',
-  locale?: string,
+  locale = DATE_LOCALE,
 ): string {
   // 1 January 2024 was a Monday.
   return new Intl.DateTimeFormat(locale, { weekday: style, timeZone: 'UTC' }).format(
@@ -255,7 +256,7 @@ export function weekdayName(
 }
 
 /** "Every day", "Weekdays", "Weekends", or the days in week order ("Mon, Wed, Fri"). */
-export function scheduleLabel(days: readonly number[], firstDay = 1, locale?: string): string {
+export function scheduleLabel(days: readonly number[], firstDay = 1, locale = DATE_LOCALE): string {
   const set = new Set(days);
   if (set.size === 7) return 'Every day';
   if (set.size === 5 && [1, 2, 3, 4, 5].every((day) => set.has(day))) return 'Weekdays';
@@ -267,7 +268,7 @@ export function scheduleLabel(days: readonly number[], firstDay = 1, locale?: st
 }
 
 /** "Today", "Yesterday", or a date like "Friday 16 October". */
-export function dayLabel(date: IsoDate, today: IsoDate, locale?: string): string {
+export function dayLabel(date: IsoDate, today: IsoDate, locale = DATE_LOCALE): string {
   if (date === today) return 'Today';
   if (date === addDays(today, -1)) return 'Yesterday';
   const [year, month, day] = date.split('-').map(Number) as [number, number, number];
@@ -280,7 +281,7 @@ export function dayLabel(date: IsoDate, today: IsoDate, locale?: string): string
 }
 
 /** A time of day for people: "8:00 PM", or "20:00" where that's how times are written. */
-export function timeLabel(time: IsoTime, locale?: string): string {
+export function timeLabel(time: IsoTime, locale = DATE_LOCALE): string {
   const [hour, minute] = time.split(':').map(Number) as [number, number];
   return new Intl.DateTimeFormat(locale, {
     hour: 'numeric',

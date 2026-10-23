@@ -1,6 +1,31 @@
 /**
  * A small QR code encoder (ISO/IEC 18004), so a phone's camera can open a
- * link shown on another device. No library, no network: just the standard.
+ * link shown on another device. No network, and no package to install.
+ *
+ * It follows Project Nayuki's QR Code generator library
+ * (https://www.nayuki.io/page/qr-code-generator-library):
+ *
+ *   Copyright (c) Project Nayuki. (MIT License)
+ *
+ *   Permission is hereby granted, free of charge, to any person obtaining a
+ *   copy of this software and associated documentation files (the
+ *   "Software"), to deal in the Software without restriction, including
+ *   without limitation the rights to use, copy, modify, merge, publish,
+ *   distribute, sublicense, and/or sell copies of the Software, and to
+ *   permit persons to whom the Software is furnished to do so, subject to the
+ *   following conditions:
+ *   - The above copyright notice and this permission notice shall be
+ *     included in all copies or substantial portions of the Software.
+ *   - The Software is provided "as is", without warranty of any kind,
+ *     express or implied, including but not limited to the warranties of
+ *     merchantability, fitness for a particular purpose and noninfringement.
+ *     In no event shall the authors or copyright holders be liable for any
+ *     claim, damages or other liability, whether in an action of contract,
+ *     tort or otherwise, arising from, out of or in connection with the
+ *     Software or the use or other dealings in the Software.
+ *
+ * Pages that show a QR code link to the same notice (the hub's
+ * /licenses/qrcodegen.txt), since the built file has no comments.
  *
  * It covers what links need: text as bytes (UTF-8), error correction level M
  * (about 15% of the code can be damaged and still scan), versions 1 to 10

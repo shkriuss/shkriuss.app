@@ -46,8 +46,10 @@ colour are in [`packages/registry/apps.json`](../../packages/registry/apps.json)
 Everything is saved in the browser on this device (`shkriuss:calendar` for
 events, `shkriuss:calendar-reminders` for when reminders were last checked,
 `shkriuss:calendar-holidays` for which holidays and fasts to show).
-Nothing is sent anywhere: imported files are read on the device, and
-notifications are made by the browser on the device (no push server).
+Imported files are read on the device. Nothing else leaves it, unless the
+person turns on sync (a sealed copy on Calendar's server, docs/adr/0010) or
+reminders while Calendar is closed (each reminder's time and sealed text on
+its notification server, docs/adr/0009).
 
 ## Where things are
 

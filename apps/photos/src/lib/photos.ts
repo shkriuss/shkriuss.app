@@ -5,6 +5,7 @@
  * device: ../scripts/library.ts and docs/adr/0015-photos-app.md. The online
  * library's rules are in online.ts.
  */
+import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
 /** What every device knows about a photo (sent to the online library sealed). */
 export interface PhotoDetails {
@@ -146,12 +147,12 @@ function asWritten(taken: string): Date {
   return new Date(Date.UTC(year ?? 1970, (month ?? 1) - 1, day ?? 1, hour, minute, second));
 }
 
-const monthFormat = new Intl.DateTimeFormat(undefined, {
+const monthFormat = new Intl.DateTimeFormat(DATE_LOCALE, {
   month: 'long',
   year: 'numeric',
   timeZone: 'UTC',
 });
-const takenFormat = new Intl.DateTimeFormat(undefined, {
+const takenFormat = new Intl.DateTimeFormat(DATE_LOCALE, {
   dateStyle: 'medium',
   timeStyle: 'short',
   timeZone: 'UTC',
@@ -223,8 +224,11 @@ export function formatLabel(photo: Pick<Photo, 'name' | 'type'>): string {
 /** The name to save the original as: its own name, made safe, with an extension. */
 export function downloadName(photo: Pick<Photo, 'name' | 'type' | 'taken'>): string {
   // Characters files can't have in their names, and invisible ones, become "-".
+  // Invisible ones include direction marks, which can make "gpj.exe" show as "exe.jpg".
   const safe = [...photo.name]
-    .map((char) => (char.charCodeAt(0) < 32 || '\\/:*?"<>|'.includes(char) ? '-' : char))
+    .map((char) =>
+      /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(char) || '\\/:*?"<>|'.includes(char) ? '-' : char,
+    )
     .join('')
     .replace(/-{2,}/g, '-')
     .replace(/^[.\s]+/, '')
@@ -239,6 +243,8 @@ export function downloadName(photo: Pick<Photo, 'name' | 'type' | 'taken'>): str
 /** What happened when photos were picked, for a message. */
 export interface Added {
   added: number;
+  /** Photos that were only online: the same file puts their original back here. */
+  restored?: number;
   /** Already in the library (the same file). */
   duplicates: number;
   /** Files that aren't pictures. */
@@ -247,9 +253,19 @@ export interface Added {
   failed: number;
 }
 
-export function addedMessage({ added, duplicates, notPhotos, failed }: Added): string {
+export function addedMessage({
+  added,
+  restored = 0,
+  duplicates,
+  notPhotos,
+  failed,
+}: Added): string {
   const parts = [
-    added > 0 ? `Added ${countLabel(added, 'photo', 'photos')}.` : 'No photos were added.',
+    added > 0 || restored > 0 ? '' : 'No photos were added.',
+    added > 0 ? `Added ${countLabel(added, 'photo', 'photos')}.` : '',
+    restored > 0
+      ? `${countLabel(restored, 'original is', 'originals are')} back on this device.`
+      : '',
     duplicates > 0 ? `${countLabel(duplicates, 'photo was', 'photos were')} already here.` : '',
     notPhotos > 0 ? `${countLabel(notPhotos, 'file isn’t a photo', 'files aren’t photos')}.` : '',
     failed > 0 ? `${countLabel(failed, 'photo couldn’t', 'photos couldn’t')} be saved.` : '',

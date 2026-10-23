@@ -2,7 +2,7 @@
   "site": {
     "name": "shkriuss",
     "domain": "shkriuss.app",
-    "description": "Small, private web apps. Your data stays on your device.",
+    "description": "Small, private web apps. Your data stays on your device unless you choose to sync it.",
     "icon": "grid",
     "color": "teal"
   },
@@ -10,7 +10,7 @@
     {
       "slug": "tally",
       "name": "Tally",
-      "description": "Count anything with a tap. Your counts stay on your device.",
+      "description": "Count anything with a tap. Your counts stay on your device unless you turn on sync.",
       "icon": "tally",
       "color": "indigo",
       "status": "live",
@@ -25,7 +25,7 @@
     {
       "slug": "calendar",
       "name": "Calendar",
-      "description": "Plan your days. Your events stay on your device.",
+      "description": "Plan your days. Your events stay on your device unless you turn on sync.",
       "icon": "calendar",
       "color": "blue",
       "status": "live",
@@ -33,7 +33,7 @@
       "dataStored": [
         "Your events: titles, dates, times, repeats, reminders and notes",
         "When reminders were last checked, so each one shows only once",
-        "If you turn on reminders while Calendar is closed: this device's notification settings and a random device key (never in backups)",
+        "If you turn on reminders while Calendar is closed: this device's notification settings and a random device key (never in backups; after you turn it off, kept only until the server has deleted your reminders)",
         "If you turn on sync: a copy of your events on Calendar's server, locked on your devices so only they can read it, and this device's sync key (never in backups)",
         "Which holidays and fasts to show",
         "Your light or dark theme choice"
@@ -44,7 +44,7 @@
     {
       "slug": "notes",
       "name": "Notes",
-      "description": "Write things down. Your notes stay on your device.",
+      "description": "Write things down. Your notes stay on your device unless you turn on sync.",
       "icon": "note",
       "color": "orange",
       "status": "live",
@@ -59,7 +59,7 @@
     {
       "slug": "habits",
       "name": "Habits",
-      "description": "Build habits one day at a time. Your progress stays on your device.",
+      "description": "Build habits one day at a time. Your progress stays on your device unless you turn on sync.",
       "icon": "check",
       "color": "green",
       "status": "live",
@@ -67,7 +67,7 @@
       "dataStored": [
         "Your habits: their names, the days you plan them for and their reminder times",
         "Which days you marked each habit done",
-        "If you turn on reminders while Habits is closed: this device's notification settings and a random device key (never in backups)",
+        "If you turn on reminders while Habits is closed: this device's notification settings and a random device key (never in backups; after you turn it off, kept only until the server has deleted your reminders)",
         "If you turn on sync: a copy of your habits and check marks on Habits' server, locked on your devices so only they can read it, and this device's sync key (never in backups)",
         "Your light or dark theme choice"
       ],
@@ -96,7 +96,7 @@
     {
       "slug": "shelf",
       "name": "Shelf",
-      "description": "Keep track of what you buy and love. Your list stays on your device.",
+      "description": "Keep track of what you buy and love. Your list stays on your device unless you turn on sync.",
       "icon": "bag",
       "color": "pink",
       "status": "live",
@@ -112,7 +112,7 @@
     {
       "slug": "tasks",
       "name": "Tasks",
-      "description": "Your to-do list, with due dates, lists and reminders. It stays on your device.",
+      "description": "Your to-do list, with due dates, lists and reminders. It stays on your device unless you turn on sync.",
       "icon": "checklist",
       "color": "teal",
       "status": "live",
@@ -121,7 +121,7 @@
         "Your tasks: their titles, notes, steps, dates and times, how they repeat, reminders, lists, which are important and when you finished them",
         "Your lists: their names",
         "Whether you see tasks by date or in your own order (on this device only)",
-        "If you turn on reminders while Tasks is closed: this device's notification settings and a random device key (never in backups)",
+        "If you turn on reminders while Tasks is closed: this device's notification settings and a random device key (never in backups; after you turn it off, kept only until the server has deleted your reminders)",
         "If you turn on sync: a copy of your tasks and lists on Tasks' server, locked on your devices so only they can read it, and this device's sync key (never in backups)",
         "Your light or dark theme choice"
       ],
@@ -131,7 +131,7 @@
     {
       "slug": "meals",
       "name": "Meals",
-      "description": "Plan your meals for the week, and what to buy for them. Your plan stays on your device.",
+      "description": "Plan your meals for the week, and what to buy for them. Your plan stays on your device unless you turn on sync.",
       "icon": "utensils",
       "color": "red",
       "status": "live",
@@ -141,7 +141,7 @@
         "Your meals: their names, ingredients and notes",
         "Your shopping lists: what you added and what you ticked off (kept for 8 weeks)",
         "Your reminder times for each meal of the day",
-        "If you turn on reminders while Meals is closed: this device's notification settings and a random device key (never in backups)",
+        "If you turn on reminders while Meals is closed: this device's notification settings and a random device key (never in backups; after you turn it off, kept only until the server has deleted your reminders)",
         "If you turn on sync: a copy of your plan, meals, shopping lists and reminder times on Meals' server, locked on your devices so only they can read it, and this device's sync key (never in backups)",
         "Your light or dark theme choice"
       ],
@@ -151,7 +151,7 @@
     {
       "slug": "water",
       "name": "Water",
-      "description": "Drink enough water each day. Your log stays on your device.",
+      "description": "Drink enough water each day. Your log stays on your device unless you turn on sync.",
       "icon": "droplet",
       "color": "blue",
       "status": "live",
@@ -160,7 +160,7 @@
         "How much water you drank, and when (kept for a year)",
         "Your daily goal, glass and bottle sizes, and units",
         "Your reminder settings",
-        "If you turn on reminders while Water is closed: this device's notification settings and a random device key (never in backups)",
+        "If you turn on reminders while Water is closed: this device's notification settings and a random device key (never in backups; after you turn it off, kept only until the server has deleted your reminders)",
         "If you turn on sync: a copy of your drinks and settings on Water's server, locked on your devices so only they can read it, and this device's sync key (never in backups)",
         "Your light or dark theme choice"
       ],
@@ -170,14 +170,14 @@
     {
       "slug": "reminders",
       "name": "Reminders",
-      "description": "Get reminded at the right time, once or again and again. Your reminders stay on your device.",
+      "description": "Get reminded at the right time, once or again and again. Your reminders stay on your device unless you turn on sync.",
       "icon": "bell",
       "color": "orange",
       "status": "live",
       "storage": "device",
       "dataStored": [
         "Your reminders: what to be reminded of, when, how often it repeats, and which are done",
-        "If you turn on reminders while Reminders is closed: this device's notification settings and a random device key (never in backups)",
+        "If you turn on reminders while Reminders is closed: this device's notification settings and a random device key (never in backups; after you turn it off, kept only until the server has deleted your reminders)",
         "If you turn on sync: a copy of your reminders on Reminders' server, locked on your devices so only they can read it, and this device's sync key (never in backups)",
         "Your light or dark theme choice"
       ],
@@ -187,7 +187,7 @@
     {
       "slug": "trades",
       "name": "Trades",
-      "description": "Your trading journal: log your trades and see what works. It stays on your device.",
+      "description": "Your trading journal: log your trades and see what works. It stays on your device unless you turn on sync.",
       "icon": "chart",
       "color": "green",
       "status": "live",
@@ -203,7 +203,7 @@
     {
       "slug": "budget",
       "name": "Budget",
-      "description": "See where your money goes, month by month. Your budget stays on your device.",
+      "description": "See where your money goes, month by month. Your budget stays on your device unless you turn on sync.",
       "icon": "wallet",
       "color": "indigo",
       "status": "live",
@@ -212,7 +212,7 @@
         "Your expenses and income: amounts, days, categories and notes",
         "Your categories and their monthly limits",
         "Which currency to show amounts in, and your monthly reminder settings",
-        "If you turn on reminders while Budget is closed: this device's notification settings and a random device key (never in backups)",
+        "If you turn on reminders while Budget is closed: this device's notification settings and a random device key (never in backups; after you turn it off, kept only until the server has deleted your reminders)",
         "If you turn on sync: a copy of your budget on Budget's server, locked on your devices so only they can read it, and this device's sync key (never in backups)",
         "Your light or dark theme choice"
       ],
@@ -222,7 +222,7 @@
     {
       "slug": "repairs",
       "name": "Repairs",
-      "description": "Keep a record of every repair, vehicle by vehicle. Your records stay on your device.",
+      "description": "Keep a record of every repair, vehicle by vehicle. Your records stay on your device unless you turn on sync.",
       "icon": "wrench",
       "color": "slate",
       "status": "live",

@@ -3,7 +3,7 @@
  * Durable Object, with storage and R2 kept in Maps.
  */
 import type { DurableObjectListStorage, R2Bucket } from '@shkriuss/server';
-import worker, { Library, type LibraryEnv } from './worker.ts';
+import worker, { Library, LibraryGate, type LibraryEnv } from './worker.ts';
 
 export class MemoryListStorage implements DurableObjectListStorage {
   readonly map = new Map<string, unknown>();
@@ -27,6 +27,9 @@ export class MemoryListStorage implements DurableObjectListStorage {
   }
   async deleteAlarm(): Promise<void> {
     this.alarm = null;
+  }
+  async getAlarm(): Promise<number | null> {
+    return this.alarm;
   }
   async list<T>(options: { prefix?: string; startAfter?: string; limit?: number }) {
     const { prefix = '', startAfter = '', limit = Infinity } = options;
@@ -86,10 +89,16 @@ export class MemoryBucket implements R2Bucket {
 export function memoryLibrary(code: string | null = 'correct horse battery staple') {
   const objects = new Map<string, { library: Library; storage: MemoryListStorage }>();
   const bucket = new MemoryBucket();
+  const gateStorage = new MemoryListStorage();
+  const gate = new LibraryGate({ storage: gateStorage, blockConcurrencyWhile: (run) => run() });
   const env: LibraryEnv = {
     ASSETS: { fetch: async () => new Response('page') },
     LIBRARY_FILES: bucket,
     ...(code === null ? {} : { LIBRARY_STORAGE_CODE: code }),
+    LIBRARY_GATE: {
+      idFromName: (name) => ({ toString: () => name }),
+      get: () => ({ fetch: (input, init) => gate.fetch(new Request(input, init)) }),
+    },
     LIBRARIES: {
       idFromName: (name) => ({ toString: () => name }),
       get: (id) => ({
@@ -113,6 +122,8 @@ export function memoryLibrary(code: string | null = 'correct horse battery stapl
     env,
     bucket,
     objects,
+    gate,
+    gateStorage,
     fetch: (request: Request) => worker.fetch(request, env),
   };
 }

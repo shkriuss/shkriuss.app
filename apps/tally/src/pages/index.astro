@@ -82,6 +82,23 @@ import { MAX_NAME_LENGTH } from '../lib/counters.ts';
     </li>
   </template>
 
+  <dialog class="dialog" aria-labelledby="reset-title" data-reset-dialog>
+    <form method="dialog" class="stack">
+      <h2 id="reset-title" data-reset-title>
+        Reset this counter to 0?
+      </h2>
+      <p data-reset-text>Its count will be set back to 0. This can’t be undone.</p>
+      <div class="cluster">
+        <Button type="submit" value="cancel">
+          Cancel
+        </Button>
+        <Button type="submit" variant="danger" value="confirm">
+          Reset
+        </Button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog class="dialog" aria-labelledby="delete-title" data-counter-dialog>
     <form method="dialog" class="stack">
       <h2 id="delete-title">Delete this counter?</h2>

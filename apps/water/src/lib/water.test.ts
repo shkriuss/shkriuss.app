@@ -13,6 +13,7 @@ import {
   emptySettings,
   everyLabel,
   formatAmount,
+  goalReached,
   inUnit,
   isDrinksState,
   isSettingsState,
@@ -225,6 +226,23 @@ describe('history', () => {
     ]);
     expect(averageOf(recentDays(state, 2000, TODAY, 5))).toBe(1440);
     expect(averageOf([])).toBe(0);
+  });
+
+  it('reaches a goal in ounces with drinks that add up to it', () => {
+    // Four 16 fl oz bottles are 1,892 ml; 64 fl oz is 1,893 ml.
+    const goal = toMl(64, 'oz');
+    const bottles = [1, 2, 3, 4].reduce(
+      (all, hour) => addDrink(all, drink(TODAY, `1${hour}:00`, toMl(16, 'oz'))),
+      emptyDrinks(),
+    );
+    const total = totalOn(bottles, TODAY);
+    expect(total).toBeLessThan(goal);
+    expect(goalReached(total, goal, 'oz')).toBe(true);
+    expect(progressText(total, goal, 'oz')).toBe('Goal reached. Well done!');
+    expect(streak(bottles, goal, TODAY, 'oz')).toBe(1);
+    expect(recentDays(bottles, goal, TODAY, 1, 'oz')[0]?.reached).toBe(true);
+    // In millilitres, a millilitre short is short.
+    expect(goalReached(1999, 2000, 'ml')).toBe(false);
   });
 
   it('counts days in a row the goal was reached', () => {

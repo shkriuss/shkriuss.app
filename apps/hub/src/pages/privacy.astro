@@ -63,6 +63,10 @@ const LAST_UPDATED = '22 October 2026';
               <td>
                 {whereLabel[site.storage]}
                 {site.sync && ' (and, if you turn on sync, a locked copy online)'}
+                {site.pushNotifications &&
+                  ' (and, if you turn on reminders while it’s closed, your reminders, locked, on its server)'}
+                {site.slug === HUB_SLUG &&
+                  ' (and, if you add a passkey, your account key, locked, on its server)'}
               </td>
             </tr>
           ))}
@@ -91,10 +95,25 @@ const LAST_UPDATED = '22 October 2026';
           </li>
           <li>
             Each reminder that won't happen again is deleted after it's sent. Turning the option
-            off, deleting all data in the app, or blocking notifications deletes everything for that
-            device.
+            off, or deleting all data in the app, deletes everything for that device. If the server
+            can't be reached then, the app says so and tries again each time it's opened.
           </li>
-          <li>Nothing is shared between apps, and nobody is told who you are.</li>
+          <li>
+            Blocking notifications deletes everything for that device the next time you open the
+            app, or when a reminder is due and the push service says the device no longer takes
+            them. The server also deletes everything for a device when none of its reminders can be
+            delivered for two days.
+          </li>
+          <li>
+            The app sends your reminders again each week while you use it. If you don't open the app
+            on that device for 13 months, the server deletes everything it has for that device.
+          </li>
+          <li>
+            The push service sees when each reminder is sent, which app sends it, and roughly how
+            long it is, but not what it says. It already knows which phone or browser it delivers
+            to, as it does for any app's notifications.
+          </li>
+          <li>Nothing is shared between apps, and the server is never told who you are.</li>
         </ul>
       </>
     )}
@@ -124,11 +143,14 @@ const LAST_UPDATED = '22 October 2026';
       <li>
         <strong>If you replace your account key</strong> (after losing a device): the server keeps a
         note that the old key was replaced, so devices that still have it sign out. Your device
-        keeps the old key for a while, so your apps can move their synced data to the new one.
+        keeps the old key until you sign out, so your apps can move their synced data to the new
+        one.
       </li>
       <li>
-        That's all. There's no list of accounts, and nothing that connects an account to you, to
-        your devices, or to your data in any app.
+        That's all. There's no list of accounts, and nothing stored that connects an account to you,
+        to your devices, or to your data in any app. Like any web request, each request comes with
+        your device's internet address and the time: Cloudflare's servers handle them to answer it,
+        and nothing here keeps them.
       </li>
     </ul>
 
@@ -147,8 +169,9 @@ const LAST_UPDATED = '22 October 2026';
           </li>
           <li>
             The app's own server on Cloudflare keeps one locked copy of the app's data. It sees how
-            big the copy is and when it changes, but never what's in it. It can't tell which account
-            is yours, and each app's copy can't be linked to another app's.
+            big the copy is and when it changes, but never what's in it. Nothing it stores says
+            which account is yours, or links one app's copy to another's (each sync comes with your
+            internet address and the time, which aren't kept).
           </li>
           <li>
             In apps with photos, each photo is locked on your device in the same way and kept with
@@ -162,8 +185,9 @@ const LAST_UPDATED = '22 October 2026';
               in Cloudflare's file storage (R2). The server sees how many photos there are, how big,
               and when they're added or deleted, never what they show, their names or their dates.
               Adding photos needs a storage code that only the owner of these apps has, which keeps
-              the storage bill under control. Deleting a photo deletes it online and on your other
-              devices.
+              the storage bill under control. When someone types a wrong code, a scrambled form of
+              their internet address is kept for up to an hour, to limit guessing. Deleting a photo
+              deletes it online and on your other devices.
             </li>
           )}
           <li>
@@ -172,7 +196,8 @@ const LAST_UPDATED = '22 October 2026';
           <li>
             “Turn off on this device” stops syncing there and keeps your data. “Delete the online
             copy” deletes the copy (and its photos, and any online library) from the server; your
-            devices keep what they have.
+            devices keep what they have. A small note stays, so your other devices learn it was
+            deleted: when, and how many times it was changed, never what was in it.
           </li>
           <li>
             If you replace your account key, turning on sync again moves the app's copy to the new
@@ -191,15 +216,16 @@ const LAST_UPDATED = '22 October 2026';
       </li>
       <li>Send anything off your device unless you turn on an option that says it does.</li>
       <li>Make you sign up or log in. The account is optional and needs no email or name.</li>
-      <li>Sell or share your data. There is none to share.</li>
+      <li>Sell or share your data. We can't read it, so there's nothing to share.</li>
     </ul>
 
     <h2>Hosting</h2>
     <p>
       The sites are hosted by Cloudflare. Like any web host, Cloudflare's servers handle your IP
       address and basic request details (such as which page was asked for and your browser type) to
-      deliver pages and protect against attacks. No Cloudflare analytics or logging is turned on for
-      these sites, and that data is not collected or looked at. See{' '}
+      deliver pages and protect against attacks. Cloudflare keeps overall counts (like requests per
+      day) and a record of requests its firewall blocks. No logs of individual visits are turned on
+      for these sites, and nobody looks at that data. See{' '}
       <a href="https://www.cloudflare.com/privacypolicy/">Cloudflare's privacy policy</a>.
     </p>
 
@@ -207,6 +233,8 @@ const LAST_UPDATED = '22 October 2026';
     <ul>
       <li>
         Each app that saves data has a “Your data” section to back up, restore or delete it all.
+        Photos can only delete there: its photos are too big for a backup file, and its copy is its
+        online library, with sync on.
       </li>
       <li>
         Backups are files you download. By default they're locked with a passphrase you choose, on
@@ -215,15 +243,20 @@ const LAST_UPDATED = '22 October 2026';
       </li>
       <li>You can also clear a site's data in your browser settings.</li>
       <li>
-        Because your data is only on your device, clearing your browser data or losing the device
-        deletes it. Back up if you want to keep a copy or move to a new device.
+        Unless you turn on sync, your data is only on your device, so clearing your browser data or
+        losing the device deletes it. Back up if you want to keep a copy or move to a new device.
+      </li>
+      <li>
+        Safari also deletes a website's data when it isn't opened for 7 days, unless it's on your
+        Home Screen. The apps ask your browser to keep their data, but it decides. Adding an app to
+        your Home Screen, sync and backups all keep it safe.
       </li>
     </ul>
 
     <h2>Changes</h2>
     <p>
-      If this ever changes (for example, when apps start syncing through your account), this page
-      will be updated first, and the app will ask you before anything leaves your device.
+      If what leaves your device ever changes, this page is updated first, and the app asks you
+      before anything new leaves your device.
     </p>
   </article>
 </AppShell>

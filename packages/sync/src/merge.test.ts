@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   canonical,
+  dropForgotten,
   fingerprint,
   keepBoth,
   knownFrom,
@@ -10,7 +11,9 @@ import {
   sameSnapshot,
   secondVersionName,
   TOMBSTONE_DAYS,
+  upgradeKnown,
   valuesOf,
+  type Entry,
   type Identified,
   type Known,
   type StoreSnapshot,
@@ -97,6 +100,22 @@ describe('observe', () => {
     const later = observe(knownFrom(removed.snapshot), [counter('a')], 1, 300);
     expect(later.changed).toBe(false);
     expect(later.snapshot.items['b']).toEqual({ t: 200, deleted: true });
+  });
+
+  it('stamps a change later than the version it was made from, even with a clock behind', () => {
+    const synced: StoreSnapshot = {
+      v: 1,
+      items: { a: { t: 1000, value: counter('a') }, b: { t: 1000, value: counter('b') } },
+      order: { ids: ['a', 'b'], t: 1000 },
+    };
+    // This device's clock says 400.
+    const next = observe(knownFrom(synced), [counter('a', 5)], 1, 400).snapshot;
+    expect(next.items).toEqual({
+      a: { t: 1001, value: counter('a', 5) },
+      b: { t: 1001, deleted: true },
+    });
+    expect(next.order.t).toBe(1001);
+    expect(valuesOf(merge(synced, next))).toEqual([counter('a', 5)]);
   });
 
   it('notices a new order', () => {
@@ -264,6 +283,80 @@ describe('keepBoth', () => {
   });
 });
 
+describe('ids', () => {
+  // A calendar file can give an event any id, such as "__proto__".
+  const odd = [counter('__proto__'), counter('constructor'), counter('toString')];
+
+  it('are only ever keys, whatever they are', () => {
+    const mine = observe(undefined, [counter('a'), ...odd], 1, 100).snapshot;
+    const theirs = observe(undefined, [counter('a')], 1, 100).snapshot;
+    const merged = merge(mine, theirs);
+    expect(valuesOf(merged)).toEqual([counter('a'), ...odd]);
+    expect(valuesOf(prune(merged, 200))).toEqual([counter('a'), ...odd]);
+
+    // Deleted, and remembered through the device's saved state (JSON).
+    const known = JSON.parse(JSON.stringify(knownFrom(merged))) as Known;
+    const deleted = observe(known, [counter('a')], 1, 300).snapshot;
+    for (const { id } of odd) expect(deleted.items[id]).toEqual({ t: 300, deleted: true });
+    expect(valuesOf(merge(deleted, merged))).toEqual([counter('a')]);
+  });
+
+  it('that aren’t there never match something else', () => {
+    const known = JSON.parse(JSON.stringify(knownFrom(observe(undefined, [], 1, 100).snapshot)));
+    const added = observe(known as Known, odd, 1, 200).snapshot;
+    for (const { id } of odd) expect(added.items[id]).toEqual({ t: 200, value: counter(id) });
+    const empty = observe(undefined, [], 1, 100).snapshot;
+    expect(valuesOf(merge(empty, added))).toEqual(odd);
+    const copy = (item: Identified) => ({ ...item, id: `${item.id}-copy` });
+    expect(keepBoth(known as Known, added, empty, copy, 300).kept).toBe(0);
+  });
+});
+
+describe('upgradeKnown', () => {
+  // Data version 2 adds a colour to every counter.
+  const v2 = (item: Counter) => ({ ...item, color: null });
+  const known = knownFrom(
+    observe(undefined, [counter('a'), counter('b'), counter('c')], 1, 100).snapshot,
+  );
+  // Since the last sync, here: b changed and c deleted, still saved in version 1.
+  const old = new Map([
+    ['a', counter('a')],
+    ['b', counter('b', 5)],
+  ]);
+  const current = [v2(counter('a')), v2(counter('b', 5))];
+
+  it('counts only what changed here since the last sync as edited', () => {
+    const next = upgradeKnown(known, current, old, 2);
+    expect(next.v).toBe(2);
+    expect(next.items).toEqual({
+      a: { h: fingerprint(v2(counter('a'))), t: 0 },
+      b: { h: '', t: 0 },
+      c: { h: '', t: 0 },
+    });
+    expect(observe(next, current, 2, 500).snapshot.items).toEqual({
+      a: { t: 0, value: v2(counter('a')) },
+      b: { t: 500, value: v2(counter('b', 5)) },
+      c: { t: 500, deleted: true },
+    });
+  });
+
+  it('takes items as unchanged when the old data is gone', () => {
+    expect(upgradeKnown(known, current, null, 2).items).toEqual({
+      a: { h: fingerprint(v2(counter('a'))), t: 0 },
+      b: { h: fingerprint(v2(counter('b', 5))), t: 0 },
+      c: { h: '', t: 0 },
+    });
+  });
+
+  it('leaves items whose value at the last sync is unknown to the newest edit', () => {
+    const next = upgradeKnown(known, current, old, 2);
+    const mine = observe(next, current, 2, 500).snapshot;
+    const theirs = observe(knownFrom(mine), [v2(counter('a')), v2(counter('b', 7))], 2, 400);
+    const copy = (item: Identified) => ({ ...item, id: `${item.id}-copy` });
+    expect(keepBoth(next, mine, theirs.snapshot, copy, 500).kept).toBe(0);
+  });
+});
+
 describe('secondVersionName', () => {
   it('adds "(second version)", shortening the name to fit', () => {
     expect(secondVersionName('  Shopping ', 60)).toBe('Shopping (second version)');
@@ -274,6 +367,39 @@ describe('secondVersionName', () => {
     expect(emoji.length).toBeLessThanOrEqual(30);
     expect(emoji).toBe('😀😀😀😀😀😀 (second version)');
     expect(secondVersionName('   ', 60)).toBe('Second version');
+  });
+});
+
+describe('dropForgotten', () => {
+  it('deletes what the copy lost without a marker, unless it was changed here', () => {
+    const online = observe(
+      undefined,
+      [counter('gone'), counter('edited'), counter('marked'), counter('kept')],
+      1,
+      100,
+    ).snapshot;
+    const seen = knownFrom(online);
+    // The copy now: "gone" and "edited" dropped without a marker, "marked" with one.
+    const theirs: StoreSnapshot = {
+      v: 1,
+      items: { marked: { t: 200, deleted: true }, kept: online.items['kept'] as Entry },
+      order: { ids: ['kept'], t: 200 },
+    };
+    const here = [
+      counter('gone'),
+      counter('edited', 5),
+      counter('marked'),
+      counter('kept'),
+      counter('new'),
+    ];
+    const mine = observe(seen, here, 1, 300).snapshot;
+    const result = dropForgotten(mine, theirs, seen);
+    expect(result.items['gone']).toEqual({ t: 0, deleted: true });
+    expect(valuesOf(merge(result, theirs))).toEqual([
+      counter('edited', 5),
+      counter('kept'),
+      counter('new'),
+    ]);
   });
 });
 

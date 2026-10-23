@@ -43,6 +43,8 @@ test.describe('offline', () => {
     await context.setOffline(true);
     await page.reload();
     await expect(page.locator('h1')).toBeVisible();
+    // The page's scripts were saved too, and ran: the theme switch shows only then.
+    await expect(page.locator('[data-theme-switch]')).toBeVisible();
     await context.setOffline(false);
   });
 
@@ -53,6 +55,7 @@ test.describe('offline', () => {
     const started = Date.now();
     await page.reload({ timeout: 10_000 });
     await expect(page.locator('h1')).toBeVisible();
+    await expect(page.locator('[data-theme-switch]')).toBeVisible();
     expect(Date.now() - started).toBeLessThan(8_000);
   });
 });

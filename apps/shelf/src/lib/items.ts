@@ -7,6 +7,8 @@
  */
 import { isIsoDate, parts, type IsoDate } from '@shkriuss/dates';
 import { secondVersionName } from '@shkriuss/sync';
+import { compareText } from '@shkriuss/ui/text';
+import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
 /** An item's category when it has none. Categories themselves: ./categories.ts. */
 export const NO_CATEGORY = '';
@@ -146,7 +148,8 @@ export function parsePrice(text: string): number | null | undefined {
 export function normalizeLink(text: string): string | undefined {
   const trimmed = text.trim();
   if (trimmed === '') return '';
-  const withScheme = /^[a-z][a-z\d+.-]*:/i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  // "shop.ge:8080/x" has no scheme: one with a dot in it is a host and port.
+  const withScheme = /^[a-z][a-z\d+-]*:/i.test(trimmed) ? trimmed : `https://${trimmed}`;
   try {
     const url = new URL(withScheme);
     if (url.protocol !== 'https:' && url.protocol !== 'http:') return undefined;
@@ -260,8 +263,7 @@ export const fold = (text: string): string =>
   text.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase().trim();
 
 /** Alphabetical order, without minding case or accents ("item 2" before "item 10"). */
-export const byText = (a: string, b: string): number =>
-  a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true });
+export const byText = compareText;
 
 /** The item's category, or NO_CATEGORY if it's not one of `known` (deleted on another device). */
 const categoryOf = (item: Item, known: ReadonlySet<string>): string =>
@@ -307,9 +309,11 @@ export function visibleItems(
       Number(a.brand === '') - Number(b.brand === '') ||
       byText(a.brand, b.brand) ||
       byText(a.name, b.name),
-    // Without a price: last.
+    // Without a price: last. Prices in different currencies can't be compared
+    // (no exchange rates), so each currency's come together.
     price: (a, b) =>
       Number(a.price === null) - Number(b.price === null) ||
+      byText(a.currency, b.currency) ||
       (a.price ?? 0) - (b.price ?? 0) ||
       byText(a.name, b.name),
   };
@@ -387,7 +391,7 @@ export const formatPrice = (price: number, currency: Currency, locale?: string):
   new Intl.NumberFormat(locale, { style: 'currency', currency }).format(price);
 
 /** "12 Oct 2026". */
-export function formatDate(date: IsoDate, locale?: string): string {
+export function formatDate(date: IsoDate, locale = DATE_LOCALE): string {
   const { year, month, day } = parts(date);
   return new Intl.DateTimeFormat(locale, {
     day: 'numeric',
@@ -400,7 +404,10 @@ export function formatDate(date: IsoDate, locale?: string): string {
 /** The website a link goes to, without "www." ("shop.ge"). */
 export function linkHost(link: string): string {
   try {
-    return new URL(link).hostname.replace(/^www\./, '');
+    // Links from backups and other devices skip the form's check: only web links show.
+    const url = new URL(link);
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return '';
+    return url.hostname.replace(/^www\./, '');
   } catch {
     return '';
   }

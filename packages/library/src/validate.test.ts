@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  callerNetwork,
   checkFirstParts,
   checkMove,
   checkRemove,
@@ -9,6 +10,18 @@ import {
   parseParts,
   utcDay,
 } from './validate.ts';
+
+describe('callerNetwork', () => {
+  it('keeps an IPv4 address, and the first 64 bits of an IPv6 one', () => {
+    expect(callerNetwork('203.0.113.7')).toBe('203.0.113.7');
+    expect(callerNetwork('2001:db8:1:2::abcd')).toBe('2001:db8:1:2');
+    expect(callerNetwork('2001:0DB8:0001:0002:aaaa:bbbb:cccc:dddd')).toBe('2001:db8:1:2');
+    expect(callerNetwork('2001:db8::1')).toBe('2001:db8:0:0');
+    expect(callerNetwork('::1')).toBe('0:0:0:0');
+    expect(callerNetwork('fe80::')).toBe('fe80:0:0:0');
+    expect(callerNetwork(null)).toBe('');
+  });
+});
 
 describe('parseParts', () => {
   it('reads the sizes of an item’s parts', () => {

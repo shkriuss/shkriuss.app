@@ -18,7 +18,23 @@ export interface TestSite {
  */
 export const TEST_STORAGE_CODE = 'local test storage code';
 
+/**
+ * The first site's port; the others follow. Set E2E_PORT_BASE to run beside
+ * another checkout's tests (say, a second AI session) without clashing.
+ */
+function portBase(): number {
+  const text = process.env['E2E_PORT_BASE'];
+  if (text === undefined || text === '') return 8787;
+  const base = Number(text);
+  if (!Number.isInteger(base) || base < 1024 || base > 50_000) {
+    throw new Error(`E2E_PORT_BASE must be a port from 1024 to 50000, not "${text}".`);
+  }
+  return base;
+}
+
+const base = portBase();
+
 export const sites: TestSite[] = siteSlugs().map((slug, index) => {
-  const port = 8787 + index;
+  const port = base + index;
   return { slug, dir: join(repoRoot, 'apps', slug), port, baseURL: `http://127.0.0.1:${port}` };
 });

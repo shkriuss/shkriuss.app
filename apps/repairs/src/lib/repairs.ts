@@ -22,6 +22,9 @@
  * vehicle in the repair form adds it.
  */
 import { isIsoDate, type IsoDate } from '@shkriuss/dates';
+import { parseDecimal } from '@shkriuss/ui/numbers';
+import { compareText } from '@shkriuss/ui/text';
+import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
 export interface Vehicle {
   id: string;
@@ -245,8 +248,7 @@ const fold = (text: string): string =>
 const oneLine = (text: string): string => text.trim().replace(/\s+/g, ' ');
 
 /** "Bus 2" before "Bus 10". */
-const byName = (a: string, b: string): number =>
-  a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+const byName = compareText;
 
 // ---------- Vehicles ----------
 
@@ -351,10 +353,7 @@ export interface RepairForm {
 export type RepairProblems = Partial<Record<string, string>>;
 
 /** A typed number: null when empty, NaN when it isn't one. A comma works as a decimal point. */
-const parseNumber = (text: string): number | null => {
-  const tidy = text.trim().replace(/\s/g, '').replace(',', '.');
-  return tidy === '' ? null : Number(tidy);
-};
+const parseNumber = parseDecimal;
 
 /**
  * Reads the repair form into a repair (with the given id), or says what's
@@ -798,7 +797,7 @@ export function partLabel(part: Part, locale?: string): string {
 }
 
 /** "Wednesday, October 21, 2026" */
-export function dayLabel(date: IsoDate, locale?: string): string {
+export function dayLabel(date: IsoDate, locale = DATE_LOCALE): string {
   const [year, month, day] = date.split('-').map(Number) as [number, number, number];
   return new Intl.DateTimeFormat(locale, { dateStyle: 'full', timeZone: 'UTC' }).format(
     Date.UTC(year, month - 1, day),
@@ -806,7 +805,7 @@ export function dayLabel(date: IsoDate, locale?: string): string {
 }
 
 /** "Oct 21, 2026" */
-export function dateLabel(date: IsoDate, locale?: string): string {
+export function dateLabel(date: IsoDate, locale = DATE_LOCALE): string {
   const [year, month, day] = date.split('-').map(Number) as [number, number, number];
   return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(
     Date.UTC(year, month - 1, day),

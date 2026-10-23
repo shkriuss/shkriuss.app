@@ -1,6 +1,11 @@
 # 0002. One Cloudflare Worker per site, with static assets
 
-Status: Accepted (2026-10-16)
+Status: Accepted (2026-10-16). Extended by [ADR 0009](0009-push-notifications.md),
+[ADR 0010](0010-account-and-sync.md), [ADR 0014](0014-syncing-photos.md) and
+[ADR 0016](0016-online-photo-library.md): a site with an optional feature
+(notifications, sync, the account, Photos' online library) also has a Worker
+script, which runs only for `/api/*`; the token also needs Workers R2 Storage
+(see `docs/deployment.md`).
 
 ## Context
 

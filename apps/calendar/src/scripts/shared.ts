@@ -4,6 +4,7 @@
  */
 import { parts, type IsoDate, type IsoTime } from '../lib/dates.ts';
 import type { CalendarState, Occurrence } from '../lib/events.ts';
+import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
 export function required<T extends Element>(root: ParentNode, selector: string): T {
   const element = root.querySelector<T>(selector);
@@ -17,7 +18,7 @@ export const utc = (date: IsoDate): Date => {
   return new Date(Date.UTC(year, month - 1, day));
 };
 const formatter = (options: Intl.DateTimeFormatOptions) =>
-  new Intl.DateTimeFormat(undefined, { ...options, timeZone: 'UTC' });
+  new Intl.DateTimeFormat(DATE_LOCALE, { ...options, timeZone: 'UTC' });
 
 export const monthFormat = formatter({ month: 'long', year: 'numeric' });
 export const longDate = formatter({

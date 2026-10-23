@@ -14,14 +14,20 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
 
 **What runs where**
 
-- Every site is static files on Cloudflare Workers static assets.
-- The one exception is optional: apps that offer **notifications while
-  closed** (Calendar) also run a small Worker for `/api/push/*`, with one
+- Every site's pages and files are static files on Cloudflare Workers
+  static assets. Worker code runs only for `/api/*`, for these optional
+  features.
+- Apps that offer **notifications while
+  closed** (`"pushNotifications": true` in `apps.json`: Calendar, Habits,
+  Tasks, Meals, Water, Reminders and Budget) also run a small Worker for
+  `/api/push/*`, with one
   Durable Object per device ([ADR 0009](docs/adr/0009-push-notifications.md)).
   It only ever holds messages encrypted on the user's device, delivery times
   and a time zone; each app has its own storage and signing key, generated
   by the server and never exported. Requests are size-limited, rate-limited
-  and checked; push addresses must be https with a domain name.
+  and checked; push addresses must be https with a domain name, and
+  redirects are refused. A device whose messages all fail or are refused for
+  two days is forgotten, and each app sends at most 2,000 messages a day.
 - The hub also runs a small Worker for `/api/account/*`, for the optional
   **shkriuss account** ([ADR 0010](docs/adr/0010-account-and-sync.md)). It
   only holds values sealed on the device (AES-256-GCM): passkey locks, under
@@ -47,9 +53,15 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
   list, with each photo's details sealed too. It only ever sees hashes of the
   library's id and token. The first token to reach a library is its only
   one; after the account key is replaced it moves to the new token, proven
-  with the old one, which is refused from then on. Adding photos needs the
-  storage code, and the library has hard limits (1 TB, 400,000 photos,
-  95 MB each, 20,000 uploads a day), so nobody can run up the bill.
+  with the old one, which is refused from then on. If a device with the old
+  key (a lost one) moves it first, it's theirs: Photos says so and starts a
+  new library. Adding photos needs the
+  storage code (20 wrong tries an hour from each internet address, so a
+  stranger can't lock others out; the code is five or more random words),
+  and changing the code locks
+  every library. Hard limits across all libraries (1 TB, 20,000 uploads a
+  day), plus 400,000 photos per library and 95 MB each, mean nobody can run
+  up the bill.
 - An app connects by sending the person to the hub with a one-time ECDH
   public key; after they confirm, the hub seals the app's key to it and sends
   it back in the URL fragment, only to that app's real address. The app and
@@ -57,8 +69,9 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
 - Each app is its own origin (`<app>.shkriuss.app`), so browsers keep each
   app's saved data separate. Apps never get the account secret, only a key
   for themselves.
-- User data stays in the browser (`localStorage`). Nothing is sent anywhere
-  unless the user turns on notifications while closed, or uses the account.
+- User data stays in the browser (`localStorage`, and IndexedDB for photos).
+  Nothing is sent anywhere unless the user turns on notifications while
+  closed, or uses the account (sync, and Photos' online library).
 
 **Browser protections (same headers on every site)**
 
@@ -75,18 +88,27 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
 - No secrets in the repository. The Cloudflare API token is stored only as a
   GitHub Actions secret, with just three permissions: _Workers Scripts: Edit_
   and _Workers R2 Storage: Edit_ (account), and _Workers Routes: Edit_ (the
-  `shkriuss.app` zone only). Photos' storage code is a GitHub Actions secret
-  too, handed to its Worker at deploy in a temporary file that's deleted
-  straight after; the Worker compares codes in constant time and allows 10
-  wrong tries an hour per library.
-- gitleaks scans every commit for secrets; zizmor checks the workflows;
+  `shkriuss.app` zone only). It's a secret of two environments: `production`,
+  which only `main` can use, and `preview`, which waits for the owner's
+  approval, because a preview runs a pull request's code before it's
+  merged. Photos' storage code is a secret of `production` only, handed to
+  its Worker at deploy in a temporary file that's deleted straight after;
+  previews never get it.
+- gitleaks scans every commit for secrets; zizmor checks the workflows,
+  including that each pinned commit really belongs to its action;
   `pnpm audit` checks for known vulnerabilities; Dependabot proposes updates
   (after a 7-day cooldown).
 - GitHub Actions are pinned to exact commit SHAs, workflows start with no
   permissions, and code checkout doesn't keep credentials.
-- pnpm only lets allow-listed packages run install scripts and won't install
-  versions published less than 7 days ago.
-- Production deploys only happen from `main`, after every check passes.
+- pnpm only lets allow-listed packages run install scripts and won't pick
+  versions published less than 7 days ago when it updates the lockfile. CI
+  also refuses a pull request that adds a version that new to the lockfile
+  by other means (`scripts/lockfile-age.ts`).
+- Production deploys only happen from `main`, after every check passes,
+  including the dependency audit, and only for `main`'s newest commit (so
+  re-running an older run can't put older code back). Only the deploy steps
+  see the token, and the deploy job installs without the shared package
+  cache.
 
 ## Known limits
 
@@ -96,7 +118,14 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
   Public repositories also get GitHub's own secret scanning, push protection,
   code scanning and rulesets; [docs/deployment.md](docs/deployment.md#github-settings)
   lists the settings to turn on.
-- Cloudflare, as the host, sees visitors' IP addresses to deliver pages. No
-  Cloudflare analytics or logging is turned on for these sites.
-- Preview links (`*.workers.dev`) are public, but not listed anywhere and not
-  indexed by search engines. They contain the same code as production.
+- Cloudflare, as the host, sees visitors' IP addresses to deliver pages and
+  answer the Workers. It always keeps traffic statistics (numbers of
+  requests), and a short record (IP address, country, browser, page) of
+  requests its firewall blocks as likely attacks. No extra Cloudflare
+  analytics or logging is turned on: every Worker sets
+  `"observability": { "enabled": false }`, and the owner doesn't use what's
+  kept.
+- Preview links (`*.workers.dev`) are public, and are posted in the pull
+  request's comments, which are public too. Search engines are told not to
+  index them. They run a pull request's code, never touch production's
+  storage, and get no storage code.

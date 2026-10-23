@@ -1,12 +1,19 @@
 # Preview links for pull requests: every site is uploaded to Cloudflare as a
 # preview (on *.workers.dev) and the links are posted as a PR comment.
-# Previews are deleted when the pull request is closed or merged.
+#
+# The Cloudflare token can change production too, and this runs the pull
+# request's own code, before anyone has merged it. So it runs only once the
+# owner approves it: the token is a secret of the "preview" environment,
+# which needs the owner's approval (docs/deployment.md, "GitHub settings").
+# Previews get no Photos storage code, so their online library stays locked.
+# Previews of closed pull requests are deleted by the production deploy
+# (ci.yml), which runs only code that's on main.
 # Docs: docs/deployment.md
 name: Preview
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, closed]
+    types: [opened, synchronize, reopened]
 
 permissions: {}
 
@@ -25,24 +32,26 @@ jobs:
   deploy:
     name: Deploy previews
     # Only for branches in this repository (never forks), and not for
-    # Dependabot, which has no access to the Cloudflare token.
+    # Dependabot's pull requests, whoever last pushed to them.
     if: >-
-      github.event.action != 'closed' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
-      github.actor != 'dependabot[bot]'
+      github.event.pull_request.user.login != 'dependabot[bot]' &&
+      !startsWith(github.head_ref, 'dependabot/')
+    environment: preview
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: read
+      # To post the links as a comment on the pull request.
       pull-requests: write
-    env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
     steps:
       - name: Check the Cloudflare token is set up
         id: token
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
-            echo "::notice title=Previews skipped::Add the CLOUDFLARE_API_TOKEN repository secret to get preview links. See docs/deployment.md."
+            echo "::notice title=Previews skipped::Add the CLOUDFLARE_API_TOKEN secret to the preview environment to get preview links. See docs/deployment.md."
             echo "ready=false" >> "$GITHUB_OUTPUT"
           else
             echo "ready=true" >> "$GITHUB_OUTPUT"
@@ -58,21 +67,26 @@ jobs:
         if: steps.token.outputs.ready == 'true'
         uses: ./.github/actions/setup
 
+      - name: Grammar's Deep check model, from the cache
+        if: steps.token.outputs.ready == 'true'
+        uses: ./.github/actions/deep-check-model
+
       - name: Build every site
         if: steps.token.outputs.ready == 'true'
         run: pnpm build
 
       - name: Create the preview storage buckets (if they aren't there yet)
         if: steps.token.outputs.ready == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: node scripts/buckets.ts preview
 
       - name: Upload previews to Cloudflare
         if: steps.token.outputs.ready == 'true'
         env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           # The PR's own latest commit (GITHUB_SHA is GitHub's temporary merge commit).
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          # The online photo library's storage code (docs/adr/0016-online-photo-library.md).
-          PHOTOS_STORAGE_CODE: ${{ secrets.PHOTOS_STORAGE_CODE }}
         run: node scripts/previews.ts deploy "$PREVIEW_NAME" > preview-comment.md
 
       - name: Post the links on the pull request
@@ -82,30 +96,3 @@ jobs:
           GH_REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: gh pr comment "$PR_NUMBER" --edit-last --create-if-none --body-file preview-comment.md
-
-  cleanup:
-    name: Delete previews
-    if: >-
-      github.event.action == 'closed' &&
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      github.actor != 'dependabot[bot]'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-    steps:
-      - name: Check out code
-        if: env.CLOUDFLARE_API_TOKEN != ''
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Set up
-        if: env.CLOUDFLARE_API_TOKEN != ''
-        uses: ./.github/actions/setup
-
-      - name: Delete this pull request's previews
-        if: env.CLOUDFLARE_API_TOKEN != ''
-        run: node scripts/previews.ts delete "$PREVIEW_NAME"

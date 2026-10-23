@@ -62,25 +62,37 @@ export function isDate(value: string): boolean {
   return match !== null && parseStamp(`${value}T00:00`) !== null;
 }
 
+/**
+ * One clock reader per time zone, kept under the zone's own name only, so
+ * other spellings of it ("aSiA/tBiLiSi") don't each add one.
+ */
 const formatters = new Map<string, Intl.DateTimeFormat>();
+
+/** Reads clocks in `timeZone`. Throws for a time zone nobody knows. */
+function formatterFor(timeZone: string): Intl.DateTimeFormat {
+  const cached = formatters.get(timeZone);
+  if (cached) return cached;
+  const format = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
+  });
+  const name = format.resolvedOptions().timeZone;
+  if (!formatters.has(name)) formatters.set(name, format);
+  return format;
+}
+
+/** The time zones with a clock reader kept (for tests). */
+export const cachedTimeZones = (): string[] => [...formatters.keys()];
 
 /** The wall-clock time (as UTC-based ms) that clocks in `timeZone` show at `moment`. */
 function wallClock(moment: number, timeZone: string): number {
-  let format = formatters.get(timeZone);
-  if (!format) {
-    format = new Intl.DateTimeFormat('en-US', {
-      timeZone,
-      hourCycle: 'h23',
-      year: 'numeric',
-      month: 'numeric',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: 'numeric',
-      second: 'numeric',
-    });
-    formatters.set(timeZone, format);
-  }
-  const parts = format.formatToParts(new Date(moment));
+  const parts = formatterFor(timeZone).formatToParts(new Date(moment));
   const read = (type: Intl.DateTimeFormatPartTypes) =>
     Number(parts.find((part) => part.type === type)?.value ?? 0);
   return Date.UTC(
@@ -93,20 +105,28 @@ function wallClock(moment: number, timeZone: string): number {
   );
 }
 
-/** True if this browser or server knows the time zone, e.g. "Asia/Tbilisi". */
-export function isTimeZone(timeZone: string): boolean {
+/**
+ * The time zone's own name, e.g. "Asia/Tbilisi" for "asia/tbilisi", or null
+ * if this browser or server doesn't know it. Only named zones: browsers never
+ * give a bare offset like "+03:00".
+ */
+export function canonicalTimeZone(timeZone: string): string | null {
+  if (!/^[A-Za-z]/.test(timeZone)) return null;
   try {
-    wallClock(0, timeZone);
-    return true;
+    return formatterFor(timeZone).resolvedOptions().timeZone;
   } catch {
-    return false;
+    return null;
   }
 }
 
 /** The moment when clocks in `timeZone` show `wall`. In a daylight-saving gap, an hour later. */
 export function zonedMoment(wall: number, timeZone: string): number {
   const guess = wall - (wallClock(wall, timeZone) - wall);
-  return wall - (wallClock(guess, timeZone) - guess);
+  const moment = wall - (wallClock(guess, timeZone) - guess);
+  // West of UTC, a time that doesn't exist that night lands an hour early
+  // (the clocks show 01:30 for 02:30): move it past the gap.
+  const shown = wallClock(moment, timeZone);
+  return shown < wall ? moment + (wall - shown) : moment;
 }
 
 /** Start times (wall ms) of each occurrence that starts on or after `fromDay` (days since 1970). */

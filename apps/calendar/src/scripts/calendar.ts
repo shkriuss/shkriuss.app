@@ -6,6 +6,7 @@
  */
 import { createStore, downloadFile } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
+import { focusProblem, reportSave } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { site } from 'virtual:shkriuss/site';
 import {
@@ -156,8 +157,7 @@ export function mountCalendar(root: Document): void {
 
   const save = (next: CalendarState): boolean => {
     state = next;
-    const saved = store.save(state);
-    if (!saved) announce('Could not save. Your browser may be blocking storage.');
+    const saved = reportSave(store.save(state));
     render();
     // Update reminders for when Calendar is closed (if that's on).
     pushReminders.sync();
@@ -538,7 +538,7 @@ export function mountCalendar(root: Document): void {
     showProblems(problems);
     const first = FIELD_ORDER.find((field) => problems[field]);
     if (first) {
-      inputFor(first)?.focus();
+      focusProblem(inputFor(first), problems[first]);
       return;
     }
     if (problems.form) return;
@@ -640,13 +640,15 @@ export function mountCalendar(root: Document): void {
     focusDay(selected);
   });
 
+  // The answer shows under the buttons (and is read out).
+  const exportStatus = required<HTMLElement>(root, '[data-export-status]');
   required<HTMLButtonElement>(root, '[data-action="export-ics"]').addEventListener('click', () => {
     if (state.events.length === 0) {
-      announce('There are no events to download yet.');
+      exportStatus.textContent = 'There are no events to download yet.';
       return;
     }
     downloadFile(`calendar-${today()}.ics`, toIcs(state.events), 'text/calendar');
-    announce(`Downloaded ${plural(state.events.length, 'event')}.`);
+    exportStatus.textContent = `Downloaded ${plural(state.events.length, 'event')}.`;
   });
 
   // If Calendar is open in two tabs, keep them in sync.

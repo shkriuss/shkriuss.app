@@ -15,6 +15,7 @@
 import { addDays, firstDayOfWeek, today as todayOf, type IsoDate } from '@shkriuss/dates';
 import { createStore } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
+import { focusProblem, reportSave } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { site } from 'virtual:shkriuss/site';
 import {
@@ -115,7 +116,6 @@ const remindersStore = createStore<RemindersState>({
   validate: isRemindersState,
 });
 
-const COULD_NOT_SAVE = 'Couldn’t save. Is this browser in private mode, or is storage blocked?';
 /** How often to look for a new day (the "Today" mark moves at midnight). */
 const NEW_DAY_CHECK_MS = 60_000;
 
@@ -127,7 +127,6 @@ function required<T extends Element>(root: ParentNode, selector: string): T {
 
 export function mountMeals(root: Document): void {
   const announcer = required<HTMLElement>(root, '[data-announcer]');
-  const message = required<HTMLElement>(root, '[data-message]');
   const weekHeading = required<HTMLElement>(root, '[data-week-heading]');
   const weekDates = required<HTMLElement>(root, '[data-week-dates]');
   const thisWeekButton = required<HTMLButtonElement>(root, '[data-action="this-week"]');
@@ -195,10 +194,6 @@ export function mountMeals(root: Document): void {
   const announce = (text: string): void => {
     announcer.textContent = text;
   };
-  const say = (text: string | null): void => {
-    message.hidden = text === null;
-    message.textContent = text ?? '';
-  };
   /** Something on the page with this id (a planned meal or one of your meals). */
   const byId = (container: ParentNode, id: string, selector: string): HTMLElement | null =>
     container.querySelector<HTMLElement>(`[data-id="${CSS.escape(id)}"] ${selector}`);
@@ -206,24 +201,29 @@ export function mountMeals(root: Document): void {
     `${entry.name}: ${SLOT_LABELS[entry.slot].toLowerCase()}, ${formatDay(entry.date)}`;
 
   // ---------- Saving ----------
+  // Each gives false (and the person is told, in the notice at the top) if it couldn't save.
+  // With `report` false, the caller tells the person (after saving something else too).
 
-  function saveMeals(next: MealsState): void {
+  function saveMeals(next: MealsState, report = true): boolean {
     meals = next;
-    say(mealsStore.save(meals) ? null : COULD_NOT_SAVE);
+    const saved = mealsStore.save(meals);
     sync.changed();
+    return report ? reportSave(saved) : saved;
   }
 
-  function savePlan(next: PlanState): void {
+  function savePlan(next: PlanState, report = true): boolean {
     plan = next;
-    say(planStore.save(plan) ? null : COULD_NOT_SAVE);
+    const saved = planStore.save(plan);
     sync.changed();
     reminderControls.changed();
+    return report ? reportSave(saved) : saved;
   }
 
-  function saveShopping(next: ShoppingState): void {
+  function saveShopping(next: ShoppingState): boolean {
     shopping = next;
-    say(shoppingStore.save(shopping) ? null : COULD_NOT_SAVE);
+    const saved = reportSave(shoppingStore.save(shopping));
     sync.changed();
+    return saved;
   }
 
   // ---------- The week ----------
@@ -344,10 +344,11 @@ export function mountMeals(root: Document): void {
 
   function setReminderTime(slot: Slot, time: string | null): void {
     reminders = setReminder(reminders, slot, time);
-    say(remindersStore.save(reminders) ? null : COULD_NOT_SAVE);
+    const stored = reportSave(remindersStore.save(reminders));
     sync.changed();
     reminderControls.changed();
     renderReminders();
+    if (!stored) return;
     const saved = reminderTime(reminders, slot);
     if (saved === null) {
       announce(`No ${SLOT_LABELS[slot].toLowerCase()} reminder.`);
@@ -441,14 +442,16 @@ export function mountMeals(root: Document): void {
     const problems = planProblems(plan, draft, editingPlanned ?? undefined);
     showPlanProblems(problems);
     if (Object.keys(problems).length > 0) {
-      planName.focus();
+      // A problem with the whole form is read out by itself (role="alert").
+      if (problems.name) focusProblem(planName, problems.name);
+      else planName.focus();
       return;
     }
     const entry = plannedFromDraft(draft, editingPlanned ?? crypto.randomUUID());
-    savePlan(editingPlanned ? updatePlanned(plan, entry) : addPlanned(plan, entry));
+    const saved = savePlan(editingPlanned ? updatePlanned(plan, entry) : addPlanned(plan, entry));
     planDialog.close();
     render();
-    announce(`${editingPlanned ? 'Changed' : 'Added'} ${describe(entry)}.`);
+    if (saved) announce(`${editingPlanned ? 'Changed' : 'Added'} ${describe(entry)}.`);
     byId(dayList, entry.id, '[data-action="edit-planned"]')?.focus();
   });
 
@@ -456,9 +459,9 @@ export function mountMeals(root: Document): void {
     const entry = plan.planned.find((planned) => planned.id === editingPlanned);
     planDialog.close();
     if (!entry) return;
-    savePlan(removePlanned(plan, entry.id));
+    const saved = savePlan(removePlanned(plan, entry.id));
     render();
-    announce(`Removed ${describe(entry)}.`);
+    if (saved) announce(`Removed ${describe(entry)}.`);
     dayList.querySelector<HTMLElement>(`[data-date="${entry.date}"] [data-action="plan"]`)?.focus();
   });
 
@@ -505,23 +508,26 @@ export function mountMeals(root: Document): void {
     const problems = mealProblems(meals, draft, editingMeal ?? undefined);
     showMealProblems(problems);
     if (Object.keys(problems).length > 0) {
-      // The first field with a problem (or the name, for the whole form).
-      if (problems.ingredients && !problems.name) mealIngredients.focus();
-      else if (problems.notes && !problems.name && !problems.ingredients) mealNotes.focus();
+      // The first field with a problem (or the name, for the whole form, whose
+      // problem is read out by itself).
+      if (problems.name) focusProblem(mealName, problems.name);
+      else if (problems.ingredients) focusProblem(mealIngredients, problems.ingredients);
+      else if (problems.notes) focusProblem(mealNotes, problems.notes);
       else mealName.focus();
       return;
     }
     const before = meals.meals.find((meal) => meal.id === editingMeal);
     const meal = mealFromDraft(draft, editingMeal ?? crypto.randomUUID());
-    saveMeals(before ? updateMeal(meals, meal) : addMeal(meals, meal));
+    let stored = saveMeals(before ? updateMeal(meals, meal) : addMeal(meals, meal), false);
     // Renamed: what's planned with the old name follows.
     if (before) {
       const renamed = renamePlanned(plan, before.name, meal.name);
-      if (renamed !== plan) savePlan(renamed);
+      if (renamed !== plan) stored = savePlan(renamed, false) && stored;
     }
+    const saved = reportSave(stored);
     mealDialog.close();
     render();
-    announce(`Saved “${meal.name}”.`);
+    if (saved) announce(`Saved “${meal.name}”.`);
     byId(mealList, meal.id, '[data-action="edit-meal"]')?.focus();
   });
 
@@ -554,9 +560,9 @@ export function mountMeals(root: Document): void {
       return;
     }
     mealDialog.close();
-    saveMeals(removeMeal(meals, meal.id));
+    const saved = saveMeals(removeMeal(meals, meal.id));
     render();
-    announce(`Deleted “${meal.name}”.`);
+    if (saved) announce(`Deleted “${meal.name}”.`);
     newMealButton.focus();
   });
 
@@ -589,9 +595,9 @@ export function mountMeals(root: Document): void {
         const { state, copied } = copyWeek(plan, addDays(shown, -7), shown, () =>
           crypto.randomUUID(),
         );
-        savePlan(state);
+        const saved = savePlan(state);
         render();
-        announce(`Copied ${copied} ${copied === 1 ? 'meal' : 'meals'} from last week.`);
+        if (saved) announce(`Copied ${copied} ${copied === 1 ? 'meal' : 'meals'} from last week.`);
         weekHeading.focus();
         break;
       }
@@ -604,9 +610,9 @@ export function mountMeals(root: Document): void {
       case 'remove-extra': {
         const key = button.closest<HTMLElement>('[data-key]')?.dataset['key'] ?? '';
         const row = rows.find((entry) => entry.key === key);
-        saveShopping(removeExtra(shopping, key));
+        const saved = saveShopping(removeExtra(shopping, key));
         renderShopping();
-        if (row) announce(`Removed “${row.name}” from the list.`);
+        if (saved && row) announce(`Removed “${row.name}” from the list.`);
         extraInput.focus();
         break;
       }
@@ -633,10 +639,12 @@ export function mountMeals(root: Document): void {
     const key = box.closest<HTMLElement>('[data-key]')?.dataset['key'] ?? '';
     const row = rows.find((entry) => entry.key === key);
     if (!row) return;
-    saveShopping(setDone(shopping, shown, row, box.checked));
+    const saved = saveShopping(setDone(shopping, shown, row, box.checked));
     renderShopping();
     shoppingStatus.textContent = '';
-    announce(box.checked ? `Ticked off ${row.name}.` : `${row.name} is back on the list.`);
+    if (saved) {
+      announce(box.checked ? `Ticked off ${row.name}.` : `${row.name} is back on the list.`);
+    }
     shoppingListElement
       .querySelector<HTMLElement>(`[data-key="${CSS.escape(key)}"] [data-row-done]`)
       ?.focus();
@@ -648,15 +656,15 @@ export function mountMeals(root: Document): void {
     extraError.textContent = problem ?? '';
     extraInput.toggleAttribute('aria-invalid', problem !== null);
     if (problem) {
-      extraInput.focus();
+      focusProblem(extraInput, problem);
       return;
     }
     const name = extraInput.value.trim();
-    saveShopping(addExtra(shopping, shown, name, crypto.randomUUID()));
+    const saved = saveShopping(addExtra(shopping, shown, name, crypto.randomUUID()));
     extraInput.value = '';
     shoppingStatus.textContent = '';
     renderShopping();
-    announce(`Added “${name}” to the list.`);
+    if (saved) announce(`Added “${name}” to the list.`);
     extraInput.focus();
   });
 

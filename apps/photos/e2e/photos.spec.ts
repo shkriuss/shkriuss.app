@@ -140,3 +140,39 @@ test('“Delete all data” deletes the photos', async ({ page }) => {
   await expect(page.getByText('No photos yet.', { exact: false })).toBeVisible();
   expect(await stored(page)).toEqual({ photos: 0, files: 0 });
 });
+
+test('mends a photo database left without its table, and opens a newer one', async ({ page }) => {
+  // Made by something else, at a newer version, with no table (or with one).
+  const remake = (version: number, withTable: boolean) =>
+    page.evaluate(
+      ([version, withTable]) =>
+        new Promise<void>((resolve, reject) => {
+          const deleted = indexedDB.deleteDatabase('shkriuss-files');
+          deleted.onerror = () => reject(deleted.error);
+          deleted.onsuccess = () => {
+            const made = indexedDB.open('shkriuss-files', version as number);
+            made.onupgradeneeded = () => {
+              if (withTable) made.result.createObjectStore('files');
+            };
+            made.onerror = () => reject(made.error);
+            made.onsuccess = () => {
+              made.result.close();
+              resolve();
+            };
+          };
+        }),
+      [version, withTable] as const,
+    );
+
+  for (const [version, withTable] of [
+    [1, false],
+    [5, false],
+    [7, true],
+  ] as const) {
+    await remake(version, withTable);
+    await page.reload();
+    await addPhotos(page, [jpeg('IMG_0001.JPG', await picture(page, { width: 400, height: 300 }))]);
+    await expect(tiles(page)).toHaveCount(1);
+    expect(await stored(page), `version ${version}`).toEqual({ photos: 1, files: 1 });
+  }
+});

@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { isDate, isTimeZone, nextFireTime, parseStamp, type Timing } from './schedule.ts';
+import {
+  cachedTimeZones,
+  canonicalTimeZone,
+  isDate,
+  nextFireTime,
+  parseStamp,
+  type Timing,
+} from './schedule.ts';
 
 const at = (iso: string) => Date.parse(iso);
 const iso = (moment: number | null) => (moment === null ? null : new Date(moment).toISOString());
@@ -42,6 +49,27 @@ describe('nextFireTime', () => {
       '2026-10-20T07:00:00.000Z',
       '2026-10-27T08:00:00.000Z',
       '2026-11-03T08:00:00.000Z',
+    ]);
+  });
+
+  it('moves a time that doesn’t exist that night an hour later, west of UTC too', () => {
+    // Berlin skips 02:00–03:00 on 29 March: 02:30 becomes 03:30 (01:30 UTC).
+    const berlin = timing({ start: '2026-03-29T02:30' });
+    expect(iso(nextFireTime(berlin, 'Europe/Berlin', at('2026-03-28T00:00:00Z')))).toBe(
+      '2026-03-29T01:30:00.000Z',
+    );
+    // New York skips 02:00–03:00 on 8 March: 02:30 becomes 03:30 EDT, not 01:30 EST.
+    const newYork = timing({ start: '2026-03-08T02:30' });
+    expect(iso(nextFireTime(newYork, 'America/New_York', at('2026-03-07T00:00:00Z')))).toBe(
+      '2026-03-08T07:30:00.000Z',
+    );
+    // Santiago skips 00:00–01:00 on 6 September: a daily 00:30 reminder goes off at
+    // 01:30 that morning, not at 23:30 the evening before.
+    const daily = timing({ start: '2026-09-01T00:30', repeat: 'daily' });
+    expect(fires(daily, 'America/Santiago', '2026-09-05T00:00:00Z', 3)).toEqual([
+      '2026-09-05T04:30:00.000Z',
+      '2026-09-06T04:30:00.000Z',
+      '2026-09-07T03:30:00.000Z',
     ]);
   });
 
@@ -111,8 +139,23 @@ describe('checks', () => {
     expect(isDate('2026-13-01')).toBe(false);
   });
 
-  it('knows real time zones', () => {
-    expect(isTimeZone('Asia/Tbilisi')).toBe(true);
-    expect(isTimeZone('Mars/Olympus_Mons')).toBe(false);
+  it('knows real time zones, by their own names', () => {
+    expect(canonicalTimeZone('Asia/Tbilisi')).toBe('Asia/Tbilisi');
+    expect(canonicalTimeZone('Mars/Olympus_Mons')).toBeNull();
+    expect(canonicalTimeZone('aMeRiCa/nEw_YoRk')).toBe('America/New_York');
+    expect(canonicalTimeZone('+03:00')).toBeNull();
+  });
+
+  it('keeps one clock reader per time zone, however it’s spelt', () => {
+    // 256 ways to write America/New_York, with capitals in different places.
+    for (let n = 0; n < 256; n += 1) {
+      const spelling = [...'america/new_york']
+        .map((letter, index) => ((n >> index) & 1 ? letter.toUpperCase() : letter))
+        .join('');
+      expect(canonicalTimeZone(spelling)).toBe('America/New_York');
+    }
+    expect(cachedTimeZones().filter((name) => /new_york/i.test(name))).toEqual([
+      'America/New_York',
+    ]);
   });
 });

@@ -20,6 +20,7 @@ interface WranglerConfig {
   routes: { pattern: string; custom_domain: boolean }[];
   assets: { directory: string; not_found_handling: string; run_worker_first?: string[] };
   workers_dev: boolean;
+  observability?: { enabled: boolean };
   durable_objects?: { bindings: { name: string; class_name: string }[] };
   migrations?: { tag: string; new_sqlite_classes?: string[] }[];
   r2_buckets?: { binding: string; bucket_name: string }[];
@@ -56,7 +57,10 @@ const FEATURES: Record<
   },
   library: {
     service: 'an online library (/api/library)',
-    bindings: [{ name: 'LIBRARIES', class_name: 'Library' }],
+    bindings: [
+      { name: 'LIBRARIES', class_name: 'Library' },
+      { name: 'LIBRARY_GATE', class_name: 'LibraryGate' },
+    ],
   },
 };
 
@@ -82,6 +86,28 @@ describe('registry and folders', () => {
   });
 });
 
+describe('browser tests', () => {
+  // The shared fixtures fail a test on console errors, CSP problems and
+  // requests to other websites; Playwright's own test and expect don't.
+  const specs = [
+    ...appFolders.flatMap((slug) => {
+      const folder = join(repoRoot, 'apps', slug, 'e2e');
+      return existsSync(folder)
+        ? readdirSync(folder)
+            .filter((file) => file.endsWith('.spec.ts'))
+            .map((file) => join('apps', slug, 'e2e', file))
+        : [];
+    }),
+    'templates/app/e2e/app.spec.ts',
+  ];
+
+  it.each(specs)('%s takes test and expect from the shared fixtures', (spec) => {
+    const source = readFileSync(join(repoRoot, spec), 'utf8');
+    expect(source).toMatch(/from '(\.\.\/)+tests\/e2e\/fixtures\.ts'/);
+    expect(source).not.toMatch(/import \{[^}]*\b(test|expect)\b[^}]*\} from '@playwright\/test'/);
+  });
+});
+
 describe.each(appFolders)('apps/%s', (slug) => {
   const domain = slug === HUB_SLUG ? hub.domain : `${slug}.${hub.domain}`;
 
@@ -104,6 +130,8 @@ describe.each(appFolders)('apps/%s', (slug) => {
     expect(config.routes).toEqual([{ pattern: domain, custom_domain: true }]);
     expect(config.assets).toMatchObject({ directory: './dist', not_found_handling: '404-page' });
     expect(config.workers_dev).toBe(false);
+    // No logs or traces of requests (the privacy page says so).
+    expect(config.observability).toEqual({ enabled: false });
     expect(config.previews).toBeDefined();
   });
 

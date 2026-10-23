@@ -2,7 +2,7 @@
 // Shared checks (accessibility, security headers, offline, privacy) run for
 // every app from tests/e2e/.
 import type { Page } from '@playwright/test';
-import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
+import { checkA11y, expect, failSaving, test } from '../../../tests/e2e/fixtures.ts';
 
 const titleBox = (page: Page) => page.getByRole('textbox', { name: 'Title' });
 const bodyBox = (page: Page) => page.getByRole('textbox', { name: 'Note' });
@@ -180,4 +180,62 @@ test('keeps notes saved by the first version, splitting off their titles', async
   await card(page, 'Groceries').getByRole('link').click();
   await expect(titleBox(page)).toHaveValue('Groceries');
   await expect(bodyBox(page)).toHaveValue('Milk\nEggs');
+});
+
+test('typing doesn’t overwrite a change made elsewhere: that version is kept too', async ({
+  page,
+}) => {
+  // Typing here waits a moment before it's saved: hold that moment still.
+  await page.clock.install();
+  await page.reload();
+  await writeNote(page, 'Trip', 'Pack bags');
+  // The same note open in a second tab (the same as a sync bringing a change).
+  const other = await page.context().newPage();
+  await other.goto('/');
+  await other.getByRole('link', { name: 'Trip', exact: true }).click();
+  await page.getByRole('link', { name: 'Trip', exact: true }).click();
+
+  // Typing here, not saved yet, when the other tab saves its change.
+  await bodyBox(page).pressSequentially(' and tickets');
+  await bodyBox(other).fill('Pack bags and passports');
+  await other.getByRole('button', { name: 'All notes' }).click();
+
+  await page.getByRole('button', { name: 'All notes' }).click();
+  await expect
+    .poll(async () => (await titles(page)).sort())
+    .toEqual(['Trip', 'Trip (second version)']);
+  await card(page, 'Trip').getByRole('link').click();
+  await expect(bodyBox(page)).toHaveValue('Pack bags and tickets');
+  await page.getByRole('button', { name: 'All notes' }).click();
+  await card(page, 'Trip (second version)').getByRole('link').click();
+  await expect(bodyBox(page)).toHaveValue('Pack bags and passports');
+});
+
+test('says so in the editor when typing can’t be saved', async ({ page }) => {
+  await page.getByRole('button', { name: 'New note' }).click();
+  await titleBox(page).fill('Shopping');
+  await expect(page.locator('[data-edited]')).toHaveText(/^Edited /);
+  await failSaving(page);
+  await bodyBox(page).fill('Milk, eggs, bread');
+
+  // Seen in the editor, read out, and not "Edited" as if it were kept (audit G-1).
+  const problem = page.getByRole('alert');
+  await expect(problem).toBeVisible();
+  await expect(problem).toHaveText(/^Couldn’t save/);
+  await expect(page.locator('[data-edited]')).toHaveText('Not saved');
+  await expect(bodyBox(page)).toBeFocused();
+
+  // More typing doesn't read it out again at every pause: it's the same notice.
+  await problem.evaluate((element) => element.setAttribute('data-first', ''));
+  await bodyBox(page).pressSequentially(', tea');
+  await page.waitForTimeout(800);
+  await expect(page.locator('[data-edited]')).toHaveText('Not saved');
+  await expect(problem).toHaveAttribute('data-first', '');
+
+  // Still shown on the list.
+  await page.getByRole('button', { name: 'All notes' }).click();
+  await expect(problem).toBeVisible();
+  await page.reload();
+  await card(page, 'Shopping').getByRole('link').click();
+  await expect(bodyBox(page)).toHaveValue('');
 });

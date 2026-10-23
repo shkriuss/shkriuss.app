@@ -3,8 +3,9 @@ Web (the onnxruntime-web package), by Microsoft (https://onnxruntime.ai),
 used unchanged. Its licence follows.
 
 ONNX Runtime also contains open-source components by others, listed with
-their licences in ONNX Runtime's third-party notices:
-https://github.com/microsoft/onnxruntime/blob/main/ThirdPartyNotices.txt
+their licences in ONNX Runtime's third-party notices. For version 1.30.0:
+https://github.com/microsoft/onnxruntime/blob/v1.30.0/ThirdPartyNotices.txt
+(Each later version has the same file in its own release.)
 
 MIT License
 

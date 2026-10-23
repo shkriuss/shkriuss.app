@@ -13,6 +13,7 @@ import {
   fileSizeProblems,
   gzipSize,
   pageAssets,
+  scriptsLoaded,
   spacingProblems,
 } from './lib/dist-checks.ts';
 
@@ -39,7 +40,8 @@ for (const slug of sites) {
     const assets = pageAssets(html);
     const sum = (files: string[]) =>
       files.reduce((total, file) => total + gzipSize(readFileSync(join(dist, file))), 0);
-    const sizes = { html: gzipSize(html), css: sum(assets.css), js: sum(assets.js) };
+    const scripts = scriptsLoaded(assets.js, (file) => readFileSync(join(dist, file), 'utf8'));
+    const sizes = { html: gzipSize(html), css: sum(assets.css), js: sum(scripts) };
     const problems = [...cspProblems(html), ...budgetProblems(sizes), ...spacingProblems(html)];
 
     const name = `${slug}/${page}`;

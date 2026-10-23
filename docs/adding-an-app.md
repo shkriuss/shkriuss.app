@@ -13,7 +13,7 @@ any extra work.
 | **description** | `Quick notes, saved on your device.` | One sentence for the hub card. Up to 160 characters.                                                                                                                                    |
 | **icon**        | `note`                               | One of the icons in `packages/ui/src/icons/index.ts`.                                                                                                                                   |
 | **color**       | `blue`                               | teal, blue, indigo, violet, pink, red, orange, green or slate.                                                                                                                          |
-| **stores**      | `Your notes`                         | What the app saves on the device, in plain words. This goes on the privacy page. Leave it empty if the app saves nothing.                                                               |
+| **stores**      | `Your notes`                         | What the app saves on the device, in plain words, for the privacy page. Separate several with `;`. The theme choice is always added (every page saves it).                              |
 
 ## Option A: ask Claude
 
@@ -65,6 +65,12 @@ in alphabetical order, so where an entry sits in `apps.json` doesn't matter.
   data. Apps whose data is too big for a backup file (like Photos) use
   `<DataControls backup={false}>`, with a sentence inside saying what to do
   instead.
+- Saving can fail (storage full, or blocked). Pass what `save()` gives to
+  `reportSave()` from `@shkriuss/ui/problem`: it tells the person, in the
+  same words as every app, and gives back whether it saved, so the app only
+  says "Saved" when it did. After showing a form's errors, put focus on the
+  first wrong field with `focusProblem()`, which reads the error out if the
+  person pressed Enter in that field.
 - Add browser tests in `apps/<slug>/e2e/`. `apps/tally` is the reference
   example for all of this.
 - If the app needs a browser feature (for example keeping the screen on),

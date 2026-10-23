@@ -2,10 +2,17 @@
  * The online library's rules for Photos, as plain functions
  * (docs/adr/0016-online-photo-library.md): what changes from other devices
  * do to this device's photos, which photos go up next, what "Free up space"
- * frees, and what the status line says. The work itself is in
- * ../scripts/online.ts.
+ * frees, and what the status line says; and how the libraries' records are
+ * kept. The work itself is in ../scripts/online.ts.
  */
-import type { LibraryChange, LibraryProblem } from '@shkriuss/library';
+import {
+  isLibraryRecord,
+  tidyRecords,
+  type LibraryChange,
+  type LibraryProblem,
+  type LibraryRecord,
+} from '@shkriuss/library';
+import type { StoreOptions } from '@shkriuss/storage';
 import {
   countLabel,
   detailsOf,
@@ -14,6 +21,32 @@ import {
   type OnlinePlace,
   type Photo,
 } from './photos.ts';
+import { DATE_LOCALE } from '@shkriuss/ui/locale';
+
+/** The online libraries' records, kept in the synced copy (they move with a new account key). */
+export interface Records {
+  items: LibraryRecord[];
+}
+
+const isRecords = (value: unknown): value is Records =>
+  typeof value === 'object' &&
+  value !== null &&
+  Array.isArray((value as Records).items) &&
+  (value as Records).items.every(isLibraryRecord);
+
+/**
+ * The records' store. Version 2 keeps one record per library; version 1's
+ * one record ("library") becomes the record of its library. Records of
+ * version 1 can still come from other devices, and are tidied the same way.
+ */
+export const RECORDS: StoreOptions<Records> = {
+  key: 'library',
+  version: 2,
+  fallback: () => ({ items: [] }),
+  validate: isRecords,
+  migrate: (old, version) =>
+    version === 1 && isRecords(old) ? { items: [...tidyRecords(old.items)] } : undefined,
+};
 
 /** What a page of changes from the online library does here. */
 export interface Applied {
@@ -127,11 +160,31 @@ export interface OnlineState {
   problem: OnlineProblem | null;
   /** For 'daily-limit': when uploads start again (ms). */
   retryAt: number | null;
+  /** The library this device used was taken by a device with an old account key. */
+  taken: boolean;
 }
 
-const timeFormat = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
+/** Problems that only stop photos going up: what's online is still there. */
+const UPLOADS_ONLY: ReadonlySet<OnlineProblem> = new Set(['full', 'daily-limit', 'not-set-up']);
 
-export function onlineMessage(state: OnlineState): string {
+/**
+ * Whether "Free up space" can be offered: only once the library in use has
+ * answered since Photos opened, and while it isn't being deleted, moved or
+ * out of reach. Before anything goes, it's asked again.
+ */
+export const canFreeUp = (state: OnlineState): boolean =>
+  state.checked && (state.problem === null || UPLOADS_ONLY.has(state.problem));
+
+const timeFormat = new Intl.DateTimeFormat(DATE_LOCALE, { hour: 'numeric', minute: '2-digit' });
+
+const TAKEN =
+  'Your online library was taken by a device that still had your old account key, perhaps the lost one, so it can’t be used any more. Photos that were only in it can’t be brought back. Photos on this device go into a new online library.';
+
+/** The status line: what happened to the library this device used, if it was taken, then how it's going. */
+export const onlineMessage = (state: OnlineState): string =>
+  state.taken ? `${TAKEN} ${statusOf(state)}` : statusOf(state);
+
+function statusOf(state: OnlineState): string {
   const tooBig =
     state.tooBig > 0
       ? ` ${countLabel(state.tooBig, 'photo is', 'photos are')} too big to keep online (over 95 MB), so ${state.tooBig === 1 ? 'it stays' : 'they stay'} on this device.`

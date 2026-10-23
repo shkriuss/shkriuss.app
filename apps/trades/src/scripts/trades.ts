@@ -6,6 +6,7 @@
 import { today } from '@shkriuss/dates';
 import { createStore, downloadFile } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
+import { focusProblem, reportSave } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { site } from 'virtual:shkriuss/site';
 import {
@@ -36,6 +37,7 @@ import {
   saveTrade,
   setCurrency,
   setupNames,
+  shownRate,
   SIDE_LABELS,
   stats,
   toCsv,
@@ -66,7 +68,6 @@ const settingsStore = createStore<SettingsState>({
 
 /** Closed trades shown at first, and added by "Show more". */
 const PAGE_SIZE = 50;
-const COULD_NOT_SAVE = 'Couldn’t save. Your browser may be blocking storage.';
 const FIELDS: readonly (keyof TradeForm)[] = [
   'symbol',
   'side',
@@ -80,7 +81,15 @@ const FIELDS: readonly (keyof TradeForm)[] = [
   'setup',
   'notes',
 ];
-const percent = new Intl.NumberFormat(undefined, { style: 'percent', maximumFractionDigits: 0 });
+/** A win rate: whole percent, never rounded to 100% with a loss or to 0% with a win. */
+function rateText(rate: number): string {
+  const { value, digits } = shownRate(rate);
+  return new Intl.NumberFormat(undefined, {
+    style: 'percent',
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(value);
+}
 
 function required<T extends Element>(root: ParentNode, selector: string): T {
   const element = root.querySelector<T>(selector);
@@ -147,7 +156,7 @@ export function mountTrades(root: Document): void {
       settings = next.settings;
       ok = settingsStore.save(settings) && ok;
     }
-    announce(ok ? message : COULD_NOT_SAVE);
+    if (reportSave(ok)) announce(message);
     render();
     sync.changed();
   }
@@ -169,7 +178,7 @@ export function mountTrades(root: Document): void {
     if (found.count === 0) return;
     tile('total', money(found.total, true), '', found.total);
     tile('count', String(found.count), `${found.wins} won, ${found.losses} lost`);
-    tile('win-rate', found.winRate === null ? '—' : percent.format(found.winRate));
+    tile('win-rate', found.winRate === null ? '—' : rateText(found.winRate));
     tile(
       'profit-factor',
       found.profitFactor === null ? '—' : found.profitFactor.toFixed(2),
@@ -276,7 +285,7 @@ export function mountTrades(root: Document): void {
         total.textContent = money(group.total, true);
         tone(total, group.total);
         required<HTMLElement>(item, '[data-group-counts]').textContent =
-          `${group.count} ${group.count === 1 ? 'trade' : 'trades'}, ${percent.format(group.wins / group.count)} won`;
+          `${group.count} ${group.count === 1 ? 'trade' : 'trades'}, ${rateText(group.wins / group.count)} won`;
         return item;
       }),
     );
@@ -328,9 +337,10 @@ export function mountTrades(root: Document): void {
     const first = FIELDS.find((name) => problems[name]);
     if (first) {
       const control = field(first);
-      (
-        (control instanceof RadioNodeList ? control[0] : control) as HTMLElement | undefined
-      )?.focus();
+      focusProblem(
+        (control instanceof RadioNodeList ? control[0] : control) as HTMLElement | undefined,
+        problems[first],
+      );
     }
     return first !== undefined;
   }
@@ -434,12 +444,14 @@ export function mountTrades(root: Document): void {
       closedList.querySelectorAll<HTMLElement>('[data-action="edit"]')[first]?.focus();
     }
     if (action === 'csv') {
+      // The answer shows under the button (and is read out).
+      const csvStatus = required<HTMLElement>(root, '[data-csv-status]');
       if (state.trades.length === 0) {
-        announce('There are no trades to download yet.');
+        csvStatus.textContent = 'There are no trades to download yet.';
         return;
       }
       downloadFile(`trades-${today()}.csv`, toCsv(state), 'text/csv');
-      announce('Downloaded your trades as a spreadsheet.');
+      csvStatus.textContent = 'Downloaded your trades as a spreadsheet.';
     }
   });
 

@@ -154,14 +154,17 @@ test('adds another device with a one-time code', async ({ page, browser, baseURL
   await expect(view(second, 'signed-in')).toBeVisible();
   await expect(accountCode(second)).toHaveText(code);
 
-  await expect(page.locator('[data-link-status]')).toHaveText('Your other device is signed in.');
+  await expect(page.locator('[data-link-status]')).toHaveText(
+    /^A device used this code and is now signed in\. If it wasn’t the one you meant/,
+  );
   await expect(page.locator('[data-link-qr] svg')).toHaveCount(0);
 
   // A code works once.
   guard.allowConsole('410');
   const third = await (await otherDevice(browser, baseURL)).newPage();
   await third.goto(url);
-  await expect(message(third)).toHaveText(/already used, or has expired/);
+  // Used by someone else first: the person is told, and what to do.
+  await expect(message(third)).toHaveText(/^Someone already used this code\. If it wasn’t you/);
   await expect(view(third, 'signed-out')).toBeVisible();
   await other.close();
 });

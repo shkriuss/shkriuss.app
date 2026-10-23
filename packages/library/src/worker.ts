@@ -18,6 +18,12 @@
  * Object keeps its list and checks the token; the first token to reach a
  * new library becomes its token. The files are in R2 under the SHA-256 of
  * the library's id. Everything arrives sealed, so the server can't read it.
+ *
+ * Anyone can make up a library, so what protects the bill is kept across all
+ * of them, in one more Durable Object (LibraryGate): bytes stored and uploads
+ * per day, and wrong storage codes per hour from each internet address. A
+ * library stays unlocked only for the storage code it was unlocked with:
+ * changing the code locks them all.
  */
 import { equalBytes, sha256, utf8 } from '@shkriuss/crypto';
 import {
@@ -35,6 +41,7 @@ import {
   type SiteEnv,
 } from '@shkriuss/server';
 import {
+  callerNetwork,
   checkFirstParts,
   checkMove,
   checkRemove,
@@ -54,6 +61,8 @@ import {
 
 export interface LibraryEnv extends SiteEnv {
   LIBRARIES: DurableObjectNamespace;
+  /** One object for the limits kept across all libraries. */
+  LIBRARY_GATE: DurableObjectNamespace;
   LIBRARY_FILES: R2Bucket;
   /** The storage code that lets a library be added to (a secret). Without it, nothing can be. */
   LIBRARY_STORAGE_CODE?: string;
@@ -71,6 +80,20 @@ async function isStorageCode(given: string, code: string): Promise<boolean> {
   return equalBytes(await sha256(utf8(given)), await sha256(utf8(code)));
 }
 
+/** Which storage code is set ("" for none): a library unlocked with another is locked. */
+async function codeId(code: string | undefined): Promise<string> {
+  return code ? (await sha256Text(`shkriuss library storage code v1 ${code}`)).slice(0, 16) : '';
+}
+
+/**
+ * Who is trying a storage code: their network (callerNetwork), hashed with
+ * the code, so the gate never keeps an address it could read back.
+ */
+async function callerId(request: Request, code: string): Promise<string> {
+  const network = callerNetwork(request.headers.get('CF-Connecting-IP'));
+  return (await sha256Text(`shkriuss library caller v1 ${code} ${network}`)).slice(0, 16);
+}
+
 /** Requests to /api/library and /api/library/*. */
 export async function handleLibrary(
   request: Request,
@@ -83,14 +106,34 @@ export async function handleLibrary(
   if (!LIBRARY_ID.test(library)) return problem(400, 'Missing or malformed library id.');
   const prefix = await sha256Text(library);
   const object = env.LIBRARIES.get(env.LIBRARIES.idFromName(library));
-  // The Durable Object gets only hashes: never the token or the library's id.
-  const headers = { 'X-Token': await sha256Text(token), 'X-Prefix': prefix };
+  // The Durable Object gets only hashes: never the token, the library's id or the code.
+  const headers = {
+    'X-Token': await sha256Text(token),
+    'X-Prefix': prefix,
+    'X-Code': await codeId(env.LIBRARY_STORAGE_CODE),
+  };
   const call = (op: string, body?: unknown) =>
     object.fetch(`https://library/${op}`, {
       method: 'POST',
       headers,
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
+  const gate = (op: string, body: unknown) =>
+    env.LIBRARY_GATE.get(env.LIBRARY_GATE.idFromName('gate')).fetch(`https://gate/${op}`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  /** Bytes a library says it no longer stores are taken off the total. */
+  const released = async (response: Response) => {
+    const freed = Number(response.headers.get('X-Freed') ?? '0');
+    if (response.ok && freed > 0) await gate('release', { bytes: freed });
+    return response;
+  };
+  /** Which of these items the library has (only those are read from R2). */
+  const has = async (ids: readonly string[]) => {
+    const answer = await call('has', { ids });
+    return answer.ok ? new Set(((await answer.json()) as { ids: string[] }).ids) : answer;
+  };
   const body = async <T>(
     check: (body: unknown) => { ok: true; value: T } | { ok: false; error: string },
   ) => {
@@ -102,7 +145,7 @@ export async function handleLibrary(
 
   if (path === '/api/library') {
     if (request.method !== 'DELETE') return problem(405, 'Use DELETE.');
-    return call('wipe');
+    return released(await call('wipe'));
   }
   if (path === '/api/library/changes') {
     if (request.method !== 'GET') return problem(405, 'Use GET.');
@@ -116,13 +159,23 @@ export async function handleLibrary(
     if (request.method !== 'POST') return problem(405, 'Use POST.');
     if (path === '/api/library/remove') {
       const ids = await body(checkRemove);
-      return ids instanceof Response ? ids : call('remove', { ids: ids.value });
+      if (ids instanceof Response) return ids;
+      const removed = await released(await call('remove', { ids: ids.value }));
+      return removed.ok ? noContent() : removed;
     }
     const code = env.LIBRARY_STORAGE_CODE;
     if (!code) return json({ error: 'Online storage isn’t set up.', notSetUp: true }, 503);
     const given = await body(checkUnlock);
     if (given instanceof Response) return given;
-    return call(`unlock?ok=${(await isStorageCode(given.value, code)) ? 1 : 0}`);
+    // Only the library's own token may try, and wrong tries from one address
+    // count together, whatever the library.
+    const allowed = await call('check');
+    if (!allowed.ok) return allowed;
+    const tried = await gate('try', {
+      ok: await isStorageCode(given.value, code),
+      caller: await callerId(request, code),
+    });
+    return tried.ok ? call('unlock') : tried;
   }
   if (path === '/api/library/move') {
     if (request.method !== 'POST') return problem(405, 'Use POST.');
@@ -134,9 +187,9 @@ export async function handleLibrary(
     if (request.method !== 'POST') return problem(405, 'Use POST.');
     const items = await body(checkFirstParts);
     if (items instanceof Response) return items;
-    const allowed = await call('check');
-    if (!allowed.ok) return allowed;
-    return new Response(firstParts(env.LIBRARY_FILES, prefix, items.value), {
+    const there = await has(items.value.map(([id]) => id));
+    if (there instanceof Response) return there;
+    return new Response(firstParts(env.LIBRARY_FILES, prefix, items.value, there), {
       headers: { 'Content-Type': 'application/octet-stream', ...API_HEADERS },
     });
   }
@@ -159,9 +212,11 @@ export async function handleLibrary(
     ) {
       return problem(400, '"offset" and "length" must say which bytes.');
     }
-    const allowed = await call('check');
-    if (!allowed.ok) return allowed;
-    const file = await env.LIBRARY_FILES.get(key, { range: { offset, length } });
+    const there = await has([item]);
+    if (there instanceof Response) return there;
+    const file = there.has(item)
+      ? await env.LIBRARY_FILES.get(key, { range: { offset, length } })
+      : null;
     if (!file) return problem(404, 'No such item.');
     return new Response(file.body, {
       headers: { 'Content-Type': 'application/octet-stream', ...API_HEADERS },
@@ -182,6 +237,8 @@ export async function handleLibrary(
   // Checked before anything reaches R2, and again after (another upload may have come first).
   const begin = await call('begin', { id: item, size });
   if (!begin.ok) return begin;
+  const room = await gate('reserve', { size });
+  if (!room.ok) return room;
   try {
     await env.LIBRARY_FILES.put(key, request.body);
   } catch {
@@ -191,6 +248,7 @@ export async function handleLibrary(
   if (commit.headers.get('X-Discard') === '1') {
     await env.LIBRARY_FILES.delete(key).catch(() => undefined);
   }
+  if (commit.ok) await gate('add', { size });
   return commit;
 }
 
@@ -203,12 +261,14 @@ function lengthOf(size: number): Uint8Array {
 
 /**
  * Each item's first `size` bytes, in the order asked: 4 bytes of length (0
- * when there's no such item), then the bytes. A few are read at a time.
+ * when there's no such item), then the bytes. A few are read at a time, and
+ * only items the library has (`there`) are read from R2.
  */
 function firstParts(
   bucket: R2Bucket,
   prefix: string,
   items: readonly [string, number][],
+  there: ReadonlySet<string>,
 ): ReadableStream<Uint8Array> {
   let next = 0;
   return new ReadableStream<Uint8Array>({
@@ -221,6 +281,7 @@ function firstParts(
       next += batch.length;
       const found = await Promise.all(
         batch.map(async ([id, size]) => {
+          if (!there.has(id)) return new Uint8Array(0);
           const file = await bucket
             .get(fileKey(prefix, id), { range: { offset: 0, length: size } })
             .catch(() => null);
@@ -237,6 +298,113 @@ function firstParts(
 
 export default createWorker<LibraryEnv>({ '/api/library': handleLibrary });
 
+// ---------- Limits across all libraries ----------
+
+interface GateState {
+  /** Bytes stored, all libraries together. */
+  bytes: number;
+  /** Uploads on `day` (UTC). */
+  day: string;
+  uploads: number;
+}
+
+/** Wrong storage codes from one caller in one hour: "try:<hour>:<callerId>" → count. */
+const tryKey = (hour: number, caller: string) => `try:${String(hour).padStart(8, '0')}:${caller}`;
+
+/**
+ * What protects the bill, kept across every library: anyone can make up a
+ * library, so limits kept in each would protect nothing. One object, named
+ * "gate"; the Worker asks it before each upload and each try of the code.
+ * Wrong tries are kept per caller and deleted when their hour is over.
+ */
+export class LibraryGate {
+  readonly state: DurableObjectListState;
+
+  constructor(state: DurableObjectListState) {
+    this.state = state;
+  }
+
+  async fetch(request: Request): Promise<Response> {
+    return this.state.blockConcurrencyWhile(async () => {
+      const op = new URL(request.url).pathname.slice(1);
+      const body = (await request.json()) as {
+        ok?: boolean;
+        caller?: string;
+        size?: number;
+        bytes?: number;
+      };
+      const storage = this.state.storage;
+      const now = Date.now();
+      const today = utcDay(now);
+      const saved = await storage.get<GateState>('gate');
+      const gate: GateState = {
+        bytes: saved?.bytes ?? 0,
+        day: today,
+        uploads: saved?.day === today ? saved.uploads : 0,
+      };
+      const save = (next: GateState) => storage.put('gate', next);
+
+      if (op === 'try') {
+        const hour = Math.floor(now / HOUR_MS);
+        const key = tryKey(hour, body.caller ?? '');
+        const tries = (await storage.get<number>(key)) ?? 0;
+        if (tries >= LIMITS.unlockTries) {
+          return json(
+            {
+              error: 'Too many wrong codes; try again in an hour.',
+              tooMany: true,
+              retryAt: (hour + 1) * HOUR_MS,
+            },
+            429,
+          );
+        }
+        if (body.ok === true) return noContent();
+        await storage.put(key, tries + 1);
+        if ((await storage.getAlarm()) === null) await storage.setAlarm((hour + 1) * HOUR_MS);
+        return json({ error: 'That isn’t the storage code.', wrong: true }, 403);
+      }
+      const size = Math.max(0, Number(body.size ?? body.bytes ?? 0));
+      if (op === 'reserve') {
+        if (gate.bytes + size > LIMITS.bytes) {
+          return json({ error: 'The online storage is full.', full: true }, 507);
+        }
+        if (gate.uploads >= LIMITS.uploadsPerDay) {
+          return json(
+            { error: 'That’s all the uploads for today.', retryAt: nextUtcMidnight(now) },
+            429,
+          );
+        }
+        return noContent();
+      }
+      if (op === 'add') {
+        await save({ ...gate, bytes: gate.bytes + size, uploads: gate.uploads + 1 });
+        return noContent();
+      }
+      if (op === 'release') {
+        await save({ ...gate, bytes: Math.max(0, gate.bytes - size) });
+        return noContent();
+      }
+      return problem(404, 'Not found.');
+    });
+  }
+
+  /** When an hour is over: forget its wrong tries. */
+  async alarm(): Promise<void> {
+    await this.state.blockConcurrencyWhile(async () => {
+      const storage = this.state.storage;
+      const hour = Math.floor(Date.now() / HOUR_MS);
+      for (;;) {
+        const keys = [...(await storage.list({ prefix: 'try:', limit: 128 })).keys()];
+        const old = keys.filter((key) => key < tryKey(hour, ''));
+        if (old.length === 0) break;
+        for (const key of old) await storage.delete(key);
+      }
+      const left = await storage.list({ prefix: 'try:', limit: 1 });
+      if (left.size > 0) await storage.setAlarm((hour + 1) * HOUR_MS);
+    });
+  }
+}
+
 // ---------- One library's list ----------
 
 interface Meta {
@@ -246,8 +414,10 @@ interface Meta {
   retired: string[];
   /** Where its files are in R2. */
   prefix: string;
-  /** The storage code was given: items can be added. */
+  /** The storage code was given once (files may exist). */
   unlocked: boolean;
+  /** Which storage code it was (codeId): items can be added while it's still the code. */
+  unlockedWith?: string;
   /** The newest change's number. */
   seq: number;
   /** Changes when the library is deleted, so devices start again. */
@@ -257,8 +427,6 @@ interface Meta {
   /** Uploads on `day` (UTC). */
   day: string;
   uploads: number;
-  /** Wrong storage codes since `start` (ms). */
-  tries: { start: number; count: number };
   /** Being deleted: files go in batches (alarm). */
   wiping: boolean;
 }
@@ -290,9 +458,11 @@ const newMeta = (prefix: string): Meta => ({
   bytes: 0,
   day: '',
   uploads: 0,
-  tries: { start: 0, count: 0 },
   wiping: false,
 });
+
+/** Items can be added: unlocked with the storage code that's set now. */
+const canAdd = (meta: Meta, code: string): boolean => code !== '' && meta.unlockedWith === code;
 
 /** A refusal for an upload, and whether the file just uploaded should be deleted. */
 const refusal = (status: number, body: Record<string, unknown>, discard = true): Response =>
@@ -320,10 +490,15 @@ export class Library {
       const url = new URL(request.url);
       const op = url.pathname.slice(1);
       const token = request.headers.get('X-Token') ?? '';
+      const code = request.headers.get('X-Code') ?? '';
       const now = Date.now();
       const meta =
         (await this.state.storage.get<Meta>('meta')) ??
         newMeta(request.headers.get('X-Prefix') ?? '');
+      // Unlocked before codes were remembered: with the code set then, which is still the one.
+      if (meta.unlocked && meta.unlockedWith === undefined && code !== '') {
+        meta.unlockedWith = code;
+      }
 
       if (meta.retired.includes(token)) {
         return json({ error: 'The library moved to a new account key.', moved: true }, 410);
@@ -341,18 +516,26 @@ export class Library {
       switch (op) {
         case 'check':
           return noContent();
+        case 'has':
+          return this.#has(((await request.json()) as { ids: string[] }).ids);
         case 'changes':
-          return this.#changes(meta, Number(url.searchParams.get('since')), now);
+          return this.#changes(meta, Number(url.searchParams.get('since')), code, now);
         case 'unlock':
-          return this.#unlock(meta, url.searchParams.get('ok') === '1', now);
+          // The Worker asks only after the code was right.
+          await this.#save({ ...meta, unlocked: true, unlockedWith: code });
+          return noContent();
         case 'begin': {
           const { id, size } = (await request.json()) as { id: string; size: number };
-          return (await this.#refuse(meta, id, size, now)) ?? noContent();
+          return (await this.#refuse(meta, id, size, code, now)) ?? noContent();
         }
-        case 'commit':
-          return this.#commit(meta, (await request.json()) as Omit<ItemRow, 'seq' | 'at'>, now);
-        case 'remove':
-          return this.#remove(meta, ((await request.json()) as { ids: string[] }).ids, now);
+        case 'commit': {
+          const item = (await request.json()) as Omit<ItemRow, 'seq' | 'at'>;
+          return this.#commit(meta, item, code, now);
+        }
+        case 'remove': {
+          const { ids } = (await request.json()) as { ids: string[] };
+          return this.#remove(meta, ids, canAdd(meta, code), now);
+        }
         case 'wipe':
           return this.#wipe(meta);
         default:
@@ -383,7 +566,22 @@ export class Library {
     return this.state.storage.put('meta', meta);
   }
 
-  async #changes(meta: Meta, since: number, now: number): Promise<Response> {
+  /** Which of these items the library has now. */
+  async #has(ids: readonly string[]): Promise<Response> {
+    const found = await Promise.all(
+      ids.map(async (id) => {
+        const entry = await this.state.storage.get<Entry>(itemKey(id));
+        return entry && !('deleted' in entry) ? id : null;
+      }),
+    );
+    return json({ ids: found.filter((id) => id !== null) });
+  }
+
+  async #changes(meta: Meta, since: number, code: string, now: number): Promise<Response> {
+    // A deletion whose alarm stopped (R2 was down for too long) starts again.
+    if (meta.wiping && (await this.state.storage.getAlarm()) === null) {
+      await this.state.storage.setAlarm(now);
+    }
     const listed = meta.wiping
       ? []
       : [
@@ -400,7 +598,7 @@ export class Library {
       more: listed.length > LIMITS.page,
       seq: meta.seq,
       epoch: meta.epoch,
-      unlocked: meta.unlocked,
+      unlocked: canAdd(meta, code),
       wiping: meta.wiping,
       usage: {
         items: meta.items,
@@ -410,24 +608,18 @@ export class Library {
     } satisfies Changes);
   }
 
-  async #unlock(meta: Meta, ok: boolean, now: number): Promise<Response> {
-    const tries = now - meta.tries.start < HOUR_MS ? meta.tries : { start: now, count: 0 };
-    if (tries.count >= LIMITS.unlockTries) {
-      return json({ error: 'Too many wrong codes; try again in an hour.', tooMany: true }, 429);
-    }
-    if (ok) {
-      await this.#save({ ...meta, unlocked: true, tries: { start: now, count: 0 } });
-      return noContent();
-    }
-    await this.#save({ ...meta, tries: { ...tries, count: tries.count + 1 } });
-    return json({ error: 'That isn’t the storage code.', wrong: true }, 403);
-  }
-
   /** Why an item of `size` bytes can't be added now, or null if it can. */
-  async #refuse(meta: Meta, id: string, size: number, now: number): Promise<Response | null> {
+  async #refuse(
+    meta: Meta,
+    id: string,
+    size: number,
+    code: string,
+    now: number,
+  ): Promise<Response | null> {
     if (meta.wiping) return refusal(503, { error: 'The library is being deleted.', wiping: true });
-    if (!meta.unlocked)
+    if (!canAdd(meta, code)) {
       return refusal(423, { error: 'Give the storage code first.', locked: true });
+    }
     const entry = await this.state.storage.get<Entry>(itemKey(id));
     if (entry && 'deleted' in entry) {
       return refusal(409, { error: 'That item was deleted.', deleted: true });
@@ -447,9 +639,14 @@ export class Library {
     return null;
   }
 
-  async #commit(meta: Meta, item: Omit<ItemRow, 'seq' | 'at'>, now: number): Promise<Response> {
+  async #commit(
+    meta: Meta,
+    item: Omit<ItemRow, 'seq' | 'at'>,
+    code: string,
+    now: number,
+  ): Promise<Response> {
     const size = item.parts.reduce((sum, part) => sum + part, 0);
-    const refused = await this.#refuse(meta, item.id, size, now);
+    const refused = await this.#refuse(meta, item.id, size, code, now);
     if (refused) return refused;
     const seq = meta.seq + 1;
     const today = utcDay(now);
@@ -467,8 +664,18 @@ export class Library {
     return json({ seq });
   }
 
-  /** Deletes items and their files, leaving markers so other devices delete them too. */
-  async #remove(meta: Meta, ids: readonly string[], now: number): Promise<Response> {
+  /**
+   * Deletes items and their files, leaving markers so other devices delete
+   * them too. An id the list doesn't have gets a marker only while items can
+   * be added (it may be on its way up); otherwise there's nothing to stop, and
+   * a stranger's made-up library can't fill storage with markers.
+   */
+  async #remove(
+    meta: Meta,
+    ids: readonly string[],
+    adding: boolean,
+    now: number,
+  ): Promise<Response> {
     if (meta.wiping) return problem(503, 'The library is being deleted.');
     const entries = await Promise.all(
       ids.map(async (id) => [id, await this.state.storage.get<Entry>(itemKey(id))] as const),
@@ -484,6 +691,7 @@ export class Library {
     let { seq, items, bytes } = meta;
     for (const [id, entry] of entries) {
       if (entry && 'deleted' in entry) continue;
+      if (!entry && !adding) continue;
       if (entry) {
         await this.state.storage.delete(seqKey(entry.seq));
         items -= 1;
@@ -499,7 +707,10 @@ export class Library {
       await this.state.storage.put(itemKey(id), { seq, deleted: true } satisfies Entry);
     }
     await this.#save({ ...meta, seq, items, bytes });
-    return noContent();
+    return new Response(null, {
+      status: 204,
+      headers: { ...API_HEADERS, 'X-Freed': String(meta.bytes - bytes) },
+    });
   }
 
   /**
@@ -518,8 +729,22 @@ export class Library {
   }
 
   async #wipe(meta: Meta): Promise<Response> {
+    if (!meta.unlocked) {
+      // Never unlocked, so never had files: nothing to look for in R2.
+      await this.state.storage.deleteAll();
+      await this.#save({ ...meta, epoch: crypto.randomUUID(), items: 0, bytes: 0, seq: meta.seq });
+      return json({ wiping: false }, 202);
+    }
+    const freed = meta.wiping ? 0 : meta.bytes;
     if (!meta.wiping) await this.#save({ ...meta, wiping: true });
     await this.state.storage.setAlarm(Date.now());
-    return json({ wiping: true }, 202);
+    return new Response(JSON.stringify({ wiping: true }), {
+      status: 202,
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        ...API_HEADERS,
+        'X-Freed': String(freed),
+      },
+    });
   }
 }

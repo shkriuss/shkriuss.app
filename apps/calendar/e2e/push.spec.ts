@@ -4,7 +4,7 @@ import type { Page } from '@playwright/test';
 import { fromBase64Url } from '../../../packages/push/src/base64.ts';
 import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
 import { fakeSubscription, startRig, type PushRig } from '../../../tests/e2e/notifications.ts';
-import { dayList, editor, newEvent, save } from './helpers.ts';
+import { dayList, editor, newEvent, save, seed } from './helpers.ts';
 
 test.use({ serviceWorkers: 'allow', timezoneId: 'Europe/Berlin' });
 
@@ -104,6 +104,29 @@ test('uploads reminders encrypted, never in plain text', async ({ page }) => {
   expect(request.headers()['authorization']).toMatch(/^Bearer [\w-]{43}$/);
 });
 
+test('an imported event’s calendar id stays on the device, even a long one', async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-10-17T10:00:00+02:00'));
+  await fakeSubscription(page, rig);
+  await page.goto('/');
+  // Outlook gives events 112-character ids, kept as the event's id when imported.
+  const uid = `040000008200E00074C5B7101A82E008${'0'.repeat(80)}`;
+  await seed(page, [
+    { id: uid, title: 'Booked', startDate: '2026-10-20', endDate: '2026-10-20', reminder: 15 },
+  ]);
+  const upload = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/api/push/schedule') && response.request().method() === 'PUT',
+  );
+  await closedSwitch(page).check();
+  const response = await upload;
+  expect(response.status()).toBe(200);
+  const text = response.request().postData() ?? '';
+  expect(text).not.toContain(uid);
+  const body = JSON.parse(text) as { entries: { id: string }[] };
+  expect(body.entries.map((entry) => entry.id)).toEqual(['1']);
+  await expect(closedStatus(page)).toHaveText(/^On:/);
+});
+
 test('turning it off, or deleting all data, removes it from the server', async ({ page }) => {
   await fakeSubscription(page, rig);
   await page.goto('/');
@@ -134,6 +157,145 @@ test('turning it off, or deleting all data, removes it from the server', async (
   await deleted;
   await page.waitForLoadState('load');
   await expect(closedSwitch(page)).not.toBeChecked();
+});
+
+test('says so when turning it off can’t reach the server, and finishes later', async ({
+  page,
+  guard,
+}) => {
+  // The browser logs the deletion this test stops.
+  guard.allowConsole('net::ERR_FAILED');
+  await fakeSubscription(page, rig);
+  await page.goto('/');
+  await closedSwitch(page).check();
+  await expect(closedStatus(page)).toHaveText(/^On:/);
+
+  // The deletion can't get through (offline, say).
+  await page.route('**/api/push/schedule', (route) =>
+    route.request().method() === 'DELETE' ? route.abort() : route.continue(),
+  );
+  await closedSwitch(page).uncheck();
+  await expect(closedStatus(page)).toHaveText(
+    "Off, but your reminders couldn’t be removed from Calendar's server yet. Calendar will try again when it’s open and online.",
+  );
+  await checkA11y(page, 'reminders while closed: deletion pending');
+
+  // Next time Calendar is open, it tries again.
+  await page.unroute('**/api/push/schedule');
+  const deleted = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/api/push/schedule') && response.request().method() === 'DELETE',
+  );
+  await page.reload();
+  expect((await deleted).status()).toBe(204);
+  await expect(closedStatus(page)).toHaveText(/^Off:/);
+  expect(await page.evaluate(() => localStorage.getItem('shkriuss-device:push-delete'))).toBeNull();
+});
+
+test('“Delete all data” deletes here at once, even while the network hangs', async ({ page }) => {
+  await fakeSubscription(page, rig);
+  await page.goto('/');
+  await seed(page, [
+    { title: 'Private appointment', startDate: '2099-01-01', endDate: '2099-01-01' },
+  ]);
+  await closedSwitch(page).check();
+  await expect(closedStatus(page)).toHaveText(/^On:/);
+
+  // From now on the server never answers (a VPN with no connection, say).
+  await page.route('**/api/**', () => {
+    // Never answers.
+  });
+  await page.getByRole('button', { name: 'Delete all data' }).click();
+  const reloaded = page.waitForEvent('load', { timeout: 10_000 });
+  await page
+    .getByRole('dialog', { name: 'Delete all data?' })
+    .getByRole('button', { name: 'Delete everything' })
+    .click();
+  // Deleted on this device without waiting for the server, which can't answer.
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem('shkriuss:calendar')))
+    .toBeNull();
+  await reloaded;
+  const device = await page.evaluate(() => ({
+    calendar: localStorage.getItem('shkriuss:calendar') ?? '',
+    push: localStorage.getItem('shkriuss-device:push'),
+    pending: localStorage.getItem('shkriuss-device:push-delete'),
+    subscribed: sessionStorage.getItem('fake-push'),
+  }));
+  expect(device.calendar).not.toContain('Private appointment');
+  expect(device).toMatchObject({ push: null, subscribed: null });
+  // The server's copy is remembered, to be deleted later.
+  expect(device.pending).not.toBeNull();
+  await expect(closedSwitch(page)).not.toBeChecked();
+  await expect(closedStatus(page)).toHaveText(/^Off, but your reminders couldn’t be removed/);
+
+  await page.unroute('**/api/**');
+  const deleted = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/api/push/schedule') && response.request().method() === 'DELETE',
+  );
+  await page.reload();
+  expect((await deleted).status()).toBe(204);
+  await expect(closedStatus(page)).toHaveText(/^Off:/);
+});
+
+test('turning it off while the network hangs gives up after a while', async ({ page }) => {
+  await page.clock.install();
+  await fakeSubscription(page, rig);
+  await page.goto('/');
+  await closedSwitch(page).check();
+  await expect(closedStatus(page)).toHaveText(/^On:/);
+
+  await page.route('**/api/**', () => {
+    // Never answers.
+  });
+  // With the keyboard: focus stays on the switch while it waits.
+  await closedSwitch(page).focus();
+  await page.keyboard.press('Space');
+  await expect(closedStatus(page)).toHaveText('Turning off…');
+  await expect(closedSwitch(page)).not.toBeChecked();
+  await expect(closedSwitch(page)).toBeDisabled();
+  await expect(closedSwitch(page)).toBeFocused();
+  // Pressing it again meanwhile does nothing.
+  await page.keyboard.press('Space');
+  await expect(closedSwitch(page)).not.toBeChecked();
+  await page.clock.runFor('00:21');
+  await expect(closedStatus(page)).toHaveText(
+    "Off, but your reminders couldn’t be removed from Calendar's server yet. Calendar will try again when it’s open and online.",
+  );
+  await expect(closedSwitch(page)).toBeEnabled();
+  await expect(closedSwitch(page)).toBeFocused();
+});
+
+test('after a trip, coming back to Calendar sends the new time zone', async ({ page }) => {
+  await fakeSubscription(page, rig);
+  await page.goto('/');
+  await closedSwitch(page).check();
+  await expect(closedStatus(page)).toHaveText(/^On:/);
+  const timeZones: string[] = [];
+  page.on('request', (request) => {
+    if (request.url().endsWith('/api/push/schedule') && request.method() === 'PUT') {
+      timeZones.push(
+        (JSON.parse(request.postData() ?? '{}') as { timeZone?: string }).timeZone ?? '',
+      );
+    }
+  });
+
+  // Back on screen with nothing changed: nothing is sent.
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  // Flown to London, and back on screen (the page stayed in memory).
+  await page.evaluate(() => {
+    const Original = Intl.DateTimeFormat;
+    const InLondon = function (...args: ConstructorParameters<typeof Intl.DateTimeFormat>) {
+      const format = new Original(...args);
+      const resolved = format.resolvedOptions.bind(format);
+      format.resolvedOptions = () => ({ ...resolved(), timeZone: 'Europe/London' });
+      return format;
+    } as unknown as typeof Intl.DateTimeFormat;
+    Intl.DateTimeFormat = InLondon;
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await expect.poll(() => timeZones).toEqual(['Europe/London']);
 });
 
 test('device settings stay out of backups', async ({ page }) => {

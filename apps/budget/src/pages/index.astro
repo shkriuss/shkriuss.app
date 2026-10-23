@@ -130,6 +130,7 @@ import {
           Download as a spreadsheet (CSV)
         </Button>
       </div>
+      <p class="muted" role="status" data-csv-status></p>
     </section>
 
     <section class="stack" aria-labelledby="reminder-heading">
@@ -256,10 +257,9 @@ import {
             class="input"
             id="entry-amount"
             name="amount"
-            type="number"
+            type="text"
             inputmode="decimal"
-            step="any"
-            min="0"
+            autocomplete="off"
             aria-describedby="entry-amount-error"
             required
           />
@@ -344,10 +344,9 @@ import {
           class="input"
           id="category-limit"
           name="limit"
-          type="number"
+          type="text"
           inputmode="decimal"
-          step="any"
-          min="0"
+          autocomplete="off"
           aria-describedby="category-limit-hint category-limit-error"
         />
         <p class="field__hint" id="category-limit-hint">

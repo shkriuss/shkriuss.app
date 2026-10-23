@@ -196,6 +196,26 @@ test('finds items by search, category, how you like them, and brand', async ({ p
   await checkA11y(page, 'the form (dark)');
 });
 
+test('saving a form keeps what changed elsewhere while it was open', async ({ page }) => {
+  await seed(page, [{ name: 'Running shoes', price: 250 }]);
+  await page.getByRole('button', { name: 'Edit Running shoes' }).click();
+  // Meanwhile, another tab (or a sync from another device) changes the price.
+  const other = await page.context().newPage();
+  await other.goto('/');
+  await other.getByRole('button', { name: 'Edit Running shoes' }).click();
+  await form(other).getByLabel('Price (optional)').fill('220');
+  await save(other);
+  await expect(card(other, 'Running shoes').locator('[data-price]')).toHaveText(/220\.00$/);
+  await other.close();
+
+  await form(page).getByLabel('Notes (optional)').fill('Comfy');
+  await save(page);
+  await expect(card(page, 'Running shoes').locator('[data-price]')).toHaveText(/220\.00$/);
+  await page.getByRole('button', { name: 'Edit Running shoes' }).click();
+  await expect(form(page).getByLabel('Notes (optional)')).toHaveValue('Comfy');
+  await expect(form(page).getByLabel('Price (optional)')).toHaveValue('220');
+});
+
 test('ignores saved data it doesn’t understand', async ({ page }) => {
   await page.evaluate(() => {
     localStorage.setItem('shkriuss:shelf', JSON.stringify({ v: 1, data: { items: [{ id: 1 }] } }));

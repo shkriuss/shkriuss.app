@@ -27,6 +27,8 @@ import {
   type Stamp,
 } from '@shkriuss/dates';
 import type { Notice } from '@shkriuss/push';
+import { parseDecimal } from '@shkriuss/ui/numbers';
+import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
 export type Kind = 'expense' | 'income';
 export const KINDS: readonly Kind[] = ['expense', 'income'];
@@ -78,8 +80,13 @@ const tidy = (value: number): number => Math.round(value * 100) / 100;
 
 // ---------- Checking ----------
 
+/**
+ * A saved amount. The form never saves 0, but older versions could (0.001
+ * was kept as 0), so 0 is still read: refusing it would make all of Budget
+ * unreadable on that device.
+ */
 const isAmount = (value: unknown): value is number =>
-  typeof value === 'number' && Number.isFinite(value) && value > 0 && value <= LIMITS.amount;
+  typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= LIMITS.amount;
 
 function isCategory(value: unknown): value is Category {
   if (typeof value !== 'object' || value === null) return false;
@@ -119,15 +126,17 @@ export function isEntriesState(value: unknown): value is EntriesState {
   return Array.isArray(entries) && entries.every(isEntry);
 }
 
-/** A typed amount: null when empty, NaN when it isn't a number. */
-const parseAmount = (text: string): number | null =>
-  text.trim() === '' ? null : Number(text.trim());
+/** A typed amount: null when empty, NaN when it isn't a number ("12,50" is 12.5). */
+const parseAmount = parseDecimal;
 
 /** What's wrong with a typed amount, or undefined (empty is fine when `optional`). */
 function amountProblem(text: string, optional: boolean): string | undefined {
   const value = parseAmount(text);
   if (value === null) return optional ? undefined : 'Enter an amount.';
-  if (!Number.isFinite(value) || value <= 0) return 'Enter an amount above 0.';
+  if (!Number.isFinite(value)) return 'Enter a number, like 12.50 or 12,50.';
+  if (value <= 0) return 'Enter an amount above 0.';
+  // Amounts are kept to the cent, so one that rounds to 0 would be saved as 0.
+  if (tidy(value) <= 0) return 'Enter at least 0.01.';
   if (value > LIMITS.amount) return 'Enter a smaller amount.';
   return undefined;
 }
@@ -229,7 +238,14 @@ export function readEntry(
   if (note.length > LIMITS.note) problems.note = `Use ${LIMITS.note} characters or fewer.`;
   if (Object.keys(problems).length > 0 || !kind) return { problems };
   return {
-    entry: { id, kind, amount: tidy(Number(form.amount)), date: form.date, category, note },
+    entry: {
+      id,
+      kind,
+      amount: tidy(parseAmount(form.amount) ?? 0),
+      date: form.date,
+      category,
+      note,
+    },
   };
 }
 
@@ -358,7 +374,7 @@ export function formatMoney(
 }
 
 /** "October 2026". */
-export function monthLabel(month: string, locale?: string): string {
+export function monthLabel(month: string, locale = DATE_LOCALE): string {
   const [year, number] = month.split('-').map(Number) as [number, number];
   return new Intl.DateTimeFormat(locale, {
     month: 'long',
@@ -368,7 +384,7 @@ export function monthLabel(month: string, locale?: string): string {
 }
 
 /** "Wed, Oct 21". */
-export function dayLabel(date: IsoDate, locale?: string): string {
+export function dayLabel(date: IsoDate, locale = DATE_LOCALE): string {
   const [year, month, day] = date.split('-').map(Number) as [number, number, number];
   return new Intl.DateTimeFormat(locale, {
     weekday: 'short',
@@ -561,7 +577,7 @@ export function dayChoiceLabel(day: ReminderDay): string {
 }
 
 /** "9:00 AM" (in the person's own style). */
-export function timeLabel(time: IsoTime, locale?: string): string {
+export function timeLabel(time: IsoTime, locale = DATE_LOCALE): string {
   const [hour, minute] = time.split(':').map(Number) as [number, number];
   return new Intl.DateTimeFormat(locale, {
     hour: 'numeric',
@@ -571,14 +587,14 @@ export function timeLabel(time: IsoTime, locale?: string): string {
 }
 
 /** "Reminder on the 1st of every month, at 9:00 AM." or that it's off. */
-export function reminderSentence(reminder: Reminder, locale?: string): string {
+export function reminderSentence(reminder: Reminder, locale = DATE_LOCALE): string {
   if (!reminder.on) return 'The monthly reminder is off.';
   const day = reminder.day === 'last' ? 'the last day' : `the ${dayChoiceLabel(reminder.day)}`;
   return `Reminder on ${day} of every month, at ${timeLabel(reminder.time, locale)}.`;
 }
 
 /** "Sunday, November 1, at 9:00 AM" */
-export function whenLabel(stamp: Stamp, locale?: string): string {
+export function whenLabel(stamp: Stamp, locale = DATE_LOCALE): string {
   const [date, time] = stamp.split('T') as [IsoDate, IsoTime];
   const { year, month, day } = parts(date);
   const dayText = new Intl.DateTimeFormat(locale, {

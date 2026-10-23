@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
-import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
+import { checkA11y, expect, failSaving, test } from '../../../tests/e2e/fixtures.ts';
 
 async function addCounter(page: Page, name: string): Promise<void> {
   await page.getByLabel('New counter').fill(name);
@@ -59,11 +59,80 @@ test('explains invalid names', async ({ page }) => {
   await expect(page.getByText('You already have a counter with that name.')).toBeVisible();
 });
 
+test('reads out a name’s problem after Enter in the field', async ({ page }) => {
+  // Focus stays in the field, so moving focus there reads nothing (audit G-3).
+  const input = page.getByLabel('New counter');
+  await input.focus();
+  await page.keyboard.press('Enter');
+  await expect(input).toBeFocused();
+  await expect(page.getByRole('alert')).toHaveText('New counter: Enter a name for the counter.');
+
+  await input.fill('Cups');
+  await page.keyboard.press('Enter');
+  await input.fill('Cups');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('alert')).toHaveText(
+    'New counter: You already have a counter with that name.',
+  );
+  // Gone once the name is changed.
+  await input.pressSequentially('!');
+  await expect(page.getByRole('alert')).toHaveCount(0);
+});
+
+test('asks before resetting a count to 0', async ({ page }) => {
+  await addCounter(page, 'Cups');
+  const cups = counter(page, 'Cups');
+  for (let tap = 0; tap < 3; tap += 1) {
+    await cups.getByRole('button', { name: 'Add 1 to Cups' }).click();
+  }
+  const reset = cups.getByRole('button', { name: 'Reset Cups to zero' });
+  await reset.click();
+  const dialog = page.getByRole('dialog', { name: 'Reset “Cups” to 0?' });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText('It’s at 3 now.');
+  await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused();
+  await checkA11y(page, 'reset dialog');
+
+  await page.keyboard.press('Enter');
+  await expect(dialog).toBeHidden();
+  await expect(cups.locator('[data-value]')).toHaveText('3');
+  await expect(reset).toBeFocused();
+
+  await reset.click();
+  await dialog.getByRole('button', { name: 'Reset' }).click();
+  await expect(cups.locator('[data-value]')).toHaveText('0');
+  await expect(page.getByRole('status').filter({ hasText: 'Cups: reset to 0.' })).toBeAttached();
+  await expect(cups.getByRole('button', { name: 'Reset Cups to zero' })).toBeFocused();
+  await page.reload();
+  await expect(counter(page, 'Cups').locator('[data-value]')).toHaveText('0');
+});
+
+test('says so, on screen, when counting can’t be saved', async ({ page }) => {
+  await addCounter(page, 'Cups');
+  await failSaving(page);
+  const plus = counter(page, 'Cups').getByRole('button', { name: 'Add 1 to Cups' });
+  await plus.click();
+  const problem = page.getByRole('alert');
+  await expect(problem).toBeVisible();
+  await expect(problem).toHaveText(/^Couldn’t save/);
+  // The count isn't announced as if it were kept.
+  await expect(page.getByRole('status').filter({ hasText: 'Cups: 1' })).toHaveCount(0);
+  await expect(plus).toBeFocused();
+
+  await page.reload();
+  await expect(counter(page, 'Cups').locator('[data-value]')).toHaveText('0');
+  await expect(page.getByRole('alert')).toHaveCount(0);
+});
+
 test('resets and deletes counters (with confirmation)', async ({ page }) => {
   await addCounter(page, 'Books');
   const books = counter(page, 'Books');
   await books.getByRole('button', { name: 'Add 1 to Books' }).click();
   await books.getByRole('button', { name: 'Reset Books to zero' }).click();
+  await page
+    .getByRole('dialog', { name: 'Reset “Books” to 0?' })
+    .getByRole('button', { name: 'Reset' })
+    .click();
   await expect(books.locator('[data-value]')).toHaveText('0');
 
   await books.getByRole('button', { name: 'Delete Books' }).click();
@@ -112,11 +181,18 @@ test('backs up, deletes and restores the data', async ({ page }) => {
   expect(file.app).toBe('tally');
   expect(file.data['shkriuss:tally'].data.counters[0]).toMatchObject({ name: 'Water', count: 1 });
 
+  // Something an app downloaded into its own cache (like Grammar's model), and the offline copy.
+  await page.evaluate(async () => {
+    await (await caches.open('downloads')).put('/big-file', new Response('model'));
+    await (await caches.open('shkriuss-offline-copy')).put('/', new Response('page'));
+  });
   await page.getByRole('button', { name: 'Delete all data' }).click();
   const deleteDialog = page.getByRole('dialog', { name: 'Delete all data?' });
   await deleteDialog.getByRole('button', { name: 'Delete everything' }).click();
   await page.waitForLoadState('load');
   await expect(page.getByText('No counters yet')).toBeVisible();
+  // The download is gone too; the offline copy of the site stays.
+  expect(await page.evaluate(() => caches.keys())).toEqual(['shkriuss-offline-copy']);
 
   // Restore the locked backup.
   const chooser = page.waitForEvent('filechooser');

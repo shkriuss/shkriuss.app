@@ -90,10 +90,14 @@ export function shiftMonth(date: IsoDate, offset: number): IsoDate {
 }
 
 /** The same day in another month, clamped to that month's length (31 Jan → 28/29 Feb). */
-export function sameDayInMonth(date: IsoDate, offset: number): IsoDate {
+export function sameDayInMonth(
+  date: IsoDate,
+  offset: number,
+  day: number = parts(date).day,
+): IsoDate {
   const first = shiftMonth(date, offset);
   const { year, month } = parts(first);
-  return makeDate(year, month, Math.min(parts(date).day, daysInMonth(year, month)));
+  return makeDate(year, month, Math.min(day, daysInMonth(year, month)));
 }
 
 /**

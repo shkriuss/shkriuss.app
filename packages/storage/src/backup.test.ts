@@ -9,7 +9,7 @@ import {
   restoreAll,
   type EncryptedBackup,
 } from './backup.ts';
-import { exportAll, type ExportFile, type StorageLike } from './index.ts';
+import { createStore, exportAll, type ExportFile, type StorageLike } from './index.ts';
 
 /** In-memory stand-in for localStorage; can be given a maximum number of items, like a full disk. */
 class MemoryStorage implements StorageLike {
@@ -181,5 +181,34 @@ describe('restoreAll', () => {
 
   it('explains when the browser blocks storage', () => {
     expect(() => restoreAll(file, undefined)).toThrow(/isn’t letting the app save data/);
+  });
+
+  it('first checks the backup with the app’s stores, and changes nothing if they can’t read it', () => {
+    // The app's store on this page: version 2.
+    const store = createStore<{ repairs: string[] }>({
+      key: 'repairs',
+      version: 2,
+      fallback: () => ({ repairs: [] }),
+      validate: (value): value is { repairs: string[] } =>
+        Array.isArray((value as { repairs?: unknown } | null)?.repairs),
+      storage,
+    });
+    store.save({ repairs: ['brakes'] });
+    const before = storage.entries();
+    const code = (saved: unknown) => {
+      try {
+        restoreAll({ ...file, data: { 'shkriuss:repairs': saved } }, storage);
+        return 'ok';
+      } catch (error) {
+        return (error as BackupError).code;
+      }
+    };
+    // Made by a newer version of the app, on another device.
+    expect(code({ v: 3, data: { repairs: ['tyres'] } })).toBe('newer-version');
+    expect(code({ v: 2, data: { repairs: 'tyres' } })).toBe('not-a-backup');
+    expect(code('not an envelope')).toBe('not-a-backup');
+    expect(storage.entries()).toEqual(before);
+    expect(code({ v: 2, data: { repairs: ['tyres'] } })).toBe('ok');
+    expect(store.load()).toEqual({ repairs: ['tyres'] });
   });
 });

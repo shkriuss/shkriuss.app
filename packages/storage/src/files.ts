@@ -8,6 +8,8 @@
  * "<kind>:<id>", e.g. "repair-photos:6f1c…". Browser only.
  */
 
+import { keepData } from './index.ts';
+
 const DATABASE = 'shkriuss-files';
 const TABLE = 'files';
 
@@ -25,25 +27,55 @@ export interface FileStore<T extends StoredFile> {
   removeAll(ids: readonly string[]): Promise<void>;
 }
 
+/**
+ * The lowest database version with everything upgrade() makes. Raise it when
+ * adding a step there (like an index), so existing databases get the step.
+ */
+const VERSION = 1;
+
+/**
+ * Makes sure the database has what this code needs. Each step checks for
+ * what it adds instead of trusting the version number, so it also mends a
+ * database left half made (a table missing) and never fails on one that
+ * already has it. Existing files are never touched.
+ */
+function upgrade(database: IDBDatabase): void {
+  if (!database.objectStoreNames.contains(TABLE)) database.createObjectStore(TABLE);
+}
+
+const isReady = (database: IDBDatabase) =>
+  database.version >= VERSION && database.objectStoreNames.contains(TABLE);
+
+/** Opens the database: at whatever version it has, or at `version` (upgrading it). */
+function request(version?: number): Promise<IDBDatabase> {
+  return new Promise<IDBDatabase>((resolve, reject) => {
+    const opened =
+      version === undefined ? indexedDB.open(DATABASE) : indexedDB.open(DATABASE, version);
+    opened.onupgradeneeded = () => upgrade(opened.result);
+    opened.onsuccess = () => resolve(opened.result);
+    opened.onerror = () => reject(opened.error ?? new Error('Couldn’t open the files.'));
+  });
+}
+
 let opening: Promise<IDBDatabase> | null = null;
 
 function open(): Promise<IDBDatabase> {
-  opening ??= new Promise<IDBDatabase>((resolve, reject) => {
-    const request = indexedDB.open(DATABASE, 1);
-    request.onupgradeneeded = () => {
-      request.result.createObjectStore(TABLE);
+  opening ??= (async () => {
+    let database = await request();
+    if (!isReady(database)) {
+      // Older, or missing its table: open it one version up, which runs upgrade().
+      const version = Math.max(VERSION, database.version + 1);
+      database.close();
+      database = await request(version);
+    }
+    const ready = database;
+    // "Delete all data", or an upgrade, in another tab: let go, so it can.
+    ready.onversionchange = () => {
+      ready.close();
+      opening = null;
     };
-    request.onsuccess = () => {
-      const database = request.result;
-      // "Delete all data" in another tab: let go, so it can.
-      database.onversionchange = () => {
-        database.close();
-        opening = null;
-      };
-      resolve(database);
-    };
-    request.onerror = () => reject(request.error ?? new Error('Couldn’t open the files.'));
-  }).catch((error: unknown) => {
+    return ready;
+  })().catch((error: unknown) => {
     opening = null;
     throw error;
   });
@@ -102,20 +134,20 @@ export function createFileStore<T extends StoredFile>(kind: string): FileStore<T
  * space (it may say no). Worth asking once someone saves something they'd
  * miss, like a photo.
  */
-export async function keepFiles(): Promise<void> {
-  try {
-    if (!(await navigator.storage.persisted())) await navigator.storage.persist();
-  } catch {
-    // Not supported: the files are kept as long as the browser allows.
-  }
+export function keepFiles(): Promise<void> {
+  keepData();
+  return Promise.resolve();
 }
 
 /**
- * Deletes every file this site saved ("Delete all data"). Resolves when it's
- * done, or after `waitMs` if the browser is slow to: the caller reloads anyway.
+ * Deletes every file this site saved ("Delete all data"): the files database,
+ * and what an app downloaded into its own cache, like Grammar's Deep check
+ * model. The offline copy of the site (caches named "shkriuss-…") stays.
+ * Resolves when it's done, or after `waitMs` if the browser is slow to: the
+ * caller reloads anyway.
  */
 export function deleteAllFiles(waitMs = 3000): Promise<void> {
-  return new Promise<void>((resolve) => {
+  const database = new Promise<void>((resolve) => {
     const done = () => resolve();
     window.setTimeout(done, waitMs);
     try {
@@ -129,4 +161,17 @@ export function deleteAllFiles(waitMs = 3000): Promise<void> {
       done();
     }
   });
+  return Promise.all([database, deleteDownloads()]).then(() => undefined);
+}
+
+/** Caches an app keeps itself (not the offline copy, "shkriuss-…"). */
+async function deleteDownloads(): Promise<void> {
+  try {
+    const names = await caches.keys();
+    await Promise.all(
+      names.filter((name) => !name.startsWith('shkriuss-')).map((name) => caches.delete(name)),
+    );
+  } catch {
+    // No Cache Storage here: nothing was downloaded into it.
+  }
 }

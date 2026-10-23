@@ -23,6 +23,16 @@ changes on its next deploy.
 - **Accessible by default:** WCAG 2.2 AA contrast (unit-tested for every
   token pair in both themes), visible focus rings, 44px tap targets,
   reduced motion respected, and semantic HTML in every component.
+  - The one exception to 44px: Calendar's days on screens narrower than
+    about 340px, where seven columns can't each be 44px wide. They stay 44px
+    tall, well above WCAG's 24px minimum.
+  - Pages fit a 320px screen, and a 360px one with text at 200%, without
+    sideways scrolling (tested on every page).
+  - States shown only by colour (a pressed toggle, a selected day) also get
+    a rule for Windows contrast themes (`@media (forced-colors: active)`),
+    which replace backgrounds.
+  - A page's `<style>` only reaches elements written in that page: style an
+    `<Icon>` inside it with `:global(svg)` (a unit test checks this).
 - **CSS first.** Component classes work with plain HTML, so even markup
   created by scripts (Tally's `<template>`) uses the same styles.
 
@@ -44,8 +54,45 @@ import { AppShell, Button, Card, AppIcon, Icon, DataControls } from '@shkriuss/u
 </AppShell>
 ```
 
-Also available: `NotFound` (the 404 page) and `ThemeSwitch` (already in the
-footer).
+Also available: `NotFound` (the 404 page), `ThemeSwitch` (already in the
+footer), `SyncControls` (sync with the account, for apps with `"sync": true`)
+and `PushControls` (notifications while closed, for apps with
+`"pushNotifications": true`).
+
+Script helpers, imported from TypeScript: `@shkriuss/ui/numbers`
+(`parseDecimal`, for amounts typed with a point or a comma),
+`@shkriuss/ui/locale` (`DATE_LOCALE`: format dates and times with it, so
+weekdays and months are in English like the rest of the page, even on a
+phone set to another language), `@shkriuss/ui/text` (`compareText`, for
+sorting lists alphabetically),
+`@shkriuss/ui/problem` (telling people about a problem the same way in every
+app: `showProblem` puts it in the notice at the top of every page, which is
+read out at once; `reportSave(store.save(…))` says when saving didn't work,
+and why; `focusProblem` goes to a form's first wrong field, or reads its error
+out if the person is in it already),
+`@shkriuss/ui/worker` (`startWorker`, for heavy work), `@shkriuss/ui/busy`
+(`setBusy`, below), `@shkriuss/ui/qr-code`, `@shkriuss/ui/service-worker`,
+`@shkriuss/ui/sync-controls` and `@shkriuss/ui/push-controls`.
+
+A button that waits for something (saving, the network) is **busy**, not
+disabled. Disabling the button someone just pressed throws keyboard and
+screen reader focus back to the top of the page. A busy one keeps focus,
+looks and reads as unavailable, and ignores presses (also Enter in its form):
+
+```ts
+import { setBusy } from '@shkriuss/ui/busy';
+
+setBusy(button, true);
+try {
+  await save();
+} finally {
+  setBusy(button, false);
+}
+```
+
+Use `disabled` only for something that stays unavailable until the person
+does something else, like "Continue" until a box is ticked. If a panel with
+the focused button is hidden, move focus to what takes its place.
 
 QR codes (for example to open a link on another device) are drawn by a
 script, since their content is usually made on the page:
@@ -66,7 +113,8 @@ read them best, in both themes.
   variables `--stack-gap`, `--cluster-gap`, `--grid-min` and `--grid-gap`.
 - Text: `.lead`, `.muted`, `.prose`, `.visually-hidden`.
 - Components: `.btn` (`--primary`, `--danger`, `--ghost`, `--icon`, `--lg`;
-  a toggle button with `aria-pressed="true"` looks like `--primary`),
+  a toggle button with `aria-pressed="true"` looks like `--primary`; a
+  disabled or busy one, `aria-disabled="true"`, is grey but still readable),
   `.card` (`--link`), `.badge`, `.notice` (`--danger`), `.dialog`,
   `.app-icon`, `.code-text` (a key or link to copy or write down, in a
   monospace box) and `.qr-code`.

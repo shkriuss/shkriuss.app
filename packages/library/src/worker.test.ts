@@ -22,11 +22,12 @@ const token = () => toBase64Url(randomBytes(32));
 const libraryId = () => toBase64Url(randomBytes(32));
 const details = 'D'.repeat(60);
 
-/** A device's way into one library. */
-function client(library: string, bearer: string) {
+/** A device's way into one library, from an internet address. */
+function client(library: string, bearer: string, address = '203.0.113.7') {
   const headers = (more: Record<string, string> = {}) => ({
     Authorization: `Bearer ${bearer}`,
     'X-Library': library,
+    'CF-Connecting-IP': address,
     ...more,
   });
   const call = (path: string, init: RequestInit = {}) =>
@@ -139,17 +140,60 @@ describe('the storage code', () => {
     expect((await device.put(ITEM, [100])).status).toBe(200);
   });
 
-  it('allows 10 wrong tries an hour', async () => {
+  it('allows 20 wrong tries an hour from one address, counting every library together', async () => {
     vi.useFakeTimers({ now: Date.UTC(2026, 9, 22, 12) });
-    const device = client(libraryId(), token());
+    // Anyone can make up libraries, so a new one doesn't mean more tries.
     for (let attempt = 0; attempt < LIMITS.unlockTries; attempt += 1) {
-      expect((await device.unlock('guess')).status).toBe(403);
+      expect((await client(libraryId(), token()).unlock('guess')).status).toBe(403);
     }
+    const device = client(libraryId(), token());
     const tooMany = await device.unlock();
     expect(tooMany.status).toBe(429);
-    expect(await tooMany.json()).toMatchObject({ tooMany: true });
+    expect(await tooMany.json()).toMatchObject({
+      tooMany: true,
+      retryAt: Date.UTC(2026, 9, 22, 13),
+    });
     vi.setSystemTime(Date.UTC(2026, 9, 22, 13, 1));
     expect((await device.unlock()).status).toBe(204);
+  });
+
+  it('a stranger’s wrong tries can’t stop the right code from anywhere else', async () => {
+    vi.useFakeTimers({ now: Date.UTC(2026, 9, 22, 12) });
+    // One IPv6 connection has a whole network: changing the last 64 bits doesn't help.
+    for (let attempt = 0; attempt < LIMITS.unlockTries; attempt += 1) {
+      const stranger = client(libraryId(), token(), `2001:db8:1:2::${attempt.toString(16)}`);
+      expect((await stranger.unlock('guess')).status).toBe(403);
+    }
+    const sameNetwork = client(libraryId(), token(), '2001:db8:1:2:ffff::1');
+    expect((await sameNetwork.unlock()).status).toBe(429);
+    expect((await client(libraryId(), token(), '2001:db8:1:3::1').unlock()).status).toBe(204);
+    expect((await client(libraryId(), token(), '198.51.100.4').unlock()).status).toBe(204);
+  });
+
+  it('forgets wrong tries when their hour is over, and keeps no addresses', async () => {
+    vi.useFakeTimers({ now: Date.UTC(2026, 9, 22, 12, 30) });
+    expect((await client(libraryId(), token(), '198.51.100.4').unlock('guess')).status).toBe(403);
+    const kept = [...server.gateStorage.map.keys()].filter((key) => key.startsWith('try:'));
+    expect(kept).toHaveLength(1);
+    expect(JSON.stringify([...server.gateStorage.map])).not.toContain('198.51.100');
+    expect(server.gateStorage.alarm).toBe(Date.UTC(2026, 9, 22, 13));
+
+    vi.setSystemTime(Date.UTC(2026, 9, 22, 13));
+    await server.gate.alarm();
+    expect([...server.gateStorage.map.keys()].filter((key) => key.startsWith('try:'))).toEqual([]);
+  });
+
+  it('unlocks only while it’s still the code: changing it locks every library', async () => {
+    const device = client(libraryId(), token());
+    await device.unlock();
+    expect((await device.put(ITEM, [100])).status).toBe(200);
+
+    server.env.LIBRARY_STORAGE_CODE = 'a new passphrase';
+    expect((await device.changes()).unlocked).toBe(false);
+    expect((await device.put('photo-0002', [100])).status).toBe(423);
+    expect((await device.unlock()).status).toBe(403);
+    expect((await device.unlock('a new passphrase')).status).toBe(204);
+    expect((await device.put('photo-0002', [100])).status).toBe(200);
   });
 
   it('can’t be given if the server has none', async () => {
@@ -278,6 +322,89 @@ describe('items', () => {
     vi.setSystemTime(Date.UTC(2026, 9, 23, 0, 1));
     expect((await device.put(ITEM, [100])).status).toBe(200);
     expect((await device.changes()).usage.uploadsToday).toBe(1);
+  });
+});
+
+describe('protecting the bill', () => {
+  const total = async () =>
+    (await server.gateStorage.get<{ bytes: number; uploads: number }>('gate')) ?? {
+      bytes: 0,
+      uploads: 0,
+    };
+
+  it('keeps one total of bytes and uploads across every library', async () => {
+    vi.useFakeTimers({ now: Date.UTC(2026, 9, 22, 12) });
+    const first = client(libraryId(), token());
+    const second = client(libraryId(), token());
+    await first.unlock();
+    await second.unlock();
+    expect((await first.put(ITEM, [100, 50])).status).toBe(200);
+    expect(await total()).toMatchObject({ bytes: 150, uploads: 1 });
+
+    // Nearly full in all, though the second library holds nothing yet.
+    await server.gateStorage.put('gate', { ...(await total()), bytes: LIMITS.bytes - 50 });
+    expect((await second.put(ITEM, [100])).status).toBe(507);
+    await server.gateStorage.put('gate', { ...(await total()), bytes: 150 });
+
+    await server.gateStorage.put('gate', {
+      ...(await total()),
+      day: '2026-10-22',
+      uploads: LIMITS.uploadsPerDay,
+    });
+    const today = await second.put(ITEM, [100]);
+    expect(today.status).toBe(429);
+    expect(await today.json()).toMatchObject({ retryAt: Date.UTC(2026, 9, 23) });
+    expect(server.bucket.files.size).toBe(1);
+
+    // Deleting gives the room back.
+    expect((await first.remove([ITEM])).status).toBe(204);
+    expect((await total()).bytes).toBe(0);
+  });
+
+  it('gives the room back when a library is deleted', async () => {
+    const device = client(libraryId(), token());
+    await device.unlock();
+    await device.put(ITEM, [100]);
+    await device.put('photo-0002', [200]);
+    expect((await total()).bytes).toBe(300);
+    expect((await device.call('', { method: 'DELETE' })).status).toBe(202);
+    expect((await total()).bytes).toBe(0);
+    // Asking again while it's being deleted doesn't give it back twice.
+    await server.gateStorage.put('gate', { ...(await total()), bytes: 1000 });
+    expect((await device.call('', { method: 'DELETE' })).status).toBe(202);
+    expect((await total()).bytes).toBe(1000);
+  });
+
+  it('a stranger’s made-up library costs no R2 reads, lists or rows', async () => {
+    const stranger = client(libraryId(), token());
+    const get = vi.spyOn(server.bucket, 'get');
+    const list = vi.spyOn(server.bucket, 'list');
+    const ids = Array.from({ length: LIMITS.firstParts }, (_, index) => `photo-${1000 + index}`);
+
+    const parts = await stranger.post('/first-parts', { items: ids.map((id) => [id, 100]) });
+    expect(parts.status).toBe(200);
+    expect(new Uint8Array(await parts.arrayBuffer())).toEqual(new Uint8Array(4 * ids.length));
+    expect((await stranger.call(`/items/${ITEM}?offset=0&length=10`)).status).toBe(404);
+    expect(get).not.toHaveBeenCalled();
+
+    expect((await stranger.remove(ids)).status).toBe(204);
+    const storage = [...server.objects.values()][0]?.storage;
+    expect([...(storage?.map.keys() ?? [])]).toEqual(['meta']);
+
+    expect((await stranger.call('', { method: 'DELETE' })).status).toBe(202);
+    expect(storage?.alarm).toBeNull();
+    expect(list).not.toHaveBeenCalled();
+  });
+
+  it('starts a deletion again if its alarm stopped', async () => {
+    const device = client(libraryId(), token());
+    await device.unlock();
+    await device.put(ITEM, [100]);
+    await device.call('', { method: 'DELETE' });
+    const storage = [...server.objects.values()][0]?.storage;
+    if (storage) storage.alarm = null;
+    expect((await device.changes()).wiping).toBe(true);
+    expect(storage?.alarm).not.toBeNull();
   });
 });
 

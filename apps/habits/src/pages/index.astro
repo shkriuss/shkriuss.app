@@ -268,7 +268,7 @@ import { EDITABLE_DAYS, MAX_NAME_LENGTH } from '../lib/habits.ts';
     gap: var(--space-1);
   }
 
-  .habit__reminder svg {
+  .habit__reminder :global(svg) {
     width: 1em;
     height: 1em;
   }
@@ -313,7 +313,7 @@ import { EDITABLE_DAYS, MAX_NAME_LENGTH } from '../lib/habits.ts';
     border-radius: var(--radius-full);
   }
 
-  .day__mark svg {
+  .day__mark :global(svg) {
     width: 1rem;
     height: 1rem;
     visibility: hidden;
@@ -325,7 +325,7 @@ import { EDITABLE_DAYS, MAX_NAME_LENGTH } from '../lib/habits.ts';
     color: var(--color-on-accent);
   }
 
-  .day--done .day__mark svg {
+  .day--done .day__mark :global(svg) {
     visibility: visible;
   }
 

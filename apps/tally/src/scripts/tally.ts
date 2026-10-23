@@ -4,6 +4,7 @@
  */
 import { createStore } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
+import { focusProblem, reportSave } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { site } from 'virtual:shkriuss/site';
 import {
@@ -44,21 +45,25 @@ export function mountTally(root: Document): void {
   const announcer = required<HTMLElement>(root, '[data-announcer]');
   const dialog = required<HTMLDialogElement>(root, '[data-counter-dialog]');
   const dialogName = required<HTMLElement>(dialog, '[data-counter-dialog-name]');
+  const resetDialog = required<HTMLDialogElement>(root, '[data-reset-dialog]');
+  const resetTitle = required<HTMLElement>(resetDialog, '[data-reset-title]');
+  const resetText = required<HTMLElement>(resetDialog, '[data-reset-text]');
 
   let state = store.load();
   let pendingDeleteId: string | undefined;
+  let pendingResetId: string | undefined;
 
   const announce = (message: string): void => {
     announcer.textContent = message;
   };
 
-  const save = (next: TallyState): void => {
+  /** Saves and shows `next`; false (and the person is told) if it couldn't be saved. */
+  const save = (next: TallyState): boolean => {
     state = next;
-    if (!store.save(state)) {
-      announce('Could not save. Your browser may be blocking storage.');
-    }
+    const saved = reportSave(store.save(state));
     render();
     sync.changed();
+    return saved;
   };
 
   function renderCounter(counter: Counter): HTMLLIElement {
@@ -109,15 +114,14 @@ export function mountTally(root: Document): void {
     if (message) {
       error.textContent = message;
       input.setAttribute('aria-invalid', 'true');
-      input.focus();
+      focusProblem(input, message);
       return;
     }
     const name = input.value.trim();
     error.textContent = '';
     input.removeAttribute('aria-invalid');
     input.value = '';
-    save(addCounter(state, name, crypto.randomUUID()));
-    announce(`Added counter ${name}.`);
+    if (save(addCounter(state, name, crypto.randomUUID()))) announce(`Added counter ${name}.`);
   });
 
   input.addEventListener('input', () => {
@@ -133,26 +137,57 @@ export function mountTally(root: Document): void {
     const counter = state.counters.find((entry) => entry.id === id);
     if (!button || !id || !counter) return;
 
+    let saved: boolean;
     switch (button.dataset['action']) {
       case 'increment':
-        save(changeCount(state, id, 1));
+        saved = save(changeCount(state, id, 1));
         break;
       case 'decrement':
-        save(changeCount(state, id, -1));
+        saved = save(changeCount(state, id, -1));
         break;
       case 'reset':
-        save(resetCounter(state, id));
-        break;
+        if (counter.count === 0) {
+          saved = true;
+          break;
+        }
+        // Asks first: the count can't be brought back.
+        pendingResetId = id;
+        resetTitle.textContent = `Reset “${counter.name}” to 0?`;
+        resetText.textContent = `It’s at ${numberFormat.format(counter.count)} now. This can’t be undone.`;
+        resetDialog.returnValue = '';
+        resetDialog.showModal();
+        return;
       case 'delete':
         pendingDeleteId = id;
         dialogName.textContent = counter.name;
+        dialog.returnValue = '';
         dialog.showModal();
         return;
       default:
         return;
     }
     const updated = state.counters.find((entry) => entry.id === id);
-    if (updated) announce(`${updated.name}: ${numberFormat.format(updated.count)}`);
+    if (saved && updated) announce(`${updated.name}: ${numberFormat.format(updated.count)}`);
+  });
+
+  /** Back to a counter's button after its dialog, or to the name field if it's gone. */
+  const focusCounter = (id: string, action: string): void => {
+    (
+      list.querySelector<HTMLButtonElement>(
+        `[data-id="${CSS.escape(id)}"] [data-action="${action}"]`,
+      ) ?? input
+    ).focus();
+  };
+
+  resetDialog.addEventListener('close', () => {
+    const id = pendingResetId;
+    pendingResetId = undefined;
+    if (!id) return;
+    if (resetDialog.returnValue === 'confirm' && save(resetCounter(state, id))) {
+      const counter = state.counters.find((entry) => entry.id === id);
+      if (counter) announce(`${counter.name}: reset to 0.`);
+    }
+    focusCounter(id, 'reset');
   });
 
   dialog.addEventListener('close', () => {
@@ -160,8 +195,7 @@ export function mountTally(root: Document): void {
     pendingDeleteId = undefined;
     if (dialog.returnValue !== 'confirm' || !id) return;
     const counter = state.counters.find((entry) => entry.id === id);
-    save(removeCounter(state, id));
-    if (counter) announce(`Deleted ${counter.name}.`);
+    if (save(removeCounter(state, id)) && counter) announce(`Deleted ${counter.name}.`);
     input.focus();
   });
 

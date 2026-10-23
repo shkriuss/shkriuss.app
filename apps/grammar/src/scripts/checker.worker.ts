@@ -53,13 +53,16 @@ function issueOf(lint: Lint): Issue {
 let linter: Promise<LocalLinter> | undefined;
 /** Only the newest text is worth checking. */
 let newest = 0;
+/** The person's dictionary, imported again whenever the linter is remade. */
+let words: string[] = [];
 
 async function handle(message: ToChecker): Promise<void> {
   if (message.type === 'start') {
     linter = (async () => {
       const local = new LocalLinter({ binary, dialect: dialectOf(message.english) });
       await local.setup();
-      if (message.words.length > 0) await local.importWords(message.words);
+      words = message.words;
+      if (words.length > 0) await local.importWords(words);
       return local;
     })();
     await linter;
@@ -77,10 +80,13 @@ async function handle(message: ToChecker): Promise<void> {
   }
   const local = await linter;
   if (message.type === 'english') {
+    // Changing the English makes a new linter, without the person's words.
     await local.setDialect(dialectOf(message.english));
+    if (words.length > 0) await local.importWords(words);
   } else {
+    words = message.words;
     await local.clearWords();
-    if (message.words.length > 0) await local.importWords(message.words);
+    if (words.length > 0) await local.importWords(words);
   }
 }
 

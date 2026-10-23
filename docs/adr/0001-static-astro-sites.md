@@ -1,6 +1,9 @@
 # 0001. Static sites built with Astro
 
-Status: Accepted (2026-10-16)
+Status: Accepted (2026-10-16). Extended by [ADR 0009](0009-push-notifications.md)
+and [ADR 0010](0010-account-and-sync.md): optional features have server code
+for `/api/*`. Pages are bigger than first guessed: see the budgets in
+[ADR 0007](0007-testing-strategy.md).
 
 ## Context
 

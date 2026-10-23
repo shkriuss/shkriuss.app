@@ -118,6 +118,9 @@ describe('for people', () => {
     expect(downloadName(photo({ name: '', type: 'image/png' }))).toBe(
       'photo-2026-10-21-14-03-22.png',
     );
+    // Invisible direction marks and zero-width characters, which can hide the real extension.
+    expect(downloadName(photo({ name: 'holiday‮gpj.exe' }))).toBe('holiday-gpj.exe');
+    expect(downloadName(photo({ name: 'a​b⁦c.jpg' }))).toBe('a-b-c.jpg');
   });
 
   it('makes pictures smaller, never bigger', () => {
@@ -135,6 +138,14 @@ describe('for people', () => {
     );
     expect(addedMessage({ added: 0, duplicates: 1, notPhotos: 0, failed: 0 })).toBe(
       'No photos were added. 1 photo was already here.',
+    );
+  });
+
+  it('says when picking a photo again put its original back', () => {
+    const none = { added: 0, duplicates: 0, notPhotos: 0, failed: 0 };
+    expect(addedMessage({ ...none, restored: 1 })).toBe('1 original is back on this device.');
+    expect(addedMessage({ ...none, added: 2, restored: 3, duplicates: 1 })).toBe(
+      'Added 2 photos. 3 originals are back on this device. 1 photo was already here.',
     );
   });
 });

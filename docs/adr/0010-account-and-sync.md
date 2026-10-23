@@ -51,7 +51,11 @@ The requirements:
      a lookup token.
    - The server keeps the account secret sealed with the wrap key (AES-256-GCM),
      stored under the SHA-256 hash of the lookup token.
-   - The passkey belongs to the hub's own domain.
+   - The passkey belongs to the hub's own domain, `shkriuss.app`. Browsers let
+     any subdomain ask for a passkey of its parent domain, so only the hub's
+     pages allow passkeys (their `Permissions-Policy` header). Every app's
+     pages refuse them, and `defineAppConfig` won't build an app that asks. So
+     no subdomain may ever be served by anyone but these Workers.
    - A passkey that can't do PRF is refused, and the browser is asked to forget
      it (WebAuthn "signal" API, where supported).
    - "Remove a passkey" deletes its lock.
@@ -172,9 +176,13 @@ in with `sync: true` in `apps.json`.
   - An app's data is a list of items with ids, such as Calendar's events or
     Tally's counters.
   - Each item carries the time it last changed, inside the encrypted copy.
-    When two devices both changed an item, the newest change wins.
+    When two devices both changed an item, the newest change wins. A change
+    always gets a time after the version it was made from, so a device
+    whose clock is behind doesn't lose its own edits.
   - Deleting leaves a marker with the time, so deletions sync. Markers are
-    dropped after 180 days.
+    dropped after 180 days. A device away longer still deletes an item it
+    saw in the copy that the same copy no longer has, unless it changed the
+    item since.
   - The list's order is merged the same way; new items from the other device
     go at the end.
   - On a device's first sync, its items count as older than what's already
@@ -192,10 +200,18 @@ in with `sync: true` in `apps.json`.
     know which data version the device last synced.
   - Data from a newer version of the app is never overwritten: the older
     device waits until it updates. Older data is upgraded with the store's own
-    migration and checked with its own validation before it's saved.
+    migration and checked with its own validation before it's saved. After
+    such an update, only what was really changed on a device counts as
+    edited: it compares with its data as still saved in the old version.
+  - Data on the device that this version can't read (from a newer version,
+    after a rollback, or failing its own checks) is never saved over or
+    synced: the device says so and waits for an update.
 - **When devices sync:** when the app opens or comes back on screen, about
   1.5 seconds after each change, every minute while it's open, and with
-  "Sync now".
+  "Sync now". A request that gets no answer within 20 seconds (more for a
+  big copy or photo on a slow connection) counts as no connection: the app
+  says so and tries again later, instead of waiting for ever on a network
+  that hangs.
 - **What app servers can see:** that an account uses the app, how big its
   copy is, and when it changes. Never the contents, and not which account is
   whose.
@@ -220,8 +236,12 @@ in with `sync: true` in `apps.json`.
 - **Lost recovery key.** If the person loses the recovery key and every
   signed-in device, the account and anything synced are gone for good. The
   Account page and the downloaded key file say so.
-- **Lost device.** Replacing the key protects what's synced from then on.
-  Anything synced before could already have been read on the lost device.
+- **Lost device.** Replacing the key protects each app from the moment its
+  sync is turned on again (on any of the person's devices), which moves its
+  copy to the new key. Until then, the lost device can still see and change
+  that app's online copy, so the Account page lists the apps still on the
+  old key. Anything synced before could already have been read on the lost
+  device.
   - Edits made on the lost device before an app moves its copy come along
     with the move.
   - Someone holding the lost device could replace the key first. Then the
@@ -243,8 +263,16 @@ in with `sync: true` in `apps.json`.
   app added to the Home Screen may need its own sign-in on the hub when it
   connects.
 - **Someone sees the QR code.** Anyone who sees a QR code within its 10 minutes
-  could use it first. The first device then says it was used, while the
-  person's own device sees an error, so it's noticed.
+  could use it first. The device showing it then says a device used it and
+  to replace the key if it wasn't the one meant, and the person's own device
+  says someone already used the code, so it's noticed.
+- **The account code is 8 characters (40 bits).** It catches a link from
+  someone else by mistake, but a determined attacker who knows a person's
+  code could make an account with the same code by brute force. Linking only
+  from a code you just made on your own device is what's safe.
+- **Signing out** forgets the account on that device, but each app there
+  keeps its own key and syncs until its sync is turned off; the sign-out
+  dialog lists those apps.
 - **Free quota.** As with [ADR 0009](0009-push-notifications.md), someone
   determined could use up the daily free quota. Things would pause until the
   next day; nothing is exposed and nothing costs money.

@@ -4,7 +4,8 @@
  *
  * Colours use light-dark(LIGHT, DARK). The browser picks the right value from
  * `color-scheme`, which follows the device setting unless the person picks a
- * theme (stored as data-theme on <html>).
+ * theme (stored as data-theme on <html>). Older browsers get the same values
+ * from the @supports block below.
  *
  * Contrast is checked by tests/unit/contrast.test.ts: text pairs need at least
  * 4.5:1 and UI boundaries at least 3:1 (WCAG 2.2 AA).
@@ -114,6 +115,73 @@
 
 :root[data-theme='dark'] {
   color-scheme: dark;
+}
+
+/*
+ * The same colours for browsers without light-dark() (Safari and iOS before
+ * 17.5): without this, every colour above is invalid there, so borders,
+ * buttons and the focus ring disappear. Picked with the device setting and
+ * data-theme instead. tests/unit/contrast.test.ts checks they match.
+ */
+@supports not (color: light-dark(#000000, #ffffff)) {
+  :root {
+    --color-bg: #f7f7f5;
+    --color-surface: #ffffff;
+    --color-surface-sunken: #efefec;
+    --color-border: #dcdcd7;
+    --color-border-strong: #7d7d78;
+    --color-text: #18181b;
+    --color-text-muted: #55565c;
+    --color-accent: #0f6b63;
+    --color-accent-hover: #0b524c;
+    --color-on-accent: #ffffff;
+    --color-accent-soft: #e2f1ef;
+    --color-danger: #b42318;
+    --color-danger-hover: #8f1b12;
+    --color-on-danger: #ffffff;
+    --color-danger-soft: #fdecea;
+    --color-focus: #1d4ed8;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) {
+      --color-bg: #111214;
+      --color-surface: #1b1c1f;
+      --color-surface-sunken: #0b0c0d;
+      --color-border: #34353a;
+      --color-border-strong: #7c7d84;
+      --color-text: #ececee;
+      --color-text-muted: #a6a7ae;
+      --color-accent: #5cc8bd;
+      --color-accent-hover: #86d9cf;
+      --color-on-accent: #08201d;
+      --color-accent-soft: #142e2b;
+      --color-danger: #ff9b8f;
+      --color-danger-hover: #ffbcb4;
+      --color-on-danger: #2b0905;
+      --color-danger-soft: #3a1411;
+      --color-focus: #9ec5ff;
+    }
+  }
+
+  :root[data-theme='dark'] {
+    --color-bg: #111214;
+    --color-surface: #1b1c1f;
+    --color-surface-sunken: #0b0c0d;
+    --color-border: #34353a;
+    --color-border-strong: #7c7d84;
+    --color-text: #ececee;
+    --color-text-muted: #a6a7ae;
+    --color-accent: #5cc8bd;
+    --color-accent-hover: #86d9cf;
+    --color-on-accent: #08201d;
+    --color-accent-soft: #142e2b;
+    --color-danger: #ff9b8f;
+    --color-danger-hover: #ffbcb4;
+    --color-on-danger: #2b0905;
+    --color-danger-soft: #3a1411;
+    --color-focus: #9ec5ff;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

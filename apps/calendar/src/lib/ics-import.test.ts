@@ -150,6 +150,16 @@ describe('parseIcs', () => {
     ).toMatchObject({ startTime: '08:00', endTime: null });
   });
 
+  it('reads a very long time zone name quickly, as unknown', () => {
+    const started = performance.now();
+    const result = parseIcs(
+      calendar([`DTSTART;TZID=${'A'.repeat(60_000)}:20261017T090000`, 'SUMMARY:x']),
+      options,
+    );
+    expect(performance.now() - started).toBeLessThan(500);
+    expect(result.events[0]?.draft).toMatchObject({ startTime: '09:00' });
+  });
+
   it('keeps times as written when the time zone is unknown, and says so', () => {
     const result = parseIcs(
       calendar(['DTSTART;TZID=Pacific Standard Time:20261017T090000', 'SUMMARY:Outlook meeting']),

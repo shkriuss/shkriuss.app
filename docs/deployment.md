@@ -3,9 +3,11 @@
 ## How it works
 
 ```
-pull request ──► CI checks ──► preview links (pr-<n>-<site>.shkriuss.workers.dev)
+pull request ──► CI checks
+      │       └──► (when you approve) preview links (pr-<n>-<site>.shkriuss.workers.dev)
       │
    merge to main ──► CI checks ──► deploy every site ──► check the live sites
+                                                      └──► delete previews of closed pull requests
 ```
 
 - **Hosting:** each site (the hub and every app) is its own Cloudflare Worker
@@ -18,22 +20,29 @@ pull request ──► CI checks ──► preview links (pr-<n>-<site>.shkriuss
 - **Production:** `.github/workflows/ci.yml`. On every push to `main` it runs
   every check, then deploys the exact files it tested, one site at a time,
   then checks that every live site answers with the right security headers.
-- **Previews:** `.github/workflows/preview.yml`. Each pull request gets
-  Cloudflare Worker Previews named `pr-<number>`. A bot comment lists the
-  links, and they update on every push. They are deleted when the pull
-  request closes. They're public but unlisted, and `workers.dev` tells search
-  engines not to index them.
+- **Previews:** `.github/workflows/preview.yml`. A pull request gets
+  Cloudflare Worker Previews named `pr-<number>` once you approve them (see
+  "Seeing a preview" below). A bot comment lists the links. They're public
+  but unlisted, and `workers.dev` tells search engines not to index them.
+  Previews of closed pull requests are deleted by the next production
+  deploy.
+  - **Why approval:** the Cloudflare token can change production too, and a
+    preview runs the pull request's own code before anyone has merged it.
+    So the token is kept in an environment that waits for you.
+  - Previews get no storage code, so Photos' online library stays locked in
+    them.
 - **Storage for Photos' online library** ([ADR 0016](adr/0016-online-photo-library.md)):
   two R2 buckets, `shkriuss-photos` and `shkriuss-photos-preview` (for
   previews; its files are deleted after 7 days). `scripts/buckets.ts`
-  creates them before deploying if they aren't there. At each deploy,
-  `scripts/deploy.ts` and `scripts/previews.ts` give Photos' Worker the
-  storage code as its secret `LIBRARY_STORAGE_CODE`.
+  creates them before deploying if they aren't there. At each production
+  deploy, `scripts/deploy.ts` gives Photos' Worker the storage code as its
+  secret `LIBRARY_STORAGE_CODE`.
 
 ## Setup (one time)
 
 The workflows need two secrets: `CLOUDFLARE_API_TOKEN`, and
-`PHOTOS_STORAGE_CODE` for Photos' online library. The account ID isn't
+`PHOTOS_STORAGE_CODE` for Photos' online library. They're kept in GitHub
+_environments_, which decide which runs may use them. The account ID isn't
 secret, so it's written in the workflows.
 
 ### Create the Cloudflare API token
@@ -56,11 +65,22 @@ secret, so it's written in the workflows.
 
 ### Save it in GitHub
 
-1. Open the repository on GitHub → **Settings** → **Secrets and variables**
-   → **Actions**.
-2. Tap **New repository secret**.
-3. **Name:** `CLOUDFLARE_API_TOKEN`. **Secret:** paste the token. Tap
-   **Add secret**.
+Open the repository on GitHub → **Settings** → **Environments**.
+
+1. **New environment**, named `production`:
+   - **Deployment branches and tags** → **Selected branches and tags** →
+     **Add deployment branch or tag rule** → `main`. Only runs on `main` can
+     use this environment.
+   - **Environment secrets** → **Add environment secret**: name
+     `CLOUDFLARE_API_TOKEN`, value: the token.
+2. **New environment**, named `preview`:
+   - Tick **Required reviewers**, add yourself, and tap **Save protection
+     rules**. Leave **Prevent self-review** off.
+   - **Environment secrets** → **Add environment secret**: name
+     `CLOUDFLARE_API_TOKEN`, value: the same token. Never the storage code.
+3. **Settings** → **Secrets and variables** → **Actions**: delete any
+   _repository_ secret named `CLOUDFLARE_API_TOKEN` or `PHOTOS_STORAGE_CODE`.
+   Repository secrets reach every run, whatever its environment.
 
 Never paste the token anywhere else, including chat.
 
@@ -69,15 +89,20 @@ Never paste the token anywhere else, including chat.
 1. **Turn on R2:** Cloudflare dashboard → **R2 Object Storage** → **Purchase
    R2 Plan** (it asks for a payment method; the first 10 GB a month are
    free).
-2. **The storage code:** make up a long passphrase (five random words is
-   good) and keep it in your password manager. In GitHub, add a repository
-   secret (as above) named `PHOTOS_STORAGE_CODE` with it. You type it once in
+2. **The storage code:** make up a long passphrase of five or more random
+   words (a password manager's "passphrase" generator does this; not a
+   sentence you'd say, at least 24 characters, or the deploy warns) and keep
+   it in your password manager. In GitHub, add it as a secret
+   of the `production` environment (as above), named `PHOTOS_STORAGE_CODE`.
+   You type it once in
    Photos to let your account add photos online; without it, nobody (you
    included) can add to the online library, so nobody else can fill it on
    your bill.
 
 To change the storage code, change the secret: the next deploy gives the
-new one to the Worker. Libraries already unlocked stay unlocked.
+new one to the Worker. To deploy again without merging anything, open the
+newest **CI** run on `main` → **Re-run all jobs**. Only the newest commit on
+`main` deploys: re-running an older run checks it but deploys nothing.
 
 ### GitHub settings
 
@@ -105,6 +130,78 @@ version of the site):
    pass** with **Checks**, **Secret scan** and **Dependency audit**.
 4. **Settings → General → Features:** Wikis, Projects and Issues are off.
    Security reports come through private vulnerability reporting.
+5. **Settings → General → Pull Requests:** keep only **Allow squash
+   merging**, and tick **Automatically delete head branches**. In the `main`
+   ruleset, set **Allowed merge methods** to **Squash** too.
+6. Optional, in the `main` ruleset: **Require code scanning results**, with
+   CodeQL and alerts **High or higher**; and under **Settings → Advanced
+   Security → Secret Protection**, **Scan for non-provider patterns** and
+   **Validity checks**, if they're offered.
+
+### Domain and Cloudflare settings
+
+These keep the domain yours and stop others from misusing it. They're found
+in the Cloudflare dashboard (<https://dash.cloudflare.com>), mostly under
+**shkriuss.app** (the zone). Each takes a few minutes, once (audit findings
+I-1 to I-10).
+
+1. **Keep the domain:** **Domain Registration → Manage Domains →
+   shkriuss.app → Configuration → Auto renew: On.** Check under **Billing →
+   Payment info** that the card on file won't expire before the renewal
+   date. Without this, the domain lapses after a year and every app stops.
+2. **Say the domain sends no email**, so nobody can send convincing fake
+   mail "from" shkriuss.app. **DNS → Records → Add record**, three times:
+   - type `MX`, name `@`, mail server `.`, priority `0`;
+   - type `TXT`, name `@`, content `v=spf1 -all`;
+   - type `TXT`, name `_dmarc`, content
+     `v=DMARC1; p=reject; sp=reject; adkim=s; aspf=s`.
+
+   Then **Email → Email Routing → Routing rules**: delete the `security@`
+   and `support@` rules (mail to them doesn't arrive anyway). Security reports
+   come through GitHub, as `/.well-known/security.txt` says.
+
+3. **Only Cloudflare's certificate authorities may issue certificates:**
+   **DNS → Records → Add record**, type `CAA`, name `@`, flags `0`, tag
+   **Only allow specific hostnames**, three times, with `letsencrypt.org`,
+   `pki.goog` and `ssl.com`. All three are needed: Cloudflare uses each of
+   them for some of the sites' certificates. Then **SSL/TLS → Edge
+   Certificates → Certificate Transparency Monitoring: On**, which emails you
+   when a certificate is issued for the domain.
+4. **Nothing rewrites the pages:** turn off **SSL/TLS → Edge Certificates →
+   Automatic HTTPS Rewrites**, **Scrape Shield → Server-side Excludes** (if
+   it's there) and **Security → Settings → Replace insecure JavaScript
+   libraries**. Delete the site under **Analytics & Logs → Web Analytics**,
+   and leave Zaraz and Rocket Loader off. The pages already work without
+   them, and the security rules would block what they add. The live check
+   after each deploy fails if a page has changed.
+5. **Limit requests to the servers:** **Security → WAF → Rate limiting
+   rules → Create rule**: "URI Path starts with `/api/`", 30 requests per 10
+   seconds, action **Block**. It stops one fast script from using up the free
+   daily requests that all the apps share.
+6. **Account safety:** **Manage Account → Members → Enforce two-factor
+   authentication: On.** And **Notifications → Add → Usage Based Billing →
+   R2**: an alert when storage passes 20 GB, so unusual uploads show up before
+   they cost anything.
+
+## Seeing a preview
+
+Open the pull request, scroll to its checks, and tap **Deploy previews** (it
+says it's waiting). Tap **Review deployments**, tick **preview**, and tap
+**Approve and deploy**. A few minutes later the bot comment lists the links.
+Each later push waits for approval again. A pull request you don't need to
+look at doesn't need approving: merging doesn't wait for previews.
+
+Approve only pull requests you trust: the preview runs that pull request's
+code with the Cloudflare token.
+
+**Old version addresses.** Before the sites had server code, Cloudflare gave
+each production deploy of the hub, Calendar, Grammar, Photos and Tally a
+permanent address like `1a2b3c4d-tally.shkriuss.workers.dev` (36 of them,
+audit finding I-6). They serve only that old version's static files: no
+data, and no way to reach anyone's. Cloudflare can't delete single versions,
+and no new ones are made. To hide them anyway, turn on Cloudflare Access for
+those Workers' preview addresses (**Workers & Pages** → the Worker →
+**Settings** → **Domains & Routes** → **Preview URLs**).
 
 ## Rolling back
 
@@ -114,6 +211,12 @@ version of the site):
 - **Fastest (one site):** Cloudflare dashboard → **Workers & Pages** → the
   site → **Deployments** → pick an earlier version → **Rollback**. The next
   merge to `main` deploys over it again.
+- **Don't roll back past a change to how an app saves its data** (a pull
+  request that raised a store's `version` and added a migration). Fix
+  forward instead. Anyone who opened the newer version has their data saved
+  in the new shape, which the older version can't read: it keeps that data
+  safe, but shows nothing, and can't save or sync, until the newer version
+  is back.
 
 ## Costs
 
@@ -138,12 +241,12 @@ Everything here fits Cloudflare's and GitHub's free plans:
 
 ## Troubleshooting
 
-| Problem                                                            | Fix                                                                                                                                                                      |
-| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Deploy fails with "Add the CLOUDFLARE_API_TOKEN repository secret" | Do the setup above.                                                                                                                                                      |
-| Deploy fails with "Authentication error [code: 10000]"             | The token is missing a permission or the zone. Edit it in Cloudflare (**My Profile** → **API Tokens** → **Edit**) and check both permission rows and both resource rows. |
-| "Custom domain … already exists / conflicting DNS record"          | A DNS record already uses that name. Delete it in Cloudflare (**shkriuss.app** → **DNS** → **Records**) and re-run the workflow.                                         |
-| A new app's address doesn't work right after the first deploy      | DNS and certificates can take a few minutes. The smoke test retries for about 5 minutes.                                                                                 |
-| No preview links on a pull request                                 | Dependabot pull requests don't get previews (no secret access). Otherwise check the **Preview** workflow run.                                                            |
-| "Could not create the R2 bucket …"                                 | Turn on R2 in Cloudflare, and give the token `Account` · `Workers R2 Storage` · `Edit` (see setup).                                                                      |
-| Photos says "Online storage isn't set up yet"                      | Add the `PHOTOS_STORAGE_CODE` secret (see setup), then run the **CI** workflow again so the Worker gets it.                                                              |
+| Problem                                                       | Fix                                                                                                                                                                           |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Deploy fails with "Add the CLOUDFLARE_API_TOKEN secret"       | Add it to the `production` environment (see setup).                                                                                                                           |
+| Deploy fails with "Authentication error [code: 10000]"        | The token is missing a permission or the zone. Edit it in Cloudflare (**My Profile** → **API Tokens** → **Edit**) and check all three permission rows and both resource rows. |
+| "Custom domain … already exists / conflicting DNS record"     | A DNS record already uses that name. Delete it in Cloudflare (**shkriuss.app** → **DNS** → **Records**) and re-run the workflow.                                              |
+| A new app's address doesn't work right after the first deploy | DNS and certificates can take a few minutes. The smoke test retries for about 5 minutes.                                                                                      |
+| No preview links on a pull request                            | Previews wait for your approval (see "Seeing a preview"). Dependabot's pull requests never get previews.                                                                      |
+| "Could not create the R2 bucket …"                            | Turn on R2 in Cloudflare, and give the token `Account` · `Workers R2 Storage` · `Edit` (see setup).                                                                           |
+| Photos says "Online storage isn't set up yet"                 | Add the `PHOTOS_STORAGE_CODE` secret to the `production` environment (see setup). The next merge to `main` gives it to the Worker.                                            |

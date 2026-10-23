@@ -12,6 +12,7 @@ import {
   migrateNotes,
   notesCount,
   removeNote,
+  keepOtherVersion,
   secondVersion,
   setPinned,
   titleOf,
@@ -77,6 +78,17 @@ describe('writing notes', () => {
     expect(dropIfEmpty(state, 'missing')).toBe(state);
   });
 
+  it('keeps the other device’s version as a second note while typing goes on here', () => {
+    const state = { notes: [note('a', 'Trip', 'Theirs', 5, false)] };
+    expect(keepOtherVersion(state, 'a', 'b')).toEqual({
+      notes: [
+        note('a', 'Trip', 'Theirs', 5, false),
+        note('b', 'Trip (second version)', 'Theirs', 5, false),
+      ],
+    });
+    expect(keepOtherVersion(state, 'gone', 'b')).toBe(state);
+  });
+
   it('makes a second version of a note changed on two devices', () => {
     expect(secondVersion(note('a', ' Plan ', 'Mine', 5, true), 'b')).toEqual(
       note('b', 'Plan (second version)', 'Mine', 5, true),
@@ -104,6 +116,15 @@ describe('notes saved by version 1', () => {
       { id: 'b', title: '', body: '', created: 1, updated: 2, pinned: false },
       { id: 'c', title: 'Just a title', body: '', created: 1, updated: 2, pinned: false },
     ]);
+  });
+
+  it('keeps a first line too long for a title in the text', () => {
+    const long = 'x'.repeat(250);
+    const migrated = migrateNotes(
+      { notes: [{ id: 'a', text: `${long}\nMore`, created: 1, updated: 2, pinned: false }] },
+      1,
+    );
+    expect(migrated?.notes[0]).toMatchObject({ title: '', body: `${long}\nMore` });
   });
 
   it('gives up on anything else', () => {

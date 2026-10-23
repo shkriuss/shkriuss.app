@@ -70,13 +70,16 @@ test('reminds once a month while Budget is open', async ({ page }) => {
 test('checks the reminder time', async ({ page }) => {
   await page.goto('/');
   await page.getByLabel('Time', { exact: true }).fill('');
+  // Changed while in the field: the problem is read out there (audit G-3).
+  await expect(page.getByRole('alert')).toHaveText('Time: Choose a time for the reminder.');
   await page.getByLabel('Time', { exact: true }).blur();
-  await expect(page.getByText('Choose a time for the reminder.')).toBeVisible();
+  const error = page.getByText('Choose a time for the reminder.', { exact: true });
+  await expect(error).toBeVisible();
   await expect(page.getByLabel('Time', { exact: true })).toHaveAttribute('aria-invalid', 'true');
   await checkA11y(page, 'reminder time problem');
   await page.getByLabel('Time', { exact: true }).fill('18:00');
   await page.getByLabel('Time', { exact: true }).blur();
-  await expect(page.getByText('Choose a time for the reminder.')).toBeHidden();
+  await expect(error).toBeHidden();
   await expect(page.getByLabel('Time', { exact: true })).not.toHaveAttribute('aria-invalid');
 });
 
@@ -116,8 +119,9 @@ test.describe('while Budget is closed', () => {
       await remindMe(page).check();
       const entries = await entriesOf(request);
       expect(entries).toHaveLength(1);
+      // A number, never the app's own id (it stays on the device).
       expect(entries[0]).toMatchObject({
-        id: 'reminder',
+        id: '1',
         start: '2026-10-01T09:00',
         repeat: 'monthly',
         offset: 0,

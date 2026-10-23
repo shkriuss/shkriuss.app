@@ -23,6 +23,21 @@ test('shows this month with today selected', async ({ page }) => {
   await expect(page.getByText('Nothing planned in the next 7 days.')).toBeVisible();
 });
 
+test('in a Windows contrast theme, the chosen day and event dots still show', async ({ page }) => {
+  // Contrast themes replace backgrounds with the theme's own colours (audit G-6).
+  await seed(page, [{ startDate: '2026-10-20', endDate: '2026-10-20' }]);
+  await page.emulateMedia({ forcedColors: 'active' });
+  const canvas = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  const backgroundOf = (element: Element) => getComputedStyle(element).backgroundColor;
+  const chosen = await day(page, /^Saturday, October 17, 2026/).evaluate(backgroundOf);
+  expect(chosen).not.toBe(canvas);
+  expect(chosen).not.toMatch(/^rgba\(.*, 0\)$|transparent/);
+  const dot = day(page, /^Tuesday, October 20, 2026/).locator('.day-cell__dot');
+  const dotColour = await dot.evaluate(backgroundOf);
+  expect(dotColour).not.toBe(canvas);
+  expect(dotColour).not.toMatch(/^rgba\(.*, 0\)$|transparent/);
+});
+
 test('adds an event and remembers it after a reload', async ({ page }) => {
   await newEvent(page, 'Dentist');
   await editor(page).getByLabel('Start time').fill('14:30');
@@ -222,11 +237,23 @@ test('moves between days with the keyboard', async ({ page }) => {
   await expect(monthHeading(page)).toHaveText('November 2025');
 });
 
+test('reads out a missing title after Enter in the title box', async ({ page }) => {
+  await newEvent(page, '');
+  const title = editor(page).getByLabel('Title');
+  await title.press('Enter');
+  await expect(title).toBeFocused();
+  // Focus is there already, so the problem is read out instead (audit G-3).
+  await expect(editor(page).getByRole('alert').filter({ hasText: 'Title:' })).toHaveText(
+    'Title: Enter a title.',
+  );
+});
+
 test('downloads events as an .ics file', async ({ page }) => {
   await page.getByRole('button', { name: 'Download .ics file' }).click();
+  // Shown under the button too, not only read out (audit G-1).
   await expect(
     page.getByRole('status').filter({ hasText: 'There are no events to download yet.' }),
-  ).toBeAttached();
+  ).toBeVisible();
 
   await seed(page, [{ title: 'Dentist', startTime: '14:30', endTime: '15:30', reminder: 15 }]);
   const downloadPromise = page.waitForEvent('download');

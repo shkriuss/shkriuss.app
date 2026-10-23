@@ -7,6 +7,7 @@
  *   PUT    /api/sync/copy           replace it: { base, data } (409 if base is out of date)
  *   DELETE /api/sync/copy           delete it, and its files (leaves a note that it was deleted)
  *   DELETE /api/sync/copy?moved     the same, after it was moved to a new account key
+ *                                   (for good: a moved copy can't be started again)
  *
  * Apps with files, like photos, turn these on with syncHandler({ files: true })
  * (docs/adr/0014-syncing-photos.md):
@@ -151,6 +152,8 @@ interface WriteWindow {
 }
 
 const isDeleted = (saved: Saved): saved is Extract<Saved, { deleted: true }> => 'deleted' in saved;
+const isMoved = (saved: Saved | undefined): boolean =>
+  saved !== undefined && isDeleted(saved) && saved.moved === true;
 
 /** 410 Gone, saying whether the copy was deleted or moved to a new account key. */
 const gone = (saved: Saved | undefined): Response =>
@@ -187,6 +190,8 @@ export class SyncCopy {
 
       if (request.method === 'DELETE') {
         // Everything goes, files included; only the note that it was deleted stays.
+        // Moved is for good: devices still on the old key must keep hearing it.
+        const moved = url.searchParams.has('moved') || isMoved(saved);
         const writes = await this.state.storage.get<WriteWindow>('writes');
         if (await this.state.storage.get<FileIndex>('files')) await this.state.storage.deleteAll();
         if (writes) await this.state.storage.put('writes', writes);
@@ -194,7 +199,7 @@ export class SyncCopy {
           version: (saved?.version ?? 0) + 1,
           epoch: saved?.epoch ?? '',
           deleted: true,
-          ...(url.searchParams.has('moved') ? { moved: true as const } : {}),
+          ...(moved ? { moved: true as const } : {}),
           at: now,
         } satisfies Saved);
         return noContent();
@@ -207,7 +212,10 @@ export class SyncCopy {
       const { base, data } = (await request.json()) as PutRequest;
       const live = saved && !isDeleted(saved) ? saved : undefined;
       if (base === null) {
-        // Starting a copy: only when there isn't one (a deleted one can be started again).
+        // Starting a copy: only when there isn't one. A deleted one can be started
+        // again, but not one moved to a new account key: the old key may be a lost
+        // device's, and starting it again would let it read the other devices' edits.
+        if (isMoved(saved)) return gone(saved);
         if (live) {
           return json({ error: 'There is already a copy.', ...this.#current(live) }, 409);
         }

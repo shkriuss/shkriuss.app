@@ -78,6 +78,10 @@ test('words in my dictionary aren’t marked as misspelled', async ({ page }) =>
     .click();
   await expect(suggestion(page, 'Mtskheta')).toHaveCount(0);
   await expect(page.locator('[data-words]')).toContainText('Mtskheta');
+  // Still known after switching English.
+  await page.getByLabel('British (UK)').check();
+  await expect(status(page)).toHaveText('No problems found.');
+  await expect(suggestion(page, 'Mtskheta')).toHaveCount(0);
 
   await page.reload();
   await expect(status(page)).not.toHaveText(/Loading/, { timeout: 30_000 });

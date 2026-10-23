@@ -88,14 +88,14 @@ test.describe('while Reminders is closed', () => {
       let request = upload();
       await addReminder(page, 'Secret dentist visit', { time: '18:00' });
       let entries = await entriesOf(request);
+      // A number, never the app's own id (it stays on the device, in the sealed message).
       expect(entries).toEqual([
-        expect.objectContaining({ start: '2026-10-21T18:00', repeat: 'none', offset: 0 }),
+        expect.objectContaining({ id: '1', start: '2026-10-21T18:00', repeat: 'none', offset: 0 }),
       ]);
-      const id = entries[0]?.id ?? '';
       expect(await rig.open(fromBase64Url(entries[0]?.payload ?? ''))).toEqual({
         title: 'Secret dentist visit',
         body: REMINDER_BODY,
-        tag: id,
+        tag: expect.stringMatching(/^[\w-]{36}$/),
         url: '/',
       });
 
@@ -108,11 +108,11 @@ test.describe('while Reminders is closed', () => {
       await editDialog(page).getByRole('button', { name: 'Save' }).click();
       entries = await entriesOf(request);
       expect(entries.map((entry) => [entry.id, entry.start, entry.repeat])).toEqual([
-        [`${id}~3`, '2026-10-21T18:00', 'weekly'],
-        [`${id}~4`, '2026-10-22T18:00', 'weekly'],
-        [`${id}~5`, '2026-10-23T18:00', 'weekly'],
-        [`${id}~1`, '2026-10-26T18:00', 'weekly'],
-        [`${id}~2`, '2026-10-27T18:00', 'weekly'],
+        ['1', '2026-10-21T18:00', 'weekly'],
+        ['2', '2026-10-22T18:00', 'weekly'],
+        ['3', '2026-10-23T18:00', 'weekly'],
+        ['4', '2026-10-26T18:00', 'weekly'],
+        ['5', '2026-10-27T18:00', 'weekly'],
       ]);
 
       // Back to once, then done: nothing left to send.

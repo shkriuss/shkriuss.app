@@ -6,6 +6,7 @@
  * Each sentence's result is remembered while the page is open, so after an
  * edit only the changed sentences are checked again.
  */
+import { setBusy } from '@shkriuss/ui/busy';
 import { startWorker } from '@shkriuss/ui/worker';
 import {
   applyAll,
@@ -124,6 +125,7 @@ export function mountDeepCheck(root: Document, host: DeepCheckHost): { textChang
   const downloadButton = required<HTMLButtonElement>(section, '[data-action="deep-download"]');
   const downloadBar = required<HTMLProgressElement>(section, '[data-deep-download-bar]');
   const downloadStatus = required<HTMLElement>(section, '[data-deep-download-status]');
+  const stopButton = required<HTMLButtonElement>(section, '[data-action="deep-stop"]');
   const updateNotice = required<HTMLElement>(section, '[data-deep-update]');
   const runButton = required<HTMLButtonElement>(section, '[data-action="deep-run"]');
   const checkProgress = required<HTMLElement>(section, '[data-deep-check-progress]');
@@ -155,9 +157,18 @@ export function mountDeepCheck(root: Document, host: DeepCheckHost): { textChang
   let recheckTimer: number | undefined;
   let focusAfter: number | null = null;
 
-  function show(next: Phase): void {
+  /**
+   * Shows one panel. If focus was in a panel that's hidden now, it moves to
+   * `focus` (what takes its place), not back to the top of the page (audit G-7).
+   */
+  function show(next: Phase, focus: HTMLElement = heading): void {
+    const active = document.activeElement;
+    const hadFocus = panels.some((panel) => !panel.hidden && panel.contains(active));
     phase = next;
     for (const panel of panels) panel.hidden = panel.dataset['deepPanel'] !== next;
+    if (hadFocus && !panels.some((panel) => !panel.hidden && panel.contains(active))) {
+      focus.focus();
+    }
   }
 
   function setProblem(text: string): void {
@@ -226,7 +237,7 @@ export function mountDeepCheck(root: Document, host: DeepCheckHost): { textChang
 
     const controller = new AbortController();
     download = controller;
-    show('downloading');
+    show('downloading', stopButton);
     host.announce(`Downloading Deep check, ${megabytes(needed)}.`);
     let announced = 0;
     const progress = () => {
@@ -263,11 +274,11 @@ export function mountDeepCheck(root: Document, host: DeepCheckHost): { textChang
       saved = manifest;
       stopWorker();
       updateNotice.hidden = true;
-      show('ready');
+      show('ready', runButton);
       host.announce('Deep check is downloaded. It works offline now.');
       runButton.focus();
     } catch (error) {
-      show(saved ? 'ready' : 'absent');
+      show(saved ? 'ready' : 'absent', saved ? runButton : downloadButton);
       if (controller.signal.aborted) {
         setProblem('Download stopped. Download again to continue where it stopped.');
       } else if (error instanceof DOMException && error.name === 'QuotaExceededError') {
@@ -294,7 +305,7 @@ export function mountDeepCheck(root: Document, host: DeepCheckHost): { textChang
     render();
     status.textContent = '';
     size.textContent = current ? megabytes(downloadBytes(current)) : size.textContent;
-    show('absent');
+    show('absent', downloadButton);
     host.announce('Removed Deep check from this device.');
     downloadButton.focus();
   }
@@ -311,11 +322,11 @@ export function mountDeepCheck(root: Document, host: DeepCheckHost): { textChang
   function failed(reason: 'files' | 'start'): void {
     stopWorker();
     checkProgress.hidden = true;
-    runButton.disabled = false;
+    setBusy(runButton, false);
     status.textContent = '';
     if (reason === 'files') {
       saved = undefined;
-      show('absent');
+      show('absent', downloadButton);
       setProblem('Some Deep check files are missing from this device. Download it again.');
     } else {
       setProblem(
@@ -380,7 +391,8 @@ export function mountDeepCheck(root: Document, host: DeepCheckHost): { textChang
       finish(text, sentences);
       return;
     }
-    runButton.disabled = true;
+    // Busy, not disabled, so focus stays on it while it checks (audit G-7).
+    setBusy(runButton, true);
     if (!(await startWorkerOnce(manifest))) return;
     lastId += 1;
     pending = { id: lastId, keys: missing, text, sentences };
@@ -398,7 +410,7 @@ export function mountDeepCheck(root: Document, host: DeepCheckHost): { textChang
   }
 
   function finish(text: string, sentences: Sentence[]): void {
-    runButton.disabled = false;
+    setBusy(runButton, false);
     checkProgress.hidden = true;
     // A corrected sentence is already right: accepting its changes needs no new check.
     for (const words of [...corrections.values()]) {
@@ -496,12 +508,9 @@ export function mountDeepCheck(root: Document, host: DeepCheckHost): { textChang
     'click',
     () => void startDownload(),
   );
-  required<HTMLButtonElement>(section, '[data-action="deep-stop"]').addEventListener(
-    'click',
-    () => {
-      download?.abort();
-    },
-  );
+  stopButton.addEventListener('click', () => {
+    download?.abort();
+  });
   runButton.addEventListener('click', () => void check());
   required<HTMLButtonElement>(section, '[data-action="deep-remove"]').addEventListener(
     'click',

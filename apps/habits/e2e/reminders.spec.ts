@@ -122,19 +122,20 @@ test.describe('while Habits is closed', () => {
         expect(text).not.toContain('Secret');
         return (JSON.parse(text) as { entries: Entry[] }).entries;
       };
-      const monday = (entries: Entry[]) => entries.find((entry) => entry.id.endsWith('~1'));
+      const on = (entries: Entry[], day: string) =>
+        entries.find((entry) => entry.start.startsWith(day));
 
       let request = upload();
       await setReminder(page, 'Secret walk', '20:00');
       let entries = await entriesOf(request);
-      // Every day: one a week for each day.
-      expect(entries).toHaveLength(7);
-      expect(monday(entries)).toMatchObject({
+      // Every day: one a week for each day, numbered (the app's ids stay on the device).
+      expect(entries.map((entry) => entry.id)).toEqual(['1', '2', '3', '4', '5', '6', '7']);
+      expect(on(entries, '2026-10-19')).toMatchObject({
         start: '2026-10-19T20:00',
         repeat: 'weekly',
         offset: 0,
       });
-      expect(await rig.open(fromBase64Url(monday(entries)?.payload ?? ''))).toEqual({
+      expect(await rig.open(fromBase64Url(on(entries, '2026-10-19')?.payload ?? ''))).toEqual({
         title: 'Secret walk',
         body: REMINDER_BODY,
         tag: expect.any(String),
@@ -145,8 +146,9 @@ test.describe('while Habits is closed', () => {
       request = upload();
       await page.getByRole('button', { name: 'Secret walk: done today' }).click();
       entries = await entriesOf(request);
-      expect(monday(entries)?.start).toBe('2026-10-26T20:00');
-      expect(entries.find((entry) => entry.id.endsWith('~2'))?.start).toBe('2026-10-20T20:00');
+      expect(on(entries, '2026-10-19')).toBeUndefined();
+      expect(on(entries, '2026-10-26')?.start).toBe('2026-10-26T20:00');
+      expect(on(entries, '2026-10-20')?.start).toBe('2026-10-20T20:00');
     } finally {
       rig.server.close();
     }

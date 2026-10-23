@@ -1,5 +1,14 @@
-import { beforeEach, describe, expect, it } from 'vitest';
-import { createStore, deleteAll, exportAll, ownKeys, type StorageLike } from './index.ts';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import {
+  allSaved,
+  createStore,
+  deleteAll,
+  exportAll,
+  getLocalStorage,
+  lastSaveProblem,
+  ownKeys,
+  type StorageLike,
+} from './index.ts';
 
 /** In-memory stand-in for localStorage. */
 class MemoryStorage implements StorageLike {
@@ -81,9 +90,43 @@ describe('createStore', () => {
     expect(makeStore().load()).toEqual({});
   });
 
-  it('reports failed writes instead of throwing', () => {
+  it('reports failed writes instead of throwing, and says why', () => {
     storage.failWrites = true;
     expect(makeStore().save({ water: 1 })).toBe(false);
+    expect(lastSaveProblem()).toBe('full');
+    storage.setItem = () => {
+      throw new DOMException('The operation is insecure.', 'SecurityError');
+    };
+    expect(makeStore().save({ water: 1 })).toBe(false);
+    expect(lastSaveProblem()).toBe('unavailable');
+  });
+
+  it('knows whether everything is saved: each store, until it saves again', () => {
+    const counts = makeStore();
+    const others = makeStore({ key: 'others' });
+    expect(counts.save({ water: 1 })).toBe(true);
+    expect(allSaved()).toBe(true);
+    storage.failWrites = true;
+    expect(counts.save({ water: 2 })).toBe(false);
+    expect(allSaved()).toBe(false);
+    storage.failWrites = false;
+    // Another store saving doesn't save what this one holds.
+    expect(others.save({ tea: 1 })).toBe(true);
+    expect(allSaved()).toBe(false);
+    expect(counts.save({ water: 2 })).toBe(true);
+    expect(allSaved()).toBe(true);
+  });
+
+  it('says why it didn’t save: data it mustn’t save over, or a value that fails its checks', () => {
+    storage.setItem('shkriuss:counts', '{"v":3,"data":{"water":1}}');
+    expect(makeStore().save({ water: 2 })).toBe(false);
+    expect(lastSaveProblem()).toBe('newer');
+    storage.setItem('shkriuss:counts', 'not json');
+    expect(makeStore().save({ water: 2 })).toBe(false);
+    expect(lastSaveProblem()).toBe('unreadable');
+    storage.removeItem('shkriuss:counts');
+    expect(makeStore().save({ water: Number.NaN })).toBe(false);
+    expect(lastSaveProblem()).toBe('invalid');
   });
 
   it('checks data from elsewhere: valid, migrated, invalid or too new', () => {
@@ -100,6 +143,68 @@ describe('createStore', () => {
     expect(store.read(2, { water: 'lots' })).toBeUndefined();
     expect(store.read(3, { water: 1 })).toBeUndefined();
     expect(store.read(1.5, { water: 1 })).toBeUndefined();
+  });
+
+  it('says whether what’s saved can be read', () => {
+    const store = makeStore();
+    expect(store.status()).toBe('empty');
+    store.save({ water: 1 });
+    expect(store.status()).toBe('ok');
+    storage.setItem('shkriuss:counts', '{"v":3,"data":{"water":1}}');
+    expect(store.status()).toBe('newer');
+    storage.setItem('shkriuss:counts', '{"v":2,"data":{"water":"lots"}}');
+    expect(store.status()).toBe('unreadable');
+    storage.setItem('shkriuss:counts', 'not json');
+    expect(store.status()).toBe('unreadable');
+  });
+
+  it('gives what’s saved as it was saved, for sync after a data version change', () => {
+    const store = makeStore();
+    expect(store.raw()).toBeNull();
+    storage.setItem('shkriuss:counts', '{"v":1,"data":[["water",5]]}');
+    expect(store.raw()).toEqual({ v: 1, data: [['water', 5]] });
+    storage.setItem('shkriuss:counts', 'not json');
+    expect(store.raw()).toBeNull();
+  });
+
+  it('never saves over data from a newer version of the app (say, after a rollback)', () => {
+    makeStore({ version: 3 }).save({ water: 5, tea: 2 });
+    const saved = storage.getItem('shkriuss:counts');
+    const older = makeStore();
+    expect(older.load()).toEqual({});
+    expect(older.save({ coffee: 1 })).toBe(false);
+    expect(storage.getItem('shkriuss:counts')).toBe(saved);
+    expect(makeStore({ version: 3 }).load()).toEqual({ water: 5, tea: 2 });
+  });
+
+  it('never saves over data it can’t read: a migration that fails, or one bad value', () => {
+    storage.setItem('shkriuss:counts', '{"v":1,"data":[["water",5]]}');
+    const buggy = makeStore({
+      migrate: () => {
+        throw new TypeError('Cannot read properties of undefined');
+      },
+    });
+    expect(buggy.load()).toEqual({});
+    expect(buggy.status()).toBe('unreadable');
+    expect(buggy.save({ coffee: 1 })).toBe(false);
+    const fixed = makeStore({ migrate: (old) => Object.fromEntries(old as [string, number][]) });
+    expect(fixed.load()).toEqual({ water: 5 });
+
+    // Saved by an older version that didn't check its values (like Budget's
+    // amount of 0): the rest of the data is still there for a fixed version.
+    const bad = '{"v":2,"data":{"water":5,"tea":"lots"}}';
+    storage.setItem('shkriuss:counts', bad);
+    expect(makeStore().save({ coffee: 1 })).toBe(false);
+    expect(storage.getItem('shkriuss:counts')).toBe(bad);
+  });
+
+  it('never saves a value that fails its own checks, as it would be read back', () => {
+    const store = makeStore();
+    store.save({ water: 1 });
+    expect(store.save({ water: 'lots' } as unknown as Counts)).toBe(false);
+    // JSON saves NaN as null, which the checks would turn down when loading.
+    expect(store.save({ water: Number.NaN })).toBe(false);
+    expect(store.load()).toEqual({ water: 1 });
   });
 
   it('clears its key', () => {
@@ -137,5 +242,51 @@ describe('exportAll / deleteAll', () => {
     expect(ownKeys(undefined)).toEqual([]);
     expect(deleteAll(undefined)).toBe(0);
     expect(exportAll('x', undefined, new Date(0)).data).toEqual({});
+  });
+});
+
+describe('getLocalStorage', () => {
+  const original = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  const use = (value: unknown) =>
+    Object.defineProperty(globalThis, 'localStorage', { value, configurable: true });
+  afterEach(() => {
+    if (original) Object.defineProperty(globalThis, 'localStorage', original);
+    else Reflect.deleteProperty(globalThis, 'localStorage');
+  });
+
+  it('gives storage that works', () => {
+    use(storage);
+    expect(getLocalStorage()).toBe(storage);
+  });
+
+  it('still gives storage that’s full, so what’s saved can be read', () => {
+    storage.setItem('shkriuss:counts', '{"v":2,"data":{"water":3}}');
+    storage.failWrites = true;
+    use(storage);
+    expect(getLocalStorage()).toBe(storage);
+    const store = createStore<Counts>({
+      key: 'counts',
+      version: 2,
+      fallback: () => ({}),
+      validate: isCounts,
+    });
+    expect(store.load()).toEqual({ water: 3 });
+    expect(store.save({ water: 4 })).toBe(false);
+    expect(lastSaveProblem()).toBe('full');
+  });
+
+  it('gives nothing when storage is blocked', () => {
+    storage.setItem = () => {
+      throw new DOMException('The operation is insecure.', 'SecurityError');
+    };
+    use(storage);
+    expect(getLocalStorage()).toBeUndefined();
+    Object.defineProperty(globalThis, 'localStorage', {
+      get() {
+        throw new DOMException('Access is denied.', 'SecurityError');
+      },
+      configurable: true,
+    });
+    expect(getLocalStorage()).toBeUndefined();
   });
 });

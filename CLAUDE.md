@@ -30,7 +30,7 @@ packages/server/     shared Worker helpers: createWorker() for /api/*, JSON, lim
 templates/app/       copied by `pnpm new-app` (placeholder slug: template-app)
 tests/e2e/           shared Playwright tests that run against EVERY site
 tests/unit/          cross-cutting unit tests (contrast, registry consistency, workflows)
-scripts/             new-app, check-dist, previews, smoke-test
+scripts/             new-app, check-dist, deploy, buckets, previews, smoke-test
 ```
 
 ## Commands (Node 24, pnpm 10)
@@ -46,7 +46,9 @@ pnpm new-app <slug> --name "Name" --description "One sentence." --icon note --co
 
 `pnpm test:e2e` needs `pnpm build` first (it serves `apps/*/dist` with
 `wrangler dev`). In a sandbox without Playwright's own browser, set
-`PW_CHROMIUM_PATH` to an installed Chromium.
+`PW_CHROMIUM_PATH` to an installed Chromium. Beside another checkout's
+browser tests (another session), set `E2E_PORT_BASE` (say `9300`) so the
+servers don't clash; `E2E_REUSE=1` reuses servers already running.
 
 ## Rules
 
@@ -75,6 +77,10 @@ pnpm new-app <slug> --name "Name" --description "One sentence." --icon note --co
 - **Accessibility is WCAG 2.2 AA.** Semantic HTML, labels on every control,
   visible focus, 44px tap targets, works at 320px wide and in both themes.
   Shared e2e tests run axe on every page in light and dark mode.
+- **Browsers:** Safari and iOS 16.4 and later (push and sync need it), and
+  current Chrome, Edge and Firefox. Use anything newer only with a fallback
+  or a feature check, like the colours for browsers without `light-dark()`
+  in `tokens.css`. Tests run in Chromium only, so check the support tables.
 - **Registry is the source of truth.** Never hard-code app names, domains or
   lists; read `@shkriuss/registry`.
 - **Security headers live in one place:** `packages/astro-config/src/headers.ts`.

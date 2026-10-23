@@ -9,10 +9,15 @@
 import { spawnSync } from 'node:child_process';
 import { basename } from 'node:path';
 import { getSite } from '../packages/registry/src/index.ts';
-import { withSecretsFile, workerSecrets } from './lib/storage.ts';
+import { MIN_STORAGE_CODE_LENGTH, withSecretsFile, workerSecrets } from './lib/storage.ts';
 
 const slug = basename(process.cwd());
-const { secrets, missing } = workerSecrets(slug, getSite(slug).library);
+const { secrets, missing, weak } = workerSecrets(slug, getSite(slug).library);
+for (const name of weak) {
+  console.log(
+    `::warning title=Short storage code::${name} is shorter than ${MIN_STORAGE_CODE_LENGTH} characters, so it may be guessable. Change it to five or more random words. See docs/deployment.md.`,
+  );
+}
 for (const name of missing) {
   // Secrets stay from one deploy to the next, so this only matters the first time.
   console.log(

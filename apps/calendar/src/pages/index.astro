@@ -145,6 +145,7 @@ import { MAX_NOTES_LENGTH, MAX_TITLE_LENGTH, REPEAT_LABELS, REPEATS } from '../l
           Download .ics file
         </Button>
       </div>
+      <p class="muted" role="status" data-export-status></p>
       <input
         type="file"
         accept=".ics,text/calendar"
@@ -522,6 +523,28 @@ import { MAX_NOTES_LENGTH, MAX_TITLE_LENGTH, REPEAT_LABELS, REPEATS } from '../l
 
   .month__grid :global(.day-cell--fast[aria-pressed='true']::after) {
     background: currentColor;
+  }
+
+  /* Windows contrast themes replace backgrounds, so the selected day, the dots
+     and the fast line use the theme's own colours there (audit G-6). */
+  @media (forced-colors: active) {
+    .month__grid :global(.day-cell[aria-pressed='true']) {
+      forced-color-adjust: none;
+      background: SelectedItem;
+      color: SelectedItemText;
+    }
+
+    .month__grid :global(.day-cell__dot),
+    .month__grid :global(.day-cell--fast::after),
+    .legend__fast {
+      forced-color-adjust: none;
+      background: CanvasText;
+    }
+
+    .month__grid :global(.day-cell[aria-pressed='true'] .day-cell__dot),
+    .month__grid :global(.day-cell--fast[aria-pressed='true']::after) {
+      background: SelectedItemText;
+    }
   }
 
   .month__legend {

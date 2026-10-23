@@ -23,6 +23,8 @@
   // The real address. Cloudflare creates the DNS record and certificate.
   "routes": [{ "pattern": "repairs.shkriuss.app", "custom_domain": true }],
   // No *.workers.dev address for production, but keep preview links for PRs.
+  // No Workers logs or traces: nothing about requests is kept (see the privacy page).
+  "observability": { "enabled": false },
   "workers_dev": false,
   "preview_urls": true,
   // Settings for PR previews (`wrangler preview`). Each preview gets its own,

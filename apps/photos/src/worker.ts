@@ -6,7 +6,7 @@ import { handleLibrary, type LibraryEnv } from '@shkriuss/library/worker';
 import { createWorker } from '@shkriuss/server';
 import { syncHandler, type SyncEnv } from '@shkriuss/sync/worker';
 
-export { Library } from '@shkriuss/library/worker';
+export { Library, LibraryGate } from '@shkriuss/library/worker';
 export { SyncCopy } from '@shkriuss/sync/worker';
 
 export default createWorker<SyncEnv & LibraryEnv>({

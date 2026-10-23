@@ -5,6 +5,7 @@
  * A note has a title and a body, both plain text.
  */
 import { secondVersionName } from '@shkriuss/sync';
+import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
 export interface Note {
   id: string;
@@ -64,9 +65,12 @@ function splitText(text: string): { title: string; body: string } {
   const lines = text.split(/\r?\n/);
   const first = lines.findIndex((line) => line.trim() !== '');
   if (first === -1) return { title: '', body: '' };
+  const title = (lines[first] ?? '').trim();
+  // Too long for a title: it all stays in the text, so nothing is cut off later.
+  if (title.length > MAX_TITLE_LENGTH) return { title: '', body: lines.slice(first).join('\n') };
   const rest = lines.slice(first + 1);
   while (rest.length > 0 && rest[0]?.trim() === '') rest.shift();
-  return { title: (lines[first] ?? '').trim(), body: rest.join('\n') };
+  return { title, body: rest.join('\n') };
 }
 
 /** Turns notes saved by an older version into today's shape (undefined if it can't). */
@@ -141,6 +145,16 @@ export const secondVersion = (note: Note, id: string): Note => ({
   title: secondVersionName(note.title, MAX_TITLE_LENGTH),
 });
 
+/**
+ * A note changed on another device while it was being typed here: that
+ * version is kept as a second note (with id `copyId`), so the typing can go
+ * on in this one without losing it.
+ */
+export function keepOtherVersion(state: NotesState, id: string, copyId: string): NotesState {
+  const note = state.notes.find((entry) => entry.id === id);
+  return note ? { notes: [...state.notes, secondVersion(note, copyId)] } : state;
+}
+
 /** Cuts text to `max` characters (never in the middle of an emoji), adding "…". */
 function shorten(text: string, max: number): string {
   const characters = [...text];
@@ -185,7 +199,7 @@ export function visibleNotes(state: NotesState, search = ''): Note[] {
 }
 
 /** When a note was edited: the time if today, else the date ("14:05", "12 Oct", "12 Oct 2025"). */
-export function editedLabel(updated: number, now: number, locale?: string): string {
+export function editedLabel(updated: number, now: number, locale = DATE_LOCALE): string {
   const date = new Date(updated);
   const today = new Date(now);
   if (date.toDateString() === today.toDateString()) {
