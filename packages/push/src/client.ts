@@ -23,6 +23,19 @@ const API = '/api/push';
 /** Re-upload at least this often, even if nothing changed (keeps the server's copy fresh). */
 const REFRESH_MS = 7 * 24 * 60 * 60 * 1000;
 const SERVICE_WORKER_TIMEOUT_MS = 10_000;
+/** The server must answer within this long (plus the time to send what's uploaded). */
+const ANSWER_MS = 20_000;
+/** A slow connection that still works, in bytes per second (about 256 kbit/s). */
+const SLOW_BYTES_PER_SECOND = 32_000;
+
+/**
+ * How long a request that sends this many bytes may take before it counts
+ * as "couldn't reach the server". A network that hangs (a VPN with no
+ * connection, captive Wi-Fi, a very bad signal) would otherwise keep the app
+ * waiting for ever; a big upload on a slow connection still gets through.
+ */
+export const timeLimit = (bytes: number): number =>
+  ANSWER_MS + Math.ceil((bytes / SLOW_BYTES_PER_SECOND) * 1000);
 
 /** One scheduled notification, in the app's own local time. */
 export interface Notice {
@@ -143,9 +156,14 @@ async function api(path: string, init: RequestInit, deviceKey?: string): Promise
   const headers = new Headers(init.headers);
   if (deviceKey) headers.set('Authorization', `Bearer ${deviceKey}`);
   if (init.body) headers.set('Content-Type', 'application/json');
+  const bytes = typeof init.body === 'string' ? init.body.length : 0;
   let response: Response;
   try {
-    response = await fetch(`${API}${path}`, { ...init, headers });
+    response = await fetch(`${API}${path}`, {
+      ...init,
+      headers,
+      signal: AbortSignal.timeout(timeLimit(bytes)),
+    });
   } catch {
     throw new PushError('server', 'Couldn’t reach the notification service.');
   }
@@ -172,7 +190,10 @@ export async function enablePush(): Promise<void> {
   }
   const response = await api('/key', { method: 'GET' });
   if (!response.ok) throw new PushError('refused', 'The notification service isn’t working.');
-  const { publicKey } = (await response.json()) as { publicKey: string };
+  const { publicKey } = (await response.json().catch(() => {
+    // The answer stopped coming (the time limit), or came damaged.
+    throw new PushError('server', 'Couldn’t reach the notification service.');
+  })) as { publicKey: string };
 
   const worker = await registration();
   let subscription = await worker.pushManager.getSubscription();
@@ -323,22 +344,31 @@ export async function finishPushDelete(): Promise<boolean> {
   return !isPushDeletePending();
 }
 
-/**
- * Deletes this device's data on the server and unsubscribes. Never throws.
- * False if the server couldn't be reached: the deletion is kept, to be
- * finished later by finishPushDelete().
- */
-export async function disablePush(): Promise<boolean> {
-  const state = load();
-  // Noted before the device key is gone, so the deletion can be tried again.
-  if (state) storePendingDeletes([...pendingDeletes(), state.deviceKey]);
-  store(null);
-  const deleted = await finishPushDelete();
+async function unsubscribe(): Promise<void> {
   try {
     const subscription = await (await registration()).pushManager.getSubscription();
     await subscription?.unsubscribe();
   } catch {
     // Nothing to unsubscribe.
   }
+}
+
+/**
+ * Deletes this device's data on the server and unsubscribes. Never throws.
+ * False if the server couldn't be reached: the deletion is kept, to be
+ * finished later by finishPushDelete().
+ *
+ * It's off on this device as soon as this is called: the deletion is noted
+ * before anything waits, so a caller doesn't need to wait for the server
+ * (like "Delete all data", which deletes everything here straight away).
+ */
+export async function disablePush(): Promise<boolean> {
+  const state = load();
+  // Noted before the device key is gone, so the deletion can be tried again.
+  if (state) storePendingDeletes([...pendingDeletes(), state.deviceKey]);
+  store(null);
+  // Unsubscribing doesn't wait for the server: then nothing more arrives on
+  // this device, even while the server can't be reached.
+  const [deleted] = await Promise.all([finishPushDelete(), unsubscribe()]);
   return deleted;
 }

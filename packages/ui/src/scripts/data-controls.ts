@@ -21,6 +21,16 @@ import { focusProblem } from './problem.ts';
 
 /** Backup files bigger than this are turned down (apps save far less). */
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
+/**
+ * After "Delete all data", the page reloads once the notification server has
+ * deleted this device's reminders, or after this long (it's tried again later).
+ */
+const PUSH_WAIT_MS = 5000;
+
+const wait = (ms: number) =>
+  new Promise<void>((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
 
 const longDate = new Intl.DateTimeFormat(DATE_LOCALE, {
   day: 'numeric',
@@ -272,15 +282,18 @@ export function mountDataControls(section: HTMLElement): void {
   deleteDialog.addEventListener('close', () => {
     if (deleteDialog.returnValue !== 'confirm') return;
     status.textContent = 'Deleting…';
-    // Notifications while the app is closed: delete them on the server too. If it
-    // can't be reached, the app tries again (and says so) once it has reloaded.
+    // Notifications while the app is closed: off here at once, and deleted on
+    // the server too. That's noted before anything waits, so if the server
+    // can't be reached, or the page reloads first, the app tries again (and
+    // says so) once it has reloaded.
     const push = isPushEnabled() || isPushDeletePending() ? disablePush() : Promise.resolve(true);
-    void push.finally(() => {
-      // Sync stops here first, so the deletion doesn't reach the other devices.
-      stopSync();
-      deleteAll();
-      // Files like photos too, then reload so the app starts fresh from empty storage.
-      void deleteAllFiles().then(() => window.location.reload());
-    });
+    // Everything on this device goes now, without waiting for the network
+    // (audit G-2). Sync stops first, so the deletion doesn't reach the other devices.
+    stopSync();
+    deleteAll();
+    // Files like photos too, then reload so the app starts fresh from empty storage.
+    void deleteAllFiles()
+      .then(() => Promise.race([push, wait(PUSH_WAIT_MS)]))
+      .then(() => window.location.reload());
   });
 }

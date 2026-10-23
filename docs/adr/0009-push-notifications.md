@@ -17,7 +17,11 @@ browsers like IronFox receive Web Push through **UnifiedPush**.
   is off until switched on. Switching it off, or **Delete all data**, deletes
   the device's data on the server. If the server can't be reached then, the
   app says so, keeps the device key (and nothing else) and tries again each
-  time it's opened or back online.
+  time it's opened or back online. Notifications stop on the device at once
+  (it unsubscribes without waiting for the server), and "Delete all data"
+  deletes everything on the device first, so a network that hangs can't
+  stop it. A request that gets no answer within 20 seconds (more for a big
+  upload on a slow connection) counts as "can't be reached".
 - **Shared code, separate servers.** The code lives in `@shkriuss/push`. Each
   app that uses it runs the routes in its **own** Worker
   (`apps/<slug>/src/worker.ts`, `/api/push/*`; everything else is still

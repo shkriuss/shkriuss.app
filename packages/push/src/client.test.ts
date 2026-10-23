@@ -12,6 +12,7 @@ import {
   isPushEnabled,
   PushError,
   syncPush,
+  timeLimit,
   type Notice,
 } from './client.ts';
 import { memoryPush } from './testing.ts';
@@ -33,8 +34,33 @@ class MemoryStorage {
 }
 
 let server: ReturnType<typeof memoryPush>;
-/** How the app's server is doing: answering, unreachable, or failing. */
-let network: 'up' | 'down' | 'failing';
+/** How the app's server is doing: answering, unreachable, failing, or never answering. */
+let network: 'up' | 'down' | 'failing' | 'hanging';
+/** The time limits of requests so far (see hangingNetwork). */
+let limits: { ms: number; controller: AbortController }[];
+
+/**
+ * A network that hangs: requests to the app's server never answer, and wait
+ * until their time limit. Time limits only run out when the test says so.
+ */
+function hangingNetwork(): { elapse(): void } {
+  network = 'hanging';
+  vi.spyOn(AbortSignal, 'timeout').mockImplementation((ms: number) => {
+    const controller = new AbortController();
+    limits.push({ ms, controller });
+    return controller.signal;
+  });
+  return {
+    elapse() {
+      for (const { controller } of limits) {
+        controller.abort(new DOMException('The operation timed out.', 'TimeoutError'));
+      }
+    },
+  };
+}
+
+const subscription = async () =>
+  (await navigator.serviceWorker.ready).pushManager.getSubscription();
 
 /** A phone with notifications allowed, whose browser can subscribe to push. */
 async function phone(): Promise<void> {
@@ -72,6 +98,14 @@ async function phone(): Promise<void> {
     if (input.startsWith(ENDPOINT)) return new Response(null, { status: 201 });
     if (network === 'down') throw new TypeError('Failed to fetch');
     if (network === 'failing') return new Response(null, { status: 503 });
+    if (network === 'hanging') {
+      return new Promise<Response>((_, reject) => {
+        const signal = init?.signal;
+        signal?.addEventListener('abort', () => {
+          reject(signal.reason);
+        });
+      });
+    }
     return server.fetch(new Request(`${ORIGIN}${input}`, init));
   });
   await enablePush();
@@ -80,10 +114,12 @@ async function phone(): Promise<void> {
 beforeEach(async () => {
   server = memoryPush();
   network = 'up';
+  limits = [];
   await phone();
 });
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 const notice = (overrides: Partial<Notice> = {}): Notice => ({
@@ -156,6 +192,24 @@ describe('syncPush', () => {
     const down = await syncPush([notice()], { force: true }).catch((error: unknown) => error);
     expect((down as PushError).code).toBe('server');
   });
+
+  it('gives up on a server that never answers, as on one it can’t reach', async () => {
+    const { elapse } = hangingNetwork();
+    const uploading = syncPush([notice()], { force: true }).catch((error: unknown) => error);
+    await vi.waitFor(() => {
+      expect(limits).toHaveLength(1);
+    });
+    elapse();
+    expect(((await uploading) as PushError).code).toBe('server');
+  });
+});
+
+describe('timeLimit', () => {
+  it('waits 20 seconds for an answer, and longer for a big upload on a slow connection', () => {
+    expect(timeLimit(0)).toBe(20_000);
+    // The biggest schedule (1.5 MB) at about 256 kbit/s takes 47 seconds to send.
+    expect(timeLimit(1_500_000)).toBe(20_000 + 46_875);
+  });
 });
 
 describe('disablePush', () => {
@@ -183,6 +237,28 @@ describe('disablePush', () => {
     network = 'up';
     expect(await finishPushDelete()).toBe(true);
     expect(isPushDeletePending()).toBe(false);
+    expect(devicesKept()).toBe(0);
+  });
+
+  it('is off here at once while the server never answers, and finishes later', async () => {
+    await syncPush([notice()]);
+    const { elapse } = hangingNetwork();
+    const disabling = disablePush();
+    // Off on this device straight away, and nothing more can arrive here.
+    expect(isPushEnabled()).toBe(false);
+    expect(isPushDeletePending()).toBe(true);
+    await vi.waitFor(async () => {
+      expect(await subscription()).toBeNull();
+    });
+    // The server never answers: after its time limit, that's "couldn't reach".
+    expect(limits.map(({ ms }) => ms)).toEqual([timeLimit(0)]);
+    elapse();
+    expect(await disabling).toBe(false);
+    expect(devicesKept()).toBe(1);
+
+    vi.restoreAllMocks();
+    network = 'up';
+    expect(await finishPushDelete()).toBe(true);
     expect(devicesKept()).toBe(0);
   });
 

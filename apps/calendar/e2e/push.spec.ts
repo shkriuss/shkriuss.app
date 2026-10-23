@@ -192,6 +192,72 @@ test('says so when turning it off can’t reach the server, and finishes later',
   expect(await page.evaluate(() => localStorage.getItem('shkriuss-device:push-delete'))).toBeNull();
 });
 
+test('“Delete all data” deletes here at once, even while the network hangs', async ({ page }) => {
+  await fakeSubscription(page, rig);
+  await page.goto('/');
+  await seed(page, [
+    { title: 'Private appointment', startDate: '2099-01-01', endDate: '2099-01-01' },
+  ]);
+  await closedSwitch(page).check();
+  await expect(closedStatus(page)).toHaveText(/^On:/);
+
+  // From now on the server never answers (a VPN with no connection, say).
+  await page.route('**/api/**', () => {
+    // Never answers.
+  });
+  await page.getByRole('button', { name: 'Delete all data' }).click();
+  const reloaded = page.waitForEvent('load', { timeout: 10_000 });
+  await page
+    .getByRole('dialog', { name: 'Delete all data?' })
+    .getByRole('button', { name: 'Delete everything' })
+    .click();
+  // Deleted on this device without waiting for the server, which can't answer.
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem('shkriuss:calendar')))
+    .toBeNull();
+  await reloaded;
+  const device = await page.evaluate(() => ({
+    calendar: localStorage.getItem('shkriuss:calendar') ?? '',
+    push: localStorage.getItem('shkriuss-device:push'),
+    pending: localStorage.getItem('shkriuss-device:push-delete'),
+    subscribed: sessionStorage.getItem('fake-push'),
+  }));
+  expect(device.calendar).not.toContain('Private appointment');
+  expect(device).toMatchObject({ push: null, subscribed: null });
+  // The server's copy is remembered, to be deleted later.
+  expect(device.pending).not.toBeNull();
+  await expect(closedSwitch(page)).not.toBeChecked();
+  await expect(closedStatus(page)).toHaveText(/^Off, but your reminders couldn’t be removed/);
+
+  await page.unroute('**/api/**');
+  const deleted = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/api/push/schedule') && response.request().method() === 'DELETE',
+  );
+  await page.reload();
+  expect((await deleted).status()).toBe(204);
+  await expect(closedStatus(page)).toHaveText(/^Off:/);
+});
+
+test('turning it off while the network hangs gives up after a while', async ({ page }) => {
+  await page.clock.install();
+  await fakeSubscription(page, rig);
+  await page.goto('/');
+  await closedSwitch(page).check();
+  await expect(closedStatus(page)).toHaveText(/^On:/);
+
+  await page.route('**/api/**', () => {
+    // Never answers.
+  });
+  await closedSwitch(page).uncheck();
+  await expect(closedStatus(page)).toHaveText('Turning off…');
+  await page.clock.runFor('00:21');
+  await expect(closedStatus(page)).toHaveText(
+    "Off, but your reminders couldn’t be removed from Calendar's server yet. Calendar will try again when it’s open and online.",
+  );
+  await expect(closedSwitch(page)).toBeEnabled();
+});
+
 test('after a trip, coming back to Calendar sends the new time zone', async ({ page }) => {
   await fakeSubscription(page, rig);
   await page.goto('/');
