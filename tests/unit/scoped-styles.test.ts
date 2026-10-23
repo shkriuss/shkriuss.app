@@ -12,7 +12,9 @@ const repoRoot = join(import.meta.dirname, '../..');
 
 /** Selectors in a file's scoped styles that name an `svg` the file doesn't draw itself. */
 function unscopedIconRules(source: string): string[] {
-  if (/<svg[\s>]/.test(source.replace(/<style[\s\S]*?<\/style>/g, ''))) return [];
+  // The markup is what's around the style blocks.
+  const markup = source.split(/<style[^>]*>[\s\S]*?<\/style>/);
+  if (markup.some((part) => /<svg[\s>]/.test(part))) return [];
   const found: string[] = [];
   for (const [, attributes = '', css = ''] of source.matchAll(
     /<style([^>]*)>([\s\S]*?)<\/style>/g,
