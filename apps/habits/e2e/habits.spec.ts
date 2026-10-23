@@ -2,7 +2,7 @@
 // and a new day starting while the app is open. Shared checks (accessibility,
 // security headers, offline, privacy) run for every app from tests/e2e/.
 import type { Page } from '@playwright/test';
-import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
+import { checkA11y, expect, failSaving, test } from '../../../tests/e2e/fixtures.ts';
 
 test.use({ timezoneId: 'Europe/Berlin' });
 
@@ -146,4 +146,32 @@ test('starts a new day while open, keeping the streak', async ({ page }) => {
   await expect(page.locator('[data-today]')).toHaveText('Tuesday, October 20');
   await expect(doneToday(page, 'Stretch')).toHaveAttribute('aria-pressed', 'false');
   await expect(streak(page, 'Stretch')).toHaveText('1-day streak');
+});
+
+test('reads out a name’s problem after Enter in the field, in the editor too', async ({ page }) => {
+  await addHabit(page, 'Read');
+  await addHabit(page, 'Walk');
+  await page.getByLabel('New habit').fill('read');
+  await page.getByLabel('New habit').press('Enter');
+  await expect(page.getByRole('alert')).toHaveText(
+    'New habit: You already have a habit with that name.',
+  );
+
+  await card(page, 'Walk').getByRole('button', { name: 'Edit Walk' }).click();
+  const name = editor(page).getByLabel('Name');
+  await name.fill('');
+  await name.press('Enter');
+  await expect(name).toBeFocused();
+  await expect(editor(page).getByRole('alert')).toHaveText(/^Name: /);
+});
+
+test('says so when marking a habit done can’t be saved', async ({ page }) => {
+  await addHabit(page, 'Read');
+  await failSaving(page);
+  await doneToday(page, 'Read').click();
+  const problem = page.getByRole('alert');
+  await expect(problem).toBeVisible();
+  await expect(problem).toHaveText(/^Couldn’t save/);
+  // Not told it's done, as if it were kept (audit G-1).
+  await expect(page.getByRole('status').filter({ hasText: 'Read: done today.' })).toHaveCount(0);
 });

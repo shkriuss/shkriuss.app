@@ -6,6 +6,7 @@
 import { addDays, firstDayOfWeek, isIsoTime, today, weekday, type IsoDate } from '@shkriuss/dates';
 import { createStore } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
+import { focusProblem, reportSave } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { site } from 'virtual:shkriuss/site';
 import {
@@ -113,7 +114,8 @@ export function mountHabits(root: Document): void {
   const find = (id: string | null | undefined): Habit | undefined =>
     habits.habits.find((habit) => habit.id === id);
 
-  function save(next: { habits?: HabitsState; checks?: ChecksState }): void {
+  /** Saves and shows the change; false (and the person is told) if it couldn't be saved. */
+  function save(next: { habits?: HabitsState; checks?: ChecksState }): boolean {
     let ok = true;
     if (next.habits) {
       habits = next.habits;
@@ -123,10 +125,11 @@ export function mountHabits(root: Document): void {
       checks = next.checks;
       ok = checksStore.save(checks) && ok;
     }
-    if (!ok) announce('Couldn’t save. Your browser may be blocking storage.');
+    const saved = reportSave(ok);
     render();
     reminders.changed();
     sync.changed();
+    return saved;
   }
 
   // ---------- The list ----------
@@ -212,15 +215,14 @@ export function mountHabits(root: Document): void {
     if (message) {
       error.textContent = message;
       input.setAttribute('aria-invalid', 'true');
-      input.focus();
+      focusProblem(input, message);
       return;
     }
     const name = input.value.trim();
     error.textContent = '';
     input.removeAttribute('aria-invalid');
     input.value = '';
-    save({ habits: addHabit(habits, name, crypto.randomUUID()) });
-    announce(`Added ${name}.`);
+    if (save({ habits: addHabit(habits, name, crypto.randomUUID()) })) announce(`Added ${name}.`);
   });
 
   input.addEventListener('input', () => {
@@ -241,8 +243,9 @@ export function mountHabits(root: Document): void {
       return;
     }
     const done = !doneDates(checks, habit.id).has(day);
-    save({ checks: setDone(checks, habit.id, day, done) });
-    announce(done ? `${habit.name}: done today.` : `${habit.name}: not done today.`);
+    if (save({ checks: setDone(checks, habit.id, day, done) })) {
+      announce(done ? `${habit.name}: done today.` : `${habit.name}: not done today.`);
+    }
   });
 
   function checkbox(label: string, value: string, checked: boolean): HTMLLabelElement {
@@ -308,15 +311,15 @@ export function mountHabits(root: Document): void {
     reminderErrorText.textContent = reminderProblem ? 'Choose a time for the reminder.' : '';
     reminderInput.toggleAttribute('aria-invalid', reminderProblem);
     if (nameProblem) {
-      editName.focus();
+      focusProblem(editName, nameProblem);
       return;
     }
     if (days.length === 0) {
-      dayChecks.querySelector<HTMLInputElement>('input')?.focus();
+      focusProblem(dayChecks.querySelector<HTMLInputElement>('input'));
       return;
     }
     if (reminderProblem) {
-      reminderInput.focus();
+      focusProblem(reminderInput);
       return;
     }
 
@@ -327,8 +330,11 @@ export function mountHabits(root: Document): void {
       }
     }
     editDialog.close();
-    save({ habits: updateHabit(habits, habit.id, { name, days, reminder }), checks: nextChecks });
-    announce(`Saved ${name.trim()}.`);
+    if (
+      save({ habits: updateHabit(habits, habit.id, { name, days, reminder }), checks: nextChecks })
+    ) {
+      announce(`Saved ${name.trim()}.`);
+    }
     if (reminder !== null) reminders.offerNotifications();
   });
 
@@ -359,8 +365,7 @@ export function mountHabits(root: Document): void {
     const habit = find(editing);
     if (deleteDialog.returnValue !== 'confirm' || !habit) return;
     editDialog.close();
-    save(removeHabit(habits, checks, habit.id));
-    announce(`Deleted ${habit.name}.`);
+    if (save(removeHabit(habits, checks, habit.id))) announce(`Deleted ${habit.name}.`);
     input.focus();
   });
 
