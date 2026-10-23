@@ -18,6 +18,7 @@ import {
 } from '@shkriuss/storage/backup';
 import { DATE_LOCALE } from '../lib/locale.ts';
 import { focusProblem } from './problem.ts';
+import { setBusy } from './busy.ts';
 
 /** Backup files bigger than this are turned down (apps save far less). */
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
@@ -66,6 +67,7 @@ export function mountDataControls(section: HTMLElement): void {
   const passphrase = find<HTMLInputElement>(backupForm, '[name="passphrase"]');
   const repeat = find<HTMLInputElement>(backupForm, '[name="repeat"]');
   const showPassphrase = find<HTMLInputElement>(backupForm, '[data-show-passphrase]');
+  const backupSubmit = find<HTMLButtonElement>(backupForm, 'button[type="submit"]');
 
   const restoreDialog = find<HTMLDialogElement>(section, '[data-restore-dialog]');
   const restoreForm = find<HTMLFormElement>(restoreDialog, '[data-restore-form]');
@@ -90,10 +92,13 @@ export function mountDataControls(section: HTMLElement): void {
     else input.removeAttribute('aria-invalid');
   }
 
-  /** While working, says what's happening and stops double taps. */
+  /**
+   * While working, says what's happening and stops double taps. The buttons
+   * are busy, not disabled, so focus stays where it is (audit G-7).
+   */
   function busy(dialog: HTMLDialogElement, message: string): void {
     find<HTMLElement>(dialog, '[data-dialog-status]').textContent = message;
-    for (const button of dialog.querySelectorAll('button')) button.disabled = message !== '';
+    for (const button of dialog.querySelectorAll('button')) setBusy(button, message !== '');
   }
 
   for (const dialog of [backupDialog, restoreDialog]) {
@@ -163,6 +168,8 @@ export function mountDataControls(section: HTMLElement): void {
         busy(backupDialog, '');
         find<HTMLElement>(backupDialog, '[data-dialog-status]').textContent =
           'Something went wrong while locking the backup. Please try again.';
+        // Focus stays where it was; if it was nowhere, it's on the button to try again.
+        if (!backupDialog.contains(document.activeElement)) backupSubmit.focus();
       },
     );
   });

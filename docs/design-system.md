@@ -70,9 +70,29 @@ app: `showProblem` puts it in the notice at the top of every page, which is
 read out at once; `reportSave(store.save(…))` says when saving didn't work,
 and why; `focusProblem` goes to a form's first wrong field, or reads its error
 out if the person is in it already),
-`@shkriuss/ui/worker` (`startWorker`, for heavy work), `@shkriuss/ui/qr-code`,
-`@shkriuss/ui/service-worker`, `@shkriuss/ui/sync-controls` and
-`@shkriuss/ui/push-controls`.
+`@shkriuss/ui/worker` (`startWorker`, for heavy work), `@shkriuss/ui/busy`
+(`setBusy`, below), `@shkriuss/ui/qr-code`, `@shkriuss/ui/service-worker`,
+`@shkriuss/ui/sync-controls` and `@shkriuss/ui/push-controls`.
+
+A button that waits for something (saving, the network) is **busy**, not
+disabled. Disabling the button someone just pressed throws keyboard and
+screen reader focus back to the top of the page. A busy one keeps focus,
+looks and reads as unavailable, and ignores presses (also Enter in its form):
+
+```ts
+import { setBusy } from '@shkriuss/ui/busy';
+
+setBusy(button, true);
+try {
+  await save();
+} finally {
+  setBusy(button, false);
+}
+```
+
+Use `disabled` only for something that stays unavailable until the person
+does something else, like "Continue" until a box is ticked. If a panel with
+the focused button is hidden, move focus to what takes its place.
 
 QR codes (for example to open a link on another device) are drawn by a
 script, since their content is usually made on the page:
@@ -93,7 +113,8 @@ read them best, in both themes.
   variables `--stack-gap`, `--cluster-gap`, `--grid-min` and `--grid-gap`.
 - Text: `.lead`, `.muted`, `.prose`, `.visually-hidden`.
 - Components: `.btn` (`--primary`, `--danger`, `--ghost`, `--icon`, `--lg`;
-  a toggle button with `aria-pressed="true"` looks like `--primary`),
+  a toggle button with `aria-pressed="true"` looks like `--primary`; a
+  disabled or busy one, `aria-disabled="true"`, is grey but still readable),
   `.card` (`--link`), `.badge`, `.notice` (`--danger`), `.dialog`,
   `.app-icon`, `.code-text` (a key or link to copy or write down, in a
   monospace box) and `.qr-code`.

@@ -45,6 +45,7 @@ import {
 } from '@shkriuss/sync/connect';
 import { appOriginFor, isAppOrigin } from '@shkriuss/sync/origins';
 import { focusProblem } from '@shkriuss/ui/problem';
+import { setBusy } from '@shkriuss/ui/busy';
 import { renderQrCode } from '@shkriuss/ui/qr-code';
 import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
@@ -160,6 +161,7 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
   const linkUrl = required<HTMLElement>(root, '[data-link-url]');
   const linkStatus = required<HTMLElement>(root, '[data-link-status]');
   const createLinkButton = required<HTMLButtonElement>(root, '[data-action="create-link"]');
+  const copyLinkButton = required<HTMLButtonElement>(linkPanel, '[data-action="copy-link"]');
   const passkeyStatus = required<HTMLElement>(root, '[data-passkey-status]');
 
   const keyDialog = required<HTMLDialogElement>(root, '[data-key-dialog]');
@@ -366,7 +368,7 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
   async function startLink(): Promise<void> {
     if (!account) return;
     stopLink();
-    createLinkButton.disabled = true;
+    setBusy(createLinkButton, true);
     linkStatus.textContent = 'Making a code…';
     try {
       link = await createLink(account.secret);
@@ -374,12 +376,15 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
       linkStatus.textContent = problemOf(error);
       return;
     } finally {
-      createLinkButton.disabled = false;
+      setBusy(createLinkButton, false);
     }
     renderQrCode(linkQr, link.url, 'QR code to add another device to your account');
     linkUrl.textContent = link.url;
     linkPanel.hidden = false;
+    // The code takes the button's place: focus goes with it, to "Copy link".
+    const hadFocus = document.activeElement === createLinkButton;
     createLinkButton.hidden = true;
+    if (hadFocus) copyLinkButton.focus();
     linkStatus.textContent = `Waiting for your other device. The code works once, until ${timeFormat.format(link.expiresAt)}.`;
     poll = window.setInterval(() => void checkLink(), LINK_POLL_MS);
   }
@@ -420,12 +425,13 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
     passkeyStatus.textContent = 'This browser can’t use passkeys. Use your recovery key instead.';
   }
 
-  async function withButton(button: HTMLButtonElement, task: () => Promise<void>): Promise<void> {
-    button.disabled = true;
+  /** Runs `task` with `button` busy: presses do nothing meanwhile, and focus stays on it (audit G-7). */
+  async function withButton<T>(button: HTMLButtonElement, task: () => Promise<T>): Promise<T> {
+    setBusy(button, true);
     try {
-      await task();
+      return await task();
     } finally {
-      button.disabled = false;
+      setBusy(button, false);
     }
   }
 
@@ -443,14 +449,13 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
         return;
       }
       if (!account) return;
-      button.disabled = true;
+      const current = account;
       newStatus.textContent = 'Replacing the key…';
       let saved: boolean;
       try {
-        saved = await replaceAccountKey(account.secret, secret);
+        saved = await withButton(button, () => replaceAccountKey(current.secret, secret));
       } catch (error) {
         newStatus.textContent = problemOf(error);
-        button.disabled = false;
         return;
       }
       pending = null;
@@ -508,7 +513,8 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
       }),
     'accept-connect': async (button) => {
       if (!account || !connecting || connecting === 'invalid') return;
-      button.disabled = true;
+      // Stays busy: the page goes back to the app.
+      setBusy(button, true);
       const { request, app } = connecting;
       const secret = await appSecretOf(account.secret, app.slug);
       // Apps also get their keys from replaced account keys, to move their old copies.

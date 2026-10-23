@@ -9,6 +9,7 @@
     "./env": {
       "types": "./src/env.d.ts"
     },
+    "./busy": "./src/scripts/busy.ts",
     "./icons": "./src/icons/index.ts",
     "./colors": "./src/icons/colors.ts",
     "./styles.css": "./src/styles/index.css",

@@ -108,6 +108,48 @@ test('a plain copy restores without a passphrase', async ({ page }) => {
   expect(await saved(page)).toEqual({ sample: JSON.stringify(SAMPLE), theme: 'dark' });
 });
 
+test('keeps focus on “Download backup” while it locks, and after a problem', async ({ page }) => {
+  await page.getByRole('button', { name: 'Back up' }).click();
+  const dialog = backupDialog(page);
+  await dialog.getByLabel('Passphrase', { exact: true }).fill(PASSPHRASE);
+  await dialog.getByLabel('Type it again').fill(PASSPHRASE);
+  // Locking the backup will fail, when the test says so.
+  await page.evaluate(() => {
+    const target = window as unknown as { locks: number; failLocking: () => void };
+    target.locks = 0;
+    crypto.subtle.deriveKey = () =>
+      new Promise((_, reject) => {
+        target.locks += 1;
+        target.failLocking = () => {
+          reject(new Error('Locking failed'));
+        };
+      });
+  });
+  const locks = () => page.evaluate(() => (window as unknown as { locks: number }).locks);
+  const button = dialog.getByRole('button', { name: 'Download backup' });
+  await button.focus();
+  await page.keyboard.press('Enter');
+  await expect(dialog.getByRole('status')).toHaveText('Locking your backup…');
+  await expect(button).toHaveAttribute('aria-disabled', 'true');
+  await expect(button).toBeFocused();
+  await checkA11y(page, 'backup dialog while locking');
+  // Pressing it again meanwhile does nothing, nor does Enter in a field.
+  await page.keyboard.press('Enter');
+  await dialog.getByLabel('Type it again').press('Enter');
+  expect(await locks()).toBe(1);
+
+  await button.focus();
+  await page.evaluate(() => {
+    (window as unknown as { failLocking: () => void }).failLocking();
+  });
+  await expect(dialog.getByRole('status')).toHaveText(
+    'Something went wrong while locking the backup. Please try again.',
+  );
+  await expect(button).not.toHaveAttribute('aria-disabled');
+  await expect(button).toBeFocused();
+  await checkA11y(page, 'backup dialog after a problem');
+});
+
 test('turns down files that aren’t this app’s backups', async ({ page }) => {
   const other = { app: 'some-other-app', exportedAt: new Date().toISOString(), data: {} };
   await chooseBackup(page, { name: 'other.json', buffer: Buffer.from(JSON.stringify(other)) });

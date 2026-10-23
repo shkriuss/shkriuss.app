@@ -4,6 +4,7 @@
  */
 import type { SyncClient, SyncEvent, SyncProblem, SyncStatus } from '@shkriuss/sync';
 import { DATE_LOCALE } from '../lib/locale.ts';
+import { setBusy } from './busy.ts';
 
 /** How often "Last synced …" is brought up to date. */
 const REFRESH_MS = 30 * 1000;
@@ -80,10 +81,15 @@ export function mountSyncControls(section: HTMLElement, sync: SyncClient): void 
   ]);
 
   function render(status: SyncStatus): void {
+    // Turned on or off while focus is on a button that's hidden now: it moves
+    // to the button that takes its place, not back to the top of the page.
+    const hadFocus = (status.on ? off : on).contains(document.activeElement);
     off.hidden = status.on;
     on.hidden = !status.on;
+    if (hadFocus) button(status.on ? 'sync-now' : 'sync-on').focus();
     code.textContent = status.code ?? '';
-    button('sync-now').disabled = status.busy;
+    // Busy, not disabled, so focus stays on it during every sync (audit G-7).
+    setBusy(button('sync-now'), status.busy);
     if (working) statusLine.textContent = working;
     else if (status.problem) statusLine.textContent = PROBLEMS[status.problem];
     else if (note) statusLine.textContent = note;
@@ -120,9 +126,9 @@ export function mountSyncControls(section: HTMLElement, sync: SyncClient): void 
 
   button('sync-on').addEventListener('click', () => {
     start('Opening your shkriuss account…');
-    button('sync-on').disabled = true;
+    setBusy(button('sync-on'), true);
     sync.connect().catch(() => {
-      button('sync-on').disabled = false;
+      setBusy(button('sync-on'), false);
       done(CONNECT_FAILED);
     });
   });
@@ -131,7 +137,7 @@ export function mountSyncControls(section: HTMLElement, sync: SyncClient): void 
   // comes back as it was left, still opening it.
   window.addEventListener('pageshow', (event) => {
     if (!event.persisted || working !== 'Opening your shkriuss account…') return;
-    button('sync-on').disabled = false;
+    setBusy(button('sync-on'), false);
     done();
   });
 

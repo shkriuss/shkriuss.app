@@ -7,6 +7,7 @@
  */
 import { focusProblem, showProblem } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
+import { setBusy } from '@shkriuss/ui/busy';
 import { canFreeUp, freeable, onlineMessage } from '../lib/online.ts';
 import {
   addedMessage,
@@ -265,7 +266,8 @@ export function mountPhotos(root: Document): void {
    */
   async function addPhotos(picked: readonly File[]): Promise<void> {
     busy = true;
-    addButton.disabled = true;
+    // Busy, not disabled, so focus stays on it while photos are added (audit G-7).
+    setBusy(addButton, true);
     const result: Required<Added> = {
       added: 0,
       restored: 0,
@@ -317,7 +319,7 @@ export function mountPhotos(root: Document): void {
     }
     adding.hidden = true;
     busy = false;
-    addButton.disabled = false;
+    setBusy(addButton, false);
     // Photos that couldn't be saved show in the page's notice too.
     if (result.failed > 0) showProblem(`${addedMessage(result)} This device may be out of space.`);
     else announce(addedMessage(result));

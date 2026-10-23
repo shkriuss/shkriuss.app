@@ -249,13 +249,22 @@ test('turning it off while the network hangs gives up after a while', async ({ p
   await page.route('**/api/**', () => {
     // Never answers.
   });
-  await closedSwitch(page).uncheck();
+  // With the keyboard: focus stays on the switch while it waits.
+  await closedSwitch(page).focus();
+  await page.keyboard.press('Space');
   await expect(closedStatus(page)).toHaveText('Turning off…');
+  await expect(closedSwitch(page)).not.toBeChecked();
+  await expect(closedSwitch(page)).toBeDisabled();
+  await expect(closedSwitch(page)).toBeFocused();
+  // Pressing it again meanwhile does nothing.
+  await page.keyboard.press('Space');
+  await expect(closedSwitch(page)).not.toBeChecked();
   await page.clock.runFor('00:21');
   await expect(closedStatus(page)).toHaveText(
     "Off, but your reminders couldn’t be removed from Calendar's server yet. Calendar will try again when it’s open and online.",
   );
   await expect(closedSwitch(page)).toBeEnabled();
+  await expect(closedSwitch(page)).toBeFocused();
 });
 
 test('after a trip, coming back to Calendar sends the new time zone', async ({ page }) => {

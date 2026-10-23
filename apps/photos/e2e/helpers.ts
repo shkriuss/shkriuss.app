@@ -63,7 +63,11 @@ export async function addPhotos(
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: 'Add photos' }).click();
   await (await chooser).setFiles(files);
-  await page.getByRole('button', { name: 'Add photos' }).and(page.locator(':enabled')).waitFor();
+  // Busy (aria-disabled) while the photos are added.
+  await page
+    .getByRole('button', { name: 'Add photos' })
+    .and(page.locator(':enabled:not([aria-disabled="true"])'))
+    .waitFor();
 }
 
 /** How many photos (and how many sets of files) are kept on this device. */

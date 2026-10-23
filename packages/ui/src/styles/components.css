@@ -218,11 +218,33 @@
   transform: scale(0.97);
 }
 
+/* Unavailable, or busy for a moment (aria-disabled, which keeps focus; see
+   scripts/busy.ts). Plainer, but its text stays readable: --color-text-muted
+   on --color-surface-sunken is contrast-tested. */
 .btn:disabled,
 .btn[aria-disabled='true'] {
-  opacity: 0.55;
+  --btn-bg: var(--color-surface-sunken);
+  --btn-bg-hover: var(--color-surface-sunken);
+  --btn-fg: var(--color-text-muted);
+  --btn-border: var(--color-border-strong);
   cursor: not-allowed;
   transform: none;
+}
+
+.check:has(> input[aria-disabled='true']) {
+  color: var(--color-text-muted);
+}
+
+.check:has(> input[aria-disabled='true']),
+.check input[aria-disabled='true'] {
+  cursor: not-allowed;
+}
+
+@media (forced-colors: active) {
+  .btn[aria-disabled='true'] {
+    border-color: GrayText;
+    color: GrayText;
+  }
 }
 
 .btn--primary {

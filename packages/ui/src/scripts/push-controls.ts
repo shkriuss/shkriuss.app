@@ -20,6 +20,7 @@ import {
   type Notice,
   type PushErrorCode,
 } from '@shkriuss/push';
+import { setBusy } from './busy.ts';
 
 /** Waits this long after a change before uploading, so quick edits go up together. */
 const SYNC_DELAY_MS = 800;
@@ -71,6 +72,8 @@ export function mountPushControls(block: HTMLElement, options: PushControlsOptio
   function render(message?: string): void {
     const on = isPushEnabled();
     toggle.checked = on;
+    // Turned off while focus is on "Send a test notification": it goes to the switch.
+    if (!on && testRow.contains(document.activeElement)) toggle.focus();
     testRow.hidden = !on;
     status.textContent = message ?? (on ? ON : isPushDeletePending() ? OFF_NOT_DELETED : OFF);
   }
@@ -114,7 +117,8 @@ export function mountPushControls(block: HTMLElement, options: PushControlsOptio
   }
 
   toggle.addEventListener('change', () => {
-    toggle.disabled = true;
+    // Busy, not disabled, so focus stays on the switch while it waits (audit G-7).
+    setBusy(toggle, true);
     if (toggle.checked) {
       status.textContent = 'Turning on…';
       enablePush()
@@ -129,7 +133,7 @@ export function mountPushControls(block: HTMLElement, options: PushControlsOptio
           },
         )
         .finally(() => {
-          toggle.disabled = false;
+          setBusy(toggle, false);
           options.onChange?.();
         });
     } else {
@@ -137,14 +141,14 @@ export function mountPushControls(block: HTMLElement, options: PushControlsOptio
       void disablePush().finally(() => {
         // Says so if the reminders couldn't be removed from the server yet.
         render();
-        toggle.disabled = false;
+        setBusy(toggle, false);
         options.onChange?.();
       });
     }
   });
 
   testButton.addEventListener('click', () => {
-    testButton.disabled = true;
+    setBusy(testButton, true);
     sendTestPush(app, 'Notifications are working.')
       .then(
         () => {
@@ -155,7 +159,7 @@ export function mountPushControls(block: HTMLElement, options: PushControlsOptio
         },
       )
       .finally(() => {
-        testButton.disabled = false;
+        setBusy(testButton, false);
       });
   });
 
