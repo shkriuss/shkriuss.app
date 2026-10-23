@@ -172,10 +172,11 @@ in with `sync: true` in `apps.json`.
     Moving to a new account key does the same, with a note that it moved.
   - Limits: about 1.4 MB of compressed data per app, and 120 changes per 10
     minutes per account.
-  - The Worker checks only an upload's size and passes it on, and the copy's
-    object checks the rest. Checking a full-size copy in the Worker took
-    about 8 ms of the free plan's 10 ms of CPU time (audit finding B-9); an
-    object has 30 seconds.
+  - The Worker only reads an upload, in one go, and passes it on; the copy's
+    object checks the rest. Reading a full-size copy piece by piece took the
+    Worker 11 to 36 ms of CPU time on Cloudflare, and checking it about 8 ms
+    more, over the free plan's 10 ms (audit finding B-9). An object has 30
+    seconds.
 - **The copy.** The data of every synced store, as JSON, compressed (gzip),
   then sealed with AES-256-GCM, labelled with the app's name.
 - **Merging** (`packages/sync/src/merge.ts`).

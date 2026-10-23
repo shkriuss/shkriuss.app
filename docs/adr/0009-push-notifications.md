@@ -64,10 +64,10 @@ browsers like IronFox receive Web Push through **UnifiedPush**.
   sends the soonest ones that fit), https push addresses with a domain name only (no redirects), schedule
   changes rate-limited, and at most 2,000 messages per app per day (UTC):
   past that, sending waits until 00:00 UTC.
-- **Checked by the device's object:** the Worker checks only an upload's size
-  and passes it on. Checking the biggest schedule in the Worker took more
-  than the free plan's 10 ms of CPU time (audit finding B-9); an object has
-  30 seconds.
+- **Checked by the device's object:** the Worker only reads an upload, in
+  one go, and passes it on; the device's object checks the rest. Reading
+  and checking the biggest schedule in the Worker took more than the free
+  plan's 10 ms of CPU time (audit finding B-9); an object has 30 seconds.
 - **Not stored in backups:** the device key and subscription keys live under
   `shkriuss-device:` in `localStorage`, which backups skip, so restoring on
   another phone can't take over this one's notifications.

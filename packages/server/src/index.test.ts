@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { bytesBody, jsonBody, readJson } from './index.ts';
 
 /** A body sent in chunks, with no Content-Length; counts the chunks read. */
@@ -47,5 +47,23 @@ describe('request bodies', () => {
     });
     const refused = await jsonBody(declared, 100);
     expect(!refused.ok && refused.response.status).toBe(413);
+  });
+
+  it('reads a body that says its size in one go, which costs Workers far less CPU time', async () => {
+    const { request } = streamed(100, 1024);
+    request.headers.set('Content-Length', String(100 * 1024));
+    const whole = vi.spyOn(request, 'arrayBuffer');
+    const read = await bytesBody(request, 200 * 1024);
+    expect(read.ok && read.body.length).toBe(100 * 1024);
+    expect(whole).toHaveBeenCalledOnce();
+  });
+
+  it('refuses a body bigger than it said, or with a size that isn’t a number', async () => {
+    const lying = streamed(10, 1024).request;
+    lying.headers.set('Content-Length', '100');
+    expect((await bytesBody(lying, 2048)).ok).toBe(false);
+    const garbled = streamed(1, 10).request;
+    garbled.headers.set('Content-Length', 'ten');
+    expect((await bytesBody(garbled, 2048)).ok).toBe(false);
   });
 });

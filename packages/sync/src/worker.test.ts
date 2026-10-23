@@ -7,7 +7,7 @@ import { randomBytes, toBase64Url } from '@shkriuss/crypto';
 import { OBJECT_BYTES } from '@shkriuss/server/meter';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { memorySync } from './testing.ts';
-import { MAX_REQUEST_BYTES, MAX_SEALED_CHARS } from './validate.ts';
+import { MAX_FILE_BYTES, MAX_REQUEST_BYTES, MAX_SEALED_CHARS } from './validate.ts';
 import { STORAGE_LIMITS, UNUSED_MS } from './worker.ts';
 
 const SITE = 'https://notes.shkriuss.app';
@@ -180,6 +180,19 @@ describe('a copy sent to the Worker', () => {
       'Unknown fields.',
     ]);
     expect(await send(sealed(MAX_REQUEST_BYTES + 1))).toEqual([413, 'Request too big.']);
+    expect(server.copies.stored()).toEqual([]);
+  });
+
+  it('with files, has each file checked by its object too', async () => {
+    const server = memorySync();
+    const token = madeUpToken();
+    const send = async (body: Uint8Array<ArrayBuffer>) => {
+      const sent = request(SITE, 'files/photo-1', token, { method: 'PUT', body });
+      const response = await server.fetchWithFiles(sent);
+      return [response.status, ((await response.json()) as { error: string }).error];
+    };
+    expect(await send(new Uint8Array(28))).toEqual([400, 'Not a sealed file.']);
+    expect(await send(new Uint8Array(MAX_FILE_BYTES + 1))).toEqual([413, 'Request too big.']);
     expect(server.copies.stored()).toEqual([]);
   });
 });
