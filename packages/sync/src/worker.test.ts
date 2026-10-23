@@ -7,7 +7,7 @@ import { randomBytes, toBase64Url } from '@shkriuss/crypto';
 import { OBJECT_BYTES } from '@shkriuss/server/meter';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { memorySync } from './testing.ts';
-import { MAX_SEALED_CHARS } from './validate.ts';
+import { MAX_FILE_BYTES, MAX_REQUEST_BYTES, MAX_SEALED_CHARS } from './validate.ts';
 import { STORAGE_LIMITS, UNUSED_MS } from './worker.ts';
 
 const SITE = 'https://notes.shkriuss.app';
@@ -134,6 +134,66 @@ describe('all of an app’s copies together', () => {
     expect(statuses).toContain(204);
     expect(statuses.at(-1)).toBe(507);
     expect(keptBytes(server)).toBeLessThan(STORAGE_LIMITS.files.preview);
+  });
+});
+
+describe('a copy sent to the Worker', () => {
+  // Checking a full-size copy takes most of the free plan's 10 ms of CPU time
+  // for the Worker, so only the copy's object (with 30 seconds) does it.
+  it('reaches its object as it was sent, with only its size checked first', async () => {
+    const server = memorySync();
+    const { namespace } = server.copies;
+    const received: string[] = [];
+    server.env.SYNC_COPIES = {
+      idFromName: (name) => namespace.idFromName(name),
+      get: (id) => ({
+        fetch: async (input, init) => {
+          if (input === 'https://copy/') received.push(await new Request(input, init).text());
+          return namespace.get(id).fetch(input, init);
+        },
+      }),
+    };
+    const body = `{ "data": "${sealed(MAX_SEALED_CHARS)}",\n  "base": null }`;
+    const sent = request(SITE, 'copy', madeUpToken(), { method: 'PUT', body });
+    expect((await server.fetch(sent)).status).toBe(200);
+    expect(received.map((text) => text === body)).toEqual([true]);
+  });
+
+  it('is checked by its object, which keeps nothing when it’s wrong', async () => {
+    const server = memorySync();
+    const token = madeUpToken();
+    const send = async (body: string) => {
+      const response = await server.fetch(request(SITE, 'copy', token, { method: 'PUT', body }));
+      return [response.status, ((await response.json()) as { error: string }).error];
+    };
+    expect(await send('{"base": null, "data": ')).toEqual([400, 'Body must be JSON.']);
+    expect(await send(JSON.stringify({ base: null, data: 'not sealed! '.repeat(9) }))).toEqual([
+      400,
+      '"data" must be a sealed copy.',
+    ]);
+    expect(await send(JSON.stringify({ base: 0, data: sealed(100) }))).toEqual([
+      400,
+      '"base" must be a version number or null.',
+    ]);
+    expect(await send(JSON.stringify({ base: null, data: sealed(100), more: 1 }))).toEqual([
+      400,
+      'Unknown fields.',
+    ]);
+    expect(await send(sealed(MAX_REQUEST_BYTES + 1))).toEqual([413, 'Request too big.']);
+    expect(server.copies.stored()).toEqual([]);
+  });
+
+  it('with files, has each file checked by its object too', async () => {
+    const server = memorySync();
+    const token = madeUpToken();
+    const send = async (body: Uint8Array<ArrayBuffer>) => {
+      const sent = request(SITE, 'files/photo-1', token, { method: 'PUT', body });
+      const response = await server.fetchWithFiles(sent);
+      return [response.status, ((await response.json()) as { error: string }).error];
+    };
+    expect(await send(new Uint8Array(28))).toEqual([400, 'Not a sealed file.']);
+    expect(await send(new Uint8Array(MAX_FILE_BYTES + 1))).toEqual([413, 'Request too big.']);
+    expect(server.copies.stored()).toEqual([]);
   });
 });
 

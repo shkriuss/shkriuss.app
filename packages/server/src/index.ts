@@ -113,14 +113,24 @@ export function bearerToken(request: Request): string | null {
 }
 
 /**
- * The body's bytes, read as they arrive: null as soon as there are more than
- * `limit`, so a big body sent without Content-Length is never held whole.
+ * The body's bytes, or null if there are more than `limit`. A body that says
+ * its size (Content-Length, as browsers always do) is read in one go; one
+ * that doesn't is read as it arrives, and stopped as soon as it's too big, so
+ * it's never held whole. Reading piece by piece costs CPU time for each piece:
+ * 2 MB took a Worker 11 to 36 ms on Cloudflare, over the free plan's 10 ms,
+ * and at most about 6 ms in one go (audit finding B-9).
  */
 async function readLimited(
   request: Request,
   limit: number,
 ): Promise<Uint8Array<ArrayBuffer> | null> {
-  if (Number(request.headers.get('Content-Length') ?? '0') > limit) return null;
+  const declared = request.headers.get('Content-Length');
+  if (declared !== null) {
+    if (!(Number(declared) <= limit)) return null;
+    // HTTP doesn't let a body run past its Content-Length; checked all the same.
+    const body = new Uint8Array(await request.arrayBuffer());
+    return body.length > limit ? null : body;
+  }
   if (!request.body) return new Uint8Array(0);
   const reader = request.body.getReader();
   const chunks: Uint8Array[] = [];

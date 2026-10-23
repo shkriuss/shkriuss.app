@@ -20,6 +20,7 @@
  */
 import {
   bearerToken,
+  bytesBody,
   createWorker,
   json,
   jsonBody,
@@ -42,13 +43,7 @@ import {
 } from '@shkriuss/server/meter';
 import { fromBase64Url } from './base64.ts';
 import { nextFireTime } from './schedule.ts';
-import {
-  checkSchedule,
-  checkTest,
-  LIMITS,
-  type ScheduleEntry,
-  type ScheduleRequest,
-} from './validate.ts';
+import { checkSchedule, checkTest, LIMITS, type ScheduleEntry } from './validate.ts';
 import { generateVapidKeys, vapidAuthorization, type VapidKeys } from './vapid.ts';
 
 export interface PushEnv extends SiteEnv {
@@ -124,16 +119,14 @@ export async function handlePush(request: Request, env: PushEnv, path: string): 
 
   if (route === 'DELETE') return device.fetch('https://device/schedule', { method: 'DELETE' });
 
-  const read = await jsonBody(request, LIMITS.requestBytes);
+  // Only the size is checked here, and the device checks the rest: checking a
+  // full schedule here took more than the free plan's 10 ms of CPU time
+  // (audit finding B-9), while the device's object has 30 seconds.
+  const read = await bytesBody(request, LIMITS.requestBytes);
   if (!read.ok) return read.response;
-  const checked =
-    route === 'PUT'
-      ? checkSchedule(read.body, allowLocal(env))
-      : checkTest(read.body, allowLocal(env));
-  if (!checked.ok) return problem(400, checked.error);
   return device.fetch(route === 'PUT' ? 'https://device/schedule' : 'https://device/test', {
     method: route === 'PUT' ? 'PUT' : 'POST',
-    body: JSON.stringify(checked.value),
+    body: read.body,
     headers: { [LIMIT_HEADER]: String(limitFor(new URL(request.url), STORAGE_LIMITS)) },
   });
 }
@@ -313,8 +306,14 @@ export class PushDevice {
       return noContent();
     }
 
+    // Checked here rather than in the Worker (handlePush), before anything is kept.
+    const read = await jsonBody(request, LIMITS.requestBytes);
+    if (!read.ok) return read.response;
+
     if (pathname === '/test') {
-      const { endpoint, payload } = (await request.json()) as { endpoint: string; payload: string };
+      const checked = checkTest(read.body, allowLocal(this.env));
+      if (!checked.ok) return problem(400, checked.error);
+      const { endpoint, payload } = checked.value;
       const lastTest = (await this.state.storage.get<number>('lastTest')) ?? 0;
       if (now - lastTest < TEST_GAP_MS) return problem(429, 'Wait a few seconds.');
       await this.state.storage.put('lastTest', now);
@@ -334,13 +333,15 @@ export class PushDevice {
     }
 
     // PUT /schedule
+    const checked = checkSchedule(read.body, allowLocal(this.env));
+    if (!checked.ok) return problem(400, checked.error);
+    const schedule = checked.value;
     const updates =
       record && now - record.updates.windowStart < UPDATE_WINDOW_MS
         ? { ...record.updates, count: record.updates.count + 1 }
         : { windowStart: now, count: 1 };
     if (updates.count > UPDATES_PER_WINDOW)
       return problem(429, 'Too many changes; try again soon.');
-    const schedule = (await request.json()) as ScheduleRequest;
     const entries: StoredEntry[] = [];
     for (const entry of schedule.entries) {
       const next = nextFireTime(entry, schedule.timeZone, now);
