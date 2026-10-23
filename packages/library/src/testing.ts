@@ -90,7 +90,11 @@ export function memoryLibrary(code: string | null = 'correct horse battery stapl
   const objects = new Map<string, { library: Library; storage: MemoryListStorage }>();
   const bucket = new MemoryBucket();
   const gateStorage = new MemoryListStorage();
-  const gate = new LibraryGate({ storage: gateStorage, blockConcurrencyWhile: (run) => run() });
+  const gate = new LibraryGate({
+    id: { toString: () => 'gate' },
+    storage: gateStorage,
+    blockConcurrencyWhile: (run) => run(),
+  });
   const env: LibraryEnv = {
     ASSETS: { fetch: async () => new Response('page') },
     LIBRARY_FILES: bucket,
@@ -109,7 +113,10 @@ export function memoryLibrary(code: string | null = 'correct horse battery stapl
             const storage = new MemoryListStorage();
             found = {
               storage,
-              library: new Library({ storage, blockConcurrencyWhile: (run) => run() }, env),
+              library: new Library(
+                { id: { toString: () => name }, storage, blockConcurrencyWhile: (run) => run() },
+                env,
+              ),
             };
             objects.set(name, found);
           }

@@ -2,6 +2,8 @@
 
 Status: Accepted (2026-10-21). Extends [ADR 0010](0010-account-and-sync.md)
 (sync) and [ADR 0013](0013-photos-on-the-device.md) (photos on the device).
+Repairs' copies and photos together have a limit (1 GB):
+[ADR 0017](0017-storage-limits.md).
 
 ## Context
 

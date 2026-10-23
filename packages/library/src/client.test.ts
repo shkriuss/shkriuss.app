@@ -6,7 +6,8 @@
  */
 import { randomBytes, toBase64Url, utf8 } from '@shkriuss/crypto';
 import { createSync, saveConnection, syncedStore, type SyncClient } from '@shkriuss/sync';
-import syncWorker, { SyncCopy, type SyncEnv } from '@shkriuss/sync/worker';
+import { memorySync } from '@shkriuss/sync/testing';
+import syncWorker from '@shkriuss/sync/worker';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   isLibraryRecord,
@@ -21,7 +22,7 @@ import {
   type LibraryItem,
   type LibraryRecord,
 } from './client.ts';
-import { memoryLibrary, MemoryListStorage } from './testing.ts';
+import { memoryLibrary } from './testing.ts';
 
 const ORIGIN = 'https://photos.example';
 const CODE = 'correct horse battery staple';
@@ -423,25 +424,7 @@ class Device {
 
 describe('with sync, as Photos uses it', () => {
   beforeEach(() => {
-    const copies = new Map<string, SyncCopy>();
-    const env: SyncEnv = {
-      ASSETS: { fetch: async () => new Response('page') },
-      SYNC_COPIES: {
-        idFromName: (name) => ({ toString: () => name }),
-        get: (id) => ({
-          fetch: (input, init) => {
-            const copy =
-              copies.get(id.toString()) ??
-              new SyncCopy({
-                storage: new MemoryListStorage(),
-                blockConcurrencyWhile: (run) => run(),
-              });
-            copies.set(id.toString(), copy);
-            return copy.fetch(new Request(input, init));
-          },
-        }),
-      },
-    };
+    const { env } = memorySync();
     const libraryFetch = globalThis.fetch;
     vi.stubGlobal('fetch', async (input: string, init?: RequestInit) =>
       input.startsWith('/api/sync')

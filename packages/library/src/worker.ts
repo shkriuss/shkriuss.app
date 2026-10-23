@@ -23,7 +23,10 @@
  * of them, in one more Durable Object (LibraryGate): bytes stored and uploads
  * per day, and wrong storage codes per hour from each internet address. A
  * library stays unlocked only for the storage code it was unlocked with:
- * changing the code locks them all.
+ * changing the code locks them all. How many libraries there can be at all
+ * is kept by the namespace's meter (@shkriuss/server/meter, STORAGE_LIMITS):
+ * each one, even empty, takes room in the storage every app shares
+ * (docs/adr/0017-storage-limits.md).
  */
 import { equalBytes, sha256, utf8 } from '@shkriuss/crypto';
 import {
@@ -40,6 +43,14 @@ import {
   type R2Bucket,
   type SiteEnv,
 } from '@shkriuss/server';
+import {
+  LIMIT_HEADER,
+  limitFor,
+  limitOf,
+  METER,
+  meterFetch,
+  reserve,
+} from '@shkriuss/server/meter';
 import {
   callerNetwork,
   checkFirstParts,
@@ -67,6 +78,13 @@ export interface LibraryEnv extends SiteEnv {
   /** The storage code that lets a library be added to (a secret). Without it, nothing can be. */
   LIBRARY_STORAGE_CODE?: string;
 }
+
+/**
+ * All libraries together, counted as 16 KB each (a new library holds less;
+ * what's added after the storage code is limited by LibraryGate), on the
+ * real site and on a PR preview.
+ */
+export const STORAGE_LIMITS = { site: 32_000_000, preview: 4_000_000 } as const;
 
 /** JSON bodies: a list of ids, at most. */
 const MAX_JSON_BYTES = 8 * 1024;
@@ -111,6 +129,7 @@ export async function handleLibrary(
     'X-Token': await sha256Text(token),
     'X-Prefix': prefix,
     'X-Code': await codeId(env.LIBRARY_STORAGE_CODE),
+    [LIMIT_HEADER]: String(limitFor(new URL(request.url), STORAGE_LIMITS)),
   };
   const call = (op: string, body?: unknown) =>
     object.fetch(`https://library/${op}`, {
@@ -485,16 +504,22 @@ export class Library {
   }
 
   async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+    // The meter for all libraries is one of these objects too, named METER.
+    if (url.hostname === METER) return meterFetch(this.state, request);
     // One request at a time: counts and change numbers stay right.
     return this.state.blockConcurrencyWhile(async () => {
-      const url = new URL(request.url);
       const op = url.pathname.slice(1);
       const token = request.headers.get('X-Token') ?? '';
       const code = request.headers.get('X-Code') ?? '';
       const now = Date.now();
-      const meta =
-        (await this.state.storage.get<Meta>('meta')) ??
-        newMeta(request.headers.get('X-Prefix') ?? '');
+      const saved = await this.state.storage.get<Meta>('meta');
+      // Every request to a new library keeps it (its token is claimed), so it
+      // needs room first.
+      if (!saved && !(await reserve(this.state, this.env.LIBRARIES, 0, limitOf(request)))) {
+        return problem(507, 'There’s no room for more online libraries just now.');
+      }
+      const meta = saved ?? newMeta(request.headers.get('X-Prefix') ?? '');
       // Unlocked before codes were remembered: with the code set then, which is still the one.
       if (meta.unlocked && meta.unlockedWith === undefined && code !== '') {
         meta.unlockedWith = code;

@@ -73,7 +73,9 @@ servers don't clash; `E2E_REUSE=1` reuses servers already running.
   (keys are prefixed `shkriuss:`); photos and other big files go in
   `@shkriuss/storage/files` ([ADR 0013](docs/adr/0013-photos-on-the-device.md)). Apps that store data show `<DataControls />`
   and list what they store in `apps.json` (`dataStored`), which feeds the
-  privacy page. Anything server-side needs an ADR first.
+  privacy page. Anything server-side needs an ADR first, and anything a
+  stranger can make a server keep counts against a storage meter
+  (`@shkriuss/server/meter`, [ADR 0017](docs/adr/0017-storage-limits.md)).
 - **Accessibility is WCAG 2.2 AA.** Semantic HTML, labels on every control,
   visible focus, 44px tap targets, works at 320px wide and in both themes.
   Shared e2e tests run axe on every page in light and dark mode.

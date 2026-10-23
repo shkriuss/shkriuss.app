@@ -3,7 +3,9 @@
 Status: Accepted (2026-10-17). Built in three parts: the account, Calendar and
 Tally syncing through it, and replacing the account key after losing a
 device. Extended by [ADR 0014](0014-syncing-photos.md): files like photos
-sync too, each sealed on its own.
+sync too, each sealed on its own. Changed by [ADR 0017](0017-storage-limits.md):
+each app's copies together have a limit, and copies (and replaced-key notes)
+nobody uses for 13 months are deleted.
 
 ## Context
 

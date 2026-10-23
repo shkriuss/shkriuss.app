@@ -4,49 +4,11 @@
  * to play the push service.
  */
 import { randomBytes, toBase64Url } from '@shkriuss/crypto';
-import type { DurableObjectState, DurableObjectStorage } from '@shkriuss/server';
+import { METER } from '@shkriuss/server/meter';
+import { MemoryStorage, memoryState } from '@shkriuss/server/testing';
 import worker, { PushDevice, PushKeys, type PushEnv } from './worker.ts';
 
-/** The most one stored value can be on Cloudflare (2 MB); bigger ones are refused. */
-const MAX_VALUE_LENGTH = 2 * 1024 * 1024;
-
-export class MemoryStorage implements DurableObjectStorage {
-  readonly map = new Map<string, unknown>();
-  alarm: number | null = null;
-
-  async get<T>(key: string): Promise<T | undefined> {
-    return structuredClone(this.map.get(key)) as T | undefined;
-  }
-  async put(key: string, value: unknown): Promise<void> {
-    if (JSON.stringify(value).length > MAX_VALUE_LENGTH) throw new RangeError('Value too big');
-    this.map.set(key, structuredClone(value));
-  }
-  async delete(key: string): Promise<boolean> {
-    return this.map.delete(key);
-  }
-  async deleteAll(): Promise<void> {
-    this.map.clear();
-  }
-  async setAlarm(time: number): Promise<void> {
-    this.alarm = time;
-  }
-  async deleteAlarm(): Promise<void> {
-    this.alarm = null;
-  }
-}
-
-/** Like a real Durable Object: nothing else runs while blockConcurrencyWhile() does. */
-export function memoryState(storage: DurableObjectStorage): DurableObjectState {
-  let queue: Promise<unknown> = Promise.resolve();
-  return {
-    storage,
-    blockConcurrencyWhile<T>(callback: () => Promise<T>): Promise<T> {
-      const result = queue.then(callback);
-      queue = result.catch(() => undefined);
-      return result;
-    },
-  };
-}
+export { MemoryStorage, memoryState } from '@shkriuss/server/testing';
 
 /** A made-up device key, as a phone would send it. */
 export const deviceKey = (): string => toBase64Url(randomBytes(32));
@@ -58,8 +20,10 @@ export const deviceKey = (): string => toBase64Url(randomBytes(32));
  */
 export function memoryPush() {
   const devices = new Map<string, { device: PushDevice; storage: MemoryStorage }>();
+  /** The app's storage meter, kept apart from the devices (it's one of the same objects). */
+  const meter = { storage: new MemoryStorage(), device: undefined as PushDevice | undefined };
   const keysStorage = new MemoryStorage();
-  const keys = new PushKeys(memoryState(keysStorage));
+  const keys = new PushKeys(memoryState(keysStorage, 'vapid'));
   const counts = { signs: 0, wakes: 0 };
   const env: PushEnv = {
     ASSETS: { fetch: async () => new Response('page') },
@@ -77,10 +41,14 @@ export function memoryPush() {
       get: (id) => ({
         fetch: (input, init) => {
           const name = id.toString();
+          if (name === METER) {
+            meter.device ??= new PushDevice(memoryState(meter.storage, name), env);
+            return meter.device.fetch(new Request(input, init));
+          }
           let found = devices.get(name);
           if (!found) {
             const storage = new MemoryStorage();
-            found = { storage, device: new PushDevice(memoryState(storage), env) };
+            found = { storage, device: new PushDevice(memoryState(storage, name), env) };
             devices.set(name, found);
           }
           return found.device.fetch(new Request(input, init));
@@ -107,6 +75,7 @@ export function memoryPush() {
   return {
     env,
     devices,
+    meter: meter.storage,
     keysStorage,
     counts,
     runAlarms,

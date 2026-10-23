@@ -5,7 +5,9 @@
   "description": "Shared helpers for each site's small Worker: routing /api/*, JSON responses with security headers, request limits.",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./meter": "./src/meter.ts",
+    "./testing": "./src/testing.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"

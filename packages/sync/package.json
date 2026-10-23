@@ -9,6 +9,7 @@
     "./connect": "./src/connect.ts",
     "./edits": "./src/edits.ts",
     "./origins": "./src/origins.ts",
+    "./testing": "./src/testing.ts",
     "./worker": "./src/worker.ts"
   },
   "scripts": {

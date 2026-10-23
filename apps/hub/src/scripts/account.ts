@@ -97,6 +97,8 @@ const REPLACED = {
   key: `This key was replaced on another device, so it can’t sign in any more. ${SIGN_IN_AGAIN}`,
   passkey: `This passkey is for an account key that was replaced on another device, so it can’t sign in any more. ${SIGN_IN_AGAIN} Then you can add a new passkey.`,
   done: 'Your account key is replaced. Devices with the old key are signed out when they next open this page. Now turn on sync again in each app (below), on each of your devices: until then, a lost device can still see that app’s changes. Add a new passkey if you use one.',
+  unnoted:
+    'Your account key is replaced, but the account service had no room to note the old one just now, so devices that still have it won’t sign out by themselves. Now turn on sync again in each app (below), on each of your devices: until then, a lost device can still see that app’s changes. Add a new passkey if you use one.',
 };
 
 /** True if this key was replaced on another device (false if that can't be checked now). */
@@ -472,9 +474,9 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
       if (!account) return;
       const current = account;
       newStatus.textContent = 'Replacing the key…';
-      let saved: boolean;
+      let result: { saved: boolean; noted: boolean };
       try {
-        saved = await withButton(button, () => replaceAccountKey(current.secret, secret));
+        result = await withButton(button, () => replaceAccountKey(current.secret, secret));
       } catch (error) {
         newStatus.textContent = problemOf(error);
         return;
@@ -485,7 +487,8 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
       stopLink();
       linkStatus.textContent = '';
       home();
-      say(saved ? REPLACED.done : STORAGE_BLOCKED, !saved);
+      if (!result.saved) say(STORAGE_BLOCKED, true);
+      else say(result.noted ? REPLACED.done : REPLACED.unnoted, !result.noted);
     },
     replace: () => {
       say(null);

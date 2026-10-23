@@ -28,15 +28,19 @@ export async function isReplaced(secret: Uint8Array<ArrayBuffer>): Promise<boole
 
 /**
  * Replaces this device's account key with `next`: marks `current` as
- * replaced for good, then signs in here with `next`. Returns false if the
+ * replaced for good, then signs in here with `next`. `saved` is false if the
  * browser won't store it (the person has the new recovery key by then).
+ * `noted` is false if the account service had no room to note the old key
+ * (docs/adr/0017): it's replaced all the same, but devices that still have
+ * it don't sign out by themselves.
  */
 export async function replaceAccountKey(
   current: Uint8Array<ArrayBuffer>,
   next: Uint8Array<ArrayBuffer>,
-): Promise<boolean> {
+): Promise<{ saved: boolean; noted: boolean }> {
   const response = await api('/status', { method: 'PUT' }, await statusToken(current));
-  if (!response.ok) throw new AccountError('server', 'Couldn’t replace the account key.');
+  const noted = response.status !== 507;
+  if (!response.ok && noted) throw new AccountError('server', 'Couldn’t replace the account key.');
   noteReplaced(current);
-  return saveAccount(next);
+  return { saved: saveAccount(next), noted };
 }

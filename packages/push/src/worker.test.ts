@@ -7,6 +7,7 @@ import { randomBytes, toBase64Url } from '@shkriuss/crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { deviceKey, memoryPush } from './testing.ts';
 import { LIMITS } from './validate.ts';
+import { STORAGE_LIMITS } from './worker.ts';
 
 const ORIGIN = 'https://calendar.example';
 const ENDPOINT = 'https://push.example.com/device-1';
@@ -165,11 +166,11 @@ describe('what’s kept for how long', () => {
     // Next due on 29 February 2028, well after that.
     const leapDay = entry({ start: '2028-02-29T09:00', repeat: 'yearly' });
     expect((await device().schedule([leapDay])).status).toBe(200);
-    const kept = () => [...server.devices.values()].map(({ storage }) => storage.map.size);
+    const kept = () => [...server.devices.values()].map(({ storage }) => storage.map.has('device'));
     await passDays(395);
-    expect(kept()).toEqual([1]);
+    expect(kept()).toEqual([true]);
     await passDays(2);
-    expect(kept()).toEqual([0]);
+    expect([...server.devices.values()].map(({ storage }) => storage.map.size)).toEqual([0]);
     expect([...server.devices.values()].map(({ storage }) => storage.alarm)).toEqual([null]);
   });
 
@@ -254,5 +255,52 @@ describe('sending', () => {
     const response = await device().test();
     expect(response.status).toBe(502);
     expect(reached).toEqual([ENDPOINT]);
+  });
+});
+
+describe('all of an app’s devices together', () => {
+  /** The biggest schedule the checks allow. */
+  const biggest = () => {
+    const big = toBase64Url(randomBytes(((LIMITS.payloadsLength / LIMITS.entries) * 3) / 4));
+    return Array.from({ length: LIMITS.entries }, (_, index) =>
+      entry({ id: `e${index}`, payload: big }),
+    );
+  };
+
+  it('stop at the app’s limit, however many device keys are made up', async () => {
+    const entries = biggest();
+    let kept = 0;
+    for (; kept < 100; kept += 1) {
+      const response = await device().schedule(entries);
+      if (response.status === 507) break;
+      expect(response.status).toBe(200);
+    }
+    expect(kept).toBeGreaterThan(5);
+    expect(kept).toBeLessThan(100);
+    expect(server.meter.map.get('total')).toBeLessThanOrEqual(STORAGE_LIMITS.site);
+    // A refused device keeps nothing.
+    const stored = [...server.devices.values()].filter(({ storage }) => storage.map.size > 0);
+    expect(stored).toHaveLength(kept);
+  });
+
+  it('get room back when a device is forgotten', async () => {
+    const entries = biggest();
+    const keys: string[] = [];
+    for (let tries = 0; tries < 100; tries += 1) {
+      const key = deviceKey();
+      if ((await device(key).schedule(entries)).status === 507) break;
+      keys.push(key);
+    }
+    await server.fetch(
+      new Request(`${ORIGIN}/api/push/schedule`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${keys[0] ?? ''}` },
+      }),
+    );
+    expect((await device().schedule(entries)).status).toBe(200);
+  });
+
+  it('have a much smaller limit on a PR preview', () => {
+    expect(STORAGE_LIMITS.preview * 4).toBeLessThan(STORAGE_LIMITS.site);
   });
 });

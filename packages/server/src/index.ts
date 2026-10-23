@@ -1,5 +1,7 @@
 /**
- * Shared helpers for the small server part of a site (its own Worker).
+ * Shared helpers for the small server part of a site (its own Worker). The
+ * storage meters that keep strangers from filling the shared storage are in
+ * ./meter.ts (@shkriuss/server/meter).
  *
  * A site with server routes has apps/<slug>/src/worker.ts, which builds its
  * Worker with createWorker(): requests to /api/<feature>/* go to that
@@ -30,6 +32,8 @@ export interface DurableObjectStorage {
   deleteAlarm(): Promise<void>;
 }
 export interface DurableObjectState {
+  /** This object's own id (the same for every request to it). */
+  readonly id: DurableObjectId;
   storage: DurableObjectStorage;
   blockConcurrencyWhile<T>(callback: () => Promise<T>): Promise<T>;
 }

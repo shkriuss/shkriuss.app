@@ -464,9 +464,9 @@ async function goneError(response: Response): Promise<SyncError> {
 const isGone = (error: unknown): boolean =>
   error instanceof SyncError && (error.problem === 'deleted' || error.problem === 'moved');
 
-/** Any other failed response, as a SyncError. */
+/** Any other failed response, as a SyncError (507: the app's room online is used up, ADR 0017). */
 const failed = (response: Response): SyncError =>
-  new SyncError(response.status >= 500 ? 'offline' : 'server');
+  new SyncError(response.status >= 500 && response.status !== 507 ? 'offline' : 'server');
 
 /** An account's keys for one app (./snapshot.ts). */
 interface Keys {
