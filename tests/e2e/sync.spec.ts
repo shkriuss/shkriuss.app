@@ -23,7 +23,10 @@ test.beforeEach(({ guard }, testInfo) => {
   guard.allowOrigin(hubURL);
 });
 
+/** The status line (shown, but not read out: it changes at every sync). */
 const status = (page: Page) => page.locator('[data-sync-status]');
+/** What's read out: what the person asked for, or needs to know. */
+const announced = (page: Page) => page.locator('[data-sync-announcer]');
 
 test('turns on through the account, and off again', async ({ page }, testInfo) => {
   const { name } = getSite(testInfo.project.name);
@@ -41,14 +44,17 @@ test('turns on through the account, and off again', async ({ page }, testInfo) =
   expect(page.url(), 'the key is taken out of the address bar').not.toContain('#');
   await checkA11y(page, 'sync: on');
 
-  // Still on after a reload.
+  // Still on after a reload. The sync as it opens isn't read out.
   await page.reload();
   await expect(page.locator('[data-sync-on]')).toBeVisible();
   await expect(status(page)).toHaveText(/Synced just now/);
+  await expect(status(page)).not.toHaveAttribute('role');
+  await expect(announced(page)).toBeEmpty();
 
   await page.getByRole('button', { name: 'Turn off on this device' }).click();
   await expect(page.getByRole('button', { name: 'Turn on sync' })).toBeVisible();
   await expect(status(page)).toHaveText(/^Sync is off on this device/);
+  await expect(announced(page)).toHaveText(/^Sync is off on this device/);
   // The app's key is gone from this device.
   expect(await page.evaluate(() => localStorage.getItem('shkriuss-device:sync'))).toContain(
     '"secret":null',

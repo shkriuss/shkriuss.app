@@ -1,12 +1,31 @@
-// "Sync between your devices" while it waits for the network (packages/ui
-// SyncControls, the same in every app with sync; tested once, here). The
-// browser's clock is a test clock, so a time limit can run out at once.
-// How it connects and syncs is tested for every app in tests/e2e/sync.spec.ts.
+// "Sync between your devices" while it waits for the network, and what it
+// reads out (packages/ui SyncControls, the same in every app with sync;
+// tested once, here). The browser's clock is a test clock, so a time limit
+// can run out at once. How it connects and syncs is tested for every app in
+// tests/e2e/sync.spec.ts.
 import type { Locator, Page } from '@playwright/test';
 import { createAccount, hubURL, turnOnSync } from '../../../tests/e2e/account.ts';
 import { expect, test } from '../../../tests/e2e/fixtures.ts';
 
 const status = (page: Page) => page.locator('[data-sync-status]');
+const announcer = (page: Page) => page.locator('[data-sync-announcer]');
+
+/** From when the page has loaded, notes everything written in a live region (what screen readers read out). */
+const recordReadOut = (page: Page) =>
+  page.addInitScript(() => {
+    const said: string[] = [];
+    (window as unknown as { said: string[] }).said = said;
+    document.addEventListener('DOMContentLoaded', () => {
+      new MutationObserver((records) => {
+        for (const { target } of records) {
+          const element = target instanceof Element ? target : target.parentElement;
+          const region = element?.closest('[role="status"], [role="alert"], [aria-live]');
+          if (region) said.push(region.textContent ?? '');
+        }
+      }).observe(document.body, { subtree: true, childList: true, characterData: true });
+    });
+  });
+const readOut = (page: Page) => page.evaluate(() => (window as unknown as { said: string[] }).said);
 
 /**
  * Starts counting how often focus leaves `control` (as it does when a
@@ -49,6 +68,7 @@ test('“Sync now” gives up on a network that hangs, and says so', async ({ pa
 
   await page.clock.runFor('00:21');
   await expect(status(page)).toHaveText('Couldn’t sync: no connection. It will try again.');
+  await expect(announcer(page)).toHaveText('Couldn’t sync: no connection. It will try again.');
   await expect(syncNow).toBeEnabled();
   await expect(syncNow).toBeFocused();
   expect(await left()).toBe(0);
@@ -98,8 +118,60 @@ test('“Turn on sync” gives up on a network that hangs, and says so', async (
   await page.clock.runFor('00:05');
   const failed = "Couldn’t reach Tally's server. Check your connection and try again.";
   await expect(status(page)).toHaveText(failed);
+  await expect(announcer(page)).toHaveText(failed);
   await expect(turnOn).toBeEnabled();
   await expect(turnOn).toBeFocused();
   await page.clock.runFor('00:31');
   await expect(status(page)).toHaveText(failed);
+});
+
+test('the sync status is shown, but only news is read out', async ({ page, guard }) => {
+  // The test cuts the connection below.
+  guard.allowConsole('net::ERR_FAILED');
+  await createAccount(page);
+  await page.goto('/');
+  await turnOnSync(page, 'Tally');
+  await recordReadOut(page);
+  await page.reload();
+  await expect(status(page)).toHaveText('Synced just now.');
+  // The status line isn't a live region, nor in one.
+  expect(
+    await status(page).evaluate(
+      (line) => line.closest('[role="status"], [role="alert"], [role="log"], [aria-live]') === null,
+    ),
+  ).toBe(true);
+
+  // Syncs that start by themselves (when the page opens, every minute, back
+  // on screen) change the line, but nothing is read out.
+  const fetched = () =>
+    page.waitForResponse((response) => new URL(response.url()).pathname === '/api/sync/copy');
+  let synced = fetched();
+  await page.clock.runFor('01:00');
+  await synced;
+  await expect(status(page)).toHaveText('Synced just now.');
+  synced = fetched();
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await synced;
+  await expect(status(page)).toHaveText('Synced just now.');
+  expect(await readOut(page)).toEqual([]);
+
+  // "Sync now": its result is read out, each time.
+  const syncNow = page.getByRole('button', { name: 'Sync now' });
+  await syncNow.click();
+  await expect(announcer(page)).toHaveText('Synced just now.');
+  await expect(syncNow).toBeEnabled();
+  await syncNow.click();
+  await expect.poll(() => readOut(page)).toHaveLength(2);
+
+  // A problem is read out once, not again at every sync while it lasts.
+  const offline = 'Couldn’t sync: no connection. It will try again.';
+  await page.route('**/api/sync/**', (route) => route.abort());
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await expect(status(page)).toHaveText(offline);
+  await expect(announcer(page)).toHaveText(offline);
+  const failed = page.waitForEvent('requestfailed');
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await failed;
+  await expect(syncNow).toBeEnabled();
+  expect((await readOut(page)).filter((text) => text.trim() === offline)).toHaveLength(1);
 });

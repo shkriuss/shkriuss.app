@@ -31,6 +31,7 @@ export function mountSyncControls(section: HTMLElement, sync: SyncClient): void 
   const on = find<HTMLElement>(section, '[data-sync-on]');
   const code = find<HTMLElement>(section, '[data-sync-code]');
   const statusLine = find<HTMLElement>(section, '[data-sync-status]');
+  const announcer = find<HTMLElement>(section, '[data-sync-announcer]');
   const deleteDialog = find<HTMLDialogElement>(section, '[data-sync-delete-dialog]');
   const button = (action: string) => find<HTMLButtonElement>(section, `[data-action="${action}"]`);
 
@@ -90,11 +91,42 @@ export function mountSyncControls(section: HTMLElement, sync: SyncClient): void 
     code.textContent = status.code ?? '';
     // Busy, not disabled, so focus stays on it during every sync (audit G-7).
     setBusy(button('sync-now'), status.busy);
-    if (working) statusLine.textContent = working;
-    else if (status.problem) statusLine.textContent = PROBLEMS[status.problem];
-    else if (note) statusLine.textContent = note;
-    else if (!status.on) statusLine.textContent = '';
-    else statusLine.textContent = status.busy ? 'Syncing…' : lastSynced(status.last);
+    const text = working
+      ? working
+      : status.problem
+        ? PROBLEMS[status.problem]
+        : (note ?? (!status.on ? '' : status.busy ? 'Syncing…' : lastSynced(status.last)));
+    // Only when it changes (it's brought up to date every 30 seconds).
+    if (statusLine.textContent !== text) statusLine.textContent = text;
+  }
+
+  /**
+   * Reads something out. The status line itself isn't a live region: a sync
+   * runs every minute, and every change would be read out (audit G-9). Only
+   * what the person asked for, or needs to know, is.
+   */
+  function announce(message: string): void {
+    // The same words again (after another "Sync now") are still news: change
+    // something that can't be heard, a no-break space at the end.
+    announcer.textContent =
+      announcer.textContent === message ? message + String.fromCharCode(0xa0) : message;
+  }
+
+  /** "Sync now" was pressed: the result of that sync is read out. */
+  let asked = false;
+  /** The problem read out last: one that stays isn't read out again at every sync. */
+  let told: SyncProblem | null = null;
+
+  /** After a sync, or turning it on or off: reads out what's worth hearing. */
+  function tell(status: SyncStatus, message: string | undefined, event?: SyncEvent): void {
+    if (status.busy) return;
+    const problem = status.problem;
+    const news = problem !== null && problem !== told;
+    told = problem;
+    if (problem && (news || asked)) announce(PROBLEMS[problem]);
+    else if (message) announce(message);
+    else if (asked && event === 'synced') announce(lastSynced(status.last));
+    asked = false;
   }
 
   /** Starts something the person asked for: says so until it's done. */
@@ -102,6 +134,7 @@ export function mountSyncControls(section: HTMLElement, sync: SyncClient): void 
     working = message;
     note = null;
     render(sync.status());
+    announce(message);
   }
 
   /** It's done (or failed, with what to say). */
@@ -109,6 +142,7 @@ export function mountSyncControls(section: HTMLElement, sync: SyncClient): void 
     working = null;
     if (problem) note = problem;
     render(sync.status());
+    if (problem) announce(problem);
   }
 
   sync.subscribe((status, event) => {
@@ -116,6 +150,7 @@ export function mountSyncControls(section: HTMLElement, sync: SyncClient): void 
     if (message) note = message;
     else if (event === 'synced' && !lasting.includes(note ?? undefined)) note = null;
     render(status);
+    tell(status, message, event);
     if (event && FROM_HUB.has(event)) reveal();
   });
 
@@ -143,6 +178,7 @@ export function mountSyncControls(section: HTMLElement, sync: SyncClient): void 
 
   button('sync-now').addEventListener('click', () => {
     note = null;
+    asked = true;
     void sync.syncNow();
   });
 
