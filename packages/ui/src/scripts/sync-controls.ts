@@ -120,12 +120,11 @@ export function mountSyncControls(section: HTMLElement, sync: SyncClient): void 
   /** After a sync, or turning it on or off: reads out what's worth hearing. */
   function tell(status: SyncStatus, message: string | undefined, event?: SyncEvent): void {
     if (status.busy) return;
-    const problem = status.problem;
-    const news = problem !== null && problem !== told;
-    told = problem;
-    if (problem && (news || asked)) announce(PROBLEMS[problem]);
+    const { problem } = status;
+    if (problem && (problem !== told || asked)) announce(PROBLEMS[problem]);
     else if (message) announce(message);
     else if (asked && event === 'synced') announce(lastSynced(status.last));
+    told = problem;
     asked = false;
   }
 
@@ -171,7 +170,7 @@ export function mountSyncControls(section: HTMLElement, sync: SyncClient): void 
   // Back from the Account page with the browser's Back button: this page
   // comes back as it was left, still opening it.
   window.addEventListener('pageshow', (event) => {
-    if (!event.persisted || working !== 'Opening your shkriuss account…') return;
+    if (!event.persisted || !working) return;
     setBusy(button('sync-on'), false);
     done();
   });

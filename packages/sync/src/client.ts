@@ -530,7 +530,7 @@ export function createSync(options: {
     const response = await api(`/copy${since === null ? '' : `?since=${since}`}`, {}, token);
     if (response.status === 204) return { kind: 'same' } as Remote;
     if (response.status === 410) throw await goneError(response);
-    if (!response.ok) throw new SyncError(response.status >= 500 ? 'offline' : 'server');
+    if (!response.ok) throw failed(response);
     const copy = (await response.json()) as { version: number; epoch?: string; data?: string };
     if (copy.data === undefined || copy.epoch === undefined) return { kind: 'none' } as Remote;
     let opened: Stores;
@@ -714,7 +714,7 @@ export function createSync(options: {
       if (response.status === 409) return false;
       if (response.status === 410) throw await goneError(response);
       if (response.status === 413) throw new SyncError('too-big');
-      if (!response.ok) throw new SyncError(response.status >= 500 ? 'offline' : 'server');
+      if (!response.ok) throw failed(response);
       online = (await response.json()) as { version: number; epoch: string };
     }
 

@@ -196,9 +196,9 @@ export function mountDataControls(section: HTMLElement): void {
     restoreSyncWarning.hidden = file === null || !isSyncOn();
     restoreSubmit.hidden = file === null;
     restoreCancel.textContent = file === null ? 'Close' : 'Cancel';
+    // Focus starts on the passphrase, or "Cancel" (first in the dialog), never
+    // on "Restore", which replaces everything (audit G-10).
     restoreDialog.showModal();
-    // Never on "Restore", which replaces everything: one press of Enter mustn't (audit G-10).
-    (file?.kind === 'encrypted' ? restorePassphrase : restoreCancel).focus();
   }
 
   find<HTMLButtonElement>(section, '[data-action="restore"]').addEventListener('click', () => {

@@ -77,7 +77,7 @@ describe('fetchWithLimit', () => {
     });
     expect(limits.map(({ ms }) => ms)).toEqual([30_000]);
     elapse(0);
-    await expect(request).rejects.toThrow('The server took too long to answer.');
+    expect(isTimeout(await request.catch((reason: unknown) => reason))).toBe(true);
   });
 
   it('gives the answer time to arrive, for its size, then gives up on it too', async () => {

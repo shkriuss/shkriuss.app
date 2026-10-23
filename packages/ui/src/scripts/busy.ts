@@ -10,40 +10,31 @@
  * moment. A disabled control loses keyboard and screen reader focus (it
  * goes back to the page itself, and a screen reader may start again from
  * the top), and nothing puts it back. A busy one keeps focus: it's marked
- * aria-disabled="true" and every press on it is ignored, also Enter in a
- * form whose submit button is busy. `.btn[aria-disabled='true']` looks
- * like a disabled button. Keep `disabled` for things that stay unavailable
- * until the person does something else (like "Continue" until a box is ticked).
+ * aria-disabled="true", and once setBusy() has been used on a page, every
+ * press on such a control is ignored, also Enter in a form whose submit
+ * button it is. `.btn[aria-disabled='true']` looks like a disabled button.
+ * Keep `disabled` for things that stay unavailable until the person does
+ * something else (like "Continue" until a box is ticked).
  */
-
-const BUSY = 'data-busy';
 
 let listening = false;
 
-/** One listener for the whole page, before any other: presses on a busy control stop here. */
-function ignorePresses(): void {
-  if (listening) return;
-  listening = true;
-  window.addEventListener(
-    'click',
-    (event) => {
-      if (event.target instanceof Element && event.target.closest(`[${BUSY}]`)) {
-        // Also stops a checkbox from changing, and a form from being sent.
-        event.preventDefault();
-        event.stopImmediatePropagation();
-      }
-    },
-    { capture: true },
-  );
-}
-
 /** Marks a button or switch as waiting (or not any more), keeping focus where it is. */
 export function setBusy(control: HTMLButtonElement | HTMLInputElement, busy: boolean): void {
-  ignorePresses();
-  control.toggleAttribute(BUSY, busy);
-  if (busy) control.setAttribute('aria-disabled', 'true');
-  else control.removeAttribute('aria-disabled');
+  if (!listening) {
+    listening = true;
+    // One listener for the whole page, before any other: presses on a busy control stop here.
+    window.addEventListener(
+      'click',
+      (event) => {
+        if (event.target instanceof Element && event.target.closest('[aria-disabled="true"]')) {
+          // Also stops a checkbox from changing, and a form from being sent.
+          event.preventDefault();
+          event.stopImmediatePropagation();
+        }
+      },
+      { capture: true },
+    );
+  }
+  control.ariaDisabled = busy ? 'true' : null;
 }
-
-/** Whether setBusy() marked this control as waiting. */
-export const isBusy = (control: Element): boolean => control.hasAttribute(BUSY);

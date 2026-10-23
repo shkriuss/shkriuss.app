@@ -25,8 +25,8 @@ const REFRESH_MS = 7 * 24 * 60 * 60 * 1000;
 const SERVICE_WORKER_TIMEOUT_MS = 10_000;
 /** The server must answer within this long (plus the time to send what's uploaded). */
 const ANSWER_MS = 20_000;
-/** A slow connection that still works, in bytes per second (about 256 kbit/s). */
-const SLOW_BYTES_PER_SECOND = 32_000;
+/** A slow connection that still works, in bytes per millisecond (32 KB a second, about 256 kbit/s). */
+const SLOW_BYTES_PER_MS = 32;
 
 /**
  * How long a request that sends this many bytes may take before it counts
@@ -35,7 +35,7 @@ const SLOW_BYTES_PER_SECOND = 32_000;
  * waiting for ever; a big upload on a slow connection still gets through.
  */
 export const timeLimit = (bytes: number): number =>
-  ANSWER_MS + Math.ceil((bytes / SLOW_BYTES_PER_SECOND) * 1000);
+  ANSWER_MS + Math.ceil(bytes / SLOW_BYTES_PER_MS);
 
 /** One scheduled notification, in the app's own local time. */
 export interface Notice {
@@ -190,10 +190,7 @@ export async function enablePush(): Promise<void> {
   }
   const response = await api('/key', { method: 'GET' });
   if (!response.ok) throw new PushError('refused', 'The notification service isn’t working.');
-  const { publicKey } = (await response.json().catch(() => {
-    // The answer stopped coming (the time limit), or came damaged.
-    throw new PushError('server', 'Couldn’t reach the notification service.');
-  })) as { publicKey: string };
+  const { publicKey } = (await response.json()) as { publicKey: string };
 
   const worker = await registration();
   let subscription = await worker.pushManager.getSubscription();
