@@ -4,6 +4,7 @@
  * pieces calendar.ts draws them with.
  */
 import { createStore } from '@shkriuss/storage';
+import { reportSave } from '@shkriuss/ui/problem';
 import type { IsoDate } from '../lib/dates.ts';
 import {
   DEFAULT_SETTINGS,
@@ -61,7 +62,7 @@ export function mountSpecialDays(root: Document, changed: () => void): SpecialDa
   for (const { key, input } of inputs) {
     input.addEventListener('change', () => {
       settings = { ...settings, [key]: input.checked };
-      store.save(settings);
+      reportSave(store.save(settings));
       show();
       changed();
     });

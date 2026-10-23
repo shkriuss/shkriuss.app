@@ -237,11 +237,23 @@ test('moves between days with the keyboard', async ({ page }) => {
   await expect(monthHeading(page)).toHaveText('November 2025');
 });
 
+test('reads out a missing title after Enter in the title box', async ({ page }) => {
+  await newEvent(page, '');
+  const title = editor(page).getByLabel('Title');
+  await title.press('Enter');
+  await expect(title).toBeFocused();
+  // Focus is there already, so the problem is read out instead (audit G-3).
+  await expect(editor(page).getByRole('alert').filter({ hasText: 'Title:' })).toHaveText(
+    'Title: Enter a title.',
+  );
+});
+
 test('downloads events as an .ics file', async ({ page }) => {
   await page.getByRole('button', { name: 'Download .ics file' }).click();
+  // Shown under the button too, not only read out (audit G-1).
   await expect(
     page.getByRole('status').filter({ hasText: 'There are no events to download yet.' }),
-  ).toBeAttached();
+  ).toBeVisible();
 
   await seed(page, [{ title: 'Dentist', startTime: '14:30', endTime: '15:30', reminder: 15 }]);
   const downloadPromise = page.waitForEvent('download');
