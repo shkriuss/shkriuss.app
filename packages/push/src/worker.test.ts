@@ -210,7 +210,8 @@ describe('the app’s daily limit', () => {
     expect(perDay).toEqual([2000, 2000]);
     // Every device is still there, waiting for its next time.
     expect([...server.devices.values()].every(({ storage }) => storage.alarm !== null)).toBe(true);
-  });
+    // 4,000 sealed messages take about a second, longer on a busy CI machine.
+  }, 30_000);
 });
 
 describe('size', () => {
