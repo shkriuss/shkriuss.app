@@ -164,6 +164,11 @@ export function mountPushControls(block: HTMLElement, options: PushControlsOptio
     render();
     refresh();
     window.addEventListener('online', refresh);
+    // Back on screen, maybe in another time zone after a trip: the server's copy
+    // follows (an unchanged schedule isn't sent again).
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') refresh();
+    });
   } else {
     toggle.disabled = true;
     status.textContent =

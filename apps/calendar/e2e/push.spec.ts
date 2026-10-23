@@ -159,7 +159,12 @@ test('turning it off, or deleting all data, removes it from the server', async (
   await expect(closedSwitch(page)).not.toBeChecked();
 });
 
-test('says so when turning it off can’t reach the server, and finishes later', async ({ page }) => {
+test('says so when turning it off can’t reach the server, and finishes later', async ({
+  page,
+  guard,
+}) => {
+  // The browser logs the deletion this test stops.
+  guard.allowConsole('net::ERR_FAILED');
   await fakeSubscription(page, rig);
   await page.goto('/');
   await closedSwitch(page).check();
@@ -185,6 +190,37 @@ test('says so when turning it off can’t reach the server, and finishes later',
   expect((await deleted).status()).toBe(204);
   await expect(closedStatus(page)).toHaveText(/^Off:/);
   expect(await page.evaluate(() => localStorage.getItem('shkriuss-device:push-delete'))).toBeNull();
+});
+
+test('after a trip, coming back to Calendar sends the new time zone', async ({ page }) => {
+  await fakeSubscription(page, rig);
+  await page.goto('/');
+  await closedSwitch(page).check();
+  await expect(closedStatus(page)).toHaveText(/^On:/);
+  const timeZones: string[] = [];
+  page.on('request', (request) => {
+    if (request.url().endsWith('/api/push/schedule') && request.method() === 'PUT') {
+      timeZones.push(
+        (JSON.parse(request.postData() ?? '{}') as { timeZone?: string }).timeZone ?? '',
+      );
+    }
+  });
+
+  // Back on screen with nothing changed: nothing is sent.
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  // Flown to London, and back on screen (the page stayed in memory).
+  await page.evaluate(() => {
+    const Original = Intl.DateTimeFormat;
+    const InLondon = function (...args: ConstructorParameters<typeof Intl.DateTimeFormat>) {
+      const format = new Original(...args);
+      const resolved = format.resolvedOptions.bind(format);
+      format.resolvedOptions = () => ({ ...resolved(), timeZone: 'Europe/London' });
+      return format;
+    } as unknown as typeof Intl.DateTimeFormat;
+    Intl.DateTimeFormat = InLondon;
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await expect.poll(() => timeZones).toEqual(['Europe/London']);
 });
 
 test('device settings stay out of backups', async ({ page }) => {
