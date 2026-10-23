@@ -14,6 +14,7 @@
 import { createStore } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
 import { withEdits } from '@shkriuss/sync/edits';
+import { clearProblem, focusProblem, reportSave, showProblem } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { site } from 'virtual:shkriuss/site';
 import {
@@ -78,8 +79,6 @@ const categoriesStore = createStore<CategoriesState>({
   validate: isCategoriesState,
 });
 
-const COULD_NOT_SAVE = 'Couldn’t save. Is this browser in private mode, or is storage blocked?';
-
 /** Search results are read out this long after the last key press. */
 const ANNOUNCE_DELAY_MS = 700;
 /** Form fields with a place for a problem, in the order they appear. */
@@ -116,7 +115,6 @@ function setOptions(select: HTMLSelectElement, choices: Choice[], fallback: stri
 
 export function mountShelf(root: Document): void {
   const addButton = required<HTMLButtonElement>(root, '[data-action="add"]');
-  const message = required<HTMLElement>(root, '[data-message]');
   const itemsHeading = required<HTMLElement>(root, '[data-items-heading]');
   const filtersBox = required<HTMLElement>(root, '[data-filters]');
   const search = required<HTMLInputElement>(root, '[data-filter="search"]');
@@ -186,16 +184,25 @@ export function mountShelf(root: Document): void {
   const announce = (text: string): void => {
     announcer.textContent = text;
   };
-  const say = (text: string | null): void => {
-    message.hidden = text === null;
-    message.textContent = text ?? '';
+  /** A message say() showed in the page's notice (read out too), taken away by the next save. */
+  let said: string | null = null;
+  const say = (text: string): void => {
+    showProblem(text);
+    said = text;
+  };
+  /** Tells the person if saving didn't work; once it does, takes say()'s message away. */
+  const report = (saved: boolean): boolean => {
+    if (reportSave(saved) && said !== null) {
+      clearProblem(said);
+      said = null;
+    }
+    return saved;
   };
   const find = (id: string | null): Item | undefined => state.items.find((item) => item.id === id);
 
   function save(next: ShelfState): boolean {
     state = next;
-    const saved = store.save(state);
-    say(saved ? null : COULD_NOT_SAVE);
+    const saved = report(store.save(state));
     sync.changed();
     render();
     return saved;
@@ -203,8 +210,7 @@ export function mountShelf(root: Document): void {
 
   function saveCategories(next: CategoriesState): boolean {
     categoriesState = next;
-    const saved = categoriesStore.save(categoriesState);
-    say(saved ? null : COULD_NOT_SAVE);
+    const saved = report(categoriesStore.save(categoriesState));
     sync.changed();
     render();
     return saved;
@@ -444,7 +450,7 @@ export function mountShelf(root: Document): void {
     showProblems(problems);
     const first = FIELD_ORDER.find((name) => problems[name]);
     if (first) {
-      form.querySelector<HTMLElement>(`[name="${first}"]`)?.focus();
+      focusProblem(form.querySelector<HTMLElement>(`[name="${first}"]`), problems[first]);
       return;
     }
     if (problems.form) return;
@@ -489,8 +495,7 @@ export function mountShelf(root: Document): void {
     if (deleteDialog.returnValue !== 'confirm' || !item) return;
     editingId = null;
     opener = addButton;
-    save(removeItem(state, item.id));
-    announce(`Deleted ${item.name}.`);
+    if (save(removeItem(state, item.id))) announce(`Deleted ${item.name}.`);
     editor.close();
   });
 
@@ -593,7 +598,7 @@ export function mountShelf(root: Document): void {
     const problem = categoryProblem(categoriesState, categoryInput.value, editingCategoryId);
     showCategoryProblem(problem);
     if (problem) {
-      categoryInput.focus();
+      focusProblem(categoryInput, problem);
       return;
     }
     const id = editingCategoryId ?? crypto.randomUUID();
@@ -634,15 +639,18 @@ export function mountShelf(root: Document): void {
     const category = findCategory(editingCategoryId);
     if (categoryDeleteDialog.returnValue !== 'confirm' || !category) return;
     const to = findCategory(moveTo.value);
+    let saved = true;
     if (state.items.some((item) => item.category === category.id)) {
-      save(moveItems(state, category.id, to?.id ?? NO_CATEGORY));
+      saved = save(moveItems(state, category.id, to?.id ?? NO_CATEGORY));
     }
-    saveCategories(removeCategory(categoriesState, category.id));
-    announce(
-      to
-        ? `Deleted category ${category.name}. Its items are in ${to.name} now.`
-        : `Deleted category ${category.name}.`,
-    );
+    saved = saveCategories(removeCategory(categoriesState, category.id)) && saved;
+    if (saved) {
+      announce(
+        to
+          ? `Deleted category ${category.name}. Its items are in ${to.name} now.`
+          : `Deleted category ${category.name}.`,
+      );
+    }
     editingCategoryId = null;
     categoryOpener = addCategoryButton;
     categoryEditor.close();
