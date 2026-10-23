@@ -7,15 +7,26 @@
  * 24-hour clock of their first language. Numbers keep the browser's language.
  */
 export function englishLocale(languages: readonly string[]): string {
-  const english = languages.find((tag) => /^en(?:-|$)/i.test(tag));
+  // Some systems add a "@posix"-like part, which isn't part of a language tag.
+  const tags = languages.map((tag) => tag.split('@')[0] ?? '').filter(isLanguageTag);
+  const english = tags.find((tag) => /^en(?:-|$)/i.test(tag));
   if (english) return english;
   try {
-    const { hourCycle } = new Intl.DateTimeFormat(languages[0], {
+    const { hourCycle } = new Intl.DateTimeFormat(tags[0], {
       hour: 'numeric',
     }).resolvedOptions();
     return hourCycle ? new Intl.Locale('en-GB', { hourCycle }).toString() : 'en-GB';
   } catch {
     return 'en-GB';
+  }
+}
+
+/** Whether dates can be written with `tag`. */
+function isLanguageTag(tag: string): boolean {
+  try {
+    return Intl.getCanonicalLocales(tag).length === 1;
+  } catch {
+    return false;
   }
 }
 

@@ -29,6 +29,9 @@ describe('englishLocale', () => {
 
   it('falls back to British English', () => {
     expect(englishLocale([])).toMatch(/^en-GB/);
-    expect(englishLocale(['not a language tag'])).toBe('en-GB');
+    expect(englishLocale(['not a language tag'])).toMatch(/^en-GB/);
+    // Some systems report their language like this; every date would fail to show.
+    expect(englishLocale(['en-US@posix'])).toBe('en-US');
+    expect(englishLocale(['', 'ka-GE'])).toMatch(/^en-GB/);
   });
 });
