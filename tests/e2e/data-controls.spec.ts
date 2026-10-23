@@ -79,6 +79,7 @@ test('a locked backup restores everything, only with its passphrase', async ({ p
   await expect(restoreDialog(page)).toContainText('Restoring replaces everything');
   await checkA11y(page, 'restore dialog');
   const unlock = restoreDialog(page).getByLabel('Passphrase');
+  await expect(unlock).toBeFocused();
   await unlock.fill('not the right passphrase');
   await restoreDialog(page).getByRole('button', { name: 'Restore' }).click();
   await expect(unlock).toHaveAccessibleDescription(/doesn’t unlock this backup/);
@@ -102,6 +103,13 @@ test('a plain copy restores without a passphrase', async ({ page }) => {
   await page.evaluate(() => localStorage.removeItem('shkriuss:e2e-sample'));
   await chooseBackup(page, file);
   await expect(restoreDialog(page).getByLabel('Passphrase')).toBeHidden();
+  // Focus starts on "Cancel": one press of Enter mustn't replace everything.
+  await expect(restoreDialog(page).getByRole('button', { name: 'Cancel' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(restoreDialog(page)).toBeHidden();
+  expect((await saved(page)).sample).toBeNull();
+
+  await chooseBackup(page, file);
   const reloaded = page.waitForEvent('load');
   await restoreDialog(page).getByRole('button', { name: 'Restore' }).click();
   await reloaded;
@@ -155,6 +163,7 @@ test('turns down files that aren’t this app’s backups', async ({ page }) => 
   await chooseBackup(page, { name: 'other.json', buffer: Buffer.from(JSON.stringify(other)) });
   await expect(restoreDialog(page)).toContainText('This backup is from a different app');
   await expect(restoreDialog(page).getByRole('button', { name: 'Restore' })).toBeHidden();
+  await expect(restoreDialog(page).getByRole('button', { name: 'Close' })).toBeFocused();
   await restoreDialog(page).getByRole('button', { name: 'Close' }).click();
 
   await chooseBackup(page, { name: 'notes.json', buffer: Buffer.from('{"hello":"world"}') });

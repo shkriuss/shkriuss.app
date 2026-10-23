@@ -151,11 +151,12 @@ const Heading = `h${level}` as 'h2' | 'h3';
         Sync is on, so this also replaces {site.name}'s data on your other devices.
       </p>
       <p class="muted" role="status" data-dialog-status></p>
+      {/* "Cancel" first, as in the delete dialogs: it has focus when there's no passphrase to type. */}
       <div class="cluster">
+        <Button data-action="cancel">Cancel</Button>
         <Button type="submit" variant="primary" data-restore-submit>
           Restore
         </Button>
-        <Button data-action="cancel">Cancel</Button>
       </div>
     </form>
   </dialog>

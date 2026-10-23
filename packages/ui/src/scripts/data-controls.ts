@@ -197,6 +197,8 @@ export function mountDataControls(section: HTMLElement): void {
     restoreSubmit.hidden = file === null;
     restoreCancel.textContent = file === null ? 'Close' : 'Cancel';
     restoreDialog.showModal();
+    // Never on "Restore", which replaces everything: one press of Enter mustn't (audit G-10).
+    (file?.kind === 'encrypted' ? restorePassphrase : restoreCancel).focus();
   }
 
   find<HTMLButtonElement>(section, '[data-action="restore"]').addEventListener('click', () => {
