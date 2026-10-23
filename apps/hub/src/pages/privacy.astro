@@ -108,7 +108,12 @@ const LAST_UPDATED = '22 October 2026';
             The app sends your reminders again each week while you use it. If you don't open the app
             on that device for 13 months, the server deletes everything it has for that device.
           </li>
-          <li>Nothing is shared between apps, and nobody is told who you are.</li>
+          <li>
+            The push service sees when each reminder is sent, which app sends it, and roughly how
+            long it is, but not what it says. It already knows which phone or browser it delivers
+            to, as it does for any app's notifications.
+          </li>
+          <li>Nothing is shared between apps, and the server is never told who you are.</li>
         </ul>
       </>
     )}
