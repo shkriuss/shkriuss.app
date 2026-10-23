@@ -6,6 +6,7 @@
 import { today } from '@shkriuss/dates';
 import { createStore, downloadFile } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
+import { focusProblem, reportSave } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { site } from 'virtual:shkriuss/site';
 import {
@@ -67,7 +68,6 @@ const settingsStore = createStore<SettingsState>({
 
 /** Closed trades shown at first, and added by "Show more". */
 const PAGE_SIZE = 50;
-const COULD_NOT_SAVE = 'Couldn’t save. Your browser may be blocking storage.';
 const FIELDS: readonly (keyof TradeForm)[] = [
   'symbol',
   'side',
@@ -156,7 +156,7 @@ export function mountTrades(root: Document): void {
       settings = next.settings;
       ok = settingsStore.save(settings) && ok;
     }
-    announce(ok ? message : COULD_NOT_SAVE);
+    if (reportSave(ok)) announce(message);
     render();
     sync.changed();
   }
@@ -337,9 +337,10 @@ export function mountTrades(root: Document): void {
     const first = FIELDS.find((name) => problems[name]);
     if (first) {
       const control = field(first);
-      (
-        (control instanceof RadioNodeList ? control[0] : control) as HTMLElement | undefined
-      )?.focus();
+      focusProblem(
+        (control instanceof RadioNodeList ? control[0] : control) as HTMLElement | undefined,
+        problems[first],
+      );
     }
     return first !== undefined;
   }
@@ -443,12 +444,14 @@ export function mountTrades(root: Document): void {
       closedList.querySelectorAll<HTMLElement>('[data-action="edit"]')[first]?.focus();
     }
     if (action === 'csv') {
+      // The answer shows under the button (and is read out).
+      const csvStatus = required<HTMLElement>(root, '[data-csv-status]');
       if (state.trades.length === 0) {
-        announce('There are no trades to download yet.');
+        csvStatus.textContent = 'There are no trades to download yet.';
         return;
       }
       downloadFile(`trades-${today()}.csv`, toCsv(state), 'text/csv');
-      announce('Downloaded your trades as a spreadsheet.');
+      csvStatus.textContent = 'Downloaded your trades as a spreadsheet.';
     }
   });
 
