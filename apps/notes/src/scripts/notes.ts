@@ -12,6 +12,12 @@
  */
 import { createStore } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
+import {
+  clearProblem,
+  reportSave,
+  showProblem,
+  type ReportSaveOptions,
+} from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { site } from 'virtual:shkriuss/site';
 import {
@@ -61,7 +67,6 @@ export function mountNotes(root: Document): void {
   const listView = required<HTMLElement>(root, '[data-view="list"]');
   const editorView = required<HTMLElement>(root, '[data-view="editor"]');
   const newButton = required<HTMLButtonElement>(listView, '[data-action="new"]');
-  const message = required<HTMLElement>(listView, '[data-message]');
   const searchField = required<HTMLElement>(listView, '[data-search-field]');
   const search = required<HTMLInputElement>(listView, '[data-search]');
   const empty = required<HTMLElement>(listView, '[data-empty]');
@@ -89,22 +94,27 @@ export function mountNotes(root: Document): void {
   let fromList = false;
   let saveTimer: number | undefined;
   let announceTimer: number | undefined;
+  /** The message say() shows, to take it away when a note opens. */
+  let said: string | null = null;
 
   const announce = (text: string): void => {
     announcer.textContent = text;
   };
+  /** Shows a message in the page's notice (shown in both views, and read out), or takes it away. */
   const say = (text: string | null): void => {
-    message.hidden = text === null;
-    message.textContent = text ?? '';
+    if (text !== null) showProblem(text);
+    else if (said !== null) clearProblem(said);
+    said = text;
   };
   const find = (id: string | null): Note | undefined => state.notes.find((note) => note.id === id);
   const titleText = (note: Note): string => titleOf(note) || 'New note';
 
-  function save(next: NotesState): void {
+  /** Saves `next`; false (and the person is told) if it couldn't be saved. */
+  function save(next: NotesState, options?: ReportSaveOptions): boolean {
     state = next;
-    if (!store.save(state))
-      say('Couldn’t save. Is this browser in private mode, or is storage blocked?');
+    const saved = reportSave(store.save(state), options);
     sync.changed();
+    return saved;
   }
 
   // ---------- The list ----------
@@ -175,9 +185,14 @@ export function mountNotes(root: Document): void {
     if (current === null) return;
     const now = Date.now();
     const base = find(current) ? state : addNote(state, current, now);
-    save(editNote(base, current, { title: titleField.value, body: bodyField.value }, now));
+    // Saved after each pause in typing: a problem is read out once, not at every pause.
+    const saved = save(
+      editNote(base, current, { title: titleField.value, body: bodyField.value }, now),
+      { repeat: false },
+    );
     const note = find(current);
     if (note) showEdited(note);
+    if (!saved) edited.textContent = 'Not saved';
   }
 
   /** What the note was when the typing that's waiting to be saved began. */
@@ -276,7 +291,6 @@ export function mountNotes(root: Document): void {
       left = null;
       backToList();
       say('That note was deleted on another device.');
-      announce('That note was deleted on another device.');
       return;
     }
     showValue(titleField, note.title);
@@ -338,9 +352,10 @@ export function mountNotes(root: Document): void {
         break;
       case 'pin':
         if (!note) return;
-        save(setPinned(state, note.id, !note.pinned));
         pinButton.setAttribute('aria-pressed', String(!note.pinned));
-        announce(note.pinned ? 'Unpinned.' : 'Pinned to the top of the list.');
+        if (save(setPinned(state, note.id, !note.pinned))) {
+          announce(note.pinned ? 'Unpinned.' : 'Pinned to the top of the list.');
+        }
         break;
       case 'delete':
         if (!note) return;
@@ -356,9 +371,9 @@ export function mountNotes(root: Document): void {
     const id = current;
     current = null;
     left = null;
-    save(removeNote(state, id));
+    const saved = save(removeNote(state, id));
     backToList();
-    announce('Note deleted.');
+    if (saved) announce('Note deleted.');
   });
 
   window.addEventListener('hashchange', () => route());
