@@ -1,6 +1,7 @@
 /**
  * Guards for the GitHub workflows:
  * - every third-party action is pinned to an exact commit (supply-chain safety);
+ * - the build CI saves for the deploy keeps every file;
  * - the "New app" form offers exactly the icons and colours that exist.
  */
 import { readdirSync, readFileSync } from 'node:fs';
@@ -27,6 +28,16 @@ describe('GitHub Actions are pinned to commits', () => {
       if (action.startsWith('./')) continue;
       expect(action, `${action} should be pinned to a full commit SHA`).toMatch(/@[0-9a-f]{40}$/);
     }
+  });
+});
+
+describe('the build CI tested is the one deployed', () => {
+  it('keeps files in folders whose names start with a dot (/.well-known/security.txt)', () => {
+    const ci = readFileSync(join(github, 'workflows/ci.yml'), 'utf8');
+    // The step runs to the next blank line.
+    const step = /- name: Save the tested build for deployment\n[\s\S]*?(?=\n\s*\n)/.exec(ci)?.[0];
+    expect(step, 'the step that saves the build').toBeDefined();
+    expect(step).toContain('include-hidden-files: true');
   });
 });
 
