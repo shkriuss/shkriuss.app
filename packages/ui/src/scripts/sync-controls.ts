@@ -56,10 +56,21 @@ export function mountSyncControls(section: HTMLElement, sync: SyncClient): void 
       'Synced. Something was changed on two devices at once, so both versions are kept: check for a second copy.',
   };
 
+  const CONNECT_FAILED = `Couldn’t reach ${app}'s server. Check your connection and try again.`;
+  const DELETE_FAILED = 'Couldn’t delete the online copy. Check your connection and try again.';
+
+  /** What's being done that the person asked for, like "Opening your shkriuss account…": shown until it's done. */
+  let working: string | null = null;
   /** A message from the last thing that happened, shown until the next sync. */
   let note: string | null = null;
   /** These stay until the person does something here: later syncs don't hide them. */
-  const lasting = [EVENTS.connected, EVENTS['kept-both'], EVENTS['kept-on']];
+  const lasting = [
+    EVENTS.connected,
+    EVENTS['kept-both'],
+    EVENTS['kept-on'],
+    CONNECT_FAILED,
+    DELETE_FAILED,
+  ];
   /** What comes back from the hub's Account page, so it's scrolled into sight. */
   const FROM_HUB: ReadonlySet<SyncEvent> = new Set([
     'connected',
@@ -73,10 +84,25 @@ export function mountSyncControls(section: HTMLElement, sync: SyncClient): void 
     on.hidden = !status.on;
     code.textContent = status.code ?? '';
     button('sync-now').disabled = status.busy;
-    if (status.problem) statusLine.textContent = PROBLEMS[status.problem];
+    if (working) statusLine.textContent = working;
+    else if (status.problem) statusLine.textContent = PROBLEMS[status.problem];
     else if (note) statusLine.textContent = note;
     else if (!status.on) statusLine.textContent = '';
     else statusLine.textContent = status.busy ? 'Syncing…' : lastSynced(status.last);
+  }
+
+  /** Starts something the person asked for: says so until it's done. */
+  function start(message: string): void {
+    working = message;
+    note = null;
+    render(sync.status());
+  }
+
+  /** It's done (or failed, with what to say). */
+  function done(problem?: string): void {
+    working = null;
+    if (problem) note = problem;
+    render(sync.status());
   }
 
   sync.subscribe((status, event) => {
@@ -93,13 +119,20 @@ export function mountSyncControls(section: HTMLElement, sync: SyncClient): void 
   }
 
   button('sync-on').addEventListener('click', () => {
-    note = null;
-    statusLine.textContent = 'Opening your shkriuss account…';
+    start('Opening your shkriuss account…');
     button('sync-on').disabled = true;
     sync.connect().catch(() => {
       button('sync-on').disabled = false;
-      statusLine.textContent = `Couldn’t reach ${app}'s server. Check your connection and try again.`;
+      done(CONNECT_FAILED);
     });
+  });
+
+  // Back from the Account page with the browser's Back button: this page
+  // comes back as it was left, still opening it.
+  window.addEventListener('pageshow', (event) => {
+    if (!event.persisted || working !== 'Opening your shkriuss account…') return;
+    button('sync-on').disabled = false;
+    done();
   });
 
   button('sync-now').addEventListener('click', () => {
@@ -119,12 +152,14 @@ export function mountSyncControls(section: HTMLElement, sync: SyncClient): void 
 
   deleteDialog.addEventListener('close', () => {
     if (deleteDialog.returnValue !== 'confirm') return;
-    statusLine.textContent = 'Deleting the online copy…';
+    start('Deleting the online copy…');
     sync.deleteOnline().then(
-      () => button('sync-on').focus(),
       () => {
-        statusLine.textContent =
-          'Couldn’t delete the online copy. Check your connection and try again.';
+        done();
+        button('sync-on').focus();
+      },
+      () => {
+        done(DELETE_FAILED);
       },
     );
   });

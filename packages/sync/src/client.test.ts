@@ -356,6 +356,40 @@ describe('syncing between devices', () => {
     expect((await phone.syncNow()).problem).toBeNull();
   });
 
+  it('gives up on a server that never answers, as when offline', async () => {
+    const phone = new Device(randomBytes(32));
+    phone.counters = [counter('water')];
+    // Time limits run out only when this test says so.
+    const limits: AbortController[] = [];
+    vi.spyOn(AbortSignal, 'timeout').mockImplementation(() => {
+      const controller = new AbortController();
+      limits.push(controller);
+      return controller.signal;
+    });
+    const realFetch = globalThis.fetch;
+    vi.stubGlobal('fetch', (_input: string, init: RequestInit) => {
+      const signal = init.signal as AbortSignal;
+      return new Promise<Response>((_, reject) => {
+        signal.addEventListener('abort', () => {
+          reject(signal.reason);
+        });
+      });
+    });
+    const syncing = phone.syncNow();
+    await vi.waitFor(() => {
+      expect(phone.status?.busy).toBe(true);
+      expect(limits).toHaveLength(1);
+    });
+    for (const limit of limits) {
+      limit.abort(new DOMException('The operation timed out.', 'TimeoutError'));
+    }
+    expect(await syncing).toMatchObject({ busy: false, problem: 'offline' });
+
+    vi.restoreAllMocks();
+    vi.stubGlobal('fetch', realFetch);
+    expect((await phone.syncNow()).problem).toBeNull();
+  });
+
   it('waits instead of overwriting data from a newer version of the app', async () => {
     const secret = randomBytes(32);
     const newer = new Device(secret, 2);

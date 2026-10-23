@@ -58,6 +58,7 @@ import {
   type Known,
   type StoreSnapshot,
 } from './merge.ts';
+import { fetchWithLimit, isTimeout } from './request.ts';
 import { fileLabel, openStores, sealStores, syncKeys, type Stores } from './snapshot.ts';
 
 export { secondVersionName } from './merge.ts';
@@ -396,7 +397,8 @@ async function api(path: string, init: RequestInit = {}, token?: string): Promis
   if (typeof init.body === 'string') headers.set('Content-Type', 'application/json');
   else if (init.body) headers.set('Content-Type', 'application/octet-stream');
   try {
-    return await fetch(`${API}${path}`, {
+    // No answer in time (a network that hangs) counts as no connection too.
+    return await fetchWithLimit(`${API}${path}`, {
       ...init,
       headers,
       credentials: 'omit',
@@ -406,6 +408,10 @@ async function api(path: string, init: RequestInit = {}, token?: string): Promis
     throw new SyncError('offline');
   }
 }
+
+/** Why a round failed. An answer that stopped coming in time is no connection. */
+const problemOf = (error: unknown): SyncProblem =>
+  error instanceof SyncError ? error.problem : isTimeout(error) ? 'offline' : 'server';
 
 /**
  * Why a store's data here can't be synced, if it can't: it's from a newer
@@ -924,7 +930,7 @@ export function createSync(options: {
     } catch (error) {
       // Stopped: sync was turned off meanwhile, which says so itself.
       if (error instanceof StoppedError) problem = null;
-      else problem = error instanceof SyncError ? error.problem : 'server';
+      else problem = problemOf(error);
       const state = loadState();
       if (state && isGone(error)) {
         saveState(offState(state));
