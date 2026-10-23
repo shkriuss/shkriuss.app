@@ -196,6 +196,10 @@
   color: var(--btn-fg);
   font-weight: var(--weight-semibold);
   line-height: 1.2;
+  text-align: center;
+  /* With very large text, a word longer than the screen breaks instead of
+     making the page scroll sideways (audit G-11). */
+  overflow-wrap: anywhere;
   text-decoration: none;
   cursor: pointer;
   user-select: none;
