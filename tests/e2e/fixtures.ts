@@ -36,6 +36,21 @@ export async function checkA11y(page: Page, label = page.url()): Promise<void> {
   expect(problems, `Accessibility problems on ${label}`).toEqual([]);
 }
 
+/**
+ * From now on (until the page is reloaded), the page can't save its data,
+ * as when the browser's storage is full: localStorage.setItem() throws for
+ * the apps' own keys.
+ */
+export async function failSaving(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const setItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key: string, value: string) {
+      if (key.startsWith('shkriuss:')) throw new DOMException('Full', 'QuotaExceededError');
+      setItem.call(this, key, value);
+    };
+  });
+}
+
 interface Guard {
   /** Console messages that are expected in this test (substring match). */
   allowConsole: (text: string) => void;

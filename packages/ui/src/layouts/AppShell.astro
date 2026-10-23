@@ -91,6 +91,11 @@ const currentPath = Astro.url.pathname;
 
       <main id="main" class="shell__main" tabindex="-1">
         <div class:list={['container', wide && 'container--wide']}>
+          <!--
+            Problems, like "Couldn’t save": shown here by scripts/problem.ts,
+            above every view of the page, and read out at once.
+          -->
+          <div class="problem" data-problem></div>
           <slot />
         </div>
       </main>
@@ -116,6 +121,21 @@ const currentPath = Astro.url.pathname;
         </div>
       </footer>
     </div>
+
+    <!-- One problem, copied by scripts/problem.ts into [data-problem]. -->
+    <template data-problem-template>
+      <div class="notice notice--danger problem__notice">
+        <p role="alert" data-problem-text></p>
+        <button
+          type="button"
+          class="btn btn--ghost btn--icon problem__hide"
+          aria-label="Hide this message"
+          data-problem-hide
+        >
+          <Icon name="x" />
+        </button>
+      </div>
+    </template>
 
     <script>
       import { registerServiceWorker } from '../scripts/service-worker.ts';

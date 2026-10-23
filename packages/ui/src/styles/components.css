@@ -483,6 +483,54 @@ select.input {
   background: var(--color-danger-soft);
 }
 
+/*
+ * The page's problem notice ("Couldn’t save…", scripts/problem.ts): at the
+ * top of the page, and still in sight after scrolling down, unless it's too
+ * tall for the screen (large text): then it scrolls with the page
+ * (.problem--tall). Empty, and taking no room, while there's no problem.
+ */
+.problem {
+  position: sticky;
+  inset-block-start: var(--space-2);
+  z-index: 2;
+}
+
+.problem--tall {
+  position: static;
+}
+
+.problem:not(:empty) {
+  margin-block-end: var(--space-5);
+}
+
+.problem__notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding-inline-end: var(--space-1);
+  box-shadow: var(--shadow);
+}
+
+/* With large text, the button goes below the words instead of squeezing them. */
+.problem__notice > p {
+  flex: 1 1 12rem;
+  min-width: 0;
+  align-self: center;
+  font-weight: var(--weight-semibold);
+}
+
+.problem__hide {
+  flex: none;
+  margin-block: calc(-1 * var(--space-2));
+  margin-inline-start: auto;
+}
+
+/* While it stays in sight, what gets focus scrolls into view below it, not under it. */
+:root:has(.problem:not(:empty, .problem--tall)) {
+  scroll-padding-block-start: calc(var(--space-6) + 12rem);
+}
+
 /* ---------- Progress ---------- */
 
 /* <progress class="progress" max="…" value="…">: how far a download or a long task has got. */

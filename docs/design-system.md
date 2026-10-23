@@ -65,6 +65,11 @@ Script helpers, imported from TypeScript: `@shkriuss/ui/numbers`
 weekdays and months are in English like the rest of the page, even on a
 phone set to another language), `@shkriuss/ui/text` (`compareText`, for
 sorting lists alphabetically),
+`@shkriuss/ui/problem` (telling people about a problem the same way in every
+app: `showProblem` puts it in the notice at the top of every page, which is
+read out at once; `reportSave(store.save(…))` says when saving didn't work,
+and why; `focusProblem` goes to a form's first wrong field, or reads its error
+out if the person is in it already),
 `@shkriuss/ui/worker` (`startWorker`, for heavy work), `@shkriuss/ui/qr-code`,
 `@shkriuss/ui/service-worker`, `@shkriuss/ui/sync-controls` and
 `@shkriuss/ui/push-controls`.
