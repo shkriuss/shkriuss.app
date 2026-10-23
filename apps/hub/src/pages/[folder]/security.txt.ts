@@ -2,12 +2,20 @@
  * /.well-known/security.txt (RFC 9116): where to report a security problem
  * (privately, on GitHub; see SECURITY.md). Made at build time, so "Expires",
  * which must be less than a year away, moves on with every deploy.
+ *
+ * The file isn't in a ".well-known" folder because code scanning (CodeQL)
+ * skips folders whose names start with a dot; the folder's name comes from
+ * getStaticPaths instead.
  */
 import { hubOrigin } from '@shkriuss/registry';
-import type { APIRoute } from 'astro';
+import type { APIRoute, GetStaticPaths } from 'astro';
 
 const REPOSITORY = 'https://github.com/shkriuss/shkriuss.app';
 const VALID_DAYS = 180;
+
+export const getStaticPaths = (() => [
+  { params: { folder: '.well-known' } },
+]) satisfies GetStaticPaths;
 
 export const GET: APIRoute = () => {
   const expires = new Date(Date.now() + VALID_DAYS * 24 * 60 * 60 * 1000);
