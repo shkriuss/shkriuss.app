@@ -6,6 +6,7 @@
 import { nowStamp } from '@shkriuss/dates';
 import { createStore } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
+import { focusProblem, reportSave } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { site } from 'virtual:shkriuss/site';
 import {
@@ -45,7 +46,6 @@ const store = createStore<RemindersState>({
 
 /** How often the list is brought up to date (what's overdue, what's next). */
 const REFRESH_MS = 20_000;
-const COULD_NOT_SAVE = 'Couldn’t save. Your browser may be blocking storage.';
 const GROUPS = [
   ['overdue', 'Overdue'],
   ['today', 'Today'],
@@ -77,7 +77,7 @@ function formFields(form: HTMLFormElement) {
       else input.removeAttribute('aria-invalid');
     }
     const first = (['text', 'date', 'time'] as const).find((name) => found[name]);
-    if (first) inputs[first].focus();
+    if (first) focusProblem(inputs[first], found[first]);
     return first !== undefined;
   }
 
@@ -116,6 +116,8 @@ export function mountReminders(root: Document): void {
   const edit = formFields(editForm);
   const deleteDialog = required<HTMLDialogElement>(root, '[data-delete-dialog]');
   const deleteText = required<HTMLElement>(deleteDialog, '[data-delete-text]');
+  const clearDialog = required<HTMLDialogElement>(root, '[data-clear-dialog]');
+  const clearText = required<HTMLElement>(clearDialog, '[data-clear-text]');
 
   let state = store.load();
   let now = nowStamp();
@@ -128,10 +130,14 @@ export function mountReminders(root: Document): void {
   const find = (id: string | null | undefined) =>
     state.reminders.find((reminder) => reminder.id === id);
 
-  /** Saves, shows the change, and tells the notification service and other devices. */
+  /**
+   * Saves, shows the change, and tells the notification service and other
+   * devices. `message` is read out only if it was saved; if it wasn't, the
+   * person is told that instead.
+   */
   function save(next: RemindersState, message: string): void {
     state = next;
-    announce(store.save(state) ? message : COULD_NOT_SAVE);
+    if (reportSave(store.save(state))) announce(message);
     render();
     notify.changed();
     sync.changed();
@@ -272,8 +278,14 @@ export function mountReminders(root: Document): void {
     const action = button?.dataset['action'];
     const reminder = find(button?.closest<HTMLElement>('li[data-id]')?.dataset['id']);
     if (action === 'clear-done') {
-      save(clearDone(state), 'Cleared the done reminders.');
-      add.text.focus();
+      // Asks first, like deleting one: they can't be brought back.
+      const count = state.reminders.filter((entry) => entry.done !== null).length;
+      clearText.textContent =
+        count === 1
+          ? 'The done reminder will be removed. This can’t be undone.'
+          : `The ${count} done reminders will be removed. This can’t be undone.`;
+      clearDialog.returnValue = '';
+      clearDialog.showModal();
       return;
     }
     if (!reminder) return;
@@ -336,6 +348,12 @@ export function mountReminders(root: Document): void {
     if (deleteDialog.returnValue !== 'confirm' || !reminder) return;
     editDialog.close();
     save(removeReminder(state, reminder.id), `Deleted ${reminder.text}.`);
+    add.text.focus();
+  });
+
+  clearDialog.addEventListener('close', () => {
+    if (clearDialog.returnValue !== 'confirm') return;
+    save(clearDone(state), 'Cleared the done reminders.');
     add.text.focus();
   });
 
