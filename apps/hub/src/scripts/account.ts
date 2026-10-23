@@ -72,6 +72,8 @@ function connectRequestOf(
 
 /** How often a shown code checks whether the other device has used it. */
 const LINK_POLL_MS = 2000;
+/** A message that appears is shown (and read out) this long after it's put on the page. */
+const SAY_DELAY_MS = 100;
 
 const PROBLEMS: Record<AccountErrorCode, string> = {
   cancelled: 'Cancelled.',
@@ -214,10 +216,30 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
     announcer.textContent = text;
   };
 
+  /** Counts messages, so a newer one wins over one still waiting to be shown (see say). */
+  let said = 0;
+
+  /**
+   * Shows a message, which is read out (null hides it). The message is a
+   * live region, and one that appears with its text already in it isn't
+   * always read out. So when it was hidden, it's put on the page empty (and
+   * invisible) first, and its text follows a moment later. That way it needs
+   * no second live region saying the same thing (audit G-14).
+   */
   function say(text: string | null, danger = false): void {
-    message.hidden = text === null;
-    message.textContent = text ?? '';
+    said += 1;
+    const turn = said;
+    const appearing = text !== null && message.hidden !== false;
     message.classList.toggle('notice--danger', danger);
+    message.classList.toggle('visually-hidden', appearing);
+    message.hidden = text === null;
+    message.textContent = appearing ? '' : (text ?? '');
+    if (!appearing) return;
+    window.setTimeout(() => {
+      if (turn !== said) return;
+      message.classList.remove('visually-hidden');
+      message.textContent = text;
+    }, SAY_DELAY_MS);
   }
 
   /**
@@ -300,7 +322,6 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
     stopLink();
     home();
     say(done);
-    announce(done);
     return true;
   }
 
@@ -465,7 +486,6 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
       linkStatus.textContent = '';
       home();
       say(saved ? REPLACED.done : STORAGE_BLOCKED, !saved);
-      announce(saved ? REPLACED.done : STORAGE_BLOCKED);
     },
     replace: () => {
       say(null);
@@ -641,7 +661,6 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
     linkStatus.textContent = '';
     show('signed-out');
     say('This device is signed out.');
-    announce('This device is signed out.');
   });
 
   // Signed in or out, or an app connected, in another tab: follow along.
