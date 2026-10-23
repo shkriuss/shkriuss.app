@@ -8,6 +8,7 @@
 import { isIsoDate, parts, type IsoDate } from '@shkriuss/dates';
 import { secondVersionName } from '@shkriuss/sync';
 import { compareText } from '@shkriuss/ui/text';
+import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
 /** An item's category when it has none. Categories themselves: ./categories.ts. */
 export const NO_CATEGORY = '';
@@ -390,7 +391,7 @@ export const formatPrice = (price: number, currency: Currency, locale?: string):
   new Intl.NumberFormat(locale, { style: 'currency', currency }).format(price);
 
 /** "12 Oct 2026". */
-export function formatDate(date: IsoDate, locale?: string): string {
+export function formatDate(date: IsoDate, locale = DATE_LOCALE): string {
   const { year, month, day } = parts(date);
   return new Intl.DateTimeFormat(locale, {
     day: 'numeric',

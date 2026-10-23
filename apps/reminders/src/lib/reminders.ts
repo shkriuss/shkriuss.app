@@ -26,6 +26,7 @@ import {
 } from '@shkriuss/dates';
 import type { Notice } from '@shkriuss/push';
 import { secondVersionName } from '@shkriuss/sync';
+import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
 export type Repeat = 'none' | 'daily' | 'weekdays' | 'weekly' | 'monthly' | 'yearly';
 export const REPEATS: readonly Repeat[] = [
@@ -353,7 +354,7 @@ const dateParts = (date: IsoDate) => {
 };
 
 /** A time of day for people: "8:00 PM", or "20:00" where that's how times are written. */
-export function timeLabel(time: IsoTime, locale?: string): string {
+export function timeLabel(time: IsoTime, locale = DATE_LOCALE): string {
   const [hour, minute] = time.split(':').map(Number) as [number, number];
   return new Intl.DateTimeFormat(locale, {
     hour: 'numeric',
@@ -363,7 +364,7 @@ export function timeLabel(time: IsoTime, locale?: string): string {
 }
 
 /** "Today at 3:00 PM", "Tomorrow at …", "Yesterday at …", or "Friday, October 23 at …". */
-export function whenLabel(at: Stamp, now: Stamp, locale?: string): string {
+export function whenLabel(at: Stamp, now: Stamp, locale = DATE_LOCALE): string {
   const date = at.slice(0, 10);
   const today = now.slice(0, 10);
   const time = timeLabel(at.slice(11), locale);
@@ -381,7 +382,7 @@ export function whenLabel(at: Stamp, now: Stamp, locale?: string): string {
 }
 
 /** whenLabel() for the middle of a sentence: "today at 3:00 PM", "Friday, October 23 at …". */
-export const whenInSentence = (at: Stamp, now: Stamp, locale?: string): string =>
+export const whenInSentence = (at: Stamp, now: Stamp, locale = DATE_LOCALE): string =>
   whenLabel(at, now, locale).replace(/^(Today|Tomorrow|Yesterday) /, (word) => word.toLowerCase());
 
 const ordinal = (day: number): string => {
@@ -390,7 +391,7 @@ const ordinal = (day: number): string => {
 };
 
 /** "Every day", "Every weekday", "Every Friday", "Every month on the 23rd", "Every year on October 23". */
-export function repeatLabel(reminder: Reminder, locale?: string): string {
+export function repeatLabel(reminder: Reminder, locale = DATE_LOCALE): string {
   switch (reminder.repeat) {
     case 'none':
       return '';

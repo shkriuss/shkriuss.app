@@ -15,6 +15,7 @@
     "./tokens.css": "./src/styles/tokens.css",
     "./components/*": "./src/components/*",
     "./layouts/*": "./src/layouts/*",
+    "./locale": "./src/lib/locale.ts",
     "./push-controls": "./src/scripts/push-controls.ts",
     "./numbers": "./src/lib/numbers.ts",
     "./text": "./src/lib/text.ts",

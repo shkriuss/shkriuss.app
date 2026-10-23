@@ -67,6 +67,23 @@ test('sets reminders and lists them by when they come next', async ({ page }) =>
   await expect(page.locator('li[data-id]')).toHaveCount(4);
 });
 
+test.describe('on a phone set to Georgian', () => {
+  test.use({ locale: 'ka-GE' });
+
+  test('dates are in English like the rest of the page, with its 24-hour clock', async ({
+    page,
+  }) => {
+    await addReminder(page, 'Water the garden', {
+      date: '2026-10-28',
+      time: '18:30',
+      repeat: 'Every week',
+    });
+    await expect(meta(page, 'Water the garden')).toHaveText(
+      /^Wednesday,? 28 October at 18:30\s*Every Wednesday$/,
+    );
+  });
+});
+
 test('ticks reminders done, puts off overdue ones, and clears done ones', async ({ page }) => {
   await seed(page, [
     reminder('a', 'Call the dentist', '2026-10-21', '09:00'),

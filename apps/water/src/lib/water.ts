@@ -21,6 +21,7 @@ import {
   type Stamp,
 } from '@shkriuss/dates';
 import type { Notice } from '@shkriuss/push';
+import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
 /** Millilitres, or US fluid ounces. */
 export type Unit = 'ml' | 'oz';
@@ -434,7 +435,7 @@ export function reminderDue(
 // ---------- Dates and times for people ----------
 
 /** "Today", "Yesterday", or a date like "Monday 19 October". */
-export function dayLabel(date: IsoDate, today: IsoDate, locale?: string): string {
+export function dayLabel(date: IsoDate, today: IsoDate, locale = DATE_LOCALE): string {
   if (date === today) return 'Today';
   if (date === addDays(today, -1)) return 'Yesterday';
   const [year, month, day] = date.split('-').map(Number) as [number, number, number];
@@ -447,7 +448,7 @@ export function dayLabel(date: IsoDate, today: IsoDate, locale?: string): string
 }
 
 /** A time of day for people: "8:00 PM", or "20:00" where that's how times are written. */
-export function timeLabel(time: IsoTime, locale?: string): string {
+export function timeLabel(time: IsoTime, locale = DATE_LOCALE): string {
   const [hour, minute] = time.split(':').map(Number) as [number, number];
   return new Intl.DateTimeFormat(locale, {
     hour: 'numeric',

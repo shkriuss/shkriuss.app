@@ -5,6 +5,7 @@
  * device: ../scripts/library.ts and docs/adr/0015-photos-app.md. The online
  * library's rules are in online.ts.
  */
+import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
 /** What every device knows about a photo (sent to the online library sealed). */
 export interface PhotoDetails {
@@ -146,12 +147,12 @@ function asWritten(taken: string): Date {
   return new Date(Date.UTC(year ?? 1970, (month ?? 1) - 1, day ?? 1, hour, minute, second));
 }
 
-const monthFormat = new Intl.DateTimeFormat(undefined, {
+const monthFormat = new Intl.DateTimeFormat(DATE_LOCALE, {
   month: 'long',
   year: 'numeric',
   timeZone: 'UTC',
 });
-const takenFormat = new Intl.DateTimeFormat(undefined, {
+const takenFormat = new Intl.DateTimeFormat(DATE_LOCALE, {
   dateStyle: 'medium',
   timeStyle: 'short',
   timeZone: 'UTC',

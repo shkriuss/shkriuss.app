@@ -29,6 +29,7 @@ import {
 import type { Notice } from '@shkriuss/push';
 import { secondVersionName } from '@shkriuss/sync';
 import { compareText } from '@shkriuss/ui/text';
+import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
 export const LIMITS = { name: 100, ingredient: 100, notes: 5000 } as const;
 export const MAX_INGREDIENTS = 60;
@@ -649,7 +650,7 @@ export const dueReminders = (
 const utc = (date: IsoDate): Date => new Date(`${date}T00:00:00Z`);
 
 /** "Monday 19 October" (in the person's language). */
-export const formatDay = (date: IsoDate, locale?: string): string =>
+export const formatDay = (date: IsoDate, locale = DATE_LOCALE): string =>
   new Intl.DateTimeFormat(locale, {
     weekday: 'long',
     day: 'numeric',
@@ -658,7 +659,7 @@ export const formatDay = (date: IsoDate, locale?: string): string =>
   }).format(utc(date));
 
 /** "19–25 October", "28 September – 4 October". */
-export const formatWeek = (start: IsoDate, locale?: string): string =>
+export const formatWeek = (start: IsoDate, locale = DATE_LOCALE): string =>
   new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long', timeZone: 'UTC' }).formatRange(
     utc(start),
     utc(addDays(start, 6)),

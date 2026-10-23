@@ -61,6 +61,7 @@ import {
   type Unit,
 } from '../lib/water.ts';
 import { mountReminders } from './reminders.ts';
+import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
 const drinksStore = createStore<DrinksState>({
   key: 'water',
@@ -86,7 +87,7 @@ const AMOUNT_LABELS: Record<Amount, string> = {
 };
 const UNIT_NAMES: Record<Unit, string> = { ml: 'millilitres', oz: 'US fluid ounces' };
 
-const dateFormat = new Intl.DateTimeFormat(undefined, {
+const dateFormat = new Intl.DateTimeFormat(DATE_LOCALE, {
   weekday: 'long',
   day: 'numeric',
   month: 'long',

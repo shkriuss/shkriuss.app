@@ -21,6 +21,7 @@ import {
   type OnlinePlace,
   type Photo,
 } from './photos.ts';
+import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
 /** The online libraries' records, kept in the synced copy (they move with a new account key). */
 export interface Records {
@@ -174,7 +175,7 @@ const UPLOADS_ONLY: ReadonlySet<OnlineProblem> = new Set(['full', 'daily-limit',
 export const canFreeUp = (state: OnlineState): boolean =>
   state.checked && (state.problem === null || UPLOADS_ONLY.has(state.problem));
 
-const timeFormat = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
+const timeFormat = new Intl.DateTimeFormat(DATE_LOCALE, { hour: 'numeric', minute: '2-digit' });
 
 const TAKEN =
   'Your online library was taken by a device that still had your old account key, perhaps the lost one, so it can’t be used any more. Photos that were only in it can’t be brought back. Photos on this device go into a new online library.';

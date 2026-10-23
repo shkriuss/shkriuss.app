@@ -25,6 +25,7 @@ import {
 } from '@shkriuss/dates';
 import type { Notice } from '@shkriuss/push';
 import { compareText } from '@shkriuss/ui/text';
+import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
 export const REPEATS = ['none', 'daily', 'weekdays', 'weekly', 'monthly', 'yearly'] as const;
 export type Repeat = (typeof REPEATS)[number];
@@ -598,7 +599,7 @@ const utc = (date: IsoDate): Date => {
 };
 
 /** "14:30" or "2:30 PM", in the person's style. */
-export function formatTime(time: IsoTime, locale?: string): string {
+export function formatTime(time: IsoTime, locale = DATE_LOCALE): string {
   const [hour, minute] = time.split(':').map(Number) as [number, number];
   return new Intl.DateTimeFormat(locale, {
     hour: 'numeric',
@@ -608,7 +609,7 @@ export function formatTime(time: IsoTime, locale?: string): string {
 }
 
 /** "Today", "Tomorrow", "Yesterday", "Friday" (this week), or "Mon, 26 Oct" (with the year if not this one). */
-export function formatDay(date: IsoDate, today: IsoDate, locale?: string): string {
+export function formatDay(date: IsoDate, today: IsoDate, locale = DATE_LOCALE): string {
   const days = daysBetween(today, date);
   if (days === 0) return 'Today';
   if (days === 1) return 'Tomorrow';
@@ -626,7 +627,7 @@ export function formatDay(date: IsoDate, today: IsoDate, locale?: string): strin
 }
 
 /** When a task is due, for the list: "Today, 14:30". */
-export function dueText(task: Task, today: IsoDate, locale?: string): string {
+export function dueText(task: Task, today: IsoDate, locale = DATE_LOCALE): string {
   if (task.date === null) return '';
   const day = formatDay(task.date, today, locale);
   return task.time ? `${day}, ${formatTime(task.time, locale)}` : day;

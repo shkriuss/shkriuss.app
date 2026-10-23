@@ -24,6 +24,7 @@
 import { isIsoDate, type IsoDate } from '@shkriuss/dates';
 import { parseDecimal } from '@shkriuss/ui/numbers';
 import { compareText } from '@shkriuss/ui/text';
+import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
 export interface Vehicle {
   id: string;
@@ -796,7 +797,7 @@ export function partLabel(part: Part, locale?: string): string {
 }
 
 /** "Wednesday, October 21, 2026" */
-export function dayLabel(date: IsoDate, locale?: string): string {
+export function dayLabel(date: IsoDate, locale = DATE_LOCALE): string {
   const [year, month, day] = date.split('-').map(Number) as [number, number, number];
   return new Intl.DateTimeFormat(locale, { dateStyle: 'full', timeZone: 'UTC' }).format(
     Date.UTC(year, month - 1, day),
@@ -804,7 +805,7 @@ export function dayLabel(date: IsoDate, locale?: string): string {
 }
 
 /** "Oct 21, 2026" */
-export function dateLabel(date: IsoDate, locale?: string): string {
+export function dateLabel(date: IsoDate, locale = DATE_LOCALE): string {
   const [year, month, day] = date.split('-').map(Number) as [number, number, number];
   return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(
     Date.UTC(year, month - 1, day),

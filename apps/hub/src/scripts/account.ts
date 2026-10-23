@@ -45,6 +45,7 @@ import {
 } from '@shkriuss/sync/connect';
 import { appOriginFor, isAppOrigin } from '@shkriuss/sync/origins';
 import { renderQrCode } from '@shkriuss/ui/qr-code';
+import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
 type View =
   | 'loading'
@@ -98,7 +99,7 @@ const REPLACED = {
 const wasReplaced = (secret: Uint8Array<ArrayBuffer>): Promise<boolean> =>
   isReplaced(secret).catch(() => false);
 
-const timeFormat = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
+const timeFormat = new Intl.DateTimeFormat(DATE_LOCALE, { hour: 'numeric', minute: '2-digit' });
 
 function required<T extends Element>(root: ParentNode, selector: string): T {
   const element = root.querySelector<T>(selector);

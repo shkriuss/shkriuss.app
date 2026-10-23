@@ -51,6 +51,10 @@ and `PushControls` (notifications while closed, for apps with
 
 Script helpers, imported from TypeScript: `@shkriuss/ui/numbers`
 (`parseDecimal`, for amounts typed with a point or a comma),
+`@shkriuss/ui/locale` (`DATE_LOCALE`: format dates and times with it, so
+weekdays and months are in English like the rest of the page, even on a
+phone set to another language), `@shkriuss/ui/text` (`compareText`, for
+sorting lists alphabetically),
 `@shkriuss/ui/worker` (`startWorker`, for heavy work), `@shkriuss/ui/qr-code`,
 `@shkriuss/ui/service-worker`, `@shkriuss/ui/sync-controls` and
 `@shkriuss/ui/push-controls`.

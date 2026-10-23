@@ -3,12 +3,13 @@
  * buttons and the status line to an app's sync client (@shkriuss/sync).
  */
 import type { SyncClient, SyncEvent, SyncProblem, SyncStatus } from '@shkriuss/sync';
+import { DATE_LOCALE } from '../lib/locale.ts';
 
 /** How often "Last synced …" is brought up to date. */
 const REFRESH_MS = 30 * 1000;
 
-const timeFormat = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
-const dateFormat = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' });
+const timeFormat = new Intl.DateTimeFormat(DATE_LOCALE, { hour: 'numeric', minute: '2-digit' });
+const dateFormat = new Intl.DateTimeFormat(DATE_LOCALE, { day: 'numeric', month: 'short' });
 
 function find<T extends Element>(root: ParentNode, selector: string): T {
   const element = root.querySelector<T>(selector);

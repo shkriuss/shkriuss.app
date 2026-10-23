@@ -11,6 +11,7 @@
  */
 import { addDays, isIsoDate, type IsoDate } from '@shkriuss/dates';
 import { parseDecimal } from '@shkriuss/ui/numbers';
+import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
 export type Side = 'long' | 'short';
 export const SIDES: readonly Side[] = ['long', 'short'];
@@ -477,7 +478,7 @@ export const formatR = (value: number): string =>
   `${value > 0 ? '+' : value < 0 ? '-' : ''}${Math.abs(value).toFixed(1)}R`;
 
 /** "October 2026". */
-export function monthLabel(month: string, locale?: string): string {
+export function monthLabel(month: string, locale = DATE_LOCALE): string {
   const [year, number] = month.split('-').map(Number) as [number, number];
   return new Intl.DateTimeFormat(locale, {
     month: 'long',
@@ -487,7 +488,7 @@ export function monthLabel(month: string, locale?: string): string {
 }
 
 /** "Oct 19, 2026"-style dates. */
-export function dateLabel(date: IsoDate, locale?: string): string {
+export function dateLabel(date: IsoDate, locale = DATE_LOCALE): string {
   const [year, month, day] = date.split('-').map(Number) as [number, number, number];
   return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(
     Date.UTC(year, month - 1, day),

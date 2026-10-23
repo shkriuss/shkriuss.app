@@ -5,6 +5,7 @@
  * A note has a title and a body, both plain text.
  */
 import { secondVersionName } from '@shkriuss/sync';
+import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
 export interface Note {
   id: string;
@@ -198,7 +199,7 @@ export function visibleNotes(state: NotesState, search = ''): Note[] {
 }
 
 /** When a note was edited: the time if today, else the date ("14:05", "12 Oct", "12 Oct 2025"). */
-export function editedLabel(updated: number, now: number, locale?: string): string {
+export function editedLabel(updated: number, now: number, locale = DATE_LOCALE): string {
   const date = new Date(updated);
   const today = new Date(now);
   if (date.toDateString() === today.toDateString()) {

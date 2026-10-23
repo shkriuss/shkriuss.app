@@ -16,11 +16,12 @@ import {
   restoreAll,
   type BackupFile,
 } from '@shkriuss/storage/backup';
+import { DATE_LOCALE } from '../lib/locale.ts';
 
 /** Backup files bigger than this are turned down (apps save far less). */
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
 
-const longDate = new Intl.DateTimeFormat(undefined, {
+const longDate = new Intl.DateTimeFormat(DATE_LOCALE, {
   day: 'numeric',
   month: 'long',
   year: 'numeric',

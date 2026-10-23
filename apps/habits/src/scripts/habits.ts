@@ -35,6 +35,7 @@ import {
   type HabitsState,
 } from '../lib/habits.ts';
 import { mountReminders } from './reminders.ts';
+import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
 const habitsStore = createStore<HabitsState>({
   key: 'habits',
@@ -55,7 +56,7 @@ const DEFAULT_REMINDER = '20:00';
 /** How often to check whether the day has changed while Habits is open. */
 const NEW_DAY_CHECK_MS = 60 * 1000;
 
-const dateFormat = new Intl.DateTimeFormat(undefined, {
+const dateFormat = new Intl.DateTimeFormat(DATE_LOCALE, {
   weekday: 'long',
   day: 'numeric',
   month: 'long',
