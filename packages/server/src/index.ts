@@ -117,8 +117,8 @@ export function bearerToken(request: Request): string | null {
  * its size (Content-Length, as browsers always do) is read in one go; one
  * that doesn't is read as it arrives, and stopped as soon as it's too big, so
  * it's never held whole. Reading piece by piece costs CPU time for each piece:
- * 2 MB took a Worker 11 to 36 ms on Cloudflare, over the free plan's 10 ms
- * (audit finding B-9).
+ * 2 MB took a Worker 11 to 36 ms on Cloudflare, over the free plan's 10 ms,
+ * and at most about 6 ms in one go (audit finding B-9).
  */
 async function readLimited(
   request: Request,

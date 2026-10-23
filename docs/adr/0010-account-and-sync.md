@@ -175,8 +175,8 @@ in with `sync: true` in `apps.json`.
   - The Worker only reads an upload, in one go, and passes it on; the copy's
     object checks the rest. Reading a full-size copy piece by piece took the
     Worker 11 to 36 ms of CPU time on Cloudflare, and checking it about 8 ms
-    more, over the free plan's 10 ms (audit finding B-9). An object has 30
-    seconds.
+    more, over the free plan's 10 ms (audit finding B-9). Now it takes at
+    most about 6 ms. An object has 30 seconds.
 - **The copy.** The data of every synced store, as JSON, compressed (gzip),
   then sealed with AES-256-GCM, labelled with the app's name.
 - **Merging** (`packages/sync/src/merge.ts`).
