@@ -13,6 +13,7 @@
 import { today as todayOf } from '@shkriuss/dates';
 import { createStore } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
+import { clearProblem, focusProblem, reportSave, showProblem } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { site } from 'virtual:shkriuss/site';
 import {
@@ -103,7 +104,6 @@ const viewStore = createStore<ViewSettings>({
   validate: isViewSettings,
 });
 
-const COULD_NOT_SAVE = 'Couldn’t save. Is this browser in private mode, or is storage blocked?';
 /** Form fields with a place for a problem, in the order they appear. */
 const FIELD_ORDER: DraftField[] = ['title', 'date', 'time', 'every'];
 /** When deleting a list: its tasks go too. */
@@ -133,7 +133,6 @@ export function mountTasks(root: Document): void {
   const addInput = required<HTMLInputElement>(addForm, '[name="title"]');
   const addError = required<HTMLElement>(addForm, '[data-add-error]');
   const viewHeading = required<HTMLElement>(root, '[data-view-heading]');
-  const message = required<HTMLElement>(root, '[data-message]');
   const viewList = required<HTMLUListElement>(root, '[data-views]');
   const editListButton = required<HTMLButtonElement>(root, '[data-action="edit-list"]');
   const empty = required<HTMLElement>(root, '[data-empty]');
@@ -213,9 +212,19 @@ export function mountTasks(root: Document): void {
   const announce = (text: string): void => {
     announcer.textContent = text;
   };
-  const say = (text: string | null): void => {
-    message.hidden = text === null;
-    message.textContent = text ?? '';
+  /** A message say() showed in the page's notice (read out too), taken away by the next save. */
+  let said: string | null = null;
+  const say = (text: string): void => {
+    showProblem(text);
+    said = text;
+  };
+  /** Tells the person if saving didn't work; once it does, takes say()'s message away. */
+  const report = (saved: boolean): boolean => {
+    if (reportSave(saved) && said !== null) {
+      clearProblem(said);
+      said = null;
+    }
+    return saved;
   };
   const find = (id: string | null): Task | undefined => tasks.tasks.find((task) => task.id === id);
   const viewName = (shown: View): string =>
@@ -232,8 +241,7 @@ export function mountTasks(root: Document): void {
 
   function saveTasks(next: TasksState): boolean {
     tasks = next;
-    const saved = tasksStore.save(tasks);
-    say(saved ? null : COULD_NOT_SAVE);
+    const saved = report(tasksStore.save(tasks));
     reminders.changed();
     sync.changed();
     render();
@@ -242,8 +250,7 @@ export function mountTasks(root: Document): void {
 
   function saveLists(next: ListsState): boolean {
     lists = next;
-    const saved = listsStore.save(lists);
-    say(saved ? null : COULD_NOT_SAVE);
+    const saved = report(listsStore.save(lists));
     sync.changed();
     render();
     return saved;
@@ -412,7 +419,7 @@ export function mountTasks(root: Document): void {
     addError.textContent = problem ?? '';
     if (problem) {
       addInput.setAttribute('aria-invalid', 'true');
-      addInput.focus();
+      focusProblem(addInput, problem);
       return;
     }
     addInput.removeAttribute('aria-invalid');
@@ -444,23 +451,23 @@ export function mountTasks(root: Document): void {
     const index = rows.findIndex((row) => row.dataset['id'] === task.id);
     const neighbour = (rows[index + 1] ?? rows[index - 1])?.dataset['id'];
     const { state, next } = completeTask(tasks, task.id, Date.now(), day, crypto.randomUUID());
-    saveTasks(state);
+    const saved = saveTasks(state);
     if (next) {
       control(task.id, '[data-done]')?.focus();
-      announce(`Done: ${task.title}. Next: ${formatDay(next, day)}.`);
+      if (saved) announce(`Done: ${task.title}. Next: ${formatDay(next, day)}.`);
       return;
     }
     const nextBox = neighbour ? control(neighbour, '[data-done]') : null;
     (nextBox ?? viewHeading).focus();
-    announce(`Done: ${task.title}.`);
+    if (saved) announce(`Done: ${task.title}.`);
   }
 
   function tick(task: Task, stepId: string, done: boolean): void {
-    saveTasks(tickStep(tasks, task.id, stepId, done, Date.now()));
+    const saved = saveTasks(tickStep(tasks, task.id, stepId, done, Date.now()));
     control(task.id, `[data-step-id="${CSS.escape(stepId)}"]`)?.focus();
     const ticked = find(task.id);
     const step = ticked?.steps.find((entry) => entry.id === stepId);
-    if (!ticked || !step) return;
+    if (!saved || !ticked || !step) return;
     announce(
       ticked.steps.every((entry) => entry.done)
         ? `${step.title}: done. All steps of ${ticked.title} are done.`
@@ -469,9 +476,9 @@ export function mountTasks(root: Document): void {
   }
 
   function markToDo(task: Task): void {
-    saveTasks(reopenTask(tasks, task.id, Date.now()));
+    const saved = saveTasks(reopenTask(tasks, task.id, Date.now()));
     control(task.id, '[data-done]')?.focus();
-    announce(`${task.title} is to do again.`);
+    if (saved) announce(`${task.title} is to do again.`);
   }
 
   for (const box of [groupsBox, doneList]) {
@@ -516,7 +523,10 @@ export function mountTasks(root: Document): void {
     focus: string,
   ): void {
     const next = moveTask(tasks, task.id, target);
-    if (next !== tasks) saveTasks(next);
+    if (next !== tasks && !saveTasks(next)) {
+      control(task.id, focus)?.focus();
+      return;
+    }
     control(task.id, focus)?.focus();
     const ordered = orderedTasks(tasks, view, search);
     const position = ordered.findIndex((entry) => entry.id === task.id) + 1;
@@ -637,7 +647,7 @@ export function mountTasks(root: Document): void {
 
   orderSelect.addEventListener('change', () => {
     settings = { order: orderSelect.value === 'mine' ? 'mine' : 'date' };
-    viewStore.save(settings);
+    report(viewStore.save(settings));
     movingId = null;
     render();
     announce(
@@ -695,8 +705,9 @@ export function mountTasks(root: Document): void {
   clearDialog.addEventListener('close', () => {
     if (clearDialog.returnValue !== 'confirm') return;
     const done = doneTasks(tasks, view, search);
-    saveTasks(removeTasks(tasks, new Set(done.map((task) => task.id))));
-    announce(`Deleted ${done.length} done ${done.length === 1 ? 'task' : 'tasks'}.`);
+    if (saveTasks(removeTasks(tasks, new Set(done.map((task) => task.id))))) {
+      announce(`Deleted ${done.length} done ${done.length === 1 ? 'task' : 'tasks'}.`);
+    }
     viewHeading.focus();
   });
 
@@ -792,7 +803,7 @@ export function mountTasks(root: Document): void {
     stepError.textContent = problem ?? '';
     if (problem) {
       newStep.setAttribute('aria-invalid', 'true');
-      newStep.focus();
+      focusProblem(newStep, problem);
       return;
     }
     newStep.removeAttribute('aria-invalid');
@@ -891,7 +902,7 @@ export function mountTasks(root: Document): void {
     showProblems(problems);
     const first = FIELD_ORDER.find((name) => problems[name]);
     if (first) {
-      form.querySelector<HTMLElement>(`[name="${first}"]`)?.focus();
+      focusProblem(form.querySelector<HTMLElement>(`[name="${first}"]`), problems[first]);
       return;
     }
     const task = taskFromDraft(draft, editingId, Date.now(), find(editingId));
@@ -925,8 +936,7 @@ export function mountTasks(root: Document): void {
     if (deleteDialog.returnValue !== 'confirm' || !task) return;
     editingId = null;
     opener = viewHeading;
-    saveTasks(removeTask(tasks, task.id));
-    announce(`Deleted ${task.title}.`);
+    if (saveTasks(removeTask(tasks, task.id))) announce(`Deleted ${task.title}.`);
     editor.close();
   });
 
@@ -984,7 +994,7 @@ export function mountTasks(root: Document): void {
     const problem = listProblem(lists, listInput.value, editingListId);
     showListProblem(problem);
     if (problem) {
-      listInput.focus();
+      focusProblem(listInput, problem);
       return;
     }
     const id = editingListId ?? crypto.randomUUID();
@@ -1036,15 +1046,16 @@ export function mountTasks(root: Document): void {
     if (listDeleteDialog.returnValue !== 'confirm' || id === null || name === '') return;
     const choice = listTasks.value;
     const inList = tasks.tasks.filter((task) => task.list === id);
+    let saved = true;
     if (inList.length > 0) {
-      saveTasks(
+      saved = saveTasks(
         choice === DELETE_TASKS
           ? removeTasks(tasks, new Set(inList.map((task) => task.id)))
           : moveTasks(tasks, id, choice),
       );
     }
-    saveLists(removeList(lists, id));
-    announce(`Deleted list ${name}.`);
+    saved = saveLists(removeList(lists, id)) && saved;
+    if (saved) announce(`Deleted list ${name}.`);
     editingListId = null;
     listOpener = viewHeading;
     listEditor.close();
