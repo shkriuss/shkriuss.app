@@ -27,6 +27,16 @@ export const WCAG_TAGS = [
 
 /** Fails the test with a readable list if axe finds accessibility problems. */
 export async function checkA11y(page: Page, label = page.url()): Promise<void> {
+  // A colour still fading (a button that stops waiting, a switch to dark mode)
+  // would have its contrast checked half-way, so let transitions finish first.
+  await page.evaluate(() =>
+    Promise.all(
+      document
+        .getAnimations()
+        .filter((animation) => animation.effect?.getComputedTiming().endTime !== Infinity)
+        .map((animation) => animation.finished.catch(() => undefined)),
+    ),
+  );
   const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
   const problems = results.violations.map(
     (violation) =>
