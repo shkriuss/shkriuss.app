@@ -182,6 +182,8 @@ import { AppShell, Button, DataControls, Icon, SyncControls } from '@shkriuss/ui
         </Button>
         <Button data-action="close-viewer">Close</Button>
       </div>
+      <!-- How "Save original" is going, and problems while the viewer is open. -->
+      <p class="viewer__status" role="status" data-viewer-status></p>
     </div>
   </dialog>
 
@@ -331,6 +333,11 @@ import { AppShell, Button, DataControls, Icon, SyncControls } from '@shkriuss/ui
 
   .viewer {
     width: min(100% - 2 * var(--gutter), 60rem);
+  }
+
+  .viewer__status[data-problem] {
+    color: var(--color-danger);
+    font-weight: var(--weight-semibold);
   }
 
   .viewer__image {

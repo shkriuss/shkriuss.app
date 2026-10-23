@@ -186,9 +186,36 @@ test('frees up space on this device, and the photos still show', async ({ page }
   await tile.click();
   const dialog = page.locator('[data-viewer]');
   await expect.poll(() => naturalWidth(dialog.getByRole('img')), ONLINE).toBe(2048);
+
+  // While it downloads, the viewer says so, and another tap doesn't start a
+  // second download (audit G-8). The download waits here until let go.
+  const held: Route[] = [];
+  let letGo = (): void => undefined;
+  const goOn = new Promise<void>((resolve) => {
+    letGo = resolve;
+  });
+  await page.route('**/api/library/items/**', async (route) => {
+    held.push(route);
+    await goOn;
+    await route.continue();
+  });
   const download = page.waitForEvent('download');
-  await dialog.getByRole('button', { name: 'Save original' }).click();
+  const saveOriginal = dialog.getByRole('button', { name: 'Save original' });
+  await saveOriginal.click();
+  const viewerStatus = dialog.getByRole('status');
+  await expect(viewerStatus).toHaveText('Downloading the original…');
+  await expect(saveOriginal).toHaveAttribute('aria-disabled', 'true');
+  await expect(saveOriginal).toBeFocused();
+  await expect.poll(() => held.length).toBeGreaterThan(0);
+  const asked = held.length;
+  await saveOriginal.dispatchEvent('click');
+  await page.waitForTimeout(500);
+  expect(held.length).toBe(asked);
+  letGo();
   expect((await readFile(await (await download).path())).equals(original)).toBe(true);
+  await page.unroute('**/api/library/items/**');
+  await expect(viewerStatus).toHaveText('Downloaded the original.');
+  await expect(saveOriginal).not.toHaveAttribute('aria-disabled');
   await dialog.getByRole('button', { name: 'Close' }).click();
 
   // Picking the same photo again puts its original back on this device.
@@ -233,9 +260,10 @@ test('frees up space only when the online library has just said the photos are t
     .getByRole('dialog', { name: 'Free up space on this device?' })
     .getByRole('button', { name: 'Free up space' })
     .click();
+  // Shown at the top of the page, and read out (audit G-1).
   await expect(
-    page.getByRole('status').filter({ hasText: 'Couldn’t free up space. Please try again.' }),
-  ).toBeAttached();
+    page.getByRole('alert').filter({ hasText: 'Couldn’t free up space. Please try again.' }),
+  ).toBeVisible();
   expect(await originalsHere(page)).toBe(1);
 });
 
