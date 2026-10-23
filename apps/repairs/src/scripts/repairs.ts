@@ -6,6 +6,7 @@
 import { today } from '@shkriuss/dates';
 import { createStore, downloadFile } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
+import { focusProblem, reportSave } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { site } from 'virtual:shkriuss/site';
 import {
@@ -98,7 +99,6 @@ const settingsStore = createStore<SettingsState>({
   validate: isSettingsState,
 });
 
-const COULD_NOT_SAVE = 'Couldn’t save. Your browser may be blocking storage, or it may be full.';
 /** Repairs shown at first, and added by "Show more". */
 const PAGE_SIZE = 50;
 const EMPTY_PART: PartForm = { name: '', number: '', quantity: '1', price: '' };
@@ -159,6 +159,7 @@ export function mountRepairs(root: Document): void {
   const photosSyncHint = required<HTMLElement>(repairForm, '[data-photos-sync-hint]');
   const photosBusy = required<HTMLElement>(repairForm, '[data-photos-busy]');
   const photoError = required<HTMLElement>(repairForm, '[data-error-for="photos"]');
+  const csvStatus = required<HTMLElement>(root, '[data-csv-status]');
   const photoInput = required<HTMLInputElement>(repairForm, '[data-photo-input]');
   const addPhotosButton = required<HTMLButtonElement>(repairForm, '[data-action="add-photos"]');
   const photoDialog = required<HTMLDialogElement>(root, '[data-photo-dialog]');
@@ -229,7 +230,7 @@ export function mountRepairs(root: Document): void {
       settings = next.settings;
       ok = settingsStore.save(settings) && ok;
     }
-    announce(ok ? message : COULD_NOT_SAVE);
+    if (reportSave(ok)) announce(message);
     render();
     sync.changed();
   }
@@ -505,7 +506,7 @@ export function mountRepairs(root: Document): void {
     const first = names.find((name) => problems[name]);
     if (!first) return false;
     const input = repairForm.elements.namedItem(first);
-    (input instanceof HTMLElement ? input : addPartButton).focus();
+    focusProblem(input instanceof HTMLElement ? input : addPartButton, problems[first]);
     return true;
   }
 
@@ -808,7 +809,7 @@ export function mountRepairs(root: Document): void {
       );
     }
     const first = VEHICLE_FIELDS.find((name) => problems[name]);
-    if (first) (vehicleForm.elements.namedItem(first) as HTMLElement).focus();
+    if (first) focusProblem(vehicleForm.elements.namedItem(first) as HTMLElement, problems[first]);
   }
 
   function openVehicle(vehicle: Vehicle | undefined): void {
@@ -976,12 +977,13 @@ export function mountRepairs(root: Document): void {
         askToDelete('vehicle');
         break;
       case 'csv':
+        // The answer shows under the button (and is read out).
         if (repairs.repairs.length === 0) {
-          announce('There’s nothing to download yet.');
+          csvStatus.textContent = 'There’s nothing to download yet.';
           break;
         }
         downloadFile(`repairs-${today()}.csv`, toCsv(repairs, vehicles, settings), 'text/csv');
-        announce('Downloaded your repairs as a spreadsheet.');
+        csvStatus.textContent = 'Downloaded your repairs as a spreadsheet.';
         break;
     }
   });

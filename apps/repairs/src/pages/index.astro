@@ -112,6 +112,7 @@ import { CURRENCIES, LIMITS, UNIT_LABELS, UNITS } from '../lib/repairs.ts';
           Download as a spreadsheet (CSV)
         </Button>
       </div>
+      <p class="muted" role="status" data-csv-status></p>
     </section>
 
     <SyncControls />
@@ -435,7 +436,8 @@ import { CURRENCIES, LIMITS, UNIT_LABELS, UNITS } from '../lib/repairs.ts';
         <p class="field__hint" data-photos-busy hidden>
           Adding photos…
         </p>
-        <p class="field__error" data-error-for="photos"></p>
+        <!-- Read out when it's shown: focus is elsewhere then (on "Add photos"). -->
+        <p class="field__error" role="alert" data-error-for="photos"></p>
         <input type="file" accept="image/*" multiple hidden data-photo-input />
         <div>
           <Button icon="camera" data-action="add-photos">
