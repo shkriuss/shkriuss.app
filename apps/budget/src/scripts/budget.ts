@@ -6,6 +6,7 @@
 import { isIsoTime, nowStamp, today } from '@shkriuss/dates';
 import { createStore, downloadFile } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
+import { focusProblem, reportSave } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { site } from 'virtual:shkriuss/site';
 import {
@@ -76,8 +77,6 @@ const settingsStore = createStore<SettingsState>({
   validate: isSettingsState,
 });
 
-const COULD_NOT_SAVE = 'Couldn’t save. Your browser may be blocking storage.';
-
 function required<T extends Element>(root: ParentNode, selector: string): T {
   const element = root.querySelector<T>(selector);
   if (!element) throw new Error(`Budget: missing element ${selector}`);
@@ -110,7 +109,10 @@ function showProblems(
   const first = names.find((name) => problems[name]);
   if (first) {
     const control = form.elements.namedItem(first);
-    ((control instanceof RadioNodeList ? control[0] : control) as HTMLElement | null)?.focus();
+    focusProblem(
+      (control instanceof RadioNodeList ? control[0] : control) as HTMLElement | null,
+      problems[first],
+    );
   }
   return first !== undefined;
 }
@@ -135,6 +137,7 @@ export function mountBudget(root: Document): void {
   const reminderOn = required<HTMLInputElement>(root, '[data-reminder-on]');
   const reminderDay = required<HTMLSelectElement>(root, '[data-reminder="day"]');
   const reminderTime = required<HTMLInputElement>(root, '[data-reminder="time"]');
+  const csvStatus = required<HTMLElement>(root, '[data-csv-status]');
   const reminderError = required<HTMLElement>(root, '[data-reminder-error]');
   const reminderNext = required<HTMLElement>(root, '[data-reminder-next]');
   const categoryTemplate = required<HTMLTemplateElement>(root, '[data-category-template]');
@@ -191,7 +194,7 @@ export function mountBudget(root: Document): void {
       settings = next.settings;
       ok = settingsStore.save(settings) && ok;
     }
-    announce(ok ? message : COULD_NOT_SAVE);
+    if (reportSave(ok)) announce(message);
     render();
     if (next.settings) reminders.changed();
     sync.changed();
@@ -491,12 +494,13 @@ export function mountBudget(root: Document): void {
         askToDelete('category');
         break;
       case 'csv':
+        // The answer shows under the button (and is read out).
         if (entries.entries.length === 0) {
-          announce('There’s nothing to download yet.');
+          csvStatus.textContent = 'There’s nothing to download yet.';
           break;
         }
         downloadFile(`budget-${today()}.csv`, toCsv(entries, categories), 'text/csv');
-        announce('Downloaded your budget as a spreadsheet.');
+        csvStatus.textContent = 'Downloaded your budget as a spreadsheet.';
         break;
     }
   });
@@ -522,7 +526,11 @@ export function mountBudget(root: Document): void {
     reminderError.textContent = wrong ? 'Choose a time for the reminder.' : '';
     if (wrong) reminderTime.setAttribute('aria-invalid', 'true');
     else reminderTime.removeAttribute('aria-invalid');
-    if (wrong) return;
+    if (wrong) {
+      // Changed while in the field: read the problem out (focus stays there).
+      if (root.activeElement === reminderTime) focusProblem(reminderTime);
+      return;
+    }
     const next: Reminder = {
       on: reminderOn.checked,
       day: REMINDER_DAYS.find((day) => String(day) === reminderDay.value) ?? 1,
