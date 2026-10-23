@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
+  allSaved,
   createStore,
   deleteAll,
   exportAll,
@@ -98,6 +99,22 @@ describe('createStore', () => {
     };
     expect(makeStore().save({ water: 1 })).toBe(false);
     expect(lastSaveProblem()).toBe('unavailable');
+  });
+
+  it('knows whether everything is saved: each store, until it saves again', () => {
+    const counts = makeStore();
+    const others = makeStore({ key: 'others' });
+    expect(counts.save({ water: 1 })).toBe(true);
+    expect(allSaved()).toBe(true);
+    storage.failWrites = true;
+    expect(counts.save({ water: 2 })).toBe(false);
+    expect(allSaved()).toBe(false);
+    storage.failWrites = false;
+    // Another store saving doesn't save what this one holds.
+    expect(others.save({ tea: 1 })).toBe(true);
+    expect(allSaved()).toBe(false);
+    expect(counts.save({ water: 2 })).toBe(true);
+    expect(allSaved()).toBe(true);
   });
 
   it('says why it didn’t save: data it mustn’t save over, or a value that fails its checks', () => {

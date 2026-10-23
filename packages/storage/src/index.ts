@@ -111,6 +111,8 @@ export type SaveProblem =
   | 'invalid';
 
 let lastProblem: SaveProblem = 'unavailable';
+/** The stores whose latest save didn't work, by key: what they hold isn't saved. */
+const unsaved = new Set<string>();
 
 /**
  * Why the latest save on this page that didn't work didn't work, for
@@ -119,6 +121,15 @@ let lastProblem: SaveProblem = 'unavailable';
  */
 export function lastSaveProblem(): SaveProblem {
   return lastProblem;
+}
+
+/**
+ * Whether every store on this page saved the last time it tried. Each save
+ * writes a store's whole value, so one that works again saves what didn't
+ * save before, but only for that store.
+ */
+export function allSaved(): boolean {
+  return unsaved.size === 0;
 }
 
 const made = new Map<string, Pick<Store<unknown>, 'version' | 'read'>>();
@@ -211,6 +222,7 @@ export function createStore<T>(options: StoreOptions<T>): Store<T> {
     save(value: T): boolean {
       const fail = (problem: SaveProblem): false => {
         lastProblem = problem;
+        unsaved.add(fullKey);
         return false;
       };
       try {
@@ -228,6 +240,7 @@ export function createStore<T>(options: StoreOptions<T>): Store<T> {
         }
         target.setItem(fullKey, text);
         fine = text;
+        unsaved.delete(fullKey);
         keepData();
         return true;
       } catch (error) {

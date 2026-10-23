@@ -8,8 +8,9 @@
  * - clearProblem(text?): takes the notice away (only while it shows `text`,
  *   if that's given). The person can also hide it with its button.
  * - reportSave(saved): give it what store.save() gave. When saving didn't
- *   work, it says so, and why; once saving works again, it takes that away.
- *   It gives `saved` back, so the app says "Saved" only when it was:
+ *   work, it says so, and why; once everything is saved again, it takes
+ *   that away. It gives `saved` back, so the app says "Saved" only when it
+ *   was:
  *
  *     if (reportSave(store.save(state))) announce('Added Cups.');
  *
@@ -19,7 +20,7 @@
  *   Done in it), focusing it reads nothing, so the error is read out instead,
  *   with the field's name: "New counter: Enter a name for the counter."
  */
-import { lastSaveProblem } from '@shkriuss/storage';
+import { allSaved, lastSaveProblem } from '@shkriuss/storage';
 import { SAVE_PROBLEM_TEXTS, saveProblemText, spokenFieldProblem } from '../lib/problems.ts';
 
 const noticeArea = (): HTMLElement | null => document.querySelector('[data-problem]');
@@ -90,11 +91,12 @@ export interface ReportSaveOptions {
   repeat?: boolean;
 }
 
-/** Tells the person when saving didn't work (and why), or takes that away once it does. */
+/** Tells the person when saving didn't work (and why), or takes that away once all is saved. */
 export function reportSave(saved: boolean, { repeat = true }: ReportSaveOptions = {}): boolean {
   const shown = shownProblem();
   if (saved) {
-    if (shown !== null && SAVE_PROBLEM_TEXTS.includes(shown)) clearProblem();
+    // Not while another store still holds something unsaved.
+    if (shown !== null && SAVE_PROBLEM_TEXTS.includes(shown) && allSaved()) clearProblem();
     return true;
   }
   const text = saveProblemText(lastSaveProblem());
