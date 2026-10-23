@@ -5,7 +5,9 @@ repository and the live sites. Every auditor reads the same brief, checks one
 **area** at a time and sends back a report in the same format, so that
 reports from different tools can be compared and every finding can be checked.
 
-The prompts to give each AI tool are in [prompts.md](prompts.md).
+The prompts to give each AI tool are in [prompts.md](prompts.md), and what
+the first audit found, and what happened to each finding, is in
+[results.md](results.md).
 
 ## Rules for auditors
 
