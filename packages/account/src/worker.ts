@@ -24,6 +24,12 @@
  *
  * There are no account ids, names, emails or passwords: nothing here can be
  * linked to a person, or to the data in any app.
+ *
+ * Anyone can make up a lookup or status token, so all passkey locks
+ * together, and all replaced-key notes together, have a limit
+ * (STORAGE_LIMITS, kept by each namespace's meter: @shkriuss/server/meter),
+ * and a note nobody has asked about for about 13 months is deleted
+ * (docs/adr/0017-storage-limits.md). Device links go after 10 minutes anyway.
  */
 import {
   bearerToken,
@@ -38,6 +44,15 @@ import {
   type SiteEnv,
 } from '@shkriuss/server';
 import {
+  LIMIT_HEADER,
+  limitFor,
+  limitOf,
+  METER,
+  meterFetch,
+  release,
+  reserve,
+} from '@shkriuss/server/meter';
+import {
   checkSealedBody,
   LINK_ID_PATTERN,
   LINK_LIFETIME_MS,
@@ -49,6 +64,24 @@ export interface AccountEnv extends SiteEnv {
   ACCOUNT_PASSKEYS: DurableObjectNamespace;
   ACCOUNT_STATUS: DurableObjectNamespace;
 }
+
+/**
+ * All passkey locks together, and all replaced-key notes together, in bytes,
+ * on the real site and on a PR preview. Each counts 16 KB (it holds less).
+ */
+export const STORAGE_LIMITS = {
+  passkeys: { site: 40_000_000, preview: 4_000_000 },
+  replaced: { site: 40_000_000, preview: 4_000_000 },
+} as const;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+/** A replaced-key note nobody has asked about for this long (about 13 months) is deleted. */
+export const UNUSED_MS = 396 * DAY_MS;
+
+/** The limit for one namespace on this site, for the object to check. */
+const limitHeaders = (request: Request, limits: { site: number; preview: number }) => ({
+  [LIMIT_HEADER]: String(limitFor(new URL(request.url), limits)),
+});
 
 /** Requests to /api/account/*. */
 export async function handleAccount(
@@ -89,7 +122,11 @@ export async function handleAccount(
     if (!read.ok) return read.response;
     const checked = checkSealedBody(read.body, 'wrap');
     if (!checked.ok) return problem(400, checked.error);
-    return stub.fetch('https://passkey/', { method: 'PUT', body: checked.value });
+    return stub.fetch('https://passkey/', {
+      method: 'PUT',
+      body: checked.value,
+      headers: limitHeaders(request, STORAGE_LIMITS.passkeys),
+    });
   }
 
   if (path === '/api/account/status') {
@@ -97,7 +134,12 @@ export async function handleAccount(
     if (!token) return problem(401, 'Missing or malformed status token.');
     const stub = env.ACCOUNT_STATUS.get(env.ACCOUNT_STATUS.idFromName(await sha256Text(token)));
     if (request.method === 'GET') return stub.fetch('https://status/');
-    if (request.method === 'PUT') return stub.fetch('https://status/', { method: 'PUT' });
+    if (request.method === 'PUT') {
+      return stub.fetch('https://status/', {
+        method: 'PUT',
+        headers: limitHeaders(request, STORAGE_LIMITS.replaced),
+      });
+    }
     return problem(405, 'Use GET or PUT.');
   }
 
@@ -160,17 +202,25 @@ export class AccountLink {
 
 export class AccountPasskey {
   readonly state: DurableObjectState;
+  readonly env: AccountEnv;
 
-  constructor(state: DurableObjectState) {
+  constructor(state: DurableObjectState, env: AccountEnv) {
     this.state = state;
+    this.env = env;
   }
 
   async fetch(request: Request): Promise<Response> {
+    // The meter for all passkey locks is one of these objects too, named METER.
+    if (new URL(request.url).hostname === METER) return meterFetch(this.state, request);
     if (request.method === 'PUT') {
+      if (!(await reserve(this.state, this.env.ACCOUNT_PASSKEYS, 0, limitOf(request)))) {
+        return problem(507, 'There’s no room for more passkeys just now.');
+      }
       await this.state.storage.put('wrap', await request.text());
       return noContent();
     }
     if (request.method === 'DELETE') {
+      await release(this.state, this.env.ACCOUNT_PASSKEYS);
       await this.state.storage.deleteAll();
       return noContent();
     }
@@ -183,19 +233,54 @@ export class AccountPasskey {
 
 export class AccountStatus {
   readonly state: DurableObjectState;
+  readonly env: AccountEnv;
 
-  constructor(state: DurableObjectState) {
+  constructor(state: DurableObjectState, env: AccountEnv) {
     this.state = state;
+    this.env = env;
   }
 
   async fetch(request: Request): Promise<Response> {
-    if (request.method === 'PUT') {
-      // For good: a replaced key never becomes the account again.
-      if (!(await this.state.storage.get<number>('replaced'))) {
-        await this.state.storage.put('replaced', Date.now());
+    // The meter for all notes is one of these objects too, named METER.
+    if (new URL(request.url).hostname === METER) return meterFetch(this.state, request);
+    return this.state.blockConcurrencyWhile(async () => {
+      const replaced = (await this.state.storage.get<number>('replaced')) !== undefined;
+      const now = Date.now();
+      if (request.method === 'PUT') {
+        // A replaced key never becomes the account again (until nobody has
+        // asked about it for 13 months: by then no device still has it).
+        if (!replaced) {
+          if (!(await reserve(this.state, this.env.ACCOUNT_STATUS, 0, limitOf(request)))) {
+            return problem(507, 'There’s no room to note the old key just now.');
+          }
+          await this.state.storage.put('replaced', now);
+        }
+        await this.#touch(now);
+        return noContent();
       }
-      return noContent();
-    }
-    return json({ replaced: (await this.state.storage.get<number>('replaced')) !== undefined });
+      if (replaced) await this.#touch(now);
+      return json({ replaced });
+    });
+  }
+
+  /** UNUSED_MS after a device last asked: the note goes, and its room with it. */
+  async alarm(): Promise<void> {
+    await this.state.blockConcurrencyWhile(async () => {
+      const active = (await this.state.storage.get<number>('active')) ?? 0;
+      if (Date.now() - active < UNUSED_MS) {
+        await this.state.storage.setAlarm(active + UNUSED_MS);
+        return;
+      }
+      await release(this.state, this.env.ACCOUNT_STATUS);
+      await this.state.storage.deleteAll();
+    });
+  }
+
+  /** Keeps the note for UNUSED_MS more. At most once a day: each time is a write. */
+  async #touch(now: number): Promise<void> {
+    const active = await this.state.storage.get<number>('active');
+    if (active !== undefined && now - active < DAY_MS) return;
+    await this.state.storage.put('active', now);
+    await this.state.storage.setAlarm(now + UNUSED_MS);
   }
 }

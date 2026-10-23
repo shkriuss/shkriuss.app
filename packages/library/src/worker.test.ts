@@ -6,6 +6,7 @@ import { randomBytes, sha256, toBase64Url } from '@shkriuss/crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { memoryLibrary } from './testing.ts';
 import { LIMITS, type Changes } from './validate.ts';
+import { STORAGE_LIMITS } from './worker.ts';
 
 const ORIGIN = 'https://photos.example';
 const CODE = 'correct horse battery staple';
@@ -389,7 +390,8 @@ describe('protecting the bill', () => {
 
     expect((await stranger.remove(ids)).status).toBe(204);
     const storage = [...server.objects.values()][0]?.storage;
-    expect([...(storage?.map.keys() ?? [])]).toEqual(['meta']);
+    // Its (empty) list, and the room it was given (docs/adr/0017).
+    expect([...(storage?.map.keys() ?? [])].sort()).toEqual(['meta', 'meter:granted']);
 
     expect((await stranger.call('', { method: 'DELETE' })).status).toBe(202);
     expect(storage?.alarm).toBeNull();
@@ -440,5 +442,26 @@ describe('deleting a library', () => {
     expect(after.usage).toMatchObject({ items: 0, bytes: 0 });
     expect(after.epoch).not.toBe(epoch);
     expect((await device.put(ITEM, [100])).status).toBe(200);
+  });
+});
+
+describe('how many libraries there can be (docs/adr/0017)', () => {
+  it('stops made-up libraries at the limit, and keeps nothing for one turned down', async () => {
+    const preview = (library: string) =>
+      server.fetch(
+        new Request('https://pr-9-photos.shkriuss.workers.dev/api/library/changes?since=0', {
+          headers: { Authorization: `Bearer ${token()}`, 'X-Library': library },
+        }),
+      );
+    let kept = 0;
+    for (; kept < 1000; kept += 1) {
+      const response = await preview(libraryId());
+      if (response.status === 507) break;
+      expect(response.status).toBe(200);
+    }
+    expect(kept).toBe(Math.floor(STORAGE_LIMITS.preview / (16 * 1024)));
+    const stored = [...server.objects.values()].filter(({ storage }) => storage.map.size > 0);
+    // The libraries, and the meter that counts them.
+    expect(stored).toHaveLength(kept + 1);
   });
 });

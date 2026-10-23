@@ -4,7 +4,6 @@
  * turns, like phones that sync one after another.
  */
 import { equalBytes, randomBytes, toBase64Url, utf8 } from '@shkriuss/crypto';
-import { createWorker } from '@shkriuss/server';
 import { createStore, deleteAll, type StorageLike, type Store } from '@shkriuss/storage';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -18,11 +17,9 @@ import {
 } from './client.ts';
 import { turnOffProof } from './connect.ts';
 import { syncKeys } from './snapshot.ts';
+import { memorySync, withFiles } from './testing.ts';
 import type { FileList } from './validate.ts';
-import worker, { SyncCopy, syncHandler, type SyncEnv } from './worker.ts';
-
-/** An app's Worker with files on (worker.ts's default has them off). */
-const withFiles = createWorker<SyncEnv>({ '/api/sync': syncHandler({ files: true }) });
+import worker, { STORAGE_LIMITS, type SyncEnv } from './worker.ts';
 
 class MemoryStorage implements StorageLike {
   #map = new Map<string, string>();
@@ -45,39 +42,7 @@ class MemoryStorage implements StorageLike {
 
 // ---------- The server, in memory ----------
 
-function memoryServer(): SyncEnv {
-  const objects = new Map<string, SyncCopy>();
-  const storageFor = () => {
-    const map = new Map<string, unknown>();
-    return {
-      get: async <T>(key: string) => structuredClone(map.get(key)) as T | undefined,
-      put: async (key: string, value: unknown) => void map.set(key, structuredClone(value)),
-      delete: async (key: string) => map.delete(key),
-      deleteAll: async () => map.clear(),
-      setAlarm: async () => undefined,
-      deleteAlarm: async () => undefined,
-    };
-  };
-  return {
-    ASSETS: { fetch: async () => new Response('page') },
-    SYNC_COPIES: {
-      idFromName: (name: string) => ({ toString: () => name }),
-      get: (id) => ({
-        fetch: (input: string, init?: RequestInit) => {
-          const name = id.toString();
-          const object =
-            objects.get(name) ??
-            new SyncCopy({
-              storage: storageFor(),
-              blockConcurrencyWhile: (callback) => callback(),
-            });
-          objects.set(name, object);
-          return object.fetch(new Request(input, init));
-        },
-      }),
-    },
-  };
-}
+const memoryServer = (): SyncEnv => memorySync().env;
 
 // ---------- Pretend devices ----------
 
@@ -1313,6 +1278,35 @@ describe('data linked to the copy', () => {
     expect(linked.calls).toEqual([move]);
     await tablet.syncNow();
     expect(linked.calls).toEqual([move]);
+  });
+});
+
+describe('no room online for the app', () => {
+  it('keeps the changes here, says so, and syncs them once there’s room', async () => {
+    const secret = randomBytes(32);
+    const phone = new Device(secret);
+    const tablet = new Device(secret);
+    // Strangers' made-up copies have used up all of the app's room (these
+    // tests' server has files on, so it's the limit for copies with files).
+    const limit = STORAGE_LIMITS.files.site;
+    const meter = server.SYNC_COPIES.get(server.SYNC_COPIES.idFromName('meter'));
+    const strangers = (bytes: number) =>
+      meter.fetch('https://meter/', {
+        method: 'POST',
+        body: JSON.stringify({ id: 'strangers', bytes, limit }),
+      });
+    await strangers(limit);
+
+    phone.counters = [counter('door')];
+    // "Couldn't sync just now. It will try again later."
+    expect((await phone.syncNow()).problem).toBe('server');
+    expect(phone.counters).toEqual([counter('door')]);
+
+    // Their copies are deleted after 13 months unused: then it syncs.
+    await strangers(0);
+    expect((await phone.syncNow()).problem).toBeNull();
+    await tablet.syncNow();
+    expect(tablet.counters).toEqual([counter('door')]);
   });
 });
 

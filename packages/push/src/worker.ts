@@ -13,6 +13,10 @@
  * The device is identified by a random key only the phone has (a bearer
  * token); the server stores just its SHA-256 hash. Messages arrive already
  * encrypted by the phone, so the server can't read them.
+ *
+ * Anyone can make up a device key, so all of an app's devices together have
+ * a limit (STORAGE_LIMITS, kept by the namespace's meter:
+ * @shkriuss/server/meter, docs/adr/0017-storage-limits.md).
  */
 import {
   bearerToken,
@@ -26,6 +30,16 @@ import {
   type DurableObjectState,
   type SiteEnv,
 } from '@shkriuss/server';
+import {
+  LIMIT_HEADER,
+  limitFor,
+  limitOf,
+  METER,
+  meterFetch,
+  NO_LIMIT,
+  release,
+  reserve,
+} from '@shkriuss/server/meter';
 import { fromBase64Url } from './base64.ts';
 import { nextFireTime } from './schedule.ts';
 import {
@@ -76,6 +90,11 @@ const SENDS_PER_ALARM = 25;
  * months) is forgotten. Apps upload it at least weekly while they're used.
  */
 const UNUSED_MS = 396 * DAY_MS;
+/**
+ * All of one app's device schedules together, in bytes, on the real site
+ * and on a PR preview. Each device also counts 16 KB, whatever it holds.
+ */
+export const STORAGE_LIMITS = { site: 40_000_000, preview: 8_000_000 } as const;
 
 // ---------- Helpers ----------
 
@@ -115,6 +134,7 @@ export async function handlePush(request: Request, env: PushEnv, path: string): 
   return device.fetch(route === 'PUT' ? 'https://device/schedule' : 'https://device/test', {
     method: route === 'PUT' ? 'PUT' : 'POST',
     body: JSON.stringify(checked.value),
+    headers: { [LIMIT_HEADER]: String(limitFor(new URL(request.url), STORAGE_LIMITS)) },
   });
 }
 
@@ -203,12 +223,15 @@ export class PushDevice {
     return this.state.storage.get<DeviceRecord>('device');
   }
 
-  async #save(record: DeviceRecord): Promise<void> {
+  /** Saves the schedule; false if there's no room for it (the app's limit is reached). */
+  async #save(record: DeviceRecord, limit: number): Promise<boolean> {
     if (record.entries.length === 0) {
       // Nothing left to send: keep nothing at all.
       await this.#forget();
-      return;
+      return true;
     }
+    const bytes = JSON.stringify(record).length;
+    if (!(await reserve(this.state, this.env.PUSH_DEVICES, bytes, limit))) return false;
     await this.state.storage.setAlarm(
       Math.min(
         ...record.entries.map((entry) => entry.retryAt ?? entry.next),
@@ -217,9 +240,11 @@ export class PushDevice {
       ),
     );
     await this.state.storage.put('device', record);
+    return true;
   }
 
   async #forget(): Promise<void> {
+    await release(this.state, this.env.PUSH_DEVICES);
     await this.state.storage.deleteAlarm();
     await this.state.storage.deleteAll();
   }
@@ -271,6 +296,8 @@ export class PushDevice {
   }
 
   async fetch(request: Request): Promise<Response> {
+    // The app's meter is one of these objects too, named METER.
+    if (new URL(request.url).hostname === METER) return meterFetch(this.state, request);
     // One request at a time, and never during a wake-up, so none of them works
     // from a copy that another has just changed.
     return this.state.blockConcurrencyWhile(() => this.#handle(request));
@@ -319,14 +346,18 @@ export class PushDevice {
       const next = nextFireTime(entry, schedule.timeZone, now);
       if (next !== null) entries.push({ ...entry, next, attempts: 0, retryAt: null });
     }
-    await this.#save({
-      endpoint: schedule.endpoint,
-      timeZone: schedule.timeZone,
-      entries,
-      updates,
-      // Still failing for the same push address: an upload doesn't start the count again.
-      failingSince: record?.endpoint === schedule.endpoint ? (record.failingSince ?? null) : null,
-    });
+    const saved = await this.#save(
+      {
+        endpoint: schedule.endpoint,
+        timeZone: schedule.timeZone,
+        entries,
+        updates,
+        // Still failing for the same push address: an upload doesn't start the count again.
+        failingSince: record?.endpoint === schedule.endpoint ? (record.failingSince ?? null) : null,
+      },
+      limitOf(request),
+    );
+    if (!saved) return problem(507, 'There’s no room for more notifications just now.');
     return json({ scheduled: entries.length });
   }
 
@@ -398,6 +429,7 @@ export class PushDevice {
       const next = nextFireTime(entry, record.timeZone, Math.max(entry.next, now));
       if (next !== null) entries.push({ ...entry, next, attempts: 0, retryAt: null });
     }
-    await this.#save({ ...record, entries, failingSince });
+    // What it already had, give or take a few bytes: never refused.
+    await this.#save({ ...record, entries, failingSince }, NO_LIMIT);
   }
 }

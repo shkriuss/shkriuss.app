@@ -232,6 +232,9 @@ Everything here fits Cloudflare's and GitHub's free plans:
   is about two; signing in, adding a device or opening the Account page
   takes a handful; an app with
   sync open uses about one a minute, plus one or two per change).
+- Durable Objects also keep up to 5 GB, for every app together. Each app's
+  servers have a limit that keeps them all within it, and copies nobody uses
+  for 13 months are deleted ([ADR 0017](adr/0017-storage-limits.md)).
 - Photos' online library uses R2: free up to 10 GB, then about $0.015 per GB
   a month (about $15 a month for 1 TB, the most it holds), and downloads are
   free. Each photo put online is one Worker request and two Durable Object
@@ -250,3 +253,4 @@ Everything here fits Cloudflare's and GitHub's free plans:
 | No preview links on a pull request                            | Previews wait for your approval (see "Seeing a preview"). Dependabot's pull requests never get previews.                                                                      |
 | "Could not create the R2 bucket …"                            | Turn on R2 in Cloudflare, and give the token `Account` · `Workers R2 Storage` · `Edit` (see setup).                                                                           |
 | Photos says "Online storage isn't set up yet"                 | Add the `PHOTOS_STORAGE_CODE` secret to the `production` environment (see setup). The next merge to `main` gives it to the Worker.                                            |
+| An app keeps saying "Couldn't sync just now"                  | Its server may have reached its limit (ADR 0017); unused copies go after 13 months. To raise it: `STORAGE_LIMITS` in `packages/sync/src/worker.ts`, all under 5 GB.           |

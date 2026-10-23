@@ -25,11 +25,11 @@ anyone is listed here without its details until it's fixed (see
 
 | Severity | Found | Fixed | Partly fixed | Your setting | Your choice | Later | Explained or accepted |
 | -------- | ----- | ----- | ------------ | ------------ | ----------- | ----- | --------------------- |
-| High     | 14    | 12    | –            | 2            | –           | –     | –                     |
+| High     | 14    | 14    | –            | –            | –           | –     | –                     |
 | Medium   | 34    | 32    | 1            | –            | –           | 1     | –                     |
-| Low      | 90    | 75    | 1            | 2            | –           | 10    | 2                     |
-| Info     | 24    | 8     | 1            | 4            | 1           | 7     | 3                     |
-| **All**  | 162   | 127   | 3            | 8            | 1           | 18    | 5                     |
+| Low      | 90    | 77    | 1            | –            | –           | 10    | 2                     |
+| Info     | 24    | 12    | 1            | –            | 1           | 7     | 3                     |
+| **All**  | 162   | 135   | 3            | –            | 1           | 18    | 5                     |
 
 "Your setting" means a change in Cloudflare or GitHub that only the owner can
 make, listed in [deployment.md](../deployment.md). "Later" means a real but
@@ -37,24 +37,11 @@ small problem, or a bigger change, that's planned rather than done now.
 
 ## What's left for the owner
 
-**Settings** (step by step in [deployment.md](../deployment.md)):
-
-1. Make a new Cloudflare token, keep it and the Photos storage code in the
-   `production` and `preview` environments, and delete the repository
-   secrets (H-1, H-2, I-11). Until then, a pull request's preview can use the
-   production token.
-2. Turn on auto-renew for the domain (I-1).
-3. Add the rate-limiting rule for `/api/` in Cloudflare (B-1, I-8).
-4. Add the email records that say the domain sends no email, and delete the
-   two unused email forwarding rules (I-2).
-5. Add a CAA record so only Cloudflare's certificate authorities can issue
-   certificates for the domain (I-5).
-6. Turn off the Cloudflare features that can rewrite pages (I-3).
-7. GitHub: squash merges only, delete branches after merge, and required
-   checks from the rules on `main` (I-9, H-11).
-8. Cloudflare: two-factor sign-in and a usage alert for R2 (I-10).
-9. Make the Photos storage code at least 24 characters, like five random
-   words (B-4).
+**Settings:** all done (23 October 2026), step by step in
+[deployment.md](../deployment.md). The ones that can be seen from outside
+were checked: the email and certificate records, the limit on requests to
+the servers, the deploy's token and storage code, previews waiting for
+approval, and pages that nothing rewrites.
 
 **Choices** (the default is already in place; say if you want the other):
 
@@ -111,24 +98,24 @@ Severity is the auditor’s: **High** could lose or leak data or cost money; **M
 
 ### B. Servers and the bill
 
-| ID   | Severity | What was wrong                                                                                                    | What happened                                         |
-| ---- | -------- | ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| B-1  | High     | The servers’ shared storage needs a further limit (details kept private until it’s in place)                      | Your setting: the limit for /api/ in deployment.md    |
-| B-2  | High     | One push upload from a stranger wakes the server about 2,500 times a day, forever                                 | Fixed                                                 |
-| B-3  | High     | An unlocked library stays unlocked for good, and there's no limit across libraries                                | Fixed                                                 |
-| B-4  | Medium   | The storage code's "10 wrong tries an hour" doesn't limit guessing                                                | Fixed                                                 |
-| B-5  | Medium   | "Remove" writes 201 rows per request, with no code and no limit, enough to stop every write on the account        | Fixed                                                 |
-| B-6  | Medium   | Strangers can make R2 bill for operations without the storage code                                                | Fixed                                                 |
-| B-7  | Low      | Sealed files can stay in R2 outside the library's list: after a failed commit, and after "Delete the online copy" | Later: an occasional clean-up of leftover files in R2 |
-| B-8  | Low      | The daily upload limit is per library, and a full day's uploads use most of the free daily writes                 | Fixed                                                 |
-| B-9  | Low      | Syncing a copy near the documented size likely goes over the free plan's 10 ms CPU limit                          | Later: measure CPU time for a full-size copy          |
-| B-10 | Low      | A notification schedule that passes every check is too big to store                                               | Fixed                                                 |
-| B-11 | Low      | Body size limits are checked only after the whole body has been read                                              | Fixed                                                 |
-| B-12 | Low      | The push address checks can be bypassed with a redirect                                                           | Fixed                                                 |
-| B-13 | Low      | The time-zone cache grows with every spelling of a time zone                                                      | Fixed                                                 |
-| B-14 | Low      | Deleting a library never finishes if its alarm keeps failing                                                      | Fixed                                                 |
-| B-15 | Low      | PushDevice handles requests without `blockConcurrencyWhile`, unlike the other objects                             | Fixed                                                 |
-| B-16 | Info     | Until the person's device moves the library, a lost device can move it to a token of its own                      | Fixed (with A-3)                                      |
+| ID   | Severity | What was wrong                                                                                                    | What happened                                                                                 |
+| ---- | -------- | ----------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| B-1  | High     | Anyone can fill the 5 GB of Durable Object storage that every app shares, for good                                | Fixed (a limit on what each app’s servers keep, and copies nobody uses are deleted: ADR 0017) |
+| B-2  | High     | One push upload from a stranger wakes the server about 2,500 times a day, forever                                 | Fixed                                                                                         |
+| B-3  | High     | An unlocked library stays unlocked for good, and there's no limit across libraries                                | Fixed                                                                                         |
+| B-4  | Medium   | The storage code's "10 wrong tries an hour" doesn't limit guessing                                                | Fixed                                                                                         |
+| B-5  | Medium   | "Remove" writes 201 rows per request, with no code and no limit, enough to stop every write on the account        | Fixed                                                                                         |
+| B-6  | Medium   | Strangers can make R2 bill for operations without the storage code                                                | Fixed                                                                                         |
+| B-7  | Low      | Sealed files can stay in R2 outside the library's list: after a failed commit, and after "Delete the online copy" | Later: an occasional clean-up of leftover files in R2                                         |
+| B-8  | Low      | The daily upload limit is per library, and a full day's uploads use most of the free daily writes                 | Fixed                                                                                         |
+| B-9  | Low      | Syncing a copy near the documented size likely goes over the free plan's 10 ms CPU limit                          | Later: measure CPU time for a full-size copy                                                  |
+| B-10 | Low      | A notification schedule that passes every check is too big to store                                               | Fixed                                                                                         |
+| B-11 | Low      | Body size limits are checked only after the whole body has been read                                              | Fixed                                                                                         |
+| B-12 | Low      | The push address checks can be bypassed with a redirect                                                           | Fixed                                                                                         |
+| B-13 | Low      | The time-zone cache grows with every spelling of a time zone                                                      | Fixed                                                                                         |
+| B-14 | Low      | Deleting a library never finishes if its alarm keeps failing                                                      | Fixed                                                                                         |
+| B-15 | Low      | PushDevice handles requests without `blockConcurrencyWhile`, unlike the other objects                             | Fixed                                                                                         |
+| B-16 | Info     | Until the person's device moves the library, a lost device can move it to a token of its own                      | Fixed (with A-3)                                                                              |
 
 ### C. Pages and the browser
 
@@ -253,8 +240,8 @@ Severity is the auditor’s: **High** could lose or leak data or cost money; **M
 
 | ID   | Severity | What was wrong                                                                                                                           | What happened                                                               |
 | ---- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| H-1  | High     | Preview job gives the production Cloudflare token and the real storage code to unmerged, unchecked PR code                               | Fixed (works once you do step 1 of “What’s left for the owner”)             |
-| H-2  | Medium   | Dependabot PRs get the production token as soon as a person pushes to, updates or reopens them                                           | Fixed (works once you do step 1 of “What’s left for the owner”)             |
+| H-1  | High     | Preview job gives the production Cloudflare token and the real storage code to unmerged, unchecked PR code                               | Fixed                                                                       |
+| H-2  | Medium   | Dependabot PRs get the production token as soon as a person pushes to, updates or reopens them                                           | Fixed                                                                       |
 | H-3  | Medium   | The 7-day `minimumReleaseAge` doesn't apply to versions already in `pnpm-lock.yaml`, so CI installs brand-new versions a PR writes there | Fixed                                                                       |
 | H-4  | Low      | The production deploy job shows the Cloudflare token to every step, not just the two that need it                                        | Fixed                                                                       |
 | H-5  | Low      | The pin test and CI's offline zizmor accept any 40-character SHA, including commits that aren't in the action's repository               | Fixed                                                                       |
@@ -263,25 +250,25 @@ Severity is the auditor’s: **High** could lose or leak data or cost money; **M
 | H-8  | Low      | Following the docs to redeploy can quietly do nothing, or put older code back live                                                       | Fixed                                                                       |
 | H-9  | Low      | The deploy job reuses a dependency cache that jobs running test-only code can write                                                      | Fixed                                                                       |
 | H-10 | Low      | `sharp` is allowed to run install scripts, but needs none                                                                                | Fixed                                                                       |
-| H-11 | Info     | The PR being checked defines its own required checks                                                                                     | Your setting: required checks come from the rules on main                   |
+| H-11 | Info     | The PR being checked defines its own required checks                                                                                     | Fixed (your setting: required checks come from the rules on main)           |
 | H-12 | Info     | Production doesn't run exactly the files that were tested                                                                                | Accepted: the deploy uses the tested build, plus checksum-checked downloads |
 | H-13 | Info     | Some CI tools are pinned by hand and Dependabot never updates them                                                                       | Later: let Dependabot update the hand-pinned tools                          |
 
 ### I. Domain and Cloudflare
 
-| ID   | Severity | What was wrong                                                                                                        | What happened                                                                         |
-| ---- | -------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| I-1  | High     | Auto-renew is off, so the domain won't renew itself                                                                   | Your setting: domain auto-renew                                                       |
-| I-2  | Low      | No SPF, DMARC or null MX records say the domain sends no email, and two email forwarding rules sit unused             | Your setting: email DNS records                                                       |
-| I-3  | Low      | Cloudflare features can rewrite live pages, and nothing checks the live HTML                                          | Fixed (the live check spots a changed page); turning the features off is your setting |
-| I-4  | Low      | The privacy page says Cloudflare data "is not collected", but Cloudflare keeps security events and traffic statistics | Fixed                                                                                 |
-| I-5  | Low      | No CAA record, so any public CA may issue certificates for the domain                                                 | Your setting: a CAA record                                                            |
-| I-6  | Low      | 36 old builds stay public indefinitely at "version preview" addresses                                                 | Explained (deployment.md); hiding them is your choice                                 |
-| I-7  | Low      | No `security.txt` on any site                                                                                         | Fixed                                                                                 |
-| I-8  | Info     | Requests to the servers need a limit at Cloudflare (details kept private until it’s in place)                         | Your setting: the limit for /api/ in deployment.md                                    |
-| I-9  | Info     | GitHub repository settings to tidy                                                                                    | Your setting: GitHub repository settings                                              |
-| I-10 | Info     | Small Cloudflare account settings to add                                                                              | Your setting: Cloudflare account settings                                             |
-| I-11 | Info     | Previews get the production storage code                                                                              | Fixed (works once you do step 1 of “What’s left for the owner”)                       |
+| ID   | Severity | What was wrong                                                                                                        | What happened                                                         |
+| ---- | -------- | --------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| I-1  | High     | Auto-renew is off, so the domain won't renew itself                                                                   | Fixed (your setting)                                                  |
+| I-2  | Low      | No SPF, DMARC or null MX records say the domain sends no email, and two email forwarding rules sit unused             | Fixed (your setting; checked on 23 October)                           |
+| I-3  | Low      | Cloudflare features can rewrite live pages, and nothing checks the live HTML                                          | Fixed (the features are off, and the live check spots a changed page) |
+| I-4  | Low      | The privacy page says Cloudflare data "is not collected", but Cloudflare keeps security events and traffic statistics | Fixed                                                                 |
+| I-5  | Low      | No CAA record, so any public CA may issue certificates for the domain                                                 | Fixed (your setting; checked on 23 October)                           |
+| I-6  | Low      | 36 old builds stay public indefinitely at "version preview" addresses                                                 | Explained (deployment.md); hiding them is your choice                 |
+| I-7  | Low      | No `security.txt` on any site                                                                                         | Fixed                                                                 |
+| I-8  | Info     | Nothing at the edge limits requests to `/api/*`, and all apps share the free daily limits                             | Fixed (your setting; checked on 23 October)                           |
+| I-9  | Info     | GitHub repository settings to tidy                                                                                    | Fixed (your setting)                                                  |
+| I-10 | Info     | Small Cloudflare account settings to add                                                                              | Fixed (your setting)                                                  |
+| I-11 | Info     | Previews get the production storage code                                                                              | Fixed                                                                 |
 
 ### J. Architecture and tests
 
