@@ -125,7 +125,9 @@ test.describe('while Water is closed', () => {
         '2026-10-21T21:00',
         '2026-10-21T09:00',
       ]);
-      expect(entries[0]).toMatchObject({ id: 'drink~11:00', repeat: 'daily', offset: 0 });
+      // Numbers, never the app's own ids (they stay on the device).
+      expect(entries.map((entry) => entry.id)).toEqual(['1', '2', '3', '4', '5', '6', '7']);
+      expect(entries[0]).toMatchObject({ repeat: 'daily', offset: 0 });
       expect(await rig.open(fromBase64Url(entries[0]?.payload ?? ''))).toEqual({
         title: REMINDER_TITLE,
         body: REMINDER_BODY,

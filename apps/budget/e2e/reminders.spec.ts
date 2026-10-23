@@ -116,8 +116,9 @@ test.describe('while Budget is closed', () => {
       await remindMe(page).check();
       const entries = await entriesOf(request);
       expect(entries).toHaveLength(1);
+      // A number, never the app's own id (it stays on the device).
       expect(entries[0]).toMatchObject({
-        id: 'reminder',
+        id: '1',
         start: '2026-10-01T09:00',
         repeat: 'monthly',
         offset: 0,
