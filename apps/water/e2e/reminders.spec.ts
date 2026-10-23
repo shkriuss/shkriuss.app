@@ -70,13 +70,18 @@ test('reminds to drink while Water is open, until the goal is reached', async ({
 test('checks the reminder times', async ({ page }) => {
   await page.goto('/');
   await page.getByLabel('Until').fill('08:00');
+  // Changed while in the field: the problem is read out there (audit G-3).
+  await expect(page.getByRole('alert')).toHaveText(
+    'Until: Choose an “Until” time after the “From” time.',
+  );
   await page.getByLabel('Until').blur();
-  await expect(page.getByText('Choose an “Until” time after the “From” time.')).toBeVisible();
+  const error = page.getByText('Choose an “Until” time after the “From” time.', { exact: true });
+  await expect(error).toBeVisible();
   await expect(page.getByLabel('Until')).toHaveAttribute('aria-invalid', 'true');
   await checkA11y(page, 'reminder times problem');
   await page.getByLabel('From').fill('07:00');
   await page.getByLabel('From').blur();
-  await expect(page.getByText('Choose an “Until” time after the “From” time.')).toBeHidden();
+  await expect(error).toBeHidden();
   await expect(page.getByLabel('Until')).not.toHaveAttribute('aria-invalid');
 });
 
