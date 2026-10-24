@@ -148,7 +148,8 @@ worker, so the page never freezes. Grammar is the example to copy:
    the app downloads them only when asked, into a cache of its own (any name
    not starting with `shkriuss-`). Cloudflare serves files of up to 25 MiB,
    so split bigger ones (`pnpm check:dist` checks). Grammar's
-   `scripts/deep-check-files.ts` and `src/scripts/deep-check.ts` show how,
+   `apps/grammar/scripts/deep-check-files.ts` and
+   `apps/grammar/src/scripts/deep-check.ts` show how,
    including checking every file's SHA-256. These files are left out of the
    build that CI saves for deploying, so give the app an
    `on-demand-into-dist` script in `package.json` that puts them back (see
