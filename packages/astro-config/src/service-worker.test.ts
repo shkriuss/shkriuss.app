@@ -233,6 +233,6 @@ describe('the service worker', () => {
     expect(await opens('https://example.com/')).toBe('/');
     expect(await opens(undefined)).toBe(`${ORIGIN}/`);
     // Its path starts with "//", which on its own would mean another website.
-    expect(new URL(await opens('/.//example.com/x'), ORIGIN).origin).toBe(ORIGIN);
+    expect(await opens('/.//example.com/x')).toBe(`${ORIGIN}//example.com/x`);
   });
 });
