@@ -27,9 +27,9 @@ anyone is listed here without its details until it's fixed (see
 | -------- | ----- | ----- | ------------ | ------------ | ----------- | ----- | --------------------- |
 | High     | 14    | 14    | –            | –            | –           | –     | –                     |
 | Medium   | 34    | 34    | –            | –            | –           | –     | –                     |
-| Low      | 90    | 80    | 1            | –            | –           | 7     | 2                     |
-| Info     | 24    | 14    | 1            | –            | 1           | 4     | 4                     |
-| **All**  | 162   | 142   | 2            | –            | 1           | 11    | 6                     |
+| Low      | 90    | 86    | 1            | –            | –           | 1     | 2                     |
+| Info     | 24    | 17    | –            | –            | 1           | 1     | 5                     |
+| **All**  | 162   | 151   | 1            | –            | 1           | 2     | 7                     |
 
 "Your setting" means a change in Cloudflare or GitHub that only the owner can
 make, listed in [deployment.md](../deployment.md). "Later" means a real but
@@ -57,18 +57,8 @@ approval, and pages that nothing rewrites.
 
 Real, but small or rare, or a bigger change best done on its own. None of them can leak or lose anyone’s data.
 
-- **E-12** (Low) The list's order is one value for the whole list, so adding or deleting an item on one device undoes a reorder made on another. _Later: each item needs its own place in the order._
-- **F1-4** (Low) Importing a repeating event can drop its last time when the two time zones change clocks on different dates. _Later: rare, needs both time zones in the import._
-- **F1-5** (Low) Repeating events imported from another time zone are an hour off for part of the year, without a word. _Later: rare, needs both time zones in the import._
-- **F2-3** (Low) Meals' shopping ticks and hand-added items don't show on a synced device whose week starts on another day. _Later: a shared "week starts on" setting._
-- **F2-8** (Low) The item limits are reachable in normal use, and there's no way to clear old items except one at a time. _Later: higher limits, and a way to clear a whole period._
-- **F2-10** (Info) Refunds in a category and partial closes can't be recorded. _Later: app features._
-- **G-14** (Info) Smaller points: Grammar’s fixes clear undo, double announcements, three wordings for "Couldn’t save". _Partly fixed (one read-out per message, one wording for "Couldn’t save"); keeping Grammar’s undo history is later._
-- **J-6** (Low) The "notifications while open" code is copied into six apps, and five of them never test the iPhone and blocked cases. _Later: one shared module for reminders while open._
 - **J-7** (Low) Three files of about 1,000 lines, each mostly one closure, are hard to change safely. _Later: split the three biggest files._
 - **J-8** (Low) Small helpers are copied between apps and have drifted, including a slow comparator and a misleading "Couldn't save". _Partly fixed (the comparator, and one wording for "Couldn’t save"); the rest later._
-- **J-14** (Info) Browser tests always start all 15 servers, and CI time grows about a minute per app toward a 30-minute limit. _Later: run only the sites a change touches._
-- **J-15** (Info) Storage that's synchronous and `localStorage`-only will be hard to grow, and app limits already exceed what fits. _Later: storage that can grow, if needed._
 - **J-16** (Info) Browser test helpers repeat storage formats and photo helpers by hand. _Later: shared test helpers._
 
 ## Every finding
@@ -86,7 +76,7 @@ Severity is the auditor’s: **High** could lose or leak data or cost money; **M
 | A-5 | Low      | A device-link QR code used by someone else looks like a normal success, so it isn't noticed                                                           | Fixed                                                                                    |
 | A-6 | Low      | After "Replace the account key", the old key keeps full access to each app until that app is turned on again, but the page says it "stops it syncing" | Fixed                                                                                    |
 | A-7 | Info     | Bearer tokens can be replayed by anyone who sees Worker requests; the status token alone can lock an account out for good                             | Accepted: only Cloudflare, which runs the servers, sees requests                         |
-| A-8 | Info     | The ADRs don't say what the servers can roll back, withhold or drop                                                                                   | Fixed: written down (ADRs 0010, 0016), and an old sync copy no longer deletes anything   |
+| A-8 | Info     | The ADRs don't say what the servers can roll back, withhold or drop                                                                                   | Fixed: written down (ADRs 0010, 0016); old copies and false notes delete nothing         |
 
 ### B. Servers and the bill
 
@@ -147,20 +137,20 @@ Severity is the auditor’s: **High** could lose or leak data or cost money; **M
 
 ### E. Saving and syncing data
 
-| ID   | Severity | What was wrong                                                                                                                                                                                   | What happened                                     |
-| ---- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------- |
-| E-1  | High     | Rolling back an app after a data version change wipes people's data, and with sync on it deletes it on every device                                                                              | Fixed                                             |
-| E-2  | High     | A sync that is already running undoes "Delete all data" and "Turn off"; after "Delete all data" the reload deletes everything on every device                                                    | Fixed                                             |
-| E-3  | High     | Changes from other devices are saved, but the page isn't told until the upload succeeds; an edit in between brings back deleted items and deletes new ones everywhere                            | Fixed                                             |
-| E-4  | High     | The first sync after a data version change marks every item as just edited, so the stalest device overwrites everyone else's edits and brings back deletions                                     | Fixed                                             |
-| E-5  | High     | Photos: after the account key is replaced, a device that only has the new key can replace the record of the real online library, cutting everyone off from it while the lost device keeps access | Fixed (one rare case left, in ADR 0016)           |
-| E-6  | Medium   | A device whose clock is behind silently loses its own edits and deletions, with no conflict at all                                                                                               | Fixed                                             |
-| E-7  | Medium   | Deleted items come back after 180 days: from a device that hasn't synced in that time, after sync was off that long, or because of a clock far ahead                                             | Fixed                                             |
-| E-8  | Medium   | "Keep both" stops protecting an edit after an upload fails, or after an edit made while sync was off                                                                                             | Fixed                                             |
-| E-9  | Medium   | Safari's 7-day deletion and private windows: nobody is told, and only apps with photos ask the browser to keep their data                                                                        | Fixed                                             |
-| E-10 | Medium   | Photos' "Free up space" trusts this device's old note that photos are online                                                                                                                     | Fixed                                             |
-| E-11 | Low      | A calendar file with `UID:__proto__` stops sync on that device for good                                                                                                                          | Fixed                                             |
-| E-12 | Low      | The list's order is one value for the whole list, so adding or deleting an item on one device undoes a reorder made on another                                                                   | Later: each item needs its own place in the order |
+| ID   | Severity | What was wrong                                                                                                                                                                                   | What happened                           |
+| ---- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------- |
+| E-1  | High     | Rolling back an app after a data version change wipes people's data, and with sync on it deletes it on every device                                                                              | Fixed                                   |
+| E-2  | High     | A sync that is already running undoes "Delete all data" and "Turn off"; after "Delete all data" the reload deletes everything on every device                                                    | Fixed                                   |
+| E-3  | High     | Changes from other devices are saved, but the page isn't told until the upload succeeds; an edit in between brings back deleted items and deletes new ones everywhere                            | Fixed                                   |
+| E-4  | High     | The first sync after a data version change marks every item as just edited, so the stalest device overwrites everyone else's edits and brings back deletions                                     | Fixed                                   |
+| E-5  | High     | Photos: after the account key is replaced, a device that only has the new key can replace the record of the real online library, cutting everyone off from it while the lost device keeps access | Fixed (one rare case left, in ADR 0016) |
+| E-6  | Medium   | A device whose clock is behind silently loses its own edits and deletions, with no conflict at all                                                                                               | Fixed                                   |
+| E-7  | Medium   | Deleted items come back after 180 days: from a device that hasn't synced in that time, after sync was off that long, or because of a clock far ahead                                             | Fixed                                   |
+| E-8  | Medium   | "Keep both" stops protecting an edit after an upload fails, or after an edit made while sync was off                                                                                             | Fixed                                   |
+| E-9  | Medium   | Safari's 7-day deletion and private windows: nobody is told, and only apps with photos ask the browser to keep their data                                                                        | Fixed                                   |
+| E-10 | Medium   | Photos' "Free up space" trusts this device's old note that photos are online                                                                                                                     | Fixed                                   |
+| E-11 | Low      | A calendar file with `UID:__proto__` stops sync on that device for good                                                                                                                          | Fixed                                   |
+| E-12 | Low      | The list's order is one value for the whole list, so adding or deleting an item on one device undoes a reorder made on another                                                                   | Fixed: only a move changes the order    |
 
 ### F1. Calendar, Tasks, Reminders, Habits, Water
 
@@ -169,8 +159,8 @@ Severity is the auditor’s: **High** could lose or leak data or cost money; **M
 | F1-1  | Medium   | Monthly and yearly tasks drift to the 28th for good after one short month                                    | Fixed                                                         |
 | F1-2  | Medium   | In fluid ounces, drinking exactly the goal in bottles doesn't reach it ("0 fl oz to go")                     | Fixed                                                         |
 | F1-3  | Low      | Calendar won't save or import a daily event that goes past midnight                                          | Fixed                                                         |
-| F1-4  | Low      | Importing a repeating event can drop its last time when the two time zones change clocks on different dates  | Later: rare, needs both time zones in the import              |
-| F1-5  | Low      | Repeating events imported from another time zone are an hour off for part of the year, without a word        | Later: rare, needs both time zones in the import              |
+| F1-4  | Low      | Importing a repeating event can drop its last time when the two time zones change clocks on different dates  | Fixed                                                         |
+| F1-5  | Low      | Repeating events imported from another time zone are an hour off for part of the year, without a word        | Fixed: the import says when times may be an hour off          |
 | F1-6  | Low      | In a daylight-saving gap, reminders west of UTC go off an hour early, the evening before at midnight changes | Fixed                                                         |
 | F1-7  | Low      | After travelling, notifications keep the old time zone until the app is reloaded or something changes        | Fixed                                                         |
 | F1-8  | Low      | Ticking off a repeating task dated in the year 9999 empties the whole task list                              | Fixed                                                         |
@@ -179,19 +169,19 @@ Severity is the auditor’s: **High** could lose or leak data or cost money; **M
 
 ### F2. Budget, Trades, Repairs, Meals, Tally
 
-| ID    | Severity | What was wrong                                                                                            | What happened                                           |
-| ----- | -------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| F2-1  | High     | An amount that rounds to 0 makes Budget lose every entry (or every category), on every synced device      | Fixed                                                   |
-| F2-2  | Medium   | A comma typed in a money or hours field is dropped or misread without a word ("12,50" is saved as 1250)   | Fixed                                                   |
-| F2-3  | Low      | Meals' shopping ticks and hand-added items don't show on a synced device whose week starts on another day | Later: a shared "week starts on" setting                |
-| F2-4  | Low      | Trades' setups are case- and space-sensitive, so one setup splits into several in "By setup"              | Fixed                                                   |
-| F2-5  | Low      | Trades accepts any size of number, so results can show Infinity or NaN, and very small prices show as 0   | Fixed                                                   |
-| F2-6  | Low      | Trades rounds the win rate to whole percent: 1 loss in 250 shows "100%"                                   | Fixed                                                   |
-| F2-7  | Low      | A Repairs day cut by "Show more" shows a day total for only part of the day                               | Fixed                                                   |
-| F2-8  | Low      | The item limits are reachable in normal use, and there's no way to clear old items except one at a time   | Later: higher limits, and a way to clear a whole period |
-| F2-9  | Info     | Tally keeps two counters, not the sum, when both devices counted                                          | By design (both devices counted)                        |
-| F2-10 | Info     | Refunds in a category and partial closes can't be recorded                                                | Later: app features                                     |
-| F2-11 | Info     | Tests: gaps that let F2-1 to F2-3 through                                                                 | Fixed (tests added with each fix)                       |
+| ID    | Severity | What was wrong                                                                                            | What happened                                            |
+| ----- | -------- | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| F2-1  | High     | An amount that rounds to 0 makes Budget lose every entry (or every category), on every synced device      | Fixed                                                    |
+| F2-2  | Medium   | A comma typed in a money or hours field is dropped or misread without a word ("12,50" is saved as 1250)   | Fixed                                                    |
+| F2-3  | Low      | Meals' shopping ticks and hand-added items don't show on a synced device whose week starts on another day | Fixed: lists are kept under the week's Monday            |
+| F2-4  | Low      | Trades' setups are case- and space-sensitive, so one setup splits into several in "By setup"              | Fixed                                                    |
+| F2-5  | Low      | Trades accepts any size of number, so results can show Infinity or NaN, and very small prices show as 0   | Fixed                                                    |
+| F2-6  | Low      | Trades rounds the win rate to whole percent: 1 loss in 250 shows "100%"                                   | Fixed                                                    |
+| F2-7  | Low      | A Repairs day cut by "Show more" shows a day total for only part of the day                               | Fixed                                                    |
+| F2-8  | Low      | The item limits are reachable in normal use, and there's no way to clear old items except one at a time   | Fixed: measured limits, Delete a year, plans kept a year |
+| F2-9  | Info     | Tally keeps two counters, not the sum, when both devices counted                                          | By design (both devices counted)                         |
+| F2-10 | Info     | Refunds in a category and partial closes can't be recorded                                                | Fixed: refunds in Budget, partial closes in Trades       |
+| F2-11 | Info     | Tests: gaps that let F2-1 to F2-3 through                                                                 | Fixed (tests added with each fix)                        |
 
 ### F3. Notes, Shelf, Grammar, Photos
 
@@ -211,22 +201,22 @@ Severity is the auditor’s: **High** could lose or leak data or cost money; **M
 
 ### G. Accessibility
 
-| ID   | Severity | What was wrong                                                                                        | What happened                                                                                                     |
-| ---- | -------- | ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| G-1  | Medium   | When saving fails, most people aren’t told, and some apps go on as if it was saved                    | Fixed                                                                                                             |
-| G-2  | Medium   | "Delete all data" deletes nothing while the network hangs, and only says "Deleting…"                  | Fixed                                                                                                             |
-| G-3  | Medium   | An error shown after pressing Enter or "Done" in the field isn’t read out                             | Fixed                                                                                                             |
-| G-4  | Medium   | Two one-tap buttons destroy data with no confirmation and no undo                                     | Fixed                                                                                                             |
-| G-5  | Low      | Habits’ "last 7 days" shows a tick on every day, done or not                                          | Fixed                                                                                                             |
-| G-6  | Low      | In Windows contrast themes, selected and "on" states disappear                                        | Fixed                                                                                                             |
-| G-7  | Low      | Buttons that are waiting get disabled, which throws keyboard and screen reader focus back to the page | Fixed                                                                                                             |
-| G-8  | Low      | While the network hangs, sync shows "Syncing…" for ever, and "Turn on sync" goes silent               | Fixed                                                                                                             |
-| G-9  | Low      | With sync on, the sync status is read out again every minute                                          | Fixed                                                                                                             |
-| G-10 | Low      | The Restore dialog opens with "Restore" focused, the button that replaces everything                  | Fixed                                                                                                             |
-| G-11 | Low      | With text at 200%, the theme switch doesn’t wrap, so every page scrolls sideways                      | Fixed                                                                                                             |
-| G-12 | Low      | Some tap targets are smaller than the project’s own 44 px rule                                        | Fixed (the footer links); Calendar's days at 320px are a written exception                                        |
-| G-13 | Low      | text-size-adjust: none may turn off Android’s own text-size setting                                   | Fixed: changed to the safer 100% (not tried on an Android phone)                                                  |
-| G-14 | Info     | Smaller points: Grammar’s fixes clear undo, double announcements, three wordings for "Couldn’t save"  | Partly fixed (one read-out per message, one wording for "Couldn’t save"); keeping Grammar’s undo history is later |
+| ID   | Severity | What was wrong                                                                                        | What happened                                                              |
+| ---- | -------- | ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| G-1  | Medium   | When saving fails, most people aren’t told, and some apps go on as if it was saved                    | Fixed                                                                      |
+| G-2  | Medium   | "Delete all data" deletes nothing while the network hangs, and only says "Deleting…"                  | Fixed                                                                      |
+| G-3  | Medium   | An error shown after pressing Enter or "Done" in the field isn’t read out                             | Fixed                                                                      |
+| G-4  | Medium   | Two one-tap buttons destroy data with no confirmation and no undo                                     | Fixed                                                                      |
+| G-5  | Low      | Habits’ "last 7 days" shows a tick on every day, done or not                                          | Fixed                                                                      |
+| G-6  | Low      | In Windows contrast themes, selected and "on" states disappear                                        | Fixed                                                                      |
+| G-7  | Low      | Buttons that are waiting get disabled, which throws keyboard and screen reader focus back to the page | Fixed                                                                      |
+| G-8  | Low      | While the network hangs, sync shows "Syncing…" for ever, and "Turn on sync" goes silent               | Fixed                                                                      |
+| G-9  | Low      | With sync on, the sync status is read out again every minute                                          | Fixed                                                                      |
+| G-10 | Low      | The Restore dialog opens with "Restore" focused, the button that replaces everything                  | Fixed                                                                      |
+| G-11 | Low      | With text at 200%, the theme switch doesn’t wrap, so every page scrolls sideways                      | Fixed                                                                      |
+| G-12 | Low      | Some tap targets are smaller than the project’s own 44 px rule                                        | Fixed (the footer links); Calendar's days at 320px are a written exception |
+| G-13 | Low      | text-size-adjust: none may turn off Android’s own text-size setting                                   | Fixed: changed to the safer 100% (not tried on an Android phone)           |
+| G-14 | Info     | Smaller points: Grammar’s fixes clear undo, double announcements, three wordings for "Couldn’t save"  | Fixed                                                                      |
 
 ### H. CI and deploys
 
@@ -271,7 +261,7 @@ Severity is the auditor’s: **High** could lose or leak data or cost money; **M
 | J-3  | Medium   | Photos reloads, checks and re-sorts the whole library every time the window gets focus                                       | Fixed                                                                              |
 | J-4  | Medium   | The JS size budget doesn't count shared chunks, so two pages are over budget while `check:dist` passes                       | Fixed                                                                              |
 | J-5  | Medium   | Browser tests don't check the second device for errors, CSP violations or outside requests                                   | Fixed                                                                              |
-| J-6  | Low      | The "notifications while open" code is copied into six apps, and five of them never test the iPhone and blocked cases        | Later: one shared module for reminders while open                                  |
+| J-6  | Low      | The "notifications while open" code is copied into six apps, and five of them never test the iPhone and blocked cases        | Fixed: @shkriuss/ui/local-reminders, one shared test                               |
 | J-7  | Low      | Three files of about 1,000 lines, each mostly one closure, are hard to change safely                                         | Later: split the three biggest files                                               |
 | J-8  | Low      | Small helpers are copied between apps and have drifted, including a slow comparator and a misleading "Couldn't save"         | Partly fixed (the comparator, and one wording for "Couldn’t save"); the rest later |
 | J-9  | Low      | Several docs no longer describe the system                                                                                   | Fixed                                                                              |
@@ -279,8 +269,8 @@ Severity is the auditor’s: **High** could lose or leak data or cost money; **M
 | J-11 | Low      | Scheduled notification delivery (the push Durable Object's alarm) has no test                                                | Fixed                                                                              |
 | J-12 | Low      | The files database can't be upgraded safely, and a database without its table is never repaired                              | Fixed                                                                              |
 | J-13 | Low      | Local browser tests use fixed ports and reuse whatever server is already listening                                           | Fixed                                                                              |
-| J-14 | Info     | Browser tests always start all 15 servers, and CI time grows about a minute per app toward a 30-minute limit                 | Later: run only the sites a change touches                                         |
-| J-15 | Info     | Storage that's synchronous and `localStorage`-only will be hard to grow, and app limits already exceed what fits             | Later: storage that can grow, if needed                                            |
+| J-14 | Info     | Browser tests always start all 15 servers, and CI time grows about a minute per app toward a 30-minute limit                 | Fixed: E2E_SITES starts only the sites asked for                                   |
+| J-15 | Info     | Storage that's synchronous and `localStorage`-only will be hard to grow, and app limits already exceed what fits             | Accepted: a full storage says so; more room only when an app needs it              |
 | J-16 | Info     | Browser test helpers repeat storage formats and photo helpers by hand                                                        | Later: shared test helpers                                                         |
 | J-17 | Info     | Flaky browser tests are retried in CI and never reported                                                                     | Explained: Playwright already lists flaky tests in each run’s summary              |
 | J-18 | Info     | The cache test for pages would pass for a page cached for a year                                                             | Fixed                                                                              |
