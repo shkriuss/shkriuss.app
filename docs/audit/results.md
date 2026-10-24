@@ -28,14 +28,16 @@ anyone is listed here without its details until it's fixed (see
 | High     | 14    | 14    | –            | –            | –           | –     | –                     |
 | Medium   | 34    | 34    | –            | –            | –           | –     | –                     |
 | Low      | 90    | 88    | –            | –            | –           | –     | 2                     |
-| Info     | 24    | 18    | –            | –            | 1           | –     | 5                     |
-| **All**  | 162   | 154   | –            | –            | 1           | –     | 7                     |
+| Info     | 24    | 18    | –            | –            | –           | –     | 6                     |
+| **All**  | 162   | 154   | –            | –            | –           | –     | 8                     |
 
 "Your setting" means a change in Cloudflare or GitHub that only the owner can
 make, listed in [deployment.md](../deployment.md). "Later" means a real but
 small problem, or a bigger change, that's planned rather than done now.
 
-## What's left for the owner
+## What the owner decided
+
+Nothing is left for the owner.
 
 **Settings:** all done (23 October 2026), step by step in
 [deployment.md](../deployment.md). The ones that can be seen from outside
@@ -43,15 +45,15 @@ were checked: the email and certificate records, the limit on requests to
 the servers, the deploy's token and storage code, previews waiting for
 approval, and pages that nothing rewrites.
 
-**Choices** (the default is already in place; say if you want the other):
+**Choices:** decided on 24 October 2026, keeping the defaults:
 
 - **F1-10:** a task due today at a set time becomes "Overdue" only the next
-  day. The other choice is as soon as its time passes.
+  day, not as soon as its time passes.
 - **I-6:** old builds stay at their "version preview" addresses, which are
-  hard to guess and show only code that was public anyway. The other choice
-  is hiding them, which also puts pull request previews behind a sign-in.
+  hard to guess and show only code that was public anyway. Hiding them would
+  also put pull request previews behind a sign-in.
 - **Z-11:** the repository has no licence file, so anyone may read the code
-  but not reuse it. The other choice is adding one, like MIT.
+  but not reuse it.
 
 ## Every finding
 
@@ -146,18 +148,18 @@ Severity is the auditor’s: **High** could lose or leak data or cost money; **M
 
 ### F1. Calendar, Tasks, Reminders, Habits, Water
 
-| ID    | Severity | What was wrong                                                                                               | What happened                                                 |
-| ----- | -------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------- |
-| F1-1  | Medium   | Monthly and yearly tasks drift to the 28th for good after one short month                                    | Fixed                                                         |
-| F1-2  | Medium   | In fluid ounces, drinking exactly the goal in bottles doesn't reach it ("0 fl oz to go")                     | Fixed                                                         |
-| F1-3  | Low      | Calendar won't save or import a daily event that goes past midnight                                          | Fixed                                                         |
-| F1-4  | Low      | Importing a repeating event can drop its last time when the two time zones change clocks on different dates  | Fixed                                                         |
-| F1-5  | Low      | Repeating events imported from another time zone are an hour off for part of the year, without a word        | Fixed: the import says when times may be an hour off          |
-| F1-6  | Low      | In a daylight-saving gap, reminders west of UTC go off an hour early, the evening before at midnight changes | Fixed                                                         |
-| F1-7  | Low      | After travelling, notifications keep the old time zone until the app is reloaded or something changes        | Fixed                                                         |
-| F1-8  | Low      | Ticking off a repeating task dated in the year 9999 empties the whole task list                              | Fixed                                                         |
-| F1-9  | Low      | Calendar's README says nothing is ever sent and there's no push server                                       | Fixed (as D-15)                                               |
-| F1-10 | Info     | A task due today at a time isn't "Overdue" once that time has passed                                         | Your choice: mark timed tasks overdue once their time passes? |
+| ID    | Severity | What was wrong                                                                                               | What happened                                        |
+| ----- | -------- | ------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------- |
+| F1-1  | Medium   | Monthly and yearly tasks drift to the 28th for good after one short month                                    | Fixed                                                |
+| F1-2  | Medium   | In fluid ounces, drinking exactly the goal in bottles doesn't reach it ("0 fl oz to go")                     | Fixed                                                |
+| F1-3  | Low      | Calendar won't save or import a daily event that goes past midnight                                          | Fixed                                                |
+| F1-4  | Low      | Importing a repeating event can drop its last time when the two time zones change clocks on different dates  | Fixed                                                |
+| F1-5  | Low      | Repeating events imported from another time zone are an hour off for part of the year, without a word        | Fixed: the import says when times may be an hour off |
+| F1-6  | Low      | In a daylight-saving gap, reminders west of UTC go off an hour early, the evening before at midnight changes | Fixed                                                |
+| F1-7  | Low      | After travelling, notifications keep the old time zone until the app is reloaded or something changes        | Fixed                                                |
+| F1-8  | Low      | Ticking off a repeating task dated in the year 9999 empties the whole task list                              | Fixed                                                |
+| F1-9  | Low      | Calendar's README says nothing is ever sent and there's no push server                                       | Fixed (as D-15)                                      |
+| F1-10 | Info     | A task due today at a time isn't "Overdue" once that time has passed                                         | Kept as is (your choice): overdue from the next day  |
 
 ### F2. Budget, Trades, Repairs, Meals, Tally
 
@@ -237,7 +239,7 @@ Severity is the auditor’s: **High** could lose or leak data or cost money; **M
 | I-3  | Low      | Cloudflare features can rewrite live pages, and nothing checks the live HTML                                          | Fixed (the features are off, and the live check spots a changed page) |
 | I-4  | Low      | The privacy page says Cloudflare data "is not collected", but Cloudflare keeps security events and traffic statistics | Fixed                                                                 |
 | I-5  | Low      | No CAA record, so any public CA may issue certificates for the domain                                                 | Fixed (your setting; checked on 23 October)                           |
-| I-6  | Low      | 36 old builds stay public indefinitely at "version preview" addresses                                                 | Explained (deployment.md); hiding them is your choice                 |
+| I-6  | Low      | 36 old builds stay public indefinitely at "version preview" addresses                                                 | Explained (deployment.md); kept as is (your choice)                   |
 | I-7  | Low      | No `security.txt` on any site                                                                                         | Fixed                                                                 |
 | I-8  | Info     | Nothing at the edge limits requests to `/api/*`, and all apps share the free daily limits                             | Fixed (your setting; checked on 23 October)                           |
 | I-9  | Info     | GitHub repository settings to tidy                                                                                    | Fixed (your setting)                                                  |
@@ -281,5 +283,5 @@ Severity is the auditor’s: **High** could lose or leak data or cost money; **M
 | Z-8  | Low      | Deep check's licence file calls RoBERTa's files Apache 2.0 and leaves out their MIT notice                       | Fixed                                                   |
 | Z-9  | Low      | On a phone set to another language, sentences mix English with that language, and the page says it's all English | Fixed                                                   |
 | Z-10 | Low      | Right-to-left text shows its full stop or "!" at the wrong end                                                   | Fixed                                                   |
-| Z-11 | Info     | Smaller points                                                                                                   | Fixed (the licence link); a LICENSE file is your choice |
+| Z-11 | Info     | Smaller points                                                                                                   | Fixed (the licence link); no LICENSE file (your choice) |
 | Z-12 | Info     | The threat model has no goal for keeping things working                                                          | Fixed                                                   |
