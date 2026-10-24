@@ -7,11 +7,16 @@
  * being changed silently.
  *
  * Times with a time zone (or in UTC) are converted to the device's time zone;
- * from then on they are "floating" local times like every other event.
+ * from then on they are "floating" local times like every other event. A
+ * repeating event keeps the time its first date has, so when the two time
+ * zones change their clocks on different dates, some of its times are an hour
+ * off; a note says so. Another note says when a monthly or yearly repeat moved
+ * to another day near the end of a month, where its dates can come out wrong.
  */
 import {
   addDays,
   addMinutes,
+  daysBetween,
   fromDayNumber,
   isIsoDate,
   makeDate,
@@ -187,6 +192,10 @@ interface When {
   date: IsoDate;
   /** null for a whole day. */
   time: IsoTime | null;
+  /** The date and time as written in the file, before converting. */
+  written: { date: IsoDate; time: IsoTime | null };
+  /** The time zone it was written in ("UTC" for UTC); null for whole days, floating times and unknown zones. */
+  zone: string | null;
   /** True when the time was written as 23:59:59 (Calendar's "until the end of the day"). */
   endOfDay: boolean;
   /** True when the time zone wasn't recognised and the time was kept as written. */
@@ -238,8 +247,8 @@ function offsetOf(ms: number, timeZone: string): number {
   return Date.UTC(c.year, c.month - 1, c.day, c.hour, c.minute, c.second) - ms;
 }
 
-/** The moment when clocks in `timeZone` show `wall` (a UTC-based number), or null. */
-function zonedToUtc(wall: number, timeZone: string): number | null {
+/** The name this browser knows a time zone by, or null. */
+function knownZone(timeZone: string): string | null {
   // Zone names are short. A long one isn't a time zone, and would be slow to search.
   if (timeZone.length > 100) return null;
   // Old Thunderbird files write zones like "/mozilla.org/20050126_1/Europe/Berlin".
@@ -247,13 +256,19 @@ function zonedToUtc(wall: number, timeZone: string): number | null {
   for (const zone of zones) {
     if (!zone) continue;
     try {
-      const guess = wall - offsetOf(wall, zone);
-      return wall - offsetOf(guess, zone);
+      wallClock(0, zone);
+      return zone;
     } catch {
       // Not a time zone this browser knows.
     }
   }
   return null;
+}
+
+/** The moment when clocks in `timeZone` (a known zone) show `wall` (a UTC-based number). */
+function zonedToUtc(wall: number, timeZone: string): number {
+  const guess = wall - offsetOf(wall, timeZone);
+  return wall - offsetOf(guess, timeZone);
 }
 
 function inZone(ms: number, timeZone: string): { date: IsoDate; time: IsoTime } {
@@ -270,16 +285,83 @@ function readWhen(property: Property, timeZone: string): When | null {
   const [, year, month, day, hour, minute, second, utc] = match;
   const date = `${year}-${month}-${day}`;
   if (!isIsoDate(date)) return null;
-  const plain = { date, time: null, endOfDay: false, unknownZone: false };
+  const plain: When = {
+    date,
+    time: null,
+    written: { date, time: null },
+    zone: null,
+    endOfDay: false,
+    unknownZone: false,
+  };
   if (hour === undefined || property.params['VALUE'] === 'DATE') return plain;
 
-  const endOfDay = hour === '23' && minute === '59' && second === '59';
+  const time = `${hour}:${minute}`;
+  const asWritten: When = {
+    ...plain,
+    time,
+    written: { date, time },
+    endOfDay: hour === '23' && minute === '59' && second === '59',
+  };
+  const named = utc ? 'UTC' : property.params['TZID'];
+  if (!named) return asWritten;
+  const zone = knownZone(named);
+  if (!zone) return { ...asWritten, unknownZone: true };
   const wall = Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute));
-  const zone = utc ? 'UTC' : property.params['TZID'];
-  if (!zone) return { ...plain, time: `${hour}:${minute}`, endOfDay };
-  const moment = zonedToUtc(wall, zone);
-  if (moment === null) return { ...plain, time: `${hour}:${minute}`, endOfDay, unknownZone: true };
-  return { ...plain, ...inZone(moment, timeZone), endOfDay };
+  return { ...asWritten, ...inZone(zonedToUtc(wall, zone), timeZone), zone };
+}
+
+const DAY_MS = 86_400_000;
+
+/**
+ * The days (as day numbers) in `year` when clocks in `zone` and in `timeZone`
+ * move further apart or closer together, checked at noon (UTC) each day.
+ * `seen` keeps them for the next event; `timeZone` is the same for a whole file.
+ */
+function clockChangeDays(
+  zone: string,
+  timeZone: string,
+  year: number,
+  seen: Map<string, number[]>,
+): number[] {
+  const key = `${zone} ${year}`;
+  const known = seen.get(key);
+  if (known) return known;
+  const apart = (day: number) => {
+    const noon = day * DAY_MS + DAY_MS / 2;
+    return offsetOf(noon, zone) - offsetOf(noon, timeZone);
+  };
+  const days: number[] = [];
+  const first = toDayNumber(makeDate(year, 1, 1));
+  let before = apart(first - 1);
+  for (let day = first; day < toDayNumber(makeDate(year + 1, 1, 1)); day += 1) {
+    const now = apart(day);
+    if (now !== before) days.push(day);
+    before = now;
+  }
+  seen.set(key, days);
+  return days;
+}
+
+/**
+ * True when clocks in `zone` and in `timeZone` don't stay the same time apart
+ * from `from` to `to`. Clocks change on a yearly pattern, so at most a year is
+ * checked (also when `to` is null: "forever").
+ */
+function clocksChangeApart(
+  zone: string,
+  timeZone: string,
+  from: IsoDate,
+  to: IsoDate | null,
+  seen: Map<string, number[]>,
+): boolean {
+  if (zone === timeZone) return false;
+  const first = toDayNumber(from);
+  const last = Math.min(to ? toDayNumber(to) : Infinity, first + 366, toDayNumber('9999-12-31'));
+  for (let year = parts(from).year; year <= parts(fromDayNumber(last)).year; year += 1) {
+    const days = clockChangeDays(zone, timeZone, year, seen);
+    if (days.some((day) => day > first && day <= last)) return true;
+  }
+  return false;
 }
 
 // ---------- Repeats ----------
@@ -311,8 +393,9 @@ interface Rule {
 }
 
 /**
- * Reads an RRULE, or returns null if Calendar can't show it. `written` is the
- * start date as written in the file (rules use the file's own time zone).
+ * Reads an RRULE, or returns null if Calendar can't show it. Rules use the
+ * start's own time zone: `written` is the start date as written in the file,
+ * and UNTIL is converted to `timeZone`, the zone the start is written in.
  */
 function readRule(value: string, written: IsoDate, timeZone: string): Rule | null {
   const rule: Record<string, string> = {};
@@ -366,6 +449,26 @@ function lastStart(draft: EventDraft, count: number): IsoDate | null {
   return starts[count - 1]?.start ?? null;
 }
 
+/**
+ * True when moving a monthly or yearly event from `written` to another day,
+ * `moved`, changes the months or years it's in. Monthly on the 31st (7 months
+ * a year) moved to the 1st would show every month; yearly on 28 February
+ * moved to 1 March would miss 29 February in leap years.
+ */
+function repeatMoves(repeat: Repeat, written: IsoDate, moved: IsoDate): boolean {
+  if (written === moved) return false;
+  const a = parts(written);
+  const b = parts(moved);
+  if (repeat === 'monthly') return a.month !== b.month || a.day > 28 || b.day > 28;
+  if (repeat === 'yearly') {
+    // 29 February is the only day that isn't in every year.
+    const leapDay = (date: { month: number; day: number }) => date.month === 2 && date.day === 29;
+    const acrossFebruary = (a.month === 2 && b.month === 3) || (a.month === 3 && b.month === 2);
+    return leapDay(a) || leapDay(b) || acrossFebruary;
+  }
+  return false;
+}
+
 // ---------- Events ----------
 
 const UNSUPPORTED_REPEAT =
@@ -379,12 +482,15 @@ interface Flags {
   changedDates: number;
   skippedDates: number;
   droppedReminders: number;
+  clockChanges: number;
+  movedRepeats: number;
 }
 
 function toEvent(
   raw: RawEvent,
   options: ParseOptions,
   flags: Flags,
+  changeDays: Map<string, number[]>,
 ): ParsedEvent | SkippedEvent | null {
   const get = (name: string) => raw.props.find((property) => property.name === name);
   const text = (name: string) => unescapeText(get(name)?.value ?? '').trim();
@@ -436,19 +542,19 @@ function toEvent(
   const rules = raw.props.filter((property) => property.name === 'RRULE');
   if (rules.length > 1 || get('RDATE')) return skip(UNSUPPORTED_REPEAT);
   if (rules[0]) {
-    const written = startProperty.value
-      .trim()
-      .slice(0, 8)
-      .replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3');
-    const rule = readRule(rules[0].value, written, options.timeZone);
+    // Rules use the time zone the start is written in.
+    const { written } = start;
+    const rule = readRule(rules[0].value, written.date, start.zone ?? options.timeZone);
     if (!rule) return skip(UNSUPPORTED_REPEAT);
     repeat = rule.repeat;
     count = rule.count;
     if (rule.until) {
-      repeatUntil = rule.until.date;
-      // An UNTIL in another time zone can land on the next day, after the last start.
-      if (rule.until.time !== null && start.time !== null && start.time > rule.until.time)
-        repeatUntil = addDays(repeatUntil, -1);
+      // The last start as written: UNTIL can be before the start time on its day.
+      let last = rule.until.date;
+      if (rule.until.time !== null && written.time !== null && written.time > rule.until.time)
+        last = addDays(last, -1);
+      // Then moved to another day if the first start was.
+      repeatUntil = addDays(last, daysBetween(written.date, start.date));
       if (repeatUntil < start.date) repeat = 'none';
     }
     if (count === 1) repeat = 'none';
@@ -493,6 +599,14 @@ function toEvent(
   const problem = Object.values(problems)[0];
   if (problem) return skip(problem);
 
+  // Every later time keeps the first one's time, and day of the month, on this device.
+  if (draft.repeat !== 'none' && start.zone) {
+    const { startDate, repeatUntil: last } = draft;
+    if (clocksChangeApart(start.zone, options.timeZone, startDate, last, changeDays))
+      flags.clockChanges += 1;
+    if (repeatMoves(draft.repeat, start.written.date, startDate)) flags.movedRepeats += 1;
+  }
+
   const uid = get('UID')?.value.trim() ?? '';
   const ownSuffix = `@${options.domain ?? 'calendar.shkriuss.app'}`;
   const id = uid.endsWith(ownSuffix) ? uid.slice(0, -ownSuffix.length) : uid;
@@ -511,11 +625,19 @@ export function parseIcs(file: string, options: ParseOptions): ParseResult {
       error: 'This doesn’t look like a calendar (.ics) file.',
     };
   }
-  const flags: Flags = { unknownZone: 0, changedDates: 0, skippedDates: 0, droppedReminders: 0 };
+  const flags: Flags = {
+    unknownZone: 0,
+    changedDates: 0,
+    skippedDates: 0,
+    droppedReminders: 0,
+    clockChanges: 0,
+    movedRepeats: 0,
+  };
+  const changeDays = new Map<string, number[]>();
   const events: ParsedEvent[] = [];
   const skipped: SkippedEvent[] = [];
   for (const raw of readEvents(text)) {
-    const result = toEvent(raw, options, flags);
+    const result = toEvent(raw, options, flags, changeDays);
     if (!result) continue;
     if ('draft' in result) events.push(result);
     else skipped.push(result);
@@ -525,6 +647,16 @@ export function parseIcs(file: string, options: ParseOptions): ParseResult {
   if (flags.unknownZone) {
     notes.push(
       `${plural(flags.unknownZone, 'event')} used a time zone Calendar doesn’t know, so ${flags.unknownZone === 1 ? 'its times were' : 'their times were'} kept as written.`,
+    );
+  }
+  if (flags.clockChanges) {
+    notes.push(
+      `${plural(flags.clockChanges, 'repeating event')} ${flags.clockChanges === 1 ? 'is' : 'are'} from a time zone that doesn’t change its clocks on the same dates as yours, so some of ${flags.clockChanges === 1 ? 'its' : 'their'} times may be an hour off.`,
+    );
+  }
+  if (flags.movedRepeats) {
+    notes.push(
+      `${plural(flags.movedRepeats, 'repeating event')} moved to another day in your time zone, so some of ${flags.movedRepeats === 1 ? 'its' : 'their'} dates near the end of a month may be wrong.`,
     );
   }
   if (flags.changedDates) {

@@ -102,6 +102,15 @@ its notification server, docs/adr/0009).
   repeats like "every 2 weeks" or "Mondays and Wednesdays", and changes to
   single dates of a repeating event, are listed as not imported. Times with a
   time zone are moved to the phone's time zone.
+- **Repeating events from another time zone** keep the time their first date
+  has on the phone. When that time zone changes its clocks (summer time) on
+  other dates than the phone's, some of the times end up an hour off: a weekly
+  9:00 London meeting imported in Tbilisi shows at 12:00 every week, but from
+  late October to late March it's really at 13:00. Before anything is added,
+  the import says how many events this affects. It also says when a monthly or
+  yearly event moved to another day near the end of a month: 22:00 UTC on the
+  31st is 02:00 on the 1st in Tbilisi, and Calendar would show it on the 1st
+  of every month, also after months without a 31st.
 - Data saved before reminders existed (version 1) is upgraded automatically.
 
 See [docs/adding-an-app.md](../../docs/adding-an-app.md) for the full guide.
