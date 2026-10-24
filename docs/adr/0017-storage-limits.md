@@ -69,6 +69,10 @@ and a couple of open previews. The per-account limits stay as they were
   puts its own data online again. So only copies nobody uses go for good.
 - **A note that a key was replaced** is deleted the same way, 13 months
   after a device last asked about it. By then no device still has the key.
+- **An online library that was never unlocked** (with the storage code) is
+  deleted 30 days after it was last used. It can't hold photos before it's
+  unlocked, so nothing is lost: a device still using it makes it again.
+  Unlocked libraries stay.
 - A token that only asks (a copy that doesn't exist, a file, a replaced-key
   check) keeps nothing at all.
 
@@ -93,9 +97,9 @@ and a couple of open previews. The per-account limits stay as they were
 - Strangers can't fill the storage every app shares. The most they can do
   is use up one app's room for a while: its new copies or schedules wait,
   while the owner's own copy keeps syncing and every other app works.
-- Junk copies, replaced-key notes and schedules go away by themselves, so
-  those namespaces recover even when full. (Passkey locks and online
-  libraries don't yet: see below.)
+- Junk copies, replaced-key notes, schedules and libraries go away by
+  themselves, so those namespaces recover even when full. (Passkey locks
+  don't: see below.)
 - Copies nobody uses no longer stay on the server for good, which is better
   for privacy too.
 
@@ -105,12 +109,12 @@ and a couple of open previews. The per-account limits stay as they were
   by touching their junk now and then. Then new people can't turn on sync in
   that app until the junk is gone. Telling junk from real copies would need
   accounts the server knows about, which ADR 0010 chose not to have.
-- **Passkey locks and online libraries aren't deleted when unused.** So
-  junk there stays: about 2,500 made-up passkey locks, or 2,000 made-up
-  libraries, fill that namespace until the limit is raised or the owner
-  clears it. Existing passkeys and libraries keep working; new ones can't be
-  made, including the new library a device starts after the account key is
-  replaced.
+- **Passkey locks aren't deleted when unused**: a lock is needed only when
+  someone signs in with that passkey, which can be years later, so the server
+  can't tell an unused one from junk. About 2,500 made-up locks fill that
+  namespace until the limit is raised or the owner clears it. Existing
+  passkeys keep working and the recovery key always works; only adding a new
+  passkey waits.
 - **Raising a limit** is a change to the numbers in the code (and, for much
   more, the Workers paid plan). If the apps get many more users, the limits
   need raising.

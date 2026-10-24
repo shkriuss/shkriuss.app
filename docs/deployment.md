@@ -244,8 +244,9 @@ Everything here fits Cloudflare's and GitHub's free plans:
 - Photos' online library uses R2: free up to 10 GB, then about $0.015 per GB
   a month (about $15 a month for 1 TB, the most it holds), and downloads are
   free. Each photo put online is one Worker request and four Durable Object
-  requests. At most 20,000 photos go up a day, which would take about 80,000
-  of the 100,000 free daily Durable Object requests that every app shares.
+  requests. At most 10,000 photos go up a day, which takes at most about
+  40,000 of the 100,000 free daily Durable Object requests that every app
+  shares.
 - The domain renewal, and R2 above 10 GB, are your only regular costs.
 
 ## Troubleshooting

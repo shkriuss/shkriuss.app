@@ -6,7 +6,7 @@ import { randomBytes, sha256, toBase64Url } from '@shkriuss/crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { memoryLibrary } from './testing.ts';
 import { LIMITS, type Changes } from './validate.ts';
-import { STORAGE_LIMITS, SWEEP_MS } from './worker.ts';
+import { LOCKED_UNUSED_MS, STORAGE_LIMITS, SWEEP_MS } from './worker.ts';
 
 const ORIGIN = 'https://photos.example';
 const CODE = 'correct horse battery staple';
@@ -390,11 +390,13 @@ describe('protecting the bill', () => {
 
     expect((await stranger.remove(ids)).status).toBe(204);
     const storage = [...server.objects.values()][0]?.storage;
-    // Its (empty) list, and the room it was given (docs/adr/0017).
-    expect([...(storage?.map.keys() ?? [])].sort()).toEqual(['meta', 'meter:granted']);
+    // Its (empty) list, the room it was given, and when it was last used, so
+    // it's deleted if nobody uses it (docs/adr/0017).
+    expect([...(storage?.map.keys() ?? [])].sort()).toEqual(['active', 'meta', 'meter:granted']);
 
     expect((await stranger.call('', { method: 'DELETE' })).status).toBe(202);
-    expect(storage?.alarm).toBeNull();
+    // Only that clean-up is planned: no files to look for in R2, as it never had any.
+    expect(storage?.alarm).toBeGreaterThan(Date.now() + LOCKED_UNUSED_MS - 60_000);
     expect(list).not.toHaveBeenCalled();
   });
 
@@ -549,6 +551,92 @@ describe('files left in R2 outside the list (audit finding B-7)', () => {
     expect(await response.json()).toMatchObject({ wiping: true });
     expect((await device.changes()).rows).toEqual([]);
     expect([...server.bucket.files.keys()]).toEqual([]);
+  });
+});
+
+describe('libraries nobody unlocked (docs/adr/0017)', () => {
+  const START = Date.UTC(2026, 9, 22, 12);
+  const DAY = 24 * 60 * 60 * 1000;
+  /** A library made up by a stranger, its storage, and the meter's. */
+  async function madeUp() {
+    vi.useFakeTimers({ now: START });
+    const library = libraryId();
+    const device = client(library, token());
+    expect((await device.call('/changes?since=0')).status).toBe(200);
+    const object = server.objects.get(library);
+    const meter = server.objects.get('meter')?.storage;
+    if (!object || !meter) throw new Error('No library');
+    return { device, object, meter };
+  }
+  const wake = async (object: { library: { alarm(): Promise<void> } }) => object.library.alarm();
+
+  it('are deleted when nobody used them for 30 days, giving their room back', async () => {
+    const { object, meter } = await madeUp();
+    expect(await meter.get('total')).toBeGreaterThan(0);
+    expect(object.storage.alarm).toBe(START + LOCKED_UNUSED_MS);
+
+    vi.setSystemTime(START + LOCKED_UNUSED_MS);
+    await wake(object);
+    expect(object.storage.map.size).toBe(0);
+    expect(await meter.get('total')).toBe(0);
+  });
+
+  it('stay while they’re used: the 30 days start again (at most once a day)', async () => {
+    const { device, object } = await madeUp();
+    vi.setSystemTime(START + 12 * 60 * 60 * 1000);
+    await device.changes();
+    expect(object.storage.alarm).toBe(START + LOCKED_UNUSED_MS);
+
+    vi.setSystemTime(START + 20 * DAY);
+    await device.changes();
+    expect(object.storage.alarm).toBe(START + 20 * DAY + LOCKED_UNUSED_MS);
+    // An alarm from before (or one that ran early) waits for the new time.
+    vi.setSystemTime(START + LOCKED_UNUSED_MS);
+    await wake(object);
+    expect(object.storage.map.has('meta')).toBe(true);
+    expect(object.storage.alarm).toBe(START + 20 * DAY + LOCKED_UNUSED_MS);
+  });
+
+  it('the device that used one just makes it again', async () => {
+    const { device, object } = await madeUp();
+    vi.setSystemTime(START + LOCKED_UNUSED_MS);
+    await wake(object);
+    expect(object.storage.map.size).toBe(0);
+    expect((await device.call('/changes?since=0')).status).toBe(200);
+    expect((await device.unlock()).status).toBe(204);
+  });
+
+  it('once unlocked, a library stays, used or not', async () => {
+    const { device, object } = await madeUp();
+    await device.unlock();
+    expect(object.storage.alarm).toBeNull();
+    expect(object.storage.map.has('active')).toBe(false);
+
+    vi.setSystemTime(START + 2 * LOCKED_UNUSED_MS);
+    await wake(object);
+    expect(object.storage.map.has('meta')).toBe(true);
+  });
+
+  it('deleting one keeps its room counted, and its clean-up', async () => {
+    const { device, object, meter } = await madeUp();
+    const total = await meter.get('total');
+    vi.setSystemTime(START + DAY);
+    expect((await device.call('', { method: 'DELETE' })).status).toBe(202);
+    expect(object.storage.map.has('meter:granted')).toBe(true);
+    expect(object.storage.alarm).toBe(START + DAY + LOCKED_UNUSED_MS);
+
+    vi.setSystemTime(START + DAY + LOCKED_UNUSED_MS);
+    await wake(object);
+    expect(object.storage.map.size).toBe(0);
+    expect(await meter.get('total')).toBe((total as number) - 16 * 1024);
+  });
+
+  it('someone else’s token doesn’t keep one', async () => {
+    const { object } = await madeUp();
+    const library = [...server.objects.entries()].find(([, found]) => found === object)?.[0] ?? '';
+    vi.setSystemTime(START + 20 * DAY);
+    expect((await client(library, token()).call('/changes?since=0')).status).toBe(403);
+    expect(object.storage.alarm).toBe(START + LOCKED_UNUSED_MS);
   });
 });
 

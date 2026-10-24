@@ -28,9 +28,10 @@ export const LIMITS = {
   bytes: 1_000_000_000_000,
   /**
    * Uploads per day (UTC), all libraries together, so the free plan's daily
-   * requests last for every app.
+   * requests last for every app: each upload is four Durable Object requests
+   * and four row writes, of 100,000 a day each for every app together.
    */
-  uploadsPerDay: 20_000,
+  uploadsPerDay: 10_000,
   /** Sealed details, in base64url characters. */
   detailsChars: 4000,
   /** Parts per item (Photos: thumbnail, screen-sized copy, original). */
