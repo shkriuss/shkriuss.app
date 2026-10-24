@@ -5,7 +5,9 @@ Tally syncing through it, and replacing the account key after losing a
 device. Extended by [ADR 0014](0014-syncing-photos.md): files like photos
 sync too, each sealed on its own. Changed by [ADR 0017](0017-storage-limits.md):
 each app's copies together have a limit, and copies (and replaced-key notes)
-nobody uses for 13 months are deleted.
+nobody uses for 13 months are deleted. Extended by
+[ADR 0016](0016-online-photo-library.md): Photos' online library goes through
+the account and is kept in Cloudflare R2, free up to 10 GB, then paid.
 
 ## Context
 
@@ -198,8 +200,8 @@ in with `sync: true` in `apps.json`.
     online, so turning on sync (say, after restoring an old backup) never
     overwrites newer edits. Its other items are added.
   - **Keeping both versions (optional, per app).** An app can ask for this
-    instead of "newest wins" with `conflictCopy`; Calendar, Notes and Tally
-    all do. When an item was changed on this device and on another since
+    instead of "newest wins" with `conflictCopy`; Calendar, Meals, Notes,
+    Reminders, Shelf and Tally do. When an item was changed on this device and on another since
     this device's last sync, the other device's version keeps the item and
     this device's becomes a new item, named "… (second version)"
     (`secondVersionName`, which shortens the name to fit the app's
@@ -275,10 +277,12 @@ in with `sync: true` in `apps.json`.
 - **Device clocks decide "newest".** A device whose clock is far off can win
   or lose a conflict it shouldn't. Edits on different items never conflict.
 - **Same item, two devices.** When the same item is changed on two devices
-  before they sync, changes aren't combined: the person ends up with two
-  items to tidy by hand. For Tally, counting the same counter on two devices
-  at once gives two counters to add up. In Calendar, both events keep their
-  reminder until one is deleted.
+  before they sync, changes aren't combined. In apps that keep both
+  versions, the person ends up with two items to tidy by hand: for Tally,
+  counting the same counter on two devices at once gives two counters to add
+  up; in Calendar, both events keep their reminder until one is deleted. In
+  the other apps the newest change wins, and the other device's change to
+  that item is lost.
 - **iPhone Home Screen apps** keep their own storage, separate from Safari. An
   app added to the Home Screen may need its own sign-in on the hub when it
   connects.
@@ -295,12 +299,15 @@ in with `sync: true` in `apps.json`.
   dialog lists those apps.
 - **Free quota.** As with [ADR 0009](0009-push-notifications.md), someone
   determined could use up the daily free quota. Things would pause until the
-  next day; nothing is exposed and nothing costs money.
+  next day; nothing is exposed and nothing costs money. Someone could also
+  fill one app's room for online copies, which doesn't reset daily
+  ([ADR 0017](0017-storage-limits.md)).
 - **The hub now runs a small Worker for `/api/account/*`.** Every other request
   is still a static file.
 - **QR codes are made by our own encoder** (`packages/ui/src/lib/qr.ts`), not a
   dependency. It's tested module for module against two independent encoders,
-  for every mask, at versions 1 to 10.
+  for every mask, at versions 1, 2, 4 to 7 and 10 (the encoder goes up to
+  version 10).
 
 ## Alternatives
 

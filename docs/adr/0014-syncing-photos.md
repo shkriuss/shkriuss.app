@@ -64,8 +64,11 @@ repairs may have a thousand of them.
 - **Space is limited.** On Cloudflare's free plan, Durable Objects hold
   5 GB in all (every app and every account together), and 1 GB per object,
   so per account. At a few hundred KB a photo, 800 MB is about two years of
-  a technician's daily photos. Moving to the Workers paid plan (about $5 a
-  month) lifts both; the limits are in `packages/sync/src/validate.ts`.
+  a technician's daily photos. The per-account limits (5,000 files, 800 MB)
+  are in `packages/sync/src/validate.ts`; the change rate, and the total for
+  all accounts together (1 GB, [ADR 0017](0017-storage-limits.md)), in
+  `packages/sync/src/worker.ts`. The Workers paid plan (about $5 a month)
+  lifts Cloudflare's limits; ours are raised by changing those numbers.
 - Each upload costs three row writes, against 100,000 a day on the free plan.
 - Photos still aren't in backup files (ADR 0013); with sync on, the online
   copy is a second place they're kept.

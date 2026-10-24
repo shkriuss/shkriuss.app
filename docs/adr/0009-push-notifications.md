@@ -92,8 +92,10 @@ browsers like IronFox receive Web Push through **UnifiedPush**.
   day in all. So someone determined can use up only that app's messages for
   the day (its notifications then pause until 00:00 UTC), not the Durable
   Object requests the other apps need. It can't cost money on the free plan
-  and can't reveal anything. If it ever happens, add Cloudflare's rate
-  limiting in front of `/api/push/*`.
+  and can't reveal anything. A Cloudflare rate-limiting rule on `/api/`
+  slows this down ([deployment](../deployment.md)). Someone could also fill
+  that app's room for schedules; then new devices wait until the junk is
+  forgotten ([ADR 0017](0017-storage-limits.md)).
 
 ## Alternatives
 

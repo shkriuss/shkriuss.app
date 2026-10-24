@@ -171,11 +171,13 @@ self.addEventListener('push', (event) => {
     message = {};
   }
   const text = (value) => (typeof value === 'string' ? value : '');
-  // Only a page on this site can be opened (never another website).
+  // Only a page on this site can be opened (never another website). The whole
+  // address is kept: a path alone could start with "//" ("/.//x" becomes
+  // "//x"), which would mean another website.
   let url = '/';
   try {
     const target = new URL(text(message.url) || '/', self.location.origin);
-    if (target.origin === self.location.origin) url = target.pathname + target.search + target.hash;
+    if (target.origin === self.location.origin) url = target.href;
   } catch {
     url = '/';
   }

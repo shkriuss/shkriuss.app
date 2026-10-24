@@ -29,7 +29,9 @@ opens a pull request with preview links.
    **Run workflow** button.
 4. Wait about a minute, then tap the finished run. Its summary has an
    **Open a pull request** link: tap it, then tap **Create pull request**.
-5. Wait for the checks (green ticks) and the **Preview links** comment.
+5. Wait for the checks (green ticks). For preview links, approve **Deploy
+   previews** ([how](deployment.md#seeing-a-preview)); the **Preview links**
+   comment then appears.
 6. When you're happy, tap **Merge pull request**. A few minutes later the app
    is live at `https://<slug>.shkriuss.app` and listed on the hub.
 
@@ -49,11 +51,14 @@ pnpm --filter notes dev
 
 1. Copies `templates/app/` to `apps/<slug>/`, replacing `template-app` with
    the slug.
-2. Adds the app to `packages/registry/apps.json` with `"status": "live"`.
+2. Adds the app to `packages/registry/apps.json` with `"status": "live"` and
+   `"storage": "device"` (change it to `"none"` if the app saves nothing),
+   then formats the new files.
 
 That's all: the hub, the privacy page, the browser tests, the build and the
-deploy all read from the registry and the `apps/` folder. The hub lists apps
-in alphabetical order, so where an entry sits in `apps.json` doesn't matter.
+deploy all read from the registry and the `apps/` folder. (One shared test
+needs a line once the app saves something; see below.) The hub lists apps in
+alphabetical order, so where an entry sits in `apps.json` doesn't matter.
 
 ## Building the app
 
@@ -77,6 +82,9 @@ in alphabetical order, so where an entry sits in `apps.json` doesn't matter.
   `seedStores()` from `tests/e2e/storage.ts` with the app's own version
   constant (like `TASKS_VERSION`), and `readStore()` to check what was
   saved. Test photos come from `tests/e2e/photos.ts`.
+- Once the app saves something, add one line for it to `changes` in
+  `tests/e2e/saving.spec.ts`: one tap or entry that saves. Otherwise the
+  shared "can't save" test skips the app.
 - If the app needs a browser feature (for example keeping the screen on),
   allow it in `astro.config.ts`:
   `defineAppConfig({ slug: 'notes', allowFeatures: ['screen-wake-lock'] })`.
@@ -96,13 +104,21 @@ is the simplest example to copy. Ask Claude, or:
    `assets.run_worker_first`, `durable_objects`, `migrations` and `previews`.
    A unit test checks these match. Migrations run in order, so if the app is
    already live, add the new one after the ones it has (see Habits').
-4. Add `"@shkriuss/push": "workspace:*"` to the app's `package.json`.
-5. Put `<PushControls />` (the "Also remind me when … is closed" switch) in
-   the app's notifications section. In the page script, call
-   `mountPushControls(…, { notices, announce })` and its `sync()` whenever
-   the app's data changes. `notices()` returns the notifications as they are
-   now: each has a local start time, a repeat pattern, minutes before, and
-   the title and text to show. See `apps/habits/src/scripts/reminders.ts`.
+4. Add `"@shkriuss/push": "workspace:*"` to the app's `package.json`, and
+   `"@shkriuss/server": "workspace:*"` too if its Worker combines push and
+   sync.
+5. In the app's notifications section, put the status line
+   (`<p data-notify-status>Notifications are off.</p>`), the **Turn on
+   notifications** button (`data-notify-enable` around a
+   `<Button data-action="enable-notifications">`) and `<PushControls />`
+   (the "Also remind me when … is closed" switch), as Habits does. The
+   shared browser tests check these. In the page script, call
+   `mountLocalReminders(document, { app, due, notices, announce })` from
+   `@shkriuss/ui/local-reminders`, and its `changed()` after every change.
+   `due()` says what's due while the app is open; `notices()` returns the
+   notifications for while it's closed: each has a local start time, a
+   repeat pattern, minutes before, and the title and text to show. See
+   `apps/habits/src/scripts/reminders.ts`.
 
 The privacy page lists the app automatically, and "Delete all data" already
 removes the device from the server.
@@ -133,7 +149,10 @@ worker, so the page never freezes. Grammar is the example to copy:
    not starting with `shkriuss-`). Cloudflare serves files of up to 25 MiB,
    so split bigger ones (`pnpm check:dist` checks). Grammar's
    `scripts/deep-check-files.ts` and `src/scripts/deep-check.ts` show how,
-   including checking every file's SHA-256.
+   including checking every file's SHA-256. These files are left out of the
+   build that CI saves for deploying, so give the app an
+   `on-demand-into-dist` script in `package.json` that puts them back (see
+   Grammar's). Without it, they're missing on the live site.
 
 ## Sync between devices (optional)
 
@@ -159,9 +178,9 @@ or:
 The privacy page and the Account page's list of apps that sync include the
 app automatically. When an item is changed on two devices before they sync,
 the newest change wins, unless the store passes `conflictCopy` to keep both
-versions, as Calendar, Tally and Notes do (see Tally: `secondVersion` in
-`src/lib/counters.ts`). Moving to a new account key (after a lost device)
-needs no extra code.
+versions, as Calendar, Meals, Notes, Reminders, Shelf and Tally do (Tally
+is the simplest: see `secondVersion` in `src/lib/counters.ts`). Moving to a
+new account key (after a lost device) needs no extra code.
 
 ## Listing it on the hub
 

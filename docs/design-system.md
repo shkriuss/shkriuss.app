@@ -85,9 +85,11 @@ a "Show more" button, always keeping what has focus or was just saved, and
 app: `showProblem` puts it in the notice at the top of every page, which is
 read out at once; `reportSave(store.save(…))` says when saving didn't work,
 and why; `focusProblem` goes to a form's first wrong field, or reads its error
-out if the person is in it already),
-`@shkriuss/ui/worker` (`startWorker`, for heavy work), `@shkriuss/ui/busy`
-(`setBusy`, below), `@shkriuss/ui/qr-code`, `@shkriuss/ui/service-worker`,
+out if the person is in it already; `clearProblem` takes the notice away),
+`@shkriuss/ui/worker` (`startWorker`, for heavy work, and, inside a worker of
+an app with `"webAssembly": true`, `allowThreadScripts`), `@shkriuss/ui/busy`
+(`setBusy`, below), `@shkriuss/ui/qr-code`, `@shkriuss/ui/service-worker`
+(`offlineCopySaved`, to wait until the site works offline),
 `@shkriuss/ui/sync-controls` and `@shkriuss/ui/push-controls`.
 
 A button that waits for something (saving, the network) is **busy**, not
@@ -133,7 +135,9 @@ read them best, in both themes.
   disabled or busy one, `aria-disabled="true"`, is grey but still readable),
   `.card` (`--link`), `.badge`, `.notice` (`--danger`), `.dialog`,
   `.app-icon`, `.code-text` (a key or link to copy or write down, in a
-  monospace box) and `.qr-code`.
+  monospace box), `.qr-code`, `.progress` (on `<progress>`: how far a
+  download or long task has got) and `.disclosure` (on `<details>`: help that
+  opens on tap).
 - Forms: `.field` / `.field__label` / `.field__hint` / `.field__error`
   (hidden while empty), `.input` (also for `<select>` and `<textarea>`),
   `.field-row` (fields side by side that stack on narrow screens) and
@@ -152,4 +156,5 @@ read them best, in both themes.
 
 Add a line to `packages/ui/src/icons/index.ts` (SVG shapes on a 24×24 grid,
 stroke only), then add the same name to the icon list in
-`.github/workflows/new-app.yml`. A unit test checks the two lists match.
+`.github/workflows/new-app.yml`, in alphabetical order. A unit test checks the
+two lists match.

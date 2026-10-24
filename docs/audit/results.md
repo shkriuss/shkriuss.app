@@ -19,7 +19,15 @@ anyone is listed here without its details until it's fixed (see
 - **Evidence:** each finding came with the code that shows it, or a test or
   command that proves it. Each fix comes with a test that fails without it,
   where one can be written.
-- **Fixes:** in [pull request #50](https://github.com/shkriuss/shkriuss.app/pull/50).
+- **Fixes:** in pull requests
+  [#50](https://github.com/shkriuss/shkriuss.app/pull/50),
+  [#52](https://github.com/shkriuss/shkriuss.app/pull/52),
+  [#53](https://github.com/shkriuss/shkriuss.app/pull/53),
+  [#54](https://github.com/shkriuss/shkriuss.app/pull/54),
+  [#56](https://github.com/shkriuss/shkriuss.app/pull/56),
+  [#57](https://github.com/shkriuss/shkriuss.app/pull/57),
+  [#60](https://github.com/shkriuss/shkriuss.app/pull/60) and
+  [#61](https://github.com/shkriuss/shkriuss.app/pull/61).
 
 ## Totals
 
@@ -27,9 +35,9 @@ anyone is listed here without its details until it's fixed (see
 | -------- | ----- | ----- | ------------ | ------------ | ----------- | ----- | --------------------- |
 | High     | 14    | 14    | –            | –            | –           | –     | –                     |
 | Medium   | 34    | 34    | –            | –            | –           | –     | –                     |
-| Low      | 90    | 88    | –            | –            | –           | –     | 2                     |
-| Info     | 24    | 18    | –            | –            | –           | –     | 6                     |
-| **All**  | 162   | 154   | –            | –            | –           | –     | 8                     |
+| Low      | 90    | 88    | –            | –            | 1           | –     | 1                     |
+| Info     | 24    | 18    | –            | –            | 1           | –     | 5                     |
+| **All**  | 162   | 154   | –            | –            | 2           | –     | 6                     |
 
 "Your setting" means a change in Cloudflare or GitHub that only the owner can
 make, listed in [deployment.md](../deployment.md). "Later" means a real but

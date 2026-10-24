@@ -1,6 +1,8 @@
 # 0008. Encrypted backup files
 
-Status: Accepted (2026-10-17)
+Status: Accepted (2026-10-17). Changed by [ADR 0013](0013-photos-on-the-device.md)
+and [ADR 0015](0015-photos-app.md): backups hold `localStorage` only, so photos
+aren't in them, and the Photos app has no Back up or Restore.
 
 ## Context
 
@@ -9,7 +11,9 @@ backup file is how people keep a copy or move to a new device. Until now that
 file was plain JSON that anyone could read, and there was no way to load it
 back. The same encryption will later be the base for an optional,
 end-to-end encrypted account with sync between devices, so the format needs
-to be solid and kept compatible.
+to be solid and kept compatible. (In the end the account,
+[ADR 0010](0010-account-and-sync.md), uses its own random key instead of this
+format.)
 
 ## Decision
 
@@ -33,8 +37,11 @@ to be solid and kept compatible.
   `data` (the app's export, encrypted, base64). New versions must still read
   version 1 files.
 - **Restore** accepts locked and plain backups, but only from the same app.
-  It replaces the app's data on the device (after a clear warning), puts the
-  old data back if the browser runs out of room part-way, and reloads the app.
+  Before anything is replaced, each part is checked by the app's own store:
+  a backup from a newer version of the app, or one it can't read, is refused
+  and nothing changes. Then it replaces the app's data on the device (after a
+  clear warning), puts the old data back if the browser runs out of room
+  part-way, and reloads the app.
 
 ## Consequences
 

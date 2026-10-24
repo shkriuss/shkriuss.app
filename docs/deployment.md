@@ -10,16 +10,20 @@ pull request ──► CI checks
                                                       └──► delete previews of closed pull requests
 ```
 
-- **Hosting:** each site (the hub and every app) is its own Cloudflare Worker
-  that serves only static files. Requests for static files are free and
-  unlimited on Cloudflare's Free plan.
+- **Hosting:** each site (the hub and every app) is its own Cloudflare
+  Worker. It serves the site's files, and runs server code only for
+  addresses that start with `/api/` (sync, the account, notifications,
+  Photos' online library). A new app starts with files only. Requests for
+  static files are free and unlimited on Cloudflare's Free plan.
 - **Addresses:** each site's `wrangler.jsonc` has a _custom domain_
   (`shkriuss.app`, `tally.shkriuss.app`, …). On deploy, Cloudflare creates the
   DNS record and HTTPS certificate itself. `workers.dev` addresses are off for
   production.
 - **Production:** `.github/workflows/ci.yml`. On every push to `main` it runs
-  every check, then deploys the exact files it tested, one site at a time,
-  then checks that every live site answers with the right security headers.
+  every check, then deploys the exact files it tested, one site at a time
+  (Grammar's big model download is made again from the same checked files),
+  then checks that every live site shows the page that was deployed, with
+  its security rules, and that its server answers.
 - **Previews:** `.github/workflows/preview.yml`. A pull request gets
   Cloudflare Worker Previews named `pr-<number>` once you approve them (see
   "Seeing a preview" below). A bot comment lists the links. They're public
@@ -199,7 +203,9 @@ each production deploy of the hub, Calendar, Grammar, Photos and Tally a
 permanent address like `1a2b3c4d-tally.shkriuss.workers.dev` (36 of them,
 audit finding I-6). They serve only that old version's static files: no
 data, and no way to reach anyone's. Cloudflare can't delete single versions,
-and no new ones are made. To hide them anyway, turn on Cloudflare Access for
+and no new ones are made for sites with server code. (A new app made from
+the template has none yet, so its deploys get these addresses too, until it
+gets sync.) To hide them anyway, turn on Cloudflare Access for
 those Workers' preview addresses (**Workers & Pages** → the Worker →
 **Settings** → **Domains & Routes** → **Preview URLs**).
 
@@ -237,20 +243,20 @@ Everything here fits Cloudflare's and GitHub's free plans:
   for 13 months are deleted ([ADR 0017](adr/0017-storage-limits.md)).
 - Photos' online library uses R2: free up to 10 GB, then about $0.015 per GB
   a month (about $15 a month for 1 TB, the most it holds), and downloads are
-  free. Each photo put online is one Worker request and two Durable Object
-  requests; at most 20,000 photos go up a day, so the free daily requests
-  last for every app.
+  free. Each photo put online is one Worker request and four Durable Object
+  requests. At most 20,000 photos go up a day, which would take about 80,000
+  of the 100,000 free daily Durable Object requests that every app shares.
 - The domain renewal, and R2 above 10 GB, are your only regular costs.
 
 ## Troubleshooting
 
-| Problem                                                       | Fix                                                                                                                                                                           |
-| ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Deploy fails with "Add the CLOUDFLARE_API_TOKEN secret"       | Add it to the `production` environment (see setup).                                                                                                                           |
-| Deploy fails with "Authentication error [code: 10000]"        | The token is missing a permission or the zone. Edit it in Cloudflare (**My Profile** → **API Tokens** → **Edit**) and check all three permission rows and both resource rows. |
-| "Custom domain … already exists / conflicting DNS record"     | A DNS record already uses that name. Delete it in Cloudflare (**shkriuss.app** → **DNS** → **Records**) and re-run the workflow.                                              |
-| A new app's address doesn't work right after the first deploy | DNS and certificates can take a few minutes. The smoke test retries for about 5 minutes.                                                                                      |
-| No preview links on a pull request                            | Previews wait for your approval (see "Seeing a preview"). Dependabot's pull requests never get previews.                                                                      |
-| "Could not create the R2 bucket …"                            | Turn on R2 in Cloudflare, and give the token `Account` · `Workers R2 Storage` · `Edit` (see setup).                                                                           |
-| Photos says "Online storage isn't set up yet"                 | Add the `PHOTOS_STORAGE_CODE` secret to the `production` environment (see setup). The next merge to `main` gives it to the Worker.                                            |
-| An app keeps saying "Couldn't sync just now"                  | Its server may have reached its limit (ADR 0017); unused copies go after 13 months. To raise it: `STORAGE_LIMITS` in `packages/sync/src/worker.ts`, all under 5 GB.           |
+| Problem                                                       | Fix                                                                                                                                                                                                                    |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Deploy fails with "Add the CLOUDFLARE_API_TOKEN secret"       | Add it to the `production` environment (see setup).                                                                                                                                                                    |
+| Deploy fails with "Authentication error [code: 10000]"        | The token is missing a permission or the zone. Edit it in Cloudflare (**My Profile** → **API Tokens** → **Edit**) and check all three permission rows and both resource rows.                                          |
+| "Custom domain … already exists / conflicting DNS record"     | A DNS record already uses that name. Delete it in Cloudflare (**shkriuss.app** → **DNS** → **Records**) and re-run the workflow.                                                                                       |
+| A new app's address doesn't work right after the first deploy | DNS and certificates can take a few minutes. The smoke test retries for about 5 minutes.                                                                                                                               |
+| No preview links on a pull request                            | Previews wait for your approval (see "Seeing a preview"). Pull requests from Dependabot or from forks never get previews. If the run says "Previews skipped", add `CLOUDFLARE_API_TOKEN` to the `preview` environment. |
+| "Could not create the R2 bucket …"                            | Turn on R2 in Cloudflare, and give the token `Account` · `Workers R2 Storage` · `Edit` (see setup).                                                                                                                    |
+| Photos says "Online storage isn't set up yet"                 | Add the `PHOTOS_STORAGE_CODE` secret to the `production` environment (see setup). The next merge to `main` gives it to the Worker.                                                                                     |
+| An app keeps saying "Couldn't sync just now"                  | Its server may have reached its limit (ADR 0017); unused copies go after 13 months. To raise it: `STORAGE_LIMITS` in `packages/sync/src/worker.ts`, all under 5 GB.                                                    |
