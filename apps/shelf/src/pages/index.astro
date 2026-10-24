@@ -35,6 +35,7 @@ import { CURRENCIES, LIMITS, OPINIONS, OPINION_LABELS, SORTS, SORT_LABELS } from
             Search
           </label>
           <input
+            dir="auto"
             class="input"
             id="search"
             type="search"
@@ -76,7 +77,7 @@ import { CURRENCIES, LIMITS, OPINIONS, OPINION_LABELS, SORTS, SORT_LABELS } from
 
       <p class="cluster brand-filter" data-brand-filter hidden>
         <span>
-          Brand: <strong data-brand-name></strong>
+          Brand: <strong dir="auto" data-brand-name></strong>
         </span>
         <Button variant="ghost" icon="x" data-action="all-brands">
           All brands
@@ -130,7 +131,7 @@ import { CURRENCIES, LIMITS, OPINIONS, OPINION_LABELS, SORTS, SORT_LABELS } from
   <template data-item-template>
     <li class="card stack stack--sm item" data-id>
       <p class="cluster item__tags">
-        <span class="badge" data-category>
+        <span dir="auto" class="badge" data-category>
           Category
         </span>
         <span class="item__opinion" data-opinion>
@@ -141,15 +142,15 @@ import { CURRENCIES, LIMITS, OPINIONS, OPINION_LABELS, SORTS, SORT_LABELS } from
         </span>
       </p>
       <h3 class="item__name">
-        <button type="button" class="item__edit" data-action="edit">
+        <button dir="auto" type="button" class="item__edit" data-action="edit">
           Item
         </button>
       </h3>
-      <p class="item__brand" data-brand></p>
+      <p dir="auto" class="item__brand" data-brand></p>
       <p class="item__price" data-price></p>
-      <p class="muted item__details" data-details></p>
+      <p dir="auto" class="muted item__details" data-details></p>
       <p class="muted item__details" data-bought></p>
-      <p class="muted item__notes" data-notes></p>
+      <p dir="auto" class="muted item__notes" data-notes></p>
       <p data-link-row>
         <!-- The script puts in the real address. -->
         <a
@@ -170,7 +171,7 @@ import { CURRENCIES, LIMITS, OPINIONS, OPINION_LABELS, SORTS, SORT_LABELS } from
   <template data-brand-template>
     <li>
       <button type="button" class="btn chip" data-action="brand">
-        <span class="chip__name" data-brand-label>
+        <span dir="auto" class="chip__name" data-brand-label>
           Brand
         </span>
         <span class="chip__counts" data-brand-counts></span>
@@ -182,7 +183,7 @@ import { CURRENCIES, LIMITS, OPINIONS, OPINION_LABELS, SORTS, SORT_LABELS } from
   <template data-category-template>
     <li>
       <button type="button" class="btn chip" aria-haspopup="dialog" data-category-id>
-        <span class="chip__name" data-category-label>
+        <span dir="auto" class="chip__name" data-category-label>
           Category
         </span>
         <span class="chip__counts" data-category-count></span>
@@ -201,6 +202,7 @@ import { CURRENCIES, LIMITS, OPINIONS, OPINION_LABELS, SORTS, SORT_LABELS } from
           Name
         </label>
         <input
+          dir="auto"
           class="input"
           id="item-name"
           name="name"
@@ -219,6 +221,7 @@ import { CURRENCIES, LIMITS, OPINIONS, OPINION_LABELS, SORTS, SORT_LABELS } from
             Brand (optional)
           </label>
           <input
+            dir="auto"
             class="input"
             id="item-brand"
             name="brand"
@@ -282,6 +285,7 @@ import { CURRENCIES, LIMITS, OPINIONS, OPINION_LABELS, SORTS, SORT_LABELS } from
             Where to buy (optional)
           </label>
           <input
+            dir="auto"
             class="input"
             id="item-shop"
             name="shop"
@@ -296,6 +300,7 @@ import { CURRENCIES, LIMITS, OPINIONS, OPINION_LABELS, SORTS, SORT_LABELS } from
             Size or variant (optional)
           </label>
           <input
+            dir="auto"
             class="input"
             id="item-variant"
             name="variant"
@@ -347,6 +352,7 @@ import { CURRENCIES, LIMITS, OPINIONS, OPINION_LABELS, SORTS, SORT_LABELS } from
           Notes (optional)
         </label>
         <textarea
+          dir="auto"
           class="input"
           id="item-notes"
           name="notes"
@@ -373,7 +379,7 @@ import { CURRENCIES, LIMITS, OPINIONS, OPINION_LABELS, SORTS, SORT_LABELS } from
     <form method="dialog" class="stack">
       <h2 id="delete-title">Delete this item?</h2>
       <p>
-        “<span data-delete-name></span>” will be removed. This can't be undone.
+        “<span dir="auto" data-delete-name></span>” will be removed. This can't be undone.
       </p>
       <div class="cluster">
         <Button type="submit" value="cancel">
@@ -396,6 +402,7 @@ import { CURRENCIES, LIMITS, OPINIONS, OPINION_LABELS, SORTS, SORT_LABELS } from
           Name
         </label>
         <input
+          dir="auto"
           class="input"
           id="category-name"
           type="text"

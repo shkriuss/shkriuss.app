@@ -33,6 +33,12 @@ changes on its next deploy.
     which replace backgrounds.
   - A page's `<style>` only reaches elements written in that page: style an
     `<Icon>` inside it with `:global(svg)` (a unit test checks this).
+  - Text people type can be in any language. Text boxes for it, and the
+    elements that show it (names, titles, notes), get `dir="auto"`, so
+    Hebrew or Arabic reads right to left with its "!" at its own end. Typed
+    text inside a line of the app's own text (a note after a date) goes in
+    `typedText()` from `@shkriuss/ui/typed-text`. A unit test checks every
+    text box.
 - **CSS first.** Component classes work with plain HTML, so even markup
   created by scripts (Tally's `<template>`) uses the same styles.
 

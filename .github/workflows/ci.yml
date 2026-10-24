@@ -120,12 +120,20 @@ jobs:
       - name: Scan every commit for secrets
         run: ./gitleaks git --redact --no-banner --verbose .
 
+      # The version is in .github/zizmor/requirements.txt, where Dependabot
+      # updates it; pip refuses a download that doesn't match its hashes.
+      - name: Install zizmor (pinned version, hashes checked)
+        run: |
+          python3 -m venv "$RUNNER_TEMP/zizmor"
+          "$RUNNER_TEMP/zizmor/bin/pip" install --quiet --require-hashes --no-deps \
+            --only-binary :all: -r .github/zizmor/requirements.txt
+
       # Online, so it also checks that each pinned commit really belongs to its
       # action (a commit from someone's fork would otherwise pass).
       - name: Check the workflows themselves for security problems (zizmor)
         env:
           GH_TOKEN: ${{ github.token }}
-        run: pipx run 'zizmor==1.31.1' --min-severity medium .github/
+        run: '"$RUNNER_TEMP/zizmor/bin/zizmor" --min-severity medium .github/'
 
   audit:
     name: Dependency audit

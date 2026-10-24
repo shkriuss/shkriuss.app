@@ -21,6 +21,7 @@ import { EDITABLE_DAYS, MAX_NAME_LENGTH } from '../lib/habits.ts';
           New habit
         </label>
         <input
+          dir="auto"
           class="input"
           id="habit-name"
           name="name"
@@ -82,7 +83,7 @@ import { EDITABLE_DAYS, MAX_NAME_LENGTH } from '../lib/habits.ts';
     <li class="card habit">
       <div class="habit__header">
         <div class="stack stack--sm">
-          <h3 class="habit__name" data-name>
+          <h3 dir="auto" class="habit__name" data-name>
             Habit
           </h3>
           <p class="muted habit__schedule" data-schedule></p>
@@ -133,6 +134,7 @@ import { EDITABLE_DAYS, MAX_NAME_LENGTH } from '../lib/habits.ts';
           Name
         </label>
         <input
+          dir="auto"
           class="input"
           id="edit-name"
           name="name"
@@ -195,7 +197,7 @@ import { EDITABLE_DAYS, MAX_NAME_LENGTH } from '../lib/habits.ts';
     <form method="dialog" class="stack">
       <h2 id="delete-title">Delete this habit?</h2>
       <p>
-        “<span data-delete-name></span>” and all its check marks will be removed.
+        “<span dir="auto" data-delete-name></span>” and all its check marks will be removed.
       </p>
       <div class="cluster">
         <Button type="submit" value="cancel">

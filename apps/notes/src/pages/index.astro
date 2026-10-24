@@ -28,6 +28,7 @@ import { MAX_BODY_LENGTH, MAX_TITLE_LENGTH } from '../lib/notes.ts';
           Search notes
         </label>
         <input
+          dir="auto"
           class="input"
           id="search"
           type="search"
@@ -80,6 +81,7 @@ import { MAX_BODY_LENGTH, MAX_TITLE_LENGTH } from '../lib/notes.ts';
         Title
       </label>
       <input
+        dir="auto"
         class="input editor__title"
         id="note-title"
         type="text"
@@ -94,6 +96,7 @@ import { MAX_BODY_LENGTH, MAX_TITLE_LENGTH } from '../lib/notes.ts';
         Note
       </label>
       <textarea
+        dir="auto"
         class="input editor__body"
         id="note-body"
         rows="12"
@@ -111,7 +114,7 @@ import { MAX_BODY_LENGTH, MAX_TITLE_LENGTH } from '../lib/notes.ts';
   <template data-note-template>
     <li class="card card--link note-card">
       <h3 class="note-card__title">
-        <a class="card__link" href="#note=" data-open>
+        <a dir="auto" class="card__link" href="#note=" data-open>
           Note
         </a>
         <span class="note-card__pin" role="img" aria-label="Pinned" data-pinned hidden>
@@ -125,7 +128,7 @@ import { MAX_BODY_LENGTH, MAX_TITLE_LENGTH } from '../lib/notes.ts';
     <form method="dialog" class="stack">
       <h2 id="delete-title">Delete this note?</h2>
       <p>
-        “<span data-delete-name></span>” will be removed. This can't be undone.
+        “<span dir="auto" data-delete-name></span>” will be removed. This can't be undone.
       </p>
       <div class="cluster">
         <Button type="submit" value="cancel">

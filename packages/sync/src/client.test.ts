@@ -1165,6 +1165,69 @@ describe('deletions older than the markers (180 days)', () => {
   });
 });
 
+describe('a copy older than one a device saw', () => {
+  /**
+   * For one sync, the server sends `copy` instead of the real one, as a server
+   * restored from a backup would, or one that sends an old copy again.
+   */
+  function serveOnce(copy: { version: number; epoch: string; data: string }): void {
+    let served = false;
+    vi.stubGlobal('fetch', async (input: string, init?: RequestInit) => {
+      const url = new URL(input, ORIGIN);
+      if (!served && url.pathname === '/api/sync/copy' && (init?.method ?? 'GET') === 'GET') {
+        served = true;
+        return Response.json(copy);
+      }
+      return withFiles.fetch(new Request(url, init), server);
+    });
+  }
+
+  async function copyNow(secret: Uint8Array<ArrayBuffer>) {
+    return (await (await call(secret, '/copy')).json()) as {
+      version: number;
+      epoch: string;
+      data: string;
+    };
+  }
+
+  it('doesn’t take what was added since as deleted (restored from a backup)', async () => {
+    const secret = randomBytes(32);
+    const phone = new Device(secret);
+    const tablet = new Device(secret);
+    phone.counters = [counter('a')];
+    await phone.syncNow();
+    const old = await copyNow(secret);
+    phone.counters = [counter('a'), counter('b')];
+    await phone.syncNow();
+    await tablet.syncNow();
+
+    serveOnce(old);
+    await tablet.syncNow();
+    await phone.syncNow();
+    expect(tablet.counters).toEqual([counter('a'), counter('b')]);
+    expect(phone.counters).toEqual([counter('a'), counter('b')]);
+  });
+
+  it('doesn’t either when the server says it’s new (an old copy sent again)', async () => {
+    const secret = randomBytes(32);
+    const phone = new Device(secret);
+    const tablet = new Device(secret);
+    phone.counters = [counter('a')];
+    await phone.syncNow();
+    const old = await copyNow(secret);
+    phone.counters = [counter('a'), counter('b')];
+    await phone.syncNow();
+    await tablet.syncNow();
+
+    // Only the sealed count, which only devices can write, shows it's old.
+    serveOnce({ ...old, version: (await copyNow(secret)).version + 5 });
+    await tablet.syncNow();
+    await phone.syncNow();
+    expect(tablet.counters).toEqual([counter('a'), counter('b')]);
+    expect(phone.counters).toEqual([counter('a'), counter('b')]);
+  });
+});
+
 // ---------- Files, like photos ----------
 
 /** A request straight to the server, as the account with this app key. */

@@ -136,6 +136,16 @@ test('long lists show 100 notes at a time', async ({ page }) => {
   await expect(more).toBeVisible();
 });
 
+test('shows Hebrew or Arabic the right way round, and English as before', async ({ page }) => {
+  const rightToLeft = (element: HTMLElement | SVGElement) => element.matches(':dir(rtl)');
+  await writeNote(page, 'שלום עולם!', 'Hello world!');
+  const link = card(page, 'שלום עולם!').getByRole('link');
+  expect(await link.evaluate(rightToLeft)).toBe(true);
+  await link.click();
+  expect(await titleBox(page).evaluate(rightToLeft)).toBe(true);
+  expect(await bodyBox(page).evaluate(rightToLeft)).toBe(false);
+});
+
 test('pinned notes come first', async ({ page }) => {
   await writeNote(page, 'Older');
   await writeNote(page, 'Newer');
@@ -220,7 +230,7 @@ test('keeps notes saved by the first version, splitting off their titles', async
 test('typing doesn’t overwrite a change made elsewhere: that version is kept too', async ({
   page,
 }) => {
-  // Typing here waits a moment before it's saved: hold that moment still.
+  // Typing here waits a moment before it's saved: that moment is held still below.
   await page.clock.install();
   await page.reload();
   await writeNote(page, 'Trip', 'Pack bags');
@@ -229,6 +239,9 @@ test('typing doesn’t overwrite a change made elsewhere: that version is kept t
   await other.goto('/');
   await other.getByRole('link', { name: 'Trip', exact: true }).click();
   await page.getByRole('link', { name: 'Trip', exact: true }).click();
+  // install() lets time run on: stop it, or on a busy machine typing here
+  // can be saved before the other tab's change.
+  await page.clock.pauseAt((await page.evaluate(() => Date.now())) + 1000);
 
   // Typing here, not saved yet, when the other tab saves its change.
   await bodyBox(page).pressSequentially(' and tickets');

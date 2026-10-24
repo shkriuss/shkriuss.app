@@ -36,3 +36,12 @@ updates:
     groups:
       actions:
         patterns: ['*']
+
+  # zizmor, the workflow checker CI runs (.github/zizmor/requirements.txt).
+  - package-ecosystem: pip
+    directory: /.github/zizmor
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7

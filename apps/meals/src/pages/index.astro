@@ -26,7 +26,7 @@ import {
 
     <section class="stack" aria-labelledby="week-heading">
       <div class="stack stack--sm">
-        <h2 id="week-heading" tabindex="-1" data-week-heading>
+        <h2 dir="auto" id="week-heading" tabindex="-1" data-week-heading>
           This week
         </h2>
         <p class="muted" data-week-dates></p>
@@ -72,6 +72,7 @@ import {
             Add to the list
           </label>
           <input
+            dir="auto"
             class="input"
             id="extra"
             type="text"
@@ -198,6 +199,7 @@ import {
         Dinner
       </span>
       <button
+        dir="auto"
         type="button"
         class="planned__name"
         aria-haspopup="dialog"
@@ -214,7 +216,7 @@ import {
     <li class="row" data-key>
       <label class="row__check">
         <input type="checkbox" data-row-done />
-        <span class="row__name" data-row-name>
+        <span dir="auto" class="row__name" data-row-name>
           Item
         </span>
         <span class="muted row__for" data-row-for></span>
@@ -226,7 +228,13 @@ import {
   <!-- One of your meals. -->
   <template data-meal-template>
     <li class="meal" data-id>
-      <button type="button" class="meal__name" aria-haspopup="dialog" data-action="edit-meal">
+      <button
+        dir="auto"
+        type="button"
+        class="meal__name"
+        aria-haspopup="dialog"
+        data-action="edit-meal"
+      >
         Meal
       </button>
       <span class="muted meal__meta" data-meal-meta></span>
@@ -244,6 +252,7 @@ import {
           Meal
         </label>
         <input
+          dir="auto"
           class="input"
           id="plan-name"
           name="name"
@@ -303,6 +312,7 @@ import {
           Name
         </label>
         <input
+          dir="auto"
           class="input"
           id="meal-name"
           name="name"
@@ -324,6 +334,7 @@ import {
           One per line, like “500 g minced beef”. Up to {MAX_INGREDIENTS}.
         </p>
         <textarea
+          dir="auto"
           class="input"
           id="meal-ingredients"
           name="ingredients"
@@ -341,6 +352,7 @@ import {
           How to make it, or where the recipe is.
         </p>
         <textarea
+          dir="auto"
           class="input"
           id="meal-notes"
           name="notes"
@@ -372,8 +384,8 @@ import {
     <form method="dialog" class="stack">
       <h2 id="delete-title">Delete this meal?</h2>
       <p>
-        “<span data-delete-name></span>” will be removed from your meals. If it’s in your plan, it
-        stays there, without its ingredients.
+        “<span dir="auto" data-delete-name></span>” will be removed from your meals. If it’s in your
+        plan, it stays there, without its ingredients.
       </p>
       <div class="cluster">
         <Button type="submit" value="cancel">

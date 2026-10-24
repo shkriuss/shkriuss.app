@@ -4,7 +4,7 @@
  * The file never leaves the device.
  */
 import { importEvents, MAX_EVENTS } from '../lib/events.ts';
-import { parseIcs, type ParseResult } from '../lib/ics-import.ts';
+import type { ParseResult } from '../lib/ics-import.ts';
 import { plural, required, type CalendarPage } from './shared.ts';
 
 /** Bigger files are turned down (years of a busy calendar fit in well under 1 MB). */
@@ -89,8 +89,9 @@ export function mountImportDialog(root: Document, page: CalendarPage): void {
       fail('This file is too big to import (over 5 MB).');
       return;
     }
-    file.text().then(
-      (text) => {
+    // The reader loads only now: most visits never import a file.
+    Promise.all([file.text(), import('../lib/ics-import.ts')]).then(
+      ([text, { parseIcs }]) => {
         const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
         show(parseIcs(text, { timeZone, makeId: () => crypto.randomUUID() }), file.name);
       },

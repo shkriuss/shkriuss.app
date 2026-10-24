@@ -75,6 +75,7 @@ const STAT_TILES = [
           Search
         </label>
         <input
+          dir="auto"
           class="input"
           id="search"
           type="search"
@@ -138,7 +139,7 @@ const STAT_TILES = [
     <li class="trade">
       <div class="trade__main">
         <button type="button" class="trade__title" aria-haspopup="dialog" data-action="edit">
-          <span class="trade__symbol" data-symbol>
+          <span dir="auto" class="trade__symbol" data-symbol>
             AAPL
           </span>
           <span class="badge" data-side>
@@ -161,7 +162,7 @@ const STAT_TILES = [
   <!-- One line of "By setup" or "By month". -->
   <template data-group-template>
     <li class="group">
-      <span class="group__name" data-group-name></span>
+      <span dir="auto" class="group__name" data-group-name></span>
       <span class="group__total" data-group-total></span>
       <span class="muted group__counts" data-group-counts></span>
     </li>
@@ -180,6 +181,7 @@ const STAT_TILES = [
             Symbol
           </label>
           <input
+            dir="auto"
             class="input trade-symbol"
             id="trade-symbol"
             name="symbol"
@@ -278,6 +280,7 @@ const STAT_TILES = [
           Setup (optional)
         </label>
         <input
+          dir="auto"
           class="input"
           id="trade-setup"
           name="setup"
@@ -295,6 +298,7 @@ const STAT_TILES = [
           Notes (optional)
         </label>
         <textarea
+          dir="auto"
           class="input"
           id="trade-notes"
           name="notes"
@@ -321,7 +325,7 @@ const STAT_TILES = [
     <form method="dialog" class="stack">
       <h2 id="delete-title">Delete this trade?</h2>
       <p>
-        The <span data-delete-name></span> trade will be removed from your journal.
+        The <span dir="auto" data-delete-name></span> trade will be removed from your journal.
       </p>
       <div class="cluster">
         <Button type="submit" value="cancel">

@@ -8,6 +8,7 @@ import { createStore, downloadFile } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
 import { focusProblem, reportSave } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
+import { typedText } from '@shkriuss/ui/typed-text';
 import { site } from 'virtual:shkriuss/site';
 import {
   byDay,
@@ -246,12 +247,11 @@ export function mountRepairs(root: Document): void {
     const item = required<HTMLLIElement>(fragment, 'li');
     item.dataset['id'] = repair.id;
     required<HTMLElement>(item, '[data-title]').textContent = vehicleName(vehicles, repair.vehicle);
-    required<HTMLElement>(item, '[data-meta]').textContent = [
-      repair.mileage === null ? '' : mileage(repair.mileage),
-      repair.system,
-    ]
-      .filter(Boolean)
-      .join(' · ');
+    const meta = required<HTMLElement>(item, '[data-meta]');
+    meta.textContent = repair.mileage === null ? '' : mileage(repair.mileage);
+    if (repair.system) {
+      meta.append(repair.mileage === null ? '' : ' · ', typedText(repair.system));
+    }
     const rows = {
       problem: required<HTMLElement>(item, '[data-row="problem"]'),
       work: required<HTMLElement>(item, '[data-row="work"]'),
@@ -267,6 +267,7 @@ export function mountRepairs(root: Document): void {
       required<HTMLUListElement>(rows.parts, '[data-parts]').replaceChildren(
         ...repair.parts.map((part) => {
           const line = document.createElement('li');
+          line.dir = 'auto';
           line.textContent =
             part.price === null
               ? partLabel(part)

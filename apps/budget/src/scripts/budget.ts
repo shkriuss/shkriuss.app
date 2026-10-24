@@ -8,6 +8,7 @@ import { createStore, downloadFile } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
 import { focusProblem, reportSave } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
+import { typedText } from '@shkriuss/ui/typed-text';
 import { site } from 'virtual:shkriuss/site';
 import {
   addSuggested,
@@ -239,9 +240,9 @@ export function mountBudget(root: Document): void {
     const item = required<HTMLLIElement>(fragment, 'li');
     item.dataset['id'] = entry.id;
     required<HTMLElement>(item, '[data-title]').textContent = categoryName(entry);
-    required<HTMLElement>(item, '[data-meta]').textContent = [dayLabel(entry.date), entry.note]
-      .filter(Boolean)
-      .join(' · ');
+    const meta = required<HTMLElement>(item, '[data-meta]');
+    meta.textContent = dayLabel(entry.date);
+    if (entry.note) meta.append(' · ', typedText(entry.note));
     const amount = required<HTMLElement>(item, '[data-amount]');
     const signed = entry.kind === 'income' ? entry.amount : -entry.amount;
     amount.textContent = money(signed, true);

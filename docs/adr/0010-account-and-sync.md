@@ -222,6 +222,17 @@ in with `sync: true` in `apps.json`.
 - **What app servers can see:** that an account uses the app, how big its
   copy is, and when it changes. Never the contents, and not which account is
   whose.
+- **What a server could do if it went wrong** (audit finding A-8). It can't
+  read or change the data, or pass one app's or account's copy off as
+  another's: every copy is sealed and labelled. It could hold back changes,
+  answer "no change" when there is one, keep an old copy, or say the copy
+  was deleted (devices then turn sync off and keep their data). An old copy
+  deletes nothing on devices, whether the server was restored from a backup
+  or sends it on purpose: each copy carries how many times devices have
+  written it, sealed so the server can't change it, and a device that has
+  seen a newer copy merges an older one like a device that was away, without
+  taking what it lacks as deleted. Whoever controls the servers could also
+  change the apps themselves, so these limits matter most for mistakes.
 - **What doesn't sync:** settings that belong to one device, such as
   notifications, reminder bookkeeping and the theme. "Delete all data" turns
   sync off on that device first, so the deletion doesn't spread.

@@ -27,9 +27,9 @@ anyone is listed here without its details until it's fixed (see
 | -------- | ----- | ----- | ------------ | ------------ | ----------- | ----- | --------------------- |
 | High     | 14    | 14    | –            | –            | –           | –     | –                     |
 | Medium   | 34    | 34    | –            | –            | –           | –     | –                     |
-| Low      | 90    | 79    | 1            | –            | –           | 8     | 2                     |
-| Info     | 24    | 12    | 1            | –            | 1           | 7     | 3                     |
-| **All**  | 162   | 139   | 2            | –            | 1           | 15    | 5                     |
+| Low      | 90    | 80    | 1            | –            | –           | 7     | 2                     |
+| Info     | 24    | 14    | 1            | –            | 1           | 4     | 4                     |
+| **All**  | 162   | 142   | 2            | –            | 1           | 11    | 6                     |
 
 "Your setting" means a change in Cloudflare or GitHub that only the owner can
 make, listed in [deployment.md](../deployment.md). "Later" means a real but
@@ -57,7 +57,6 @@ approval, and pages that nothing rewrites.
 
 Real, but small or rare, or a bigger change best done on its own. None of them can leak or lose anyone’s data.
 
-- **A-8** (Info) The ADRs don't say what the servers can roll back, withhold or drop. _Later: write down what a server could roll back or withhold._
 - **E-12** (Low) The list's order is one value for the whole list, so adding or deleting an item on one device undoes a reorder made on another. _Later: each item needs its own place in the order._
 - **F1-4** (Low) Importing a repeating event can drop its last time when the two time zones change clocks on different dates. _Later: rare, needs both time zones in the import._
 - **F1-5** (Low) Repeating events imported from another time zone are an hour off for part of the year, without a word. _Later: rare, needs both time zones in the import._
@@ -65,15 +64,12 @@ Real, but small or rare, or a bigger change best done on its own. None of them c
 - **F2-8** (Low) The item limits are reachable in normal use, and there's no way to clear old items except one at a time. _Later: higher limits, and a way to clear a whole period._
 - **F2-10** (Info) Refunds in a category and partial closes can't be recorded. _Later: app features._
 - **G-14** (Info) Smaller points: Grammar’s fixes clear undo, double announcements, three wordings for "Couldn’t save". _Partly fixed (one read-out per message, one wording for "Couldn’t save"); keeping Grammar’s undo history is later._
-- **H-13** (Info) Some CI tools are pinned by hand and Dependabot never updates them. _Later: let Dependabot update the hand-pinned tools._
 - **J-6** (Low) The "notifications while open" code is copied into six apps, and five of them never test the iPhone and blocked cases. _Later: one shared module for reminders while open._
 - **J-7** (Low) Three files of about 1,000 lines, each mostly one closure, are hard to change safely. _Later: split the three biggest files._
 - **J-8** (Low) Small helpers are copied between apps and have drifted, including a slow comparator and a misleading "Couldn't save". _Partly fixed (the comparator, and one wording for "Couldn’t save"); the rest later._
 - **J-14** (Info) Browser tests always start all 15 servers, and CI time grows about a minute per app toward a 30-minute limit. _Later: run only the sites a change touches._
 - **J-15** (Info) Storage that's synchronous and `localStorage`-only will be hard to grow, and app limits already exceed what fits. _Later: storage that can grow, if needed._
 - **J-16** (Info) Browser test helpers repeat storage formats and photo helpers by hand. _Later: shared test helpers._
-- **J-17** (Info) Flaky browser tests are retried in CI and never reported. _Later: list flaky tests in the job summary._
-- **Z-10** (Low) Right-to-left text shows its full stop or "!" at the wrong end. _Later: show right-to-left text the right way round (dir="auto")._
 
 ## Every finding
 
@@ -90,7 +86,7 @@ Severity is the auditor’s: **High** could lose or leak data or cost money; **M
 | A-5 | Low      | A device-link QR code used by someone else looks like a normal success, so it isn't noticed                                                           | Fixed                                                                                    |
 | A-6 | Low      | After "Replace the account key", the old key keeps full access to each app until that app is turned on again, but the page says it "stops it syncing" | Fixed                                                                                    |
 | A-7 | Info     | Bearer tokens can be replayed by anyone who sees Worker requests; the status token alone can lock an account out for good                             | Accepted: only Cloudflare, which runs the servers, sees requests                         |
-| A-8 | Info     | The ADRs don't say what the servers can roll back, withhold or drop                                                                                   | Later: write down what a server could roll back or withhold                              |
+| A-8 | Info     | The ADRs don't say what the servers can roll back, withhold or drop                                                                                   | Fixed: written down (ADRs 0010, 0016), and an old sync copy no longer deletes anything   |
 
 ### B. Servers and the bill
 
@@ -248,7 +244,7 @@ Severity is the auditor’s: **High** could lose or leak data or cost money; **M
 | H-10 | Low      | `sharp` is allowed to run install scripts, but needs none                                                                                | Fixed                                                                       |
 | H-11 | Info     | The PR being checked defines its own required checks                                                                                     | Fixed (your setting: required checks come from the rules on main)           |
 | H-12 | Info     | Production doesn't run exactly the files that were tested                                                                                | Accepted: the deploy uses the tested build, plus checksum-checked downloads |
-| H-13 | Info     | Some CI tools are pinned by hand and Dependabot never updates them                                                                       | Later: let Dependabot update the hand-pinned tools                          |
+| H-13 | Info     | Some CI tools are pinned by hand and Dependabot never updates them                                                                       | Fixed: Dependabot updates zizmor; quality.md lists gitleaks and pnpm        |
 
 ### I. Domain and Cloudflare
 
@@ -286,22 +282,22 @@ Severity is the auditor’s: **High** could lose or leak data or cost money; **M
 | J-14 | Info     | Browser tests always start all 15 servers, and CI time grows about a minute per app toward a 30-minute limit                 | Later: run only the sites a change touches                                         |
 | J-15 | Info     | Storage that's synchronous and `localStorage`-only will be hard to grow, and app limits already exceed what fits             | Later: storage that can grow, if needed                                            |
 | J-16 | Info     | Browser test helpers repeat storage formats and photo helpers by hand                                                        | Later: shared test helpers                                                         |
-| J-17 | Info     | Flaky browser tests are retried in CI and never reported                                                                     | Later: list flaky tests in the job summary                                         |
+| J-17 | Info     | Flaky browser tests are retried in CI and never reported                                                                     | Explained: Playwright already lists flaky tests in each run’s summary              |
 | J-18 | Info     | The cache test for pages would pass for a page cached for a year                                                             | Fixed                                                                              |
 
 ### Z. Anything else
 
-| ID   | Severity | What was wrong                                                                                                   | What happened                                                   |
-| ---- | -------- | ---------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| Z-1  | Medium   | Anyone can lock everyone out of the online photo library with 20 requests an hour                                | Fixed                                                           |
-| Z-2  | Medium   | After a deploy, a slow connection can leave an app that opens empty when offline                                 | Fixed                                                           |
-| Z-3  | Medium   | Every build and every deploy needs a 361 MB download from one Hugging Face account                               | Fixed                                                           |
-| Z-4  | Low      | A new app made with `pnpm new-app` or the "New app" workflow tells the privacy page it stores nothing            | Fixed                                                           |
-| Z-5  | Low      | The template's browser test skips the shared checks (console errors and requests to other sites)                 | Fixed                                                           |
-| Z-6  | Low      | The JavaScript size budget doesn't count imported files; Calendar and Tasks are over it                          | Fixed                                                           |
-| Z-7  | Low      | The QR code encoder is a translation of an MIT-licensed library, without its copyright notice                    | Fixed                                                           |
-| Z-8  | Low      | Deep check's licence file calls RoBERTa's files Apache 2.0 and leaves out their MIT notice                       | Fixed                                                           |
-| Z-9  | Low      | On a phone set to another language, sentences mix English with that language, and the page says it's all English | Fixed                                                           |
-| Z-10 | Low      | Right-to-left text shows its full stop or "!" at the wrong end                                                   | Later: show right-to-left text the right way round (dir="auto") |
-| Z-11 | Info     | Smaller points                                                                                                   | Fixed (the licence link); a LICENSE file is your choice         |
-| Z-12 | Info     | The threat model has no goal for keeping things working                                                          | Fixed                                                           |
+| ID   | Severity | What was wrong                                                                                                   | What happened                                           |
+| ---- | -------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| Z-1  | Medium   | Anyone can lock everyone out of the online photo library with 20 requests an hour                                | Fixed                                                   |
+| Z-2  | Medium   | After a deploy, a slow connection can leave an app that opens empty when offline                                 | Fixed                                                   |
+| Z-3  | Medium   | Every build and every deploy needs a 361 MB download from one Hugging Face account                               | Fixed                                                   |
+| Z-4  | Low      | A new app made with `pnpm new-app` or the "New app" workflow tells the privacy page it stores nothing            | Fixed                                                   |
+| Z-5  | Low      | The template's browser test skips the shared checks (console errors and requests to other sites)                 | Fixed                                                   |
+| Z-6  | Low      | The JavaScript size budget doesn't count imported files; Calendar and Tasks are over it                          | Fixed                                                   |
+| Z-7  | Low      | The QR code encoder is a translation of an MIT-licensed library, without its copyright notice                    | Fixed                                                   |
+| Z-8  | Low      | Deep check's licence file calls RoBERTa's files Apache 2.0 and leaves out their MIT notice                       | Fixed                                                   |
+| Z-9  | Low      | On a phone set to another language, sentences mix English with that language, and the page says it's all English | Fixed                                                   |
+| Z-10 | Low      | Right-to-left text shows its full stop or "!" at the wrong end                                                   | Fixed                                                   |
+| Z-11 | Info     | Smaller points                                                                                                   | Fixed (the licence link); a LICENSE file is your choice |
+| Z-12 | Info     | The threat model has no goal for keeping things working                                                          | Fixed                                                   |

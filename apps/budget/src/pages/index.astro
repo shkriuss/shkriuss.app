@@ -205,6 +205,7 @@ import {
     <li class="category">
       <div class="category__line">
         <button
+          dir="auto"
           type="button"
           class="category__name"
           aria-haspopup="dialog"
@@ -223,7 +224,7 @@ import {
   <template data-entry-template>
     <li class="entry">
       <button type="button" class="entry__main" aria-haspopup="dialog" data-action="edit-entry">
-        <span class="entry__title" data-title></span>
+        <span dir="auto" class="entry__title" data-title></span>
         <span class="muted entry__meta" data-meta></span>
       </button>
       <span class="entry__amount" data-amount></span>
@@ -291,6 +292,7 @@ import {
           Note (optional)
         </label>
         <input
+          dir="auto"
           class="input"
           id="entry-note"
           name="note"
@@ -324,6 +326,7 @@ import {
           Name
         </label>
         <input
+          dir="auto"
           class="input"
           id="category-name"
           name="name"

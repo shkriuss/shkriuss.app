@@ -8,6 +8,7 @@ import { createStore, downloadFile } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
 import { focusProblem, reportSave } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
+import { typedText } from '@shkriuss/ui/typed-text';
 import { site } from 'virtual:shkriuss/site';
 import {
   byMonth,
@@ -226,9 +227,9 @@ export function mountTrades(root: Document): void {
     item.dataset['id'] = trade.id;
     required<HTMLElement>(item, '[data-symbol]').textContent = trade.symbol;
     required<HTMLElement>(item, '[data-side]').textContent = SIDE_LABELS[trade.side];
-    required<HTMLElement>(item, '[data-setup]').textContent = trade.setup
-      ? `Setup: ${trade.setup}`
-      : '';
+    const setup = required<HTMLElement>(item, '[data-setup]');
+    setup.textContent = trade.setup ? 'Setup: ' : '';
+    if (trade.setup) setup.append(typedText(trade.setup));
     const meta = required<HTMLElement>(item, '[data-meta]');
     const result = profit(trade);
     if (result === null) {
