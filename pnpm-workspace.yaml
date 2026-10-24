@@ -40,6 +40,16 @@ ignoredBuiltDependencies:
   - protobufjs
 strictDepBuilds: true
 
+# Security fixes Dependabot can't make, for packages only another package
+# uses (docs/quality.md). Remove each once that package needs the fixed
+# version itself.
+overrides:
+  # undici: GHSA-xjj6-f33q-929c (high), GHSA-4qv8-2p9j-2685, GHSA-f72v-6w45-q472.
+  # miniflare (inside wrangler: local servers and tests only) pins 7.29.1;
+  # unifont (Astro's fonts, while building) allows any 8.x.
+  'miniflare>undici': 7.30.1
+  'unifont>undici': ^8.12.2
+
 # Don't install versions published less than 7 days ago, so a hijacked or
 # broken release is usually caught and pulled before it reaches us. This must
 # match Dependabot's cooldown (.github/dependabot.yml): Dependabot applies its
