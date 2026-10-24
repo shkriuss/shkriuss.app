@@ -27,9 +27,9 @@ anyone is listed here without its details until it's fixed (see
 | -------- | ----- | ----- | ------------ | ------------ | ----------- | ----- | --------------------- |
 | High     | 14    | 14    | –            | –            | –           | –     | –                     |
 | Medium   | 34    | 32    | 1            | –            | –           | 1     | –                     |
-| Low      | 90    | 78    | 1            | –            | –           | 9     | 2                     |
+| Low      | 90    | 79    | 1            | –            | –           | 8     | 2                     |
 | Info     | 24    | 12    | 1            | –            | 1           | 7     | 3                     |
-| **All**  | 162   | 136   | 3            | –            | 1           | 17    | 5                     |
+| **All**  | 162   | 137   | 3            | –            | 1           | 16    | 5                     |
 
 "Your setting" means a change in Cloudflare or GitHub that only the owner can
 make, listed in [deployment.md](../deployment.md). "Later" means a real but
@@ -58,7 +58,6 @@ approval, and pages that nothing rewrites.
 Real, but small or rare, or a bigger change best done on its own. None of them can leak or lose anyone’s data.
 
 - **A-8** (Info) The ADRs don't say what the servers can roll back, withhold or drop. _Later: write down what a server could roll back or withhold._
-- **B-7** (Low) Sealed files can stay in R2 outside the library's list: after a failed commit, and after "Delete the online copy". _Later: an occasional clean-up of leftover files in R2._
 - **E-12** (Low) The list's order is one value for the whole list, so adding or deleting an item on one device undoes a reorder made on another. _Later: each item needs its own place in the order._
 - **F1-4** (Low) Importing a repeating event can drop its last time when the two time zones change clocks on different dates. _Later: rare, needs both time zones in the import._
 - **F1-5** (Low) Repeating events imported from another time zone are an hour off for part of the year, without a word. _Later: rare, needs both time zones in the import._
@@ -105,7 +104,7 @@ Severity is the auditor’s: **High** could lose or leak data or cost money; **M
 | B-4  | Medium   | The storage code's "10 wrong tries an hour" doesn't limit guessing                                                | Fixed                                                                                         |
 | B-5  | Medium   | "Remove" writes 201 rows per request, with no code and no limit, enough to stop every write on the account        | Fixed                                                                                         |
 | B-6  | Medium   | Strangers can make R2 bill for operations without the storage code                                                | Fixed                                                                                         |
-| B-7  | Low      | Sealed files can stay in R2 outside the library's list: after a failed commit, and after "Delete the online copy" | Later: an occasional clean-up of leftover files in R2                                         |
+| B-7  | Low      | Sealed files can stay in R2 outside the library's list: after a failed commit, and after "Delete the online copy" | Fixed (a weekly clean-up of files not in the list; an upload never joins a newer library)     |
 | B-8  | Low      | The daily upload limit is per library, and a full day's uploads use most of the free daily writes                 | Fixed                                                                                         |
 | B-9  | Low      | Syncing a copy near the documented size likely goes over the free plan's 10 ms CPU limit                          | Fixed (a full upload took the Worker 11 to 36 ms on Cloudflare; now at most about 6 ms)       |
 | B-10 | Low      | A notification schedule that passes every check is too big to store                                               | Fixed                                                                                         |

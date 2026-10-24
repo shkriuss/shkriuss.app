@@ -68,7 +68,7 @@ export interface R2Bucket {
     prefix?: string;
     cursor?: string;
     limit?: number;
-  }): Promise<{ objects: { key: string }[]; truncated: boolean; cursor?: string }>;
+  }): Promise<{ objects: { key: string; uploaded: Date }[]; truncated: boolean; cursor?: string }>;
 }
 
 /** Every site's static files (the "ASSETS" binding in wrangler.jsonc). */

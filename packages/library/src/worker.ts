@@ -18,6 +18,8 @@
  * Object keeps its list and checks the token; the first token to reach a
  * new library becomes its token. The files are in R2 under the SHA-256 of
  * the library's id. Everything arrives sealed, so the server can't read it.
+ * A file that never made it into the list (its upload's commit failed) is
+ * deleted by a weekly clean-up (Library.alarm).
  *
  * Anyone can make up a library, so what protects the bill is kept across all
  * of them, in one more Durable Object (LibraryGate): bytes stored and uploads
@@ -256,6 +258,8 @@ export async function handleLibrary(
   // Checked before anything reaches R2, and again after (another upload may have come first).
   const begin = await call('begin', { id: item, size });
   if (!begin.ok) return begin;
+  // Which library this is: one deleted in the meantime doesn't take it (B-7).
+  const { epoch } = (await begin.json()) as { epoch: string };
   const room = await gate('reserve', { size });
   if (!room.ok) return room;
   try {
@@ -263,7 +267,8 @@ export async function handleLibrary(
   } catch {
     return problem(502, 'The upload didn’t finish.');
   }
-  const commit = await call('commit', { id: item, key: keyId, details, parts });
+  // If this fails, the file stays in R2 outside the list until the weekly clean-up.
+  const commit = await call('commit', { id: item, key: keyId, details, parts, epoch });
   if (commit.headers.get('X-Discard') === '1') {
     await env.LIBRARY_FILES.delete(key).catch(() => undefined);
   }
@@ -454,6 +459,15 @@ interface Meta {
 type Entry = { seq: number; size: number } | { seq: number; deleted: true };
 
 const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
+/**
+ * How often a library with files looks for files in R2 that aren't in its
+ * list (left when an upload's commit failed: audit finding B-7). Files
+ * uploaded in the last day may still be on their way in, so they stay.
+ */
+export const SWEEP_MS = 7 * DAY_MS;
+/** Where a clean-up that takes several wake-ups got to in R2. */
+const SWEEP_CURSOR = 'sweep';
 /** Old tokens remembered (one per replaced account key). */
 const MAX_RETIRED = 10;
 /** R2 deletes at most this many files at once. */
@@ -551,11 +565,13 @@ export class Library {
           return noContent();
         case 'begin': {
           const { id, size } = (await request.json()) as { id: string; size: number };
-          return (await this.#refuse(meta, id, size, code, now)) ?? noContent();
+          return (await this.#refuse(meta, id, size, code, now)) ?? this.#begin(meta, now);
         }
         case 'commit': {
-          const item = (await request.json()) as Omit<ItemRow, 'seq' | 'at'>;
-          return this.#commit(meta, item, code, now);
+          const { epoch, ...item } = (await request.json()) as Omit<ItemRow, 'seq' | 'at'> & {
+            epoch: string;
+          };
+          return this.#commit(meta, item, epoch, code, now);
         }
         case 'remove': {
           const { ids } = (await request.json()) as { ids: string[] };
@@ -569,11 +585,18 @@ export class Library {
     });
   }
 
-  /** Files are deleted in batches until none are left; then the list is emptied. */
+  /**
+   * While it's being deleted: files are deleted in batches until none are
+   * left, then the list is emptied. Otherwise: the weekly clean-up (#sweep).
+   */
   async alarm(): Promise<void> {
     await this.state.blockConcurrencyWhile(async () => {
       const meta = await this.state.storage.get<Meta>('meta');
-      if (!meta?.wiping) return;
+      if (!meta) return;
+      if (!meta.wiping) {
+        await this.#sweep(meta);
+        return;
+      }
       const files = this.env.LIBRARY_FILES;
       const listed = await files.list({ prefix: `${meta.prefix}/`, limit: DELETE_BATCH });
       if (listed.objects.length > 0) await files.delete(listed.objects.map((file) => file.key));
@@ -589,6 +612,55 @@ export class Library {
 
   #save(meta: Meta): Promise<void> {
     return this.state.storage.put('meta', meta);
+  }
+
+  /**
+   * An upload may go ahead: it's told which library this is (its epoch), so
+   * its commit can tell if the library was deleted in the meantime. The
+   * weekly clean-up starts with the first upload.
+   */
+  async #begin(meta: Meta, now: number): Promise<Response> {
+    if ((await this.state.storage.getAlarm()) === null) {
+      await this.state.storage.setAlarm(now + SWEEP_MS);
+    }
+    return json({ epoch: meta.epoch });
+  }
+
+  /**
+   * Deletes this library's files in R2 that its list doesn't have (a commit
+   * failed after the upload, or a removed item's file stayed), a batch per
+   * wake-up. Files uploaded in the last day stay: they may still be on their
+   * way in. Again in a week while the library has files.
+   */
+  async #sweep(meta: Meta): Promise<void> {
+    const storage = this.state.storage;
+    if (!meta.unlocked) return;
+    const cursor = await storage.get<string>(SWEEP_CURSOR);
+    const listed = await this.env.LIBRARY_FILES.list({
+      prefix: `${meta.prefix}/`,
+      limit: DELETE_BATCH,
+      ...(cursor ? { cursor } : {}),
+    });
+    const settled = Date.now() - DAY_MS;
+    const checked = await Promise.all(
+      listed.objects
+        .filter((file) => file.uploaded.getTime() < settled)
+        .map(async ({ key }) => {
+          const entry = await storage.get<Entry>(itemKey(key.slice(meta.prefix.length + 1)));
+          return entry === undefined || 'deleted' in entry ? key : null;
+        }),
+    );
+    const strays = checked.filter((key) => key !== null);
+    if (strays.length > 0) await this.env.LIBRARY_FILES.delete(strays);
+    if (listed.truncated && listed.cursor) {
+      await storage.put(SWEEP_CURSOR, listed.cursor);
+      await storage.setAlarm(Date.now());
+      return;
+    }
+    if (cursor) await storage.delete(SWEEP_CURSOR);
+    if (cursor || listed.objects.length > strays.length) {
+      await storage.setAlarm(Date.now() + SWEEP_MS);
+    }
   }
 
   /** Which of these items the library has now. */
@@ -667,9 +739,14 @@ export class Library {
   async #commit(
     meta: Meta,
     item: Omit<ItemRow, 'seq' | 'at'>,
+    epoch: string,
     code: string,
     now: number,
   ): Promise<Response> {
+    // Begun before the library was deleted: the photo mustn't come back in the new one.
+    if (epoch !== meta.epoch) {
+      return refusal(503, { error: 'The library was deleted.', wiping: true });
+    }
     const size = item.parts.reduce((sum, part) => sum + part, 0);
     const refused = await this.#refuse(meta, item.id, size, code, now);
     if (refused) return refused;

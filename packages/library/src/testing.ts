@@ -49,9 +49,12 @@ async function bytesOf(value: ReadableStream | Uint8Array | null): Promise<Uint8
 
 export class MemoryBucket implements R2Bucket {
   readonly files = new Map<string, Uint8Array>();
+  /** When each file was put (Date.now()); a file set in `files` directly counts as long ago. */
+  readonly uploaded = new Map<string, number>();
 
   async put(key: string, value: ReadableStream | Uint8Array | null): Promise<unknown> {
     this.files.set(key, await bytesOf(value));
+    this.uploaded.set(key, Date.now());
     return {};
   }
   async get(key: string, options?: { range?: { offset: number; length: number } }) {
@@ -66,18 +69,24 @@ export class MemoryBucket implements R2Bucket {
     };
   }
   async delete(keys: string | string[]): Promise<void> {
-    for (const key of typeof keys === 'string' ? [keys] : keys) this.files.delete(key);
+    for (const key of typeof keys === 'string' ? [keys] : keys) {
+      this.files.delete(key);
+      this.uploaded.delete(key);
+    }
   }
+  /** Like R2, the cursor goes on after the last key listed, even if files were deleted since. */
   async list(options: { prefix?: string; cursor?: string; limit?: number }) {
-    const { prefix = '', limit = 1000 } = options;
-    const start = Number(options.cursor ?? '0');
-    const keys = [...this.files.keys()].filter((key) => key.startsWith(prefix)).sort();
-    const page = keys.slice(start, start + limit);
-    const truncated = start + limit < keys.length;
+    const { prefix = '', cursor = '', limit = 1000 } = options;
+    const keys = [...this.files.keys()]
+      .filter((key) => key.startsWith(prefix) && key > cursor)
+      .sort();
+    const page = keys.slice(0, limit);
+    const last = page.at(-1);
+    const truncated = limit < keys.length && last !== undefined;
     return {
-      objects: page.map((key) => ({ key })),
+      objects: page.map((key) => ({ key, uploaded: new Date(this.uploaded.get(key) ?? 0) })),
       truncated,
-      ...(truncated ? { cursor: String(start + limit) } : {}),
+      ...(truncated ? { cursor: last } : {}),
     };
   }
 }

@@ -6,7 +6,7 @@ import { randomBytes, sha256, toBase64Url } from '@shkriuss/crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { memoryLibrary } from './testing.ts';
 import { LIMITS, type Changes } from './validate.ts';
-import { STORAGE_LIMITS } from './worker.ts';
+import { STORAGE_LIMITS, SWEEP_MS } from './worker.ts';
 
 const ORIGIN = 'https://photos.example';
 const CODE = 'correct horse battery staple';
@@ -442,6 +442,113 @@ describe('deleting a library', () => {
     expect(after.usage).toMatchObject({ items: 0, bytes: 0 });
     expect(after.epoch).not.toBe(epoch);
     expect((await device.put(ITEM, [100])).status).toBe(200);
+  });
+});
+
+describe('files left in R2 outside the list (audit finding B-7)', () => {
+  /** Wakes each library whose alarm is due by now, until none is. */
+  async function wake() {
+    for (const { library, storage } of server.objects.values()) {
+      while (storage.alarm !== null && storage.alarm <= Date.now()) {
+        storage.alarm = null;
+        await library.alarm();
+      }
+    }
+  }
+  const HOUR_MS = 60 * 60 * 1000;
+
+  it('are deleted by the weekly clean-up once they’re a day old', async () => {
+    vi.useFakeTimers({ now: Date.UTC(2026, 9, 24, 9), toFake: ['Date'] });
+    const library = libraryId();
+    const device = client(library, token());
+    await device.unlock();
+    expect((await device.put(ITEM, [100])).status).toBe(200);
+    const { storage } = server.objects.get(library) ?? {};
+    if (!storage) throw new Error('No library');
+
+    // The list can't be written (say the day's free writes are used up), after the upload.
+    const put = storage.put.bind(storage);
+    storage.put = async (key, value) => {
+      if (key.startsWith('seq:')) throw new Error('storage write failed');
+      return put(key, value);
+    };
+    expect((await device.put('photo-0002', [100])).status).toBe(500);
+    storage.put = put;
+    const stray = await fileKey(library, 'photo-0002');
+    expect(server.bucket.files.has(stray)).toBe(true);
+    expect((await device.changes()).usage.items).toBe(1);
+
+    // A week later: the stray goes; the photo in the list, and one still on its way in, stay.
+    vi.setSystemTime(Date.now() + SWEEP_MS);
+    const young = await fileKey(library, 'photo-0003');
+    server.bucket.files.set(young, new Uint8Array(1));
+    server.bucket.uploaded.set(young, Date.now() - HOUR_MS);
+    await wake();
+    expect(server.bucket.files.has(stray)).toBe(false);
+    expect(server.bucket.files.has(await fileKey(library, ITEM))).toBe(true);
+    expect(server.bucket.files.has(young)).toBe(true);
+    // And again in a week, while the library has files.
+    expect(storage.alarm).toBe(Date.now() + SWEEP_MS);
+  });
+
+  it('are looked for a batch at a time, and only in that library', async () => {
+    vi.useFakeTimers({ now: Date.UTC(2026, 9, 24, 9), toFake: ['Date'] });
+    const library = libraryId();
+    const device = client(library, token());
+    await device.unlock();
+    await device.put(ITEM, [100]);
+    const prefix = (await fileKey(library, '')).slice(0, -1);
+    for (let index = 0; index < 2500; index += 1) {
+      server.bucket.files.set(`${prefix}/stray-${index}`, new Uint8Array(1));
+    }
+    const other = await fileKey(libraryId(), 'photo-0009');
+    server.bucket.files.set(other, new Uint8Array(1));
+    const list = vi.spyOn(server.bucket, 'list');
+
+    vi.setSystemTime(Date.now() + SWEEP_MS);
+    await wake();
+    expect([...server.bucket.files.keys()].sort()).toEqual(
+      [other, await fileKey(library, ITEM)].sort(),
+    );
+    expect(list).toHaveBeenCalledTimes(3);
+    expect([...(server.objects.get(library)?.storage.map.keys() ?? [])]).not.toContain('sweep');
+  });
+
+  it('aren’t looked for in a library nobody uploaded to', async () => {
+    const device = client(libraryId(), token());
+    await device.unlock();
+    await device.changes();
+    expect([...server.objects.values()].map(({ storage }) => storage.alarm)).toEqual([null, null]);
+  });
+
+  it('a photo on its way up while the library is deleted doesn’t come back in the new one', async () => {
+    const library = libraryId();
+    const device = client(library, token());
+    await device.unlock();
+    await device.put(ITEM, [100]);
+    // Its upload has begun, but reaches R2 only after the deletion has finished.
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    let uploadingToR2 = false;
+    const realPut = server.bucket.put.bind(server.bucket);
+    server.bucket.put = async (key, value) => {
+      uploadingToR2 = true;
+      await held;
+      return realPut(key, value);
+    };
+    const uploading = device.put('photo-0002', [100]);
+    await vi.waitFor(() => expect(uploadingToR2).toBe(true));
+
+    expect((await device.call('', { method: 'DELETE' })).status).toBe(202);
+    await wake();
+    expect((await device.changes()).wiping).toBe(false);
+    release();
+
+    const response = await uploading;
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ wiping: true });
+    expect((await device.changes()).rows).toEqual([]);
+    expect([...server.bucket.files.keys()]).toEqual([]);
   });
 });
 
