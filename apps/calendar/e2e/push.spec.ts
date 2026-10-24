@@ -1,6 +1,6 @@
 // "Also remind me when Calendar is closed" (packages/push, docs/adr/0009),
 // with the pretend push service in tests/e2e/notifications.ts.
-import type { Page } from '@playwright/test';
+import type { Page, Route } from '@playwright/test';
 import { fromBase64Url } from '../../../packages/push/src/base64.ts';
 import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
 import { fakeSubscription, startRig, type PushRig } from '../../../tests/e2e/notifications.ts';
@@ -192,7 +192,12 @@ test('says so when turning it off can’t reach the server, and finishes later',
   expect(await page.evaluate(() => localStorage.getItem('shkriuss-device:push-delete'))).toBeNull();
 });
 
-test('“Delete all data” deletes here at once, even while the network hangs', async ({ page }) => {
+test('“Delete all data” deletes here at once, even while the network hangs', async ({
+  page,
+  guard,
+}) => {
+  // The browser logs the requests that hung, when they're dropped below.
+  guard.allowConsole('net::ERR_FAILED');
   await fakeSubscription(page, rig);
   await page.goto('/');
   await seed(page, [
@@ -202,8 +207,9 @@ test('“Delete all data” deletes here at once, even while the network hangs',
   await expect(closedStatus(page)).toHaveText(/^On:/);
 
   // From now on the server never answers (a VPN with no connection, say).
-  await page.route('**/api/**', () => {
-    // Never answers.
+  const hanging: Route[] = [];
+  await page.route('**/api/**', (route) => {
+    hanging.push(route); // Never answers.
   });
   await page.getByRole('button', { name: 'Delete all data' }).click();
   const reloaded = page.waitForEvent('load', { timeout: 10_000 });
@@ -229,6 +235,10 @@ test('“Delete all data” deletes here at once, even while the network hangs',
   await expect(closedSwitch(page)).not.toBeChecked();
   await expect(closedStatus(page)).toHaveText(/^Off, but your reminders couldn’t be removed/);
 
+  // Back online. The requests that hung are dropped, as a dead connection's
+  // are: only unrouting would let them through late, and one could then
+  // finish the deletion before the reload below has anything to do.
+  await Promise.all(hanging.map((route) => route.abort().catch(() => undefined)));
   await page.unroute('**/api/**');
   const deleted = page.waitForResponse(
     (response) =>
