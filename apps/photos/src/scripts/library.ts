@@ -13,6 +13,7 @@
  * forgets it with the photos.
  */
 import { createFileStore, keepFiles } from '@shkriuss/storage/files';
+import { changeCount } from '../lib/changes.ts';
 import { byNewest, toPhoto, type Photo } from '../lib/photos.ts';
 
 export interface PhotoFiles {
@@ -40,8 +41,15 @@ const details = createFileStore<Photo>('photo');
 const files = createFileStore<PhotoFiles>('photo-files');
 const progress = createFileStore<OnlineProgress>('photos-online');
 
+/** Every change to the photos' details counts, so other Photos tabs know to load them again. */
+const changes = changeCount();
+
+/** True if another Photos tab changed the photos since this one last loaded or changed them. */
+export const changedElsewhere = (): boolean => changes.changedElsewhere();
+
 /** Every photo's details, newest first. */
 export async function loadLibrary(): Promise<Photo[]> {
+  changes.loading();
   return (await details.all())
     .map(toPhoto)
     .filter((photo) => photo !== null)
@@ -57,11 +65,15 @@ export async function savePhoto(photo: Photo, photoFiles: PhotoFiles): Promise<v
     await files.removeAll([photo.id]).catch(() => undefined);
     throw error;
   }
+  changes.changed();
   void keepFiles();
 }
 
 /** Saves photos' details (where they are has changed, or they're new from another device). */
-export const saveDetails = (photos: readonly Photo[]): Promise<void> => details.putAll(photos);
+export async function saveDetails(photos: readonly Photo[]): Promise<void> {
+  await details.putAll(photos);
+  changes.changed();
+}
 
 export const getFiles = (id: string): Promise<PhotoFiles | undefined> =>
   files.get(id).catch(() => undefined);
@@ -97,6 +109,7 @@ function forgetThumb(id: string): void {
 /** Deletes photos from this device: details first, then files. */
 export async function deletePhotos(ids: readonly string[]): Promise<void> {
   await details.removeAll(ids);
+  changes.changed();
   for (const id of ids) forgetThumb(id);
   await files.removeAll(ids).catch(() => undefined);
 }
@@ -111,6 +124,7 @@ export async function removeOriginals(photos: readonly Photo[]): Promise<void> {
     await files.putAll([{ id: photo.id, original: null, view: null, thumb: kept?.thumb ?? null }]);
   }
   await details.putAll(photos.map((photo) => ({ ...photo, here: false })));
+  changes.changed();
 }
 
 /** Gives a photo's files to another id (the same photo, as it's known online). */

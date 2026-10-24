@@ -64,7 +64,10 @@ Script helpers, imported from TypeScript: `@shkriuss/ui/numbers`
 `@shkriuss/ui/locale` (`DATE_LOCALE`: format dates and times with it, so
 weekdays and months are in English like the rest of the page, even on a
 phone set to another language), `@shkriuss/ui/text` (`compareText`, for
-sorting lists alphabetically),
+sorting lists alphabetically), `@shkriuss/ui/long-lists` (for lists that
+can grow to thousands: `shownCount` draws `PAGE_SIZE` (100) at a time behind
+a "Show more" button, always keeping what has focus or was just saved, and
+`waitForTyping` draws a search once typing pauses, not at every key),
 `@shkriuss/ui/problem` (telling people about a problem the same way in every
 app: `showProblem` puts it in the notice at the top of every page, which is
 read out at once; `reportSave(store.save(…))` says when saving didn't work,

@@ -250,6 +250,38 @@ test('is accessible, in both themes', async ({ page }) => {
   await checkA11y(page, 'the form with a problem (dark)');
 });
 
+test('long lists show 100 tasks at a time', async ({ page }) => {
+  const many = (count: number, title: string, done: number | null) =>
+    Array.from({ length: count }, (_, index) => ({ title: `${title} ${index + 1}`, done }));
+  await seed(page, [...many(130, 'Task', null), ...many(105, 'Done task', NOW.getTime())]);
+  await expect(titles(page)).toHaveCount(100);
+  const more = page.getByRole('button', { name: 'Show more tasks', exact: true });
+  await more.click();
+  await expect(titles(page)).toHaveCount(130);
+  // Focus goes to the first task just shown.
+  await expect(titles(page).nth(100)).toBeFocused();
+  await expect(more).toBeHidden();
+
+  // Done tasks too, once their list is open.
+  await page.locator('[data-done-summary]').click();
+  await expect(doneTitles(page)).toHaveCount(100);
+  await page.getByRole('button', { name: 'Show more done tasks' }).click();
+  await expect(doneTitles(page)).toHaveCount(105);
+  await expect(doneTitles(page).nth(100)).toBeFocused();
+
+  // A task changed far down stays in view.
+  await doneTitles(page).nth(104).click();
+  await editor(page).getByLabel('Title').fill('Changed at the end');
+  await editor(page).getByRole('button', { name: 'Save' }).click();
+  await expect(doneTitles(page).filter({ hasText: 'Changed at the end' })).toBeVisible();
+
+  // A new search starts at the first page again.
+  await page.getByLabel('Search').fill('task');
+  await expect(titles(page)).toHaveCount(100);
+  await expect(doneTitles(page)).toHaveCount(100);
+  await expect(more).toBeVisible();
+});
+
 test('ignores saved data it doesn’t understand', async ({ page }) => {
   await page.evaluate(() => {
     localStorage.setItem('shkriuss:tasks', JSON.stringify({ v: 1, data: { tasks: [{ id: 1 }] } }));

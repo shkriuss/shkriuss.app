@@ -8,7 +8,8 @@ const titleBox = (page: Page) => page.getByRole('textbox', { name: 'Title' });
 const bodyBox = (page: Page) => page.getByRole('textbox', { name: 'Note' });
 const card = (page: Page, title: string) =>
   page.getByRole('listitem').filter({ has: page.getByRole('link', { name: title, exact: true }) });
-const titles = (page: Page) => page.locator('[data-notes] [data-open]').allTextContents();
+const links = (page: Page) => page.locator('[data-notes] [data-open]');
+const titles = (page: Page) => links(page).allTextContents();
 
 /** Writes a new note and goes back to the list. */
 async function writeNote(page: Page, title: string, body = ''): Promise<void> {
@@ -91,14 +92,48 @@ test('finds notes by title or text, ignoring case and accents', async ({ page })
   await writeNote(page, 'Packing', 'Passport, charger');
   const searchBox = page.getByLabel('Search notes');
   await searchBox.fill('cafe');
-  expect(await titles(page)).toEqual(['Café ideas']);
+  await expect(links(page)).toHaveText(['Café ideas']);
   await expect(page.getByRole('status').filter({ hasText: '1 note found.' })).toBeAttached();
   await searchBox.fill('passport');
-  expect(await titles(page)).toEqual(['Packing']);
+  await expect(links(page)).toHaveText(['Packing']);
   await searchBox.fill('tea');
   await expect(page.getByText('No notes match “tea”.')).toBeVisible();
   await searchBox.fill('');
-  expect(await titles(page)).toEqual(['Packing', 'Café ideas']);
+  await expect(links(page)).toHaveText(['Packing', 'Café ideas']);
+});
+
+test('long lists show 100 notes at a time', async ({ page }) => {
+  await page.evaluate(() => {
+    // Note 1 is the oldest, so it comes last.
+    const notes = Array.from({ length: 105 }, (_, index) => ({
+      id: `note-${index + 1}`,
+      title: `Note ${index + 1}`,
+      body: '',
+      created: index + 1,
+      updated: index + 1,
+      pinned: false,
+    }));
+    localStorage.setItem('shkriuss:notes', JSON.stringify({ v: 2, data: { notes } }));
+  });
+  await page.reload();
+  await expect(links(page)).toHaveCount(100);
+  const more = page.getByRole('button', { name: 'Show more notes' });
+  await more.click();
+  await expect(links(page)).toHaveCount(105);
+  // Focus goes to the first note just shown.
+  await expect(links(page).nth(100)).toBeFocused();
+  await expect(links(page).nth(100)).toHaveText('Note 5');
+  await expect(more).toBeHidden();
+
+  // Back from a note far down: it's still there, with focus on it.
+  await card(page, 'Note 2').getByRole('link').click();
+  await page.getByRole('button', { name: 'All notes' }).click();
+  await expect(card(page, 'Note 2').getByRole('link')).toBeFocused();
+
+  // A new search starts at the first page again.
+  await page.getByLabel('Search notes').fill('note');
+  await expect(links(page)).toHaveCount(100);
+  await expect(more).toBeVisible();
 });
 
 test('pinned notes come first', async ({ page }) => {

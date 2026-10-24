@@ -131,6 +131,41 @@ test('chooses several to save or delete, and deletes one while looking at it', a
   expect(await stored(page)).toEqual({ photos: 0, files: 0 });
 });
 
+test('loads the library again on focus only when another tab changed it', async ({
+  page,
+  context,
+}) => {
+  await expect(page.getByText('No photos yet.', { exact: false })).toBeVisible();
+  // Counts how often the whole library is read (audit J-3: seconds when it's big).
+  await page.evaluate(() => {
+    const getAll = IDBObjectStore.prototype.getAll;
+    const counted = window as unknown as { reads: number };
+    counted.reads = 0;
+    IDBObjectStore.prototype.getAll = function (...args) {
+      counted.reads += 1;
+      return getAll.apply(this, args);
+    };
+  });
+  const reads = () => page.evaluate(() => (window as unknown as { reads: number }).reads);
+  const focus = () => page.evaluate(() => window.dispatchEvent(new Event('focus')));
+
+  await focus();
+  expect(await reads()).toBe(0);
+
+  const other = await context.newPage();
+  await other.goto('/');
+  await addPhotos(other, [jpeg('IMG_0001.JPG', await picture(other))]);
+  await expect(tiles(other)).toHaveCount(1);
+  await focus();
+  await expect(tiles(page)).toHaveCount(1);
+  expect(await reads()).toBe(1);
+
+  // Nothing changed since: switching back doesn't read it all again.
+  await focus();
+  await focus();
+  expect(await reads()).toBe(1);
+});
+
 test('“Delete all data” deletes the photos', async ({ page }) => {
   await addPhotos(page, [jpeg('IMG_0001.JPG', await picture(page, { width: 400, height: 300 }))]);
   await expect(tiles(page)).toHaveCount(1);

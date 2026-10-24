@@ -98,12 +98,18 @@ import {
         Nothing to do here. Add a task above.
       </p>
       <div class="stack" data-groups></div>
+      <div data-open-more hidden>
+        <Button data-action="more-open">Show more tasks</Button>
+      </div>
 
       <details class="stack stack--sm" data-done-section hidden>
         <summary class="done-summary" data-done-summary>
           Done
         </summary>
         <ul role="list" class="tasks" data-done-list></ul>
+        <div data-done-more hidden>
+          <Button data-action="more-done">Show more done tasks</Button>
+        </div>
         <p>
           <Button variant="ghost" icon="trash" data-action="clear-done">
             Delete done tasks

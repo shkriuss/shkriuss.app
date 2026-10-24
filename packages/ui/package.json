@@ -17,6 +17,7 @@
     "./components/*": "./src/components/*",
     "./layouts/*": "./src/layouts/*",
     "./locale": "./src/lib/locale.ts",
+    "./long-lists": "./src/lib/long-lists.ts",
     "./push-controls": "./src/scripts/push-controls.ts",
     "./numbers": "./src/lib/numbers.ts",
     "./problem": "./src/scripts/problem.ts",

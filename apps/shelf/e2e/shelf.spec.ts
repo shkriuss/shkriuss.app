@@ -216,6 +216,27 @@ test('saving a form keeps what changed elsewhere while it was open', async ({ pa
   await expect(form(page).getByLabel('Price (optional)')).toHaveValue('220');
 });
 
+test('long lists show 100 items at a time', async ({ page }) => {
+  await seed(
+    page,
+    Array.from({ length: 120 }, (_, index) => ({ name: `Item ${index + 1}` })),
+  );
+  await expect(page.locator('[data-count]')).toHaveText('120 items');
+  await expect(names(page)).toHaveCount(100);
+  const more = page.getByRole('button', { name: 'Show more items' });
+  await more.click();
+  await expect(names(page)).toHaveCount(120);
+  // Focus goes to the first item just shown.
+  await expect(names(page).nth(100)).toBeFocused();
+  await expect(more).toBeHidden();
+
+  // A new search starts at the first page again.
+  await filter(page, 'Search').fill('item');
+  await expect(names(page)).toHaveCount(100);
+  await expect(more).toBeVisible();
+  await expect(page.locator('[data-count]')).toHaveText('120 items');
+});
+
 test('ignores saved data it doesn’t understand', async ({ page }) => {
   await page.evaluate(() => {
     localStorage.setItem('shkriuss:shelf', JSON.stringify({ v: 1, data: { items: [{ id: 1 }] } }));

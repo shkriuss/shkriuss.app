@@ -26,10 +26,10 @@ anyone is listed here without its details until it's fixed (see
 | Severity | Found | Fixed | Partly fixed | Your setting | Your choice | Later | Explained or accepted |
 | -------- | ----- | ----- | ------------ | ------------ | ----------- | ----- | --------------------- |
 | High     | 14    | 14    | –            | –            | –           | –     | –                     |
-| Medium   | 34    | 32    | 1            | –            | –           | 1     | –                     |
+| Medium   | 34    | 34    | –            | –            | –           | –     | –                     |
 | Low      | 90    | 79    | 1            | –            | –           | 8     | 2                     |
 | Info     | 24    | 12    | 1            | –            | 1           | 7     | 3                     |
-| **All**  | 162   | 137   | 3            | –            | 1           | 16    | 5                     |
+| **All**  | 162   | 139   | 2            | –            | 1           | 15    | 5                     |
 
 "Your setting" means a change in Cloudflare or GitHub that only the owner can
 make, listed in [deployment.md](../deployment.md). "Later" means a real but
@@ -66,8 +66,6 @@ Real, but small or rare, or a bigger change best done on its own. None of them c
 - **F2-10** (Info) Refunds in a category and partial closes can't be recorded. _Later: app features._
 - **G-14** (Info) Smaller points: Grammar’s fixes clear undo, double announcements, three wordings for "Couldn’t save". _Partly fixed (one read-out per message, one wording for "Couldn’t save"); keeping Grammar’s undo history is later._
 - **H-13** (Info) Some CI tools are pinned by hand and Dependabot never updates them. _Later: let Dependabot update the hand-pinned tools._
-- **J-1** (Medium) Long lists are rebuilt in full on every change, which freezes Tasks (and likely Shelf and Notes) well below their own limits. _Partly fixed (shared comparator, Done list on demand); the rest later._
-- **J-3** (Medium) Photos reloads, checks and re-sorts the whole library every time the window gets focus. _Later: reload Photos only when the library changed._
 - **J-6** (Low) The "notifications while open" code is copied into six apps, and five of them never test the iPhone and blocked cases. _Later: one shared module for reminders while open._
 - **J-7** (Low) Three files of about 1,000 lines, each mostly one closure, are hard to change safely. _Later: split the three biggest files._
 - **J-8** (Low) Small helpers are copied between apps and have drifted, including a slow comparator and a misleading "Couldn't save". _Partly fixed (the comparator, and one wording for "Couldn’t save"); the rest later._
@@ -272,9 +270,9 @@ Severity is the auditor’s: **High** could lose or leak data or cost money; **M
 
 | ID   | Severity | What was wrong                                                                                                               | What happened                                                                      |
 | ---- | -------- | ---------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| J-1  | Medium   | Long lists are rebuilt in full on every change, which freezes Tasks (and likely Shelf and Notes) well below their own limits | Partly fixed (shared comparator, Done list on demand); the rest later              |
+| J-1  | Medium   | Long lists are rebuilt in full on every change, which freezes Tasks (and likely Shelf and Notes) well below their own limits | Fixed                                                                              |
 | J-2  | Medium   | Every colour depends on CSS `light-dark()` with no fallback, and no browser baseline is written down or tested               | Fixed                                                                              |
-| J-3  | Medium   | Photos reloads, checks and re-sorts the whole library every time the window gets focus                                       | Later: reload Photos only when the library changed                                 |
+| J-3  | Medium   | Photos reloads, checks and re-sorts the whole library every time the window gets focus                                       | Fixed                                                                              |
 | J-4  | Medium   | The JS size budget doesn't count shared chunks, so two pages are over budget while `check:dist` passes                       | Fixed                                                                              |
 | J-5  | Medium   | Browser tests don't check the second device for errors, CSP violations or outside requests                                   | Fixed                                                                              |
 | J-6  | Low      | The "notifications while open" code is copied into six apps, and five of them never test the iPhone and blocked cases        | Later: one shared module for reminders while open                                  |
