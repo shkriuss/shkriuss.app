@@ -3,7 +3,15 @@
 // is tested for every app in tests/e2e/sync.spec.ts.
 import { createAccount, hubURL, signInWithKey, turnOnSync } from '../../../tests/e2e/account.ts';
 import { expect, test } from '../../../tests/e2e/fixtures.ts';
-import { addCategory, addEntry, categoryItem, NOW, TIME_ZONE, total } from './helpers.ts';
+import {
+  addCategory,
+  addEntry,
+  categoryItem,
+  NOW,
+  TIME_ZONE,
+  total,
+  yearDialog,
+} from './helpers.ts';
 
 test.use({ timezoneId: TIME_ZONE });
 
@@ -46,5 +54,17 @@ test('categories, entries, the currency and the reminder sync between devices', 
   await uploaded;
   await page.getByRole('button', { name: 'Sync now' }).click();
   await expect(total(page, 'Income')).toHaveText('€2,000.00');
+
+  // A year deleted on the phone is deleted on the tablet too.
+  const deleted = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/api/sync/copy') && response.request().method() === 'PUT',
+  );
+  await page.getByRole('button', { name: 'Delete a year…' }).click();
+  await yearDialog(page).getByRole('button', { name: 'Delete 2 entries' }).click();
+  await deleted;
+  await tablet.getByRole('button', { name: 'Sync now' }).click();
+  await expect(total(tablet, 'Income')).toHaveText('€0.00');
+  await expect(total(tablet, 'Spent')).toHaveText('€0.00');
   await tablet.context().close();
 });

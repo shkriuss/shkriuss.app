@@ -99,6 +99,7 @@ function asProblem(problem: LibraryProblem): OnlineProblem | null {
     case 'wrong-code':
     case 'too-many-tries':
     case 'deleted':
+    case 'unproven-deletion':
     case 'exists':
     case 'too-big':
       return 'server';
@@ -327,6 +328,9 @@ export function startOnline(list: PhotoList): Online {
           // Deleted on another device meanwhile.
           await deletePhotos([photo.id]);
           list.changed({ remove: [photo.id] });
+        } else if (error.problem === 'unproven-deletion') {
+          // The server says so, but no device of this account deleted it: it stays here.
+          skip.add(photo.id);
         } else {
           if (error.problem === 'locked') unlocked = false;
           if (error.problem === 'daily-limit') retryAt = error.retryAt;

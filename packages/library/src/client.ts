@@ -227,6 +227,8 @@ export type LibraryProblem =
   | 'too-big'
   /** The item was deleted on another device. */
   | 'deleted'
+  /** The server says the item was deleted, but no device of this account's did: it stays here. */
+  | 'unproven-deletion'
   /** The item is already in the library. */
   | 'exists'
   /** The library is being deleted. */
@@ -238,15 +240,19 @@ export class LibraryError extends Error {
   readonly retryAt: number | null;
   /** The server's answer, if it gave one. */
   readonly status: number | null;
+  /** For 'deleted': the deletion note's seal the server gave, to check. */
+  readonly proof: string | null;
   constructor(
     problem: LibraryProblem,
     retryAt: number | null = null,
     status: number | null = null,
+    proof: string | null = null,
   ) {
     super(problem);
     this.problem = problem;
     this.retryAt = retryAt;
     this.status = status;
+    this.proof = proof;
   }
 }
 
@@ -260,7 +266,11 @@ async function failure(response: Response): Promise<LibraryError> {
   if (response.status === 423) return error('locked');
   if (response.status === 507) return error('full');
   if (response.status === 413) return error('too-big');
-  if (response.status === 409) return error(flag('deleted') ? 'deleted' : 'exists');
+  if (response.status === 409 && flag('deleted')) {
+    const proof = typeof body['proof'] === 'string' ? body['proof'] : null;
+    return new LibraryError('deleted', null, response.status, proof);
+  }
+  if (response.status === 409) return error('exists');
   if (response.status === 403 && flag('wrong')) return error('wrong-code');
   if (response.status === 429) {
     if (flag('tooMany')) return error('too-many-tries');
@@ -340,6 +350,21 @@ export function libraryApi(access: LibraryAccess) {
     return openBytes(key, sealed, label(access.library, id, `part ${index}`)).catch(() => null);
   }
 
+  /**
+   * Whether a deletion note was made by a device of this account: its seal
+   * opens with one of the library's keys, for this library and this item.
+   * A server can't make one up, or move one to another item (audit A-8).
+   */
+  async function realDeletion(id: string, proof: string | null | undefined): Promise<boolean> {
+    const [keyId = '', sealed = ''] = (proof ?? '').split('.');
+    const key = access.keys.get(keyId);
+    if (!key || sealed === '') return false;
+    return open(key, sealed, label(access.library, id, 'deleted')).then(
+      () => true,
+      () => false,
+    );
+  }
+
   return {
     /** What changed after change `since`, oldest first (a page at a time: see `more`). */
     async changes(since: number): Promise<LibraryChanges> {
@@ -348,7 +373,10 @@ export function libraryApi(access: LibraryAccess) {
       let unreadable = 0;
       for (const row of page.rows) {
         if (isDeletedRow(row)) {
-          changes.push({ id: row.id, seq: row.seq, deleted: true });
+          // A note without a device's seal is left alone: the item stays here.
+          if (await realDeletion(row.id, row.proof)) {
+            changes.push({ id: row.id, seq: row.seq, deleted: true });
+          }
           continue;
         }
         const key = access.keys.get(row.key);
@@ -415,15 +443,35 @@ export function libraryApi(access: LibraryAccess) {
           'X-Library-Details': sealedDetails,
           'X-Library-Parts': sizes.join(','),
         },
+      }).catch(async (error: unknown) => {
+        if (
+          error instanceof LibraryError &&
+          error.problem === 'deleted' &&
+          !(await realDeletion(id, error.proof))
+        ) {
+          throw new LibraryError('unproven-deletion', null, error.status);
+        }
+        throw error;
       });
       const { seq } = (await response.json()) as { seq: number };
       return { seq, key: current.id, parts: sizes };
     },
 
-    /** Deletes items everywhere (their ids can't be used again). */
+    /**
+     * Deletes items everywhere (their ids can't be used again). Each deletion
+     * note carries this device's seal, so other devices can tell it's real.
+     */
     async remove(ids: readonly string[]): Promise<void> {
+      const { current, library } = access;
       for (let start = 0; start < ids.length; start += LIMITS.remove) {
-        await post('/remove', { ids: ids.slice(start, start + LIMITS.remove) });
+        const chunk = ids.slice(start, start + LIMITS.remove);
+        const proofs = await Promise.all(
+          chunk.map(
+            async (id) =>
+              `${current.id}.${await seal(current.key, utf8('deleted'), label(library, id, 'deleted'))}`,
+          ),
+        );
+        await post('/remove', { ids: chunk, proofs });
       }
     },
 

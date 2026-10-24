@@ -212,6 +212,116 @@ describe('parseIcs', () => {
     });
   });
 
+  it('keeps the last time of a repeat when the time zones change clocks on different dates', () => {
+    const london = { ...options, timeZone: 'Europe/London' };
+    const weekly = (start: string, until: string, opts = options) =>
+      only(calendar([start, `RRULE:FREQ=WEEKLY;UNTIL=${until}`, 'SUMMARY:x']), opts);
+    // Tuesdays at 09:00 in Tbilisi (05:00 UTC), the last on 10 November. In London
+    // the first is at 06:00 (summer time) but the last at 05:00.
+    expect(weekly('DTSTART;TZID=Asia/Tbilisi:20261020T090000', '20261110T050000Z', london)).toEqual(
+      {
+        ...base,
+        title: 'x',
+        startDate: '2026-10-20',
+        endDate: '2026-10-20',
+        startTime: '06:00',
+        endTime: null,
+        repeat: 'weekly',
+        repeatUntil: '2026-11-10',
+      },
+    );
+    // The same with the start written in UTC.
+    expect(weekly('DTSTART:20261020T050000Z', '20261110T050000Z', london)).toMatchObject({
+      repeatUntil: '2026-11-10',
+    });
+    // An UNTIL before the start time on its day ends the day before.
+    expect(
+      weekly('DTSTART;TZID=Asia/Tbilisi:20261020T090000', '20261110T000000Z', london),
+    ).toMatchObject({ repeatUntil: '2026-11-09' });
+    // 22:00 UTC on Tuesdays is 02:00 on Wednesdays in Tbilisi: the last one moves too.
+    expect(weekly('DTSTART:20261020T220000Z', '20261110T220000Z')).toMatchObject({
+      startDate: '2026-10-21',
+      startTime: '02:00',
+      repeatUntil: '2026-11-11',
+    });
+    // An UNTIL with only a date, after a start that moves to the next day.
+    expect(weekly('DTSTART;TZID=Europe/London:20261020T233000', '20261110')).toMatchObject({
+      startDate: '2026-10-21',
+      startTime: '02:30',
+      repeatUntil: '2026-11-11',
+    });
+  });
+
+  it('says when some repeating times may be an hour off', () => {
+    const weekly = (start: string, rule = 'FREQ=WEEKLY') => [start, `RRULE:${rule}`, 'SUMMARY:x'];
+    const london = 'DTSTART;TZID=Europe/London:20260714T090000';
+    // London changes its clocks and Tbilisi doesn't: 09:00 in London is 12:00 in
+    // Tbilisi in summer but 13:00 in winter. Calendar keeps 12:00.
+    const result = parseIcs(
+      calendar(
+        weekly(london),
+        weekly('DTSTART;TZID=America/New_York:20260714T090000', 'FREQ=DAILY;COUNT=200'),
+        // Nothing to say: the same time zone, UTC, a time without a zone, a
+        // whole day, no repeat, or repeats that end before any clocks change.
+        weekly('DTSTART;TZID=Asia/Tbilisi:20260714T090000'),
+        weekly('DTSTART:20260714T090000Z'),
+        weekly('DTSTART:20260714T090000'),
+        weekly('DTSTART;VALUE=DATE:20260714'),
+        [london, 'SUMMARY:x'],
+        weekly(london, 'FREQ=WEEKLY;UNTIL=20260901T080000Z'),
+        weekly(london, 'FREQ=WEEKLY;COUNT=5'),
+      ),
+      options,
+    );
+    expect(result.skipped).toEqual([]);
+    expect(result.events[0]?.draft).toMatchObject({ startTime: '12:00', repeat: 'weekly' });
+    expect(result.notes).toEqual([
+      '2 repeating events are from a time zone that doesn’t change its clocks on the same dates as yours, so some of their times may be an hour off.',
+    ]);
+
+    const notes = (start: string, timeZone: string) =>
+      parseIcs(calendar(weekly(start)), { ...options, timeZone }).notes;
+    // London and New York both change, but on different dates.
+    expect(notes('DTSTART;TZID=America/New_York:20260714T090000', 'Europe/London')).toEqual([
+      '1 repeating event is from a time zone that doesn’t change its clocks on the same dates as yours, so some of its times may be an hour off.',
+    ]);
+    // A repeat that starts in winter still finds the summer.
+    expect(notes('DTSTART;TZID=Europe/London:20261201T090000', 'Asia/Tbilisi')).toHaveLength(1);
+    // UTC never changes; London does.
+    expect(notes('DTSTART:20260714T090000Z', 'Europe/London')).toHaveLength(1);
+    // London and Berlin change on the same dates.
+    expect(notes(london, 'Europe/Berlin')).toEqual([]);
+    expect(notes(london, 'Europe/London')).toEqual([]);
+  });
+
+  it('says when a monthly or yearly repeat moves to another day', () => {
+    // 22:00 UTC is 02:00 the next day in Tbilisi. Monthly on the 31st (in UTC)
+    // becomes monthly on the 1st, which would show in months without a 31st.
+    const result = parseIcs(
+      calendar(
+        ['DTSTART:20261031T220000Z', 'RRULE:FREQ=MONTHLY', 'SUMMARY:Rent'],
+        ['DTSTART:20260228T220000Z', 'RRULE:FREQ=YEARLY', 'SUMMARY:x'],
+        // Nothing to say: the 15th becomes the 16th every month, 31 December
+        // becomes 1 January every year, weekly stays weekly, or no move.
+        ['DTSTART:20261015T220000Z', 'RRULE:FREQ=MONTHLY', 'SUMMARY:x'],
+        ['DTSTART:20261231T220000Z', 'RRULE:FREQ=YEARLY', 'SUMMARY:x'],
+        ['DTSTART:20261031T220000Z', 'RRULE:FREQ=WEEKLY', 'SUMMARY:x'],
+        ['DTSTART:20261031T080000Z', 'RRULE:FREQ=MONTHLY', 'SUMMARY:x'],
+        ['DTSTART:20261031T220000Z', 'SUMMARY:x'],
+      ),
+      options,
+    );
+    expect(result.skipped).toEqual([]);
+    expect(result.events[0]?.draft).toMatchObject({
+      startDate: '2026-11-01',
+      startTime: '02:00',
+      repeat: 'monthly',
+    });
+    expect(result.notes).toEqual([
+      '2 repeating events moved to another day in your time zone, so some of their dates near the end of a month may be wrong.',
+    ]);
+  });
+
   it('lists events it can’t show, with the reason', () => {
     const result = parseIcs(
       calendar(

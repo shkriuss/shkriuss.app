@@ -12,6 +12,12 @@ export const ITEM_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{7,63}$/;
 export const KEY_ID = /^[A-Za-z0-9_-]{1,16}$/;
 /** Sealing adds a 12-byte IV and a 16-byte tag. */
 export const SEAL_BYTES = 28;
+/**
+ * A deletion note's seal, "<key id>.<sealed>": made by the device that
+ * deleted the item, with a key only the account's devices have, so a server
+ * can't make one up (audit A-8).
+ */
+export const DELETION_PROOF = /^[A-Za-z0-9_-]{1,16}\.[A-Za-z0-9_-]{40,64}$/;
 
 export const LIMITS = {
   /** One item, all its parts sealed. Cloudflare takes at most 100 MB in one request. */
@@ -77,6 +83,8 @@ export interface DeletedRow {
   seq: number;
   deleted: true;
   at: number;
+  /** The deleting device's seal (DELETION_PROOF); missing in notes from before it was added. */
+  proof?: string;
 }
 export type Row = ItemRow | DeletedRow;
 
@@ -149,9 +157,15 @@ export function checkFirstParts(body: unknown): Checked<[string, number][]> {
   return { ok: true, value: items as [string, number][] };
 }
 
-/** POST /api/library/remove: { ids: […] }. */
-export function checkRemove(body: unknown): Checked<string[]> {
-  const ids = fields(body, ['ids'])?.['ids'];
+/**
+ * POST /api/library/remove: { ids: […], proofs: […] }, each id with its
+ * deletion note's seal (proofs are missing from versions before them).
+ * Returns each id once, with its seal or null.
+ */
+export function checkRemove(body: unknown): Checked<[string, string | null][]> {
+  const record = fields(body, ['ids', 'proofs']);
+  const ids = record?.['ids'];
+  const proofs = record?.['proofs'];
   if (
     !Array.isArray(ids) ||
     ids.length === 0 ||
@@ -160,7 +174,19 @@ export function checkRemove(body: unknown): Checked<string[]> {
   ) {
     return { ok: false, error: `"ids" must be 1 to ${LIMITS.remove} item ids.` };
   }
-  return { ok: true, value: [...new Set(ids as string[])] };
+  if (
+    proofs !== undefined &&
+    (!Array.isArray(proofs) ||
+      proofs.length !== ids.length ||
+      !proofs.every((proof) => typeof proof === 'string' && DELETION_PROOF.test(proof)))
+  ) {
+    return { ok: false, error: '"proofs" must be a deletion note\u2019s seal for each id.' };
+  }
+  const items = new Map<string, string | null>();
+  (ids as string[]).forEach((id, index) => {
+    if (!items.has(id)) items.set(id, (proofs as string[] | undefined)?.[index] ?? null);
+  });
+  return { ok: true, value: [...items] };
 }
 
 /** POST /api/library/unlock: { code }. */

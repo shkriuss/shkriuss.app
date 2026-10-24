@@ -4,8 +4,9 @@
  *
  * Three lists, saved and synced separately:
  * - categories: a name and, optionally, a limit for each month;
- * - entries: an expense (in a category, or none) or income, with an amount,
- *   a day and a note;
+ * - entries: an expense or a refund (money back for an expense: it comes off
+ *   the spending), each in a category or none, or income; with an amount, a
+ *   day and a note;
  * - settings: the currency amounts are shown in, and the monthly reminder.
  *   Each is saved only once changed (US dollars and no reminder until then),
  *   so a new device has nothing that could win over another device's choice
@@ -30,8 +31,11 @@ import type { Notice } from '@shkriuss/push';
 import { parseDecimal } from '@shkriuss/ui/numbers';
 import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
-export type Kind = 'expense' | 'income';
-export const KINDS: readonly Kind[] = ['expense', 'income'];
+export type Kind = 'expense' | 'income' | 'refund';
+export const KINDS: readonly Kind[] = ['expense', 'income', 'refund'];
+
+/** Expenses and refunds are in a category (or "No category"); income isn't. */
+export const hasCategory = (kind: Kind): boolean => kind !== 'income';
 
 export interface Category {
   id: string;
@@ -49,7 +53,7 @@ export interface Entry {
   kind: Kind;
   amount: number;
   date: IsoDate;
-  /** For an expense: its category's id, or null. Always null for income. */
+  /** For an expense or a refund: its category's id, or null. Always null for income. */
   category: string | null;
   note: string;
 }
@@ -58,7 +62,19 @@ export interface EntriesState {
   entries: Entry[];
 }
 
-export const LIMITS = { name: 30, note: 100, categories: 50, entries: 5000, amount: 1e9 };
+/**
+ * The entries' data version. Version 2 added refunds. What version 1 saved
+ * reads the same (migrateEntries), and a Budget on another device that's
+ * still version 1 waits for its update instead of syncing refunds it can't
+ * read.
+ */
+export const ENTRIES_VERSION = 2;
+
+/**
+ * `entries`: the most Budget keeps, so they fit on the device and in the
+ * sync copy (measured in budget.test.ts: "room for every entry").
+ */
+export const LIMITS = { name: 30, note: 100, categories: 50, entries: 6000, amount: 1e9 };
 
 export const emptyCategories = (): CategoriesState => ({ categories: [] });
 export const emptyEntries = (): EntriesState => ({ entries: [] });
@@ -108,7 +124,7 @@ function isEntry(value: unknown): value is Entry {
     KINDS.includes(kind as Kind) &&
     isAmount(amount) &&
     isIsoDate(date) &&
-    (category === null || (kind === 'expense' && typeof category === 'string')) &&
+    (category === null || (hasCategory(kind as Kind) && typeof category === 'string')) &&
     typeof note === 'string'
   );
 }
@@ -125,6 +141,10 @@ export function isEntriesState(value: unknown): value is EntriesState {
   const { entries } = value as Record<string, unknown>;
   return Array.isArray(entries) && entries.every(isEntry);
 }
+
+/** Entries saved by an older version, in this version's shape (version 1's are the same). */
+export const migrateEntries = (old: unknown, version: number): EntriesState | undefined =>
+  version === 1 && isEntriesState(old) ? old : undefined;
 
 /** A typed amount: null when empty, NaN when it isn't a number ("12,50" is 12.5). */
 const parseAmount = parseDecimal;
@@ -224,14 +244,15 @@ export function readEntry(
 ): { entry: Entry; problems?: undefined } | { entry?: undefined; problems: EntryProblems } {
   const problems: EntryProblems = {};
   const kind = KINDS.find((entry) => entry === form.kind);
-  if (!kind) problems.kind = 'Choose expense or income.';
+  if (!kind) problems.kind = 'Choose expense, income or refund.';
   const amountText = amountProblem(form.amount, false);
   if (amountText) problems.amount = amountText;
-  else if (count >= LIMITS.entries)
-    problems.amount = `You can keep up to ${LIMITS.entries} entries.`;
+  else if (count >= LIMITS.entries) {
+    problems.amount = `You can keep up to ${new Intl.NumberFormat().format(LIMITS.entries)} entries. To make room, delete a year (under Currency and spreadsheet).`;
+  }
   if (!isIsoDate(form.date)) problems.date = 'Choose a day.';
   const category =
-    kind === 'expense' && categories.categories.some((entry) => entry.id === form.category)
+    kind && hasCategory(kind) && categories.categories.some((entry) => entry.id === form.category)
       ? form.category
       : null;
   const note = form.note.trim();
@@ -272,6 +293,51 @@ export const removeEntry = (state: EntriesState, id: string): EntriesState => ({
   entries: state.entries.filter((entry) => entry.id !== id),
 });
 
+// ---------- Making room ----------
+
+export interface YearCount {
+  /** "2024". */
+  year: string;
+  count: number;
+}
+
+const yearOf = (date: IsoDate): string => date.slice(0, 4);
+
+/** The years that have entries, the earliest first, with how many each has (for "Delete a year"). */
+export function entryYears(state: EntriesState): YearCount[] {
+  const counts = new Map<string, number>();
+  for (const entry of state.entries) {
+    counts.set(yearOf(entry.date), (counts.get(yearOf(entry.date)) ?? 0) + 1);
+  }
+  return [...counts]
+    .map(([year, count]) => ({ year, count }))
+    .sort((a, b) => a.year.localeCompare(b.year));
+}
+
+/** Removes every entry of a year ("2024"): expenses, income and refunds. */
+export const removeYear = (state: EntriesState, year: string): EntriesState => ({
+  entries: state.entries.filter((entry) => yearOf(entry.date) !== year),
+});
+
+/** "1 entry", "312 entries". */
+export const entriesCount = (count: number, locale?: string): string =>
+  `${new Intl.NumberFormat(locale).format(count)} ${count === 1 ? 'entry' : 'entries'}`;
+
+/**
+ * What the page says once Budget is nearly full (over 90% of the entries it
+ * keeps): how many more fit, and how to make room. Null until then.
+ */
+export function roomNote(count: number, locale?: string): string | null {
+  if (count <= LIMITS.entries * 0.9) return null;
+  const left = LIMITS.entries - count;
+  const number = new Intl.NumberFormat(locale);
+  const start =
+    left > 0
+      ? `Budget is nearly full: there’s room for ${number.format(left)} more ${left === 1 ? 'entry' : 'entries'} (it keeps up to ${number.format(LIMITS.entries)}).`
+      : `Budget is full: it keeps up to ${entriesCount(LIMITS.entries, locale)}.`;
+  return `${start} To make room, download the spreadsheet, then use “Delete a year…” under Currency and spreadsheet, below.`;
+}
+
 // ---------- Months ----------
 
 export const monthOf = (date: IsoDate): string => date.slice(0, 7);
@@ -296,6 +362,7 @@ export const entriesIn = (state: EntriesState, month: string): Entry[] =>
 
 export interface Summary {
   income: number;
+  /** Expenses minus refunds (below 0 when more was refunded, say for last month's buys). */
   spent: number;
   /** Income minus spending (negative when more was spent). */
   left: number;
@@ -303,14 +370,18 @@ export interface Summary {
   budgeted: number | null;
 }
 
+/** What an entry adds to the spending: an expense its amount, a refund takes its amount off. */
+const spending = (entry: Entry): number =>
+  entry.kind === 'expense' ? entry.amount : entry.kind === 'refund' ? -entry.amount : 0;
+
 export function summary(entries: readonly Entry[], categories: CategoriesState): Summary {
-  const total = (kind: Kind) =>
-    tidy(entries.reduce((sum, entry) => (entry.kind === kind ? sum + entry.amount : sum), 0));
   const limits = categories.categories.flatMap((category) =>
     category.limit === null ? [] : [category.limit],
   );
-  const income = total('income');
-  const spent = total('expense');
+  const income = tidy(
+    entries.reduce((sum, entry) => (entry.kind === 'income' ? sum + entry.amount : sum), 0),
+  );
+  const spent = tidy(entries.reduce((sum, entry) => sum + spending(entry), 0));
   return {
     income,
     spent,
@@ -320,16 +391,17 @@ export function summary(entries: readonly Entry[], categories: CategoriesState):
 }
 
 export interface CategoryTotal {
-  /** null: expenses without a category (or in one that was deleted). */
+  /** null: expenses and refunds without a category (or in one that was deleted). */
   category: Category | null;
+  /** Expenses minus refunds. */
   spent: number;
   /** What's left of the limit (negative when over), or null without one. */
   left: number | null;
 }
 
 /**
- * Spending in each category, in the categories' order, then "No category"
- * if anything was spent without one.
+ * Spending in each category (refunds taken off), in the categories' order,
+ * then "No category" if anything was spent or refunded without one.
  */
 export function byCategory(
   entries: readonly Entry[],
@@ -338,9 +410,9 @@ export function byCategory(
   const spent = new Map<string | null, number>();
   const known = new Set(categories.categories.map((category) => category.id));
   for (const entry of entries) {
-    if (entry.kind !== 'expense') continue;
+    if (!hasCategory(entry.kind)) continue;
     const key = entry.category !== null && known.has(entry.category) ? entry.category : null;
-    spent.set(key, tidy((spent.get(key) ?? 0) + entry.amount));
+    spent.set(key, tidy((spent.get(key) ?? 0) + spending(entry)));
   }
   const totals: CategoryTotal[] = categories.categories.map((category) => {
     const amount = spent.get(category.id) ?? 0;
@@ -351,7 +423,7 @@ export function byCategory(
     };
   });
   const none = spent.get(null);
-  if (none) totals.push({ category: null, spent: none, left: null });
+  if (none !== undefined) totals.push({ category: null, spent: none, left: null });
   return totals;
 }
 
@@ -404,7 +476,13 @@ function cell(value: string | number | null): string {
   return /[",\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
 }
 
-/** Every entry as a CSV file, the latest first. Expenses are negative. */
+export const KIND_LABELS: Record<Kind, string> = {
+  expense: 'Expense',
+  income: 'Income',
+  refund: 'Refund',
+};
+
+/** Every entry as a CSV file, the latest first. Expenses are negative; income and refunds positive. */
 export function toCsv(entries: EntriesState, categories: CategoriesState): string {
   const names = new Map(categories.categories.map((category) => [category.id, category.name]));
   const rows = [...entries.entries]
@@ -412,9 +490,9 @@ export function toCsv(entries: EntriesState, categories: CategoriesState): strin
     .map((entry) =>
       [
         entry.date,
-        entry.kind === 'income' ? 'Income' : 'Expense',
-        entry.kind === 'income' ? entry.amount : -entry.amount,
-        entry.kind === 'income' ? '' : (names.get(entry.category ?? '') ?? ''),
+        KIND_LABELS[entry.kind],
+        entry.kind === 'expense' ? -entry.amount : entry.amount,
+        hasCategory(entry.kind) ? (names.get(entry.category ?? '') ?? '') : '',
         entry.note,
       ]
         .map(cell)

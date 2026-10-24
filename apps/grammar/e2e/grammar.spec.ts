@@ -1,8 +1,9 @@
 // Grammar: checking as you type with the real checker (Harper, as
-// WebAssembly in a worker, under the site's strict CSP), fixing, American and
-// British English, the dictionary, copy and clear, and that the text never
-// leaves the device. Shared checks (accessibility, security headers, offline,
-// privacy) run for every app from tests/e2e/.
+// WebAssembly in a worker, under the site's strict CSP), fixing (and Undo
+// after a fix), American and British English, the dictionary, copy and
+// clear, and that the text never leaves the device. Shared checks
+// (accessibility, security headers, offline, privacy) run for every app from
+// tests/e2e/.
 import type { Page } from '@playwright/test';
 import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
 
@@ -47,6 +48,42 @@ test('checks as you type, and fixes problems with a tap', async ({ page }) => {
   await page.reload();
   await expect(text(page)).toHaveValue('I have an apple.');
   await expect(status(page)).toHaveText('No problems found.', { timeout: 30_000 });
+});
+
+test('Undo takes a fix back', async ({ page }) => {
+  await open(page);
+  await page.getByLabel('American (US)').check();
+  await text(page).fill('I has a apple.');
+  // While the fix is made the box has focus, with no phone keyboard for it.
+  await text(page).evaluate((box) => {
+    const seen: (string | null)[] = [];
+    Object.assign(window, { inputModes: seen });
+    box.addEventListener('focus', () => seen.push(box.getAttribute('inputmode')));
+  });
+  await suggestion(page, 'has').getByRole('button', { name: 'Change to “have”' }).click();
+  await expect(text(page)).toHaveValue('I have a apple.');
+  await expect(page.getByRole('button', { name: 'Change to “an”' })).toBeFocused();
+  expect(await page.evaluate(() => Reflect.get(window, 'inputModes') as unknown)).toEqual(['none']);
+  await expect(text(page)).not.toHaveAttribute('inputmode');
+
+  await text(page).press('ControlOrMeta+z');
+  await expect(text(page)).toHaveValue('I has a apple.');
+  // Checked again, like any edit.
+  await expect(status(page)).toHaveText('2 suggestions.');
+});
+
+test('fixes still work in a browser that can’t make them as an edit', async ({ page }) => {
+  // Then the text is set the old way (without undo).
+  await page.addInitScript(() => {
+    Object.defineProperty(document, 'execCommand', { value: () => false });
+  });
+  await open(page);
+  await page.getByLabel('American (US)').check();
+  await text(page).fill('I has a apple.');
+  await suggestion(page, 'has').getByRole('button', { name: 'Change to “have”' }).click();
+  await expect(text(page)).toHaveValue('I have a apple.');
+  await expect(status(page)).toHaveText('1 suggestion.');
+  await expect(page.getByRole('button', { name: 'Change to “an”' })).toBeFocused();
 });
 
 test('checks American or British English', async ({ page }) => {

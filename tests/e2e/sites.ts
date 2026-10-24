@@ -32,9 +32,35 @@ function portBase(): number {
   return base;
 }
 
-const base = portBase();
+/**
+ * The sites to test, from E2E_SITES ("tally,notes"; empty for every site).
+ * Starting all 15 servers takes about a minute, so a quick run while working
+ * on one app can start only its own (audit J-14). The hub always runs: sync
+ * tests need it. CI tests every site.
+ */
+export function chosenSites(all: readonly string[], text: string | undefined): string[] {
+  if (text === undefined || text.trim() === '') return [...all];
+  const wanted = new Set(
+    text
+      .split(',')
+      .map((slug) => slug.trim())
+      .filter(Boolean),
+  );
+  const unknown = [...wanted].filter((slug) => !all.includes(slug));
+  if (unknown.length > 0) {
+    throw new Error(`E2E_SITES: no site called ${unknown.join(', ')}. Sites: ${all.join(', ')}.`);
+  }
+  return all.filter((slug) => slug === 'hub' || wanted.has(slug));
+}
 
-export const sites: TestSite[] = siteSlugs().map((slug, index) => {
-  const port = base + index;
-  return { slug, dir: join(repoRoot, 'apps', slug), port, baseURL: `http://127.0.0.1:${port}` };
-});
+const base = portBase();
+const all = siteSlugs();
+const chosen = new Set(chosenSites(all, process.env['E2E_SITES']));
+
+// Each site keeps its own port whichever are chosen.
+export const sites: TestSite[] = all
+  .map((slug, index) => {
+    const port = base + index;
+    return { slug, dir: join(repoRoot, 'apps', slug), port, baseURL: `http://127.0.0.1:${port}` };
+  })
+  .filter((site) => chosen.has(site.slug));

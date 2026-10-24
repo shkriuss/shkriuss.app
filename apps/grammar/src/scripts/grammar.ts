@@ -1,9 +1,10 @@
 /**
  * Grammar's page behaviour: saves the text and settings on the device, sends
  * the text to the checker (checker.worker.ts, on this device) as it's typed,
- * and shows what it finds. Tapping a fix changes the text. Deep check, the
- * optional AI model, is in deep-check.ts. With sync on, the English choice
- * and the dictionary sync between devices; the text stays here.
+ * and shows what it finds. Tapping a fix changes the text, as an edit Undo
+ * can take back (edit-text.ts). Deep check, the optional AI model, is in
+ * deep-check.ts. With sync on, the English choice and the dictionary sync
+ * between devices; the text stays here.
  */
 import { createStore } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
@@ -35,6 +36,7 @@ import {
 } from '../lib/grammar.ts';
 import checkerUrl from './checker.worker.ts?worker&url';
 import { mountDeepCheck } from './deep-check.ts';
+import { editText } from './edit-text.ts';
 
 const store = createStore<GrammarState>({
   key: 'grammar',
@@ -88,6 +90,8 @@ export function mountGrammar(root: Document): void {
   let focusAfterCheck: number | null = null;
   let checkTimer: number | undefined;
   let saveTimer: number | undefined;
+  /** True while a fix changes the text (see fixText). */
+  let fixing = false;
 
   const announce = (message: string): void => {
     announcer.textContent = message;
@@ -112,6 +116,20 @@ export function mountGrammar(root: Document): void {
     window.clearTimeout(saveTimer);
     // Saved after each pause in typing: a problem is read out once, not at every pause.
     if (textarea.value !== state.text) save({ ...state, text: textarea.value }, { repeat: false });
+  }
+
+  /**
+   * Makes a fix as an edit, so Undo can take it back. The code making the
+   * fix saves and checks the text itself, so the edit's `input` event is
+   * left alone.
+   */
+  function fixText(text: string): void {
+    fixing = true;
+    try {
+      editText(textarea, text);
+    } finally {
+      fixing = false;
+    }
   }
 
   // ---------- The checker ----------
@@ -259,7 +277,7 @@ export function mountGrammar(root: Document): void {
   const deep = mountDeepCheck(root, {
     textarea,
     replaceText: (text) => {
-      textarea.value = text;
+      fixText(text);
       actionStatus.textContent = '';
       saveText();
       check();
@@ -270,6 +288,7 @@ export function mountGrammar(root: Document): void {
   // ---------- Typing and settings ----------
 
   textarea.addEventListener('input', () => {
+    if (fixing) return;
     actionStatus.textContent = '';
     window.clearTimeout(checkTimer);
     checkTimer = window.setTimeout(check, CHECK_DELAY_MS);
@@ -322,7 +341,7 @@ export function mountGrammar(root: Document): void {
     }
     const fix = fixesToShow(issue)[Number(button.dataset['fix'])];
     if (!fix) return;
-    textarea.value = applyFix(textarea.value, issue, fix);
+    fixText(applyFix(textarea.value, issue, fix));
     saveText();
     focusAfterCheck = index;
     announce(fixDone(issue, fix));

@@ -1,7 +1,8 @@
 // Deep check, with the real model (GECToR Large, 381 MB, downloaded from this
 // site only when asked), running on the device under the site's strict CSP
 // and Trusted Types, on several cores: checking, accepting, skipping,
-// accepting all, working offline, and removing it. docs/adr/0012.
+// accepting all, Undo after accepting, working offline, and removing it.
+// docs/adr/0012.
 import type { Page } from '@playwright/test';
 import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
 
@@ -74,6 +75,21 @@ test('downloads only when asked, then checks the text and makes its changes', as
   await text(page).pressSequentially(' They was happy.');
   await expect(button(page, 'Change “was” to “were”')).toBeVisible({ timeout: 60_000 });
   await expect(button(page, 'Change “a” to “an”')).toHaveCount(0);
+
+  // Undo takes back an accepted change, and all of “Accept all” at once.
+  await button(page, 'Change “was” to “were”').click();
+  await expect(text(page)).toHaveValue(
+    'I have a apple. She goes to school every day. They were happy.',
+  );
+  await text(page).press('ControlOrMeta+z');
+  await expect(text(page)).toHaveValue(
+    'I have a apple. She goes to school every day. They was happy.',
+  );
+  await text(page).fill('I has a apple. She go to school every days.');
+  await button(page, 'Accept all 4 changes').click();
+  await expect(text(page)).toHaveValue('I have an apple. She goes to school every day.');
+  await text(page).press('ControlOrMeta+z');
+  await expect(text(page)).toHaveValue('I has a apple. She go to school every days.');
 
   // The text never left the device: only files were downloaded.
   expect(requests.filter((line) => !line.startsWith('GET '))).toEqual([]);

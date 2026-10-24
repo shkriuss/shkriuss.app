@@ -115,6 +115,91 @@ test('moves between weeks, and copies last week’s meals', async ({ page }) => 
   ).toBeAttached();
 });
 
+test('says so when the plan is too full to copy last week, and lets go of old meals', async ({
+  page,
+}) => {
+  await seed(page, {
+    planned: [
+      // More than a year ago: let go when Meals opens.
+      { id: 'old', date: '2025-10-01', slot: 'dinner', name: 'Stew' },
+      { id: 'a', date: '2026-10-12', slot: 'dinner', name: 'Lentil soup' },
+      { id: 'b', date: '2026-10-16', slot: 'lunch', name: 'Salad' },
+      ...Array.from({ length: 4998 }, (_, index) => ({
+        id: `later-${index}`,
+        date: '2026-12-01',
+        slot: 'dinner' as const,
+        name: 'Soup',
+      })),
+    ],
+  });
+  const saved = () =>
+    page.evaluate(() => {
+      const plan = JSON.parse(localStorage.getItem('shkriuss:meal-plan') ?? 'null') as {
+        data: { planned: { id: string }[] };
+      };
+      return {
+        count: plan.data.planned.length,
+        old: plan.data.planned.some((e) => e.id === 'old'),
+      };
+    });
+  expect(await saved()).toEqual({ count: 5000, old: false });
+
+  // Full: nothing is copied, and the notice at the top says why.
+  const copy = page.getByRole('button', { name: 'Copy last week’s meals' });
+  await copy.click();
+  const notice = page.locator('[data-problem-text]');
+  await expect(notice).toHaveText(
+    'The plan holds 5,000 meals at most, so nothing was copied. Remove some old ones first.',
+  );
+  await expect(notice).toBeVisible();
+  await expect(copy).toBeFocused();
+  await expect(day(page, '2026-10-19').getByText('Nothing planned.')).toBeVisible();
+  await checkA11y(page, 'plan full');
+
+  // Once the plan changes, the notice goes.
+  await page.getByRole('button', { name: 'Previous week' }).click();
+  await page.getByRole('button', { name: 'Salad' }).click();
+  await planDialog(page).getByRole('button', { name: 'Remove' }).click();
+  await expect(notice).toHaveCount(0);
+  await page.getByRole('button', { name: 'This week' }).click();
+  await copy.click();
+  await expect(dayMeals(page, '2026-10-19')).toHaveText([/Dinner\s*Lentil soup/]);
+});
+
+test('keeps ticks saved by the older version, under the week’s Monday', async ({ page }) => {
+  await seed(page, {
+    meals: [{ id: 's', name: 'Lentil soup', ingredients: ['Red lentils', 'Carrots'], notes: '' }],
+    planned: [{ id: 'p', date: '2026-10-21', slot: 'dinner', name: 'Lentil soup' }],
+  });
+  // Version 1 saved this week's list under its first day here, Sunday 18 October.
+  await page.evaluate(() => {
+    const items = [
+      { id: '2026-10-18:carrots', week: '2026-10-18', name: 'Carrots', extra: false, done: true },
+      { id: 'm', week: '2026-10-18', name: 'Milk', extra: true, done: false },
+    ];
+    localStorage.setItem('shkriuss:meal-shopping', JSON.stringify({ v: 1, data: { items } }));
+  });
+  await page.reload();
+  await expect(shoppingNames(page)).toHaveText(['Milk', 'Red lentils', 'Carrots']);
+  await expect(page.getByRole('checkbox', { name: /Carrots/ })).toBeChecked();
+
+  // Saved again in the new version: under Monday 19 October.
+  await page.getByRole('checkbox', { name: /Red lentils/ }).click();
+  const saved = await page.evaluate(
+    () =>
+      JSON.parse(localStorage.getItem('shkriuss:meal-shopping') ?? 'null') as {
+        v: number;
+        data: { items: { week: string }[] };
+      },
+  );
+  expect(saved.v).toBe(2);
+  expect(saved.data.items.map((item) => item.week)).toEqual([
+    '2026-10-19',
+    '2026-10-19',
+    '2026-10-19',
+  ]);
+});
+
 test('your meals’ ingredients make the shopping list', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await expect(page.getByText('No meals yet.')).toBeVisible();

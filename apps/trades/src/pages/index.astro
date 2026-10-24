@@ -1,8 +1,9 @@
 ---
 /**
  * Trades: results for a period, open trades, closed trades (with search),
- * results by setup and by month, the trade form, the currency and a
- * spreadsheet download. Behaviour: ../scripts/trades.ts.
+ * results by setup and by month, the trade form (which also closes a trade,
+ * or part of it), the currency, a spreadsheet download and "Delete a year".
+ * Behaviour: ../scripts/trades.ts.
  */
 import { AppShell, Button, DataControls, SyncControls } from '@shkriuss/ui';
 import { CURRENCIES, LIMITS, PERIOD_LABELS, PERIODS } from '../lib/trades.ts';
@@ -28,6 +29,9 @@ const STAT_TILES = [
         Your trading journal: log your trades and see what works. It’s saved on this device.
       </p>
     </header>
+
+    <!-- Once Trades is nearly full: how much room is left, and how to make more. -->
+    <p class="notice" data-room-note hidden></p>
 
     <div class="cluster toolbar">
       <Button variant="primary" icon="plus" data-action="new">
@@ -118,9 +122,12 @@ const STAT_TILES = [
           Shown with every amount. Prices and amounts aren’t converted.
         </p>
       </div>
-      <div>
+      <div class="cluster">
         <Button icon="download" data-action="csv">
           Download as a spreadsheet (CSV)
+        </Button>
+        <Button icon="trash" aria-haspopup="dialog" data-action="delete-year">
+          Delete a year…
         </Button>
       </div>
       <p class="muted" role="status" data-csv-status></p>
@@ -251,12 +258,23 @@ const STAT_TILES = [
         <div class="field-row">
           {(
             [
-              ['exitDate', 'Day', 'date'],
-              ['exitPrice', 'Price', 'number'],
-              ['fees', 'Fees (optional)', 'number'],
+              ['exitDate', 'Day', 'date', ''],
+              ['exitPrice', 'Price', 'number', ''],
+              // Only while closing an open trade (the script shows it).
+              [
+                'closeQuantity',
+                'Quantity closed',
+                'number',
+                'Less than all of it? The rest stays open.',
+              ],
+              ['fees', 'Fees (optional)', 'number', ''],
             ] as const
-          ).map(([name, label, type]) => (
-            <div class="field">
+          ).map(([name, label, type, hint]) => (
+            <div
+              class="field"
+              data-close-quantity={name === 'closeQuantity' ? '' : undefined}
+              hidden={name === 'closeQuantity'}
+            >
               <label class="field__label" for={`trade-${name}`}>
                 {label}
               </label>
@@ -267,8 +285,13 @@ const STAT_TILES = [
                 type={type === 'number' ? 'text' : type}
                 inputmode={type === 'number' ? 'decimal' : undefined}
                 autocomplete={type === 'number' ? 'off' : undefined}
-                aria-describedby={`trade-${name}-error`}
+                aria-describedby={`${hint ? `trade-${name}-hint ` : ''}trade-${name}-error`}
               />
+              {hint && (
+                <p class="field__hint" id={`trade-${name}-hint`}>
+                  {hint}
+                </p>
+              )}
               <p class="field__error" id={`trade-${name}-error`} data-error-for={name} />
             </div>
           ))}
@@ -333,6 +356,43 @@ const STAT_TILES = [
         </Button>
         <Button type="submit" variant="danger" value="confirm">
           Delete
+        </Button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- "Delete a year…": every trade closed in the year chosen, to make room. -->
+  <dialog class="dialog" aria-labelledby="year-title" data-year-dialog>
+    <form class="stack" data-year-form novalidate>
+      <h2 id="year-title">Delete a year</h2>
+      <div class="field">
+        <label class="field__label" for="year-select">
+          Year
+        </label>
+        <select
+          class="input"
+          id="year-select"
+          aria-describedby="year-hint year-text"
+          data-year-select
+        ></select>
+        <p class="field__hint" id="year-hint">
+          The year the trades were closed in.
+        </p>
+      </div>
+      <p id="year-text" aria-live="polite" data-year-text></p>
+      <p class="muted">
+        To keep a copy of them, download the spreadsheet first: it has every trade.
+      </p>
+      <div>
+        <Button icon="download" data-action="csv">
+          Download as a spreadsheet (CSV)
+        </Button>
+      </div>
+      <p class="muted" role="status" data-csv-status></p>
+      <div class="cluster">
+        <Button data-action="cancel">Cancel</Button>
+        <Button type="submit" variant="danger" icon="trash">
+          <span data-year-confirm>Delete</span>
         </Button>
       </div>
     </form>

@@ -1,8 +1,10 @@
+import { addDays } from '@shkriuss/dates';
 import { describe, expect, it } from 'vitest';
 import {
   addExtra,
   addMeal,
   addPlanned,
+  copyProblem,
   copyWeek,
   defaultSlot,
   dueReminders,
@@ -20,14 +22,18 @@ import {
   isRemindersState,
   isShoppingState,
   MAX_INGREDIENTS,
+  MAX_PLANNED,
   mealDraftOf,
   mealFromDraft,
   mealProblems,
+  migrateShopping,
   parseIngredients,
+  PLAN_DAYS_KEPT,
   plannedFromDraft,
   plannedInWeek,
   plannedOn,
   planProblems,
+  prunePlan,
   pruneShopping,
   removeExtra,
   removeMeal,
@@ -41,6 +47,7 @@ import {
   setReminder,
   shoppingList,
   shoppingText,
+  shoppingWeek,
   sortedMeals,
   suggestions,
   updateMeal,
@@ -256,6 +263,55 @@ describe('the plan', () => {
       ['2026-10-28', 'Soup'],
     ]);
     expect(state.planned.filter((entry) => entry.id.startsWith('new-'))).toHaveLength(3);
+    expect(copyProblem(copied, 0)).toBeNull();
+  });
+
+  it('says so when the plan is too full to copy a week', () => {
+    const full = (count: number): PlanState => ({
+      planned: [
+        ...plan.planned,
+        ...Array.from({ length: count - plan.planned.length }, (_, index) =>
+          planned(`Meal ${index}`, '2026-12-01'),
+        ),
+      ],
+    });
+    // Room for 2 of the 3.
+    const some = copyWeek(full(MAX_PLANNED - 2), MONDAY, '2026-10-26', ids());
+    expect([some.copied, some.left]).toEqual([2, 1]);
+    expect(some.state.planned).toHaveLength(MAX_PLANNED);
+    expect(copyProblem(some.copied, some.left)).toBe(
+      'The plan holds 5,000 meals at most, so only 2 of last week’s 3 meals were copied.',
+    );
+    expect(copyProblem(1, 2)).toBe(
+      'The plan holds 5,000 meals at most, so only 1 of last week’s 3 meals was copied.',
+    );
+    // No room at all.
+    const none = copyWeek(full(MAX_PLANNED), MONDAY, '2026-10-26', ids());
+    expect([none.copied, none.left]).toEqual([0, 3]);
+    expect(copyProblem(none.copied, none.left)).toBe(
+      'The plan holds 5,000 meals at most, so nothing was copied. Remove some old ones first.',
+    );
+    // Adding one is stopped too, with a message in the form.
+    expect(planProblems(full(MAX_PLANNED), { name: 'Salad', date: MONDAY, slot: 'lunch' })).toEqual(
+      { form: 'The plan holds 5,000 meals at most. Remove some old ones first.' },
+    );
+  });
+
+  it('lets go of planned meals more than a year old', () => {
+    const old: PlanState = {
+      planned: [planned('Stew', '2025-10-20'), planned('Pie', '2025-10-21'), ...plan.planned],
+    };
+    // A year before Wednesday 21 October 2026.
+    const keepFrom = addDays('2026-10-21', -PLAN_DAYS_KEPT);
+    expect(keepFrom).toBe('2025-10-21');
+    expect(prunePlan(old, keepFrom).planned.map((entry) => entry.name)).toEqual([
+      'Pie',
+      'Bolognese',
+      'Porridge',
+      'Soup',
+      'Toast',
+    ]);
+    expect(prunePlan(plan, keepFrom)).toBe(plan);
   });
 
   it('suggests your meals first, then other names planned before', () => {
@@ -338,6 +394,109 @@ describe('shopping', () => {
       'onions',
     ]);
     expect(removeExtra(shopping, 'm').items).toEqual([]);
+  });
+
+  it('shows the same ticks and added things on devices whose weeks start on other days', () => {
+    // A phone whose weeks start on Monday (19–25 October) and a tablet whose
+    // weeks start on Sunday (18–24 October), sharing one synced list.
+    const phone = MONDAY;
+    const tablet = '2026-10-18';
+    let shopping = emptyShopping();
+    const rowOn = (week: string, name: string) => {
+      const row = shoppingList(plan, meals, shopping, week).find((entry) => entry.name === name);
+      if (!row) throw new Error(`No ${name}`);
+      return row;
+    };
+    const seen = (week: string) =>
+      shoppingList(plan, meals, shopping, week).map((row) => [row.name, row.done]);
+
+    shopping = setDone(shopping, phone, rowOn(phone, 'Onions'), true);
+    shopping = addExtra(shopping, phone, 'Milk', 'm');
+    shopping = setDone(shopping, tablet, rowOn(tablet, 'Carrots'), true);
+    shopping = addExtra(shopping, tablet, 'Bread', 'b');
+    expect(seen(phone)).toEqual([
+      ['Bread', false],
+      ['Milk', false],
+      ['Minced beef', false],
+      ['Spaghetti', false],
+      ['Carrots', true],
+      ['Onions', true],
+    ]);
+    expect(seen(tablet)).toEqual(seen(phone));
+    // A week starting on Saturday (17–23 October) has the same list too.
+    expect(seen('2026-10-17')).toEqual(seen(phone));
+
+    // Ticked on both: one tick, not two.
+    shopping = setDone(shopping, tablet, rowOn(tablet, 'Onions'), true);
+    expect(shopping.items.filter((item) => item.name === 'Onions')).toHaveLength(1);
+    // Put back on the list on the tablet: back on the phone's too.
+    shopping = setDone(shopping, tablet, rowOn(tablet, 'Onions'), false);
+    shopping = setDone(shopping, phone, rowOn(phone, 'Milk'), true);
+    expect(rowOn(phone, 'Onions').done).toBe(false);
+    expect(rowOn(tablet, 'Milk').done).toBe(true);
+
+    // The weeks before and after keep lists of their own.
+    expect(shoppingList(plan, meals, shopping, '2026-10-11').map((row) => row.name)).toEqual([]);
+    expect(shoppingList(plan, meals, shopping, '2026-10-25').map((row) => row.name)).toEqual([
+      'Carrots',
+      'onions',
+    ]);
+  });
+
+  it('saves each list under the Monday in its week', () => {
+    expect(shoppingWeek(MONDAY)).toBe(MONDAY);
+    // Weeks starting on Sunday, Saturday or Friday.
+    expect(shoppingWeek('2026-10-18')).toBe(MONDAY);
+    expect(shoppingWeek('2026-10-17')).toBe(MONDAY);
+    expect(shoppingWeek('2026-10-16')).toBe(MONDAY);
+    expect(addExtra(emptyShopping(), '2026-10-18', 'Milk', 'm').items[0]?.week).toBe(MONDAY);
+  });
+
+  it('moves lists saved by the older version to their week’s Monday', () => {
+    const old = {
+      items: [
+        // From a device whose weeks start on Sunday…
+        { id: '2026-10-18:onions', week: '2026-10-18', name: 'Onions', extra: false, done: true },
+        { id: 'm', week: '2026-10-18', name: 'Milk', extra: true, done: false },
+        // …one whose weeks start on Monday…
+        { id: `${MONDAY}:carrots`, week: MONDAY, name: 'Carrots', extra: false, done: true },
+        // …and one whose weeks start on Saturday, the week before.
+        { id: 'b', week: '2026-10-10', name: 'Bread', extra: true, done: true },
+      ],
+    };
+    const migrated = migrateShopping(old, 1);
+    if (!migrated) throw new Error('Not migrated');
+    expect(isShoppingState(migrated)).toBe(true);
+    // The same ids, so sync matches them with other devices' copies.
+    expect(migrated.items.map((item) => [item.id, item.week])).toEqual([
+      ['2026-10-18:onions', MONDAY],
+      ['m', MONDAY],
+      [`${MONDAY}:carrots`, MONDAY],
+      ['b', '2026-10-12'],
+    ]);
+    const seen = (week: string) =>
+      shoppingList(plan, meals, migrated, week).map((row) => [row.name, row.done]);
+    expect(seen(MONDAY)).toEqual([
+      ['Milk', false],
+      ['Minced beef', false],
+      ['Spaghetti', false],
+      ['Carrots', true],
+      ['Onions', true],
+    ]);
+    expect(seen('2026-10-18')).toEqual(seen(MONDAY));
+    // A tick from before can be taken back.
+    const onions = shoppingList(plan, meals, migrated, MONDAY).find((row) => row.name === 'Onions');
+    if (!onions) throw new Error('No onions');
+    expect(setDone(migrated, MONDAY, onions, false).items.map((item) => item.id)).toEqual([
+      'm',
+      `${MONDAY}:carrots`,
+      'b',
+    ]);
+
+    expect(migrateShopping(old, 2)).toBeUndefined();
+    expect(migrateShopping(null, 1)).toBeUndefined();
+    expect(migrateShopping({ items: 'x' }, 1)).toBeUndefined();
+    expect(isShoppingState(migrateShopping({ items: [{ id: 'a' }] }, 1))).toBe(false);
   });
 
   it('lets go of old weeks', () => {

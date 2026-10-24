@@ -137,7 +137,7 @@
       "status": "live",
       "storage": "device",
       "dataStored": [
-        "Your meal plan: what you'll eat on which day",
+        "Your meal plan: what you'll eat on which day (kept for a year)",
         "Your meals: their names, ingredients and notes",
         "Your shopping lists: what you added and what you ticked off (kept for 8 weeks)",
         "Your reminder times for each meal of the day",
@@ -209,7 +209,7 @@
       "status": "live",
       "storage": "device",
       "dataStored": [
-        "Your expenses and income: amounts, days, categories and notes",
+        "Your expenses, refunds and income: amounts, days, categories and notes",
         "Your categories and their monthly limits",
         "Which currency to show amounts in, and your monthly reminder settings",
         "If you turn on reminders while Budget is closed: this device's notification settings and a random device key (never in backups; after you turn it off, kept only until the server has deleted your reminders)",
