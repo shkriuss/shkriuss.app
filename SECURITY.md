@@ -59,7 +59,7 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
   storage code (20 wrong tries an hour from each internet address, so a
   stranger can't lock others out; the code is five or more random words),
   and changing the code locks
-  every library. Hard limits across all libraries (1 TB, 20,000 uploads a
+  every library. Hard limits across all libraries (1 TB, 10,000 uploads a
   day), plus 400,000 photos per library and 95 MB each, mean nobody can run
   up the bill.
 - An app connects by sending the person to the hub with a one-time ECDH

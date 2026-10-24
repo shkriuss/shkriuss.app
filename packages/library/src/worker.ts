@@ -28,7 +28,8 @@
  * changing the code locks them all. How many libraries there can be at all
  * is kept by the namespace's meter (@shkriuss/server/meter, STORAGE_LIMITS):
  * each one, even empty, takes room in the storage every app shares
- * (docs/adr/0017-storage-limits.md).
+ * (docs/adr/0017-storage-limits.md). One that was never unlocked holds no
+ * photos, so it's deleted when nobody has used it for LOCKED_UNUSED_MS.
  */
 import { equalBytes, sha256, utf8 } from '@shkriuss/crypto';
 import {
@@ -46,11 +47,13 @@ import {
   type SiteEnv,
 } from '@shkriuss/server';
 import {
+  GRANTED_KEY,
   LIMIT_HEADER,
   limitFor,
   limitOf,
   METER,
   meterFetch,
+  release,
   reserve,
 } from '@shkriuss/server/meter';
 import {
@@ -468,6 +471,15 @@ const DAY_MS = 24 * HOUR_MS;
 export const SWEEP_MS = 7 * DAY_MS;
 /** Where a clean-up that takes several wake-ups got to in R2. */
 const SWEEP_CURSOR = 'sweep';
+/**
+ * A library that was never unlocked holds no photos (the storage code comes
+ * first), only who it belongs to. Unused this long, it's deleted and its room
+ * given back, so made-up ones can't keep the room for real ones for good
+ * (docs/adr/0017). A device still using it just makes it again.
+ */
+export const LOCKED_UNUSED_MS = 30 * DAY_MS;
+/** When a locked library was last used (at most once a day: each time is a write). */
+const ACTIVE = 'active';
 /** Old tokens remembered (one per replaced account key). */
 const MAX_RETIRED = 10;
 /** R2 deletes at most this many files at once. */
@@ -551,6 +563,7 @@ export class Library {
       } else if (meta.access !== token) {
         return problem(403, 'This isn’t your library.');
       }
+      if (!meta.unlocked) await this.#touch(now);
 
       switch (op) {
         case 'check':
@@ -562,6 +575,9 @@ export class Library {
         case 'unlock':
           // The Worker asks only after the code was right.
           await this.#save({ ...meta, unlocked: true, unlockedWith: code });
+          // Kept from now on, photos or not: only locked libraries go when unused.
+          await this.state.storage.delete(ACTIVE);
+          await this.state.storage.deleteAlarm();
           return noContent();
         case 'begin': {
           const { id, size } = (await request.json()) as { id: string; size: number };
@@ -587,12 +603,17 @@ export class Library {
 
   /**
    * While it's being deleted: files are deleted in batches until none are
-   * left, then the list is emptied. Otherwise: the weekly clean-up (#sweep).
+   * left, then the list is emptied. A locked library nobody used for
+   * LOCKED_UNUSED_MS goes. Otherwise: the weekly clean-up (#sweep).
    */
   async alarm(): Promise<void> {
     await this.state.blockConcurrencyWhile(async () => {
       const meta = await this.state.storage.get<Meta>('meta');
       if (!meta) return;
+      if (!meta.unlocked) {
+        await this.#forgetIfUnused();
+        return;
+      }
       if (!meta.wiping) {
         await this.#sweep(meta);
         return;
@@ -612,6 +633,25 @@ export class Library {
 
   #save(meta: Meta): Promise<void> {
     return this.state.storage.put('meta', meta);
+  }
+
+  /** Keeps a locked library LOCKED_UNUSED_MS more. */
+  async #touch(now: number): Promise<void> {
+    const active = await this.state.storage.get<number>(ACTIVE);
+    if (active !== undefined && now - active < DAY_MS) return;
+    await this.state.storage.put(ACTIVE, now);
+    await this.state.storage.setAlarm(now + LOCKED_UNUSED_MS);
+  }
+
+  /** A locked library nobody used for LOCKED_UNUSED_MS: everything goes, and its room is given back. */
+  async #forgetIfUnused(): Promise<void> {
+    const active = (await this.state.storage.get<number>(ACTIVE)) ?? 0;
+    if (Date.now() - active < LOCKED_UNUSED_MS) {
+      await this.state.storage.setAlarm(active + LOCKED_UNUSED_MS);
+      return;
+    }
+    await release(this.state, this.env.LIBRARIES);
+    await this.state.storage.deleteAll();
   }
 
   /**
@@ -838,9 +878,17 @@ export class Library {
 
   async #wipe(meta: Meta): Promise<Response> {
     if (!meta.unlocked) {
-      // Never unlocked, so never had files: nothing to look for in R2.
-      await this.state.storage.deleteAll();
+      // Never unlocked, so never had files: nothing to look for in R2. The
+      // room it was given, and its clean-up when unused, stay.
+      const storage = this.state.storage;
+      const kept = await Promise.all(
+        [GRANTED_KEY, ACTIVE].map(async (key) => [key, await storage.get(key)] as const),
+      );
+      await storage.deleteAll();
+      for (const [key, value] of kept) if (value !== undefined) await storage.put(key, value);
       await this.#save({ ...meta, epoch: crypto.randomUUID(), items: 0, bytes: 0, seq: meta.seq });
+      const active = (await storage.get<number>(ACTIVE)) ?? Date.now();
+      await storage.setAlarm(active + LOCKED_UNUSED_MS);
       return json({ wiping: false }, 202);
     }
     const freed = meta.wiping ? 0 : meta.bytes;

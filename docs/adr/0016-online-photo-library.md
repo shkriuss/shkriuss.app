@@ -96,7 +96,7 @@ every device. That's far beyond what sync can hold:
   the new code once.
 - **Limits across all libraries,** because anyone can make up a library, so
   limits kept in each would protect nothing. One more Durable Object
-  (`LibraryGate`) keeps them: 1 TB stored and 20,000 uploads a day in all.
+  (`LibraryGate`) keeps them: 1 TB stored and 10,000 uploads a day in all.
   The upload limit keeps a big import from using up the free daily requests
   every app shares.
 - **20 wrong codes an hour from each internet address** (for IPv6, each
@@ -176,10 +176,11 @@ every device. That's far beyond what sync can hold:
 - **Free plan requests:** an upload is one Worker request and four Durable
   Object requests (the library twice, `LibraryGate` twice); a screen of
   thumbnails is a few. A device checks for changes about once a minute while
-  open. A full day of 20,000 uploads would take about 80,000 of the free
-  plan's 100,000 daily Durable Object requests, which every app shares, and
-  most of its daily row writes. Bigger imports take several days, or the
-  Workers paid plan ($5 a month) lifts the daily limits.
+  open. A full day of 10,000 uploads takes about 40,000 of the free plan's
+  100,000 daily Durable Object requests, and as many of its row writes, which
+  every app shares (it was 20,000 a day until 24 October 2026, which could
+  have left too few for the other apps). Bigger imports take several days,
+  or the Workers paid plan ($5 a month) lifts the daily limits.
 - **The list's size:** about 400 bytes per photo in the Durable Object
   (about 160 MB at 400,000 photos), well inside 1 GB.
 - **Uploads only while Photos is open.** Browsers don't upload in the
