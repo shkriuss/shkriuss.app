@@ -51,33 +51,67 @@ Why these tools:
   about the whole repository: whether the privacy page matches the code,
   whether the docs are still right.
 
-Use each tool's most capable model. If you don't have one of these tools, skip
-its column: Claude covers every area anyway.
+If you don't have one of these tools, skip its column: Claude covers every
+area anyway.
+
+## Which model and effort
+
+Use each tool's most capable model, at the highest effort it offers for a
+single task. Skip modes that split the work between helpers (Codex's
+**Ultra**): an audit needs one reader who sees the whole area. Model names
+change every few months, so ask Claude for the current names and settings
+before you start; it checks each tool's own docs.
 
 ## Starting each tool
 
-**Codex**, in the ChatGPT app or at chatgpt.com/codex:
+**Claude**, in Claude Code (the Claude app or claude.ai/code):
 
-1. Connect GitHub, and choose `shkriuss/shkriuss.app` and the `main` branch.
-2. Paste the prompt and choose **Ask**, not **Code**, so it doesn't change
-   anything.
-3. If it asks for a setup script, use
-   `corepack enable && pnpm install --frozen-lockfile`.
+1. Start a new session on `shkriuss/shkriuss.app`, so it reads the code
+   fresh. Choose the model and effort before sending the first message.
+2. Send: "Audit this repository with the brief in docs/audit/README.md, every
+   area including I. Don't change files or post anything on GitHub. When you
+   have finished, I'll send you the other tools' reports: check every finding
+   as the brief's 'What happens to reports' says."
+3. Send the other tools' reports to this same session.
 
-**Jules**, at jules.google.com:
+**Codex**, in ChatGPT:
+
+1. The first time only: at chatgpt.com (in the phone's browser is fine),
+   choose **Work in** › **Cloud**, then **Select environment** › **Create
+   environment**. Connect GitHub, choose `shkriuss/shkriuss.app`, and tap
+   **Get started**. Codex installs what the project needs and runs its
+   checks; then tap **Publish**. If it asks for a setup script, use
+   `corepack enable && pnpm install --frozen-lockfile`. Leave its internet
+   access off.
+2. For each task, choose that environment (in the ChatGPT app: open
+   **Codex**), the model and the effort, then paste the prompt. If you see
+   **Ask** and **Code**, choose **Ask**.
+3. Codex works on its own copy, and nothing reaches GitHub unless you tap
+   **Commit**, **Push** or **Create pull request**: never tap those.
+
+**Jules**, at jules.google.com (in the phone's browser is fine):
 
 1. Connect GitHub, and choose `shkriuss/shkriuss.app`.
 2. Paste the prompt.
 3. Jules shows a plan first. If the plan changes code, reply "No code
    changes: report only." Never tap "Publish branch" or "Create PR".
 
-**Gemini**, in the Gemini app or at gemini.google.com:
+**Gemini** can read the repository two ways:
 
-1. Start a new chat and tap **+**, then **Import code**, and paste
-   `https://github.com/shkriuss/shkriuss.app`.
-2. Paste the prompt. Use a new chat for each area.
-3. If the import fails because the repository is too big, tell Claude, which
-   can make a smaller bundle for that area.
+- **On a computer**, at gemini.google.com: start a new chat, tap **+**, then
+  **Import code**, paste `https://github.com/shkriuss/shkriuss.app`, then
+  paste the prompt. (Importing code doesn't work in the phone app yet.)
+- **On a phone or tablet**: ask Claude for the area's file. Claude makes one
+  text file per area from `main`, with every file the area needs. In the
+  Gemini app, start a new chat, tap **+**, then **Files**, choose it, and
+  paste the prompt with this line added at the end:
+
+  ```text
+  The repository's files for this area are in the attached file, each starting with a line "===== FILE: <path> =====". Read files there instead of on GitHub. If you need a file that isn't in it, say so under "Not checked".
+  ```
+
+Use a new chat for each area. Don't use Deep Think: it reads less at once,
+too little for these files.
 
 ## Sending reports back
 
