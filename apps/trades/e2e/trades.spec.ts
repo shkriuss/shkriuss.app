@@ -3,7 +3,18 @@
 import { readFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
 import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
-import { fillTrade, NOW, seed, tile, TIME_ZONE, trade, tradeDialog, tradeItem } from './helpers.ts';
+import { LIMITS } from '../src/lib/trades.ts';
+import {
+  fillTrade,
+  NOW,
+  seed,
+  tile,
+  TIME_ZONE,
+  trade,
+  tradeDialog,
+  tradeItem,
+  yearDialog,
+} from './helpers.ts';
 
 test.use({ timezoneId: TIME_ZONE });
 
@@ -12,7 +23,8 @@ test.beforeEach(async ({ page }) => {
   await page.goto('/');
 });
 
-const status = (page: Page, text: string) => page.getByRole('status').filter({ hasText: text });
+const status = (page: Page, text: string | RegExp) =>
+  page.getByRole('status').filter({ hasText: text });
 
 test('logs a trade, closes it, and shows the result', async ({ page }) => {
   await expect(page.getByText('No closed trades in this period yet.')).toBeVisible();
@@ -181,4 +193,131 @@ test('the currency, and a spreadsheet of the trades', async ({ page }) => {
     'Symbol,Side,Entry date,Entry price,Quantity,Stop loss,Exit date,Exit price,Fees,Net result,Return %,R,Setup,Notes',
     'AAPL,Long,2026-10-01,100,10,,2026-10-05,110,0,100,10,,,"Good, ""clean"" entry"',
   ]);
+});
+
+test('closes part of a trade, then the rest', async ({ page }) => {
+  await seed(page, [
+    trade({
+      symbol: 'AAPL',
+      entryPrice: 150,
+      quantity: 100,
+      stop: 145,
+      exitDate: null,
+      exitPrice: null,
+      fees: 1,
+    }),
+  ]);
+  const dialog = tradeDialog(page);
+  const exit = dialog.getByRole('group', { name: 'Exit' });
+  const closed = page.locator('[data-closed-list]');
+
+  // "Quantity closed" is only there while closing.
+  await page.getByRole('button', { name: 'AAPL Long' }).click();
+  await expect(exit.getByLabel('Quantity closed')).toBeHidden();
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+
+  await page.getByRole('button', { name: 'Close the AAPL trade' }).click();
+  const quantity = exit.getByLabel('Quantity closed');
+  await expect(quantity).toHaveValue('100');
+  await expect(exit.getByLabel('Fees (optional)')).toHaveValue('1');
+  await expect(quantity).toHaveAccessibleDescription('Less than all of it? The rest stays open.');
+  await fillTrade(page, { closeQuantity: '101', exitPrice: '160', fees: '2' });
+  await expect(dialog.getByText('Enter no more than the trade’s quantity.')).toBeVisible();
+  await expect(quantity).toBeFocused();
+  await checkA11y(page, 'closing part of a trade');
+
+  await fillTrade(page, { closeQuantity: '40' });
+  await expect(
+    status(page, 'Closed 40 of the AAPL trade: +$398.00. 60 still open.'),
+  ).toBeAttached();
+  await expect(page.locator('[data-open-list] li')).toHaveText([/60 at 150, since Oct 1, 2026/]);
+  await expect(closed.locator('li')).toHaveCount(1);
+  await expect(closed.locator('[data-meta]')).toHaveText('40 · 150 → 160 · Oct 21, 2026');
+  await expect(closed.locator('[data-profit]')).toHaveText('+$398.00');
+  await expect(closed.locator('[data-extra]')).toHaveText('+6.63% · +2.0R');
+  await expect(closed.getByRole('button', { name: 'AAPL Long' })).toBeFocused();
+
+  // The rest, all of it (no fees left: they were the first part's).
+  await page.getByRole('button', { name: 'Close the AAPL trade' }).click();
+  await expect(quantity).toHaveValue('60');
+  await expect(exit.getByLabel('Fees (optional)')).toHaveValue('');
+  await fillTrade(page, { exitPrice: '155' });
+  await expect(status(page, 'Saved the AAPL trade: +$300.00.')).toBeAttached();
+  await expect(page.getByRole('heading', { name: 'Open trades' })).toBeHidden();
+  await expect(closed.locator('li')).toHaveCount(2);
+  await expect(tile(page, 'Net result')).toHaveText('+$698.00');
+  await expect(tile(page, 'Closed trades')).toHaveText('2');
+});
+
+test('deletes a year of closed trades, never open ones', async ({ page }) => {
+  await page.getByRole('button', { name: 'Delete a year…' }).click();
+  await expect(status(page, 'There are no closed trades to delete.')).toBeVisible();
+
+  await seed(page, [
+    trade({ symbol: 'AAPL', entryDate: '2024-02-01', exitDate: '2024-03-02' }),
+    trade({ symbol: 'MSFT', entryDate: '2024-11-01', exitDate: '2024-12-31' }),
+    trade({ symbol: 'NVDA', entryDate: '2024-12-30', exitDate: '2025-01-02' }),
+    trade({ symbol: 'TSLA', entryDate: '2024-05-05', exitDate: null, exitPrice: null }),
+  ]);
+  const deleteYear = page.getByRole('button', { name: 'Delete a year…' });
+  await deleteYear.click();
+  const dialog = yearDialog(page);
+  const year = dialog.getByLabel('Year');
+  await expect(year).toBeFocused();
+  await expect(year).toHaveAccessibleDescription(/^The year the trades were closed in\./);
+  await expect(year.locator('option')).toHaveText([
+    '2024 (2 closed trades)',
+    '2025 (1 closed trade)',
+  ]);
+  await expect(year).toHaveValue('2024');
+  await expect(dialog.locator('[data-year-text]')).toHaveText(
+    'The 2 closed trades from 2024 will be deleted. Open trades stay. With sync on, they’re deleted on your other devices too. This can’t be undone.',
+  );
+  await checkA11y(page, 'delete a year');
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await checkA11y(page, 'delete a year (dark)');
+
+  // The spreadsheet first, from the dialog.
+  const download = page.waitForEvent('download');
+  await dialog.getByRole('button', { name: 'Download as a spreadsheet (CSV)' }).click();
+  expect((await download).suggestedFilename()).toBe('trades-2026-10-21.csv');
+  await expect(dialog.getByRole('status')).toHaveText('Downloaded your trades as a spreadsheet.');
+
+  await year.selectOption('2025');
+  await expect(dialog.getByRole('button', { name: 'Delete 1 closed trade' })).toBeVisible();
+  await year.selectOption('2024');
+  await dialog.getByRole('button', { name: 'Delete 2 closed trades' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(status(page, 'Deleted 2 closed trades from 2024.')).toBeAttached();
+  await expect(deleteYear).toBeFocused();
+  await expect(page.locator('[data-closed-list] [data-symbol]')).toHaveText(['NVDA']);
+  // The open trade, entered in 2024, stays.
+  await expect(page.locator('[data-open-list] [data-symbol]')).toHaveText(['TSLA']);
+  await page.reload();
+  await expect(page.locator('[data-closed-list] [data-symbol]')).toHaveText(['NVDA']);
+});
+
+test('says when Trades is nearly full, and how to make room', async ({ page }) => {
+  // Just over 90% of the trades Trades keeps: one closed a day, back from 2026.
+  const count = LIMITS.trades * 0.9 + 1;
+  await seed(
+    page,
+    Array.from({ length: count }, (_, index) => {
+      const day = new Date(Date.UTC(2026, 9, 21) - index * 86_400_000).toISOString();
+      return trade({ id: `t${index}`, entryDate: day.slice(0, 10), exitDate: day.slice(0, 10) });
+    }),
+  );
+  const note = page.locator('[data-room-note]');
+  await expect(note).toHaveText(
+    `Trades is nearly full: there’s room for ${LIMITS.trades - count} more trades (it keeps up to ${new Intl.NumberFormat('en-US').format(LIMITS.trades)}, open and closed). To make room, download the spreadsheet, then use “Delete a year…” under Currency and spreadsheet, below.`,
+  );
+  await checkA11y(page, 'nearly full');
+
+  // Deleting the oldest year makes room.
+  await page.getByRole('button', { name: 'Delete a year…' }).click();
+  await yearDialog(page)
+    .getByRole('button', { name: /^Delete \d+ closed trades$/ })
+    .click();
+  await expect(status(page, /^Deleted \d+ closed trades from \d{4}\.$/)).toBeAttached();
+  await expect(note).toBeHidden();
 });

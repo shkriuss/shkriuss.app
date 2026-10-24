@@ -45,7 +45,10 @@ const TRANSFER_HEADERS = ['content-encoding', 'content-length', 'transfer-encodi
 /** What Deep check needs from the rest of the page (grammar.ts). */
 export interface DeepCheckHost {
   textarea: HTMLTextAreaElement;
-  /** Puts new text in the box (after accepting changes): saves it and checks it. */
+  /**
+   * Puts new text in the box (after accepting changes) as one edit, so one
+   * Undo takes it back: saves it and checks it.
+   */
   replaceText(text: string): void;
   announce(message: string): void;
 }
@@ -493,6 +496,7 @@ export function mountDeepCheck(root: Document, host: DeepCheckHost): { textChang
   acceptAll.addEventListener('click', () => {
     if (!results || outdated()) return;
     const count = results.changes.length;
+    // All of them in one edit: one Undo takes them all back.
     const text = applyAll(results.text, results.changes);
     results = { text, changes: [] };
     host.replaceText(text);

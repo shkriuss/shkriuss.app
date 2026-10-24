@@ -1,7 +1,8 @@
 /**
  * Budget's page behaviour: connects pages/index.astro to the rules in
  * lib/budget.ts, saves on the device, and syncs the categories, entries and
- * settings when sync is on. The monthly reminder: reminders.ts.
+ * settings when sync is on. "Delete a year…" deletes a year's entries, to
+ * make room. The monthly reminder: reminders.ts.
  */
 import { isIsoTime, nowStamp, today } from '@shkriuss/dates';
 import { createStore, downloadFile } from '@shkriuss/storage';
@@ -19,12 +20,17 @@ import {
   emptyCategories,
   emptyEntries,
   emptySettings,
+  entriesCount,
   entriesIn,
+  ENTRIES_VERSION,
+  entryYears,
   formatMoney,
+  hasCategory,
   isCategoriesState,
   isEntriesState,
   isSettingsState,
   KINDS,
+  migrateEntries,
   monthLabel,
   monthOf,
   nextReminder,
@@ -32,9 +38,11 @@ import {
   readEntry,
   removeCategory,
   removeEntry,
+  removeYear,
   REMINDER_DAYS,
   reminderOf,
   reminderSentence,
+  roomNote,
   saveCategory,
   saveEntry,
   setCurrency,
@@ -66,9 +74,10 @@ const categoriesStore = createStore<CategoriesState>({
 
 const entriesStore = createStore<EntriesState>({
   key: 'budget',
-  version: 1,
+  version: ENTRIES_VERSION,
   fallback: emptyEntries,
   validate: isEntriesState,
+  migrate: migrateEntries,
 });
 
 const settingsStore = createStore<SettingsState>({
@@ -139,6 +148,8 @@ export function mountBudget(root: Document): void {
   const reminderDay = required<HTMLSelectElement>(root, '[data-reminder="day"]');
   const reminderTime = required<HTMLInputElement>(root, '[data-reminder="time"]');
   const csvStatus = required<HTMLElement>(root, '[data-csv-status]');
+  const deleteYearButton = required<HTMLButtonElement>(root, '[data-action="delete-year"]');
+  const roomText = required<HTMLElement>(root, '[data-room-note]');
   const reminderError = required<HTMLElement>(root, '[data-reminder-error]');
   const reminderNext = required<HTMLElement>(root, '[data-reminder-next]');
   const categoryTemplate = required<HTMLTemplateElement>(root, '[data-category-template]');
@@ -155,6 +166,11 @@ export function mountBudget(root: Document): void {
   const deleteDialog = required<HTMLDialogElement>(root, '[data-delete-dialog]');
   const deleteTitle = required<HTMLElement>(deleteDialog, '[data-delete-title]');
   const deleteText = required<HTMLElement>(deleteDialog, '[data-delete-text]');
+  const yearDialog = required<HTMLDialogElement>(root, '[data-year-dialog]');
+  const yearForm = required<HTMLFormElement>(yearDialog, '[data-year-form]');
+  const yearSelect = required<HTMLSelectElement>(yearForm, '[data-year-select]');
+  const yearText = required<HTMLElement>(yearForm, '[data-year-text]');
+  const yearConfirm = required<HTMLElement>(yearForm, '[data-year-confirm]');
 
   let categories = categoriesStore.load();
   let entries = entriesStore.load();
@@ -174,6 +190,7 @@ export function mountBudget(root: Document): void {
     entries.entries.find((entry) => entry.id === id);
   const findCategory = (id: string | null | undefined) =>
     categories.categories.find((category) => category.id === id);
+  /** "Income", or an expense's or a refund's category. */
   const categoryName = (entry: Entry) =>
     entry.kind === 'income' ? 'Income' : (findCategory(entry.category)?.name ?? 'No category');
 
@@ -239,14 +256,18 @@ export function mountBudget(root: Document): void {
     const fragment = entryTemplate.content.cloneNode(true) as DocumentFragment;
     const item = required<HTMLLIElement>(fragment, 'li');
     item.dataset['id'] = entry.id;
-    required<HTMLElement>(item, '[data-title]').textContent = categoryName(entry);
+    const title = required<HTMLElement>(item, '[data-title]');
+    // A refund says so, before its category (which keeps its own direction).
+    if (entry.kind === 'refund') title.append('Refund · ', typedText(categoryName(entry)));
+    else title.textContent = categoryName(entry);
     const meta = required<HTMLElement>(item, '[data-meta]');
     meta.textContent = dayLabel(entry.date);
     if (entry.note) meta.append(' · ', typedText(entry.note));
     const amount = required<HTMLElement>(item, '[data-amount]');
-    const signed = entry.kind === 'income' ? entry.amount : -entry.amount;
+    // Money in (income, and refunds) is positive.
+    const signed = entry.kind === 'expense' ? -entry.amount : entry.amount;
     amount.textContent = money(signed, true);
-    if (entry.kind === 'income') tone(amount, signed);
+    if (entry.kind !== 'expense') tone(amount, signed);
     return item;
   }
 
@@ -254,6 +275,9 @@ export function mountBudget(root: Document): void {
     const current = monthOf(today());
     monthHeading.textContent = monthLabel(month);
     thisMonthButton.hidden = month === current;
+    const room = roomNote(entries.entries.length);
+    roomText.hidden = room === null;
+    roomText.textContent = room ?? '';
 
     const monthEntries = entriesIn(entries, month);
     const totals = summary(monthEntries, categories);
@@ -307,8 +331,14 @@ export function mountBudget(root: Document): void {
     KINDS.find((kind) => kind === (entryForm.elements.namedItem('kind') as RadioNodeList).value) ??
     'expense';
 
+  /** The form's title: what it adds (it follows the type chosen), or "Change entry". */
+  function showTitle(): void {
+    const adding = { expense: 'Add expense', income: 'Add income', refund: 'Add refund' };
+    entryTitle.textContent = editingEntry ? 'Change entry' : adding[kindOf()];
+  }
+
   function showCategoryField(): void {
-    categoryField.hidden = kindOf() !== 'expense';
+    categoryField.hidden = !hasCategory(kindOf());
   }
 
   function openEntry(entry: Entry | undefined, kind: Kind = 'expense'): void {
@@ -316,11 +346,6 @@ export function mountBudget(root: Document): void {
     const values = entry
       ? toEntryForm(entry)
       : { kind, amount: '', date: suggestedDay(month, today()), category: '', note: '' };
-    entryTitle.textContent = entry
-      ? 'Change entry'
-      : kind === 'income'
-        ? 'Add income'
-        : 'Add expense';
     categorySelect.replaceChildren(
       new Option('No category', ''),
       ...categories.categories.map((category) => new Option(category.name, category.id)),
@@ -330,6 +355,7 @@ export function mountBudget(root: Document): void {
     }
     required<HTMLElement>(entryForm, '[data-action="delete-entry"]').hidden = !entry;
     showProblems(entryForm, ['kind', 'amount', 'date', 'note'], {});
+    showTitle();
     showCategoryField();
     entryDialog.showModal();
     // The amount first: the type is already chosen by the button tapped.
@@ -337,7 +363,9 @@ export function mountBudget(root: Document): void {
   }
 
   entryForm.addEventListener('change', (event) => {
-    if ((event.target as HTMLInputElement).name === 'kind') showCategoryField();
+    if ((event.target as HTMLInputElement).name !== 'kind') return;
+    showTitle();
+    showCategoryField();
   });
 
   entryForm.addEventListener('submit', (event) => {
@@ -367,7 +395,9 @@ export function mountBudget(root: Document): void {
     const what =
       entry.kind === 'income'
         ? `Saved ${money(entry.amount)} income`
-        : `Saved ${money(entry.amount)} on ${categoryName(entry)}`;
+        : entry.kind === 'refund'
+          ? `Saved a ${money(entry.amount)} refund on ${categoryName(entry)}`
+          : `Saved ${money(entry.amount)} on ${categoryName(entry)}`;
     save(
       { entries: saveEntry(entries, entry) },
       moved ? `${what}, in ${monthLabel(month)}.` : `${what}.`,
@@ -416,7 +446,8 @@ export function mountBudget(root: Document): void {
       if (!entry) return;
       deleting = { type, id: entry.id };
       deleteTitle.textContent = 'Delete this entry?';
-      deleteText.textContent = `${money(entry.amount)} (${categoryName(entry)}, ${dayLabel(entry.date)}) will be removed.`;
+      const refund = entry.kind === 'refund' ? ' refund' : '';
+      deleteText.textContent = `${money(entry.amount)}${refund} (${categoryName(entry)}, ${dayLabel(entry.date)}) will be removed.`;
     } else {
       const category = findCategory(editingCategory);
       if (!category) return;
@@ -445,6 +476,57 @@ export function mountBudget(root: Document): void {
       save({ categories: removeCategory(categories, category.id) }, `Deleted ${category.name}.`);
       newCategoryButton.focus();
     }
+  });
+
+  // ---------- Deleting a year ----------
+
+  /** How many entries the year chosen has (0 if it has none now). */
+  const yearCount = (year: string) =>
+    entryYears(entries).find((entry) => entry.year === year)?.count ?? 0;
+
+  /** Says what deleting the year chosen removes. */
+  function showYear(): void {
+    const year = yearSelect.value;
+    const count = entriesCount(yearCount(year));
+    yearText.textContent = `The ${count} from ${year} will be deleted: expenses, income and refunds. With sync on, they’re deleted on your other devices too. This can’t be undone.`;
+    yearConfirm.textContent = `Delete ${count}`;
+  }
+
+  /** The years with entries to choose from (the year chosen stays chosen while it has any). */
+  function fillYears(): void {
+    const chosen = yearSelect.value;
+    const years = entryYears(entries);
+    yearSelect.replaceChildren(
+      ...years.map(({ year, count }) => new Option(`${year} (${entriesCount(count)})`, year)),
+    );
+    // Else the first, the earliest year: the oldest entries are the likeliest to go.
+    if (years.some(({ year }) => year === chosen)) yearSelect.value = chosen;
+    showYear();
+  }
+
+  function openYears(): void {
+    if (entries.entries.length === 0) {
+      csvStatus.textContent = 'There are no entries to delete.';
+      return;
+    }
+    yearSelect.replaceChildren();
+    fillYears();
+    required<HTMLElement>(yearForm, '[data-csv-status]').textContent = '';
+    yearDialog.showModal();
+    yearSelect.focus();
+  }
+
+  yearSelect.addEventListener('change', showYear);
+
+  yearForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const year = yearSelect.value;
+    const count = yearCount(year);
+    yearDialog.close();
+    deleteYearButton.focus();
+    if (count === 0) return;
+    // Like deleting entries one by one, so other devices delete them too.
+    save({ entries: removeYear(entries, year) }, `Deleted ${entriesCount(count)} from ${year}.`);
   });
 
   // ---------- Everything else ----------
@@ -494,15 +576,22 @@ export function mountBudget(root: Document): void {
       case 'delete-category':
         askToDelete('category');
         break;
-      case 'csv':
-        // The answer shows under the button (and is read out).
+      case 'delete-year':
+        openYears();
+        break;
+      case 'csv': {
+        // The answer shows under the button tapped (and is read out).
+        const status =
+          button?.closest('dialog, section')?.querySelector<HTMLElement>('[data-csv-status]') ??
+          csvStatus;
         if (entries.entries.length === 0) {
-          csvStatus.textContent = 'There’s nothing to download yet.';
+          status.textContent = 'There’s nothing to download yet.';
           break;
         }
         downloadFile(`budget-${today()}.csv`, toCsv(entries, categories), 'text/csv');
-        csvStatus.textContent = 'Downloaded your budget as a spreadsheet.';
+        status.textContent = 'Downloaded your budget as a spreadsheet.';
         break;
+      }
     }
   });
 
@@ -555,6 +644,10 @@ export function mountBudget(root: Document): void {
     // What's being changed was deleted on another device or tab.
     if (editingEntry !== null && !findEntry(editingEntry)) entryDialog.close();
     if (editingCategory !== null && !findCategory(editingCategory)) categoryDialog.close();
+    if (yearDialog.open) {
+      if (entries.entries.length === 0) yearDialog.close();
+      else fillYears();
+    }
     render();
     reminders.changed();
   }

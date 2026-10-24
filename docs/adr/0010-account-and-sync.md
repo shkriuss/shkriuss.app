@@ -190,8 +190,10 @@ in with `sync: true` in `apps.json`.
     dropped after 180 days. A device away longer still deletes an item it
     saw in the copy that the same copy no longer has, unless it changed the
     item since.
-  - The list's order is merged the same way; new items from the other device
-    go at the end.
+  - The list's order is merged the same way: the newest move wins. Adding or
+    deleting an item isn't a move, so it doesn't undo a move made on another
+    device (audit finding E-12). Items only the other device has go where it
+    put them: just before the item that followed them there, or at the end.
   - On a device's first sync, its items count as older than what's already
     online, so turning on sync (say, after restoring an old backup) never
     overwrites newer edits. Its other items are added.

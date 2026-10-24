@@ -90,6 +90,29 @@ test('cancelling adds nothing', async ({ page }) => {
   await expect(page.getByText('Nothing planned on this day.')).toBeVisible();
 });
 
+test('says when repeating times may be an hour off', async ({ page }) => {
+  // 09:00 in London is 12:00 in Tbilisi in summer, but 13:00 in winter.
+  const file = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'BEGIN:VEVENT',
+    'UID:weekly-call@example.com',
+    'DTSTART;TZID=Europe/London:20261017T090000',
+    'RRULE:FREQ=WEEKLY',
+    'SUMMARY:Weekly call',
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ].join('\r\n');
+  await importFile(page, 'london.ics', file);
+  await expect(dialog(page)).toContainText(
+    '1 repeating event is from a time zone that doesn’t change its clocks on the same dates as yours, so some of its times may be an hour off.',
+  );
+  await dialog(page).getByRole('button', { name: 'Add 1 event' }).click();
+  await expect(dayList(page).getByRole('button')).toHaveAccessibleName(
+    /^12:00\sPM, Weekly call, repeats$/,
+  );
+});
+
 test('explains files it can’t use', async ({ page }) => {
   await importFile(page, 'notes.txt', 'Buy milk');
   await expect(dialog(page)).toContainText('This doesn’t look like a calendar (.ics) file.');

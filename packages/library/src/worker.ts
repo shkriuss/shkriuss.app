@@ -9,7 +9,7 @@
  *             details, X-Library-Parts: the parts' sizes)
  *   GET    /api/library/items/<id>?offset=N&length=N   some bytes of an item
  *   POST   /api/library/first-parts          { items: [[id, size], …] }: several first parts at once
- *   POST   /api/library/remove               { ids }: delete items (their ids can't be used again)
+ *   POST   /api/library/remove               { ids, proofs }: delete items (their ids can't be used again)
  *   POST   /api/library/move                 { from: old token }: after the account key was replaced
  *   DELETE /api/library                      delete everything in it
  *
@@ -179,9 +179,9 @@ export async function handleLibrary(
   if (path === '/api/library/unlock' || path === '/api/library/remove') {
     if (request.method !== 'POST') return problem(405, 'Use POST.');
     if (path === '/api/library/remove') {
-      const ids = await body(checkRemove);
-      if (ids instanceof Response) return ids;
-      const removed = await released(await call('remove', { ids: ids.value }));
+      const items = await body(checkRemove);
+      if (items instanceof Response) return items;
+      const removed = await released(await call('remove', { items: items.value }));
       return removed.ok ? noContent() : removed;
     }
     const code = env.LIBRARY_STORAGE_CODE;
@@ -456,7 +456,7 @@ interface Meta {
 }
 
 /** What the list knows of each item it ever had. */
-type Entry = { seq: number; size: number } | { seq: number; deleted: true };
+type Entry = { seq: number; size: number } | { seq: number; deleted: true; proof?: string };
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
@@ -574,8 +574,8 @@ export class Library {
           return this.#commit(meta, item, epoch, code, now);
         }
         case 'remove': {
-          const { ids } = (await request.json()) as { ids: string[] };
-          return this.#remove(meta, ids, canAdd(meta, code), now);
+          const { items } = (await request.json()) as { items: [string, string | null][] };
+          return this.#remove(meta, items, canAdd(meta, code), now);
         }
         case 'wipe':
           return this.#wipe(meta);
@@ -719,7 +719,8 @@ export class Library {
     }
     const entry = await this.state.storage.get<Entry>(itemKey(id));
     if (entry && 'deleted' in entry) {
-      return refusal(409, { error: 'That item was deleted.', deleted: true });
+      const proof = entry.proof === undefined ? {} : { proof: entry.proof };
+      return refusal(409, { error: 'That item was deleted.', deleted: true, ...proof });
     }
     // Already there: its file is in use, so it stays.
     if (entry) return refusal(409, { error: 'That item is already there.', exists: true }, false);
@@ -774,13 +775,14 @@ export class Library {
    */
   async #remove(
     meta: Meta,
-    ids: readonly string[],
+    removals: readonly [string, string | null][],
     adding: boolean,
     now: number,
   ): Promise<Response> {
     if (meta.wiping) return problem(503, 'The library is being deleted.');
+    const proofs = new Map(removals);
     const entries = await Promise.all(
-      ids.map(async (id) => [id, await this.state.storage.get<Entry>(itemKey(id))] as const),
+      removals.map(async ([id]) => [id, await this.state.storage.get<Entry>(itemKey(id))] as const),
     );
     const live = entries.filter(
       (pair): pair is readonly [string, { seq: number; size: number }] =>
@@ -800,13 +802,17 @@ export class Library {
         bytes -= entry.size;
       }
       seq += 1;
+      // The deleting device's seal goes with the note, so other devices can tell it's real.
+      const proof = proofs.get(id);
+      const sealed = proof ? { proof } : {};
       await this.state.storage.put(seqKey(seq), {
         id,
         seq,
         deleted: true,
         at: now,
+        ...sealed,
       } satisfies DeletedRow);
-      await this.state.storage.put(itemKey(id), { seq, deleted: true } satisfies Entry);
+      await this.state.storage.put(itemKey(id), { seq, deleted: true, ...sealed } satisfies Entry);
     }
     await this.#save({ ...meta, seq, items, bytes });
     return new Response(null, {

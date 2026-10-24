@@ -14,6 +14,7 @@ export const tradeItem = (page: Page, symbol: string) =>
 /** A results tile's value, by its label ("Net result"). */
 export const tile = (page: Page, label: string) =>
   page.locator('.tile').filter({ hasText: label }).locator('[data-value]');
+export const yearDialog = (page: Page) => page.getByRole('dialog', { name: 'Delete a year' });
 
 /** Fills in the open trade form (only the fields given) and saves. */
 export async function fillTrade(
@@ -27,6 +28,8 @@ export async function fillTrade(
     stop?: string;
     exitDate?: string;
     exitPrice?: string;
+    /** "Quantity closed" (only while closing). */
+    closeQuantity?: string;
     fees?: string;
     setup?: string;
     notes?: string;
@@ -35,6 +38,9 @@ export async function fillTrade(
   const dialog = tradeDialog(page);
   const entry = dialog.getByRole('group', { name: 'Entry' });
   const exit = dialog.getByRole('group', { name: 'Exit' });
+  if (fields.closeQuantity !== undefined) {
+    await exit.getByLabel('Quantity closed').fill(fields.closeQuantity);
+  }
   if (fields.symbol !== undefined) await dialog.getByLabel('Symbol').fill(fields.symbol);
   if (fields.side) await dialog.getByLabel(fields.side, { exact: true }).check();
   if (fields.entryDate !== undefined) await entry.getByLabel('Day').fill(fields.entryDate);

@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { addDays } from '@shkriuss/dates';
+import { footprint, sampleText } from '@shkriuss/sync/testing';
 import { nextFireTime } from '../../../../packages/push/src/schedule.ts';
+import { MAX_SEALED_CHARS } from '../../../../packages/sync/src/validate.ts';
 import {
   addSuggested,
   byCategory,
@@ -9,21 +12,27 @@ import {
   emptyCategories,
   emptyEntries,
   emptySettings,
+  entriesCount,
   entriesIn,
+  ENTRIES_VERSION,
+  entryYears,
   formatMoney,
   isCategoriesState,
   isEntriesState,
   LIMITS,
+  migrateEntries,
   monthLabel,
   nextReminder,
   readCategory,
   readEntry,
   removeCategory,
   removeEntry,
+  removeYear,
   reminderDue,
   reminderNotices,
   reminderOf,
   reminderSentence,
+  roomNote,
   saveCategory,
   saveEntry,
   setCurrency,
@@ -172,8 +181,33 @@ describe('entries', () => {
       amount: 'Enter a smaller amount.',
     });
     expect(readEntry(form, 'x', LIMITS.entries, categories).problems).toEqual({
-      amount: `You can keep up to ${LIMITS.entries} entries.`,
+      amount: `You can keep up to ${new Intl.NumberFormat().format(LIMITS.entries)} entries. To make room, delete a year (under Currency and spreadsheet).`,
     });
+  });
+
+  it('reads a refund, in a category like an expense', () => {
+    expect(readEntry({ ...form, kind: 'refund' }, 'x', 0, categories).entry).toMatchObject({
+      kind: 'refund',
+      amount: 12.5,
+      category: 'food',
+    });
+    expect(
+      readEntry({ ...form, kind: 'refund', category: '' }, 'x', 0, categories).entry?.category,
+    ).toBeNull();
+    expect(readEntry({ ...form, kind: 'gift' }, 'x', 0, categories).problems).toEqual({
+      kind: 'Choose expense, income or refund.',
+    });
+    expect(isEntriesState(entries(entry({ kind: 'refund' })))).toBe(true);
+    expect(isEntriesState(entries(entry({ kind: 'refund', category: null })))).toBe(true);
+  });
+
+  it('reads what version 1 saved, which had no refunds', () => {
+    expect(ENTRIES_VERSION).toBe(2);
+    const saved = entries(entry({}), entry({ id: 'i', kind: 'income', category: null }));
+    expect(migrateEntries(saved, 1)).toEqual(saved);
+    expect(migrateEntries({ entries: [{ id: 'a' }] }, 1)).toBeUndefined();
+    expect(migrateEntries(null, 1)).toBeUndefined();
+    expect(migrateEntries(saved, 3)).toBeUndefined();
   });
 
   it('adds, changes and removes entries', () => {
@@ -245,6 +279,111 @@ describe('months', () => {
       { category: null, spent: 40.1, left: null },
     ]);
   });
+
+  it('takes refunds off their category’s spending, and off what was spent', () => {
+    const withRefunds = saveEntry(
+      saveEntry(october, entry({ id: 'r', kind: 'refund', amount: 40, category: 'fun' })),
+      entry({ id: 's', kind: 'refund', amount: 0.1, category: null, date: '2026-10-09' }),
+    );
+    const month = entriesIn(withRefunds, '2026-10');
+    // Fun was $35 over its limit: the refund brings it back under.
+    expect(byCategory(month, categories)).toEqual([
+      { category: categories.categories[0], spent: 120.1, left: 279.9 },
+      { category: categories.categories[1], spent: 95, left: 5 },
+      { category: categories.categories[2], spent: 0, left: null },
+      { category: null, spent: 40, left: null },
+    ]);
+    expect(summary(month, categories)).toEqual({
+      income: 2000,
+      spent: 255.1,
+      left: 1744.9,
+      budgeted: 500,
+    });
+    // A refund for something bought the month before: less than nothing spent.
+    const refundOnly = [entry({ kind: 'refund', amount: 30, category: 'food' })];
+    expect(summary(refundOnly, categories).spent).toBe(-30);
+    expect(byCategory(refundOnly, categories)[0]).toMatchObject({ spent: -30, left: 430 });
+    // "No category" shows while it has entries, even if they add up to 0.
+    const evened = [
+      entry({ id: 'a', category: null }),
+      entry({ id: 'b', kind: 'refund', category: null }),
+    ];
+    expect(byCategory(evened, emptyCategories())).toEqual([
+      { category: null, spent: 0, left: null },
+    ]);
+  });
+});
+
+describe('making room', () => {
+  const years = entries(
+    entry({ id: 'a', date: '2024-03-02' }),
+    entry({ id: 'b', date: '2026-10-21', kind: 'income', category: null }),
+    entry({ id: 'c', date: '2024-12-31', kind: 'refund' }),
+    entry({ id: 'd', date: '2025-01-01' }),
+  );
+
+  it('lists the years with entries, and deletes one', () => {
+    expect(entryYears(years)).toEqual([
+      { year: '2024', count: 2 },
+      { year: '2025', count: 1 },
+      { year: '2026', count: 1 },
+    ]);
+    expect(entryYears(emptyEntries())).toEqual([]);
+    expect(removeYear(years, '2024').entries.map((item) => item.id)).toEqual(['b', 'd']);
+    expect(removeYear(years, '2023')).toEqual(years);
+    expect(entriesCount(1, 'en-US')).toBe('1 entry');
+    expect(entriesCount(1234, 'en-US')).toBe('1,234 entries');
+  });
+
+  it('says so once Budget is nearly full', () => {
+    const number = (value: number) => new Intl.NumberFormat('en-US').format(value);
+    const nearly = LIMITS.entries * 0.9;
+    const makeRoom =
+      'To make room, download the spreadsheet, then use “Delete a year…” under Currency and spreadsheet, below.';
+    expect(roomNote(nearly, 'en-US')).toBeNull();
+    expect(roomNote(nearly + 1, 'en-US')).toBe(
+      `Budget is nearly full: there’s room for ${number(LIMITS.entries - nearly - 1)} more entries (it keeps up to ${number(LIMITS.entries)}). ${makeRoom}`,
+    );
+    expect(roomNote(LIMITS.entries - 1, 'en-US')).toContain('there’s room for 1 more entry (');
+    expect(roomNote(LIMITS.entries, 'en-US')).toBe(
+      `Budget is full: it keeps up to ${number(LIMITS.entries)} entries. ${makeRoom}`,
+    );
+  });
+
+  // Every entry is saved on the device (in localStorage, about 5 MB for each
+  // site), and with sync on, also goes into the copy that goes online.
+  it('has room for every entry, on the device and in the sync copy', async () => {
+    const ids = Array.from({ length: LIMITS.categories }, () => crypto.randomUUID());
+    const list = Array.from({ length: LIMITS.entries }, (_, index): Entry => {
+      const kind = index % 10 === 0 ? 'income' : index % 10 === 1 ? 'refund' : 'expense';
+      return {
+        id: crypto.randomUUID(),
+        kind,
+        amount: 1000 + ((index * 7919) % 99_000_000) / 100,
+        date: addDays('2016-01-01', index % 3650),
+        category: kind === 'income' ? null : (ids[index % ids.length] ?? null),
+        // Long-ish notes: 60 of the 100 characters allowed.
+        note: sampleText(60, index),
+      };
+    });
+    const size = await footprint({
+      app: 'budget',
+      store: 'shkriuss:budget',
+      version: ENTRIES_VERSION,
+      data: { entries: list },
+      items: list,
+      // A quarter of them deleted ("Delete a year") less than 180 days ago.
+      deleted: LIMITS.entries / 4,
+    });
+    expect(size.saved).toBeLessThan(2_000_000);
+    expect(size.compressed).toBeLessThan(1_000_000);
+    expect(size.sealed).toBeLessThan(MAX_SEALED_CHARS);
+    // Safari allows 5 MiB (5,242,880 bytes), and counts 2 bytes for each
+    // character of text with any character beyond Latin-1 (like ’ from an
+    // iPhone's keyboard, or Georgian). Sync's own records are plain letters
+    // and digits: 1 byte each. Some room is left for the rest.
+    expect(2 * size.saved + size.syncState).toBeLessThan(4_500_000);
+  }, 60_000);
 });
 
 describe('words and money', () => {
@@ -273,11 +412,13 @@ describe('spreadsheet', () => {
             category: null,
             note: '=pay',
           }),
+          entry({ id: 'c', date: '2026-10-04', kind: 'refund', amount: 4.5, note: 'Sour milk' }),
         ),
         categories,
       ).split('\r\n'),
     ).toEqual([
       'Date,Type,Amount,Category,Note',
+      '2026-10-04,Refund,4.5,Groceries,Sour milk',
       "2026-10-03,Income,2000,,'=pay",
       '2026-10-02,Expense,-10,Groceries,"Milk, ""fresh"""',
       '',

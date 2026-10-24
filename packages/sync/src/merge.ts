@@ -106,6 +106,16 @@ export function fingerprint(value: unknown): string {
 const sameIds = (a: readonly string[], b: readonly string[]) =>
   a.length === b.length && a.every((id, index) => id === b[index]);
 
+/** Whether the items both lists have are in the same order: adding or deleting an item isn't a move. */
+function sameRelativeOrder(before: readonly string[], after: readonly string[]): boolean {
+  const had = new Set(before);
+  const kept = new Set(after);
+  return sameIds(
+    before.filter((id) => kept.has(id)),
+    after.filter((id) => had.has(id)),
+  );
+}
+
 /**
  * This device's items as a snapshot: items that differ from what was known
  * at the last sync (or are new) get the time `now`, and items that are gone
@@ -146,9 +156,11 @@ export function observe(
     }
   }
   const ids = current.map((item) => item.id);
-  const orderSame = known !== undefined && sameIds(known.order.ids, ids);
-  if (!orderSame) changed = true;
-  const order = { ids, t: orderSame ? known.order.t : stamp(known?.order) };
+  if (known === undefined || !sameIds(known.order.ids, ids)) changed = true;
+  // Only a move makes this order win over another device's: adding or
+  // deleting an item would undo a move made there (audit E-12).
+  const moved = known === undefined || !sameRelativeOrder(known.order.ids, ids);
+  const order = { ids, t: moved ? stamp(known?.order) : known.order.t };
   return { snapshot: { v: version, items, order }, changed };
 }
 
@@ -219,8 +231,26 @@ export function merge(a: StoreSnapshot, b: StoreSnapshot): StoreSnapshot {
       ids.push(id);
     }
   };
-  first.ids.forEach(add);
-  second.ids.forEach(add);
+  // The other order's own items go where it put them: just before the item
+  // that followed them there, or at the end.
+  const placed = new Set(first.ids.filter(live));
+  const goBefore = new Map<string | null, string[]>();
+  let waiting: string[] = [];
+  for (const id of second.ids) {
+    if (!placed.has(id)) {
+      waiting.push(id);
+      continue;
+    }
+    goBefore.set(id, waiting);
+    waiting = [];
+  }
+  goBefore.set(null, waiting);
+  for (const id of first.ids) {
+    if (!placed.has(id)) continue;
+    goBefore.get(id)?.forEach(add);
+    add(id);
+  }
+  goBefore.get(null)?.forEach(add);
   Object.keys(items).sort().forEach(add);
   const order = sameIds(ids, first.ids) ? first : { ids, t: Math.max(a.order.t, b.order.t) };
   return { v: a.v, items, order };

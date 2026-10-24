@@ -1,7 +1,8 @@
 /**
  * Trades' page behaviour: connects pages/index.astro to the rules in
  * lib/trades.ts, saves on the device, and syncs the trades and the currency
- * when sync is on.
+ * when sync is on. "Close" opens the trade form to close a trade, all of it
+ * or part of it; "Delete a year…" deletes the trades closed in a year.
  */
 import { today } from '@shkriuss/dates';
 import { createStore, downloadFile } from '@shkriuss/storage';
@@ -13,8 +14,11 @@ import { site } from 'virtual:shkriuss/site';
 import {
   byMonth,
   bySetup,
+  closedCount,
   closedIn,
   closedTrades,
+  closedYears,
+  closePart,
   CURRENCIES,
   currencyOf,
   dateLabel,
@@ -24,6 +28,7 @@ import {
   formatNumber,
   formatPercent,
   formatR,
+  isOpen,
   isSettingsState,
   isTradesState,
   matchesSearch,
@@ -31,10 +36,13 @@ import {
   openTrades,
   PERIODS,
   profit,
+  readClose,
   readTrade,
+  removeClosedYear,
   removeTrade,
   returnPercent,
   rMultiple,
+  roomNote,
   saveTrade,
   setCurrency,
   setupNames,
@@ -44,9 +52,9 @@ import {
   toCsv,
   toForm,
   withSettings,
+  type CloseProblems,
   type Group,
   type Period,
-  type Problems,
   type SettingsState,
   type Trade,
   type TradeForm,
@@ -81,6 +89,13 @@ const FIELDS: readonly (keyof TradeForm)[] = [
   'fees',
   'setup',
   'notes',
+];
+type FieldName = keyof TradeForm | 'closeQuantity';
+/** Every field, in the form's order: "Quantity closed" (only while closing) is before the fees. */
+const ALL_FIELDS: readonly FieldName[] = [
+  ...FIELDS.slice(0, FIELDS.indexOf('fees')),
+  'closeQuantity',
+  ...FIELDS.slice(FIELDS.indexOf('fees')),
 ];
 /** A win rate: whole percent, never rounded to 100% with a loss or to 0% with a win. */
 function rateText(rate: number): string {
@@ -130,6 +145,15 @@ export function mountTrades(root: Document): void {
   const deleteButton = required<HTMLElement>(dialog, '[data-action="delete"]');
   const deleteDialog = required<HTMLDialogElement>(root, '[data-delete-dialog]');
   const deleteName = required<HTMLElement>(deleteDialog, '[data-delete-name]');
+  const closeQuantityField = required<HTMLElement>(form, '[data-close-quantity]');
+  const roomText = required<HTMLElement>(root, '[data-room-note]');
+  const csvStatus = required<HTMLElement>(root, '[data-csv-status]');
+  const deleteYearButton = required<HTMLButtonElement>(root, '[data-action="delete-year"]');
+  const yearDialog = required<HTMLDialogElement>(root, '[data-year-dialog]');
+  const yearForm = required<HTMLFormElement>(yearDialog, '[data-year-form]');
+  const yearSelect = required<HTMLSelectElement>(yearForm, '[data-year-select]');
+  const yearText = required<HTMLElement>(yearForm, '[data-year-text]');
+  const yearConfirm = required<HTMLElement>(yearForm, '[data-year-confirm]');
 
   let state = tradesStore.load();
   let settings = settingsStore.load();
@@ -138,6 +162,8 @@ export function mountTrades(root: Document): void {
   let shown = PAGE_SIZE;
   /** The trade in the form (null: a new one). */
   let editing: string | null = null;
+  /** Whether the form is closing an open trade ("Close"), so it can close part of it. */
+  let closing = false;
 
   const announce = (message: string): void => {
     announcer.textContent = message;
@@ -293,6 +319,9 @@ export function mountTrades(root: Document): void {
   }
 
   function render(): void {
+    const room = roomNote(state.trades.length);
+    roomText.hidden = room === null;
+    roomText.textContent = room ?? '';
     const closed = closedIn(state, period, today());
     renderResults(closed);
     renderLists(closed);
@@ -308,7 +337,7 @@ export function mountTrades(root: Document): void {
 
   // ---------- The form ----------
 
-  const field = (name: keyof TradeForm) =>
+  const field = (name: FieldName) =>
     form.elements.namedItem(name) as HTMLInputElement | RadioNodeList;
 
   function readForm(): TradeForm {
@@ -324,8 +353,8 @@ export function mountTrades(root: Document): void {
   }
 
   /** Shows what's wrong; focuses the first field with a problem. Returns true if anything is. */
-  function showProblems(problems: Problems): boolean {
-    for (const name of FIELDS) {
+  function showProblems(problems: CloseProblems): boolean {
+    for (const name of ALL_FIELDS) {
       const problem = problems[name];
       required<HTMLElement>(form, `[data-error-for="${name}"]`).textContent = problem ?? '';
       const control = field(name);
@@ -335,7 +364,7 @@ export function mountTrades(root: Document): void {
         else input.removeAttribute('aria-invalid');
       }
     }
-    const first = FIELDS.find((name) => problems[name]);
+    const first = ALL_FIELDS.find((name) => problems[name]);
     if (first) {
       const control = field(first);
       focusProblem(
@@ -346,10 +375,15 @@ export function mountTrades(root: Document): void {
     return first !== undefined;
   }
 
-  function openForm(trade: Trade | undefined, closing = false): void {
+  function openForm(trade: Trade | undefined, close = false): void {
     editing = trade?.id ?? null;
+    closing = close && trade !== undefined && isOpen(trade);
     dialogTitle.textContent = !trade ? 'New trade' : closing ? 'Close trade' : 'Change trade';
     deleteButton.hidden = !trade;
+    // Closing: all of it, unless less is typed.
+    closeQuantityField.hidden = !closing;
+    (field('closeQuantity') as HTMLInputElement).value =
+      closing && trade ? String(trade.quantity) : '';
     fillForm(
       trade
         ? toForm(trade)
@@ -383,15 +417,34 @@ export function mountTrades(root: Document): void {
     (button ?? newButton).focus();
   }
 
-  form.addEventListener('submit', (event) => {
-    event.preventDefault();
-    const others = state.trades.length - (editing ? 1 : 0);
-    const read = readTrade(readForm(), editing ?? crypto.randomUUID(), others);
+  /** Closes the trade in the form: all of it, or part of it (the rest stays open). */
+  function submitClose(id: string): void {
+    const read = readClose(
+      readForm(),
+      (field('closeQuantity') as HTMLInputElement).value,
+      { id, newId: crypto.randomUUID() },
+      state.trades.length - 1,
+    );
     if (!read.trade) {
       showProblems(read.problems);
       return;
     }
-    const { trade } = read;
+    const { trade, rest } = read;
+    if (!rest) {
+      saveFromForm(trade);
+      return;
+    }
+    dialog.close();
+    const result = profit(trade) ?? 0;
+    save(
+      { trades: closePart(state, trade, rest) },
+      `Closed ${formatNumber(trade.quantity)} of the ${trade.symbol} trade: ${money(result, true)}. ${formatNumber(rest.quantity)} still open.`,
+    );
+    focusTrade(trade.id);
+  }
+
+  /** Saves the trade read from the form, and says how it stands. */
+  function saveFromForm(trade: Trade): void {
     dialog.close();
     const result = profit(trade);
     save(
@@ -401,6 +454,21 @@ export function mountTrades(root: Document): void {
         : `Saved the ${trade.symbol} trade: ${money(result, true)}.`,
     );
     focusTrade(trade.id);
+  }
+
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    if (closing && editing) {
+      submitClose(editing);
+      return;
+    }
+    const others = state.trades.length - (editing ? 1 : 0);
+    const read = readTrade(readForm(), editing ?? crypto.randomUUID(), others);
+    if (!read.trade) {
+      showProblems(read.problems);
+      return;
+    }
+    saveFromForm(read.trade);
   });
 
   form.addEventListener('click', (event) => {
@@ -419,6 +487,7 @@ export function mountTrades(root: Document): void {
 
   dialog.addEventListener('close', () => {
     editing = null;
+    closing = false;
   });
 
   deleteDialog.addEventListener('close', () => {
@@ -427,6 +496,57 @@ export function mountTrades(root: Document): void {
     dialog.close();
     save({ trades: removeTrade(state, trade.id) }, `Deleted the ${trade.symbol} trade.`);
     newButton.focus();
+  });
+
+  // ---------- Deleting a year ----------
+
+  /** How many trades were closed in the year chosen (0 if none are now). */
+  const yearCount = (year: string) =>
+    closedYears(state).find((entry) => entry.year === year)?.count ?? 0;
+
+  /** Says what deleting the year chosen removes. */
+  function showYear(): void {
+    const year = yearSelect.value;
+    const count = closedCount(yearCount(year));
+    yearText.textContent = `The ${count} from ${year} will be deleted. Open trades stay. With sync on, they’re deleted on your other devices too. This can’t be undone.`;
+    yearConfirm.textContent = `Delete ${count}`;
+  }
+
+  /** The years trades were closed in, to choose from (the year chosen stays chosen while it has any). */
+  function fillYears(): void {
+    const chosen = yearSelect.value;
+    const years = closedYears(state);
+    yearSelect.replaceChildren(
+      ...years.map(({ year, count }) => new Option(`${year} (${closedCount(count)})`, year)),
+    );
+    // Else the first, the earliest year: the oldest trades are the likeliest to go.
+    if (years.some(({ year }) => year === chosen)) yearSelect.value = chosen;
+    showYear();
+  }
+
+  function openYears(): void {
+    if (closedYears(state).length === 0) {
+      csvStatus.textContent = 'There are no closed trades to delete.';
+      return;
+    }
+    yearSelect.replaceChildren();
+    fillYears();
+    required<HTMLElement>(yearForm, '[data-csv-status]').textContent = '';
+    yearDialog.showModal();
+    yearSelect.focus();
+  }
+
+  yearSelect.addEventListener('change', showYear);
+
+  yearForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const year = yearSelect.value;
+    const count = yearCount(year);
+    yearDialog.close();
+    deleteYearButton.focus();
+    if (count === 0) return;
+    // Like deleting trades one by one, so other devices delete them too.
+    save({ trades: removeClosedYear(state, year) }, `Deleted ${closedCount(count)} from ${year}.`);
   });
 
   // ---------- Everything else on the page ----------
@@ -444,15 +564,19 @@ export function mountTrades(root: Document): void {
       render();
       closedList.querySelectorAll<HTMLElement>('[data-action="edit"]')[first]?.focus();
     }
+    if (action === 'delete-year') openYears();
+    if (action === 'cancel' && button?.closest('[data-year-dialog]')) yearDialog.close();
     if (action === 'csv') {
-      // The answer shows under the button (and is read out).
-      const csvStatus = required<HTMLElement>(root, '[data-csv-status]');
+      // The answer shows under the button tapped (and is read out).
+      const status =
+        button?.closest('dialog, section')?.querySelector<HTMLElement>('[data-csv-status]') ??
+        csvStatus;
       if (state.trades.length === 0) {
-        csvStatus.textContent = 'There are no trades to download yet.';
+        status.textContent = 'There are no trades to download yet.';
         return;
       }
       downloadFile(`trades-${today()}.csv`, toCsv(state), 'text/csv');
-      csvStatus.textContent = 'Downloaded your trades as a spreadsheet.';
+      status.textContent = 'Downloaded your trades as a spreadsheet.';
     }
   });
 
@@ -481,6 +605,10 @@ export function mountTrades(root: Document): void {
     settings = settingsStore.load();
     // The trade being changed was deleted on another device or tab.
     if (editing !== null && !find(editing)) dialog.close();
+    if (yearDialog.open) {
+      if (closedYears(state).length === 0) yearDialog.close();
+      else fillYears();
+    }
     render();
   }
 

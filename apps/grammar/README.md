@@ -19,6 +19,12 @@ The checking is done by [Harper](https://github.com/automattic/harper)
   after typing stops, and applies fixes. On a first visit it starts the
   checker once the offline copy is saved (`offlineCopySaved()`), so the big
   file is downloaded once and then comes from that copy, offline too.
+- `src/scripts/edit-text.ts` and `src/lib/edit.ts`: a fix, and Deep check's
+  "Accept" and "Accept all", change the text as one edit, like typing or
+  pasting, so Undo (Ctrl+Z, ⌘Z, or shaking an iPhone) takes it back. Setting
+  the text box's value from code would clear its undo history. It uses
+  `document.execCommand('insertText')`: old, but the only way that keeps the
+  history. Where it doesn't work, the text is set the old way, without undo.
 - Sync ([ADR 0010](../../docs/adr/0010-account-and-sync.md)): with sync on,
   the English choice and the dictionary sync between devices
   (`syncedSettings` in `grammar.ts`; the newest change wins). The text never
