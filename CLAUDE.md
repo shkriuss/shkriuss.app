@@ -110,6 +110,16 @@ a quicker run while working on a few apps; CI always tests every site.
   The audit brief ([docs/audit/README.md](docs/audit/README.md)) has more,
   area by area.
 
+- **Keep the docs true.** Every AI session reads them before working, so a
+  wrong step becomes a wrong change. When a change alters something a doc
+  says (how it works, a limit or number, a file or its name, a command, a
+  step), update that doc in the same PR: this file, the guides in `docs/`,
+  `README.md`, `SECURITY.md`, `apps.json` (`dataStored`, for the privacy
+  page) and the audit brief. A decision record (ADR) keeps what was decided
+  and why: add a "Changed by" note to its status, or write a new ADR for a
+  new decision. Search for the old name or number before pushing. A unit
+  test checks that every doc link and file path still exists.
+
 - **Explain in plain language.** The owner is a beginner: PR descriptions and
   docs should say what changed and why, without jargon.
 

@@ -486,7 +486,15 @@ subdomain.
 - Is logic copied between apps that should be in a shared package? Are there
   files too large to work with? The largest is
   `apps/tasks/src/scripts/tasks.ts`.
-- Do the ADRs and docs still match the code?
+- Do the docs still match the code? Every AI session reads them before it
+  works, so a wrong step there becomes a wrong change. Check each concrete
+  claim (paths and names, commands, limits and numbers, steps, what a
+  helper or component takes) in `CLAUDE.md`, `README.md`, `SECURITY.md`,
+  the guides in `docs/`, the ADRs (what they say about how things work now,
+  and whether a later change has its "Changed by" note), this brief,
+  `prompts.md` and the pull request checklist. Also report what a newcomer
+  would need that no doc mentions. A unit test (`tests/unit/docs.test.ts`)
+  already checks that links and file paths exist, so look at what they say.
 - Tests: important behaviour untested, tests that can't fail, and flaky
   patterns (timing, order).
 - Performance:
