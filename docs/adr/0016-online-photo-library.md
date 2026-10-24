@@ -142,6 +142,15 @@ every device. That's far beyond what sync can hold:
   couldn't delete the online copy instead of saying it's done.
   `packages/sync` gains a `linked` option for this: data an app keeps
   online beside its copy, deleted and moved with it.
+  A photo still on its way up while its library is deleted isn't added to
+  the new one: its file is deleted instead (audit finding B-7).
+- **Files left outside the list.** A photo's file reaches R2 before the
+  list has it. If adding it to the list then fails (say the day's free
+  writes are used up), the file would stay in R2 for good, counted nowhere.
+  So once a week, a library with files deletes those in R2 that its list
+  doesn't have, if they're over a day old (newer ones may still be on their
+  way in). It starts with the first upload, so a library nobody uploads to
+  is never woken. Audit finding B-7.
 
 ## Consequences
 
