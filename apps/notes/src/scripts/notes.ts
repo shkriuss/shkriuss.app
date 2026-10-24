@@ -42,6 +42,7 @@ import {
   type Note,
   type NotesState,
 } from '../lib/notes.ts';
+import { required } from '@shkriuss/ui/dom';
 
 const store = createStore<NotesState>({
   key: 'notes',
@@ -57,12 +58,6 @@ const SAVE_DELAY_MS = 400;
 const ANNOUNCE_DELAY_MS = 700;
 
 const noteIdOf = (hash: string): string | null => /^#note=([\w-]{1,64})$/.exec(hash)?.[1] ?? null;
-
-function required<T extends Element>(root: ParentNode, selector: string): T {
-  const element = root.querySelector<T>(selector);
-  if (!element) throw new Error(`Notes: missing element ${selector}`);
-  return element;
-}
 
 export function mountNotes(root: Document): void {
   const listView = required<HTMLElement>(root, '[data-view="list"]');

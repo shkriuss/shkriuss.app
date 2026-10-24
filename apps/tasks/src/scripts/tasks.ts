@@ -9,6 +9,9 @@
  * tasks are moved by dragging their handle (or Move up / Move down, or the
  * arrow keys on the handle); the order is the order of the saved tasks.
  * When sync is on, the newest change to each task and list wins.
+ *
+ * The steps in the task form are in step-edits.ts; adding, renaming and
+ * deleting lists, in list-editor.ts; reminders, in reminders.ts.
  */
 import { today as todayOf } from '@shkriuss/dates';
 import { createStore } from '@shkriuss/storage';
@@ -18,15 +21,10 @@ import { clearProblem, focusProblem, reportSave, showProblem } from '@shkriuss/u
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { site } from 'virtual:shkriuss/site';
 import {
-  addList,
   emptyLists,
   isListsState,
   listName,
-  listProblem,
   LISTS_VERSION,
-  MAX_LISTS,
-  removeList,
-  renameList,
   sortedLists,
   type List,
   type ListsState,
@@ -45,11 +43,9 @@ import {
   isTasksState,
   isViewSettings,
   matchesSearch,
-  MAX_STEPS,
   MAX_TASKS,
   migrateTasks,
   moveTask,
-  moveTasks,
   newTask,
   NO_LIST,
   openGroups,
@@ -72,7 +68,6 @@ import {
   WHEN_LABELS,
   whenOf,
   type DraftField,
-  type Step,
   type Task,
   type TaskDraft,
   type TasksState,
@@ -80,7 +75,10 @@ import {
   type ViewSettings,
   type When,
 } from '../lib/tasks.ts';
+import { mountListEditor } from './list-editor.ts';
 import { mountReminders } from './reminders.ts';
+import { mountStepEdits } from './step-edits.ts';
+import { required, showFieldProblems } from '@shkriuss/ui/dom';
 
 const tasksStore = createStore<TasksState>({
   key: 'tasks',
@@ -107,8 +105,6 @@ const viewStore = createStore<ViewSettings>({
 
 /** Form fields with a place for a problem, in the order they appear. */
 const FIELD_ORDER: DraftField[] = ['title', 'date', 'time', 'every'];
-/** When deleting a list: its tasks go too. */
-const DELETE_TASKS = 'delete';
 /** How often to look for a new day (the groups change at midnight). */
 const NEW_DAY_CHECK_MS = 60_000;
 /** A handle has to move this far (px) before it counts as dragging, not a tap. */
@@ -118,12 +114,6 @@ const SCROLL_EDGE_PX = 64;
 const SCROLL_STEP_PX = 16;
 /** Search results are read out this long after the last key press. */
 const ANNOUNCE_DELAY_MS = 700;
-
-function required<T extends Element>(root: ParentNode, selector: string): T {
-  const element = root.querySelector<T>(selector);
-  if (!element) throw new Error(`Tasks: missing element ${selector}`);
-  return element;
-}
 
 const keyOf = (view: View): string => (typeof view === 'string' ? view : `list:${view.list}`);
 const viewOf = (key: string): View =>
@@ -147,7 +137,6 @@ export function mountTasks(root: Document): void {
   const taskTemplate = required<HTMLTemplateElement>(root, '[data-task-template]');
   const viewTemplate = required<HTMLTemplateElement>(root, '[data-view-template]');
   const stepTemplate = required<HTMLTemplateElement>(root, '[data-step-template]');
-  const stepEditTemplate = required<HTMLTemplateElement>(root, '[data-step-edit-template]');
   const announcer = required<HTMLElement>(root, '[data-announcer]');
   const searchInput = required<HTMLInputElement>(root, '[data-search]');
   const orderSelect = required<HTMLSelectElement>(root, '[data-order]');
@@ -159,23 +148,9 @@ export function mountTasks(root: Document): void {
   const listField = required<HTMLElement>(form, '[data-list-field]');
   const everyField = required<HTMLElement>(form, '[data-every-field]');
   const everyUnitText = required<HTMLElement>(form, '[data-every-unit]');
-  const stepEditList = required<HTMLUListElement>(form, '[data-step-edit-list]');
-  const newStep = required<HTMLInputElement>(form, '[data-new-step]');
-  const stepError = required<HTMLElement>(form, '[data-step-error]');
   const deleteDialog = required<HTMLDialogElement>(root, '[data-delete-dialog]');
   const deleteName = required<HTMLElement>(deleteDialog, '[data-delete-name]');
 
-  const listEditor = required<HTMLDialogElement>(root, '[data-list-dialog]');
-  const listForm = required<HTMLFormElement>(listEditor, '[data-list-form]');
-  const listTitle = required<HTMLElement>(listEditor, '[data-list-title]');
-  const listInput = required<HTMLInputElement>(listForm, '[data-list-name-input]');
-  const listError = required<HTMLElement>(listForm, '[data-list-error]');
-  const deleteListButton = required<HTMLButtonElement>(listEditor, '[data-action="delete-list"]');
-  const listDeleteDialog = required<HTMLDialogElement>(root, '[data-list-delete-dialog]');
-  const listDeleteName = required<HTMLElement>(listDeleteDialog, '[data-list-delete-name]');
-  const listTasksField = required<HTMLElement>(listDeleteDialog, '[data-list-tasks-field]');
-  const listTasksCount = required<HTMLElement>(listDeleteDialog, '[data-list-tasks-count]');
-  const listTasks = required<HTMLSelectElement>(listDeleteDialog, '[data-list-tasks]');
   const clearDialog = required<HTMLDialogElement>(root, '[data-clear-dialog]');
   const clearText = required<HTMLElement>(clearDialog, '[data-clear-text]');
 
@@ -208,14 +183,8 @@ export function mountTasks(root: Document): void {
   let editingId: string | null = null;
   let opener: HTMLElement | null = null;
   let savedId: string | null = null;
-  /** The steps in the task's form, as they're being changed (saved with "Save"). */
-  let draftSteps: Step[] = [];
   /** Tasks whose steps are folded out in the list. */
   const openSteps = new Set<string>();
-  /** The same for the list form (null: a new list). */
-  let editingListId: string | null = null;
-  let listOpener: HTMLElement | null = null;
-  let savedListId: string | null = null;
 
   const announce = (text: string): void => {
     announcer.textContent = text;
@@ -798,7 +767,7 @@ export function mountTasks(root: Document): void {
     return {
       title: value('title'),
       notes: value('notes'),
-      steps: draftSteps.map((step) => ({ ...step })),
+      steps: stepEdits.steps(),
       list: value('list'),
       important: field<HTMLInputElement>('important').checked,
       date: value('date'),
@@ -812,10 +781,7 @@ export function mountTasks(root: Document): void {
   function fillForm(draft: TaskDraft): void {
     for (const name of textFields) field<HTMLInputElement>(name).value = draft[name];
     field<HTMLTextAreaElement>('notes').value = draft.notes;
-    draftSteps = draft.steps.map((step) => ({ ...step }));
-    newStep.value = '';
-    stepError.textContent = '';
-    renderStepEdits();
+    stepEdits.fill(draft.steps);
     field<HTMLSelectElement>('repeat').value = draft.repeat;
     field<HTMLInputElement>('every').value = draft.every;
     showEvery();
@@ -843,110 +809,14 @@ export function mountTasks(root: Document): void {
   field<HTMLSelectElement>('repeat').addEventListener('change', showEvery);
   field<HTMLInputElement>('every').addEventListener('input', showEvery);
 
-  // ---------- Steps in the form ----------
+  const stepEdits = mountStepEdits(root, form, announce);
 
-  function renderStepEdits(): void {
-    stepEditList.replaceChildren(
-      ...draftSteps.map((step, index) => {
-        const fragment = stepEditTemplate.content.cloneNode(true) as DocumentFragment;
-        const item = required<HTMLLIElement>(fragment, 'li');
-        item.dataset['stepId'] = step.id;
-        const number = index + 1;
-        required<HTMLInputElement>(item, '[data-step-done]').checked = step.done;
-        required<HTMLElement>(item, '[data-step-done-label]').textContent = `Step ${number} done`;
-        const title = required<HTMLInputElement>(item, '[data-step-title]');
-        title.value = step.title;
-        title.setAttribute('aria-label', `Step ${number}`);
-        required<HTMLElement>(item, '[data-action="remove-step"]').setAttribute(
-          'aria-label',
-          `Remove step ${number}`,
-        );
-        return item;
-      }),
-    );
-  }
-
-  const stepOf = (element: Element): Step | undefined => {
-    const id = element.closest<HTMLElement>('[data-step-id]')?.dataset['stepId'];
-    return draftSteps.find((step) => step.id === id);
-  };
-
-  function addStep(): void {
-    const title = newStep.value.trim();
-    let problem: string | null = null;
-    if (title === '') problem = 'Write the step first.';
-    else if (draftSteps.length >= MAX_STEPS) problem = `A task can have up to ${MAX_STEPS} steps.`;
-    stepError.textContent = problem ?? '';
-    if (problem) {
-      newStep.setAttribute('aria-invalid', 'true');
-      focusProblem(newStep, problem);
-      return;
-    }
-    newStep.removeAttribute('aria-invalid');
-    draftSteps.push({ id: crypto.randomUUID(), title, done: false });
-    renderStepEdits();
-    newStep.value = '';
-    newStep.focus();
-    announce(`Added step ${title}.`);
-  }
-
-  required<HTMLButtonElement>(form, '[data-action="add-step"]').addEventListener('click', addStep);
-
-  // Enter in a step adds it, or moves on to the next one, instead of saving the whole task.
-  form.addEventListener('keydown', (event) => {
-    const target = event.target as HTMLElement;
-    if (event.key !== 'Enter' || event.isComposing) return;
-    if (target === newStep) {
-      event.preventDefault();
-      addStep();
-    } else if (target.matches('[data-step-title]')) {
-      event.preventDefault();
-      newStep.focus();
-    }
-  });
-
-  stepEditList.addEventListener('input', (event) => {
-    const target = event.target as HTMLInputElement;
-    const step = stepOf(target);
-    if (step && target.matches('[data-step-title]')) step.title = target.value;
-  });
-
-  stepEditList.addEventListener('change', (event) => {
-    const target = event.target as HTMLInputElement;
-    const step = stepOf(target);
-    if (step && target.matches('[data-step-done]')) step.done = target.checked;
-  });
-
-  stepEditList.addEventListener('click', (event) => {
-    const remove = (event.target as Element).closest('[data-action="remove-step"]');
-    const step = remove ? stepOf(remove) : undefined;
-    if (!step) return;
-    const index = draftSteps.indexOf(step);
-    draftSteps.splice(index, 1);
-    renderStepEdits();
-    // Focus moves to the step that took its place, or the one before, or "New step".
-    const titles = stepEditList.querySelectorAll<HTMLElement>('[data-step-title]');
-    (titles[index] ?? titles[index - 1] ?? newStep).focus();
-    announce(`Removed step ${step.title || index + 1}.`);
-  });
-
-  newStep.addEventListener('input', () => {
-    if (newStep.value.trim() === '') return;
-    stepError.textContent = '';
-    newStep.removeAttribute('aria-invalid');
-  });
-
-  /** Shows each problem next to its field. With `onlyClear`, only removes fixed ones. */
-  function showProblems(problems: Partial<Record<DraftField, string>>, onlyClear = false): void {
-    for (const name of [...FIELD_ORDER, 'form'] as DraftField[]) {
-      const text = problems[name] ?? '';
-      if (onlyClear && text) continue;
-      required<HTMLElement>(form, `[data-error-for="${name}"]`).textContent = text;
-      const input = form.querySelector<HTMLElement>(`[name="${name}"]`);
-      if (text) input?.setAttribute('aria-invalid', 'true');
-      else input?.removeAttribute('aria-invalid');
-    }
-  }
+  /** Shows each problem next to its field; focuses the first. Returns true if there are any. */
+  const showProblems = (problems: Partial<Record<DraftField, string>>, onlyClear = false) =>
+    showFieldProblems(form, [...FIELD_ORDER, 'form'], problems, {
+      onlyClear,
+      focusFirst: !onlyClear,
+    });
 
   function openEditor(task: Task): void {
     editingId = task.id;
@@ -975,12 +845,7 @@ export function mountTasks(root: Document): void {
     if (editingId === null) return;
     const draft = readDraft();
     const problems = draftProblems(draft);
-    showProblems(problems);
-    const first = FIELD_ORDER.find((name) => problems[name]);
-    if (first) {
-      focusProblem(form.querySelector<HTMLElement>(`[name="${first}"]`), problems[first]);
-      return;
-    }
+    if (showProblems(problems)) return;
     const task = taskFromDraft(draft, editingId, Date.now(), find(editingId));
     reveal = task.id;
     if (saveTasks(updateTask(tasks, task))) {
@@ -1019,123 +884,18 @@ export function mountTasks(root: Document): void {
 
   // ---------- Lists ----------
 
-  function showListProblem(text: string | null): void {
-    listError.textContent = text ?? '';
-    if (text) listInput.setAttribute('aria-invalid', 'true');
-    else listInput.removeAttribute('aria-invalid');
-  }
-
-  function openListEditor(list: List | null): void {
-    editingListId = list?.id ?? null;
-    listOpener = root.activeElement instanceof HTMLElement ? root.activeElement : null;
-    showListProblem(null);
-    listTitle.textContent = list ? 'Edit list' : 'New list';
-    deleteListButton.hidden = list === null;
-    listInput.value = list?.name ?? '';
-    listEditor.showModal();
-    listInput.focus();
-  }
-
-  listEditor.addEventListener('close', () => {
-    const saved = savedListId
-      ? viewList.querySelector<HTMLElement>(`[data-view="${CSS.escape(`list:${savedListId}`)}"]`)
-      : null;
-    (saved ?? (listOpener?.isConnected ? listOpener : viewHeading)).focus();
-    savedListId = null;
-    listOpener = null;
-  });
-
-  required<HTMLButtonElement>(root, '[data-action="add-list"]').addEventListener('click', () => {
-    if (lists.lists.length >= MAX_LISTS) {
-      say(`You have ${MAX_LISTS} lists, the most Tasks can keep. Delete one to add another.`);
-      return;
-    }
-    openListEditor(null);
-  });
-
-  editListButton.addEventListener('click', () => {
-    if (typeof view === 'string') return;
-    const id = view.list;
-    const list = lists.lists.find((entry) => entry.id === id);
-    if (list) openListEditor(list);
-  });
-
-  listInput.addEventListener('input', () => {
-    if (listInput.hasAttribute('aria-invalid')) {
-      showListProblem(listProblem(lists, listInput.value, editingListId));
-    }
-  });
-
-  listForm.addEventListener('submit', (event) => {
-    event.preventDefault();
-    const problem = listProblem(lists, listInput.value, editingListId);
-    showListProblem(problem);
-    if (problem) {
-      focusProblem(listInput, problem);
-      return;
-    }
-    const id = editingListId ?? crypto.randomUUID();
-    const added = editingListId === null;
-    // A new list is shown straight away, ready for its tasks.
-    if (added) view = { list: id };
-    const next = added
-      ? addList(lists, id, listInput.value)
-      : renameList(lists, id, listInput.value);
-    if (saveLists(next)) {
-      announce(added ? `Added list ${listName(next, id)}.` : `Saved list ${listName(next, id)}.`);
-    }
-    savedListId = id;
-    listEditor.close();
-  });
-
-  required<HTMLButtonElement>(listEditor, '[data-action="cancel-list"]').addEventListener(
-    'click',
-    () => {
-      listEditor.close();
+  mountListEditor(root, {
+    lists: () => lists,
+    tasks: () => tasks,
+    view: () => view,
+    setView(next) {
+      view = next;
     },
-  );
-
-  deleteListButton.addEventListener('click', () => {
-    const name = listName(lists, editingListId ?? '');
-    if (editingListId === null || name === '') return;
-    const id = editingListId;
-    const count = tasks.tasks.filter((task) => task.list === id).length;
-    listDeleteName.textContent = name;
-    // Its tasks can stay (without a list), move to another list, or go too.
-    listTasksField.hidden = count === 0;
-    listTasksCount.textContent = tasksCount(count);
-    listTasks.replaceChildren(
-      new Option('Keep them, without a list', NO_LIST),
-      ...sortedLists(lists)
-        .filter((list) => list.id !== id)
-        .map((list) => new Option(`Move them to ${list.name}`, list.id)),
-      new Option('Delete them too', DELETE_TASKS),
-    );
-    listTasks.value = NO_LIST;
-    listDeleteDialog.returnValue = '';
-    // Opens on top of the form; "Cancel" goes back to it.
-    listDeleteDialog.showModal();
-  });
-
-  listDeleteDialog.addEventListener('close', () => {
-    const id = editingListId;
-    const name = listName(lists, id ?? '');
-    if (listDeleteDialog.returnValue !== 'confirm' || id === null || name === '') return;
-    const choice = listTasks.value;
-    const inList = tasks.tasks.filter((task) => task.list === id);
-    let saved = true;
-    if (inList.length > 0) {
-      saved = saveTasks(
-        choice === DELETE_TASKS
-          ? removeTasks(tasks, new Set(inList.map((task) => task.id)))
-          : moveTasks(tasks, id, choice),
-      );
-    }
-    saved = saveLists(removeList(lists, id)) && saved;
-    if (saved) announce(`Deleted list ${name}.`);
-    editingListId = null;
-    listOpener = viewHeading;
-    listEditor.close();
+    saveLists,
+    saveTasks,
+    announce,
+    say,
+    viewHeading,
   });
 
   // ---------- Elsewhere ----------

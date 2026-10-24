@@ -65,6 +65,7 @@ import {
   type ItemDraft,
   type ShelfState,
 } from '../lib/items.ts';
+import { required, showFieldProblems } from '@shkriuss/ui/dom';
 
 const store = createStore<ShelfState>({
   key: 'shelf',
@@ -84,12 +85,6 @@ const categoriesStore = createStore<CategoriesState>({
 const ANNOUNCE_DELAY_MS = 700;
 /** Form fields with a place for a problem, in the order they appear. */
 const FIELD_ORDER: DraftField[] = ['name', 'price', 'link', 'bought'];
-
-function required<T extends Element>(root: ParentNode, selector: string): T {
-  const element = root.querySelector<T>(selector);
-  if (!element) throw new Error(`Shelf: missing element ${selector}`);
-  return element;
-}
 
 const oneOf = <T extends string>(value: string, options: readonly T[]): value is T =>
   (options as readonly string[]).includes(value);
@@ -400,17 +395,12 @@ export function mountShelf(root: Document): void {
     }
   }
 
-  /** Shows each problem next to its field. With `onlyClear`, only removes fixed ones. */
-  function showProblems(problems: Partial<Record<DraftField, string>>, onlyClear = false): void {
-    for (const name of [...FIELD_ORDER, 'form'] as DraftField[]) {
-      const text = problems[name] ?? '';
-      if (onlyClear && text) continue;
-      required<HTMLElement>(form, `[data-error-for="${name}"]`).textContent = text;
-      const control = form.querySelector<HTMLElement>(`[name="${name}"]`);
-      if (text) control?.setAttribute('aria-invalid', 'true');
-      else control?.removeAttribute('aria-invalid');
-    }
-  }
+  /** Shows each problem next to its field; focuses the first. Returns true if there are any. */
+  const showProblems = (problems: Partial<Record<DraftField, string>>, onlyClear = false) =>
+    showFieldProblems(form, [...FIELD_ORDER, 'form'], problems, {
+      onlyClear,
+      focusFirst: !onlyClear,
+    });
 
   function openEditor(item: Item | null): void {
     editingId = item?.id ?? null;
@@ -463,13 +453,7 @@ export function mountShelf(root: Document): void {
     if (editingId === null && state.items.length >= MAX_ITEMS) {
       problems.form = `You can keep up to ${itemsCount(MAX_ITEMS)}. Delete some to add more.`;
     }
-    showProblems(problems);
-    const first = FIELD_ORDER.find((name) => problems[name]);
-    if (first) {
-      focusProblem(form.querySelector<HTMLElement>(`[name="${first}"]`), problems[first]);
-      return;
-    }
-    if (problems.form) return;
+    if (showProblems(problems)) return;
 
     const now = Date.now();
     const existing = find(editingId);

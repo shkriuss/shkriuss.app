@@ -65,12 +65,19 @@ footer), `SyncControls` (sync with the account, for apps with `"sync": true`)
 and `PushControls` (notifications while closed, for apps with
 `"pushNotifications": true`).
 
-Script helpers, imported from TypeScript: `@shkriuss/ui/numbers`
-(`parseDecimal`, for amounts typed with a point or a comma),
+Script helpers, imported from TypeScript: `@shkriuss/ui/dom` (`required`,
+for an element the page must have, and `showFieldProblems`, which shows each
+of a form's problems next to its field, marks the field, and can focus the
+first), `@shkriuss/ui/numbers` (`parseDecimal`, for amounts typed with a
+point or a comma, and `formatMoney` with `CURRENCIES`),
 `@shkriuss/ui/locale` (`DATE_LOCALE`: format dates and times with it, so
 weekdays and months are in English like the rest of the page, even on a
 phone set to another language), `@shkriuss/ui/text` (`compareText`, for
-sorting lists alphabetically), `@shkriuss/ui/long-lists` (for lists that
+sorting lists alphabetically, and `foldText`, for comparing and searching
+without minding case, accents or extra spaces),
+`@shkriuss/ui/local-reminders` (notifications while the app is open, with
+the same texts and the same iPhone and "blocked" cases in every app),
+`@shkriuss/ui/long-lists` (for lists that
 can grow to thousands: `shownCount` draws `PAGE_SIZE` (100) at a time behind
 a "Show more" button, always keeping what has focus or was just saved, and
 `waitForTyping` draws a search once typing pauses, not at every key),

@@ -2,6 +2,7 @@
 // vehicle, the currency, and repairs saved before there were hours and costs.
 import type { Page } from '@playwright/test';
 import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
+import { readStore } from '../../../tests/e2e/storage.ts';
 import {
   addRepair,
   fillRepair,
@@ -145,8 +146,7 @@ test('keeps repairs saved before there were hours and costs', async ({ page }) =
   await item.getByRole('button').click();
   await fillRepair(page, { hours: '1.5' });
   await expect(item.locator('[data-hours]')).toHaveText('1.5 hours');
-  const saved = await page.evaluate(() => localStorage.getItem('shkriuss:repairs'));
-  expect(JSON.parse(saved ?? '{}')).toMatchObject({
+  expect(await readStore(page, 'repairs')).toMatchObject({
     v: 3,
     data: {
       repairs: [

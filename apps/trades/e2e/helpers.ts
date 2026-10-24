@@ -1,7 +1,8 @@
 // Shared by Trades' browser tests: the day it is, finding things on the
 // page, filling in the trade form, and saving trades straight into storage.
 import type { Page } from '@playwright/test';
-import type { Trade } from '../src/lib/trades.ts';
+import { seedStores } from '../../../tests/e2e/storage.ts';
+import { TRADES_VERSION, type Trade } from '../src/lib/trades.ts';
 
 /** Wednesday 21 October 2026, 10:00 in Tbilisi (the tests' time zone). */
 export const NOW = new Date('2026-10-21T10:00:00+04:00');
@@ -74,8 +75,5 @@ export const trade = (overrides: Partial<Trade>): Trade => ({
 
 /** Saves trades straight into storage, then reloads. */
 export async function seed(page: Page, trades: Trade[]): Promise<void> {
-  await page.evaluate((list) => {
-    localStorage.setItem('shkriuss:trades', JSON.stringify({ v: 1, data: { trades: list } }));
-  }, trades);
-  await page.reload();
+  await seedStores(page, { trades: { version: TRADES_VERSION, data: { trades } } });
 }

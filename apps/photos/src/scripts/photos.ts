@@ -36,12 +36,7 @@ import {
 } from './library.ts';
 import { startOnline } from './online.ts';
 import { processFile } from './process.ts';
-
-function required<T extends Element>(root: ParentNode, selector: string): T {
-  const element = root.querySelector<T>(selector);
-  if (!element) throw new Error(`Photos: missing element ${selector}`);
-  return element;
-}
+import { required } from '@shkriuss/ui/dom';
 
 /** Offers a file to save, under this name. */
 function saveFile(file: Blob, name: string): void {

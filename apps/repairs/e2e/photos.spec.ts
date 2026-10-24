@@ -3,6 +3,7 @@
 // removed, and deleted with their repair or with all data.
 import type { Page } from '@playwright/test';
 import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
+import { readStore } from '../../../tests/e2e/storage.ts';
 import {
   addPhotos,
   fillRepair,
@@ -31,7 +32,7 @@ const status = (page: Page, text: string) => page.getByRole('status').filter({ h
 test('adds photos to a repair, made smaller, and keeps them on the device', async ({ page }) => {
   // Counted before the app has made its files: counting mustn't get in its way.
   expect(await storedPhotos(page)).toBe(0);
-  const big = await picture(page);
+  const big = await picture(page, { width: 3000, height: 2000 });
   await page.getByRole('button', { name: 'New repair' }).click();
   const dialog = repairDialog(page);
   await dialog.getByLabel('Vehicle').fill('Bus 105');
@@ -79,7 +80,7 @@ test('adds photos to a repair, made smaller, and keeps them on the device', asyn
   // Another photo; the first removed. Saving deletes it from the device.
   await repairItems(page).first().locator('[data-action="edit-repair"]').click();
   await expect(formPhotos).toHaveCount(1);
-  await addPhotos(page, [jpeg('second.jpg', await picture(page, 800, 600))]);
+  await addPhotos(page, [jpeg('second.jpg', await picture(page, { width: 800, height: 600 }))]);
   await expect(formPhotos).toHaveCount(2);
   await dialog.getByRole('button', { name: 'Remove photo 1' }).click();
   await expect(formPhotos).toHaveCount(1);
@@ -105,7 +106,7 @@ test('adds photos to a repair, made smaller, and keeps them on the device', asyn
 });
 
 test('up to 10 photos, and moving between them', async ({ page }) => {
-  const small = await picture(page, 40, 30);
+  const small = await picture(page, { width: 40, height: 30 });
   await page.getByRole('button', { name: 'New repair' }).click();
   const dialog = repairDialog(page);
   await dialog.getByLabel('Vehicle').fill('Bus 7');
@@ -144,15 +145,12 @@ test('photos on another device, and deleting all data', async ({ page }) => {
   await expect(dialog.locator('[data-form-photos-elsewhere]')).toHaveText(
     '1 photo is on another device. It stays with this repair.',
   );
-  await addPhotos(page, [jpeg('here.jpg', await picture(page, 400, 300))]);
+  await addPhotos(page, [jpeg('here.jpg', await picture(page, { width: 400, height: 300 }))]);
   await fillRepair(page, { work: 'Checked again' });
   await expect(item.locator('[data-photos] img')).toHaveCount(1);
   await expect(item.locator('[data-photos-elsewhere]')).toHaveText('1 photo on another device');
-  const saved = await page.evaluate(() => localStorage.getItem('shkriuss:repairs'));
-  expect(
-    (JSON.parse(saved ?? '{}') as { data: { repairs: { photos: string[] }[] } }).data.repairs[0]
-      ?.photos,
-  ).toEqual(['taken-on-the-tablet', expect.any(String)]);
+  const saved = await readStore<{ repairs: { photos: string[] }[] }>(page, 'repairs');
+  expect(saved?.data.repairs[0]?.photos).toEqual(['taken-on-the-tablet', expect.any(String)]);
   expect(await storedPhotos(page)).toBe(1);
 
   // "Delete all data" deletes the photos too.

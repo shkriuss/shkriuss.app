@@ -7,7 +7,8 @@
  * without saving anything, so when it syncs it never brings back a category
  * you removed on another device, or undoes a rename.
  */
-import { byText, fold } from './items.ts';
+import { foldText } from '@shkriuss/ui/text';
+import { byText } from './items.ts';
 
 export interface Category {
   id: string;
@@ -89,9 +90,9 @@ export function categoryProblem(
   id: string | null,
 ): string | null {
   const categories = categoriesOf(state);
-  const wanted = fold(cutName(name));
+  const wanted = foldText(cutName(name));
   if (wanted === '') return 'Give it a name.';
-  const same = categories.find((entry) => entry.id !== id && fold(entry.name) === wanted);
+  const same = categories.find((entry) => entry.id !== id && foldText(entry.name) === wanted);
   if (same) return `You already have a category called “${same.name}”.`;
   if (id === null && categories.length >= MAX_CATEGORIES) {
     return `You can have up to ${MAX_CATEGORIES} categories. Delete one to add another.`;

@@ -6,11 +6,7 @@ import { parts, type IsoDate, type IsoTime } from '../lib/dates.ts';
 import type { CalendarState, Occurrence } from '../lib/events.ts';
 import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
-export function required<T extends Element>(root: ParentNode, selector: string): T {
-  const element = root.querySelector<T>(selector);
-  if (!element) throw new Error(`Calendar: missing element ${selector}`);
-  return element;
-}
+export { required } from '@shkriuss/ui/dom';
 
 // Dates are formatted as UTC midnight so the device's time zone can't shift them.
 export const utc = (date: IsoDate): Date => {

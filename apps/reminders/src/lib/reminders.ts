@@ -62,6 +62,9 @@ export interface RemindersState {
   reminders: Reminder[];
 }
 
+/** The reminders' data version. */
+export const REMINDERS_VERSION = 1;
+
 export const MAX_TEXT_LENGTH = 120;
 export const MAX_REMINDERS = 300;
 

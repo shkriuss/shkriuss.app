@@ -37,6 +37,7 @@ import {
 import checkerUrl from './checker.worker.ts?worker&url';
 import { mountDeepCheck } from './deep-check.ts';
 import { editText } from './edit-text.ts';
+import { required } from '@shkriuss/ui/dom';
 
 const store = createStore<GrammarState>({
   key: 'grammar',
@@ -53,12 +54,6 @@ const SAVE_DELAY_MS = 500;
 const LOADING = 'Loading the grammar checker…';
 const EMPTY = 'Type or paste your text above, and suggestions show here.';
 const FAILED = 'The grammar checker couldn’t start in this browser. Updating the browser may help.';
-
-function required<T extends Element>(root: ParentNode, selector: string): T {
-  const element = root.querySelector<T>(selector);
-  if (!element) throw new Error(`Grammar: missing element ${selector}`);
-  return element;
-}
 
 /** "“a”", or "the space" when the text is only spaces. */
 const named = (text: string): string => (text.trim() === '' ? 'the space' : `“${text}”`);

@@ -13,7 +13,7 @@
  * closed, and the rest, still open.
  */
 import { addDays, isIsoDate, type IsoDate } from '@shkriuss/dates';
-import { parseDecimal } from '@shkriuss/ui/numbers';
+import { CURRENCIES, formatMoney, parseDecimal, type Currency } from '@shkriuss/ui/numbers';
 import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
 export type Side = 'long' | 'short';
@@ -43,6 +43,9 @@ export interface Trade {
 export interface TradesState {
   trades: Trade[];
 }
+
+/** The trades' data version. */
+export const TRADES_VERSION = 1;
 
 export const LIMITS = {
   symbol: 20,
@@ -539,21 +542,8 @@ export function setupNames(state: TradesState): string[] {
 
 // ---------- Money and numbers for people ----------
 
-export const CURRENCIES = ['USD', 'EUR', 'GBP', 'GEL', 'CHF', 'JPY', 'CAD', 'AUD'] as const;
-export type Currency = (typeof CURRENCIES)[number];
-
-/** "$1,234.50"; with `signed`, "+$480.00" or "-$120.00". */
-export function formatMoney(
-  amount: number,
-  currency: Currency,
-  options: { signed?: boolean; locale?: string } = {},
-): string {
-  return new Intl.NumberFormat(options.locale, {
-    style: 'currency',
-    currency,
-    signDisplay: options.signed ? 'exceptZero' : 'auto',
-  }).format(amount);
-}
+// The currencies and formatMoney are shared with Budget and Repairs.
+export { CURRENCIES, formatMoney, type Currency };
 
 /**
  * A price or amount, with as many decimals as it has (up to 8). Below 1, up

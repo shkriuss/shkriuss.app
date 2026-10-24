@@ -1,7 +1,8 @@
 // Shared by Reminders' browser tests: the day it is, finding things on the
 // page, and saving reminders straight into storage.
 import type { Page } from '@playwright/test';
-import type { Reminder, Repeat } from '../src/lib/reminders.ts';
+import { seedStores } from '../../../tests/e2e/storage.ts';
+import { REMINDERS_VERSION, type Reminder, type Repeat } from '../src/lib/reminders.ts';
 
 /** Wednesday 21 October 2026, 10:00 in Tbilisi (the tests' time zone). */
 export const NOW = new Date('2026-10-21T10:00:00+04:00');
@@ -43,8 +44,5 @@ export const reminder = (
 
 /** Saves reminders straight into storage, then reloads. */
 export async function seed(page: Page, reminders: Reminder[]): Promise<void> {
-  await page.evaluate((list) => {
-    localStorage.setItem('shkriuss:reminders', JSON.stringify({ v: 1, data: { reminders: list } }));
-  }, reminders);
-  await page.reload();
+  await seedStores(page, { reminders: { version: REMINDERS_VERSION, data: { reminders } } });
 }

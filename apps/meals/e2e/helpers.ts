@@ -1,7 +1,15 @@
 // Shared by Meals' browser tests: the day it is, finding things on the page,
 // and saving meals and plans straight into storage.
 import type { Page } from '@playwright/test';
-import type { Meal, Planned, ShoppingItem } from '../src/lib/meals.ts';
+import { seedStores } from '../../../tests/e2e/storage.ts';
+import {
+  MEALS_VERSION,
+  PLAN_VERSION,
+  SHOPPING_VERSION,
+  type Meal,
+  type Planned,
+  type ShoppingItem,
+} from '../src/lib/meals.ts';
 
 /** Wednesday 21 October 2026, 10:00 in Tbilisi (the tests' time zone). */
 export const NOW = new Date('2026-10-21T10:00:00+04:00');
@@ -42,12 +50,15 @@ export async function newMeal(page: Page, name: string, ingredients: string[] = 
 /** Saves meals, a plan and shopping ticks straight into storage, then reloads. */
 export async function seed(
   page: Page,
-  data: { meals?: Meal[]; planned?: Planned[]; items?: ShoppingItem[] },
+  {
+    meals = [],
+    planned = [],
+    items = [],
+  }: { meals?: Meal[]; planned?: Planned[]; items?: ShoppingItem[] },
 ): Promise<void> {
-  await page.evaluate(({ meals = [], planned = [], items = [] }) => {
-    localStorage.setItem('shkriuss:meals', JSON.stringify({ v: 1, data: { meals } }));
-    localStorage.setItem('shkriuss:meal-plan', JSON.stringify({ v: 1, data: { planned } }));
-    localStorage.setItem('shkriuss:meal-shopping', JSON.stringify({ v: 2, data: { items } }));
-  }, data);
-  await page.reload();
+  await seedStores(page, {
+    meals: { version: MEALS_VERSION, data: { meals } },
+    'meal-plan': { version: PLAN_VERSION, data: { planned } },
+    'meal-shopping': { version: SHOPPING_VERSION, data: { items } },
+  });
 }

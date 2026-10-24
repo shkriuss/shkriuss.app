@@ -91,6 +91,7 @@ import {
   type Slot,
 } from '../lib/meals.ts';
 import { mountReminders } from './reminders.ts';
+import { required } from '@shkriuss/ui/dom';
 
 const mealsStore = createStore<MealsState>({
   key: 'meals',
@@ -124,12 +125,6 @@ const remindersStore = createStore<RemindersState>({
 
 /** How often to look for a new day (the "Today" mark moves at midnight). */
 const NEW_DAY_CHECK_MS = 60_000;
-
-function required<T extends Element>(root: ParentNode, selector: string): T {
-  const element = root.querySelector<T>(selector);
-  if (!element) throw new Error(`Meals: missing element ${selector}`);
-  return element;
-}
 
 export function mountMeals(root: Document): void {
   const announcer = required<HTMLElement>(root, '[data-announcer]');

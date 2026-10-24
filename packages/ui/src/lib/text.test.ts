@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compareText } from './text.ts';
+import { compareText, foldText } from './text.ts';
 
 describe('compareText', () => {
   it('sorts like localeCompare, ignoring case and accents, with numbers in order', () => {
@@ -11,5 +11,14 @@ describe('compareText', () => {
     );
     expect(compareText('Café', 'cafe')).toBe(0);
     expect(compareText('Bus 2', 'Bus 10')).toBeLessThan(0);
+  });
+});
+
+describe('foldText', () => {
+  it('drops case, accents and extra spaces', () => {
+    expect(foldText('  Café  au   Lait ')).toBe('cafe au lait');
+    expect(foldText('Crème\tbrûlée\n')).toBe('creme brulee');
+    expect(foldText('ÇAĞRI')).toBe(foldText('çağri'));
+    expect(foldText('')).toBe('');
   });
 });

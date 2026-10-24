@@ -34,12 +34,14 @@ import {
   type Problems,
   type RemindersState,
   type Repeat,
+  REMINDERS_VERSION,
 } from '../lib/reminders.ts';
 import { mountNotify } from './notify.ts';
+import { required } from '@shkriuss/ui/dom';
 
 const store = createStore<RemindersState>({
   key: 'reminders',
-  version: 1,
+  version: REMINDERS_VERSION,
   fallback: emptyReminders,
   validate: isRemindersState,
 });
@@ -52,12 +54,6 @@ const GROUPS = [
   ['tomorrow', 'Tomorrow'],
   ['later', 'Later'],
 ] as const;
-
-function required<T extends Element>(root: ParentNode, selector: string): T {
-  const element = root.querySelector<T>(selector);
-  if (!element) throw new Error(`Reminders: missing element ${selector}`);
-  return element;
-}
 
 /** A form with text, date, time and repeat fields (adding, and changing). */
 function formFields(form: HTMLFormElement) {

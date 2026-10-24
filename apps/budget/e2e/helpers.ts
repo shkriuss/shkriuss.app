@@ -1,7 +1,13 @@
 // Shared by Budget's browser tests: the day it is, finding things on the
 // page, filling in the forms, and saving a budget straight into storage.
 import type { Page } from '@playwright/test';
-import { ENTRIES_VERSION, type Category, type Entry } from '../src/lib/budget.ts';
+import { seedStores } from '../../../tests/e2e/storage.ts';
+import {
+  CATEGORIES_VERSION,
+  ENTRIES_VERSION,
+  type Category,
+  type Entry,
+} from '../src/lib/budget.ts';
 
 /** Wednesday 21 October 2026, 10:00 in Tbilisi (the tests' time zone). */
 export const NOW = new Date('2026-10-21T10:00:00+04:00');
@@ -84,17 +90,11 @@ export async function seed(
   page: Page,
   data: { categories?: Category[]; entries?: Entry[]; version?: number },
 ): Promise<void> {
-  await page.evaluate(
-    ({ categories = [], entries = [], version }) => {
-      localStorage.setItem(
-        'shkriuss:budget-categories',
-        JSON.stringify({ v: 1, data: { categories } }),
-      );
-      localStorage.setItem('shkriuss:budget', JSON.stringify({ v: version, data: { entries } }));
-    },
-    { version: ENTRIES_VERSION, ...data },
-  );
-  await page.reload();
+  const { categories = [], entries = [], version = ENTRIES_VERSION } = data;
+  await seedStores(page, {
+    'budget-categories': { version: CATEGORIES_VERSION, data: { categories } },
+    budget: { version, data: { entries } },
+  });
 }
 
 /** The entries' data version as saved, and how many there are. */

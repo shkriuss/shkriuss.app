@@ -7,7 +7,8 @@
  */
 import { isIsoDate, parts, type IsoDate } from '@shkriuss/dates';
 import { secondVersionName } from '@shkriuss/sync';
-import { compareText } from '@shkriuss/ui/text';
+import { compareText, foldText } from '@shkriuss/ui/text';
+import { formatMoney } from '@shkriuss/ui/numbers';
 import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
 /** An item's category when it has none. Categories themselves: ./categories.ts. */
@@ -258,10 +259,6 @@ export const secondVersion = (item: Item, id: string): Item => ({
 
 // ---------- Showing them ----------
 
-/** Text for comparing: lower case and without accents, so "cafe" finds "Café". */
-export const fold = (text: string): string =>
-  text.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase().trim();
-
 /** Alphabetical order, without minding case or accents ("item 2" before "item 10"). */
 export const byText = compareText;
 
@@ -300,8 +297,8 @@ export function visibleItems(
   categories: readonly { id: string }[],
 ): Item[] {
   const known = idsOf(categories);
-  const words = fold(filters.search).split(/\s+/).filter(Boolean);
-  const brand = filters.brand === null ? null : fold(filters.brand);
+  const words = foldText(filters.search).split(/\s+/).filter(Boolean);
+  const brand = filters.brand === null ? null : foldText(filters.brand);
   const sorters: Record<Sort, (a: Item, b: Item) => number> = {
     recent: (a, b) => b.updated - a.updated,
     name: (a, b) => byText(a.name, b.name),
@@ -321,8 +318,10 @@ export function visibleItems(
     .filter((item) => {
       if (filters.category !== 'all' && categoryOf(item, known) !== filters.category) return false;
       if (filters.opinion !== 'all' && item.opinion !== filters.opinion) return false;
-      if (brand !== null && fold(item.brand) !== brand) return false;
-      const text = fold([item.name, item.brand, item.shop, item.variant, item.notes].join('\n'));
+      if (brand !== null && foldText(item.brand) !== brand) return false;
+      const text = foldText(
+        [item.name, item.brand, item.shop, item.variant, item.notes].join('\n'),
+      );
       return words.every((word) => text.includes(word));
     })
     .sort((a, b) => sorters[filters.sort](a, b) || (a.id < b.id ? -1 : 1));
@@ -343,7 +342,7 @@ export function brandsOf(state: ShelfState): Brand[] {
   >();
   const newestFirst = [...state.items].sort((a, b) => b.updated - a.updated);
   for (const item of newestFirst) {
-    const key = fold(item.brand);
+    const key = foldText(item.brand);
     if (key === '') continue;
     const group = groups.get(key) ?? { spellings: new Map<string, number>(), items: 0, loved: 0 };
     const spelling = item.brand.trim();
@@ -388,7 +387,7 @@ export function lastCurrency(state: ShelfState): Currency {
 
 /** "GEL 12.50", "₾12.50"… in the person's own style. */
 export const formatPrice = (price: number, currency: Currency, locale?: string): string =>
-  new Intl.NumberFormat(locale, { style: 'currency', currency }).format(price);
+  formatMoney(price, currency, { locale });
 
 /** "12 Oct 2026". */
 export function formatDate(date: IsoDate, locale = DATE_LOCALE): string {

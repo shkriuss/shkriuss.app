@@ -34,6 +34,7 @@ import {
 import { contextOf } from '../lib/grammar.ts';
 import { sentencesOf, type Sentence } from '../lib/sentences.ts';
 import deepCheckUrl from './deep-check.worker.ts?worker&url';
+import { required } from '@shkriuss/ui/dom';
 
 /** Where the downloaded manifest is saved: a name the site never serves, so it's never mixed up with the current one. */
 const SAVED_MANIFEST = `${DEEP_CHECK_PATH}saved-manifest.json`;
@@ -59,12 +60,6 @@ interface Found extends Change {
 }
 
 type Phase = 'unsupported' | 'absent' | 'downloading' | 'ready';
-
-function required<T extends Element>(root: ParentNode, selector: string): T {
-  const element = root.querySelector<T>(selector);
-  if (!element) throw new Error(`Deep check: missing element ${selector}`);
-  return element;
-}
 
 const supported = (): boolean =>
   typeof caches !== 'undefined' &&

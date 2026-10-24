@@ -27,9 +27,9 @@ anyone is listed here without its details until it's fixed (see
 | -------- | ----- | ----- | ------------ | ------------ | ----------- | ----- | --------------------- |
 | High     | 14    | 14    | –            | –            | –           | –     | –                     |
 | Medium   | 34    | 34    | –            | –            | –           | –     | –                     |
-| Low      | 90    | 86    | 1            | –            | –           | 1     | 2                     |
-| Info     | 24    | 17    | –            | –            | 1           | 1     | 5                     |
-| **All**  | 162   | 151   | 1            | –            | 1           | 2     | 7                     |
+| Low      | 90    | 88    | –            | –            | –           | –     | 2                     |
+| Info     | 24    | 18    | –            | –            | 1           | –     | 5                     |
+| **All**  | 162   | 154   | –            | –            | 1           | –     | 7                     |
 
 "Your setting" means a change in Cloudflare or GitHub that only the owner can
 make, listed in [deployment.md](../deployment.md). "Later" means a real but
@@ -52,14 +52,6 @@ approval, and pages that nothing rewrites.
   is hiding them, which also puts pull request previews behind a sign-in.
 - **Z-11:** the repository has no licence file, so anyone may read the code
   but not reuse it. The other choice is adding one, like MIT.
-
-## Planned for later
-
-Real, but small or rare, or a bigger change best done on its own. None of them can leak or lose anyone’s data.
-
-- **J-7** (Low) Three files of about 1,000 lines, each mostly one closure, are hard to change safely. _Later: split the three biggest files._
-- **J-8** (Low) Small helpers are copied between apps and have drifted, including a slow comparator and a misleading "Couldn't save". _Partly fixed (the comparator, and one wording for "Couldn’t save"); the rest later._
-- **J-16** (Info) Browser test helpers repeat storage formats and photo helpers by hand. _Later: shared test helpers._
 
 ## Every finding
 
@@ -254,26 +246,26 @@ Severity is the auditor’s: **High** could lose or leak data or cost money; **M
 
 ### J. Architecture and tests
 
-| ID   | Severity | What was wrong                                                                                                               | What happened                                                                      |
-| ---- | -------- | ---------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| J-1  | Medium   | Long lists are rebuilt in full on every change, which freezes Tasks (and likely Shelf and Notes) well below their own limits | Fixed                                                                              |
-| J-2  | Medium   | Every colour depends on CSS `light-dark()` with no fallback, and no browser baseline is written down or tested               | Fixed                                                                              |
-| J-3  | Medium   | Photos reloads, checks and re-sorts the whole library every time the window gets focus                                       | Fixed                                                                              |
-| J-4  | Medium   | The JS size budget doesn't count shared chunks, so two pages are over budget while `check:dist` passes                       | Fixed                                                                              |
-| J-5  | Medium   | Browser tests don't check the second device for errors, CSP violations or outside requests                                   | Fixed                                                                              |
-| J-6  | Low      | The "notifications while open" code is copied into six apps, and five of them never test the iPhone and blocked cases        | Fixed: @shkriuss/ui/local-reminders, one shared test                               |
-| J-7  | Low      | Three files of about 1,000 lines, each mostly one closure, are hard to change safely                                         | Later: split the three biggest files                                               |
-| J-8  | Low      | Small helpers are copied between apps and have drifted, including a slow comparator and a misleading "Couldn't save"         | Partly fixed (the comparator, and one wording for "Couldn’t save"); the rest later |
-| J-9  | Low      | Several docs no longer describe the system                                                                                   | Fixed                                                                              |
-| J-10 | Low      | The app template's test bypasses the shared browser checks                                                                   | Fixed                                                                              |
-| J-11 | Low      | Scheduled notification delivery (the push Durable Object's alarm) has no test                                                | Fixed                                                                              |
-| J-12 | Low      | The files database can't be upgraded safely, and a database without its table is never repaired                              | Fixed                                                                              |
-| J-13 | Low      | Local browser tests use fixed ports and reuse whatever server is already listening                                           | Fixed                                                                              |
-| J-14 | Info     | Browser tests always start all 15 servers, and CI time grows about a minute per app toward a 30-minute limit                 | Fixed: E2E_SITES starts only the sites asked for                                   |
-| J-15 | Info     | Storage that's synchronous and `localStorage`-only will be hard to grow, and app limits already exceed what fits             | Accepted: a full storage says so; more room only when an app needs it              |
-| J-16 | Info     | Browser test helpers repeat storage formats and photo helpers by hand                                                        | Later: shared test helpers                                                         |
-| J-17 | Info     | Flaky browser tests are retried in CI and never reported                                                                     | Explained: Playwright already lists flaky tests in each run’s summary              |
-| J-18 | Info     | The cache test for pages would pass for a page cached for a year                                                             | Fixed                                                                              |
+| ID   | Severity | What was wrong                                                                                                               | What happened                                                         |
+| ---- | -------- | ---------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| J-1  | Medium   | Long lists are rebuilt in full on every change, which freezes Tasks (and likely Shelf and Notes) well below their own limits | Fixed                                                                 |
+| J-2  | Medium   | Every colour depends on CSS `light-dark()` with no fallback, and no browser baseline is written down or tested               | Fixed                                                                 |
+| J-3  | Medium   | Photos reloads, checks and re-sorts the whole library every time the window gets focus                                       | Fixed                                                                 |
+| J-4  | Medium   | The JS size budget doesn't count shared chunks, so two pages are over budget while `check:dist` passes                       | Fixed                                                                 |
+| J-5  | Medium   | Browser tests don't check the second device for errors, CSP violations or outside requests                                   | Fixed                                                                 |
+| J-6  | Low      | The "notifications while open" code is copied into six apps, and five of them never test the iPhone and blocked cases        | Fixed: @shkriuss/ui/local-reminders, one shared test                  |
+| J-7  | Low      | Three files of about 1,000 lines, each mostly one closure, are hard to change safely                                         | Fixed: parts moved to files of their own                              |
+| J-8  | Low      | Small helpers are copied between apps and have drifted, including a slow comparator and a misleading "Couldn't save"         | Fixed: shared helpers in @shkriuss/ui                                 |
+| J-9  | Low      | Several docs no longer describe the system                                                                                   | Fixed                                                                 |
+| J-10 | Low      | The app template's test bypasses the shared browser checks                                                                   | Fixed                                                                 |
+| J-11 | Low      | Scheduled notification delivery (the push Durable Object's alarm) has no test                                                | Fixed                                                                 |
+| J-12 | Low      | The files database can't be upgraded safely, and a database without its table is never repaired                              | Fixed                                                                 |
+| J-13 | Low      | Local browser tests use fixed ports and reuse whatever server is already listening                                           | Fixed                                                                 |
+| J-14 | Info     | Browser tests always start all 15 servers, and CI time grows about a minute per app toward a 30-minute limit                 | Fixed: E2E_SITES starts only the sites asked for                      |
+| J-15 | Info     | Storage that's synchronous and `localStorage`-only will be hard to grow, and app limits already exceed what fits             | Accepted: a full storage says so; more room only when an app needs it |
+| J-16 | Info     | Browser test helpers repeat storage formats and photo helpers by hand                                                        | Fixed: tests/e2e/storage.ts and photos.ts                             |
+| J-17 | Info     | Flaky browser tests are retried in CI and never reported                                                                     | Explained: Playwright already lists flaky tests in each run’s summary |
+| J-18 | Info     | The cache test for pages would pass for a page cached for a year                                                             | Fixed                                                                 |
 
 ### Z. Anything else
 
