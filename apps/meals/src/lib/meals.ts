@@ -7,11 +7,14 @@
  * - the plan: what you'll eat on a day, at breakfast, lunch, dinner or as a
  *   snack. A planned meal is just a name: it uses the ingredients of your
  *   meal with the same name (capitals and accents don't matter), so a meal
- *   added later, or renamed, still matches;
+ *   added later, or renamed, still matches. Planned meals more than a year
+ *   old are let go, so the plan never fills up with old ones;
  * - shopping: what's ticked off on a week's shopping list, and what was
  *   added to it by hand. The list itself is made from that week's planned
- *   meals. A tick's id is made from the week and the ingredient, so ticking
- *   the same thing on two devices is the same tick, never a conflict;
+ *   meals. Each list is saved under the Monday in its week, whichever day
+ *   weeks start on where you are, so devices set to different languages
+ *   share it. A tick's id is made from that Monday and the ingredient, so
+ *   ticking the same thing on two devices is the same tick, never a conflict;
  * - reminders: for each meal of the day, a time to be told what's planned.
  */
 import {
@@ -38,6 +41,8 @@ export const MAX_PLANNED = 5000;
 export const MAX_SHOPPING = 2000;
 /** Shopping lists older than this many weeks are let go. */
 export const SHOPPING_WEEKS_KEPT = 8;
+/** Planned meals older than this many days (a year) are let go. */
+export const PLAN_DAYS_KEPT = 365;
 
 // ---------- Text ----------
 
@@ -85,6 +90,14 @@ const inWeek = (date: IsoDate, start: IsoDate): boolean => {
   const day = daysBetween(start, date);
   return day >= 0 && day < 7;
 };
+
+/**
+ * The day the shopping list of the week starting on `start` is saved under:
+ * the Monday in that week (`start` itself if it's a Monday, the next day if
+ * it's a Sunday, two days on if it's a Saturday). Devices whose weeks start
+ * on different days work out the same day, so they share the list.
+ */
+export const shoppingWeek = (start: IsoDate): IsoDate => addDays(start, (8 - weekday(start)) % 7);
 
 // ---------- Your meals ----------
 
@@ -327,21 +340,44 @@ export function renamePlanned(state: PlanState, from: string, to: string): PlanS
 
 /**
  * Copies what's planned in the week starting on `from` to the week starting
- * on `to`, on the same days of the week. Returns the new plan and how many
- * meals were copied.
+ * on `to`, on the same days of the week. Returns the new plan, how many
+ * meals were copied, and how many weren't because the plan was full.
  */
 export function copyWeek(
   state: PlanState,
   from: IsoDate,
   to: IsoDate,
   newId: () => string,
-): { state: PlanState; copied: number } {
+): { state: PlanState; copied: number; left: number } {
   const shift = daysBetween(from, to);
   const room = Math.max(0, MAX_PLANNED - state.planned.length);
-  const copies = plannedInWeek(state, from)
+  const week = plannedInWeek(state, from);
+  const copies = week
     .slice(0, room)
     .map((entry) => ({ ...entry, id: newId(), date: addDays(entry.date, shift) }));
-  return { state: { planned: [...state.planned, ...copies] }, copied: copies.length };
+  return {
+    state: { planned: [...state.planned, ...copies] },
+    copied: copies.length,
+    left: week.length - copies.length,
+  };
+}
+
+/**
+ * What to tell the person when the plan was too full to copy all of last
+ * week (`left` meals weren't copied), or null if it wasn't.
+ */
+export function copyProblem(copied: number, left: number): string | null {
+  if (left === 0) return null;
+  const most = `The plan holds ${MAX_PLANNED.toLocaleString('en')} meals at most`;
+  if (copied === 0) return `${most}, so nothing was copied. Remove some old ones first.`;
+  const of = `${copied.toLocaleString('en')} of last week’s ${plural(copied + left, 'meal')}`;
+  return `${most}, so only ${of} ${copied === 1 ? 'was' : 'were'} copied.`;
+}
+
+/** Lets go of planned meals from before `keepFrom`. The same object if none. */
+export function prunePlan(state: PlanState, keepFrom: IsoDate): PlanState {
+  const planned = state.planned.filter((entry) => compareDates(entry.date, keepFrom) >= 0);
+  return planned.length === state.planned.length ? state : { planned };
 }
 
 /** Names to suggest when planning: your meals, then other names planned before. */
@@ -367,7 +403,7 @@ export function suggestions(meals: MealsState, plan: PlanState): string[] {
 
 export interface ShoppingItem {
   id: string;
-  /** The first day of the week whose list it's on. */
+  /** The Monday in the week whose list it's on (shoppingWeek). */
   week: IsoDate;
   name: string;
   /** Added by hand (true), or a tick on an ingredient from the plan (false). */
@@ -379,7 +415,8 @@ export interface ShoppingState {
   items: ShoppingItem[];
 }
 
-export const SHOPPING_VERSION = 1;
+/** 2: lists are saved under their week's Monday (see migrateShopping). */
+export const SHOPPING_VERSION = 2;
 export const emptyShopping = (): ShoppingState => ({ items: [] });
 
 function isShoppingItem(value: unknown): value is ShoppingItem {
@@ -400,6 +437,24 @@ export const isShoppingState = (value: unknown): value is ShoppingState =>
   Array.isArray((value as ShoppingState).items) &&
   (value as ShoppingState).items.every(isShoppingItem);
 
+/**
+ * Turns shopping saved by an older version into today's shape (undefined if
+ * it can't). Version 1 saved each list under its week's first day on that
+ * device; now it's the Monday in that week. Ids stay as they were, so sync
+ * still matches each item with its copy on other devices.
+ */
+export function migrateShopping(old: unknown, version: number): ShoppingState | undefined {
+  if (version !== 1 || typeof old !== 'object' || old === null) return undefined;
+  const { items } = old as Record<string, unknown>;
+  if (!Array.isArray(items)) return undefined;
+  return {
+    items: items.map((item: unknown) => {
+      const week = (item as Partial<ShoppingItem> | null)?.week;
+      return isIsoDate(week) ? { ...(item as object), week: shoppingWeek(week) } : item;
+    }) as ShoppingItem[],
+  };
+}
+
 /** One line on a week's shopping list. */
 export interface ShoppingRow {
   /** The ingredient (folded), or the id of something added by hand. */
@@ -413,7 +468,18 @@ export interface ShoppingRow {
   done: boolean;
 }
 
+/** A tick's id: the list's Monday and the ingredient (folded). */
 const tickId = (week: IsoDate, key: string): string => `${week}:${key}`;
+
+/**
+ * The ingredient a tick is for. Ticks saved before lists went by their
+ * Monday keep the day they had then in their id, so it isn't compared.
+ */
+const tickKey = (item: ShoppingItem): string => item.id.slice(item.id.indexOf(':') + 1);
+
+/** Whether `item` is the tick for ingredient `key` on the list saved under `week`. */
+const isTick = (item: ShoppingItem, week: IsoDate, key: string): boolean =>
+  !item.extra && item.week === week && tickKey(item) === key;
 
 /**
  * The shopping list for the week starting on `week`: the ingredients of its
@@ -446,8 +512,9 @@ export function shoppingList(
     }
   }
   const list = [...rows.values()];
+  const saved = shoppingWeek(week);
   for (const item of shopping.items) {
-    if (item.week !== week) continue;
+    if (item.week !== saved) continue;
     if (item.extra) {
       list.push({
         key: item.id,
@@ -458,14 +525,14 @@ export function shoppingList(
         done: item.done,
       });
     } else {
-      const row = rows.get(item.id.slice(week.length + 1));
+      const row = rows.get(tickKey(item));
       if (row) row.done = item.done;
     }
   }
   return list.sort((a, b) => Number(a.done) - Number(b.done) || byText(a.name, b.name));
 }
 
-/** Ticks a line off the week's list, or puts it back. */
+/** Ticks a line off the list of the week starting on `week`, or puts it back. */
 export function setDone(
   shopping: ShoppingState,
   week: IsoDate,
@@ -477,9 +544,11 @@ export function setDone(
       items: shopping.items.map((item) => (item.id === row.key ? { ...item, done } : item)),
     };
   }
-  const id = tickId(week, row.key);
-  const items = shopping.items.filter((item) => item.id !== id);
-  if (done) items.push({ id, week, name: row.name, extra: false, done: true });
+  const saved = shoppingWeek(week);
+  const items = shopping.items.filter((item) => !isTick(item, saved, row.key));
+  if (done) {
+    items.push({ id: tickId(saved, row.key), week: saved, name: row.name, extra: false, done });
+  }
   return { items };
 }
 
@@ -493,20 +562,27 @@ export function extraProblem(shopping: ShoppingState, name: string): string | nu
   return null;
 }
 
+/** Adds something by hand to the list of the week starting on `week`. */
 export const addExtra = (
   shopping: ShoppingState,
   week: IsoDate,
   name: string,
   id: string,
 ): ShoppingState => ({
-  items: [...shopping.items, { id, week, name: tidy(name), extra: true, done: false }],
+  items: [
+    ...shopping.items,
+    { id, week: shoppingWeek(week), name: tidy(name), extra: true, done: false },
+  ],
 });
 
 export const removeExtra = (shopping: ShoppingState, id: string): ShoppingState => ({
   items: shopping.items.filter((item) => item.id !== id),
 });
 
-/** Lets go of lists from before `keepFrom` (a week's first day). The same object if none. */
+/**
+ * Lets go of the lists of weeks before the week starting on `keepFrom` (each
+ * list is saved under a day in its own week). The same object if none.
+ */
 export function pruneShopping(shopping: ShoppingState, keepFrom: IsoDate): ShoppingState {
   const items = shopping.items.filter((item) => compareDates(item.week, keepFrom) >= 0);
   return items.length === shopping.items.length ? shopping : { items };

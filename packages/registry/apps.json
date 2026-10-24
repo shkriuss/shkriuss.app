@@ -137,7 +137,7 @@
       "status": "live",
       "storage": "device",
       "dataStored": [
-        "Your meal plan: what you'll eat on which day",
+        "Your meal plan: what you'll eat on which day (kept for a year)",
         "Your meals: their names, ingredients and notes",
         "Your shopping lists: what you added and what you ticked off (kept for 8 weeks)",
         "Your reminder times for each meal of the day",

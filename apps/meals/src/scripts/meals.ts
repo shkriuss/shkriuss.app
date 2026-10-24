@@ -4,24 +4,26 @@
  *
  * The page shows one week at a time (from the day weeks start where you
  * are): each day with what's planned, then that week's shopping list, then
- * your meals. "Add a meal" on a day plans something; tapping a planned meal
- * changes or removes it. A planned meal with the name of one of your meals
- * puts that meal's ingredients on the shopping list. Reminders tell what's
- * planned at the time chosen for each meal of the day (./reminders.ts). When
- * sync is on, the newest change to each planned meal, shopping tick and
- * reminder time wins; a meal changed on two devices at once is kept in both
- * versions.
+ * your meals. The list is saved under the Monday in the week, so a device
+ * whose weeks start on another day shows the same ticks. "Add a meal" on a
+ * day plans something; tapping a planned meal changes or removes it. A
+ * planned meal with the name of one of your meals puts that meal's
+ * ingredients on the shopping list. Reminders tell what's planned at the
+ * time chosen for each meal of the day (./reminders.ts). When sync is on,
+ * the newest change to each planned meal, shopping tick and reminder time
+ * wins; a meal changed on two devices at once is kept in both versions.
  */
 import { addDays, firstDayOfWeek, today as todayOf, type IsoDate } from '@shkriuss/dates';
 import { createStore } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
-import { focusProblem, reportSave } from '@shkriuss/ui/problem';
+import { clearProblem, focusProblem, reportSave, showProblem } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { site } from 'virtual:shkriuss/site';
 import {
   addExtra,
   addMeal,
   addPlanned,
+  copyProblem,
   copyWeek,
   DEFAULT_REMINDER_TIMES,
   defaultSlot,
@@ -42,11 +44,14 @@ import {
   mealFromDraft,
   mealProblems,
   MEALS_VERSION,
+  migrateShopping,
+  PLAN_DAYS_KEPT,
   PLAN_VERSION,
   plannedFromDraft,
   plannedInWeek,
   plannedOn,
   planProblems,
+  prunePlan,
   pruneShopping,
   REMINDERS_VERSION,
   reminderTime,
@@ -106,6 +111,7 @@ const shoppingStore = createStore<ShoppingState>({
   version: SHOPPING_VERSION,
   fallback: emptyShopping,
   validate: isShoppingState,
+  migrate: migrateShopping,
 });
 
 /** When to be reminded of what's planned (synced between devices). */
@@ -194,6 +200,12 @@ export function mountMeals(root: Document): void {
   const announce = (text: string): void => {
     announcer.textContent = text;
   };
+  /** A message say() showed in the page's notice (read out too), taken away by the next plan save. */
+  let said: string | null = null;
+  const say = (text: string): void => {
+    showProblem(text);
+    said = text;
+  };
   /** Something on the page with this id (a planned meal or one of your meals). */
   const byId = (container: ParentNode, id: string, selector: string): HTMLElement | null =>
     container.querySelector<HTMLElement>(`[data-id="${CSS.escape(id)}"] ${selector}`);
@@ -216,6 +228,11 @@ export function mountMeals(root: Document): void {
     const saved = planStore.save(plan);
     sync.changed();
     reminderControls.changed();
+    // The plan changed, so a message that it was full may be out of date.
+    if (saved && said !== null) {
+      clearProblem(said);
+      said = null;
+    }
     return report ? reportSave(saved) : saved;
   }
 
@@ -592,13 +609,19 @@ export function mountMeals(root: Document): void {
         break;
       }
       case 'copy-week': {
-        const { state, copied } = copyWeek(plan, addDays(shown, -7), shown, () =>
+        const { state, copied, left } = copyWeek(plan, addDays(shown, -7), shown, () =>
           crypto.randomUUID(),
         );
-        const saved = savePlan(state);
+        // Nothing copied (the plan is full): nothing to save.
+        const saved = copied === 0 || savePlan(state);
         render();
-        if (saved) announce(`Copied ${copied} ${copied === 1 ? 'meal' : 'meals'} from last week.`);
-        weekHeading.focus();
+        // The button is gone once the week has meals.
+        if (copyWeekOffer.hidden) weekHeading.focus();
+        const problem = copyProblem(copied, left);
+        if (saved && problem) say(problem);
+        else if (saved) {
+          announce(`Copied ${copied} ${copied === 1 ? 'meal' : 'meals'} from last week.`);
+        }
         break;
       }
       case 'new-meal':
@@ -670,10 +693,12 @@ export function mountMeals(root: Document): void {
 
   // ---------- Keeping up ----------
 
-  /** Lets go of shopping lists from long ago. */
+  /** Lets go of shopping lists and planned meals from long ago. */
   function prune(): void {
     const pruned = pruneShopping(shopping, addDays(thisWeek, -7 * SHOPPING_WEEKS_KEPT));
     if (pruned !== shopping) saveShopping(pruned);
+    const trimmed = prunePlan(plan, addDays(today, -PLAN_DAYS_KEPT));
+    if (trimmed !== plan) savePlan(trimmed);
   }
 
   function reload(): void {

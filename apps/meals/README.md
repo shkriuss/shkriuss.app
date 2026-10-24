@@ -12,12 +12,16 @@ Plan your meals for the week, and what to buy for them. Lives at
     (breakfast, lunch, dinner or snack). A planned meal uses the
     ingredients of your meal with the same name (capitals and accents
     don't matter), so renaming a meal renames it in the plan too
-    (`renamePlanned`);
+    (`renamePlanned`). Planned meals more than a year old are let go
+    (`prunePlan`), so the plan (5,000 meals at most) doesn't fill up;
   - shopping (`shkriuss:meal-shopping`): what's ticked off on each week's
     list, and what was added to it by hand. The list itself is made from
     the week's planned meals (`shoppingList`): each ingredient once, with
-    how many meals need it. Weeks older than 8 are let go
-    (`pruneShopping`);
+    how many meals need it. Each list is saved under the Monday in its
+    week (`shoppingWeek`), so a phone whose weeks start on Monday and a
+    tablet whose weeks start on Sunday share it when they sync (version 1
+    used each device's own first day; `migrateShopping` moves it). Weeks
+    older than 8 are let go (`pruneShopping`);
   - reminders (`shkriuss:meal-reminders`): for each meal of the day, a time
     to be told what's planned ("Dinner: Lentil soup"), or off. Only the ones
     ever set are saved, so a new device has nothing that could win over
@@ -28,7 +32,10 @@ Plan your meals for the week, and what to buy for them. Lives at
   reminder only on days with something planned for that meal.
 - `src/scripts/meals.ts`: connects the page to those rules. It shows one
   week at a time, starting on the day weeks start where you are
-  (`firstDayOfWeek`). "Copy last week's meals" fills an empty week.
+  (`firstDayOfWeek`). "Copy last week's meals" fills an empty week (if
+  the plan is too full for all of it, the notice at the top says so).
+  Old shopping lists and planned meals are let go when Meals opens and
+  at each new day.
 - `src/pages/index.astro`: the page, built from `@shkriuss/ui` components.
   `<template>`s hold the markup for a day, a planned meal, a shopping line
   and a meal; the forms are dialogs.

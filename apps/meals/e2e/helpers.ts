@@ -47,7 +47,7 @@ export async function seed(
   await page.evaluate(({ meals = [], planned = [], items = [] }) => {
     localStorage.setItem('shkriuss:meals', JSON.stringify({ v: 1, data: { meals } }));
     localStorage.setItem('shkriuss:meal-plan', JSON.stringify({ v: 1, data: { planned } }));
-    localStorage.setItem('shkriuss:meal-shopping', JSON.stringify({ v: 1, data: { items } }));
+    localStorage.setItem('shkriuss:meal-shopping', JSON.stringify({ v: 2, data: { items } }));
   }, data);
   await page.reload();
 }
