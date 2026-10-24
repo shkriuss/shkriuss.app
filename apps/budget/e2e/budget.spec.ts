@@ -3,6 +3,7 @@
 import { readFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
 import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
+import { LIMITS } from '../src/lib/budget.ts';
 import {
   addCategory,
   addEntry,
@@ -14,9 +15,11 @@ import {
   entryItems,
   fillEntry,
   NOW,
+  savedEntries,
   seed,
   TIME_ZONE,
   total,
+  yearDialog,
 } from './helpers.ts';
 
 test.use({ timezoneId: TIME_ZONE });
@@ -26,7 +29,8 @@ test.beforeEach(async ({ page }) => {
   await page.goto('/');
 });
 
-const status = (page: Page, text: string) => page.getByRole('status').filter({ hasText: text });
+const status = (page: Page, text: string | RegExp) =>
+  page.getByRole('status').filter({ hasText: text });
 
 test('categories with monthly limits, and spending against them', async ({ page }) => {
   await expect(page.locator('[data-month-heading]')).toHaveText('October 2026');
@@ -175,12 +179,13 @@ test('the currency, and a spreadsheet of the entries', async ({ page }) => {
     categories: [{ id: 'g', name: 'Groceries', limit: null }],
     entries: [
       entry({ amount: 12.5, category: 'g', note: 'Milk, "fresh"' }),
-      entry({ kind: 'income', amount: 100, date: '2026-10-22', note: 'Refund' }),
+      entry({ kind: 'income', amount: 100, date: '2026-10-22', note: 'Gift' }),
+      entry({ kind: 'refund', amount: 2.5, category: 'g', date: '2026-10-23' }),
     ],
   });
   await page.getByLabel('Currency', { exact: true }).selectOption('GEL');
   await expect(status(page, 'Amounts are shown in GEL now.')).toBeAttached();
-  await expect(total(page, 'Spent')).toHaveText(/^GEL\s12\.50$/);
+  await expect(total(page, 'Spent')).toHaveText(/^GEL\s10\.00$/);
 
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Download as a spreadsheet (CSV)' }).click();
@@ -189,10 +194,139 @@ test('the currency, and a spreadsheet of the entries', async ({ page }) => {
   const text = await readFile((await file.path()) ?? '', 'utf8');
   expect(text.split('\r\n')).toEqual([
     'Date,Type,Amount,Category,Note',
-    '2026-10-22,Income,100,,Refund',
+    '2026-10-23,Refund,2.5,Groceries,',
+    '2026-10-22,Income,100,,Gift',
     '2026-10-21,Expense,-12.5,Groceries,"Milk, ""fresh"""',
     '',
   ]);
+});
+
+test('a refund comes off its category’s spending', async ({ page }) => {
+  // Saved by Budget before refunds (data version 1): still read.
+  await seed(page, {
+    version: 1,
+    categories: [{ id: 'g', name: 'Groceries', limit: 100 }],
+    entries: [entry({ amount: 120, category: 'g', date: '2026-10-02', note: 'Big shop' })],
+  });
+  await expect(categoryItem(page, 'Groceries')).toContainText('$20.00 over the $100.00 limit');
+
+  await page.getByRole('button', { name: 'Add expense' }).click();
+  const dialog = entryDialog(page);
+  await dialog.getByLabel('Refund', { exact: true }).check();
+  await expect(dialog.getByRole('heading', { name: 'Add refund' })).toBeVisible();
+  await expect(dialog.getByLabel('Category')).toBeVisible();
+  await expect(dialog.getByRole('group', { name: 'Type' })).toHaveAccessibleDescription(
+    'A refund is money back for something you bought: it comes off that category’s spending.',
+  );
+  await checkA11y(page, 'refund form');
+  await fillEntry(page, { amount: '30', category: 'Groceries', note: 'Returned the melon' });
+  await expect(status(page, 'Saved a $30.00 refund on Groceries.')).toBeAttached();
+
+  await expect(entryItems(page).first()).toHaveText(
+    /Refund · Groceries\s*Wed, Oct 21 · Returned the melon\s*\+\$30\.00/,
+  );
+  await expect(categoryItem(page, 'Groceries')).toContainText('$10.00 left of $100.00');
+  await expect(categoryItem(page, 'Groceries')).not.toHaveClass(/category--over/);
+  await expect(total(page, 'Spent')).toHaveText('$90.00');
+  await expect(total(page, 'Left')).toHaveText('-$90.00');
+  // Saved in the new version.
+  expect(await savedEntries(page)).toEqual({ version: 2, count: 2 });
+
+  // Changing it shows it's a refund, and deleting says so.
+  await entryItems(page).first().getByRole('button').click();
+  await expect(dialog.getByRole('heading', { name: 'Change entry' })).toBeVisible();
+  await expect(dialog.getByLabel('Refund', { exact: true })).toBeChecked();
+  await dialog.getByRole('button', { name: 'Delete' }).click();
+  await expect(page.getByRole('dialog', { name: 'Delete this entry?' })).toContainText(
+    '$30.00 refund (Groceries, Wed, Oct 21) will be removed.',
+  );
+});
+
+test('deletes a year, after saying what it deletes', async ({ page }) => {
+  await page.getByRole('button', { name: 'Delete a year…' }).click();
+  await expect(status(page, 'There are no entries to delete.')).toBeVisible();
+
+  await seed(page, {
+    entries: [
+      entry({ date: '2024-03-02' }),
+      entry({ date: '2024-12-31', kind: 'income' }),
+      entry({ date: '2025-06-01' }),
+      entry({ note: 'This month' }),
+    ],
+  });
+  const deleteYear = page.getByRole('button', { name: 'Delete a year…' });
+  await deleteYear.click();
+  const dialog = yearDialog(page);
+  const year = dialog.getByLabel('Year');
+  await expect(year).toBeFocused();
+  await expect(year.locator('option')).toHaveText([
+    '2024 (2 entries)',
+    '2025 (1 entry)',
+    '2026 (1 entry)',
+  ]);
+  // The oldest year to begin with.
+  await expect(year).toHaveValue('2024');
+  await expect(dialog.locator('[data-year-text]')).toHaveText(
+    'The 2 entries from 2024 will be deleted: expenses, income and refunds. With sync on, they’re deleted on your other devices too. This can’t be undone.',
+  );
+  await expect(dialog.getByRole('button', { name: 'Delete 2 entries' })).toBeVisible();
+  await checkA11y(page, 'delete a year');
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await checkA11y(page, 'delete a year (dark)');
+
+  // The spreadsheet first, from the dialog.
+  const download = page.waitForEvent('download');
+  await dialog.getByRole('button', { name: 'Download as a spreadsheet (CSV)' }).click();
+  expect((await download).suggestedFilename()).toBe('budget-2026-10-21.csv');
+  await expect(dialog.getByRole('status')).toHaveText('Downloaded your budget as a spreadsheet.');
+
+  await year.selectOption('2025');
+  await expect(dialog.getByRole('button', { name: 'Delete 1 entry' })).toBeVisible();
+  // Cancel deletes nothing.
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(dialog).toBeHidden();
+  expect((await savedEntries(page)).count).toBe(4);
+
+  await deleteYear.click();
+  await dialog.getByRole('button', { name: 'Delete 2 entries' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(status(page, 'Deleted 2 entries from 2024.')).toBeAttached();
+  await expect(deleteYear).toBeFocused();
+  expect((await savedEntries(page)).count).toBe(2);
+  await expect(entryItems(page)).toHaveText([/This month/]);
+  await deleteYear.click();
+  await expect(year.locator('option')).toHaveText(['2025 (1 entry)', '2026 (1 entry)']);
+});
+
+test('says when Budget is nearly full, and how to make room', async ({ page }) => {
+  // Just over 90% of the entries Budget keeps: one a day, back from 2026.
+  const count = LIMITS.entries * 0.9 + 1;
+  await page.evaluate((count) => {
+    const day = Date.UTC(2026, 9, 21);
+    const entries = Array.from({ length: count }, (_, index) => ({
+      id: `e${index}`,
+      kind: 'expense',
+      amount: 10,
+      date: new Date(day - index * 86_400_000).toISOString().slice(0, 10),
+      category: null,
+      note: '',
+    }));
+    localStorage.setItem('shkriuss:budget', JSON.stringify({ v: 2, data: { entries } }));
+  }, count);
+  await page.reload();
+  const note = page.locator('[data-room-note]');
+  await expect(note).toHaveText(
+    `Budget is nearly full: there’s room for ${LIMITS.entries - count} more entries (it keeps up to ${new Intl.NumberFormat('en-US').format(LIMITS.entries)}). To make room, download the spreadsheet, then use “Delete a year…” under Currency and spreadsheet, below.`,
+  );
+  await checkA11y(page, 'nearly full');
+
+  // Deleting the oldest year makes room.
+  await page.getByRole('button', { name: 'Delete a year…' }).click();
+  await yearDialog(page)
+    .getByRole('button', { name: /^Delete \d+ entr/ })
+    .click();
+  await expect(status(page, /^Deleted \d+ entries from \d{4}\.$/)).toBeAttached();
+  await expect(note).toBeHidden();
 });
 
 test('shows a note in Hebrew or Arabic the right way round', async ({ page }) => {

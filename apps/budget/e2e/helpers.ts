@@ -1,7 +1,7 @@
 // Shared by Budget's browser tests: the day it is, finding things on the
 // page, filling in the forms, and saving a budget straight into storage.
 import type { Page } from '@playwright/test';
-import type { Category, Entry } from '../src/lib/budget.ts';
+import { ENTRIES_VERSION, type Category, type Entry } from '../src/lib/budget.ts';
 
 /** Wednesday 21 October 2026, 10:00 in Tbilisi (the tests' time zone). */
 export const NOW = new Date('2026-10-21T10:00:00+04:00');
@@ -21,12 +21,13 @@ export const total = (page: Page, label: 'Spent' | 'Income' | 'Left') =>
     .locator('.total')
     .filter({ has: page.getByRole('term').getByText(label, { exact: true }) })
     .locator('dd');
+export const yearDialog = (page: Page) => page.getByRole('dialog', { name: 'Delete a year' });
 
-/** "Add expense" or "Add income", filled in and saved. */
+/** "Add expense" or "Add income" (a refund: "Add expense", then "Refund"), filled in and saved. */
 export async function addEntry(
   page: Page,
   fields: {
-    kind?: 'expense' | 'income';
+    kind?: 'expense' | 'income' | 'refund';
     amount: string;
     date?: string;
     category?: string;
@@ -36,6 +37,9 @@ export async function addEntry(
   await page
     .getByRole('button', { name: fields.kind === 'income' ? 'Add income' : 'Add expense' })
     .click();
+  if (fields.kind === 'refund') {
+    await entryDialog(page).getByLabel('Refund', { exact: true }).check();
+  }
   await fillEntry(page, fields);
 }
 
@@ -72,17 +76,33 @@ export const entry = (overrides: Partial<Entry>): Entry => ({
   ...overrides,
 });
 
-/** Saves categories and entries straight into storage, then reloads. */
+/**
+ * Saves categories and entries straight into storage, then reloads.
+ * `version`: the entries' data version (an older one, as an older Budget saved them).
+ */
 export async function seed(
   page: Page,
-  data: { categories?: Category[]; entries?: Entry[] },
+  data: { categories?: Category[]; entries?: Entry[]; version?: number },
 ): Promise<void> {
-  await page.evaluate(({ categories = [], entries = [] }) => {
-    localStorage.setItem(
-      'shkriuss:budget-categories',
-      JSON.stringify({ v: 1, data: { categories } }),
-    );
-    localStorage.setItem('shkriuss:budget', JSON.stringify({ v: 1, data: { entries } }));
-  }, data);
+  await page.evaluate(
+    ({ categories = [], entries = [], version }) => {
+      localStorage.setItem(
+        'shkriuss:budget-categories',
+        JSON.stringify({ v: 1, data: { categories } }),
+      );
+      localStorage.setItem('shkriuss:budget', JSON.stringify({ v: version, data: { entries } }));
+    },
+    { version: ENTRIES_VERSION, ...data },
+  );
   await page.reload();
 }
+
+/** The entries' data version as saved, and how many there are. */
+export const savedEntries = (page: Page) =>
+  page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem('shkriuss:budget') ?? 'null') as {
+      v: number;
+      data: { entries: unknown[] };
+    } | null;
+    return { version: saved?.v, count: saved?.data.entries.length };
+  });

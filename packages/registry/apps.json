@@ -209,7 +209,7 @@
       "status": "live",
       "storage": "device",
       "dataStored": [
-        "Your expenses and income: amounts, days, categories and notes",
+        "Your expenses, refunds and income: amounts, days, categories and notes",
         "Your categories and their monthly limits",
         "Which currency to show amounts in, and your monthly reminder settings",
         "If you turn on reminders while Budget is closed: this device's notification settings and a random device key (never in backups; after you turn it off, kept only until the server has deleted your reminders)",

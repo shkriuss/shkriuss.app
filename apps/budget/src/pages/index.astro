@@ -2,14 +2,17 @@
 /**
  * Budget: one month at a time. What was spent, earned and is left, each
  * category against its limit, and the month's entries; forms for an entry
- * and a category; the currency and a spreadsheet download; the monthly
- * reminder. Behaviour: ../scripts/budget.ts and ../scripts/reminders.ts.
+ * and a category; the currency, a spreadsheet download and "Delete a year";
+ * the monthly reminder. Behaviour: ../scripts/budget.ts and
+ * ../scripts/reminders.ts.
  */
 import { AppShell, Button, DataControls, Icon, PushControls, SyncControls } from '@shkriuss/ui';
 import {
   CURRENCIES,
   dayChoiceLabel,
   DEFAULT_REMINDER,
+  KIND_LABELS,
+  KINDS,
   LIMITS,
   REMINDER_DAYS,
 } from '../lib/budget.ts';
@@ -23,6 +26,9 @@ import {
         See where your money goes, month by month. Your budget is saved on this device.
       </p>
     </header>
+
+    <!-- Once Budget is nearly full: how much room is left, and how to make more. -->
+    <p class="notice" data-room-note hidden></p>
 
     <section class="stack" aria-labelledby="month-heading">
       <div class="stack stack--sm">
@@ -125,9 +131,12 @@ import {
           Shown with every amount. Amounts aren’t converted.
         </p>
       </div>
-      <div>
+      <div class="cluster">
         <Button icon="download" data-action="csv">
           Download as a spreadsheet (CSV)
+        </Button>
+        <Button icon="trash" aria-haspopup="dialog" data-action="delete-year">
+          Delete a year…
         </Button>
       </div>
       <p class="muted" role="status" data-csv-status></p>
@@ -236,18 +245,19 @@ import {
       <h2 id="entry-title" data-entry-title>
         Add expense
       </h2>
-      <fieldset class="stack stack--sm">
+      <fieldset class="stack stack--sm" aria-describedby="entry-kind-hint">
         <legend class="field__label">Type</legend>
         <div class="cluster kinds">
-          <label class="check">
-            <input type="radio" name="kind" value="expense" checked />
-            <span>Expense</span>
-          </label>
-          <label class="check">
-            <input type="radio" name="kind" value="income" />
-            <span>Income</span>
-          </label>
+          {KINDS.map((kind) => (
+            <label class="check">
+              <input type="radio" name="kind" value={kind} checked={kind === 'expense'} />
+              <span>{KIND_LABELS[kind]}</span>
+            </label>
+          ))}
         </div>
+        <p class="field__hint" id="entry-kind-hint">
+          A refund is money back for something you bought: it comes off that category’s spending.
+        </p>
       </fieldset>
       <div class="field-row">
         <div class="field">
@@ -381,6 +391,40 @@ import {
         </Button>
         <Button type="submit" variant="danger" value="confirm">
           Delete
+        </Button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- "Delete a year…": every entry of the year chosen, to make room. -->
+  <dialog class="dialog" aria-labelledby="year-title" data-year-dialog>
+    <form class="stack" data-year-form novalidate>
+      <h2 id="year-title">Delete a year</h2>
+      <div class="field">
+        <label class="field__label" for="year-select">
+          Year
+        </label>
+        <select
+          class="input"
+          id="year-select"
+          aria-describedby="year-text"
+          data-year-select
+        ></select>
+      </div>
+      <p id="year-text" aria-live="polite" data-year-text></p>
+      <p class="muted">
+        To keep a copy of them, download the spreadsheet first: it has every entry.
+      </p>
+      <div>
+        <Button icon="download" data-action="csv">
+          Download as a spreadsheet (CSV)
+        </Button>
+      </div>
+      <p class="muted" role="status" data-csv-status></p>
+      <div class="cluster">
+        <Button data-action="cancel">Cancel</Button>
+        <Button type="submit" variant="danger" icon="trash">
+          <span data-year-confirm>Delete</span>
         </Button>
       </div>
     </form>
