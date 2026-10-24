@@ -93,6 +93,22 @@ a quicker run while working on a few apps; CI always tests every site.
 - **Small, tested changes.** Pure logic goes in `src/lib/*.ts` with a Vitest
   test next to it; user flows get Playwright tests in `apps/<slug>/e2e/`.
   Import `test`/`expect` from `tests/e2e/fixtures.ts`.
+- **Ask "how could it break?" before building**, and test the answers, not
+  only what the change should do. The audit's serious findings came from
+  questions like these:
+  - two devices or tabs changing the same thing at once, or a device that
+    was offline for weeks;
+  - a server that's slow, unreachable, refuses, or answers with something
+    old or made up: data on the device must survive it;
+  - full or blocked storage, and iPhone limits (5 MB per site, where some
+    characters count twice);
+  - data saved by an older version, or a newer version on another device;
+  - a stranger calling the Worker: what can they make it store, or cost?
+  - time zones and clock changes; 320px wide with a screen reader.
+
+  The audit brief ([docs/audit/README.md](docs/audit/README.md)) has more,
+  area by area.
+
 - **Explain in plain language.** The owner is a beginner: PR descriptions and
   docs should say what changed and why, without jargon.
 
