@@ -20,11 +20,16 @@ pull requests, and zero or near-zero cost. Cloudflare now recommends Workers
   (`<slug>.shkriuss.app`; the hub uses the apex `shkriuss.app`), turns
   `workers_dev` off for production, and keeps preview URLs on.
 - Security headers come from a generated `_headers` file, which Cloudflare
-  applies to static assets (no Worker code needed).
+  applies to static assets (no Worker code needed). Answers from the servers
+  added later (`/api/*`) get their own set, `API_HEADERS` in
+  `packages/server/src/index.ts`.
 - **Production deploys** run `wrangler deploy` from GitHub Actions after all
   checks pass on `main`.
 - **Pull request previews** use Cloudflare **Worker Previews**
-  (`wrangler preview --name pr-<n>`) on `*.workers.dev`, deleted on close.
+  (`wrangler preview --name pr-<n>`) on `*.workers.dev`. They run only once
+  the owner approves them (the token is a secret of the `preview`
+  environment), never for forks or Dependabot. Previews of closed pull
+  requests are deleted by the next production deploy.
 - The API token is limited to _Workers Scripts: Edit_ and _Workers Routes:
   Edit_ on the `shkriuss.app` zone.
 

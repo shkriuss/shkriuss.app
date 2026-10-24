@@ -1,6 +1,8 @@
 # 0011. Grammar checking on the device (Harper, WebAssembly)
 
-Status: Accepted (2026-10-18)
+Status: Accepted (2026-10-18). Extended by [ADR 0012](0012-deep-check-ai-model.md):
+apps with `"webAssembly": true` may also create the `default` Trusted Types
+policy, for WebAssembly threads.
 
 ## Context
 

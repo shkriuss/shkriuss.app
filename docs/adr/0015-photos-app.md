@@ -1,8 +1,9 @@
 # 0015. The Photos app: original files on the device
 
 Status: Accepted (2026-10-21). Builds on [ADR 0013](0013-photos-on-the-device.md)
-(files on the device). Keeping the library online, in Cloudflare R2, comes
-next, in its own ADR.
+(files on the device). Extended by [ADR 0016](0016-online-photo-library.md):
+with sync on, the library is also online, in Cloudflare R2, and "Free up
+space" can leave only the thumbnail on a device.
 
 ## Context
 

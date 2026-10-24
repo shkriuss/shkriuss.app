@@ -14,14 +14,22 @@ is cross-site scripting (XSS) stealing local data.
 writes them to every site's `_headers` file:
 
 - `Content-Security-Policy`: `default-src 'none'` and only `'self'` for
-  scripts, styles, images, fonts, connections, the manifest and workers;
+  scripts, styles, images, fonts, connections, the manifest and workers
+  (images may also be `data:` and `blob:` addresses, which only the page
+  itself can make, for example photos shown from the device);
   `base-uri 'none'`, `frame-ancestors 'none'`, `form-action 'self'`, and
   **Trusted Types** (`require-trusted-types-for 'script'`) with two named
   policies: `shkriuss-sw`, used only to register `/sw.js`, and
   `shkriuss-worker`, used only to start workers from the site's own build
   files. Apps that run WebAssembly (`"webAssembly": true` in `apps.json`)
   also get `'wasm-unsafe-eval'` in `script-src`
-  ([ADR 0011](0011-on-device-grammar-checking.md)).
+  ([ADR 0011](0011-on-device-grammar-checking.md)), and the Trusted Types
+  policy `default`, which `allowThreadScripts()` uses to start WebAssembly
+  threads ([ADR 0012](0012-deep-check-ai-model.md)).
+- Answers from the servers (`/api/*`, ADRs 0009 and 0010) aren't static
+  files, so `_headers` doesn't reach them. They get a short set of their own:
+  `API_HEADERS` in `packages/server/src/index.ts` (no caching,
+  `default-src 'none'`, HSTS, `nosniff`, CORP, no referrer).
 - HSTS with preload, `nosniff`, `X-Frame-Options: DENY`,
   `Referrer-Policy: no-referrer`, a Permissions-Policy that turns off every
   powerful feature (apps opt in with `allowFeatures`), and COOP/CORP/COEP.

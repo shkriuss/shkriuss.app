@@ -227,10 +227,12 @@ describe('the service worker', () => {
       await worker.push({ title: 'Reminder', url });
       return worker.shown.at(-1)?.options.data.url;
     };
-    expect(await opens('/today/?a=1#b')).toBe('/today/?a=1#b');
+    expect(await opens('/today/?a=1#b')).toBe(`${ORIGIN}/today/?a=1#b`);
     expect(await opens('/\\example.com')).toBe('/');
     expect(await opens('//example.com/')).toBe('/');
     expect(await opens('https://example.com/')).toBe('/');
-    expect(await opens(undefined)).toBe('/');
+    expect(await opens(undefined)).toBe(`${ORIGIN}/`);
+    // Its path starts with "//", which on its own would mean another website.
+    expect(await opens('/.//example.com/x')).toBe(`${ORIGIN}//example.com/x`);
   });
 });

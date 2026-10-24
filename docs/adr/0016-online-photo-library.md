@@ -173,11 +173,13 @@ every device. That's far beyond what sync can hold:
   photo. Notes from before seals were added have none, so a device that
   hadn't caught up with one keeps that photo. Whoever controls the servers
   could still change the apps themselves.
-- **Free plan requests:** an upload is one Worker request and two Durable
-  Object requests; a screen of thumbnails is a few. A device checks for
-  changes about once a minute while open. 20,000 uploads a day stays well
-  inside the free 100,000; bigger imports take several days, or the Workers
-  paid plan ($5 a month) lifts the daily limits.
+- **Free plan requests:** an upload is one Worker request and four Durable
+  Object requests (the library twice, `LibraryGate` twice); a screen of
+  thumbnails is a few. A device checks for changes about once a minute while
+  open. A full day of 20,000 uploads would take about 80,000 of the free
+  plan's 100,000 daily Durable Object requests, which every app shares, and
+  most of its daily row writes. Bigger imports take several days, or the
+  Workers paid plan ($5 a month) lifts the daily limits.
 - **The list's size:** about 400 bytes per photo in the Durable Object
   (about 160 MB at 400,000 photos), well inside 1 GB.
 - **Uploads only while Photos is open.** Browsers don't upload in the

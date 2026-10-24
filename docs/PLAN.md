@@ -1,7 +1,7 @@
 # shkriuss.app: project plan
 
-_Last updated: 2026-10-16. Versions were checked against the npm registry and
-official docs on that date._
+_Last updated: 2026-10-24. Versions were checked against the npm registry and
+official docs on 2026-10-16._
 
 This is the plan for a hub at **shkriuss.app** that lists small personal web
 apps. Each app lives on its own subdomain, for example `tally.shkriuss.app`.
@@ -59,7 +59,7 @@ shkriuss.app/
 │   ├── library/             Photos' online library in R2 (ADR 0016)
 │   └── crypto/, dates/      Web Crypto helpers; calendar dates as "YYYY-MM-DD"
 ├── templates/app/           starting files for a new app (copied by the generator)
-├── scripts/                 new-app, dist checks, deploys, buckets, previews, smoke test
+├── scripts/                 new-app, dist checks, deploys, buckets, previews, smoke test, package age
 ├── tests/e2e/               browser tests that run against EVERY site automatically
 ├── tests/unit/              repo-wide checks (colour contrast, registry, workflows)
 ├── docs/                    plan, guides, decision records (adr/)
@@ -72,8 +72,10 @@ How the shared packages work:
   sizes, radii) with automatic dark and light modes, plus base styles, CSS
   component classes (`.btn`, `.card`, …), Astro components (`<AppShell>`,
   `<Button>`, `<Card>`, `<Icon>`, `<AppIcon>`, `<DataControls>`,
-  `<NotFound>`), and an SVG icon set. Change a token once and every site
-  changes on its next deploy ([design system guide](design-system.md)).
+  `<SyncControls>`, `<PushControls>`, `<ThemeSwitch>`, `<NotFound>`), page
+  helpers every app uses (like `@shkriuss/ui/dom` and `/problem`), and an SVG
+  icon set. Change a token once and every site changes on its next deploy
+  ([design system guide](design-system.md)).
 - **`@shkriuss/registry`**: `apps.json` is the single list of apps. The hub
   draws its app cards from it. Each app reads its own name, description, icon
   and colour from it. The privacy page builds its table from it. Unit tests
@@ -86,7 +88,9 @@ How the shared packages work:
   - writes an offline service worker;
   - keeps scripts and styles out of the HTML, so the strict CSP works.
 - **`@shkriuss/storage`**: a small typed wrapper around `localStorage` with
-  versioning and migrations, plus "download my data" and "delete my data".
+  versioning and migrations, plus back up (locked with a passphrase, or a
+  plain copy), restore and "delete all data". Photos and other big files go
+  in IndexedDB (`@shkriuss/storage/files`).
 
 Shared versions: a pnpm **catalog** in `pnpm-workspace.yaml` pins each
 third-party version once for the whole repo.
@@ -142,17 +146,17 @@ Full guide: [deployment.md](deployment.md).
 Defined once in `packages/astro-config/src/headers.ts`
 ([ADR 0004](adr/0004-security-headers.md)).
 
-| Header                         | Value (short)                                                                                                                                                                                                       | What it does                                                                                                                        |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `Content-Security-Policy`      | `default-src 'none'`; scripts, styles, images, fonts, connections, manifest and workers from `'self'` only; `base-uri 'none'`; `form-action 'self'`; `frame-ancestors 'none'`; `require-trusted-types-for 'script'` | Only our own files can run or load. No inline code, no third parties, no framing. Trusted Types block the most common XSS mistakes. |
-| `Strict-Transport-Security`    | `max-age=63072000; includeSubDomains; preload`                                                                                                                                                                      | HTTPS only. (The `.app` domain is already HTTPS-only in browsers.)                                                                  |
-| `X-Content-Type-Options`       | `nosniff`                                                                                                                                                                                                           | Stops browsers guessing file types.                                                                                                 |
-| `Referrer-Policy`              | `no-referrer`                                                                                                                                                                                                       | Never tells other sites where a visitor came from.                                                                                  |
-| `Permissions-Policy`           | camera, microphone, geolocation, payment, USB, … all `()`                                                                                                                                                           | Turns powerful browser features off. An app that needs one turns it on with `allowFeatures`.                                        |
-| `Cross-Origin-Opener-Policy`   | `same-origin`                                                                                                                                                                                                       | Isolates the page from pop-ups and other windows.                                                                                   |
-| `Cross-Origin-Resource-Policy` | `same-origin`                                                                                                                                                                                                       | Other sites can't embed our files.                                                                                                  |
-| `Cross-Origin-Embedder-Policy` | `require-corp`                                                                                                                                                                                                      | Completes cross-origin isolation.                                                                                                   |
-| `X-Frame-Options`              | `DENY`                                                                                                                                                                                                              | Anti-framing for older browsers.                                                                                                    |
+| Header                         | Value (short)                                                                                                                                                                                                                                                                 | What it does                                                                                                                        |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `Content-Security-Policy`      | `default-src 'none'`; scripts, styles, fonts, connections, manifest and workers from `'self'` only, images also from `data:` and `blob:` (photos made on the device); `base-uri 'none'`; `form-action 'self'`; `frame-ancestors 'none'`; `require-trusted-types-for 'script'` | Only our own files can run or load. No inline code, no third parties, no framing. Trusted Types block the most common XSS mistakes. |
+| `Strict-Transport-Security`    | `max-age=63072000; includeSubDomains; preload`                                                                                                                                                                                                                                | HTTPS only. (The `.app` domain is already HTTPS-only in browsers.)                                                                  |
+| `X-Content-Type-Options`       | `nosniff`                                                                                                                                                                                                                                                                     | Stops browsers guessing file types.                                                                                                 |
+| `Referrer-Policy`              | `no-referrer`                                                                                                                                                                                                                                                                 | Never tells other sites where a visitor came from.                                                                                  |
+| `Permissions-Policy`           | camera, microphone, geolocation, payment, USB, … all `()`                                                                                                                                                                                                                     | Turns powerful browser features off. An app that needs one turns it on with `allowFeatures`.                                        |
+| `Cross-Origin-Opener-Policy`   | `same-origin`                                                                                                                                                                                                                                                                 | Isolates the page from pop-ups and other windows.                                                                                   |
+| `Cross-Origin-Resource-Policy` | `same-origin`                                                                                                                                                                                                                                                                 | Other sites can't embed our files.                                                                                                  |
+| `Cross-Origin-Embedder-Policy` | `require-corp`                                                                                                                                                                                                                                                                | Completes cross-origin isolation.                                                                                                   |
+| `X-Frame-Options`              | `DENY`                                                                                                                                                                                                                                                                        | Anti-framing for older browsers.                                                                                                    |
 
 Hashed build files (`/_astro/*`) are cached for a year. Pages revalidate on
 every visit, so updates appear right away.
@@ -174,8 +178,9 @@ Rules for every app ([ADR 0006](adr/0006-local-first-data.md)):
 
 1. Data stays on the device by default.
 2. No cookies, no analytics, no ads, no third-party anything.
-3. Every app that stores data has **Download a copy** (a JSON file) and
-   **Delete all data**.
+3. Every app that stores data has **Back up** (a file, locked with a
+   passphrase or a plain copy), **Restore** and **Delete all data**. Photos,
+   whose data is too big for a file, has **Delete all data** only.
 4. The privacy page lists each app's storage, generated from the registry so
    it can't go out of date.
 
@@ -211,8 +216,8 @@ flag that before starting.
   only other secret ([ADR 0016](adr/0016-online-photo-library.md)).
 - GitHub Actions are pinned to exact commits (a unit test enforces this).
   Workflows start with no permissions and ask only for what each job needs.
-  Checkout doesn't keep credentials, except in the **New app** workflow,
-  which has to push a branch.
+  Checkout never keeps credentials: the **New app** workflow gives its token
+  only to the step that pushes the branch.
 - pnpm only lets allow-listed packages run install scripts, and won't
   install versions less than 7 days old. Dependabot waits the same 7 days
   before proposing an update (the two must match, or Dependabot fails). For an
@@ -236,6 +241,7 @@ flag that before starting.
 | Security and privacy      | Playwright                                                        | a header is missing, a console error (including CSP violations), a cookie, or a request to another domain |
 | Offline / install         | Playwright                                                        | manifest or icons missing, or the site doesn't load offline                                               |
 | Dependencies              | `pnpm audit --audit-level high`                                   | a known high or critical vulnerability                                                                    |
+| Package age               | `scripts/lockfile-age.ts` (pull requests)                         | a pull request adds a package version published less than 7 days ago                                      |
 | Secrets                   | gitleaks                                                          | something that looks like a secret is in any commit                                                       |
 | Workflows                 | zizmor                                                            | a risky GitHub Actions pattern                                                                            |
 
@@ -313,9 +319,10 @@ they ran out.)
 - Manual accessibility pass on a phone (VoiceOver or TalkBack).
 - `www.shkriuss.app` → `shkriuss.app` redirect (a free Cloudflare Redirect
   Rule), if you want it.
-- `security.txt` and email anti-spoofing DNS records (SPF `-all`, DMARC
-  `reject`, null MX), since the domain sends no email. Needs your decision on
-  a contact address.
+- [x] `security.txt` (at `shkriuss.app/.well-known/security.txt`): it points
+      to GitHub's private security reports.
+- Email anti-spoofing DNS records (SPF `-all`, DMARC `reject`, null MX),
+  since the domain sends no email.
 - [x] Import-from-file for app data: **Back up** (locked with a passphrase)
       and **Restore** in every app ([ADR 0008](adr/0008-encrypted-backups.md)).
 - Deploy only the apps that changed, if CI time becomes a problem.
@@ -346,6 +353,13 @@ they ran out.)
       (newest edit of each item wins, deletions sync).
 - [x] **shkriuss account**, part 3: replace the account key (for a lost
       device), and a list of the apps that sync on the Account page.
+- [x] More apps, each syncing through the account: **Shelf**, **Tasks**,
+      **Meals**, **Water**, **Reminders**, **Trades**, **Budget**,
+      **Repairs** (with photos) and **Photos**, with an optional online
+      library ([ADR 0015](adr/0015-photos-app.md),
+      [ADR 0016](adr/0016-online-photo-library.md)).
+- [x] A full audit of the code, and its fixes
+      ([results](audit/results.md)).
 
 ---
 
@@ -357,7 +371,7 @@ they ran out.)
 | GitHub plan            | **Free**                                                 | Pro (~$4/month) is only needed for branch protection on private repos.                                |
 | Example app            | **Tally** (tap to count things, saved on your device)    | Any other small app.                                                                                  |
 | Brand name on the hub  | **"shkriuss"**                                           | Any name. It's one line in `apps.json`.                                                               |
-| Public contact address | **None for now**                                         | Add an email for privacy and security questions (and `security.txt`).                                 |
+| Public contact address | **None** (security reports go through GitHub)            | Add an email for privacy and security questions.                                                      |
 | PR preview links       | **Public but unlisted** (`*.workers.dev`, not indexed)   | Put them behind a Cloudflare Access login (free, more setup).                                         |
 | `www.shkriuss.app`     | **Not set up**                                           | Redirect it to `shkriuss.app` (one dashboard rule).                                                   |
 | Theme                  | **Follows your device**, with a Light/Dark/System switch | —                                                                                                     |
@@ -374,8 +388,8 @@ they ran out.)
    IP addresses to serve pages. The privacy page says so instead of claiming
    "zero data".
 4. **Local-only data can be lost.** If you clear your browser data or lose
-   your phone, app data is gone. Every app has **Download a copy** for
-   backups.
+   your phone, app data is gone. Every app has **Back up** and **Restore**,
+   and the optional sync keeps a copy on your other devices.
 5. **"Newest versions" vs "well supported".** I chose pnpm 10 and
    TypeScript 6 over the newest majors because Dependabot, ESLint and Astro's
    checker don't support those yet. ADR 0005 says when to upgrade.

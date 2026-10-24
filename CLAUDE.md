@@ -14,9 +14,10 @@ tablet: they can't run commands, so CI does all building, testing and deploying.
 ## Layout
 
 ```
-apps/hub/            shkriuss.app (app list, privacy page)
+apps/hub/            shkriuss.app (app list, privacy page, account page + its Worker)
 apps/<slug>/         one folder per app → <slug>.shkriuss.app
-packages/ui/         design system: tokens, CSS, Astro components, icons, AppShell
+packages/ui/         design system: tokens, CSS, Astro components, icons, AppShell,
+                     and page helpers every app uses (@shkriuss/ui/dom, /problem, …)
 packages/registry/   apps.json = the single list of apps (+ validation)
 packages/astro-config/ defineAppConfig(): headers, manifest, icons, service worker
 packages/storage/    on-device storage helpers (createStore, export, backup, restore, delete; files/photos)
@@ -30,7 +31,7 @@ packages/server/     shared Worker helpers: createWorker() for /api/*, JSON, lim
 templates/app/       copied by `pnpm new-app` (placeholder slug: template-app)
 tests/e2e/           shared Playwright tests that run against EVERY site
 tests/unit/          cross-cutting unit tests (contrast, registry consistency, workflows)
-scripts/             new-app, check-dist, deploy, buckets, previews, smoke-test
+scripts/             new-app, check-dist, deploy, buckets, previews, smoke-test, lockfile-age
 ```
 
 ## Commands (Node 24, pnpm 10)
@@ -128,4 +129,5 @@ the page in `apps/<slug>/src/pages/index.astro`. Full guide:
 - Use unpinned GitHub Actions (`uses:` must be a full commit SHA).
 - Upgrade TypeScript to 7 or pnpm past 10 before the notes in
   [ADR 0005](docs/adr/0005-pnpm-typescript-versions.md) say it's safe.
-- Deploy by hand. Merging to `main` deploys; PRs get preview links.
+- Deploy by hand. Merging to `main` deploys; PRs get preview links once the
+  owner approves them.

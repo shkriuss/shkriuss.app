@@ -4,7 +4,7 @@
 # The Cloudflare token can change production too, and this runs the pull
 # request's own code, before anyone has merged it. So it runs only once the
 # owner approves it: the token is a secret of the "preview" environment,
-# which needs the owner's approval (docs/deployment.md, "GitHub settings").
+# which needs the owner's approval (docs/deployment.md, "Save it in GitHub").
 # Previews get no Photos storage code, so their online library stays locked.
 # Previews of closed pull requests are deleted by the production deploy
 # (ci.yml), which runs only code that's on main.

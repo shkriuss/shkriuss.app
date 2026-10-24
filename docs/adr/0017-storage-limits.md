@@ -82,8 +82,9 @@ and a couple of open previews. The per-account limits stay as they were
   key is replaced all the same (the apps move their copies to the new key
   when sync is turned on again), and the Account page says that devices with
   the old key won't sign out by themselves.
-- Adding a passkey, notifications, or a new online library: the usual
-  "couldn't, try again later".
+- Adding a passkey or notifications: the usual "couldn't, try again later".
+- A new online library: Photos says the online library is full, and photos
+  stay on the device.
 
 ## Consequences
 
@@ -92,7 +93,9 @@ and a couple of open previews. The per-account limits stay as they were
 - Strangers can't fill the storage every app shares. The most they can do
   is use up one app's room for a while: its new copies or schedules wait,
   while the owner's own copy keeps syncing and every other app works.
-- Junk goes away by itself, so even a full namespace recovers.
+- Junk copies, replaced-key notes and schedules go away by themselves, so
+  those namespaces recover even when full. (Passkey locks and online
+  libraries don't yet: see below.)
 - Copies nobody uses no longer stay on the server for good, which is better
   for privacy too.
 
@@ -102,6 +105,12 @@ and a couple of open previews. The per-account limits stay as they were
   by touching their junk now and then. Then new people can't turn on sync in
   that app until the junk is gone. Telling junk from real copies would need
   accounts the server knows about, which ADR 0010 chose not to have.
+- **Passkey locks and online libraries aren't deleted when unused.** So
+  junk there stays: about 2,500 made-up passkey locks, or 2,000 made-up
+  libraries, fill that namespace until the limit is raised or the owner
+  clears it. Existing passkeys and libraries keep working; new ones can't be
+  made, including the new library a device starts after the account key is
+  replaced.
 - **Raising a limit** is a change to the numbers in the code (and, for much
   more, the Workers paid plan). If the apps get many more users, the limits
   need raising.

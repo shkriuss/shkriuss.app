@@ -26,7 +26,9 @@ the first audit found, and what happened to each finding, is in
    what would confirm it.
 
 3. **Read "Intentional choices" below first.** Report one of them only if you
-   think its reasoning is wrong, and say concretely why.
+   think its reasoning is wrong, and say concretely why. Also read the
+   findings in [results.md](results.md) marked Explained, Accepted, By
+   design or Your choice: report one again only if its reason is wrong.
 4. **No style comments.** Prettier, ESLint, TypeScript and the size and CSP
    checks already run on every change. Report formatting, naming or personal
    preference only if it causes a real problem.
@@ -39,7 +41,10 @@ the first audit found, and what happened to each finding, is in
    or a new test that fails, in your own workspace only. Setup: Node.js 24,
    pnpm 10 (`corepack enable`), then `pnpm install --frozen-lockfile`. Useful
    commands: `pnpm test` (unit tests), `pnpm typecheck`, `pnpm build`.
-   `pnpm test:e2e` needs `pnpm build` first and Playwright's Chromium.
+   `pnpm test:e2e` needs `pnpm build` first and Playwright's Chromium. The
+   first `pnpm build` downloads Grammar's 361 MB model from Hugging Face;
+   without it, build the rest with
+   `pnpm -r --filter "./apps/*" --filter "!grammar" build`.
 
 ## What this is
 
@@ -103,8 +108,9 @@ the first audit found, and what happened to each finding, is in
 6. "Delete" deletes, on the device and online.
 7. Only code that passed every check in CI reaches production.
 8. No stranger can lock people out of a feature (a limit that protects the
-   bill must not let one person block everyone), and no outside service can
-   stop a fix from being deployed.
+   bill must not let one person block everyone, except one app's storage
+   limit, [ADR 0017](../adr/0017-storage-limits.md)), and no outside service
+   can stop a fix from being deployed.
 
 ## Intentional choices
 
@@ -134,6 +140,10 @@ reasoning is wrong, and say why.
 - **No analytics, logs or error reporting** of any kind.
 - **Durable Objects run on Cloudflare's free plan.** The limits in the ADRs
   keep normal use within it.
+- **Each app's servers have a storage limit**
+  ([ADR 0017](../adr/0017-storage-limits.md)). Someone determined can fill
+  one app's room for a while, so new people can't turn on sync there, but
+  nothing else stops. Copies nobody has used for 13 months are deleted.
 
 ## Areas
 
@@ -149,9 +159,10 @@ don't stop at these questions: anything else you find in the area counts.
 - the hub: [`account.ts`](../../apps/hub/src/scripts/account.ts),
   [`account.astro`](../../apps/hub/src/pages/account.astro) and
   [`worker.ts`](../../apps/hub/src/worker.ts);
-- how an app gets its key:
-  [`connect.ts`](../../packages/sync/src/connect.ts) and
-  [`origins.ts`](../../packages/sync/src/origins.ts);
+- how an app gets its key, and where it keeps it:
+  [`connect.ts`](../../packages/sync/src/connect.ts),
+  [`origins.ts`](../../packages/sync/src/origins.ts) and
+  [`device.ts`](../../packages/sync/src/device.ts);
 - encrypted backups:
   [`backup.ts`](../../packages/storage/src/backup.ts);
 - push encryption: [`encrypt.ts`](../../packages/push/src/encrypt.ts) and
@@ -187,7 +198,8 @@ don't stop at these questions: anything else you find in the area counts.
 
 **Where:**
 
-- [`packages/server`](../../packages/server);
+- [`packages/server`](../../packages/server), including the storage meter
+  (`meter.ts`);
 - the Workers, each with its `validate.ts` next to it:
   - [`packages/sync/src/worker.ts`](../../packages/sync/src/worker.ts);
   - [`packages/library/src/worker.ts`](../../packages/library/src/worker.ts);
@@ -195,10 +207,13 @@ don't stop at these questions: anything else you find in the area counts.
     `schedule.ts`;
   - [`packages/account/src/worker.ts`](../../packages/account/src/worker.ts);
 - each app's `src/worker.ts` and `wrangler.jsonc`;
-- ADRs 0009, 0010, 0014 and 0016.
+- ADRs 0009, 0010, 0014, 0016 and 0017.
 
 **Check:**
 
+- Everything a stranger can make a server keep goes through a meter, the
+  limits add up to less than the free plan's 5 GB, and junk goes away by
+  itself (or the ADR says why not).
 - For every `/api` route:
   - who may call it, and what proves it;
   - what it accepts (size, shape, types) and what it returns;
@@ -231,17 +246,21 @@ don't stop at these questions: anything else you find in the area counts.
 
 - [`packages/astro-config`](../../packages/astro-config): `headers.ts`,
   `service-worker.ts`, `integration.ts` and `manifest.ts`;
-- [`scripts/check-dist.ts`](../../scripts/check-dist.ts) and
+- [`scripts/lib/dist-checks.ts`](../../scripts/lib/dist-checks.ts) (run by
+  `scripts/check-dist.ts`) and
   [`tests/e2e/security.spec.ts`](../../tests/e2e/security.spec.ts);
-- [`packages/ui`](../../packages/ui): its components and its worker helper;
+- [`packages/ui`](../../packages/ui): its components, and the code that
+  makes the Trusted Types policies
+  ([`worker.ts`](../../packages/ui/src/scripts/worker.ts) and
+  [`service-worker.ts`](../../packages/ui/src/scripts/service-worker.ts));
 - every app's `src/scripts`;
 - the parsers:
   - calendar import:
     [`ics-import.ts`](../../apps/calendar/src/lib/ics-import.ts);
   - Photos' Exif reading: [`exif.ts`](../../apps/photos/src/lib/exif.ts);
   - restoring backups: [`backup.ts`](../../packages/storage/src/backup.ts);
-- Grammar's on-demand download
-  ([ADR 0012](../adr/0012-deep-check-ai-model.md)).
+- every app's `public/on-demand/` downloads (today Grammar's Deep check,
+  [ADR 0012](../adr/0012-deep-check-ai-model.md)).
 
 **Check:**
 
@@ -267,8 +286,9 @@ don't stop at these questions: anything else you find in the area counts.
   - that it never caches `/api`.
 - Our subdomains all belong to the same site (`shkriuss.app`). Is there any
   trust between them, through `postMessage`, shared storage or cookies?
-- Grammar's model download is checked by SHA-256 before use, and only
-  allowed apps compile WebAssembly.
+- On-demand downloads are never precached, are downloaded only when the
+  person asks, are checked by SHA-256 before use, and are at most 25 MiB per
+  file. Only allowed apps compile WebAssembly.
 - Downloads ("Save original", backups) have the right content types and safe
   file names.
 
@@ -306,8 +326,9 @@ don't stop at these questions: anything else you find in the area counts.
 
 - [`packages/storage`](../../packages/storage): `index.ts`, `files.ts` and
   `backup.ts`;
-- [`packages/sync`](../../packages/sync): `merge.ts`, `client.ts` and
-  `snapshot.ts`;
+- [`packages/sync`](../../packages/sync): `merge.ts`, `client.ts` (the sync
+  rounds), `device.ts` (this device's sync state), `files.ts` (photos),
+  `edits.ts`, `requests.ts`, `request.ts` and `snapshot.ts`;
 - [`packages/library/src/client.ts`](../../packages/library/src/client.ts) and
   [`apps/photos/src/scripts/online.ts`](../../apps/photos/src/scripts/online.ts);
 - every app's data versions and migrations (`createStore` with `version`);
@@ -316,7 +337,8 @@ don't stop at these questions: anything else you find in the area counts.
 **Check:**
 
 - Can people lose data when:
-  - storage is full;
+  - storage is full, including iPhone's 5 MB per site, where some characters
+    count twice;
   - they browse privately;
   - the browser clears storage? Safari deletes a site's data after 7 days
     without use unless it's on the Home Screen. Do we tell people, and do we
@@ -389,9 +411,14 @@ This area is split into three tasks:
 
 **Where:**
 
-- `.github/workflows/`, `.github/actions/setup` and `.github/dependabot.yml`;
+- `.github/workflows/`, `.github/actions/setup`,
+  `.github/actions/deep-check-model`, `.github/dependabot.yml` and
+  `.github/zizmor/requirements.txt`;
 - `scripts/`: `deploy.ts`, `previews.ts`, `buckets.ts`, `smoke-test.ts`,
-  `new-app.ts` and `check-dist.ts`;
+  `new-app.ts`, `check-dist.ts` and `lockfile-age.ts`, with their logic in
+  `scripts/lib/`;
+- `apps/grammar/scripts/deep-check-files.ts`, which downloads Grammar's model
+  during the build and checks its SHA-256;
 - every `package.json`, plus `pnpm-workspace.yaml` (`catalog`,
   `minimumReleaseAge`, `onlyBuiltDependencies`) and `pnpm-lock.yaml`;
 - `.gitleaks.toml` and `tests/unit/workflows.test.ts`;
@@ -467,8 +494,9 @@ subdomain.
   - long lists;
   - IndexedDB use;
   - heavy work on the main thread.
-- Browser support: Safari on iPhone and iPad (the owner's devices), and
-  Chrome on Android.
+- Browser support: Safari and iOS 16.4 and later (the owner's devices; push
+  and sync need it), and current Chrome, Edge and Firefox. Anything newer
+  needs a fallback or a feature check.
 - What will be hard to change later, and why?
 
 ### Z. Anything else
