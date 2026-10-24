@@ -49,6 +49,8 @@ pnpm new-app <slug> --name "Name" --description "One sentence." --icon note --co
 `PW_CHROMIUM_PATH` to an installed Chromium. Beside another checkout's
 browser tests (another session), set `E2E_PORT_BASE` (say `9300`) so the
 servers don't clash; `E2E_REUSE=1` reuses servers already running.
+`E2E_SITES=tally,notes` starts only those sites' servers (and the hub's), for
+a quicker run while working on a few apps; CI always tests every site.
 
 ## Rules
 
