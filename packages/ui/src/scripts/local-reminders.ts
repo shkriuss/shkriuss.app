@@ -22,6 +22,7 @@
 import { addMinutes, nowStamp, type Stamp } from '@shkriuss/dates';
 import { isPushEnabled, type Notice } from '@shkriuss/push';
 import { mountPushControls } from './push-controls.ts';
+import { required } from './dom.ts';
 
 const CHECK_EVERY_MS = 20_000;
 /** Reminders later than this (the page was asleep) aren't shown: it's on screen again. */
@@ -69,12 +70,6 @@ export function statusTexts(app: string, what = 'reminders'): Record<Permission,
     granted: 'Notifications are on.',
     denied: `Notifications are blocked for ${app}. To allow them, change this site’s settings in your browser.`,
   };
-}
-
-function required<T extends Element>(root: ParentNode, selector: string): T {
-  const element = root.querySelector<T>(selector);
-  if (!element) throw new Error(`Reminders: missing element ${selector}`);
-  return element;
 }
 
 export function mountLocalReminders(

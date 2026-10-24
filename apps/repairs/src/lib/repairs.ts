@@ -22,7 +22,7 @@
  * vehicle in the repair form adds it.
  */
 import { isIsoDate, type IsoDate } from '@shkriuss/dates';
-import { parseDecimal } from '@shkriuss/ui/numbers';
+import { CURRENCIES, formatMoney, parseDecimal, type Currency } from '@shkriuss/ui/numbers';
 import { compareText } from '@shkriuss/ui/text';
 import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
@@ -38,6 +38,9 @@ export interface Vehicle {
 export interface VehiclesState {
   vehicles: Vehicle[];
 }
+
+/** The vehicles' data version. */
+export const VEHICLES_VERSION = 1;
 
 export interface Part {
   name: string;
@@ -74,6 +77,9 @@ export interface Repair {
 export interface RepairsState {
   repairs: Repair[];
 }
+
+/** The repairs' data version (see migrateRepairs). */
+export const REPAIRS_VERSION = 3;
 
 export const LIMITS = {
   vehicle: 40,
@@ -783,12 +789,8 @@ const formatQuantity = (quantity: number, locale?: string): string =>
 export const formatHours = (hours: number, locale?: string): string =>
   `${new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(hours)} ${hours === 1 ? 'hour' : 'hours'}`;
 
-export const CURRENCIES = ['USD', 'EUR', 'GBP', 'GEL', 'CHF', 'JPY', 'CAD', 'AUD'] as const;
-export type Currency = (typeof CURRENCIES)[number];
-
-/** "$1,234.50" */
-export const formatMoney = (amount: number, currency: Currency, locale?: string): string =>
-  new Intl.NumberFormat(locale, { style: 'currency', currency }).format(amount);
+// The currencies and formatMoney are shared with Budget and Trades.
+export { CURRENCIES, formatMoney, type Currency };
 
 /** "Brake pads × 2 (8-97366-123-0)" */
 export function partLabel(part: Part, locale?: string): string {

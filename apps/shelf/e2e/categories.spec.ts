@@ -2,7 +2,9 @@
 // ones too), and the items follow. Syncing them: e2e/sync.spec.ts.
 import type { Page } from '@playwright/test';
 import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
-import type { Item } from '../src/lib/items.ts';
+import { seedStores } from '../../../tests/e2e/storage.ts';
+import { CATEGORIES_VERSION } from '../src/lib/categories.ts';
+import { SHELF_VERSION, type Item } from '../src/lib/items.ts';
 
 /** The ids of the categories Shelf starts with (lib/categories.ts). */
 const STARTING = ['food', 'clothes', 'tech', 'care', 'personal', 'home', 'other'];
@@ -39,14 +41,10 @@ const sample = (item: Partial<Item>, index: number): Item => ({
 
 /** Saves items (and category changes) straight into storage, then reloads. */
 async function seed(page: Page, items: Partial<Item>[], changes: unknown[] = []): Promise<void> {
-  await page.evaluate(
-    ([data, categories]) => {
-      localStorage.setItem('shkriuss:shelf', JSON.stringify({ v: 1, data }));
-      localStorage.setItem('shkriuss:shelf-categories', JSON.stringify({ v: 1, data: categories }));
-    },
-    [{ items: items.map(sample) }, { changes }] as const,
-  );
-  await page.reload();
+  await seedStores(page, {
+    shelf: { version: SHELF_VERSION, data: { items: items.map(sample) } },
+    'shelf-categories': { version: CATEGORIES_VERSION, data: { changes } },
+  });
 }
 
 test.beforeEach(async ({ page }) => {

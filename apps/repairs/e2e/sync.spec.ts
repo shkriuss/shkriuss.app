@@ -103,7 +103,7 @@ test('photos sync between devices, and deleting one deletes it on both', async (
   const dialog = repairDialog(page);
   await expect(dialog.getByText('They sync to your other devices', { exact: false })).toBeVisible();
   await dialog.getByLabel('Vehicle').fill('Bus 105');
-  await addPhotos(page, [jpeg('door.jpg', await picture(page, 800, 600))]);
+  await addPhotos(page, [jpeg('door.jpg', await picture(page, { width: 800, height: 600 }))]);
   await expect(dialog.locator('[data-form-photos] img')).toHaveCount(1);
   const uploaded = page.waitForResponse(
     (response) =>

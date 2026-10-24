@@ -24,7 +24,7 @@ import {
   type Stamp,
 } from '@shkriuss/dates';
 import type { Notice } from '@shkriuss/push';
-import { compareText } from '@shkriuss/ui/text';
+import { compareText, foldText } from '@shkriuss/ui/text';
 import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
 export const REPEATS = ['none', 'daily', 'weekdays', 'weekly', 'monthly', 'yearly'] as const;
@@ -491,12 +491,15 @@ export function inView(task: Task, view: View): boolean {
 }
 
 /** The words searched for, as compared (lower case, without accents). */
-export const searchWords = (search: string): string[] => fold(search).split(/\s+/).filter(Boolean);
+export const searchWords = (search: string): string[] =>
+  foldText(search).split(/\s+/).filter(Boolean);
 
 /** True when every word searched for is in the task's title, notes or steps. */
 export function matchesSearch(task: Task, words: readonly string[]): boolean {
   if (words.length === 0) return true;
-  const text = fold([task.title, task.notes, ...task.steps.map((step) => step.title)].join('\n'));
+  const text = foldText(
+    [task.title, task.notes, ...task.steps.map((step) => step.title)].join('\n'),
+  );
   return words.every((word) => text.includes(word));
 }
 
@@ -664,10 +667,6 @@ export const dueReminders = (state: TasksState, from: Stamp, to: Stamp): Task[] 
     const at = reminderAt(task);
     return task.done === null && at !== null && from < at && at <= to;
   });
-
-/** Text for comparing: lower case and without accents. */
-export const fold = (text: string): string =>
-  text.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase().trim();
 
 /** Alphabetical order, without minding case or accents. */
 export const byText = compareText;

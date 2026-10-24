@@ -2,7 +2,14 @@
 // page, filling in the forms, adding photos, and saving records straight
 // into storage.
 import type { Page } from '@playwright/test';
-import type { Repair, Vehicle } from '../src/lib/repairs.ts';
+import { fileKeys, type jpeg } from '../../../tests/e2e/photos.ts';
+import { seedStores } from '../../../tests/e2e/storage.ts';
+import {
+  REPAIRS_VERSION,
+  VEHICLES_VERSION,
+  type Repair,
+  type Vehicle,
+} from '../src/lib/repairs.ts';
 
 /** Wednesday 21 October 2026, 10:00 in Tbilisi (the tests' time zone). */
 export const NOW = new Date('2026-10-21T10:00:00+04:00');
@@ -105,38 +112,17 @@ export const repair = (overrides: Partial<Repair>): Repair => ({
 /** Saves vehicles and repairs straight into storage, then reloads. */
 export async function seed(
   page: Page,
-  data: { vehicles?: Vehicle[]; repairs?: Repair[] },
+  { vehicles = [], repairs = [] }: { vehicles?: Vehicle[]; repairs?: Repair[] },
 ): Promise<void> {
-  await page.evaluate(({ vehicles = [], repairs = [] }) => {
-    localStorage.setItem('shkriuss:repairs-vehicles', JSON.stringify({ v: 1, data: { vehicles } }));
-    localStorage.setItem('shkriuss:repairs', JSON.stringify({ v: 3, data: { repairs } }));
-  }, data);
-  await page.reload();
+  await seedStores(page, {
+    'repairs-vehicles': { version: VEHICLES_VERSION, data: { vehicles } },
+    repairs: { version: REPAIRS_VERSION, data: { repairs } },
+  });
 }
 
 // ---------- Photos ----------
 
-/** A JPEG made in the browser: camera-sized by default (3000 × 2000). */
-export async function picture(page: Page, width = 3000, height = 2000): Promise<Buffer> {
-  const base64 = await page.evaluate(
-    async ([w, h]) => {
-      const canvas = new OffscreenCanvas(w, h);
-      const context = canvas.getContext('2d');
-      if (!context) throw new Error('No canvas');
-      context.fillStyle = '#c33';
-      context.fillRect(0, 0, w, h);
-      const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.9 });
-      let text = '';
-      for (const byte of new Uint8Array(await blob.arrayBuffer()))
-        text += String.fromCharCode(byte);
-      return btoa(text);
-    },
-    [width, height] as const,
-  );
-  return Buffer.from(base64, 'base64');
-}
-
-export const jpeg = (name: string, buffer: Buffer) => ({ name, mimeType: 'image/jpeg', buffer });
+export { jpeg, naturalWidth, picture } from '../../../tests/e2e/photos.ts';
 
 /** Picks files with the open repair form's "Add photos". */
 export async function addPhotos(page: Page, files: ReturnType<typeof jpeg>[]): Promise<void> {
@@ -146,30 +132,4 @@ export async function addPhotos(page: Page, files: ReturnType<typeof jpeg>[]): P
 }
 
 /** How many photos are kept on this device. */
-export const storedPhotos = (page: Page) =>
-  page.evaluate(
-    () =>
-      new Promise<number>((resolve) => {
-        const request = indexedDB.open('shkriuss-files');
-        // Not made yet: leave that to the app. Made here, it would have no
-        // table, and the app (finding it already there) couldn't save photos.
-        request.onupgradeneeded = () => request.transaction?.abort();
-        request.onerror = () => resolve(0);
-        request.onsuccess = () => {
-          const database = request.result;
-          if (!database.objectStoreNames.contains('files')) {
-            database.close();
-            resolve(0);
-            return;
-          }
-          const count = database.transaction('files').objectStore('files').count();
-          count.onsuccess = () => {
-            database.close();
-            resolve(count.result);
-          };
-        };
-      }),
-  );
-
-export const naturalWidth = (image: ReturnType<Page['locator']>) =>
-  image.evaluate((element) => (element as HTMLImageElement).naturalWidth);
+export const storedPhotos = async (page: Page): Promise<number> => (await fileKeys(page)).length;

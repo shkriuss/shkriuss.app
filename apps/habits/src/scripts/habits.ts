@@ -37,6 +37,7 @@ import {
 } from '../lib/habits.ts';
 import { mountReminders } from './reminders.ts';
 import { DATE_LOCALE } from '@shkriuss/ui/locale';
+import { required } from '@shkriuss/ui/dom';
 
 const habitsStore = createStore<HabitsState>({
   key: 'habits',
@@ -63,12 +64,6 @@ const dateFormat = new Intl.DateTimeFormat(DATE_LOCALE, {
   month: 'long',
   timeZone: 'UTC',
 });
-
-function required<T extends Element>(root: ParentNode, selector: string): T {
-  const element = root.querySelector<T>(selector);
-  if (!element) throw new Error(`Habits: missing element ${selector}`);
-  return element;
-}
 
 const dateOf = (date: IsoDate): number => {
   const [year, month, day] = date.split('-').map(Number) as [number, number, number];

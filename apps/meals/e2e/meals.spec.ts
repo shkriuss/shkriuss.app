@@ -2,6 +2,7 @@
 // support, privacy, sync) already run for every app from tests/e2e/.
 // The locale is en-US, so weeks start on Sunday: "this week" is 18–24 October.
 import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
+import { readStore } from '../../../tests/e2e/storage.ts';
 import {
   day,
   dayMeals,
@@ -132,16 +133,10 @@ test('says so when the plan is too full to copy last week, and lets go of old me
       })),
     ],
   });
-  const saved = () =>
-    page.evaluate(() => {
-      const plan = JSON.parse(localStorage.getItem('shkriuss:meal-plan') ?? 'null') as {
-        data: { planned: { id: string }[] };
-      };
-      return {
-        count: plan.data.planned.length,
-        old: plan.data.planned.some((e) => e.id === 'old'),
-      };
-    });
+  const saved = async () => {
+    const plan = (await readStore<{ planned: { id: string }[] }>(page, 'meal-plan'))?.data;
+    return { count: plan?.planned.length, old: plan?.planned.some((e) => e.id === 'old') };
+  };
   expect(await saved()).toEqual({ count: 5000, old: false });
 
   // Full: nothing is copied, and the notice at the top says why.
@@ -185,15 +180,9 @@ test('keeps ticks saved by the older version, under the week’s Monday', async 
 
   // Saved again in the new version: under Monday 19 October.
   await page.getByRole('checkbox', { name: /Red lentils/ }).click();
-  const saved = await page.evaluate(
-    () =>
-      JSON.parse(localStorage.getItem('shkriuss:meal-shopping') ?? 'null') as {
-        v: number;
-        data: { items: { week: string }[] };
-      },
-  );
-  expect(saved.v).toBe(2);
-  expect(saved.data.items.map((item) => item.week)).toEqual([
+  const saved = await readStore<{ items: { week: string }[] }>(page, 'meal-shopping');
+  expect(saved?.v).toBe(2);
+  expect(saved?.data.items.map((item) => item.week)).toEqual([
     '2026-10-19',
     '2026-10-19',
     '2026-10-19',

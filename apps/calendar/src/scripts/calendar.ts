@@ -6,7 +6,8 @@
  */
 import { createStore, downloadFile } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
-import { focusProblem, reportSave } from '@shkriuss/ui/problem';
+import { showFieldProblems } from '@shkriuss/ui/dom';
+import { reportSave } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { site } from 'virtual:shkriuss/site';
 import {
@@ -426,23 +427,12 @@ export function mountCalendar(root: Document): void {
     };
   }
 
-  const errorFor = (field: DraftField): HTMLElement =>
-    required<HTMLElement>(form, `[data-error-for="${field}"]`);
-  const inputFor = (field: DraftField): HTMLElement | null =>
-    form.querySelector<HTMLElement>(`[name="${field}"]`);
-
-  /** Shows each problem next to its field. With `onlyClear`, only removes fixed ones. */
-  function showProblems(problems: Partial<Record<DraftField, string>>, onlyClear = false): void {
-    for (const field of [...FIELD_ORDER, 'form'] as DraftField[]) {
-      const message = problems[field] ?? '';
-      const error = errorFor(field);
-      if (onlyClear && message) continue;
-      error.textContent = message;
-      const control = inputFor(field);
-      if (message) control?.setAttribute('aria-invalid', 'true');
-      else control?.removeAttribute('aria-invalid');
-    }
-  }
+  /** Shows each problem next to its field; focuses the first. Returns true if there are any. */
+  const showProblems = (problems: Partial<Record<DraftField, string>>, onlyClear = false) =>
+    showFieldProblems(form, [...FIELD_ORDER, 'form'], problems, {
+      onlyClear,
+      focusFirst: !onlyClear,
+    });
 
   function openEditor(event: CalendarEvent | null): void {
     editingId = event?.id ?? null;
@@ -535,13 +525,7 @@ export function mountCalendar(root: Document): void {
     if (!editingId && state.events.length >= MAX_EVENTS) {
       problems.form = `You can have up to ${MAX_EVENTS} events. Delete some to add more.`;
     }
-    showProblems(problems);
-    const first = FIELD_ORDER.find((field) => problems[field]);
-    if (first) {
-      focusProblem(inputFor(first), problems[first]);
-      return;
-    }
-    if (problems.form) return;
+    if (showProblems(problems)) return;
 
     const id = editingId ?? crypto.randomUUID();
     const next = editingId ? updateEvent(state, id, draft) : addEvent(state, draft, id);

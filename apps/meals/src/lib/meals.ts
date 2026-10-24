@@ -31,7 +31,7 @@ import {
 } from '@shkriuss/dates';
 import type { Notice } from '@shkriuss/push';
 import { secondVersionName } from '@shkriuss/sync';
-import { compareText } from '@shkriuss/ui/text';
+import { compareText, foldText } from '@shkriuss/ui/text';
 import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
 export const LIMITS = { name: 100, ingredient: 100, notes: 5000 } as const;
@@ -45,10 +45,6 @@ export const SHOPPING_WEEKS_KEPT = 8;
 export const PLAN_DAYS_KEPT = 365;
 
 // ---------- Text ----------
-
-/** For comparing names: without capitals, accents or extra spaces. */
-export const fold = (text: string): string =>
-  text.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase().trim().replace(/\s+/g, ' ');
 
 /** Alphabetical order, without minding case or accents. */
 export const byText = compareText;
@@ -141,8 +137,8 @@ export const sortedMeals = (state: MealsState): Meal[] =>
 
 /** Your meal called `name`, if there is one. */
 export function findMeal(state: MealsState, name: string): Meal | undefined {
-  const key = fold(name);
-  return key === '' ? undefined : state.meals.find((meal) => fold(meal.name) === key);
+  const key = foldText(name);
+  return key === '' ? undefined : state.meals.find((meal) => foldText(meal.name) === key);
 }
 
 /** Ingredients typed one per line: tidied, without empty lines or the same one twice. */
@@ -151,7 +147,7 @@ export function parseIngredients(text: string): string[] {
   const ingredients: string[] = [];
   for (const line of text.split('\n')) {
     const ingredient = cut(tidy(line), LIMITS.ingredient);
-    const key = fold(ingredient);
+    const key = foldText(ingredient);
     if (key === '' || seen.has(key)) continue;
     seen.add(key);
     ingredients.push(ingredient);
@@ -329,11 +325,11 @@ export function defaultSlot(state: PlanState, date: IsoDate): Slot {
 
 /** After one of your meals is renamed: planned meals with the old name follow. */
 export function renamePlanned(state: PlanState, from: string, to: string): PlanState {
-  const key = fold(from);
-  if (key === fold(to)) return state;
+  const key = foldText(from);
+  if (key === foldText(to)) return state;
   return {
     planned: state.planned.map((entry) =>
-      fold(entry.name) === key ? { ...entry, name: to } : entry,
+      foldText(entry.name) === key ? { ...entry, name: to } : entry,
     ),
   };
 }
@@ -385,7 +381,7 @@ export function suggestions(meals: MealsState, plan: PlanState): string[] {
   const seen = new Set<string>();
   const names: string[] = [];
   const add = (name: string) => {
-    const key = fold(name);
+    const key = foldText(name);
     if (key === '' || seen.has(key)) return;
     seen.add(key);
     names.push(name);
@@ -393,7 +389,7 @@ export function suggestions(meals: MealsState, plan: PlanState): string[] {
   for (const meal of sortedMeals(meals)) add(meal.name);
   const others: string[] = [];
   for (const entry of plan.planned) {
-    if (!seen.has(fold(entry.name))) others.push(entry.name);
+    if (!seen.has(foldText(entry.name))) others.push(entry.name);
   }
   for (const name of others.sort(byText)) add(name);
   return names.slice(0, 300);
@@ -497,7 +493,7 @@ export function shoppingList(
     const meal = findMeal(meals, entry.name);
     if (!meal) continue;
     for (const ingredient of meal.ingredients) {
-      const key = fold(ingredient);
+      const key = foldText(ingredient);
       const row = rows.get(key) ?? {
         key,
         name: ingredient,

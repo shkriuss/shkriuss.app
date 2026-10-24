@@ -60,20 +60,23 @@ import {
   type DrinksState,
   type SettingsState,
   type Unit,
+  DRINKS_VERSION,
+  SETTINGS_VERSION,
 } from '../lib/water.ts';
 import { mountReminders } from './reminders.ts';
 import { DATE_LOCALE } from '@shkriuss/ui/locale';
+import { required } from '@shkriuss/ui/dom';
 
 const drinksStore = createStore<DrinksState>({
   key: 'water',
-  version: 1,
+  version: DRINKS_VERSION,
   fallback: emptyDrinks,
   validate: isDrinksState,
 });
 
 const settingsStore = createStore<SettingsState>({
   key: 'water-settings',
-  version: 1,
+  version: SETTINGS_VERSION,
   fallback: emptySettings,
   validate: isSettingsState,
 });
@@ -93,12 +96,6 @@ const dateFormat = new Intl.DateTimeFormat(DATE_LOCALE, {
   month: 'long',
   timeZone: 'UTC',
 });
-
-function required<T extends Element>(root: ParentNode, selector: string): T {
-  const element = root.querySelector<T>(selector);
-  if (!element) throw new Error(`Water: missing element ${selector}`);
-  return element;
-}
 
 const dateOf = (date: IsoDate): number => {
   const [year, month, day] = date.split('-').map(Number) as [number, number, number];

@@ -1,7 +1,8 @@
 // Shared by Water's browser tests: the day it is, finding things on the page,
 // and saving drinks and settings straight into storage.
 import type { Page } from '@playwright/test';
-import type { Drink, Setting } from '../src/lib/water.ts';
+import { seedStores } from '../../../tests/e2e/storage.ts';
+import { DRINKS_VERSION, SETTINGS_VERSION, type Drink, type Setting } from '../src/lib/water.ts';
 
 /** Wednesday 21 October 2026, 10:00 in Tbilisi (the tests' time zone). */
 export const NOW = new Date('2026-10-21T10:00:00+04:00');
@@ -35,13 +36,12 @@ export async function addOther(
 /** Saves drinks and settings straight into storage, then reloads. */
 export async function seed(
   page: Page,
-  data: { drinks?: Drink[]; settings?: Setting[] },
+  { drinks = [], settings = [] }: { drinks?: Drink[]; settings?: Setting[] },
 ): Promise<void> {
-  await page.evaluate(({ drinks = [], settings = [] }) => {
-    localStorage.setItem('shkriuss:water', JSON.stringify({ v: 1, data: { drinks } }));
-    localStorage.setItem('shkriuss:water-settings', JSON.stringify({ v: 1, data: { settings } }));
-  }, data);
-  await page.reload();
+  await seedStores(page, {
+    water: { version: DRINKS_VERSION, data: { drinks } },
+    'water-settings': { version: SETTINGS_VERSION, data: { settings } },
+  });
 }
 
 /** A drink on a day, at a time. */

@@ -55,7 +55,7 @@ test('shows reminders missed while Calendar was closed', async ({ page }) => {
       { title: 'Already over', startTime: '08:00', endTime: '08:30', reminder: 15 },
     ],
     // Calendar was last open at 8:00.
-    { 'shkriuss:calendar-reminders': { v: 1, data: { checkedUntil: '2026-10-17T08:00' } } },
+    { 'calendar-reminders': { version: 1, data: { checkedUntil: '2026-10-17T08:00' } } },
   );
   await expect(reminders(page).locator('[data-action="edit"]')).toHaveCount(1);
   await expect(reminders(page).getByRole('button', { name: /Still to come/ })).toBeVisible();

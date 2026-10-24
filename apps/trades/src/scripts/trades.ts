@@ -7,7 +7,7 @@
 import { today } from '@shkriuss/dates';
 import { createStore, downloadFile } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
-import { focusProblem, reportSave } from '@shkriuss/ui/problem';
+import { reportSave } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { typedText } from '@shkriuss/ui/typed-text';
 import { site } from 'virtual:shkriuss/site';
@@ -59,11 +59,13 @@ import {
   type Trade,
   type TradeForm,
   type TradesState,
+  TRADES_VERSION,
 } from '../lib/trades.ts';
+import { required, showFieldProblems } from '@shkriuss/ui/dom';
 
 const tradesStore = createStore<TradesState>({
   key: 'trades',
-  version: 1,
+  version: TRADES_VERSION,
   fallback: emptyTrades,
   validate: isTradesState,
 });
@@ -105,12 +107,6 @@ function rateText(rate: number): string {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   }).format(value);
-}
-
-function required<T extends Element>(root: ParentNode, selector: string): T {
-  const element = root.querySelector<T>(selector);
-  if (!element) throw new Error(`Trades: missing element ${selector}`);
-  return element;
 }
 
 /** Green for a win, red for a loss. */
@@ -353,27 +349,8 @@ export function mountTrades(root: Document): void {
   }
 
   /** Shows what's wrong; focuses the first field with a problem. Returns true if anything is. */
-  function showProblems(problems: CloseProblems): boolean {
-    for (const name of ALL_FIELDS) {
-      const problem = problems[name];
-      required<HTMLElement>(form, `[data-error-for="${name}"]`).textContent = problem ?? '';
-      const control = field(name);
-      const inputs = control instanceof RadioNodeList ? [...control] : [control];
-      for (const input of inputs as HTMLElement[]) {
-        if (problem) input.setAttribute('aria-invalid', 'true');
-        else input.removeAttribute('aria-invalid');
-      }
-    }
-    const first = ALL_FIELDS.find((name) => problems[name]);
-    if (first) {
-      const control = field(first);
-      focusProblem(
-        (control instanceof RadioNodeList ? control[0] : control) as HTMLElement | undefined,
-        problems[first],
-      );
-    }
-    return first !== undefined;
-  }
+  const showProblems = (problems: CloseProblems): boolean =>
+    showFieldProblems(form, ALL_FIELDS, problems, { focusFirst: true });
 
   function openForm(trade: Trade | undefined, close = false): void {
     editing = trade?.id ?? null;

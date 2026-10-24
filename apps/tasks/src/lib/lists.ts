@@ -3,7 +3,8 @@
  * tasks without a list are simply in "All". A list can be renamed or
  * deleted at any time.
  */
-import { byText, fold } from './tasks.ts';
+import { foldText } from '@shkriuss/ui/text';
+import { byText } from './tasks.ts';
 
 export interface List {
   id: string;
@@ -50,9 +51,9 @@ const cutName = (name: string): string => name.trim().slice(0, LIST_NAME_MAX).tr
  * the list being renamed (null for a new one).
  */
 export function listProblem(state: ListsState, name: string, id: string | null): string | null {
-  const wanted = fold(cutName(name));
+  const wanted = foldText(cutName(name));
   if (wanted === '') return 'Give it a name.';
-  const same = state.lists.find((list) => list.id !== id && fold(list.name) === wanted);
+  const same = state.lists.find((list) => list.id !== id && foldText(list.name) === wanted);
   if (same) return `You already have a list called “${same.name}”.`;
   if (id === null && state.lists.length >= MAX_LISTS) {
     return `You can have up to ${MAX_LISTS} lists. Delete one to add another.`;

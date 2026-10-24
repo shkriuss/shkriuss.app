@@ -70,9 +70,13 @@ in alphabetical order, so where an entry sits in `apps.json` doesn't matter.
   same words as every app, and gives back whether it saved, so the app only
   says "Saved" when it did. After showing a form's errors, put focus on the
   first wrong field with `focusProblem()`, which reads the error out if the
-  person pressed Enter in that field.
+  person pressed Enter in that field. `showFieldProblems()` from
+  `@shkriuss/ui/dom` does both for a whole form.
 - Add browser tests in `apps/<slug>/e2e/`. `apps/tally` is the reference
-  example for all of this.
+  example for all of this. To start a test with saved data, use
+  `seedStores()` from `tests/e2e/storage.ts` with the app's own version
+  constant (like `TASKS_VERSION`), and `readStore()` to check what was
+  saved. Test photos come from `tests/e2e/photos.ts`.
 - If the app needs a browser feature (for example keeping the screen on),
   allow it in `astro.config.ts`:
   `defineAppConfig({ slug: 'notes', allowFeatures: ['screen-wake-lock'] })`.

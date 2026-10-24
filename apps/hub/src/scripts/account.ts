@@ -48,6 +48,7 @@ import { focusProblem } from '@shkriuss/ui/problem';
 import { setBusy } from '@shkriuss/ui/busy';
 import { renderQrCode } from '@shkriuss/ui/qr-code';
 import { DATE_LOCALE } from '@shkriuss/ui/locale';
+import { required } from '@shkriuss/ui/dom';
 
 type View =
   | 'loading'
@@ -106,12 +107,6 @@ const wasReplaced = (secret: Uint8Array<ArrayBuffer>): Promise<boolean> =>
   isReplaced(secret).catch(() => false);
 
 const timeFormat = new Intl.DateTimeFormat(DATE_LOCALE, { hour: 'numeric', minute: '2-digit' });
-
-function required<T extends Element>(root: ParentNode, selector: string): T {
-  const element = root.querySelector<T>(selector);
-  if (!element) throw new Error(`Account: missing element ${selector}`);
-  return element;
-}
 
 function today(): string {
   const now = new Date();

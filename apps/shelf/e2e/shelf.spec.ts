@@ -3,7 +3,8 @@
 // The locale is en-US.
 import type { Page } from '@playwright/test';
 import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
-import type { Item } from '../src/lib/items.ts';
+import { seedStores } from '../../../tests/e2e/storage.ts';
+import { SHELF_VERSION, type Item } from '../src/lib/items.ts';
 
 const form = (page: Page) => page.getByRole('dialog', { name: /^(New|Edit) item$/ });
 const cards = (page: Page) => page.locator('[data-items] > li');
@@ -34,13 +35,7 @@ const sample = (item: Partial<Item>, index: number): Item => ({
 
 /** Saves items straight into storage, then reloads. */
 async function seed(page: Page, items: Partial<Item>[]): Promise<void> {
-  await page.evaluate(
-    (data) => {
-      localStorage.setItem('shkriuss:shelf', JSON.stringify({ v: 1, data }));
-    },
-    { items: items.map(sample) },
-  );
-  await page.reload();
+  await seedStores(page, { shelf: { version: SHELF_VERSION, data: { items: items.map(sample) } } });
 }
 
 test.beforeEach(async ({ page }) => {

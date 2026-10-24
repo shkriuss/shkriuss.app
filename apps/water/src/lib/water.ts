@@ -39,6 +39,9 @@ export interface DrinksState {
   drinks: Drink[];
 }
 
+/** The drinks' data version. */
+export const DRINKS_VERSION = 1;
+
 export interface Reminders {
   on: boolean;
   /** Minutes between reminders (one of EVERY_CHOICES). */
@@ -64,6 +67,9 @@ export interface SettingsState {
   /** Only the settings ever changed, in SETTING_IDS order. */
   settings: Setting[];
 }
+
+/** The settings' data version. */
+export const SETTINGS_VERSION = 1;
 
 const SETTING_IDS: readonly Setting['id'][] = ['unit', 'goal', 'glass', 'bottle', 'reminders'];
 

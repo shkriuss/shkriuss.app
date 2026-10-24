@@ -29,13 +29,15 @@
  * sync, files saved here go online and files deleted here are deleted online,
  * each sealed on its own. Other devices download a file when they first need
  * it (download()).
+ *
+ * In other files: this device's state (./device.ts), requests to the server
+ * (./requests.ts) and files (./files.ts).
  */
-import { fromBase64Url, openBytes, sealBytes, toBase64Url } from '@shkriuss/crypto';
+import { fromBase64Url } from '@shkriuss/crypto';
 import type { Store } from '@shkriuss/storage';
 import {
   CONNECT_LIFETIME_MS,
   connectUrl,
-  type Connection,
   newConnectRequest,
   openConnection,
   parseConnectResult,
@@ -43,6 +45,21 @@ import {
   type PendingConnect,
   turnOffProof,
 } from './connect.ts';
+import {
+  checkStillOn,
+  forgetFiles,
+  isSyncOn,
+  loadState,
+  offState,
+  saveConnection,
+  saveState,
+  STATE_KEY,
+  StoppedError,
+  updateFiles,
+  updateState,
+  type DeviceState,
+} from './device.ts';
+import { createFileSync, type SyncedFiles } from './files.ts';
 import {
   byId,
   canonical,
@@ -58,39 +75,31 @@ import {
   type Known,
   type StoreSnapshot,
 } from './merge.ts';
-import { fetchWithLimit, isTimeout } from './request.ts';
 import {
-  fileLabel,
-  openStores,
-  sealStores,
-  syncKeys,
-  type OpenedCopy,
-  type Stores,
-} from './snapshot.ts';
+  api,
+  failed,
+  goneError,
+  isGone,
+  problemOf,
+  SyncError,
+  type Keys,
+  type SyncProblem,
+} from './requests.ts';
+import { openStores, sealStores, syncKeys, type OpenedCopy, type Stores } from './snapshot.ts';
+import { FILE_ID, MAX_SEALED_CHARS } from './validate.ts';
 
+export { isSyncOn, saveConnection, stopSync } from './device.ts';
+export type { SyncedFiles } from './files.ts';
 export { secondVersionName } from './merge.ts';
-import { FILE_ID, MAX_FILE_BYTES, MAX_SEALED_CHARS, type FileList } from './validate.ts';
+export type { SyncProblem } from './requests.ts';
 
-const STATE_KEY = 'shkriuss-device:sync';
-const FILES_KEY = 'shkriuss-device:sync-files';
 const PENDING_KEY = 'shkriuss-device:connect';
-const API = '/api/sync';
 /** After a change, wait this long so quick edits go up together. */
 const CHANGE_DELAY_MS = 1500;
 /** While the app is open and visible, look for changes from other devices this often. */
 const POLL_MS = 60 * 1000;
 /** Merge again at most this many times in a row when another device writes first. */
 const MAX_ROUNDS = 3;
-/** Check every file against the online list this often (and once sync is turned on). */
-const CHECK_FILES_MS = 24 * 60 * 60 * 1000;
-/**
- * The daily check leaves files this new alone: they go online before the
- * data that uses them, so another device may not have sent that data yet.
- */
-const NEW_FILE_MS = 24 * 60 * 60 * 1000;
-/** After the server says "too many changes", leave files alone this long. */
-const FILES_PAUSE_MS = 10 * 60 * 1000;
-
 /** A store whose data is a list of items with ids, and how to get the list in and out. */
 export interface SyncedStore<T = unknown, I extends Identified = Identified> {
   store: Store<T>;
@@ -103,17 +112,6 @@ export interface SyncedStore<T = unknown, I extends Identified = Identified> {
    * the item). Edits then also win over deletions on another device.
    */
   conflictCopy?(mine: I, theirs: I): I;
-}
-
-/**
- * Files that go with an app's data, like photos: too big for the copy, so
- * each one is sealed and kept online on its own (docs/adr/0014).
- */
-export interface SyncedFiles {
-  /** The ids of every file the app's data uses now, whether it's on this device or not. */
-  wanted(): ReadonlySet<string>;
-  /** This device's copy of a file, or null if it hasn't got it. */
-  read(id: string): Promise<Uint8Array<ArrayBuffer> | null>;
 }
 
 /**
@@ -141,28 +139,6 @@ export interface LinkedData {
  */
 export const syncedStore = <T, I extends Identified>(config: SyncedStore<T, I>): SyncedStore =>
   config as unknown as SyncedStore;
-
-export type SyncProblem =
-  /** No connection, or the app's server didn't answer. */
-  | 'offline'
-  /** The server refused, or the online copy couldn't be read. */
-  | 'server'
-  /** Another device has a newer version of the app: wait for this one to update. */
-  | 'update-needed'
-  /** This version of the app can't read the data saved here: it's kept as it is, unsynced. */
-  | 'unreadable'
-  /** Too much data to sync. */
-  | 'too-big'
-  /** The online copy was deleted on another device; sync is now off here. */
-  | 'deleted'
-  /** The account key was replaced on another device, which moved the copy; sync is now off here. */
-  | 'moved'
-  /** This browser won't save. */
-  | 'storage'
-  /** There's no room online for more files: new ones stay on this device. */
-  | 'files-full'
-  /** Coming back from the hub didn't work (took too long, or another tab). */
-  | 'connect-failed';
 
 export interface SyncStatus {
   on: boolean;
@@ -208,221 +184,6 @@ export interface SyncClient {
   secret(): Uint8Array<ArrayBuffer> | null;
 }
 
-// ---------- This device's sync state ----------
-
-interface DeviceState {
-  /** The app's own key (from the account), base64url. Null while sync is off. */
-  secret: string | null;
-  code: string | null;
-  /**
-   * The online copy's version and lineage when last seen, and the most times
-   * devices had written it (sealed in the copy; missing before that was added).
-   */
-  remote: { version: number; epoch: string; written?: number } | null;
-  /** What this device knew at the last sync, per store key. */
-  known: Record<string, Known>;
-  /** True when `known` holds a merge that isn't online yet (the upload failed). */
-  dirty: boolean;
-  /**
-   * The online copy as this device last saw it (its epoch, and per store key
-   * what it held). `known` runs ahead of it after a failed upload, or edits
-   * while sync was off; keeping both versions needs to know what was online.
-   */
-  base: { epoch: string; stores: Record<string, Known> } | null;
-  last: number | null;
-  /** The app's keys from replaced account keys: their online copies are moved here, then deleted. */
-  previous: string[];
-}
-
-const strings = (value: unknown): string[] =>
-  Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
-
-function loadState(): DeviceState | null {
-  try {
-    const value: unknown = JSON.parse(localStorage.getItem(STATE_KEY) ?? 'null');
-    if (typeof value !== 'object' || value === null) return null;
-    const state = value as Partial<Record<keyof DeviceState, unknown>>;
-    const on = typeof state.secret === 'string' && typeof state.code === 'string';
-    if (!on && state.secret !== null) return null;
-    const base = state.base as Partial<NonNullable<DeviceState['base']>> | null | undefined;
-    return {
-      secret: on ? (state.secret as string) : null,
-      code: on ? (state.code as string) : null,
-      remote: (state.remote as DeviceState['remote'] | undefined) ?? null,
-      known: (state.known as DeviceState['known'] | undefined) ?? {},
-      dirty: state.dirty === true,
-      base:
-        typeof base?.epoch === 'string' && typeof base.stores === 'object' && base.stores !== null
-          ? (base as DeviceState['base'])
-          : null,
-      last: typeof state.last === 'number' ? state.last : null,
-      previous: strings(state.previous),
-    };
-  } catch {
-    return null;
-  }
-}
-
-function saveState(state: DeviceState | null): boolean {
-  try {
-    if (state) localStorage.setItem(STATE_KEY, JSON.stringify(state));
-    else localStorage.removeItem(STATE_KEY);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/** Files to bring up to date online (apps with files only), kept apart so a sync can't overwrite them. */
-interface FileState {
-  /** Saved here; not online yet. */
-  uploads: string[];
-  /** Deleted here; maybe still online. */
-  removals: string[];
-  /** When every file was last checked against the online list (null: not since sync was turned on). */
-  checked: number | null;
-  /** The server said "too many changes": files wait until then (ms). */
-  paused: number | null;
-}
-
-function loadFiles(): FileState {
-  try {
-    const value: unknown = JSON.parse(localStorage.getItem(FILES_KEY) ?? 'null');
-    const files = (typeof value === 'object' && value !== null ? value : {}) as Partial<
-      Record<keyof FileState, unknown>
-    >;
-    const time = (time: unknown) => (typeof time === 'number' ? time : null);
-    return {
-      uploads: strings(files.uploads),
-      removals: strings(files.removals),
-      checked: time(files.checked),
-      paused: time(files.paused),
-    };
-  } catch {
-    return { uploads: [], removals: [], checked: null, paused: null };
-  }
-}
-
-/** Changes the file lists in one go (nothing else runs in between). */
-function updateFiles(change: (files: FileState) => FileState): boolean {
-  try {
-    localStorage.setItem(FILES_KEY, JSON.stringify(change(loadFiles())));
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/** Sync was turned off, or on with another key: start again with a full check. */
-function forgetFiles(): void {
-  try {
-    localStorage.removeItem(FILES_KEY);
-  } catch {
-    // Nothing saved, so nothing to forget.
-  }
-}
-
-/** Whether this device syncs this app. */
-export const isSyncOn = (): boolean => typeof loadState()?.secret === 'string';
-
-/**
- * Stops syncing on this device and forgets what it knew, so a later "Turn on
- * sync" starts like the first time (what's online wins). For when all data is
- * deleted here, or replaced from a backup. Never throws.
- */
-export function stopSync(): void {
-  saveState(null);
-  forgetFiles();
-}
-
-/** Sync off, keeping what this device knew. */
-const offState = (state: DeviceState): DeviceState => ({
-  ...state,
-  secret: null,
-  code: null,
-  remote: null,
-  previous: [],
-});
-
-/**
- * Saves the connection the hub sent (coming back from "Turn on sync").
- * Connecting again with the same key changes nothing; with another key, this
- * device's data is merged into that account's copy at the next sync. Keys
- * the new one replaced are remembered until their copies are moved. Returns
- * false if the browser won't save.
- */
-export function saveConnection(connection: Connection): boolean {
-  const existing = loadState();
-  const secret = toBase64Url(connection.secret);
-  const previous = [
-    ...new Set([...(existing?.previous ?? []), ...connection.replaces.map(toBase64Url)]),
-  ].filter((key) => key !== secret);
-  if (existing?.secret === secret) {
-    return saveState({ ...existing, code: connection.code, previous });
-  }
-  forgetFiles();
-  return saveState({
-    secret,
-    code: connection.code,
-    remote: null,
-    known: existing?.known ?? {},
-    dirty: existing?.dirty ?? false,
-    base: existing?.base ?? null,
-    last: null,
-    previous,
-  });
-}
-
-class SyncError extends Error {
-  readonly problem: SyncProblem;
-  constructor(problem: SyncProblem) {
-    super(problem);
-    this.problem = problem;
-  }
-}
-
-/** Sync was turned off, or on with another key, while a round waited for the server. */
-class StoppedError extends Error {}
-
-/**
- * A round reads this device's state at the start, then waits for the server.
- * Meanwhile the person may turn sync off, or delete all data (which turns it
- * off first): then the round stops without saving anything, so that stays
- * done. Call this before every save after waiting.
- */
-function checkStillOn(secret: string): void {
-  if (loadState()?.secret !== secret) throw new StoppedError();
-}
-
-/** Saves what a round learned onto the state as it is now (see checkStillOn). False if the browser won't save. */
-function updateState(secret: string, change: Partial<DeviceState>): boolean {
-  const current = loadState();
-  if (current?.secret !== secret) throw new StoppedError();
-  return saveState({ ...current, ...change });
-}
-
-async function api(path: string, init: RequestInit = {}, token?: string): Promise<Response> {
-  const headers = new Headers(init.headers);
-  if (token) headers.set('Authorization', `Bearer ${token}`);
-  if (typeof init.body === 'string') headers.set('Content-Type', 'application/json');
-  else if (init.body) headers.set('Content-Type', 'application/octet-stream');
-  try {
-    // No answer in time (a network that hangs) counts as no connection too.
-    return await fetchWithLimit(`${API}${path}`, {
-      ...init,
-      headers,
-      credentials: 'omit',
-      cache: 'no-store',
-    });
-  } catch {
-    throw new SyncError('offline');
-  }
-}
-
-/** Why a round failed. An answer that stopped coming in time is no connection. */
-const problemOf = (error: unknown): SyncProblem =>
-  error instanceof SyncError ? error.problem : isTimeout(error) ? 'offline' : 'server';
-
 /**
  * Why a store's data here can't be synced, if it can't: it's from a newer
  * version of the app (or this device last synced with a newer version), or
@@ -465,28 +226,6 @@ function knownNow(stores: readonly SyncedStore[], known: Record<string, Known>) 
   return result;
 }
 
-/** A 410 from the server: the copy was deleted, or moved to a new account key. */
-async function goneError(response: Response): Promise<SyncError> {
-  const body = (await response.json().catch(() => null)) as { moved?: unknown } | null;
-  return new SyncError(body?.moved === true ? 'moved' : 'deleted');
-}
-
-const isGone = (error: unknown): boolean =>
-  error instanceof SyncError && (error.problem === 'deleted' || error.problem === 'moved');
-
-/** Any other failed response, as a SyncError (507: the app's room online is used up, ADR 0017). */
-const failed = (response: Response): SyncError =>
-  new SyncError(response.status >= 500 && response.status !== 507 ? 'offline' : 'server');
-
-/** An account's keys for one app (./snapshot.ts). */
-interface Keys {
-  token: string;
-  key: Uint8Array<ArrayBuffer>;
-}
-
-/** Thrown when the server says "too many changes": files wait a while. */
-class PausedError extends Error {}
-
 /** The online copy, or why there isn't one. */
 type Remote =
   | { kind: 'same' }
@@ -513,9 +252,8 @@ export function createSync(options: {
   let keptBoth = 0;
   let again = false;
   let problem: SyncProblem | null = null;
-  /** Set when a file had no room online during this run. */
-  let noRoom = false;
   let timer: number | undefined;
+  const fileSync = createFileSync(options.app);
 
   const status = (): SyncStatus => {
     const state = loadState();
@@ -760,7 +498,7 @@ export function createSync(options: {
     // data moved too: that device may have been the lost one.
     if (state.previous.length > 0) {
       for (const old of moving) {
-        if (files) await moveFiles(files, old, { token, key });
+        if (files) await fileSync.moveFiles(files, old, { token, key });
         if (linked) await linked.move(old.secret, fromBase64Url(secret));
         const response = await api('/copy?moved', { method: 'DELETE' }, old.token);
         if (!response.ok) throw failed(response);
@@ -776,169 +514,6 @@ export function createSync(options: {
   const knownsOf = (merged: Stores): Record<string, Known> =>
     Object.fromEntries(Object.entries(merged).map(([key, snapshot]) => [key, knownFrom(snapshot)]));
 
-  // ---------- Files ----------
-
-  /** The account's files online, and the copy's version. */
-  async function listFiles(token: string): Promise<FileList> {
-    const response = await api('/files', {}, token);
-    if (response.status === 410) throw await goneError(response);
-    if (response.status === 429) throw new PausedError();
-    if (!response.ok) throw failed(response);
-    return (await response.json()) as FileList;
-  }
-
-  /** One file from online, opened; null if it isn't there. */
-  async function fetchFile({ token, key }: Keys, id: string) {
-    const response = await api(`/files/${id}`, {}, token);
-    if (response.status === 404) return null;
-    if (response.status === 429) throw new PausedError();
-    if (!response.ok) throw failed(response);
-    const sealed = new Uint8Array(await response.arrayBuffer());
-    return openBytes(key, sealed, fileLabel(options.app, id)).catch(() => null);
-  }
-
-  /** Seals a file and puts it online (one too big to sync just stays here). */
-  async function putFile({ token, key }: Keys, id: string, bytes: Uint8Array<ArrayBuffer>) {
-    const sealed = await sealBytes(key, bytes, fileLabel(options.app, id));
-    if (sealed.length > MAX_FILE_BYTES) return;
-    const response = await api(`/files/${id}`, { method: 'PUT', body: sealed }, token);
-    if (response.status === 413) return;
-    if (response.status === 507) throw new SyncError('files-full');
-    if (response.status === 410) throw await goneError(response);
-    if (response.status === 429) throw new PausedError();
-    if (!response.ok) throw failed(response);
-  }
-
-  /** Puts this device's copy of a file online, if it has one. */
-  async function uploadFile(synced: SyncedFiles, keys: Keys, id: string) {
-    const bytes = await synced.read(id).catch(() => null);
-    if (bytes) await putFile(keys, id, bytes);
-  }
-
-  /**
-   * Deletes a file online, but only if the copy is still the one this device
-   * synced (the server checks): false if it changed, so a file another device
-   * has just started using again is never deleted. Sync again first.
-   */
-  async function deleteFile({ token }: Keys, id: string, base: number) {
-    const response = await api(`/files/${id}?base=${base}`, { method: 'DELETE' }, token);
-    if (response.status === 409) return false;
-    if (response.status === 410) throw await goneError(response);
-    if (response.status === 429) throw new PausedError();
-    if (!response.ok) throw failed(response);
-    return true;
-  }
-
-  /** The device's keys and file lists, unless files wait (sync off, or "too many changes"). */
-  async function fileWork(now: number) {
-    const state = loadState();
-    const lists = loadFiles();
-    if (!state?.secret || (lists.paused !== null && now < lists.paused)) return null;
-    return { state, lists, keys: await syncKeys(fromBase64Url(state.secret)) };
-  }
-
-  const dequeue = (list: 'uploads' | 'removals', id: string) =>
-    updateFiles((current) => ({ ...current, [list]: current[list].filter((x) => x !== id) }));
-
-  /** Puts a file online; false if there's no room for it (the daily check tries again). */
-  async function upload(synced: SyncedFiles, keys: Keys, id: string): Promise<boolean> {
-    try {
-      await uploadFile(synced, keys, id);
-      return true;
-    } catch (error) {
-      if (!(error instanceof SyncError && error.problem === 'files-full')) throw error;
-      noRoom = true;
-      return false;
-    }
-  }
-
-  /** "Too many changes": files wait a while, without bothering anyone. */
-  function pauseOn(error: unknown): void {
-    if (!(error instanceof PausedError)) throw error;
-    updateFiles((current) => ({ ...current, paused: Date.now() + FILES_PAUSE_MS }));
-  }
-
-  /**
-   * Before a sync: files saved here go online, so other devices find them
-   * as soon as the data that uses them arrives.
-   */
-  async function uploadFiles(synced: SyncedFiles): Promise<void> {
-    const work = await fileWork(Date.now());
-    if (!work || work.lists.uploads.length === 0) return;
-    // Read together with the list, so a file just saved is in both or neither.
-    const wanted = synced.wanted();
-    try {
-      for (const id of work.lists.uploads) {
-        if (wanted.has(id) && !(await upload(synced, work.keys, id))) {
-          dequeue('uploads', id);
-          return;
-        }
-        dequeue('uploads', id);
-      }
-    } catch (error) {
-      pauseOn(error);
-    }
-  }
-
-  /**
-   * After a sync: files deleted here are deleted online, and once a day every
-   * file is checked against the online list (missing ones go up, unused ones
-   * older than a day are deleted). Deleting only works while the copy online
-   * is still the one this device just synced (the server checks), so a file
-   * another device has started using again is never deleted. Returns false
-   * if it should run again after another sync.
-   */
-  async function tidyFiles(synced: SyncedFiles): Promise<boolean> {
-    const now = Date.now();
-    const work = await fileWork(now);
-    if (!work?.state.remote) return true;
-    const { removals, checked } = work.lists;
-    const due = checked === null || now - checked >= CHECK_FILES_MS;
-    if (removals.length === 0 && !due) return true;
-    const wanted = synced.wanted();
-    const { keys } = work;
-    const base = work.state.remote.version;
-    try {
-      for (const id of removals) {
-        if (!wanted.has(id) && !(await deleteFile(keys, id, base))) return false;
-        dequeue('removals', id);
-      }
-      if (!due) return true;
-      const online = await listFiles(keys.token);
-      for (const id of wanted) {
-        if (Object.hasOwn(online.files, id) || !FILE_ID.test(id)) continue;
-        if (!(await upload(synced, keys, id))) break;
-      }
-      if (online.version !== base) return false;
-      for (const [id, [, at]] of Object.entries(online.files)) {
-        if (wanted.has(id) || online.now - at < NEW_FILE_MS) continue;
-        if (!(await deleteFile(keys, id, base))) return false;
-      }
-      updateFiles((current) => ({ ...current, checked: now }));
-    } catch (error) {
-      pauseOn(error);
-    }
-    return true;
-  }
-
-  /** Brings a replaced key's files to the new key, re-sealed (the ones the data uses). */
-  async function moveFiles(synced: SyncedFiles, from: Keys, to: Keys): Promise<void> {
-    let theirs: FileList;
-    try {
-      theirs = await listFiles(from.token);
-    } catch (error) {
-      if (isGone(error)) return;
-      throw error;
-    }
-    const ours = await listFiles(to.token);
-    const wanted = synced.wanted();
-    for (const id of Object.keys(theirs.files)) {
-      if (!wanted.has(id) || Object.hasOwn(ours.files, id)) continue;
-      const bytes = (await synced.read(id).catch(() => null)) ?? (await fetchFile(from, id));
-      if (bytes) await putFile(to, id, bytes);
-    }
-  }
-
   async function run(): Promise<void> {
     if (!isSyncOn()) return;
     if (busy) {
@@ -950,13 +525,13 @@ export function createSync(options: {
     emit();
     let event: SyncEvent | undefined;
     try {
-      noRoom = false;
-      if (files) await uploadFiles(files);
+      fileSync.start();
+      if (files) await fileSync.uploadFiles(files);
       let done = false;
       for (let attempt = 0; attempt < MAX_ROUNDS && !done; attempt += 1) done = await round();
-      if (done && files) done = await tidyFiles(files);
+      if (done && files) done = await fileSync.tidyFiles(files);
       if (!done) again = true;
-      problem = noRoom ? 'files-full' : null;
+      problem = fileSync.noRoom() ? 'files-full' : null;
       event = keptBoth > 0 ? 'kept-both' : 'synced';
     } catch (error) {
       // Stopped: sync was turned off meanwhile, which says so itself.
@@ -1096,7 +671,7 @@ export function createSync(options: {
       const state = loadState();
       if (!files || !state?.secret || !FILE_ID.test(id)) return null;
       try {
-        return await fetchFile(await syncKeys(fromBase64Url(state.secret)), id);
+        return await fileSync.fetchFile(await syncKeys(fromBase64Url(state.secret)), id);
       } catch {
         return null;
       }

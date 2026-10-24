@@ -28,7 +28,7 @@ import {
   type Stamp,
 } from '@shkriuss/dates';
 import type { Notice } from '@shkriuss/push';
-import { parseDecimal } from '@shkriuss/ui/numbers';
+import { CURRENCIES, formatMoney, parseDecimal, type Currency } from '@shkriuss/ui/numbers';
 import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
 export type Kind = 'expense' | 'income' | 'refund';
@@ -47,6 +47,9 @@ export interface Category {
 export interface CategoriesState {
   categories: Category[];
 }
+
+/** The categories' data version. */
+export const CATEGORIES_VERSION = 1;
 
 export interface Entry {
   id: string;
@@ -429,21 +432,8 @@ export function byCategory(
 
 // ---------- Money and dates for people ----------
 
-export const CURRENCIES = ['USD', 'EUR', 'GBP', 'GEL', 'CHF', 'JPY', 'CAD', 'AUD'] as const;
-export type Currency = (typeof CURRENCIES)[number];
-
-/** "$1,234.50"; with `signed`, "+$480.00" or "-$120.00". */
-export function formatMoney(
-  amount: number,
-  currency: Currency,
-  options: { signed?: boolean; locale?: string } = {},
-): string {
-  return new Intl.NumberFormat(options.locale, {
-    style: 'currency',
-    currency,
-    signDisplay: options.signed ? 'exceptZero' : 'auto',
-  }).format(amount);
-}
+// The currencies and formatMoney are shared with Trades and Repairs.
+export { CURRENCIES, formatMoney, type Currency };
 
 /** "October 2026". */
 export function monthLabel(month: string, locale = DATE_LOCALE): string {

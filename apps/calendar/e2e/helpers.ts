@@ -1,7 +1,8 @@
 // Helpers shared by Calendar's browser tests.
 import type { Page } from '@playwright/test';
 import { expect } from '../../../tests/e2e/fixtures.ts';
-import type { CalendarEvent } from '../src/lib/events.ts';
+import { seedStores, type Saved } from '../../../tests/e2e/storage.ts';
+import { DATA_VERSION, type CalendarEvent } from '../src/lib/events.ts';
 
 /** An event with every field filled in; tests change only what matters to them. */
 export const sampleEvent = (event: Partial<CalendarEvent>, index = 0): CalendarEvent => ({
@@ -22,17 +23,12 @@ export const sampleEvent = (event: Partial<CalendarEvent>, index = 0): CalendarE
 export async function seed(
   page: Page,
   events: Partial<CalendarEvent>[],
-  storage: Record<string, unknown> = {},
+  stores: Record<string, Saved> = {},
 ): Promise<void> {
-  const data = {
-    'shkriuss:calendar': { v: 2, data: { events: events.map(sampleEvent) } },
-    ...storage,
-  };
-  await page.evaluate((entries) => {
-    for (const [key, value] of Object.entries(entries))
-      localStorage.setItem(key, JSON.stringify(value));
-  }, data);
-  await page.reload();
+  await seedStores(page, {
+    calendar: { version: DATA_VERSION, data: { events: events.map(sampleEvent) } },
+    ...stores,
+  });
 }
 
 export const editor = (page: Page) => page.getByRole('dialog', { name: /^(New|Edit) event$/ });

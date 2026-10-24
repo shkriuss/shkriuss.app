@@ -19,6 +19,7 @@ import {
   type Counter,
   type TallyState,
 } from '../lib/counters.ts';
+import { required } from '@shkriuss/ui/dom';
 
 const store = createStore<TallyState>({
   key: 'tally',
@@ -26,12 +27,6 @@ const store = createStore<TallyState>({
   fallback: emptyState,
   validate: isTallyState,
 });
-
-function required<T extends Element>(root: ParentNode, selector: string): T {
-  const element = root.querySelector<T>(selector);
-  if (!element) throw new Error(`Tally: missing element ${selector}`);
-  return element;
-}
 
 const numberFormat = new Intl.NumberFormat();
 

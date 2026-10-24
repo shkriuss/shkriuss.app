@@ -6,6 +6,7 @@
  */
 import { secondVersionName } from '@shkriuss/sync';
 import { DATE_LOCALE } from '@shkriuss/ui/locale';
+import { foldText } from '@shkriuss/ui/text';
 
 export interface Note {
   id: string;
@@ -177,19 +178,15 @@ export function titleOf(note: Note): string {
   return shorten(oneLine(note.title) || oneLine(firstLine), LIST_TITLE_LENGTH);
 }
 
-/** Text for searching: lower case and without accents, so "cafe" finds "Café". */
-const fold = (text: string): string =>
-  text.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase();
-
 /**
  * The notes to list: those whose title or body contains every word of the
  * search, pinned first, then the most recently edited.
  */
 export function visibleNotes(state: NotesState, search = ''): Note[] {
-  const words = fold(search).split(/\s+/).filter(Boolean);
+  const words = foldText(search).split(/\s+/).filter(Boolean);
   return state.notes
     .filter((note) => {
-      const text = fold(`${note.title}\n${note.body}`);
+      const text = foldText(`${note.title}\n${note.body}`);
       return words.every((word) => text.includes(word));
     })
     .sort(

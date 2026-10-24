@@ -1,8 +1,9 @@
 // Shared by Tasks' browser tests: finding things on the page, and saving
 // tasks and lists straight into storage.
 import type { Page } from '@playwright/test';
-import type { List } from '../src/lib/lists.ts';
-import type { Task } from '../src/lib/tasks.ts';
+import { seedStores } from '../../../tests/e2e/storage.ts';
+import { LISTS_VERSION, type List } from '../src/lib/lists.ts';
+import { TASKS_VERSION, type Task } from '../src/lib/tasks.ts';
 
 /** Tuesday 20 October 2026, 10:00 in Tbilisi (the tests' time zone). */
 export const NOW = new Date('2026-10-20T10:00:00+04:00');
@@ -46,12 +47,8 @@ const sample = (task: Partial<Task>, index: number): Task => ({
 
 /** Saves tasks (and lists) straight into storage, then reloads. */
 export async function seed(page: Page, tasks: Partial<Task>[], lists: List[] = []): Promise<void> {
-  await page.evaluate(
-    ([data, listsData]) => {
-      localStorage.setItem('shkriuss:tasks', JSON.stringify({ v: 3, data }));
-      localStorage.setItem('shkriuss:task-lists', JSON.stringify({ v: 1, data: listsData }));
-    },
-    [{ tasks: tasks.map(sample) }, { lists }] as const,
-  );
-  await page.reload();
+  await seedStores(page, {
+    tasks: { version: TASKS_VERSION, data: { tasks: tasks.map(sample) } },
+    'task-lists': { version: LISTS_VERSION, data: { lists } },
+  });
 }

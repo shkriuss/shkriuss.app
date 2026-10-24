@@ -22,6 +22,7 @@ import {
   emptySettings,
   entriesCount,
   entriesIn,
+  CATEGORIES_VERSION,
   ENTRIES_VERSION,
   entryYears,
   formatMoney,
@@ -64,10 +65,11 @@ import {
   type SettingsState,
 } from '../lib/budget.ts';
 import { mountReminders } from './reminders.ts';
+import { required, showFieldProblems } from '@shkriuss/ui/dom';
 
 const categoriesStore = createStore<CategoriesState>({
   key: 'budget-categories',
-  version: 1,
+  version: CATEGORIES_VERSION,
   fallback: emptyCategories,
   validate: isCategoriesState,
 });
@@ -87,12 +89,6 @@ const settingsStore = createStore<SettingsState>({
   validate: isSettingsState,
 });
 
-function required<T extends Element>(root: ParentNode, selector: string): T {
-  const element = root.querySelector<T>(selector);
-  if (!element) throw new Error(`Budget: missing element ${selector}`);
-  return element;
-}
-
 /** Green for money in, red for money over. */
 function tone(element: Element, amount: number): void {
   element.classList.toggle('win', amount > 0);
@@ -100,32 +96,11 @@ function tone(element: Element, amount: number): void {
 }
 
 /** Shows a form's problems; focuses the first. Returns true if there are any. */
-function showProblems(
+const showProblems = (
   form: HTMLFormElement,
   names: readonly string[],
   problems: Partial<Record<string, string>>,
-): boolean {
-  for (const name of names) {
-    const problem = problems[name];
-    const error = form.querySelector<HTMLElement>(`[data-error-for="${name}"]`);
-    if (error) error.textContent = problem ?? '';
-    const control = form.elements.namedItem(name);
-    const inputs = control instanceof RadioNodeList ? [...control] : control ? [control] : [];
-    for (const input of inputs as HTMLElement[]) {
-      if (problem) input.setAttribute('aria-invalid', 'true');
-      else input.removeAttribute('aria-invalid');
-    }
-  }
-  const first = names.find((name) => problems[name]);
-  if (first) {
-    const control = form.elements.namedItem(first);
-    focusProblem(
-      (control instanceof RadioNodeList ? control[0] : control) as HTMLElement | null,
-      problems[first],
-    );
-  }
-  return first !== undefined;
-}
+): boolean => showFieldProblems(form, names, problems, { focusFirst: true });
 
 export function mountBudget(root: Document): void {
   const announcer = required<HTMLElement>(root, '[data-announcer]');

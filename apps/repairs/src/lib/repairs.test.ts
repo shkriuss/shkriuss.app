@@ -559,8 +559,8 @@ describe('hours worked and costs', () => {
   it('in words', () => {
     expect(formatHours(1, 'en-US')).toBe('1 hour');
     expect(formatHours(2.5, 'en-US')).toBe('2.5 hours');
-    expect(formatMoney(1234.5, 'USD', 'en-US')).toBe('$1,234.50');
-    expect(formatMoney(80, 'GEL', 'en-US')).toMatch(/^GEL\s80\.00$/);
+    expect(formatMoney(1234.5, 'USD', { locale: 'en-US' })).toBe('$1,234.50');
+    expect(formatMoney(80, 'GEL', { locale: 'en-US' })).toMatch(/^GEL\s80\.00$/);
   });
 
   it('upgrades repairs saved before hours and costs', () => {
