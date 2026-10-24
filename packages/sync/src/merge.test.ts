@@ -114,7 +114,8 @@ describe('observe', () => {
       a: { t: 1001, value: counter('a', 5) },
       b: { t: 1001, deleted: true },
     });
-    expect(next.order.t).toBe(1001);
+    // Deleting an item isn't a move: the order keeps its time (audit E-12).
+    expect(next.order.t).toBe(1000);
     expect(valuesOf(merge(synced, next))).toEqual([counter('a', 5)]);
   });
 
@@ -123,6 +124,14 @@ describe('observe', () => {
     const moved = observe(known, [counter('b'), counter('a')], 1, 200);
     expect(moved.changed).toBe(true);
     expect(moved.snapshot.order).toEqual({ ids: ['b', 'a'], t: 200 });
+  });
+
+  it('takes adding or deleting an item as no move', () => {
+    const synced = observe(undefined, [counter('a'), counter('b')], 1, 100).snapshot;
+    const known = { ...knownFrom(synced), order: { ids: ['a', 'b'], t: 100 } };
+    const added = observe(known, [counter('c'), counter('a')], 1, 200);
+    expect(added.changed).toBe(true);
+    expect(added.snapshot.order).toEqual({ ids: ['c', 'a'], t: 100 });
   });
 });
 
@@ -191,7 +200,7 @@ describe('merge', () => {
     expect(canonical(merge(a, b))).toBe(canonical(merge(b, a)));
   });
 
-  it('uses the newest order, then adds the other device’s new items at the end', () => {
+  it('uses the newest order, then adds the other device’s new items where it put them', () => {
     const phone = new Device([counter('a'), counter('b')]);
     let server = phone.sync(undefined, 100);
     const tablet = new Device();
@@ -204,6 +213,23 @@ describe('merge', () => {
     expect(phone.items.map((item) => item.id)).toEqual(['b', 'a', 'c']);
     tablet.sync(server, 400);
     expect(tablet.items).toEqual(phone.items);
+  });
+
+  it('doesn’t undo a move made elsewhere when an item is added or deleted (audit E-12)', () => {
+    const phone = new Device([counter('a'), counter('b'), counter('c')]);
+    let server = phone.sync(undefined, 100);
+    const tablet = new Device();
+    server = tablet.sync(server, 150);
+
+    // The phone moves c to the top; a minute later, before syncing, the
+    // tablet adds d at the top and deletes b.
+    phone.items = [counter('c'), counter('a'), counter('b')];
+    server = phone.sync(server, 200);
+    tablet.items = [counter('d'), counter('a'), counter('c')];
+    server = tablet.sync(server, 260);
+    expect(tablet.items.map((item) => item.id)).toEqual(['c', 'd', 'a']);
+    phone.sync(server, 300);
+    expect(phone.items).toEqual(tablet.items);
   });
 
   it('says when nothing changed', () => {
@@ -258,7 +284,8 @@ describe('keepBoth', () => {
     tablet.items = [counter('b')];
     const mine = tablet.snapshot(3000).snapshot;
     const result = keepBoth(tablet.known as Known, mine, server, copy, 3000);
-    expect(valuesOf(merge(result.snapshot, server))).toEqual([counter('b'), counter('a', 5)]);
+    // Back where it was: deleting isn't a move.
+    expect(valuesOf(merge(result.snapshot, server))).toEqual([counter('a', 5), counter('b')]);
   });
 
   it('keeps an item changed here but deleted on the other device', () => {
@@ -268,7 +295,8 @@ describe('keepBoth', () => {
     tablet.items = [counter('a', 4), counter('b')];
     const mine = tablet.snapshot(2000).snapshot;
     const result = keepBoth(tablet.known as Known, mine, server, copy, 2000);
-    expect(valuesOf(merge(result.snapshot, server))).toEqual([counter('b'), counter('a', 4)]);
+    // Where it was: deleting isn't a move.
+    expect(valuesOf(merge(result.snapshot, server))).toEqual([counter('a', 4), counter('b')]);
   });
 
   it('still syncs a deletion made on the other device', () => {
