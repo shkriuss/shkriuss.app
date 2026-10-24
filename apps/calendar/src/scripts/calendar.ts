@@ -300,7 +300,12 @@ export function mountCalendar(root: Document): void {
     const time = timeLabel(occurrence, day, formatTime);
     const when = withDate ? `${shortDate.format(utc(day))} · ${time}` : time;
     required<HTMLElement>(item, '[data-when]').textContent = when;
-    required<HTMLElement>(item, '[data-title]').textContent = event.title;
+    const title = required<HTMLElement>(item, '[data-title]');
+    title.textContent = event.title;
+    // A space between the time and the title (not shown: they're on separate
+    // grid rows), so the button's text reads "All day Birthday", which its
+    // name below starts with, and not "All dayBirthday" (WCAG 2.5.3).
+    title.before(' ');
     required<HTMLElement>(item, '[data-repeat]').hidden = event.repeat === 'none';
     required<HTMLElement>(item, '[data-has-reminder]').hidden = event.reminder === null;
     const name = [when, event.title];

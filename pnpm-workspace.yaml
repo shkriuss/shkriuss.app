@@ -7,7 +7,7 @@ packages:
 # version number, so upgrading Astro (for example) is a one-line change here.
 catalog:
   '@astrojs/check': ^0.9.10
-  '@axe-core/playwright': ^4.13.0
+  '@axe-core/playwright': ^4.14.0
   '@eslint/js': ^10.0.1
   '@playwright/test': ^1.64.0
   '@types/node': ^24.19.0

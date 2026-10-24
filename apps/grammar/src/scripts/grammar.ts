@@ -204,14 +204,16 @@ export function mountGrammar(root: Document): void {
     );
     fixes.hidden = fixes.childElementCount === 0;
 
+    // Each name starts with the button's visible words, so people who use
+    // voice control can say what they see (WCAG 2.5.3).
     required<HTMLElement>(item, '[data-action="show"]').setAttribute(
       'aria-label',
-      `Show ${named(issue.problem)} in the text`,
+      `Show in text: ${named(issue.problem)}`,
     );
     const word = wordToAdd(issue);
     const addButton = required<HTMLButtonElement>(item, '[data-action="add-word"]');
     addButton.hidden = word === undefined || state.words.includes(word);
-    if (word !== undefined) addButton.setAttribute('aria-label', `Add “${word}” to my dictionary`);
+    if (word !== undefined) addButton.setAttribute('aria-label', `Add to my dictionary: “${word}”`);
     return item;
   }
 

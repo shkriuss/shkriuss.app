@@ -111,7 +111,7 @@ test('words in my dictionary aren’t marked as misspelled', async ({ page }) =>
   await text(page).fill('Mtskheta is near Tbilisi.');
   await expect(suggestion(page, 'Mtskheta')).toBeVisible();
   await suggestion(page, 'Mtskheta')
-    .getByRole('button', { name: 'Add “Mtskheta” to my dictionary' })
+    .getByRole('button', { name: 'Add to my dictionary: “Mtskheta”' })
     .click();
   await expect(suggestion(page, 'Mtskheta')).toHaveCount(0);
   await expect(page.locator('[data-words]')).toContainText('Mtskheta');
@@ -131,7 +131,7 @@ test('words in my dictionary aren’t marked as misspelled', async ({ page }) =>
 test('shows a problem in the text', async ({ page }) => {
   await open(page);
   await text(page).fill('She go to school.');
-  await suggestion(page, 'go').getByRole('button', { name: 'Show “go” in the text' }).click();
+  await suggestion(page, 'go').getByRole('button', { name: 'Show in text: “go”' }).click();
   await expect(text(page)).toBeFocused();
   expect(
     await text(page).evaluate((box: HTMLTextAreaElement) => [box.selectionStart, box.selectionEnd]),

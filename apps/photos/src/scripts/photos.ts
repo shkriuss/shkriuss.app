@@ -194,7 +194,12 @@ export function mountPhotos(root: Document): void {
     const image = required<HTMLImageElement>(item, '[data-thumb]');
     void photoThumb(photo).then((url) => {
       if (url) image.src = url;
-      else format.hidden = false;
+      else {
+        format.hidden = false;
+        // The name includes the badge's words ("HEIC"), so people who use
+        // voice control can say what they see (WCAG 2.5.3).
+        button.ariaLabel = `${photoAlt(photo)}, ${format.textContent}`;
+      }
     });
     return item;
   }
