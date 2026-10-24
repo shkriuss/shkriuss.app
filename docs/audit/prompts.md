@@ -67,7 +67,10 @@ before you start; it checks each tool's own docs.
 **Claude**, in Claude Code (the Claude app or claude.ai/code):
 
 1. Start a new session on `shkriuss/shkriuss.app`, so it reads the code
-   fresh. Choose the model and effort before sending the first message.
+   fresh. Before the audit, send two messages on their own: `/model` and the
+   model's name, then `/effort max`. On some plans the biggest model is paid
+   from usage credits instead of the plan's own limits, so check before
+   choosing it.
 2. Send: "Audit this repository with the brief in docs/audit/README.md, every
    area including I. Don't change files or post anything on GitHub. When you
    have finished, I'll send you the other tools' reports: check every finding
