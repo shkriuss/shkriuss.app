@@ -8,6 +8,9 @@
  * won or lost), fees, a setup name ("Breakout") and notes. Amounts are in
  * one currency, chosen in the settings (saved only once changed, like
  * Water's, so a new device has nothing to win over another's when syncing).
+ *
+ * Closing part of an open trade splits it in two (readClose): the part
+ * closed, and the rest, still open.
  */
 import { addDays, isIsoDate, type IsoDate } from '@shkriuss/dates';
 import { parseDecimal } from '@shkriuss/ui/numbers';
@@ -45,7 +48,11 @@ export const LIMITS = {
   symbol: 20,
   setup: 40,
   notes: 1000,
-  trades: 2000,
+  /**
+   * The most trades kept, open and closed, so they fit on the device and in
+   * the sync copy (measured in trades.test.ts: "room for every trade").
+   */
+  trades: 3500,
   /** The biggest price, quantity or fee (results stay exact far beyond it). */
   number: 1e12,
 };
@@ -122,7 +129,7 @@ export function readTrade(
   else if (symbol.length > LIMITS.symbol) {
     problems.symbol = `Use ${LIMITS.symbol} characters or fewer.`;
   } else if (count >= LIMITS.trades) {
-    problems.symbol = `You can keep up to ${LIMITS.trades} trades.`;
+    problems.symbol = `You can keep up to ${new Intl.NumberFormat().format(LIMITS.trades)} trades. To make room, delete a year (under Currency and spreadsheet).`;
   }
   const side = SIDES.find((entry) => entry === form.side);
   if (!side) problems.side = 'Choose long or short.';
@@ -207,6 +214,54 @@ export function readTrade(
   };
 }
 
+/** What's wrong in the close form: the trade form's problems, and "Quantity closed". */
+export type CloseProblems = Problems & { closeQuantity?: string };
+
+/**
+ * Reads the close form: the trade form, and how many of the trade were
+ * closed (`closeQuantity`: the whole trade unless it's changed). Closing
+ * all of it saves the trade with its exit, as readTrade does. Closing part
+ * of it splits it in two:
+ * - `trade`: the part closed, a new trade (`ids.newId`) with that quantity,
+ *   the exit, and the fees typed in;
+ * - `rest`: the rest of the quantity, still open, with the trade's own id
+ *   (`ids.id`), the same entry and stop loss, and no fees (they're the
+ *   closed part's, so they aren't counted twice).
+ * `count` is how many other trades there are.
+ */
+export function readClose(
+  form: TradeForm,
+  closeQuantity: string,
+  ids: { id: string; newId: string },
+  count: number,
+):
+  | { trade: Trade; rest: Trade | null; problems?: undefined }
+  | { trade?: undefined; rest?: undefined; problems: CloseProblems } {
+  const read = readTrade(form, ids.id, count);
+  const problems: CloseProblems = { ...read.problems };
+  const whole = parseNumber(form.quantity);
+  const closed = parseNumber(closeQuantity);
+  if (closed === null) problems.closeQuantity = 'Enter how many you closed.';
+  else if (!isPrice(closed)) problems.closeQuantity = 'Enter a number above 0.';
+  else if (isPrice(whole) && closed > whole) {
+    problems.closeQuantity = 'Enter no more than the trade’s quantity.';
+  }
+  const rest = isPrice(whole) && isPrice(closed) ? tidy(whole - closed) : 0;
+  if (rest > 0 && !problems.closeQuantity) {
+    if (form.exitDate.trim() === '' && form.exitPrice.trim() === '') {
+      problems.exitPrice = 'Enter the exit price, to close part of the trade.';
+    } else if (count + 1 >= LIMITS.trades) {
+      problems.closeQuantity = `You can keep up to ${new Intl.NumberFormat().format(LIMITS.trades)} trades, so close all of it, or make room first.`;
+    }
+  }
+  if (!read.trade || Object.keys(problems).length > 0) return { problems };
+  if (rest <= 0) return { trade: read.trade, rest: null };
+  return {
+    trade: { ...read.trade, id: ids.newId, quantity: closed as number },
+    rest: { ...read.trade, quantity: rest, exitDate: null, exitPrice: null, fees: 0 },
+  };
+}
+
 /** A trade as the form shows it. */
 export const toForm = (trade: Trade): TradeForm => ({
   symbol: trade.symbol,
@@ -237,6 +292,61 @@ export function saveTrade(state: TradesState, trade: Trade): TradesState {
 export const removeTrade = (state: TradesState, id: string): TradesState => ({
   trades: state.trades.filter((trade) => trade.id !== id),
 });
+
+/** Closing part of an open trade (readClose): the part closed, and the rest of it, still open. */
+export const closePart = (state: TradesState, closed: Trade, rest: Trade): TradesState =>
+  saveTrade(saveTrade(state, rest), closed);
+
+// ---------- Making room ----------
+
+export interface YearCount {
+  /** "2024". */
+  year: string;
+  count: number;
+}
+
+/** The year a trade was closed in, or null while it's open. */
+const closedYear = (trade: Trade): string | null => trade.exitDate?.slice(0, 4) ?? null;
+
+/**
+ * The years trades were closed in (by the day they were exited, like the
+ * results), the earliest first, with how many each (for "Delete a year").
+ */
+export function closedYears(state: TradesState): YearCount[] {
+  const counts = new Map<string, number>();
+  for (const trade of state.trades) {
+    const year = closedYear(trade);
+    if (year !== null) counts.set(year, (counts.get(year) ?? 0) + 1);
+  }
+  return [...counts]
+    .map(([year, count]) => ({ year, count }))
+    .sort((a, b) => a.year.localeCompare(b.year));
+}
+
+/** Removes the trades closed in a year ("2024"). Open trades always stay. */
+export const removeClosedYear = (state: TradesState, year: string): TradesState => ({
+  trades: state.trades.filter((trade) => closedYear(trade) !== year),
+});
+
+/** "1 closed trade", "312 closed trades". */
+export const closedCount = (count: number, locale?: string): string =>
+  `${new Intl.NumberFormat(locale).format(count)} closed ${count === 1 ? 'trade' : 'trades'}`;
+
+/**
+ * What the page says once Trades is nearly full (over 90% of the trades it
+ * keeps, open and closed): how many more fit, and how to make room. Null
+ * until then.
+ */
+export function roomNote(count: number, locale?: string): string | null {
+  if (count <= LIMITS.trades * 0.9) return null;
+  const left = LIMITS.trades - count;
+  const most = new Intl.NumberFormat(locale).format(LIMITS.trades);
+  const start =
+    left > 0
+      ? `Trades is nearly full: there’s room for ${new Intl.NumberFormat(locale).format(left)} more ${left === 1 ? 'trade' : 'trades'} (it keeps up to ${most}, open and closed).`
+      : `Trades is full: it keeps up to ${most} trades, open and closed.`;
+  return `${start} To make room, download the spreadsheet, then use “Delete a year…” under Currency and spreadsheet, below.`;
+}
 
 // ---------- Results ----------
 

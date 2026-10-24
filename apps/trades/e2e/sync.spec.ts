@@ -3,7 +3,7 @@
 // every app in tests/e2e/sync.spec.ts.
 import { createAccount, hubURL, signInWithKey, turnOnSync } from '../../../tests/e2e/account.ts';
 import { expect, test } from '../../../tests/e2e/fixtures.ts';
-import { fillTrade, NOW, tile, TIME_ZONE, tradeItem } from './helpers.ts';
+import { fillTrade, NOW, tile, TIME_ZONE, tradeItem, yearDialog } from './helpers.ts';
 
 test.use({ timezoneId: TIME_ZONE });
 
@@ -38,5 +38,16 @@ test('trades and the currency sync between devices', async ({ page, browser, gua
   await page.getByRole('button', { name: 'Sync now' }).click();
   await expect(tile(page, 'Net result')).toHaveText('+€100.00');
   await expect(page.getByRole('heading', { name: 'Open trades' })).toBeHidden();
+
+  // A year deleted on the phone is deleted on the tablet too.
+  const deleted = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/api/sync/copy') && response.request().method() === 'PUT',
+  );
+  await page.getByRole('button', { name: 'Delete a year…' }).click();
+  await yearDialog(page).getByRole('button', { name: 'Delete 1 closed trade' }).click();
+  await deleted;
+  await tablet.getByRole('button', { name: 'Sync now' }).click();
+  await expect(tablet.getByText('No closed trades yet.')).toBeVisible();
   await tablet.context().close();
 });

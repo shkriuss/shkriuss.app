@@ -1,9 +1,15 @@
 import { describe, expect, it } from 'vitest';
+import { addDays } from '@shkriuss/dates';
+import { footprint, sampleText } from '@shkriuss/sync/testing';
+import { MAX_SEALED_CHARS } from '../../../../packages/sync/src/validate.ts';
 import {
   byMonth,
   bySetup,
+  closedCount,
   closedIn,
   closedTrades,
+  closedYears,
+  closePart,
   currencyOf,
   dateLabel,
   emptySettings,
@@ -18,10 +24,13 @@ import {
   monthLabel,
   openTrades,
   profit,
+  readClose,
   readTrade,
+  removeClosedYear,
   removeTrade,
   returnPercent,
   rMultiple,
+  roomNote,
   saveTrade,
   setCurrency,
   setupNames,
@@ -159,7 +168,7 @@ describe('reading the form', () => {
       symbol: `Use ${LIMITS.symbol} characters or fewer.`,
     });
     expect(readTrade(form, 'a', LIMITS.trades).problems).toEqual({
-      symbol: `You can keep up to ${LIMITS.trades} trades.`,
+      symbol: `You can keep up to ${new Intl.NumberFormat().format(LIMITS.trades)} trades. To make room, delete a year (under Currency and spreadsheet).`,
     });
   });
 
@@ -183,6 +192,165 @@ describe('changing', () => {
     ]);
     expect(removeTrade(current, 'a').trades.map((entry) => entry.id)).toEqual(['b']);
   });
+});
+
+describe('closing part of a trade', () => {
+  const open = trade({
+    id: 'a',
+    quantity: 100,
+    stop: 95,
+    fees: 1,
+    exitDate: null,
+    exitPrice: null,
+  });
+  const closeForm: TradeForm = {
+    ...toForm(open),
+    exitDate: '2026-10-05',
+    exitPrice: '110',
+    fees: '2',
+  };
+  const ids = { id: 'a', newId: 'b' };
+
+  it('closes all of it, as saving the form does', () => {
+    expect(readClose(closeForm, '100', ids, 0)).toEqual({
+      trade: { ...open, exitDate: '2026-10-05', exitPrice: 110, fees: 2 },
+      rest: null,
+    });
+  });
+
+  it('splits it: the part closed is a new trade, and the rest stays open', () => {
+    const read = readClose(closeForm, '40', ids, 0);
+    // The fees typed in are the closed part's; both keep the stop loss.
+    expect(read.trade).toEqual({
+      ...open,
+      id: 'b',
+      quantity: 40,
+      exitDate: '2026-10-05',
+      exitPrice: 110,
+      fees: 2,
+    });
+    expect(read.rest).toEqual({ ...open, quantity: 60, fees: 0 });
+    expect(profit(read.trade as Trade)).toBe(398);
+    expect(rMultiple(read.trade as Trade)).toBe(1.99);
+
+    const before = state(trade({ id: 'x' }), open);
+    const after = closePart(before, read.trade as Trade, read.rest as Trade);
+    expect(after.trades.map((entry) => `${entry.id}:${entry.quantity}`)).toEqual([
+      'x:10',
+      'a:60',
+      'b:40',
+    ]);
+    expect(openTrades(after).map((entry) => entry.id)).toEqual(['a']);
+    // Without tiny decimal errors.
+    expect(readClose({ ...closeForm, quantity: '0.3' }, '0,1', ids, 0).rest?.quantity).toBe(0.2);
+  });
+
+  it('says what’s wrong', () => {
+    expect(readClose(closeForm, '', ids, 0).problems).toEqual({
+      closeQuantity: 'Enter how many you closed.',
+    });
+    expect(readClose(closeForm, '0', ids, 0).problems).toEqual({
+      closeQuantity: 'Enter a number above 0.',
+    });
+    expect(readClose(closeForm, '101', ids, 0).problems).toEqual({
+      closeQuantity: 'Enter no more than the trade’s quantity.',
+    });
+    // Part of it closes only with an exit.
+    expect(readClose({ ...closeForm, exitDate: '', exitPrice: '' }, '40', ids, 0).problems).toEqual(
+      { exitPrice: 'Enter the exit price, to close part of the trade.' },
+    );
+    // The trade form's own problems too.
+    expect(readClose({ ...closeForm, exitPrice: '' }, '40', ids, 0).problems).toEqual({
+      exitPrice: 'Enter the exit price, or leave both empty.',
+    });
+    // Splitting makes one more trade: there must be room for it.
+    expect(readClose(closeForm, '40', ids, LIMITS.trades - 1).problems).toEqual({
+      closeQuantity: `You can keep up to ${new Intl.NumberFormat().format(LIMITS.trades)} trades, so close all of it, or make room first.`,
+    });
+    expect(readClose(closeForm, '100', ids, LIMITS.trades - 1).trade).toBeDefined();
+  });
+});
+
+describe('making room', () => {
+  const trades = state(
+    trade({ id: 'a', exitDate: '2024-03-02' }),
+    trade({ id: 'b', entryDate: '2024-12-30', exitDate: '2025-01-02' }),
+    trade({ id: 'c', entryDate: '2023-05-01', exitDate: null, exitPrice: null }),
+    trade({ id: 'd', exitDate: '2024-11-30' }),
+  );
+
+  it('lists the years trades were closed in, and deletes one (open trades stay)', () => {
+    expect(closedYears(trades)).toEqual([
+      { year: '2024', count: 2 },
+      { year: '2025', count: 1 },
+    ]);
+    expect(removeClosedYear(trades, '2024').trades.map((entry) => entry.id)).toEqual(['b', 'c']);
+    // By the day it was closed, not entered.
+    expect(removeClosedYear(trades, '2025').trades.map((entry) => entry.id)).toEqual([
+      'a',
+      'c',
+      'd',
+    ]);
+    expect(removeClosedYear(trades, '2023')).toEqual(trades);
+    expect(closedCount(1, 'en-US')).toBe('1 closed trade');
+    expect(closedCount(1234, 'en-US')).toBe('1,234 closed trades');
+  });
+
+  it('says so once Trades is nearly full', () => {
+    const number = (value: number) => new Intl.NumberFormat('en-US').format(value);
+    const nearly = LIMITS.trades * 0.9;
+    const makeRoom =
+      'To make room, download the spreadsheet, then use “Delete a year…” under Currency and spreadsheet, below.';
+    expect(roomNote(nearly, 'en-US')).toBeNull();
+    expect(roomNote(nearly + 1, 'en-US')).toBe(
+      `Trades is nearly full: there’s room for ${number(LIMITS.trades - nearly - 1)} more trades (it keeps up to ${number(LIMITS.trades)}, open and closed). ${makeRoom}`,
+    );
+    expect(roomNote(LIMITS.trades - 1, 'en-US')).toContain('there’s room for 1 more trade (');
+    expect(roomNote(LIMITS.trades, 'en-US')).toBe(
+      `Trades is full: it keeps up to ${number(LIMITS.trades)} trades, open and closed. ${makeRoom}`,
+    );
+  });
+
+  // Every trade is saved on the device (in localStorage, about 5 MB for each
+  // site), and with sync on, also goes into the copy that goes online.
+  it('has room for every trade, on the device and in the sync copy', async () => {
+    const list = Array.from({ length: LIMITS.trades }, (_, index): Trade => {
+      const entryDate = addDays('2016-01-01', index % 3650);
+      const open = index % 20 === 0;
+      return {
+        id: crypto.randomUUID(),
+        symbol: ['EURUSD', 'AAPL', 'BTCUSD', 'NVDA'][index % 4] ?? 'AAPL',
+        side: index % 3 === 0 ? 'short' : 'long',
+        entryDate,
+        entryPrice: 100 + ((index * 7919) % 1_000_000) / 10_000,
+        quantity: 1 + (index % 1000) * 25,
+        stop: 99 + ((index * 104_729) % 1_000_000) / 10_000,
+        exitDate: open ? null : addDays(entryDate, index % 30),
+        exitPrice: open ? null : 101 + ((index * 1_299_709) % 1_000_000) / 10_000,
+        fees: ((index * 31) % 1000) / 100,
+        setup: ['Breakout retest', 'Pullback', 'Gap and go', 'Range fade'][index % 4] ?? '',
+        // Long-ish notes: two or three sentences (200 of the 1,000 characters allowed).
+        notes: sampleText(200, index),
+      };
+    });
+    const size = await footprint({
+      app: 'trades',
+      store: 'shkriuss:trades',
+      version: 1,
+      data: { trades: list },
+      items: list,
+      // A quarter of them deleted ("Delete a year") less than 180 days ago.
+      deleted: LIMITS.trades / 4,
+    });
+    expect(size.saved).toBeLessThan(2_000_000);
+    expect(size.compressed).toBeLessThan(1_000_000);
+    expect(size.sealed).toBeLessThan(MAX_SEALED_CHARS);
+    // Safari allows 5 MiB (5,242,880 bytes), and counts 2 bytes for each
+    // character of text with any character beyond Latin-1 (like ’ from an
+    // iPhone's keyboard, or Georgian). Sync's own records are plain letters
+    // and digits: 1 byte each. Some room is left for the rest.
+    expect(2 * size.saved + size.syncState).toBeLessThan(4_500_000);
+  }, 60_000);
 });
 
 describe('results', () => {
