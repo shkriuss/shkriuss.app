@@ -97,27 +97,7 @@ test('asks to show notifications after saving an event with a reminder', async (
   await expect(editor(page).getByLabel('Reminder', { exact: true })).toHaveValue('15');
 });
 
-test('turns on notifications with the button', async ({ page }) => {
-  await fakeNotifications(page, 'default');
-  await page.goto('/');
-  const button = page.getByRole('button', { name: 'Turn on notifications' });
-  await button.click();
-  await expect(button).toBeHidden();
-  await expect(status(page)).toHaveText(/^Notifications are on\./);
-  await expect(status(page)).toBeFocused();
-});
-
-for (const [permission, text] of [
-  ['denied', /^Notifications are blocked for Calendar/],
-  ['unsupported', /^This browser can’t show notifications/],
-] as const) {
-  test(`explains when notifications are ${permission}`, async ({ page }) => {
-    await fakeNotifications(page, permission);
-    await page.goto('/');
-    await expect(status(page)).toHaveText(text);
-    await expect(page.getByRole('button', { name: 'Turn on notifications' })).toBeHidden();
-  });
-}
+// Turning notifications on, and blocked or missing notifications: tests/e2e/notifications.spec.ts.
 
 test('offers reminder choices that fit timed and all-day events', async ({ page }) => {
   await page.goto('/');

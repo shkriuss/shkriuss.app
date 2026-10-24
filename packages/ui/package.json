@@ -17,6 +17,7 @@
     "./components/*": "./src/components/*",
     "./layouts/*": "./src/layouts/*",
     "./locale": "./src/lib/locale.ts",
+    "./local-reminders": "./src/scripts/local-reminders.ts",
     "./long-lists": "./src/lib/long-lists.ts",
     "./push-controls": "./src/scripts/push-controls.ts",
     "./numbers": "./src/lib/numbers.ts",
@@ -32,6 +33,7 @@
     "typecheck": "astro check --noSync"
   },
   "dependencies": {
+    "@shkriuss/dates": "workspace:*",
     "@shkriuss/push": "workspace:*",
     "@shkriuss/registry": "workspace:*",
     "@shkriuss/storage": "workspace:*",
