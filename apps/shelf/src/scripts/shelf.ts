@@ -14,6 +14,7 @@
 import { createStore } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
 import { withEdits } from '@shkriuss/sync/edits';
+import { PAGE_SIZE, shownCount, waitForTyping } from '@shkriuss/ui/long-lists';
 import { clearProblem, focusProblem, reportSave, showProblem } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { site } from 'virtual:shkriuss/site';
@@ -126,6 +127,7 @@ export function mountShelf(root: Document): void {
   const count = required<HTMLElement>(root, '[data-count]');
   const empty = required<HTMLElement>(root, '[data-empty]');
   const list = required<HTMLUListElement>(root, '[data-items]');
+  const more = required<HTMLElement>(root, '[data-more]');
   const brandsSection = required<HTMLElement>(root, '[data-brands-section]');
   const brandList = required<HTMLUListElement>(root, '[data-brands]');
   const brandNames = required<HTMLDataListElement>(root, '[data-brand-names]');
@@ -180,6 +182,10 @@ export function mountShelf(root: Document): void {
   let categoryOpener: HTMLElement | null = null;
   let savedCategoryId: string | null = null;
   let announceTimer: number | undefined;
+  /** Items shown so far ("Show more" adds a page: audit J-1). */
+  let shown = PAGE_SIZE;
+  /** An item just saved: shown, however far down it is. */
+  let reveal: string | null = null;
 
   const announce = (text: string): void => {
     announcer.textContent = text;
@@ -295,7 +301,16 @@ export function mountShelf(root: Document): void {
     filters = { ...filters, category: categoryFilter.value };
 
     const items = visibleItems(state, filters, categories);
-    list.replaceChildren(...items.map((item) => renderItem(item, categories)));
+    // Never hidden by paging: the item with focus, or one just saved.
+    const focused = (root.activeElement as HTMLElement | null)?.closest<HTMLElement>('[data-id]');
+    shown = shownCount(
+      items.map((item) => item.id),
+      shown,
+      [reveal, focused?.dataset['id']],
+    );
+    reveal = null;
+    list.replaceChildren(...items.slice(0, shown).map((item) => renderItem(item, categories)));
+    more.hidden = items.length <= shown;
     const total = state.items.length;
     const none = total === 0;
     empty.hidden = !none;
@@ -327,11 +342,12 @@ export function mountShelf(root: Document): void {
 
   /** What the filters show, for screen readers. */
   function announceCount(): void {
-    const shown = visibleItems(state, filters, categoriesOf(categoriesState)).length;
-    announce(`${itemsCount(shown)} shown.`);
+    const matches = visibleItems(state, filters, categoriesOf(categoriesState)).length;
+    announce(`${itemsCount(matches)} shown.`);
   }
 
   function readFilters(): void {
+    shown = PAGE_SIZE;
     filters = {
       ...filters,
       search: search.value,
@@ -462,6 +478,8 @@ export function mountShelf(root: Document): void {
     const edited =
       existing && openedDraft ? withEdits(openedDraft, draft, draftOf(existing)) : draft;
     const item = itemFromDraft(edited, editingId ?? crypto.randomUUID(), now, existing);
+    typedSearch.flush();
+    reveal = item.id;
     // A saved item that the filters would hide is still shown: clear them.
     const hidden = !visibleItems({ items: [item] }, filters, categoriesOf(categoriesState)).length;
     if (hidden) {
@@ -523,6 +541,7 @@ export function mountShelf(root: Document): void {
     ];
     if (brand === undefined) return;
     filters = { ...filters, brand: filters.brand === brand ? null : brand };
+    shown = PAGE_SIZE;
     render();
     if (filters.brand === null) {
       announceCount();
@@ -531,21 +550,32 @@ export function mountShelf(root: Document): void {
     // Over to the list, which now shows only this brand.
     itemsHeading.focus();
     itemsHeading.scrollIntoView({ block: 'start' });
-    const shown = visibleItems(state, filters, categoriesOf(categoriesState)).length;
-    announce(`${itemsCount(shown)} by ${brand}.`);
+    const matches = visibleItems(state, filters, categoriesOf(categoriesState)).length;
+    announce(`${itemsCount(matches)} by ${brand}.`);
   });
 
   required<HTMLButtonElement>(root, '[data-action="all-brands"]').addEventListener('click', () => {
     filters = { ...filters, brand: null };
+    shown = PAGE_SIZE;
     render();
     announceCount();
     itemsHeading.focus();
   });
 
-  search.addEventListener('input', () => {
+  // The list is drawn again once typing pauses, not at every key (audit J-1).
+  const typedSearch = waitForTyping(() => {
+    if (filters.search === search.value) return;
     readFilters();
     window.clearTimeout(announceTimer);
     announceTimer = window.setTimeout(announceCount, ANNOUNCE_DELAY_MS);
+  });
+  search.addEventListener('input', typedSearch);
+
+  required<HTMLButtonElement>(more, '[data-action="more"]').addEventListener('click', () => {
+    const first = shown;
+    shown += PAGE_SIZE;
+    render();
+    list.querySelectorAll<HTMLElement>('[data-action="edit"]')[first]?.focus();
   });
   for (const select of [categoryFilter, opinionFilter, sortFilter]) {
     select.addEventListener('change', () => {

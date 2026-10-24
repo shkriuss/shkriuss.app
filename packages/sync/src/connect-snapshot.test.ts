@@ -90,10 +90,10 @@ describe('sealed copies', () => {
     const { key } = await syncKeys(randomBytes(32));
     const items = Array.from({ length: 200 }, (_, index) => ({ id: `id-${index}`, name: 'Water' }));
     const stores = { 'shkriuss:tally': observe(undefined, items, 1, 100).snapshot };
-    const sealed = await sealStores(key, 'tally', stores);
+    const sealed = await sealStores(key, 'tally', stores, 3);
     expect(sealed).not.toContain('Water');
     expect(sealed.length).toBeLessThan(JSON.stringify(stores).length / 4);
-    expect(await openStores(key, 'tally', sealed)).toEqual(stores);
+    expect(await openStores(key, 'tally', sealed)).toEqual({ stores, written: 3 });
     await expect(
       openStores((await syncKeys(randomBytes(32))).key, 'tally', sealed),
     ).rejects.toThrow();

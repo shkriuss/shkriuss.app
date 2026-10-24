@@ -16,6 +16,7 @@ import { MAX_NAME_LENGTH } from '../lib/counters.ts';
           New counter
         </label>
         <input
+          dir="auto"
           class="input"
           id="counter-name"
           name="name"
@@ -56,7 +57,7 @@ import { MAX_NAME_LENGTH } from '../lib/counters.ts';
   <template data-counter-template>
     <li class="card counter">
       <div class="counter__header">
-        <h3 class="counter__name" data-name>
+        <h3 dir="auto" class="counter__name" data-name>
           Counter
         </h3>
         <div class="counter__tools">
@@ -103,7 +104,7 @@ import { MAX_NAME_LENGTH } from '../lib/counters.ts';
     <form method="dialog" class="stack">
       <h2 id="delete-title">Delete this counter?</h2>
       <p>
-        “<span data-counter-dialog-name></span>” and its count will be removed.
+        “<span dir="auto" data-counter-dialog-name></span>” and its count will be removed.
       </p>
       <div class="cluster">
         <Button type="submit" value="cancel">

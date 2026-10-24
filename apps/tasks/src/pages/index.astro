@@ -33,6 +33,7 @@ import {
           New task
         </label>
         <input
+          dir="auto"
           class="input"
           id="new-task"
           name="title"
@@ -52,7 +53,7 @@ import {
     </form>
 
     <section class="stack" aria-labelledby="view-heading">
-      <h2 id="view-heading" tabindex="-1" data-view-heading>
+      <h2 dir="auto" id="view-heading" tabindex="-1" data-view-heading>
         All tasks
       </h2>
 
@@ -71,6 +72,7 @@ import {
             Search
           </label>
           <input
+            dir="auto"
             class="input"
             id="search"
             type="search"
@@ -98,12 +100,18 @@ import {
         Nothing to do here. Add a task above.
       </p>
       <div class="stack" data-groups></div>
+      <div data-open-more hidden>
+        <Button data-action="more-open">Show more tasks</Button>
+      </div>
 
       <details class="stack stack--sm" data-done-section hidden>
         <summary class="done-summary" data-done-summary>
           Done
         </summary>
         <ul role="list" class="tasks" data-done-list></ul>
+        <div data-done-more hidden>
+          <Button data-action="more-done">Show more done tasks</Button>
+        </div>
         <p>
           <Button variant="ghost" icon="trash" data-action="clear-done">
             Delete done tasks
@@ -164,7 +172,13 @@ import {
         </span>
       </label>
       <div class="task__body">
-        <button type="button" class="task__title" aria-haspopup="dialog" data-action="edit">
+        <button
+          dir="auto"
+          type="button"
+          class="task__title"
+          aria-haspopup="dialog"
+          data-action="edit"
+        >
           Task
         </button>
         <p class="muted task__meta" data-meta>
@@ -183,10 +197,10 @@ import {
           </span>
           <span class="task__tag" data-list-tag>
             <Icon name="list" />
-            <span data-list-name></span>
+            <span dir="auto" data-list-name></span>
           </span>
         </p>
-        <p class="muted task__notes" data-notes></p>
+        <p dir="auto" class="muted task__notes" data-notes></p>
         <details class="steps" data-steps>
           <summary class="steps__summary">
             <span class="visually-hidden" data-steps-of>
@@ -221,7 +235,7 @@ import {
     <li>
       <label class="check step">
         <input type="checkbox" data-step-done />
-        <span class="step__title" data-step-title>
+        <span dir="auto" class="step__title" data-step-title>
           Step
         </span>
       </label>
@@ -238,6 +252,7 @@ import {
         </span>
       </label>
       <input
+        dir="auto"
         class="input step-edit__title"
         type="text"
         autocomplete="off"
@@ -252,7 +267,7 @@ import {
   <template data-view-template>
     <li>
       <button type="button" class="btn chip" aria-pressed="false" data-view>
-        <span class="chip__name" data-view-name>
+        <span dir="auto" class="chip__name" data-view-name>
           All
         </span>
         <span class="chip__count" data-view-count></span>
@@ -269,6 +284,7 @@ import {
           Title
         </label>
         <input
+          dir="auto"
           class="input"
           id="task-title"
           name="title"
@@ -286,6 +302,7 @@ import {
           Notes (optional)
         </label>
         <textarea
+          dir="auto"
           class="input"
           id="task-notes"
           name="notes"
@@ -303,6 +320,7 @@ import {
           </label>
           <div class="step-add">
             <input
+              dir="auto"
               class="input"
               id="new-step"
               type="text"
@@ -437,7 +455,7 @@ import {
     <form method="dialog" class="stack">
       <h2 id="delete-title">Delete this task?</h2>
       <p>
-        “<span data-delete-name></span>” will be removed. This can't be undone.
+        “<span dir="auto" data-delete-name></span>” will be removed. This can't be undone.
       </p>
       <div class="cluster">
         <Button type="submit" value="cancel">
@@ -460,6 +478,7 @@ import {
           Name
         </label>
         <input
+          dir="auto"
           class="input"
           id="list-name"
           type="text"
@@ -488,7 +507,7 @@ import {
     <form method="dialog" class="stack">
       <h2 id="list-delete-title">Delete this list?</h2>
       <p>
-        “<span data-list-delete-name></span>” will be removed.
+        “<span dir="auto" data-list-delete-name></span>” will be removed.
       </p>
       <div class="field" data-list-tasks-field>
         <label class="field__label" for="list-tasks">

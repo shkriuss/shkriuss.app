@@ -194,3 +194,25 @@ test('the currency, and a spreadsheet of the entries', async ({ page }) => {
     '',
   ]);
 });
+
+test('shows a note in Hebrew or Arabic the right way round', async ({ page }) => {
+  await seed(page, {
+    categories: [{ id: 'g', name: 'מכולת', limit: null }],
+    entries: [entry({ id: 'a', amount: 20, category: 'g', note: 'לחם וחלב!' })],
+  });
+  const item = entryItems(page).first();
+  await expect(item).toContainText('לחם וחלב!');
+  const rightToLeft = (selector: string) =>
+    item.locator(selector).evaluate((element) => element.matches(':dir(rtl)'));
+  // The note keeps its own direction inside a line that's otherwise English.
+  expect(await rightToLeft('[data-meta] bdi')).toBe(true);
+  expect(await rightToLeft('[data-meta]')).toBe(false);
+  expect(await rightToLeft('[data-title]')).toBe(true);
+  await item.getByRole('button').click();
+  await expect(entryDialog(page).getByLabel('Note (optional)')).toHaveValue('לחם וחלב!');
+  expect(
+    await entryDialog(page)
+      .getByLabel('Note (optional)')
+      .evaluate((element) => element.matches(':dir(rtl)')),
+  ).toBe(true);
+});

@@ -13,6 +13,7 @@
 import { today as todayOf } from '@shkriuss/dates';
 import { createStore } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
+import { PAGE_SIZE, shownCount, waitForTyping } from '@shkriuss/ui/long-lists';
 import { clearProblem, focusProblem, reportSave, showProblem } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { site } from 'virtual:shkriuss/site';
@@ -140,6 +141,8 @@ export function mountTasks(root: Document): void {
   const doneSection = required<HTMLDetailsElement>(root, '[data-done-section]');
   const doneSummary = required<HTMLElement>(root, '[data-done-summary]');
   const doneList = required<HTMLUListElement>(root, '[data-done-list]');
+  const openMore = required<HTMLElement>(root, '[data-open-more]');
+  const doneMore = required<HTMLElement>(root, '[data-done-more]');
   const groupTemplate = required<HTMLTemplateElement>(root, '[data-group-template]');
   const taskTemplate = required<HTMLTemplateElement>(root, '[data-task-template]');
   const viewTemplate = required<HTMLTemplateElement>(root, '[data-view-template]');
@@ -182,6 +185,11 @@ export function mountTasks(root: Document): void {
   let settings = viewStore.load();
   /** What's typed in Search ("" for everything). */
   let search = '';
+  /** Tasks to do, and done ones, shown so far ("Show more" adds a page: audit J-1). */
+  let openShown = PAGE_SIZE;
+  let doneShown = PAGE_SIZE;
+  /** A task just added, saved, moved or ticked back to do: shown, however far down it is. */
+  let reveal: string | null = null;
   let announceTimer: number | undefined;
   let day = todayOf();
   /** The task showing Move up / Move down, and the one being dragged. */
@@ -373,19 +381,46 @@ export function mountTasks(root: Document): void {
     const mine = settings.order === 'mine';
     orderSelect.value = settings.order;
     moveHint.hidden = !mine;
+    // Never hidden by paging: the task with focus, or one just changed.
+    const focused = (root.activeElement as HTMLElement | null)?.closest<HTMLElement>('[data-id]');
+    const keep = [reveal, focused?.dataset['id'], movingId];
+    reveal = null;
     let open: number;
+    let openTotal: number;
     if (mine) {
       const ordered = orderedTasks(tasks, view, search);
+      openShown = shownCount(
+        ordered.map((task) => task.id),
+        openShown,
+        keep,
+      );
       const fragment = orderedTemplate.content.cloneNode(true) as DocumentFragment;
       const list = required<HTMLElement>(fragment, '[data-ordered]');
-      list.replaceChildren(...ordered.map(renderTask));
+      list.replaceChildren(...ordered.slice(0, openShown).map(renderTask));
       groupsBox.replaceChildren(...(ordered.length > 0 ? [list] : []));
       open = ordered.length;
+      openTotal = ordered.length;
     } else {
       const groups = openGroups(tasks, view, day, search);
-      groupsBox.replaceChildren(...groups.map((group) => renderGroup(group.when, group.tasks)));
+      const all = groups.flatMap((group) => group.tasks);
+      openShown = shownCount(
+        all.map((task) => task.id),
+        openShown,
+        keep,
+      );
+      // The first openShown tasks, in their groups.
+      let left = openShown;
+      const shownGroups = groups.flatMap((group) => {
+        if (left <= 0) return [];
+        const shownTasks = group.tasks.slice(0, left);
+        left -= shownTasks.length;
+        return [renderGroup(group.when, shownTasks)];
+      });
+      groupsBox.replaceChildren(...shownGroups);
       open = groups.length;
+      openTotal = all.length;
     }
+    openMore.hidden = openTotal <= openShown;
     const done = doneTasks(tasks, view, search);
     empty.hidden = open > 0;
     const searched = search.trim();
@@ -398,13 +433,36 @@ export function mountTasks(root: Document): void {
     }
     doneSection.hidden = done.length === 0;
     doneSummary.textContent = `Done (${done.length})`;
-    // Done tasks are drawn only while their list is open: there can be thousands.
-    doneList.replaceChildren(...(doneSection.open ? done.map(renderTask) : []));
+    // Done tasks are drawn only while their list is open, a page at a time: there can be thousands.
+    if (doneSection.open) {
+      doneShown = shownCount(
+        done.map((task) => task.id),
+        doneShown,
+        keep,
+      );
+    }
+    doneList.replaceChildren(...(doneSection.open ? done.slice(0, doneShown).map(renderTask) : []));
+    doneMore.hidden = !doneSection.open || done.length <= doneShown;
   }
 
   doneSection.addEventListener('toggle', () => {
     if (doneSection.open) render();
   });
+
+  /** "Show more": the next page of tasks, with focus on the first of them. */
+  function showMore(list: HTMLElement, done: boolean): void {
+    const first = done ? doneShown : openShown;
+    if (done) doneShown += PAGE_SIZE;
+    else openShown += PAGE_SIZE;
+    render();
+    list.querySelectorAll<HTMLElement>('[data-action="edit"]')[first]?.focus();
+  }
+  required<HTMLElement>(openMore, '[data-action="more-open"]').addEventListener('click', () =>
+    showMore(groupsBox, false),
+  );
+  required<HTMLElement>(doneMore, '[data-action="more-done"]').addEventListener('click', () =>
+    showMore(doneList, true),
+  );
 
   // ---------- Adding, and ticking off ----------
 
@@ -427,11 +485,13 @@ export function mountTasks(root: Document): void {
       list: typeof view === 'string' ? NO_LIST : view.list,
       important: view === 'important',
     });
+    typedSearch.flush();
     // A search the new task doesn't match would hide it: clear the search.
     if (!matchesSearch(task, searchWords(search))) {
       search = '';
       searchInput.value = '';
     }
+    reveal = task.id;
     if (saveTasks(addTask(tasks, task))) {
       announce(`Added ${task.title}. Tap it to give it a date or a reminder.`);
     }
@@ -476,6 +536,7 @@ export function mountTasks(root: Document): void {
   }
 
   function markToDo(task: Task): void {
+    reveal = task.id;
     const saved = saveTasks(reopenTask(tasks, task.id, Date.now()));
     control(task.id, '[data-done]')?.focus();
     if (saved) announce(`${task.title} is to do again.`);
@@ -523,6 +584,7 @@ export function mountTasks(root: Document): void {
     focus: string,
   ): void {
     const next = moveTask(tasks, task.id, target);
+    reveal = task.id;
     if (next !== tasks && !saveTasks(next)) {
       control(task.id, focus)?.focus();
       return;
@@ -666,20 +728,32 @@ export function mountTasks(root: Document): void {
     announce(`${tasksCount(found)} found.`);
   }
 
-  searchInput.addEventListener('input', () => {
+  /** A new search (or view) shows its first page again. */
+  function firstPages(): void {
+    openShown = PAGE_SIZE;
+    doneShown = PAGE_SIZE;
+  }
+
+  // The list is drawn again once typing pauses, not at every key (audit J-1).
+  const typedSearch = waitForTyping(() => {
+    if (search === searchInput.value) return;
     search = searchInput.value;
     movingId = null;
+    firstPages();
     render();
     window.clearTimeout(announceTimer);
     announceTimer = window.setTimeout(announceFound, ANNOUNCE_DELAY_MS);
   });
+  searchInput.addEventListener('input', typedSearch);
 
   // Escape clears the search (as browsers do for search boxes, in every browser).
   searchInput.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape' || searchInput.value === '') return;
     event.preventDefault();
+    typedSearch.cancel();
     searchInput.value = '';
     search = '';
+    firstPages();
     render();
     announce('Search cleared.');
   });
@@ -688,11 +762,13 @@ export function mountTasks(root: Document): void {
     const key = (event.target as Element).closest<HTMLElement>('[data-view]')?.dataset['view'];
     if (key === undefined) return;
     view = viewOf(key);
+    firstPages();
     render();
     announce(`${viewName(view)}: ${tasksCount(openCount(view))} to do.`);
   });
 
   required<HTMLButtonElement>(root, '[data-action="clear-done"]').addEventListener('click', () => {
+    typedSearch.flush();
     const count = doneTasks(tasks, view, search).length;
     clearText.textContent =
       count === 1
@@ -906,6 +982,7 @@ export function mountTasks(root: Document): void {
       return;
     }
     const task = taskFromDraft(draft, editingId, Date.now(), find(editingId));
+    reveal = task.id;
     if (saveTasks(updateTask(tasks, task))) {
       announce(
         inView(task, view)

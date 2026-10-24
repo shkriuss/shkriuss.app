@@ -59,7 +59,14 @@ import {
   type StoreSnapshot,
 } from './merge.ts';
 import { fetchWithLimit, isTimeout } from './request.ts';
-import { fileLabel, openStores, sealStores, syncKeys, type Stores } from './snapshot.ts';
+import {
+  fileLabel,
+  openStores,
+  sealStores,
+  syncKeys,
+  type OpenedCopy,
+  type Stores,
+} from './snapshot.ts';
 
 export { secondVersionName } from './merge.ts';
 import { FILE_ID, MAX_FILE_BYTES, MAX_SEALED_CHARS, type FileList } from './validate.ts';
@@ -207,8 +214,11 @@ interface DeviceState {
   /** The app's own key (from the account), base64url. Null while sync is off. */
   secret: string | null;
   code: string | null;
-  /** The online copy's version and lineage when last seen. */
-  remote: { version: number; epoch: string } | null;
+  /**
+   * The online copy's version and lineage when last seen, and the most times
+   * devices had written it (sealed in the copy; missing before that was added).
+   */
+  remote: { version: number; epoch: string; written?: number } | null;
   /** What this device knew at the last sync, per store key. */
   known: Record<string, Known>;
   /** True when `known` holds a merge that isn't online yet (the upload failed). */
@@ -481,7 +491,7 @@ class PausedError extends Error {}
 type Remote =
   | { kind: 'same' }
   | { kind: 'none' }
-  | { kind: 'copy'; version: number; epoch: string; stores: Stores };
+  | { kind: 'copy'; version: number; epoch: string; stores: Stores; written: number | null };
 
 // ---------- The client ----------
 
@@ -533,13 +543,14 @@ export function createSync(options: {
     if (!response.ok) throw failed(response);
     const copy = (await response.json()) as { version: number; epoch?: string; data?: string };
     if (copy.data === undefined || copy.epoch === undefined) return { kind: 'none' } as Remote;
-    let opened: Stores;
+    let opened: OpenedCopy;
     try {
       opened = await openStores(key, options.app, copy.data);
     } catch (error) {
       throw new SyncError(error instanceof RangeError ? 'update-needed' : 'server');
     }
-    return { kind: 'copy', version: copy.version, epoch: copy.epoch, stores: opened } as Remote;
+    const { version, epoch } = copy;
+    return { kind: 'copy', version, epoch, ...opened } as Remote;
   }
 
   /** The other device's items for one store, in this app's current data version. */
@@ -621,6 +632,23 @@ export function createSync(options: {
       return true;
     }
 
+    // A copy older than one this device saw (the server restored from a
+    // backup, or sending an old copy again) is merged like a device that was
+    // away for a while, but what it lacks isn't taken as deleted (audit A-8).
+    const last =
+      remote.kind === 'copy' && state.remote?.epoch === remote.epoch ? state.remote : null;
+    const older =
+      remote.kind === 'copy' &&
+      last !== null &&
+      (remote.version < last.version || (remote.written ?? Infinity) < (last.written ?? 0));
+    /** The most times this copy was written, as far as this device knows. */
+    const written =
+      remote.kind === 'copy'
+        ? Math.max(remote.written ?? 0, last?.written ?? 0)
+        : remote.kind === 'same'
+          ? (state.remote?.written ?? 0)
+          : 0;
+
     // 3. Merge.
     const merged: Stores = {};
     /** What the online copy holds now, as this device has seen it. */
@@ -636,7 +664,7 @@ export function createSync(options: {
         seen[synced.store.key] = knownFrom(theirs);
         // Keeping both compares with the copy as this device last saw it (or
         // what it knew, if it last saw another copy), in today's data version.
-        const sameCopy = remote.kind === 'copy' && state.base?.epoch === remote.epoch;
+        const sameCopy = remote.kind === 'copy' && state.base?.epoch === remote.epoch && !older;
         const base = sameCopy ? state.base?.stores[synced.store.key] : known;
         // Deleted elsewhere longer ago than the markers last: deleted here too.
         if (sameCopy && base) result = dropForgotten(result, theirs, base);
@@ -679,7 +707,9 @@ export function createSync(options: {
 
     // 5. Upload, if the copy online isn't already this.
     let online =
-      remote.kind === 'copy' ? { version: remote.version, epoch: remote.epoch } : state.remote;
+      remote.kind === 'copy'
+        ? { version: remote.version, epoch: remote.epoch, written }
+        : state.remote && { ...state.remote, written };
     const same =
       remote.kind === 'same'
         ? !localChanged && !state.dirty && moving.length === 0
@@ -702,7 +732,7 @@ export function createSync(options: {
       if (!updateState(secret, { known: knowns, dirty: true, base: seenOnline })) {
         throw new SyncError('storage');
       }
-      const data = await sealStores(key, options.app, merged);
+      const data = await sealStores(key, options.app, merged, written + 1);
       if (data.length > MAX_SEALED_CHARS) throw new SyncError('too-big');
       const base = remote.kind === 'none' ? null : (online?.version ?? null);
       const response = await api(
@@ -715,7 +745,8 @@ export function createSync(options: {
       if (response.status === 410) throw await goneError(response);
       if (response.status === 413) throw new SyncError('too-big');
       if (!response.ok) throw failed(response);
-      online = (await response.json()) as { version: number; epoch: string };
+      const saved = (await response.json()) as { version: number; epoch: string };
+      online = { ...saved, written: written + 1 };
     }
 
     // 6. Remember. The copy online is now the merge.

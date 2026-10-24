@@ -12,6 +12,7 @@
  */
 import { createStore } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
+import { PAGE_SIZE, shownCount, waitForTyping } from '@shkriuss/ui/long-lists';
 import {
   clearProblem,
   reportSave,
@@ -72,6 +73,7 @@ export function mountNotes(root: Document): void {
   const empty = required<HTMLElement>(listView, '[data-empty]');
   const noResults = required<HTMLElement>(listView, '[data-no-results]');
   const list = required<HTMLUListElement>(listView, '[data-notes]');
+  const more = required<HTMLElement>(listView, '[data-more]');
   const template = required<HTMLTemplateElement>(root, '[data-note-template]');
   const titleField = required<HTMLInputElement>(editorView, '[data-title]');
   const bodyField = required<HTMLTextAreaElement>(editorView, '[data-body]');
@@ -94,6 +96,10 @@ export function mountNotes(root: Document): void {
   let fromList = false;
   let saveTimer: number | undefined;
   let announceTimer: number | undefined;
+  /** Notes shown so far ("Show more" adds a page: audit J-1). */
+  let shown = PAGE_SIZE;
+  /** The search the list was drawn for: a new one starts at the first page. */
+  let searched = '';
   /** The message say() shows, to take it away when a note opens. */
   let said: string | null = null;
 
@@ -130,9 +136,20 @@ export function mountNotes(root: Document): void {
     return item;
   }
 
-  function renderList(): void {
+  /** Draws the list; `keep` (a note just left) is shown however far down it is. */
+  function renderList(keep: string | null = null): void {
     const notes = visibleNotes(state, search.value);
-    list.replaceChildren(...notes.map(renderNote));
+    if (search.value !== searched) shown = PAGE_SIZE;
+    searched = search.value;
+    // Never hidden by paging: that note, or the one with focus.
+    const focused = (root.activeElement as HTMLElement | null)?.closest<HTMLElement>('[data-id]');
+    shown = shownCount(
+      notes.map((note) => note.id),
+      shown,
+      [keep, focused?.dataset['id']],
+    );
+    list.replaceChildren(...notes.slice(0, shown).map(renderNote));
+    more.hidden = notes.length <= shown;
     const none = state.notes.length === 0;
     empty.hidden = !none;
     searchField.hidden = none && search.value === '';
@@ -145,7 +162,7 @@ export function mountNotes(root: Document): void {
     listView.hidden = false;
     listShown = true;
     document.title = pageTitle;
-    renderList();
+    renderList(left);
     if (!focus) return;
     // Back from a note: focus that note in the list, or "New note".
     const link =
@@ -312,7 +329,9 @@ export function mountNotes(root: Document): void {
     location.hash = `note=${id}`;
   });
 
-  search.addEventListener('input', () => {
+  // The list is drawn again once typing pauses, not at every key (audit J-1).
+  const typedSearch = waitForTyping(() => {
+    if (search.value === searched) return;
     renderList();
     window.clearTimeout(announceTimer);
     announceTimer = window.setTimeout(() => {
@@ -320,6 +339,14 @@ export function mountNotes(root: Document): void {
         announce(`${notesCount(visibleNotes(state, search.value).length)} found.`);
       }
     }, ANNOUNCE_DELAY_MS);
+  });
+  search.addEventListener('input', typedSearch);
+
+  required<HTMLButtonElement>(more, '[data-action="more"]').addEventListener('click', () => {
+    const first = shown;
+    shown += PAGE_SIZE;
+    renderList();
+    list.querySelectorAll<HTMLElement>('[data-open]')[first]?.focus();
   });
 
   editorView.addEventListener('input', () => {

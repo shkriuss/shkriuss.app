@@ -26,7 +26,14 @@ import {
   type Added,
   type Photo,
 } from '../lib/photos.ts';
-import { deletePhotos, getFiles, loadLibrary, savePhoto, thumbUrl } from './library.ts';
+import {
+  changedElsewhere,
+  deletePhotos,
+  getFiles,
+  loadLibrary,
+  savePhoto,
+  thumbUrl,
+} from './library.ts';
 import { startOnline } from './online.ts';
 import { processFile } from './process.ts';
 
@@ -618,9 +625,10 @@ export function mountPhotos(root: Document): void {
     }
   });
 
-  // If Photos is open in another tab too, show what it adds or deletes.
+  // If Photos is open in another tab too, show what it adds or deletes. Only
+  // then: loading the whole library takes seconds when it's big (audit J-3).
   window.addEventListener('focus', () => {
-    if (!busy) void reload();
+    if (!busy && changedElsewhere()) void reload();
   });
 
   /** What the list shows about each photo, to see whether a reload changed anything. */

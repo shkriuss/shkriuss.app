@@ -33,6 +33,12 @@ changes on its next deploy.
     which replace backgrounds.
   - A page's `<style>` only reaches elements written in that page: style an
     `<Icon>` inside it with `:global(svg)` (a unit test checks this).
+  - Text people type can be in any language. Text boxes for it, and the
+    elements that show it (names, titles, notes), get `dir="auto"`, so
+    Hebrew or Arabic reads right to left with its "!" at its own end. Typed
+    text inside a line of the app's own text (a note after a date) goes in
+    `typedText()` from `@shkriuss/ui/typed-text`. A unit test checks every
+    text box.
 - **CSS first.** Component classes work with plain HTML, so even markup
   created by scripts (Tally's `<template>`) uses the same styles.
 
@@ -64,7 +70,10 @@ Script helpers, imported from TypeScript: `@shkriuss/ui/numbers`
 `@shkriuss/ui/locale` (`DATE_LOCALE`: format dates and times with it, so
 weekdays and months are in English like the rest of the page, even on a
 phone set to another language), `@shkriuss/ui/text` (`compareText`, for
-sorting lists alphabetically),
+sorting lists alphabetically), `@shkriuss/ui/long-lists` (for lists that
+can grow to thousands: `shownCount` draws `PAGE_SIZE` (100) at a time behind
+a "Show more" button, always keeping what has focus or was just saved, and
+`waitForTyping` draws a search once typing pauses, not at every key),
 `@shkriuss/ui/problem` (telling people about a problem the same way in every
 app: `showProblem` puts it in the notice at the top of every page, which is
 read out at once; `reportSave(store.save(…))` says when saving didn't work,

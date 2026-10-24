@@ -162,6 +162,15 @@ every device. That's far beyond what sync can hold:
 - **What the servers can see:** how many photos, how big each part is, and
   when they're added or deleted. Never what they show, their names or
   dates.
+- **What a server could do if it went wrong** (audit finding A-8). It can't
+  read photos or change them, or pass one off as another: each part is
+  sealed and labelled with its library, item and part. It could hide photos
+  or changes, hold back new ones, delete what it keeps, or say the library
+  was deleted. A false "deleted" note would delete that photo on devices
+  too, since those notes aren't sealed; but whoever controls the servers
+  could also change the apps themselves. A mistake like a restore from a
+  backup sends no such notes: devices only ask for changes after the last
+  one they saw.
 - **Free plan requests:** an upload is one Worker request and two Durable
   Object requests; a screen of thumbnails is a few. A device checks for
   changes about once a minute while open. 20,000 uploads a day stays well

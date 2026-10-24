@@ -19,6 +19,18 @@ interface SyncFile {
   version: typeof SYNC_VERSION;
   app: string;
   stores: Stores;
+  /**
+   * How many times devices have written the copy. It's sealed, so a server
+   * can't pass an old copy off as a new one (audit A-8). Copies written
+   * before it was added don't have it.
+   */
+  written?: number;
+}
+
+/** An opened copy: its stores, and how many times it was written (null if it doesn't say). */
+export interface OpenedCopy {
+  stores: Stores;
+  written: number | null;
 }
 
 /** The two keys an app's own key gives: one for the server (a token), one for the data. */
@@ -48,8 +60,9 @@ export async function sealStores(
   key: Uint8Array<ArrayBuffer>,
   app: string,
   stores: Stores,
+  written: number,
 ): Promise<string> {
-  const file: SyncFile = { format: SYNC_FORMAT, version: SYNC_VERSION, app, stores };
+  const file: SyncFile = { format: SYNC_FORMAT, version: SYNC_VERSION, app, stores, written };
   const compressed = await pipe(utf8(JSON.stringify(file)), new CompressionStream('gzip'));
   return seal(key, compressed, label(app));
 }
@@ -59,7 +72,7 @@ export async function openStores(
   key: Uint8Array<ArrayBuffer>,
   app: string,
   sealed: string,
-): Promise<Stores> {
+): Promise<OpenedCopy> {
   const compressed = await open(key, sealed, label(app));
   const file = JSON.parse(
     new TextDecoder().decode(await pipe(compressed, new DecompressionStream('gzip'))),
@@ -68,5 +81,9 @@ export async function openStores(
     throw new Error('Not this app’s sync data');
   }
   if (file.version !== SYNC_VERSION) throw new RangeError('Made by a newer version');
-  return file.stores ?? {};
+  const { written } = file;
+  return {
+    stores: file.stores ?? {},
+    written: Number.isSafeInteger(written) && (written as number) > 0 ? (written as number) : null,
+  };
 }

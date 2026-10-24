@@ -34,6 +34,7 @@ import { CURRENCIES, LIMITS, UNIT_LABELS, UNITS } from '../lib/repairs.ts';
             Search
           </label>
           <input
+            dir="auto"
             class="input"
             id="search"
             type="search"
@@ -147,6 +148,7 @@ import { CURRENCIES, LIMITS, UNIT_LABELS, UNITS } from '../lib/repairs.ts';
     <li class="repair">
       <div class="repair__top">
         <button
+          dir="auto"
           type="button"
           class="repair__title"
           aria-haspopup="dialog"
@@ -160,11 +162,11 @@ import { CURRENCIES, LIMITS, UNIT_LABELS, UNITS } from '../lib/repairs.ts';
       <dl class="repair__details">
         <div data-row="problem">
           <dt>Damage found</dt>
-          <dd data-problem></dd>
+          <dd dir="auto" data-problem></dd>
         </div>
         <div data-row="work">
           <dt>Work done</dt>
-          <dd data-work></dd>
+          <dd dir="auto" data-work></dd>
         </div>
         <div data-row="parts">
           <dt>Parts replaced</dt>
@@ -195,10 +197,10 @@ import { CURRENCIES, LIMITS, UNIT_LABELS, UNITS } from '../lib/repairs.ts';
   <template data-vehicle-template>
     <li class="vehicle">
       <div class="vehicle__text">
-        <span class="vehicle__name" data-name>
+        <span dir="auto" class="vehicle__name" data-name>
           Vehicle
         </span>
-        <span class="muted" data-details></span>
+        <span dir="auto" class="muted" data-details></span>
         <span class="muted" data-summary></span>
       </div>
       <div class="cluster vehicle__actions">
@@ -227,6 +229,7 @@ import { CURRENCIES, LIMITS, UNIT_LABELS, UNITS } from '../lib/repairs.ts';
           <label class="field">
             <span class="field__label">Name</span>
             <input
+              dir="auto"
               class="input"
               type="text"
               list="part-names"
@@ -243,6 +246,7 @@ import { CURRENCIES, LIMITS, UNIT_LABELS, UNITS } from '../lib/repairs.ts';
             <label class="field">
               <span class="field__label">Part number (optional)</span>
               <input
+                dir="auto"
                 class="input"
                 type="text"
                 autocomplete="off"
@@ -318,6 +322,7 @@ import { CURRENCIES, LIMITS, UNIT_LABELS, UNITS } from '../lib/repairs.ts';
             Vehicle
           </label>
           <input
+            dir="auto"
             class="input"
             id="repair-vehicle"
             name="vehicle"
@@ -372,6 +377,7 @@ import { CURRENCIES, LIMITS, UNIT_LABELS, UNITS } from '../lib/repairs.ts';
             System (optional)
           </label>
           <input
+            dir="auto"
             class="input"
             id="repair-system"
             name="system"
@@ -390,6 +396,7 @@ import { CURRENCIES, LIMITS, UNIT_LABELS, UNITS } from '../lib/repairs.ts';
           Damage found
         </label>
         <textarea
+          dir="auto"
           class="input"
           id="repair-problem"
           name="problem"
@@ -405,6 +412,7 @@ import { CURRENCIES, LIMITS, UNIT_LABELS, UNITS } from '../lib/repairs.ts';
           Work done
         </label>
         <textarea
+          dir="auto"
           class="input"
           id="repair-work"
           name="work"
@@ -503,6 +511,7 @@ import { CURRENCIES, LIMITS, UNIT_LABELS, UNITS } from '../lib/repairs.ts';
           Name or number
         </label>
         <input
+          dir="auto"
           class="input"
           id="vehicle-name"
           name="name"
@@ -520,6 +529,7 @@ import { CURRENCIES, LIMITS, UNIT_LABELS, UNITS } from '../lib/repairs.ts';
           Model (optional)
         </label>
         <input
+          dir="auto"
           class="input"
           id="vehicle-model"
           name="model"
@@ -536,6 +546,7 @@ import { CURRENCIES, LIMITS, UNIT_LABELS, UNITS } from '../lib/repairs.ts';
           Number plate (optional)
         </label>
         <input
+          dir="auto"
           class="input"
           id="vehicle-plate"
           name="plate"
@@ -551,6 +562,7 @@ import { CURRENCIES, LIMITS, UNIT_LABELS, UNITS } from '../lib/repairs.ts';
           Notes (optional)
         </label>
         <textarea
+          dir="auto"
           class="input"
           id="vehicle-notes"
           name="notes"

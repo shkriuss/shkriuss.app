@@ -25,6 +25,7 @@ import { MAX_TEXT_LENGTH, REPEAT_CHOICES, REPEATS } from '../lib/reminders.ts';
           Remind me to
         </label>
         <input
+          dir="auto"
           class="input"
           id="add-text"
           name="text"
@@ -158,7 +159,13 @@ import { MAX_TEXT_LENGTH, REPEAT_CHOICES, REPEATS } from '../lib/reminders.ts';
         <Icon name="repeat" />
       </span>
       <div class="reminder__body">
-        <button type="button" class="reminder__text" aria-haspopup="dialog" data-action="edit">
+        <button
+          dir="auto"
+          type="button"
+          class="reminder__text"
+          aria-haspopup="dialog"
+          data-action="edit"
+        >
           Reminder
         </button>
         <p class="muted reminder__meta">
@@ -184,6 +191,7 @@ import { MAX_TEXT_LENGTH, REPEAT_CHOICES, REPEATS } from '../lib/reminders.ts';
           Remind me to
         </label>
         <input
+          dir="auto"
           class="input"
           id="edit-text"
           name="text"
@@ -266,7 +274,7 @@ import { MAX_TEXT_LENGTH, REPEAT_CHOICES, REPEATS } from '../lib/reminders.ts';
     <form method="dialog" class="stack">
       <h2 id="delete-title">Delete this reminder?</h2>
       <p>
-        “<span data-delete-text></span>” will be removed.
+        “<span dir="auto" data-delete-text></span>” will be removed.
       </p>
       <div class="cluster">
         <Button type="submit" value="cancel">

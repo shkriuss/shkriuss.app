@@ -168,7 +168,7 @@ import { MAX_NOTES_LENGTH, MAX_TITLE_LENGTH, REPEAT_LABELS, REPEATS } from '../l
     <li>
       <button type="button" class="event-item" data-action="edit">
         <span class="event-item__when" data-when></span>
-        <span class="event-item__title" data-title>
+        <span dir="auto" class="event-item__title" data-title>
           Event
         </span>
         <span class="event-item__icons">
@@ -210,6 +210,7 @@ import { MAX_NOTES_LENGTH, MAX_TITLE_LENGTH, REPEAT_LABELS, REPEATS } from '../l
           Title
         </label>
         <input
+          dir="auto"
           class="input"
           id="event-title"
           name="title"
@@ -334,6 +335,7 @@ import { MAX_NOTES_LENGTH, MAX_TITLE_LENGTH, REPEAT_LABELS, REPEATS } from '../l
           Notes (optional)
         </label>
         <textarea
+          dir="auto"
           class="input"
           id="event-notes"
           name="notes"
