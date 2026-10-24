@@ -166,11 +166,13 @@ every device. That's far beyond what sync can hold:
   read photos or change them, or pass one off as another: each part is
   sealed and labelled with its library, item and part. It could hide photos
   or changes, hold back new ones, delete what it keeps, or say the library
-  was deleted. A false "deleted" note would delete that photo on devices
-  too, since those notes aren't sealed; but whoever controls the servers
-  could also change the apps themselves. A mistake like a restore from a
-  backup sends no such notes: devices only ask for changes after the last
-  one they saw.
+  was deleted (devices then keep the photos they have). It can't make a
+  device delete a photo: a "deleted" note, in the list of changes or in
+  the answer to an upload, counts only with the seal of the device that
+  deleted the photo, made with the library's key for that library and that
+  photo. Notes from before seals were added have none, so a device that
+  hadn't caught up with one keeps that photo. Whoever controls the servers
+  could still change the apps themselves.
 - **Free plan requests:** an upload is one Worker request and two Durable
   Object requests; a screen of thumbnails is a few. A device checks for
   changes about once a minute while open. 20,000 uploads a day stays well

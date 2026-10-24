@@ -175,6 +175,68 @@ describe('items', () => {
   });
 });
 
+describe('deletion notes', () => {
+  /** The server adds `rows` to every list of changes, as a server that went wrong could. */
+  function addRows(rows: object[]): void {
+    vi.stubGlobal('fetch', async (input: string, init: RequestInit = {}) => {
+      const headers = new Headers(init.headers);
+      if (init.body instanceof Blob) headers.set('Content-Length', String(init.body.size));
+      const response = await server.fetch(
+        new Request(new URL(input, ORIGIN), { ...init, headers }),
+      );
+      if (!new URL(input, ORIGIN).pathname.endsWith('/changes')) return response;
+      const page = (await response.json()) as { rows: object[] };
+      return Response.json({ ...page, rows: [...page.rows, ...rows] });
+    });
+  }
+
+  it('count only when a device of this account made them (audit A-8)', async () => {
+    const secret = randomBytes(32);
+    const phone = await device(secret);
+    await phone.api.unlock(CODE);
+    await phone.api.upload('photo-0001', photo, parts());
+    await phone.api.upload('photo-0002', photo, parts());
+    await phone.api.remove(['photo-0001']);
+    const real = (await phone.api.changes(0)).changes;
+    expect(real.map((change) => [change.id, 'deleted' in change])).toEqual([
+      ['photo-0002', false],
+      ['photo-0001', true],
+    ]);
+
+    // Made up by the server: without a seal, or with the seal of another item's note.
+    const listed = (await (
+      await fetch(`${ORIGIN}/api/library/changes?since=0`, {
+        headers: {
+          Authorization: `Bearer ${(await libraryAccess(secret, phone.record)).token}`,
+          'X-Library': phone.record.library,
+        },
+      })
+    ).json()) as { rows: { id: string; proof?: string }[] };
+    const sealOfAnother = listed.rows.find((row) => row.id === 'photo-0001')?.proof;
+    expect(sealOfAnother).toMatch(/\./);
+    addRows([
+      { id: 'photo-0002', seq: 9, deleted: true, at: 1 },
+      { id: 'photo-0002', seq: 10, deleted: true, at: 1, proof: sealOfAnother },
+    ]);
+    const tablet = await device(secret, phone.record);
+    expect((await tablet.api.changes(0)).changes).toEqual(real);
+  });
+
+  it('that a refused upload gives must be real too', async () => {
+    const phone = await device(randomBytes(32));
+    await phone.api.unlock(CODE);
+    await phone.api.upload('photo-0001', photo, parts());
+    await phone.api.remove(['photo-0001']);
+    expect((await failure(phone.api.upload('photo-0001', photo, parts()))).problem).toBe('deleted');
+
+    // A server that says "deleted" with no seal: the photo just doesn't go up.
+    vi.stubGlobal('fetch', async () => Response.json({ deleted: true }, { status: 409 }));
+    expect((await failure(phone.api.upload('photo-0002', photo, parts()))).problem).toBe(
+      'unproven-deletion',
+    );
+  });
+});
+
 describe('a replaced account key', () => {
   it('moves the library: old items still open, new ones use the new key, the old token stops', async () => {
     const oldKey = randomBytes(32);

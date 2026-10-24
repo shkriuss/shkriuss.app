@@ -76,11 +76,22 @@ describe('bodies', () => {
     }
   });
 
-  it('checks removals, removing doubles', () => {
+  it('checks removals and their seals, removing doubles', () => {
     expect(checkRemove({ ids: ['photo-0001', 'photo-0001'] })).toEqual({
       ok: true,
-      value: ['photo-0001'],
+      value: [['photo-0001', null]],
     });
+    const proof = `k1.${'A'.repeat(47)}`;
+    expect(checkRemove({ ids: ['photo-0001', 'photo-0002'], proofs: [proof, proof] })).toEqual({
+      ok: true,
+      value: [
+        ['photo-0001', proof],
+        ['photo-0002', proof],
+      ],
+    });
+    // One seal for each id, each one a seal.
+    expect(checkRemove({ ids: ['photo-0001'], proofs: [] }).ok).toBe(false);
+    expect(checkRemove({ ids: ['photo-0001'], proofs: ['not a seal'] }).ok).toBe(false);
     expect(checkRemove({ ids: [] }).ok).toBe(false);
     expect(
       checkRemove({ ids: Array.from({ length: 101 }, (_, i) => `photo-${1000 + i}`) }).ok,
