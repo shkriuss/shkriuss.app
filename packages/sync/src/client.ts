@@ -206,12 +206,13 @@ export interface SyncClient {
   secret(): Uint8Array<ArrayBuffer> | null;
   /**
    * The time to count back from when deleting data by age (ms), like Water's
-   * drinks older than a year. Deletions here reach the other devices (also
-   * ones made while sync is off, once it's on again), so a clock set far
-   * ahead mustn't decide: it's this device's clock, but never later than the
-   * sync server's at the last sync. Null when that isn't known yet (synced
-   * before it was kept): then wait. Without sync ever used here, deletions
-   * stay here, so it's this device's clock (audit F1-4).
+   * drinks older than a year. While sync is on, deletions here reach the
+   * other devices, so a clock set far ahead mustn't decide: it's this
+   * device's clock, but never later than the sync server's at the last sync.
+   * Null when that isn't known yet (synced before it was kept): then wait.
+   * With sync off (or never used) it's this device's clock, so data still
+   * goes on time, however long sync stays off. Deletions made while it's off
+   * reach the others only if it's turned on again (audit F1-4).
    */
   trustedNow(): number | null;
 }
@@ -800,7 +801,7 @@ export function createSync(options: {
     },
     trustedNow() {
       const state = loadState();
-      if (!state) return Date.now();
+      if (!state?.secret) return Date.now();
       return state.serverTime === null ? null : Math.min(Date.now(), state.serverTime);
     },
   };

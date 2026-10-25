@@ -435,10 +435,11 @@ export function mountWater(root: Document): void {
   }
 
   /**
-   * Lets go of drinks older than a year. With sync, what's let go here is
-   * deleted on every device, so a clock set far ahead mustn't decide: it
-   * counts back from the sync server's clock at the last sync, if that's
-   * earlier, and waits while that isn't known (audit F1-4).
+   * Lets go of drinks older than a year. While sync is on, what's let go
+   * here is deleted on every device, so a clock set far ahead mustn't
+   * decide: it counts back from the sync server's clock at the last sync, if
+   * that's earlier, and waits while that isn't known (audit F1-4). With sync
+   * off, from this device's clock.
    */
   function prune(): void {
     const now = sync.trustedNow();

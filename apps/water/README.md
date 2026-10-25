@@ -38,11 +38,13 @@ Drink enough water each day. Lives at <https://water.shkriuss.app>.
 - `src/worker.ts`: runs the shared notification and sync servers
   ([ADR 0010](../../docs/adr/0010-account-and-sync.md)). Drinks are only
   added or removed, never changed, so they never conflict; for each setting,
-  the newest change wins. With sync, letting go of a drink deletes it on
-  every device, so a phone whose clock is set far ahead must not decide
+  the newest change wins. While sync is on, letting go of a drink deletes it
+  on every device, so a phone whose clock is set far ahead must not decide
   which drinks are a year old: Water counts the year back from the sync
   server's clock at the last sync, if that's earlier than the phone's
   (`trustedNow` in `@shkriuss/sync`), and lets nothing go until it knows it.
+  With sync off, it counts from the phone's clock, so drinks still go after
+  a year, however long sync stays off.
 - `e2e/`: browser tests (`helpers.ts` is shared by them). The shared
   accessibility, security, offline and sync checks in `tests/e2e/` run too.
 

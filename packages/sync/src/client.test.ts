@@ -1294,14 +1294,16 @@ describe('a device whose clock is far ahead', () => {
     phone.counters = [counter('water')];
     expect((await phone.syncNow()).problem).toBeNull();
     expect(phone.use().sync.trustedNow()).toBe(SERVER);
-    // Sync turned off: what's deleted meanwhile reaches the others once it's on again.
-    phone.sync.turnOff();
-    expect(phone.use().sync.trustedNow()).toBe(SERVER);
     // A clock behind the server's is its own.
     vi.setSystemTime(SERVER - MINUTE);
     expect(phone.use().sync.trustedNow()).toBe(SERVER - MINUTE);
-    // "Delete all data" forgets sync: nothing deleted here reaches the others.
+    // Sync turned off: its own clock again, so data kept "for a year" still
+    // goes on time, also after years with sync off (only a deletion made
+    // while it's off could reach the others, if sync is turned on again).
     vi.setSystemTime(AHEAD);
+    phone.sync.turnOff();
+    expect(phone.use().sync.trustedNow()).toBe(AHEAD);
+    // "Delete all data" forgets sync: nothing deleted here reaches the others.
     stopSync();
     expect(phone.use().sync.trustedNow()).toBe(AHEAD);
     vi.useRealTimers();
