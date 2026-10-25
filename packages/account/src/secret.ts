@@ -9,7 +9,7 @@
  *   signed-in device, to check they're on the same account. It reveals
  *   nothing about the secret.
  */
-import { equalBytes, hkdf, randomBytes, sha256, concat, utf8 } from '@shkriuss/crypto';
+import { equalBytes, hkdf, randomBytes, sha256, concat, toBase64Url, utf8 } from '@shkriuss/crypto';
 
 export const SECRET_BYTES = 32;
 
@@ -22,6 +22,18 @@ export const RECOVERY_KEY_CHARS = SECRET_CHARS + CHECK_CHARS;
 
 export function generateSecret(): Uint8Array<ArrayBuffer> {
   return randomBytes(SECRET_BYTES);
+}
+
+/**
+ * A tag saying that `next` replaced `old`. Only a device that has both keys
+ * can make it, or check it: one with only the old key (a lost device) learns
+ * nothing about the new one from it.
+ */
+export async function successorTag(
+  old: Uint8Array<ArrayBuffer>,
+  next: Uint8Array<ArrayBuffer>,
+): Promise<string> {
+  return toBase64Url(await hkdf(concat(old, next), 'shkriuss account successor v1'));
 }
 
 function toBase32(bytes: Uint8Array): string {

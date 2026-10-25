@@ -26,6 +26,7 @@ import {
   utf8,
 } from '@shkriuss/crypto';
 import type { LinkedData } from '@shkriuss/sync';
+import { fetchWithLimit } from '@shkriuss/sync/request';
 import { isDeletedRow, LIMITS, type Changes } from './validate.ts';
 
 export { LIMITS } from './validate.ts';
@@ -323,7 +324,9 @@ export function libraryApi(access: LibraryAccess) {
     if (typeof init.body === 'string') headers.set('Content-Type', 'application/json');
     let response: Response;
     try {
-      response = await fetch(`${API}${path}`, {
+      // With a time limit for its size, as sync's requests (audit G-11): a
+      // network that hangs counts as no connection, instead of waiting for ever.
+      response = await fetchWithLimit(`${API}${path}`, {
         ...init,
         headers,
         credentials: 'omit',

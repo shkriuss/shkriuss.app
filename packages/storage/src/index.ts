@@ -75,7 +75,7 @@ export interface Store<T> {
 }
 
 /** Whether an error from storage means it's full (each browser names it its own way). */
-const isFull = (error: unknown): boolean =>
+export const isStorageFull = (error: unknown): boolean =>
   error instanceof DOMException &&
   (error.name === 'QuotaExceededError' || error.name === 'NS_ERROR_DOM_QUOTA_REACHED');
 
@@ -93,7 +93,7 @@ export function getLocalStorage(): StorageLike | undefined {
     storage.removeItem(probe);
     return storage;
   } catch (error) {
-    return storage && isFull(error) ? storage : undefined;
+    return storage && isStorageFull(error) ? storage : undefined;
   }
 }
 
@@ -245,7 +245,7 @@ export function createStore<T>(options: StoreOptions<T>): Store<T> {
         return true;
       } catch (error) {
         // Quota exceeded or storage blocked.
-        return fail(isFull(error) ? 'full' : 'unavailable');
+        return fail(isStorageFull(error) ? 'full' : 'unavailable');
       }
     },
 

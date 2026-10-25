@@ -44,6 +44,7 @@ export function mountSyncControls(section: HTMLElement, sync: SyncClient): void 
     deleted: `The online copy was deleted on another device, so sync is off here. ${app}'s data on this device is kept.`,
     moved: `Your account key was replaced on another device, so sync is off here. ${app}'s data on this device is kept. Turn on sync again to keep syncing.`,
     storage: 'This browser won’t save. Is it in private mode, or is storage blocked?',
+    full: `There’s no room left for ${app}’s data in this browser, so it can’t sync. Delete something you don’t need here, and it will sync again.`,
     'files-full': `There’s no room left online for more of ${app}’s photos and files. New ones stay on this device.`,
     'connect-failed': 'Turning on sync didn’t finish. Please try again.',
   };
