@@ -6,6 +6,9 @@
 // cover turning sync on and off, deleting the online copy and a new account key.
 import { readFile } from 'node:fs/promises';
 import type { Page, Route } from '@playwright/test';
+import { appSecretOf, parseRecoveryKey } from '../../../packages/account/src/secret.ts';
+import { randomBytes, toBase64Url } from '../../../packages/crypto/src/index.ts';
+import { libraryAccess, libraryRecord } from '../../../packages/library/src/client.ts';
 import {
   createAccount,
   hubURL,
@@ -309,8 +312,7 @@ test('a device with the old account key took the library: Photos says so, and st
   browser,
   guard,
 }) => {
-  // The lost phone moved the old copy (410), and moving the library is refused: it's theirs now (403).
-  guard.allowConsole('status of 410 (Gone)');
+  // Moving the library is refused: it's theirs now (403).
   guard.allowConsole('status of 403 (Forbidden)');
   const { key } = await createAccount(page);
   await page.goto('/');
@@ -324,19 +326,45 @@ test('a device with the old account key took the library: Photos says so, and st
 
   // That phone is lost, and the key is replaced on this tablet. Before the
   // tablet opens Photos again, someone with the phone makes an account of
-  // their own, and turns on sync in Photos with it.
+  // their own, and turns on sync in Photos with it. Photos there moves
+  // nothing of the old key's: only the person's own devices know which key
+  // replaced it (audit A-3).
   await replaceKey(page);
   await lost.goto(`${hubURL}/account/`);
   await expect(lost.locator('[data-message]')).toHaveText(/^Your account key was replaced/);
   await createAccount(lost);
-  const takenAway = oldCopyMoved(lost);
+  const moves: string[] = [];
+  lost.on('request', (request) => {
+    if (/\/api\/(sync\/copy\?moved|library\/move)$/.test(request.url())) moves.push(request.url());
+  });
+  const since = await lost.evaluate(() => Date.now());
   await connectAgain(lost, appURL);
-  await takenAway;
+  await lost.waitForFunction((after) => {
+    const state = JSON.parse(localStorage.getItem('shkriuss-device:sync') ?? 'null') as {
+      last?: number | null;
+    } | null;
+    return (state?.last ?? 0) >= after;
+  }, since);
+  expect(moves).toEqual([]);
+
+  // But an older version of Photos still on that phone, or a request made by
+  // hand, can move the library with the old key's token.
+  const old = await parseRecoveryKey(key);
+  if (!old.ok) throw new Error('Not a recovery key');
+  const secret = await appSecretOf(old.secret, 'photos');
+  const { token, library } = await libraryAccess(secret, await libraryRecord(secret, undefined));
+  const taken = await lost.request.post(`${appURL}/api/library/move`, {
+    headers: { Authorization: `Bearer ${toBase64Url(randomBytes(32))}`, 'X-Library': library },
+    data: { from: token },
+  });
+  expect(taken.status()).toBe(204);
   await lost.context().close();
 
-  // The tablet turns on sync again: Photos says what happened, and its photo
-  // goes up to a new library.
+  // The tablet turns on sync again: it moves the old copy itself, Photos says
+  // what happened to the library, and its photo goes up to a new library.
+  const moved = oldCopyMoved(page);
   await connectAgain(page, appURL);
+  await moved;
   await expect(onlineStatus(page)).toHaveText(
     /^Your online library was taken by a device that still had your old account key, perhaps the lost one/,
     ONLINE,

@@ -17,6 +17,8 @@ export interface DeviceLink {
   /** Open this on the other device (it's what the QR code holds). */
   url: string;
   expiresAt: number;
+  /** Cancels the link (cancelLink): only this device has it. */
+  cancel: string;
 }
 
 export type LinkState = 'waiting' | 'used' | 'expired';
@@ -30,11 +32,26 @@ export async function createLink(
 ): Promise<DeviceLink> {
   const id = toBase64Url(randomBytes(16));
   const key = randomBytes(32);
+  const cancel = toBase64Url(randomBytes(32));
   const data = await seal(key, secret, label(id));
-  const response = await api(`/link/${id}`, { method: 'PUT', body: JSON.stringify({ data }) });
+  const response = await api(`/link/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify({ data, cancel }),
+  });
   if (response.status !== 201) throw new AccountError('server', 'Couldn’t make a link.');
   const { expiresAt } = (await response.json()) as { expiresAt: number };
-  return { id, url: `${origin}/account/#link=${id}.${toBase64Url(key)}`, expiresAt };
+  return { id, url: `${origin}/account/#link=${id}.${toBase64Url(key)}`, expiresAt, cancel };
+}
+
+/**
+ * Makes a link stop working before it expires (the person is done with the
+ * code, audit A-2). "used" if another device already used it.
+ */
+export async function cancelLink(link: DeviceLink): Promise<'cancelled' | 'used'> {
+  const response = await api(`/link/${link.id}`, { method: 'DELETE' }, link.cancel);
+  if (response.status === 409) return 'used';
+  if (!response.ok) throw new AccountError('server', 'Couldn’t cancel the link.');
+  return 'cancelled';
 }
 
 /** Whether the other device has used the link yet. */

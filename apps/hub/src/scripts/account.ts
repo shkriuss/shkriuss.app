@@ -7,6 +7,7 @@ import {
   accountCodeOf,
   addPasskey,
   appSecretOf,
+  cancelLink,
   claimLink,
   createLink,
   currentAccount,
@@ -23,6 +24,7 @@ import {
   recoveryKeyOf,
   removePasskey,
   replaceAccountKey,
+  replacedNote,
   replacedSecrets,
   sameSecret,
   saveAccount,
@@ -82,6 +84,10 @@ const PROBLEMS: Record<AccountErrorCode, string> = {
     'This browser or password manager can’t use a passkey to unlock an account. Use your recovery key, or add this device with a code from another one. (Google Password Manager on Android and iCloud Keychain on iPhone, iPad and Mac can.)',
   'unknown-passkey':
     'That passkey isn’t connected to a shkriuss account. Try another passkey, or use your recovery key.',
+  'old-passkey':
+    'This passkey was added before a security update, so it can’t sign in any more. Sign in with your recovery key, or add this device with a code from another one, then add a passkey again.',
+  'passkey-refused':
+    'The account service didn’t accept this passkey. Check that this device’s date and time are right and try again, or use your recovery key.',
   'link-used': 'This code has expired. Show a new one on your other device.',
   'link-taken':
     'Someone already used this code. If it wasn’t you, replace your account key on your other device now: whoever used it can see what you sync.',
@@ -103,6 +109,10 @@ const REPLACED = {
 };
 
 /** True if this key was replaced on another device (false if that can't be checked now). */
+/** Someone used the device code: maybe not the person (audit A-5). */
+const LINK_USED =
+  'A device used this code and is now signed in. If it wasn’t the one you meant, replace your account key now (below).';
+
 const wasReplaced = (secret: Uint8Array<ArrayBuffer>): Promise<boolean> =>
   isReplaced(secret).catch(() => false);
 
@@ -311,12 +321,12 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
       say(replaced, true);
       return false;
     }
-    if (!saveAccount(secret)) {
+    if (!(await saveAccount(secret))) {
       say(STORAGE_BLOCKED, true);
       return false;
     }
     account = await currentAccount();
-    stopLink();
+    void dropLink();
     home();
     say(done);
     return true;
@@ -363,6 +373,36 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
     createLinkButton.hidden = false;
   }
 
+  /**
+   * Stops showing the code, and makes it stop working: hiding it isn't
+   * enough, as someone may have seen or photographed it (audit A-2). If that
+   * doesn't work at once, it keeps trying until the code expires, and says so
+   * if someone used it meanwhile.
+   */
+  async function dropLink(): Promise<void> {
+    const shown = link;
+    stopLink();
+    if (!shown) return;
+    let told = false;
+    const cancel = async (): Promise<boolean> => {
+      try {
+        if ((await cancelLink(shown)) === 'used' && !told) {
+          told = true;
+          say(LINK_USED, true);
+        }
+        return true;
+      } catch {
+        return Date.now() > shown.expiresAt;
+      }
+    };
+    if (await cancel()) return;
+    const retry = window.setInterval(() => {
+      void cancel().then((done) => {
+        if (done) window.clearInterval(retry);
+      });
+    }, LINK_POLL_MS);
+  }
+
   async function checkLink(): Promise<void> {
     if (!link || document.hidden) return;
     const shown = link;
@@ -375,8 +415,7 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
     if (link !== shown) return;
     if (state === 'used') {
       stopLink();
-      linkStatus.textContent =
-        'A device used this code and is now signed in. If it wasn’t the one you meant, replace your account key now (below).';
+      linkStatus.textContent = LINK_USED;
     } else if (state === 'expired' || Date.now() > shown.expiresAt) {
       stopLink();
       linkStatus.textContent = 'The code expired. Show a new one if you still need it.';
@@ -385,7 +424,7 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
 
   async function startLink(): Promise<void> {
     if (!account) return;
-    stopLink();
+    void dropLink();
     setBusy(createLinkButton, true);
     linkStatus.textContent = 'Making a code…';
     try {
@@ -403,7 +442,7 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
     const hadFocus = document.activeElement === createLinkButton;
     createLinkButton.hidden = true;
     if (hadFocus) copyLinkButton.focus();
-    linkStatus.textContent = `Waiting for your other device. The code works once, until ${timeFormat.format(link.expiresAt)}.`;
+    linkStatus.textContent = `Waiting for your other device. The code works once, until ${timeFormat.format(link.expiresAt)}, or until you tap Done.`;
     poll = window.setInterval(() => void checkLink(), LINK_POLL_MS);
   }
 
@@ -479,7 +518,7 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
       pending = null;
       newKey.textContent = '';
       account = await currentAccount();
-      stopLink();
+      void dropLink();
       linkStatus.textContent = '';
       home();
       if (!result.saved) say(STORAGE_BLOCKED, true);
@@ -555,7 +594,7 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
     },
     'create-link': () => startLink(),
     'close-link': () => {
-      stopLink();
+      void dropLink();
       linkStatus.textContent = '';
       createLinkButton.focus();
     },
@@ -655,7 +694,7 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
     if (signOutDialog.returnValue !== 'confirm') return;
     forgetAccount();
     account = null;
-    stopLink();
+    void dropLink();
     linkStatus.textContent = '';
     show('signed-out');
     say('This device is signed out.');
@@ -670,7 +709,7 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
     if (event.key !== null && event.key !== 'shkriuss-device:account') return;
     void currentAccount().then((current) => {
       account = current;
-      if (!current) stopLink();
+      if (!current) void dropLink();
       if (!pending && !linked) home(false);
     });
   });
@@ -678,8 +717,9 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
   window.addEventListener('hashchange', () => void openLink(location.hash));
 
   // Replaced on another device (a lost device): sign out here.
-  if (account && (await wasReplaced(account.secret))) {
-    noteReplaced(account.secret);
+  const note = account ? await replacedNote(account.secret).catch(() => null) : null;
+  if (account && note?.replaced) {
+    noteReplaced(account.secret, note.successor);
     account = null;
     say(REPLACED.here, true);
   }

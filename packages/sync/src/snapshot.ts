@@ -43,8 +43,31 @@ export async function syncKeys(
   };
 }
 
-async function pipe(bytes: Uint8Array<ArrayBuffer>, stream: GenericTransformStream) {
-  const output = new Blob([bytes]).stream().pipeThrough(stream);
+/**
+ * The most a copy may unpack to. Real copies unpack to a few MB at most, but
+ * a few KB of gzip can unpack to gigabytes and crash the app on every device
+ * that opens it: a copy that would be bigger isn't opened (audit E-1).
+ */
+export const MAX_OPENED_BYTES = 64 * 1024 * 1024;
+
+async function pipe(
+  bytes: Uint8Array<ArrayBuffer>,
+  stream: GenericTransformStream,
+  limit = Infinity,
+) {
+  let total = 0;
+  const output = new Blob([bytes])
+    .stream()
+    .pipeThrough(stream)
+    .pipeThrough(
+      new TransformStream<Uint8Array, Uint8Array>({
+        transform(chunk, controller) {
+          total += chunk.byteLength;
+          if (total > limit) controller.error(new Error('Unpacks to too much data'));
+          else controller.enqueue(chunk);
+        },
+      }),
+    );
   return new Uint8Array(await new Response(output).arrayBuffer());
 }
 
@@ -67,7 +90,10 @@ export async function sealStores(
   return seal(key, compressed, label(app));
 }
 
-/** Opens a sealed copy. Throws if the key is wrong, it was changed, or it isn't this app's. */
+/**
+ * Opens a sealed copy. Throws if the key is wrong, it was changed, it isn't
+ * this app's, or it would unpack to more than MAX_OPENED_BYTES.
+ */
 export async function openStores(
   key: Uint8Array<ArrayBuffer>,
   app: string,
@@ -75,7 +101,9 @@ export async function openStores(
 ): Promise<OpenedCopy> {
   const compressed = await open(key, sealed, label(app));
   const file = JSON.parse(
-    new TextDecoder().decode(await pipe(compressed, new DecompressionStream('gzip'))),
+    new TextDecoder().decode(
+      await pipe(compressed, new DecompressionStream('gzip'), MAX_OPENED_BYTES),
+    ),
   ) as Partial<SyncFile>;
   if (file.format !== SYNC_FORMAT || file.app !== app || typeof file.stores !== 'object') {
     throw new Error('Not this app’s sync data');

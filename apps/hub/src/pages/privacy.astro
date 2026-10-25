@@ -132,19 +132,21 @@ const LAST_UPDATED = '23 October 2026';
       </li>
       <li>
         <strong>If you add a passkey:</strong> the account's own server on Cloudflare keeps your
-        account key locked so that only that passkey can unlock it. The server can't unlock it and
-        doesn't know whose it is. Removing the passkey deletes it.
+        account key locked so that only that passkey can unlock it, with the passkey's public key,
+        to check that it's used on the Account page. The server can't unlock it and doesn't know
+        whose it is. Removing the passkey deletes it.
       </li>
       <li>
         <strong>When you add a device with a code:</strong> for at most 10 minutes, the server keeps
         your account key locked with a one-time key that's only in the QR code. It's deleted as soon
-        as your other device uses it.
+        as your other device uses it, or you tap Done.
       </li>
       <li>
         <strong>If you replace your account key</strong> (after losing a device): the server keeps a
-        note that the old key was replaced, so devices that still have it sign out. The note is
-        deleted once no device has asked about it for 13 months. Your device keeps the old key until
-        you sign out, so your apps can move their synced data to the new one.
+        note that the old key was replaced, so devices that still have it sign out, with a tag that
+        only a device with both the old and the new key can check. The note is deleted once no
+        device has asked about it for 13 months. Your device keeps the old key until you sign out
+        (or sign in to another account), so your apps can move their synced data to the new one.
       </li>
       <li>
         That's all. There's no list of accounts, and nothing stored that connects an account to you,

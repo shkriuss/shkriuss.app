@@ -7,6 +7,8 @@
 import { hkdf, toBase64Url } from '@shkriuss/crypto';
 import { noteReplaced, saveAccount } from './device.ts';
 import { AccountError, api } from './errors.ts';
+import { successorTag } from './secret.ts';
+import { SUCCESSOR_PATTERN } from './validate.ts';
 
 /** Checking gives up after this long (then the device carries on as it is). */
 const CHECK_TIMEOUT_MS = 5000;
@@ -14,16 +16,34 @@ const CHECK_TIMEOUT_MS = 5000;
 const statusToken = async (secret: Uint8Array<ArrayBuffer>) =>
   toBase64Url(await hkdf(secret, 'shkriuss account status v1'));
 
-/** Whether this account key was replaced on another device. Throws AccountError("server") if it can't tell. */
-export async function isReplaced(secret: Uint8Array<ArrayBuffer>): Promise<boolean> {
+/**
+ * Whether this account key was replaced on another device, and the tag of
+ * the key that replaced it (successorTag; null if the note doesn't say).
+ * Throws AccountError("server") if it can't tell.
+ */
+export async function replacedNote(
+  secret: Uint8Array<ArrayBuffer>,
+): Promise<{ replaced: boolean; successor: string | null }> {
   const response = await api(
     '/status',
     { signal: AbortSignal.timeout(CHECK_TIMEOUT_MS) },
     await statusToken(secret),
   );
   if (!response.ok) throw new AccountError('server', 'Couldn’t check the account.');
-  const { replaced } = (await response.json()) as { replaced: boolean };
-  return replaced === true;
+  const { replaced, successor } = (await response.json()) as {
+    replaced?: unknown;
+    successor?: unknown;
+  };
+  return {
+    replaced: replaced === true,
+    successor:
+      typeof successor === 'string' && SUCCESSOR_PATTERN.test(successor) ? successor : null,
+  };
+}
+
+/** Whether this account key was replaced on another device. Throws AccountError("server") if it can't tell. */
+export async function isReplaced(secret: Uint8Array<ArrayBuffer>): Promise<boolean> {
+  return (await replacedNote(secret)).replaced;
 }
 
 /**
@@ -38,9 +58,16 @@ export async function replaceAccountKey(
   current: Uint8Array<ArrayBuffer>,
   next: Uint8Array<ArrayBuffer>,
 ): Promise<{ saved: boolean; noted: boolean }> {
-  const response = await api('/status', { method: 'PUT' }, await statusToken(current));
+  // The note says which key replaced this one, in a way only devices that
+  // have both can check: they keep the old key only for that account.
+  const successor = await successorTag(current, next);
+  const response = await api(
+    '/status',
+    { method: 'PUT', body: JSON.stringify({ successor }) },
+    await statusToken(current),
+  );
   const noted = response.status !== 507;
   if (!response.ok && noted) throw new AccountError('server', 'Couldn’t replace the account key.');
-  noteReplaced(current);
-  return { saved: saveAccount(next), noted };
+  noteReplaced(current, successor);
+  return { saved: await saveAccount(next), noted };
 }

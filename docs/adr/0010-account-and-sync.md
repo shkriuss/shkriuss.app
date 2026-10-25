@@ -8,6 +8,9 @@ each app's copies together have a limit, and copies (and replaced-key notes)
 nobody uses for 13 months are deleted. Extended by
 [ADR 0016](0016-online-photo-library.md): Photos' online library goes through
 the account and is kept in Cloudflare R2, free up to 10 GB, then paid.
+Changed by [ADR 0018](0018-passkey-signatures.md): the account service keeps
+each passkey's public key, and only hands out or removes a lock for the
+passkey's signature made on the Account page.
 
 ## Context
 
@@ -56,12 +59,16 @@ The requirements:
    - The server keeps the account secret sealed with the wrap key (AES-256-GCM),
      stored under the SHA-256 hash of the lookup token.
    - The passkey belongs to the hub's own domain, `shkriuss.app`. Browsers let
-     any subdomain ask for a passkey of its parent domain, so only the hub's
-     pages allow passkeys (their `Permissions-Policy` header). Every app's
-     pages refuse them, and `defineAppConfig` won't build an app that asks. So
-     no subdomain may ever be served by anyone but these Workers.
+     any subdomain ask for a passkey of its parent domain. Every app's pages
+     refuse passkeys (their `Permissions-Policy` header), and
+     `defineAppConfig` won't build an app that asks, but only Chromium-based
+     browsers honour that header. So the account service also keeps each
+     passkey's public key, and hands out or removes a lock only for the
+     passkey's signature made on the Account page itself
+     ([ADR 0018](0018-passkey-signatures.md)).
    - A passkey that can't do PRF is refused, and the browser is asked to forget
-     it (WebAuthn "signal" API, where supported).
+     it (WebAuthn "signal" API, where supported). So is one the account service
+     says no lock uses.
    - "Remove a passkey" deletes its lock.
 3. **Adding a device with a QR code.**
    - The signed-in device seals the secret with a new one-time 256-bit key.
@@ -72,6 +79,12 @@ The requirements:
      immediately removes the key from the address bar, shows the account code,
      and asks before signing in.
    - The first device shows when the code has been used.
+   - "Done" (or showing a new code, or signing out) cancels the code at
+     once: the device that made it sends a token only it has
+     (`DELETE /api/account/link/<id>`). If that doesn't get through, it keeps
+     trying until the code expires, and says so if a device used it
+     meanwhile (audit finding A-2: hiding the code used to leave it working,
+     with nobody watching).
 
 **Account code:** an 8-character fingerprint of the secret (40 bits from
 HKDF), like `K7Q2-M9XD`.
@@ -99,7 +112,8 @@ HKDF), like `K7Q2-M9XD`.
 
 - **Checks on the server:**
   - Requests from other sites are refused (`Sec-Fetch-Site`).
-  - Bodies are limited to 1 KB.
+  - Bodies are limited to 1 KB (4 KB for passkeys, which carry a signature
+    and a public key).
   - Only sealed values of the right shape are accepted.
   - Shared helpers live in `packages/server`.
 
@@ -111,7 +125,10 @@ person still has, **"Replace the account key"** on the Account page:
 1. Makes a new secret and shows its recovery key. Nothing changes until the
    person confirms they saved it.
 2. Tells the account service that the old key is replaced, for good
-   (`PUT /api/account/status`, with a token derived from the old key).
+   (`PUT /api/account/status`, with a token derived from the old key). The
+   note also holds a tag made from both keys (`successorTag`), which only a
+   device that has both can check: one with only the old key learns nothing
+   about the new one from it.
 3. Signs this device in with the new key, and remembers the old one.
 
 Then:
@@ -120,17 +137,32 @@ Then:
   the Account page, and signs out if the key was replaced. The old recovery
   key, links made with it, and passkeys that unlock it can't sign in any more.
   If the service can't be reached, the device carries on and checks next time.
+  It remembers the old key, with the note's tag, until it signs in again.
+- **A device keeps old keys only for the account that replaced them.** When
+  it signs in, it keeps a replaced key only if the tag says the new account
+  replaced it (or replaced a key that did). Signed in to another account (a
+  link from someone else's device, say), it forgets them: their apps would
+  otherwise move this account's old data into that one (audit finding A-3).
+  Keys noted before the tag was added have none, and are forgotten too.
 - **Apps.** The Account page lists the apps that sync, each with a link that
   opens the app and starts "Turn on sync" (`#sync=connect`). When an app
   connects, the hub also gives it its keys from the replaced account keys.
   The app's next sync brings the old online copy into the new one (merging as
   usual), then deletes the old copy, marked as moved. Devices still using the
-  old copy turn sync off and say the key was replaced; their data stays.
+  old copy turn sync off and say the key was replaced; their data stays. The
+  lost device can still write anything to the old copy, so nothing in it can
+  stop the move: a copy that doesn't open has nothing to bring and is
+  deleted all the same, and one from a newer version of the app (or that
+  fails the app's checks) waits until the app is updated, while syncing with
+  the new key goes on.
 - **Sync history.** A device keeps what it knew at its last sync when sync is
   turned off (by the person, or because the copy was deleted or moved), and
   keeps noting edits and deletions while it's off. Turning sync on again, with
   either key, then syncs those properly instead of starting over. "Delete all
-  data" and restoring a backup forget it, so older data never counts as new.
+  data" forgets it, and so does restoring a backup while sync is off, so older
+  data never counts as new. Restoring while sync is on replaces the data on
+  every device, on purpose: the restored data syncs as new edits, as the
+  Restore dialog warns.
 
 ### Syncing apps through the account
 
@@ -180,7 +212,10 @@ in with `sync: true` in `apps.json`.
     more, over the free plan's 10 ms (audit finding B-9). Now it takes at
     most about 6 ms. An object has 30 seconds.
 - **The copy.** The data of every synced store, as JSON, compressed (gzip),
-  then sealed with AES-256-GCM, labelled with the app's name.
+  then sealed with AES-256-GCM, labelled with the app's name. A device
+  doesn't open a copy that would unpack to more than 64 MB (real copies are a
+  few MB): a lost device could otherwise upload a few KB that unpack to
+  gigabytes and crash the app wherever it's opened.
 - **Merging** (`packages/sync/src/merge.ts`).
   - An app's data is a list of items with ids, such as Calendar's events or
     Tally's counters.
@@ -210,7 +245,11 @@ in with `sync: true` in `apps.json`.
     device's second sync after updating to this version, because it needs to
     know which data version the device last synced.
   - Data from a newer version of the app is never overwritten: the older
-    device waits until it updates. Older data is upgraded with the store's own
+    device waits until it updates. That includes single items a newer
+    version added without a new data version (a currency an older version
+    doesn't offer, say): an app drops or changes items it can't read, and
+    those would spread as deletions, so the device waits instead of saving
+    them (audit finding F2-8). Older data is upgraded with the store's own
     migration and checked with its own validation before it's saved. After
     such an update, only what was really changed on a device counts as
     edited: it compares with its data as still saved in the old version.
@@ -222,7 +261,8 @@ in with `sync: true` in `apps.json`.
   "Sync now". A request that gets no answer within 20 seconds (more for a
   big copy or photo on a slow connection) counts as no connection: the app
   says so and tries again later, instead of waiting for ever on a network
-  that hangs.
+  that hangs. The Account page's requests and Photos' online library have
+  the same limit.
 - **What app servers can see:** that an account uses the app, how big its
   copy is, and when it changes. Never the contents, and not which account is
   whose.
@@ -287,10 +327,11 @@ in with `sync: true` in `apps.json`.
 - **iPhone Home Screen apps** keep their own storage, separate from Safari. An
   app added to the Home Screen may need its own sign-in on the hub when it
   connects.
-- **Someone sees the QR code.** Anyone who sees a QR code within its 10 minutes
-  could use it first. The device showing it then says a device used it and
-  to replace the key if it wasn't the one meant, and the person's own device
-  says someone already used the code, so it's noticed.
+- **Someone sees the QR code.** Anyone who sees a QR code before it's used,
+  cancelled ("Done") or expired could use it first. The device showing it
+  then says a device used it and to replace the key if it wasn't the one
+  meant, and the person's own device says someone already used the code, so
+  it's noticed.
 - **The account code is 8 characters (40 bits).** It catches a link from
   someone else by mistake, but a determined attacker who knows a person's
   code could make an account with the same code by brute force. Linking only
