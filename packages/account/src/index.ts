@@ -15,6 +15,7 @@ export {
   type Account,
 } from './device.ts';
 export {
+  cancelLink,
   claimLink,
   createLink,
   linkState,

@@ -72,6 +72,12 @@ The requirements:
      immediately removes the key from the address bar, shows the account code,
      and asks before signing in.
    - The first device shows when the code has been used.
+   - "Done" (or showing a new code, or signing out) cancels the code at
+     once: the device that made it sends a token only it has
+     (`DELETE /api/account/link/<id>`). If that doesn't get through, it keeps
+     trying until the code expires, and says so if a device used it
+     meanwhile (audit finding A-2: hiding the code used to leave it working,
+     with nobody watching).
 
 **Account code:** an 8-character fingerprint of the secret (40 bits from
 HKDF), like `K7Q2-M9XD`.
@@ -308,10 +314,11 @@ in with `sync: true` in `apps.json`.
 - **iPhone Home Screen apps** keep their own storage, separate from Safari. An
   app added to the Home Screen may need its own sign-in on the hub when it
   connects.
-- **Someone sees the QR code.** Anyone who sees a QR code within its 10 minutes
-  could use it first. The device showing it then says a device used it and
-  to replace the key if it wasn't the one meant, and the person's own device
-  says someone already used the code, so it's noticed.
+- **Someone sees the QR code.** Anyone who sees a QR code before it's used,
+  cancelled ("Done") or expired could use it first. The device showing it
+  then says a device used it and to replace the key if it wasn't the one
+  meant, and the person's own device says someone already used the code, so
+  it's noticed.
 - **The account code is 8 characters (40 bits).** It catches a link from
   someone else by mistake, but a determined attacker who knows a person's
   code could make an account with the same code by brute force. Linking only

@@ -13,8 +13,9 @@
  *   out. Found by the hash of a token only the old key can make.
  *
  *   GET    /api/account/ping             is the service running?
- *   PUT    /api/account/link/<id>        store a link (once)
+ *   PUT    /api/account/link/<id>        store a link (once), with a token that cancels it
  *   GET    /api/account/link/<id>        fetch it (once; then it's deleted)
+ *   DELETE /api/account/link/<id>        cancel it (Bearer: that token), unless it was used
  *   GET    /api/account/link/<id>/state  "waiting", "used" or "expired"
  *   PUT    /api/account/passkey          store a passkey lock (Bearer: lookup token)
  *   GET    /api/account/passkey          fetch it
@@ -54,12 +55,16 @@ import {
   reserve,
 } from '@shkriuss/server/meter';
 import {
+  checkLinkBody,
   checkSealedBody,
   LINK_ID_PATTERN,
   LINK_LIFETIME_MS,
   MAX_REQUEST_BYTES,
   SUCCESSOR_PATTERN,
 } from './validate.ts';
+
+/** From the Worker to a link's object: the hash of the token that cancels it. */
+const CANCEL_HEADER = 'X-Shkriuss-Cancel';
 
 export interface AccountEnv extends SiteEnv {
   ACCOUNT_LINKS: DurableObjectNamespace;
@@ -103,12 +108,22 @@ export async function handleAccount(
       return stub.fetch('https://link/state');
     }
     if (request.method === 'GET') return stub.fetch('https://link/claim');
-    if (request.method !== 'PUT') return problem(405, 'Use PUT or GET.');
+    if (request.method === 'DELETE') {
+      const cancel = bearerToken(request);
+      if (!cancel) return problem(401, 'Missing or malformed cancel token.');
+      return stub.fetch('https://link/', {
+        method: 'DELETE',
+        headers: { [CANCEL_HEADER]: await sha256Text(cancel) },
+      });
+    }
+    if (request.method !== 'PUT') return problem(405, 'Use PUT, GET or DELETE.');
     const read = await jsonBody(request, MAX_REQUEST_BYTES);
     if (!read.ok) return read.response;
-    const checked = checkSealedBody(read.body, 'data');
+    const checked = checkLinkBody(read.body);
     if (!checked.ok) return problem(400, checked.error);
-    return stub.fetch('https://link/', { method: 'PUT', body: checked.value });
+    const { data, cancel } = checked.value;
+    const body = { data, cancel: cancel === null ? null : await sha256Text(cancel) };
+    return stub.fetch('https://link/', { method: 'PUT', body: JSON.stringify(body) });
   }
 
   if (path === '/api/account/passkey') {
@@ -168,6 +183,8 @@ interface LinkRecord {
   /** The sealed secret, until it's fetched. */
   data: string | null;
   expiresAt: number;
+  /** The hash of the token that cancels it (null for links made before that). */
+  cancel?: string | null;
 }
 
 export class AccountLink {
@@ -188,9 +205,24 @@ export class AccountLink {
       if (request.method === 'PUT') {
         if (saved) return problem(409, 'This link already exists.');
         const expiresAt = now + LINK_LIFETIME_MS;
-        await this.state.storage.put('link', { data: await request.text(), expiresAt });
+        const { data, cancel } = (await request.json()) as { data: string; cancel: string | null };
+        await this.state.storage.put('link', { data, expiresAt, cancel } satisfies LinkRecord);
         await this.state.storage.setAlarm(expiresAt);
         return json({ expiresAt }, 201);
+      }
+
+      // Cancelled by the device that made it ("Done"): it stops working at once.
+      if (request.method === 'DELETE') {
+        if (!record) return noContent();
+        if (!record.cancel || record.cancel !== request.headers.get(CANCEL_HEADER)) {
+          return problem(403, 'Only the device that made this link can cancel it.');
+        }
+        if (record.data === null) {
+          return json({ error: 'This link was already used.', used: true }, 409);
+        }
+        await this.state.storage.deleteAll();
+        await this.state.storage.deleteAlarm();
+        return noContent();
       }
 
       if (pathname === '/state') {
@@ -201,7 +233,7 @@ export class AccountLink {
       if (!record) return problem(410, 'This link has expired.');
       if (record.data === null)
         return json({ error: 'This link was already used.', used: true }, 410);
-      await this.state.storage.put('link', { data: null, expiresAt: record.expiresAt });
+      await this.state.storage.put('link', { ...record, data: null });
       return json({ data: record.data });
     });
   }
