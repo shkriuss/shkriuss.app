@@ -378,6 +378,23 @@ describe('changes', () => {
     }
   });
 
+  it('is simply done when “every” goes past 9999-12-31, however big (audit F1-14)', () => {
+    // The form allows 1 to 99, but a backup or another device can hold more:
+    // the checks look only at the shape, so it loads, and ticking it off
+    // mustn't fail.
+    for (const repeat of ['daily', 'weekly', 'monthly', 'yearly'] as const) {
+      for (const every of [1_000_000_000, Number.MAX_SAFE_INTEGER, 1e308]) {
+        const far: Task = { ...task({ title: 'Far apart', date: TODAY, repeat }), every };
+        expect(isTasksState(stateOf(far))).toBe(true);
+        const { state, next } = completeTask(stateOf(far), far.id, 5000, TODAY, 'copy');
+        expect(next, `${repeat}, every ${every}`).toBeNull();
+        expect(state.tasks).toEqual([{ ...far, done: 5000, updated: 5000 }]);
+      }
+    }
+    // Within the dates there are, it counts on as usual.
+    expect(nextDate(TODAY, 'weekly', TODAY, 150)).toBe('2029-09-04');
+  });
+
   it('works out the next date of each kind of repeat', () => {
     // Due today (Tuesday).
     expect(nextDate(TODAY, 'daily', TODAY)).toBe('2026-10-21');

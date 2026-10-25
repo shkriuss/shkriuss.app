@@ -376,12 +376,20 @@ export function tickStep(
   return updateTask(state, { ...task, steps, updated: now });
 }
 
+/** Dates end here (years 1000 to 9999, @shkriuss/dates). */
+const LAST_DATE: IsoDate = '9999-12-31';
+
 /**
  * The next date of a repeating task: the first one after its current date
  * that's also after today (so a task done late doesn't stay overdue).
  * `every` skips some: every 2 weeks counts on from its date in steps of 2
  * weeks. A monthly task on the 31st moves to the end of shorter months, and
  * back to the 31st after them (`day`, Task.day).
+ *
+ * null when there's none by the last date there is (9999-12-31). That's
+ * also so for a huge `every`: the form allows only 1 to MAX_EVERY, but a
+ * backup or another device can hold more, as the checks on saved data look
+ * only at the shape (audit F1-14).
  */
 export function nextDate(
   date: IsoDate,
@@ -389,10 +397,13 @@ export function nextDate(
   today: IsoDate,
   every = 1,
   day = parts(date).day,
-): IsoDate {
+): IsoDate | null {
   const after = compareDates(date, today) > 0 ? date : today;
-  const days = (step: number): IsoDate =>
-    addDays(date, (Math.floor(daysBetween(date, after) / step) + 1) * step);
+  const days = (step: number): IsoDate | null => {
+    const count = (Math.floor(daysBetween(date, after) / step) + 1) * step;
+    // Checked before adding: a huge count is past what JavaScript's dates can hold.
+    return count <= daysBetween(date, LAST_DATE) ? addDays(date, count) : null;
+  };
   switch (repeat) {
     case 'none':
       return date;
@@ -400,8 +411,8 @@ export function nextDate(
       return days(every);
     case 'weekdays': {
       let next = addDays(after, 1);
-      while (weekday(next) > 5) next = addDays(next, 1);
-      return next;
+      while (isIsoDate(next) && weekday(next) > 5) next = addDays(next, 1);
+      return isIsoDate(next) ? next : null;
     }
     case 'weekly':
       return days(7 * every);
@@ -416,12 +427,12 @@ export function nextDate(
         Math.floor(((later.year - year) * 12 + later.month - month) / step) * step,
       );
       let next = sameDayInMonth(date, months, day);
-      // Dates end at 9999-12-31: past that, the caller sees it isn't a date.
+      // Past 9999-12-31, `next` isn't a date (a year with more digits).
       while (isIsoDate(next) && compareDates(next, after) <= 0) {
         months += step;
         next = sameDayInMonth(date, months, day);
       }
-      return next;
+      return isIsoDate(next) ? next : null;
     }
   }
 }
@@ -444,8 +455,8 @@ export function completeTask(
   }
   const day = task.day ?? parts(task.date).day;
   const next = nextDate(task.date, task.repeat, today, task.every, day);
-  // No next date before the last one there is (9999-12-31): it's simply done.
-  if (!isIsoDate(next)) {
+  // No next date by the last one there is (9999-12-31): it's simply done.
+  if (next === null) {
     return { state: updateTask(state, { ...task, done: now, updated: now }), next: null };
   }
   const copy: Task = {

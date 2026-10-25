@@ -14,7 +14,9 @@ Your to-do list, with dates, lists and reminders. Lives at
   later, no date), or shown in your own order ("My order": the order of the
   saved tasks, so sync keeps it too; `moveTask`). Ticking off a repeating
   task moves it to its next date after today, with its steps unticked, and
-  keeps a done copy.
+  keeps a done copy. With no next date by 9999-12-31, the last date there
+  is, it's simply done; so is one whose "every" is bigger than the form
+  allows (from a backup or another device) and goes past it (`nextDate`).
 - `src/lib/lists.ts`: your lists ("Work", "Home"…), with tests
   (`lists.test.ts`). There are none to begin with. Saved under
   `shkriuss:task-lists`. Deleting a list keeps its tasks (without a list),
