@@ -373,10 +373,16 @@ import { MAX_NOTES_LENGTH, MAX_TITLE_LENGTH, REPEAT_LABELS, REPEATS } from '../l
       </div>
     </form>
   </dialog>
-  <dialog class="dialog" aria-labelledby="import-title" data-import-dialog>
+  <!-- What the file has (or why it can't be used) is read out as it opens (audit G-9). -->
+  <dialog
+    class="dialog"
+    aria-labelledby="import-title"
+    aria-describedby="import-details"
+    data-import-dialog
+  >
     <form method="dialog" class="stack">
       <h2 id="import-title">Import events</h2>
-      <div class="stack stack--sm" data-import-details></div>
+      <div class="stack stack--sm" id="import-details" data-import-details></div>
       <div class="stack stack--sm" data-import-skipped-block hidden>
         <p>These can’t be imported:</p>
         <ul class="import-skipped" data-import-skipped></ul>

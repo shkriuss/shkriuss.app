@@ -44,8 +44,9 @@ package age check run only in GitHub Actions.
   seconds for the network, then opens the saved copy (the test allows 8).
 - **Not found:** unknown pages return status 404 with a helpful page.
 - **Your data:** on sites that save data, a locked backup restores only with
-  its passphrase, a plain copy restores, other files are turned down, and
-  focus stays on **Download backup**.
+  its passphrase, a plain copy restores, other files are turned down (the
+  Restore dialog reads out why, or its warning, as it opens), and focus
+  stays on **Download backup**.
 - **Saving:** when the browser won't save, the app says so, on screen and out
   loud (each app's change is listed in `tests/e2e/saving.spec.ts`).
 - **Notifications and sync:** on apps that have them, turning them on and off
