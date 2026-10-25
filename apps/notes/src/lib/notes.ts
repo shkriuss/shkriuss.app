@@ -147,6 +147,27 @@ export const secondVersion = (note: Note, id: string): Note => ({
 });
 
 /**
+ * After a sync, with note `id` open (and not being typed in) showing
+ * `shown`: if the sync kept that text as a second version (because the
+ * note was changed on another device too) and the note has the other
+ * device's text now, the second version (audit F3-6).
+ */
+export function keptVersion(
+  before: NotesState,
+  after: NotesState,
+  id: string,
+  shown: { title: string; body: string },
+): Note | undefined {
+  const note = after.notes.find((entry) => entry.id === id);
+  if (!note || (note.title === shown.title && note.body === shown.body)) return undefined;
+  const known = new Set(before.notes.map((entry) => entry.id));
+  const title = secondVersion({ ...note, title: shown.title }, '').title;
+  return after.notes.find(
+    (entry) => !known.has(entry.id) && entry.title === title && entry.body === shown.body,
+  );
+}
+
+/**
  * A note changed on another device while it was being typed here: that
  * version is kept as a second note (with id `copyId`), so the typing can go
  * on in this one without losing it.

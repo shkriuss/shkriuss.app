@@ -31,6 +31,7 @@ import {
   isEmpty,
   isNotesState,
   keepOtherVersion,
+  keptVersion,
   MAX_NOTES,
   migrateNotes,
   NOTES_VERSION,
@@ -281,6 +282,7 @@ export function mountNotes(root: Document): void {
 
   /** After changes from another device or tab. */
   function refresh(): void {
+    const before = state;
     state = store.load();
     if (current === null) {
       if (!listView.hidden) renderList();
@@ -309,10 +311,20 @@ export function mountNotes(root: Document): void {
       say('That note was deleted on another device.');
       return;
     }
+    // Changed on another device too: the sync kept the text shown here as a
+    // second version, and the note has the other device's text now. Say so
+    // where it shows, and read it out (audit F3-6).
+    const shown = { title: titleField.value, body: bodyField.value };
+    const kept = keptVersion(before, state, note.id, shown);
     showValue(titleField, note.title);
     showValue(bodyField, note.body);
     pinButton.setAttribute('aria-pressed', String(note.pinned));
     showEdited(note);
+    if (kept) {
+      say(
+        `This note was also changed on another device. You’re now seeing that version. Yours is kept as a separate note: “${titleText(kept)}”.`,
+      );
+    }
   }
 
   // ---------- Events ----------

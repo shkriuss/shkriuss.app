@@ -13,6 +13,7 @@ import {
   notesCount,
   removeNote,
   keepOtherVersion,
+  keptVersion,
   secondVersion,
   setPinned,
   titleOf,
@@ -97,6 +98,21 @@ describe('writing notes', () => {
     expect(secondVersion(note('a', 't'.repeat(MAX_TITLE_LENGTH)), 'b').title).toBe(
       `${'t'.repeat(MAX_TITLE_LENGTH - 17)} (second version)`,
     );
+  });
+
+  it('finds the text shown here, kept as a second version by a sync', () => {
+    // The note open here was changed on another device too (audit F3-6).
+    const before = { notes: [note('a', 'Groceries', 'Milk')] };
+    const shown = { title: 'Groceries', body: 'Milk' };
+    const kept = note('b', 'Groceries (second version)', 'Milk');
+    const after = { notes: [note('a', 'Groceries', 'Bread', 2000), kept] };
+    expect(keptVersion(before, after, 'a', shown)).toBe(kept);
+    // Changed on the other device only, or not at all: nothing was kept.
+    const theirs = { notes: [note('a', 'Groceries', 'Bread', 2000)] };
+    expect(keptVersion(before, theirs, 'a', shown)).toBeUndefined();
+    expect(keptVersion(before, before, 'a', shown)).toBeUndefined();
+    // A second version that was there already isn't this one.
+    expect(keptVersion(after, after, 'a', shown)).toBeUndefined();
   });
 });
 
