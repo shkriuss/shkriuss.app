@@ -570,17 +570,20 @@ import {
     border-block-start: var(--border-width) solid var(--color-border);
   }
 
+  /* The amount at the end of the line; with large text it goes under the
+     entry, not the entry squeezed into a column of letters (audit G-4). */
   .entry {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: var(--space-3);
+    column-gap: var(--space-3);
     padding-block: var(--space-1);
     border-block-end: var(--border-width) solid var(--color-border);
   }
 
   .entry__main {
     display: grid;
-    flex: 1;
+    flex: 1 1 8rem;
     min-width: 0;
     padding-block: var(--space-1);
   }
@@ -596,6 +599,7 @@ import {
   }
 
   .entry__amount {
+    margin-inline-start: auto;
     font-weight: var(--weight-bold);
     white-space: nowrap;
   }
