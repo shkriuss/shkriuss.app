@@ -198,6 +198,16 @@ look at doesn't need approving: merging doesn't wait for previews.
 Approve only pull requests you trust: the preview runs that pull request's
 code with the Cloudflare token.
 
+**Two pull requests' previews at a time.** Each set of previews gets its own
+server storage: as many Durable Object namespaces as the live sites (33
+today), and the free plan has 100 for the whole account. So the live sites
+and the previews of two pull requests fit. A third pull request's previews
+fail with "reached the Workers Free limit of 100 Durable Object namespaces";
+once one of the others is merged or closed (the next deploy of `main`
+deletes its previews), re-run **Deploy previews** there. A unit test
+(`tests/unit/free-plan.test.ts`) checks that two still fit: one more app
+with sync or notifications leaves room for only one.
+
 **Old version addresses.** Before the sites had server code, Cloudflare gave
 each production deploy of the hub, Calendar, Grammar, Photos and Tally a
 permanent address like `1a2b3c4d-tally.shkriuss.workers.dev` (36 of them,
@@ -235,12 +245,20 @@ Everything here fits Cloudflare's and GitHub's free plans:
   which ran out, so it was made public on 22 October 2026.)
 - Notifications while an app is closed, the optional account and sync use
   Durable Objects, free up to 100,000 requests a day (each notification sent
-  is about two; signing in, adding a device or opening the Account page
-  takes a handful; an app with
-  sync open uses about one a minute, plus one or two per change).
+  is about two; signing in or opening the Account page takes a handful, and
+  a device code shown to add a device takes one every 2 seconds, up to 300
+  in its 10 minutes; an app with sync open uses about one a minute, plus one
+  or two per change).
 - Durable Objects also keep up to 5 GB, for every app together. Each app's
-  servers have a limit that keeps them all within it, and copies nobody uses
-  for 13 months are deleted ([ADR 0017](adr/0017-storage-limits.md)).
+  servers have a limit, and copies nobody uses for 13 months are deleted
+  ([ADR 0017](adr/0017-storage-limits.md)). A unit test checks that the
+  limits of every app together stay under 4.5 GB; a few more apps with sync
+  or notifications will need smaller limits each.
+- Durable Objects also have 13,000 GB-s of time a day, counted while an
+  object waits too. Push services are given 5 seconds to answer, and each
+  second spent waiting counts against the app's 2,000 messages a day, so
+  notifications can't use more than a small part of it
+  ([ADR 0009](adr/0009-push-notifications.md)).
 - Photos' online library uses R2: free up to 10 GB, then about $0.015 per GB
   a month (about $15 a month for 1 TB, the most it holds), and downloads are
   free. Each photo put online is one Worker request and four Durable Object

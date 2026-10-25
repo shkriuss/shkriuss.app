@@ -44,6 +44,7 @@ import {
   jsonBody,
   noContent,
   problem,
+  runAlarm,
   sha256Text,
   type DurableObjectNamespace,
   type DurableObjectState,
@@ -272,7 +273,7 @@ export class AccountLink {
 
   /** At expiry: delete everything. */
   async alarm(): Promise<void> {
-    await this.state.storage.deleteAll();
+    await runAlarm(this.state, () => this.state.storage.deleteAll());
   }
 }
 
@@ -381,7 +382,7 @@ export class AccountStatus {
 
   /** UNUSED_MS after a device last asked: the note goes, and its room with it. */
   async alarm(): Promise<void> {
-    await this.state.blockConcurrencyWhile(async () => {
+    await runAlarm(this.state, async () => {
       const active = (await this.state.storage.get<number>('active')) ?? 0;
       if (Date.now() - active < UNUSED_MS) {
         await this.state.storage.setAlarm(active + UNUSED_MS);

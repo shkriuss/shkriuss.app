@@ -138,7 +138,7 @@ every device. That's far beyond what sync can hold:
   first, since that may have been the lost one.
 - **"Delete the online copy"** deletes the account's libraries first: each
   list is cleared at once, then the files are deleted in batches of 1,000
-  (a Durable Object alarm). Photos on each device stay; those only online
+  (a Durable Object alarm, which keeps trying while R2 fails: audit B-2). Photos on each device stay; those only online
   are gone. A library known to be taken is left alone; if one refuses
   (another device took it), the copy stays, and the device says it
   couldn't delete the online copy instead of saying it's done.
