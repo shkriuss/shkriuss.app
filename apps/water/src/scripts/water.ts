@@ -15,6 +15,7 @@ import {
 } from '@shkriuss/dates';
 import { createStore } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
+import { keepFocus } from '@shkriuss/ui/keep-focus';
 import { focusProblem, reportSave } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { site } from 'virtual:shkriuss/site';
@@ -426,10 +427,15 @@ export function mountWater(root: Document): void {
 
   // ---------- Keeping up ----------
 
+  /** Draws it all again in the background: keyboard focus stays where it was (audit G-3). */
+  const redraw = (draw: () => void = render): void => {
+    keepFocus(draw, required<HTMLButtonElement>(root, '[data-add="glass"]'));
+  };
+
   function reload(): void {
     drinks = drinksStore.load();
     settings = settingsStore.load();
-    render();
+    redraw();
     reminders.changed();
   }
 
@@ -443,8 +449,11 @@ export function mountWater(root: Document): void {
   const checkDay = (): void => {
     if (today() === day) return;
     day = today();
-    render();
-    prune();
+    // Letting go of old drinks draws it again too.
+    redraw(() => {
+      render();
+      prune();
+    });
     reminders.changed();
   };
   window.setInterval(checkDay, NEW_DAY_CHECK_MS);

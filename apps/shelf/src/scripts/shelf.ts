@@ -14,6 +14,7 @@
 import { createStore } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
 import { withEdits } from '@shkriuss/sync/edits';
+import { keepFocus } from '@shkriuss/ui/keep-focus';
 import { PAGE_SIZE, shownCount, waitForTyping } from '@shkriuss/ui/long-lists';
 import { clearProblem, focusProblem, reportSave, showProblem } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
@@ -688,12 +689,12 @@ export function mountShelf(root: Document): void {
     if (category) openCategoryEditor(category);
   });
 
-  /** After changes from another device or tab. */
+  /** After changes from another device or tab: keyboard focus stays where it was (audit G-3). */
   function refresh(): void {
     state = store.load();
     categoriesState = categoriesStore.load();
     // The item open in the form was deleted elsewhere: saving adds it back.
-    render();
+    keepFocus(render, addButton);
   }
 
   // If Shelf is open in two tabs, keep them the same.

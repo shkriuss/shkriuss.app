@@ -138,9 +138,12 @@ const currentPath = Astro.url.pathname;
     </template>
 
     <script>
+      import { returnFocusAfterDialogs } from '../scripts/keep-focus.ts';
       import { registerServiceWorker } from '../scripts/service-worker.ts';
 
       if (import.meta.env.PROD) registerServiceWorker();
+      // A dialog's opener drawn again while it was open gets focus back (audit G-3).
+      returnFocusAfterDialogs();
     </script>
   </body>
 </html>

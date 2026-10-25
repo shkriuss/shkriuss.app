@@ -7,6 +7,7 @@
 import { today } from '@shkriuss/dates';
 import { createStore, downloadFile } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
+import { keepFocus } from '@shkriuss/ui/keep-focus';
 import { reportSave } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { typedText } from '@shkriuss/ui/typed-text';
@@ -586,12 +587,16 @@ export function mountTrades(root: Document): void {
       if (closedYears(state).length === 0) yearDialog.close();
       else fillYears();
     }
-    render();
+    keepFocus(render, newButton);
   }
 
-  // "This month" moves on with the calendar.
+  // "This month" moves on with the calendar. The lists are drawn again only
+  // in a new month, as that moves keyboard focus (audit G-3).
+  let shownMonth = today().slice(0, 7);
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') render();
+    if (document.visibilityState !== 'visible' || today().slice(0, 7) === shownMonth) return;
+    shownMonth = today().slice(0, 7);
+    keepFocus(render, newButton);
   });
 
   // If Trades is open in two tabs, keep them the same.

@@ -16,6 +16,7 @@
 import { today as todayOf } from '@shkriuss/dates';
 import { createStore } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
+import { keepFocus } from '@shkriuss/ui/keep-focus';
 import { PAGE_SIZE, shownCount, waitForTyping } from '@shkriuss/ui/long-lists';
 import { clearProblem, focusProblem, reportSave, showProblem } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
@@ -900,26 +901,26 @@ export function mountTasks(root: Document): void {
 
   // ---------- Elsewhere ----------
 
-  /** After changes from another device or tab. */
+  /** After changes from another device or tab: keyboard focus stays where it was (audit G-3). */
   function refresh(): void {
     tasks = tasksStore.load();
     lists = listsStore.load();
     reminders.changed();
-    render();
+    keepFocus(render, viewHeading);
   }
 
   // If Tasks is open in two tabs, keep them the same.
   window.addEventListener('storage', (event) => {
     if (event.key === viewStore.key) settings = viewStore.load();
     if (event.key === tasksStore.key || event.key === listsStore.key) refresh();
-    else if (event.key === viewStore.key) render();
+    else if (event.key === viewStore.key) keepFocus(render, viewHeading);
   });
 
   // At midnight, "Tomorrow" becomes "Today".
   const checkDay = (): void => {
     if (todayOf() === day) return;
     day = todayOf();
-    render();
+    keepFocus(render, viewHeading);
   };
   window.setInterval(checkDay, NEW_DAY_CHECK_MS);
   root.addEventListener('visibilitychange', () => {

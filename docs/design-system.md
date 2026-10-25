@@ -88,7 +88,8 @@ and why; `focusProblem` goes to a form's first wrong field, or reads its error
 out if the person is in it already; `clearProblem` takes the notice away),
 `@shkriuss/ui/worker` (`startWorker`, for heavy work, and, inside a worker of
 an app with `"webAssembly": true`, `allowThreadScripts`), `@shkriuss/ui/busy`
-(`setBusy`, below), `@shkriuss/ui/qr-code`, `@shkriuss/ui/service-worker`
+(`setBusy`, below), `@shkriuss/ui/keep-focus` (`keepFocus`, below),
+`@shkriuss/ui/qr-code`, `@shkriuss/ui/service-worker`
 (`offlineCopySaved`, to wait until the site works offline),
 `@shkriuss/ui/sync-controls` and `@shkriuss/ui/push-controls`.
 
@@ -111,6 +112,24 @@ try {
 Use `disabled` only for something that stays unavailable until the person
 does something else, like "Continue" until a box is ticked. If a panel with
 the focused button is hidden, move focus to what takes its place.
+
+Drawing a list again (`replaceChildren`) removes the control that has
+focus, and focus falls back to the top of the page. After the person's own
+change, the app puts focus where it makes sense. A list drawn again in the
+background (a change in another tab or from another device, or a new day)
+goes through `keepFocus`, which puts focus back on the new copy of the same
+control, found by its data attributes and its item's (`<li data-id="…">`).
+If that item is gone, focus goes to the one after it (or before it), or else
+to the control given:
+
+```ts
+import { keepFocus } from '@shkriuss/ui/keep-focus';
+
+window.addEventListener('storage', () => keepFocus(reload, addButton));
+```
+
+Dialogs need nothing: when one closes after a redraw replaced the control
+that opened it, AppShell puts focus on its new copy.
 
 QR codes (for example to open a link on another device) are drawn by a
 script, since their content is usually made on the page:

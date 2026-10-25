@@ -7,6 +7,7 @@
 import { createStore, downloadFile } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
 import { showFieldProblems } from '@shkriuss/ui/dom';
+import { keepFocus } from '@shkriuss/ui/keep-focus';
 import { reportSave } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { site } from 'virtual:shkriuss/site';
@@ -192,13 +193,14 @@ export function mountCalendar(root: Document): void {
     ],
     onChange: () => {
       state = store.load();
-      render();
+      // Drawn again in the background: keyboard focus stays where it was (audit G-3).
+      keepFocus(render, newEventButton);
       pushReminders.sync();
     },
   });
   mountSyncControls(required<HTMLElement>(root, '[data-sync-controls]'), sync);
   // Holidays, days off and fasts in Georgia (shown unless turned off).
-  const special = mountSpecialDays(root, render);
+  const special = mountSpecialDays(root, () => keepFocus(render, newEventButton));
 
   // ---------- Showing the calendar ----------
 
@@ -644,7 +646,7 @@ export function mountCalendar(root: Document): void {
   window.addEventListener('storage', (storageEvent) => {
     if (storageEvent.key === store.key) {
       state = store.load();
-      render();
+      keepFocus(render, newEventButton);
       pushReminders.sync();
     }
   });
@@ -654,7 +656,7 @@ export function mountCalendar(root: Document): void {
     if (root.visibilityState === 'visible' && today() !== todayDate) {
       if (selected === todayDate) selected = today();
       viewMonth = shiftMonth(selected, 0);
-      render();
+      keepFocus(render, newEventButton);
     }
   });
 

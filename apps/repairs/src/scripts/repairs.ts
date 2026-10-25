@@ -7,6 +7,7 @@
 import { today } from '@shkriuss/dates';
 import { createStore, downloadFile } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
+import { keepFocus } from '@shkriuss/ui/keep-focus';
 import { focusProblem, reportSave } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { typedText } from '@shkriuss/ui/typed-text';
@@ -819,6 +820,7 @@ export function mountRepairs(root: Document): void {
 
   // ---------- Keeping up ----------
 
+  /** After changes from another device or tab: keyboard focus stays where it was (audit G-3). */
   function reload(): void {
     vehicles = vehiclesStore.load();
     repairs = repairsStore.load();
@@ -826,7 +828,7 @@ export function mountRepairs(root: Document): void {
     // What's being changed was deleted on another device or tab.
     if (editingRepair !== null && !findRepair(editingRepair)) repairDialog.close();
     if (editingVehicle !== null && !findVehicle(editingVehicle)) vehicleDialog.close();
-    render();
+    keepFocus(render, newRepairButton);
   }
 
   // If Repairs is open in two tabs, keep them the same.
@@ -882,7 +884,7 @@ export function mountRepairs(root: Document): void {
     // Turned on or off: photos say where they are.
     if (status.on !== syncWasOn) {
       syncWasOn = status.on;
-      render();
+      keepFocus(render, newRepairButton);
     }
   });
 
