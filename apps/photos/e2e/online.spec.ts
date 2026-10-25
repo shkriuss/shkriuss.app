@@ -22,8 +22,10 @@ import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
 import { TEST_STORAGE_CODE } from '../../../tests/e2e/sites.ts';
 import {
   addPhotos,
+  hereWithoutOriginal,
   jpeg,
   naturalWidth,
+  onlinePlace,
   originalsHere,
   picture,
   stored,
@@ -163,6 +165,122 @@ test('puts photos online, and shows them on the other devices', async ({
   await tablet.context().close();
 });
 
+test('sync turned off while the online library is being asked: nothing is lost, and nothing more goes up', async ({
+  page,
+  browser,
+}) => {
+  const { key } = await createAccount(page);
+  await page.goto('/');
+  const appURL = new URL(page.url()).origin;
+  await photoOnline(page, 'IMG_0013.JPG');
+
+  // The tablet has that photo only online.
+  const tablet = await (await otherDevice(browser)).newPage();
+  await signInWithKey(tablet, key);
+  await tablet.goto(`${appURL}/`);
+  await turnOnSync(tablet, 'Photos');
+  await expect(tiles(tablet)).toHaveCount(1, ONLINE);
+  await expect(onlineStatus(tablet)).toHaveText(/^Online: 1 photo · /, ONLINE);
+
+  // Its next look at the library takes a while (a slow connection): one
+  // starts when a photo is added there, which would then go up.
+  const held: Route[] = [];
+  let letGo = (): void => undefined;
+  const goOn = new Promise<void>((resolve) => {
+    letGo = resolve;
+  });
+  await tablet.route('**/api/library/changes*', async (route) => {
+    held.push(route);
+    await goOn;
+    await route.continue();
+  });
+  const uploads: string[] = [];
+  tablet.on('request', (request) => {
+    if (request.method() === 'PUT' && request.url().includes('/api/library/items/')) {
+      uploads.push(request.url());
+    }
+  });
+  const july = withExif(
+    await picture(tablet, { width: 800, height: 600, color: '#36c' }),
+    '2019:07:04 18:30:05',
+  );
+  await addPhotos(tablet, [jpeg('IMG_0014.JPG', july)]);
+  await expect.poll(() => held.length).toBeGreaterThan(0);
+
+  // Meanwhile sync is turned off there: the photo only online goes at once.
+  await tablet.getByRole('button', { name: 'Turn off on this device' }).click();
+  await expect(tiles(tablet)).toHaveCount(1);
+  const answered = tablet.waitForResponse((response) =>
+    response.url().includes('/api/library/changes'),
+  );
+  letGo();
+  await answered;
+  await tablet.unroute('**/api/library/changes*');
+
+  // The look under way stops (audit F3-2): it doesn't write back how far it
+  // had got, so the next one starts from the beginning, and puts nothing online.
+  await expect.poll(async () => (await onlinePlace(tablet))?.since).toBe(0);
+  for (let check = 0; check < 10; check += 1) {
+    await tablet.waitForTimeout(100);
+    expect((await onlinePlace(tablet))?.since).toBe(0);
+  }
+  expect(uploads).toEqual([]);
+
+  // On again: the photo only online is back, and the new one goes up.
+  await turnOnSync(tablet, 'Photos');
+  await expect(tiles(tablet)).toHaveCount(2, ONLINE);
+  await expect(onlineStatus(tablet)).toHaveText(/^Online: 2 photos · /, ONLINE);
+
+  // Opened with sync off, and the photo only online still kept, with how far
+  // a look had got (as such a look could leave them before): it goes, and
+  // comes back when sync is on again.
+  const leftOver = await tablet.evaluate(
+    () =>
+      new Promise<[string, unknown][]>((resolve) => {
+        const request = indexedDB.open('shkriuss-files');
+        request.onsuccess = () => {
+          const table = request.result.transaction('files').objectStore('files');
+          const names = table.getAllKeys();
+          const values = table.getAll();
+          // Requests in one transaction finish in order: the names are read by now.
+          values.onsuccess = () => {
+            request.result.close();
+            const pairs = names.result.map((name, at): [string, unknown] => [
+              String(name),
+              values.result[at],
+            ]);
+            resolve(
+              pairs.filter(([name]) => name.startsWith('photo:') || name === 'photos-online:state'),
+            );
+          };
+        };
+      }),
+  );
+  await tablet.getByRole('button', { name: 'Turn off on this device' }).click();
+  await expect(tiles(tablet)).toHaveCount(1);
+  await tablet.evaluate(
+    (pairs) =>
+      new Promise<void>((resolve) => {
+        const request = indexedDB.open('shkriuss-files');
+        request.onsuccess = () => {
+          const run = request.result.transaction('files', 'readwrite');
+          for (const [name, value] of pairs) run.objectStore('files').put(value, name);
+          run.oncomplete = () => {
+            request.result.close();
+            resolve();
+          };
+        };
+      }),
+    leftOver,
+  );
+  await tablet.reload();
+  await expect(tiles(tablet)).toHaveCount(1);
+  await expect.poll(async () => (await onlinePlace(tablet))?.since).toBe(0);
+  await turnOnSync(tablet, 'Photos');
+  await expect(tiles(tablet)).toHaveCount(2, ONLINE);
+  await tablet.context().close();
+});
+
 test('frees up space on this device, and the photos still show', async ({ page }) => {
   await createAccount(page);
   await page.goto('/');
@@ -268,6 +386,131 @@ test('frees up space only when the online library has just said the photos are t
     page.getByRole('alert').filter({ hasText: 'Couldn’t free up space. Please try again.' }),
   ).toBeVisible();
   expect(await originalsHere(page)).toBe(1);
+});
+
+/** "Delete the online copy", from Photos' own sync controls. */
+async function deleteOnlineCopy(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Delete the online copy' }).click();
+  await page
+    .getByRole('dialog', { name: 'Delete the online copy?' })
+    .getByRole('button', { name: 'Delete the online copy' })
+    .click();
+  await expect(page.locator('[data-sync-status]')).toHaveText(
+    'The online copy is deleted, and sync is off on this device.',
+    ONLINE,
+  );
+}
+
+test('a photo is never marked as on this device without its original, even if freeing up space stops half-way', async ({
+  page,
+}) => {
+  // Audit F3-1: the tab is closed, or the device fills up, part-way through.
+  await createAccount(page);
+  await page.goto('/');
+  const october = withExif(await picture(page, { width: 800, height: 600 }), '2026:10:21 14:03:22');
+  const july = withExif(
+    await picture(page, { width: 800, height: 600, color: '#36c' }),
+    '2019:07:04 18:30:05',
+  );
+  await addPhotos(page, [jpeg('IMG_0010.JPG', october), jpeg('IMG_0011.JPG', july)]);
+  await turnOnSync(page, 'Photos');
+  await unlock(page);
+  await expect(onlineStatus(page)).toHaveText(/^Online: 2 photos · /, ONLINE);
+
+  // Nothing more can be saved once the first original has gone, as if the page had been closed.
+  await page.evaluate(() => {
+    const put = IDBObjectStore.prototype.put;
+    const transaction = IDBDatabase.prototype.transaction;
+    let stopped = false;
+    IDBObjectStore.prototype.put = function (
+      this: IDBObjectStore,
+      ...args: [unknown, IDBValidKey?]
+    ) {
+      const [value, key] = args;
+      if (
+        String(key).startsWith('photo-files:') &&
+        (value as { original: unknown }).original === null
+      ) {
+        this.transaction.addEventListener('complete', () => {
+          stopped = true;
+        });
+      }
+      return put.apply(this, args);
+    };
+    IDBDatabase.prototype.transaction = function (
+      this: IDBDatabase,
+      ...args: Parameters<typeof transaction>
+    ) {
+      if (stopped) throw new DOMException('The page was closed.', 'InvalidStateError');
+      return transaction.apply(this, args);
+    };
+  });
+  await page.getByRole('button', { name: 'Free up space on this device' }).click();
+  await page
+    .getByRole('dialog', { name: 'Free up space on this device?' })
+    .getByRole('button', { name: 'Free up space' })
+    .click();
+  await expect(
+    page.getByRole('alert').filter({ hasText: 'Couldn’t free up space. Please try again.' }),
+  ).toBeVisible();
+
+  // Opened again: the photo freed says it's only online, and the other one still has its original.
+  await page.reload();
+  await expect(onlineStatus(page)).toHaveText(/^Online: 2 photos · /, ONLINE);
+  expect(await hereWithoutOriginal(page)).toBe(0);
+  expect(await originalsHere(page)).toBe(1);
+  await page.getByRole('button', { name: 'Photo taken Oct 21, 2026, 2:03 PM' }).click();
+  const dialog = page.locator('[data-viewer]');
+  await expect(dialog.locator('[data-detail="where"]')).toHaveText(
+    'Online (the original isn’t on this device)',
+  );
+  await dialog.getByRole('button', { name: 'Close' }).click();
+
+  // Deleting the online copy deletes the photo that was only there, and keeps the other.
+  await deleteOnlineCopy(page);
+  await expect(tiles(page)).toHaveCount(1);
+  expect(await originalsHere(page)).toBe(1);
+  expect(await hereWithoutOriginal(page)).toBe(0);
+});
+
+test('deleting the online copy keeps no photo as on this device without its original', async ({
+  page,
+}) => {
+  await createAccount(page);
+  await page.goto('/');
+  await photoOnline(page, 'IMG_0012.JPG');
+  // As an older version could leave it (audit F3-1): marked as here, but its original was freed.
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        const request = indexedDB.open('shkriuss-files');
+        request.onsuccess = () => {
+          const database = request.result;
+          const run = database.transaction('files', 'readwrite');
+          const table = run.objectStore('files');
+          const files = table.getAll(
+            IDBKeyRange.bound('photo-files:', 'photo-files;', false, true),
+          );
+          files.onsuccess = () => {
+            for (const file of files.result as { id: string }[]) {
+              table.put({ ...file, original: null, view: null }, `photo-files:${file.id}`);
+            }
+          };
+          run.oncomplete = () => {
+            database.close();
+            resolve();
+          };
+          run.onerror = () => reject(run.error ?? new Error('Not saved'));
+        };
+      }),
+  );
+  await page.reload();
+  await expect(onlineStatus(page)).toHaveText(/^Online: 1 photo · /, ONLINE);
+
+  // Its original was only online, so with the online copy deleted, the photo is gone.
+  await deleteOnlineCopy(page);
+  await expect(tiles(page)).toHaveCount(0);
+  expect(await stored(page)).toMatchObject({ photos: 0 });
 });
 
 test('after the account key is replaced, every device keeps to the library with the photos', async ({

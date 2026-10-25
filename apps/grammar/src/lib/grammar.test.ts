@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   addWord,
+  DICTIONARY_FULL,
   applyFix,
   contextOf,
   defaultEnglish,
@@ -126,13 +127,21 @@ describe('dictionary', () => {
   });
 
   it('adds each word once, in order, and removes it again', () => {
-    let words = addWord([], 'Tbilisi');
-    words = addWord(words, 'Mtskheta');
-    words = addWord(words, 'Tbilisi');
+    let words = addWord([], 'Tbilisi') ?? [];
+    words = addWord(words, 'Mtskheta') ?? [];
+    words = addWord(words, 'Tbilisi') ?? [];
     expect(words).toEqual(['Mtskheta', 'Tbilisi']);
     expect(removeWord(words, 'Mtskheta')).toEqual(['Tbilisi']);
+  });
+
+  it('says when the dictionary is full, instead of adding nothing', () => {
+    // With 500 words, "Add to my dictionary" added nothing, but said "Added" (audit F3-8).
     const full = Array.from({ length: MAX_WORDS }, (_, index) => `w${index}`);
-    expect(addWord(full, 'more')).toHaveLength(MAX_WORDS);
+    expect(addWord(full, 'Tbilisi')).toBeNull();
+    // A word already in it is still in it.
+    expect(addWord(full, 'w7')).toEqual(full);
+    expect(addWord(full.slice(1), 'Tbilisi')).toHaveLength(MAX_WORDS);
+    expect(DICTIONARY_FULL).toBe('Your dictionary is full (500 words). Remove one to add another.');
   });
 });
 

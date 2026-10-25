@@ -22,12 +22,15 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
   Tasks, Meals, Water, Reminders and Budget) also run a small Worker for
   `/api/push/*`, with one
   Durable Object per device ([ADR 0009](docs/adr/0009-push-notifications.md)).
-  It only ever holds messages encrypted on the user's device, delivery times
-  and a time zone; each app has its own storage and signing key, generated
+  It only ever holds messages encrypted on the user's device, delivery times,
+  a time zone and the device's push address; each app has its own storage
+  and signing key, generated
   by the server and never exported. Requests are size-limited, rate-limited
   and checked; push addresses must be https with a domain name, and
   redirects are refused. A device whose messages all fail or are refused for
-  two days is forgotten, and each app sends at most 2,000 messages a day.
+  two days is forgotten, and each app sends at most 2,000 messages a day. A
+  push service gets 5 seconds to answer, and time spent waiting counts
+  against those messages, so a slow push address can't tie up the servers.
 - The hub also runs a small Worker for `/api/account/*`, for the optional
   **shkriuss account** ([ADR 0010](docs/adr/0010-account-and-sync.md)). It
   only holds values sealed on the device (AES-256-GCM): passkey locks, under
@@ -108,7 +111,8 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
 - pnpm only lets allow-listed packages run install scripts and won't pick
   versions published less than 7 days ago when it updates the lockfile. CI
   also refuses a pull request that adds a version that new to the lockfile
-  by other means (`scripts/lockfile-age.ts`).
+  by other means, or a package from a web address or a git repository
+  instead of the npm registry (`scripts/lockfile-age.ts`).
 - Production deploys only happen from `main`, after every check passes,
   including the dependency audit, and only for `main`'s newest commit (so
   re-running an older run can't put older code back). Only the deploy steps

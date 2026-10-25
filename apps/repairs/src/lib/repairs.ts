@@ -22,8 +22,17 @@
  * vehicle in the repair form adds it.
  */
 import { isIsoDate, type IsoDate } from '@shkriuss/dates';
-import { CURRENCIES, formatMoney, parseDecimal, type Currency } from '@shkriuss/ui/numbers';
-import { compareText } from '@shkriuss/ui/text';
+import {
+  CURRENCIES,
+  currencyDigits,
+  decimalText,
+  formatMoney,
+  parseDecimal,
+  parseWhole,
+  roundDecimal,
+  type Currency,
+} from '@shkriuss/ui/numbers';
+import { compareText, foldText } from '@shkriuss/ui/text';
 import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
 export interface Vehicle {
@@ -97,7 +106,11 @@ export const LIMITS = {
   photos: 10,
   money: 1_000_000_000,
   vehicles: 500,
-  repairs: 10_000,
+  /**
+   * The most repairs kept, so they fit on the device and in the sync copy
+   * (measured in repairs.test.ts: "room for every repair").
+   */
+  repairs: 3000,
 };
 
 /**
@@ -241,14 +254,11 @@ export function migrateRepairs(old: unknown, version: number): RepairsState | un
 
 // ---------- Words ----------
 
-/** Text for comparing: lower case, without accents, apostrophes or extra spaces. */
-const fold = (text: string): string =>
-  text
-    .normalize('NFD')
-    .replace(/[\p{Diacritic}'’]/gu, '')
-    .toLowerCase()
-    .replace(/\s+/g, ' ')
-    .trim();
+/**
+ * Text for comparing: lower case, without accents, apostrophes or extra
+ * spaces (foldText, so a Hindi or Thai name keeps its vowel signs).
+ */
+const fold = (text: string): string => foldText(text.replace(/['’ʼ]/g, ''));
 
 /** Tidies typed text: no spaces at the ends, and no runs of spaces in one-line fields. */
 const oneLine = (text: string): string => text.trim().replace(/\s+/g, ' ');
@@ -278,11 +288,16 @@ export function readVehicle(
 ): { vehicle: Vehicle; problems?: undefined } | { vehicle?: undefined; problems: VehicleProblems } {
   const problems: VehicleProblems = {};
   const name = oneLine(form.name);
-  const isNew = !state.vehicles.some((vehicle) => vehicle.id === id);
+  const own = state.vehicles.find((vehicle) => vehicle.id === id);
+  const isNew = own === undefined;
+  // Its own name, unchanged, is fine even if another vehicle has it too:
+  // two devices that each added "Bus 105" before they first synced.
+  const unchanged = own !== undefined && fold(own.name) === fold(name);
   if (name === '') problems.name = 'Enter a name or number, like a bus number.';
   else if (name.length > LIMITS.vehicle)
     problems.name = `Use ${LIMITS.vehicle} characters or fewer.`;
   else if (
+    !unchanged &&
     state.vehicles.some((vehicle) => vehicle.id !== id && fold(vehicle.name) === fold(name))
   ) {
     problems.name = 'You already have a vehicle with that name.';
@@ -358,13 +373,13 @@ export interface RepairForm {
  */
 export type RepairProblems = Partial<Record<string, string>>;
 
-/** A typed number: null when empty, NaN when it isn't one. A comma works as a decimal point. */
-const parseNumber = parseDecimal;
-
 /**
  * Reads the repair form into a repair (with the given id), or says what's
  * wrong, field by field. A vehicle that isn't saved yet is made, with an id
- * from `newId`, and returned as `newVehicle`.
+ * from `newId`, and returned as `newVehicle`. Numbers are read as typed in
+ * `locale` (the browser's own when left out): "1,5" is 1.5, and "1,500" is
+ * 1500 in English (parseDecimal); the mileage is a whole number ("120.000"
+ * is 120000 in German).
  */
 export function readRepair(
   form: RepairForm,
@@ -372,9 +387,11 @@ export function readRepair(
   repairs: RepairsState,
   vehicles: VehiclesState,
   newId: () => string,
+  locale?: string,
 ):
   | { repair: Repair; newVehicle: Vehicle | null; problems?: undefined }
   | { repair?: undefined; newVehicle?: undefined; problems: RepairProblems } {
+  const parseNumber = (text: string) => parseDecimal(text, locale);
   const problems: RepairProblems = {};
 
   const name = oneLine(form.vehicle);
@@ -394,8 +411,7 @@ export function readRepair(
 
   if (!isIsoDate(form.date)) problems['date'] = 'Choose the day.';
 
-  const mileageText = form.mileage.trim().replace(/[\s,]/g, '');
-  const mileage = mileageText === '' ? null : Number(mileageText);
+  const mileage = parseWhole(form.mileage, locale);
   if (mileage !== null && !isMileage(mileage)) {
     problems['mileage'] = 'Enter the mileage as a whole number, or leave it empty.';
   }
@@ -412,13 +428,13 @@ export function readRepair(
   form.parts.forEach((row, index) => {
     const partName = oneLine(row.name);
     const number = oneLine(row.number).toUpperCase();
-    const quantityText = row.quantity.trim().replace(',', '.');
+    const typedQuantity = parseNumber(row.quantity);
     const price = parseNumber(row.price);
     // An empty row is left out.
     if (
       partName === '' &&
       number === '' &&
-      (quantityText === '' || quantityText === '1') &&
+      (typedQuantity === null || typedQuantity === 1) &&
       price === null
     ) {
       return;
@@ -430,7 +446,7 @@ export function readRepair(
     if (number.length > LIMITS.partNumber) {
       problems[`part-number-${index}`] = `Use ${LIMITS.partNumber} characters or fewer.`;
     }
-    const quantity = quantityText === '' ? 1 : Number(quantityText);
+    const quantity = typedQuantity ?? 1;
     if (!isQuantity(quantity)) problems[`part-quantity-${index}`] = 'Enter a number above 0.';
     if (!isMoneyOrNull(price))
       problems[`part-price-${index}`] = 'Enter a price, or leave it empty.';
@@ -454,7 +470,8 @@ export function readRepair(
   }
   const isNew = !repairs.repairs.some((repair) => repair.id === id);
   if (isNew && repairs.repairs.length >= LIMITS.repairs) {
-    problems['vehicle'] ??= `You can keep up to ${LIMITS.repairs} repairs.`;
+    problems['vehicle'] ??=
+      `You can keep up to ${new Intl.NumberFormat(locale).format(LIMITS.repairs)} repairs. To make room, delete a year (under Units and spreadsheet).`;
   }
 
   if (Object.keys(problems).length > 0 || !vehicle) return { problems };
@@ -476,28 +493,30 @@ export function readRepair(
   };
 }
 
-const numberText = (value: number | null): string => (value === null ? '' : String(value));
-
-/** A part as the form shows it. */
-const toPartForm = (part: Part): PartForm => ({
-  name: part.name,
-  number: part.number,
-  quantity: String(part.quantity),
-  price: numberText(part.price),
-});
-
-export const toRepairForm = (repair: Repair, vehicles: VehiclesState): RepairForm => ({
-  vehicle: vehicleName(vehicles, repair.vehicle),
-  date: repair.date,
-  mileage: numberText(repair.mileage),
-  system: repair.system,
-  problem: repair.problem,
-  work: repair.work,
-  parts: repair.parts.map(toPartForm),
-  hours: numberText(repair.hours),
-  labour: numberText(repair.labour),
-  photos: [...repair.photos],
-});
+/**
+ * A repair as the form shows it: numbers as they'd be typed in `locale` (the
+ * browser's own when left out), so saving the form unchanged keeps them.
+ */
+export function toRepairForm(repair: Repair, vehicles: VehiclesState, locale?: string): RepairForm {
+  const number = (value: number | null) => (value === null ? '' : decimalText(value, locale));
+  return {
+    vehicle: vehicleName(vehicles, repair.vehicle),
+    date: repair.date,
+    mileage: number(repair.mileage),
+    system: repair.system,
+    problem: repair.problem,
+    work: repair.work,
+    parts: repair.parts.map((part) => ({
+      name: part.name,
+      number: part.number,
+      quantity: number(part.quantity),
+      price: number(part.price),
+    })),
+    hours: number(repair.hours),
+    labour: number(repair.labour),
+    photos: [...repair.photos],
+  };
+}
 
 export function saveRepair(state: RepairsState, repair: Repair): RepairsState {
   const exists = state.repairs.some((item) => item.id === repair.id);
@@ -511,6 +530,51 @@ export function saveRepair(state: RepairsState, repair: Repair): RepairsState {
 export const removeRepair = (state: RepairsState, id: string): RepairsState => ({
   repairs: state.repairs.filter((repair) => repair.id !== id),
 });
+
+// ---------- Making room ----------
+
+export interface YearCount {
+  /** "2024". */
+  year: string;
+  count: number;
+}
+
+const yearOf = (date: IsoDate): string => date.slice(0, 4);
+
+/** The years that have repairs, the earliest first, with how many each has (for "Delete a year"). */
+export function repairYears(state: RepairsState): YearCount[] {
+  const counts = new Map<string, number>();
+  for (const repair of state.repairs) {
+    counts.set(yearOf(repair.date), (counts.get(yearOf(repair.date)) ?? 0) + 1);
+  }
+  return [...counts]
+    .map(([year, count]) => ({ year, count }))
+    .sort((a, b) => a.year.localeCompare(b.year));
+}
+
+/** The repairs of a year ("2024"), to delete with their photos. */
+export const repairsIn = (state: RepairsState, year: string): Repair[] =>
+  state.repairs.filter((repair) => yearOf(repair.date) === year);
+
+/** Removes every repair of a year ("2024"). Vehicles stay. */
+export const removeYear = (state: RepairsState, year: string): RepairsState => ({
+  repairs: state.repairs.filter((repair) => yearOf(repair.date) !== year),
+});
+
+/**
+ * What the page says once Repairs is nearly full (over 90% of the repairs it
+ * keeps): how many more fit, and how to make room. Null until then.
+ */
+export function roomNote(count: number, locale?: string): string | null {
+  if (count <= LIMITS.repairs * 0.9) return null;
+  const left = LIMITS.repairs - count;
+  const number = new Intl.NumberFormat(locale);
+  const start =
+    left > 0
+      ? `Repairs is nearly full: there’s room for ${number.format(left)} more ${left === 1 ? 'repair' : 'repairs'} (it keeps up to ${number.format(LIMITS.repairs)}).`
+      : `Repairs is full: it keeps up to ${number.format(LIMITS.repairs)} repairs.`;
+  return `${start} To make room, download the spreadsheet, then use “Delete a year…” under Units and spreadsheet, below.`;
+}
 
 /** The vehicle's name, or a stand-in if it was deleted (on another device). */
 export const vehicleName = (state: VehiclesState, id: string): string =>
@@ -540,12 +604,13 @@ export function matchesSearch(
       ...repair.parts.flatMap((part) => [part.name, part.number]),
     ].join(' '),
   );
-  const words = haystack.split(/[^\p{L}\p{N}]+/u);
+  // Words are letters (with their vowel signs, in Hindi or Thai) and digits.
+  const words = haystack.split(/[^\p{L}\p{M}\p{N}]+/u);
   return fold(query)
     .split(' ')
     .filter(Boolean)
     .every((typed) =>
-      /^[\p{L}\p{N}]+$/u.test(typed)
+      /^[\p{L}\p{M}\p{N}]+$/u.test(typed)
         ? words.some((word) => word.startsWith(typed))
         : haystack.includes(typed),
     );
@@ -593,20 +658,38 @@ export function byDay(repairs: readonly Repair[]): Day[] {
 /** Sums without floating-point crumbs (0.1 + 0.2 is 0.3). */
 const tidy = (value: number): number => Math.round(value * 1e6) / 1e6;
 
+/** An amount as it's shown in `currency`: to the cent, or to the yen (no decimals). */
+const shown = (amount: number, currency: Currency): number =>
+  roundDecimal(tidy(amount), currencyDigits(currency));
+
 export interface Cost {
-  /** Each priced part's quantity × price. */
+  /** Each priced part's quantity × price (partCost), added up. */
   parts: number;
   labour: number;
   total: number;
 }
 
-/** What a repair cost: its priced parts and labour. Null if no price was noted. */
-export function repairCost(repair: Repair): Cost | null {
+/**
+ * What a part cost: its quantity × its price, rounded once to its
+ * currency's decimals, as it's shown (so the parts add up to what's shown
+ * for them). Null if no price was noted.
+ */
+export const partCost = (part: Part, currency: Currency = 'USD'): number | null =>
+  part.price === null ? null : shown(part.quantity * part.price, currency);
+
+/**
+ * What a repair cost in `currency`: its priced parts and labour, each as
+ * it's shown. Null if no price was noted.
+ */
+export function repairCost(repair: Repair, currency: Currency = 'USD'): Cost | null {
   const priced = repair.parts.filter((part) => part.price !== null);
   if (priced.length === 0 && repair.labour === null) return null;
-  const parts = tidy(priced.reduce((sum, part) => sum + part.quantity * (part.price ?? 0), 0));
-  const labour = repair.labour ?? 0;
-  return { parts, labour, total: tidy(parts + labour) };
+  const parts = shown(
+    priced.reduce((sum, part) => sum + (partCost(part, currency) ?? 0), 0),
+    currency,
+  );
+  const labour = shown(repair.labour ?? 0, currency);
+  return { parts, labour, total: shown(parts + labour, currency) };
 }
 
 export interface Totals {
@@ -616,14 +699,14 @@ export interface Totals {
   cost: number | null;
 }
 
-/** The hours and costs of some repairs, added up. */
-export function totals(repairs: readonly Repair[]): Totals {
+/** The hours and costs (in `currency`) of some repairs, added up. */
+export function totals(repairs: readonly Repair[], currency: Currency = 'USD'): Totals {
   let hours: number | null = null;
   let cost: number | null = null;
   for (const repair of repairs) {
     if (repair.hours !== null) hours = tidy((hours ?? 0) + repair.hours);
-    const own = repairCost(repair);
-    if (own) cost = tidy((cost ?? 0) + own.total);
+    const own = repairCost(repair, currency);
+    if (own) cost = shown((cost ?? 0) + own.total, currency);
   }
   return { hours, cost };
 }
@@ -656,8 +739,12 @@ export interface VehicleSummary {
   cost: number | null;
 }
 
-/** Each vehicle with how many repairs it had, when, and what they cost, in name order. */
-export function vehicleSummaries(vehicles: VehiclesState, repairs: RepairsState): VehicleSummary[] {
+/** Each vehicle with how many repairs it had, when, and what they cost (in `currency`), in name order. */
+export function vehicleSummaries(
+  vehicles: VehiclesState,
+  repairs: RepairsState,
+  currency: Currency = 'USD',
+): VehicleSummary[] {
   return sortedVehicles(vehicles).map((vehicle) => {
     const own = repairs.repairs.filter((repair) => repair.vehicle === vehicle.id);
     const lastDate = own.reduce<IsoDate | null>(
@@ -669,7 +756,7 @@ export function vehicleSummaries(vehicles: VehiclesState, repairs: RepairsState)
       repairs: own.length,
       lastDate,
       lastMileage: lastMileage(repairs, vehicle.id)?.mileage ?? null,
-      cost: totals(own).cost,
+      cost: totals(own, currency).cost,
     };
   });
 }
@@ -854,7 +941,7 @@ export function toCsv(
   ];
   const rows = findRepairs(repairs, vehicles, { vehicle: null, query: '' }).map((repair) => {
     const vehicle = byId.get(repair.vehicle);
-    const cost = repairCost(repair);
+    const cost = repairCost(repair, currency);
     return [
       repair.date,
       vehicle?.name ?? 'Unknown vehicle',

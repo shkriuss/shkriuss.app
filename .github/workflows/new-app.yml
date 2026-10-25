@@ -150,6 +150,6 @@ jobs:
             echo "## $APP_NAME is ready for review"
             echo
             echo "1. [Open a pull request for it](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/compare/main...${branch}?expand=1)."
-            echo "2. Wait for the checks and the preview links."
+            echo "2. Wait for the checks. For preview links, approve **Deploy previews** (docs/deployment.md#seeing-a-preview)."
             echo "3. Merge it. It goes live at https://${APP_SLUG}.shkriuss.app"
           } >> "$GITHUB_STEP_SUMMARY"

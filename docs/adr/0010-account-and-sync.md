@@ -290,7 +290,8 @@ in with `sync: true` in `apps.json`.
 - It works without Google: the recovery key and QR codes work everywhere.
 - Free plan: Durable Object requests are counted against the same
   100,000-a-day allowance as notifications. An account uses a handful per
-  sign-in or linked device; an app with sync uses about one a minute while it's
+  sign-in, and a device code one every 2 seconds while it's shown (up to 300
+  in its 10 minutes); an app with sync uses about one a minute while it's
   open, and one or two per change.
 
 **Costs and limits**

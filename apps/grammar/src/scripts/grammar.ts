@@ -8,21 +8,29 @@
  */
 import { createStore } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
-import { reportSave, type ReportSaveOptions } from '@shkriuss/ui/problem';
+import {
+  clearProblem,
+  reportSave,
+  showProblem,
+  type ReportSaveOptions,
+} from '@shkriuss/ui/problem';
 import { offlineCopySaved } from '@shkriuss/ui/service-worker';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
+import { watchTextLimit } from '@shkriuss/ui/text-limit';
 import { startWorker } from '@shkriuss/ui/worker';
 import { site } from 'virtual:shkriuss/site';
 import {
   addWord,
   applyFix,
   contextOf,
+  DICTIONARY_FULL,
   emptyState,
   fixDone,
   fixesToShow,
   fixLabel,
   isGrammarState,
   MAX_SHOWN,
+  MAX_WORDS,
   removeWord,
   summary,
   syncedSettings,
@@ -72,6 +80,8 @@ export function mountGrammar(root: Document): void {
   const actionStatus = required<HTMLElement>(root, '[data-action-status]');
   const clearDialog = required<HTMLDialogElement>(root, '[data-clear-dialog]');
   const announcer = required<HTMLElement>(root, '[data-announcer]');
+  // A paste longer than the box takes is cut by the browser: say so (audit F3-3).
+  const textLimit = watchTextLimit(textarea);
 
   let state = store.load();
   /** What the checker found, and the text it found it in. */
@@ -162,18 +172,34 @@ export function mountGrammar(root: Document): void {
       checkedText = lastText;
       render();
     } else {
-      phase = 'failed';
-      setStatus(FAILED);
+      checkerFailed();
     }
+  }
+
+  /** How many more times the checker is started again if it stops working. */
+  let restarts = 3;
+
+  /**
+   * The checker stopped working. If it had started, it's started again, a
+   * few times at most, and checks the text again once it's ready (audit
+   * F3-4); if it never started, this browser can't run it.
+   */
+  function checkerFailed(): void {
+    worker?.terminate();
+    if (phase === 'ready' && restarts > 0) {
+      restarts -= 1;
+      phase = 'loading';
+      startChecker();
+      return;
+    }
+    phase = 'failed';
+    setStatus(FAILED);
   }
 
   function startChecker(): void {
     worker = startWorker(checkerUrl);
     worker.addEventListener('message', heard);
-    worker.addEventListener('error', () => {
-      phase = 'failed';
-      setStatus(FAILED);
-    });
+    worker.addEventListener('error', checkerFailed);
     tell({ type: 'start', english: state.english, words: state.words });
   }
 
@@ -257,6 +283,8 @@ export function mountGrammar(root: Document): void {
     tell({ type: 'words', words });
     renderWords();
     check();
+    // There's room again: the note that the dictionary is full goes.
+    if (words.length < MAX_WORDS) clearProblem(DICTIONARY_FULL);
     return saved;
   }
 
@@ -332,8 +360,14 @@ export function mountGrammar(root: Document): void {
     if (action === 'add-word') {
       const word = wordToAdd(issue);
       if (word === undefined) return;
+      const words = addWord(state.words, word);
+      if (words === null) {
+        // Shown at the top of the page and read out; focus stays on the button.
+        showProblem(DICTIONARY_FULL);
+        return;
+      }
       focusAfterCheck = index;
-      if (setWords(addWord(state.words, word))) announce(`Added “${word}” to your dictionary.`);
+      if (setWords(words)) announce(`Added “${word}” to your dictionary.`);
       return;
     }
     const fix = fixesToShow(issue)[Number(button.dataset['fix'])];
@@ -382,6 +416,7 @@ export function mountGrammar(root: Document): void {
   clearDialog.addEventListener('close', () => {
     if (clearDialog.returnValue !== 'confirm') return;
     textarea.value = '';
+    textLimit.clear();
     saveText();
     check();
     deep.textChanged();
@@ -395,6 +430,7 @@ export function mountGrammar(root: Document): void {
     state = store.load();
     if (textarea.value !== state.text) {
       textarea.value = state.text;
+      textLimit.clear();
       deep.textChanged();
     }
     settingsChanged();

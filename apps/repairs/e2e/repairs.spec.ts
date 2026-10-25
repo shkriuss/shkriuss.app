@@ -3,6 +3,7 @@
 import { readFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
 import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
+import { LIMITS, REPAIRS_VERSION } from '../src/lib/repairs.ts';
 import {
   fillRepair,
   NOW,
@@ -15,6 +16,7 @@ import {
   vehicle,
   vehicleDialog,
   vehicleItem,
+  yearDialog,
 } from './helpers.ts';
 
 test.use({ timezoneId: TIME_ZONE });
@@ -24,7 +26,8 @@ test.beforeEach(async ({ page }) => {
   await page.goto('/');
 });
 
-const status = (page: Page, text: string) => page.getByRole('status').filter({ hasText: text });
+const status = (page: Page, text: string | RegExp) =>
+  page.getByRole('status').filter({ hasText: text });
 const fleet = [
   vehicle({ id: 'b105', name: 'Bus 105' }),
   vehicle({ id: 'b12', name: 'Bus 12', plate: 'TB-012-BB' }),
@@ -295,4 +298,97 @@ test('miles, and a spreadsheet of every repair', async ({ page }) => {
     '2026-10-21,Bus 105,Isuzu Novociti Life,,120000,Brakes,"Door sensor fault, ""intermittent""",Replaced the front pads,Door sensor (DS-4),,,,',
     '',
   ]);
+});
+
+test('deletes a year, after saying what it deletes', async ({ page }) => {
+  await page.getByRole('button', { name: 'Delete a year…' }).click();
+  await expect(status(page, 'There are no repairs to delete.')).toBeVisible();
+
+  await seed(page, {
+    vehicles: fleet,
+    repairs: [
+      repair({ id: 'a', date: '2024-03-02' }),
+      repair({ id: 'b', date: '2024-12-31', vehicle: 'b12' }),
+      repair({ id: 'c', date: '2025-06-01' }),
+      repair({ id: 'd', work: 'Checked the doors' }),
+    ],
+  });
+  const deleteYear = page.getByRole('button', { name: 'Delete a year…' });
+  await deleteYear.click();
+  const dialog = yearDialog(page);
+  const year = dialog.getByLabel('Year');
+  await expect(year).toBeFocused();
+  await expect(year.locator('option')).toHaveText([
+    '2024 (2 repairs)',
+    '2025 (1 repair)',
+    '2026 (1 repair)',
+  ]);
+  // The oldest year to begin with.
+  await expect(year).toHaveValue('2024');
+  await expect(dialog.locator('[data-year-text]')).toHaveText(
+    'The 2 repairs from 2024 will be deleted, with their photos. With sync on, they’re deleted on your other devices too. This can’t be undone.',
+  );
+  await checkA11y(page, 'delete a year');
+
+  // The spreadsheet first, from the dialog.
+  const download = page.waitForEvent('download');
+  await dialog.getByRole('button', { name: 'Download as a spreadsheet (CSV)' }).click();
+  expect((await download).suggestedFilename()).toBe('repairs-2026-10-21.csv');
+  await expect(dialog.getByRole('status')).toHaveText('Downloaded your repairs as a spreadsheet.');
+
+  await year.selectOption('2025');
+  await expect(dialog.getByRole('button', { name: 'Delete 1 repair' })).toBeVisible();
+  // Cancel deletes nothing.
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(repairItems(page)).toHaveCount(4);
+
+  await deleteYear.click();
+  await dialog.getByRole('button', { name: 'Delete 2 repairs' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(status(page, 'Deleted 2 repairs from 2024.')).toBeAttached();
+  await expect(deleteYear).toBeFocused();
+  await expect(repairItems(page)).toHaveCount(2);
+  // The vehicles stay.
+  await expect(vehicleItem(page, 'Bus 12')).toHaveCount(1);
+});
+
+// Audit F2-3: Repairs kept more than fit, and there was no way to make room.
+test('says when Repairs is nearly full, and how to make room', async ({ page }) => {
+  // Just over 90% of the repairs Repairs keeps: one a day, back from 2026.
+  const count = LIMITS.repairs * 0.9 + 1;
+  await page.evaluate(
+    ({ count, version }) => {
+      const day = Date.UTC(2026, 9, 21);
+      const repairs = Array.from({ length: count }, (_, index) => ({
+        id: `r${index}`,
+        vehicle: 'b105',
+        date: new Date(day - index * 86_400_000).toISOString().slice(0, 10),
+        mileage: null,
+        system: '',
+        problem: '',
+        work: 'Checked the doors',
+        parts: [],
+        hours: null,
+        labour: null,
+        photos: [],
+      }));
+      localStorage.setItem('shkriuss:repairs', JSON.stringify({ v: version, data: { repairs } }));
+    },
+    { count, version: REPAIRS_VERSION },
+  );
+  await page.reload();
+  const note = page.locator('[data-room-note]');
+  await expect(note).toHaveText(
+    `Repairs is nearly full: there’s room for ${LIMITS.repairs - count} more repairs (it keeps up to ${new Intl.NumberFormat('en-US').format(LIMITS.repairs)}). To make room, download the spreadsheet, then use “Delete a year…” under Units and spreadsheet, below.`,
+  );
+  await checkA11y(page, 'nearly full');
+
+  // Deleting the oldest year makes room.
+  await page.getByRole('button', { name: 'Delete a year…' }).click();
+  await yearDialog(page)
+    .getByRole('button', { name: /^Delete \d+ repairs$/ })
+    .click();
+  await expect(status(page, /^Deleted \d+ repairs from \d{4}\.$/)).toBeAttached();
+  await expect(note).toBeHidden();
 });

@@ -1,5 +1,10 @@
-import { describe, expect, it, vi } from 'vitest';
-import { bytesBody, json, jsonBody, noContent, problem, readJson } from './index.ts';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { bytesBody, json, jsonBody, noContent, problem, readJson, runAlarm } from './index.ts';
+import { MemoryStorage, memoryState } from './testing.ts';
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 /** A body sent in chunks, with no Content-Length; counts the chunks read. */
 function streamed(chunks: number, size: number) {
@@ -76,5 +81,63 @@ describe('answers', () => {
       expect(answer.headers.get('Cache-Control')).toBe('no-store');
     }
     vi.useRealTimers();
+  });
+});
+
+describe('an alarm that fails (audit B-2)', () => {
+  const MINUTE = 60_000;
+
+  it('runs again later, then later still, while it keeps failing, at most a day apart', async () => {
+    vi.useFakeTimers({ now: Date.UTC(2026, 9, 25), toFake: ['Date'] });
+    const storage = new MemoryStorage();
+    const state = memoryState(storage);
+    const work = vi.fn(async () => {
+      throw new Error('R2 is down');
+    });
+    const gaps: number[] = [];
+    for (let wake = 0; wake < 13; wake += 1) {
+      await runAlarm(state, work);
+      gaps.push(((storage.alarm ?? 0) - Date.now()) / MINUTE);
+      vi.setSystemTime(storage.alarm ?? 0);
+    }
+    expect(gaps).toEqual([1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 1440, 1440]);
+  });
+
+  it('starts counting again once it works, leaving the work’s own alarm', async () => {
+    vi.useFakeTimers({ now: Date.UTC(2026, 9, 25), toFake: ['Date'] });
+    const storage = new MemoryStorage();
+    const state = memoryState(storage);
+    let down = true;
+    const work = async () => {
+      if (down) throw new Error('R2 is down');
+      await storage.setAlarm(Date.now() + 7 * 24 * 60 * MINUTE);
+    };
+    await runAlarm(state, work);
+    await runAlarm(state, work);
+    down = false;
+    await runAlarm(state, work);
+    expect(storage.alarm).toBe(Date.now() + 7 * 24 * 60 * MINUTE);
+    expect([...storage.map.keys()]).toEqual([]);
+    down = true;
+    await runAlarm(state, work);
+    expect(storage.alarm).toBe(Date.now() + MINUTE);
+  });
+
+  it('runs one at a time with the object’s requests', async () => {
+    const state = memoryState(new MemoryStorage());
+    const order: string[] = [];
+    let finish: () => void = () => undefined;
+    const alarm = runAlarm(state, async () => {
+      order.push('alarm starts');
+      await new Promise<void>((resolve) => (finish = resolve));
+      order.push('alarm ends');
+    });
+    const request = state.blockConcurrencyWhile(async () => {
+      order.push('request');
+    });
+    await vi.waitFor(() => expect(order).toEqual(['alarm starts']));
+    finish();
+    await Promise.all([alarm, request]);
+    expect(order).toEqual(['alarm starts', 'alarm ends', 'request']);
   });
 });

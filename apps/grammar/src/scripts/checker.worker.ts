@@ -71,7 +71,6 @@ async function handle(message: ToChecker): Promise<void> {
   }
   if (!linter) return;
   if (message.type === 'check') {
-    newest = message.id;
     const local = await linter;
     if (message.id !== newest) return;
     const lints = await local.lint(message.text, { language: 'plaintext' });
@@ -90,8 +89,21 @@ async function handle(message: ToChecker): Promise<void> {
   }
 }
 
+/**
+ * Messages are handled one at a time, in order (audit F3-4). Changing the
+ * English remakes the linter: handled at the same time, a new dictionary
+ * (sent with it when the choice changes on another device) was put into
+ * the old one, already freed, and the checker failed.
+ */
+let queue: Promise<void> = Promise.resolve();
+
 addEventListener('message', (event: MessageEvent<ToChecker>) => {
-  handle(event.data).catch(() => {
-    send({ type: 'failed' });
-  });
+  const message = event.data;
+  // Only the newest text is worth checking: an older one still waiting is skipped.
+  if (message.type === 'check') newest = message.id;
+  queue = queue
+    .then(() => handle(message))
+    .catch(() => {
+      send({ type: 'failed' });
+    });
 });

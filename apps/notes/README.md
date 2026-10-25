@@ -11,7 +11,10 @@ Write things down. Lives at <https://notes.shkriuss.app>.
   one note;
   `#note=<id>` in the address opens a note, so the back button works.
   Typing is saved a moment after the last key press, and straight away when
-  leaving the note or the page.
+  leaving the note or the page. A new note nothing was written in goes when
+  it's left, closing the page too (one a closed page left behind goes the
+  next time Notes opens, ten minutes on). List titles are cut between whole
+  characters: an emoji, a flag, a letter with its accent.
 - `src/pages/index.astro`: the page, built from `@shkriuss/ui` components.
   A `<template>` holds the markup for one note in the list.
 - Sync between devices (optional): `src/worker.ts` runs the shared sync

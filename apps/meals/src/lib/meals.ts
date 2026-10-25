@@ -6,9 +6,9 @@
  * - your meals: dishes you make, each with its ingredients and notes;
  * - the plan: what you'll eat on a day, at breakfast, lunch, dinner or as a
  *   snack. A planned meal is just a name: it uses the ingredients of your
- *   meal with the same name (capitals and accents don't matter), so a meal
- *   added later, or renamed, still matches. Planned meals more than a year
- *   old are let go, so the plan never fills up with old ones;
+ *   meal with the same name (capitals and accents don't matter: foldText),
+ *   so a meal added later, or renamed, still matches. Planned meals more
+ *   than a year old are let go, so the plan never fills up with old ones;
  * - shopping: what's ticked off on a week's shopping list, and what was
  *   added to it by hand. The list itself is made from that week's planned
  *   meals. Each list is saved under the Monday in its week, whichever day
@@ -179,10 +179,17 @@ export function mealProblems(
 ): Partial<Record<MealField, string>> {
   const problems: Partial<Record<MealField, string>> = {};
   const name = tidy(draft.name);
-  const same = findMeal(state, name);
+  const key = foldText(name);
+  const own = state.meals.find((meal) => meal.id === editing);
+  // Its own name, unchanged, is fine even if another meal has it too: two
+  // devices that each added "Soup" before they first synced.
+  const same =
+    own && foldText(own.name) === key
+      ? undefined
+      : state.meals.find((meal) => meal.id !== editing && foldText(meal.name) === key);
   if (name === '') problems.name = 'Give the meal a name.';
   else if (length(name) > LIMITS.name) problems.name = `Use at most ${LIMITS.name} characters.`;
-  else if (same && same.id !== editing) problems.name = `You already have “${same.name}”.`;
+  else if (same) problems.name = `You already have “${same.name}”.`;
   if (parseIngredients(draft.ingredients).length > MAX_INGREDIENTS) {
     problems.ingredients = `Up to ${MAX_INGREDIENTS} ingredients.`;
   }
@@ -621,7 +628,11 @@ export const DEFAULT_REMINDER_TIMES: Record<Slot, IsoTime> = {
   snack: '16:00',
 };
 export const REMINDER_BODY = 'Tap to see today’s meals.';
-/** At most this many reminders go to the notification service (the soonest). */
+/**
+ * At most this many reminders go to the notification service (the soonest):
+ * 25 days with all four meals of the day. The next ones go each time Meals
+ * is opened (README).
+ */
 export const MAX_NOTICES = 100;
 
 /** What was saved or synced: each meal of the day at most once, in order. */

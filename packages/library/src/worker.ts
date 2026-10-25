@@ -40,6 +40,7 @@ import {
   jsonBody,
   noContent,
   problem,
+  runAlarm,
   sha256Text,
   type DurableObjectListState,
   type DurableObjectNamespace,
@@ -417,7 +418,7 @@ export class LibraryGate {
 
   /** When an hour is over: forget its wrong tries. */
   async alarm(): Promise<void> {
-    await this.state.blockConcurrencyWhile(async () => {
+    await runAlarm(this.state, async () => {
       const storage = this.state.storage;
       const hour = Math.floor(Date.now() / HOUR_MS);
       for (;;) {
@@ -607,7 +608,7 @@ export class Library {
    * LOCKED_UNUSED_MS goes. Otherwise: the weekly clean-up (#sweep).
    */
   async alarm(): Promise<void> {
-    await this.state.blockConcurrencyWhile(async () => {
+    await runAlarm(this.state, async () => {
       const meta = await this.state.storage.get<Meta>('meta');
       if (!meta) return;
       if (!meta.unlocked) {

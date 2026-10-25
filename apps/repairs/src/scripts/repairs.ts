@@ -1,12 +1,14 @@
 /**
  * Repairs' page behaviour: connects pages/index.astro to the rules in
  * lib/repairs.ts, saves on the device, and syncs the vehicles, repairs,
- * settings and photos when sync is on. Photos: photos.ts; in the repair form,
- * form-photos.ts; looking at them, photo-viewer.ts.
+ * settings and photos when sync is on. "Delete a year…" deletes a year's
+ * repairs and their photos, to make room. Photos: photos.ts; in the repair
+ * form, form-photos.ts; looking at them, photo-viewer.ts.
  */
 import { today } from '@shkriuss/dates';
 import { createStore, downloadFile } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
+import { decimalText } from '@shkriuss/ui/numbers';
 import { focusProblem, reportSave } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { typedText } from '@shkriuss/ui/typed-text';
@@ -33,6 +35,7 @@ import {
   lastMileage,
   migrateRepairs,
   modelNames,
+  partCost,
   partLabel,
   partNames,
   photoFiles,
@@ -41,7 +44,11 @@ import {
   readVehicle,
   removeRepair,
   removeVehicle,
+  removeYear,
   repairCost,
+  repairsIn,
+  repairYears,
+  roomNote,
   saveRepair,
   saveVehicle,
   setCurrency,
@@ -66,7 +73,13 @@ import {
   REPAIRS_VERSION,
   VEHICLES_VERSION,
 } from '../lib/repairs.ts';
-import { deletePhotos, downloadPhotosWith, readPhotoFile, thumbUrl } from './photos.ts';
+import {
+  deletePhotos,
+  deleteUnusedPhotos,
+  downloadPhotosWith,
+  readPhotoFile,
+  thumbUrl,
+} from './photos.ts';
 import { required } from '@shkriuss/ui/dom';
 import { mountFormPhotos } from './form-photos.ts';
 import { mountPhotoViewer } from './photo-viewer.ts';
@@ -149,6 +162,13 @@ export function mountRepairs(root: Document): void {
   const deleteDialog = required<HTMLDialogElement>(root, '[data-delete-dialog]');
   const deleteTitle = required<HTMLElement>(deleteDialog, '[data-delete-title]');
   const deleteText = required<HTMLElement>(deleteDialog, '[data-delete-text]');
+  const roomText = required<HTMLElement>(root, '[data-room-note]');
+  const deleteYearButton = required<HTMLButtonElement>(root, '[data-action="delete-year"]');
+  const yearDialog = required<HTMLDialogElement>(root, '[data-year-dialog]');
+  const yearForm = required<HTMLFormElement>(yearDialog, '[data-year-form]');
+  const yearSelect = required<HTMLSelectElement>(yearForm, '[data-year-select]');
+  const yearText = required<HTMLElement>(yearForm, '[data-year-text]');
+  const yearConfirm = required<HTMLElement>(yearForm, '[data-year-confirm]');
 
   let vehicles = vehiclesStore.load();
   let repairs = repairsStore.load();
@@ -234,10 +254,9 @@ export function mountRepairs(root: Document): void {
         ...repair.parts.map((part) => {
           const line = document.createElement('li');
           line.dir = 'auto';
+          const price = partCost(part, currencyOf(settings));
           line.textContent =
-            part.price === null
-              ? partLabel(part)
-              : `${partLabel(part)} · ${money(part.quantity * part.price)}`;
+            price === null ? partLabel(part) : `${partLabel(part)} · ${money(price)}`;
           return line;
         }),
       );
@@ -245,7 +264,7 @@ export function mountRepairs(root: Document): void {
     if (repair.hours !== null) {
       required<HTMLElement>(rows.hours, 'dd').textContent = formatHours(repair.hours);
     } else rows.hours.remove();
-    const cost = repairCost(repair);
+    const cost = repairCost(repair, currencyOf(settings));
     if (cost) {
       // "$140.00 · parts $90.00, labour $50.00" when it's both.
       required<HTMLElement>(rows.cost, 'dd').textContent =
@@ -309,19 +328,20 @@ export function mountRepairs(root: Document): void {
     const count = countLabel(found.length, 'repair', 'repairs');
     const on = only ? ` on ${vehicleName(vehicles, only)}` : '';
     const matching = query.trim() ? ` ${found.length === 1 ? 'matches' : 'match'} your search` : '';
-    const sums = totalsText(totals(found));
+    const currency = currencyOf(settings);
+    const sums = totalsText(totals(found, currency));
     resultCount.textContent =
       (filtered ? `${count}${on}${matching}` : `${count} in all`) + (sums ? ` · ${sums}.` : '.');
 
     // Each day's total counts all its repairs, also those after "Show more".
-    const dayTotals = new Map(byDay(found).map((day) => [day.date, totals(day.repairs)]));
+    const dayTotals = new Map(byDay(found).map((day) => [day.date, totals(day.repairs, currency)]));
     daysList.replaceChildren(
       ...byDay(found.slice(0, shown)).map((day) => {
         const fragment = dayTemplate.content.cloneNode(true) as DocumentFragment;
         const block = required<HTMLElement>(fragment, 'div');
         required<HTMLElement>(block, '[data-day-heading]').textContent = dayLabel(day.date);
         required<HTMLElement>(block, '[data-day-total]').textContent = totalsText(
-          dayTotals.get(day.date) ?? totals(day.repairs),
+          dayTotals.get(day.date) ?? totals(day.repairs, currency),
         );
         required<HTMLUListElement>(block, '[data-day-list]').replaceChildren(
           ...day.repairs.map(renderRepair),
@@ -364,7 +384,7 @@ export function mountRepairs(root: Document): void {
   }
 
   function renderVehicles(): void {
-    const summaries = vehicleSummaries(vehicles, repairs);
+    const summaries = vehicleSummaries(vehicles, repairs, currencyOf(settings));
     noVehicles.hidden = summaries.length > 0;
     vehicleList.replaceChildren(...summaries.map(renderVehicle));
 
@@ -378,6 +398,9 @@ export function mountRepairs(root: Document): void {
   }
 
   function render(): void {
+    const room = roomNote(repairs.repairs.length);
+    roomText.hidden = room === null;
+    roomText.textContent = room ?? '';
     renderVehicles();
     renderRepairs();
     unitSelect.value = unitOf(settings);
@@ -532,7 +555,7 @@ export function mountRepairs(root: Document): void {
     if (number && number.value.trim() === '') number.value = known.number;
     const price = partInput(Number(match[1]), 'price');
     if (price && price.value.trim() === '' && known.price !== null) {
-      price.value = String(known.price);
+      price.value = decimalText(known.price);
     }
   });
 
@@ -692,6 +715,64 @@ export function mountRepairs(root: Document): void {
     }
   });
 
+  // ---------- Deleting a year ----------
+
+  const repairsCount = (count: number) => countLabel(count, 'repair', 'repairs');
+
+  /** How many repairs the year chosen has (0 if it has none now). */
+  const yearCount = (year: string) =>
+    repairYears(repairs).find((entry) => entry.year === year)?.count ?? 0;
+
+  /** Says what deleting the year chosen removes. */
+  function showYear(): void {
+    const year = yearSelect.value;
+    const count = repairsCount(yearCount(year));
+    yearText.textContent = `The ${count} from ${year} will be deleted, with their photos. With sync on, they’re deleted on your other devices too. This can’t be undone.`;
+    yearConfirm.textContent = `Delete ${count}`;
+  }
+
+  /** The years with repairs to choose from (the year chosen stays chosen while it has any). */
+  function fillYears(): void {
+    const chosen = yearSelect.value;
+    const years = repairYears(repairs);
+    yearSelect.replaceChildren(
+      ...years.map(({ year, count }) => new Option(`${year} (${repairsCount(count)})`, year)),
+    );
+    // Else the first, the earliest year: the oldest repairs are the likeliest to go.
+    if (years.some(({ year }) => year === chosen)) yearSelect.value = chosen;
+    showYear();
+  }
+
+  function openYears(): void {
+    if (repairs.repairs.length === 0) {
+      csvStatus.textContent = 'There are no repairs to delete.';
+      return;
+    }
+    yearSelect.replaceChildren();
+    fillYears();
+    required<HTMLElement>(yearForm, '[data-csv-status]').textContent = '';
+    yearDialog.showModal();
+    yearSelect.focus();
+  }
+
+  yearSelect.addEventListener('change', showYear);
+
+  yearForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const year = yearSelect.value;
+    const gone = repairsIn(repairs, year);
+    yearDialog.close();
+    deleteYearButton.focus();
+    if (gone.length === 0) return;
+    // Like deleting repairs one by one: other devices delete them too, and their photos go.
+    save(
+      { repairs: removeYear(repairs, year) },
+      `Deleted ${repairsCount(gone.length)} from ${year}.`,
+    );
+    void deletePhotos(photosOf(gone));
+    sync.filesRemoved(photoFiles(photosOf(gone)));
+  });
+
   // ---------- Everything else ----------
 
   root.addEventListener('click', (event) => {
@@ -772,15 +853,22 @@ export function mountRepairs(root: Document): void {
       case 'delete-vehicle':
         askToDelete('vehicle');
         break;
-      case 'csv':
-        // The answer shows under the button (and is read out).
+      case 'delete-year':
+        openYears();
+        break;
+      case 'csv': {
+        // The answer shows under the button tapped (and is read out).
+        const status =
+          button?.closest('dialog, section')?.querySelector<HTMLElement>('[data-csv-status]') ??
+          csvStatus;
         if (repairs.repairs.length === 0) {
-          csvStatus.textContent = 'There’s nothing to download yet.';
+          status.textContent = 'There’s nothing to download yet.';
           break;
         }
         downloadFile(`repairs-${today()}.csv`, toCsv(repairs, vehicles, settings), 'text/csv');
-        csvStatus.textContent = 'Downloaded your repairs as a spreadsheet.';
+        status.textContent = 'Downloaded your repairs as a spreadsheet.';
         break;
+      }
     }
   });
 
@@ -826,6 +914,10 @@ export function mountRepairs(root: Document): void {
     // What's being changed was deleted on another device or tab.
     if (editingRepair !== null && !findRepair(editingRepair)) repairDialog.close();
     if (editingVehicle !== null && !findVehicle(editingVehicle)) vehicleDialog.close();
+    if (yearDialog.open) {
+      if (repairs.repairs.length === 0) yearDialog.close();
+      else fillYears();
+    }
     render();
   }
 
@@ -834,6 +926,17 @@ export function mountRepairs(root: Document): void {
     const keys = [vehiclesStore.key, repairsStore.key, settingsStore.key];
     if (event.key !== null && keys.includes(event.key)) reload();
   });
+
+  /**
+   * Deletes the photos no repair uses, and no repair form open here
+   * (deleteUnusedPhotos). Not while the repairs saved can't be read (saved
+   * by a newer Repairs, say): every photo would look unused then.
+   */
+  function deleteUnused(): void {
+    if (repairsStore.status() !== 'ok') return;
+    const inForm = repairDialog.open ? formPhotos.inUse() : [];
+    void deleteUnusedPhotos(new Set([...photosOf(repairsStore.load().repairs), ...inForm]));
+  }
 
   // Sync between devices through the shkriuss account (if turned on). The
   // newest change to each vehicle, repair and setting wins. Vehicles and
@@ -878,7 +981,10 @@ export function mountRepairs(root: Document): void {
   syncWasOn = sync.status().on;
   mountSyncControls(required<HTMLElement>(root, '[data-sync-controls]'), sync);
   sync.subscribe((status, event) => {
-    if (event === 'synced' || event === 'kept-both') refreshMissingThumbs();
+    if (event === 'synced' || event === 'kept-both') {
+      refreshMissingThumbs();
+      deleteUnused();
+    }
     // Turned on or off: photos say where they are.
     if (status.on !== syncWasOn) {
       syncWasOn = status.on;
@@ -887,4 +993,6 @@ export function mountRepairs(root: Document): void {
   });
 
   render();
+  // Photos left behind (by an older backup restored, say) go.
+  deleteUnused();
 }

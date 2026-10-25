@@ -8,7 +8,7 @@
 import { focusProblem, showProblem } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { setBusy } from '@shkriuss/ui/busy';
-import { canFreeUp, freeable, onlineMessage } from '../lib/online.ts';
+import { canFreeUp, freeable, onlineMessage, onlyOnline } from '../lib/online.ts';
 import {
   addedMessage,
   byMonth,
@@ -639,9 +639,11 @@ export function mountPhotos(root: Document): void {
     try {
       let loaded = await loadLibrary();
       // Photos only online need sync: without it, they can't be seen here.
-      if (!online.state().on && loaded.some((photo) => !photo.here)) {
-        const hidden = loaded.filter((photo) => !photo.here).map((photo) => photo.id);
-        await deletePhotos(hidden);
+      // Where this device had got to starts again too, so they're found
+      // again when sync is on (audit F3-2).
+      const hidden = onlyOnline(loaded);
+      if (!online.state().on && hidden.length > 0) {
+        await online.hideOnlyOnline(hidden.map((photo) => photo.id));
         loaded = loaded.filter((photo) => photo.here);
       }
       if (shape(loaded) === shape(photos)) return;

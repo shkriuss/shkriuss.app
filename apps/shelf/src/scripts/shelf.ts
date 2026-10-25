@@ -17,6 +17,7 @@ import { withEdits } from '@shkriuss/sync/edits';
 import { PAGE_SIZE, shownCount, waitForTyping } from '@shkriuss/ui/long-lists';
 import { clearProblem, focusProblem, reportSave, showProblem } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
+import { watchTextLimit } from '@shkriuss/ui/text-limit';
 import { site } from 'virtual:shkriuss/site';
 import {
   addCategory,
@@ -357,6 +358,10 @@ export function mountShelf(root: Document): void {
 
   const field = <T extends HTMLElement>(name: string): T => required<T>(form, `[name="${name}"]`);
   const textFields = ['name', 'brand', 'price', 'shop', 'link', 'variant', 'bought'] as const;
+  // A paste longer than a box takes is cut by the browser: say so (audit F3-3).
+  const limits = ['name', 'brand', 'shop', 'variant', 'link', 'notes'].map((name) =>
+    watchTextLimit(field<HTMLInputElement | HTMLTextAreaElement>(name)),
+  );
 
   function readDraft(): ItemDraft {
     const value = (name: string): string =>
@@ -379,6 +384,7 @@ export function mountShelf(root: Document): void {
 
   function fillForm(draft: ItemDraft): void {
     for (const name of textFields) field<HTMLInputElement>(name).value = draft[name];
+    for (const limit of limits) limit.clear();
     const category = field<HTMLSelectElement>('category');
     setOptions(
       category,

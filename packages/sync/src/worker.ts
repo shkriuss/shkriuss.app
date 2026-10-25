@@ -37,6 +37,7 @@ import {
   jsonBody,
   noContent,
   problem,
+  runAlarm,
   sha256Text,
   type ApiHandler,
   type DurableObjectState,
@@ -328,7 +329,7 @@ export class SyncCopy {
    * by strangers don't stay for good, and their room is given back.
    */
   async alarm(): Promise<void> {
-    await this.state.blockConcurrencyWhile(async () => {
+    await runAlarm(this.state, async () => {
       const active = (await this.state.storage.get<number>('active')) ?? 0;
       if (Date.now() - active < UNUSED_MS) {
         await this.state.storage.setAlarm(active + UNUSED_MS);

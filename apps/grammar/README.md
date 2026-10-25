@@ -14,6 +14,9 @@ The checking is done by [Harper](https://github.com/automattic/harper)
 - `src/scripts/checker.worker.ts`: the checker, in a web worker so the page
   never freezes. It loads Harper (a 16 MB WebAssembly file, about 8 MB
   compressed), checks text, and sends back plain copies of what it finds.
+  It handles the page's messages one at a time, in order; if it stops
+  working after it started, the page starts it again (three times at most).
+  `checker.worker.test.ts` runs it with the real Harper.
 - `src/scripts/grammar.ts`: the page. Saves the text, the English choice and
   the dictionary on the device with `@shkriuss/storage`, checks a moment
   after typing stops, and applies fixes. On a first visit it starts the
