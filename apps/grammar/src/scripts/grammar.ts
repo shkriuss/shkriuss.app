@@ -8,7 +8,12 @@
  */
 import { createStore } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
-import { reportSave, type ReportSaveOptions } from '@shkriuss/ui/problem';
+import {
+  clearProblem,
+  reportSave,
+  showProblem,
+  type ReportSaveOptions,
+} from '@shkriuss/ui/problem';
 import { offlineCopySaved } from '@shkriuss/ui/service-worker';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { watchTextLimit } from '@shkriuss/ui/text-limit';
@@ -18,12 +23,14 @@ import {
   addWord,
   applyFix,
   contextOf,
+  DICTIONARY_FULL,
   emptyState,
   fixDone,
   fixesToShow,
   fixLabel,
   isGrammarState,
   MAX_SHOWN,
+  MAX_WORDS,
   removeWord,
   summary,
   syncedSettings,
@@ -276,6 +283,8 @@ export function mountGrammar(root: Document): void {
     tell({ type: 'words', words });
     renderWords();
     check();
+    // There's room again: the note that the dictionary is full goes.
+    if (words.length < MAX_WORDS) clearProblem(DICTIONARY_FULL);
     return saved;
   }
 
@@ -351,8 +360,14 @@ export function mountGrammar(root: Document): void {
     if (action === 'add-word') {
       const word = wordToAdd(issue);
       if (word === undefined) return;
+      const words = addWord(state.words, word);
+      if (words === null) {
+        // Shown at the top of the page and read out; focus stays on the button.
+        showProblem(DICTIONARY_FULL);
+        return;
+      }
       focusAfterCheck = index;
-      if (setWords(addWord(state.words, word))) announce(`Added “${word}” to your dictionary.`);
+      if (setWords(words)) announce(`Added “${word}” to your dictionary.`);
       return;
     }
     const fix = fixesToShow(issue)[Number(button.dataset['fix'])];

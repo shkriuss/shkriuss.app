@@ -129,6 +129,37 @@ test('words in my dictionary aren’t marked as misspelled', async ({ page }) =>
   await expect(page.getByText('No words yet.')).toBeVisible();
 });
 
+test('says when the dictionary is full', async ({ page }) => {
+  // With 500 words, "Add to my dictionary" added nothing but said "Added"
+  // (audit F3-8).
+  await page.goto('/');
+  const words = Array.from({ length: 500 }, (_, index) => `word${index}`);
+  await page.evaluate((list) => {
+    const data = { text: '', english: 'american', words: list };
+    localStorage.setItem('shkriuss:grammar', JSON.stringify({ v: 1, data }));
+  }, words);
+  await open(page);
+  await text(page).fill('Mtskheta is near Tbilisi.');
+  const add = suggestion(page, 'Mtskheta').getByRole('button', {
+    name: 'Add to my dictionary: “Mtskheta”',
+  });
+  await add.click();
+  const full = page
+    .getByRole('alert')
+    .filter({ hasText: 'Your dictionary is full (500 words). Remove one to add another.' });
+  await expect(full).toBeVisible();
+  await expect(add).toBeFocused();
+  await expect(suggestion(page, 'Mtskheta')).toBeVisible();
+  await expect(page.locator('[data-words] [data-word="Mtskheta"]')).toHaveCount(0);
+
+  // With room again, the note goes, and the word is added.
+  await page.getByRole('button', { name: 'Remove “word0” from my dictionary' }).click();
+  await expect(full).toHaveCount(0);
+  await add.click();
+  await expect(page.getByRole('status').filter({ hasText: 'Added “Mtskheta”' })).toBeAttached();
+  await expect(suggestion(page, 'Mtskheta')).toHaveCount(0);
+});
+
 test('shows a problem in the text', async ({ page }) => {
   await open(page);
   await text(page).fill('She go to school.');
