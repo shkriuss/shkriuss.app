@@ -159,7 +159,10 @@ Then:
   turned off (by the person, or because the copy was deleted or moved), and
   keeps noting edits and deletions while it's off. Turning sync on again, with
   either key, then syncs those properly instead of starting over. "Delete all
-  data" and restoring a backup forget it, so older data never counts as new.
+  data" forgets it, and so does restoring a backup while sync is off, so older
+  data never counts as new. Restoring while sync is on replaces the data on
+  every device, on purpose: the restored data syncs as new edits, as the
+  Restore dialog warns.
 
 ### Syncing apps through the account
 
