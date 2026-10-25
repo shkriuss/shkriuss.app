@@ -76,7 +76,9 @@ phone set to another language), `@shkriuss/ui/text` (`compareText`, for
 sorting lists alphabetically, and `foldText`, for comparing and searching
 without minding case, accents or extra spaces),
 `@shkriuss/ui/local-reminders` (notifications while the app is open, with
-the same texts and the same iPhone and "blocked" cases in every app),
+the same texts and the same iPhone and "blocked" cases in every app; after
+the page slept, only ones a few minutes late show, and on the night clocks
+go forward, ones in the skipped hour go off as the clocks change),
 `@shkriuss/ui/long-lists` (for lists that
 can grow to thousands: `shownCount` draws `PAGE_SIZE` (100) at a time behind
 a "Show more" button, always keeping what has focus or was just saved, and

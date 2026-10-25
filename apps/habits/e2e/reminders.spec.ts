@@ -83,6 +83,21 @@ test('reminds while Habits is open, unless it’s done already', async ({ page }
   await expect(card(page, 'Drink water').locator('[data-reminder]')).toBeHidden();
 });
 
+test('a reminder in the hour that clocks skip still goes off', async ({ page }) => {
+  // In Berlin, clocks go from 02:00 to 03:00 on 29 March 2026 (audit F1-6).
+  await fakeNotifications(page, 'granted');
+  await page.clock.install({ time: new Date('2026-03-29T01:50:00+01:00') });
+  await page.goto('/');
+  await addHabit(page, 'Medicine');
+  await setReminder(page, 'Medicine', '02:30');
+  // Open through the night: it goes off as the clocks change, at 3:00.
+  await page.clock.runFor('01:00:00');
+  await expect(page.getByRole('status').filter({ hasText: 'Reminder: Medicine.' })).toBeAttached();
+  expect(await shownNotifications(page)).toEqual([
+    expect.objectContaining({ title: 'Medicine', body: REMINDER_BODY }),
+  ]);
+});
+
 test('asks to show notifications when a reminder is set', async ({ page }) => {
   await fakeNotifications(page, 'default');
   await page.goto('/');
