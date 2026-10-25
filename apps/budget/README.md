@@ -21,9 +21,11 @@ See where your money goes, month by month. Lives at
     Budget waits for its update before it syncs, instead of mixing refunds
     into data it can't read;
   - settings (`shkriuss:budget-settings`): the currency, only for showing
-    amounts (nothing is converted), and the monthly reminder. Each is saved
-    only once changed (US dollars and no reminder until then), so a new device
-    has nothing to win over another's when they first sync.
+    amounts (nothing is converted; an amount typed is kept to the
+    currency's own decimals: to the cent, or to the yen), and the monthly
+    reminder. Each is saved only once changed (US dollars and no reminder
+    until then), so a new device has nothing to win over another's when
+    they first sync.
 - A month shows what was spent, earned and is left (`summary`), each
   category's spending against its limit (`byCategory`; over the limit, its
   bar turns red), and the month's entries, the latest first. Once a

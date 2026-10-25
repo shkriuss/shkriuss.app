@@ -357,6 +357,7 @@ export function mountBudget(root: Document): void {
       editingEntry ?? crypto.randomUUID(),
       entries.entries.length - (editingEntry ? 1 : 0),
       categories,
+      { currency: currencyOf(settings) },
     );
     if (!read.entry) {
       showProblems(entryForm, ['kind', 'amount', 'date', 'note'], read.problems);
@@ -402,6 +403,7 @@ export function mountBudget(root: Document): void {
       },
       editingCategory ?? crypto.randomUUID(),
       categories,
+      { currency: currencyOf(settings) },
     );
     if (!read.category) {
       showProblems(categoryForm, ['name', 'limit'], read.problems);

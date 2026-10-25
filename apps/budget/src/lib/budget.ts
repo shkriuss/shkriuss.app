@@ -30,6 +30,7 @@ import {
 import type { Notice } from '@shkriuss/push';
 import {
   CURRENCIES,
+  currencyDigits,
   decimalText,
   formatMoney,
   parseDecimal,
@@ -160,8 +161,12 @@ export function isEntriesState(value: unknown): value is EntriesState {
 export const migrateEntries = (old: unknown, version: number): EntriesState | undefined =>
   version === 1 && isEntriesState(old) ? old : undefined;
 
-/** How the forms are read: amounts as typed in `locale` (the browser's own when left out). */
+/**
+ * How the forms are read: amounts in `currency` (US dollars when left out),
+ * as typed in `locale` (the browser's own when left out).
+ */
 export interface ReadOptions {
+  currency?: Currency | undefined;
   locale?: string | undefined;
 }
 
@@ -172,14 +177,24 @@ export interface ReadOptions {
 const parseAmount = (text: string, { locale }: ReadOptions): number | null =>
   parseDecimal(text, locale);
 
+/**
+ * An amount kept as its currency has it: to the cent, or to the yen (no
+ * decimals), so what's added up is what's shown.
+ */
+const keep = (amount: number, { currency = 'USD' }: ReadOptions): number =>
+  roundDecimal(amount, currencyDigits(currency));
+
 /** What's wrong with a typed amount, or undefined (empty is fine when `optional`). */
 function amountProblem(text: string, optional: boolean, options: ReadOptions): string | undefined {
   const value = parseAmount(text, options);
   if (value === null) return optional ? undefined : 'Enter an amount.';
   if (!Number.isFinite(value)) return 'Enter a number, like 12.50 or 12,50.';
   if (value <= 0) return 'Enter an amount above 0.';
-  // Amounts are kept to the cent, so one that rounds to 0 would be saved as 0.
-  if (tidy(value) <= 0) return 'Enter at least 0.01.';
+  // Kept to the cent (or the yen), so one that rounds to 0 would be saved as 0.
+  if (keep(value, options) <= 0) {
+    const least = 10 ** -currencyDigits(options.currency ?? 'USD');
+    return `Enter at least ${decimalText(least, options.locale)}.`;
+  }
   if (value > LIMITS.amount) return 'Enter a smaller amount.';
   return undefined;
 }
@@ -225,7 +240,7 @@ export function readCategory(
   if (limitProblem) problems.limit = limitProblem;
   if (Object.keys(problems).length > 0) return { problems };
   const limit = parseAmount(form.limit, options);
-  return { category: { id, name, limit: limit === null ? null : tidy(limit) } };
+  return { category: { id, name, limit: limit === null ? null : keep(limit, options) } };
 }
 
 /** A category as its form shows it. */
@@ -298,7 +313,7 @@ export function readEntry(
     entry: {
       id,
       kind,
-      amount: tidy(parseAmount(form.amount, options) ?? 0),
+      amount: keep(parseAmount(form.amount, options) ?? 0, options),
       date: form.date,
       category,
       note,

@@ -87,7 +87,9 @@ describe('categories', () => {
       name: 'Enter a name for the category.',
       limit: 'Enter an amount above 0.',
     });
-    expect(readCategory({ name: 'Rent', limit: '0.001' }, 'p', categories).problems).toEqual({
+    expect(
+      readCategory({ name: 'Rent', limit: '0.001' }, 'p', categories, { locale: 'en-US' }).problems,
+    ).toEqual({
       limit: 'Enter at least 0.01.',
     });
     expect(readCategory({ name: 'groceries', limit: '' }, 'p', categories).problems).toEqual({
@@ -220,7 +222,9 @@ describe('entries', () => {
       amount: 'Enter an amount above 0.',
     });
     // Kept to the cent, so it would be saved as 0, which saved data never holds.
-    expect(readEntry({ ...form, amount: '0.004' }, 'x', 0, categories).problems).toEqual({
+    expect(
+      readEntry({ ...form, amount: '0.004' }, 'x', 0, categories, { locale: 'en-US' }).problems,
+    ).toEqual({
       amount: 'Enter at least 0.01.',
     });
     // Rounded to the cent as written (1.005 * 100 is 100.49999999999999).
@@ -237,6 +241,35 @@ describe('entries', () => {
     expect(readEntry(form, 'x', LIMITS.entries, categories).problems).toEqual({
       amount: `You can keep up to ${new Intl.NumberFormat().format(LIMITS.entries)} entries. To make room, delete a year (under Currency and spreadsheet).`,
     });
+  });
+
+  // Audit F2-13: yen kept cents, so 0.01 yen was saved and shown as "¥0",
+  // and two entries of 0.5 showed as ¥1 and ¥1, adding up to ¥1.
+  it('keeps amounts to their currency’s own decimals', () => {
+    const yen = { currency: 'JPY', locale: 'en-US' } as const;
+    expect(readEntry({ ...form, amount: '0.5' }, 'x', 0, categories, yen).entry?.amount).toBe(1);
+    expect(readEntry({ ...form, amount: '1500.4' }, 'x', 0, categories, yen).entry?.amount).toBe(
+      1500,
+    );
+    expect(readEntry({ ...form, amount: '0.4' }, 'x', 0, categories, yen).problems).toEqual({
+      amount: 'Enter at least 1.',
+    });
+    expect(readCategory({ name: 'Rent', limit: '80000.5' }, 'r', categories, yen).category).toEqual(
+      {
+        id: 'r',
+        name: 'Rent',
+        limit: 80_001,
+      },
+    );
+    // Two entries of 0.5 yen: ¥1 each, ¥2 in all.
+    const twice = ['a', 'b'].map(
+      (id) => readEntry({ ...form, amount: '0.5' }, id, 0, categories, yen).entry as Entry,
+    );
+    expect(summary(twice, categories).spent).toBe(2);
+    // Dollars keep their cents.
+    expect(
+      readEntry({ ...form, amount: '0.5' }, 'x', 0, categories, { currency: 'USD' }).entry?.amount,
+    ).toBe(0.5);
   });
 
   it('reads a refund, in a category like an expense', () => {
