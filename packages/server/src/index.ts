@@ -201,6 +201,38 @@ export function isFromAnotherSite(request: Request): boolean {
   return site !== null && site !== 'same-origin' && site !== 'none';
 }
 
+// ---------- Alarms ----------
+
+const MINUTE_MS = 60 * 1000;
+const DAY_MS = 24 * 60 * MINUTE_MS;
+/** How many wake-ups in a row have failed (kept by runAlarm, gone with everything else). */
+const ALARM_FAILURES = 'alarmFailures';
+
+/**
+ * Runs an object's alarm: one at a time with its requests, and so that a
+ * passing error (R2 or another object not answering for a few minutes)
+ * can't stop it for good (audit B-2). Cloudflare tries an alarm that throws
+ * only 6 more times, over about 2 minutes, then never again. This sets it
+ * again instead, later after each failure in a row (a minute, doubling, at
+ * most a day), so a fault that never goes away costs a wake-up a day.
+ */
+export function runAlarm(state: DurableObjectState, work: () => Promise<void>): Promise<void> {
+  return state.blockConcurrencyWhile(async () => {
+    const storage = state.storage;
+    try {
+      await work();
+    } catch {
+      const failures = (await storage.get<number>(ALARM_FAILURES)) ?? 0;
+      await storage.put(ALARM_FAILURES, failures + 1);
+      await storage.setAlarm(Date.now() + Math.min(DAY_MS, MINUTE_MS * 2 ** failures));
+      return;
+    }
+    if ((await storage.get<number>(ALARM_FAILURES)) !== undefined) {
+      await storage.delete(ALARM_FAILURES);
+    }
+  });
+}
+
 // ---------- The Worker ----------
 
 /** Answers one feature's requests; `path` is the URL path, e.g. "/api/push/key". */

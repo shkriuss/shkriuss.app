@@ -64,7 +64,11 @@ and a couple of open previews. The per-account limits stay as they were
 - **An online copy nobody has synced with, or even asked about, for 396 days
   (about 13 months) is deleted**, files and all, with the note left when one
   is deleted. Notification schedules already work that way (ADR 0009).
-- Each copy sets an alarm when it's used, at most once a day.
+- Each copy sets an alarm when it's used, at most once a day. An alarm that
+  fails (R2 or the meter not answering for a while) runs again a minute
+  later, then later each time, up to a day apart, so a clean-up or a
+  deletion never stops for good (`runAlarm` in `@shkriuss/server`, audit
+  B-2).
 - A device that comes back later finds no copy, as on a first sync, and
   puts its own data online again. So only copies nobody uses go for good.
 - **A note that a key was replaced** is deleted the same way, 13 months
