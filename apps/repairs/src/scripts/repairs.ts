@@ -737,10 +737,14 @@ export function mountRepairs(root: Document): void {
         announce(`Showing the repairs on ${vehicle.name}.`);
         break;
       }
-      case 'more':
+      case 'more': {
+        // Focus carries on from the first repair just shown (audit G-5).
+        const first = shown;
         shown += PAGE_SIZE;
         renderRepairs();
+        daysList.querySelectorAll<HTMLElement>('[data-action="edit-repair"]')[first]?.focus();
         break;
+      }
       case 'add-photos':
         formPhotos.pick();
         break;

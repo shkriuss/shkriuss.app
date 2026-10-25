@@ -527,11 +527,13 @@ export function mountShelf(root: Document): void {
     if (brand === undefined) return;
     filters = { ...filters, brand: filters.brand === brand ? null : brand };
     shown = PAGE_SIZE;
-    render();
     if (filters.brand === null) {
+      // The brands are drawn again: focus stays on this one (audit G-5).
+      keepFocus(render);
       announceCount();
       return;
     }
+    render();
     // Over to the list, which now shows only this brand.
     itemsHeading.focus();
     itemsHeading.scrollIntoView({ block: 'start' });
