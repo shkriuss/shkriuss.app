@@ -20,6 +20,42 @@ export function lockedPackages(lockfile: string): Set<string> {
   return found;
 }
 
+/**
+ * Packages a pnpm-lock.yaml takes from somewhere other than the npm registry,
+ * such as a web address or a git repository: their key isn't
+ * "name@version", or they have no integrity hash. The age check can't tell
+ * when those were published, so they'd slip past it (audit H-1).
+ */
+export function unregisteredPackages(lockfile: string): string[] {
+  const found: string[] = [];
+  let inPackages = false;
+  let key: string | null = null;
+  let fromRegistry = false;
+  const done = () => {
+    if (key !== null && !fromRegistry) found.push(key);
+    key = null;
+  };
+  for (const line of lockfile.split('\n')) {
+    if (/^\S/.test(line)) {
+      done();
+      inPackages = line.trim() === 'packages:';
+      continue;
+    }
+    if (!inPackages) continue;
+    const entry = /^ {2}'?([^'\s].*?)'?:\s*$/.exec(line)?.[1];
+    if (entry !== undefined) {
+      done();
+      key = entry;
+      // "name@1.2.3" (or "@scope/name@1.2.3-beta.1"), as the registry's versions are.
+      fromRegistry = /^(?:@[^@/\s]+\/)?[^@/\s]+@\d[^/:\s]*$/.test(entry);
+    } else if (key !== null && /^ {4}resolution:/.test(line)) {
+      fromRegistry &&= /^ {4}resolution: \{integrity: /.test(line);
+    }
+  }
+  done();
+  return found;
+}
+
 /** The versions `head` has that `base` doesn't, as [name, version]. */
 export function addedPackages(base: string, head: string): [string, string][] {
   const before = lockedPackages(base);

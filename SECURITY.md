@@ -103,7 +103,8 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
 - pnpm only lets allow-listed packages run install scripts and won't pick
   versions published less than 7 days ago when it updates the lockfile. CI
   also refuses a pull request that adds a version that new to the lockfile
-  by other means (`scripts/lockfile-age.ts`).
+  by other means, or a package from a web address or a git repository
+  instead of the npm registry (`scripts/lockfile-age.ts`).
 - Production deploys only happen from `main`, after every check passes,
   including the dependency audit, and only for `main`'s newest commit (so
   re-running an older run can't put older code back). Only the deploy steps

@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { addedPackages, lockedPackages, releaseAgeRules, tooNew } from './lockfile-age.ts';
+import {
+  addedPackages,
+  lockedPackages,
+  releaseAgeRules,
+  tooNew,
+  unregisteredPackages,
+} from './lockfile-age.ts';
 
 const lockfile = (packages: string[]) => `lockfileVersion: '9.0'
 
@@ -79,5 +85,37 @@ describe('the lockfile age check', () => {
     const current = readFileSync('pnpm-lock.yaml', 'utf8');
     expect(lockedPackages(current).size).toBeGreaterThan(100);
     expect(addedPackages(current, current)).toEqual([]);
+    expect(unregisteredPackages(current)).toEqual([]);
+  });
+
+  it('finds packages from a web address or a git repository, which it can’t check (audit H-1)', () => {
+    // What pnpm 10 writes for those, and for a version from the registry.
+    const head = `lockfileVersion: '9.0'
+
+packages:
+
+  evil@https://example.com/evil-1.0.0.tgz:
+    resolution: {tarball: https://example.com/evil-1.0.0.tgz}
+    version: 1.0.0
+
+  sneaky@https://codeload.github.com/someone/sneaky/tar.gz/0123456789abcdef0123456789abcdef01234567:
+    resolution: {tarball: https://codeload.github.com/someone/sneaky/tar.gz/0123456789abcdef0123456789abcdef01234567}
+    version: 2.0.0
+
+  '@scope/plain@1.2.3-beta.1':
+    resolution: {integrity: sha512-x}
+
+  odd@4.5.6:
+    resolution: {tarball: https://example.com/odd.tgz}
+
+snapshots:
+
+  evil@https://example.com/evil-1.0.0.tgz: {}
+`;
+    expect(unregisteredPackages(head)).toEqual([
+      'evil@https://example.com/evil-1.0.0.tgz',
+      'sneaky@https://codeload.github.com/someone/sneaky/tar.gz/0123456789abcdef0123456789abcdef01234567',
+      'odd@4.5.6',
+    ]);
   });
 });

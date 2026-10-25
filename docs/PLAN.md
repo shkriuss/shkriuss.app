@@ -241,7 +241,7 @@ flag that before starting.
 | Security and privacy      | Playwright                                                        | a header is missing, a console error (including CSP violations), a cookie, or a request to another domain |
 | Offline / install         | Playwright                                                        | manifest or icons missing, or the site doesn't load offline                                               |
 | Dependencies              | `pnpm audit --audit-level high`                                   | a known high or critical vulnerability                                                                    |
-| Package age               | `scripts/lockfile-age.ts` (pull requests)                         | a pull request adds a package version published less than 7 days ago                                      |
+| Package age               | `scripts/lockfile-age.ts` (pull requests)                         | a pull request adds a package version published less than 7 days ago, or one not from the npm registry    |
 | Secrets                   | gitleaks                                                          | something that looks like a secret is in any commit                                                       |
 | Workflows                 | zizmor                                                            | a risky GitHub Actions pattern                                                                            |
 
