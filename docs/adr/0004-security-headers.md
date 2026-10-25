@@ -44,6 +44,10 @@ writes them to every site's `_headers` file:
   third-party resources are blocked. That's enforced three ways: ESLint rules,
   `pnpm check:dist`, and browser tests that fail on any console error or
   cross-origin request.
+- The browser tests check that every site sends what `headers.ts` writes,
+  and a unit test (`headers.test.ts`) pins exactly what it writes, for an
+  app, the hub and an app with WebAssembly, and that only the hub may turn
+  on passkeys. A weaker header can't pass by changing both (audit J-3).
 - Writing UI code takes a little more care (use `<template>`, `textContent`,
   CSS classes).
 - `upgrade-insecure-requests` is left out: all our URLs are same-origin HTTPS
