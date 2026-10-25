@@ -566,6 +566,22 @@ describe('setups', () => {
       'Breakout retest',
     );
   });
+
+  // Audit F2-2: a Thai tone mark was dropped like an accent.
+  it('are told apart when they differ in a tone mark or vowel sign', () => {
+    const trades = [
+      trade({ id: 'a', setup: 'ข้าว' }),
+      trade({ id: 'b', setup: 'ขาว' }),
+      trade({ id: 'c', setup: 'Café' }),
+      trade({ id: 'd', setup: 'cafe' }),
+    ];
+    expect(bySetup(trades).map((group) => [group.key, group.count])).toEqual([
+      ['Café', 2],
+      ['ขาว', 1],
+      ['ข้าว', 1],
+    ]);
+    expect(matchesSearch(trade({ notes: 'ข้าว' }), 'ขาว')).toBe(false);
+  });
 });
 
 describe('spreadsheet', () => {

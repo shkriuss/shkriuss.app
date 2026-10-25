@@ -30,7 +30,7 @@ import {
   parseWhole,
   type Currency,
 } from '@shkriuss/ui/numbers';
-import { compareText } from '@shkriuss/ui/text';
+import { compareText, foldText } from '@shkriuss/ui/text';
 import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
 export interface Vehicle {
@@ -248,14 +248,11 @@ export function migrateRepairs(old: unknown, version: number): RepairsState | un
 
 // ---------- Words ----------
 
-/** Text for comparing: lower case, without accents, apostrophes or extra spaces. */
-const fold = (text: string): string =>
-  text
-    .normalize('NFD')
-    .replace(/[\p{Diacritic}'’]/gu, '')
-    .toLowerCase()
-    .replace(/\s+/g, ' ')
-    .trim();
+/**
+ * Text for comparing: lower case, without accents, apostrophes or extra
+ * spaces (foldText, so a Hindi or Thai name keeps its vowel signs).
+ */
+const fold = (text: string): string => foldText(text.replace(/['’ʼ]/g, ''));
 
 /** Tidies typed text: no spaces at the ends, and no runs of spaces in one-line fields. */
 const oneLine = (text: string): string => text.trim().replace(/\s+/g, ' ');
@@ -550,12 +547,13 @@ export function matchesSearch(
       ...repair.parts.flatMap((part) => [part.name, part.number]),
     ].join(' '),
   );
-  const words = haystack.split(/[^\p{L}\p{N}]+/u);
+  // Words are letters (with their vowel signs, in Hindi or Thai) and digits.
+  const words = haystack.split(/[^\p{L}\p{M}\p{N}]+/u);
   return fold(query)
     .split(' ')
     .filter(Boolean)
     .every((typed) =>
-      /^[\p{L}\p{N}]+$/u.test(typed)
+      /^[\p{L}\p{M}\p{N}]+$/u.test(typed)
         ? words.some((word) => word.startsWith(typed))
         : haystack.includes(typed),
     );

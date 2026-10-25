@@ -10,6 +10,7 @@ import {
   emptySettings,
   emptyVehicles,
   findRepairs,
+  findVehicleByName,
   formatHours,
   formatMileage,
   formatMoney,
@@ -127,6 +128,23 @@ describe('vehicles', () => {
       readVehicle({ name: 'x'.repeat(41), model: '', plate: '', notes: '' }, 'x', vehicles)
         .problems,
     ).toEqual({ name: 'Use 40 characters or fewer.' });
+  });
+
+  // Audit F2-2: a virama or a Thai tone mark was dropped like an accent.
+  it('tells apart names that differ in a vowel sign or a tone mark', () => {
+    const named = (name: string) => ({ vehicles: [vehicle({ id: 'x', name })] });
+    const details = { model: '', plate: '', notes: '' };
+    // Hindi: truck, and the same letters without the virama.
+    expect(readVehicle({ ...details, name: 'टरक 1' }, 'y', named('ट्रक 1')).vehicle?.name).toBe(
+      'टरक 1',
+    );
+    expect(findVehicleByName(named('ट्रक 1'), 'टरक 1')).toBeUndefined();
+    // Thai: chicken, and the same letters without the tone mark.
+    expect(findVehicleByName(named('ไก่ 1'), 'ไก 1')).toBeUndefined();
+    expect(findVehicleByName(named('ไก่ 1'), ' ไก่  1 ')?.id).toBe('x');
+    // Accents, case and apostrophes still don't matter.
+    expect(findVehicleByName(named('Mike’s Van'), 'mikes van')?.id).toBe('x');
+    expect(findVehicleByName(named('Café'), 'CAFE')?.id).toBe('x');
   });
 
   it('are saved, renamed, and removed with their repairs', () => {
@@ -393,6 +411,17 @@ describe('finding repairs', () => {
     expect(ids('eplaced')).toEqual([]);
     expect(ids('', 'b105')).toEqual(['c', 'a']);
     expect(ids('a/c', 'b105')).toEqual(['c']);
+  });
+
+  it('finds words with vowel signs from their start, like any other', () => {
+    // Hindi: "changed the brake oil" (तेल is oil).
+    const written = repairs(repair({ id: 'h', work: 'ब्रेक तेल बदला' }));
+    const found = (query: string) =>
+      findRepairs(written, vehicles, { vehicle: null, query }).map((item) => item.id);
+    expect(found('तेल')).toEqual(['h']);
+    expect(found('ते')).toEqual(['h']);
+    // Not from the middle of a word, as "7" doesn't find "97366".
+    expect(found('ेल')).toEqual([]);
   });
 
   it('knows the last mileage noted', () => {

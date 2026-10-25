@@ -11,8 +11,9 @@ Plan your meals for the week, and what to buy for them. Lives at
   - the plan (`shkriuss:meal-plan`): a name for a day and a meal of the day
     (breakfast, lunch, dinner or snack). A planned meal uses the
     ingredients of your meal with the same name (capitals and accents
-    don't matter), so renaming a meal renames it in the plan too
-    (`renamePlanned`). Planned meals more than a year old are let go
+    don't matter, but the vowel signs of scripts like Hindi or Thai do:
+    they're letters; `foldText`), so renaming a meal renames it in the
+    plan too (`renamePlanned`). Planned meals more than a year old are let go
     (`prunePlan`), so the plan (5,000 meals at most) doesn't fill up;
   - shopping (`shkriuss:meal-shopping`): what's ticked off on each week's
     list, and what was added to it by hand. The list itself is made from

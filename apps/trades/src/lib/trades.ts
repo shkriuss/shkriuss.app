@@ -21,6 +21,7 @@ import {
   type Currency,
 } from '@shkriuss/ui/numbers';
 import { DATE_LOCALE } from '@shkriuss/ui/locale';
+import { foldText } from '@shkriuss/ui/text';
 
 export type Side = 'long' | 'short';
 export const SIDES: readonly Side[] = ['long', 'short'];
@@ -530,12 +531,8 @@ export const closedTrades = (trades: readonly Trade[]): Trade[] =>
         b.entryDate.localeCompare(a.entryDate),
     );
 
-/** Text for comparing: lower case and without accents. */
-const fold = (text: string): string =>
-  text
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '')
-    .toLowerCase();
+/** Text for comparing: lower case and without accents (a Thai word keeps its tone marks). */
+const fold = foldText;
 
 /** True if every word typed is in the trade's symbol, setup or notes. */
 export function matchesSearch(trade: Trade, query: string): boolean {

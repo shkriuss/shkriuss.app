@@ -80,7 +80,9 @@ field with a number so it reads back the same; `roundDecimal`; and
 weekdays and months are in English like the rest of the page, even on a
 phone set to another language), `@shkriuss/ui/text` (`compareText`, for
 sorting lists alphabetically, and `foldText`, for comparing and searching
-without minding case, accents or extra spaces),
+without minding case, accents or extra spaces: the accents of Latin, Greek
+and Cyrillic letters, while the vowel signs of scripts like Hindi or Thai,
+which are letters, still count),
 `@shkriuss/ui/local-reminders` (notifications while the app is open, with
 the same texts and the same iPhone and "blocked" cases in every app),
 `@shkriuss/ui/long-lists` (for lists that
