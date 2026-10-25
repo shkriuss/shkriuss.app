@@ -179,6 +179,32 @@ describe('your meals', () => {
     expect(ingredientsText(meal('Toast'))).toBe('No ingredients yet');
   });
 
+  // Audit F2-6: two devices that each added "Soup" before they first synced
+  // have twins, and the second couldn't be saved.
+  it('lets a meal keep a name it shares with another', () => {
+    const twins = { meals: [...state.meals, { ...meal('soup'), id: 'soup-2' }] };
+    const draft = { name: 'Soup', ingredients: 'Leeks', notes: '' };
+    expect(mealProblems(twins, draft, 'soup-2')).toEqual({});
+    expect(mealProblems(twins, draft, 'soup')).toEqual({});
+    // A new name is still checked, and so is a new meal.
+    expect(mealProblems(twins, { ...draft, name: 'Bolognese' }, 'soup-2').name).toBe(
+      'You already have “Bolognese”.',
+    );
+    expect(mealProblems(twins, draft).name).toBe('You already have “Soup”.');
+  });
+
+  // Audit F2-2: vowel signs were dropped like accents, so different words were "the same".
+  it('tells apart words that differ in a vowel sign (Hindi, Thai…)', () => {
+    // Sugar, chickpeas and rice in Hindi; chicken and rice in Thai.
+    expect(parseIngredients('चीनी\nचना\nचावल\nचीनी')).toEqual(['चीनी', 'चना', 'चावल']);
+    expect(parseIngredients('ไก่\nข้าว\nขาว')).toEqual(['ไก่', 'ข้าว', 'ขาว']);
+    // दाल (lentils) and दल (a group) are different names.
+    const dal = { meals: [meal('दाल')] };
+    expect(mealProblems(dal, { name: 'दल', ingredients: '', notes: '' })).toEqual({});
+    expect(findMeal(dal, 'दल')).toBeUndefined();
+    expect(findMeal(dal, ' दाल ')?.name).toBe('दाल');
+  });
+
   it('keeps a second version under another name', () => {
     expect(secondVersion(bolognese, 'b2')).toEqual({
       ...bolognese,
@@ -355,6 +381,24 @@ describe('shopping', () => {
       ['Spaghetti', 2, ['Bolognese']],
     ]);
     expect(shoppingText(rows)).toBe('Carrots\nMinced beef ×2\nOnions ×3\nSpaghetti ×2');
+  });
+
+  // Audit F2-2: sugar and chickpeas (Hindi) made one line, and one tick.
+  it('keeps ingredients that differ in a vowel sign on lines of their own', () => {
+    const hindi = { meals: [meal('Kheer', ['चीनी']), meal('Chana masala', ['चना'])] };
+    const week = { planned: [planned('Kheer', MONDAY), planned('Chana masala', '2026-10-20')] };
+    const rows = shoppingList(week, hindi, emptyShopping(), MONDAY);
+    expect(rows.map((row) => [row.name, row.count])).toEqual([
+      ['चना', 1],
+      ['चीनी', 1],
+    ]);
+    const sugar = rows.find((row) => row.name === 'चीनी');
+    if (!sugar) throw new Error('No sugar');
+    const ticked = shoppingList(week, hindi, setDone(emptyShopping(), MONDAY, sugar, true), MONDAY);
+    expect(ticked.map((row) => [row.name, row.done])).toEqual([
+      ['चना', false],
+      ['चीनी', true],
+    ]);
   });
 
   it('ticks things off, adds others by hand, and remembers each week apart', () => {

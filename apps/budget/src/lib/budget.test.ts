@@ -1,11 +1,14 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { addDays } from '@shkriuss/dates';
 import { footprint, sampleText } from '@shkriuss/sync/testing';
+import { appSecret, Device, pretendBrowser } from '../../../../tests/unit/sync-devices.ts';
 import { nextFireTime } from '../../../../packages/push/src/schedule.ts';
 import { MAX_SEALED_CHARS } from '../../../../packages/sync/src/validate.ts';
 import {
   addSuggested,
+  budgetLine,
   byCategory,
+  CATEGORIES_VERSION,
   currencyOf,
   dayChoiceLabel,
   dayLabel,
@@ -41,6 +44,7 @@ import {
   suggestedDay,
   SUGGESTED,
   summary,
+  toCategoryForm,
   toCsv,
   toEntryForm,
   whenLabel,
@@ -83,7 +87,9 @@ describe('categories', () => {
       name: 'Enter a name for the category.',
       limit: 'Enter an amount above 0.',
     });
-    expect(readCategory({ name: 'Rent', limit: '0.001' }, 'p', categories).problems).toEqual({
+    expect(
+      readCategory({ name: 'Rent', limit: '0.001' }, 'p', categories, { locale: 'en-US' }).problems,
+    ).toEqual({
       limit: 'Enter at least 0.01.',
     });
     expect(readCategory({ name: 'groceries', limit: '' }, 'p', categories).problems).toEqual({
@@ -98,6 +104,24 @@ describe('categories', () => {
     expect(
       readCategory({ name: 'x'.repeat(LIMITS.name + 1), limit: '' }, 'p', categories).problems,
     ).toEqual({ name: `Use ${LIMITS.name} characters or fewer.` });
+  });
+
+  it('lets a category keep a name it shares with another', () => {
+    const twins = {
+      categories: [...categories.categories, { id: 'food-2', name: 'groceries', limit: null }],
+    };
+    expect(readCategory({ name: 'Groceries', limit: '300' }, 'food-2', twins).category).toEqual({
+      id: 'food-2',
+      name: 'Groceries',
+      limit: 300,
+    });
+    // A new name is still checked, and so is a new category.
+    expect(readCategory({ name: 'Fun', limit: '' }, 'food-2', twins).problems).toEqual({
+      name: 'You already have a category with that name.',
+    });
+    expect(readCategory({ name: 'Groceries', limit: '' }, 'new', twins).problems).toEqual({
+      name: 'You already have a category with that name.',
+    });
   });
 
   it('adds, changes and removes categories', () => {
@@ -156,10 +180,37 @@ describe('entries', () => {
     // Income has no category; an unknown category is none.
     expect(readEntry({ ...form, kind: 'income' }, 'x', 0, categories).entry?.category).toBeNull();
     expect(readEntry({ ...form, category: 'gone' }, 'x', 0, categories).entry?.category).toBeNull();
-    expect(toEntryForm(readEntry(form, 'x', 0, categories).entry as Entry)).toEqual({
+    expect(toEntryForm(readEntry(form, 'x', 0, categories).entry as Entry, 'en-US')).toEqual({
       ...form,
       note: 'Bread',
     });
+  });
+
+  // Audit F2-1: "2,000" was saved as 2.00.
+  it('reads thousands the way the person’s language writes them', () => {
+    const amount = (text: string, locale: string) =>
+      readEntry({ ...form, amount: text }, 'x', 0, categories, { locale }).entry?.amount;
+    expect(amount('2,000', 'en-US')).toBe(2000);
+    expect(amount('1,500.50', 'en-US')).toBe(1500.5);
+    expect(amount('12,50', 'en-US')).toBe(12.5);
+    expect(amount('1.500', 'de-DE')).toBe(1500);
+    expect(amount('1,500', 'de-DE')).toBe(1.5);
+    expect(amount('١٬٥٠٠', 'ar-EG')).toBe(1500);
+    expect(amount('١٢٫٥٠', 'ar-EG')).toBe(12.5);
+    expect(
+      readCategory({ name: 'Rent', limit: '1,200' }, 'r', categories, { locale: 'en-US' }).category
+        ?.limit,
+    ).toBe(1200);
+    // Shown in the form again, then saved unchanged: the same amount.
+    const saved = readEntry({ ...form, amount: '1.234,5' }, 'x', 0, categories, {
+      locale: 'de-DE',
+    }).entry as Entry;
+    expect(toEntryForm(saved, 'de-DE').amount).toBe('1234,5');
+    expect(
+      readEntry(toEntryForm(saved, 'de-DE'), 'x', 0, categories, { locale: 'de-DE' }).entry,
+    ).toEqual(saved);
+    const rent = { id: 'r', name: 'Rent', limit: 1200.5 };
+    expect(toCategoryForm(rent, 'de-DE')).toEqual({ name: 'Rent', limit: '1200,5' });
   });
 
   it('says what’s wrong', () => {
@@ -171,10 +222,17 @@ describe('entries', () => {
       amount: 'Enter an amount above 0.',
     });
     // Kept to the cent, so it would be saved as 0, which saved data never holds.
-    expect(readEntry({ ...form, amount: '0.004' }, 'x', 0, categories).problems).toEqual({
+    expect(
+      readEntry({ ...form, amount: '0.004' }, 'x', 0, categories, { locale: 'en-US' }).problems,
+    ).toEqual({
       amount: 'Enter at least 0.01.',
     });
-    expect(readEntry({ ...form, amount: '1.234,50' }, 'x', 0, categories).problems).toEqual({
+    // Rounded to the cent as written (1.005 * 100 is 100.49999999999999).
+    expect(readEntry({ ...form, amount: '1.005' }, 'x', 0, categories).entry?.amount).toBe(1.01);
+    expect(readEntry({ ...form, amount: '0.005' }, 'x', 0, categories).entry?.amount).toBe(0.01);
+    expect(
+      readEntry({ ...form, amount: '1.234,50' }, 'x', 0, categories, { locale: 'en-US' }).problems,
+    ).toEqual({
       amount: 'Enter a number, like 12.50 or 12,50.',
     });
     expect(readEntry({ ...form, amount: '2000000000' }, 'x', 0, categories).problems).toEqual({
@@ -183,6 +241,35 @@ describe('entries', () => {
     expect(readEntry(form, 'x', LIMITS.entries, categories).problems).toEqual({
       amount: `You can keep up to ${new Intl.NumberFormat().format(LIMITS.entries)} entries. To make room, delete a year (under Currency and spreadsheet).`,
     });
+  });
+
+  // Audit F2-13: yen kept cents, so 0.01 yen was saved and shown as "¥0",
+  // and two entries of 0.5 showed as ¥1 and ¥1, adding up to ¥1.
+  it('keeps amounts to their currency’s own decimals', () => {
+    const yen = { currency: 'JPY', locale: 'en-US' } as const;
+    expect(readEntry({ ...form, amount: '0.5' }, 'x', 0, categories, yen).entry?.amount).toBe(1);
+    expect(readEntry({ ...form, amount: '1500.4' }, 'x', 0, categories, yen).entry?.amount).toBe(
+      1500,
+    );
+    expect(readEntry({ ...form, amount: '0.4' }, 'x', 0, categories, yen).problems).toEqual({
+      amount: 'Enter at least 1.',
+    });
+    expect(readCategory({ name: 'Rent', limit: '80000.5' }, 'r', categories, yen).category).toEqual(
+      {
+        id: 'r',
+        name: 'Rent',
+        limit: 80_001,
+      },
+    );
+    // Two entries of 0.5 yen: ¥1 each, ¥2 in all.
+    const twice = ['a', 'b'].map(
+      (id) => readEntry({ ...form, amount: '0.5' }, id, 0, categories, yen).entry as Entry,
+    );
+    expect(summary(twice, categories).spent).toBe(2);
+    // Dollars keep their cents.
+    expect(
+      readEntry({ ...form, amount: '0.5' }, 'x', 0, categories, { currency: 'USD' }).entry?.amount,
+    ).toBe(0.5);
   });
 
   it('reads a refund, in a category like an expense', () => {
@@ -262,13 +349,45 @@ describe('months', () => {
       spent: 295.2,
       left: 1704.8,
       budgeted: 500,
+      // Groceries and Fun: not "No category" or the deleted one.
+      spentWithLimit: 255.1,
     });
     expect(summary([], emptyCategories())).toEqual({
       income: 0,
       spent: 0,
       left: 0,
       budgeted: null,
+      spentWithLimit: 0,
     });
+  });
+
+  // Audit F2-7: rent in a category with no limit put the month "over budget".
+  it('holds only spending in categories with a limit against the budget', () => {
+    const home: CategoriesState = {
+      categories: [
+        { id: 'food', name: 'Groceries', limit: 400 },
+        { id: 'home', name: 'Home', limit: null },
+      ],
+    };
+    const month = [
+      entry({ id: 'rent', amount: 1500, category: 'home' }),
+      entry({ id: 'shop', amount: 100, category: 'food' }),
+    ];
+    expect(budgetLine(summary(month, home), 'USD', 'en-US')).toEqual({
+      text: '$300.00 left of the $400.00 budgeted ($1,500.00 more spent without a limit)',
+      over: false,
+    });
+    const over = [...month, entry({ id: 'feast', amount: 350, category: 'food' })];
+    expect(budgetLine(summary(over, home), 'USD', 'en-US')).toEqual({
+      text: '$50.00 over the $400.00 budgeted ($1,500.00 more spent without a limit)',
+      over: true,
+    });
+    // Only spending with a limit: nothing more to say.
+    expect(budgetLine(summary(month.slice(1), home), 'USD', 'en-US')).toEqual({
+      text: '$300.00 left of the $400.00 budgeted',
+      over: false,
+    });
+    expect(budgetLine(summary(month, emptyCategories()), 'USD', 'en-US')).toBeNull();
   });
 
   it('shows spending against each category’s limit', () => {
@@ -278,6 +397,21 @@ describe('months', () => {
       { category: categories.categories[2], spent: 0, left: null },
       { category: null, spent: 40.1, left: null },
     ]);
+  });
+
+  // Audit F2-11: 3.30 spent, then refunded as 1.10 and 2.20, showed "Spent -$0.00".
+  it('never adds up to -0, which would show as "-$0.00"', () => {
+    const evened = [
+      entry({ id: 'a', amount: 3.3 }),
+      entry({ id: 'b', kind: 'refund', amount: 1.1 }),
+      entry({ id: 'c', kind: 'refund', amount: 2.2 }),
+    ];
+    const totals = summary(evened, categories);
+    expect(Object.is(totals.spent, 0)).toBe(true);
+    expect(Object.is(totals.spentWithLimit, 0)).toBe(true);
+    expect(formatMoney(totals.spent, 'USD', { locale: 'en-US' })).toBe('$0.00');
+    expect(formatMoney(totals.left, 'USD', { signed: true, locale: 'en-US' })).toBe('$0.00');
+    expect(Object.is(byCategory(evened, categories)[0]?.spent, 0)).toBe(true);
   });
 
   it('takes refunds off their category’s spending, and off what was spent', () => {
@@ -298,6 +432,7 @@ describe('months', () => {
       spent: 255.1,
       left: 1744.9,
       budgeted: 500,
+      spentWithLimit: 215.1,
     });
     // A refund for something bought the month before: less than nothing spent.
     const refundOnly = [entry({ kind: 'refund', amount: 30, category: 'food' })];
@@ -555,5 +690,48 @@ describe('monthly reminder', () => {
       'The monthly reminder is off.',
     );
     expect(whenLabel('2026-11-01T09:00', 'en-US')).toBe('Sunday, November 1, at 9:00 AM');
+  });
+});
+
+describe('categories added on two devices before they first sync', () => {
+  beforeEach(() => pretendBrowser('https://budget.shkriuss.app'));
+  afterEach(() => vi.unstubAllGlobals());
+
+  // Audit F2-6: each "Groceries" refused any change while the other existed.
+  it('can each still be changed', async () => {
+    const setup = {
+      key: 'budget-categories',
+      version: CATEGORIES_VERSION,
+      fallback: emptyCategories,
+      validate: isCategoriesState,
+      items: (value: CategoriesState) => value.categories,
+      withItems: (value: CategoriesState, list: CategoriesState['categories']) => ({
+        ...value,
+        categories: list,
+      }),
+    };
+    const secret = appSecret();
+    const phone = new Device('budget', secret, setup);
+    const tablet = new Device('budget', secret, setup);
+    // "Add suggested categories" on each, then sync turned on.
+    phone.save(addSuggested(emptyCategories(), () => crypto.randomUUID()));
+    tablet.save(addSuggested(emptyCategories(), () => crypto.randomUUID()));
+    await phone.syncNow();
+    await tablet.syncNow();
+    await phone.syncNow();
+    const twins = phone.value.categories.filter((category) => category.name === 'Groceries');
+    expect(twins).toHaveLength(2);
+    // A monthly limit on either, as the form sets it; a new name for one.
+    for (const twin of twins) {
+      expect(
+        readCategory({ name: 'Groceries', limit: '400' }, twin.id, phone.value).category?.limit,
+      ).toBe(400);
+    }
+    const second = twins[1] as CategoriesState['categories'][number];
+    expect(readCategory({ name: 'Food', limit: '' }, second.id, phone.value).category).toEqual({
+      id: second.id,
+      name: 'Food',
+      limit: null,
+    });
   });
 });

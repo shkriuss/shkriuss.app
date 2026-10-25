@@ -208,6 +208,9 @@ export function validateRegistry(input: unknown): Registry {
         problems.push(`${where}.dataStored must be a list of strings (it can be empty).`);
       } else if (app['storage'] !== 'none' && dataStored.length === 0) {
         problems.push(`${where}.dataStored must say what is stored when storage is not "none".`);
+      } else if (app['storage'] === 'none' && dataStored.length > 0) {
+        // The privacy page would say "Nothing is stored" above the list (audit J-6).
+        problems.push(`${where}.storage can't be "none" when dataStored lists something.`);
       }
       for (const flag of ['pushNotifications', 'sync', 'library', 'webAssembly'] as const) {
         if (app[flag] !== undefined && typeof app[flag] !== 'boolean') {

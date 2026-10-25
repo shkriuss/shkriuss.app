@@ -447,6 +447,48 @@ describe('deleting a library', () => {
   });
 });
 
+describe('an alarm while R2 fails (audit B-2)', () => {
+  /**
+   * Wakes the library whenever its alarm is due, as Cloudflare does: an alarm
+   * that throws is tried 6 more times (2 seconds later, doubling), then never
+   * again.
+   */
+  async function runAlarms() {
+    const { library, storage } = [...server.objects.values()][0] ?? {};
+    let retries = 0;
+    while (library && storage?.alarm !== null && storage?.alarm !== undefined) {
+      vi.setSystemTime(Math.max(Date.now(), storage.alarm));
+      storage.alarm = null;
+      try {
+        await library.alarm();
+        retries = 0;
+      } catch {
+        if (retries === 6) return;
+        retries += 1;
+        storage.alarm = Date.now() + 1000 * 2 ** retries;
+      }
+    }
+  }
+
+  it('still deletes every file of a deleted library once R2 is back', async () => {
+    vi.useFakeTimers({ now: Date.UTC(2026, 9, 25), toFake: ['Date'] });
+    const device = client(libraryId(), token());
+    await device.unlock();
+    await device.put(ITEM, [100]);
+    // R2 fails for 10 minutes, far longer than Cloudflare's own retries.
+    const list = server.bucket.list.bind(server.bucket);
+    const outage = Date.now() + 10 * 60_000;
+    vi.spyOn(server.bucket, 'list').mockImplementation(async (options) => {
+      if (Date.now() < outage) throw new Error('R2 is unavailable');
+      return list(options);
+    });
+    expect((await device.call('', { method: 'DELETE' })).status).toBe(202);
+    await runAlarms();
+    expect([...server.bucket.files.keys()]).toEqual([]);
+    expect(await device.changes()).toMatchObject({ wiping: false, rows: [] });
+  });
+});
+
 describe('files left in R2 outside the list (audit finding B-7)', () => {
   /** Wakes each library whose alarm is due by now, until none is. */
   async function wake() {

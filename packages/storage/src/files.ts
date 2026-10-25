@@ -22,6 +22,8 @@ export interface FileStore<T extends StoredFile> {
   get(id: string): Promise<T | undefined>;
   /** Every file of this kind (for small records, like a list of photos' details). */
   all(): Promise<T[]>;
+  /** The ids of every file of this kind, without reading the files. */
+  ids(): Promise<string[]>;
   /** Saves several files together: all are saved, or none. */
   putAll(files: readonly T[]): Promise<void>;
   removeAll(ids: readonly string[]): Promise<void>;
@@ -120,6 +122,10 @@ export function createFileStore<T extends StoredFile>(kind: string): FileStore<T
     },
     async all() {
       return (await transact<T[]>('readonly', (table) => table.getAll(range()))) ?? [];
+    },
+    async ids() {
+      const keys = await transact<IDBValidKey[]>('readonly', (table) => table.getAllKeys(range()));
+      return (keys ?? []).map((key) => String(key).slice(kind.length + 1));
     },
     putAll: (files) => putTogether(files.map(entry)),
     async removeAll(ids) {

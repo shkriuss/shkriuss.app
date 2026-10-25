@@ -169,6 +169,33 @@ test('adds another device with a one-time code', async ({ page, browser, baseURL
   await other.close();
 });
 
+test('“Done” makes the code stop working, so someone who saw it can’t use it', async ({
+  page,
+  browser,
+  baseURL,
+  guard,
+}) => {
+  // Audit A-2: hiding the code used to leave it working for its 10 minutes.
+  await createAccount(page);
+  await page.getByRole('button', { name: 'Show a code' }).click();
+  await expect(page.locator('[data-link-status]')).toHaveText(/or until you tap Done\.$/);
+  const url = (await page.locator('[data-link-url]').textContent()) ?? '';
+  const cancelled = page.waitForResponse(
+    (response) =>
+      response.url().includes('/api/account/link/') && response.request().method() === 'DELETE',
+  );
+  await page.getByRole('button', { name: 'Done' }).click();
+  expect((await cancelled).status()).toBe(204);
+
+  guard.allowConsole('410');
+  const other = await otherDevice(browser, baseURL);
+  const second = await other.newPage();
+  await second.goto(url);
+  await expect(message(second)).toHaveText(/^This code has expired/);
+  await expect(view(second, 'signed-out')).toBeVisible();
+  await other.close();
+});
+
 test('asks before switching a signed-in device to another account', async ({
   page,
   browser,

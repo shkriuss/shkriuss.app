@@ -155,6 +155,8 @@ const STAT_TILES = [
         </button>
         <p class="muted trade__meta" data-meta></p>
         <p class="muted trade__setup" data-setup></p>
+        <!-- Closed more than bought (two devices closed it at once): what to do. -->
+        <p class="field__error" data-problem></p>
       </div>
       <div class="trade__result" data-result>
         <span class="trade__profit" data-profit></span>
@@ -235,6 +237,7 @@ const STAT_TILES = [
                 {label}
               </label>
               <input
+                dir="auto"
                 class="input"
                 id={`trade-${name}`}
                 name={name}
@@ -279,6 +282,7 @@ const STAT_TILES = [
                 {label}
               </label>
               <input
+                dir="auto"
                 class="input"
                 id={`trade-${name}`}
                 name={name}
@@ -350,6 +354,7 @@ const STAT_TILES = [
       <p>
         The <span dir="auto" data-delete-name></span> trade will be removed from your journal.
       </p>
+      <p data-delete-more hidden></p>
       <div class="cluster">
         <Button type="submit" value="cancel">
           Cancel

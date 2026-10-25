@@ -84,3 +84,25 @@ test('“Show a code” keeps focus while it waits, then moves it to “Copy lin
   await expect(show).toBeHidden();
   await expect(page.getByRole('button', { name: 'Copy link' })).toBeFocused();
 });
+
+test('says it couldn’t reach the account service when the network hangs', async ({
+  page,
+  guard,
+}) => {
+  // Audit G-11: "Making a code…" used to stay for ever, and presses did nothing.
+  await page.clock.install();
+  await createAccount(page);
+  await page.route(
+    (url) => url.pathname.startsWith('/api/account/link'),
+    () => new Promise<void>(() => undefined),
+  );
+  guard.allowConsole('net::ERR');
+  await page.getByRole('button', { name: 'Show a code' }).click();
+  await expect(page.locator('[data-link-status]')).toHaveText('Making a code…');
+  await page.clock.fastForward(20_000);
+  await expect(page.locator('[data-link-status]')).toHaveText(/^Couldn’t reach shkriuss\.app/);
+  await expect(page.getByRole('button', { name: 'Show a code' })).not.toHaveAttribute(
+    'aria-disabled',
+    'true',
+  );
+});

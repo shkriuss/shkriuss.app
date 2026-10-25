@@ -5,13 +5,16 @@
  * It also keeps account keys this device knows were replaced (by replacing
  * the key here, or by being signed out because it was replaced elsewhere).
  * When an app connects, it gets its keys from those too, so it can move its
- * old online copy to the new key (packages/sync).
+ * old online copy to the new key (packages/sync). Each comes with a tag for
+ * the key that replaced it (successorTag), so they're kept only when this
+ * device signs in to that account: another account mustn't get this one's
+ * old data (audit A-3).
  *
  * And it keeps which apps this device turned on sync for, so the Account
  * page can offer to turn it off again (see `syncedApps`).
  */
 import { fromBase64Url, toBase64Url } from '@shkriuss/crypto';
-import { accountCodeOf, SECRET_BYTES } from './secret.ts';
+import { accountCodeOf, SECRET_BYTES, successorTag } from './secret.ts';
 
 const STORAGE_KEY = 'shkriuss-device:account';
 const SYNCED_KEY = 'shkriuss-device:synced-apps';
@@ -30,21 +33,31 @@ interface Saved {
   secret?: string;
   since?: string;
   replaced: string[];
+  /** For a replaced key, the tag of the key that replaced it (when known). */
+  successors: Record<string, string>;
 }
 
 function read(): Saved {
   try {
     const value: unknown = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null');
-    if (typeof value !== 'object' || value === null) return { replaced: [] };
-    const { secret, since, replaced } = value as Record<string, unknown>;
+    if (typeof value !== 'object' || value === null) return { replaced: [], successors: {} };
+    const { secret, since, replaced, successors } = value as Record<string, unknown>;
     return {
       ...(typeof secret === 'string' && typeof since === 'string' ? { secret, since } : {}),
       replaced: Array.isArray(replaced)
         ? replaced.filter((key): key is string => typeof key === 'string')
         : [],
+      successors:
+        typeof successors === 'object' && successors !== null && !Array.isArray(successors)
+          ? Object.fromEntries(
+              Object.entries(successors).filter(
+                (entry): entry is [string, string] => typeof entry[1] === 'string',
+              ),
+            )
+          : {},
     };
   } catch {
-    return { replaced: [] };
+    return { replaced: [], successors: {} };
   }
 }
 
@@ -74,25 +87,68 @@ export async function currentAccount(): Promise<Account | null> {
   return { secret, code: await accountCodeOf(secret), since };
 }
 
-/** Signs this device in. Returns false if the browser won't store it. */
-export function saveAccount(secret: Uint8Array<ArrayBuffer>, now = new Date()): boolean {
-  const text = toBase64Url(secret);
+/**
+ * The replaced keys that led to `secret`: replaced by it, or by a key that
+ * was (a key replaced twice). Keys with no tag, or another account's, aren't.
+ */
+async function leadingTo(secret: Uint8Array<ArrayBuffer>, saved: Saved): Promise<string[]> {
+  const leads = new Set<string>();
+  let reached = [secret];
+  while (reached.length > 0) {
+    const next: Uint8Array<ArrayBuffer>[] = [];
+    for (const key of saved.replaced) {
+      const old = leads.has(key) ? null : decode(key);
+      const tag = saved.successors[key];
+      if (!old || tag === undefined) continue;
+      for (const successor of reached) {
+        if ((await successorTag(old, successor)) === tag) {
+          leads.add(key);
+          next.push(old);
+          break;
+        }
+      }
+    }
+    reached = next;
+  }
+  return saved.replaced.filter((key) => leads.has(key));
+}
+
+/**
+ * Signs this device in. Replaced keys are kept only if they led to this
+ * account. Returns false if the browser won't store it.
+ */
+export async function saveAccount(
+  secret: Uint8Array<ArrayBuffer>,
+  now = new Date(),
+): Promise<boolean> {
+  const saved = read();
+  const replaced = await leadingTo(secret, saved);
   return write({
-    secret: text,
+    secret: toBase64Url(secret),
     since: now.toISOString(),
-    replaced: read().replaced.filter((key) => key !== text),
+    replaced,
+    successors: Object.fromEntries(
+      Object.entries(saved.successors).filter(([key]) => replaced.includes(key)),
+    ),
   });
 }
 
 /**
- * Remembers that an account key was replaced. If this device is signed in
- * with it, it's signed out.
+ * Remembers that an account key was replaced, and the tag of the key that
+ * replaced it (null if not known). If this device is signed in with it, it's
+ * signed out.
  */
-export function noteReplaced(secret: Uint8Array<ArrayBuffer>): void {
+export function noteReplaced(secret: Uint8Array<ArrayBuffer>, successor: string | null): void {
   const text = toBase64Url(secret);
   const saved = read();
   const replaced = [text, ...saved.replaced.filter((key) => key !== text)].slice(0, MAX_REPLACED);
-  write(saved.secret === text ? { replaced } : { ...saved, replaced });
+  const successors = Object.fromEntries(
+    replaced.flatMap((key) => {
+      const tag = key === text ? successor : saved.successors[key];
+      return tag ? [[key, tag]] : [];
+    }),
+  );
+  write(saved.secret === text ? { replaced, successors } : { ...saved, replaced, successors });
 }
 
 /** Account keys this device knows were replaced, newest first. */

@@ -59,11 +59,23 @@ browsers like IronFox receive Web Push through **UnifiedPush**.
   (every message fails or is refused), the device is forgotten too: a real
   push service accepts them. One signature covers a whole wake-up (it lasts
   12 hours), not one per message.
+- **Time limits** (audit B-1): a push service gets 5 seconds to answer a
+  message, or it counts as failing. Once one message fails, the rest of
+  that wake-up's messages wait for the retry with it, and a wake-up stops
+  sending after 10 seconds (the rest go out straight after). So a wake-up
+  never comes near the 30 seconds Cloudflare allows, and a push address
+  that never answers is forgotten after two days like any other. A
+  wake-up that fails (say the storage meter can't be reached) runs again a
+  minute later, then later each time, up to a day apart, instead of
+  stopping for good after Cloudflare's own retries (audit B-2).
 - **Limits:** 500 scheduled notifications per device, 4 KB per message and
   1.5 MB of messages in all (so a schedule fits in one stored value; the app
   sends the soonest ones that fit), https push addresses with a domain name only (no redirects), schedule
   changes rate-limited, and at most 2,000 messages per app per day (UTC):
-  past that, sending waits until 00:00 UTC.
+  past that, sending waits until 00:00 UTC, and messages more than an hour
+  late by then are skipped, as always. Each whole second spent waiting
+  for push services counts as one more message, so one app can't keep the
+  server waiting for more than about 2,000 seconds a day.
 - **Checked by the device's object:** the Worker only reads an upload, in
   one go, and passes it on; the device's object checks the rest. Reading
   and checking the biggest schedule in the Worker took more than the free
@@ -81,7 +93,10 @@ browsers like IronFox receive Web Push through **UnifiedPush**.
   the push address; never their content. The privacy page says so.
 - Free within Cloudflare's free plan (Durable Objects: 100,000 requests a
   day; each wake-up of a device is about two: the wake-up, and one signature
-  for up to 25 messages).
+  for up to 25 messages). Durable Objects also have 13,000 GB-s of time a
+  day, counted while an object waits too: 2,000 seconds of waiting is about
+  256 GB-s per app, and a unit test checks that all the apps with
+  notifications together stay well inside it (`tests/unit/free-plan.test.ts`).
 - New code to maintain on the server side, covered by unit tests (encryption
   test vector, schedules, signing, request checks) and browser tests with a
   local push receiver.
@@ -89,9 +104,10 @@ browsers like IronFox receive Web Push through **UnifiedPush**.
   addresses can be any https server (UnifiedPush servers are), so anyone can
   upload a made-up schedule. One whose push address never accepts a message
   is forgotten after two days, and one app sends at most 2,000 messages a
-  day in all. So someone determined can use up only that app's messages for
-  the day (its notifications then pause until 00:00 UTC), not the Durable
-  Object requests the other apps need. It can't cost money on the free plan
+  day in all, with each second spent waiting counted as a message. So
+  someone determined can use up only that app's messages for the day (its
+  notifications then pause until 00:00 UTC), not the Durable Object requests
+  or time the other apps need. It can't cost money on the free plan
   and can't reveal anything. A Cloudflare rate-limiting rule on `/api/`
   slows this down ([deployment](../deployment.md)). Someone could also fill
   that app's room for schedules; then new devices wait until the junk is

@@ -1,6 +1,8 @@
 # 0007. Testing strategy
 
-Status: Accepted (2026-10-16)
+Status: Accepted (2026-10-16). Changed in October 2026 (audit findings J-4
+and Z-6): the JS budget counts every file a page's scripts import, and is
+35 KB (see `pnpm check:dist` below).
 
 ## Context
 

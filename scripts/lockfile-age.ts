@@ -1,19 +1,37 @@
 /**
  * Fails when pnpm-lock.yaml adds a package version published less than
- * minimumReleaseAge ago (see scripts/lib/lockfile-age.ts). Run by CI on pull
- * requests, with the base branch fetched:
+ * minimumReleaseAge ago, or a package that doesn't come from the npm
+ * registry (see scripts/lib/lockfile-age.ts). Run by CI on pull requests,
+ * with the base branch fetched:
  *
  *   node scripts/lockfile-age.ts origin/main
  */
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
-import { addedPackages, releaseAgeRules, tooNew } from './lib/lockfile-age.ts';
+import {
+  addedPackages,
+  releaseAgeRules,
+  tooNew,
+  unregisteredPackages,
+} from './lib/lockfile-age.ts';
 
 const base = process.argv[2] ?? 'origin/main';
 const lockfileAt = (ref: string) =>
   execFileSync('git', ['show', `${ref}:pnpm-lock.yaml`], { encoding: 'utf8', maxBuffer: 1 << 28 });
-const added = addedPackages(lockfileAt(base), readFileSync('pnpm-lock.yaml', 'utf8'));
+const before = lockfileAt(base);
+const now = readFileSync('pnpm-lock.yaml', 'utf8');
+const added = addedPackages(before, now);
 const rules = releaseAgeRules(readFileSync('pnpm-workspace.yaml', 'utf8'));
+
+const elsewhere = unregisteredPackages(now).filter(
+  (key) => !unregisteredPackages(before).includes(key),
+);
+if (elsewhere.length > 0) {
+  console.log(
+    `::error title=Not from npm::These come from a web address or a git repository, which this check can't see the age of: ${elsewhere.join(', ')}. Use a version from the npm registry.`,
+  );
+  process.exit(1);
+}
 
 const published = new Map<string, number | undefined>();
 for (const name of new Set(added.map(([name]) => name))) {
