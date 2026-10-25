@@ -23,6 +23,7 @@ import {
   recoveryKeyOf,
   removePasskey,
   replaceAccountKey,
+  replacedNote,
   replacedSecrets,
   sameSecret,
   saveAccount,
@@ -311,7 +312,7 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
       say(replaced, true);
       return false;
     }
-    if (!saveAccount(secret)) {
+    if (!(await saveAccount(secret))) {
       say(STORAGE_BLOCKED, true);
       return false;
     }
@@ -678,8 +679,9 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
   window.addEventListener('hashchange', () => void openLink(location.hash));
 
   // Replaced on another device (a lost device): sign out here.
-  if (account && (await wasReplaced(account.secret))) {
-    noteReplaced(account.secret);
+  const note = account ? await replacedNote(account.secret).catch(() => null) : null;
+  if (account && note?.replaced) {
+    noteReplaced(account.secret, note.successor);
     account = null;
     say(REPLACED.here, true);
   }

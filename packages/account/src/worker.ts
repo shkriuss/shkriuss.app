@@ -19,8 +19,9 @@
  *   PUT    /api/account/passkey          store a passkey lock (Bearer: lookup token)
  *   GET    /api/account/passkey          fetch it
  *   DELETE /api/account/passkey          delete it
- *   GET    /api/account/status           { replaced } (Bearer: status token)
- *   PUT    /api/account/status           mark this key as replaced (for good)
+ *   GET    /api/account/status           { replaced, successor? } (Bearer: status token)
+ *   PUT    /api/account/status           mark this key as replaced (for good), with
+ *                                        { successor }: a tag of the key that replaced it
  *
  * There are no account ids, names, emails or passwords: nothing here can be
  * linked to a person, or to the data in any app.
@@ -57,6 +58,7 @@ import {
   LINK_ID_PATTERN,
   LINK_LIFETIME_MS,
   MAX_REQUEST_BYTES,
+  SUCCESSOR_PATTERN,
 } from './validate.ts';
 
 export interface AccountEnv extends SiteEnv {
@@ -135,8 +137,20 @@ export async function handleAccount(
     const stub = env.ACCOUNT_STATUS.get(env.ACCOUNT_STATUS.idFromName(await sha256Text(token)));
     if (request.method === 'GET') return stub.fetch('https://status/');
     if (request.method === 'PUT') {
+      // { successor } (devices before it was added send no body).
+      let successor: string | null = null;
+      if (request.headers.get('Content-Type')?.includes('application/json')) {
+        const read = await jsonBody(request, MAX_REQUEST_BYTES);
+        if (!read.ok) return read.response;
+        const value = (read.body as { successor?: unknown } | null)?.successor;
+        if (typeof value !== 'string' || !SUCCESSOR_PATTERN.test(value)) {
+          return problem(400, 'Body must be { "successor": "…" }.');
+        }
+        successor = value;
+      }
       return stub.fetch('https://status/', {
         method: 'PUT',
+        body: JSON.stringify({ successor }),
         headers: limitHeaders(request, STORAGE_LIMITS.replaced),
       });
     }
@@ -248,18 +262,23 @@ export class AccountStatus {
       const now = Date.now();
       if (request.method === 'PUT') {
         // A replaced key never becomes the account again (until nobody has
-        // asked about it for 13 months: by then no device still has it).
+        // asked about it for 13 months: by then no device still has it). The
+        // first note says which key replaced it; later ones change nothing.
         if (!replaced) {
           if (!(await reserve(this.state, this.env.ACCOUNT_STATUS, 0, limitOf(request)))) {
             return problem(507, 'There’s no room to note the old key just now.');
           }
+          const { successor } = (await request.json()) as { successor: string | null };
           await this.state.storage.put('replaced', now);
+          if (successor) await this.state.storage.put('successor', successor);
         }
         await this.#touch(now);
         return noContent();
       }
-      if (replaced) await this.#touch(now);
-      return json({ replaced });
+      if (!replaced) return json({ replaced });
+      await this.#touch(now);
+      const successor = await this.state.storage.get<string>('successor');
+      return json(successor ? { replaced, successor } : { replaced });
     });
   }
 

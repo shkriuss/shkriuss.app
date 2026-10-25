@@ -111,7 +111,10 @@ person still has, **"Replace the account key"** on the Account page:
 1. Makes a new secret and shows its recovery key. Nothing changes until the
    person confirms they saved it.
 2. Tells the account service that the old key is replaced, for good
-   (`PUT /api/account/status`, with a token derived from the old key).
+   (`PUT /api/account/status`, with a token derived from the old key). The
+   note also holds a tag made from both keys (`successorTag`), which only a
+   device that has both can check: one with only the old key learns nothing
+   about the new one from it.
 3. Signs this device in with the new key, and remembers the old one.
 
 Then:
@@ -120,6 +123,13 @@ Then:
   the Account page, and signs out if the key was replaced. The old recovery
   key, links made with it, and passkeys that unlock it can't sign in any more.
   If the service can't be reached, the device carries on and checks next time.
+  It remembers the old key, with the note's tag, until it signs in again.
+- **A device keeps old keys only for the account that replaced them.** When
+  it signs in, it keeps a replaced key only if the tag says the new account
+  replaced it (or replaced a key that did). Signed in to another account (a
+  link from someone else's device, say), it forgets them: their apps would
+  otherwise move this account's old data into that one (audit finding A-3).
+  Keys noted before the tag was added have none, and are forgotten too.
 - **Apps.** The Account page lists the apps that sync, each with a link that
   opens the app and starts "Turn on sync" (`#sync=connect`). When an app
   connects, the hub also gives it its keys from the replaced account keys.

@@ -20,6 +20,9 @@ const SEALED_PATTERN = /^[A-Za-z0-9_-]+$/;
 /** Request bodies are tiny; anything bigger is refused before it's read. */
 export const MAX_REQUEST_BYTES = 1024;
 
+/** The tag of the key that replaced an account key (successorTag): 32 bytes, base64url. */
+export const SUCCESSOR_PATTERN = /^[A-Za-z0-9_-]{43}$/;
+
 export type Checked<T> = { ok: true; value: T } | { ok: false; error: string };
 
 /** Checks a body of the form { [field]: "<sealed value>" }. */

@@ -13,7 +13,8 @@ import {
   replacedSecrets,
   saveAccount,
 } from './device.ts';
-import { isReplaced, replaceAccountKey } from './status.ts';
+import { successorTag } from './secret.ts';
+import { isReplaced, replaceAccountKey, replacedNote } from './status.ts';
 import worker, {
   AccountPasskey,
   AccountStatus,
@@ -79,7 +80,7 @@ describe('replacing the account key', () => {
   it('marks the old key as replaced for good, and signs in with the new one', async () => {
     const old = randomBytes(32);
     const next = randomBytes(32);
-    saveAccount(old);
+    await saveAccount(old);
     expect(await isReplaced(old)).toBe(false);
 
     expect(await replaceAccountKey(old, next)).toEqual({ saved: true, noted: true });
@@ -103,22 +104,79 @@ describe('replacing the account key', () => {
 
   it('remembers replaced keys on the device until it signs out', async () => {
     const [a, b, c] = [randomBytes(32), randomBytes(32), randomBytes(32)];
-    saveAccount(a);
-    noteReplaced(a);
+    await saveAccount(a);
+    noteReplaced(a, await successorTag(a, b));
     expect(await currentAccount()).toBeNull();
     expect(replacedSecrets()).toEqual([a]);
 
-    saveAccount(b);
-    noteReplaced(c);
+    await saveAccount(b);
+    noteReplaced(c, null);
     expect((await currentAccount())?.secret).toEqual(b);
     expect(replacedSecrets()).toEqual([c, a]);
 
-    for (let index = 0; index < 10; index += 1) noteReplaced(randomBytes(32));
+    for (let index = 0; index < 10; index += 1) noteReplaced(randomBytes(32), null);
     expect(replacedSecrets()).toHaveLength(5);
 
     forgetAccount();
     expect(await currentAccount()).toBeNull();
     expect(replacedSecrets()).toEqual([]);
+  });
+});
+
+describe('replaced keys and other accounts (audit A-3)', () => {
+  it('a device signed out elsewhere keeps its old key for the account that replaced it', async () => {
+    const [old, next] = [randomBytes(32), randomBytes(32)];
+    // The tablet replaces the key; the phone, still on the old one, learns of it.
+    await saveAccount(old);
+    await replaceAccountKey(old, next);
+    vi.stubGlobal('localStorage', new MemoryStorage());
+    await saveAccount(old);
+    const note = await replacedNote(old);
+    expect(note).toEqual({ replaced: true, successor: await successorTag(old, next) });
+    noteReplaced(old, note.successor);
+
+    // Signed in with the new key, its apps can still move their old copies.
+    await saveAccount(next);
+    expect(replacedSecrets()).toEqual([old]);
+  });
+
+  it('forgets them when signing in to another account, so that account doesn’t get their data', async () => {
+    const [old, next, someoneElse] = [randomBytes(32), randomBytes(32), randomBytes(32)];
+    await saveAccount(old);
+    await replaceAccountKey(old, next);
+    expect(replacedSecrets()).toEqual([old]);
+
+    // A link from someone else's device signs this one in to their account.
+    await saveAccount(someoneElse);
+    expect(replacedSecrets()).toEqual([]);
+  });
+
+  it('keeps a key replaced twice for the account at the end', async () => {
+    const [first, second, third] = [randomBytes(32), randomBytes(32), randomBytes(32)];
+    await saveAccount(first);
+    await replaceAccountKey(first, second);
+    await replaceAccountKey(second, third);
+    expect(replacedSecrets()).toEqual([second, first]);
+  });
+
+  it('the server keeps only the first note’s tag, and refuses a malformed one', async () => {
+    const old = randomBytes(32);
+    await saveAccount(old);
+    const next = randomBytes(32);
+    await replaceAccountKey(old, next);
+    // A device with the old key (a lost one) can't change which key replaced it.
+    await replaceAccountKey(old, randomBytes(32));
+    expect((await replacedNote(old)).successor).toBe(await successorTag(old, next));
+
+    const malformed = await worker.fetch(
+      new Request('https://shkriuss.app/api/account/status', {
+        method: 'PUT',
+        body: JSON.stringify({ successor: 'short' }),
+        headers: { Authorization: `Bearer ${madeUpToken()}`, 'Content-Type': 'application/json' },
+      }),
+      server.env,
+    );
+    expect(malformed.status).toBe(400);
   });
 });
 
@@ -146,7 +204,7 @@ describe('the account service’s room', () => {
     });
     const old = randomBytes(32);
     const next = randomBytes(32);
-    saveAccount(old);
+    await saveAccount(old);
     expect(await replaceAccountKey(old, next)).toEqual({ saved: true, noted: false });
     expect((await currentAccount())?.secret).toEqual(next);
     expect(replacedSecrets()).toEqual([old]);
@@ -156,9 +214,9 @@ describe('the account service’s room', () => {
   it('deletes a note nobody has asked about for 13 months, and keeps one that’s asked about', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     const [asked, forgotten] = [randomBytes(32), randomBytes(32)];
-    saveAccount(asked);
+    await saveAccount(asked);
     await replaceAccountKey(asked, randomBytes(32));
-    saveAccount(forgotten);
+    await saveAccount(forgotten);
     await replaceAccountKey(forgotten, randomBytes(32));
     for (let month = 0; month < 14; month += 1) {
       vi.setSystemTime(Date.now() + UNUSED_MS / 12);
