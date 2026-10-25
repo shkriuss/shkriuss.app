@@ -103,7 +103,10 @@ is the simplest example to copy. Ask Claude, or:
 3. In `wrangler.jsonc`, copy Calendar's `main`, `assets.binding`,
    `assets.run_worker_first`, `durable_objects`, `migrations` and `previews`.
    A unit test checks these match. Migrations run in order, so if the app is
-   already live, add the new one after the ones it has (see Habits').
+   already live, add the new one after the ones it has (see Habits'), and
+   to `APPLIED_MIGRATIONS` in `tests/unit/registry-consistency.test.ts`.
+   Never rename, change or reorder one that's live: Cloudflare would refuse
+   the deploy.
 4. Add `"@shkriuss/push": "workspace:*"` to the app's `package.json`, and
    `"@shkriuss/server": "workspace:*"` too if its Worker combines push and
    sync. Each app with notifications adds its own storage limit on the
@@ -171,7 +174,9 @@ or:
    (an app with notifications too combines both, like Calendar's).
 3. In `wrangler.jsonc`, copy Tally's `main`, `assets.binding`,
    `assets.run_worker_first`, `durable_objects`, `migrations` and `previews`.
-   A unit test checks these match.
+   A unit test checks these match. Add the migration to
+   `APPLIED_MIGRATIONS` in `tests/unit/registry-consistency.test.ts` too,
+   after any the app already has, as in the notifications steps.
 4. Add `"@shkriuss/sync": "workspace:*"` to the app's `package.json`. Each
    app with sync adds its own storage limit on the server (120 MB): if
    `tests/unit/free-plan.test.ts` then fails, the limits need lowering

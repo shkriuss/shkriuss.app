@@ -64,6 +64,58 @@ const FEATURES: Record<
   },
 };
 
+/**
+ * Each site's Durable Object migrations, as merging deployed them. Cloudflare
+ * refuses a deploy whose applied migrations were renamed, changed or
+ * reordered, and only main deploys, so nothing else would notice (audit
+ * J-4). Never change these: a new migration goes at the end, in the site's
+ * wrangler.jsonc and here.
+ */
+const APPLIED_MIGRATIONS: Record<string, { tag: string; new_sqlite_classes: string[] }[]> = {
+  budget: [
+    { tag: 'sync-v1', new_sqlite_classes: ['SyncCopy'] },
+    { tag: 'push-v1', new_sqlite_classes: ['PushDevice', 'PushKeys'] },
+  ],
+  calendar: [
+    { tag: 'push-v1', new_sqlite_classes: ['PushDevice', 'PushKeys'] },
+    { tag: 'sync-v1', new_sqlite_classes: ['SyncCopy'] },
+  ],
+  grammar: [{ tag: 'sync-v1', new_sqlite_classes: ['SyncCopy'] }],
+  habits: [
+    { tag: 'sync-v1', new_sqlite_classes: ['SyncCopy'] },
+    { tag: 'push-v1', new_sqlite_classes: ['PushDevice', 'PushKeys'] },
+  ],
+  hub: [
+    { tag: 'account-v1', new_sqlite_classes: ['AccountLink', 'AccountPasskey'] },
+    { tag: 'account-v2', new_sqlite_classes: ['AccountStatus'] },
+  ],
+  meals: [
+    { tag: 'sync-v1', new_sqlite_classes: ['SyncCopy'] },
+    { tag: 'push-v1', new_sqlite_classes: ['PushDevice', 'PushKeys'] },
+  ],
+  notes: [{ tag: 'sync-v1', new_sqlite_classes: ['SyncCopy'] }],
+  photos: [
+    { tag: 'v1', new_sqlite_classes: ['SyncCopy', 'Library'] },
+    { tag: 'v2', new_sqlite_classes: ['LibraryGate'] },
+  ],
+  reminders: [
+    { tag: 'sync-v1', new_sqlite_classes: ['SyncCopy'] },
+    { tag: 'push-v1', new_sqlite_classes: ['PushDevice', 'PushKeys'] },
+  ],
+  repairs: [{ tag: 'sync-v1', new_sqlite_classes: ['SyncCopy'] }],
+  shelf: [{ tag: 'sync-v1', new_sqlite_classes: ['SyncCopy'] }],
+  tally: [{ tag: 'sync-v1', new_sqlite_classes: ['SyncCopy'] }],
+  tasks: [
+    { tag: 'sync-v1', new_sqlite_classes: ['SyncCopy'] },
+    { tag: 'push-v1', new_sqlite_classes: ['PushDevice', 'PushKeys'] },
+  ],
+  trades: [{ tag: 'sync-v1', new_sqlite_classes: ['SyncCopy'] }],
+  water: [
+    { tag: 'sync-v1', new_sqlite_classes: ['SyncCopy'] },
+    { tag: 'push-v1', new_sqlite_classes: ['PushDevice', 'PushKeys'] },
+  ],
+};
+
 function wranglerConfig(slug: string): WranglerConfig {
   return parseJsonc(
     readFileSync(join(repoRoot, 'apps', slug, 'wrangler.jsonc'), 'utf8'),
@@ -166,6 +218,10 @@ describe.each(appFolders)('apps/%s', (slug) => {
       expect(classes).toEqual(
         expect.arrayContaining(bindings.map((binding) => binding.class_name)),
       );
+      expect(
+        config.migrations,
+        'Never rename, change or reorder a migration: add a new one at the end, in wrangler.jsonc and in APPLIED_MIGRATIONS',
+      ).toEqual(APPLIED_MIGRATIONS[slug]);
       // The Worker exports every storage class, and a default handler.
       const worker = readFileSync(join(repoRoot, 'apps', slug, 'src/worker.ts'), 'utf8');
       expect(worker).toMatch(/export default|export \{ default/);
