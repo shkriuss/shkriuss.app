@@ -277,6 +277,54 @@ describe('repairs', () => {
     expect(again).toMatchObject({ vehicle: 'Bus 105', mileage: '', system: 'Brakes' });
     expect(again.parts).toEqual([{ name: 'Brake pads', number: 'BP-1', quantity: '2', price: '' }]);
     expect(readRepair(again, 'r', repairs(saved), vehicles, newId).repair).toEqual(saved);
+    // In German too, where "1.125" would be one thousand one hundred and twenty-five.
+    const exact = repair({
+      mileage: 120_000,
+      parts: [{ name: 'Oil', number: '', quantity: 1.125, price: 1.234 }],
+      hours: 1.125,
+      labour: 1234.5,
+    });
+    const german = toRepairForm(exact, vehicles, 'de-DE');
+    expect(german).toMatchObject({ mileage: '120000', hours: '1,125', labour: '1234,5' });
+    expect(readRepair(german, 'r', repairs(exact), vehicles, newId, 'de-DE').repair).toEqual(exact);
+  });
+
+  // Audit F2-1: "1,500" was read as 1.5, and a mileage of "120.000" as 120.
+  it('reads numbers the way the person’s language writes them', () => {
+    const typed = (fields: Partial<RepairForm>, locale: string) =>
+      readRepair(form(fields), 'r', emptyRepairs(), vehicles, newId, locale);
+    const part = (quantity: string, price: string) => ({
+      name: 'Gearbox',
+      number: '',
+      quantity,
+      price,
+    });
+    expect(
+      typed({ mileage: '120,000', parts: [part('1,500', '1,500')], labour: '2,000' }, 'en-US')
+        .repair,
+    ).toMatchObject({ mileage: 120_000, parts: [{ quantity: 1500, price: 1500 }], labour: 2000 });
+    expect(
+      typed(
+        { mileage: '120.000', parts: [part('1,5', '1.500')], labour: '2.000', hours: '1,5' },
+        'de-DE',
+      ).repair,
+    ).toMatchObject({
+      mileage: 120_000,
+      parts: [{ quantity: 1.5, price: 1500 }],
+      labour: 2000,
+      hours: 1.5,
+    });
+    // A mileage with decimals, or anything but digits, is asked for again.
+    for (const mileage of ['120.000', '12.5', '1e3', '0x10', '-5']) {
+      expect(typed({ mileage }, 'en-US').problems, mileage).toEqual({
+        mileage: 'Enter the mileage as a whole number, or leave it empty.',
+      });
+    }
+    for (const quantity of ['1e3', '0x10', 'Infinity']) {
+      expect(typed({ parts: [part(quantity, '')] }, 'en-US').problems, quantity).toEqual({
+        'part-quantity-0': 'Enter a number above 0.',
+      });
+    }
   });
 
   it('are saved, changed and removed', () => {
@@ -472,7 +520,7 @@ describe('hours worked and costs', () => {
         { name: 'Clip', number: '', quantity: 4, price: null },
       ],
     });
-    expect(toRepairForm(read as Repair, vehicles)).toMatchObject({
+    expect(toRepairForm(read as Repair, vehicles, 'en-US')).toMatchObject({
       hours: '1.5',
       labour: '20',
       parts: [{ price: '45.5' }, { price: '' }],

@@ -7,6 +7,7 @@
 import { today } from '@shkriuss/dates';
 import { createStore, downloadFile } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
+import { decimalText } from '@shkriuss/ui/numbers';
 import { focusProblem, reportSave } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { typedText } from '@shkriuss/ui/typed-text';
@@ -532,7 +533,7 @@ export function mountRepairs(root: Document): void {
     if (number && number.value.trim() === '') number.value = known.number;
     const price = partInput(Number(match[1]), 'price');
     if (price && price.value.trim() === '' && known.price !== null) {
-      price.value = String(known.price);
+      price.value = decimalText(known.price);
     }
   });
 

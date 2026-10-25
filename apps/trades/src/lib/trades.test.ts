@@ -110,7 +110,7 @@ describe('reading the form', () => {
       0,
     );
     expect(comma.trade?.fees).toBe(2.5);
-    expect(toForm(closed.trade as Trade)).toEqual({
+    expect(toForm(closed.trade as Trade, 'en-US')).toEqual({
       ...form,
       symbol: 'AAPL',
       setup: 'Breakout',
@@ -119,6 +119,50 @@ describe('reading the form', () => {
       exitPrice: '155',
       fees: '2.5',
     });
+  });
+
+  // Audit F2-1: an entry price of "1,234" was saved as 1.234.
+  it('reads numbers the way the person’s language writes them', () => {
+    const price = (text: string, locale: string) =>
+      readTrade({ ...form, entryPrice: text, stop: '' }, 'a', 0, locale).trade?.entryPrice;
+    expect(price('1,234', 'en-US')).toBe(1234);
+    expect(price('1,234.5', 'en-US')).toBe(1234.5);
+    expect(price('1.234', 'de-DE')).toBe(1234);
+    expect(price('1,234', 'de-DE')).toBe(1.234);
+    // A price with three decimals, shown in the form in German and saved unchanged.
+    const forex = trade({ symbol: 'EURUSD', entryPrice: 1.085, exitPrice: 1.092, stop: 1.081 });
+    expect(toForm(forex, 'de-DE')).toMatchObject({ entryPrice: '1,085', exitPrice: '1,092' });
+    expect(readTrade(toForm(forex, 'de-DE'), 't', 0, 'de-DE').trade).toEqual(forex);
+  });
+
+  // Audit F2-5: the form showed "1.5e-9", which it couldn't read back.
+  it('shows tiny and huge numbers in full, and saves them unchanged', () => {
+    const tiny = trade({
+      symbol: 'BABYDOGE',
+      entryPrice: 1.5e-9,
+      stop: 1.2e-9,
+      quantity: 1e12,
+      exitDate: null,
+      exitPrice: null,
+    });
+    const shown = toForm(tiny, 'en-US');
+    expect(shown).toMatchObject({
+      entryPrice: '0.0000000015',
+      stop: '0.0000000012',
+      quantity: '1000000000000',
+    });
+    expect(readTrade(shown, 't', 0, 'en-US').trade).toEqual(tiny);
+    // Closed as "Close" fills in the form: all of it, unless less is typed.
+    const exit = { ...shown, exitDate: '2026-10-05', exitPrice: '0.000000002' };
+    expect(readClose(exit, shown.quantity, { id: 't', newId: 'n' }, 0, 'en-US').trade).toEqual({
+      ...tiny,
+      exitDate: '2026-10-05',
+      exitPrice: 2e-9,
+    });
+    // 50 satoshis of bitcoin.
+    const satoshis = trade({ symbol: 'BTCUSD', entryPrice: 60_000, quantity: 5e-7 });
+    expect(toForm(satoshis, 'de-DE').quantity).toBe('0,0000005');
+    expect(readTrade(toForm(satoshis, 'de-DE'), 't', 0, 'de-DE').trade).toEqual(satoshis);
   });
 
   it('says what’s missing or wrong', () => {

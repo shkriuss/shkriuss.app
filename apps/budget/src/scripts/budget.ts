@@ -51,6 +51,7 @@ import {
   shiftMonth,
   suggestedDay,
   summary,
+  toCategoryForm,
   toCsv,
   toEntryForm,
   whenLabel,
@@ -385,9 +386,9 @@ export function mountBudget(root: Document): void {
   function openCategory(category: Category | undefined): void {
     editingCategory = category?.id ?? null;
     categoryTitle.textContent = category ? 'Change category' : 'New category';
-    (categoryForm.elements.namedItem('name') as HTMLInputElement).value = category?.name ?? '';
-    (categoryForm.elements.namedItem('limit') as HTMLInputElement).value =
-      category?.limit == null ? '' : String(category.limit);
+    const values = category ? toCategoryForm(category) : { name: '', limit: '' };
+    (categoryForm.elements.namedItem('name') as HTMLInputElement).value = values.name;
+    (categoryForm.elements.namedItem('limit') as HTMLInputElement).value = values.limit;
     required<HTMLElement>(categoryForm, '[data-action="delete-category"]').hidden = !category;
     showProblems(categoryForm, ['name', 'limit'], {});
     categoryDialog.showModal();

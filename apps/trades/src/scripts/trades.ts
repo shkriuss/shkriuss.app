@@ -7,6 +7,7 @@
 import { today } from '@shkriuss/dates';
 import { createStore, downloadFile } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
+import { decimalText } from '@shkriuss/ui/numbers';
 import { reportSave } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { typedText } from '@shkriuss/ui/typed-text';
@@ -360,7 +361,7 @@ export function mountTrades(root: Document): void {
     // Closing: all of it, unless less is typed.
     closeQuantityField.hidden = !closing;
     (field('closeQuantity') as HTMLInputElement).value =
-      closing && trade ? String(trade.quantity) : '';
+      closing && trade ? decimalText(trade.quantity) : '';
     fillForm(
       trade
         ? toForm(trade)

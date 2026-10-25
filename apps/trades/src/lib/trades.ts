@@ -13,7 +13,13 @@
  * closed, and the rest, still open.
  */
 import { addDays, isIsoDate, type IsoDate } from '@shkriuss/dates';
-import { CURRENCIES, formatMoney, parseDecimal, type Currency } from '@shkriuss/ui/numbers';
+import {
+  CURRENCIES,
+  decimalText,
+  formatMoney,
+  parseDecimal,
+  type Currency,
+} from '@shkriuss/ui/numbers';
 import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
 export type Side = 'long' | 'short';
@@ -114,18 +120,19 @@ export interface TradeForm {
 
 export type Problems = Partial<Record<keyof TradeForm, string>>;
 
-/** A typed number: null when empty, NaN when it isn't one ("1,25" is 1.25). */
-const parseNumber = parseDecimal;
-
 /**
  * Reads the form into a trade (with the given id), or says what's wrong,
- * field by field. `count` is how many other trades there are.
+ * field by field. `count` is how many other trades there are. Numbers are
+ * read as typed in `locale` (the browser's own when left out): "1,25" is
+ * 1.25, and "1,250" is 1250 in English (parseDecimal).
  */
 export function readTrade(
   form: TradeForm,
   id: string,
   count: number,
+  locale?: string,
 ): { trade: Trade; problems?: undefined } | { trade?: undefined; problems: Problems } {
+  const parseNumber = (text: string) => parseDecimal(text, locale);
   const problems: Problems = {};
   const symbol = form.symbol.trim().toUpperCase();
   if (symbol === '') problems.symbol = 'Enter the symbol, like AAPL.';
@@ -230,20 +237,21 @@ export type CloseProblems = Problems & { closeQuantity?: string };
  * - `rest`: the rest of the quantity, still open, with the trade's own id
  *   (`ids.id`), the same entry and stop loss, and no fees (they're the
  *   closed part's, so they aren't counted twice).
- * `count` is how many other trades there are.
+ * `count` is how many other trades there are; numbers are read as in readTrade.
  */
 export function readClose(
   form: TradeForm,
   closeQuantity: string,
   ids: { id: string; newId: string },
   count: number,
+  locale?: string,
 ):
   | { trade: Trade; rest: Trade | null; problems?: undefined }
   | { trade?: undefined; rest?: undefined; problems: CloseProblems } {
-  const read = readTrade(form, ids.id, count);
+  const read = readTrade(form, ids.id, count, locale);
   const problems: CloseProblems = { ...read.problems };
-  const whole = parseNumber(form.quantity);
-  const closed = parseNumber(closeQuantity);
+  const whole = parseDecimal(form.quantity, locale);
+  const closed = parseDecimal(closeQuantity, locale);
   if (closed === null) problems.closeQuantity = 'Enter how many you closed.';
   else if (!isPrice(closed)) problems.closeQuantity = 'Enter a number above 0.';
   else if (isPrice(whole) && closed > whole) {
@@ -265,20 +273,27 @@ export function readClose(
   };
 }
 
-/** A trade as the form shows it. */
-export const toForm = (trade: Trade): TradeForm => ({
-  symbol: trade.symbol,
-  side: trade.side,
-  entryDate: trade.entryDate,
-  entryPrice: String(trade.entryPrice),
-  quantity: String(trade.quantity),
-  stop: trade.stop === null ? '' : String(trade.stop),
-  exitDate: trade.exitDate ?? '',
-  exitPrice: trade.exitPrice === null ? '' : String(trade.exitPrice),
-  fees: trade.fees === 0 ? '' : String(trade.fees),
-  setup: trade.setup,
-  notes: trade.notes,
-});
+/**
+ * A trade as the form shows it: numbers as they'd be typed in `locale` (the
+ * browser's own when left out), with all their digits and never an exponent
+ * ("0.0000000015", not "1.5e-9"), so saving the form unchanged keeps them.
+ */
+export function toForm(trade: Trade, locale?: string): TradeForm {
+  const number = (value: number) => decimalText(value, locale);
+  return {
+    symbol: trade.symbol,
+    side: trade.side,
+    entryDate: trade.entryDate,
+    entryPrice: number(trade.entryPrice),
+    quantity: number(trade.quantity),
+    stop: trade.stop === null ? '' : number(trade.stop),
+    exitDate: trade.exitDate ?? '',
+    exitPrice: trade.exitPrice === null ? '' : number(trade.exitPrice),
+    fees: trade.fees === 0 ? '' : number(trade.fees),
+    setup: trade.setup,
+    notes: trade.notes,
+  };
+}
 
 // ---------- Changing ----------
 

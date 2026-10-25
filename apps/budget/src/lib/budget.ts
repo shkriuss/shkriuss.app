@@ -28,7 +28,13 @@ import {
   type Stamp,
 } from '@shkriuss/dates';
 import type { Notice } from '@shkriuss/push';
-import { CURRENCIES, formatMoney, parseDecimal, type Currency } from '@shkriuss/ui/numbers';
+import {
+  CURRENCIES,
+  decimalText,
+  formatMoney,
+  parseDecimal,
+  type Currency,
+} from '@shkriuss/ui/numbers';
 import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
 export type Kind = 'expense' | 'income' | 'refund';
@@ -149,12 +155,21 @@ export function isEntriesState(value: unknown): value is EntriesState {
 export const migrateEntries = (old: unknown, version: number): EntriesState | undefined =>
   version === 1 && isEntriesState(old) ? old : undefined;
 
-/** A typed amount: null when empty, NaN when it isn't a number ("12,50" is 12.5). */
-const parseAmount = parseDecimal;
+/** How the forms are read: amounts as typed in `locale` (the browser's own when left out). */
+export interface ReadOptions {
+  locale?: string | undefined;
+}
+
+/**
+ * A typed amount: null when empty, NaN when it isn't a number. "12,50" is
+ * 12.5, and "1,500" is 1500 in English (parseDecimal).
+ */
+const parseAmount = (text: string, { locale }: ReadOptions): number | null =>
+  parseDecimal(text, locale);
 
 /** What's wrong with a typed amount, or undefined (empty is fine when `optional`). */
-function amountProblem(text: string, optional: boolean): string | undefined {
-  const value = parseAmount(text);
+function amountProblem(text: string, optional: boolean, options: ReadOptions): string | undefined {
+  const value = parseAmount(text, options);
   if (value === null) return optional ? undefined : 'Enter an amount.';
   if (!Number.isFinite(value)) return 'Enter a number, like 12.50 or 12,50.';
   if (value <= 0) return 'Enter an amount above 0.';
@@ -178,6 +193,7 @@ export function readCategory(
   form: CategoryForm,
   id: string,
   state: CategoriesState,
+  options: ReadOptions = {},
 ):
   | { category: Category; problems?: undefined }
   | { category?: undefined; problems: CategoryProblems } {
@@ -195,12 +211,18 @@ export function readCategory(
   } else if (!editing && state.categories.length >= LIMITS.categories) {
     problems.name = `You can have up to ${LIMITS.categories} categories.`;
   }
-  const limitProblem = amountProblem(form.limit, true);
+  const limitProblem = amountProblem(form.limit, true, options);
   if (limitProblem) problems.limit = limitProblem;
   if (Object.keys(problems).length > 0) return { problems };
-  const limit = parseAmount(form.limit);
+  const limit = parseAmount(form.limit, options);
   return { category: { id, name, limit: limit === null ? null : tidy(limit) } };
 }
+
+/** A category as its form shows it. */
+export const toCategoryForm = (category: Category, locale?: string): CategoryForm => ({
+  name: category.name,
+  limit: category.limit === null ? '' : decimalText(category.limit, locale),
+});
 
 /** Adds a category, or puts a changed one in its place. */
 export function saveCategory(state: CategoriesState, category: Category): CategoriesState {
@@ -244,11 +266,12 @@ export function readEntry(
   id: string,
   count: number,
   categories: CategoriesState,
+  options: ReadOptions = {},
 ): { entry: Entry; problems?: undefined } | { entry?: undefined; problems: EntryProblems } {
   const problems: EntryProblems = {};
   const kind = KINDS.find((entry) => entry === form.kind);
   if (!kind) problems.kind = 'Choose expense, income or refund.';
-  const amountText = amountProblem(form.amount, false);
+  const amountText = amountProblem(form.amount, false, options);
   if (amountText) problems.amount = amountText;
   else if (count >= LIMITS.entries) {
     problems.amount = `You can keep up to ${new Intl.NumberFormat().format(LIMITS.entries)} entries. To make room, delete a year (under Currency and spreadsheet).`;
@@ -265,7 +288,7 @@ export function readEntry(
     entry: {
       id,
       kind,
-      amount: tidy(parseAmount(form.amount) ?? 0),
+      amount: tidy(parseAmount(form.amount, options) ?? 0),
       date: form.date,
       category,
       note,
@@ -273,10 +296,10 @@ export function readEntry(
   };
 }
 
-/** An entry as the form shows it. */
-export const toEntryForm = (entry: Entry): EntryForm => ({
+/** An entry as the form shows it (amounts as typed in `locale`, the browser's own when left out). */
+export const toEntryForm = (entry: Entry, locale?: string): EntryForm => ({
   kind: entry.kind,
-  amount: String(entry.amount),
+  amount: decimalText(entry.amount, locale),
   date: entry.date,
   category: entry.category ?? '',
   note: entry.note,

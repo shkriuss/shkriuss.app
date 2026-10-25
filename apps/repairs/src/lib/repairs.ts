@@ -22,7 +22,14 @@
  * vehicle in the repair form adds it.
  */
 import { isIsoDate, type IsoDate } from '@shkriuss/dates';
-import { CURRENCIES, formatMoney, parseDecimal, type Currency } from '@shkriuss/ui/numbers';
+import {
+  CURRENCIES,
+  decimalText,
+  formatMoney,
+  parseDecimal,
+  parseWhole,
+  type Currency,
+} from '@shkriuss/ui/numbers';
 import { compareText } from '@shkriuss/ui/text';
 import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
@@ -358,13 +365,13 @@ export interface RepairForm {
  */
 export type RepairProblems = Partial<Record<string, string>>;
 
-/** A typed number: null when empty, NaN when it isn't one. A comma works as a decimal point. */
-const parseNumber = parseDecimal;
-
 /**
  * Reads the repair form into a repair (with the given id), or says what's
  * wrong, field by field. A vehicle that isn't saved yet is made, with an id
- * from `newId`, and returned as `newVehicle`.
+ * from `newId`, and returned as `newVehicle`. Numbers are read as typed in
+ * `locale` (the browser's own when left out): "1,5" is 1.5, and "1,500" is
+ * 1500 in English (parseDecimal); the mileage is a whole number ("120.000"
+ * is 120000 in German).
  */
 export function readRepair(
   form: RepairForm,
@@ -372,9 +379,11 @@ export function readRepair(
   repairs: RepairsState,
   vehicles: VehiclesState,
   newId: () => string,
+  locale?: string,
 ):
   | { repair: Repair; newVehicle: Vehicle | null; problems?: undefined }
   | { repair?: undefined; newVehicle?: undefined; problems: RepairProblems } {
+  const parseNumber = (text: string) => parseDecimal(text, locale);
   const problems: RepairProblems = {};
 
   const name = oneLine(form.vehicle);
@@ -394,8 +403,7 @@ export function readRepair(
 
   if (!isIsoDate(form.date)) problems['date'] = 'Choose the day.';
 
-  const mileageText = form.mileage.trim().replace(/[\s,]/g, '');
-  const mileage = mileageText === '' ? null : Number(mileageText);
+  const mileage = parseWhole(form.mileage, locale);
   if (mileage !== null && !isMileage(mileage)) {
     problems['mileage'] = 'Enter the mileage as a whole number, or leave it empty.';
   }
@@ -412,13 +420,13 @@ export function readRepair(
   form.parts.forEach((row, index) => {
     const partName = oneLine(row.name);
     const number = oneLine(row.number).toUpperCase();
-    const quantityText = row.quantity.trim().replace(',', '.');
+    const typedQuantity = parseNumber(row.quantity);
     const price = parseNumber(row.price);
     // An empty row is left out.
     if (
       partName === '' &&
       number === '' &&
-      (quantityText === '' || quantityText === '1') &&
+      (typedQuantity === null || typedQuantity === 1) &&
       price === null
     ) {
       return;
@@ -430,7 +438,7 @@ export function readRepair(
     if (number.length > LIMITS.partNumber) {
       problems[`part-number-${index}`] = `Use ${LIMITS.partNumber} characters or fewer.`;
     }
-    const quantity = quantityText === '' ? 1 : Number(quantityText);
+    const quantity = typedQuantity ?? 1;
     if (!isQuantity(quantity)) problems[`part-quantity-${index}`] = 'Enter a number above 0.';
     if (!isMoneyOrNull(price))
       problems[`part-price-${index}`] = 'Enter a price, or leave it empty.';
@@ -476,28 +484,30 @@ export function readRepair(
   };
 }
 
-const numberText = (value: number | null): string => (value === null ? '' : String(value));
-
-/** A part as the form shows it. */
-const toPartForm = (part: Part): PartForm => ({
-  name: part.name,
-  number: part.number,
-  quantity: String(part.quantity),
-  price: numberText(part.price),
-});
-
-export const toRepairForm = (repair: Repair, vehicles: VehiclesState): RepairForm => ({
-  vehicle: vehicleName(vehicles, repair.vehicle),
-  date: repair.date,
-  mileage: numberText(repair.mileage),
-  system: repair.system,
-  problem: repair.problem,
-  work: repair.work,
-  parts: repair.parts.map(toPartForm),
-  hours: numberText(repair.hours),
-  labour: numberText(repair.labour),
-  photos: [...repair.photos],
-});
+/**
+ * A repair as the form shows it: numbers as they'd be typed in `locale` (the
+ * browser's own when left out), so saving the form unchanged keeps them.
+ */
+export function toRepairForm(repair: Repair, vehicles: VehiclesState, locale?: string): RepairForm {
+  const number = (value: number | null) => (value === null ? '' : decimalText(value, locale));
+  return {
+    vehicle: vehicleName(vehicles, repair.vehicle),
+    date: repair.date,
+    mileage: number(repair.mileage),
+    system: repair.system,
+    problem: repair.problem,
+    work: repair.work,
+    parts: repair.parts.map((part) => ({
+      name: part.name,
+      number: part.number,
+      quantity: number(part.quantity),
+      price: number(part.price),
+    })),
+    hours: number(repair.hours),
+    labour: number(repair.labour),
+    photos: [...repair.photos],
+  };
+}
 
 export function saveRepair(state: RepairsState, repair: Repair): RepairsState {
   const exists = state.repairs.some((item) => item.id === repair.id);

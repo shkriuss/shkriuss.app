@@ -41,6 +41,7 @@ import {
   suggestedDay,
   SUGGESTED,
   summary,
+  toCategoryForm,
   toCsv,
   toEntryForm,
   whenLabel,
@@ -156,10 +157,37 @@ describe('entries', () => {
     // Income has no category; an unknown category is none.
     expect(readEntry({ ...form, kind: 'income' }, 'x', 0, categories).entry?.category).toBeNull();
     expect(readEntry({ ...form, category: 'gone' }, 'x', 0, categories).entry?.category).toBeNull();
-    expect(toEntryForm(readEntry(form, 'x', 0, categories).entry as Entry)).toEqual({
+    expect(toEntryForm(readEntry(form, 'x', 0, categories).entry as Entry, 'en-US')).toEqual({
       ...form,
       note: 'Bread',
     });
+  });
+
+  // Audit F2-1: "2,000" was saved as 2.00.
+  it('reads thousands the way the person’s language writes them', () => {
+    const amount = (text: string, locale: string) =>
+      readEntry({ ...form, amount: text }, 'x', 0, categories, { locale }).entry?.amount;
+    expect(amount('2,000', 'en-US')).toBe(2000);
+    expect(amount('1,500.50', 'en-US')).toBe(1500.5);
+    expect(amount('12,50', 'en-US')).toBe(12.5);
+    expect(amount('1.500', 'de-DE')).toBe(1500);
+    expect(amount('1,500', 'de-DE')).toBe(1.5);
+    expect(amount('١٬٥٠٠', 'ar-EG')).toBe(1500);
+    expect(amount('١٢٫٥٠', 'ar-EG')).toBe(12.5);
+    expect(
+      readCategory({ name: 'Rent', limit: '1,200' }, 'r', categories, { locale: 'en-US' }).category
+        ?.limit,
+    ).toBe(1200);
+    // Shown in the form again, then saved unchanged: the same amount.
+    const saved = readEntry({ ...form, amount: '1.234,5' }, 'x', 0, categories, {
+      locale: 'de-DE',
+    }).entry as Entry;
+    expect(toEntryForm(saved, 'de-DE').amount).toBe('1234,5');
+    expect(
+      readEntry(toEntryForm(saved, 'de-DE'), 'x', 0, categories, { locale: 'de-DE' }).entry,
+    ).toEqual(saved);
+    const rent = { id: 'r', name: 'Rent', limit: 1200.5 };
+    expect(toCategoryForm(rent, 'de-DE')).toEqual({ name: 'Rent', limit: '1200,5' });
   });
 
   it('says what’s wrong', () => {
@@ -174,7 +202,9 @@ describe('entries', () => {
     expect(readEntry({ ...form, amount: '0.004' }, 'x', 0, categories).problems).toEqual({
       amount: 'Enter at least 0.01.',
     });
-    expect(readEntry({ ...form, amount: '1.234,50' }, 'x', 0, categories).problems).toEqual({
+    expect(
+      readEntry({ ...form, amount: '1.234,50' }, 'x', 0, categories, { locale: 'en-US' }).problems,
+    ).toEqual({
       amount: 'Enter a number, like 12.50 or 12,50.',
     });
     expect(readEntry({ ...form, amount: '2000000000' }, 'x', 0, categories).problems).toEqual({

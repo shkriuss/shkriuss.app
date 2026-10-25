@@ -359,14 +359,14 @@ import { CURRENCIES, LIMITS, UNIT_LABELS, UNITS } from '../lib/repairs.ts';
           <label class="field__label" for="repair-mileage" data-mileage-label>
             Mileage (km)
           </label>
+          <!-- Text, not type="number": that would read "120.000" as 120 (audit F2-1). -->
           <input
             class="input"
             id="repair-mileage"
             name="mileage"
-            type="number"
+            type="text"
             inputmode="numeric"
-            step="1"
-            min="0"
+            autocomplete="off"
             aria-describedby="repair-mileage-hint repair-mileage-error"
           />
           <p class="field__hint" id="repair-mileage-hint" data-mileage-hint></p>

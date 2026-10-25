@@ -69,7 +69,13 @@ Script helpers, imported from TypeScript: `@shkriuss/ui/dom` (`required`,
 for an element the page must have, and `showFieldProblems`, which shows each
 of a form's problems next to its field, marks the field, and can focus the
 first), `@shkriuss/ui/numbers` (`parseDecimal`, for amounts typed with a
-point or a comma, and `formatMoney` with `CURRENCIES`),
+point or a comma, read the way the person's language writes thousands, so
+"1,500" is 1500 in English and 1.5 in German, in their own digits too;
+`parseWhole`, for whole numbers like a mileage; `decimalText`, to fill a
+field with a number so it reads back the same; `roundDecimal`; and
+`formatMoney` with `CURRENCIES` and `currencyDigits`: number fields are
+`type="text"` with `inputmode="decimal"` or `"numeric"`, never
+`type="number"`, which reads "120.000" as 120),
 `@shkriuss/ui/locale` (`DATE_LOCALE`: format dates and times with it, so
 weekdays and months are in English like the rest of the page, even on a
 phone set to another language), `@shkriuss/ui/text` (`compareText`, for
