@@ -7,7 +7,6 @@
 import { today } from '@shkriuss/dates';
 import { createStore, downloadFile } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
-import { decimalText } from '@shkriuss/ui/numbers';
 import { reportSave } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { typedText } from '@shkriuss/ui/typed-text';
@@ -33,13 +32,18 @@ import {
   isSettingsState,
   isTradesState,
   matchesSearch,
+  migrateTrades,
   monthLabel,
+  openQuantity,
   openTrades,
+  overClosedNote,
+  partsOf,
   PERIODS,
   profit,
+  readChange,
   readClose,
-  readTrade,
   removeClosedYear,
+  removeNote,
   removeTrade,
   returnPercent,
   rMultiple,
@@ -50,11 +54,13 @@ import {
   shownRate,
   SIDE_LABELS,
   stats,
+  toCloseForm,
   toCsv,
   toForm,
   withSettings,
   type CloseProblems,
   type Group,
+  type Parts,
   type Period,
   type SettingsState,
   type Trade,
@@ -64,11 +70,13 @@ import {
 } from '../lib/trades.ts';
 import { required, showFieldProblems } from '@shkriuss/ui/dom';
 
+// Version 2 added parts that name the trade they were closed off.
 const tradesStore = createStore<TradesState>({
   key: 'trades',
   version: TRADES_VERSION,
   fallback: emptyTrades,
   validate: isTradesState,
+  migrate: migrateTrades,
 });
 
 const settingsStore = createStore<SettingsState>({
@@ -142,6 +150,7 @@ export function mountTrades(root: Document): void {
   const deleteButton = required<HTMLElement>(dialog, '[data-action="delete"]');
   const deleteDialog = required<HTMLDialogElement>(root, '[data-delete-dialog]');
   const deleteName = required<HTMLElement>(deleteDialog, '[data-delete-name]');
+  const deleteMore = required<HTMLElement>(deleteDialog, '[data-delete-more]');
   const closeQuantityField = required<HTMLElement>(form, '[data-close-quantity]');
   const roomText = required<HTMLElement>(root, '[data-room-note]');
   const csvStatus = required<HTMLElement>(root, '[data-csv-status]');
@@ -161,6 +170,9 @@ export function mountTrades(root: Document): void {
   let editing: string | null = null;
   /** Whether the form is closing an open trade ("Close"), so it can close part of it. */
   let closing = false;
+  /** What was closed off each trade in parts, and every trade by id: worked out at each render. */
+  let parts = new Map<string, Parts>();
+  let byId = new Map<string, Trade>();
 
   const announce = (message: string): void => {
     announcer.textContent = message;
@@ -254,14 +266,21 @@ export function mountTrades(root: Document): void {
     setup.textContent = trade.setup ? 'Setup: ' : '';
     if (trade.setup) setup.append(typedText(trade.setup));
     const meta = required<HTMLElement>(item, '[data-meta]');
+    // Closed more than bought (on two devices at once): says so, on it and its parts.
+    required<HTMLElement>(item, '[data-problem]').textContent =
+      overClosedNote(trade, parts, byId) ?? '';
     const result = profit(trade);
     if (result === null) {
-      meta.textContent = `${formatNumber(trade.quantity)} at ${formatNumber(trade.entryPrice)}, since ${dateLabel(trade.entryDate)}`;
+      // What's still open of it; all it bought, if more than that was closed.
+      const open = openQuantity(trade, parts);
+      meta.textContent = `${formatNumber(open > 0 ? open : trade.quantity)} at ${formatNumber(trade.entryPrice)}, since ${dateLabel(trade.entryDate)}`;
       required<HTMLElement>(item, '[data-result]').remove();
-      required<HTMLElement>(item, '[data-action="close"]').setAttribute(
-        'aria-label',
-        `Close the ${trade.symbol} trade`,
-      );
+      if (open > 0) {
+        required<HTMLElement>(item, '[data-action="close"]').setAttribute(
+          'aria-label',
+          `Close the ${trade.symbol} trade`,
+        );
+      } else required<HTMLElement>(item, '[data-close]').remove();
     } else {
       meta.textContent = `${formatNumber(trade.quantity)} · ${formatNumber(trade.entryPrice)} → ${formatNumber(trade.exitPrice ?? 0)} · ${dateLabel(trade.exitDate ?? trade.entryDate)}`;
       const profitText = required<HTMLElement>(item, '[data-profit]');
@@ -316,6 +335,8 @@ export function mountTrades(root: Document): void {
   }
 
   function render(): void {
+    parts = partsOf(state.trades);
+    byId = new Map(state.trades.map((trade) => [trade.id, trade]));
     const room = roomNote(state.trades.length);
     roomText.hidden = room === null;
     roomText.textContent = room ?? '';
@@ -358,26 +379,28 @@ export function mountTrades(root: Document): void {
     closing = close && trade !== undefined && isOpen(trade);
     dialogTitle.textContent = !trade ? 'New trade' : closing ? 'Close trade' : 'Change trade';
     deleteButton.hidden = !trade;
-    // Closing: all of it, unless less is typed.
+    // Closing: all that's still open, unless less is typed, with the fees not counted yet.
+    const closeForm = closing && trade ? toCloseForm(trade, parts) : null;
     closeQuantityField.hidden = !closing;
-    (field('closeQuantity') as HTMLInputElement).value =
-      closing && trade ? decimalText(trade.quantity) : '';
+    (field('closeQuantity') as HTMLInputElement).value = closeForm?.closeQuantity ?? '';
     fillForm(
-      trade
-        ? toForm(trade)
-        : {
-            symbol: '',
-            side: 'long',
-            entryDate: today(),
-            entryPrice: '',
-            quantity: '',
-            stop: '',
-            exitDate: '',
-            exitPrice: '',
-            fees: '',
-            setup: '',
-            notes: '',
-          },
+      closeForm
+        ? closeForm.form
+        : trade
+          ? toForm(trade)
+          : {
+              symbol: '',
+              side: 'long',
+              entryDate: today(),
+              entryPrice: '',
+              quantity: '',
+              stop: '',
+              exitDate: '',
+              exitPrice: '',
+              fees: '',
+              setup: '',
+              notes: '',
+            },
     );
     dialog.showModal();
     if (closing) {
@@ -395,30 +418,19 @@ export function mountTrades(root: Document): void {
     (button ?? newButton).focus();
   }
 
-  /** Closes the trade in the form: all of it, or part of it (the rest stays open). */
-  function submitClose(id: string): void {
-    const read = readClose(
-      readForm(),
-      (field('closeQuantity') as HTMLInputElement).value,
-      { id, newId: crypto.randomUUID() },
-      state.trades.length - 1,
-    );
-    if (!read.trade) {
-      showProblems(read.problems);
-      return;
-    }
-    const { trade, rest } = read;
-    if (!rest) {
-      saveFromForm(trade);
-      return;
-    }
+  /** Saves part of a trade closed, with the trade it was closed off, and says what's still open. */
+  function saveClosedPart(part: Trade, rest: Trade): void {
     dialog.close();
-    const result = profit(trade) ?? 0;
+    const next = closePart(state, part, rest);
+    const open = openQuantity(rest, partsOf(next.trades));
+    const result = money(profit(part) ?? 0, true);
     save(
-      { trades: closePart(state, trade, rest) },
-      `Closed ${formatNumber(trade.quantity)} of the ${trade.symbol} trade: ${money(result, true)}. ${formatNumber(rest.quantity)} still open.`,
+      { trades: next },
+      open > 0
+        ? `Closed ${formatNumber(part.quantity)} of the ${part.symbol} trade: ${result}. ${formatNumber(open)} still open.`
+        : `Closed the rest of the ${part.symbol} trade: ${result}.`,
     );
-    focusTrade(trade.id);
+    focusTrade(part.id);
   }
 
   /** Saves the trade read from the form, and says how it stands. */
@@ -436,17 +448,18 @@ export function mountTrades(root: Document): void {
 
   form.addEventListener('submit', (event) => {
     event.preventDefault();
-    if (closing && editing) {
-      submitClose(editing);
-      return;
-    }
-    const others = state.trades.length - (editing ? 1 : 0);
-    const read = readTrade(readForm(), editing ?? crypto.randomUUID(), others);
+    const ids = { id: editing ?? crypto.randomUUID(), newId: crypto.randomUUID() };
+    // Closing: all of it, or part of it (the rest stays open).
+    const read =
+      closing && editing
+        ? readClose(readForm(), (field('closeQuantity') as HTMLInputElement).value, state, ids)
+        : readChange(readForm(), state, ids);
     if (!read.trade) {
       showProblems(read.problems);
       return;
     }
-    saveFromForm(read.trade);
+    if (read.rest) saveClosedPart(read.trade, read.rest);
+    else saveFromForm(read.trade);
   });
 
   form.addEventListener('click', (event) => {
@@ -458,6 +471,10 @@ export function mountTrades(root: Document): void {
       const trade = find(editing);
       if (!trade) return;
       deleteName.textContent = `${trade.symbol} ${SIDE_LABELS[trade.side].toLowerCase()}`;
+      // A part, or a trade with parts: what becomes of the others.
+      const more = removeNote(trade, state);
+      deleteMore.hidden = more === null;
+      deleteMore.textContent = more ?? '';
       deleteDialog.returnValue = '';
       deleteDialog.showModal();
     }
@@ -581,8 +598,11 @@ export function mountTrades(root: Document): void {
   function reload(): void {
     state = tradesStore.load();
     settings = settingsStore.load();
-    // The trade being changed was deleted on another device or tab.
-    if (editing !== null && !find(editing)) dialog.close();
+    // The trade being changed was deleted on another device or tab, or the
+    // one being closed was closed there.
+    const trade = find(editing);
+    if (editing !== null && !trade) dialog.close();
+    else if (closing && trade && openQuantity(trade, partsOf(state.trades)) <= 0) dialog.close();
     if (yearDialog.open) {
       if (closedYears(state).length === 0) yearDialog.close();
       else fillYears();

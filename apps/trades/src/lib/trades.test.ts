@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { addDays } from '@shkriuss/dates';
 import { footprint, sampleText } from '@shkriuss/sync/testing';
 import { MAX_SEALED_CHARS } from '../../../../packages/sync/src/validate.ts';
+import { appSecret, Device, pretendBrowser } from '../../../../tests/unit/sync-devices.ts';
 import {
   byMonth,
   bySetup,
@@ -21,12 +22,20 @@ import {
   isTradesState,
   LIMITS,
   matchesSearch,
+  migrateTrades,
   monthLabel,
+  openFees,
+  openQuantity,
   openTrades,
+  overClosed,
+  overClosedNote,
+  partsOf,
   profit,
+  readChange,
   readClose,
   readTrade,
   removeClosedYear,
+  removeNote,
   removeTrade,
   returnPercent,
   rMultiple,
@@ -36,8 +45,10 @@ import {
   setupNames,
   shownRate,
   stats,
+  toCloseForm,
   toCsv,
   toForm,
+  TRADES_VERSION,
   withSettings,
   type Trade,
   type TradeForm,
@@ -153,8 +164,10 @@ describe('reading the form', () => {
     });
     expect(readTrade(shown, 't', 0, 'en-US').trade).toEqual(tiny);
     // Closed as "Close" fills in the form: all of it, unless less is typed.
-    const exit = { ...shown, exitDate: '2026-10-05', exitPrice: '0.000000002' };
-    expect(readClose(exit, shown.quantity, { id: 't', newId: 'n' }, 0, 'en-US').trade).toEqual({
+    const { form: closing, closeQuantity } = toCloseForm(tiny, new Map(), 'en-US');
+    const exit = { ...closing, exitDate: '2026-10-05', exitPrice: '0.000000002' };
+    const ids = { id: 't', newId: 'n' };
+    expect(readClose(exit, closeQuantity, state(tiny), ids, 'en-US').trade).toEqual({
       ...tiny,
       exitDate: '2026-10-05',
       exitPrice: 2e-9,
@@ -222,6 +235,24 @@ describe('reading the form', () => {
     expect(isTradesState(state(trade({ exitPrice: null })))).toBe(false);
     expect(isTradesState(state(trade({ quantity: 0 })))).toBe(false);
     expect(isTradesState({ trades: {} })).toBe(false);
+    // A part names another trade.
+    expect(isTradesState(state(trade({ id: 'b', parent: 'a' })))).toBe(true);
+    expect(isTradesState(state(trade({ id: 'b', parent: '' })))).toBe(false);
+    expect(isTradesState(state(trade({ id: 'b', parent: 'b' })))).toBe(false);
+  });
+
+  it('reads what version 1 saved the same', () => {
+    expect(TRADES_VERSION).toBe(2);
+    // Version 1 closed part of a trade by making it smaller, next to the part.
+    const saved = state(
+      trade({ id: 'a', quantity: 60, exitDate: null, exitPrice: null }),
+      trade({ id: 'b', quantity: 40 }),
+    );
+    expect(migrateTrades(saved, 1)).toEqual(saved);
+    expect(openTrades(saved).map((entry) => entry.id)).toEqual(['a']);
+    expect(openQuantity(saved.trades[0] as Trade, partsOf(saved.trades))).toBe(60);
+    expect(migrateTrades({ trades: [{ id: 'a' }] }, 1)).toBeUndefined();
+    expect(migrateTrades(saved, 2)).toBeUndefined();
   });
 });
 
@@ -247,24 +278,33 @@ describe('closing part of a trade', () => {
     exitDate: null,
     exitPrice: null,
   });
+  const kept = state(trade({ id: 'x' }), open);
   const closeForm: TradeForm = {
-    ...toForm(open),
+    ...toForm(open, 'en-US'),
     exitDate: '2026-10-05',
     exitPrice: '110',
     fees: '2',
   };
-  const ids = { id: 'a', newId: 'b' };
+  const close = (form: TradeForm, quantity: string, from = kept, newId = 'b') =>
+    readClose(form, quantity, from, { id: 'a', newId }, 'en-US');
+  /** `kept`, with 40 of the trade closed as part "b". */
+  const split = () => {
+    const read = close(closeForm, '40');
+    return closePart(kept, read.trade as Trade, read.rest as Trade);
+  };
 
   it('closes all of it, as saving the form does', () => {
-    expect(readClose(closeForm, '100', ids, 0)).toEqual({
+    expect(close(closeForm, '100')).toEqual({
       trade: { ...open, exitDate: '2026-10-05', exitPrice: 110, fees: 2 },
       rest: null,
     });
   });
 
-  it('splits it: the part closed is a new trade, and the rest stays open', () => {
-    const read = readClose(closeForm, '40', ids, 0);
-    // The fees typed in are the closed part's; both keep the stop loss.
+  // Audit F2-4: closing part made the trade's quantity smaller, so a change to
+  // it from a device that hadn't synced brought the whole quantity back.
+  it('adds the part closed, naming its trade, which stays as it was', () => {
+    const read = close(closeForm, '40');
+    // The fees typed in are the part's; both keep the stop loss.
     expect(read.trade).toEqual({
       ...open,
       id: 'b',
@@ -272,46 +312,176 @@ describe('closing part of a trade', () => {
       exitDate: '2026-10-05',
       exitPrice: 110,
       fees: 2,
+      parent: 'a',
     });
-    expect(read.rest).toEqual({ ...open, quantity: 60, fees: 0 });
+    expect(read.rest).toBe(open);
     expect(profit(read.trade as Trade)).toBe(398);
     expect(rMultiple(read.trade as Trade)).toBe(1.99);
 
-    const before = state(trade({ id: 'x' }), open);
-    const after = closePart(before, read.trade as Trade, read.rest as Trade);
+    const after = split();
     expect(after.trades.map((entry) => `${entry.id}:${entry.quantity}`)).toEqual([
       'x:10',
-      'a:60',
+      'a:100',
       'b:40',
     ]);
+    const parts = partsOf(after.trades);
+    expect(parts.get('a')).toEqual({ quantity: 40, fees: 2 });
+    expect(openQuantity(open, parts)).toBe(60);
     expect(openTrades(after).map((entry) => entry.id)).toEqual(['a']);
+    // Closing again: what's still open, and no fees left (they went with the part).
+    expect(openFees(open, parts)).toBe(0);
+    expect(toCloseForm(open, parts, 'en-US')).toEqual({
+      form: { ...toForm(open, 'en-US'), fees: '' },
+      closeQuantity: '60',
+    });
+    // A form changed while closing changes the trade too.
+    expect(close({ ...closeForm, notes: 'Took profits' }, '40').rest).toEqual({
+      ...open,
+      notes: 'Took profits',
+    });
     // Without tiny decimal errors.
-    expect(readClose({ ...closeForm, quantity: '0.3' }, '0,1', ids, 0).rest?.quantity).toBe(0.2);
+    const small = trade({ id: 'a', quantity: 0.3, exitDate: null, exitPrice: null });
+    const tenth = close(
+      { ...toForm(small), exitDate: '2026-10-05', exitPrice: '110' },
+      '0,1',
+      state(small),
+    );
+    const closed = closePart(state(small), tenth.trade as Trade, tenth.rest as Trade);
+    expect(openQuantity(small, partsOf(closed.trades))).toBe(0.2);
+  });
+
+  it('closes the rest as its last part: then nothing is open', () => {
+    const first = split();
+    const parts = partsOf(first.trades);
+    const { form, closeQuantity } = toCloseForm(open, parts, 'en-US');
+    const read = close(
+      { ...form, exitDate: '2026-10-07', exitPrice: '120' },
+      closeQuantity,
+      first,
+      'c',
+    );
+    expect(read.trade).toMatchObject({
+      id: 'c',
+      quantity: 60,
+      exitPrice: 120,
+      fees: 0,
+      parent: 'a',
+    });
+    expect(read.rest).toBe(open);
+    const after = closePart(first, read.trade as Trade, read.rest as Trade);
+    expect(openTrades(after)).toEqual([]);
+    expect(openQuantity(open, partsOf(after.trades))).toBe(0);
+    // The results count each part once: 398 + 1200, and "x".
+    expect(stats(closedTrades(after.trades))).toMatchObject({ count: 3, total: 1698 });
+    expect(overClosed(open, partsOf(after.trades))).toBe(0);
   });
 
   it('says what’s wrong', () => {
-    expect(readClose(closeForm, '', ids, 0).problems).toEqual({
+    expect(close(closeForm, '').problems).toEqual({
       closeQuantity: 'Enter how many you closed.',
     });
-    expect(readClose(closeForm, '0', ids, 0).problems).toEqual({
+    expect(close(closeForm, '0').problems).toEqual({
       closeQuantity: 'Enter a number above 0.',
     });
-    expect(readClose(closeForm, '101', ids, 0).problems).toEqual({
+    expect(close(closeForm, '101').problems).toEqual({
       closeQuantity: 'Enter no more than the trade’s quantity.',
     });
+    expect(close(closeForm, '61', split(), 'c').problems).toEqual({
+      closeQuantity: 'Enter no more than the 60 still open.',
+    });
+    expect(close({ ...closeForm, quantity: '40' }, '1', split(), 'c').problems).toEqual({
+      quantity: 'Enter more than the 40 closed already.',
+    });
     // Part of it closes only with an exit.
-    expect(readClose({ ...closeForm, exitDate: '', exitPrice: '' }, '40', ids, 0).problems).toEqual(
-      { exitPrice: 'Enter the exit price, to close part of the trade.' },
-    );
+    expect(close({ ...closeForm, exitDate: '', exitPrice: '' }, '40').problems).toEqual({
+      exitPrice: 'Enter the exit price, to close part of the trade.',
+    });
     // The trade form's own problems too.
-    expect(readClose({ ...closeForm, exitPrice: '' }, '40', ids, 0).problems).toEqual({
+    expect(close({ ...closeForm, exitPrice: '' }, '40').problems).toEqual({
       exitPrice: 'Enter the exit price, or leave both empty.',
     });
-    // Splitting makes one more trade: there must be room for it.
-    expect(readClose(closeForm, '40', ids, LIMITS.trades - 1).problems).toEqual({
-      closeQuantity: `You can keep up to ${new Intl.NumberFormat().format(LIMITS.trades)} trades, so close all of it, or make room first.`,
+    // A part is one more trade: there must be room for it.
+    const others = Array.from({ length: LIMITS.trades - 1 }, (_, index) =>
+      trade({ id: `t${index}` }),
+    );
+    const full = state(open, ...others);
+    const most = `You can keep up to ${new Intl.NumberFormat('en-US').format(LIMITS.trades)} trades`;
+    expect(close(closeForm, '40', full).problems).toEqual({
+      closeQuantity: `${most}, so close all of it, or make room first.`,
     });
-    expect(readClose(closeForm, '100', ids, LIMITS.trades - 1).trade).toBeDefined();
+    expect(close(closeForm, '100', full).trade).toBeDefined();
+    const fullWithPart = closePart(
+      full,
+      { ...trade({ id: 'b', quantity: 40 }), parent: 'a' },
+      open,
+    );
+    expect(close(closeForm, '60', removeTrade(fullWithPart, 't0'), 'c').problems).toEqual({
+      closeQuantity: `${most}: make room first.`,
+    });
+  });
+
+  it('keeps a part naming its trade when it’s changed, and a trade at least what was closed', () => {
+    const after = split();
+    const part = after.trades.find((entry) => entry.id === 'b') as Trade;
+    const change = (form: TradeForm, id: string) =>
+      readChange(form, after, { id, newId: 'n' }, 'en-US');
+    expect(change({ ...toForm(part, 'en-US'), exitPrice: '115' }, 'b')).toEqual({
+      trade: { ...part, exitPrice: 115 },
+      rest: null,
+    });
+    expect(change({ ...toForm(open, 'en-US'), quantity: '120' }, 'a').trade?.quantity).toBe(120);
+    expect(change({ ...toForm(open, 'en-US'), quantity: '30' }, 'a').problems).toEqual({
+      quantity: 'Enter at least the 40 closed already.',
+    });
+    // Given an exit, a trade with parts closes what's still open, as its last part.
+    expect(
+      change({ ...toForm(open, 'en-US'), exitDate: '2026-10-07', exitPrice: '120' }, 'a'),
+    ).toMatchObject({ trade: { id: 'n', quantity: 60, parent: 'a' }, rest: open });
+    // A new trade, as readTrade reads it.
+    expect(readChange(form, after, { id: 'new', newId: 'n' }, 'en-US').trade).toEqual(
+      readTrade(form, 'new', 3, 'en-US').trade,
+    );
+  });
+
+  it('says when more was closed than bought, on the trade and its parts', () => {
+    // Two devices each closed what they saw still open (60).
+    const twice = saveTrade(
+      saveTrade(split(), { ...trade({ id: 'c', quantity: 60 }), parent: 'a' }),
+      { ...trade({ id: 'd', quantity: 60 }), parent: 'a' },
+    );
+    const parts = partsOf(twice.trades);
+    const byId = new Map(twice.trades.map((entry) => [entry.id, entry]));
+    expect(overClosed(open, parts)).toBe(60);
+    // It's listed with the open trades, to put right.
+    expect(openTrades(twice).map((entry) => entry.id)).toEqual(['a']);
+    const note =
+      '160 closed of the 100 bought: two devices may have closed it at the same time. Delete the close that’s wrong.';
+    for (const id of ['a', 'b', 'c', 'd']) {
+      expect(overClosedNote(byId.get(id) as Trade, parts, byId, 'en-US'), id).toBe(note);
+    }
+    expect(overClosedNote(byId.get('x') as Trade, parts, byId, 'en-US')).toBeNull();
+    // Deleting the extra close puts it right.
+    expect(overClosed(open, partsOf(removeTrade(twice, 'd').trades))).toBe(0);
+    // Closed all at once on one device, and part of it on another: the same.
+    const both = state(
+      { ...open, exitDate: '2026-10-06', exitPrice: 115 },
+      {
+        ...trade({ id: 'b', quantity: 40 }),
+        parent: 'a',
+      },
+    );
+    expect(overClosed(both.trades[0] as Trade, partsOf(both.trades))).toBe(40);
+  });
+
+  it('says what becomes of a part, or of a trade’s parts, when it’s deleted', () => {
+    const after = split();
+    const part = after.trades.find((entry) => entry.id === 'b') as Trade;
+    expect(removeNote(part, after, 'en-US')).toBe(
+      'The 40 it closed count as open again, in the AAPL trade.',
+    );
+    expect(openQuantity(open, partsOf(removeTrade(after, 'b').trades))).toBe(100);
+    expect(removeNote(open, after)).toBe('What was closed of it stays, as trades of their own.');
+    expect(removeNote(trade({ id: 'x' }), after)).toBeNull();
   });
 });
 
@@ -340,6 +510,29 @@ describe('making room', () => {
     expect(closedCount(1234, 'en-US')).toBe('1,234 closed trades');
   });
 
+  it('keeps what’s still open of a trade whose parts are deleted with their year', () => {
+    // Bought 100: 40 closed in 2024 (with the fees), 30 in 2025, 30 still open.
+    const lot = trade({ id: 'a', quantity: 100, fees: 1, exitDate: null, exitPrice: null });
+    const parts = state(
+      lot,
+      trade({ id: 'b', quantity: 40, fees: 2, exitDate: '2024-06-01', parent: 'a' }),
+      trade({ id: 'c', quantity: 30, exitDate: '2025-06-01', parent: 'a' }),
+    );
+    const after = removeClosedYear(parts, '2024');
+    expect(after.trades.map((entry) => `${entry.id}:${entry.quantity}`)).toEqual(['a:60', 'c:30']);
+    expect(openQuantity(after.trades[0] as Trade, partsOf(after.trades))).toBe(30);
+    expect(openFees(after.trades[0] as Trade, partsOf(after.trades))).toBe(0);
+    // A trade whose parts closed all of it goes with the last of them.
+    const gone = removeClosedYear(
+      removeClosedYear(
+        saveTrade(parts, trade({ id: 'd', quantity: 30, exitDate: '2025-07-01', parent: 'a' })),
+        '2024',
+      ),
+      '2025',
+    );
+    expect(gone.trades).toEqual([]);
+  });
+
   it('says so once Trades is nearly full', () => {
     const number = (value: number) => new Intl.NumberFormat('en-US').format(value);
     const nearly = LIMITS.trades * 0.9;
@@ -358,11 +551,12 @@ describe('making room', () => {
   // Every trade is saved on the device (in localStorage, about 5 MB for each
   // site), and with sync on, also goes into the copy that goes online.
   it('has room for every trade, on the device and in the sync copy', async () => {
+    const ids = Array.from({ length: LIMITS.trades }, () => crypto.randomUUID());
     const list = Array.from({ length: LIMITS.trades }, (_, index): Trade => {
       const entryDate = addDays('2016-01-01', index % 3650);
       const open = index % 20 === 0;
       return {
-        id: crypto.randomUUID(),
+        id: ids[index] ?? '',
         symbol: ['EURUSD', 'AAPL', 'BTCUSD', 'NVDA'][index % 4] ?? 'AAPL',
         side: index % 3 === 0 ? 'short' : 'long',
         entryDate,
@@ -375,12 +569,14 @@ describe('making room', () => {
         setup: ['Breakout retest', 'Pullback', 'Gap and go', 'Range fade'][index % 4] ?? '',
         // Long-ish notes: two or three sentences (200 of the 1,000 characters allowed).
         notes: sampleText(200, index),
+        // One in five is part of a trade closed in parts.
+        ...(index % 5 === 4 ? { parent: ids[index - 1] ?? '' } : {}),
       };
     });
     const size = await footprint({
       app: 'trades',
       store: 'shkriuss:trades',
-      version: 1,
+      version: TRADES_VERSION,
       data: { trades: list },
       items: list,
       // A quarter of them deleted ("Delete a year") less than 180 days ago.
@@ -604,6 +800,133 @@ describe('spreadsheet', () => {
       'AAPL,Long,2026-10-01,100,10,95,2026-10-05,110,2,98,9.8,1.96,Breakout,"Good, ""clean"" entry"',
       '',
     ]);
+  });
+
+  it('has a row for each part of a trade, and for what’s still open of it', () => {
+    const lot = trade({ id: 'a', quantity: 100, fees: 1, exitDate: null, exitPrice: null });
+    const part = trade({ id: 'b', quantity: 40, fees: 2, parent: 'a' });
+    expect(toCsv(state(lot, part)).split('\r\n').slice(1)).toEqual([
+      'AAPL,Long,2026-10-01,100,60,,,,0,,,,,',
+      'AAPL,Long,2026-10-01,100,40,,2026-10-05,110,2,398,9.95,,,',
+      '',
+    ]);
+    // All of it closed in parts: only the parts.
+    const all = trade({ id: 'b', quantity: 100, parent: 'a' });
+    expect(toCsv(state(lot, all)).split('\r\n').slice(1)).toEqual([
+      'AAPL,Long,2026-10-01,100,100,,2026-10-05,110,0,1000,10,,,',
+      '',
+    ]);
+  });
+});
+
+describe('closing part of a trade on one device, while another changes it', () => {
+  beforeEach(() => pretendBrowser('https://trades.shkriuss.app'));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  /** Trades' store, synced as the page syncs it. */
+  const setup = {
+    key: 'trades',
+    version: TRADES_VERSION,
+    fallback: emptyTrades,
+    validate: isTradesState,
+    migrate: migrateTrades,
+    items: (value: TradesState) => value.trades,
+    withItems: (value: TradesState, trades: Trade[]) => ({ ...value, trades }),
+  };
+  const aapl = trade({ id: 'aapl', quantity: 100, stop: 95, exitDate: null, exitPrice: null });
+  /** On `device`: closes `quantity` of the AAPL trade at 110, as the close form does. */
+  function closeOn(device: Device<TradesState, Trade>, quantity: string, newId: string): void {
+    const trades = device.value;
+    const { form } = toCloseForm(aapl, partsOf(trades.trades), 'en-US');
+    const ids = { id: 'aapl', newId };
+    const exit = { ...form, exitDate: '2026-10-05', exitPrice: '110' };
+    const read = readClose(exit, quantity, trades, ids, 'en-US');
+    if (!read.trade || !read.rest) throw new Error('Not a part');
+    device.save(closePart(trades, read.trade, read.rest));
+  }
+  /** What a device shows: each closed trade's quantity, and what's open (with what's wrong). */
+  function shown(device: Device<TradesState, Trade>) {
+    const { trades } = device.value;
+    const parts = partsOf(trades);
+    const byId = new Map(trades.map((entry) => [entry.id, entry]));
+    return {
+      closed: closedTrades(trades)
+        .map((entry) => entry.quantity)
+        .sort((a, b) => a - b),
+      open: openTrades(device.value).map((entry) => openQuantity(entry, parts)),
+      problem: overClosedNote(byId.get('aapl') as Trade, parts, byId, 'en-US'),
+    };
+  }
+  async function twoDevices() {
+    const secret = appSecret();
+    const phone = new Device('trades', secret, setup);
+    const tablet = new Device('trades', secret, setup);
+    phone.save(saveTrade(emptyTrades(), aapl));
+    await phone.syncNow();
+    await tablet.syncNow();
+    return { phone, tablet };
+  }
+
+  // Audit F2-4: the tablet's change brought back all 100, next to the 40 closed.
+  it('never counts the part closed twice', async () => {
+    const { phone, tablet } = await twoDevices();
+    // On the phone: 40 of the 100 closed. It syncs.
+    vi.setSystemTime(Date.now() + 60_000);
+    closeOn(phone, '40', 'part');
+    await phone.syncNow();
+    // Later the tablet, which hadn't synced since, moves the stop loss up.
+    vi.setSystemTime(Date.now() + 60_000);
+    tablet.save(saveTrade(tablet.value, { ...aapl, stop: 99 }));
+    await tablet.syncNow();
+    await phone.syncNow();
+    for (const device of [phone, tablet]) {
+      expect(shown(device)).toEqual({ closed: [40], open: [60], problem: null });
+      // The tablet's change counts too.
+      expect(device.value.trades.find((entry) => entry.id === 'aapl')?.stop).toBe(99);
+    }
+  });
+
+  it('counts parts closed on two devices at once, and says when they close more than was bought', async () => {
+    const { phone, tablet } = await twoDevices();
+    closeOn(phone, '40', 'phone-1');
+    closeOn(tablet, '30', 'tablet-1');
+    await phone.syncNow();
+    await tablet.syncNow();
+    await phone.syncNow();
+    expect(shown(phone)).toEqual({ closed: [30, 40], open: [30], problem: null });
+    expect(shown(tablet)).toEqual(shown(phone));
+
+    // Both close the 30 still open, before they sync.
+    closeOn(phone, '30', 'phone-2');
+    closeOn(tablet, '30', 'tablet-2');
+    await phone.syncNow();
+    await tablet.syncNow();
+    await phone.syncNow();
+    for (const device of [phone, tablet]) {
+      expect(shown(device)).toEqual({
+        closed: [30, 30, 30, 40],
+        open: [-30],
+        problem:
+          '130 closed of the 100 bought: two devices may have closed it at the same time. Delete the close that’s wrong.',
+      });
+    }
+  });
+
+  it('waits on a device that hasn’t had the update, instead of counting parts twice', async () => {
+    const secret = appSecret();
+    const phone = new Device('trades', secret, setup);
+    phone.save(saveTrade(emptyTrades(), aapl));
+    await phone.syncNow();
+    closeOn(phone, '40', 'part');
+    await phone.syncNow();
+    // Trades before the update: data version 1.
+    const old = new Device('trades', secret, { ...setup, version: 1 });
+    await old.sync.syncNow();
+    expect(old.sync.status().problem).toBe('update-needed');
+    expect(old.value.trades).toEqual([]);
   });
 });
 

@@ -237,16 +237,66 @@ test('closes part of a trade, then the rest', async ({ page }) => {
   await expect(closed.locator('[data-extra]')).toHaveText('+6.63% · +2.0R');
   await expect(closed.getByRole('button', { name: 'AAPL Long' })).toBeFocused();
 
-  // The rest, all of it (no fees left: they were the first part's).
+  // The rest, all of it (no fees left: they were the first part's). The
+  // trade still says what was bought.
   await page.getByRole('button', { name: 'Close the AAPL trade' }).click();
   await expect(quantity).toHaveValue('60');
+  await expect(dialog.getByRole('group', { name: 'Entry' }).getByLabel('Quantity')).toHaveValue(
+    '100',
+  );
   await expect(exit.getByLabel('Fees (optional)')).toHaveValue('');
   await fillTrade(page, { exitPrice: '155' });
-  await expect(status(page, 'Saved the AAPL trade: +$300.00.')).toBeAttached();
+  await expect(status(page, 'Closed the rest of the AAPL trade: +$300.00.')).toBeAttached();
   await expect(page.getByRole('heading', { name: 'Open trades' })).toBeHidden();
   await expect(closed.locator('li')).toHaveCount(2);
   await expect(tile(page, 'Net result')).toHaveText('+$698.00');
   await expect(tile(page, 'Closed trades')).toHaveText('2');
+
+  // Deleting a part: what it closed is open again.
+  await closed.getByRole('button', { name: 'AAPL Long' }).first().click();
+  await dialog.getByRole('button', { name: 'Delete' }).click();
+  const confirm = page.getByRole('dialog', { name: 'Delete this trade?' });
+  await expect(confirm).toContainText('count as open again, in the AAPL trade.');
+  await confirm.getByRole('button', { name: 'Delete' }).click();
+  await expect(page.locator('[data-open-list] [data-meta]')).toHaveText(/^\d+ at 150, since/);
+});
+
+// Audit F2-4: what two devices closed at once, before they synced, is never
+// counted twice without a word.
+test('says when more of a trade was closed than bought', async ({ page }) => {
+  const lot = trade({
+    id: 'aapl',
+    entryPrice: 150,
+    quantity: 100,
+    exitDate: null,
+    exitPrice: null,
+  });
+  await seed(page, [
+    lot,
+    trade({ id: 'p1', entryPrice: 150, quantity: 40, exitPrice: 160, parent: 'aapl' }),
+    trade({ id: 'p2', entryPrice: 150, quantity: 60, exitPrice: 160, parent: 'aapl' }),
+    trade({ id: 'p3', entryPrice: 150, quantity: 60, exitPrice: 158, parent: 'aapl' }),
+  ]);
+  const note =
+    '160 closed of the 100 bought: two devices may have closed it at the same time. Delete the close that’s wrong.';
+  const open = page.locator('[data-open-list] li');
+  await expect(open.locator('[data-meta]')).toHaveText('100 at 150, since Oct 1, 2026');
+  await expect(open.locator('[data-problem]')).toHaveText(note);
+  // Nothing's left to close.
+  await expect(page.getByRole('button', { name: 'Close the AAPL trade' })).toHaveCount(0);
+  await expect(page.locator('[data-closed-list] [data-problem]')).toHaveText([note, note, note]);
+  await checkA11y(page, 'closed more than bought');
+
+  // Deleting the close that's wrong puts it right.
+  await page.locator('li[data-id="p3"]').getByRole('button', { name: 'AAPL Long' }).click();
+  await tradeDialog(page).getByRole('button', { name: 'Delete' }).click();
+  await page
+    .getByRole('dialog', { name: 'Delete this trade?' })
+    .getByRole('button', { name: 'Delete' })
+    .click();
+  await expect(status(page, 'Deleted the AAPL trade.')).toBeAttached();
+  await expect(page.getByRole('heading', { name: 'Open trades' })).toBeHidden();
+  await expect(page.locator('[data-problem]:not(:empty)')).toHaveCount(0);
 });
 
 test('deletes a year of closed trades, never open ones', async ({ page }) => {
