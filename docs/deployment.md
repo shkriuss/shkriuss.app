@@ -198,6 +198,11 @@ look at doesn't need approving: merging doesn't wait for previews.
 Approve only pull requests you trust: the preview runs that pull request's
 code with the Cloudflare token.
 
+Every page of a preview says at the top that it's a preview of a change.
+Don't sign in there with your real shkriuss account (or type its recovery
+key), and don't put real data in: the preview runs the pull request's code,
+which isn't merged yet. To try sync on a preview, make a new account there.
+
 **Old version addresses.** Before the sites had server code, Cloudflare gave
 each production deploy of the hub, Calendar, Grammar, Photos and Tally a
 permanent address like `1a2b3c4d-tally.shkriuss.workers.dev` (36 of them,

@@ -1,7 +1,8 @@
 ---
 /**
  * The page shell every page of every site uses: <head> tags, skip link,
- * header, main content, footer with the theme switch, and offline support.
+ * header (with a note on previews of a change), main content, footer with the
+ * theme switch, and offline support.
  *
  *   <AppShell title="Privacy">…page content…</AppShell>
  *
@@ -66,6 +67,11 @@ const currentPath = Astro.url.pathname;
     </a>
     <div class="shell">
       <header class="site-header">
+        <!-- Shown only on previews of a change (scripts/preview-note.ts). -->
+        <p class="preview-note" data-preview-note hidden>
+          This is a preview of a change to {site.name}, for testing. Don’t use your real shkriuss
+          account or your real data here.
+        </p>
         <div class="container container--wide site-header__inner">
           <a class="site-brand" href="/" aria-current={currentPath === '/' ? 'page' : undefined}>
             <AppIcon icon={site.icon} color={site.color} size="sm" />
@@ -139,11 +145,13 @@ const currentPath = Astro.url.pathname;
 
     <script>
       import { returnFocusAfterDialogs } from '../scripts/keep-focus.ts';
+      import { showPreviewNote } from '../scripts/preview-note.ts';
       import { registerServiceWorker } from '../scripts/service-worker.ts';
 
       if (import.meta.env.PROD) registerServiceWorker();
       // A dialog's opener drawn again while it was open gets focus back (audit G-3).
       returnFocusAfterDialogs();
+      showPreviewNote();
     </script>
   </body>
 </html>
