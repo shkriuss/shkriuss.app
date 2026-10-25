@@ -399,6 +399,8 @@ export interface Summary {
   left: number;
   /** The categories' limits added up (null when none has one). */
   budgeted: number | null;
+  /** What was spent in the categories that have a limit (refunds taken off). */
+  spentWithLimit: number;
 }
 
 /** What an entry adds to the spending: an expense its amount, a refund takes its amount off. */
@@ -406,9 +408,8 @@ const spending = (entry: Entry): number =>
   entry.kind === 'expense' ? entry.amount : entry.kind === 'refund' ? -entry.amount : 0;
 
 export function summary(entries: readonly Entry[], categories: CategoriesState): Summary {
-  const limits = categories.categories.flatMap((category) =>
-    category.limit === null ? [] : [category.limit],
-  );
+  const limited = categories.categories.filter((category) => category.limit !== null);
+  const withLimit = new Set(limited.map((category) => category.id));
   const income = tidy(
     entries.reduce((sum, entry) => (entry.kind === 'income' ? sum + entry.amount : sum), 0),
   );
@@ -417,7 +418,43 @@ export function summary(entries: readonly Entry[], categories: CategoriesState):
     income,
     spent,
     left: tidy(income - spent),
-    budgeted: limits.length === 0 ? null : tidy(limits.reduce((sum, limit) => sum + limit, 0)),
+    budgeted:
+      limited.length === 0
+        ? null
+        : tidy(limited.reduce((sum, category) => sum + (category.limit ?? 0), 0)),
+    spentWithLimit: tidy(
+      entries.reduce(
+        (sum, entry) =>
+          entry.category !== null && withLimit.has(entry.category) ? sum + spending(entry) : sum,
+        0,
+      ),
+    ),
+  };
+}
+
+/**
+ * The month's line against the budget, when any category has a limit: what
+ * was spent in the categories that have one, against their limits added up.
+ * What was spent without a limit (in a category with none, or in none) isn't
+ * held against them: it's said besides. `over`: more was spent than budgeted.
+ */
+export function budgetLine(
+  totals: Summary,
+  currency: string,
+  locale?: string,
+): { text: string; over: boolean } | null {
+  if (totals.budgeted === null) return null;
+  const money = (amount: number) => formatMoney(amount, currency, { locale });
+  const rest = tidy(totals.budgeted - totals.spentWithLimit);
+  const budgeted = money(totals.budgeted);
+  const line =
+    rest >= 0
+      ? `${money(rest)} left of the ${budgeted} budgeted`
+      : `${money(-rest)} over the ${budgeted} budgeted`;
+  const other = tidy(totals.spent - totals.spentWithLimit);
+  return {
+    text: other > 0 ? `${line} (${money(other)} more spent without a limit)` : line,
+    over: rest < 0,
   };
 }
 

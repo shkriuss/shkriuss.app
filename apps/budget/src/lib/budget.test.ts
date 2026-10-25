@@ -6,6 +6,7 @@ import { nextFireTime } from '../../../../packages/push/src/schedule.ts';
 import { MAX_SEALED_CHARS } from '../../../../packages/sync/src/validate.ts';
 import {
   addSuggested,
+  budgetLine,
   byCategory,
   CATEGORIES_VERSION,
   currencyOf,
@@ -312,13 +313,45 @@ describe('months', () => {
       spent: 295.2,
       left: 1704.8,
       budgeted: 500,
+      // Groceries and Fun: not "No category" or the deleted one.
+      spentWithLimit: 255.1,
     });
     expect(summary([], emptyCategories())).toEqual({
       income: 0,
       spent: 0,
       left: 0,
       budgeted: null,
+      spentWithLimit: 0,
     });
+  });
+
+  // Audit F2-7: rent in a category with no limit put the month "over budget".
+  it('holds only spending in categories with a limit against the budget', () => {
+    const home: CategoriesState = {
+      categories: [
+        { id: 'food', name: 'Groceries', limit: 400 },
+        { id: 'home', name: 'Home', limit: null },
+      ],
+    };
+    const month = [
+      entry({ id: 'rent', amount: 1500, category: 'home' }),
+      entry({ id: 'shop', amount: 100, category: 'food' }),
+    ];
+    expect(budgetLine(summary(month, home), 'USD', 'en-US')).toEqual({
+      text: '$300.00 left of the $400.00 budgeted ($1,500.00 more spent without a limit)',
+      over: false,
+    });
+    const over = [...month, entry({ id: 'feast', amount: 350, category: 'food' })];
+    expect(budgetLine(summary(over, home), 'USD', 'en-US')).toEqual({
+      text: '$50.00 over the $400.00 budgeted ($1,500.00 more spent without a limit)',
+      over: true,
+    });
+    // Only spending with a limit: nothing more to say.
+    expect(budgetLine(summary(month.slice(1), home), 'USD', 'en-US')).toEqual({
+      text: '$300.00 left of the $400.00 budgeted',
+      over: false,
+    });
+    expect(budgetLine(summary(month, emptyCategories()), 'USD', 'en-US')).toBeNull();
   });
 
   it('shows spending against each category’s limit', () => {
@@ -348,6 +381,7 @@ describe('months', () => {
       spent: 255.1,
       left: 1744.9,
       budgeted: 500,
+      spentWithLimit: 215.1,
     });
     // A refund for something bought the month before: less than nothing spent.
     const refundOnly = [entry({ kind: 'refund', amount: 30, category: 'food' })];

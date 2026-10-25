@@ -13,6 +13,7 @@ import { typedText } from '@shkriuss/ui/typed-text';
 import { site } from 'virtual:shkriuss/site';
 import {
   addSuggested,
+  budgetLine,
   byCategory,
   CURRENCIES,
   currencyOf,
@@ -110,7 +111,7 @@ export function mountBudget(root: Document): void {
   const spentText = required<HTMLElement>(root, '[data-spent]');
   const incomeText = required<HTMLElement>(root, '[data-income]');
   const leftText = required<HTMLElement>(root, '[data-left]');
-  const budgetLine = required<HTMLElement>(root, '[data-budget-line]');
+  const budgetRow = required<HTMLElement>(root, '[data-budget-line]');
   const budgetProgress = required<HTMLProgressElement>(root, '[data-budget-progress]');
   const budgetText = required<HTMLElement>(root, '[data-budget-text]');
   const addExpense = required<HTMLButtonElement>(root, '[data-action="add-expense"]');
@@ -261,16 +262,14 @@ export function mountBudget(root: Document): void {
     incomeText.textContent = money(totals.income);
     leftText.textContent = money(totals.left, true);
     tone(leftText, totals.left);
-    budgetLine.hidden = totals.budgeted === null;
-    if (totals.budgeted !== null) {
+    // Spending in the categories that have a limit, against the limits.
+    const line = budgetLine(totals, currencyOf(settings));
+    budgetRow.hidden = line === null;
+    if (line && totals.budgeted !== null) {
       budgetProgress.max = totals.budgeted;
-      budgetProgress.value = Math.min(totals.spent, totals.budgeted);
-      const rest = totals.budgeted - totals.spent;
-      budgetLine.classList.toggle('total--over', rest < 0);
-      budgetText.textContent =
-        rest >= 0
-          ? `${money(rest)} left of the ${money(totals.budgeted)} budgeted`
-          : `${money(-rest)} over the ${money(totals.budgeted)} budgeted`;
+      budgetProgress.value = Math.min(totals.spentWithLimit, totals.budgeted);
+      budgetRow.classList.toggle('total--over', line.over);
+      budgetText.textContent = line.text;
     }
 
     noCategories.hidden = categories.categories.length > 0;

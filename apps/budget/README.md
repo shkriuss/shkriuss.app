@@ -26,7 +26,12 @@ See where your money goes, month by month. Lives at
     has nothing to win over another's when they first sync.
 - A month shows what was spent, earned and is left (`summary`), each
   category's spending against its limit (`byCategory`; over the limit, its
-  bar turns red), and the month's entries, the latest first. A new entry
+  bar turns red), and the month's entries, the latest first. Once a
+  category has a limit, a line under the totals sets what was spent in the
+  categories that have one against their limits added up (`budgetLine`):
+  spending without a limit (rent in "Home" with "No limit", or "No
+  category") isn't held against them, and is said besides ("$1,500.00
+  more spent without a limit"). A new entry
   starts on today, or on the first day of the month being looked at; one
   saved in another month shows that month.
 - "Download as a spreadsheet (CSV)" saves every entry (expenses negative;
