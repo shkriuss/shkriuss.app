@@ -186,9 +186,10 @@ export function returnFocusAfterDialogs(): void {
     dialog.addEventListener('close', () => {
       const spot = openers.get(dialog) ?? null;
       openers.delete(dialog);
-      // Focus still in the closed dialog is lost: the browser takes it away a moment later.
+      // Focus still in the closed dialog is lost: the browser takes it away a
+      // moment later (unless the app opened the dialog again meanwhile).
       const active = document.activeElement;
-      if (active instanceof HTMLElement && dialog.contains(active)) active.blur();
+      if (!dialog.open && active instanceof HTMLElement && dialog.contains(active)) active.blur();
       returnFocus(spot);
     });
   });
