@@ -165,18 +165,34 @@ export function mountGrammar(root: Document): void {
       checkedText = lastText;
       render();
     } else {
-      phase = 'failed';
-      setStatus(FAILED);
+      checkerFailed();
     }
+  }
+
+  /** How many more times the checker is started again if it stops working. */
+  let restarts = 3;
+
+  /**
+   * The checker stopped working. If it had started, it's started again, a
+   * few times at most, and checks the text again once it's ready (audit
+   * F3-4); if it never started, this browser can't run it.
+   */
+  function checkerFailed(): void {
+    worker?.terminate();
+    if (phase === 'ready' && restarts > 0) {
+      restarts -= 1;
+      phase = 'loading';
+      startChecker();
+      return;
+    }
+    phase = 'failed';
+    setStatus(FAILED);
   }
 
   function startChecker(): void {
     worker = startWorker(checkerUrl);
     worker.addEventListener('message', heard);
-    worker.addEventListener('error', () => {
-      phase = 'failed';
-      setStatus(FAILED);
-    });
+    worker.addEventListener('error', checkerFailed);
     tell({ type: 'start', english: state.english, words: state.words });
   }
 

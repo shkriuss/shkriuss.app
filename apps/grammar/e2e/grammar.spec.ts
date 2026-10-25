@@ -157,6 +157,47 @@ test('copies and clears the text', async ({ page, context }) => {
   await expect(status(page)).toHaveText(READY);
 });
 
+test('the English chosen elsewhere while the checker starts: it still checks', async ({ page }) => {
+  // Another tab here (or another device, through sync) switches to British
+  // while Harper is loading: the new English and the dictionary reach the
+  // checker together (audit F3-4). The change comes as another tab's does,
+  // with a storage event (a second Grammar tab would load Harper too, and two
+  // downloads of it at once can make the browser fail one).
+  const starting = page.waitForRequest((request) => request.url().endsWith('.wasm'));
+  await page.goto('/');
+  await starting;
+  await page.evaluate(() => {
+    const key = 'shkriuss:grammar';
+    const data = { text: '', english: 'british', words: ['Shkriuss'] };
+    localStorage.setItem(key, JSON.stringify({ v: 1, data }));
+    window.dispatchEvent(new StorageEvent('storage', { key, storageArea: localStorage }));
+  });
+  await expect(page.getByLabel('British (UK)')).toBeChecked();
+  await text(page).fill('I has a apple. Shkriuss likes the colour.');
+  await expect(status(page)).toHaveText('2 suggestions.', { timeout: 30_000 });
+});
+
+test('the checker is started again if it stops working', async ({ page }) => {
+  // As if it crashed once, after it had started (audit F3-4): its first
+  // check fails. The next copy of it works.
+  let started = 0;
+  await page.route('**/_astro/checker.worker-*.js', async (route) => {
+    started += 1;
+    const response = await route.fetch();
+    const script = await response.text();
+    const failing = `${script}
+addEventListener('message', (event) => {
+  if (event.data.type === 'check') postMessage({ type: 'failed' });
+});`;
+    await route.fulfill({ response, body: started === 1 ? failing : script });
+  });
+  await open(page);
+  await page.getByLabel('American (US)').check();
+  await text(page).fill('I has a apple.');
+  await expect(status(page)).toHaveText('2 suggestions.');
+  expect(started).toBe(2);
+});
+
 test('says when a pasted text doesn’t all fit', async ({ page }) => {
   // The box takes 20,000 characters; the browser keeps the start of a
   // longer paste, and nothing said so (audit F3-3).
