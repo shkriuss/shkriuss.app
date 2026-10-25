@@ -34,7 +34,7 @@
  * (./requests.ts) and files (./files.ts).
  */
 import { fromBase64Url } from '@shkriuss/crypto';
-import type { Store } from '@shkriuss/storage';
+import { isStorageFull, lastSaveProblem, type Store } from '@shkriuss/storage';
 import {
   CONNECT_LIFETIME_MS,
   connectUrl,
@@ -54,6 +54,7 @@ import {
   saveConnection,
   saveState,
   STATE_KEY,
+  stateProblem,
   StoppedError,
   updateFiles,
   updateState,
@@ -507,7 +508,9 @@ export function createSync(options: {
         if (synced.store.read(synced.store.version, next) === undefined)
           throw new SyncError('server');
         if (canonical(next) === before[synced.store.key]) continue;
-        if (!synced.store.save(next)) throw new SyncError('storage');
+        if (!synced.store.save(next)) {
+          throw new SyncError(lastSaveProblem() === 'full' ? 'full' : 'storage');
+        }
         appChanged = true;
       }
     } finally {
@@ -540,7 +543,7 @@ export function createSync(options: {
             ? null
             : state.base;
       if (!updateState(secret, { known: knowns, dirty: true, base: seenOnline })) {
-        throw new SyncError('storage');
+        throw new SyncError(stateProblem());
       }
       const data = await sealStores(key, options.app, merged, written + 1);
       if (data.length > MAX_SEALED_CHARS) throw new SyncError('too-big');
@@ -562,7 +565,7 @@ export function createSync(options: {
     // 6. Remember. The copy online is now the merge.
     const base = online ? { epoch: online.epoch, stores: knowns } : null;
     const saved = { remote: online, known: knowns, dirty: false, base, last: now };
-    if (!updateState(secret, saved)) throw new SyncError('storage');
+    if (!updateState(secret, saved)) throw new SyncError(stateProblem());
 
     // 7. The old copies are in the new one now (and their files, re-sealed with
     // the new key, and the app's linked data): delete them, so devices still
@@ -579,7 +582,7 @@ export function createSync(options: {
         for (const old of movedAway) await linked.move(old, fromBase64Url(secret));
       }
       if (!updateState(secret, { previous: stillWaiting, waiting })) {
-        throw new SyncError('storage');
+        throw new SyncError(stateProblem());
       }
     }
     return true;
@@ -650,7 +653,7 @@ export function createSync(options: {
     try {
       if (!pending || Date.now() - pending.at > CONNECT_LIFETIME_MS) throw new Error('No request');
       const connection = await openConnection(options.app, pending, result);
-      if (!saveConnection(connection)) throw new SyncError('storage');
+      if (!saveConnection(connection)) throw new SyncError(stateProblem());
       problem = null;
       emit('connected');
       await run();
@@ -693,8 +696,8 @@ export function createSync(options: {
       const { request, pending } = await newConnectRequest(options.app, location.origin);
       try {
         sessionStorage.setItem(PENDING_KEY, JSON.stringify(pending));
-      } catch {
-        throw new SyncError('storage');
+      } catch (error) {
+        throw new SyncError(isStorageFull(error) ? 'full' : 'storage');
       }
       location.assign(connectUrl(origin, request));
     },

@@ -4,6 +4,7 @@
  * date online. Kept under "shkriuss-device:", which backups skip.
  */
 import { toBase64Url } from '@shkriuss/crypto';
+import { isStorageFull } from '@shkriuss/storage';
 import type { Connection } from './connect.ts';
 import type { Known } from './merge.ts';
 
@@ -81,15 +82,22 @@ export function loadState(): DeviceState | null {
   }
 }
 
+/** Whether the latest saveState() that didn't work found the browser's storage full. */
+let stateFull = false;
+
 export function saveState(state: DeviceState | null): boolean {
   try {
     if (state) localStorage.setItem(STATE_KEY, JSON.stringify(state));
     else localStorage.removeItem(STATE_KEY);
     return true;
-  } catch {
+  } catch (error) {
+    stateFull = isStorageFull(error);
     return false;
   }
 }
+
+/** Why the latest saveState() didn't work: no room, or no storage at all. */
+export const stateProblem = (): 'full' | 'storage' => (stateFull ? 'full' : 'storage');
 
 /** Files to bring up to date online (apps with files only), kept apart so a sync can't overwrite them. */
 export interface FileState {

@@ -24,6 +24,8 @@ import worker, { STORAGE_LIMITS, type SyncEnv } from './worker.ts';
 
 class MemoryStorage implements StorageLike {
   #map = new Map<string, string>();
+  /** True: like a browser with no room left, every save throws. */
+  full = false;
   get length(): number {
     return this.#map.size;
   }
@@ -34,6 +36,7 @@ class MemoryStorage implements StorageLike {
     return this.#map.get(key) ?? null;
   }
   setItem(key: string, value: string): void {
+    if (this.full) throw new DOMException('The quota has been exceeded.', 'QuotaExceededError');
     this.#map.set(key, value);
   }
   removeItem(key: string): void {
@@ -868,6 +871,23 @@ describe('turning sync off while a sync is under way', () => {
       vi.useRealTimers();
     });
   }
+});
+
+describe('a browser with no room left', () => {
+  it('says this device is full, not that storage is blocked (audit E-3)', async () => {
+    const secret = randomBytes(32);
+    const phone = new Device(secret);
+    const tablet = new Device(secret);
+    phone.counters = [counter('water')];
+    await phone.syncNow();
+
+    tablet.storage.full = true;
+    expect((await tablet.syncNow()).problem).toBe('full');
+    // Once there's room again, it syncs.
+    tablet.storage.full = false;
+    expect((await tablet.syncNow()).problem).toBeNull();
+    expect(tablet.counters).toEqual([counter('water')]);
+  });
 });
 
 describe('showing changes from other devices', () => {
