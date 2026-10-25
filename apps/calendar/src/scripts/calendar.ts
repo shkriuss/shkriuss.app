@@ -52,7 +52,6 @@ import {
   type Repeat,
 } from '../lib/events.ts';
 import { isNotable, type SpecialDay } from '../lib/holidays.ts';
-import { toIcs } from '../lib/ics.ts';
 import {
   ALL_DAY_REMINDERS,
   DEFAULT_REMINDER,
@@ -648,8 +647,16 @@ export function mountCalendar(root: Document): void {
       exportStatus.textContent = 'There are no events to download yet.';
       return;
     }
-    downloadFile(`calendar-${today()}.ics`, toIcs(state.events), 'text/calendar');
-    exportStatus.textContent = `Downloaded ${plural(state.events.length, 'event')}.`;
+    // Loaded when it's needed, like the import: the page starts with less to load.
+    import('../lib/ics.ts').then(
+      ({ toIcs }) => {
+        downloadFile(`calendar-${today()}.ics`, toIcs(state.events), 'text/calendar');
+        exportStatus.textContent = `Downloaded ${plural(state.events.length, 'event')}.`;
+      },
+      () => {
+        exportStatus.textContent = 'Calendar couldn’t make the file. Please try again.';
+      },
+    );
   });
 
   // If Calendar is open in two tabs, keep them in sync.

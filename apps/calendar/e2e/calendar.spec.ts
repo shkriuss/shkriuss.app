@@ -269,6 +269,19 @@ test('downloads events as an .ics file', async ({ page }) => {
   expect(ics).toContain('TRIGGER:-PT15M\r\n');
 });
 
+test('says so when the file can’t be made', async ({ page, guard }) => {
+  // What writes the file loads only when it's needed; here it can't.
+  guard.allowConsole('net::ERR_FAILED');
+  await seed(page, [{ title: 'Dentist' }]);
+  await page.route('**/_astro/ics.*.js', (route) => route.abort());
+  await page.getByRole('button', { name: 'Download .ics file' }).click();
+  await expect(
+    page
+      .getByRole('status')
+      .filter({ hasText: 'Calendar couldn’t make the file. Please try again.' }),
+  ).toBeVisible();
+});
+
 test('passes accessibility checks with events, in both themes', async ({ page }) => {
   await seed(page, [
     { title: 'Dentist' },
