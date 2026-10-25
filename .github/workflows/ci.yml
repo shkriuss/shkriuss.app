@@ -25,9 +25,10 @@ jobs:
   checks:
     name: Checks
     runs-on: ubuntu-latest
-    # A stuck run stops here. Every check, the build and 540+ browser tests
-    # take about 20 minutes on GitHub's 2-processor machines (each new app adds
-    # about a minute), so this leaves room to grow.
+    # A stuck run stops here. Every check, the build and 700+ browser tests
+    # take about 15 to 20 minutes (each new app adds about a minute), so this
+    # leaves room for a few more apps. When runs come close to it, see
+    # docs/quality.md ("Time limit"): never skip tests to fit (audit J-5).
     timeout-minutes: 30
     permissions:
       contents: read
