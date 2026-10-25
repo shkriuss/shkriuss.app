@@ -19,6 +19,7 @@
  * the trade (overClosed), never as shares counted twice.
  */
 import { addDays, isIsoDate, type IsoDate } from '@shkriuss/dates';
+import { csvFile } from '@shkriuss/storage/csv';
 import {
   CURRENCIES,
   decimalText,
@@ -865,14 +866,6 @@ export function dateLabel(date: IsoDate, locale = DATE_LOCALE): string {
 
 // ---------- Spreadsheet ----------
 
-/** A spreadsheet cell: quoted when needed, and never read as a formula. */
-function cell(value: string | number | null): string {
-  if (value === null) return '';
-  let text = String(value);
-  if (typeof value === 'string' && /^[=+\-@\t\r]/.test(text)) text = `'${text}`;
-  return /[",\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
-}
-
 /**
  * The trades as a CSV file (one row each, the latest entered first). A
  * trade closed in parts has a row for each part, and one for what's still
@@ -899,27 +892,23 @@ export function toCsv(state: TradesState): string {
   const rows = state.trades
     .filter((trade) => !isOpen(trade) || openQuantity(trade, parts) > 0)
     .sort((a, b) => b.entryDate.localeCompare(a.entryDate))
-    .map((trade) =>
-      [
-        trade.symbol,
-        SIDE_LABELS[trade.side],
-        trade.entryDate,
-        trade.entryPrice,
-        isOpen(trade) ? openQuantity(trade, parts) : trade.quantity,
-        trade.stop,
-        trade.exitDate,
-        trade.exitPrice,
-        isOpen(trade) ? openFees(trade, parts) : trade.fees,
-        profit(trade),
-        returnPercent(trade),
-        rMultiple(trade),
-        trade.setup,
-        trade.notes,
-      ]
-        .map(cell)
-        .join(','),
-    );
-  return [header.join(','), ...rows].join('\r\n') + '\r\n';
+    .map((trade) => [
+      trade.symbol,
+      SIDE_LABELS[trade.side],
+      trade.entryDate,
+      trade.entryPrice,
+      isOpen(trade) ? openQuantity(trade, parts) : trade.quantity,
+      trade.stop,
+      trade.exitDate,
+      trade.exitPrice,
+      isOpen(trade) ? openFees(trade, parts) : trade.fees,
+      profit(trade),
+      returnPercent(trade),
+      rMultiple(trade),
+      trade.setup,
+      trade.notes,
+    ]);
+  return csvFile([header, ...rows]);
 }
 
 // ---------- Settings ----------

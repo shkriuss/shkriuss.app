@@ -22,6 +22,7 @@
  * vehicle in the repair form adds it.
  */
 import { isIsoDate, type IsoDate } from '@shkriuss/dates';
+import { csvFile } from '@shkriuss/storage/csv';
 import {
   CURRENCIES,
   currencyDigits,
@@ -907,14 +908,6 @@ export const countLabel = (count: number, one: string, many: string): string =>
 
 // ---------- Spreadsheet ----------
 
-/** A spreadsheet cell: quoted when needed, and never read as a formula. */
-function cell(value: string | number | null): string {
-  if (value === null) return '';
-  let text = String(value);
-  if (typeof value === 'string' && /^[=+\-@\t\r]/.test(text)) text = `'${text}`;
-  return /[",\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
-}
-
 /** Every repair as a CSV file (one row each, the latest first). */
 export function toCsv(
   repairs: RepairsState,
@@ -958,7 +951,7 @@ export function toCsv(
       cost?.total ?? null,
     ];
   });
-  return [header, ...rows].map((row) => row.map(cell).join(',')).join('\r\n') + '\r\n';
+  return csvFile([header, ...rows]);
 }
 
 // ---------- Settings ----------

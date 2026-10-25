@@ -28,6 +28,7 @@ import {
   type Stamp,
 } from '@shkriuss/dates';
 import type { Notice } from '@shkriuss/push';
+import { csvFile } from '@shkriuss/storage/csv';
 import {
   CURRENCIES,
   currencyDigits,
@@ -543,14 +544,6 @@ export function dayLabel(date: IsoDate, locale = DATE_LOCALE): string {
 
 // ---------- Spreadsheet ----------
 
-/** A spreadsheet cell: quoted when needed, and never read as a formula. */
-function cell(value: string | number | null): string {
-  if (value === null) return '';
-  let text = String(value);
-  if (typeof value === 'string' && /^[=+\-@\t\r]/.test(text)) text = `'${text}`;
-  return /[",\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
-}
-
 export const KIND_LABELS: Record<Kind, string> = {
   expense: 'Expense',
   income: 'Income',
@@ -562,18 +555,14 @@ export function toCsv(entries: EntriesState, categories: CategoriesState): strin
   const names = new Map(categories.categories.map((category) => [category.id, category.name]));
   const rows = [...entries.entries]
     .sort((a, b) => b.date.localeCompare(a.date))
-    .map((entry) =>
-      [
-        entry.date,
-        KIND_LABELS[entry.kind],
-        entry.kind === 'expense' ? -entry.amount : entry.amount,
-        hasCategory(entry.kind) ? (names.get(entry.category ?? '') ?? '') : '',
-        entry.note,
-      ]
-        .map(cell)
-        .join(','),
-    );
-  return [['Date', 'Type', 'Amount', 'Category', 'Note'].join(','), ...rows].join('\r\n') + '\r\n';
+    .map((entry) => [
+      entry.date,
+      KIND_LABELS[entry.kind],
+      entry.kind === 'expense' ? -entry.amount : entry.amount,
+      hasCategory(entry.kind) ? (names.get(entry.category ?? '') ?? '') : '',
+      entry.note,
+    ]);
+  return csvFile([['Date', 'Type', 'Amount', 'Category', 'Note'], ...rows]);
 }
 
 // ---------- Settings ----------

@@ -20,7 +20,7 @@ packages/ui/         design system: tokens, CSS, Astro components, icons, AppShe
                      and page helpers every app uses (@shkriuss/ui/dom, /problem, …)
 packages/registry/   apps.json = the single list of apps (+ validation)
 packages/astro-config/ defineAppConfig(): headers, manifest, icons, service worker
-packages/storage/    on-device storage helpers (createStore, export, backup, restore, delete; files/photos)
+packages/storage/    on-device storage helpers (createStore, export, backup, restore, delete; files/photos; CSV)
 packages/push/       optional notifications while an app is closed (client + per-app Worker)
 packages/account/    optional shkriuss account: recovery key, passkeys, device links (+ hub Worker)
 packages/sync/       optional sync between devices through the account (client + per-app Worker; photos too)
