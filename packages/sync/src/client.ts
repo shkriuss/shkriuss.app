@@ -85,7 +85,14 @@ import {
   type Keys,
   type SyncProblem,
 } from './requests.ts';
-import { openStores, sealStores, syncKeys, type OpenedCopy, type Stores } from './snapshot.ts';
+import {
+  openStores,
+  sealStores,
+  SYNC_VERSION,
+  syncKeys,
+  type OpenedCopy,
+  type Stores,
+} from './snapshot.ts';
 import { FILE_ID, MAX_SEALED_CHARS } from './validate.ts';
 
 export { isSyncOn, saveConnection, stopSync } from './device.ts';
@@ -100,6 +107,9 @@ const CHANGE_DELAY_MS = 1500;
 const POLL_MS = 60 * 1000;
 /** Merge again at most this many times in a row when another device writes first. */
 const MAX_ROUNDS = 3;
+
+/** A copy the server sent that can't be opened: from a newer version, damaged, or too big. */
+class UnopenedCopyError extends SyncError {}
 /** A store whose data is a list of items with ids, and how to get the list in and out. */
 export interface SyncedStore<T = unknown, I extends Identified = Identified> {
   store: Store<T>;
@@ -285,7 +295,7 @@ export function createSync(options: {
     try {
       opened = await openStores(key, options.app, copy.data);
     } catch (error) {
-      throw new SyncError(error instanceof RangeError ? 'update-needed' : 'server');
+      throw new UnopenedCopyError(error instanceof RangeError ? 'update-needed' : 'server');
     }
     const { version, epoch } = copy;
     return { kind: 'copy', version, epoch, ...opened } as Remote;
@@ -306,25 +316,73 @@ export function createSync(options: {
     return { ...remote, v: synced.store.version, items };
   }
 
+  /** This app's data versions: an old copy that needs newer ones is tried again once they change. */
+  const versions = [SYNC_VERSION, ...stores.map((synced) => synced.store.version)].join(' ');
+
+  /**
+   * An old copy's stores in this app's data versions, ready to merge, or
+   * "wait" if one needs a newer version of the app or fails the store's own
+   * checks (then it can't be merged, but nothing in it is lost).
+   */
+  function readOld(old: Stores): Stores | 'wait' {
+    const ready: Stores = {};
+    try {
+      for (const synced of stores) {
+        const snapshot = old[synced.store.key];
+        if (!snapshot) continue;
+        if (snapshot.v > synced.store.version) return 'wait';
+        const upgraded = upgrade(synced, snapshot);
+        const values = valuesOf(upgraded) as Identified[];
+        const value = synced.withItems(synced.store.empty(), values);
+        if (synced.store.read(synced.store.version, value) === undefined) return 'wait';
+        ready[synced.store.key] = upgraded;
+      }
+    } catch {
+      return 'wait';
+    }
+    return ready;
+  }
+
   /**
    * The online copies of replaced keys still to move here (gone ones have
-   * nothing to bring), and the replaced keys whose copy another device moved.
+   * nothing to bring), the replaced keys whose copy another device moved,
+   * and those whose copy waits for a newer version of the app.
+   *
+   * A device with the old key (a lost one) can write anything to its copy,
+   * so nothing in it may stop syncing with the new key (audit A-1): a copy
+   * that doesn't open has nothing to bring, and is retired all the same; one
+   * from a newer version of the app, or that fails the checks, waits, and is
+   * tried again only after this app updates.
    */
-  async function fetchPrevious(previous: readonly string[]) {
+  async function fetchPrevious(previous: readonly string[], waited: Record<string, string>) {
     const copies: (Keys & { secret: Uint8Array<ArrayBuffer>; stores: Stores })[] = [];
     const movedAway: Uint8Array<ArrayBuffer>[] = [];
+    const waiting: Record<string, string> = {};
     for (const encoded of previous) {
+      if (waited[encoded] === versions) {
+        waiting[encoded] = versions;
+        continue;
+      }
       const secret = fromBase64Url(encoded);
       const { token, key } = await syncKeys(secret);
+      let ready: Stores | 'wait';
       try {
         const remote = await fetchRemote(null, token, key);
-        if (remote.kind === 'copy') copies.push({ secret, token, key, stores: remote.stores });
+        if (remote.kind !== 'copy') continue;
+        ready = readOld(remote.stores);
       } catch (error) {
-        if (!isGone(error)) throw error;
-        if (error instanceof SyncError && error.problem === 'moved') movedAway.push(secret);
+        if (error instanceof UnopenedCopyError) {
+          ready = error.problem === 'update-needed' ? 'wait' : {};
+        } else {
+          if (!isGone(error)) throw error;
+          if (error instanceof SyncError && error.problem === 'moved') movedAway.push(secret);
+          continue;
+        }
       }
+      if (ready === 'wait') waiting[encoded] = versions;
+      else copies.push({ secret, token, key, stores: ready });
     }
-    return { copies, movedAway };
+    return { copies, movedAway, waiting };
   }
 
   /** What this device sees now, for each store, given what it knew. */
@@ -363,10 +421,23 @@ export function createSync(options: {
 
     // 2. The online copy, and any old copies to bring along.
     const remote = await fetchRemote(state.remote?.version ?? null, token, key);
-    const { copies: moving, movedAway } = await fetchPrevious(state.previous);
-    if (remote.kind === 'same' && !localChanged && !state.dirty && state.previous.length === 0) {
+    const {
+      copies: moving,
+      movedAway,
+      waiting,
+    } = await fetchPrevious(state.previous, state.waiting);
+    const stillWaiting = Object.keys(waiting);
+    if (
+      remote.kind === 'same' &&
+      !localChanged &&
+      !state.dirty &&
+      state.previous.length === stillWaiting.length
+    ) {
       const upgraded = state.known !== stored.known;
-      updateState(secret, upgraded ? { last: now, known: state.known } : { last: now });
+      updateState(
+        secret,
+        upgraded ? { last: now, known: state.known, waiting } : { last: now, waiting },
+      );
       return true;
     }
 
@@ -414,8 +485,9 @@ export function createSync(options: {
         result = merge(result, theirs);
       }
       for (const old of moving) {
+        // Already in this app's data version (readOld).
         const theirs = old.stores[synced.store.key];
-        if (theirs) result = merge(result, upgrade(synced, theirs));
+        if (theirs) result = merge(result, theirs);
       }
       merged[synced.store.key] = prune(result, now);
     }
@@ -506,7 +578,9 @@ export function createSync(options: {
       if (linked) {
         for (const old of movedAway) await linked.move(old, fromBase64Url(secret));
       }
-      if (!updateState(secret, { previous: [] })) throw new SyncError('storage');
+      if (!updateState(secret, { previous: stillWaiting, waiting })) {
+        throw new SyncError('storage');
+      }
     }
     return true;
   }

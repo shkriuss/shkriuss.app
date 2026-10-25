@@ -125,7 +125,12 @@ Then:
   connects, the hub also gives it its keys from the replaced account keys.
   The app's next sync brings the old online copy into the new one (merging as
   usual), then deletes the old copy, marked as moved. Devices still using the
-  old copy turn sync off and say the key was replaced; their data stays.
+  old copy turn sync off and say the key was replaced; their data stays. The
+  lost device can still write anything to the old copy, so nothing in it can
+  stop the move: a copy that doesn't open has nothing to bring and is
+  deleted all the same, and one from a newer version of the app (or that
+  fails the app's checks) waits until the app is updated, while syncing with
+  the new key goes on.
 - **Sync history.** A device keeps what it knew at its last sync when sync is
   turned off (by the person, or because the copy was deleted or moved), and
   keeps noting edits and deletions while it's off. Turning sync on again, with

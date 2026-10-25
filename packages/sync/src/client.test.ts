@@ -3,7 +3,7 @@
  * talking to the real server code (worker.ts) kept in memory. Devices take
  * turns, like phones that sync one after another.
  */
-import { equalBytes, randomBytes, toBase64Url, utf8 } from '@shkriuss/crypto';
+import { equalBytes, randomBytes, seal, toBase64Url, utf8 } from '@shkriuss/crypto';
 import { createStore, deleteAll, type StorageLike, type Store } from '@shkriuss/storage';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -16,7 +16,8 @@ import {
   type SyncStatus,
 } from './client.ts';
 import { turnOffProof } from './connect.ts';
-import { syncKeys } from './snapshot.ts';
+import { observe } from './merge.ts';
+import { sealStores, syncKeys } from './snapshot.ts';
 import { memorySync, withFiles } from './testing.ts';
 import type { FileList } from './validate.ts';
 import worker, { STORAGE_LIMITS, type SyncEnv } from './worker.ts';
@@ -533,6 +534,94 @@ describe('syncing between devices', () => {
     expect((await call(oldKey, '/copy', {}, worker)).status).toBe(410);
     expect((await lost.syncNow()).on).toBe(false);
     expect(tablet.counters).toEqual([counter('water')]);
+  });
+
+  describe('an old copy a lost device wrote (audit A-1)', () => {
+    /** What a device with the old app key can do: put any sealed bytes online as the copy. */
+    async function plant(secret: Uint8Array<ArrayBuffer>, packed: Uint8Array<ArrayBuffer>) {
+      const { key } = await syncKeys(secret);
+      const data = await seal(key, packed, 'shkriuss sync v1 tally');
+      const current = (await (await call(secret, '/copy')).json()) as { version: number };
+      const body = JSON.stringify({ base: current.version || null, data });
+      expect((await call(secret, '/copy', { method: 'PUT', body })).status).toBe(200);
+    }
+    const gzip = async (text: string) =>
+      new Uint8Array(
+        await new Response(
+          new Blob([text]).stream().pipeThrough(new CompressionStream('gzip')),
+        ).arrayBuffer(),
+      );
+
+    /** The tablet's data, synced with the old key, then the key is replaced on the tablet. */
+    async function replaced(plantOld: (oldKey: Uint8Array<ArrayBuffer>) => Promise<void>) {
+      const oldKey = randomBytes(32);
+      const newKey = randomBytes(32);
+      const tablet = new Device(oldKey);
+      tablet.counters = [counter('water')];
+      await tablet.syncNow();
+      await plantOld(oldKey);
+      tablet.connect(newKey, [oldKey]);
+      return { oldKey, newKey, tablet };
+    }
+
+    it('that doesn’t open is moved past, and retired', async () => {
+      const { oldKey, newKey, tablet } = await replaced((oldKey) =>
+        plant(oldKey, utf8('not gzip at all')),
+      );
+      expect((await tablet.syncNow()).problem).toBeNull();
+      const fresh = (await (await call(newKey, '/copy')).json()) as { version: number };
+      expect(fresh.version).toBeGreaterThan(0);
+      // Devices still on the old key hear that it moved.
+      const old = await call(oldKey, '/copy');
+      expect(old.status).toBe(410);
+      expect(await old.json()).toMatchObject({ moved: true });
+    });
+
+    it('from a newer version doesn’t stop syncing with the new key, and waits for an update', async () => {
+      const { oldKey, newKey, tablet } = await replaced(async (oldKey) =>
+        plant(
+          oldKey,
+          await gzip(
+            JSON.stringify({ format: 'shkriuss-sync', version: 2, app: 'tally', stores: {} }),
+          ),
+        ),
+      );
+      expect((await tablet.syncNow()).problem).toBeNull();
+      const fresh = (await (await call(newKey, '/copy')).json()) as { version: number };
+      expect(fresh.version).toBeGreaterThan(0);
+      // Nothing in it is lost: it's still there, for this app once it's updated.
+      expect((await call(oldKey, '/copy')).status).toBe(200);
+
+      // And it isn't downloaded again at every sync until then.
+      const { token } = await syncKeys(oldKey);
+      const realFetch = globalThis.fetch;
+      let asked = 0;
+      vi.stubGlobal('fetch', async (input: string, init?: RequestInit) => {
+        if (new Headers(init?.headers).get('Authorization') === `Bearer ${token}`) asked += 1;
+        return realFetch(input, init);
+      });
+      tablet.counters = [counter('water', 1)];
+      expect((await tablet.syncNow()).problem).toBeNull();
+      expect(asked).toBe(0);
+    });
+
+    it('that fails the app’s own checks waits too, instead of stopping sync', async () => {
+      const { oldKey, newKey, tablet } = await replaced(async (oldKey) => {
+        // A counter whose count isn't a number: the app's own check refuses it.
+        const item = { id: 'bad', name: 'bad', count: 'many' };
+        const bad = observe(undefined, [item], 1, Date.now());
+        const { key } = await syncKeys(oldKey);
+        const data = await sealStores(key, 'tally', { 'shkriuss:tally': bad.snapshot }, 1);
+        const current = (await (await call(oldKey, '/copy')).json()) as { version: number };
+        const body = JSON.stringify({ base: current.version, data });
+        expect((await call(oldKey, '/copy', { method: 'PUT', body })).status).toBe(200);
+      });
+      expect((await tablet.syncNow()).problem).toBeNull();
+      expect(tablet.counters).toEqual([counter('water')]);
+      const fresh = (await (await call(newKey, '/copy')).json()) as { version: number };
+      expect(fresh.version).toBeGreaterThan(0);
+      expect((await call(oldKey, '/copy')).status).toBe(200);
+    });
   });
 
   it('connecting to another account leaves the old one’s copy alone', async () => {

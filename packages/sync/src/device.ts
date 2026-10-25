@@ -34,10 +34,25 @@ export interface DeviceState {
   last: number | null;
   /** The app's keys from replaced account keys: their online copies are moved here, then deleted. */
   previous: string[];
+  /**
+   * Of those, the ones whose copy needs a newer version of this app (or
+   * doesn't pass its checks), with this app's data versions when that was
+   * found: they're tried again once the app is updated.
+   */
+  waiting: Record<string, string>;
 }
 
 const strings = (value: unknown): string[] =>
   Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+
+const stringRecord = (value: unknown): Record<string, string> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? Object.fromEntries(
+        Object.entries(value).filter(
+          (entry): entry is [string, string] => typeof entry[1] === 'string',
+        ),
+      )
+    : {};
 
 export function loadState(): DeviceState | null {
   try {
@@ -59,6 +74,7 @@ export function loadState(): DeviceState | null {
           : null,
       last: typeof state.last === 'number' ? state.last : null,
       previous: strings(state.previous),
+      waiting: stringRecord(state.waiting),
     };
   } catch {
     return null;
@@ -144,6 +160,7 @@ export const offState = (state: DeviceState): DeviceState => ({
   code: null,
   remote: null,
   previous: [],
+  waiting: {},
 });
 
 /**
@@ -172,6 +189,7 @@ export function saveConnection(connection: Connection): boolean {
     base: existing?.base ?? null,
     last: null,
     previous,
+    waiting: existing?.waiting ?? {},
   });
 }
 
