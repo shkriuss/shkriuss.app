@@ -9,8 +9,8 @@ import { defineConfig, devices } from '@playwright/test';
 import { sites, TEST_STORAGE_CODE } from './tests/e2e/sites.ts';
 
 const isCI = Boolean(process.env['CI']);
-// The hub's local address, for apps' "Turn on sync" (on the real site and in
-// previews, each app works it out from its own address).
+// The hub's local address, for apps' "Turn on sync" (on the real site, each
+// app works it out from its own address).
 const hub = sites.find((site) => site.slug === 'hub');
 const hubURL = hub?.baseURL ?? '';
 // Where passkeys are used in tests: they need a domain name, and "localhost" counts.

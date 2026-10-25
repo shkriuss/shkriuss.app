@@ -31,8 +31,7 @@ reasons: [ADR 0015](../../docs/adr/0015-photos-app.md) (on the device) and
     at a time, and downloads thumbnails (several at once), screen-sized
     copies and originals when they're needed.
   - `src/worker.ts`: the Worker for `/api/sync/*` and `/api/library/*`.
-    `wrangler.jsonc` has the R2 buckets (`shkriuss-photos`, and
-    `shkriuss-photos-preview` for previews).
+    `wrangler.jsonc` has the R2 bucket, `shkriuss-photos`.
   - Adding photos online needs the storage code once per account (the
     GitHub secret `PHOTOS_STORAGE_CODE`; see docs/deployment.md).
 - `src/scripts/photos.ts`: connects the page to all that: the grid by month

@@ -20,14 +20,11 @@ interface WranglerConfig {
   routes: { pattern: string; custom_domain: boolean }[];
   assets: { directory: string; not_found_handling: string; run_worker_first?: string[] };
   workers_dev: boolean;
+  preview_urls: boolean;
   observability?: { enabled: boolean };
   durable_objects?: { bindings: { name: string; class_name: string }[] };
   migrations?: { tag: string; new_sqlite_classes?: string[] }[];
   r2_buckets?: { binding: string; bucket_name: string }[];
-  previews: {
-    durable_objects?: { bindings: { name: string; class_name: string }[] };
-    r2_buckets?: { binding: string; bucket_name: string }[];
-  };
 }
 
 /** What each server feature needs: its Durable Objects (packages/<feature>). */
@@ -181,10 +178,13 @@ describe.each(appFolders)('apps/%s', (slug) => {
     expect(config.name).toBe(slug);
     expect(config.routes).toEqual([{ pattern: domain, custom_domain: true }]);
     expect(config.assets).toMatchObject({ directory: './dist', not_found_handling: '404-page' });
+    // Only at the real address: no *.workers.dev address, no addresses for
+    // single versions, and no pull request previews (docs/adr/0019).
     expect(config.workers_dev).toBe(false);
+    expect(config.preview_urls).toBe(false);
+    expect(config).not.toHaveProperty('previews');
     // No logs or traces of requests (the privacy page says so).
     expect(config.observability).toEqual({ enabled: false });
-    expect(config.previews).toBeDefined();
   });
 
   const entry = apps.find((app) => app.slug === slug);
@@ -212,8 +212,6 @@ describe.each(appFolders)('apps/%s', (slug) => {
       expect(config.main).toBe('src/worker.ts');
       expect(config.assets.run_worker_first).toEqual(['/api/*']);
       expect(config.durable_objects?.bindings).toEqual(bindings);
-      // PR previews need their own storage, or they'd have none.
-      expect(config.previews.durable_objects?.bindings).toEqual(bindings);
       const classes = (config.migrations ?? []).flatMap((m) => m.new_sqlite_classes ?? []);
       expect(classes).toEqual(
         expect.arrayContaining(bindings.map((binding) => binding.class_name)),
@@ -237,23 +235,14 @@ describe.each(appFolders)('apps/%s', (slug) => {
     },
   );
 
-  it(
-    entry?.library
-      ? 'keeps its library’s files in R2, with another bucket for previews'
-      : 'has no R2 bucket',
-    () => {
-      const config = wranglerConfig(slug);
-      if (!entry?.library) {
-        expect(config.r2_buckets).toBeUndefined();
-        return;
-      }
-      const [real] = config.r2_buckets ?? [];
-      const [preview] = config.previews.r2_buckets ?? [];
-      expect(real?.binding).toBe('LIBRARY_FILES');
-      expect(preview?.binding).toBe('LIBRARY_FILES');
-      expect(real?.bucket_name).toBe(`shkriuss-${slug}`);
-      // Previews never touch the real photos.
-      expect(preview?.bucket_name).toBe(`shkriuss-${slug}-preview`);
-    },
-  );
+  it(entry?.library ? 'keeps its library’s files in R2' : 'has no R2 bucket', () => {
+    const config = wranglerConfig(slug);
+    if (!entry?.library) {
+      expect(config.r2_buckets).toBeUndefined();
+      return;
+    }
+    expect(config.r2_buckets).toEqual([
+      { binding: 'LIBRARY_FILES', bucket_name: `shkriuss-${slug}` },
+    ]);
+  });
 });

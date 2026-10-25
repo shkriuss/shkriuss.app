@@ -50,7 +50,6 @@ import {
 import {
   GRANTED_KEY,
   LIMIT_HEADER,
-  limitFor,
   limitOf,
   METER,
   meterFetch,
@@ -87,10 +86,9 @@ export interface LibraryEnv extends SiteEnv {
 
 /**
  * All libraries together, counted as 16 KB each (a new library holds less;
- * what's added after the storage code is limited by LibraryGate), on the
- * real site and on a PR preview.
+ * what's added after the storage code is limited by LibraryGate).
  */
-export const STORAGE_LIMITS = { site: 32_000_000, preview: 4_000_000 } as const;
+export const STORAGE_LIMITS = 32_000_000;
 
 /** JSON bodies: a list of ids, at most. */
 const MAX_JSON_BYTES = 8 * 1024;
@@ -135,7 +133,7 @@ export async function handleLibrary(
     'X-Token': await sha256Text(token),
     'X-Prefix': prefix,
     'X-Code': await codeId(env.LIBRARY_STORAGE_CODE),
-    [LIMIT_HEADER]: String(limitFor(new URL(request.url), STORAGE_LIMITS)),
+    [LIMIT_HEADER]: String(STORAGE_LIMITS),
   };
   const call = (op: string, body?: unknown) =>
     object.fetch(`https://library/${op}`, {

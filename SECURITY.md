@@ -96,12 +96,11 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
 - No secrets in the repository. The Cloudflare API token is stored only as a
   GitHub Actions secret, with just three permissions: _Workers Scripts: Edit_
   and _Workers R2 Storage: Edit_ (account), and _Workers Routes: Edit_ (the
-  `shkriuss.app` zone only). It's a secret of two environments: `production`,
-  which only `main` can use, and `preview`, which waits for the owner's
-  approval, because a preview runs a pull request's code before it's
-  merged. Photos' storage code is a secret of `production` only, handed to
-  its Worker at deploy in a temporary file that's deleted straight after;
-  previews never get it.
+  `shkriuss.app` zone only). It's a secret of the `production` environment,
+  which only `main` can use: no code runs with it before it's merged (there
+  are no pull request previews: [ADR 0019](docs/adr/0019-no-pull-request-previews.md)).
+  Photos' storage code is a secret of `production` too, handed to its Worker
+  at deploy in a temporary file that's deleted straight after.
 - gitleaks scans every commit for secrets; zizmor checks the workflows,
   including that each pinned commit really belongs to its action;
   `pnpm audit` checks for known vulnerabilities; Dependabot proposes updates
@@ -134,8 +133,6 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
   analytics or logging is turned on: every Worker sets
   `"observability": { "enabled": false }`, and the owner doesn't use what's
   kept.
-- Preview links (`*.workers.dev`) are public, and are posted in the pull
-  request's comments, which are public too. Search engines are told not to
-  index them. They run a pull request's code, never touch production's
-  storage, and get no storage code. Every page of one says it's a preview,
-  and not to use a real account or real data there.
+- Each site is only at its own address (`<app>.shkriuss.app`): Cloudflare's
+  `workers.dev` addresses, for the site or for any single version of it,
+  are off.

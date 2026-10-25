@@ -4,10 +4,8 @@
 
 ```
 pull request ──► CI checks
-      │       └──► (when you approve) preview links (pr-<n>-<site>.shkriuss.workers.dev)
       │
    merge to main ──► CI checks ──► deploy every site ──► check the live sites
-                                                      └──► delete previews of closed pull requests
 ```
 
 - **Hosting:** each site (the hub and every app) is its own Cloudflare
@@ -17,30 +15,30 @@ pull request ──► CI checks
   static files are free and unlimited on Cloudflare's Free plan.
 - **Addresses:** each site's `wrangler.jsonc` has a _custom domain_
   (`shkriuss.app`, `tally.shkriuss.app`, …). On deploy, Cloudflare creates the
-  DNS record and HTTPS certificate itself. `workers.dev` addresses are off for
-  production.
+  DNS record and HTTPS certificate itself. The sites have no other address:
+  `workers_dev` is off, and so is `preview_urls`, the addresses Cloudflare
+  can give each version of a site. That also closes the 36 addresses where
+  old builds of the hub, Calendar, Grammar, Photos and Tally stayed public
+  (`1a2b3c4d-tally.shkriuss.workers.dev`, audit finding I-6): they served
+  only old static files, never anyone's data.
 - **Production:** `.github/workflows/ci.yml`. On every push to `main` it runs
   every check, then deploys the exact files it tested, one site at a time
   (Grammar's big model download is made again from the same checked files),
   then checks that every live site shows the page that was deployed, with
   its security rules, and that its server answers.
-- **Previews:** `.github/workflows/preview.yml`. A pull request gets
-  Cloudflare Worker Previews named `pr-<number>` once you approve them (see
-  "Seeing a preview" below). A bot comment lists the links. They're public
-  but unlisted, and `workers.dev` tells search engines not to index them.
-  Previews of closed pull requests are deleted by the next production
-  deploy.
-  - **Why approval:** the Cloudflare token can change production too, and a
-    preview runs the pull request's own code before anyone has merged it.
-    So the token is kept in an environment that waits for you.
-  - Previews get no storage code, so Photos' online library stays locked in
-    them.
+- **No previews:** a pull request gets CI's checks, not preview links
+  ([ADR 0019](adr/0019-no-pull-request-previews.md)). A preview ran a pull
+  request's code, before it was merged, with a token that can change the
+  live sites, and it was public. To see a change, look at the live site
+  once it's merged; if something's wrong, roll back (below).
 - **Storage for Photos' online library** ([ADR 0016](adr/0016-online-photo-library.md)):
-  two R2 buckets, `shkriuss-photos` and `shkriuss-photos-preview` (for
-  previews; its files are deleted after 7 days). `scripts/buckets.ts`
-  creates them before deploying if they aren't there. At each production
-  deploy, `scripts/deploy.ts` gives Photos' Worker the storage code as its
-  secret `LIBRARY_STORAGE_CODE`.
+  an R2 bucket, `shkriuss-photos`. `scripts/buckets.ts` creates it before
+  deploying if it isn't there. At each production deploy,
+  `scripts/deploy.ts` gives Photos' Worker the storage code as its secret
+  `LIBRARY_STORAGE_CODE`.
+- **The free plan's server storage:** each kind of storage of each site is a
+  Durable Object namespace (33 today), and the free plan has 100 for the
+  whole account. `tests/unit/free-plan.test.ts` checks they fit.
 
 ## Setup (one time)
 
@@ -77,14 +75,11 @@ Open the repository on GitHub → **Settings** → **Environments**.
      use this environment.
    - **Environment secrets** → **Add environment secret**: name
      `CLOUDFLARE_API_TOKEN`, value: the token.
-2. **New environment**, named `preview`:
-   - Tick **Required reviewers**, add yourself, and tap **Save protection
-     rules**. Leave **Prevent self-review** off.
-   - **Environment secrets** → **Add environment secret**: name
-     `CLOUDFLARE_API_TOKEN`, value: the same token. Never the storage code.
-3. **Settings** → **Secrets and variables** → **Actions**: delete any
+2. **Settings** → **Secrets and variables** → **Actions**: delete any
    _repository_ secret named `CLOUDFLARE_API_TOKEN` or `PHOTOS_STORAGE_CODE`.
    Repository secrets reach every run, whatever its environment.
+3. There's no other environment. If the list still has `preview` (from when
+   pull requests had previews), delete it: it holds a copy of the token.
 
 Never paste the token anywhere else, including chat.
 
@@ -186,51 +181,14 @@ I-1 to I-10).
    seconds, action **Block**. It slows down a script trying to use up the
    free daily requests that all the apps share, but on the free plan it can't
    stop one: just under 3 requests a second from one address is never
-   blocked, and is more than the 100,000 a day by the end of the day. PR
-   previews (`*.workers.dev`) aren't behind it at all. So the servers keep
-   what a stranger can make them do cheap, and a day of free requests used
-   up only pauses the online features until 00:00 UTC (audit I-1).
+   blocked, and is more than the 100,000 a day by the end of the day. So
+   the servers keep what a stranger can make them do cheap, and a day of
+   free requests used up only pauses the online features until 00:00 UTC
+   (audit I-1).
 6. **Account safety:** **Manage Account → Members → Enforce two-factor
    authentication: On.** And **Notifications → Add → Usage Based Billing →
    R2**: an alert when storage passes 20 GB, so unusual uploads show up before
    they cost anything.
-
-## Seeing a preview
-
-Open the pull request, scroll to its checks, and tap **Deploy previews** (it
-says it's waiting). Tap **Review deployments**, tick **preview**, and tap
-**Approve and deploy**. A few minutes later the bot comment lists the links.
-Each later push waits for approval again. A pull request you don't need to
-look at doesn't need approving: merging doesn't wait for previews.
-
-Approve only pull requests you trust: the preview runs that pull request's
-code with the Cloudflare token.
-
-Every page of a preview says at the top that it's a preview of a change.
-Don't sign in there with your real shkriuss account (or type its recovery
-key), and don't put real data in: the preview runs the pull request's code,
-which isn't merged yet. To try sync on a preview, make a new account there.
-
-**Two pull requests' previews at a time.** Each set of previews gets its own
-server storage: as many Durable Object namespaces as the live sites (33
-today), and the free plan has 100 for the whole account. So the live sites
-and the previews of two pull requests fit. A third pull request's previews
-fail with "reached the Workers Free limit of 100 Durable Object namespaces";
-once one of the others is merged or closed (the next deploy of `main`
-deletes its previews), re-run **Deploy previews** there. A unit test
-(`tests/unit/free-plan.test.ts`) checks that two still fit: one more app
-with sync or notifications leaves room for only one.
-
-**Old version addresses.** Before the sites had server code, Cloudflare gave
-each production deploy of the hub, Calendar, Grammar, Photos and Tally a
-permanent address like `1a2b3c4d-tally.shkriuss.workers.dev` (36 of them,
-audit finding I-6). They serve only that old version's static files: no
-data, and no way to reach anyone's. Cloudflare can't delete single versions,
-and no new ones are made for sites with server code. (A new app made from
-the template has none yet, so its deploys get these addresses too, until it
-gets sync.) To hide them anyway, turn on Cloudflare Access for
-those Workers' preview addresses (**Workers & Pages** → the Worker →
-**Settings** → **Domains & Routes** → **Preview URLs**).
 
 ## Rolling back
 
@@ -277,8 +235,9 @@ Everything here fits Cloudflare's and GitHub's free plans:
 - Durable Objects also keep up to 5 GB, for every app together. Each app's
   servers have a limit, and copies nobody uses for 13 months are deleted
   ([ADR 0017](adr/0017-storage-limits.md)). A unit test checks that the
-  limits of every app together stay under 4.5 GB; a few more apps with sync
-  or notifications will need smaller limits each.
+  limits of every app together stay under 4.5 GB (they're at 3.1 GB: room
+  for about eight more apps with sync and notifications before the limits
+  need lowering).
 - Durable Objects also have 13,000 GB-s of time a day, counted while an
   object waits too. Push services are given 5 seconds to answer, and each
   second spent waiting counts against the app's 2,000 messages a day, so
@@ -294,13 +253,12 @@ Everything here fits Cloudflare's and GitHub's free plans:
 
 ## Troubleshooting
 
-| Problem                                                       | Fix                                                                                                                                                                                                                    |
-| ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Deploy fails with "Add the CLOUDFLARE_API_TOKEN secret"       | Add it to the `production` environment (see setup).                                                                                                                                                                    |
-| Deploy fails with "Authentication error [code: 10000]"        | The token is missing a permission or the zone. Edit it in Cloudflare (**My Profile** → **API Tokens** → **Edit**) and check all three permission rows and both resource rows.                                          |
-| "Custom domain … already exists / conflicting DNS record"     | A DNS record already uses that name. Delete it in Cloudflare (**shkriuss.app** → **DNS** → **Records**) and re-run the workflow.                                                                                       |
-| A new app's address doesn't work right after the first deploy | DNS and certificates can take a few minutes. The smoke test retries for about 5 minutes.                                                                                                                               |
-| No preview links on a pull request                            | Previews wait for your approval (see "Seeing a preview"). Pull requests from Dependabot or from forks never get previews. If the run says "Previews skipped", add `CLOUDFLARE_API_TOKEN` to the `preview` environment. |
-| "Could not create the R2 bucket …"                            | Turn on R2 in Cloudflare, and give the token `Account` · `Workers R2 Storage` · `Edit` (see setup).                                                                                                                    |
-| Photos says "Online storage isn't set up yet"                 | Add the `PHOTOS_STORAGE_CODE` secret to the `production` environment (see setup). The next merge to `main` gives it to the Worker.                                                                                     |
-| An app keeps saying "Couldn't sync just now"                  | Its server may have reached its limit (ADR 0017); unused copies go after 13 months. To raise it: `STORAGE_LIMITS` in `packages/sync/src/worker.ts`, all under 5 GB.                                                    |
+| Problem                                                       | Fix                                                                                                                                                                           |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Deploy fails with "Add the CLOUDFLARE_API_TOKEN secret"       | Add it to the `production` environment (see setup).                                                                                                                           |
+| Deploy fails with "Authentication error [code: 10000]"        | The token is missing a permission or the zone. Edit it in Cloudflare (**My Profile** → **API Tokens** → **Edit**) and check all three permission rows and both resource rows. |
+| "Custom domain … already exists / conflicting DNS record"     | A DNS record already uses that name. Delete it in Cloudflare (**shkriuss.app** → **DNS** → **Records**) and re-run the workflow.                                              |
+| A new app's address doesn't work right after the first deploy | DNS and certificates can take a few minutes. The smoke test retries for about 5 minutes.                                                                                      |
+| "Could not create the R2 bucket …"                            | Turn on R2 in Cloudflare, and give the token `Account` · `Workers R2 Storage` · `Edit` (see setup).                                                                           |
+| Photos says "Online storage isn't set up yet"                 | Add the `PHOTOS_STORAGE_CODE` secret to the `production` environment (see setup). The next merge to `main` gives it to the Worker.                                            |
+| An app keeps saying "Couldn't sync just now"                  | Its server may have reached its limit (ADR 0017); unused copies go after 13 months. To raise it: `STORAGE_LIMITS` in `packages/sync/src/worker.ts`, all under 5 GB.           |

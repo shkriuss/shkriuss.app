@@ -34,7 +34,6 @@ import {
 } from '@shkriuss/server';
 import {
   LIMIT_HEADER,
-  limitFor,
   limitOf,
   METER,
   meterFetch,
@@ -101,10 +100,10 @@ const SENDS_PER_ALARM = 25;
  */
 const UNUSED_MS = 396 * DAY_MS;
 /**
- * All of one app's device schedules together, in bytes, on the real site
- * and on a PR preview. Each device also counts 16 KB, whatever it holds.
+ * All of one app's device schedules together, in bytes. Each device also
+ * counts 16 KB, whatever it holds.
  */
-export const STORAGE_LIMITS = { site: 40_000_000, preview: 8_000_000 } as const;
+export const STORAGE_LIMITS = 40_000_000;
 
 // ---------- Helpers ----------
 
@@ -142,7 +141,7 @@ export async function handlePush(request: Request, env: PushEnv, path: string): 
   return device.fetch(route === 'PUT' ? 'https://device/schedule' : 'https://device/test', {
     method: route === 'PUT' ? 'PUT' : 'POST',
     body: read.body,
-    headers: { [LIMIT_HEADER]: String(limitFor(new URL(request.url), STORAGE_LIMITS)) },
+    headers: { [LIMIT_HEADER]: String(STORAGE_LIMITS) },
   });
 }
 

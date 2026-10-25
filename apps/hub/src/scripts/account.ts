@@ -195,7 +195,7 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
     connectNote.hidden = false;
   }
 
-  // The links to turn sync on in apps: to this hub's own apps (a PR preview's, in a preview).
+  // The links to turn sync on in apps: to this hub's own apps.
   const syncLinks = [...root.querySelectorAll<HTMLAnchorElement>('a[data-sync-app]')].map(
     (link) => {
       const slug = link.dataset['syncApp'] ?? '';

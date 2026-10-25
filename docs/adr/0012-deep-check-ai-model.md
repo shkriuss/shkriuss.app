@@ -1,6 +1,8 @@
 # 0012. Deep check: an AI grammar model on the device, downloaded on request
 
-Status: Accepted (2026-10-18)
+Status: Accepted (2026-10-18). There are no pull request previews any more
+([ADR 0019](0019-no-pull-request-previews.md)), so the model isn't uploaded to
+them.
 
 ## Context
 

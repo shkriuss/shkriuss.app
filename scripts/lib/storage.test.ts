@@ -9,21 +9,16 @@ import {
 } from './storage.ts';
 
 describe('buckets', () => {
-  const config = {
-    r2_buckets: [{ bucket_name: 'shkriuss-photos' }],
-    previews: { r2_buckets: [{ bucket_name: 'shkriuss-photos-preview' }] },
-  };
-
-  it('are the production or the preview ones', () => {
-    expect(bucketsOf(config, 'production')).toEqual(['shkriuss-photos']);
-    expect(bucketsOf(config, 'preview')).toEqual(['shkriuss-photos-preview']);
-    expect(bucketsOf({}, 'preview')).toEqual([]);
+  it('are the ones in the config', () => {
+    expect(bucketsOf({ r2_buckets: [{ bucket_name: 'shkriuss-photos' }] })).toEqual([
+      'shkriuss-photos',
+    ]);
+    expect(bucketsOf({})).toEqual([]);
   });
 
   it('are read from each site’s wrangler.jsonc', () => {
-    expect(siteBuckets('photos', 'production')).toEqual(['shkriuss-photos']);
-    expect(siteBuckets('photos', 'preview')).toEqual(['shkriuss-photos-preview']);
-    expect(siteBuckets('tally', 'production')).toEqual([]);
+    expect(siteBuckets('photos')).toEqual(['shkriuss-photos']);
+    expect(siteBuckets('tally')).toEqual([]);
   });
 });
 

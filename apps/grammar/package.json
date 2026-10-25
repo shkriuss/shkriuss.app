@@ -10,7 +10,6 @@
     "preview": "wrangler dev --port 8787",
     "typecheck": "astro check",
     "deploy:production": "wrangler deploy",
-    "deploy:preview": "wrangler preview",
     "deep-check-files": "node scripts/deep-check-files.ts",
     "on-demand-into-dist": "node scripts/deep-check-files.ts dist/on-demand/deep-check/"
   },

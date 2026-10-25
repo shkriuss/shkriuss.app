@@ -6,6 +6,6 @@
 
 - [ ] CI is green (formatting, lint, types, unit tests, build, size and CSP, browser and accessibility tests)
 - [ ] Asked "how could it break?" (two devices, a slow or wrong server, full storage, old data, iPhone), and tests cover the answers
-- [ ] Looked at the preview links on a phone, in light and dark mode
+- [ ] After merging: looked at the live site on a phone, in light and dark mode (if something's wrong, revert the pull request)
 - [ ] For a new or changed app: `apps.json` (`dataStored`) still says what the app saves
 - [ ] Docs that describe what changed say it now (`CLAUDE.md`, `docs/`, ADR notes, `SECURITY.md`, app READMEs, the privacy page, the audit brief)

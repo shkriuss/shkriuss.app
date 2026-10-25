@@ -8,6 +8,7 @@ import type {
   DurableObjectListStorage,
   DurableObjectNamespace,
 } from './index.ts';
+import { LIMIT_HEADER } from './meter.ts';
 
 /** The most one stored value can be on Cloudflare (2 MB); bigger ones are refused. */
 const MAX_VALUE_LENGTH = 2 * 1024 * 1024;
@@ -78,9 +79,14 @@ interface MemoryObject {
  * `objects` are there to look into, and runAlarms() wakes each object whose
  * alarm is due by now (Date.now(), so tests can move the clock), until none
  * is, as Cloudflare does. It returns how many it woke.
+ *
+ * `limit`, if given, stands in for the storage limit the Worker tells each
+ * object (LIMIT_HEADER, ./meter.ts), so a test can fill the namespace
+ * quickly; limits() lists the ones the Worker sent.
  */
 export function memoryNamespace<T extends MemoryObject>(
   make: (state: DurableObjectListState) => T,
+  options: { limit?: number } = {},
 ) {
   const objects = new Map<string, { object: T; storage: MemoryStorage }>();
   const find = (name: string) => {
@@ -92,10 +98,21 @@ export function memoryNamespace<T extends MemoryObject>(
     }
     return found;
   };
+  const sent: string[] = [];
   const namespace: DurableObjectNamespace = {
     idFromName: (name) => ({ toString: () => name }),
     get: (id) => ({
-      fetch: (input, init) => find(id.toString()).object.fetch(new Request(input, init)),
+      fetch: (input, init) => {
+        const request = new Request(input, init);
+        const limit = request.headers.get(LIMIT_HEADER);
+        if (limit !== null) {
+          sent.push(limit);
+          if (options.limit !== undefined) {
+            request.headers.set(LIMIT_HEADER, String(options.limit));
+          }
+        }
+        return find(id.toString()).object.fetch(request);
+      },
     }),
   };
   async function runAlarms(): Promise<number> {
@@ -114,5 +131,5 @@ export function memoryNamespace<T extends MemoryObject>(
   }
   /** Objects that keep anything (the meter, named "meter", included). */
   const stored = () => [...objects].filter(([, { storage }]) => storage.map.size > 0);
-  return { namespace, objects, runAlarms, stored };
+  return { namespace, objects, runAlarms, stored, limits: () => [...sent] };
 }

@@ -34,22 +34,10 @@
   "r2_buckets": [{ "binding": "LIBRARY_FILES", "bucket_name": "shkriuss-photos" }],
   // The real address. Cloudflare creates the DNS record and certificate.
   "routes": [{ "pattern": "photos.shkriuss.app", "custom_domain": true }],
-  // No *.workers.dev address for production, but keep preview links for PRs.
+  // Only at the real address: no *.workers.dev address, and no addresses for
+  // single versions either (docs/adr/0019-no-pull-request-previews.md).
   // No Workers logs or traces: nothing about requests is kept (see the privacy page).
   "observability": { "enabled": false },
   "workers_dev": false,
-  "preview_urls": true,
-  // Settings for PR previews (`wrangler preview`). Each preview gets its own,
-  // empty Durable Object storage, and photos go to a separate bucket whose
-  // files are deleted after 7 days: nothing is shared with the real site.
-  "previews": {
-    "durable_objects": {
-      "bindings": [
-        { "name": "SYNC_COPIES", "class_name": "SyncCopy" },
-        { "name": "LIBRARIES", "class_name": "Library" },
-        { "name": "LIBRARY_GATE", "class_name": "LibraryGate" },
-      ],
-    },
-    "r2_buckets": [{ "binding": "LIBRARY_FILES", "bucket_name": "shkriuss-photos-preview" }],
-  },
+  "preview_urls": false,
 }

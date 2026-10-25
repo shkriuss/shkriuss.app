@@ -19,7 +19,7 @@ any extra work.
 
 Say something like: _"Add a new app called Notes at notes.shkriuss.app: quick
 notes saved on my device."_ Claude runs the generator, builds the app, and
-opens a pull request with preview links.
+opens a pull request.
 
 ## Option B: from your phone, with the New app workflow
 
@@ -29,9 +29,7 @@ opens a pull request with preview links.
    **Run workflow** button.
 4. Wait about a minute, then tap the finished run. Its summary has an
    **Open a pull request** link: tap it, then tap **Create pull request**.
-5. Wait for the checks (green ticks). For preview links, approve **Deploy
-   previews** ([how](deployment.md#seeing-a-preview)); the **Preview links**
-   comment then appears.
+5. Wait for the checks (green ticks).
 6. When you're happy, tap **Merge pull request**. About half an hour later
    (every check runs again on `main` first, then the deploy) the app is live
    at `https://<slug>.shkriuss.app` and listed on the hub.
@@ -155,7 +153,7 @@ is the simplest example to copy. Ask Claude, or:
    `export { default, PushDevice, PushKeys } from '@shkriuss/push/worker';`
    (an app with sync too combines both, like Habits' and Calendar's).
 3. In `wrangler.jsonc`, copy Calendar's `main`, `assets.binding`,
-   `assets.run_worker_first`, `durable_objects`, `migrations` and `previews`.
+   `assets.run_worker_first`, `durable_objects` and `migrations`.
    A unit test checks these match. Migrations run in order, so if the app is
    already live, add the new one after the ones it has (see Habits'), and
    to `APPLIED_MIGRATIONS` in `tests/unit/registry-consistency.test.ts`.
@@ -227,7 +225,7 @@ or:
 2. Add `src/worker.ts`: `export { default, SyncCopy } from '@shkriuss/sync/worker';`
    (an app with notifications too combines both, like Calendar's).
 3. In `wrangler.jsonc`, copy Tally's `main`, `assets.binding`,
-   `assets.run_worker_first`, `durable_objects`, `migrations` and `previews`.
+   `assets.run_worker_first`, `durable_objects` and `migrations`.
    A unit test checks these match. Add the migration to
    `APPLIED_MIGRATIONS` in `tests/unit/registry-consistency.test.ts` too,
    after any the app already has, as in the notifications steps.
@@ -276,10 +274,9 @@ online. So remove an app in steps (ask Claude for each):
 3. **Remove it:** delete `apps/<slug>/` and its entry in `apps.json` in one
    pull request. After merging, delete the Worker in the Cloudflare
    dashboard (**Workers & Pages** → the app → **Settings** → **Delete**).
-   That removes its address and its previews too.
-4. **An app with an online library** also has two R2 buckets,
-   `shkriuss-<slug>` and `shkriuss-<slug>-preview`, and a storage code
-   secret in GitHub (`<SLUG>_STORAGE_CODE`). Delete the buckets in the
-   dashboard (**R2** → the bucket → **Settings**; R2 asks you to empty it
-   first) and the secret in GitHub (**Settings** → **Secrets and variables**
+   That removes its address too.
+4. **An app with an online library** also has an R2 bucket,
+   `shkriuss-<slug>`, and a storage code secret in GitHub
+   (`<SLUG>_STORAGE_CODE`). Delete the bucket in the dashboard (**R2** → the
+   bucket → **Settings**; R2 asks you to empty it first) and the secret in GitHub (**Settings** → **Secrets and variables**
    → **Actions**).

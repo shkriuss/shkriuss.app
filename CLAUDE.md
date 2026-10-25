@@ -31,7 +31,7 @@ packages/server/     shared Worker helpers: createWorker() for /api/*, JSON, lim
 templates/app/       copied by `pnpm new-app` (placeholder slug: template-app)
 tests/e2e/           shared Playwright tests that run against EVERY site
 tests/unit/          cross-cutting unit tests (contrast, registry consistency, workflows)
-scripts/             new-app, check-dist, deploy, buckets, previews, smoke-test, lockfile-age
+scripts/             new-app, check-dist, deploy, buckets, smoke-test, lockfile-age
 ```
 
 ## Commands (Node 24, pnpm 10)
@@ -144,5 +144,6 @@ the page in `apps/<slug>/src/pages/index.astro`. Full guide:
 - Use unpinned GitHub Actions (`uses:` must be a full commit SHA).
 - Upgrade TypeScript to 7 or pnpm past 10 before the notes in
   [ADR 0005](docs/adr/0005-pnpm-typescript-versions.md) say it's safe.
-- Deploy by hand. Merging to `main` deploys; PRs get preview links once the
-  owner approves them.
+- Deploy by hand, or run code with the Cloudflare token before it's merged.
+  Merging to `main` deploys; pull requests get no previews
+  ([ADR 0019](docs/adr/0019-no-pull-request-previews.md)).

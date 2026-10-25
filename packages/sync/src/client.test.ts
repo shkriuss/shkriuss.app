@@ -1578,7 +1578,7 @@ describe('no room online for the app', () => {
     const tablet = new Device(secret);
     // Strangers' made-up copies have used up all of the app's room (these
     // tests' server has files on, so it's the limit for copies with files).
-    const limit = STORAGE_LIMITS.files.site;
+    const limit = STORAGE_LIMITS.files;
     const meter = server.SYNC_COPIES.get(server.SYNC_COPIES.idFromName('meter'));
     const strangers = (bytes: number) =>
       meter.fetch('https://meter/', {

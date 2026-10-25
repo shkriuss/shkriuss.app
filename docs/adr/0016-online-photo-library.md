@@ -4,6 +4,8 @@ Status: Accepted (2026-10-22). Builds on [ADR 0010](0010-account-and-sync.md)
 (account and sync), [ADR 0014](0014-syncing-photos.md) (sealed files) and
 [ADR 0015](0015-photos-app.md) (the Photos app on the device). How many
 libraries there can be is limited by [ADR 0017](0017-storage-limits.md).
+Changed by [ADR 0019](0019-no-pull-request-previews.md): there are no pull
+request previews, so no `shkriuss-photos-preview` bucket either.
 
 ## Context
 

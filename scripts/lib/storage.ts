@@ -2,7 +2,7 @@
  * What apps with an online library (docs/adr/0016-online-photo-library.md)
  * need on Cloudflare besides their Worker: R2 buckets (scripts/buckets.ts
  * creates them) and the storage code, a secret given to the Worker at each
- * deploy (scripts/deploy.ts, scripts/previews.ts).
+ * deploy (scripts/deploy.ts).
  */
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -12,23 +12,16 @@ import { repoRoot } from './sites.ts';
 
 interface BucketConfig {
   r2_buckets?: { bucket_name: string }[];
-  previews?: { r2_buckets?: { bucket_name: string }[] };
 }
 
-/** The R2 buckets a Worker uses, in production or in previews. */
-export function bucketsOf(config: BucketConfig, where: 'production' | 'preview'): string[] {
-  const buckets = where === 'production' ? config.r2_buckets : config.previews?.r2_buckets;
-  return (buckets ?? []).map((bucket) => bucket.bucket_name);
-}
+/** The R2 buckets a Worker uses. */
+export const bucketsOf = (config: BucketConfig): string[] =>
+  (config.r2_buckets ?? []).map((bucket) => bucket.bucket_name);
 
 /** The R2 buckets of the site in apps/<slug>. */
-export function siteBuckets(
-  slug: string,
-  where: 'production' | 'preview',
-  root: string = repoRoot,
-): string[] {
+export function siteBuckets(slug: string, root: string = repoRoot): string[] {
   const config = parseJsonc(readFileSync(join(root, 'apps', slug, 'wrangler.jsonc'), 'utf8'));
-  return bucketsOf(config as BucketConfig, where);
+  return bucketsOf(config as BucketConfig);
 }
 
 /** The GitHub secret with a site's storage code, e.g. PHOTOS_STORAGE_CODE. */

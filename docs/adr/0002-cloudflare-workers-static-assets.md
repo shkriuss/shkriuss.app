@@ -5,7 +5,9 @@ Status: Accepted (2026-10-16). Extended by [ADR 0009](0009-push-notifications.md
 [ADR 0016](0016-online-photo-library.md): a site with an optional feature
 (notifications, sync, the account, Photos' online library) also has a Worker
 script, which runs only for `/api/*`; the token also needs Workers R2 Storage
-(see `docs/deployment.md`).
+(see `docs/deployment.md`). Changed by [ADR 0019](0019-no-pull-request-previews.md):
+pull requests get no previews, and preview URLs are off too, so each site is
+only at its own domain.
 
 ## Context
 

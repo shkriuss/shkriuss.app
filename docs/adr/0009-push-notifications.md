@@ -1,7 +1,9 @@
 # 0009. Notifications while an app is closed (Web Push)
 
 Status: Accepted (2026-10-17). All of an app's schedules together have a
-limit: [ADR 0017](0017-storage-limits.md).
+limit: [ADR 0017](0017-storage-limits.md). There are no pull request previews
+any more ([ADR 0019](0019-no-pull-request-previews.md)), so what this says
+about them no longer applies.
 
 ## Context
 

@@ -1,13 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  limitFor,
-  limitOf,
-  LIMIT_HEADER,
-  meterFetch,
-  OBJECT_BYTES,
-  release,
-  reserve,
-} from './meter.ts';
+import { limitOf, LIMIT_HEADER, meterFetch, OBJECT_BYTES, release, reserve } from './meter.ts';
 import { memoryNamespace } from './testing.ts';
 
 const LIMIT = 1_000_000;
@@ -104,19 +96,22 @@ describe('storage meters', () => {
 });
 
 describe('limits', () => {
-  const limits = { site: 100, preview: 10 };
-
-  it('are smaller on PR previews', () => {
-    expect(limitFor(new URL('https://notes.shkriuss.app/api/sync/copy'), limits)).toBe(100);
-    expect(limitFor(new URL('https://pr-3-notes.shkriuss.workers.dev/api/sync/copy'), limits)).toBe(
-      10,
-    );
-    expect(limitFor(new URL('http://127.0.0.1:9001/api/sync/copy'), limits)).toBe(100);
-  });
-
   it('let nothing grow when the Worker didn’t send one', () => {
     expect(limitOf(new Request('https://copy/'))).toBe(0);
     expect(limitOf(new Request('https://copy/', { headers: { [LIMIT_HEADER]: 'lots' } }))).toBe(0);
     expect(limitOf(new Request('https://copy/', { headers: { [LIMIT_HEADER]: '500' } }))).toBe(500);
+  });
+
+  it('can be made small in tests, which still see the one the Worker sent', async () => {
+    const space = memoryNamespace(
+      () => ({ fetch: async (request: Request) => new Response(String(limitOf(request))) }),
+      { limit: 300 },
+    );
+    const object = space.namespace.get(space.namespace.idFromName('a'));
+    const answer = await object.fetch('https://object/', { headers: { [LIMIT_HEADER]: '500' } });
+    expect(await answer.text()).toBe('300');
+    // A request without a limit (to the meter, say) gets none.
+    expect(await (await object.fetch('https://object/')).text()).toBe('0');
+    expect(space.limits()).toEqual(['500']);
   });
 });

@@ -25,7 +25,9 @@ import worker, {
   type AccountEnv,
 } from './worker.ts';
 
-function memoryEnv() {
+/** The account service in memory; with `limit`, a small one for each namespace instead of the real ones. */
+function memoryEnv(limit?: number) {
+  const options = limit === undefined ? {} : { limit };
   const env: AccountEnv = {
     ASSETS: { fetch: async () => new Response('page') },
     ACCOUNT_LINKS: {
@@ -35,8 +37,8 @@ function memoryEnv() {
     ACCOUNT_PASSKEYS: null as unknown as DurableObjectNamespace,
     ACCOUNT_STATUS: null as unknown as DurableObjectNamespace,
   };
-  const passkeys = memoryNamespace((state) => new AccountPasskey(state, env));
-  const status = memoryNamespace((state) => new AccountStatus(state, env));
+  const passkeys = memoryNamespace((state) => new AccountPasskey(state, env), options);
+  const status = memoryNamespace((state) => new AccountStatus(state, env), options);
   env.ACCOUNT_PASSKEYS = passkeys.namespace;
   env.ACCOUNT_STATUS = status.namespace;
   return { env, passkeys, status };
@@ -64,7 +66,8 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-const PREVIEW = 'https://pr-4-hub.shkriuss.workers.dev';
+/** A small limit, so the tests fill it quickly. */
+const SMALL_LIMIT = 4_000_000;
 const madeUpToken = () => toBase64Url(randomBytes(32));
 /** A request from a stranger's script, straight to the Worker. */
 const stranger = (origin: string, path: string, init: RequestInit = {}) =>
@@ -307,22 +310,25 @@ describe('passkey locks (audit C-1)', () => {
 
 describe('the account service’s room', () => {
   it('stops made-up tokens from noting replaced keys past its limit', async () => {
+    server = memoryEnv(SMALL_LIMIT);
     let kept = 0;
     for (; kept < 1000; kept += 1) {
-      const response = await stranger(PREVIEW, 'status', { method: 'PUT' });
+      const response = await stranger(HUB.origin, 'status', { method: 'PUT' });
       if (response.status === 507) break;
       expect(response.status).toBe(204);
     }
-    expect(kept).toBe(Math.floor(STORAGE_LIMITS.replaced.preview / (16 * 1024)));
+    expect(kept).toBe(Math.floor(SMALL_LIMIT / (16 * 1024)));
     // Asking about a made-up token keeps nothing.
     const before = server.status.stored().length;
-    expect((await stranger(PREVIEW, 'status')).status).toBe(200);
+    expect((await stranger(HUB.origin, 'status')).status).toBe(200);
     expect(server.status.stored()).toHaveLength(before);
+    // The Worker tells each note the real limit.
+    expect(new Set(server.status.limits())).toEqual(new Set([String(STORAGE_LIMITS.replaced)]));
   });
 
   it('still replaces the key when there’s no room to note the old one', async () => {
     const meter = server.env.ACCOUNT_STATUS.get(server.env.ACCOUNT_STATUS.idFromName('meter'));
-    const limit = STORAGE_LIMITS.replaced.site;
+    const limit = STORAGE_LIMITS.replaced;
     await meter.fetch('https://meter/', {
       method: 'POST',
       body: JSON.stringify({ id: 'strangers', bytes: limit, limit }),
@@ -352,33 +358,32 @@ describe('the account service’s room', () => {
   });
 
   it('stops made-up passkey locks past its limit, and gets room back when one is removed', async () => {
+    server = memoryEnv(SMALL_LIMIT);
     // A stranger can make passkeys of their own, and sign whatever they like with them.
     const made: { lookup: string; passkey: Awaited<ReturnType<typeof testPasskey>> }[] = [];
     for (let tries = 0; tries < 1000; tries += 1) {
       const lookup = madeUpToken();
       const passkey = await testPasskey(-7);
-      const response = await passkeyRequest(
-        PREVIEW,
-        '',
-        lookup,
-        'PUT',
-        await newLock(passkey, PREVIEW),
-      );
+      const response = await passkeyRequest(HUB.origin, '', lookup, 'PUT', await newLock(passkey));
       if (response.status === 507) break;
       expect(response.status).toBe(204);
       made.push({ lookup, passkey });
     }
-    expect(made).toHaveLength(Math.floor(STORAGE_LIMITS.passkeys.preview / (16 * 1024)));
+    expect(made).toHaveLength(Math.floor(SMALL_LIMIT / (16 * 1024)));
     const [first] = made;
     if (!first) throw new Error('No lock');
     const assertion = await first.passkey.sign({
-      origin: PREVIEW,
-      rpId: new URL(PREVIEW).hostname,
+      origin: HUB.origin,
+      rpId: new URL(HUB.origin).hostname,
       purpose: 'remove',
     });
-    const remove = await passkeyRequest(PREVIEW, '/remove', first.lookup, 'POST', { assertion });
+    const remove = await passkeyRequest(HUB.origin, '/remove', first.lookup, 'POST', {
+      assertion,
+    });
     expect(remove.status).toBe(204);
-    const another = await newLock(await testPasskey(-7), PREVIEW);
-    expect((await passkeyRequest(PREVIEW, '', madeUpToken(), 'PUT', another)).status).toBe(204);
+    const another = await newLock(await testPasskey(-7));
+    expect((await passkeyRequest(HUB.origin, '', madeUpToken(), 'PUT', another)).status).toBe(204);
+    // The Worker tells each lock the real limit.
+    expect(new Set(server.passkeys.limits())).toEqual(new Set([String(STORAGE_LIMITS.passkeys)]));
   });
 });

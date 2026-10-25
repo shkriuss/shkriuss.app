@@ -299,28 +299,6 @@ test('lists the apps that sync, with links that turn on sync there', async ({ pa
   }
 });
 
-test('in a PR preview, links to that preview’s own apps', async ({ page, baseURL, guard }) => {
-  // Serve this hub as if it were PR 7's preview.
-  const preview = 'https://pr-7-hub.shkriuss.workers.dev';
-  guard.allowOrigin(preview);
-  await page.route(`${preview}/**`, async (route) => {
-    const url = new URL(route.request().url());
-    await route.fulfill({
-      response: await route.fetch({ url: `${baseURL ?? ''}${url.pathname}${url.search}` }),
-    });
-  });
-  await page.goto(`${preview}/account/`);
-  await page.getByRole('button', { name: 'Create an account' }).click();
-  await page.getByLabel("I've saved my recovery key").check();
-  await page.getByRole('button', { name: 'Continue' }).click();
-  for (const app of syncApps) {
-    await expect(page.getByRole('link', { name: `Turn on sync in ${app.name}` })).toHaveAttribute(
-      'href',
-      `https://pr-7-${app.slug}.shkriuss.workers.dev/#sync=connect`,
-    );
-  }
-});
-
 test('refuses to connect an app from the wrong address', async ({ page }) => {
   await createAccount(page);
   const key = 'B'.repeat(87);
