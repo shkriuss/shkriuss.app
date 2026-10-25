@@ -136,14 +136,52 @@ export function dropIfEmpty(state: NotesState, id: string): NotesState {
   return note && isEmpty(note) ? removeNote(state, id) : state;
 }
 
+/** How long a note nothing is written in stays, if it isn't left (the page was closed in it). */
+export const EMPTY_NOTE_MS = 10 * 60 * 1000;
+
+/**
+ * Removes notes nothing was written in for a while (EMPTY_NOTE_MS): left
+ * behind when a page was closed in a new note before it could drop it
+ * (audit F3-9). Not `keep` (the note the page opens), nor a newer one,
+ * which may be open in another tab or on another device.
+ */
+export function dropEmptyNotes(state: NotesState, keep: string | null, now: number): NotesState {
+  const notes = state.notes.filter(
+    (note) => note.id === keep || !isEmpty(note) || note.updated > now - EMPTY_NOTE_MS,
+  );
+  return notes.length === state.notes.length ? state : { notes };
+}
+
+const characters = new Intl.Segmenter('en', { granularity: 'grapheme' });
+
+/**
+ * The longest start of `text` at most `max` long (as JavaScript counts),
+ * never cut in the middle of a character as people see it: an emoji (also
+ * a family, a flag or a skin tone), or a letter with its accent.
+ */
+function fitText(text: string, max: number): string {
+  if (text.length <= max) return text;
+  let end = 0;
+  for (const { index, segment } of characters.segment(text)) {
+    if (index + segment.length > max) break;
+    end = index + segment.length;
+  }
+  return text.slice(0, end);
+}
+
+/** How much of a title fits before packages/sync adds " (second version)". */
+const SECOND_VERSION_ROOM =
+  MAX_TITLE_LENGTH - (secondVersionName('x', MAX_TITLE_LENGTH).length - 'x'.length);
+
 /**
  * A note changed on two devices at once: this device's version, kept as a
- * second note next to the other device's (packages/sync, conflictCopy).
+ * second note next to the other device's (packages/sync, conflictCopy). A
+ * long title is cut between whole characters first (audit F3-9).
  */
 export const secondVersion = (note: Note, id: string): Note => ({
   ...note,
   id,
-  title: secondVersionName(note.title, MAX_TITLE_LENGTH),
+  title: secondVersionName(fitText(note.title.trim(), SECOND_VERSION_ROOM), MAX_TITLE_LENGTH),
 });
 
 /**
@@ -177,15 +215,20 @@ export function keepOtherVersion(state: NotesState, id: string, copyId: string):
   return note ? { notes: [...state.notes, secondVersion(note, copyId)] } : state;
 }
 
-/** Cuts text to `max` characters (never in the middle of an emoji), adding "…". */
+/**
+ * Cuts text to `max` characters as people see them, adding "…": never in
+ * the middle of an emoji (also a family, a flag or a skin tone) or of a
+ * letter and its accent (audit F3-9).
+ */
 function shorten(text: string, max: number): string {
-  const characters = [...text];
-  return characters.length <= max
-    ? text
-    : `${characters
-        .slice(0, max - 1)
-        .join('')
-        .trimEnd()}…`;
+  let count = 0;
+  let cut = 0;
+  for (const { index } of characters.segment(text)) {
+    if (count === max - 1) cut = index;
+    if (count === max) return `${text.slice(0, cut).trimEnd()}…`;
+    count += 1;
+  }
+  return text;
 }
 
 const oneLine = (text: string): string => text.replace(/\s+/g, ' ').trim();

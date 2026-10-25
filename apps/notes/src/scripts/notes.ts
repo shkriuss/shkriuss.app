@@ -24,6 +24,7 @@ import { watchTextLimit } from '@shkriuss/ui/text-limit';
 import { site } from 'virtual:shkriuss/site';
 import {
   addNote,
+  dropEmptyNotes,
   dropIfEmpty,
   editedLabel,
   editNote,
@@ -60,6 +61,28 @@ const SAVE_DELAY_MS = 400;
 const ANNOUNCE_DELAY_MS = 700;
 
 const noteIdOf = (hash: string): string | null => /^#note=([\w-]{1,64})$/.exec(hash)?.[1] ?? null;
+
+/**
+ * A new note left empty is dropped as the page goes away (audit F3-9). This
+ * tab remembers which, so if the page was being reloaded, opening it again
+ * doesn't say the note is missing (sessionStorage: this tab only, and gone
+ * with it).
+ */
+const DROPPED_KEY = 'shkriuss-device:notes-dropped';
+function rememberDropped(id: string): void {
+  try {
+    sessionStorage.setItem(DROPPED_KEY, id);
+  } catch {
+    // Not kept: a reload then says the note isn't on this device.
+  }
+}
+function wasDropped(id: string): boolean {
+  try {
+    return sessionStorage.getItem(DROPPED_KEY) === id;
+  } catch {
+    return false;
+  }
+}
 
 export function mountNotes(root: Document): void {
   const listView = required<HTMLElement>(root, '[data-view="list"]');
@@ -262,7 +285,7 @@ export function mountNotes(root: Document): void {
     }
     if (id !== null) {
       history.replaceState(null, '', `${location.pathname}${location.search}`);
-      say('That note isn’t on this device. It may have been deleted.');
+      if (!wasDropped(id)) say('That note isn’t on this device. It may have been deleted.');
     }
     showList(wasEditing);
   }
@@ -301,6 +324,9 @@ export function mountNotes(root: Document): void {
         announce('This note was changed on another device: that version is kept as a second note.');
       }
       flush();
+      // Pinned or unpinned elsewhere: the button shows it (audit F3-9).
+      const pinned = find(current)?.pinned;
+      if (pinned !== undefined) pinButton.setAttribute('aria-pressed', String(pinned));
       return;
     }
     const note = find(current);
@@ -416,8 +442,16 @@ export function mountNotes(root: Document): void {
 
   window.addEventListener('hashchange', () => route());
 
-  // Save typing before the page is closed or hidden.
-  window.addEventListener('pagehide', flush);
+  // Save typing before the page is closed or hidden. A new note left empty
+  // goes with the page, as it does when leaving it (audit F3-9).
+  window.addEventListener('pagehide', () => {
+    flush();
+    if (current === null) return;
+    const next = dropIfEmpty(state, current);
+    if (next === state) return;
+    save(next);
+    rememberDropped(current);
+  });
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') flush();
   });
@@ -443,6 +477,9 @@ export function mountNotes(root: Document): void {
   });
   mountSyncControls(required<HTMLElement>(root, '[data-sync-controls]'), sync);
 
+  // New notes left empty when a page was closed before it could drop them (audit F3-9).
+  const tidy = dropEmptyNotes(state, noteIdOf(location.hash), Date.now());
+  if (tidy !== state) save(tidy);
   renderList();
   route();
 }
