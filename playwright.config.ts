@@ -11,7 +11,10 @@ import { sites, TEST_STORAGE_CODE } from './tests/e2e/sites.ts';
 const isCI = Boolean(process.env['CI']);
 // The hub's local address, for apps' "Turn on sync" (on the real site and in
 // previews, each app works it out from its own address).
-const hubURL = sites.find((site) => site.slug === 'hub')?.baseURL ?? '';
+const hub = sites.find((site) => site.slug === 'hub');
+const hubURL = hub?.baseURL ?? '';
+// Where passkeys are used in tests: they need a domain name, and "localhost" counts.
+const accountOrigin = `http://localhost:${hub?.port ?? 8787}`;
 // Lets this run with a browser that's already installed (e.g. in a sandbox).
 const executablePath = process.env['PW_CHROMIUM_PATH'];
 
@@ -45,9 +48,10 @@ export default defineConfig({
   webServer: sites.map((site) => ({
     // ALLOW_LOCAL_ENDPOINTS lets apps with notifications (packages/push) send to the
     // test's local push receiver; HUB_ORIGIN tells apps with sync where the hub
-    // is; LIBRARY_STORAGE_CODE unlocks apps' online libraries (packages/library;
+    // is; ACCOUNT_ORIGIN tells the hub where its Account page is, for passkeys;
+    // LIBRARY_STORAGE_CODE unlocks apps' online libraries (packages/library;
     // a secret on the real site). Never set for real deploys.
-    command: `pnpm exec wrangler dev --port ${site.port} --ip 127.0.0.1 --inspector-port ${site.port + 1000} --log-level warn --var ALLOW_LOCAL_ENDPOINTS:true --var HUB_ORIGIN:${hubURL} --var "LIBRARY_STORAGE_CODE:${TEST_STORAGE_CODE}"`,
+    command: `pnpm exec wrangler dev --port ${site.port} --ip 127.0.0.1 --inspector-port ${site.port + 1000} --log-level warn --var ALLOW_LOCAL_ENDPOINTS:true --var HUB_ORIGIN:${hubURL} --var ACCOUNT_ORIGIN:${accountOrigin} --var "LIBRARY_STORAGE_CODE:${TEST_STORAGE_CODE}"`,
     cwd: site.dir,
     url: `${site.baseURL}/`,
     // Only when asked: a server already on the port may be another checkout's,

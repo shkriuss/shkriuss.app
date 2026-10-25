@@ -46,25 +46,35 @@ finding B-1.
 
 ### The limits
 
-| What                                     | Real site, each     | Preview, each | Where              |
-| ---------------------------------------- | ------------------- | ------------- | ------------------ |
-| An app's online copies (13 apps)         | 120 MB              | 20 MB         | `packages/sync`    |
-| Repairs' copies with their photos        | 1 GB                | 80 MB         | `packages/sync`    |
-| An app's notification schedules (7 apps) | 40 MB               | 8 MB          | `packages/push`    |
-| Passkey locks; replaced-key notes        | 40 MB each          | 4 MB each     | `packages/account` |
-| Online libraries (Photos)                | 32 MB (about 2,000) | 4 MB          | `packages/library` |
+| What                                        | Real site, each     | Preview, each | Where              |
+| ------------------------------------------- | ------------------- | ------------- | ------------------ |
+| An app's online copies (each app with sync) | 120 MB              | 20 MB         | `packages/sync`    |
+| Repairs' copies with their photos           | 1 GB                | 80 MB         | `packages/sync`    |
+| An app's notification schedules (each app)  | 40 MB               | 8 MB          | `packages/push`    |
+| Passkey locks; replaced-key notes           | 40 MB each          | 4 MB each     | `packages/account` |
+| Online libraries (Photos)                   | 32 MB (about 2,000) | 4 MB          | `packages/library` |
 
 All together that's about 3 GB on the real sites, so a full namespace never
 stops the others, and there's room left for the owner's online library list
 and a couple of open previews. The per-account limits stay as they were
 (a copy is at most about 1.4 MB, an account's photos at most 800 MB).
 
+Each new app with sync or notifications adds its own limits, so a unit test
+(`tests/unit/free-plan.test.ts`) adds them all up from `apps.json`, with two
+open previews and the library list, and fails above 4.5 GB (audit J-2).
+There's room for about two more apps with both; past that, the limits per
+app need lowering first.
+
 ### Unused copies are deleted
 
 - **An online copy nobody has synced with, or even asked about, for 396 days
   (about 13 months) is deleted**, files and all, with the note left when one
   is deleted. Notification schedules already work that way (ADR 0009).
-- Each copy sets an alarm when it's used, at most once a day.
+- Each copy sets an alarm when it's used, at most once a day. An alarm that
+  fails (R2 or the meter not answering for a while) runs again a minute
+  later, then later each time, up to a day apart, so a clean-up or a
+  deletion never stops for good (`runAlarm` in `@shkriuss/server`, audit
+  B-2).
 - A device that comes back later finds no copy, as on a first sync, and
   puts its own data online again. So only copies nobody uses go for good.
 - **A note that a key was replaced** is deleted the same way, 13 months

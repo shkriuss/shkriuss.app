@@ -28,16 +28,23 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
   by the server and never exported. Requests are size-limited, rate-limited
   and checked; push addresses must be https with a domain name, and
   redirects are refused. A device whose messages all fail or are refused for
-  two days is forgotten, and each app sends at most 2,000 messages a day.
+  two days is forgotten, and each app sends at most 2,000 messages a day. A
+  push service gets 5 seconds to answer, and time spent waiting counts
+  against those messages, so a slow push address can't tie up the servers.
 - The hub also runs a small Worker for `/api/account/*`, for the optional
   **shkriuss account** ([ADR 0010](docs/adr/0010-account-and-sync.md)). It
   only holds values sealed on the device (AES-256-GCM): passkey locks, under
   the hash of a token only the passkey can produce, and one-time device links
-  that expire after 10 minutes. It also notes account keys that were
-  replaced (after a lost device), under the hash of a token only the old key
-  can make; devices holding a replaced key sign out, and it can't sign in
-  again. There are no account ids, emails or passwords. Requests from other
-  sites are refused (`Sec-Fetch-Site`), and bodies are limited to 1 KB.
+  that expire after 10 minutes (or when the device showing the code is done
+  with it). A lock keeps its passkey's public key, and is only handed out or
+  removed for the passkey's signature made on the Account page itself, so
+  an app's page can't use the passkey to get it, in any browser
+  ([ADR 0018](docs/adr/0018-passkey-signatures.md)). It also notes account
+  keys that were replaced (after a lost device), under the hash of a token
+  only the old key can make; devices holding a replaced key sign out, and it
+  can't sign in again. There are no account ids, emails or passwords.
+  Requests from other sites are refused (`Sec-Fetch-Site`), and bodies are
+  limited to 1 KB (4 KB for passkeys' signatures).
 - Apps that can **sync** (`"sync": true` in `apps.json`) run `/api/sync/*` in their own
   Worker, with one Durable Object per account holding one copy of the app's
   data, sealed on the device (AES-256-GCM, compressed first). The account is
