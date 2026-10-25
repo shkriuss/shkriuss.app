@@ -4,7 +4,9 @@ Status: Accepted (2026-10-23). Changes [ADR 0009](0009-push-notifications.md)
 (notifications), [ADR 0010](0010-account-and-sync.md) (account and sync),
 [ADR 0014](0014-syncing-photos.md) (photos in sync) and
 [ADR 0016](0016-online-photo-library.md) (the online library). Audit
-finding B-1.
+finding B-1. Changed by [ADR 0019](0019-no-pull-request-previews.md): there
+are no pull request previews, so each namespace has one limit, the real
+site's, and the 4.5 GB is for the real sites alone.
 
 ## Context
 

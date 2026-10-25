@@ -462,7 +462,7 @@ describe('all of an app’s devices together', () => {
     }
     expect(kept).toBeGreaterThan(5);
     expect(kept).toBeLessThan(100);
-    expect(server.meter.map.get('total')).toBeLessThanOrEqual(STORAGE_LIMITS.site);
+    expect(server.meter.map.get('total')).toBeLessThanOrEqual(STORAGE_LIMITS);
     // A refused device keeps nothing.
     const stored = [...server.devices.values()].filter(({ storage }) => storage.map.size > 0);
     expect(stored).toHaveLength(kept);
@@ -485,8 +485,4 @@ describe('all of an app’s devices together', () => {
     );
     expect((await device().schedule(entries)).status).toBe(200);
   }, 30_000);
-
-  it('have a much smaller limit on a PR preview', () => {
-    expect(STORAGE_LIMITS.preview * 4).toBeLessThan(STORAGE_LIMITS.site);
-  });
 });

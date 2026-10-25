@@ -9,8 +9,7 @@
     "build": "astro build",
     "preview": "wrangler dev --port 8787",
     "typecheck": "astro check",
-    "deploy:production": "wrangler deploy",
-    "deploy:preview": "wrangler preview"
+    "deploy:production": "wrangler deploy"
   },
   "dependencies": {
     "@shkriuss/astro-config": "workspace:*",

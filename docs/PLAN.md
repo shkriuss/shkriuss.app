@@ -59,7 +59,7 @@ shkriuss.app/
 │   ├── library/             Photos' online library in R2 (ADR 0016)
 │   └── crypto/, dates/      Web Crypto helpers; calendar dates as "YYYY-MM-DD"
 ├── templates/app/           starting files for a new app (copied by the generator)
-├── scripts/                 new-app, dist checks, deploys, buckets, previews, smoke test, package age
+├── scripts/                 new-app, dist checks, deploys, buckets, smoke test, package age
 ├── tests/e2e/               browser tests that run against EVERY site automatically
 ├── tests/unit/              repo-wide checks (colour contrast, registry, workflows)
 ├── docs/                    plan, guides, decision records (adr/)
@@ -118,15 +118,13 @@ third-party version once for the whole repo.
 - **Production deploys.** On every merge to `main`, once every check passes,
   GitHub Actions deploys the exact files it tested, then checks that every
   live site answers with the right security headers.
-- **Previews for pull requests.** A pull request gets Cloudflare Worker
-  Previews (`wrangler preview --name pr-<number>`) for every site once the
-  owner approves them, since they run its code with the Cloudflare token
-  ([deployment](deployment.md#seeing-a-preview)). A bot comment lists the
-  links, for example `https://pr-7-tally.shkriuss.workers.dev`. The next
-  production deploy after the pull request closes deletes them. Search
-  engines are told not to index them.
-- **`workers.dev` is off for production.** Each site's real address is only
-  its custom domain. Previews still use `workers.dev`.
+- **No previews for pull requests** ([ADR 0019](adr/0019-no-pull-request-previews.md)).
+  A preview would run a pull request's code, before it's merged, with the
+  Cloudflare token. A pull request gets CI's checks; once merged, look at
+  the live site, and revert if something's wrong
+  ([deployment](deployment.md#rolling-back)).
+- **Only the custom domain.** Each site's real address is its custom domain:
+  `workers.dev` and Cloudflare's addresses for single versions are off.
 - **How it scales.** The Free plan allows 100 Workers and 100 custom domains
   per zone, so about 99 apps plus the hub. Apps with sync or notifications
   also share 5 GB of server storage: a few more of them need smaller limits
@@ -264,7 +262,6 @@ reader, 200% zoom and large text, and reduced motion
 | Workflow      | Runs on                                                | What it does                                                                                                                                                             |
 | ------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `ci.yml`      | every pull request and every push to `main`            | Runs every quality gate. On `main`, if the checks, the secret scan and the dependency audit pass, it **deploys every site to production** and then tests the live sites. |
-| `preview.yml` | pull request opened or updated, once you approve it    | Deploys previews of every site and comments the links on the PR. The production deploy deletes previews of closed PRs.                                                   |
 | `new-app.yml` | started by hand (**Actions → New app → Run workflow**) | Runs the generator with the details you type, pushes a branch, and gives you a link to open the PR.                                                                      |
 | Dependabot    | weekly                                                 | Proposes grouped dependency and action updates as PRs. CI must pass before you merge.                                                                                    |
 
@@ -293,8 +290,8 @@ they ran out.)
   app** workflow from your phone, or use the command line.
 - [`docs/design-system.md`](design-system.md): tokens, components, and
   changing the design everywhere.
-- [`docs/deployment.md`](deployment.md): deploys, previews, the token setup,
-  rolling back, costs, and troubleshooting.
+- [`docs/deployment.md`](deployment.md): deploys, the token setup, rolling
+  back, costs, and troubleshooting.
 - [`docs/quality.md`](quality.md): every check, and what to do when one
   fails.
 - [`docs/adr/`](adr/): short decision records, listed in
@@ -310,11 +307,10 @@ they ran out.)
 - [x] Monorepo, design system, registry, shared Astro config, storage helpers
 - [x] Hub with app list, privacy page and 404 page
 - [x] App template, generator and **New app** workflow; example app **Tally**
-- [x] CI quality gates, preview and production deploy workflows (all checks
-      pass in my environment)
+- [x] CI quality gates and the production deploy workflow (all checks pass
+      in my environment)
 - [x] You: Cloudflare token, GitHub secret and settings (checklist below)
 - [x] First production deploy: `shkriuss.app` and `tally.shkriuss.app` live
-- [x] Preview links appear on a pull request
 - [x] You, on your phone: install Tally to your home screen and try it in
       airplane mode
 
@@ -376,7 +372,7 @@ they ran out.)
 | Example app            | **Tally** (tap to count things, saved on your device)    | Any other small app.                                                                                  |
 | Brand name on the hub  | **"shkriuss"**                                           | Any name. It's one line in `apps.json`.                                                               |
 | Public contact address | **None** (security reports go through GitHub)            | Add an email for privacy and security questions.                                                      |
-| PR preview links       | **Public but unlisted** (`*.workers.dev`, not indexed)   | Put them behind a Cloudflare Access login (free, more setup).                                         |
+| PR preview links       | **None** (removed: ADR 0019)                             | Previews behind a Cloudflare Access login (free, more setup).                                         |
 | `www.shkriuss.app`     | **Not set up**                                           | Redirect it to `shkriuss.app` (one dashboard rule).                                                   |
 | Theme                  | **Follows your device**, with a Light/Dark/System switch | —                                                                                                     |
 
@@ -409,7 +405,7 @@ in [deployment.md](deployment.md#setup-one-time).
    [deployment.md](deployment.md#create-the-cloudflare-api-token) (Workers
    Scripts, Workers R2 Storage and Workers Routes, on `shkriuss.app` only).
 2. **Save it in GitHub** as the `CLOUDFLARE_API_TOKEN` secret of the
-   `production` and `preview` environments (deployment.md says how).
+   `production` environment (deployment.md says how).
 3. **Turn on Dependabot alerts and security updates** in the repository
    settings.
 4. **Merge the first pull request.** That triggers the first production

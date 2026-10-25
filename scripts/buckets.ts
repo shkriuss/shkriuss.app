@@ -1,11 +1,9 @@
 /**
  * Creates the R2 buckets that apps with an online library use
  * (docs/adr/0016-online-photo-library.md), if they aren't there yet. CI runs
- * it before deploying, so each Worker finds its bucket. Preview buckets get
- * a rule that deletes their files after 7 days.
+ * it before deploying, so each Worker finds its bucket.
  *
- *   node scripts/buckets.ts production
- *   node scripts/buckets.ts preview
+ *   node scripts/buckets.ts
  *
  * Needs CLOUDFLARE_API_TOKEN (with "Workers R2 Storage: Edit") and
  * CLOUDFLARE_ACCOUNT_ID in the environment.
@@ -14,15 +12,6 @@ import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { repoRoot, siteSlugs } from './lib/sites.ts';
 import { siteBuckets } from './lib/storage.ts';
-
-/** Days a preview's photos are kept. */
-const PREVIEW_DAYS = 7;
-
-const where = process.argv[2];
-if (where !== 'production' && where !== 'preview') {
-  console.error('Usage: node scripts/buckets.ts <production|preview>');
-  process.exit(2);
-}
 
 function wrangler(slug: string, args: string[]) {
   const run = spawnSync('pnpm', ['exec', 'wrangler', ...args], {
@@ -35,7 +24,7 @@ function wrangler(slug: string, args: string[]) {
 
 let failed = false;
 for (const slug of siteSlugs()) {
-  for (const bucket of siteBuckets(slug, where)) {
+  for (const bucket of siteBuckets(slug)) {
     const created = wrangler(slug, ['r2', 'bucket', 'create', bucket]);
     if (created.ok) {
       console.log(`Created the R2 bucket ${bucket}.`);
@@ -47,26 +36,6 @@ for (const slug of siteSlugs()) {
       console.log(
         `::error title=R2 bucket::Could not create ${bucket}. Is R2 turned on, and may the Cloudflare token edit R2 storage? See docs/deployment.md.`,
       );
-      continue;
-    }
-    if (where === 'preview') {
-      const rule = wrangler(slug, [
-        'r2',
-        'bucket',
-        'lifecycle',
-        'add',
-        bucket,
-        'delete-old-previews',
-        '--expire-days',
-        String(PREVIEW_DAYS),
-        '--force',
-      ]);
-      if (!rule.ok && !/already exists|duplicate/i.test(rule.output)) {
-        // Previews still work; their files just stay until deleted by hand.
-        console.log(
-          `::warning title=R2 bucket::Could not set ${bucket} to delete files after ${PREVIEW_DAYS} days.`,
-        );
-      }
     }
   }
 }

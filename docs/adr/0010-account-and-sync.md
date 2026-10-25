@@ -10,7 +10,10 @@ nobody uses for 13 months are deleted. Extended by
 the account and is kept in Cloudflare R2, free up to 10 GB, then paid.
 Changed by [ADR 0018](0018-passkey-signatures.md): the account service keeps
 each passkey's public key, and only hands out or removes a lock for the
-passkey's signature made on the Account page.
+passkey's signature made on the Account page. Changed by
+[ADR 0019](0019-no-pull-request-previews.md): there are no pull request
+previews, so an app pairs only with the real hub (or, in tests, the local
+one).
 
 ## Context
 

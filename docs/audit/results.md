@@ -51,7 +51,9 @@ Nothing is left for the owner.
 [deployment.md](../deployment.md). The ones that can be seen from outside
 were checked: the email and certificate records, the limit on requests to
 the servers, the deploy's token and storage code, previews waiting for
-approval, and pages that nothing rewrites.
+approval (pull request previews were removed later:
+[ADR 0019](../adr/0019-no-pull-request-previews.md)), and pages that nothing
+rewrites.
 
 **Choices:** decided on 24 October 2026, keeping the defaults:
 
@@ -59,7 +61,9 @@ approval, and pages that nothing rewrites.
   day, not as soon as its time passes.
 - **I-6:** old builds stay at their "version preview" addresses, which are
   hard to guess and show only code that was public anyway. Hiding them would
-  also put pull request previews behind a sign-in.
+  also put pull request previews behind a sign-in. (Since 25 October 2026
+  there are no pull request previews, and these addresses are turned off:
+  [ADR 0019](../adr/0019-no-pull-request-previews.md).)
 - **Z-11:** the repository has no licence file, so anyone may read the code
   but not reuse it.
 
@@ -247,7 +251,7 @@ Severity is the auditor’s: **High** could lose or leak data or cost money; **M
 | I-3  | Low      | Cloudflare features can rewrite live pages, and nothing checks the live HTML                                          | Fixed (the features are off, and the live check spots a changed page) |
 | I-4  | Low      | The privacy page says Cloudflare data "is not collected", but Cloudflare keeps security events and traffic statistics | Fixed                                                                 |
 | I-5  | Low      | No CAA record, so any public CA may issue certificates for the domain                                                 | Fixed (your setting; checked on 23 October)                           |
-| I-6  | Low      | 36 old builds stay public indefinitely at "version preview" addresses                                                 | Explained (deployment.md); kept as is (your choice)                   |
+| I-6  | Low      | 36 old builds stay public indefinitely at "version preview" addresses                                                 | Kept at first (your choice); turned off later (ADR 0019)              |
 | I-7  | Low      | No `security.txt` on any site                                                                                         | Fixed                                                                 |
 | I-8  | Info     | Nothing at the edge limits requests to `/api/*`, and all apps share the free daily limits                             | Fixed (your setting; checked on 23 October)                           |
 | I-9  | Info     | GitHub repository settings to tidy                                                                                    | Fixed (your setting)                                                  |

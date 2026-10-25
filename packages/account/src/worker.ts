@@ -50,15 +50,7 @@ import {
   type DurableObjectState,
   type SiteEnv,
 } from '@shkriuss/server';
-import {
-  LIMIT_HEADER,
-  limitFor,
-  limitOf,
-  METER,
-  meterFetch,
-  release,
-  reserve,
-} from '@shkriuss/server/meter';
+import { LIMIT_HEADER, limitOf, METER, meterFetch, release, reserve } from '@shkriuss/server/meter';
 import {
   checkAssertionShape,
   checkLinkBody,
@@ -87,22 +79,17 @@ export interface AccountEnv extends SiteEnv {
 }
 
 /**
- * All passkey locks together, and all replaced-key notes together, in bytes,
- * on the real site and on a PR preview. Each counts 16 KB (it holds less).
+ * All passkey locks together, and all replaced-key notes together, in bytes.
+ * Each counts 16 KB (it holds less).
  */
-export const STORAGE_LIMITS = {
-  passkeys: { site: 40_000_000, preview: 4_000_000 },
-  replaced: { site: 40_000_000, preview: 4_000_000 },
-} as const;
+export const STORAGE_LIMITS = { passkeys: 40_000_000, replaced: 40_000_000 } as const;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** A replaced-key note nobody has asked about for this long (about 13 months) is deleted. */
 export const UNUSED_MS = 396 * DAY_MS;
 
-/** The limit for one namespace on this site, for the object to check. */
-const limitHeaders = (request: Request, limits: { site: number; preview: number }) => ({
-  [LIMIT_HEADER]: String(limitFor(new URL(request.url), limits)),
-});
+/** A namespace's limit, for the object to check. */
+const limitHeaders = (limit: number) => ({ [LIMIT_HEADER]: String(limit) });
 
 /** Requests to /api/account/*. */
 export async function handleAccount(
@@ -175,7 +162,7 @@ export async function handleAccount(
     return stub.fetch('https://passkey/', {
       method: 'POST',
       body: JSON.stringify(body),
-      headers: limitHeaders(request, STORAGE_LIMITS.passkeys),
+      headers: limitHeaders(STORAGE_LIMITS.passkeys),
     });
   }
 
@@ -199,7 +186,7 @@ export async function handleAccount(
       return stub.fetch('https://status/', {
         method: 'PUT',
         body: JSON.stringify({ successor }),
-        headers: limitHeaders(request, STORAGE_LIMITS.replaced),
+        headers: limitHeaders(STORAGE_LIMITS.replaced),
       });
     }
     return problem(405, 'Use GET or PUT.');

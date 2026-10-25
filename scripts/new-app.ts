@@ -63,7 +63,7 @@ It's listed on the hub once merged. To deploy it without listing it, set "status
 Next:
   1. pnpm install
   2. Build the app in ${relative(repoRoot, appDir)}/src/pages/index.astro
-  3. Open a pull request. CI checks it; preview links come once you approve them.
+  3. Open a pull request. CI checks it.
   4. Merge: it goes live at https://${entry.slug}.shkriuss.app
 `);
 } catch (error) {

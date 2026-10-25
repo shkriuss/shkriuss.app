@@ -20,7 +20,7 @@ const docs = execFileSync('git', ['ls-files', '*.md'], { cwd: repoRoot, encoding
 const prose = (doc: string): string =>
   readFileSync(join(repoRoot, doc), 'utf8').replace(/^```[\s\S]*?^```/gm, '');
 
-/** The anchors GitHub gives a doc's headings: "## Seeing a preview" is #seeing-a-preview. */
+/** The anchors GitHub gives a doc's headings: "## Rolling back" is #rolling-back. */
 function anchors(doc: string): Set<string> {
   const seen = new Map<string, number>();
   const found = new Set<string>();

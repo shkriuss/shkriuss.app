@@ -21,12 +21,6 @@ const repoRoot = join(import.meta.dirname, '../..');
 const FREE_STORAGE = 5_000_000_000;
 /** What the limits may add up to; the rest is a margin. */
 const STORAGE_BUDGET = 4_500_000_000;
-/**
- * Pull requests whose previews fit at once (docs/deployment.md says how
- * many). Each set of previews has its own storage, with smaller limits, and
- * its own Durable Object namespaces.
- */
-const PREVIEWS = 2;
 /** The owner's online library list, outside the meters (docs/adr/0016: about 400 bytes a photo). */
 const LIBRARY_LIST = LIBRARY_LIMITS.items * 400;
 
@@ -42,8 +36,8 @@ const syncsFiles = (slug: string): boolean =>
     readFileSync(join(repoRoot, 'apps', slug, 'src/worker.ts'), 'utf8'),
   );
 
-/** Every site's Durable Object namespaces: its own, or one set of previews'. */
-function namespaces(where: 'site' | 'preview'): number {
+/** Every site's Durable Object namespaces. */
+function namespaces(): number {
   const sites = readdirSync(join(repoRoot, 'apps')).filter((slug) =>
     existsSync(join(repoRoot, 'apps', slug, 'wrangler.jsonc')),
   );
@@ -51,30 +45,26 @@ function namespaces(where: 'site' | 'preview'): number {
   for (const slug of sites) {
     const config = parseJsonc(
       readFileSync(join(repoRoot, 'apps', slug, 'wrangler.jsonc'), 'utf8'),
-    ) as {
-      durable_objects?: { bindings: unknown[] };
-      previews?: { durable_objects?: { bindings: unknown[] } };
-    };
-    const own = where === 'site' ? config.durable_objects : config.previews?.durable_objects;
-    total += own?.bindings.length ?? 0;
+    ) as { durable_objects?: { bindings: unknown[] } };
+    total += config.durable_objects?.bindings.length ?? 0;
   }
   return total;
 }
 
-/** Every namespace's limit together, on the real sites or on one preview. */
-function storageLimits(where: 'site' | 'preview'): number {
-  let total = ACCOUNT.passkeys[where] + ACCOUNT.replaced[where];
+/** Every namespace's limit together. */
+function storageLimits(): number {
+  let total = ACCOUNT.passkeys + ACCOUNT.replaced;
   for (const app of apps) {
-    if (app.sync) total += (syncsFiles(app.slug) ? SYNC.files : SYNC.copies)[where];
-    if (app.pushNotifications) total += PUSH[where];
-    if (app.library) total += LIBRARY[where];
+    if (app.sync) total += syncsFiles(app.slug) ? SYNC.files : SYNC.copies;
+    if (app.pushNotifications) total += PUSH;
+    if (app.library) total += LIBRARY;
   }
   return total;
 }
 
 describe('the free plan, shared by every app', () => {
-  it('has room for every server’s storage limit, two open previews and the library list', () => {
-    const total = storageLimits('site') + PREVIEWS * storageLimits('preview') + LIBRARY_LIST;
+  it('has room for every server’s storage limit and the library list', () => {
+    const total = storageLimits() + LIBRARY_LIST;
     expect(STORAGE_BUDGET).toBeLessThan(FREE_STORAGE);
     expect(
       total,
@@ -82,11 +72,10 @@ describe('the free plan, shared by every app', () => {
     ).toBeLessThanOrEqual(STORAGE_BUDGET);
   });
 
-  it('has Durable Object namespaces for every site and two pull requests’ previews', () => {
-    expect(namespaces('preview')).toBe(namespaces('site'));
+  it('has Durable Object namespaces for every site', () => {
     expect(
-      namespaces('site') + PREVIEWS * namespaces('preview'),
-      'Fewer pull requests can have previews at once: say how many in PREVIEWS and in docs/deployment.md.',
+      namespaces(),
+      'The free plan has 100 Durable Object namespaces for the whole account (docs/deployment.md).',
     ).toBeLessThanOrEqual(FREE_NAMESPACES);
   });
 

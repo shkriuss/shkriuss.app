@@ -684,21 +684,26 @@ describe('libraries nobody unlocked (docs/adr/0017)', () => {
 
 describe('how many libraries there can be (docs/adr/0017)', () => {
   it('stops made-up libraries at the limit, and keeps nothing for one turned down', async () => {
-    const preview = (library: string) =>
+    // A small limit, so they fill it quickly.
+    const limit = 4_000_000;
+    server = memoryLibrary(CODE, { limit });
+    const ask = (library: string) =>
       server.fetch(
-        new Request('https://pr-9-photos.shkriuss.workers.dev/api/library/changes?since=0', {
+        new Request(`${ORIGIN}/api/library/changes?since=0`, {
           headers: { Authorization: `Bearer ${token()}`, 'X-Library': library },
         }),
       );
     let kept = 0;
     for (; kept < 1000; kept += 1) {
-      const response = await preview(libraryId());
+      const response = await ask(libraryId());
       if (response.status === 507) break;
       expect(response.status).toBe(200);
     }
-    expect(kept).toBe(Math.floor(STORAGE_LIMITS.preview / (16 * 1024)));
+    expect(kept).toBe(Math.floor(limit / (16 * 1024)));
     const stored = [...server.objects.values()].filter(({ storage }) => storage.map.size > 0);
     // The libraries, and the meter that counts them.
     expect(stored).toHaveLength(kept + 1);
+    // The Worker tells each library the real limit.
+    expect(new Set(server.limits())).toEqual(new Set([String(STORAGE_LIMITS)]));
   });
 });

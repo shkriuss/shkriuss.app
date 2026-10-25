@@ -3,7 +3,9 @@
  *
  * - memorySync(): an app's sync server in memory: the real Worker code and
  *   Durable Objects (@shkriuss/server/testing), with each copy's storage in
- *   a Map. `copies.runAlarms()` wakes the copies whose alarm is due.
+ *   a Map. `copies.runAlarms()` wakes the copies whose alarm is due. With
+ *   `limit`, all copies together get that limit instead of the app's, so a
+ *   test can fill them up quickly.
  * - footprint() and sampleText(): how much room an app's data takes on the
  *   device and in the sync copy, for tests that set an app's item limits
  *   (audit F2-8).
@@ -17,12 +19,12 @@ import worker, { SyncCopy, syncHandler, type SyncEnv } from './worker.ts';
 /** An app's Worker with files on (worker.ts's default has them off). */
 export const withFiles = createWorker<SyncEnv>({ '/api/sync': syncHandler({ files: true }) });
 
-export function memorySync() {
+export function memorySync(options: { limit?: number } = {}) {
   const env: SyncEnv = {
     ASSETS: { fetch: async () => new Response('page') },
     SYNC_COPIES: null as unknown as DurableObjectNamespace,
   };
-  const copies = memoryNamespace((state) => new SyncCopy(state, env));
+  const copies = memoryNamespace((state) => new SyncCopy(state, env), options);
   env.SYNC_COPIES = copies.namespace;
   return {
     env,

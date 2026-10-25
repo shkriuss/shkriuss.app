@@ -44,9 +44,6 @@ package age check run only in GitHub Actions.
   instead of failing (for example, airplane mode with a VPN on): it waits 3
   seconds for the network, then opens the saved copy (the test allows 8).
 - **Not found:** unknown pages return status 404 with a helpful page.
-- **Previews:** at a preview's address (`*.workers.dev`), every page says
-  it's a preview, not to use a real account or real data
-  (`tests/e2e/preview.spec.ts`).
 - **Your data:** on sites that save data, a locked backup restores only with
   its passphrase, a plain copy restores, other files are turned down (the
   Restore dialog reads out why, or its warning, as it opens), and focus

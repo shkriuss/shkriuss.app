@@ -32,21 +32,10 @@
   ],
   // The real address. Cloudflare creates the DNS record and certificate.
   "routes": [{ "pattern": "reminders.shkriuss.app", "custom_domain": true }],
-  // No *.workers.dev address for production, but keep preview links for PRs.
+  // Only at the real address: no *.workers.dev address, and no addresses for
+  // single versions either (docs/adr/0019-no-pull-request-previews.md).
   // No Workers logs or traces: nothing about requests is kept (see the privacy page).
   "observability": { "enabled": false },
   "workers_dev": false,
-  "preview_urls": true,
-  // Settings for PR previews (`wrangler preview`). Each preview gets its own,
-  // empty Durable Object storage (and so its own keys): nothing is shared
-  // with the real site.
-  "previews": {
-    "durable_objects": {
-      "bindings": [
-        { "name": "PUSH_DEVICES", "class_name": "PushDevice" },
-        { "name": "PUSH_KEYS", "class_name": "PushKeys" },
-        { "name": "SYNC_COPIES", "class_name": "SyncCopy" },
-      ],
-    },
-  },
+  "preview_urls": false,
 }

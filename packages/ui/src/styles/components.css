@@ -98,16 +98,6 @@
   padding-block: var(--space-6) var(--space-8);
 }
 
-/* On a preview of a change (*.workers.dev): a note at the top of the header (audit D-2). */
-.preview-note {
-  padding: var(--space-2) var(--gutter);
-  border-bottom: var(--border-width) solid var(--color-danger);
-  background: var(--color-danger-soft);
-  color: var(--color-text);
-  font-weight: var(--weight-semibold);
-  text-align: center;
-}
-
 .site-header {
   border-bottom: var(--border-width) solid var(--color-border);
   background: var(--color-surface);

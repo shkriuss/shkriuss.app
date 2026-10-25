@@ -11,7 +11,9 @@ import { MAX_FILE_BYTES, MAX_REQUEST_BYTES, MAX_SEALED_CHARS } from './validate.
 import { STORAGE_LIMITS, UNUSED_MS } from './worker.ts';
 
 const SITE = 'https://notes.shkriuss.app';
-const PREVIEW = 'https://pr-7-notes.shkriuss.workers.dev';
+/** Small limits for all copies together, so tests fill them quickly (the real ones: STORAGE_LIMITS). */
+const COPIES_LIMIT = 20_000_000;
+const FILES_LIMIT = 80_000_000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const madeUpToken = () => toBase64Url(randomBytes(32));
@@ -30,7 +32,7 @@ async function fillUp(server: ReturnType<typeof memorySync>, size: number): Prom
   const tokens: string[] = [];
   for (let tries = 0; tries < 5000; tries += 1) {
     const token = madeUpToken();
-    const response = await server.fetch(put(PREVIEW, token, null, sealed(size)));
+    const response = await server.fetch(put(SITE, token, null, sealed(size)));
     if (response.status === 507) return tokens;
     expect(response.status).toBe(200);
     tokens.push(token);
@@ -56,43 +58,41 @@ afterEach(() => {
 
 describe('all of an app’s copies together', () => {
   it('stop at the app’s limit, however many tokens are made up', async () => {
-    const server = memorySync();
+    const server = memorySync({ limit: COPIES_LIMIT });
     const biggest = sealed(MAX_SEALED_CHARS);
     const statuses: number[] = [];
     for (let index = 0; index < 15; index += 1) {
-      statuses.push((await server.fetch(put(PREVIEW, madeUpToken(), null, biggest))).status);
+      statuses.push((await server.fetch(put(SITE, madeUpToken(), null, biggest))).status);
     }
     const kept = statuses.filter((status) => status === 200).length;
     expect(kept).toBeGreaterThan(3);
     expect(statuses.slice(kept).every((status) => status === 507)).toBe(true);
-    expect(keptBytes(server)).toBeLessThan(STORAGE_LIMITS.copies.preview);
+    expect(keptBytes(server)).toBeLessThan(COPIES_LIMIT);
     // A refused copy keeps nothing at all.
     expect(server.copies.stored()).toHaveLength(kept + 1);
   });
 
   it('each count for at least 16 KB, so tiny ones run out too', async () => {
-    const kept = await fillUp(memorySync(), 40);
-    expect(kept).toHaveLength(
-      Math.floor(STORAGE_LIMITS.copies.preview / (OBJECT_BYTES + 40 + 8192)),
-    );
+    const kept = await fillUp(memorySync({ limit: COPIES_LIMIT }), 40);
+    expect(kept).toHaveLength(Math.floor(COPIES_LIMIT / (OBJECT_BYTES + 40 + 8192)));
   });
 
   it('leave copies already online syncing when the limit is reached', async () => {
-    const server = memorySync();
+    const server = memorySync({ limit: COPIES_LIMIT });
     const mine = madeUpToken();
-    const first = await server.fetch(put(PREVIEW, mine, null, sealed(100_000)));
+    const first = await server.fetch(put(SITE, mine, null, sealed(100_000)));
     expect(first.status).toBe(200);
     await fillUp(server, MAX_SEALED_CHARS);
 
     // Changes of about the same size fit in the room the copy already has.
     let version = ((await first.json()) as { version: number }).version;
     for (const size of [100_000, 110_000, 95_000]) {
-      const response = await server.fetch(put(PREVIEW, mine, version, sealed(size)));
+      const response = await server.fetch(put(SITE, mine, version, sealed(size)));
       expect(response.status).toBe(200);
       version = ((await response.json()) as { version: number }).version;
     }
     // A much bigger one needs room nobody has.
-    const bigger = await server.fetch(put(PREVIEW, mine, version, sealed(MAX_SEALED_CHARS)));
+    const bigger = await server.fetch(put(SITE, mine, version, sealed(MAX_SEALED_CHARS)));
     expect(bigger.status).toBe(507);
     expect(await bigger.json()).toEqual({
       error: 'There’s no room left online for this app just now.',
@@ -100,40 +100,46 @@ describe('all of an app’s copies together', () => {
   });
 
   it('get room back when one is deleted', async () => {
-    const server = memorySync();
+    const server = memorySync({ limit: COPIES_LIMIT });
     const tokens = await fillUp(server, MAX_SEALED_CHARS);
     const deleted = await server.fetch(
-      request(PREVIEW, 'copy', tokens[0] ?? '', { method: 'DELETE' }),
+      request(SITE, 'copy', tokens[0] ?? '', { method: 'DELETE' }),
     );
     expect(deleted.status).toBe(204);
-    expect(
-      (await server.fetch(put(PREVIEW, madeUpToken(), null, sealed(MAX_SEALED_CHARS)))).ok,
-    ).toBe(true);
+    expect((await server.fetch(put(SITE, madeUpToken(), null, sealed(MAX_SEALED_CHARS)))).ok).toBe(
+      true,
+    );
   });
 
-  it('have a much higher limit on the real site than on a preview', async () => {
-    expect(STORAGE_LIMITS.copies.site).toBeGreaterThan(5 * STORAGE_LIMITS.copies.preview);
+  it('have the app’s own limit: for copies only, or with their files', async () => {
     const server = memorySync();
     const biggest = sealed(MAX_SEALED_CHARS);
     for (let index = 0; index < 15; index += 1) {
       expect((await server.fetch(put(SITE, madeUpToken(), null, biggest))).status).toBe(200);
     }
+    const file = await server.fetchWithFiles(
+      request(SITE, 'files/photo-0', madeUpToken(), { method: 'PUT', body: new Uint8Array(1000) }),
+    );
+    expect(file.status).toBe(204);
+    expect(new Set(server.copies.limits())).toEqual(
+      new Set([String(STORAGE_LIMITS.copies), String(STORAGE_LIMITS.files)]),
+    );
   });
 
   it('with files, count the files too', async () => {
-    const server = memorySync();
+    const server = memorySync({ limit: FILES_LIMIT });
     const token = madeUpToken();
     const file = new Uint8Array(1_500_000);
     const statuses: number[] = [];
     for (let index = 0; index < 70; index += 1) {
       const response = await server.fetchWithFiles(
-        request(PREVIEW, `files/photo-${index}`, token, { method: 'PUT', body: file }),
+        request(SITE, `files/photo-${index}`, token, { method: 'PUT', body: file }),
       );
       statuses.push(response.status);
     }
     expect(statuses).toContain(204);
     expect(statuses.at(-1)).toBe(507);
-    expect(keptBytes(server)).toBeLessThan(STORAGE_LIMITS.files.preview);
+    expect(keptBytes(server)).toBeLessThan(FILES_LIMIT);
   });
 });
 

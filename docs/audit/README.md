@@ -134,8 +134,10 @@ reasoning is wrong, and say why.
 - **`'wasm-unsafe-eval'`** is in the CSP only for apps with
   `"webAssembly": true` (Grammar,
   [ADR 0011](../adr/0011-on-device-grammar-checking.md)).
-- **Preview links** (`*.workers.dev`) are public but unlisted, and use their
-  own storage, never production's.
+- **No pull request previews**
+  ([ADR 0019](../adr/0019-no-pull-request-previews.md)): nothing runs with
+  the Cloudflare token before it's merged, so a change is first seen on the
+  live site, and a revert undoes it.
 - **The Cloudflare account ID** in the workflows isn't a secret.
 - **The minimum TLS version is 1.3.** Very old devices can't connect.
 - **No analytics, logs or error reporting** of any kind.
@@ -317,9 +319,10 @@ don't stop at these questions: anything else you find in the area counts.
   - online copies and photo files;
   - notification subscriptions.
 - Is there any request to another website anywhere? Check fonts, analytics,
-  error reporting and referrers, including in manifests, icons, on-demand
-  downloads and previews.
-- Can preview links ever touch real people's data?
+  error reporting and referrers, including in manifests, icons and on-demand
+  downloads.
+- Is each site only at its own address, with no `workers.dev` address for it
+  or for any single version of it?
 
 ### E. Data safety: storage, sync, backups and changes to data formats
 
@@ -417,7 +420,7 @@ This area is split into three tasks:
 - `.github/workflows/`, `.github/actions/setup`,
   `.github/actions/deep-check-model`, `.github/dependabot.yml` and
   `.github/zizmor/requirements.txt`;
-- `scripts/`: `deploy.ts`, `previews.ts`, `buckets.ts`, `smoke-test.ts`,
+- `scripts/`: `deploy.ts`, `buckets.ts`, `smoke-test.ts`,
   `new-app.ts`, `check-dist.ts` and `lockfile-age.ts`, with their logic in
   `scripts/lib/`;
 - `apps/grammar/scripts/deep-check-files.ts`, which downloads Grammar's model

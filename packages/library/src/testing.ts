@@ -3,6 +3,7 @@
  * Durable Object, with storage and R2 kept in Maps.
  */
 import type { DurableObjectListStorage, R2Bucket } from '@shkriuss/server';
+import { LIMIT_HEADER } from '@shkriuss/server/meter';
 import worker, { Library, LibraryGate, type LibraryEnv } from './worker.ts';
 
 export class MemoryListStorage implements DurableObjectListStorage {
@@ -93,9 +94,15 @@ export class MemoryBucket implements R2Bucket {
 
 /**
  * A library server in memory: its env, each library's object and storage,
- * and fetch(). `code` is its storage code (null: it has none).
+ * and fetch(). `code` is its storage code (null: it has none). With `limit`,
+ * all libraries together get that limit instead of the real one, so a test
+ * can fill them up quickly; limits() lists the ones the Worker sent.
  */
-export function memoryLibrary(code: string | null = 'correct horse battery staple') {
+export function memoryLibrary(
+  code: string | null = 'correct horse battery staple',
+  options: { limit?: number } = {},
+) {
+  const sent: string[] = [];
   const objects = new Map<string, { library: Library; storage: MemoryListStorage }>();
   const bucket = new MemoryBucket();
   const gateStorage = new MemoryListStorage();
@@ -129,7 +136,15 @@ export function memoryLibrary(code: string | null = 'correct horse battery stapl
             };
             objects.set(name, found);
           }
-          return found.library.fetch(new Request(input, init));
+          const request = new Request(input, init);
+          const limit = request.headers.get(LIMIT_HEADER);
+          if (limit !== null) {
+            sent.push(limit);
+            if (options.limit !== undefined) {
+              request.headers.set(LIMIT_HEADER, String(options.limit));
+            }
+          }
+          return found.library.fetch(request);
         },
       }),
     },
@@ -141,5 +156,6 @@ export function memoryLibrary(code: string | null = 'correct horse battery stapl
     gate,
     gateStorage,
     fetch: (request: Request) => worker.fetch(request, env),
+    limits: () => [...sent],
   };
 }

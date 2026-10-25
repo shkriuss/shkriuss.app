@@ -48,7 +48,6 @@ import {
 import {
   GRANTED_KEY,
   LIMIT_HEADER,
-  limitFor,
   limitOf,
   METER,
   meterFetch,
@@ -92,15 +91,12 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export const UNUSED_MS = 396 * DAY_MS;
 
 /**
- * All of one app's copies together, in bytes, on the real site and on a PR
- * preview: copies only, or copies with their files (Repairs). Each copy also
- * counts 16 KB, whatever it holds (@shkriuss/server/meter). Every app's limits
- * together fit in the free plan's 5 GB (docs/adr/0017-storage-limits.md).
+ * All of one app's copies together, in bytes: copies only, or copies with
+ * their files (Repairs). Each copy also counts 16 KB, whatever it holds
+ * (@shkriuss/server/meter). Every app's limits together fit in the free
+ * plan's 5 GB (docs/adr/0017-storage-limits.md).
  */
-export const STORAGE_LIMITS = {
-  copies: { site: 120_000_000, preview: 20_000_000 },
-  files: { site: 1_000_000_000, preview: 80_000_000 },
-} as const;
+export const STORAGE_LIMITS = { copies: 120_000_000, files: 1_000_000_000 } as const;
 
 /** 507: the app's limit is reached, so nothing more is kept for now. */
 const full = (): Response => problem(507, 'There’s no room left online for this app just now.');
@@ -123,11 +119,8 @@ export async function handleSync(
   const token = bearerToken(request);
   if (!token) return problem(401, 'Missing or malformed sync token.');
   const object = env.SYNC_COPIES.get(env.SYNC_COPIES.idFromName(await sha256Text(token)));
-  // Each request tells the copy the app's limit on this site.
-  const limit = limitFor(
-    new URL(request.url),
-    options.files ? STORAGE_LIMITS.files : STORAGE_LIMITS.copies,
-  );
+  // Each request tells the copy the app's limit.
+  const limit = options.files ? STORAGE_LIMITS.files : STORAGE_LIMITS.copies;
   const copy: DurableObjectStub = {
     fetch: (input, init = {}) =>
       object.fetch(input, { ...init, headers: { [LIMIT_HEADER]: String(limit) } }),

@@ -35,21 +35,11 @@ export const OBJECT_BYTES = 16 * 1024;
 /** Where an object keeps how much the meter has granted it. */
 export const GRANTED_KEY = 'meter:granted';
 
-/** The Worker tells each object its namespace's limit, for that site, in this header. */
+/** The Worker tells each object its namespace's limit in this header. */
 export const LIMIT_HEADER = 'X-Storage-Limit';
 
 /** For writes that must happen (an alarm saving what it already had): never refused. */
 export const NO_LIMIT = Number.MAX_SAFE_INTEGER;
-
-/**
- * A namespace's limit for a request to this address: `site` on the real
- * sites, `preview` on PR previews (*.workers.dev). Previews aren't behind
- * the rate limit at Cloudflare, and each has its own storage, which counts
- * against the same 5 GB.
- */
-export function limitFor(url: URL, limits: { site: number; preview: number }): number {
-  return url.hostname.endsWith('.workers.dev') ? limits.preview : limits.site;
-}
 
 /** The limit the Worker sent with this request (0, so nothing grows, if it sent none). */
 export function limitOf(request: Request): number {

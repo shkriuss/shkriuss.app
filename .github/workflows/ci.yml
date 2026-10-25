@@ -190,8 +190,6 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
-      # To list open pull requests, so previews of closed ones are deleted.
-      pull-requests: read
     concurrency:
       group: production
       cancel-in-progress: false
@@ -255,7 +253,7 @@ jobs:
         if: steps.newest.outputs.deploy == 'true'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: node scripts/buckets.ts production
+        run: node scripts/buckets.ts
 
       - name: Deploy every site (one at a time)
         if: steps.newest.outputs.deploy == 'true'
@@ -268,11 +266,3 @@ jobs:
       - name: Check the live sites
         if: steps.newest.outputs.deploy == 'true'
         run: node scripts/smoke-test.ts
-
-      - name: Delete previews of closed pull requests
-        if: steps.newest.outputs.deploy == 'true'
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        run: node scripts/previews.ts prune
