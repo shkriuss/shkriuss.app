@@ -9,7 +9,7 @@ import { today } from '@shkriuss/dates';
 import { createStore, downloadFile } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
 import { keepFocus } from '@shkriuss/ui/keep-focus';
-import { waitForTyping } from '@shkriuss/ui/long-lists';
+import { PAGE_SIZE, shownCount, waitForTyping } from '@shkriuss/ui/long-lists';
 import { decimalText } from '@shkriuss/ui/numbers';
 import { focusProblem, reportSave } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
@@ -109,8 +109,6 @@ const settingsStore = createStore<SettingsState>({
   validate: isSettingsState,
 });
 
-/** Repairs shown at first, and added by "Show more". */
-const PAGE_SIZE = 50;
 /** Search results are read out this long after the last key press. */
 const ANNOUNCE_DELAY_MS = 700;
 const EMPTY_PART: PartForm = { name: '', number: '', quantity: '1', price: '' };
@@ -178,6 +176,8 @@ export function mountRepairs(root: Document): void {
   let repairs = repairsStore.load();
   let settings = settingsStore.load();
   let shown = PAGE_SIZE;
+  /** A repair just saved: never hidden behind "Show more" (shownCount). */
+  let reveal: string | null = null;
   /** What's in the forms: the repair or vehicle being changed (null: a new one). */
   let editingRepair: string | null = null;
   let editingVehicle: string | null = null;
@@ -340,6 +340,14 @@ export function mountRepairs(root: Document): void {
 
     // Each day's total counts all its repairs, also those after "Show more".
     const dayTotals = new Map(byDay(found).map((day) => [day.date, totals(day.repairs, currency)]));
+    // Never hidden by paging: the repair with focus, or one just saved.
+    const focused = root.activeElement?.closest<HTMLElement>('[data-id]');
+    shown = shownCount(
+      found.map((repair) => repair.id),
+      shown,
+      [reveal, focused?.dataset['id']],
+    );
+    reveal = null;
     daysList.replaceChildren(
       ...byDay(found.slice(0, shown)).map((day) => {
         const fragment = dayTemplate.content.cloneNode(true) as DocumentFragment;
@@ -608,6 +616,7 @@ export function mountRepairs(root: Document): void {
     sync.filesRemoved(photoFiles(photos.removed));
     repairDialog.close();
     const name = newVehicle?.name ?? vehicleName(vehicles, repair.vehicle);
+    reveal = repair.id;
     save(
       {
         repairs: saveRepair(repairs, repair),

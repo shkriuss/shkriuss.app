@@ -65,9 +65,10 @@ Your trading journal: log your trades and see what works. Lives at
     first sync.
 - `src/scripts/trades.ts`: connects the page to those rules. Open trades are
   listed first, with "Close" to fill in the exit (all of the trade, or part
-  of it). Closed trades can be searched by symbol, setup or notes, 50 at a
-  time; how many a search finds is read out to screen readers once typing
-  pauses ("1 closed trade found.").
+  of it). Closed trades can be searched by symbol, setup or notes, and show
+  100 at a time (`@shkriuss/ui/long-lists`: one just saved stays in sight);
+  how many a search finds is read out to screen readers once typing pauses
+  ("1 closed trade found.").
 - `src/pages/index.astro`: the page, built from `@shkriuss/ui` components.
   `<template>`s hold the markup for a trade and a line of "By setup" or "By
   month"; the trade form and "Delete a year" are dialogs.
