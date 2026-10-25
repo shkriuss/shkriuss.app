@@ -71,6 +71,10 @@ browsers like IronFox receive Web Push through **UnifiedPush**.
 - **Not stored in backups:** the device key and subscription keys live under
   `shkriuss-device:` in `localStorage`, which backups skip, so restoring on
   another phone can't take over this one's notifications.
+- **While the app is open** it reads reminders out on the page. It shows
+  them as notifications too only when the server doesn't have the schedule
+  as it is now (`pushHolds`: a change made offline, say, couldn't be
+  uploaded yet), so nothing is missed and nothing shows twice (audit F1-7).
 
 ## Consequences
 

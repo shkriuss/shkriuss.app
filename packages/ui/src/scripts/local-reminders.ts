@@ -8,7 +8,8 @@
  * the "Notifications are …" line and the "Turn on notifications" button
  * (`[data-notify-status]`, `[data-notify-enable]`) right, and mounts
  * "Also remind me when … is closed" (./push-controls.ts, docs/adr/0009):
- * when that's on, the notification service sends them instead.
+ * when that's on, the notification service sends them instead, as long as
+ * it has them as they are now (pushHolds).
  *
  *   const reminders = mountLocalReminders(document, {
  *     app: 'Habits',
@@ -23,7 +24,7 @@
  * Each app keeps its own rules for what's due (src/lib, unit-tested).
  */
 import { nowStamp, type Stamp } from '@shkriuss/dates';
-import { isPushEnabled, type Notice } from '@shkriuss/push';
+import { pushHolds, type Notice } from '@shkriuss/push';
 import { reminderWindow, type ReminderCheck } from '../lib/reminder-window.ts';
 import { mountPushControls } from './push-controls.ts';
 import { required } from './dom.ts';
@@ -100,8 +101,11 @@ export function mountLocalReminders(
   });
 
   async function notify(due: readonly DueReminder[]): Promise<void> {
-    // With push on, the notification service sends these; don't show them twice.
-    if (permission() !== 'granted' || isPushEnabled()) return;
+    if (permission() !== 'granted') return;
+    // With push on, the notification service sends these: don't show them
+    // twice. Unless it doesn't have them as they are now, say after a change
+    // made offline: then nothing else shows them (audit F1-7).
+    if (await pushHolds(options.notices())) return;
     // Phones only show notifications through the service worker.
     const registration =
       'serviceWorker' in navigator

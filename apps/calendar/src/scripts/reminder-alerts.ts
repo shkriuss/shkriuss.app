@@ -8,9 +8,10 @@
  *
  * When "Also remind me when Calendar is closed" is on (push-reminders.ts),
  * the notification service sends them instead, so this file only lists them
- * on the page (no second copy as a notification).
+ * on the page (no second copy as a notification), unless the service
+ * doesn't have them as they are now (a change that couldn't be uploaded).
  */
-import { isPushEnabled } from '@shkriuss/push';
+import { pushHolds } from '@shkriuss/push';
 import { createStore } from '@shkriuss/storage';
 import {
   addDays,
@@ -23,6 +24,7 @@ import {
 } from '../lib/dates.ts';
 import { timeLabel, type Occurrence } from '../lib/events.ts';
 import { dueReminders } from '../lib/reminders.ts';
+import { noticesOf } from './push-reminders.ts';
 import { formatTime, plural, required, shortDate, utc, type CalendarPage } from './shared.ts';
 
 const CHECK_EVERY_MS = 20_000;
@@ -96,8 +98,11 @@ export function mountReminderAlerts(root: Document, page: CalendarPage): Reminde
   };
 
   async function notify(occurrences: Occurrence[]): Promise<void> {
-    // With push on, the notification service sends these; don't show them twice.
-    if (permission() !== 'granted' || isPushEnabled()) return;
+    if (permission() !== 'granted') return;
+    // With push on, the notification service sends these: don't show them
+    // twice. Unless it doesn't have them as they are now, say after a change
+    // made offline: then nothing else shows them (audit F1-7).
+    if (await pushHolds(noticesOf(page.state().events))) return;
     // Phones only show notifications through the service worker (see sw.js).
     const registration =
       'serviceWorker' in navigator
