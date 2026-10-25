@@ -286,11 +286,16 @@ export function readVehicle(
 ): { vehicle: Vehicle; problems?: undefined } | { vehicle?: undefined; problems: VehicleProblems } {
   const problems: VehicleProblems = {};
   const name = oneLine(form.name);
-  const isNew = !state.vehicles.some((vehicle) => vehicle.id === id);
+  const own = state.vehicles.find((vehicle) => vehicle.id === id);
+  const isNew = own === undefined;
+  // Its own name, unchanged, is fine even if another vehicle has it too:
+  // two devices that each added "Bus 105" before they first synced.
+  const unchanged = own !== undefined && fold(own.name) === fold(name);
   if (name === '') problems.name = 'Enter a name or number, like a bus number.';
   else if (name.length > LIMITS.vehicle)
     problems.name = `Use ${LIMITS.vehicle} characters or fewer.`;
   else if (
+    !unchanged &&
     state.vehicles.some((vehicle) => vehicle.id !== id && fold(vehicle.name) === fold(name))
   ) {
     problems.name = 'You already have a vehicle with that name.';

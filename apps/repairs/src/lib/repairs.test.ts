@@ -138,6 +138,27 @@ describe('vehicles', () => {
     ).toEqual({ name: 'Use 40 characters or fewer.' });
   });
 
+  // Audit F2-6: two devices that each added "Bus 105" before they first
+  // synced have twins, and neither could be changed.
+  it('lets a vehicle keep a name it shares with another', () => {
+    const twins = { vehicles: [...vehicles.vehicles, vehicle({ id: 'b105-2', name: 'Bus 105' })] };
+    const details = { model: 'Isuzu Novociti Life', plate: 'tb-105-aa', notes: '' };
+    expect(readVehicle({ ...details, name: 'bus 105' }, 'b105-2', twins).vehicle).toEqual({
+      id: 'b105-2',
+      name: 'bus 105',
+      ...details,
+      plate: 'TB-105-AA',
+    });
+    expect(readVehicle({ ...details, name: 'Bus 105' }, 'b105', twins).problems).toBeUndefined();
+    // A new name is still checked, and so is a new vehicle.
+    expect(readVehicle({ ...details, name: 'Bus 12' }, 'b105-2', twins).problems).toEqual({
+      name: 'You already have a vehicle with that name.',
+    });
+    expect(readVehicle({ ...details, name: 'Bus 105' }, 'new', twins).problems).toEqual({
+      name: 'You already have a vehicle with that name.',
+    });
+  });
+
   // Audit F2-2: a virama or a Thai tone mark was dropped like an accent.
   it('tells apart names that differ in a vowel sign or a tone mark', () => {
     const named = (name: string) => ({ vehicles: [vehicle({ id: 'x', name })] });

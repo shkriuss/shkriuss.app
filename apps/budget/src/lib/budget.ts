@@ -199,10 +199,15 @@ export function readCategory(
   | { category?: undefined; problems: CategoryProblems } {
   const problems: CategoryProblems = {};
   const name = form.name.trim();
-  const editing = state.categories.some((category) => category.id === id);
+  const own = state.categories.find((category) => category.id === id);
+  const editing = own !== undefined;
+  // Its own name, unchanged, is fine even if another category has it too:
+  // two devices that each added "Groceries" before they first synced.
+  const unchanged = own?.name.toLowerCase() === name.toLowerCase();
   if (name === '') problems.name = 'Enter a name for the category.';
   else if (name.length > LIMITS.name) problems.name = `Use ${LIMITS.name} characters or fewer.`;
   else if (
+    !unchanged &&
     state.categories.some(
       (category) => category.id !== id && category.name.toLowerCase() === name.toLowerCase(),
     )

@@ -1,11 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { addDays } from '@shkriuss/dates';
 import { footprint, sampleText } from '@shkriuss/sync/testing';
+import { appSecret, Device, pretendBrowser } from '../../../../tests/unit/sync-devices.ts';
 import { nextFireTime } from '../../../../packages/push/src/schedule.ts';
 import { MAX_SEALED_CHARS } from '../../../../packages/sync/src/validate.ts';
 import {
   addSuggested,
   byCategory,
+  CATEGORIES_VERSION,
   currencyOf,
   dayChoiceLabel,
   dayLabel,
@@ -99,6 +101,24 @@ describe('categories', () => {
     expect(
       readCategory({ name: 'x'.repeat(LIMITS.name + 1), limit: '' }, 'p', categories).problems,
     ).toEqual({ name: `Use ${LIMITS.name} characters or fewer.` });
+  });
+
+  it('lets a category keep a name it shares with another', () => {
+    const twins = {
+      categories: [...categories.categories, { id: 'food-2', name: 'groceries', limit: null }],
+    };
+    expect(readCategory({ name: 'Groceries', limit: '300' }, 'food-2', twins).category).toEqual({
+      id: 'food-2',
+      name: 'Groceries',
+      limit: 300,
+    });
+    // A new name is still checked, and so is a new category.
+    expect(readCategory({ name: 'Fun', limit: '' }, 'food-2', twins).problems).toEqual({
+      name: 'You already have a category with that name.',
+    });
+    expect(readCategory({ name: 'Groceries', limit: '' }, 'new', twins).problems).toEqual({
+      name: 'You already have a category with that name.',
+    });
   });
 
   it('adds, changes and removes categories', () => {
@@ -585,5 +605,48 @@ describe('monthly reminder', () => {
       'The monthly reminder is off.',
     );
     expect(whenLabel('2026-11-01T09:00', 'en-US')).toBe('Sunday, November 1, at 9:00 AM');
+  });
+});
+
+describe('categories added on two devices before they first sync', () => {
+  beforeEach(() => pretendBrowser('https://budget.shkriuss.app'));
+  afterEach(() => vi.unstubAllGlobals());
+
+  // Audit F2-6: each "Groceries" refused any change while the other existed.
+  it('can each still be changed', async () => {
+    const setup = {
+      key: 'budget-categories',
+      version: CATEGORIES_VERSION,
+      fallback: emptyCategories,
+      validate: isCategoriesState,
+      items: (value: CategoriesState) => value.categories,
+      withItems: (value: CategoriesState, list: CategoriesState['categories']) => ({
+        ...value,
+        categories: list,
+      }),
+    };
+    const secret = appSecret();
+    const phone = new Device('budget', secret, setup);
+    const tablet = new Device('budget', secret, setup);
+    // "Add suggested categories" on each, then sync turned on.
+    phone.save(addSuggested(emptyCategories(), () => crypto.randomUUID()));
+    tablet.save(addSuggested(emptyCategories(), () => crypto.randomUUID()));
+    await phone.syncNow();
+    await tablet.syncNow();
+    await phone.syncNow();
+    const twins = phone.value.categories.filter((category) => category.name === 'Groceries');
+    expect(twins).toHaveLength(2);
+    // A monthly limit on either, as the form sets it; a new name for one.
+    for (const twin of twins) {
+      expect(
+        readCategory({ name: 'Groceries', limit: '400' }, twin.id, phone.value).category?.limit,
+      ).toBe(400);
+    }
+    const second = twins[1] as CategoriesState['categories'][number];
+    expect(readCategory({ name: 'Food', limit: '' }, second.id, phone.value).category).toEqual({
+      id: second.id,
+      name: 'Food',
+      limit: null,
+    });
   });
 });

@@ -179,6 +179,20 @@ describe('your meals', () => {
     expect(ingredientsText(meal('Toast'))).toBe('No ingredients yet');
   });
 
+  // Audit F2-6: two devices that each added "Soup" before they first synced
+  // have twins, and the second couldn't be saved.
+  it('lets a meal keep a name it shares with another', () => {
+    const twins = { meals: [...state.meals, { ...meal('soup'), id: 'soup-2' }] };
+    const draft = { name: 'Soup', ingredients: 'Leeks', notes: '' };
+    expect(mealProblems(twins, draft, 'soup-2')).toEqual({});
+    expect(mealProblems(twins, draft, 'soup')).toEqual({});
+    // A new name is still checked, and so is a new meal.
+    expect(mealProblems(twins, { ...draft, name: 'Bolognese' }, 'soup-2').name).toBe(
+      'You already have “Bolognese”.',
+    );
+    expect(mealProblems(twins, draft).name).toBe('You already have “Soup”.');
+  });
+
   // Audit F2-2: vowel signs were dropped like accents, so different words were "the same".
   it('tells apart words that differ in a vowel sign (Hindi, Thai…)', () => {
     // Sugar, chickpeas and rice in Hindi; chicken and rice in Thai.

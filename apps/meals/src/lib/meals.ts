@@ -179,10 +179,17 @@ export function mealProblems(
 ): Partial<Record<MealField, string>> {
   const problems: Partial<Record<MealField, string>> = {};
   const name = tidy(draft.name);
-  const same = findMeal(state, name);
+  const key = foldText(name);
+  const own = state.meals.find((meal) => meal.id === editing);
+  // Its own name, unchanged, is fine even if another meal has it too: two
+  // devices that each added "Soup" before they first synced.
+  const same =
+    own && foldText(own.name) === key
+      ? undefined
+      : state.meals.find((meal) => meal.id !== editing && foldText(meal.name) === key);
   if (name === '') problems.name = 'Give the meal a name.';
   else if (length(name) > LIMITS.name) problems.name = `Use at most ${LIMITS.name} characters.`;
-  else if (same && same.id !== editing) problems.name = `You already have “${same.name}”.`;
+  else if (same) problems.name = `You already have “${same.name}”.`;
   if (parseIngredients(draft.ingredients).length > MAX_INGREDIENTS) {
     problems.ingredients = `Up to ${MAX_INGREDIENTS} ingredients.`;
   }
