@@ -95,7 +95,7 @@ export function mountImportDialog(root: Document, page: CalendarPage): void {
         const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
         let result: ParseResult;
         try {
-          result = parseIcs(text, { timeZone, makeId: () => crypto.randomUUID() });
+          result = parseIcs(text, { timeZone });
         } catch {
           // Something in the file it didn't expect: say so, rather than nothing (audit F1-8).
           fail('Calendar couldn’t read this file.');

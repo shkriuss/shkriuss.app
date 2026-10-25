@@ -20,7 +20,9 @@ colour are in [`packages/registry/apps.json`](../../packages/registry/apps.json)
 - **Import**: "Import .ics file" reads a calendar file from Google Calendar,
   Apple Calendar, Outlook or this app. You see what will be added (and what
   can't be, and why) before anything changes. Importing the same file twice
-  doesn't make copies.
+  doesn't make copies: each event keeps the id (UID) the file gives it, and
+  one without gets an id made from what it is (its times, repeat, title,
+  notes and place).
 - **Export**: "Download .ics file" saves your events, with their reminders,
   in the standard calendar format for other calendar apps.
 - **Holidays and fasts in Georgia**, worked out on the device for 1901–2099

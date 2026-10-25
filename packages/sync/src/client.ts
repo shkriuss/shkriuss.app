@@ -99,7 +99,7 @@ import { FILE_ID, MAX_SEALED_CHARS } from './validate.ts';
 
 export { isSyncOn, saveConnection, stopSync } from './device.ts';
 export type { SyncedFiles } from './files.ts';
-export { secondVersionName } from './merge.ts';
+export { fingerprint, secondVersionName } from './merge.ts';
 export type { SyncProblem } from './requests.ts';
 
 const PENDING_KEY = 'shkriuss-device:connect';

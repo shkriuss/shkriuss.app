@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { CalendarEvent, EventDraft } from './events.ts';
+import { importEvents, type CalendarEvent, type EventDraft } from './events.ts';
 import { parseDuration, parseIcs, unescapeText, type ParseOptions } from './ics-import.ts';
 import { toIcs } from './ics.ts';
 
-const options: ParseOptions = { timeZone: 'Asia/Tbilisi', makeId: () => 'new-id' };
+const options: ParseOptions = { timeZone: 'Asia/Tbilisi' };
 
 /** A .ics file around some event lines (CRLF line endings, as files use). */
 const calendar = (...events: string[][]) =>
@@ -481,11 +481,41 @@ describe('parseIcs', () => {
       calendar(
         ['UID:abc@calendar.shkriuss.app', 'DTSTART:20261017T090000'],
         ['UID:XYZ-1@example.com', 'DTSTART:20261017T090000'],
-        ['DTSTART:20261017T090000'],
+        // Escaped like any text (audit F1-11).
+        ['UID:meeting\\,2026\\;room\\\\4@example.com', 'DTSTART:20261017T090000'],
       ),
       options,
     ).events.map((event) => event.id);
-    expect(ids).toEqual(['abc', 'XYZ-1@example.com', 'new-id']);
+    expect(ids).toEqual(['abc', 'XYZ-1@example.com', 'meeting,2026;room\\4@example.com']);
+  });
+
+  it('spots an event Calendar exported when it’s imported again, whatever its id', () => {
+    // Ids from other calendars' UIDs can hold "," or ";" (audit F1-11).
+    for (const id of ['meeting,2026;room\\4@example.com', 'line\nbreak', 'mine']) {
+      const event: CalendarEvent = { id, ...base };
+      const parsed = parseIcs(toIcs([event]), options).events;
+      expect(parsed.map((entry) => entry.id)).toEqual([id]);
+      expect(importEvents({ events: [event] }, parsed)).toMatchObject({ added: 0, duplicates: 1 });
+    }
+  });
+
+  it('gives an event without a UID the same id each time, so it isn’t added twice', () => {
+    const file = calendar(
+      ['DTSTAMP:20261017T080000Z', 'DTSTART:20261017T090000', 'SUMMARY:Dentist'],
+      ['DTSTART:20261017T090000', 'SUMMARY:Gym'],
+      ['DTSTART:20261018T090000', 'SUMMARY:Dentist'],
+      ['DTSTART:20261017T090000', 'RRULE:FREQ=WEEKLY', 'SUMMARY:Dentist'],
+    );
+    const ids = parseIcs(file, options).events.map((event) => event.id);
+    expect(new Set(ids).size).toBe(4);
+    for (const id of ids) expect(id).toMatch(/^ics-[0-9a-z]+$/);
+    // The same file again, written at another time.
+    const again = parseIcs(file.replace('DTSTAMP:20261017T080000Z', 'DTSTAMP:20261018T120000Z'), {
+      ...options,
+    }).events;
+    expect(again.map((event) => event.id)).toEqual(ids);
+    const first = importEvents({ events: [] }, parseIcs(file, options).events);
+    expect(importEvents(first.state, again)).toMatchObject({ added: 0, duplicates: 4 });
   });
 
   it('turns down files that aren’t calendars, or have no events', () => {

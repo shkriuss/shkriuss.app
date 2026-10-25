@@ -13,6 +13,7 @@
  * off; a note says so. Another note says when a monthly or yearly repeat moved
  * to another day near the end of a month, where its dates can come out wrong.
  */
+import { fingerprint } from '@shkriuss/sync';
 import {
   addDays,
   addMinutes,
@@ -60,8 +61,6 @@ export interface ParseResult {
 export interface ParseOptions {
   /** The device's time zone, e.g. "Europe/Tbilisi". */
   timeZone: string;
-  /** Makes an id for events without one. */
-  makeId: () => string;
   /** Events exported by this app keep their id (so importing twice doesn't duplicate). */
   domain?: string;
 }
@@ -630,10 +629,29 @@ function toEvent(
     if (repeatMoves(draft.repeat, start.written.date, startDate)) flags.movedRepeats += 1;
   }
 
-  const uid = get('UID')?.value.trim() ?? '';
+  // A UID is text, escaped like any other: Calendar's own ids can hold ","
+  // or ";" from other calendars' UIDs (audit F1-11).
+  const uid = unescapeText(get('UID')?.value ?? '').trim();
   const ownSuffix = `@${options.domain ?? 'calendar.shkriuss.app'}`;
   const id = uid.endsWith(ownSuffix) ? uid.slice(0, -ownSuffix.length) : uid;
-  return { id: id ? id.slice(0, 200) : options.makeId(), draft };
+  return { id: id ? id.slice(0, 200) : contentId(raw), draft };
+}
+
+/** What makes an event without a UID that event, for contentId: never when the file was written. */
+const CONTENT = ['DTSTART', 'DTEND', 'DURATION', 'RRULE', 'SUMMARY', 'DESCRIPTION', 'LOCATION'];
+
+/**
+ * An id for an event without a UID, made from what the event is, so it's
+ * the same each time the file is imported, and isn't added twice (audit
+ * F1-11).
+ */
+function contentId(raw: RawEvent): string {
+  const content = CONTENT.map((name) =>
+    raw.props
+      .filter((property) => property.name === name)
+      .map(({ params, value }) => [params, value]),
+  );
+  return `ics-${fingerprint(content)}`;
 }
 
 /** Reads every event in a .ics file. */
