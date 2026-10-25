@@ -561,9 +561,13 @@ function toEvent(
   const rules = raw.props.filter((property) => property.name === 'RRULE');
   if (rules.length > 1 || get('RDATE')) return skip(UNSUPPORTED_REPEAT);
   if (rules[0]) {
-    // Rules use the time zone the start is written in.
+    // Rules use the time zone the start is written in. A whole day's last day
+    // is the date written, even as a UTC time (as Outlook writes it): moved to
+    // the phone's time zone, it would be a day off on one side of the world
+    // or the other (audit F1-10).
     const { written } = start;
-    const rule = readRule(rules[0].value, written.date, start.zone ?? options.timeZone);
+    const zone = allDay ? 'UTC' : (start.zone ?? options.timeZone);
+    const rule = readRule(rules[0].value, written.date, zone);
     if (!rule) return skip(UNSUPPORTED_REPEAT);
     repeat = rule.repeat;
     count = rule.count;

@@ -274,6 +274,27 @@ describe('parseIcs', () => {
     });
   });
 
+  it('ends an all-day repeat on the day its UNTIL says, wherever the phone is', () => {
+    // Some apps (Outlook) write an all-day repeat's last day as a UTC time.
+    // Converting it to the phone's time zone moved it a day either way (audit F1-10).
+    const until = (rule: string, timeZone: string) =>
+      only(
+        calendar([
+          'DTSTART;VALUE=DATE:20261228',
+          'DTEND;VALUE=DATE:20261229',
+          `RRULE:FREQ=DAILY;UNTIL=${rule}`,
+          'SUMMARY:Holiday camp',
+        ]),
+        { ...options, timeZone },
+      ).repeatUntil;
+    for (const timeZone of ['America/New_York', 'Europe/London', 'Asia/Tbilisi']) {
+      expect(until('20261231', timeZone)).toBe('2026-12-31');
+      expect(until('20261231T000000Z', timeZone)).toBe('2026-12-31');
+      expect(until('20261231T235959Z', timeZone)).toBe('2026-12-31');
+      expect(until('20261231T120000', timeZone)).toBe('2026-12-31');
+    }
+  });
+
   it('says when some repeating times may be an hour off', () => {
     const weekly = (start: string, rule = 'FREQ=WEEKLY') => [start, `RRULE:${rule}`, 'SUMMARY:x'];
     const london = 'DTSTART;TZID=Europe/London:20260714T090000';
