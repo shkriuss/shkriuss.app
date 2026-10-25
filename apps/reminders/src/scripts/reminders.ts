@@ -3,7 +3,7 @@
  * lib/reminders.ts, saves on the device, and syncs when sync is on.
  * Notifications: notify.ts.
  */
-import { nowStamp } from '@shkriuss/dates';
+import { nowStamp, type Stamp } from '@shkriuss/dates';
 import { createStore } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
 import { focusProblem, reportSave } from '@shkriuss/ui/problem';
@@ -363,9 +363,24 @@ export function mountReminders(root: Document): void {
     notify.changed();
   }
 
+  /** What the list shows at `stamp`: each reminder's group, and when it says it's due. */
+  const shownAt = (stamp: Stamp): string => {
+    const found = groups(state, stamp);
+    return JSON.stringify(
+      (['overdue', 'today', 'tomorrow', 'later', 'done'] as const).map((key) =>
+        found[key].map(({ reminder, at }) => [reminder.id, whenLabel(at, stamp)]),
+      ),
+    );
+  };
+
   // As time goes by, reminders become overdue or move on to their next time.
+  // The list is drawn again only then: drawing it moves keyboard focus to a
+  // new copy, which a screen reader reads out again (audit G-8).
   const refresh = (): void => {
-    if (nowStamp() !== now) render();
+    const stamp = nowStamp();
+    if (stamp === now) return;
+    if (shownAt(stamp) === shownAt(now)) now = stamp;
+    else render();
   };
   window.setInterval(refresh, REFRESH_MS);
   document.addEventListener('visibilitychange', () => {
