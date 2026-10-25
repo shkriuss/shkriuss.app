@@ -364,6 +364,8 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
   // ---------- Device links ----------
 
   function stopLink(): void {
+    // "Show a code" takes the code's place: focus goes with it (audit G-5).
+    const hadFocus = linkPanel.contains(document.activeElement);
     window.clearInterval(poll);
     poll = undefined;
     link = null;
@@ -371,6 +373,7 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
     linkQr.replaceChildren();
     linkUrl.textContent = '';
     createLinkButton.hidden = false;
+    if (hadFocus) createLinkButton.focus();
   }
 
   /**

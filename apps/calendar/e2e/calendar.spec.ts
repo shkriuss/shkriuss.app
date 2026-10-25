@@ -17,7 +17,9 @@ test('shows this month with today selected', async ({ page }) => {
   const today = day(page, /^Saturday, October 17, 2026, today/);
   await expect(today).toHaveAttribute('aria-current', 'date');
   await expect(today).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.locator('[data-weekdays] th').first()).toHaveText(/^SunSunday$/);
+  // "Sun", "S" (shown instead with large text: audit G-4) and "Sunday" for screen readers.
+  await expect(page.locator('[data-weekdays] th').first()).toHaveText(/^SunSSunday$/);
+  await expect(page.getByRole('columnheader').first()).toHaveAccessibleName('Sunday');
   await expect(page.locator('[data-day-heading]')).toHaveText('Today, Saturday, October 17');
   await expect(page.getByText('Nothing planned on this day.')).toBeVisible();
   await expect(page.getByText('Nothing planned in the next 7 days.')).toBeVisible();
@@ -349,6 +351,19 @@ test('downloads events as an .ics file', async ({ page }) => {
   expect(ics).toContain('SUMMARY:Dentist\r\n');
   expect(ics).toContain('DTSTART:20261017T143000\r\n');
   expect(ics).toContain('TRIGGER:-PT15M\r\n');
+});
+
+test('says so when the file can’t be made', async ({ page, guard }) => {
+  // What writes the file loads only when it's needed; here it can't.
+  guard.allowConsole('net::ERR_FAILED');
+  await seed(page, [{ title: 'Dentist' }]);
+  await page.route('**/_astro/ics.*.js', (route) => route.abort());
+  await page.getByRole('button', { name: 'Download .ics file' }).click();
+  await expect(
+    page
+      .getByRole('status')
+      .filter({ hasText: 'Calendar couldn’t make the file. Please try again.' }),
+  ).toBeVisible();
 });
 
 test('passes accessibility checks with events, in both themes', async ({ page }) => {

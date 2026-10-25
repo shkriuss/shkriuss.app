@@ -398,6 +398,8 @@ This area is split into three tasks:
 
 - WCAG 2.2 AA, beyond what axe finds:
   - focus order, and focus moving into dialogs and back out;
+  - focus kept when a list is drawn again in the background (another tab,
+    sync, a new day: `keepFocus`);
   - status messages announced;
   - names and labels;
   - error messages tied to their fields;

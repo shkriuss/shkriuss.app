@@ -12,6 +12,7 @@
  */
 import { createStore } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
+import { keepFocus } from '@shkriuss/ui/keep-focus';
 import { PAGE_SIZE, shownCount, waitForTyping } from '@shkriuss/ui/long-lists';
 import {
   clearProblem,
@@ -308,7 +309,8 @@ export function mountNotes(root: Document): void {
     const before = state;
     state = store.load();
     if (current === null) {
-      if (!listView.hidden) renderList();
+      // Keyboard focus stays on the note it was on (audit G-3).
+      if (!listView.hidden) keepFocus(() => renderList(), newButton);
       return;
     }
     // Typing here is newer than what came in: keep it. If the note changed

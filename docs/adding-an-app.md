@@ -78,6 +78,11 @@ alphabetical order, so where an entry sits in `apps.json` doesn't matter.
   first wrong field with `focusProblem()`, which reads the error out if the
   person pressed Enter in that field. `showFieldProblems()` from
   `@shkriuss/ui/dom` does both for a whole form.
+- When the page is drawn again in the background (another tab's `storage`
+  event, sync's `onChange`, a new day), draw it with `keepFocus(render, …)`
+  from `@shkriuss/ui/keep-focus`, so keyboard focus stays on the same control
+  ([design system](design-system.md)). After the person's own change, put
+  focus where it makes sense yourself.
 - Add browser tests in `apps/<slug>/e2e/`. `apps/tally` is the reference
   example for all of this. To start a test with saved data, use
   `seedStores()` from `tests/e2e/storage.ts` with the app's own version

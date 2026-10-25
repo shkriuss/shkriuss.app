@@ -328,10 +328,11 @@ import { EDITABLE_DAYS, MAX_CHECKS, MAX_NAME_LENGTH } from '../lib/habits.ts';
     font-weight: var(--weight-semibold);
   }
 
-  /* The last 7 days: a filled circle when done, a ring when planned, a dot when not. */
+  /* The last 7 days: a filled circle when done, a ring when planned, a dot when not.
+     With large text, the circles get smaller to fit, not the page wider (audit G-4). */
   .habit__week {
     display: grid;
-    grid-template-columns: repeat(7, 1fr);
+    grid-template-columns: repeat(7, minmax(0, 1fr));
     gap: var(--space-1);
     text-align: center;
   }
@@ -354,15 +355,16 @@ import { EDITABLE_DAYS, MAX_CHECKS, MAX_NAME_LENGTH } from '../lib/habits.ts';
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 1.75rem;
-    height: 1.75rem;
+    width: min(1.75rem, 100%);
+    aspect-ratio: 1;
     border: 2px solid var(--color-border-strong);
     border-radius: var(--radius-full);
   }
 
   .day__mark :global(svg) {
-    width: 1rem;
-    height: 1rem;
+    width: min(1rem, 60%);
+    height: auto;
+    aspect-ratio: 1;
     visibility: hidden;
   }
 
@@ -386,11 +388,13 @@ import { EDITABLE_DAYS, MAX_CHECKS, MAX_NAME_LENGTH } from '../lib/habits.ts';
 
   .past-days {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 12rem), 1fr));
     column-gap: var(--space-4);
   }
 
+  /* min-width: browsers make a fieldset as wide as its content otherwise (audit G-4). */
   fieldset {
+    min-width: 0;
     margin: 0;
     padding: 0;
     border: 0;

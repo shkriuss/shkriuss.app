@@ -336,6 +336,16 @@ export function mountPhotos(root: Document): void {
 
   // ---------- Choosing several ----------
 
+  /** Above this share of the screen's height, the bar scrolls with the page instead of staying in sight. */
+  const TALL = 0.3;
+  // With large text the bar is tall: it mustn't cover most of the photos (audit G-12).
+  const fitSelection = (): void => {
+    const height = selection.getBoundingClientRect().height;
+    selection.classList.toggle('selection--tall', height > window.innerHeight * TALL);
+  };
+  new ResizeObserver(fitSelection).observe(selection);
+  window.addEventListener('resize', fitSelection);
+
   function renderChoosing(): void {
     selection.hidden = !choosing;
     selectedCount.textContent =
@@ -422,8 +432,12 @@ export function mountPhotos(root: Document): void {
   }
 
   function openPhoto(id: string): void {
-    if (!viewer.open) viewer.showModal();
+    const opening = !viewer.open;
+    if (opening) viewer.showModal();
     void showPhoto(id);
+    // Focus starts on which photo it is, not on "Previous", where Enter would
+    // show another one (audit G-14).
+    if (opening) viewerTitle.focus();
   }
 
   function stepPhoto(by: number): void {

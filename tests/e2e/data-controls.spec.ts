@@ -77,6 +77,10 @@ test('a locked backup restores everything, only with its passphrase', async ({ p
   await chooseBackup(page, file);
   await expect(restoreDialog(page)).toContainText('locked with a passphrase');
   await expect(restoreDialog(page)).toContainText('Restoring replaces everything');
+  // Read out as it opens, with its warning (audit G-9).
+  await expect(restoreDialog(page)).toHaveAccessibleDescription(
+    /^This backup is from .+ and is locked with a passphrase\. Restoring replaces everything/,
+  );
   await checkA11y(page, 'restore dialog');
   const unlock = restoreDialog(page).getByLabel('Passphrase');
   await expect(unlock).toBeFocused();
@@ -168,6 +172,10 @@ test('turns down files that aren’t this app’s backups', async ({ page }) => 
 
   await chooseBackup(page, { name: 'notes.json', buffer: Buffer.from('{"hello":"world"}') });
   await expect(restoreDialog(page)).toContainText('This file isn’t a backup from shkriuss.app.');
+  // Why, read out as it opens, not only "Close" (audit G-9).
+  await expect(restoreDialog(page)).toHaveAccessibleDescription(
+    'This file isn’t a backup from shkriuss.app.',
+  );
   await restoreDialog(page).getByRole('button', { name: 'Close' }).click();
   expect((await saved(page)).sample).toBe(JSON.stringify(SAMPLE));
 });

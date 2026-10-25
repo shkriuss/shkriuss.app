@@ -26,8 +26,15 @@ package age check run only in GitHub Actions.
   practices, on every page reachable from the home page (and the 404 page),
   in **light and dark** mode; one `<h1>`, a `lang` and a title on every page;
   the skip link works; no sideways scrolling at 320px wide, or at 360px with
-  text at 200%; footer links are big enough to tap; the theme switch works
-  and is remembered.
+  text at 200% (also apps' pages with things in them, and their dialogs,
+  with no text squeezed into a column of letters:
+  `tests/e2e/large-text.spec.ts`); footer links (and “What sync sends, and
+  where”) are big enough to tap; the theme switch works, is remembered, and
+  shows which option has focus (in Windows contrast themes too).
+- **Keyboard focus:** in apps with lists, focus stays on the same control
+  when a list is drawn again after a change in another tab (the same as a
+  change from sync), when a dialog closes after that, and when Budget and
+  Trades are opened again (`tests/e2e/keep-focus.spec.ts`).
 - **Security:** every security header is present on pages, the 404 page and
   other files; no console errors (so no CSP or Trusted Types violations); no
   cookies; no requests to any other website; build files are cached and pages
@@ -37,9 +44,13 @@ package age check run only in GitHub Actions.
   instead of failing (for example, airplane mode with a VPN on): it waits 3
   seconds for the network, then opens the saved copy (the test allows 8).
 - **Not found:** unknown pages return status 404 with a helpful page.
+- **Previews:** at a preview's address (`*.workers.dev`), every page says
+  it's a preview, not to use a real account or real data
+  (`tests/e2e/preview.spec.ts`).
 - **Your data:** on sites that save data, a locked backup restores only with
-  its passphrase, a plain copy restores, other files are turned down, and
-  focus stays on **Download backup**.
+  its passphrase, a plain copy restores, other files are turned down (the
+  Restore dialog reads out why, or its warning, as it opens), and focus
+  stays on **Download backup**.
 - **Saving:** when the browser won't save, the app says so, on screen and out
   loud (each app's change is listed in `tests/e2e/saving.spec.ts`).
 - **Notifications and sync:** on apps that have them, turning them on and off

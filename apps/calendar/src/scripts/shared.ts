@@ -26,6 +26,7 @@ export const longDate = formatter({
 export const longDateThisYear = formatter({ weekday: 'long', day: 'numeric', month: 'long' });
 export const shortDate = formatter({ weekday: 'short', day: 'numeric', month: 'short' });
 export const weekdayShort = formatter({ weekday: 'short' });
+export const weekdayNarrow = formatter({ weekday: 'narrow' });
 export const weekdayLong = formatter({ weekday: 'long' });
 const timeFormat = formatter({ hour: 'numeric', minute: '2-digit' });
 

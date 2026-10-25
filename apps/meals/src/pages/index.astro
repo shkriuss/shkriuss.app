@@ -446,10 +446,12 @@ import {
     display: grid;
   }
 
+  /* "Dinner" beside the name; with large text, the name goes under it (audit G-4). */
   .planned {
     display: flex;
+    flex-wrap: wrap;
     align-items: baseline;
-    gap: var(--space-2);
+    column-gap: var(--space-2);
   }
 
   .planned__slot {
@@ -457,6 +459,11 @@ import {
     width: 5.5rem;
     font-size: var(--text-sm);
     color: var(--color-text-muted);
+  }
+
+  .planned__name {
+    flex: 1 1 8rem;
+    min-width: 0;
   }
 
   /* The name opens the planned meal: it reads as text, works as a button. */

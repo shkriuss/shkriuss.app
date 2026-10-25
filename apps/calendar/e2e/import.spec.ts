@@ -51,6 +51,7 @@ const dialog = (page: Page) => page.getByRole('dialog', { name: 'Import events' 
 test('imports events after showing what will be added', async ({ page }) => {
   await importFile(page, 'work.ics', WORK_FILE);
   await expect(dialog(page)).toContainText('Found 3 events in “work.ics”.');
+  await expect(dialog(page)).toHaveAccessibleDescription(/^Found 3 events in “work\.ics”\./);
   await expect(dialog(page).getByRole('listitem')).toHaveText([
     'Every other Wednesday: It repeats in a way Calendar can’t show yet (for example every 2 weeks).',
   ]);
@@ -142,6 +143,10 @@ test('an event that lasts too long is listed, and the rest still imported', asyn
 test('explains files it can’t use', async ({ page }) => {
   await importFile(page, 'notes.txt', 'Buy milk');
   await expect(dialog(page)).toContainText('This doesn’t look like a calendar (.ics) file.');
+  // Read out as it opens, not only "Close" (audit G-9).
+  await expect(dialog(page)).toHaveAccessibleDescription(
+    'This doesn’t look like a calendar (.ics) file.',
+  );
   await dialog(page).getByRole('button', { name: 'Close' }).click();
 
   await importFile(page, 'empty.ics', 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nEND:VCALENDAR\r\n');

@@ -16,6 +16,7 @@
 import { addDays, firstDayOfWeek, today as todayOf, type IsoDate } from '@shkriuss/dates';
 import { createStore } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
+import { keepFocus } from '@shkriuss/ui/keep-focus';
 import { clearProblem, focusProblem, reportSave, showProblem } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { site } from 'virtual:shkriuss/site';
@@ -706,13 +707,14 @@ export function mountMeals(root: Document): void {
     if (trimmed !== plan) savePlan(trimmed);
   }
 
+  /** After changes from another device or tab: keyboard focus stays where it was (audit G-3). */
   function reload(): void {
     meals = mealsStore.load();
     plan = planStore.load();
     shopping = shoppingStore.load();
     reminders = remindersStore.load();
     reminderControls.changed();
-    render();
+    keepFocus(render, weekHeading);
   }
 
   // A new day: move "Today" (and this week, if the page was showing it).
@@ -724,7 +726,7 @@ export function mountMeals(root: Document): void {
     thisWeek = weekStartOf(today, firstDay);
     if (wasThisWeek) shown = thisWeek;
     prune();
-    render();
+    keepFocus(render, weekHeading);
   }, NEW_DAY_CHECK_MS);
 
   // If Meals is open in two tabs, keep them the same.

@@ -98,6 +98,16 @@
   padding-block: var(--space-6) var(--space-8);
 }
 
+/* On a preview of a change (*.workers.dev): a note at the top of the header (audit D-2). */
+.preview-note {
+  padding: var(--space-2) var(--gutter);
+  border-bottom: var(--border-width) solid var(--color-danger);
+  background: var(--color-danger-soft);
+  color: var(--color-text);
+  font-weight: var(--weight-semibold);
+  text-align: center;
+}
+
 .site-header {
   border-bottom: var(--border-width) solid var(--color-border);
   background: var(--color-surface);
@@ -474,16 +484,21 @@ select.input {
   gap: var(--space-3);
 }
 
-/* Checkbox with its label, sized as a comfortable tap target. */
+/* Checkbox with its label, sized as a comfortable tap target. With large text
+   on a small screen, a long word in the label breaks rather than going past
+   its box (audit G-4). */
 .check {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
+  min-width: 0;
   min-height: var(--tap-target);
+  overflow-wrap: anywhere;
   cursor: pointer;
 }
 
 .check input {
+  flex-shrink: 0;
   width: 1.25rem;
   height: 1.25rem;
   margin: 0;
@@ -578,6 +593,19 @@ select.input {
 
 .progress::-moz-progress-bar {
   background: var(--color-accent);
+}
+
+/* Contrast themes replace backgrounds: the part done keeps the theme's own colour (audit G-14). */
+@media (forced-colors: active) {
+  .progress::-webkit-progress-value {
+    forced-color-adjust: none;
+    background: Highlight;
+  }
+
+  .progress::-moz-progress-bar {
+    forced-color-adjust: none;
+    background: Highlight;
+  }
 }
 
 /* ---------- Disclosures ---------- */
@@ -698,6 +726,13 @@ select.input {
 @media (forced-colors: active) {
   .theme-switch__option:has(input:checked) {
     outline: 2px solid CanvasText;
+  }
+
+  /* The option with focus (always the checked one: arrow keys check what they
+     move to) shows the theme's focus colour, not only the checked outline (audit G-7). */
+  .theme-switch__option:has(input:focus-visible) {
+    outline: 3px solid Highlight;
+    outline-offset: 2px;
   }
 
   /* Contrast themes replace backgrounds, so a toggle that's on uses the theme's

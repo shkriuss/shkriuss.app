@@ -13,6 +13,7 @@
     "./icons": "./src/icons/index.ts",
     "./colors": "./src/icons/colors.ts",
     "./dom": "./src/scripts/dom.ts",
+    "./keep-focus": "./src/scripts/keep-focus.ts",
     "./styles.css": "./src/styles/index.css",
     "./tokens.css": "./src/styles/tokens.css",
     "./components/*": "./src/components/*",

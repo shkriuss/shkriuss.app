@@ -238,7 +238,13 @@ import { DEFAULT_REMINDERS, EVERY_CHOICES, everyLabel } from '../lib/water.ts';
           <label class="field__label" for="other-day">
             Day
           </label>
-          <select class="input" id="other-day" name="day" data-other-day></select>
+          <select
+            class="input"
+            id="other-day"
+            name="day"
+            aria-describedby="other-day-error"
+            data-other-day
+          ></select>
         </div>
         <div class="field">
           <label class="field__label" for="other-time">
@@ -255,7 +261,7 @@ import { DEFAULT_REMINDERS, EVERY_CHOICES, everyLabel } from '../lib/water.ts';
           <p class="field__error" id="other-time-error" data-error-for="time"></p>
         </div>
       </div>
-      <p class="field__error" data-error-for="day"></p>
+      <p class="field__error" id="other-day-error" data-error-for="day"></p>
       <div class="cluster">
         <Button type="submit" variant="primary">
           Add
@@ -300,6 +306,11 @@ import { DEFAULT_REMINDERS, EVERY_CHOICES, everyLabel } from '../lib/water.ts';
     gap: var(--space-2);
   }
 
+  /* "Glass" and "250 ml" go on two lines before a word is broken ("Gla / ss": audit G-10). */
+  .quick .btn {
+    flex-wrap: wrap;
+  }
+
   .quick__size {
     font-weight: var(--weight-normal);
   }
@@ -310,22 +321,28 @@ import { DEFAULT_REMINDERS, EVERY_CHOICES, everyLabel } from '../lib/water.ts';
     border-block-start: var(--border-width) solid var(--color-border);
   }
 
+  /* With large text, "Remove" goes on the next line, at the end (audit G-4). */
   .drink {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: var(--space-3);
+    gap: var(--space-1) var(--space-3);
     padding-block: var(--space-1);
     border-block-end: var(--border-width) solid var(--color-border);
   }
 
   .drink__time {
-    min-inline-size: 5.5rem;
+    min-inline-size: min(100%, 5.5rem);
     color: var(--color-text-muted);
   }
 
   .drink__amount {
     flex: 1;
     font-weight: var(--weight-semibold);
+  }
+
+  .drink .btn {
+    margin-inline-start: auto;
   }
 
   .history__streak {

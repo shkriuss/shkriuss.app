@@ -7,6 +7,8 @@
 import { today } from '@shkriuss/dates';
 import { createStore, downloadFile } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
+import { keepFocus } from '@shkriuss/ui/keep-focus';
+import { waitForTyping } from '@shkriuss/ui/long-lists';
 import { reportSave } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { typedText } from '@shkriuss/ui/typed-text';
@@ -90,6 +92,8 @@ const settingsStore = createStore<SettingsState>({
 
 /** Closed trades shown at first, and added by "Show more". */
 const PAGE_SIZE = 50;
+/** Search results are read out this long after the last key press. */
+const ANNOUNCE_DELAY_MS = 700;
 const FIELDS: readonly (keyof TradeForm)[] = [
   'symbol',
   'side',
@@ -172,6 +176,7 @@ export function mountTrades(root: Document): void {
   let editing: string | null = null;
   /** Whether the form is closing an open trade ("Close"), so it can close part of it. */
   let closing = false;
+  let announceTimer: number | undefined;
   /** What was closed off each trade in parts, and every trade by id: worked out at each render. */
   let parts = new Map<string, Parts>();
   let byId = new Map<string, Trade>();
@@ -587,11 +592,22 @@ export function mountTrades(root: Document): void {
     render();
   });
 
-  searchInput.addEventListener('input', () => {
+  /** How many closed trades the search finds, for screen readers (audit G-6). */
+  function announceFound(): void {
+    if (query.trim() === '') return;
+    const closed = closedTrades(closedIn(state, period, today()));
+    announce(`${closedCount(closed.filter((trade) => matchesSearch(trade, query)).length)} found.`);
+  }
+
+  // The lists are drawn again once typing pauses, not at every key (audit J-1).
+  const typedSearch = waitForTyping(() => {
     query = searchInput.value;
     shown = PAGE_SIZE;
     render();
+    window.clearTimeout(announceTimer);
+    announceTimer = window.setTimeout(announceFound, ANNOUNCE_DELAY_MS);
   });
+  searchInput.addEventListener('input', typedSearch);
 
   currencySelect.addEventListener('change', () => {
     const chosen = CURRENCIES.find((entry) => entry === currencySelect.value);
@@ -613,12 +629,16 @@ export function mountTrades(root: Document): void {
       if (closedYears(state).length === 0) yearDialog.close();
       else fillYears();
     }
-    render();
+    keepFocus(render, newButton);
   }
 
-  // "This month" moves on with the calendar.
+  // "This month" moves on with the calendar. The lists are drawn again only
+  // in a new month, as that moves keyboard focus (audit G-3).
+  let shownMonth = today().slice(0, 7);
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') render();
+    if (document.visibilityState !== 'visible' || today().slice(0, 7) === shownMonth) return;
+    shownMonth = today().slice(0, 7);
+    keepFocus(render, newButton);
   });
 
   // If Trades is open in two tabs, keep them the same.

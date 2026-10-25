@@ -140,7 +140,7 @@ import { AppShell, Button, DataControls, Icon, SyncControls } from '@shkriuss/ui
 
   <dialog class="dialog viewer" aria-labelledby="viewer-title" data-viewer>
     <div class="stack">
-      <h2 id="viewer-title" data-viewer-title>
+      <h2 id="viewer-title" tabindex="-1" data-viewer-title>
         Photo
       </h2>
       <img class="viewer__image" alt="" data-viewer-image />
@@ -305,6 +305,19 @@ import { AppShell, Button, DataControls, Icon, SyncControls } from '@shkriuss/ui
     outline-offset: -3px;
   }
 
+  /* A chosen photo with keyboard focus shows the focus ring, not the chosen
+     outline (audit G-1); its tick still says it's chosen. */
+  .tile[aria-pressed='true']:focus-visible {
+    outline: 3px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+
+  @media (forced-colors: active) {
+    .tile[aria-pressed='true']:focus-visible {
+      outline-color: Highlight;
+    }
+  }
+
   .tile[aria-pressed='true'] .tile__check {
     display: grid;
   }
@@ -313,16 +326,31 @@ import { AppShell, Button, DataControls, Icon, SyncControls } from '@shkriuss/ui
     opacity: 0.75;
   }
 
-  /* Stays in sight at the bottom while choosing. */
+  /*
+   * Stays in sight at the top while choosing (it comes before the photos, so
+   * it can't stay at the bottom: audit G-12), unless it would cover much of
+   * the screen, with large text (.selection--tall): then it scrolls with the
+   * page, as the problem notice does.
+   */
   .selection {
     position: sticky;
-    inset-block-end: var(--space-3);
+    inset-block-start: var(--space-2);
     z-index: 1;
     padding: var(--space-2) var(--space-3);
     border: var(--border-width) solid var(--color-border);
     border-radius: var(--radius);
     background: var(--color-surface);
     box-shadow: var(--shadow);
+  }
+
+  .selection--tall {
+    position: static;
+  }
+
+  /* A photo that gets focus scrolls into view below the bar, never under it
+     (the bar is at most 30% of the screen while it stays in sight). */
+  :global(:root:has(.selection:not([hidden], .selection--tall))) {
+    scroll-padding-block-start: calc(var(--space-2) + 30dvh);
   }
 
   .selection__count {
@@ -360,9 +388,10 @@ import { AppShell, Button, DataControls, Icon, SyncControls } from '@shkriuss/ui
     text-align: center;
   }
 
+  /* Side by side when there's room; one under another with large text (audit G-4). */
   .viewer__details {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
     gap: var(--space-2);
     margin: 0;
   }

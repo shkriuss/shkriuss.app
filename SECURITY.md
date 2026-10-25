@@ -137,4 +137,5 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
 - Preview links (`*.workers.dev`) are public, and are posted in the pull
   request's comments, which are public too. Search engines are told not to
   index them. They run a pull request's code, never touch production's
-  storage, and get no storage code.
+  storage, and get no storage code. Every page of one says it's a preview,
+  and not to use a real account or real data there.

@@ -23,7 +23,8 @@ Get reminded at the right time, once or again and again. Lives at
   Friday.
 - `src/scripts/reminders.ts`: connects the page to those rules. The list is
   brought up to date every few seconds, as reminders become overdue or move
-  on.
+  on; it's drawn again only when what it shows changes, so keyboard focus and
+  screen readers aren't disturbed every minute.
 - `src/pages/index.astro`: the page, built from `@shkriuss/ui` components.
   `<template>`s hold the markup for a group and a reminder; changing one is a
   dialog.

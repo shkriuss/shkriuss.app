@@ -7,6 +7,7 @@
 import { isIsoTime, nowStamp, today } from '@shkriuss/dates';
 import { createStore, downloadFile } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
+import { keepFocus } from '@shkriuss/ui/keep-focus';
 import { focusProblem, reportSave } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { typedText } from '@shkriuss/ui/typed-text';
@@ -625,13 +626,19 @@ export function mountBudget(root: Document): void {
       if (entries.entries.length === 0) yearDialog.close();
       else fillYears();
     }
-    render();
+    keepFocus(render, addExpense);
     reminders.changed();
   }
 
-  // "This month" moves on with the calendar.
+  // "This month" moves on with the calendar. The lists are drawn again only
+  // in a new month, as that moves keyboard focus (audit G-3).
+  let shownMonth = monthOf(today());
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') render();
+    if (document.visibilityState !== 'visible') return;
+    renderReminder();
+    if (monthOf(today()) === shownMonth) return;
+    shownMonth = monthOf(today());
+    keepFocus(render, addExpense);
   });
 
   // If Budget is open in two tabs, keep them the same.

@@ -13,6 +13,7 @@
  */
 import { pushHolds } from '@shkriuss/push';
 import { createStore } from '@shkriuss/storage';
+import { keepFocus } from '@shkriuss/ui/keep-focus';
 import {
   addDays,
   addMinutes,
@@ -146,7 +147,8 @@ export function mountReminderAlerts(root: Document, page: CalendarPage): Reminde
         shown.push({ id: event.id, start });
       }
     }
-    render();
+    // Drawn again while the person may be in the list (audit G-3).
+    keepFocus(render, page.newEventButton);
     const [first] = due;
     page.announce(
       due.length === 1 && first

@@ -126,10 +126,16 @@ const Heading = `h${level}` as 'h2' | 'h3';
     </form>
   </dialog>
 
-  <dialog class="dialog" aria-labelledby="restore-title" data-restore-dialog>
+  {/* Read out with its title: what the file is, and the warnings shown (data-controls.ts). */}
+  <dialog
+    class="dialog"
+    aria-labelledby="restore-title"
+    aria-describedby="restore-summary"
+    data-restore-dialog
+  >
     <form class="stack" data-restore-form novalidate>
       <h2 id="restore-title">Restore a backup</h2>
-      <p data-restore-summary></p>
+      <p id="restore-summary" data-restore-summary></p>
       <div class="field" data-restore-unlock hidden>
         <label class="field__label" for="restore-passphrase">
           Passphrase
@@ -144,10 +150,10 @@ const Heading = `h${level}` as 'h2' | 'h3';
         />
         <p class="field__error" id="restore-passphrase-error" data-error-for="passphrase"></p>
       </div>
-      <p class="notice notice--danger" data-restore-warning hidden>
+      <p class="notice notice--danger" id="restore-warning" data-restore-warning hidden>
         Restoring replaces everything {site.name} has saved on this device now.
       </p>
-      <p class="notice notice--danger" data-restore-sync-warning hidden>
+      <p class="notice notice--danger" id="restore-sync-warning" data-restore-sync-warning hidden>
         Sync is on, so this also replaces {site.name}'s data on your other devices.
       </p>
       <p class="muted" role="status" data-dialog-status></p>

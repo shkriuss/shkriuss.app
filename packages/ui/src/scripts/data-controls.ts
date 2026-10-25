@@ -194,6 +194,15 @@ export function mountDataControls(section: HTMLElement): void {
     unlock.hidden = file?.kind !== 'encrypted';
     restoreWarning.hidden = file === null;
     restoreSyncWarning.hidden = file === null || !isSyncOn();
+    // Read out as the dialog opens, before its buttons: what the file is (or
+    // why it can't be used), and the warnings shown (audit G-9).
+    restoreDialog.setAttribute(
+      'aria-describedby',
+      [restoreSummary, restoreWarning, restoreSyncWarning]
+        .filter((part) => !part.hidden)
+        .map((part) => part.id)
+        .join(' '),
+    );
     restoreSubmit.hidden = file === null;
     restoreCancel.textContent = file === null ? 'Close' : 'Cancel';
     // Focus starts on the passphrase, or "Cancel" (first in the dialog), never

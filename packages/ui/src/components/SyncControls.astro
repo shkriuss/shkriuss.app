@@ -72,7 +72,9 @@ const Heading = `h${level}` as 'h2' | 'h3';
   <p class="muted" data-sync-status></p>
   <p class="visually-hidden" role="status" data-sync-announcer></p>
   <p class="muted">
-    <a href={`${hubOrigin}/privacy/#sync`}>What sync sends, and where</a>
+    <a class="sync-privacy" href={`${hubOrigin}/privacy/#sync`}>
+      What sync sends, and where
+    </a>
   </p>
 
   <dialog class="dialog" aria-labelledby="sync-delete-title" data-sync-delete-dialog>
@@ -95,5 +97,12 @@ const Heading = `h${level}` as 'h2' | 'h3';
   .sync-code {
     font-family: var(--font-mono);
     letter-spacing: 0.04em;
+  }
+
+  /* A link on a line of its own: as easy to tap as the footer's (44px: audit G-13). */
+  .sync-privacy {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--tap-target);
   }
 </style>

@@ -7,6 +7,7 @@
 import { createStore, downloadFile } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
 import { showFieldProblems } from '@shkriuss/ui/dom';
+import { keepFocus } from '@shkriuss/ui/keep-focus';
 import { reportSave } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { site } from 'virtual:shkriuss/site';
@@ -52,7 +53,6 @@ import {
   type Repeat,
 } from '../lib/events.ts';
 import { isNotable, type SpecialDay } from '../lib/holidays.ts';
-import { toIcs } from '../lib/ics.ts';
 import {
   ALL_DAY_REMINDERS,
   DEFAULT_REMINDER,
@@ -73,6 +73,7 @@ import {
   shortDate,
   utc,
   weekdayLong,
+  weekdayNarrow,
   weekdayShort,
   type CalendarPage,
 } from './shared.ts';
@@ -197,13 +198,14 @@ export function mountCalendar(root: Document): void {
     ],
     onChange: () => {
       state = store.load();
-      render();
+      // Drawn again in the background: keyboard focus stays where it was (audit G-3).
+      keepFocus(render, newEventButton);
       pushReminders.sync();
     },
   });
   mountSyncControls(required<HTMLElement>(root, '[data-sync-controls]'), sync);
   // Holidays, days off and fasts in Georgia (shown unless turned off).
-  const special = mountSpecialDays(root, render);
+  const special = mountSpecialDays(root, () => keepFocus(render, newEventButton));
 
   // ---------- Showing the calendar ----------
 
@@ -213,13 +215,22 @@ export function mountCalendar(root: Document): void {
       const date = utc(makeDate(2024, 1, ((weekStart - 1 + index) % 7) + 1));
       const header = document.createElement('th');
       header.scope = 'col';
-      const short = document.createElement('span');
-      short.setAttribute('aria-hidden', 'true');
-      short.textContent = weekdayShort.format(date);
+      // "Mon", or "M" when there's no room for that (large text): the page's CSS picks.
+      const shown = (className: string, format: Intl.DateTimeFormat): HTMLSpanElement => {
+        const span = document.createElement('span');
+        span.className = className;
+        span.setAttribute('aria-hidden', 'true');
+        span.textContent = format.format(date);
+        return span;
+      };
       const full = document.createElement('span');
       full.className = 'visually-hidden';
       full.textContent = weekdayLong.format(date);
-      header.append(short, full);
+      header.append(
+        shown('weekday__short', weekdayShort),
+        shown('weekday__narrow', weekdayNarrow),
+        full,
+      );
       return header;
     });
     weekdaysRow.replaceChildren(...headers);
@@ -638,15 +649,23 @@ export function mountCalendar(root: Document): void {
       exportStatus.textContent = 'There are no events to download yet.';
       return;
     }
-    downloadFile(`calendar-${today()}.ics`, toIcs(state.events), 'text/calendar');
-    exportStatus.textContent = `Downloaded ${plural(state.events.length, 'event')}.`;
+    // Loaded when it's needed, like the import: the page starts with less to load.
+    import('../lib/ics.ts').then(
+      ({ toIcs }) => {
+        downloadFile(`calendar-${today()}.ics`, toIcs(state.events), 'text/calendar');
+        exportStatus.textContent = `Downloaded ${plural(state.events.length, 'event')}.`;
+      },
+      () => {
+        exportStatus.textContent = 'Calendar couldn’t make the file. Please try again.';
+      },
+    );
   });
 
   // If Calendar is open in two tabs, keep them in sync.
   window.addEventListener('storage', (storageEvent) => {
     if (storageEvent.key === store.key) {
       state = store.load();
-      render();
+      keepFocus(render, newEventButton);
       pushReminders.sync();
     }
   });
@@ -657,7 +676,8 @@ export function mountCalendar(root: Document): void {
     if (today() === todayDate) return;
     if (selected === todayDate) selected = today();
     viewMonth = shiftMonth(selected, 0);
-    render();
+    // Drawn again in the background: keyboard focus stays where it was (audit G-3).
+    keepFocus(render, newEventButton);
   };
   window.setInterval(checkDay, NEW_DAY_CHECK_MS);
   root.addEventListener('visibilitychange', () => {
