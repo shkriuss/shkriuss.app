@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { addDays } from '@shkriuss/dates';
+import { footprint, sampleText } from '@shkriuss/sync/testing';
+import { MAX_SEALED_CHARS } from '../../../../packages/sync/src/validate.ts';
 import {
   byDay,
   currencyOf,
@@ -10,6 +13,7 @@ import {
   emptySettings,
   emptyVehicles,
   findRepairs,
+  findVehicleByName,
   formatHours,
   formatMileage,
   formatMoney,
@@ -20,6 +24,7 @@ import {
   lastMileage,
   migrateRepairs,
   modelNames,
+  partCost,
   partLabel,
   partNames,
   photoFiles,
@@ -28,7 +33,12 @@ import {
   readVehicle,
   removeRepair,
   removeVehicle,
+  removeYear,
   repairCost,
+  repairsIn,
+  repairYears,
+  REPAIRS_VERSION,
+  roomNote,
   saveRepair,
   saveVehicle,
   setCurrency,
@@ -127,6 +137,44 @@ describe('vehicles', () => {
       readVehicle({ name: 'x'.repeat(41), model: '', plate: '', notes: '' }, 'x', vehicles)
         .problems,
     ).toEqual({ name: 'Use 40 characters or fewer.' });
+  });
+
+  // Audit F2-6: two devices that each added "Bus 105" before they first
+  // synced have twins, and neither could be changed.
+  it('lets a vehicle keep a name it shares with another', () => {
+    const twins = { vehicles: [...vehicles.vehicles, vehicle({ id: 'b105-2', name: 'Bus 105' })] };
+    const details = { model: 'Isuzu Novociti Life', plate: 'tb-105-aa', notes: '' };
+    expect(readVehicle({ ...details, name: 'bus 105' }, 'b105-2', twins).vehicle).toEqual({
+      id: 'b105-2',
+      name: 'bus 105',
+      ...details,
+      plate: 'TB-105-AA',
+    });
+    expect(readVehicle({ ...details, name: 'Bus 105' }, 'b105', twins).problems).toBeUndefined();
+    // A new name is still checked, and so is a new vehicle.
+    expect(readVehicle({ ...details, name: 'Bus 12' }, 'b105-2', twins).problems).toEqual({
+      name: 'You already have a vehicle with that name.',
+    });
+    expect(readVehicle({ ...details, name: 'Bus 105' }, 'new', twins).problems).toEqual({
+      name: 'You already have a vehicle with that name.',
+    });
+  });
+
+  // Audit F2-2: a virama or a Thai tone mark was dropped like an accent.
+  it('tells apart names that differ in a vowel sign or a tone mark', () => {
+    const named = (name: string) => ({ vehicles: [vehicle({ id: 'x', name })] });
+    const details = { model: '', plate: '', notes: '' };
+    // Hindi: truck, and the same letters without the virama.
+    expect(readVehicle({ ...details, name: 'टरक 1' }, 'y', named('ट्रक 1')).vehicle?.name).toBe(
+      'टरक 1',
+    );
+    expect(findVehicleByName(named('ट्रक 1'), 'टरक 1')).toBeUndefined();
+    // Thai: chicken, and the same letters without the tone mark.
+    expect(findVehicleByName(named('ไก่ 1'), 'ไก 1')).toBeUndefined();
+    expect(findVehicleByName(named('ไก่ 1'), ' ไก่  1 ')?.id).toBe('x');
+    // Accents, case and apostrophes still don't matter.
+    expect(findVehicleByName(named('Mike’s Van'), 'mikes van')?.id).toBe('x');
+    expect(findVehicleByName(named('Café'), 'CAFE')?.id).toBe('x');
   });
 
   it('are saved, renamed, and removed with their repairs', () => {
@@ -277,6 +325,54 @@ describe('repairs', () => {
     expect(again).toMatchObject({ vehicle: 'Bus 105', mileage: '', system: 'Brakes' });
     expect(again.parts).toEqual([{ name: 'Brake pads', number: 'BP-1', quantity: '2', price: '' }]);
     expect(readRepair(again, 'r', repairs(saved), vehicles, newId).repair).toEqual(saved);
+    // In German too, where "1.125" would be one thousand one hundred and twenty-five.
+    const exact = repair({
+      mileage: 120_000,
+      parts: [{ name: 'Oil', number: '', quantity: 1.125, price: 1.234 }],
+      hours: 1.125,
+      labour: 1234.5,
+    });
+    const german = toRepairForm(exact, vehicles, 'de-DE');
+    expect(german).toMatchObject({ mileage: '120000', hours: '1,125', labour: '1234,5' });
+    expect(readRepair(german, 'r', repairs(exact), vehicles, newId, 'de-DE').repair).toEqual(exact);
+  });
+
+  // Audit F2-1: "1,500" was read as 1.5, and a mileage of "120.000" as 120.
+  it('reads numbers the way the person’s language writes them', () => {
+    const typed = (fields: Partial<RepairForm>, locale: string) =>
+      readRepair(form(fields), 'r', emptyRepairs(), vehicles, newId, locale);
+    const part = (quantity: string, price: string) => ({
+      name: 'Gearbox',
+      number: '',
+      quantity,
+      price,
+    });
+    expect(
+      typed({ mileage: '120,000', parts: [part('1,500', '1,500')], labour: '2,000' }, 'en-US')
+        .repair,
+    ).toMatchObject({ mileage: 120_000, parts: [{ quantity: 1500, price: 1500 }], labour: 2000 });
+    expect(
+      typed(
+        { mileage: '120.000', parts: [part('1,5', '1.500')], labour: '2.000', hours: '1,5' },
+        'de-DE',
+      ).repair,
+    ).toMatchObject({
+      mileage: 120_000,
+      parts: [{ quantity: 1.5, price: 1500 }],
+      labour: 2000,
+      hours: 1.5,
+    });
+    // A mileage with decimals, or anything but digits, is asked for again.
+    for (const mileage of ['120.000', '12.5', '1e3', '0x10', '-5']) {
+      expect(typed({ mileage }, 'en-US').problems, mileage).toEqual({
+        mileage: 'Enter the mileage as a whole number, or leave it empty.',
+      });
+    }
+    for (const quantity of ['1e3', '0x10', 'Infinity']) {
+      expect(typed({ parts: [part(quantity, '')] }, 'en-US').problems, quantity).toEqual({
+        'part-quantity-0': 'Enter a number above 0.',
+      });
+    }
   });
 
   it('are saved, changed and removed', () => {
@@ -305,6 +401,96 @@ describe('repairs', () => {
     }));
     expect(isRepairsState(repairs(repair({ parts: many })))).toBe(false);
   });
+});
+
+describe('making room', () => {
+  const years = repairs(
+    repair({ id: 'a', date: '2024-03-02', photos: ['p1', 'p2'] }),
+    repair({ id: 'b', date: '2026-10-21' }),
+    repair({ id: 'c', date: '2024-12-31', vehicle: 'b12', photos: ['p3'] }),
+    repair({ id: 'd', date: '2025-01-01' }),
+  );
+
+  it('lists the years with repairs, and deletes one with its photos', () => {
+    expect(repairYears(years)).toEqual([
+      { year: '2024', count: 2 },
+      { year: '2025', count: 1 },
+      { year: '2026', count: 1 },
+    ]);
+    expect(repairYears(emptyRepairs())).toEqual([]);
+    expect(photosOf(repairsIn(years, '2024'))).toEqual(['p1', 'p2', 'p3']);
+    expect(removeYear(years, '2024').repairs.map((item) => item.id)).toEqual(['b', 'd']);
+    expect(removeYear(years, '2023')).toEqual(years);
+  });
+
+  it('says so once Repairs is nearly full', () => {
+    const number = (value: number) => new Intl.NumberFormat('en-US').format(value);
+    const nearly = LIMITS.repairs * 0.9;
+    const makeRoom =
+      'To make room, download the spreadsheet, then use “Delete a year…” under Units and spreadsheet, below.';
+    expect(roomNote(nearly, 'en-US')).toBeNull();
+    expect(roomNote(nearly + 1, 'en-US')).toBe(
+      `Repairs is nearly full: there’s room for ${number(LIMITS.repairs - nearly - 1)} more repairs (it keeps up to ${number(LIMITS.repairs)}). ${makeRoom}`,
+    );
+    expect(roomNote(LIMITS.repairs - 1, 'en-US')).toContain('there’s room for 1 more repair (');
+    expect(roomNote(LIMITS.repairs, 'en-US')).toBe(
+      `Repairs is full: it keeps up to ${number(LIMITS.repairs)} repairs. ${makeRoom}`,
+    );
+    const full = repairs(
+      ...Array.from({ length: LIMITS.repairs }, (_, index) => repair({ id: `r${index}` })),
+    );
+    expect(readRepair(form({}), 'new', full, vehicles, newId, 'en-US').problems).toEqual({
+      vehicle: `You can keep up to ${number(LIMITS.repairs)} repairs. To make room, delete a year (under Units and spreadsheet).`,
+    });
+    // A repair already kept can still be changed.
+    expect(readRepair(form({}), 'r0', full, vehicles, newId, 'en-US').repair).toBeDefined();
+  });
+
+  // Audit F2-3: 10,000 repairs didn't fit. Every repair is saved on the device
+  // (in localStorage, about 5 MB for each site), and with sync on, also goes
+  // into the copy that goes online.
+  it('has room for every repair, on the device and in the sync copy', async () => {
+    const ids = Array.from({ length: 60 }, () => crypto.randomUUID());
+    const list = Array.from({ length: LIMITS.repairs }, (_, index): Repair => ({
+      id: crypto.randomUUID(),
+      vehicle: ids[index % ids.length] ?? '',
+      // Five a working day.
+      date: addDays('2020-01-01', Math.floor(index / 5)),
+      mileage: 100_000 + index * 37,
+      system: SYSTEMS[index % SYSTEMS.length] ?? '',
+      // Modest texts: 200 characters (of the 4,000 allowed).
+      problem: sampleText(80, index),
+      work: sampleText(120, index + 1),
+      // Two parts on two repairs in three, a photo or two on one in four.
+      parts:
+        index % 3 === 0
+          ? []
+          : [
+              { name: 'Brake pads', number: '8-97366-123-0', quantity: 2, price: 45.5 },
+              { name: 'Brake disc', number: '', quantity: 1, price: null },
+            ],
+      hours: 1.5,
+      labour: index % 2 ? 50 : null,
+      photos: index % 4 === 0 ? [crypto.randomUUID(), crypto.randomUUID()] : [],
+    }));
+    const size = await footprint({
+      app: 'repairs',
+      store: 'shkriuss:repairs',
+      version: REPAIRS_VERSION,
+      data: { repairs: list },
+      items: list,
+      // A quarter of them deleted ("Delete a year") less than 180 days ago.
+      deleted: LIMITS.repairs / 4,
+    });
+    expect(size.saved).toBeLessThan(2_000_000);
+    expect(size.compressed).toBeLessThan(1_000_000);
+    expect(size.sealed).toBeLessThan(MAX_SEALED_CHARS);
+    // Safari allows 5 MiB (5,242,880 bytes), and counts 2 bytes for each
+    // character of text with any character beyond Latin-1 (like ’ from an
+    // iPhone's keyboard, or Georgian). Sync's own records are plain letters
+    // and digits: 1 byte each. Some room is left for the rest (the vehicles).
+    expect(2 * size.saved + size.syncState).toBeLessThan(4_500_000);
+  }, 60_000);
 });
 
 describe('finding repairs', () => {
@@ -345,6 +531,17 @@ describe('finding repairs', () => {
     expect(ids('eplaced')).toEqual([]);
     expect(ids('', 'b105')).toEqual(['c', 'a']);
     expect(ids('a/c', 'b105')).toEqual(['c']);
+  });
+
+  it('finds words with vowel signs from their start, like any other', () => {
+    // Hindi: "changed the brake oil" (तेल is oil).
+    const written = repairs(repair({ id: 'h', work: 'ब्रेक तेल बदला' }));
+    const found = (query: string) =>
+      findRepairs(written, vehicles, { vehicle: null, query }).map((item) => item.id);
+    expect(found('तेल')).toEqual(['h']);
+    expect(found('ते')).toEqual(['h']);
+    // Not from the middle of a word, as "7" doesn't find "97366".
+    expect(found('ेल')).toEqual([]);
   });
 
   it('knows the last mileage noted', () => {
@@ -472,7 +669,7 @@ describe('hours worked and costs', () => {
         { name: 'Clip', number: '', quantity: 4, price: null },
       ],
     });
-    expect(toRepairForm(read as Repair, vehicles)).toMatchObject({
+    expect(toRepairForm(read as Repair, vehicles, 'en-US')).toMatchObject({
       hours: '1.5',
       labour: '20',
       parts: [{ price: '45.5' }, { price: '' }],
@@ -519,6 +716,31 @@ describe('hours worked and costs', () => {
     expect(
       repairCost(repair({ parts: [{ name: 'Clip', number: '', quantity: 1, price: null }] })),
     ).toBeNull();
+  });
+
+  it('adds up each part as it’s shown, rounded once', () => {
+    // 2.5 litres at $3.45 shows as $8.63: two of them make $17.26, not $17.25
+    // (audit F2-13).
+    const oil = { name: 'Oil', number: '', quantity: 2.5, price: 3.45 };
+    expect(partCost(oil)).toBe(8.63);
+    expect(partCost({ ...oil, price: null })).toBeNull();
+    const twice = repair({ parts: [oil, { ...oil, name: 'Gear oil' }], labour: 10.004 });
+    expect(repairCost(twice)).toEqual({ parts: 17.26, labour: 10, total: 27.26 });
+    expect(totals([twice, twice])).toEqual({ hours: null, cost: 54.52 });
+    // Yen have no decimals: 1.5 × ¥333 shows as ¥500, and two make ¥1,000.
+    const bolts = { name: 'Bolts', number: '', quantity: 1.5, price: 333 };
+    expect(partCost(bolts, 'JPY')).toBe(500);
+    const yen = repair({ parts: [bolts, { ...bolts, name: 'Nuts' }] });
+    expect(repairCost(yen, 'JPY')).toEqual({ parts: 1000, labour: 0, total: 1000 });
+    expect(totals([yen], 'JPY')).toEqual({ hours: null, cost: 1000 });
+    expect(vehicleSummaries(vehicles, repairs(yen), 'JPY').map((summary) => summary.cost)).toEqual([
+      null,
+      1000,
+      null,
+    ]);
+    // The spreadsheet has the same sums.
+    const csv = toCsv(repairs(yen), vehicles, setCurrency(emptySettings(), 'JPY'));
+    expect(csv.split('\r\n')[1]).toMatch(/,1000,0,1000$/);
   });
 
   it('adds up hours and costs, by day and by vehicle', () => {

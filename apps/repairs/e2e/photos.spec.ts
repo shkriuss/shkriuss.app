@@ -18,6 +18,7 @@ import {
   storedPhotos,
   TIME_ZONE,
   vehicle,
+  yearDialog,
 } from './helpers.ts';
 
 test.use({ timezoneId: TIME_ZONE });
@@ -102,6 +103,63 @@ test('adds photos to a repair, made smaller, and keeps them on the device', asyn
     })
     .click();
   await expect(status(page, 'Deleted the repair.')).toBeAttached();
+  await expect.poll(() => storedPhotos(page)).toBe(0);
+});
+
+test('deleting a year deletes its repairs’ photos', async ({ page }) => {
+  await page.getByRole('button', { name: 'New repair' }).click();
+  const dialog = repairDialog(page);
+  await dialog.getByLabel('Vehicle').fill('Bus 105');
+  await dialog.getByLabel('Day').fill('2025-06-01');
+  await addPhotos(page, [jpeg('door.jpg', await picture(page, { width: 400, height: 300 }))]);
+  await expect(dialog.locator('[data-form-photos] img')).toHaveCount(1);
+  await fillRepair(page, {});
+  await expect(status(page, 'Saved the repair on Bus 105')).toBeAttached();
+  expect(await storedPhotos(page)).toBe(1);
+
+  await page.getByRole('button', { name: 'Delete a year…' }).click();
+  await yearDialog(page).getByRole('button', { name: 'Delete 1 repair' }).click();
+  await expect(status(page, 'Deleted 1 repair from 2025.')).toBeAttached();
+  await expect.poll(() => storedPhotos(page)).toBe(0);
+});
+
+// Audit F2-9: a photo no repair used (after an older backup was restored,
+// say) stayed on the device for good.
+test('deletes a photo no repair uses, after an older backup is restored', async ({ page }) => {
+  // A backup with one repair, and no photo.
+  await seed(page, {
+    vehicles: [vehicle({ id: 'b105', name: 'Bus 105' })],
+    repairs: [repair({ id: 'old', date: '2026-10-20' })],
+  });
+  await page.getByRole('button', { name: 'Back up' }).click();
+  const download = page.waitForEvent('download');
+  await page
+    .getByRole('dialog', { name: 'Back up your data' })
+    .getByRole('button', { name: 'Download without a passphrase' })
+    .click();
+  const backup = await (await download).path();
+
+  // Then a repair with a photo.
+  await page.getByRole('button', { name: 'New repair' }).click();
+  await repairDialog(page).getByLabel('Vehicle').fill('Bus 105');
+  await addPhotos(page, [jpeg('door.jpg', await picture(page, { width: 400, height: 300 }))]);
+  await expect(repairDialog(page).locator('[data-form-photos] img')).toHaveCount(1);
+  await fillRepair(page, { work: 'Replaced the door glass' });
+  await expect(status(page, 'Saved the repair on Bus 105.')).toBeAttached();
+  expect(await storedPhotos(page)).toBe(1);
+
+  // A few minutes later the backup is restored: no repair has the photo now.
+  await page.clock.setFixedTime(NOW.getTime() + 5 * 60 * 1000);
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Restore' }).click();
+  await (await chooser).setFiles(backup);
+  const reloaded = page.waitForEvent('load');
+  await page
+    .getByRole('dialog', { name: 'Restore a backup' })
+    .getByRole('button', { name: 'Restore' })
+    .click();
+  await reloaded;
+  await expect(repairItems(page)).toHaveCount(1);
   await expect.poll(() => storedPhotos(page)).toBe(0);
 });
 
