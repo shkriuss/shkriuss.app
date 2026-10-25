@@ -114,8 +114,10 @@ a quicker run while working on a few apps; CI always tests every site.
   wrong step becomes a wrong change. When a change alters something a doc
   says (how it works, a limit or number, a file or its name, a command, a
   step), update that doc in the same PR: this file, the guides in `docs/`,
-  `README.md`, `SECURITY.md`, `apps.json` (`dataStored`, for the privacy
-  page) and the audit brief. A decision record (ADR) keeps what was decided
+  `README.md`, `SECURITY.md`, each app's own `README.md`, `apps.json`
+  (`dataStored`, for the privacy page), the privacy page's own text
+  (`apps/hub/src/pages/privacy.astro`: its "two days", "13 months" and so
+  on) and the audit brief. A decision record (ADR) keeps what was decided
   and why: add a "Changed by" note to its status, or write a new ADR for a
   new decision. Search for the old name or number before pushing. A unit
   test checks that every doc link and file path still exists.

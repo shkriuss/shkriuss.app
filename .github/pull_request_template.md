@@ -8,4 +8,4 @@
 - [ ] Asked "how could it break?" (two devices, a slow or wrong server, full storage, old data, iPhone), and tests cover the answers
 - [ ] Looked at the preview links on a phone, in light and dark mode
 - [ ] For a new or changed app: `apps.json` (`dataStored`) still says what the app saves
-- [ ] Docs that describe what changed say it now (`CLAUDE.md`, `docs/`, ADR notes, `SECURITY.md`, the audit brief)
+- [ ] Docs that describe what changed say it now (`CLAUDE.md`, `docs/`, ADR notes, `SECURITY.md`, app READMEs, the privacy page, the audit brief)
