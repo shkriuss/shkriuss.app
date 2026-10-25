@@ -316,6 +316,10 @@ in with `sync: true` in `apps.json`.
   recovery key and QR codes still work.
 - **Device clocks decide "newest".** A device whose clock is far off can win
   or lose a conflict it shouldn't. Edits on different items never conflict.
+  Deleting by age (Water's drinks older than a year) would let a clock set
+  years ahead delete what every device still keeps, so it counts back from
+  the sync server's clock at the last sync (each answer says its time in
+  `Date`), never from a later date on the device (`trustedNow`, audit F1-4).
 - **Same item, two devices.** When the same item is changed on two devices
   before they sync, changes aren't combined. In apps that keep both
   versions, the person ends up with two items to tidy by hand: for Tally,

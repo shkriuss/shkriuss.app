@@ -35,14 +35,21 @@ export class SyncError extends Error {
   }
 }
 
+/** The server's clock when it last answered (ms, from its Date header), or null. */
+let answeredAt: number | null = null;
+
+/** The sync server's clock at its latest answer on this page (see SyncClient.trustedNow). */
+export const serverClock = (): number | null => answeredAt;
+
 export async function api(path: string, init: RequestInit = {}, token?: string): Promise<Response> {
   const headers = new Headers(init.headers);
   if (token) headers.set('Authorization', `Bearer ${token}`);
   if (typeof init.body === 'string') headers.set('Content-Type', 'application/json');
   else if (init.body) headers.set('Content-Type', 'application/octet-stream');
+  let response: Response;
   try {
     // No answer in time (a network that hangs) counts as no connection too.
-    return await fetchWithLimit(`${API}${path}`, {
+    response = await fetchWithLimit(`${API}${path}`, {
       ...init,
       headers,
       credentials: 'omit',
@@ -51,6 +58,9 @@ export async function api(path: string, init: RequestInit = {}, token?: string):
   } catch {
     throw new SyncError('offline');
   }
+  const date = Date.parse(response.headers.get('Date') ?? '');
+  if (Number.isFinite(date)) answeredAt = date;
+  return response;
 }
 
 /** Why a round failed. An answer that stopped coming in time is no connection. */

@@ -434,9 +434,16 @@ export function mountWater(root: Document): void {
     reminders.changed();
   }
 
-  /** Lets go of drinks older than a year. */
+  /**
+   * Lets go of drinks older than a year. With sync, what's let go here is
+   * deleted on every device, so a clock set far ahead mustn't decide: it
+   * counts back from the sync server's clock at the last sync, if that's
+   * earlier, and waits while that isn't known (audit F1-4).
+   */
   function prune(): void {
-    const pruned = pruneDrinks(drinks, day);
+    const now = sync.trustedNow();
+    if (now === null) return;
+    const pruned = pruneDrinks(drinks, today(new Date(now)));
     if (pruned !== drinks) save({ drinks: pruned }, null);
   }
 

@@ -1268,6 +1268,46 @@ describe('a device whose clock is behind', () => {
   }
 });
 
+describe('a device whose clock is far ahead', () => {
+  // Deleting data by age (like Water's drinks older than a year) must not go
+  // by a clock set years ahead: the deletions would reach every device, and
+  // win there (audit F1-4).
+  it('counts back from the server’s clock when deleting by age', async () => {
+    const MINUTE = 60 * 1000;
+    const SERVER = Date.UTC(2026, 9, 24, 10, 30);
+    const AHEAD = Date.UTC(2028, 9, 24, 10, 30);
+    const realFetch = globalThis.fetch;
+    vi.stubGlobal('fetch', async (input: string, init?: RequestInit) => {
+      const response = await realFetch(input, init);
+      const headers = new Headers(response.headers);
+      headers.set('Date', new Date(SERVER).toUTCString());
+      return new Response(response.body, { status: response.status, headers });
+    });
+    vi.setSystemTime(AHEAD);
+
+    // Never synced here: what's deleted here stays here, so its own clock.
+    const fresh = new Device(null);
+    expect(fresh.use().sync.trustedNow()).toBe(AHEAD);
+    // Synced, but not since the server's clock was kept: wait for a sync.
+    const phone = new Device(randomBytes(32));
+    expect(phone.use().sync.trustedNow()).toBeNull();
+    phone.counters = [counter('water')];
+    expect((await phone.syncNow()).problem).toBeNull();
+    expect(phone.use().sync.trustedNow()).toBe(SERVER);
+    // Sync turned off: what's deleted meanwhile reaches the others once it's on again.
+    phone.sync.turnOff();
+    expect(phone.use().sync.trustedNow()).toBe(SERVER);
+    // A clock behind the server's is its own.
+    vi.setSystemTime(SERVER - MINUTE);
+    expect(phone.use().sync.trustedNow()).toBe(SERVER - MINUTE);
+    // "Delete all data" forgets sync: nothing deleted here reaches the others.
+    vi.setSystemTime(AHEAD);
+    stopSync();
+    expect(phone.use().sync.trustedNow()).toBe(AHEAD);
+    vi.useRealTimers();
+  });
+});
+
 describe('deletions older than the markers (180 days)', () => {
   const T0 = Date.UTC(2026, 0, 10, 12);
   const DAY = 24 * HOUR;

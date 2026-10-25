@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { bytesBody, jsonBody, readJson } from './index.ts';
+import { bytesBody, json, jsonBody, noContent, problem, readJson } from './index.ts';
 
 /** A body sent in chunks, with no Content-Length; counts the chunks read. */
 function streamed(chunks: number, size: number) {
@@ -65,5 +65,16 @@ describe('request bodies', () => {
     const garbled = streamed(1, 10).request;
     garbled.headers.set('Content-Length', 'ten');
     expect((await bytesBody(garbled, 2048)).ok).toBe(false);
+  });
+});
+
+describe('answers', () => {
+  it('say the server’s time, for devices whose own clock is off', () => {
+    vi.useFakeTimers({ now: Date.UTC(2026, 9, 24, 10, 30), toFake: ['Date'] });
+    for (const answer of [json({ a: 1 }), problem(400, 'No.'), noContent()]) {
+      expect(answer.headers.get('Date')).toBe('Sat, 24 Oct 2026 10:30:00 GMT');
+      expect(answer.headers.get('Cache-Control')).toBe('no-store');
+    }
+    vi.useRealTimers();
   });
 });
