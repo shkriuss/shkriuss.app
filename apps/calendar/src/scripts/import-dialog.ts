@@ -93,7 +93,15 @@ export function mountImportDialog(root: Document, page: CalendarPage): void {
     Promise.all([file.text(), import('../lib/ics-import.ts')]).then(
       ([text, { parseIcs }]) => {
         const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-        show(parseIcs(text, { timeZone, makeId: () => crypto.randomUUID() }), file.name);
+        let result: ParseResult;
+        try {
+          result = parseIcs(text, { timeZone, makeId: () => crypto.randomUUID() });
+        } catch {
+          // Something in the file it didn't expect: say so, rather than nothing (audit F1-8).
+          fail('Calendar couldn’t read this file.');
+          return;
+        }
+        show(result, file.name);
       },
       () => {
         fail('Calendar couldn’t read this file.');

@@ -187,6 +187,28 @@ describe('parseIcs', () => {
     expect(
       only(calendar(['DTSTART:20261017T100000', 'DTEND:20261017T090000', 'SUMMARY:x'])),
     ).toMatchObject({ endDate: '2026-10-17', endTime: null });
+    expect(
+      only(calendar(['DTSTART:20261017T100000', 'DURATION:-P100000000D', 'SUMMARY:x'])),
+    ).toMatchObject({ endDate: '2026-10-17', endTime: null });
+  });
+
+  it('turns down an event that would last longer than Calendar allows', () => {
+    // Such a DURATION used to throw, which stopped the whole import (audit F1-8).
+    const result = parseIcs(
+      calendar(
+        ['DTSTART;VALUE=DATE:20261017', 'DURATION:P100000000D', 'SUMMARY:For ever'],
+        ['DTSTART:20261017T090000', `DURATION:PT${'9'.repeat(400)}M`, 'SUMMARY:Even longer'],
+        ['DTSTART:20261017T090000', 'DURATION:P367D', 'SUMMARY:A year and a day'],
+        ['DTSTART:20261017T090000', 'SUMMARY:Fine'],
+      ),
+      options,
+    );
+    expect(result.events.map((event) => event.draft.title)).toEqual(['Fine']);
+    expect(result.skipped).toEqual([
+      { title: 'For ever', reason: 'An event can last up to 366 days.' },
+      { title: 'Even longer', reason: 'An event can last up to 366 days.' },
+      { title: 'A year and a day', reason: 'An event can last up to 366 days.' },
+    ]);
   });
 
   it('reads the repeats Calendar can show', () => {

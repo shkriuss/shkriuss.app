@@ -31,6 +31,7 @@ import {
   draftProblems,
   isValidReminder,
   MAX_NOTES_LENGTH,
+  MAX_SPAN_DAYS,
   MAX_TITLE_LENGTH,
   occurrencesBetween,
   type EventDraft,
@@ -515,7 +516,14 @@ function toEvent(
   const endProperty = get('DTEND');
   const end = endProperty ? readWhen(endProperty, options.timeZone) : null;
   const durationProperty = get('DURATION');
-  const duration = durationProperty ? parseDuration(durationProperty.value) : null;
+  const parsed = durationProperty ? parseDuration(durationProperty.value) : null;
+  // One that ends before it starts is ignored, like an end before the start.
+  const duration = parsed !== null && parsed > 0 ? parsed : null;
+  // Longer than any event can last: turned down before the date maths, which
+  // fails for a big enough number and stopped the whole import (audit F1-8).
+  if (duration !== null && duration > (MAX_SPAN_DAYS + 1) * 1440) {
+    return skip(`An event can last up to ${MAX_SPAN_DAYS} days.`);
+  }
   if (start.time === null) {
     // All-day ends are "the day after", or a number of days.
     if (end) endDate = addDays(end.date, -1);
