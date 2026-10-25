@@ -137,3 +137,11 @@ test('the footer links are big enough to tap', async ({ page }) => {
     expect((await link.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
   }
 });
+
+test('“What sync sends, and where” is big enough to tap', async ({ page }) => {
+  // A link on a line of its own, under the sync buttons: the same 44px rule (audit G-13).
+  await page.goto('/');
+  const link = page.getByRole('link', { name: 'What sync sends, and where' });
+  test.skip((await link.count()) === 0, 'This site doesn’t sync.');
+  expect((await link.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+});
