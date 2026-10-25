@@ -97,7 +97,9 @@ reach it), `@shkriuss/ui/local-reminders` (notifications while the app is
 open, with the same texts and the same iPhone and "blocked" cases in every
 app; after the page slept, only ones a few minutes late show, and on the
 night clocks go forward, ones in the skipped hour go off as the clocks
-change),
+change; Calendar, which lists reminders on its page and shows the ones
+missed while it was closed, uses its parts, `mountNotificationStatus` and
+`showNotifications`, with its own words),
 `@shkriuss/ui/long-lists` (for lists that
 can grow to thousands: `shownCount` draws `PAGE_SIZE` (100) at a time behind
 a "Show more" button, always keeping what has focus or was just saved, and

@@ -10,10 +10,16 @@
  * the notification service sends them instead, so this file only lists them
  * on the page (no second copy as a notification), unless the service
  * doesn't have them as they are now (a change that couldn't be uploaded).
+ * The status line and the notifications themselves are the shared ones
+ * (@shkriuss/ui/local-reminders), with Calendar's own words.
  */
-import { pushHolds } from '@shkriuss/push';
 import { createStore } from '@shkriuss/storage';
 import { keepFocus } from '@shkriuss/ui/keep-focus';
+import {
+  mountNotificationStatus,
+  showNotifications,
+  type Permission,
+} from '@shkriuss/ui/local-reminders';
 import {
   addDays,
   addMinutes,
@@ -46,11 +52,6 @@ const checks = createStore<Checks>({
     STAMP_PATTERN.test(String((value as Record<string, unknown>)['checkedUntil'])),
 });
 
-type Permission = NotificationPermission | 'unsupported';
-
-const permission = (): Permission =>
-  'Notification' in window ? Notification.permission : 'unsupported';
-
 const STATUS: Record<Permission, string> = {
   unsupported:
     'This browser can’t show notifications, so reminders show on this page while Calendar is open. On iPhone or iPad, add Calendar to your Home Screen to get notifications.',
@@ -72,8 +73,7 @@ export interface ReminderAlerts {
 export function mountReminderAlerts(root: Document, page: CalendarPage): ReminderAlerts {
   const box = required<HTMLElement>(root, '[data-due]');
   const list = required<HTMLUListElement>(box, '[data-due-list]');
-  const status = required<HTMLElement>(root, '[data-notify-status]');
-  const enable = required<HTMLElement>(root, '[data-notify-enable]');
+  const status = mountNotificationStatus(root, STATUS, page.announce);
   /** Reminders on screen, as event id + the date that time of the event starts. */
   let shown: { id: string; start: IsoDate }[] = [];
   /** Used when the browser won't let Calendar save (it then works until the page closes). */
@@ -97,33 +97,6 @@ export function mountReminderAlerts(root: Document, page: CalendarPage): Reminde
       days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : shortDate.format(utc(occurrence.start));
     return `${day} · ${timeLabel(occurrence, occurrence.start, formatTime)}`;
   };
-
-  async function notify(occurrences: Occurrence[]): Promise<void> {
-    if (permission() !== 'granted') return;
-    // With push on, the notification service sends these: don't show them
-    // twice. Unless it doesn't have them as they are now, say after a change
-    // made offline: then nothing else shows them (audit F1-7).
-    if (await pushHolds(noticesOf(page.state().events))) return;
-    // Phones only show notifications through the service worker (see sw.js).
-    const registration =
-      'serviceWorker' in navigator
-        ? await navigator.serviceWorker.getRegistration().catch(() => undefined)
-        : undefined;
-    for (const occurrence of occurrences) {
-      const options: NotificationOptions = {
-        body: whenText(occurrence),
-        // The same reminder from two open tabs shows once.
-        tag: `${occurrence.event.id}/${occurrence.start}`,
-        icon: '/icon-192.png',
-      };
-      try {
-        if (registration) await registration.showNotification(occurrence.event.title, options);
-        else new Notification(occurrence.event.title, options);
-      } catch {
-        // The reminder is still on the page.
-      }
-    }
-  }
 
   function check(): void {
     const now = nowStamp();
@@ -155,36 +128,16 @@ export function mountReminderAlerts(root: Document, page: CalendarPage): Reminde
         ? `Reminder: ${first.event.title}, ${whenText(first)}.`
         : `${plural(due.length, 'reminder')}: ${due.map((o) => o.event.title).join(', ')}.`,
     );
-    void notify(due);
-  }
-
-  function renderStatus(): void {
-    const current = permission();
-    status.textContent = STATUS[current];
-    enable.hidden = current !== 'default';
-  }
-
-  function offerNotifications(): void {
-    if (permission() !== 'default') return;
-    Notification.requestPermission().then(
-      () => {
-        const hadFocus = enable.contains(root.activeElement);
-        renderStatus();
-        // The button is gone now; keep keyboard focus nearby.
-        if (hadFocus && enable.hidden) {
-          status.tabIndex = -1;
-          status.focus();
-        }
-        if (permission() === 'granted') page.announce('Notifications are on.');
-      },
-      () => undefined,
+    void showNotifications(
+      due.map((occurrence) => ({
+        title: occurrence.event.title,
+        body: whenText(occurrence),
+        // The same reminder from two open tabs shows once.
+        tag: `${occurrence.event.id}/${occurrence.start}`,
+      })),
+      () => noticesOf(page.state().events),
     );
   }
-
-  required<HTMLButtonElement>(enable, '[data-action="enable-notifications"]').addEventListener(
-    'click',
-    offerNotifications,
-  );
 
   required<HTMLButtonElement>(box, '[data-action="dismiss-reminders"]').addEventListener(
     'click',
@@ -195,23 +148,12 @@ export function mountReminderAlerts(root: Document, page: CalendarPage): Reminde
     },
   );
 
-  // Keep the status right if notifications are allowed or blocked in the browser's settings.
-  if ('permissions' in navigator) {
-    navigator.permissions.query({ name: 'notifications' }).then(
-      (result) => result.addEventListener('change', renderStatus),
-      () => undefined,
-    );
-  }
-
+  // Back to Calendar: what's due now (the status line is drawn again too).
   root.addEventListener('visibilitychange', () => {
-    if (root.visibilityState === 'visible') {
-      renderStatus();
-      check();
-    }
+    if (root.visibilityState === 'visible') check();
   });
   window.setInterval(check, CHECK_EVERY_MS);
-  renderStatus();
   check();
 
-  return { render, offerNotifications, refreshStatus: renderStatus };
+  return { render, offerNotifications: status.offer, refreshStatus: status.render };
 }

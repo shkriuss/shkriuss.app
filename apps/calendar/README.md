@@ -58,7 +58,8 @@ its notification server, docs/adr/0009).
 - Page: `src/pages/index.astro`
 - Page behaviour: `src/scripts/`
   - `calendar.ts`: the month, the lists and the event editor
-  - `reminder-alerts.ts`: due reminders and notifications
+  - `reminder-alerts.ts`: due reminders on the page, and as notifications
+    (with the shared parts of `@shkriuss/ui/local-reminders`)
   - `import-dialog.ts`: choosing a file to import; the dialog that reads it
     and shows what it adds (`import-results.ts`) loads only then
   - `special-days.ts`: holidays and fasts: what to show, and their list items

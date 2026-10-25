@@ -22,6 +22,9 @@
  *   reminders.changed();   // after every change: uploads the schedule again, if that's on
  *
  * Each app keeps its own rules for what's due (src/lib, unit-tested).
+ * Calendar, which lists reminders on its page and shows ones missed while it
+ * was closed, uses the parts: mountNotificationStatus() and
+ * showNotifications().
  */
 import { nowStamp, type Stamp } from '@shkriuss/dates';
 import { pushHolds, type Notice } from '@shkriuss/push';
@@ -75,53 +78,117 @@ export function statusTexts(app: string, what = 'reminders'): Record<Permission,
   };
 }
 
+export interface NotificationStatus {
+  /** Draws the status line and the button again (after permission may have changed). */
+  render(): void;
+  /** Asks to show notifications if the person hasn't been asked. Call it from a tap. */
+  offer(): void;
+}
+
+/**
+ * The "Notifications are …" line (`[data-notify-status]`, in `texts` for
+ * each permission) and the "Turn on notifications" button
+ * (`[data-notify-enable]`), kept right when notifications are allowed or
+ * blocked in the browser's settings.
+ */
+export function mountNotificationStatus(
+  root: Document,
+  texts: Record<Permission, string>,
+  announce: (message: string) => void,
+): NotificationStatus {
+  const status = required<HTMLElement>(root, '[data-notify-status]');
+  const enable = required<HTMLElement>(root, '[data-notify-enable]');
+
+  function render(): void {
+    const current = permission();
+    status.textContent = texts[current];
+    enable.hidden = current !== 'default';
+  }
+
+  function offer(): void {
+    if (permission() !== 'default') return;
+    Notification.requestPermission().then(
+      () => {
+        const hadFocus = enable.contains(root.activeElement);
+        render();
+        // The button is gone now; keep keyboard focus nearby.
+        if (hadFocus && enable.hidden) {
+          status.tabIndex = -1;
+          status.focus();
+        }
+        if (permission() === 'granted') announce('Notifications are on.');
+      },
+      () => undefined,
+    );
+  }
+
+  required<HTMLButtonElement>(enable, '[data-action="enable-notifications"]').addEventListener(
+    'click',
+    offer,
+  );
+  if ('permissions' in navigator) {
+    navigator.permissions.query({ name: 'notifications' }).then(
+      (result) => result.addEventListener('change', render),
+      () => undefined,
+    );
+  }
+  root.addEventListener('visibilitychange', () => {
+    if (root.visibilityState === 'visible') render();
+  });
+  render();
+  return { render, offer };
+}
+
+/**
+ * Shows reminders that are due as notifications, if the person allowed
+ * them. With "Also remind me when … is closed" on, the notification service
+ * sends them instead, so they don't show twice; unless it doesn't have them
+ * as they are now (`notices`), say after a change made offline: then
+ * nothing else would show them (audit F1-7).
+ */
+export async function showNotifications(
+  due: readonly DueReminder[],
+  notices: () => Notice[],
+): Promise<void> {
+  if (permission() !== 'granted') return;
+  if (await pushHolds(notices())) return;
+  // Phones only show notifications through the service worker.
+  const registration =
+    'serviceWorker' in navigator
+      ? await navigator.serviceWorker.getRegistration().catch(() => undefined)
+      : undefined;
+  for (const item of due) {
+    const shown: NotificationOptions = { tag: item.tag, icon: '/icon-192.png' };
+    if (item.body !== undefined) shown.body = item.body;
+    try {
+      if (registration) await registration.showNotification(item.title, shown);
+      else new Notification(item.title, shown);
+    } catch {
+      // It's read out on the page too.
+    }
+  }
+}
+
 export function mountLocalReminders(
   root: Document,
   options: LocalRemindersOptions,
 ): LocalReminders {
-  const status = required<HTMLElement>(root, '[data-notify-status]');
-  const enable = required<HTMLElement>(root, '[data-notify-enable]');
-  const texts = statusTexts(options.app, options.what);
   const spoken =
     options.spoken ??
     ((due: readonly DueReminder[]) => `Reminder: ${due.map((item) => item.title).join(', ')}.`);
   /** Reminders up to this local time have been checked, then (see ../lib/reminder-window.ts). */
   let checked: ReminderCheck = { stamp: nowStamp(), at: Date.now() };
 
-  function renderStatus(): void {
-    const current = permission();
-    status.textContent = texts[current];
-    enable.hidden = current !== 'default';
-  }
-
+  const status = mountNotificationStatus(
+    root,
+    statusTexts(options.app, options.what),
+    options.announce,
+  );
   const push = mountPushControls(required<HTMLElement>(root, '[data-push-controls]'), {
     notices: options.notices,
     announce: options.announce,
-    onChange: renderStatus,
+    onChange: status.render,
   });
-
-  async function notify(due: readonly DueReminder[]): Promise<void> {
-    if (permission() !== 'granted') return;
-    // With push on, the notification service sends these: don't show them
-    // twice. Unless it doesn't have them as they are now, say after a change
-    // made offline: then nothing else shows them (audit F1-7).
-    if (await pushHolds(options.notices())) return;
-    // Phones only show notifications through the service worker.
-    const registration =
-      'serviceWorker' in navigator
-        ? await navigator.serviceWorker.getRegistration().catch(() => undefined)
-        : undefined;
-    for (const item of due) {
-      const shown: NotificationOptions = { tag: item.tag, icon: '/icon-192.png' };
-      if (item.body !== undefined) shown.body = item.body;
-      try {
-        if (registration) await registration.showNotification(item.title, shown);
-        else new Notification(item.title, shown);
-      } catch {
-        // It's read out on the page too.
-      }
-    }
-  }
 
   function check(): void {
     const now = { stamp: nowStamp(), at: Date.now() };
@@ -133,43 +200,9 @@ export function mountLocalReminders(
     const due = options.due(window.from, window.to);
     if (due.length === 0) return;
     options.announce(spoken(due));
-    void notify(due);
+    void showNotifications(due, options.notices);
   }
 
-  function offerNotifications(): void {
-    if (permission() !== 'default') return;
-    Notification.requestPermission().then(
-      () => {
-        const hadFocus = enable.contains(root.activeElement);
-        renderStatus();
-        // The button is gone now; keep keyboard focus nearby.
-        if (hadFocus && enable.hidden) {
-          status.tabIndex = -1;
-          status.focus();
-        }
-        if (permission() === 'granted') options.announce('Notifications are on.');
-      },
-      () => undefined,
-    );
-  }
-
-  required<HTMLButtonElement>(enable, '[data-action="enable-notifications"]').addEventListener(
-    'click',
-    offerNotifications,
-  );
-
-  // Keep the status right if notifications are allowed or blocked in the browser's settings.
-  if ('permissions' in navigator) {
-    navigator.permissions.query({ name: 'notifications' }).then(
-      (result) => result.addEventListener('change', renderStatus),
-      () => undefined,
-    );
-  }
-  root.addEventListener('visibilitychange', () => {
-    if (root.visibilityState === 'visible') renderStatus();
-  });
   window.setInterval(check, CHECK_EVERY_MS);
-  renderStatus();
-
-  return { changed: push.sync, offerNotifications };
+  return { changed: push.sync, offerNotifications: status.offer };
 }
