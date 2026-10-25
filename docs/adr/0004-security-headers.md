@@ -1,6 +1,11 @@
 # 0004. Strict CSP with Trusted Types, shared security headers
 
-Status: Accepted (2026-10-16)
+Status: Accepted (2026-10-16). Extended by [ADR 0009](0009-push-notifications.md)
+and [ADR 0010](0010-account-and-sync.md): answers from the servers get
+headers of their own; by [ADR 0010](0010-account-and-sync.md): only the hub
+may use passkeys; and by [ADR 0011](0011-on-device-grammar-checking.md) and
+[ADR 0012](0012-deep-check-ai-model.md): apps that run WebAssembly may
+compile it and start its threads.
 
 ## Context
 

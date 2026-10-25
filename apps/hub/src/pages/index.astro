@@ -24,7 +24,7 @@ import { AppIcon, AppShell, Card } from '@shkriuss/ui';
               <Card title={app.name} href={`${appOrigin(app.slug)}/`} level={3}>
                 <AppIcon slot="media" icon={app.icon} color={app.color} />
                 <p>{app.description}</p>
-                <p class="muted app-meta">{app.slug}.shkriuss.app</p>
+                <p class="muted app-meta">{new URL(appOrigin(app.slug)).host}</p>
               </Card>
             </li>
           ))}

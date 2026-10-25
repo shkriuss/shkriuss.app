@@ -39,7 +39,7 @@ scripts/             new-app, check-dist, deploy, buckets, previews, smoke-test,
 ```sh
 pnpm install
 pnpm --filter tally dev          # dev server for one site
-pnpm verify                      # everything CI runs, in order:
+pnpm verify                      # CI's Checks job, in order (secret scan, zizmor, audit and package age run in CI only):
 pnpm format:check && pnpm lint && pnpm typecheck && pnpm test
 pnpm build && pnpm check:dist && pnpm test:e2e
 pnpm new-app <slug> --name "Name" --description "One sentence." --icon note --color blue --stores "Your notes"

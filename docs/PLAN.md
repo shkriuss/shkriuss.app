@@ -257,18 +257,18 @@ reader, 200% zoom and large text, and reduced motion
 
 ## 6. CI/CD (GitHub Actions)
 
-| Workflow      | Runs on                                                | What it does                                                                                                                                   |
-| ------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ci.yml`      | every pull request and every push to `main`            | Runs every quality gate. On `main`, if checks and the secret scan pass, it **deploys every site to production** and then tests the live sites. |
-| `preview.yml` | pull request opened or updated, once you approve it    | Deploys previews of every site and comments the links on the PR. The production deploy deletes previews of closed PRs.                         |
-| `new-app.yml` | started by hand (**Actions → New app → Run workflow**) | Runs the generator with the details you type, pushes a branch, and gives you a link to open the PR.                                            |
-| Dependabot    | weekly                                                 | Proposes grouped dependency and action updates as PRs. CI must pass before you merge.                                                          |
+| Workflow      | Runs on                                                | What it does                                                                                                                                                             |
+| ------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ci.yml`      | every pull request and every push to `main`            | Runs every quality gate. On `main`, if the checks, the secret scan and the dependency audit pass, it **deploys every site to production** and then tests the live sites. |
+| `preview.yml` | pull request opened or updated, once you approve it    | Deploys previews of every site and comments the links on the PR. The production deploy deletes previews of closed PRs.                                                   |
+| `new-app.yml` | started by hand (**Actions → New app → Run workflow**) | Runs the generator with the details you type, pushes a branch, and gives you a link to open the PR.                                                                      |
+| Dependabot    | weekly                                                 | Proposes grouped dependency and action updates as PRs. CI must pass before you merge.                                                                                    |
 
 **Branch protection:** the repository is public (since 22 October 2026), so
 a ruleset can protect `main`: no deleting or force-pushing it, changes only
 through pull requests whose checks pass ([deployment.md](deployment.md#github-settings)).
-Production deploys also only happen when the checks and the secret scan pass
-on `main` (the deploy job depends on them).
+Production deploys also only happen when the checks, the secret scan and the
+dependency audit pass on `main` (the deploy job depends on them).
 
 **CI minutes:** free and unlimited for public repositories on GitHub's
 standard machines. (As a private repository it had 2,000 minutes a month, and
@@ -321,8 +321,8 @@ they ran out.)
   Rule), if you want it.
 - [x] `security.txt` (at `shkriuss.app/.well-known/security.txt`): it points
       to GitHub's private security reports.
-- Email anti-spoofing DNS records (SPF `-all`, DMARC `reject`, null MX),
-  since the domain sends no email.
+- [x] Email anti-spoofing DNS records (SPF `-all`, DMARC `reject`, null MX),
+      since the domain sends no email.
 - [x] Import-from-file for app data: **Back up** (locked with a passphrase)
       and **Restore** in every app ([ADR 0008](adr/0008-encrypted-backups.md)).
 - Deploy only the apps that changed, if CI time becomes a problem.

@@ -22,8 +22,9 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
   Tasks, Meals, Water, Reminders and Budget) also run a small Worker for
   `/api/push/*`, with one
   Durable Object per device ([ADR 0009](docs/adr/0009-push-notifications.md)).
-  It only ever holds messages encrypted on the user's device, delivery times
-  and a time zone; each app has its own storage and signing key, generated
+  It only ever holds messages encrypted on the user's device, delivery times,
+  a time zone and the device's push address; each app has its own storage
+  and signing key, generated
   by the server and never exported. Requests are size-limited, rate-limited
   and checked; push addresses must be https with a domain name, and
   redirects are refused. A device whose messages all fail or are refused for

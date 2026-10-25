@@ -55,5 +55,5 @@ Node 24 and pnpm 10:
 ```sh
 pnpm install
 pnpm --filter hub dev       # or: pnpm --filter tally dev
-pnpm verify                 # every check CI runs
+pnpm verify                 # CI's Checks job (the security scans run in CI only)
 ```
