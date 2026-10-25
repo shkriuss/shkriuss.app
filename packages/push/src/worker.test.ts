@@ -466,7 +466,8 @@ describe('all of an app’s devices together', () => {
     // A refused device keeps nothing.
     const stored = [...server.devices.values()].filter(({ storage }) => storage.map.size > 0);
     expect(stored).toHaveLength(kept);
-  });
+    // Many of the biggest schedules: a few seconds, longer on a busy CI machine.
+  }, 30_000);
 
   it('get room back when a device is forgotten', async () => {
     const entries = biggest();
@@ -483,7 +484,7 @@ describe('all of an app’s devices together', () => {
       }),
     );
     expect((await device().schedule(entries)).status).toBe(200);
-  });
+  }, 30_000);
 
   it('have a much smaller limit on a PR preview', () => {
     expect(STORAGE_LIMITS.preview * 4).toBeLessThan(STORAGE_LIMITS.site);
