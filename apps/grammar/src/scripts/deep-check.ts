@@ -207,21 +207,22 @@ export function mountDeepCheck(root: Document, host: DeepCheckHost): { textChang
     await cache.put(file.path, new Response(blob, { headers }));
   }
 
-  async function startDownload(): Promise<void> {
-    setProblem('');
+  /**
+   * What to download: the version on the site, and its files not saved here
+   * yet. Undefined (saying why) when it can't be downloaded now.
+   */
+  async function planDownload() {
     current = (await currentManifest()) ?? current;
     const manifest = current;
     if (!manifest) {
       setProblem('Couldn’t reach shkriuss.app. Check your internet connection and try again.');
-      return;
+      return undefined;
     }
     const cache = await caches.open(DEEP_CHECK_CACHE);
     const files = manifestFiles(manifest);
     const have = await Promise.all(files.map((file) => cache.match(file.path)));
     const missing = files.filter((_, index) => !have[index]);
-    const total = downloadBytes(manifest);
     const needed = missing.reduce((sum, file) => sum + file.bytes, 0);
-    let done = total - needed;
 
     // Older browsers can't say how much space is left: then just try.
     const estimate = await navigator.storage?.estimate?.().catch(() => undefined);
@@ -230,8 +231,30 @@ export function mountDeepCheck(root: Document, host: DeepCheckHost): { textChang
       setProblem(
         `Not enough space: Deep check needs ${megabytes(needed)}, and this browser can save ${megabytes(free)} more for this site. Free up some space on this device, then try again.`,
       );
-      return;
+      return undefined;
     }
+    return { manifest, cache, files, missing, needed };
+  }
+
+  /** True from a tap on "Download" until the download starts, or can't. */
+  let preparing = false;
+
+  async function startDownload(button: HTMLButtonElement): Promise<void> {
+    // One at a time: a second tap meanwhile, or during the download, would
+    // download everything twice, and "Stop" would stop only one (audit F3-5).
+    if (preparing || download) return;
+    preparing = true;
+    // Busy, not disabled, so focus stays on it while the files are looked at.
+    setBusy(button, true);
+    setProblem('');
+    const plan = await planDownload().finally(() => {
+      preparing = false;
+      setBusy(button, false);
+    });
+    if (!plan) return;
+    const { manifest, cache, files, missing, needed } = plan;
+    const total = downloadBytes(manifest);
+    let done = total - needed;
 
     const controller = new AbortController();
     download = controller;
@@ -502,11 +525,9 @@ export function mountDeepCheck(root: Document, host: DeepCheckHost): { textChang
 
   // ---------- Buttons ----------
 
-  downloadButton.addEventListener('click', () => void startDownload());
-  required<HTMLButtonElement>(section, '[data-action="deep-update"]').addEventListener(
-    'click',
-    () => void startDownload(),
-  );
+  downloadButton.addEventListener('click', () => void startDownload(downloadButton));
+  const updateButton = required<HTMLButtonElement>(section, '[data-action="deep-update"]');
+  updateButton.addEventListener('click', () => void startDownload(updateButton));
   stopButton.addEventListener('click', () => {
     download?.abort();
   });
