@@ -3,23 +3,19 @@
 // for every app in tests/e2e/sync.spec.ts.
 import type { Page } from '@playwright/test';
 import { addDays } from '@shkriuss/dates';
-import { createAccount, hubURL, signInWithKey, turnOnSync } from '../../../tests/e2e/account.ts';
+import {
+  createAccount,
+  hubURL,
+  signInWithKey,
+  syncedSince,
+  turnOnSync,
+} from '../../../tests/e2e/account.ts';
 import { expect, test } from '../../../tests/e2e/fixtures.ts';
 import { readStore } from '../../../tests/e2e/storage.ts';
 import type { DrinksState } from '../src/lib/water.ts';
 import { drink, history, NOW, seed, TIME_ZONE, todaysDrinks, total } from './helpers.ts';
 
 test.use({ timezoneId: TIME_ZONE });
-
-/** Waits until the page has synced after `since` (its own clock). */
-async function syncedAfter(page: Page, since: number): Promise<void> {
-  await page.waitForFunction((after) => {
-    const state = JSON.parse(localStorage.getItem('shkriuss-device:sync') ?? 'null') as {
-      last?: number | null;
-    } | null;
-    return (state?.last ?? 0) > after;
-  }, since);
-}
 
 test('drinks, the goal and reminders sync between devices', async ({ page, browser, guard }) => {
   guard.allowOrigin(hubURL);
@@ -89,13 +85,13 @@ test('a device whose clock is years ahead doesn’t delete the drinks', async ({
   // Water lets old drinks go as it opens: opened again, now that it has them.
   const reopened = await ahead.evaluate(() => Date.now());
   await ahead.reload();
-  await syncedAfter(ahead, reopened);
+  await syncedSince(ahead, reopened);
   expect(await drinksOn(ahead)).toBe(2);
   await ahead.context().close();
 
   const since = await page.evaluate(() => Date.now());
   await page.getByRole('button', { name: 'Sync now' }).click();
-  await syncedAfter(page, since);
+  await syncedSince(page, since);
   expect(await drinksOn(page)).toBe(2);
   await expect(history(page).nth(1)).toHaveText(/^Yesterday\s*500 ml/);
 });
