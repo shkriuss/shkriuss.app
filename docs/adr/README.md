@@ -24,6 +24,7 @@ mark them "Superseded by ADR N" instead.
 | [0015](0015-photos-app.md)                       | The Photos app: original files in IndexedDB, read in a worker, never twice      | Accepted |
 | [0016](0016-online-photo-library.md)             | The online photo library: sealed photos in R2, a list per library, storage code | Accepted |
 | [0017](0017-storage-limits.md)                   | Limits on what the servers keep, and clean-up of copies nobody uses             | Accepted |
+| [0018](0018-passkey-signatures.md)               | The account service checks that a passkey was used on the Account page          | Accepted |
 
 Template: **Context** (the problem), **Decision** (what we do), **Consequences**
 (good and bad), **Alternatives** (what we didn't pick and why).

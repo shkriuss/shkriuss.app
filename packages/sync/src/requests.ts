@@ -18,8 +18,10 @@ export type SyncProblem =
   | 'deleted'
   /** The account key was replaced on another device, which moved the copy; sync is now off here. */
   | 'moved'
-  /** This browser won't save. */
+  /** This browser won't save (blocked, or a private mode). */
   | 'storage'
+  /** This browser has no room left for this site's data: sync can't save what it brings. */
+  | 'full'
   /** There's no room online for more files: new ones stay on this device. */
   | 'files-full'
   /** Coming back from the hub didn't work (took too long, or another tab). */

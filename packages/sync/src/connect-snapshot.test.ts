@@ -1,4 +1,4 @@
-import { randomBytes, toBase64Url } from '@shkriuss/crypto';
+import { randomBytes, seal, toBase64Url } from '@shkriuss/crypto';
 import { describe, expect, it } from 'vitest';
 import {
   connectResultUrl,
@@ -14,7 +14,7 @@ import {
   turnOffUrl,
 } from './connect.ts';
 import { observe } from './merge.ts';
-import { openStores, sealStores, syncKeys } from './snapshot.ts';
+import { MAX_OPENED_BYTES, openStores, sealStores, syncKeys } from './snapshot.ts';
 
 describe('connecting an app', () => {
   const connection = { secret: randomBytes(32), code: 'K7Q2-M9XD', replaces: [randomBytes(32)] };
@@ -98,6 +98,19 @@ describe('sealed copies', () => {
       openStores((await syncKeys(randomBytes(32))).key, 'tally', sealed),
     ).rejects.toThrow();
     await expect(openStores(key, 'calendar', sealed)).rejects.toThrow();
+  });
+
+  it('aren’t opened if they would unpack to more than MAX_OPENED_BYTES (audit E-1)', async () => {
+    const { key } = await syncKeys(randomBytes(32));
+    // About 64 KB of gzip that unpacks to just over the limit: a lost device
+    // could upload a few of those KB, unpacking to gigabytes.
+    const zeros = new Blob([new Uint8Array(MAX_OPENED_BYTES + 1)])
+      .stream()
+      .pipeThrough(new CompressionStream('gzip'));
+    const packed = new Uint8Array(await new Response(zeros).arrayBuffer());
+    expect(packed.length).toBeLessThan(100_000);
+    const sealed = await seal(key, packed, 'shkriuss sync v1 tally');
+    await expect(openStores(key, 'tally', sealed)).rejects.toThrow('too much data');
   });
 
   it('derive a different token and key for each app key', async () => {
