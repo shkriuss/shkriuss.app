@@ -24,6 +24,7 @@ import {
   lastMileage,
   migrateRepairs,
   modelNames,
+  partCost,
   partLabel,
   partNames,
   photoFiles,
@@ -715,6 +716,31 @@ describe('hours worked and costs', () => {
     expect(
       repairCost(repair({ parts: [{ name: 'Clip', number: '', quantity: 1, price: null }] })),
     ).toBeNull();
+  });
+
+  it('adds up each part as it’s shown, rounded once', () => {
+    // 2.5 litres at $3.45 shows as $8.63: two of them make $17.26, not $17.25
+    // (audit F2-13).
+    const oil = { name: 'Oil', number: '', quantity: 2.5, price: 3.45 };
+    expect(partCost(oil)).toBe(8.63);
+    expect(partCost({ ...oil, price: null })).toBeNull();
+    const twice = repair({ parts: [oil, { ...oil, name: 'Gear oil' }], labour: 10.004 });
+    expect(repairCost(twice)).toEqual({ parts: 17.26, labour: 10, total: 27.26 });
+    expect(totals([twice, twice])).toEqual({ hours: null, cost: 54.52 });
+    // Yen have no decimals: 1.5 × ¥333 shows as ¥500, and two make ¥1,000.
+    const bolts = { name: 'Bolts', number: '', quantity: 1.5, price: 333 };
+    expect(partCost(bolts, 'JPY')).toBe(500);
+    const yen = repair({ parts: [bolts, { ...bolts, name: 'Nuts' }] });
+    expect(repairCost(yen, 'JPY')).toEqual({ parts: 1000, labour: 0, total: 1000 });
+    expect(totals([yen], 'JPY')).toEqual({ hours: null, cost: 1000 });
+    expect(vehicleSummaries(vehicles, repairs(yen), 'JPY').map((summary) => summary.cost)).toEqual([
+      null,
+      1000,
+      null,
+    ]);
+    // The spreadsheet has the same sums.
+    const csv = toCsv(repairs(yen), vehicles, setCurrency(emptySettings(), 'JPY'));
+    expect(csv.split('\r\n')[1]).toMatch(/,1000,0,1000$/);
   });
 
   it('adds up hours and costs, by day and by vehicle', () => {

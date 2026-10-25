@@ -24,10 +24,12 @@
 import { isIsoDate, type IsoDate } from '@shkriuss/dates';
 import {
   CURRENCIES,
+  currencyDigits,
   decimalText,
   formatMoney,
   parseDecimal,
   parseWhole,
+  roundDecimal,
   type Currency,
 } from '@shkriuss/ui/numbers';
 import { compareText, foldText } from '@shkriuss/ui/text';
@@ -656,20 +658,38 @@ export function byDay(repairs: readonly Repair[]): Day[] {
 /** Sums without floating-point crumbs (0.1 + 0.2 is 0.3). */
 const tidy = (value: number): number => Math.round(value * 1e6) / 1e6;
 
+/** An amount as it's shown in `currency`: to the cent, or to the yen (no decimals). */
+const shown = (amount: number, currency: Currency): number =>
+  roundDecimal(tidy(amount), currencyDigits(currency));
+
 export interface Cost {
-  /** Each priced part's quantity × price. */
+  /** Each priced part's quantity × price (partCost), added up. */
   parts: number;
   labour: number;
   total: number;
 }
 
-/** What a repair cost: its priced parts and labour. Null if no price was noted. */
-export function repairCost(repair: Repair): Cost | null {
+/**
+ * What a part cost: its quantity × its price, rounded once to its
+ * currency's decimals, as it's shown (so the parts add up to what's shown
+ * for them). Null if no price was noted.
+ */
+export const partCost = (part: Part, currency: Currency = 'USD'): number | null =>
+  part.price === null ? null : shown(part.quantity * part.price, currency);
+
+/**
+ * What a repair cost in `currency`: its priced parts and labour, each as
+ * it's shown. Null if no price was noted.
+ */
+export function repairCost(repair: Repair, currency: Currency = 'USD'): Cost | null {
   const priced = repair.parts.filter((part) => part.price !== null);
   if (priced.length === 0 && repair.labour === null) return null;
-  const parts = tidy(priced.reduce((sum, part) => sum + part.quantity * (part.price ?? 0), 0));
-  const labour = repair.labour ?? 0;
-  return { parts, labour, total: tidy(parts + labour) };
+  const parts = shown(
+    priced.reduce((sum, part) => sum + (partCost(part, currency) ?? 0), 0),
+    currency,
+  );
+  const labour = shown(repair.labour ?? 0, currency);
+  return { parts, labour, total: shown(parts + labour, currency) };
 }
 
 export interface Totals {
@@ -679,14 +699,14 @@ export interface Totals {
   cost: number | null;
 }
 
-/** The hours and costs of some repairs, added up. */
-export function totals(repairs: readonly Repair[]): Totals {
+/** The hours and costs (in `currency`) of some repairs, added up. */
+export function totals(repairs: readonly Repair[], currency: Currency = 'USD'): Totals {
   let hours: number | null = null;
   let cost: number | null = null;
   for (const repair of repairs) {
     if (repair.hours !== null) hours = tidy((hours ?? 0) + repair.hours);
-    const own = repairCost(repair);
-    if (own) cost = tidy((cost ?? 0) + own.total);
+    const own = repairCost(repair, currency);
+    if (own) cost = shown((cost ?? 0) + own.total, currency);
   }
   return { hours, cost };
 }
@@ -719,8 +739,12 @@ export interface VehicleSummary {
   cost: number | null;
 }
 
-/** Each vehicle with how many repairs it had, when, and what they cost, in name order. */
-export function vehicleSummaries(vehicles: VehiclesState, repairs: RepairsState): VehicleSummary[] {
+/** Each vehicle with how many repairs it had, when, and what they cost (in `currency`), in name order. */
+export function vehicleSummaries(
+  vehicles: VehiclesState,
+  repairs: RepairsState,
+  currency: Currency = 'USD',
+): VehicleSummary[] {
   return sortedVehicles(vehicles).map((vehicle) => {
     const own = repairs.repairs.filter((repair) => repair.vehicle === vehicle.id);
     const lastDate = own.reduce<IsoDate | null>(
@@ -732,7 +756,7 @@ export function vehicleSummaries(vehicles: VehiclesState, repairs: RepairsState)
       repairs: own.length,
       lastDate,
       lastMileage: lastMileage(repairs, vehicle.id)?.mileage ?? null,
-      cost: totals(own).cost,
+      cost: totals(own, currency).cost,
     };
   });
 }
@@ -917,7 +941,7 @@ export function toCsv(
   ];
   const rows = findRepairs(repairs, vehicles, { vehicle: null, query: '' }).map((repair) => {
     const vehicle = byId.get(repair.vehicle);
-    const cost = repairCost(repair);
+    const cost = repairCost(repair, currency);
     return [
       repair.date,
       vehicle?.name ?? 'Unknown vehicle',

@@ -35,6 +35,7 @@ import {
   lastMileage,
   migrateRepairs,
   modelNames,
+  partCost,
   partLabel,
   partNames,
   photoFiles,
@@ -253,10 +254,9 @@ export function mountRepairs(root: Document): void {
         ...repair.parts.map((part) => {
           const line = document.createElement('li');
           line.dir = 'auto';
+          const price = partCost(part, currencyOf(settings));
           line.textContent =
-            part.price === null
-              ? partLabel(part)
-              : `${partLabel(part)} · ${money(part.quantity * part.price)}`;
+            price === null ? partLabel(part) : `${partLabel(part)} · ${money(price)}`;
           return line;
         }),
       );
@@ -264,7 +264,7 @@ export function mountRepairs(root: Document): void {
     if (repair.hours !== null) {
       required<HTMLElement>(rows.hours, 'dd').textContent = formatHours(repair.hours);
     } else rows.hours.remove();
-    const cost = repairCost(repair);
+    const cost = repairCost(repair, currencyOf(settings));
     if (cost) {
       // "$140.00 · parts $90.00, labour $50.00" when it's both.
       required<HTMLElement>(rows.cost, 'dd').textContent =
@@ -328,19 +328,20 @@ export function mountRepairs(root: Document): void {
     const count = countLabel(found.length, 'repair', 'repairs');
     const on = only ? ` on ${vehicleName(vehicles, only)}` : '';
     const matching = query.trim() ? ` ${found.length === 1 ? 'matches' : 'match'} your search` : '';
-    const sums = totalsText(totals(found));
+    const currency = currencyOf(settings);
+    const sums = totalsText(totals(found, currency));
     resultCount.textContent =
       (filtered ? `${count}${on}${matching}` : `${count} in all`) + (sums ? ` · ${sums}.` : '.');
 
     // Each day's total counts all its repairs, also those after "Show more".
-    const dayTotals = new Map(byDay(found).map((day) => [day.date, totals(day.repairs)]));
+    const dayTotals = new Map(byDay(found).map((day) => [day.date, totals(day.repairs, currency)]));
     daysList.replaceChildren(
       ...byDay(found.slice(0, shown)).map((day) => {
         const fragment = dayTemplate.content.cloneNode(true) as DocumentFragment;
         const block = required<HTMLElement>(fragment, 'div');
         required<HTMLElement>(block, '[data-day-heading]').textContent = dayLabel(day.date);
         required<HTMLElement>(block, '[data-day-total]').textContent = totalsText(
-          dayTotals.get(day.date) ?? totals(day.repairs),
+          dayTotals.get(day.date) ?? totals(day.repairs, currency),
         );
         required<HTMLUListElement>(block, '[data-day-list]').replaceChildren(
           ...day.repairs.map(renderRepair),
@@ -383,7 +384,7 @@ export function mountRepairs(root: Document): void {
   }
 
   function renderVehicles(): void {
-    const summaries = vehicleSummaries(vehicles, repairs);
+    const summaries = vehicleSummaries(vehicles, repairs, currencyOf(settings));
     noVehicles.hidden = summaries.length > 0;
     vehicleList.replaceChildren(...summaries.map(renderVehicle));
 
