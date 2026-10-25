@@ -258,7 +258,8 @@ in with `sync: true` in `apps.json`.
   "Sync now". A request that gets no answer within 20 seconds (more for a
   big copy or photo on a slow connection) counts as no connection: the app
   says so and tries again later, instead of waiting for ever on a network
-  that hangs.
+  that hangs. The Account page's requests and Photos' online library have
+  the same limit.
 - **What app servers can see:** that an account uses the app, how big its
   copy is, and when it changes. Never the contents, and not which account is
   whose.

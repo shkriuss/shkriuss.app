@@ -22,9 +22,13 @@ const LARGEST_ANSWER_BYTES = 2_000_000;
 export const timeLimit = (bytes: number): number =>
   ANSWER_MS + Math.ceil(bytes / SLOW_BYTES_PER_MS);
 
-/** The size of what's sent: sync sends text (JSON) or bytes (a sealed file). */
+/** The size of what's sent: text (JSON), bytes (a sealed file) or a Blob (a photo's parts). */
 const sizeOf = (body: BodyInit | null | undefined): number =>
-  typeof body === 'string' || body instanceof Uint8Array ? body.length : 0;
+  typeof body === 'string' || body instanceof Uint8Array
+    ? body.length
+    : body instanceof Blob
+      ? body.size
+      : 0;
 
 /** True for a request that ran out of time (see fetchWithLimit). */
 export const isTimeout = (error: unknown): boolean =>

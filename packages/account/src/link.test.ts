@@ -6,6 +6,7 @@ import { randomBytes } from '@shkriuss/crypto';
 import type { DurableObjectNamespace } from '@shkriuss/server';
 import { memoryNamespace } from '@shkriuss/server/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { REQUEST_MS } from './errors.ts';
 import { cancelLink, claimLink, createLink, linkState, parseLinkFragment } from './link.ts';
 import worker, { AccountLink, type AccountEnv } from './worker.ts';
 
@@ -25,6 +26,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 const fragmentOf = (url: string) => {
@@ -67,5 +69,22 @@ describe('a device link', () => {
     expect(await linkState(link.id)).toBe('waiting');
     const anonymous = await fetch(`/api/account/link/${link.id}`, { method: 'DELETE' });
     expect(anonymous.status).toBe(401);
+  });
+});
+
+describe('an account service that never answers (audit G-11)', () => {
+  it('is given up on, so the page can say so instead of waiting for ever', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      'fetch',
+      (_input: string, init?: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(init.signal?.reason));
+        }),
+    );
+    const checking = linkState('A'.repeat(22));
+    const result = expect(checking).rejects.toMatchObject({ code: 'server' });
+    await vi.advanceTimersByTimeAsync(REQUEST_MS);
+    await result;
   });
 });
