@@ -25,6 +25,7 @@
     "./numbers": "./src/lib/numbers.ts",
     "./problem": "./src/scripts/problem.ts",
     "./text": "./src/lib/text.ts",
+    "./text-limit": "./src/scripts/text-limit.ts",
     "./typed-text": "./src/scripts/typed-text.ts",
     "./qr-code": "./src/scripts/qr-code.ts",
     "./service-worker": "./src/scripts/service-worker.ts",

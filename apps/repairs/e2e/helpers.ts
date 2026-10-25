@@ -17,6 +17,7 @@ export const TIME_ZONE = 'Asia/Tbilisi';
 
 export const repairDialog = (page: Page) => page.locator('[data-repair-dialog]');
 export const vehicleDialog = (page: Page) => page.locator('[data-vehicle-dialog]');
+export const yearDialog = (page: Page) => page.locator('[data-year-dialog]');
 /** The repairs shown, in order. */
 export const repairItems = (page: Page) => page.locator('[data-days] li.repair');
 /** A vehicle in the Vehicles list, by its name. */

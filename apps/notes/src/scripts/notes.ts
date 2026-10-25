@@ -21,9 +21,11 @@ import {
   type ReportSaveOptions,
 } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
+import { watchTextLimit } from '@shkriuss/ui/text-limit';
 import { site } from 'virtual:shkriuss/site';
 import {
   addNote,
+  dropEmptyNotes,
   dropIfEmpty,
   editedLabel,
   editNote,
@@ -31,6 +33,7 @@ import {
   isEmpty,
   isNotesState,
   keepOtherVersion,
+  keptVersion,
   MAX_NOTES,
   migrateNotes,
   NOTES_VERSION,
@@ -60,6 +63,28 @@ const ANNOUNCE_DELAY_MS = 700;
 
 const noteIdOf = (hash: string): string | null => /^#note=([\w-]{1,64})$/.exec(hash)?.[1] ?? null;
 
+/**
+ * A new note left empty is dropped as the page goes away (audit F3-9). This
+ * tab remembers which, so if the page was being reloaded, opening it again
+ * doesn't say the note is missing (sessionStorage: this tab only, and gone
+ * with it).
+ */
+const DROPPED_KEY = 'shkriuss-device:notes-dropped';
+function rememberDropped(id: string): void {
+  try {
+    sessionStorage.setItem(DROPPED_KEY, id);
+  } catch {
+    // Not kept: a reload then says the note isn't on this device.
+  }
+}
+function wasDropped(id: string): boolean {
+  try {
+    return sessionStorage.getItem(DROPPED_KEY) === id;
+  } catch {
+    return false;
+  }
+}
+
 export function mountNotes(root: Document): void {
   const listView = required<HTMLElement>(root, '[data-view="list"]');
   const editorView = required<HTMLElement>(root, '[data-view="editor"]');
@@ -79,6 +104,8 @@ export function mountNotes(root: Document): void {
   const deleteDialog = required<HTMLDialogElement>(root, '[data-delete-dialog]');
   const deleteName = required<HTMLElement>(deleteDialog, '[data-delete-name]');
   const pageTitle = document.title;
+  // A paste longer than a box takes is cut by the browser: say so (audit F3-3).
+  const limits = [watchTextLimit(titleField), watchTextLimit(bodyField)];
 
   let state = store.load();
   /** The note in the editor; null on the list. */
@@ -180,6 +207,7 @@ export function mountNotes(root: Document): void {
     fromList = listShown;
     titleField.value = note.title;
     bodyField.value = note.body;
+    for (const limit of limits) limit.clear();
     pinButton.setAttribute('aria-pressed', String(note.pinned));
     showEdited(note);
     listView.hidden = true;
@@ -258,7 +286,7 @@ export function mountNotes(root: Document): void {
     }
     if (id !== null) {
       history.replaceState(null, '', `${location.pathname}${location.search}`);
-      say('That note isn’t on this device. It may have been deleted.');
+      if (!wasDropped(id)) say('That note isn’t on this device. It may have been deleted.');
     }
     showList(wasEditing);
   }
@@ -278,6 +306,7 @@ export function mountNotes(root: Document): void {
 
   /** After changes from another device or tab. */
   function refresh(): void {
+    const before = state;
     state = store.load();
     if (current === null) {
       // Keyboard focus stays on the note it was on (audit G-3).
@@ -297,6 +326,9 @@ export function mountNotes(root: Document): void {
         announce('This note was changed on another device: that version is kept as a second note.');
       }
       flush();
+      // Pinned or unpinned elsewhere: the button shows it (audit F3-9).
+      const pinned = find(current)?.pinned;
+      if (pinned !== undefined) pinButton.setAttribute('aria-pressed', String(pinned));
       return;
     }
     const note = find(current);
@@ -307,10 +339,20 @@ export function mountNotes(root: Document): void {
       say('That note was deleted on another device.');
       return;
     }
+    // Changed on another device too: the sync kept the text shown here as a
+    // second version, and the note has the other device's text now. Say so
+    // where it shows, and read it out (audit F3-6).
+    const shown = { title: titleField.value, body: bodyField.value };
+    const kept = keptVersion(before, state, note.id, shown);
     showValue(titleField, note.title);
     showValue(bodyField, note.body);
     pinButton.setAttribute('aria-pressed', String(note.pinned));
     showEdited(note);
+    if (kept) {
+      say(
+        `This note was also changed on another device. You’re now seeing that version. Yours is kept as a separate note: “${titleText(kept)}”.`,
+      );
+    }
   }
 
   // ---------- Events ----------
@@ -402,8 +444,16 @@ export function mountNotes(root: Document): void {
 
   window.addEventListener('hashchange', () => route());
 
-  // Save typing before the page is closed or hidden.
-  window.addEventListener('pagehide', flush);
+  // Save typing before the page is closed or hidden. A new note left empty
+  // goes with the page, as it does when leaving it (audit F3-9).
+  window.addEventListener('pagehide', () => {
+    flush();
+    if (current === null) return;
+    const next = dropIfEmpty(state, current);
+    if (next === state) return;
+    save(next);
+    rememberDropped(current);
+  });
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') flush();
   });
@@ -429,6 +479,9 @@ export function mountNotes(root: Document): void {
   });
   mountSyncControls(required<HTMLElement>(root, '[data-sync-controls]'), sync);
 
+  // New notes left empty when a page was closed before it could drop them (audit F3-9).
+  const tidy = dropEmptyNotes(state, noteIdOf(location.hash), Date.now());
+  if (tidy !== state) save(tidy);
   renderList();
   route();
 }

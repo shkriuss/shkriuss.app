@@ -8,11 +8,11 @@
  * The files are saved first and the details last, so a photo only shows once
  * everything is saved; deleting goes the other way round. A photo that's
  * only online (docs/adr/0016) has no original here, and keeps its thumbnail
- * once it's downloaded. How far this device has caught up with the online
- * library is kept here too ("photos-online:state"), so "Delete all data"
- * forgets it with the photos.
+ * once it's downloaded; "Free up space" changes both records at once. How
+ * far this device has caught up with the online library is kept here too
+ * ("photos-online:state"), so "Delete all data" forgets it with the photos.
  */
-import { createFileStore, keepFiles } from '@shkriuss/storage/files';
+import { createFileStore, keepFiles, putTogether } from '@shkriuss/storage/files';
 import { changeCount } from '../lib/changes.ts';
 import { byNewest, toPhoto, type Photo } from '../lib/photos.ts';
 
@@ -115,16 +115,30 @@ export async function deletePhotos(ids: readonly string[]): Promise<void> {
 }
 
 /**
- * "Free up space": the originals and screen-sized copies of photos that are
- * online go from this device; thumbnails stay, so every photo still shows.
+ * "Free up space", for one photo that's online: its original and
+ * screen-sized copy go from this device; the thumbnail stays, so it still
+ * shows. Its details say it's only online in the same transaction, so a
+ * photo never says it's here without its original, even if this stops
+ * half-way (audit F3-1). Returns the photo as it is now.
  */
-export async function removeOriginals(photos: readonly Photo[]): Promise<void> {
-  for (const photo of photos) {
-    const kept = await getFiles(photo.id);
-    await files.putAll([{ id: photo.id, original: null, view: null, thumb: kept?.thumb ?? null }]);
-  }
-  await details.putAll(photos.map((photo) => ({ ...photo, here: false })));
+export async function removeOriginal(photo: Photo): Promise<Photo> {
+  const kept = await getFiles(photo.id);
+  const freed = { ...photo, here: false };
+  await putTogether([
+    details.entry(freed),
+    files.entry({ id: photo.id, original: null, view: null, thumb: kept?.thumb ?? null }),
+  ]);
   changes.changed();
+  return freed;
+}
+
+/**
+ * The ids of the photos whose original is on this device, from one look at
+ * all their files. A photo marked as here may not have it: an older version
+ * of Photos could stop "Free up space" half-way.
+ */
+export async function withOriginals(): Promise<Set<string>> {
+  return new Set((await files.all()).filter((found) => found.original).map((found) => found.id));
 }
 
 /** Gives a photo's files to another id (the same photo, as it's known online). */

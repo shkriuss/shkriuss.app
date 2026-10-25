@@ -10,6 +10,7 @@ import { secondVersionName } from '@shkriuss/sync';
 import { compareText, foldText } from '@shkriuss/ui/text';
 import { formatMoney } from '@shkriuss/ui/numbers';
 import { DATE_LOCALE } from '@shkriuss/ui/locale';
+import { readableHost } from './hosts.ts';
 
 /** An item's category when it has none. Categories themselves: ./categories.ts. */
 export const NO_CATEGORY = '';
@@ -400,13 +401,16 @@ export function formatDate(date: IsoDate, locale = DATE_LOCALE): string {
   }).format(new Date(Date.UTC(year, month - 1, day)));
 }
 
-/** The website a link goes to, without "www." ("shop.ge"). */
+/**
+ * The website a link goes to, without "www." ("shop.ge"), in its own
+ * letters when that's safe ("მაღაზია.გე", not "xn--lodaaxko2f.xn--node").
+ */
 export function linkHost(link: string): string {
   try {
     // Links from backups and other devices skip the form's check: only web links show.
     const url = new URL(link);
     if (url.protocol !== 'https:' && url.protocol !== 'http:') return '';
-    return url.hostname.replace(/^www\./, '');
+    return readableHost(url.hostname.replace(/^www\./, ''));
   } catch {
     return '';
   }

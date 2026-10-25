@@ -26,6 +26,8 @@ export interface PhotoFile {
   full?: Blob;
   /** JPEG, at most PHOTO_SIZES.thumb pixels on its longest side. */
   thumb: Blob;
+  /** When it was last saved here (milliseconds; missing on photos saved before it was kept). */
+  saved?: number;
 }
 
 const files = createFileStore<PhotoFile>('repair-photos');
@@ -85,8 +87,30 @@ export async function makePhoto(file: File): Promise<PhotoFile & { full: Blob }>
 /** Saves new photos (all or none), and asks the browser to keep them. */
 export async function savePhotos(photos: readonly PhotoFile[]): Promise<void> {
   if (photos.length === 0) return;
-  await files.putAll(photos);
+  const saved = Date.now();
+  await files.putAll(photos.map((photo) => ({ ...photo, saved })));
   void keepFiles();
+}
+
+/** A photo saved this recently may belong to a repair not saved yet (in another tab, say). */
+const RECENT_MS = 60 * 1000;
+
+/**
+ * Deletes the photos on this device that no repair uses (`used`: every
+ * repair's, and those in the repair form): left behind by an older backup
+ * restored, or a thumbnail that arrived after its repair was deleted on
+ * another device. Photos saved in the last minute stay.
+ */
+export async function deleteUnusedPhotos(used: ReadonlySet<string>): Promise<void> {
+  const ids = await files.ids().catch(() => []);
+  const now = Date.now();
+  const unused: string[] = [];
+  for (const id of ids) {
+    if (used.has(id)) continue;
+    const photo = await files.get(id).catch(() => undefined);
+    if (photo && now - (photo.saved ?? 0) >= RECENT_MS) unused.push(id);
+  }
+  if (unused.length > 0) await deletePhotos(unused);
 }
 
 // ---------- From other devices ----------

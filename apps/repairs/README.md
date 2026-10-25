@@ -34,12 +34,30 @@ private car's service history. Lives at <https://repairs.shkriuss.app>.
   (`MODELS`, plus the ones used). The mileage field shows the last mileage
   noted for the vehicle (`lastMileage`).
 - Costs: a repair's cost is its priced parts (quantity × price) plus labour
-  (`repairCost`); nothing priced means no cost, not zero. Hours and costs are
+  (`repairCost`); nothing priced means no cost, not zero. Each part's
+  quantity × price is rounded once, to the currency's own decimals, as it's
+  shown (`partCost`: 2.5 litres at $3.45 is $8.63), and the sums add up those
+  shown amounts, so they match what's on the screen. Hours and costs are
   added up for each day, for what the list shows, and for each vehicle
   (`totals`). A part chosen from the suggestions gets its last price too.
 - "Download as a spreadsheet (CSV)" saves every repair, one row each, with
   the hours and the parts, labour and total cost. Text a spreadsheet could
   read as a formula starts with `'`.
+- Repairs keeps up to 3,000 repairs (`LIMITS.repairs`). Why not more: each
+  repair is saved on the device, where a browser keeps about 5 MB for each
+  site, and with sync on, sync keeps records of its own there too. The test
+  "has room for every repair" fills Repairs up with modest repairs (200
+  characters of text, two parts on most, a photo or two on some) and checks
+  that it all still fits, on an iPhone too, and in the copy that syncs. If a
+  change makes repairs bigger, that test fails, and the limit has to come
+  down. (Photos aren't counted: they're kept in IndexedDB, which holds far
+  more.)
+- To make room, "Delete a year…" (next to the spreadsheet download) deletes
+  every repair of one year, with its photos (`repairYears`, `removeYear`).
+  It says how many that is, and offers the spreadsheet first. With sync on,
+  the repairs and their photos are deleted on the other devices too. Once
+  more than 90% of the 3,000 are used, a note at the top says how many are
+  left and points to it (`roomNote`).
 - Photos (up to 10 a repair): picked with "Add photos" (the phone offers its
   camera or its photo library), made smaller on the device (1,600 pixels on
   the longest side, plus a 320-pixel thumbnail, saved again as JPEG, which
@@ -53,15 +71,18 @@ private car's service history. Lives at <https://repairs.shkriuss.app>.
   when it's opened, and says "1 photo hasn't arrived yet" until it can (with
   sync off: "1 photo on another device"). A photo is saved small enough to
   sync (`MAX_PHOTO_BYTES`, `PHOTO_QUALITIES`). Photos aren't in backups;
-  "Save a copy" saves one as a file. Deleting a repair or vehicle deletes
-  its photos (online too, with sync on); "Delete all data" deletes them on
-  this device only (sync is turned off first). A photo taken off a repair on
-  another device is deleted here at the next sync.
+  "Save a copy" saves one as a file. Deleting a repair, a vehicle or a year
+  deletes their photos (online too, with sync on); "Delete all data"
+  deletes them on this device only (sync is turned off first). A photo
+  taken off a repair on another device is deleted here at the next sync.
+  Any other photo no repair uses (left by an older backup restored, say) is
+  deleted when Repairs opens and after each sync, unless it was saved in
+  the last minute (`deleteUnusedPhotos`).
   `src/scripts/photos.ts` does the photo work.
 - `src/scripts/repairs.ts`: connects the page to those rules.
 - `src/pages/index.astro`: the page, built from `@shkriuss/ui` components.
   `<template>`s hold the markup for a day, a repair, a vehicle and a part row;
-  the forms are dialogs.
+  the forms and "Delete a year" are dialogs.
 - `src/worker.ts`: runs the shared sync server
   ([ADR 0010](../../docs/adr/0010-account-and-sync.md)), with files on for the
   photos (`syncHandler({ files: true })`). The newest change to

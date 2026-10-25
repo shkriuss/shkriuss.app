@@ -39,7 +39,7 @@ scripts/             new-app, check-dist, deploy, buckets, previews, smoke-test,
 ```sh
 pnpm install
 pnpm --filter tally dev          # dev server for one site
-pnpm verify                      # everything CI runs, in order:
+pnpm verify                      # CI's Checks job, in order (secret scan, zizmor, audit and package age run in CI only):
 pnpm format:check && pnpm lint && pnpm typecheck && pnpm test
 pnpm build && pnpm check:dist && pnpm test:e2e
 pnpm new-app <slug> --name "Name" --description "One sentence." --icon note --color blue --stores "Your notes"
@@ -86,6 +86,8 @@ a quicker run while working on a few apps; CI always tests every site.
   current Chrome, Edge and Firefox. Use anything newer only with a fallback
   or a feature check, like the colours for browsers without `light-dark()`
   in `tokens.css`. Tests run in Chromium only, so check the support tables.
+  The build won't help: Astro ships the JavaScript and CSS as written (its
+  target is "esnext"), so newer syntax or functions reach Safari 16.4 as is.
 - **Registry is the source of truth.** Never hard-code app names, domains or
   lists; read `@shkriuss/registry`.
 - **Security headers live in one place:** `packages/astro-config/src/headers.ts`.
@@ -114,8 +116,10 @@ a quicker run while working on a few apps; CI always tests every site.
   wrong step becomes a wrong change. When a change alters something a doc
   says (how it works, a limit or number, a file or its name, a command, a
   step), update that doc in the same PR: this file, the guides in `docs/`,
-  `README.md`, `SECURITY.md`, `apps.json` (`dataStored`, for the privacy
-  page) and the audit brief. A decision record (ADR) keeps what was decided
+  `README.md`, `SECURITY.md`, each app's own `README.md`, `apps.json`
+  (`dataStored`, for the privacy page), the privacy page's own text
+  (`apps/hub/src/pages/privacy.astro`: its "two days", "13 months" and so
+  on) and the audit brief. A decision record (ADR) keeps what was decided
   and why: add a "Changed by" note to its status, or write a new ADR for a
   new decision. Search for the old name or number before pushing. A unit
   test checks that every doc link and file path still exists.

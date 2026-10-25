@@ -27,63 +27,110 @@ export const MAX_SENTENCE_WORDS = 80;
 /** Written without a space before: punctuation, closing quotes, "n't", "'s". */
 const PREFIXES = new Set([...'([{"\'“‘«¿¡$£€#*']);
 const SUFFIXES = new Set([...')]}"\'”’»,.!?;:%*']);
-const CLITIC = /^(.*\p{L})(n['’]t|['’](?:s|re|ve|ll|d|m))$/iu;
-const ELLIPSIS = /^(.*?)(\.{2,}|…)$/u;
+/** "n't", "'s" and the like at the end of a word (after a letter: see cliticLength). */
+const CLITIC = /(?:n['’]t|['’](?:s|re|ve|ll|d|m))$/iu;
 /** Abbreviations keep their full stop ("Mr.", "e.g.", "U.S.", initials like "J."). */
 const ABBREVIATIONS = new Set([
   'mr.', 'mrs.', 'ms.', 'dr.', 'prof.', 'st.', 'jr.', 'sr.', 'vs.', 'etc.', 'approx.',
   'dept.', 'inc.', 'ltd.', 'co.', 'corp.', 'jan.', 'feb.', 'mar.', 'apr.', 'jun.', 'jul.',
   'aug.', 'sep.', 'sept.', 'oct.', 'nov.', 'dec.', 'mt.', 'ft.', 'no.', 'vol.', 'fig.',
 ]); // prettier-ignore
+const LONGEST_ABBREVIATION = Math.max(...[...ABBREVIATIONS].map((entry) => entry.length));
 const LINK = /^(?:https?:\/\/|www\.)\S+$|^[^\s@]+@[^\s@]+\.\p{L}{2,}$/iu;
 /** Hyphens and dashes between words, slashes and commas between letters. */
 const INFIX =
   /(?<=[\p{L}\p{N}])(?:-|–|—)(?=\p{L})|(?<=\p{L})[/,](?=\p{L})|(?<=\p{L})(?:\.{2,}|…)(?=\p{L})/gu;
 
-const isAbbreviation = (token: string): boolean =>
-  ABBREVIATIONS.has(token.toLowerCase()) ||
-  /^(?:\p{L}\.){2,}$/u.test(token) ||
-  /^\p{Lu}\.$/u.test(token);
-
 const toModel = (text: string): string => text.replace(/[‘’]/g, "'").replace(/[“”]/g, '"');
 
-/** Splits one run of non-space characters into words, as [start, end] offsets within it. */
+const isLetter = (character: string): boolean => /^\p{L}$/u.test(character);
+
+/** How many full stops come right before each position of `text` (`[i]`: those ending at i). */
+function stopsBefore(text: string): number[] {
+  const counts = [0];
+  for (let index = 0; index < text.length; index += 1) {
+    counts.push(text[index] === '.' ? (counts[index] ?? 0) + 1 : 0);
+  }
+  return counts;
+}
+
+/**
+ * Where letters each followed by a full stop ("U.S.", "e.g.") end, from
+ * `from` on: each end after two or more of them.
+ */
+function initialsEnds(text: string, from: number): Set<number> {
+  const ends = new Set<number>();
+  let at = from;
+  for (let pairs = 1; ; pairs += 1) {
+    const letter = String.fromCodePoint(text.codePointAt(at) ?? 32);
+    if (!isLetter(letter) || text[at + letter.length] !== '.') return ends;
+    at += letter.length + 1;
+    if (pairs >= 2) ends.add(at);
+  }
+}
+
+/** The length of the "n't", "'s"… that `text` has at `end`, after a letter (0: none). */
+function cliticLength(text: string, from: number, end: number): number {
+  const clitic = CLITIC.exec(text.slice(Math.max(from, end - 3), end))?.[0] ?? '';
+  const before = [...text.slice(Math.max(from, end - clitic.length - 2), end - clitic.length)];
+  return clitic && isLetter(before.at(-1) ?? '') ? clitic.length : 0;
+}
+
+/**
+ * Splits one run of non-space characters into words, as [start, end]
+ * offsets within it. Punctuation at the end is split off one by one, in one
+ * pass over it: looking at the whole rest again for each mark took seconds
+ * for a word with thousands of ")" after it (audit F3-11).
+ */
 export function splitPiece(piece: string): [number, number][] {
   let from = 0;
   let to = piece.length;
   const head: [number, number][] = [];
+  /** The words split off the end, last first. */
   const tail: [number, number][] = [];
-  const core = () => piece.slice(from, to);
 
   if (LINK.test(piece)) {
     while (to > from + 1 && /[.,!?;:)\]]/.test(piece[to - 1] ?? '')) {
-      tail.unshift([to - 1, to]);
+      tail.push([to - 1, to]);
       to -= 1;
     }
-    return [...head, [from, to], ...tail];
+    return [...head, [from, to], ...tail.reverse()];
   }
 
   while (to - from > 1 && PREFIXES.has(piece[from] ?? '')) {
     head.push([from, from + 1]);
     from += 1;
   }
+  const stops = stopsBefore(piece);
+  const initials = initialsEnds(piece, from);
+  /** Whether what's left is an abbreviation, which keeps its full stop. */
+  const isAbbreviation = (): boolean => {
+    const token = to - from <= LONGEST_ABBREVIATION ? piece.slice(from, to) : '';
+    return ABBREVIATIONS.has(token.toLowerCase()) || /^\p{Lu}\.$/u.test(token) || initials.has(to);
+  };
   for (;;) {
-    const token = core();
-    if (token.length <= 1) break;
-    const ellipsis = ELLIPSIS.exec(token);
-    const clitic = CLITIC.exec(token);
-    const last = token.at(-1) ?? '';
-    if (ellipsis?.[1]) {
-      tail.unshift([from + ellipsis[1].length, to]);
-      to = from + ellipsis[1].length;
-    } else if (SUFFIXES.has(last) && !(last === '.' && isAbbreviation(token))) {
-      tail.unshift([to - 1, to]);
+    const length = to - from;
+    if (length <= 1) break;
+    const last = piece[to - 1] ?? '';
+    // "..." (as long as it is) or "…", after something else.
+    const dots = Math.min(stops[to] ?? 0, length);
+    const ellipsis = dots >= 2 ? dots : last === '…' ? 1 : 0;
+    if (ellipsis > 0 && ellipsis < length) {
+      tail.push([to - ellipsis, to]);
+      to -= ellipsis;
+      continue;
+    }
+    if (SUFFIXES.has(last) && !(last === '.' && isAbbreviation())) {
+      tail.push([to - 1, to]);
       to -= 1;
-    } else if (clitic?.[1] && clitic[2]) {
-      tail.unshift([from + clitic[1].length, to]);
-      to = from + clitic[1].length;
-    } else if (/^cannot$/i.test(token)) {
-      tail.unshift([from + 3, to]);
+      continue;
+    }
+    const clitic = cliticLength(piece, from, to);
+    if (clitic > 0) {
+      tail.push([to - clitic, to]);
+      to -= clitic;
+    } else if (length === 6 && /^cannot$/i.test(piece.slice(from, to))) {
+      tail.push([from + 3, to]);
       to = from + 3;
     } else {
       break;
@@ -92,14 +139,14 @@ export function splitPiece(piece: string): [number, number][] {
 
   const middle: [number, number][] = [];
   let start = from;
-  for (const match of core().matchAll(INFIX)) {
+  for (const match of piece.slice(from, to).matchAll(INFIX)) {
     const at = from + match.index;
     if (at > start) middle.push([start, at]);
     middle.push([at, at + match[0].length]);
     start = at + match[0].length;
   }
   if (to > start) middle.push([start, to]);
-  return [...head, ...middle, ...tail];
+  return [...head, ...middle, ...tail.reverse()];
 }
 
 /** Every word in the text, in order. */
@@ -149,24 +196,37 @@ export function sentencesOf(text: string): Sentence[] {
   const words = wordsOf(text);
   const groups: Word[][] = [];
   let current: Word[] = [];
+  // Kept as words are added (looking back over the sentence at each word
+  // took long for long ones): whether one ended the sentence, and whether
+  // only closing quotes and brackets came after it.
+  let ended = false;
+  let onlyClosingSince = true;
+  const nextGroup = (): void => {
+    groups.push(current);
+    current = [];
+    ended = false;
+    onlyClosingSince = true;
+  };
   words.forEach((word, index) => {
     const previous = words[index - 1];
     if (previous && current.length > 0 && text.slice(previous.end, word.start).includes('\n')) {
-      groups.push(current);
-      current = [];
+      nextGroup();
     }
     current.push(word);
+    if (ENDS_SENTENCE.test(word.model)) {
+      ended = true;
+      onlyClosingSince = true;
+    } else {
+      onlyClosingSince &&= CLOSING.has(word.model);
+    }
     const next = words[index + 1];
-    const ended = current.findLastIndex((entry) => ENDS_SENTENCE.test(entry.model));
-    const onlyClosingSince = current.slice(ended + 1).every((entry) => CLOSING.has(entry.model));
     if (
-      ended >= 0 &&
+      ended &&
       onlyClosingSince &&
       !(next && CLOSING.has(next.model) && next.start === word.end) &&
       !(next && /^\p{Ll}/u.test(next.text))
     ) {
-      groups.push(current);
-      current = [];
+      nextGroup();
     }
   });
   if (current.length > 0) groups.push(current);

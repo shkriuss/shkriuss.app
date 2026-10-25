@@ -28,7 +28,15 @@ import {
   type Stamp,
 } from '@shkriuss/dates';
 import type { Notice } from '@shkriuss/push';
-import { CURRENCIES, formatMoney, parseDecimal, type Currency } from '@shkriuss/ui/numbers';
+import {
+  CURRENCIES,
+  currencyDigits,
+  decimalText,
+  formatMoney,
+  parseDecimal,
+  roundDecimal,
+  type Currency,
+} from '@shkriuss/ui/numbers';
 import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
 export type Kind = 'expense' | 'income' | 'refund';
@@ -94,8 +102,12 @@ export const SUGGESTED = [
   'Other',
 ] as const;
 
-/** Rounds away the tiny errors of decimal sums (0.1 + 0.2). */
-const tidy = (value: number): number => Math.round(value * 100) / 100;
+/**
+ * Rounds to the cent, away the tiny errors of decimal sums (0.1 + 0.2): by
+ * the amount's own digits (1.005 is 1.01, not 1.00), and never to -0, which
+ * would show as "-$0.00" (roundDecimal).
+ */
+const tidy = (value: number): number => roundDecimal(value, 2);
 
 // ---------- Checking ----------
 
@@ -149,17 +161,40 @@ export function isEntriesState(value: unknown): value is EntriesState {
 export const migrateEntries = (old: unknown, version: number): EntriesState | undefined =>
   version === 1 && isEntriesState(old) ? old : undefined;
 
-/** A typed amount: null when empty, NaN when it isn't a number ("12,50" is 12.5). */
-const parseAmount = parseDecimal;
+/**
+ * How the forms are read: amounts in `currency` (US dollars when left out),
+ * as typed in `locale` (the browser's own when left out).
+ */
+export interface ReadOptions {
+  currency?: Currency | undefined;
+  locale?: string | undefined;
+}
+
+/**
+ * A typed amount: null when empty, NaN when it isn't a number. "12,50" is
+ * 12.5, and "1,500" is 1500 in English (parseDecimal).
+ */
+const parseAmount = (text: string, { locale }: ReadOptions): number | null =>
+  parseDecimal(text, locale);
+
+/**
+ * An amount kept as its currency has it: to the cent, or to the yen (no
+ * decimals), so what's added up is what's shown.
+ */
+const keep = (amount: number, { currency = 'USD' }: ReadOptions): number =>
+  roundDecimal(amount, currencyDigits(currency));
 
 /** What's wrong with a typed amount, or undefined (empty is fine when `optional`). */
-function amountProblem(text: string, optional: boolean): string | undefined {
-  const value = parseAmount(text);
+function amountProblem(text: string, optional: boolean, options: ReadOptions): string | undefined {
+  const value = parseAmount(text, options);
   if (value === null) return optional ? undefined : 'Enter an amount.';
   if (!Number.isFinite(value)) return 'Enter a number, like 12.50 or 12,50.';
   if (value <= 0) return 'Enter an amount above 0.';
-  // Amounts are kept to the cent, so one that rounds to 0 would be saved as 0.
-  if (tidy(value) <= 0) return 'Enter at least 0.01.';
+  // Kept to the cent (or the yen), so one that rounds to 0 would be saved as 0.
+  if (keep(value, options) <= 0) {
+    const least = 10 ** -currencyDigits(options.currency ?? 'USD');
+    return `Enter at least ${decimalText(least, options.locale)}.`;
+  }
   if (value > LIMITS.amount) return 'Enter a smaller amount.';
   return undefined;
 }
@@ -178,15 +213,21 @@ export function readCategory(
   form: CategoryForm,
   id: string,
   state: CategoriesState,
+  options: ReadOptions = {},
 ):
   | { category: Category; problems?: undefined }
   | { category?: undefined; problems: CategoryProblems } {
   const problems: CategoryProblems = {};
   const name = form.name.trim();
-  const editing = state.categories.some((category) => category.id === id);
+  const own = state.categories.find((category) => category.id === id);
+  const editing = own !== undefined;
+  // Its own name, unchanged, is fine even if another category has it too:
+  // two devices that each added "Groceries" before they first synced.
+  const unchanged = own?.name.toLowerCase() === name.toLowerCase();
   if (name === '') problems.name = 'Enter a name for the category.';
   else if (name.length > LIMITS.name) problems.name = `Use ${LIMITS.name} characters or fewer.`;
   else if (
+    !unchanged &&
     state.categories.some(
       (category) => category.id !== id && category.name.toLowerCase() === name.toLowerCase(),
     )
@@ -195,12 +236,18 @@ export function readCategory(
   } else if (!editing && state.categories.length >= LIMITS.categories) {
     problems.name = `You can have up to ${LIMITS.categories} categories.`;
   }
-  const limitProblem = amountProblem(form.limit, true);
+  const limitProblem = amountProblem(form.limit, true, options);
   if (limitProblem) problems.limit = limitProblem;
   if (Object.keys(problems).length > 0) return { problems };
-  const limit = parseAmount(form.limit);
-  return { category: { id, name, limit: limit === null ? null : tidy(limit) } };
+  const limit = parseAmount(form.limit, options);
+  return { category: { id, name, limit: limit === null ? null : keep(limit, options) } };
 }
+
+/** A category as its form shows it. */
+export const toCategoryForm = (category: Category, locale?: string): CategoryForm => ({
+  name: category.name,
+  limit: category.limit === null ? '' : decimalText(category.limit, locale),
+});
 
 /** Adds a category, or puts a changed one in its place. */
 export function saveCategory(state: CategoriesState, category: Category): CategoriesState {
@@ -244,11 +291,12 @@ export function readEntry(
   id: string,
   count: number,
   categories: CategoriesState,
+  options: ReadOptions = {},
 ): { entry: Entry; problems?: undefined } | { entry?: undefined; problems: EntryProblems } {
   const problems: EntryProblems = {};
   const kind = KINDS.find((entry) => entry === form.kind);
   if (!kind) problems.kind = 'Choose expense, income or refund.';
-  const amountText = amountProblem(form.amount, false);
+  const amountText = amountProblem(form.amount, false, options);
   if (amountText) problems.amount = amountText;
   else if (count >= LIMITS.entries) {
     problems.amount = `You can keep up to ${new Intl.NumberFormat().format(LIMITS.entries)} entries. To make room, delete a year (under Currency and spreadsheet).`;
@@ -265,7 +313,7 @@ export function readEntry(
     entry: {
       id,
       kind,
-      amount: tidy(parseAmount(form.amount) ?? 0),
+      amount: keep(parseAmount(form.amount, options) ?? 0, options),
       date: form.date,
       category,
       note,
@@ -273,10 +321,10 @@ export function readEntry(
   };
 }
 
-/** An entry as the form shows it. */
-export const toEntryForm = (entry: Entry): EntryForm => ({
+/** An entry as the form shows it (amounts as typed in `locale`, the browser's own when left out). */
+export const toEntryForm = (entry: Entry, locale?: string): EntryForm => ({
   kind: entry.kind,
-  amount: String(entry.amount),
+  amount: decimalText(entry.amount, locale),
   date: entry.date,
   category: entry.category ?? '',
   note: entry.note,
@@ -371,6 +419,8 @@ export interface Summary {
   left: number;
   /** The categories' limits added up (null when none has one). */
   budgeted: number | null;
+  /** What was spent in the categories that have a limit (refunds taken off). */
+  spentWithLimit: number;
 }
 
 /** What an entry adds to the spending: an expense its amount, a refund takes its amount off. */
@@ -378,9 +428,8 @@ const spending = (entry: Entry): number =>
   entry.kind === 'expense' ? entry.amount : entry.kind === 'refund' ? -entry.amount : 0;
 
 export function summary(entries: readonly Entry[], categories: CategoriesState): Summary {
-  const limits = categories.categories.flatMap((category) =>
-    category.limit === null ? [] : [category.limit],
-  );
+  const limited = categories.categories.filter((category) => category.limit !== null);
+  const withLimit = new Set(limited.map((category) => category.id));
   const income = tidy(
     entries.reduce((sum, entry) => (entry.kind === 'income' ? sum + entry.amount : sum), 0),
   );
@@ -389,7 +438,43 @@ export function summary(entries: readonly Entry[], categories: CategoriesState):
     income,
     spent,
     left: tidy(income - spent),
-    budgeted: limits.length === 0 ? null : tidy(limits.reduce((sum, limit) => sum + limit, 0)),
+    budgeted:
+      limited.length === 0
+        ? null
+        : tidy(limited.reduce((sum, category) => sum + (category.limit ?? 0), 0)),
+    spentWithLimit: tidy(
+      entries.reduce(
+        (sum, entry) =>
+          entry.category !== null && withLimit.has(entry.category) ? sum + spending(entry) : sum,
+        0,
+      ),
+    ),
+  };
+}
+
+/**
+ * The month's line against the budget, when any category has a limit: what
+ * was spent in the categories that have one, against their limits added up.
+ * What was spent without a limit (in a category with none, or in none) isn't
+ * held against them: it's said besides. `over`: more was spent than budgeted.
+ */
+export function budgetLine(
+  totals: Summary,
+  currency: string,
+  locale?: string,
+): { text: string; over: boolean } | null {
+  if (totals.budgeted === null) return null;
+  const money = (amount: number) => formatMoney(amount, currency, { locale });
+  const rest = tidy(totals.budgeted - totals.spentWithLimit);
+  const budgeted = money(totals.budgeted);
+  const line =
+    rest >= 0
+      ? `${money(rest)} left of the ${budgeted} budgeted`
+      : `${money(-rest)} over the ${budgeted} budgeted`;
+  const other = tidy(totals.spent - totals.spentWithLimit);
+  return {
+    text: other > 0 ? `${line} (${money(other)} more spent without a limit)` : line,
+    over: rest < 0,
   };
 }
 

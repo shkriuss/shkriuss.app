@@ -1,6 +1,11 @@
 # 0004. Strict CSP with Trusted Types, shared security headers
 
-Status: Accepted (2026-10-16)
+Status: Accepted (2026-10-16). Extended by [ADR 0009](0009-push-notifications.md)
+and [ADR 0010](0010-account-and-sync.md): answers from the servers get
+headers of their own; by [ADR 0010](0010-account-and-sync.md): only the hub
+may use passkeys; and by [ADR 0011](0011-on-device-grammar-checking.md) and
+[ADR 0012](0012-deep-check-ai-model.md): apps that run WebAssembly may
+compile it and start its threads.
 
 ## Context
 
@@ -44,6 +49,10 @@ writes them to every site's `_headers` file:
   third-party resources are blocked. That's enforced three ways: ESLint rules,
   `pnpm check:dist`, and browser tests that fail on any console error or
   cross-origin request.
+- The browser tests check that every site sends what `headers.ts` writes,
+  and a unit test (`headers.test.ts`) pins exactly what it writes, for an
+  app, the hub and an app with WebAssembly, and that only the hub may turn
+  on passkeys. A weaker header can't pass by changing both (audit J-3).
 - Writing UI code takes a little more care (use `<template>`, `textContent`,
   CSS classes).
 - `upgrade-insecure-requests` is left out: all our URLs are same-origin HTTPS

@@ -14,6 +14,7 @@ import { typedText } from '@shkriuss/ui/typed-text';
 import { site } from 'virtual:shkriuss/site';
 import {
   addSuggested,
+  budgetLine,
   byCategory,
   CURRENCIES,
   currencyOf,
@@ -52,6 +53,7 @@ import {
   shiftMonth,
   suggestedDay,
   summary,
+  toCategoryForm,
   toCsv,
   toEntryForm,
   whenLabel,
@@ -110,7 +112,7 @@ export function mountBudget(root: Document): void {
   const spentText = required<HTMLElement>(root, '[data-spent]');
   const incomeText = required<HTMLElement>(root, '[data-income]');
   const leftText = required<HTMLElement>(root, '[data-left]');
-  const budgetLine = required<HTMLElement>(root, '[data-budget-line]');
+  const budgetRow = required<HTMLElement>(root, '[data-budget-line]');
   const budgetProgress = required<HTMLProgressElement>(root, '[data-budget-progress]');
   const budgetText = required<HTMLElement>(root, '[data-budget-text]');
   const addExpense = required<HTMLButtonElement>(root, '[data-action="add-expense"]');
@@ -261,16 +263,14 @@ export function mountBudget(root: Document): void {
     incomeText.textContent = money(totals.income);
     leftText.textContent = money(totals.left, true);
     tone(leftText, totals.left);
-    budgetLine.hidden = totals.budgeted === null;
-    if (totals.budgeted !== null) {
+    // Spending in the categories that have a limit, against the limits.
+    const line = budgetLine(totals, currencyOf(settings));
+    budgetRow.hidden = line === null;
+    if (line && totals.budgeted !== null) {
       budgetProgress.max = totals.budgeted;
-      budgetProgress.value = Math.min(totals.spent, totals.budgeted);
-      const rest = totals.budgeted - totals.spent;
-      budgetLine.classList.toggle('total--over', rest < 0);
-      budgetText.textContent =
-        rest >= 0
-          ? `${money(rest)} left of the ${money(totals.budgeted)} budgeted`
-          : `${money(-rest)} over the ${money(totals.budgeted)} budgeted`;
+      budgetProgress.value = Math.min(totals.spentWithLimit, totals.budgeted);
+      budgetRow.classList.toggle('total--over', line.over);
+      budgetText.textContent = line.text;
     }
 
     noCategories.hidden = categories.categories.length > 0;
@@ -358,6 +358,7 @@ export function mountBudget(root: Document): void {
       editingEntry ?? crypto.randomUUID(),
       entries.entries.length - (editingEntry ? 1 : 0),
       categories,
+      { currency: currencyOf(settings) },
     );
     if (!read.entry) {
       showProblems(entryForm, ['kind', 'amount', 'date', 'note'], read.problems);
@@ -386,9 +387,9 @@ export function mountBudget(root: Document): void {
   function openCategory(category: Category | undefined): void {
     editingCategory = category?.id ?? null;
     categoryTitle.textContent = category ? 'Change category' : 'New category';
-    (categoryForm.elements.namedItem('name') as HTMLInputElement).value = category?.name ?? '';
-    (categoryForm.elements.namedItem('limit') as HTMLInputElement).value =
-      category?.limit == null ? '' : String(category.limit);
+    const values = category ? toCategoryForm(category) : { name: '', limit: '' };
+    (categoryForm.elements.namedItem('name') as HTMLInputElement).value = values.name;
+    (categoryForm.elements.namedItem('limit') as HTMLInputElement).value = values.limit;
     required<HTMLElement>(categoryForm, '[data-action="delete-category"]').hidden = !category;
     showProblems(categoryForm, ['name', 'limit'], {});
     categoryDialog.showModal();
@@ -403,6 +404,7 @@ export function mountBudget(root: Document): void {
       },
       editingCategory ?? crypto.randomUUID(),
       categories,
+      { currency: currencyOf(settings) },
     );
     if (!read.category) {
       showProblems(categoryForm, ['name', 'limit'], read.problems);

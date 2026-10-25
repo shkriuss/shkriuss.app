@@ -44,6 +44,11 @@ export function defineAppConfig(options: AppConfigOptions): AstroUserConfig {
       inlineStylesheets: 'never',
     },
     vite: {
+      // No build target: Astro builds the browser code for "esnext" whatever
+      // this says, and giving Vite one rewrites the CSS (light-dark(), which
+      // tokens.css already has its own fallback for). So code is shipped as
+      // written, and the oldest browsers are kept working by the rule in
+      // CLAUDE.md ("Browsers"), not by the build (audit J-13).
       build: {
         // Never inline small scripts or assets into the HTML (CSP again).
         assetsInlineLimit: 0,

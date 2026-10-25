@@ -17,6 +17,7 @@ import {
   storedPhotos,
   TIME_ZONE,
   vehicleItem,
+  yearDialog,
 } from './helpers.ts';
 
 test.use({ timezoneId: TIME_ZONE });
@@ -143,4 +144,30 @@ test('photos sync between devices, and deleting one deletes it on both', async (
   await expect(repairItems(page).first().locator('[data-row="photos"]')).toHaveCount(0);
   await expect.poll(() => storedPhotos(page)).toBe(0);
   await tablet.context().close();
+});
+
+test('deleting a year deletes its photos online too', async ({ page, guard }) => {
+  guard.allowOrigin(hubURL);
+  await page.clock.setFixedTime(NOW);
+  await createAccount(page);
+  await page.goto('/');
+  await turnOnSync(page, 'Repairs');
+  await page.getByRole('button', { name: 'New repair' }).click();
+  const dialog = repairDialog(page);
+  await dialog.getByLabel('Vehicle').fill('Bus 105');
+  await dialog.getByLabel('Day').fill('2025-06-01');
+  await addPhotos(page, [jpeg('door.jpg', await picture(page, { width: 800, height: 600 }))]);
+  await expect(dialog.locator('[data-form-photos] img')).toHaveCount(1);
+  const uploaded = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/api/sync/copy') && response.request().method() === 'PUT',
+  );
+  await fillRepair(page, { work: 'Replaced the door glass' });
+  await uploaded;
+
+  const deleted = deletedOnline(page);
+  await page.getByRole('button', { name: 'Delete a year…' }).click();
+  await yearDialog(page).getByRole('button', { name: 'Delete 1 repair' }).click();
+  await deleted;
+  await expect.poll(() => storedPhotos(page)).toBe(0);
 });

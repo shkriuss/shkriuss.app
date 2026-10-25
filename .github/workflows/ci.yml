@@ -25,9 +25,10 @@ jobs:
   checks:
     name: Checks
     runs-on: ubuntu-latest
-    # A stuck run stops here. Every check, the build and 540+ browser tests
-    # take about 20 minutes on GitHub's 2-processor machines (each new app adds
-    # about a minute), so this leaves room to grow.
+    # A stuck run stops here. Every check, the build and 700+ browser tests
+    # take about 15 to 20 minutes (each new app adds about a minute), so this
+    # leaves room for a few more apps. When runs come close to it, see
+    # docs/quality.md ("Time limit"): never skip tests to fit (audit J-5).
     timeout-minutes: 30
     permissions:
       contents: read
@@ -62,6 +63,20 @@ jobs:
 
       - name: CSP safety and size budgets
         run: pnpm check:dist
+
+      # Playwright's browser is kept between runs, named by Playwright's
+      # version, so a check (and so a deploy) doesn't need Playwright's
+      # download server once it's cached (audit H-2). Its system libraries
+      # still come from Ubuntu's mirrors.
+      - name: Find Playwright's version
+        id: playwright
+        run: echo "version=$(pnpm exec playwright --version | awk '{ print $2 }')" >> "$GITHUB_OUTPUT"
+
+      - name: Browser for end-to-end tests, from the cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
 
       - name: Install browser for end-to-end tests
         run: pnpm exec playwright install --with-deps chromium

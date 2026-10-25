@@ -168,7 +168,10 @@ I-1 to I-10).
    **DNS → Records → Add record**, type `CAA`, name `@`, flags `0`, tag
    **Only allow specific hostnames**, three times, with `letsencrypt.org`,
    `pki.goog` and `ssl.com`. All three are needed: Cloudflare uses each of
-   them for some of the sites' certificates. Then **SSL/TLS → Edge
+   them for some of the sites' certificates. (Looked up from outside, the
+   domain allows two more, `comodoca.com` and `digicert.com`: Cloudflare adds
+   those itself, and they aren't in the zone's own records. That's
+   expected.) Then **SSL/TLS → Edge
    Certificates → Certificate Transparency Monitoring: On**, which emails you
    when a certificate is issued for the domain.
 4. **Nothing rewrites the pages:** turn off **SSL/TLS → Edge Certificates →
@@ -180,8 +183,13 @@ I-1 to I-10).
    after each deploy fails if a page has changed.
 5. **Limit requests to the servers:** **Security → WAF → Rate limiting
    rules → Create rule**: "URI Path starts with `/api/`", 30 requests per 10
-   seconds, action **Block**. It stops one fast script from using up the free
-   daily requests that all the apps share.
+   seconds, action **Block**. It slows down a script trying to use up the
+   free daily requests that all the apps share, but on the free plan it can't
+   stop one: just under 3 requests a second from one address is never
+   blocked, and is more than the 100,000 a day by the end of the day. PR
+   previews (`*.workers.dev`) aren't behind it at all. So the servers keep
+   what a stranger can make them do cheap, and a day of free requests used
+   up only pauses the online features until 00:00 UTC (audit I-1).
 6. **Account safety:** **Manage Account → Members → Enforce two-factor
    authentication: On.** And **Notifications → Add → Usage Based Billing →
    R2**: an alert when storage passes 20 GB, so unusual uploads show up before
@@ -202,6 +210,16 @@ Every page of a preview says at the top that it's a preview of a change.
 Don't sign in there with your real shkriuss account (or type its recovery
 key), and don't put real data in: the preview runs the pull request's code,
 which isn't merged yet. To try sync on a preview, make a new account there.
+
+**Two pull requests' previews at a time.** Each set of previews gets its own
+server storage: as many Durable Object namespaces as the live sites (33
+today), and the free plan has 100 for the whole account. So the live sites
+and the previews of two pull requests fit. A third pull request's previews
+fail with "reached the Workers Free limit of 100 Durable Object namespaces";
+once one of the others is merged or closed (the next deploy of `main`
+deletes its previews), re-run **Deploy previews** there. A unit test
+(`tests/unit/free-plan.test.ts`) checks that two still fit: one more app
+with sync or notifications leaves room for only one.
 
 **Old version addresses.** Before the sites had server code, Cloudflare gave
 each production deploy of the hub, Calendar, Grammar, Photos and Tally a
@@ -229,6 +247,18 @@ those Workers' preview addresses (**Workers & Pages** → the Worker →
   safe, but shows nothing, and can't save or sync, until the newer version
   is back.
 
+## When a service CI needs is down
+
+A deploy runs every check first, and they need a few outside services:
+npm (the packages, installed again from scratch for the deploy itself),
+Ubuntu's mirrors (the browser's system libraries) and GitHub. Playwright's
+browser and Grammar's model come from CI's cache once they've been
+downloaded, so their download servers are only needed after an update. If
+one of these is down, a merge (even a fix) can't deploy until it's back:
+re-run the failed job then. The live sites stay as they were meanwhile; to
+undo a bad deploy in the meantime, use the dashboard's **Rollback** above
+(audit H-2).
+
 ## Costs
 
 Everything here fits Cloudflare's and GitHub's free plans:
@@ -240,12 +270,20 @@ Everything here fits Cloudflare's and GitHub's free plans:
   which ran out, so it was made public on 22 October 2026.)
 - Notifications while an app is closed, the optional account and sync use
   Durable Objects, free up to 100,000 requests a day (each notification sent
-  is about two; signing in, adding a device or opening the Account page
-  takes a handful; an app with
-  sync open uses about one a minute, plus one or two per change).
+  is about two; signing in or opening the Account page takes a handful, and
+  a device code shown to add a device takes one every 2 seconds, up to 300
+  in its 10 minutes; an app with sync open uses about one a minute, plus one
+  or two per change).
 - Durable Objects also keep up to 5 GB, for every app together. Each app's
-  servers have a limit that keeps them all within it, and copies nobody uses
-  for 13 months are deleted ([ADR 0017](adr/0017-storage-limits.md)).
+  servers have a limit, and copies nobody uses for 13 months are deleted
+  ([ADR 0017](adr/0017-storage-limits.md)). A unit test checks that the
+  limits of every app together stay under 4.5 GB; a few more apps with sync
+  or notifications will need smaller limits each.
+- Durable Objects also have 13,000 GB-s of time a day, counted while an
+  object waits too. Push services are given 5 seconds to answer, and each
+  second spent waiting counts against the app's 2,000 messages a day, so
+  notifications can't use more than a small part of it
+  ([ADR 0009](adr/0009-push-notifications.md)).
 - Photos' online library uses R2: free up to 10 GB, then about $0.015 per GB
   a month (about $15 a month for 1 TB, the most it holds), and downloads are
   free. Each photo put online is one Worker request and four Durable Object

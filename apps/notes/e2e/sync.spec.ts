@@ -123,3 +123,46 @@ test('keeps both versions of a note changed on two devices at once', async ({
   await expect(link(tablet, 'Groceries (second version)')).toBeVisible();
   await tablet.context().close();
 });
+
+test('says so in the open note when a sync keeps both versions of it', async ({
+  page,
+  browser,
+  guard,
+}) => {
+  guard.allowOrigin(hubURL);
+  guard.allowConsole('ERR_INTERNET_DISCONNECTED');
+  const tablet = await twoDevices(page, browser);
+  const upload = uploaded(page);
+  await page.getByRole('button', { name: 'New note' }).click();
+  await titleBox(page).fill('Groceries');
+  await page.getByRole('button', { name: 'All notes' }).click();
+  await upload;
+  await tablet.getByRole('button', { name: 'Sync now' }).click();
+  await expect(link(tablet, 'Groceries')).toBeVisible();
+
+  // The phone, offline, changes the note and stays in it (saved once typing pauses).
+  await page.context().setOffline(true);
+  await link(page, 'Groceries').click();
+  await bodyBox(page).fill('Milk');
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem('shkriuss:notes')))
+    .toContain('Milk');
+  await editBody(tablet, 'Groceries', 'Bread');
+
+  // Back online, the phone syncs with the note still open: it shows the
+  // tablet's text now, and says where the phone's went (audit F3-6).
+  await page.context().setOffline(false);
+  await expect(bodyBox(page)).toHaveValue('Bread', { timeout: 15_000 });
+  await expect(
+    page.getByRole('alert').filter({
+      hasText:
+        'This note was also changed on another device. You’re now seeing that version. Yours is kept as a separate note: “Groceries (second version)”.',
+    }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'All notes' }).click();
+  await link(page, 'Groceries (second version)').click();
+  await expect(bodyBox(page)).toHaveValue('Milk');
+  // Gone once another note is open.
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await tablet.context().close();
+});

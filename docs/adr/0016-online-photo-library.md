@@ -75,7 +75,10 @@ every device. That's far beyond what sync can hold:
   only once the library has answered since Photos opened, while it isn't
   being deleted, moved or out of reach: what this device noted earlier may
   be out of date. Just before anything is removed, the library is asked
-  again, and only photos it still has are freed.
+  again, and only photos it still has are freed. Each photo's original goes
+  in the same step as the note that it's only online, so stopping half-way
+  never leaves a photo marked as on the device without its original (audit
+  finding F3-1).
 - **The same photo twice:** a device skips a photo already in the library
   (same SHA-256). If two devices add it at once, the one with the larger id
   is deleted. Picking a photo again whose original isn't on the device
@@ -138,7 +141,7 @@ every device. That's far beyond what sync can hold:
   first, since that may have been the lost one.
 - **"Delete the online copy"** deletes the account's libraries first: each
   list is cleared at once, then the files are deleted in batches of 1,000
-  (a Durable Object alarm). Photos on each device stay; those only online
+  (a Durable Object alarm, which keeps trying while R2 fails: audit B-2). Photos on each device stay; those only online
   are gone. A library known to be taken is left alone; if one refuses
   (another device took it), the copy stays, and the device says it
   couldn't delete the online copy instead of saying it's done.

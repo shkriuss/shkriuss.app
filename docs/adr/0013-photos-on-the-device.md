@@ -4,7 +4,9 @@ Status: Accepted (2026-10-21). Extends [ADR 0006](0006-local-first-data.md).
 Extended by [ADR 0014](0014-syncing-photos.md): with sync on, photos sync
 too, each sealed on the device. Used by the Photos app
 ([ADR 0015](0015-photos-app.md)), whose library can also be online
-([ADR 0016](0016-online-photo-library.md)).
+([ADR 0016](0016-online-photo-library.md)). Changed (2026-10-25, audit
+F2-9): Repairs also deletes the photos no repair uses, left behind by an
+older backup restored, say.
 
 ## Context
 
@@ -30,10 +32,14 @@ read it, and "Delete all data" must delete it.
   with the repair; the photos themselves sync on their own
   ([ADR 0014](0014-syncing-photos.md)). With sync off, another device shows
   "1 photo on another device".
-- **Deleting:** deleting a repair or a vehicle deletes its photos; "Delete
-  all data" (`DataControls`) deletes the whole database, and anything an app
-  downloaded into a cache of its own, like Grammar's Deep check model
-  (`deleteAllFiles()`), in every app.
+- **Deleting:** deleting a repair or a vehicle (or a year of repairs)
+  deletes its photos. Photos no repair uses any more (after an older backup
+  is restored, or a thumbnail that arrived after its repair was deleted on
+  another device) are deleted when Repairs opens and after each sync,
+  unless saved in the last minute (their repair may not be saved yet).
+  "Delete all data" (`DataControls`) deletes the whole database, and
+  anything an app downloaded into a cache of its own, like Grammar's Deep
+  check model (`deleteAllFiles()`), in every app.
 - **No new permissions:** `<input type="file" accept="image/*">` lets the
   phone offer its camera or its photo library itself; the `camera`
   permission (for live video) stays off. `img-src` already allows `blob:`.
