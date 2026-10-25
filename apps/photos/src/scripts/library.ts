@@ -8,9 +8,9 @@
  * The files are saved first and the details last, so a photo only shows once
  * everything is saved; deleting goes the other way round. A photo that's
  * only online (docs/adr/0016) has no original here, and keeps its thumbnail
- * once it's downloaded; "Free up space" changes both records at once. How far this device has caught up with the online
- * library is kept here too ("photos-online:state"), so "Delete all data"
- * forgets it with the photos.
+ * once it's downloaded; "Free up space" changes both records at once. How
+ * far this device has caught up with the online library is kept here too
+ * ("photos-online:state"), so "Delete all data" forgets it with the photos.
  */
 import { createFileStore, keepFiles, putTogether } from '@shkriuss/storage/files';
 import { changeCount } from '../lib/changes.ts';
