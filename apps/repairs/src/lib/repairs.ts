@@ -22,6 +22,8 @@
  * vehicle in the repair form adds it.
  */
 import { isIsoDate, type IsoDate } from '@shkriuss/dates';
+import { csvFile } from '@shkriuss/storage/csv';
+import { defineSettings, type SettingsState as SavedSettings } from '@shkriuss/storage/settings';
 import {
   CURRENCIES,
   currencyDigits,
@@ -809,19 +811,6 @@ export function systemNames(state: RepairsState): string[] {
 /** The longest side of a saved photo, and of its thumbnail, in pixels. */
 export const PHOTO_SIZES = { full: 1600, thumb: 320 };
 
-/** A width and height scaled down (never up) so the longest side is at most `max`. */
-export function fitWithin(
-  width: number,
-  height: number,
-  max: number,
-): { width: number; height: number } {
-  const scale = Math.min(1, max / Math.max(width, height));
-  return {
-    width: Math.max(1, Math.round(width * scale)),
-    height: Math.max(1, Math.round(height * scale)),
-  };
-}
-
 /** The photos of these repairs (to delete with them). */
 export const photosOf = (repairs: readonly Repair[]): string[] =>
   repairs.flatMap((repair) => repair.photos);
@@ -907,14 +896,6 @@ export const countLabel = (count: number, one: string, many: string): string =>
 
 // ---------- Spreadsheet ----------
 
-/** A spreadsheet cell: quoted when needed, and never read as a formula. */
-function cell(value: string | number | null): string {
-  if (value === null) return '';
-  let text = String(value);
-  if (typeof value === 'string' && /^[=+\-@\t\r]/.test(text)) text = `'${text}`;
-  return /[",\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
-}
-
 /** Every repair as a CSV file (one row each, the latest first). */
 export function toCsv(
   repairs: RepairsState,
@@ -958,21 +939,14 @@ export function toCsv(
       cost?.total ?? null,
     ];
   });
-  return [header, ...rows].map((row) => row.map(cell).join(',')).join('\r\n') + '\r\n';
+  return csvFile([header, ...rows]);
 }
 
 // ---------- Settings ----------
 
 export type Setting = { id: 'unit'; unit: Unit } | { id: 'currency'; currency: Currency };
 
-const SETTING_IDS: readonly Setting['id'][] = ['unit', 'currency'];
-
-export interface SettingsState {
-  /** Only the settings ever changed. */
-  settings: Setting[];
-}
-
-export const emptySettings = (): SettingsState => ({ settings: [] });
+export type SettingsState = SavedSettings<Setting>;
 
 function isSetting(value: unknown): value is Setting {
   if (typeof value !== 'object' || value === null) return false;
@@ -987,35 +961,21 @@ function isSetting(value: unknown): value is Setting {
   }
 }
 
-export function isSettingsState(value: unknown): value is SettingsState {
-  if (typeof value !== 'object' || value === null) return false;
-  const { settings } = value as Record<string, unknown>;
-  return Array.isArray(settings) && settings.every(isSetting);
-}
+/** Repairs' settings, saved only once changed (@shkriuss/storage/settings). */
+const SETTINGS = defineSettings<Setting>(['unit', 'currency'], isSetting);
 
+export const emptySettings = SETTINGS.empty;
+export const isSettingsState = SETTINGS.isState;
 /** Settings from sync: the ones that look right, once each, in a fixed order. */
-export const withSettings = (items: readonly unknown[]): SettingsState => ({
-  settings: SETTING_IDS.flatMap((id) => {
-    const item = items.find((entry): entry is Setting => isSetting(entry) && entry.id === id);
-    return item ? [item] : [];
-  }),
-});
+export const withSettings = SETTINGS.fromItems;
 
-const withSetting = (state: SettingsState, setting: Setting): SettingsState =>
-  withSettings([...state.settings.filter((item) => item.id !== setting.id), setting]);
+export const unitOf = (state: SettingsState): Unit => SETTINGS.get(state, 'unit')?.unit ?? 'km';
 
-export function unitOf(state: SettingsState): Unit {
-  const setting = state.settings.find((item) => item.id === 'unit');
-  return setting?.id === 'unit' ? setting.unit : 'km';
-}
-
-export function currencyOf(state: SettingsState): Currency {
-  const setting = state.settings.find((item) => item.id === 'currency');
-  return setting?.id === 'currency' ? setting.currency : 'USD';
-}
+export const currencyOf = (state: SettingsState): Currency =>
+  SETTINGS.get(state, 'currency')?.currency ?? 'USD';
 
 export const setUnit = (state: SettingsState, unit: Unit): SettingsState =>
-  UNITS.includes(unit) ? withSetting(state, { id: 'unit', unit }) : state;
+  SETTINGS.set(state, { id: 'unit', unit });
 
 export const setCurrency = (state: SettingsState, currency: Currency): SettingsState =>
-  CURRENCIES.includes(currency) ? withSetting(state, { id: 'currency', currency }) : state;
+  SETTINGS.set(state, { id: 'currency', currency });

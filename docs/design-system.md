@@ -97,7 +97,9 @@ reach it), `@shkriuss/ui/local-reminders` (notifications while the app is
 open, with the same texts and the same iPhone and "blocked" cases in every
 app; after the page slept, only ones a few minutes late show, and on the
 night clocks go forward, ones in the skipped hour go off as the clocks
-change),
+change; Calendar, which lists reminders on its page and shows the ones
+missed while it was closed, uses its parts, `mountNotificationStatus` and
+`showNotifications`, with its own words),
 `@shkriuss/ui/long-lists` (for lists that
 can grow to thousands: `shownCount` draws `PAGE_SIZE` (100) at a time behind
 a "Show more" button, always keeping what has focus or was just saved, and
@@ -107,8 +109,11 @@ app: `showProblem` puts it in the notice at the top of every page, which is
 read out at once; `reportSave(store.save(…))` says when saving didn't work,
 and why; `focusProblem` goes to a form's first wrong field, or reads its error
 out if the person is in it already; `clearProblem` takes the notice away),
-`@shkriuss/ui/worker` (`startWorker`, for heavy work, and, inside a worker of
-an app with `"webAssembly": true`, `allowThreadScripts`), `@shkriuss/ui/busy`
+`@shkriuss/ui/worker` (`startWorker`, for heavy work; `askWorker` and, in the
+worker, `answerQuestions`, to ask it something and wait for the answer; and,
+inside a worker of an app with `"webAssembly": true`, `allowThreadScripts`),
+`@shkriuss/ui/photos` (`smallerJpeg`, a smaller JPEG copy of a photo, made in
+a worker, as Photos and Repairs do), `@shkriuss/ui/busy`
 (`setBusy`, below), `@shkriuss/ui/keep-focus` (`keepFocus`, below),
 `@shkriuss/ui/qr-code`, `@shkriuss/ui/service-worker`
 (`offlineCopySaved`, to wait until the site works offline),

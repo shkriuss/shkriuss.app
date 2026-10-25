@@ -6,6 +6,10 @@
  *   import checkerUrl from './checker.worker.ts?worker&url';
  *   const worker = startWorker(checkerUrl);
  *
+ * For a worker that answers each question it's sent (like Photos' and
+ * Repairs', which make photos smaller), askWorker() on the page and
+ * answerQuestions() in the worker do the messages (lib/ask-worker.ts).
+ *
  * Our CSP enables Trusted Types, so the script URL must come from a named
  * policy ("shkriuss-worker") that only allows this site's own build files
  * (/_astro/….js).
@@ -14,6 +18,8 @@
  * processor cores (see below).
  */
 import { isBuiltWorkerUrl } from '../lib/worker-url.ts';
+
+export { answerQuestions, askWorker } from '../lib/ask-worker.ts';
 
 interface TrustedTypePolicyLike {
   createScriptURL(input: string): unknown;

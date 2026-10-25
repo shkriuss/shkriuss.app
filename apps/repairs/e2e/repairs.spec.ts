@@ -183,16 +183,16 @@ test('finds repairs by search and by vehicle', async ({ page }) => {
   );
 });
 
-test('shows 50 repairs at a time', async ({ page }) => {
+test('shows 100 repairs at a time', async ({ page }) => {
   await seed(page, {
     vehicles: fleet,
-    repairs: Array.from({ length: 60 }, (_, index) =>
+    repairs: Array.from({ length: 110 }, (_, index) =>
       repair({ date: `2026-08-${String((index % 28) + 1).padStart(2, '0')}` }),
     ),
   });
-  await expect(repairItems(page)).toHaveCount(50);
+  await expect(repairItems(page)).toHaveCount(100);
   await page.getByRole('button', { name: 'Show more' }).click();
-  await expect(repairItems(page)).toHaveCount(60);
+  await expect(repairItems(page)).toHaveCount(110);
   await expect(page.getByRole('button', { name: 'Show more' })).toBeHidden();
 });
 

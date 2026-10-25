@@ -90,7 +90,9 @@ How the shared packages work:
 - **`@shkriuss/storage`**: a small typed wrapper around `localStorage` with
   versioning and migrations, plus back up (locked with a passphrase, or a
   plain copy), restore and "delete all data". Photos and other big files go
-  in IndexedDB (`@shkriuss/storage/files`).
+  in IndexedDB (`@shkriuss/storage/files`). Spreadsheets to download are
+  made with `@shkriuss/storage/csv`, and settings saved one at a time (so
+  sync can merge them) with `@shkriuss/storage/settings`.
 
 Shared versions: a pnpm **catalog** in `pnpm-workspace.yaml` pins each
 third-party version once for the whole repo.

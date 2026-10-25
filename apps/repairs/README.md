@@ -78,7 +78,9 @@ private car's service history. Lives at <https://repairs.shkriuss.app>.
   Any other photo no repair uses (left by an older backup restored, say) is
   deleted when Repairs opens and after each sync, unless it was saved in
   the last minute (`deleteUnusedPhotos`).
-  `src/scripts/photos.ts` does the photo work.
+  `src/scripts/photos.ts` does the photo work; `make-photo.worker.ts` makes
+  picked photos smaller in a web worker (with `@shkriuss/ui/photos`), so a
+  big photo doesn't freeze the page.
 - `src/scripts/repairs.ts`: connects the page to those rules.
 - `src/pages/index.astro`: the page, built from `@shkriuss/ui` components.
   `<template>`s hold the markup for a day, a repair, a vehicle and a part row;

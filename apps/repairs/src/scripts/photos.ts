@@ -10,15 +10,9 @@
  */
 import { createFileStore, keepFiles } from '@shkriuss/storage/files';
 import type { SyncClient } from '@shkriuss/sync';
-import {
-  fitWithin,
-  fromPhotoFile,
-  MAX_PHOTO_BYTES,
-  PHOTO_QUALITIES,
-  PHOTO_SIZES,
-  photoFile,
-  type PhotoPart,
-} from '../lib/repairs.ts';
+import { askWorker, startWorker } from '@shkriuss/ui/worker';
+import { fromPhotoFile, photoFile, type PhotoPart } from '../lib/repairs.ts';
+import makePhotoUrl from './make-photo.worker.ts?worker&url';
 
 export interface PhotoFile {
   id: string;
@@ -35,53 +29,26 @@ const files = createFileStore<PhotoFile>('repair-photos');
 /** Shown when a file can't be read as a picture. */
 export class NotAPhotoError extends Error {}
 
-function encode(image: ImageBitmap, max: number, quality: number): Promise<Blob> {
-  const { width, height } = fitWithin(image.width, image.height, max);
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  const context = canvas.getContext('2d');
-  if (!context) return Promise.reject(new Error('No canvas.'));
-  context.drawImage(image, 0, 0, width, height);
-  return new Promise((resolve, reject) => {
-    canvas.toBlob(
-      (blob) => (blob ? resolve(blob) : reject(new Error('Couldn’t save the photo.'))),
-      'image/jpeg',
-      quality,
-    );
-  });
-}
+/** What the worker that makes photos smaller (make-photo.worker.ts) answers. */
+export type MadePhoto =
+  { kind: 'photo'; full: Blob; thumb: Blob } | { kind: 'not-a-photo' } | { kind: 'failed' };
 
-/** Saved at the best quality that's small enough to sync. */
-async function encodeSmallEnough(image: ImageBitmap, max: number): Promise<Blob> {
-  let blob: Blob | undefined;
-  for (const quality of PHOTO_QUALITIES) {
-    blob = await encode(image, max, quality);
-    if (blob.size <= MAX_PHOTO_BYTES) break;
-  }
-  return blob as Blob;
-}
+const makeSmaller = askWorker<File, MadePhoto>(() => startWorker(makePhotoUrl), {
+  kind: 'failed',
+});
 
 /**
- * Reads a picked file and makes the photo and its thumbnail. Saving it again
- * also leaves out what the camera wrote into the file, like the location.
+ * Reads a picked file and makes the photo and its thumbnail, in a worker so
+ * the page doesn't freeze. Saving it again also leaves out what the camera
+ * wrote into the file, like the location.
  */
 export async function makePhoto(file: File): Promise<PhotoFile & { full: Blob }> {
-  let image: ImageBitmap;
-  try {
-    image = await createImageBitmap(file);
-  } catch {
+  const made = await makeSmaller(file);
+  if (made.kind === 'not-a-photo') {
     throw new NotAPhotoError(`${file.name || 'That file'} isn’t a photo.`);
   }
-  try {
-    const [full, thumb] = await Promise.all([
-      encodeSmallEnough(image, PHOTO_SIZES.full),
-      encodeSmallEnough(image, PHOTO_SIZES.thumb),
-    ]);
-    return { id: crypto.randomUUID(), full, thumb };
-  } finally {
-    image.close();
-  }
+  if (made.kind === 'failed') throw new Error('Couldn’t make the photo smaller.');
+  return { id: crypto.randomUUID(), full: made.full, thumb: made.thumb };
 }
 
 /** Saves new photos (all or none), and asks the browser to keep them. */

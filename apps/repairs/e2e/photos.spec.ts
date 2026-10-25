@@ -217,3 +217,16 @@ test('photos on another device, and deleting all data', async ({ page }) => {
   await expect(page.getByText('No repairs yet.', { exact: false })).toBeVisible();
   expect(await storedPhotos(page)).toBe(0);
 });
+
+test('makes photos smaller in a worker, so the page doesn’t freeze', async ({ page }) => {
+  // It was done on the page itself, which stops everything else while a big
+  // photo is made smaller (audit J-12).
+  const big = await picture(page);
+  const worker = page.waitForEvent('worker');
+  await page.getByRole('button', { name: 'New repair' }).click();
+  await addPhotos(page, [jpeg('door.jpg', big)]);
+  expect((await worker).url()).toContain('make-photo.worker');
+  const formPhotos = repairDialog(page).locator('[data-form-photos] img');
+  await expect(formPhotos).toHaveCount(1);
+  await expect.poll(() => naturalWidth(formPhotos.first())).toBe(320);
+});

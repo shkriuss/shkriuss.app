@@ -5,7 +5,6 @@ import {
   byNewest,
   downloadName,
   detailsOf,
-  fitWithin,
   formatBytes,
   formatLabel,
   isPhotoDetails,
@@ -121,12 +120,6 @@ describe('for people', () => {
     // Invisible direction marks and zero-width characters, which can hide the real extension.
     expect(downloadName(photo({ name: 'holiday‮gpj.exe' }))).toBe('holiday-gpj.exe');
     expect(downloadName(photo({ name: 'a​b⁦c.jpg' }))).toBe('a-b-c.jpg');
-  });
-
-  it('makes pictures smaller, never bigger', () => {
-    expect(fitWithin(4032, 3024, 512)).toEqual({ width: 512, height: 384 });
-    expect(fitWithin(3024, 4032, 2048)).toEqual({ width: 1536, height: 2048 });
-    expect(fitWithin(300, 200, 512)).toEqual({ width: 300, height: 200 });
   });
 
   it('says what happened when photos were picked', () => {

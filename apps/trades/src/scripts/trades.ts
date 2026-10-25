@@ -8,7 +8,7 @@ import { today } from '@shkriuss/dates';
 import { createStore, downloadFile } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
 import { keepFocus } from '@shkriuss/ui/keep-focus';
-import { waitForTyping } from '@shkriuss/ui/long-lists';
+import { PAGE_SIZE, shownCount, waitForTyping } from '@shkriuss/ui/long-lists';
 import { reportSave } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { typedText } from '@shkriuss/ui/typed-text';
@@ -90,8 +90,6 @@ const settingsStore = createStore<SettingsState>({
   validate: isSettingsState,
 });
 
-/** Closed trades shown at first, and added by "Show more". */
-const PAGE_SIZE = 50;
 /** Search results are read out this long after the last key press. */
 const ANNOUNCE_DELAY_MS = 700;
 const FIELDS: readonly (keyof TradeForm)[] = [
@@ -172,6 +170,8 @@ export function mountTrades(root: Document): void {
   let period: Period = 'all';
   let query = '';
   let shown = PAGE_SIZE;
+  /** A trade just saved: never hidden behind "Show more" (shownCount). */
+  let reveal: string | null = null;
   /** The trade in the form (null: a new one). */
   let editing: string | null = null;
   /** Whether the form is closing an open trade ("Close"), so it can close part of it. */
@@ -315,6 +315,14 @@ export function mountTrades(root: Document): void {
     openList.replaceChildren(...open.map(renderTrade));
 
     const closed = closedTrades(closedInPeriod).filter((trade) => matchesSearch(trade, query));
+    // Never hidden by paging: the trade with focus, or one just saved.
+    const focused = root.activeElement?.closest<HTMLElement>('[data-id]');
+    shown = shownCount(
+      closed.map((trade) => trade.id),
+      shown,
+      [reveal, focused?.dataset['id']],
+    );
+    reveal = null;
     closedList.replaceChildren(...closed.slice(0, shown).map(renderTrade));
     more.hidden = closed.length <= shown;
     closedEmpty.hidden = closed.length > 0;
@@ -435,6 +443,7 @@ export function mountTrades(root: Document): void {
     const next = closePart(state, part, rest);
     const open = openQuantity(rest, partsOf(next.trades));
     const result = money(profit(part) ?? 0, true);
+    reveal = part.id;
     save(
       { trades: next },
       open > 0
@@ -448,6 +457,7 @@ export function mountTrades(root: Document): void {
   function saveFromForm(trade: Trade): void {
     dialog.close();
     const result = profit(trade);
+    reveal = trade.id;
     save(
       { trades: saveTrade(state, trade) },
       result === null

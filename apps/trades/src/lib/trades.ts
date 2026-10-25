@@ -19,6 +19,8 @@
  * the trade (overClosed), never as shares counted twice.
  */
 import { addDays, isIsoDate, type IsoDate } from '@shkriuss/dates';
+import { csvFile } from '@shkriuss/storage/csv';
+import { defineSettings, type SettingsState as SavedSettings } from '@shkriuss/storage/settings';
 import {
   CURRENCIES,
   decimalText,
@@ -865,14 +867,6 @@ export function dateLabel(date: IsoDate, locale = DATE_LOCALE): string {
 
 // ---------- Spreadsheet ----------
 
-/** A spreadsheet cell: quoted when needed, and never read as a formula. */
-function cell(value: string | number | null): string {
-  if (value === null) return '';
-  let text = String(value);
-  if (typeof value === 'string' && /^[=+\-@\t\r]/.test(text)) text = `'${text}`;
-  return /[",\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
-}
-
 /**
  * The trades as a CSV file (one row each, the latest entered first). A
  * trade closed in parts has a row for each part, and one for what's still
@@ -899,27 +893,23 @@ export function toCsv(state: TradesState): string {
   const rows = state.trades
     .filter((trade) => !isOpen(trade) || openQuantity(trade, parts) > 0)
     .sort((a, b) => b.entryDate.localeCompare(a.entryDate))
-    .map((trade) =>
-      [
-        trade.symbol,
-        SIDE_LABELS[trade.side],
-        trade.entryDate,
-        trade.entryPrice,
-        isOpen(trade) ? openQuantity(trade, parts) : trade.quantity,
-        trade.stop,
-        trade.exitDate,
-        trade.exitPrice,
-        isOpen(trade) ? openFees(trade, parts) : trade.fees,
-        profit(trade),
-        returnPercent(trade),
-        rMultiple(trade),
-        trade.setup,
-        trade.notes,
-      ]
-        .map(cell)
-        .join(','),
-    );
-  return [header.join(','), ...rows].join('\r\n') + '\r\n';
+    .map((trade) => [
+      trade.symbol,
+      SIDE_LABELS[trade.side],
+      trade.entryDate,
+      trade.entryPrice,
+      isOpen(trade) ? openQuantity(trade, parts) : trade.quantity,
+      trade.stop,
+      trade.exitDate,
+      trade.exitPrice,
+      isOpen(trade) ? openFees(trade, parts) : trade.fees,
+      profit(trade),
+      returnPercent(trade),
+      rMultiple(trade),
+      trade.setup,
+      trade.notes,
+    ]);
+  return csvFile([header, ...rows]);
 }
 
 // ---------- Settings ----------
@@ -929,12 +919,7 @@ export interface Setting {
   currency: Currency;
 }
 
-export interface SettingsState {
-  /** Only the settings ever changed. */
-  settings: Setting[];
-}
-
-export const emptySettings = (): SettingsState => ({ settings: [] });
+export type SettingsState = SavedSettings<Setting>;
 
 const isSetting = (value: unknown): value is Setting =>
   typeof value === 'object' &&
@@ -942,26 +927,16 @@ const isSetting = (value: unknown): value is Setting =>
   (value as Record<string, unknown>)['id'] === 'currency' &&
   CURRENCIES.includes((value as Record<string, unknown>)['currency'] as Currency);
 
-export function isSettingsState(value: unknown): value is SettingsState {
-  if (typeof value !== 'object' || value === null) return false;
-  const { settings } = value as Record<string, unknown>;
-  return Array.isArray(settings) && settings.every(isSetting);
-}
+/** Trades' settings, saved only once changed (@shkriuss/storage/settings). */
+const SETTINGS = defineSettings<Setting>(['currency'], isSetting);
 
-/** Settings from sync: the ones that look right. */
-export const withSettings = (items: readonly unknown[]): SettingsState => ({
-  settings: items.filter(isSetting).slice(0, 1),
-});
+export const emptySettings = SETTINGS.empty;
+export const isSettingsState = SETTINGS.isState;
+/** Settings from sync: the ones that look right, once each. */
+export const withSettings = SETTINGS.fromItems;
 
 export const currencyOf = (state: SettingsState): Currency =>
-  state.settings.find((setting) => setting.id === 'currency')?.currency ?? 'USD';
+  SETTINGS.get(state, 'currency')?.currency ?? 'USD';
 
 export const setCurrency = (state: SettingsState, currency: Currency): SettingsState =>
-  CURRENCIES.includes(currency)
-    ? {
-        settings: [
-          ...state.settings.filter((setting) => setting.id !== 'currency'),
-          { id: 'currency', currency },
-        ],
-      }
-    : state;
+  SETTINGS.set(state, { id: 'currency', currency });
