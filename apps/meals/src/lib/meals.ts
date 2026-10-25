@@ -628,7 +628,11 @@ export const DEFAULT_REMINDER_TIMES: Record<Slot, IsoTime> = {
   snack: '16:00',
 };
 export const REMINDER_BODY = 'Tap to see today’s meals.';
-/** At most this many reminders go to the notification service (the soonest). */
+/**
+ * At most this many reminders go to the notification service (the soonest):
+ * 25 days with all four meals of the day. The next ones go each time Meals
+ * is opened (README).
+ */
 export const MAX_NOTICES = 100;
 
 /** What was saved or synced: each meal of the day at most once, in order. */

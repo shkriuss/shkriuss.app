@@ -30,7 +30,14 @@ Plan your meals for the week, and what to buy for them. Lives at
 - `src/scripts/reminders.ts`: reminders while Meals is open, and, if "Also
   remind me when Meals is closed" is on, through the shared notification
   service ([ADR 0009](../../docs/adr/0009-push-notifications.md)). There's a
-  reminder only on days with something planned for that meal.
+  reminder only on days with something planned for that meal. The
+  notification service gets the soonest 100 (`MAX_NOTICES`), and the next
+  ones each time Meals is opened, or the plan or a reminder time changes.
+  With reminders for all four meals of the day and every meal planned, 100
+  last 25 days: for a plan made further ahead than that, open Meals at least
+  once in 25 days, or the later reminders don't come while it's closed. Why
+  not more: they're all encrypted and sent again after each change to the
+  plan, and a plan is mostly made a week at a time.
 - `src/scripts/meals.ts`: connects the page to those rules. It shows one
   week at a time, starting on the day weeks start where you are
   (`firstDayOfWeek`). "Copy last week's meals" fills an empty week (if
