@@ -123,6 +123,37 @@ test('saving keeps what changed elsewhere while the editor was open', async ({ p
   await expect(editor(page).getByLabel('Reminder')).toHaveValue('60');
 });
 
+test('saving an event deleted elsewhere meanwhile keeps it, with the change', async ({ page }) => {
+  await seed(page, [{ title: 'Dentist' }]);
+  await dayList(page)
+    .getByRole('button', { name: /Dentist/ })
+    .click();
+  // Meanwhile, another tab (or a sync from another device) deletes it.
+  const other = await page.context().newPage();
+  await other.goto('/');
+  await dayList(other)
+    .getByRole('button', { name: /Dentist/ })
+    .click();
+  await editor(other).getByRole('button', { name: 'Delete' }).click();
+  await other
+    .getByRole('dialog', { name: 'Delete this event?' })
+    .getByRole('button', { name: 'Delete' })
+    .click();
+  await expect(other.getByText('Nothing planned on this day.')).toBeVisible();
+  await other.close();
+
+  // A change wins over a deletion, as with sync (audit F1-3).
+  await editor(page).getByLabel('Notes (optional)').fill('Bring the X-ray');
+  await save(page);
+  await expect(page.getByRole('status').filter({ hasText: 'Saved Dentist.' })).toBeAttached();
+  await expect(dayList(page).getByRole('button', { name: /Dentist/ })).toBeFocused();
+  await page.reload();
+  await dayList(page)
+    .getByRole('button', { name: /Dentist/ })
+    .click();
+  await expect(editor(page).getByLabel('Notes (optional)')).toHaveValue('Bring the X-ray');
+});
+
 test('closing the editor without saving changes nothing', async ({ page }) => {
   await newEvent(page, 'Not this one');
   await editor(page).getByRole('button', { name: 'Cancel' }).click();

@@ -169,11 +169,16 @@ export function addEvent(state: CalendarState, draft: EventDraft, id: string): C
   return { events: [...state.events, { id, ...clean(draft) }] };
 }
 
+/**
+ * Puts in the changed event. One deleted on another device (or in another
+ * tab) while it was being changed comes back with the change: a change wins
+ * over a deletion, as sync does (audit F1-3).
+ */
 export function updateEvent(state: CalendarState, id: string, draft: EventDraft): CalendarState {
   if (Object.keys(draftProblems(draft)).length > 0) return state;
-  return {
-    events: state.events.map((event) => (event.id === id ? { id, ...clean(draft) } : event)),
-  };
+  const changed = { id, ...clean(draft) };
+  if (!state.events.some((event) => event.id === id)) return { events: [...state.events, changed] };
+  return { events: state.events.map((event) => (event.id === id ? changed : event)) };
 }
 
 /** An event's fields, as the editor holds them. */

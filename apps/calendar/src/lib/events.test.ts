@@ -198,6 +198,18 @@ describe('add, update and remove', () => {
     expect(editEvent(moved, 'e0', opened, opened)).toEqual(moved);
   });
 
+  it('puts back an event deleted elsewhere while it was being changed', () => {
+    // A change wins over a deletion, as sync does (audit F1-3).
+    const opened = draft();
+    const deleted = removeEvent(withEvents(opened, draft({ title: 'Gym' })), 'e0');
+    const saved = editEvent(deleted, 'e0', opened, { ...opened, notes: 'Bring the X-ray' });
+    expect(saved.events).toEqual([
+      { ...draft({ title: 'Gym' }), id: 'e1' },
+      { ...opened, id: 'e0', notes: 'Bring the X-ray' },
+    ]);
+    expect(updateEvent(deleted, 'e0', draft({ title: '' }))).toBe(deleted);
+  });
+
   it('validates saved data', () => {
     expect(isCalendarState(withEvents(draft()))).toBe(true);
     expect(isCalendarState({ events: [{ ...draft(), id: 'x', startDate: 'nope' }] })).toBe(false);

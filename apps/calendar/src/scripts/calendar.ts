@@ -547,7 +547,8 @@ export function mountCalendar(root: Document): void {
       selected = day;
       viewMonth = shiftMonth(day, 0);
     }
-    if (save(next)) announce(`Saved ${saved?.title ?? draft.title.trim()}.`);
+    // "Saved" only when it's in what was saved.
+    if (save(next) && saved) announce(`Saved ${saved.title}.`);
     // Asking now, right after choosing a reminder, makes the question clear.
     if (draft.reminder !== null) alerts.offerNotifications();
     savedId = id;

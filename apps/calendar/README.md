@@ -92,10 +92,12 @@ its notification server, docs/adr/0009).
   sync, both versions are kept: the second becomes its own event, titled
   "… (second version)", with its own reminder. An editor that's open while a
   sync (or another tab) changes its event saves only what was changed in it
-  (`editEvent`), so the other change stays. A reminder is part of its
-  event, so it syncs too; each device then uploads it to its own notification
-  service, the next time Calendar opens there (`e2e/sync.spec.ts` checks
-  this). See [ADR 0010](../../docs/adr/0010-account-and-sync.md).
+  (`editEvent`), so the other change stays; an event deleted meanwhile comes
+  back with the change, as a change wins over a deletion. A reminder is part
+  of its event, so it syncs too; each device then uploads it to its own
+  notification service, the next time Calendar opens there
+  (`e2e/sync.spec.ts` checks this). See
+  [ADR 0010](../../docs/adr/0010-account-and-sync.md).
 - **Phones without Google services** (like GrapheneOS): use a browser with
   UnifiedPush, such as IronFox with the Sunup app.
 - **On iPhone and iPad**, notifications only work after adding Calendar to
