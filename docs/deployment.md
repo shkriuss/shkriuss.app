@@ -239,8 +239,10 @@ Everything here fits Cloudflare's and GitHub's free plans:
   takes a handful; an app with
   sync open uses about one a minute, plus one or two per change).
 - Durable Objects also keep up to 5 GB, for every app together. Each app's
-  servers have a limit that keeps them all within it, and copies nobody uses
-  for 13 months are deleted ([ADR 0017](adr/0017-storage-limits.md)).
+  servers have a limit, and copies nobody uses for 13 months are deleted
+  ([ADR 0017](adr/0017-storage-limits.md)). A unit test checks that the
+  limits of every app together stay under 4.5 GB; a few more apps with sync
+  or notifications will need smaller limits each.
 - Durable Objects also have 13,000 GB-s of time a day, counted while an
   object waits too. Push services are given 5 seconds to answer, and each
   second spent waiting counts against the app's 2,000 messages a day, so

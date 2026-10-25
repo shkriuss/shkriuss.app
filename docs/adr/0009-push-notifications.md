@@ -94,7 +94,8 @@ browsers like IronFox receive Web Push through **UnifiedPush**.
   day; each wake-up of a device is about two: the wake-up, and one signature
   for up to 25 messages). Durable Objects also have 13,000 GB-s of time a
   day, counted while an object waits too: 2,000 seconds of waiting is about
-  256 GB-s per app.
+  256 GB-s per app, and a unit test checks that all the apps with
+  notifications together stay well inside it (`tests/unit/free-plan.test.ts`).
 - New code to maintain on the server side, covered by unit tests (encryption
   test vector, schedules, signing, request checks) and browser tests with a
   local push receiver.

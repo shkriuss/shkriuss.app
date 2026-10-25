@@ -126,7 +126,9 @@ third-party version once for the whole repo.
 - **`workers.dev` is off for production.** Each site's real address is only
   its custom domain. Previews still use `workers.dev`.
 - **How it scales.** The Free plan allows 100 Workers and 100 custom domains
-  per zone, so about 99 apps plus the hub. A new app needs no Cloudflare
+  per zone, so about 99 apps plus the hub. Apps with sync or notifications
+  also share 5 GB of server storage: a few more of them need smaller limits
+  each ([ADR 0017](adr/0017-storage-limits.md), checked by a unit test). A new app needs no Cloudflare
   dashboard work. If CI time grows, deploys can be limited to apps that
   changed.
 - **Account settings already checked (read-only):** the `shkriuss.app` zone

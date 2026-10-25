@@ -106,7 +106,9 @@ is the simplest example to copy. Ask Claude, or:
    already live, add the new one after the ones it has (see Habits').
 4. Add `"@shkriuss/push": "workspace:*"` to the app's `package.json`, and
    `"@shkriuss/server": "workspace:*"` too if its Worker combines push and
-   sync.
+   sync. Each app with notifications adds its own storage limit on the
+   server (40 MB): if `tests/unit/free-plan.test.ts` then fails, the limits
+   need lowering first ([ADR 0017](adr/0017-storage-limits.md)).
 5. In the app's notifications section, put the status line
    (`<p data-notify-status>Notifications are off.</p>`), the **Turn on
    notifications** button (`data-notify-enable` around a
@@ -170,7 +172,10 @@ or:
 3. In `wrangler.jsonc`, copy Tally's `main`, `assets.binding`,
    `assets.run_worker_first`, `durable_objects`, `migrations` and `previews`.
    A unit test checks these match.
-4. Add `"@shkriuss/sync": "workspace:*"` to the app's `package.json`.
+4. Add `"@shkriuss/sync": "workspace:*"` to the app's `package.json`. Each
+   app with sync adds its own storage limit on the server (120 MB): if
+   `tests/unit/free-plan.test.ts` then fails, the limits need lowering
+   first ([ADR 0017](adr/0017-storage-limits.md)).
 5. Put `<SyncControls />` above `<DataControls />`. In the page script, call
    `createSync({ app: site.slug, stores: [syncedStore({ store, items, withItems })], onChange })`,
    then `mountSyncControls(…)`, and `sync.changed()` after every save. See
