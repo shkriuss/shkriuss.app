@@ -18,7 +18,8 @@ function boxesWithoutDirection(source: string): string[] {
     /<(input|textarea)\b((?:[^>{]|\{[^}]*\})*)>/g,
   )) {
     if (tag === 'input') {
-      const type = /\stype="([^"]*)"/.exec(attributes)?.[1];
+      // No type is a text box too, and a type worked out in {…} may be one (audit J-14).
+      const type = /\stype=(?:"([^"]*)"|\{)/.exec(attributes)?.[1] ?? 'text';
       if (type !== 'text' && type !== 'search') continue;
       if (/\sinputmode="(decimal|numeric)"/.test(attributes)) continue;
     }
@@ -42,6 +43,8 @@ describe('text people type', () => {
       [],
     );
     expect(boxesWithoutDirection('<input type="date" id="day" />')).toEqual([]);
+    expect(boxesWithoutDirection('<input id="nickname" />')).toEqual(['<input nickname>']);
+    expect(boxesWithoutDirection('<input type={kind} id="answer" />')).toEqual(['<input answer>']);
   });
 
   it('is shown in its own direction in every text box', () => {

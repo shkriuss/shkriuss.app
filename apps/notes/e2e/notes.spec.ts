@@ -2,7 +2,7 @@
 // Shared checks (accessibility, security headers, offline, privacy) run for
 // every app from tests/e2e/.
 import type { Page } from '@playwright/test';
-import { checkA11y, expect, failSaving, test } from '../../../tests/e2e/fixtures.ts';
+import { checkA11y, expect, failedSaves, failSaving, test } from '../../../tests/e2e/fixtures.ts';
 
 const titleBox = (page: Page) => page.getByRole('textbox', { name: 'Title' });
 const bodyBox = (page: Page) => page.getByRole('textbox', { name: 'Note' });
@@ -273,10 +273,12 @@ test('says so in the editor when typing can’t be saved', async ({ page }) => {
   await expect(page.locator('[data-edited]')).toHaveText('Not saved');
   await expect(bodyBox(page)).toBeFocused();
 
-  // More typing doesn't read it out again at every pause: it's the same notice.
+  // More typing doesn't read it out again at every pause: it's the same
+  // notice, once Notes has tried to save that too.
   await problem.evaluate((element) => element.setAttribute('data-first', ''));
+  const tries = await failedSaves(page);
   await bodyBox(page).pressSequentially(', tea');
-  await page.waitForTimeout(800);
+  await expect.poll(() => failedSaves(page)).toBeGreaterThan(tries);
   await expect(page.locator('[data-edited]')).toHaveText('Not saved');
   await expect(problem).toHaveAttribute('data-first', '');
 
