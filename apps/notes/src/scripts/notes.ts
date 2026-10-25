@@ -20,6 +20,7 @@ import {
   type ReportSaveOptions,
 } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
+import { watchTextLimit } from '@shkriuss/ui/text-limit';
 import { site } from 'virtual:shkriuss/site';
 import {
   addNote,
@@ -78,6 +79,8 @@ export function mountNotes(root: Document): void {
   const deleteDialog = required<HTMLDialogElement>(root, '[data-delete-dialog]');
   const deleteName = required<HTMLElement>(deleteDialog, '[data-delete-name]');
   const pageTitle = document.title;
+  // A paste longer than a box takes is cut by the browser: say so (audit F3-3).
+  const limits = [watchTextLimit(titleField), watchTextLimit(bodyField)];
 
   let state = store.load();
   /** The note in the editor; null on the list. */
@@ -179,6 +182,7 @@ export function mountNotes(root: Document): void {
     fromList = listShown;
     titleField.value = note.title;
     bodyField.value = note.body;
+    for (const limit of limits) limit.clear();
     pinButton.setAttribute('aria-pressed', String(note.pinned));
     showEdited(note);
     listView.hidden = true;

@@ -2,6 +2,7 @@
 // Shared checks (accessibility, security headers, offline, privacy) run for
 // every app from tests/e2e/.
 import type { Page } from '@playwright/test';
+import { paste } from '../../../tests/e2e/clipboard.ts';
 import { checkA11y, expect, failSaving, test } from '../../../tests/e2e/fixtures.ts';
 
 const titleBox = (page: Page) => page.getByRole('textbox', { name: 'Title' });
@@ -85,6 +86,35 @@ test('saves typing straight away when leaving the page', async ({ page }) => {
   await titleBox(page).pressSequentially('Typed fast');
   await page.reload();
   await expect(titleBox(page)).toHaveValue('Typed fast');
+});
+
+test('says when a pasted title or note doesn’t all fit', async ({ page }) => {
+  // Each box takes so much; the browser keeps the start of a longer paste,
+  // and nothing said so (audit F3-3).
+  await page.getByRole('button', { name: 'New note' }).click();
+  const title = 'A long title. '.repeat(20);
+  await paste(titleBox(page), title);
+  await expect(titleBox(page)).toHaveValue(title.slice(0, 200));
+  const titleCut =
+    'Only part of that fit. This box takes up to 200 characters, so the rest wasn’t added.';
+  await expect(page.getByText(titleCut, { exact: true })).toBeVisible();
+  await expect(page.getByRole('alert').filter({ hasText: `Title: ${titleCut}` })).toBeAttached();
+
+  await expect(bodyBox(page)).toHaveAccessibleDescription(
+    'Up to 100,000 characters, about 50 pages.',
+  );
+  await paste(bodyBox(page), 'Some words. '.repeat(9_000));
+  const bodyCut =
+    'Only part of that fit. This box takes up to 100,000 characters, so the rest wasn’t added.';
+  await expect(page.getByText(bodyCut, { exact: true })).toBeVisible();
+  await expect(page.getByRole('alert').filter({ hasText: `Note: ${bodyCut}` })).toBeAttached();
+  await checkA11y(page, 'editor: pastes that didn’t all fit');
+
+  // Another note opens without them.
+  await page.getByRole('button', { name: 'All notes' }).click();
+  await page.getByRole('button', { name: 'New note' }).click();
+  await expect(page.getByText(titleCut, { exact: true })).toBeHidden();
+  await expect(page.getByText(bodyCut, { exact: true })).toBeHidden();
 });
 
 test('finds notes by title or text, ignoring case and accents', async ({ page }) => {

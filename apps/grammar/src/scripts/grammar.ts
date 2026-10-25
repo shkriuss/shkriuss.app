@@ -11,6 +11,7 @@ import { createSync, syncedStore } from '@shkriuss/sync';
 import { reportSave, type ReportSaveOptions } from '@shkriuss/ui/problem';
 import { offlineCopySaved } from '@shkriuss/ui/service-worker';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
+import { watchTextLimit } from '@shkriuss/ui/text-limit';
 import { startWorker } from '@shkriuss/ui/worker';
 import { site } from 'virtual:shkriuss/site';
 import {
@@ -72,6 +73,8 @@ export function mountGrammar(root: Document): void {
   const actionStatus = required<HTMLElement>(root, '[data-action-status]');
   const clearDialog = required<HTMLDialogElement>(root, '[data-clear-dialog]');
   const announcer = required<HTMLElement>(root, '[data-announcer]');
+  // A paste longer than the box takes is cut by the browser: say so (audit F3-3).
+  const textLimit = watchTextLimit(textarea);
 
   let state = store.load();
   /** What the checker found, and the text it found it in. */
@@ -382,6 +385,7 @@ export function mountGrammar(root: Document): void {
   clearDialog.addEventListener('close', () => {
     if (clearDialog.returnValue !== 'confirm') return;
     textarea.value = '';
+    textLimit.clear();
     saveText();
     check();
     deep.textChanged();
@@ -395,6 +399,7 @@ export function mountGrammar(root: Document): void {
     state = store.load();
     if (textarea.value !== state.text) {
       textarea.value = state.text;
+      textLimit.clear();
       deep.textChanged();
     }
     settingsChanged();

@@ -5,6 +5,7 @@
 // (accessibility, security headers, offline, privacy) run for every app from
 // tests/e2e/.
 import type { Page } from '@playwright/test';
+import { paste } from '../../../tests/e2e/clipboard.ts';
 import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
 
 // Loading the checker (16 MB of WebAssembly) takes a few seconds.
@@ -154,6 +155,37 @@ test('copies and clears the text', async ({ page, context }) => {
   await expect(text(page)).toHaveValue('');
   await expect(text(page)).toBeFocused();
   await expect(status(page)).toHaveText(READY);
+});
+
+test('says when a pasted text doesn’t all fit', async ({ page }) => {
+  // The box takes 20,000 characters; the browser keeps the start of a
+  // longer paste, and nothing said so (audit F3-3).
+  await open(page);
+  const hint = 'Type or paste your text (up to 20,000 characters). It’s checked as you type.';
+  await expect(text(page)).toHaveAccessibleDescription(hint);
+  const essay = Array.from(
+    { length: 600 },
+    (_, index) => `Paragraph ${index + 1} has a few sentences in it.`,
+  ).join(' ');
+  await paste(text(page), essay);
+  await expect(text(page)).toHaveValue(essay.slice(0, 20_000));
+  const cut =
+    'Only part of that fit. This box takes up to 20,000 characters, so the rest wasn’t added.';
+  await expect(page.getByText(cut, { exact: true })).toBeVisible();
+  // Read out at once, and with the box when it's read again.
+  await expect(page.getByRole('alert').filter({ hasText: `Your text: ${cut}` })).toBeAttached();
+  await expect(text(page)).toHaveAccessibleDescription(`${hint} ${cut}`);
+  await checkA11y(page, 'a paste that didn’t all fit');
+
+  // Typing at the limit adds nothing: that's said too.
+  await page.keyboard.type('!');
+  await expect(text(page)).toHaveValue(essay.slice(0, 20_000));
+  const none = 'That didn’t fit. This box takes up to 20,000 characters, so it wasn’t added.';
+  await expect(page.getByText(none, { exact: true })).toBeVisible();
+  // Gone once the text is changed and all of it fits.
+  await page.keyboard.press('Backspace');
+  await expect(page.getByText(none, { exact: true })).toBeHidden();
+  await expect(text(page)).toHaveAccessibleDescription(hint);
 });
 
 test('the text never leaves the device', async ({ page }) => {
