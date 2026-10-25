@@ -18,6 +18,7 @@ import {
   isDrinksState,
   isSettingsState,
   KEEP_DAYS,
+  LIMITS,
   MAX_DRINKS_PER_DAY,
   progressText,
   pruneDrinks,
@@ -203,6 +204,7 @@ describe('drinks', () => {
 
   it('says how much is left', () => {
     expect(progressText(1250, 2000, 'ml', 'en-US')).toBe('750 ml to go.');
+    expect(progressText(1999, 2000, 'ml', 'en-US')).toBe('1 ml to go.');
     expect(progressText(2000, 2000, 'ml')).toBe('Goal reached. Well done!');
   });
 });
@@ -229,20 +231,145 @@ describe('history', () => {
   });
 
   it('reaches a goal in ounces with drinks that add up to it', () => {
-    // Four 16 fl oz bottles are 1,892 ml; 64 fl oz is 1,893 ml.
+    // Four 16 fl oz bottles are saved as 1,892 ml; 64 fl oz is 1,893 ml.
     const goal = toMl(64, 'oz');
     const bottles = [1, 2, 3, 4].reduce(
       (all, hour) => addDrink(all, drink(TODAY, `1${hour}:00`, toMl(16, 'oz'))),
       emptyDrinks(),
     );
-    const total = totalOn(bottles, TODAY);
-    expect(total).toBeLessThan(goal);
+    expect(totalOn(bottles, TODAY)).toBe(1892);
+    // Added up as shown: 4 × 16 fl oz is 64 fl oz.
+    const total = totalOn(bottles, TODAY, 'oz');
+    expect(formatAmount(total, 'oz', 'en-US')).toBe('64 fl oz');
     expect(goalReached(total, goal, 'oz')).toBe(true);
     expect(progressText(total, goal, 'oz')).toBe('Goal reached. Well done!');
     expect(streak(bottles, goal, TODAY, 'oz')).toBe(1);
     expect(recentDays(bottles, goal, TODAY, 1, 'oz')[0]?.reached).toBe(true);
     // In millilitres, a millilitre short is short.
     expect(goalReached(1999, 2000, 'ml')).toBe(false);
+  });
+
+  // Each drink, and the goal, is saved rounded to whole millilitres, and
+  // that adds up: five 20 fl oz bottles are 2,955 ml, a 100 fl oz goal 2,957
+  // ml (audit F1-1). Whatever the sizes, drinking the goal must reach it.
+  describe('in ounces, drinks that add up to the goal reach it', () => {
+    /** Drinks typed in fl oz (or with a glass or bottle that size), all today. */
+    const typed = (ounces: readonly number[]): DrinksState => ({
+      drinks: ounces.map((oz, index) => drink(TODAY, '09:00', toMl(oz, 'oz'), `d${index}`)),
+    });
+    const [lowest, highest] = LIMITS.oz.goal;
+    const settingsFor = (goal: number) =>
+      setReminders(setAmount(setUnit(emptySettings(), 'oz'), 'goal', goal), {
+        on: true,
+        every: 60,
+        from: '09:00',
+        until: '21:00',
+      });
+    /** Everything that says whether the goal is reached, for drinks that add up to it. */
+    function missed(ounces: readonly number[], goalOz: number): string[] {
+      const drinks = typed(ounces);
+      const goal = toMl(goalOz, 'oz');
+      const settings = settingsFor(goal);
+      const total = totalOn(drinks, TODAY, 'oz');
+      const problems = [];
+      if (formatAmount(total, 'oz', 'en-US') !== formatAmount(goal, 'oz', 'en-US'))
+        problems.push('total');
+      if (!goalReached(total, goal, 'oz')) problems.push('not reached');
+      if (progressText(total, goal, 'oz') !== 'Goal reached. Well done!') problems.push('to go');
+      if (streak(drinks, goal, TODAY, 'oz') !== 1) problems.push('streak');
+      if (!recentDays(drinks, goal, TODAY, 1, 'oz')[0]?.reached) problems.push('history');
+      if (reminderDue(drinks, settings, `${TODAY}T09:59`, `${TODAY}T10:00`))
+        problems.push('reminder');
+      if (reminderNotices(drinks, settings, TODAY)[0]?.start !== '2026-10-22T09:00')
+        problems.push('notification service');
+      return problems.length > 0 ? [`${ounces.join(' + ')} = ${goalOz}: ${problems}`] : [];
+    }
+
+    let seed = 7;
+    const random = (count: number) => {
+      seed = (seed * 16807) % 2147483647;
+      return seed % count;
+    };
+    /** Days of 1 to 40 drinks, each 0.5 to 100 fl oz in steps of `step` (tenths or hundredths). */
+    function randomDays(days: number, step: 10 | 100): number[][] {
+      return Array.from({ length: days }, () =>
+        Array.from(
+          { length: 1 + random(MAX_DRINKS_PER_DAY) },
+          () => (step / 2 + random(100 * step - step / 2 + 1)) / step,
+        ),
+      );
+    }
+    /** Ounces added up in tenths, so the sum is exact. */
+    const tenths = (ounces: readonly number[]) =>
+      ounces.reduce((sum, oz) => sum + Math.round(oz * 10), 0);
+
+    it('with any number of drinks of one size', () => {
+      // Sizes 0.5 to 100 fl oz in tenths, 1 to 40 of them (in tenths, so sums are exact).
+      const found: string[] = [];
+      for (let size = LIMITS.oz.drink[0] * 10; size <= LIMITS.oz.drink[1] * 10; size += 1) {
+        for (let count = 1; count <= MAX_DRINKS_PER_DAY; count += 1) {
+          const goal = size * count;
+          if (goal < lowest * 10 || goal > highest * 10) continue;
+          // Most sizes need only the quick check; every 25th gets them all.
+          const ounces = Array.from({ length: count }, () => size / 10);
+          if (size % 25 === 0) found.push(...missed(ounces, goal / 10));
+          else if (!goalReached(totalOn(typed(ounces), TODAY, 'oz'), toMl(goal / 10, 'oz'), 'oz'))
+            found.push(`${count} × ${size / 10}`);
+        }
+      }
+      expect(found).toEqual([]);
+      expect(missed([20, 20, 20, 20, 20], 100)).toEqual([]);
+      expect(missed([4, 4, 6, 20], 34)).toEqual([]);
+    });
+
+    it('with drinks of different sizes, and not when they’re a tenth short', () => {
+      const found: string[] = [];
+      for (const ounces of randomDays(3000, 10)) {
+        const goal = tenths(ounces);
+        if (goal < lowest * 10 || goal >= highest * 10) continue;
+        found.push(...missed(ounces, goal / 10));
+        // A tenth of an ounce more than they add up to isn't reached.
+        const higher = toMl((goal + 1) / 10, 'oz');
+        const total = totalOn(typed(ounces), TODAY, 'oz');
+        if (progressText(total, higher, 'oz', 'en-US') !== '0.1 fl oz to go.')
+          found.push(`${ounces.join(' + ')} reaches ${(goal + 1) / 10}`);
+      }
+      expect(found).toEqual([]);
+    });
+
+    it('typed to two decimals: the total is what the drinks shown add up to', () => {
+      const found: string[] = [];
+      for (const ounces of randomDays(3000, 100)) {
+        const drinks = typed(ounces);
+        // Each drink as the list shows it, to a tenth of an ounce.
+        const shown = drinks.drinks.reduce(
+          (sum, entry) => sum + Math.round(inUnit(entry.ml, 'oz') * 10),
+          0,
+        );
+        const total = totalOn(drinks, TODAY, 'oz');
+        if (Math.round(inUnit(total, 'oz') * 10) !== shown)
+          found.push(`${ounces.join(' + ')}: ${formatAmount(total, 'oz', 'en-US')}`);
+        const goal = toMl(shown / 10, 'oz');
+        if (goal >= toMl(lowest, 'oz') && !goalReached(total, goal, 'oz'))
+          found.push(`${ounces.join(' + ')} doesn't reach ${shown / 10}`);
+      }
+      expect(found).toEqual([]);
+    });
+  });
+
+  it('never says 0 to go while the goal isn’t reached', () => {
+    const zero: string[] = [];
+    for (let goalOz = LIMITS.oz.goal[0]; goalOz <= LIMITS.oz.goal[1]; goalOz += 1) {
+      const goal = toMl(goalOz, 'oz');
+      for (let ml = goal - 40; ml <= goal; ml += 0.5) {
+        const text = progressText(ml, goal, 'oz', 'en-US');
+        if (/^0 fl oz/.test(text)) zero.push(`${ml} of ${goal} ml: ${text}`);
+      }
+    }
+    expect(zero).toEqual([]);
+    // Shown as the goal less the total, as both are shown.
+    expect(progressText(2955, toMl(100, 'oz'), 'oz', 'en-US')).toBe('0.1 fl oz to go.');
+    expect(progressText(1000, toMl(64, 'oz'), 'oz', 'en-US')).toBe('30.2 fl oz to go.');
   });
 
   it('counts days in a row the goal was reached', () => {

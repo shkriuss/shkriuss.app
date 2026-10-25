@@ -689,11 +689,21 @@ export function mountMeals(root: Document): void {
 
   // ---------- Keeping up ----------
 
-  /** Lets go of shopping lists and planned meals from long ago. */
+  /**
+   * Lets go of shopping lists and planned meals from long ago. While sync is
+   * on, what's let go here is deleted on every device, so a clock set far
+   * ahead mustn't decide: it counts back from the sync server's clock at the
+   * last sync, if that's earlier, and waits while that isn't known (as Water
+   * does, audit F1-4). With sync off, from this device's clock.
+   */
   function prune(): void {
-    const pruned = pruneShopping(shopping, addDays(thisWeek, -7 * SHOPPING_WEEKS_KEPT));
+    const now = sync.trustedNow();
+    if (now === null) return;
+    const day = todayOf(new Date(now));
+    const week = weekStartOf(day, firstDay);
+    const pruned = pruneShopping(shopping, addDays(week, -7 * SHOPPING_WEEKS_KEPT));
     if (pruned !== shopping) saveShopping(pruned);
-    const trimmed = prunePlan(plan, addDays(today, -PLAN_DAYS_KEPT));
+    const trimmed = prunePlan(plan, addDays(day, -PLAN_DAYS_KEPT));
     if (trimmed !== plan) savePlan(trimmed);
   }
 

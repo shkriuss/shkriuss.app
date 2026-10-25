@@ -25,6 +25,31 @@ test('shows this month with today selected', async ({ page }) => {
   await expect(page.getByText('Nothing planned in the next 7 days.')).toBeVisible();
 });
 
+test('moves “today” along at midnight while it stays open', async ({ page }) => {
+  // Left open overnight, on a tablet or a desktop (audit F1-12).
+  await seed(page, [
+    { title: 'Tomorrow’s walk', startDate: '2026-10-18', endDate: '2026-10-18' },
+    { title: 'Next week’s run', startDate: '2026-10-25', endDate: '2026-10-25' },
+  ]);
+  await expect(day(page, /^Saturday, October 17, 2026, today/)).toHaveAttribute(
+    'aria-current',
+    'date',
+  );
+  await expect(upcoming(page).getByRole('button')).toHaveText([/Tomorrow’s walk/]);
+
+  await page.clock.setFixedTime(new Date('2026-10-18T00:00:30'));
+  await page.clock.runFor('01:00');
+  await expect(day(page, /^Sunday, October 18, 2026, today/)).toHaveAttribute(
+    'aria-current',
+    'date',
+  );
+  await expect(day(page, /^Saturday, October 17, 2026/)).not.toHaveAttribute('aria-current');
+  await expect(page.locator('[data-day-heading]')).toHaveText('Today, Sunday, October 18');
+  await expect(dayList(page).getByRole('button')).toHaveText([/Tomorrow’s walk/]);
+  // The next 7 days start on Monday now.
+  await expect(upcoming(page).getByRole('button')).toHaveText([/Next week’s run/]);
+});
+
 test('in a Windows contrast theme, the chosen day and event dots still show', async ({ page }) => {
   // Contrast themes replace backgrounds with the theme's own colours (audit G-6).
   await seed(page, [{ startDate: '2026-10-20', endDate: '2026-10-20' }]);
@@ -95,6 +120,65 @@ test('edits and deletes an event, with a confirmation', async ({ page }) => {
 
   await page.reload();
   await expect(page.getByText('Nothing planned on this day.')).toBeVisible();
+});
+
+test('saving keeps what changed elsewhere while the editor was open', async ({ page }) => {
+  await seed(page, [{ title: 'Dentist', reminder: 15 }]);
+  await dayList(page)
+    .getByRole('button', { name: /Dentist/ })
+    .click();
+  // Meanwhile, another tab (or a sync from another device) moves it to the
+  // afternoon and changes its reminder.
+  const other = await page.context().newPage();
+  await other.goto('/');
+  await dayList(other)
+    .getByRole('button', { name: /Dentist/ })
+    .click();
+  await editor(other).getByLabel('Start time').fill('14:00');
+  await editor(other).getByLabel('End time (optional)').fill('15:00');
+  await editor(other).getByLabel('Reminder').selectOption({ label: '1 hour before' });
+  await save(other);
+  await other.close();
+
+  // Only the notes are changed here (audit F1-2).
+  await editor(page).getByLabel('Notes (optional)').fill('Bring the X-ray');
+  await save(page);
+  const item = dayList(page).getByRole('button', { name: /Dentist/ });
+  await expect(item).toHaveAccessibleName(/^2:00\sPM – 3:00\sPM, Dentist, with a reminder$/);
+  await item.click();
+  await expect(editor(page).getByLabel('Notes (optional)')).toHaveValue('Bring the X-ray');
+  await expect(editor(page).getByLabel('Reminder')).toHaveValue('60');
+});
+
+test('saving an event deleted elsewhere meanwhile keeps it, with the change', async ({ page }) => {
+  await seed(page, [{ title: 'Dentist' }]);
+  await dayList(page)
+    .getByRole('button', { name: /Dentist/ })
+    .click();
+  // Meanwhile, another tab (or a sync from another device) deletes it.
+  const other = await page.context().newPage();
+  await other.goto('/');
+  await dayList(other)
+    .getByRole('button', { name: /Dentist/ })
+    .click();
+  await editor(other).getByRole('button', { name: 'Delete' }).click();
+  await other
+    .getByRole('dialog', { name: 'Delete this event?' })
+    .getByRole('button', { name: 'Delete' })
+    .click();
+  await expect(other.getByText('Nothing planned on this day.')).toBeVisible();
+  await other.close();
+
+  // A change wins over a deletion, as with sync (audit F1-3).
+  await editor(page).getByLabel('Notes (optional)').fill('Bring the X-ray');
+  await save(page);
+  await expect(page.getByRole('status').filter({ hasText: 'Saved Dentist.' })).toBeAttached();
+  await expect(dayList(page).getByRole('button', { name: /Dentist/ })).toBeFocused();
+  await page.reload();
+  await dayList(page)
+    .getByRole('button', { name: /Dentist/ })
+    .click();
+  await expect(editor(page).getByLabel('Notes (optional)')).toHaveValue('Bring the X-ray');
 });
 
 test('closing the editor without saving changes nothing', async ({ page }) => {

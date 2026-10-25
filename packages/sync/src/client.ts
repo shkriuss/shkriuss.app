@@ -82,6 +82,7 @@ import {
   goneError,
   isGone,
   problemOf,
+  serverClock,
   SyncError,
   type Keys,
   type SyncProblem,
@@ -98,7 +99,7 @@ import { FILE_ID, MAX_SEALED_CHARS } from './validate.ts';
 
 export { isSyncOn, saveConnection, stopSync } from './device.ts';
 export type { SyncedFiles } from './files.ts';
-export { secondVersionName } from './merge.ts';
+export { fingerprint, secondVersionName } from './merge.ts';
 export type { SyncProblem } from './requests.ts';
 
 const PENDING_KEY = 'shkriuss-device:connect';
@@ -203,6 +204,17 @@ export interface SyncClient {
   download(id: string): Promise<Uint8Array<ArrayBuffer> | null>;
   /** The app's own key from the account while sync is on (for LinkedData); null when it's off. */
   secret(): Uint8Array<ArrayBuffer> | null;
+  /**
+   * The time to count back from when deleting data by age (ms), like Water's
+   * drinks older than a year. While sync is on, deletions here reach the
+   * other devices, so a clock set far ahead mustn't decide: it's this
+   * device's clock, but never later than the sync server's at the last sync.
+   * Null when that isn't known yet (synced before it was kept): then wait.
+   * With sync off (or never used) it's this device's clock, so data still
+   * goes on time, however long sync stays off. Deletions made while it's off
+   * reach the others only if it's turned on again (audit F1-4).
+   */
+  trustedNow(): number | null;
 }
 
 /**
@@ -446,10 +458,12 @@ export function createSync(options: {
       state.previous.length === stillWaiting.length
     ) {
       const upgraded = state.known !== stored.known;
-      updateState(
-        secret,
-        upgraded ? { last: now, known: state.known, waiting } : { last: now, waiting },
-      );
+      updateState(secret, {
+        last: now,
+        waiting,
+        ...answered(),
+        ...(upgraded ? { known: state.known } : {}),
+      });
       return true;
     }
 
@@ -586,7 +600,7 @@ export function createSync(options: {
 
     // 6. Remember. The copy online is now the merge.
     const base = online ? { epoch: online.epoch, stores: knowns } : null;
-    const saved = { remote: online, known: knowns, dirty: false, base, last: now };
+    const saved = { remote: online, known: knowns, dirty: false, base, last: now, ...answered() };
     if (!updateState(secret, saved)) throw new SyncError(stateProblem());
 
     // 7. The old copies are in the new one now (and their files, re-sealed with
@@ -612,6 +626,12 @@ export function createSync(options: {
 
   const knownsOf = (merged: Stores): Record<string, Known> =>
     Object.fromEntries(Object.entries(merged).map(([key, snapshot]) => [key, knownFrom(snapshot)]));
+
+  /** The server's clock at its latest answer, to keep with a sync (see trustedNow). */
+  const answered = (): Partial<DeviceState> => {
+    const time = serverClock();
+    return time === null ? {} : { serverTime: time };
+  };
 
   async function run(): Promise<void> {
     if (!isSyncOn()) return;
@@ -778,6 +798,11 @@ export function createSync(options: {
     secret() {
       const secret = loadState()?.secret;
       return secret ? fromBase64Url(secret) : null;
+    },
+    trustedNow() {
+      const state = loadState();
+      if (!state?.secret) return Date.now();
+      return state.serverTime === null ? null : Math.min(Date.now(), state.serverTime);
     },
   };
 

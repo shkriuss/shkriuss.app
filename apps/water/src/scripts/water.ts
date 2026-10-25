@@ -197,18 +197,19 @@ export function mountWater(root: Document): void {
     if (!entry.reached) required<HTMLElement>(item, '[data-day-reached]').remove();
     const bar = required<HTMLProgressElement>(item, '[data-day-progress]');
     bar.max = goal;
-    bar.value = Math.min(entry.ml, goal);
+    // Full once reached (in ounces, that can be a millilitre short).
+    bar.value = entry.reached ? goal : Math.min(entry.ml, goal);
     return item;
   }
 
   function renderToday(): void {
-    const total = totalOn(drinks, day);
+    const total = totalOn(drinks, day, unit());
     const goal = amountOf(settings, 'goal');
     dateText.textContent = dateFormat.format(dateOf(day));
     totalText.textContent = amount(total);
     goalText.textContent = amount(goal);
     progress.max = goal;
-    progress.value = Math.min(total, goal);
+    progress.value = goalReached(total, goal, unit()) ? goal : Math.min(total, goal);
     leftText.textContent = progressText(total, goal, unit());
     for (const size of ['glass', 'bottle'] as const) {
       required<HTMLElement>(root, `[data-size="${size}"]`).textContent = amount(
@@ -275,9 +276,9 @@ export function mountWater(root: Document): void {
   /** Adds a drink; says what's wrong instead if the day is full. */
   function add(ml: number, date: IsoDate, time: IsoTime): void {
     const goal = amountOf(settings, 'goal');
-    const before = totalOn(drinks, day);
+    const before = totalOn(drinks, day, unit());
     const next = addDrink(drinks, { id: crypto.randomUUID(), date, time, ml });
-    const total = totalOn(next, day);
+    const total = totalOn(next, day, unit());
     const when = date === day ? '' : ` ${dayLabel(date, day).toLowerCase()}`;
     let message = `Added ${amount(ml)}${when}. ${amount(total)} of ${amount(goal)} today.`;
     if (!goalReached(before, goal, unit()) && goalReached(total, goal, unit())) {
@@ -439,9 +440,17 @@ export function mountWater(root: Document): void {
     reminders.changed();
   }
 
-  /** Lets go of drinks older than a year. */
+  /**
+   * Lets go of drinks older than a year. While sync is on, what's let go
+   * here is deleted on every device, so a clock set far ahead mustn't
+   * decide: it counts back from the sync server's clock at the last sync, if
+   * that's earlier, and waits while that isn't known (audit F1-4). With sync
+   * off, from this device's clock.
+   */
   function prune(): void {
-    const pruned = pruneDrinks(drinks, day);
+    const now = sync.trustedNow();
+    if (now === null) return;
+    const pruned = pruneDrinks(drinks, today(new Date(now)));
     if (pruned !== drinks) save({ drinks: pruned }, null);
   }
 

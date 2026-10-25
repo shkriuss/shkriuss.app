@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   addReminder,
   clearDone,
+  draftOf,
   dueReminders,
+  editReminder,
   emptyReminders,
   groups,
   inAnHour,
@@ -133,6 +135,30 @@ describe('changing', () => {
     const later = putOff(done, 'a', inAnHour(NOW));
     expect(later.reminders[0]).toMatchObject({ date: '2026-10-21', time: '11:00', done: null });
     expect(tomorrowAt(reminder('x', '2026-10-20', '08:30'), '2026-10-21')).toBe('2026-10-22T08:30');
+  });
+
+  // While the change form is open, a sync (or another tab) may change the
+  // reminder (audit F1-2): saving puts on only what was changed in the form.
+  it('saves the change form on top of a change made elsewhere meanwhile', () => {
+    const opened = { ...reminder('a', '2026-10-21', '18:00'), text: 'Call Mum' };
+    const before = draftOf(opened);
+    // Ticked done on the other device.
+    const ticked = setDone(state(opened), 'a', NOW);
+    const text = editReminder(ticked, opened, { ...before, text: 'Call Mum back' });
+    expect(text.reminders).toEqual([{ ...opened, text: 'Call Mum back', done: NOW }]);
+    // A new time here sets it again.
+    const time = editReminder(ticked, opened, { ...before, time: '19:00' });
+    expect(time.reminders).toEqual([{ ...opened, time: '19:00', done: null }]);
+    // Moved there, text changed here: both stay.
+    const moved = putOff(state(opened), 'a', '2026-10-22T08:00');
+    expect(editReminder(moved, opened, { ...before, text: 'Call Mum back' }).reminders).toEqual([
+      { ...opened, text: 'Call Mum back', date: '2026-10-22', time: '08:00' },
+    ]);
+    // One done when the form opened is set again, as before.
+    const done = { ...opened, done: NOW };
+    expect(editReminder(state(done), done, draftOf(done)).reminders[0]?.done).toBeNull();
+    // Deleted meanwhile: nothing to change.
+    expect(editReminder(emptyReminders(), opened, before)).toEqual(emptyReminders());
   });
 
   it('keeps both versions of one changed on two devices', () => {

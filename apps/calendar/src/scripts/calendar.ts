@@ -32,7 +32,9 @@ import {
 import {
   addEvent,
   DATA_VERSION,
+  dayToShow,
   draftProblems,
+  editEvent,
   emptyState,
   isCalendarState,
   isValidReminder,
@@ -43,7 +45,6 @@ import {
   removeEvent,
   secondVersion,
   timeLabel,
-  updateEvent,
   type CalendarEvent,
   type CalendarState,
   type DraftField,
@@ -87,6 +88,8 @@ const store = createStore<CalendarState>({
 
 /** Days in the "Next 7 days" list (starting tomorrow). */
 const UPCOMING_DAYS = 7;
+/** How often to check whether the day has changed while Calendar is open. */
+const NEW_DAY_CHECK_MS = 60_000;
 /** Most dots shown under a day in the month grid. */
 const MAX_DOTS = 3;
 /** Form fields in the order they appear, for focusing the first problem. */
@@ -145,6 +148,8 @@ export function mountCalendar(root: Document): void {
   let viewMonth = shiftMonth(selected, 0);
   /** The event open in the editor (null for a new one). */
   let editingId: string | null = null;
+  /** The editor as it opened, to tell what the person changed (see editEvent). */
+  let openedDraft: EventDraft | null = null;
   /** Where keyboard focus goes back to when the editor closes. */
   let opener: HTMLElement | null = null;
   /** The event just saved, so focus can go to it in the list. */
@@ -472,6 +477,7 @@ export function mountCalendar(root: Document): void {
     lastStartDate = startDateInput.value;
     lastStartTime = startTimeInput.value;
     syncFields();
+    openedDraft = event ? readDraft() : null;
     editor.showModal();
     titleInput.focus();
   }
@@ -485,16 +491,6 @@ export function mountCalendar(root: Document): void {
     savedId = null;
     opener = null;
   });
-
-  /** The day to show after saving: the selected day if the event is on it, else its next day. */
-  function dayToShow(next: CalendarState, id: string, start: IsoDate): IsoDate {
-    const [first] = occurrencesBetween(next, selected, addDays(selected, 366)).filter(
-      (occurrence) => occurrence.event.id === id,
-    );
-    if (!first) return start;
-    // Sorted by start, so one starting on or before the selected day covers it.
-    return first.start <= selected ? selected : first.start;
-  }
 
   // Moving the start keeps the event the same length.
   startDateInput.addEventListener('change', () => {
@@ -544,13 +540,19 @@ export function mountCalendar(root: Document): void {
     if (showProblems(problems)) return;
 
     const id = editingId ?? crypto.randomUUID();
-    const next = editingId ? updateEvent(state, id, draft) : addEvent(state, draft, id);
-    const day = dayToShow(next, id, draft.startDate);
+    // A sync while the editor was open may have changed the event on another
+    // device: keep that, and put on only what was changed here.
+    const next = editingId
+      ? editEvent(state, id, openedDraft ?? draft, draft)
+      : addEvent(state, draft, id);
+    const saved = next.events.find((event) => event.id === id);
+    const day = dayToShow(next, id, selected);
     if (day !== selected) {
       selected = day;
       viewMonth = shiftMonth(day, 0);
     }
-    if (save(next)) announce(`Saved ${draft.title.trim()}.`);
+    // "Saved" only when it's in what was saved.
+    if (save(next) && saved) announce(`Saved ${saved.title}.`);
     // Asking now, right after choosing a reminder, makes the question clear.
     if (draft.reminder !== null) alerts.offerNotifications();
     savedId = id;
@@ -668,13 +670,18 @@ export function mountCalendar(root: Document): void {
     }
   });
 
-  // Coming back to the app on a new day: move "today" along.
+  // A new day, while Calendar stays open or when it comes back on screen:
+  // move "today" along, as the other apps do (audit F1-12).
+  const checkDay = (): void => {
+    if (today() === todayDate) return;
+    if (selected === todayDate) selected = today();
+    viewMonth = shiftMonth(selected, 0);
+    // Drawn again in the background: keyboard focus stays where it was (audit G-3).
+    keepFocus(render, newEventButton);
+  };
+  window.setInterval(checkDay, NEW_DAY_CHECK_MS);
   root.addEventListener('visibilitychange', () => {
-    if (root.visibilityState === 'visible' && today() !== todayDate) {
-      if (selected === todayDate) selected = today();
-      viewMonth = shiftMonth(selected, 0);
-      keepFocus(render, newEventButton);
-    }
+    if (root.visibilityState === 'visible') checkDay();
   });
 
   mountImportDialog(root, page);

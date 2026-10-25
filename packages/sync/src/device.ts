@@ -1,7 +1,8 @@
 /**
  * This device's sync state, for ./client.ts: the app's key from the account,
- * what the device knew at the last sync, and the files still to bring up to
- * date online. Kept under "shkriuss-device:", which backups skip.
+ * what the device knew at the last sync (and the server's clock then), and
+ * the files still to bring up to date online. Kept under "shkriuss-device:",
+ * which backups skip.
  */
 import { toBase64Url } from '@shkriuss/crypto';
 import { isStorageFull } from '@shkriuss/storage';
@@ -33,6 +34,12 @@ export interface DeviceState {
    */
   base: { epoch: string; stores: Record<string, Known> } | null;
   last: number | null;
+  /**
+   * The sync server's clock at the last sync (ms), for deleting data by age
+   * without trusting this device's clock (SyncClient.trustedNow). Null until
+   * then, and in state saved before it was kept.
+   */
+  serverTime: number | null;
   /** The app's keys from replaced account keys: their online copies are moved here, then deleted. */
   previous: string[];
   /**
@@ -74,6 +81,7 @@ export function loadState(): DeviceState | null {
           ? (base as DeviceState['base'])
           : null,
       last: typeof state.last === 'number' ? state.last : null,
+      serverTime: typeof state.serverTime === 'number' ? state.serverTime : null,
       previous: strings(state.previous),
       waiting: stringRecord(state.waiting),
     };
@@ -196,6 +204,7 @@ export function saveConnection(connection: Connection): boolean {
     dirty: existing?.dirty ?? false,
     base: existing?.base ?? null,
     last: null,
+    serverTime: existing?.serverTime ?? null,
     previous,
     waiting: existing?.waiting ?? {},
   });

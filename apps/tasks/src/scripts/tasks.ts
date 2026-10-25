@@ -38,6 +38,7 @@ import {
   draftOf,
   draftProblems,
   dueText,
+  editedTask,
   emptyTasks,
   formatDay,
   inView,
@@ -60,7 +61,6 @@ import {
   everyUnit,
   parseEvery,
   stepsText,
-  taskFromDraft,
   tasksCount,
   TASKS_VERSION,
   tickStep,
@@ -182,6 +182,8 @@ export function mountTasks(root: Document): void {
   let suppressClick = false;
   /** The task open in the form, where focus goes back to, and the task just saved. */
   let editingId: string | null = null;
+  /** The form as it opened, to tell what the person changed (see editedTask). */
+  let openedDraft: TaskDraft | null = null;
   let opener: HTMLElement | null = null;
   let savedId: string | null = null;
   /** Tasks whose steps are folded out in the list. */
@@ -824,6 +826,7 @@ export function mountTasks(root: Document): void {
     opener = root.activeElement instanceof HTMLElement ? root.activeElement : null;
     showProblems({});
     fillForm(draftOf(task));
+    openedDraft = readDraft();
     editor.showModal();
     field<HTMLInputElement>('title').focus();
   }
@@ -847,7 +850,9 @@ export function mountTasks(root: Document): void {
     const draft = readDraft();
     const problems = draftProblems(draft);
     if (showProblems(problems)) return;
-    const task = taskFromDraft(draft, editingId, Date.now(), find(editingId));
+    // A sync while the form was open may have changed the task on another
+    // device: keep that, and put on only what was changed here.
+    const task = editedTask(openedDraft ?? draft, draft, editingId, Date.now(), find(editingId));
     reveal = task.id;
     if (saveTasks(updateTask(tasks, task))) {
       announce(

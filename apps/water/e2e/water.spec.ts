@@ -2,6 +2,7 @@
 // support, privacy, sync) already run for every app from tests/e2e/.
 import type { Page } from '@playwright/test';
 import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
+import { toMl } from '../src/lib/water.ts';
 import {
   addOther,
   drink,
@@ -133,6 +134,37 @@ test('reaching the goal, days in a row and the last 7 days', async ({ page }) =>
     'value',
     '2000',
   );
+});
+
+test('in fluid ounces, drinking exactly the goal reaches it', async ({ page }) => {
+  // Each bottle is saved as 591 ml, and the goal as 2,957 ml: five bottles
+  // are 2,955 ml, but they add up as shown: 100 fl oz (audit F1-1).
+  await seed(page, {
+    settings: [
+      { id: 'unit', unit: 'oz' },
+      { id: 'goal', ml: toMl(100, 'oz') },
+      { id: 'bottle', ml: toMl(20, 'oz') },
+    ],
+  });
+  const bottle = page.getByRole('button', { name: 'Bottle 20 fl oz' });
+  for (let count = 1; count <= 4; count += 1) {
+    await bottle.click();
+    await expect(todaysDrinks(page)).toHaveCount(count);
+  }
+  await expect(total(page)).toHaveText('80 fl oz');
+  await expect(left(page)).toHaveText('20 fl oz to go.');
+  await bottle.click();
+  await expect(
+    status(page, 'Added 20 fl oz. 100 fl oz of 100 fl oz today. Goal reached. Well done!'),
+  ).toBeAttached();
+  await expect(total(page)).toHaveText('100 fl oz');
+  await expect(left(page)).toHaveText('Goal reached. Well done!');
+  await expect(page.getByRole('progressbar', { name: 'Today’s goal' })).toHaveAttribute(
+    'value',
+    String(toMl(100, 'oz')),
+  );
+  await expect(page.getByText('Goal reached 1 day in a row.')).toBeVisible();
+  await expect(history(page).first()).toHaveText(/goal reached$/);
 });
 
 test('the goal, the glass and bottle sizes, and the units can be changed', async ({ page }) => {

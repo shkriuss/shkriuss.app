@@ -1,18 +1,26 @@
-import { addDays } from '@shkriuss/dates';
+import { addDays, daysBetween } from '@shkriuss/dates';
+import { footprint } from '@shkriuss/sync/testing';
 import { describe, expect, it } from 'vitest';
+import { MAX_SEALED_CHARS } from '../../../../packages/sync/src/validate.ts';
 import {
   addHabit,
   bestStreak,
   checkId,
+  checksCount,
+  checksProblem,
+  checkYears,
   currentStreak,
   dayLabel,
   doneDates,
+  draftOf,
   dueReminders,
+  editHabit,
   emptyChecks,
   emptyHabits,
   EVERY_DAY,
   isChecksState,
   isHabitsState,
+  MAX_CHECKS,
   MAX_HABITS,
   MAX_NAME_LENGTH,
   nameError,
@@ -20,6 +28,8 @@ import {
   REMINDER_BODY,
   reminderNotices,
   removeHabit,
+  removeYear,
+  roomNote,
   scheduleLabel,
   setDone,
   streakLabel,
@@ -87,6 +97,38 @@ describe('habits', () => {
     );
   });
 
+  // While the edit form is open, a sync (or another tab) may change the habit
+  // (audit F1-2): saving puts on only what was changed in the form.
+  it('saves the edit form on top of a change made elsewhere meanwhile', () => {
+    const opened = draftOf(daily);
+    const weekdays = updateHabit({ habits: [daily, weekdaysOnly] }, 'water', {
+      name: 'Water',
+      days: [1, 2, 3, 4, 5],
+      reminder: '08:00',
+    });
+    const renamed = editHabit(weekdays, 'water', opened, { ...opened, name: 'Drink water' });
+    expect(renamed.habits[0]).toEqual({
+      id: 'water',
+      name: 'Drink water',
+      days: [1, 2, 3, 4, 5],
+      reminder: '08:00',
+    });
+    // Where both changed the same thing, the change here wins.
+    expect(
+      editHabit(weekdays, 'water', opened, { ...opened, days: [6, 7] }).habits[0]?.days,
+    ).toEqual([6, 7]);
+    // Renamed meanwhile to the other habit's name (on two devices at once,
+    // which sync can bring together): the form as it is.
+    const clash = { habits: [{ ...daily, name: 'Run' }, weekdaysOnly] };
+    const changed = { ...opened, days: [6, 7] };
+    expect(editHabit(clash, 'water', opened, changed).habits[0]).toEqual({
+      id: 'water',
+      name: 'Water',
+      days: [6, 7],
+    });
+    expect(editHabit(weekdays, 'gone', opened, changed)).toBe(weekdays);
+  });
+
   it('removes a habit with its check marks', () => {
     let checks: ChecksState = emptyChecks();
     checks = setDone(checks, 'water', MONDAY, true);
@@ -110,6 +152,100 @@ describe('check marks', () => {
     expect(checkId('water', MONDAY)).toBe(checkId('water', MONDAY));
     expect(checkId('water', MONDAY)).not.toBe(checkId('water', addDays(MONDAY, 1)));
   });
+});
+
+// Every check mark is kept until the person lets go of a year's (audit F1-5).
+describe('making room', () => {
+  const checks = [
+    ['water', '2024-12-31'],
+    ['run', '2025-01-01'],
+    ['water', '2025-06-01'],
+    ['water', MONDAY],
+  ].reduce((state, [habit = '', date = '']) => setDone(state, habit, date, true), emptyChecks());
+
+  it('lists the years with check marks, and deletes one', () => {
+    expect(checkYears(checks)).toEqual([
+      { year: '2024', count: 1 },
+      { year: '2025', count: 2 },
+      { year: '2026', count: 1 },
+    ]);
+    expect(checkYears(emptyChecks())).toEqual([]);
+    expect(removeYear(checks, '2025').checks.map((check) => check.date)).toEqual([
+      '2024-12-31',
+      MONDAY,
+    ]);
+    expect(removeYear(checks, '2023')).toEqual(checks);
+    expect(checksCount(1, 'en-US')).toBe('1 check mark');
+    expect(checksCount(3650, 'en-US')).toBe('3,650 check marks');
+  });
+
+  it('counts streaks from the check marks kept', () => {
+    // Done every day since 20 December 2025.
+    let marks = emptyChecks();
+    for (let date = '2025-12-20'; date <= MONDAY; date = addDays(date, 1)) {
+      marks = setDone(marks, 'water', date, true);
+    }
+    const since = (date: string) => daysBetween(date, MONDAY) + 1;
+    expect(currentStreak(daily, doneDates(marks, 'water'), MONDAY)).toBe(since('2025-12-20'));
+    // Without 2025's, it starts on 1 January.
+    const kept = doneDates(removeYear(marks, '2025'), 'water');
+    expect(currentStreak(daily, kept, MONDAY)).toBe(since('2026-01-01'));
+    expect(bestStreak(daily, kept, MONDAY)).toBe(since('2026-01-01'));
+  });
+
+  it(`keeps up to ${MAX_CHECKS} check marks, and says so once nearly full`, () => {
+    const number = (value: number) => new Intl.NumberFormat('en-US').format(value);
+    const many = (count: number): ChecksState => ({
+      checks: Array.from({ length: count }, (_, index) => {
+        const date = addDays(MONDAY, -index);
+        return { id: checkId('water', date), habit: 'water', date };
+      }),
+    });
+    expect(checksProblem(many(MAX_CHECKS - 1))).toBeUndefined();
+    expect(checksProblem(many(MAX_CHECKS - 1), 2, 'en-US')).toBe(
+      `Habits keeps up to ${number(MAX_CHECKS)} check marks. To make room, delete the check marks from a year (under Check marks).`,
+    );
+    expect(checksProblem(many(MAX_CHECKS))).toBeDefined();
+
+    const makeRoom =
+      'To make room, use “Delete check marks from a year…” under Check marks, below.';
+    const nearly = MAX_CHECKS * 0.9;
+    expect(roomNote(nearly, 'en-US')).toBeNull();
+    expect(roomNote(nearly + 1, 'en-US')).toBe(
+      `Habits is nearly full: there’s room for ${number(MAX_CHECKS - nearly - 1)} more check marks (it keeps up to ${number(MAX_CHECKS)}). ${makeRoom}`,
+    );
+    expect(roomNote(MAX_CHECKS - 1, 'en-US')).toContain('there’s room for 1 more check mark (');
+    expect(roomNote(MAX_CHECKS, 'en-US')).toBe(
+      `Habits is full: it keeps up to ${number(MAX_CHECKS)} check marks. ${makeRoom}`,
+    );
+  });
+
+  // Check marks are saved on the device (in localStorage, about 5 MB for each
+  // site), and with sync on, also go into the copy that goes online. Sync's
+  // own records of them take more room than the check marks themselves.
+  it('has room for every check mark, on the device and in the sync copy', async () => {
+    const habits = Array.from({ length: MAX_HABITS }, () => crypto.randomUUID());
+    const list = Array.from({ length: MAX_CHECKS }, (_, index) => {
+      const habit = habits[index % habits.length] ?? '';
+      const date = addDays('2016-01-01', Math.floor(index / habits.length));
+      return { id: checkId(habit, date), habit, date };
+    });
+    const size = await footprint({
+      app: 'habits',
+      store: 'shkriuss:habit-checks',
+      version: 1,
+      data: { checks: list },
+      items: list,
+      // A quarter of them deleted ("Delete check marks from a year") less than 180 days ago.
+      deleted: MAX_CHECKS / 4,
+    });
+    expect(size.compressed).toBeLessThan(1_000_000);
+    expect(size.sealed).toBeLessThan(MAX_SEALED_CHARS);
+    // Safari allows 5 MiB (5,242,880 bytes). Check marks are plain letters,
+    // digits and dashes (a habit's id and a date), like sync's own records:
+    // 1 byte each. Some room is left for the rest (the habits themselves).
+    expect(size.saved + size.syncState).toBeLessThan(4_500_000);
+  }, 60_000);
 });
 
 describe('streaks', () => {

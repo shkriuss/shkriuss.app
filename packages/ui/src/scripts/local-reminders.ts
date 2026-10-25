@@ -1,11 +1,15 @@
 /**
  * Reminders while an app is open, shared by the apps with reminders (audit
  * J-6). Every 20 seconds it asks the app what's due, reads it out on the
- * page, and shows it as a notification if the person allowed them. It keeps
+ * page, and shows it as a notification if the person allowed them. After
+ * the page slept, only reminders a few minutes late are shown; when the
+ * clocks change, ones in the skipped hour go off as they do
+ * (../lib/reminder-window.ts). It keeps
  * the "Notifications are …" line and the "Turn on notifications" button
  * (`[data-notify-status]`, `[data-notify-enable]`) right, and mounts
  * "Also remind me when … is closed" (./push-controls.ts, docs/adr/0009):
- * when that's on, the notification service sends them instead.
+ * when that's on, the notification service sends them instead, as long as
+ * it has them as they are now (pushHolds).
  *
  *   const reminders = mountLocalReminders(document, {
  *     app: 'Habits',
@@ -19,14 +23,13 @@
  *
  * Each app keeps its own rules for what's due (src/lib, unit-tested).
  */
-import { addMinutes, nowStamp, type Stamp } from '@shkriuss/dates';
-import { isPushEnabled, type Notice } from '@shkriuss/push';
+import { nowStamp, type Stamp } from '@shkriuss/dates';
+import { pushHolds, type Notice } from '@shkriuss/push';
+import { reminderWindow, type ReminderCheck } from '../lib/reminder-window.ts';
 import { mountPushControls } from './push-controls.ts';
 import { required } from './dom.ts';
 
 const CHECK_EVERY_MS = 20_000;
-/** Reminders later than this (the page was asleep) aren't shown: it's on screen again. */
-const LATE_MINUTES = 5;
 
 /** One notification that's due. */
 export interface DueReminder {
@@ -82,8 +85,8 @@ export function mountLocalReminders(
   const spoken =
     options.spoken ??
     ((due: readonly DueReminder[]) => `Reminder: ${due.map((item) => item.title).join(', ')}.`);
-  /** Reminders up to this time have been checked. */
-  let checkedUntil = nowStamp();
+  /** Reminders up to this local time have been checked, then (see ../lib/reminder-window.ts). */
+  let checked: ReminderCheck = { stamp: nowStamp(), at: Date.now() };
 
   function renderStatus(): void {
     const current = permission();
@@ -98,8 +101,11 @@ export function mountLocalReminders(
   });
 
   async function notify(due: readonly DueReminder[]): Promise<void> {
-    // With push on, the notification service sends these; don't show them twice.
-    if (permission() !== 'granted' || isPushEnabled()) return;
+    if (permission() !== 'granted') return;
+    // With push on, the notification service sends these: don't show them
+    // twice. Unless it doesn't have them as they are now, say after a change
+    // made offline: then nothing else shows them (audit F1-7).
+    if (await pushHolds(options.notices())) return;
     // Phones only show notifications through the service worker.
     const registration =
       'serviceWorker' in navigator
@@ -118,11 +124,13 @@ export function mountLocalReminders(
   }
 
   function check(): void {
-    const now = nowStamp();
-    if (now <= checkedUntil) return;
-    const late = addMinutes(now, -LATE_MINUTES);
-    const due = options.due(checkedUntil < late ? late : checkedUntil, now);
-    checkedUntil = now;
+    const now = { stamp: nowStamp(), at: Date.now() };
+    // After sleep, only reminders a few minutes late; after the clocks
+    // changed, every time they skipped (audit F1-6).
+    const window = reminderWindow(checked, now);
+    if (!window) return;
+    checked = now;
+    const due = options.due(window.from, window.to);
     if (due.length === 0) return;
     options.announce(spoken(due));
     void notify(due);

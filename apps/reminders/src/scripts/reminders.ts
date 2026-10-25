@@ -12,6 +12,7 @@ import { site } from 'virtual:shkriuss/site';
 import {
   addReminder,
   clearDone,
+  editReminder,
   emptyReminders,
   groups,
   inAnHour,
@@ -26,12 +27,12 @@ import {
   secondVersion,
   setDone,
   tomorrowAt,
-  updateReminder,
   whenInSentence,
   whenLabel,
   type Draft,
   type Item,
   type Problems,
+  type Reminder,
   type RemindersState,
   type Repeat,
   REMINDERS_VERSION,
@@ -119,6 +120,8 @@ export function mountReminders(root: Document): void {
   let now = nowStamp();
   /** The reminder in the change form. */
   let editing: string | null = null;
+  /** That reminder as the form opened with it, to tell what the person changed. */
+  let opened: Reminder | null = null;
 
   const announce = (message: string): void => {
     announcer.textContent = message;
@@ -303,6 +306,7 @@ export function mountReminders(root: Document): void {
     const reminder = find(id);
     if (!reminder) return;
     editing = id;
+    opened = reminder;
     edit.fill(reminder);
     editDialog.showModal();
   }
@@ -310,14 +314,18 @@ export function mountReminders(root: Document): void {
   editForm.addEventListener('submit', (event) => {
     event.preventDefault();
     const reminder = find(editing);
-    if (!reminder) {
+    if (!reminder || !opened) {
       editDialog.close();
       return;
     }
     const draft = edit.draft();
     if (edit.show(problems(draft, state, nowStamp(), reminder.id))) return;
     editDialog.close();
-    save(updateReminder(state, reminder.id, draft), `Saved ${draft.text.trim()}.`);
+    // A sync while the form was open may have changed the reminder on another
+    // device: keep that, and put on only what was changed here.
+    const next = editReminder(state, opened, draft);
+    const text = next.reminders.find((entry) => entry.id === reminder.id)?.text ?? draft.text;
+    save(next, `Saved ${text.trim()}.`);
     focusOn(reminder.id, 'edit');
   });
 
@@ -337,6 +345,7 @@ export function mountReminders(root: Document): void {
 
   editDialog.addEventListener('close', () => {
     editing = null;
+    opened = null;
   });
 
   deleteDialog.addEventListener('close', () => {

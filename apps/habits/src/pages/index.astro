@@ -2,10 +2,11 @@
 /**
  * Habits: today's habits with a "Done today" button, streaks and the last 7
  * days, plus an edit dialog (name, days, reminder, the last two weeks,
- * delete). Behaviour: ../scripts/habits.ts and ../scripts/reminders.ts.
+ * delete) and "Delete check marks from a year…". Behaviour:
+ * ../scripts/habits.ts and ../scripts/reminders.ts.
  */
 import { AppShell, Button, DataControls, Icon, PushControls, SyncControls } from '@shkriuss/ui';
-import { EDITABLE_DAYS, MAX_NAME_LENGTH } from '../lib/habits.ts';
+import { EDITABLE_DAYS, MAX_CHECKS, MAX_NAME_LENGTH } from '../lib/habits.ts';
 ---
 
 <AppShell wide>
@@ -14,6 +15,9 @@ import { EDITABLE_DAYS, MAX_NAME_LENGTH } from '../lib/habits.ts';
       <h1>Habits</h1>
       <p class="lead">Build habits one day at a time. Your progress is saved on this device.</p>
     </header>
+
+    <!-- Once Habits is nearly full: how much room is left, and how to make more. -->
+    <p class="notice" data-room-note hidden></p>
 
     <form class="add-form" data-add-form novalidate>
       <div class="field add-form__field">
@@ -68,6 +72,21 @@ import { EDITABLE_DAYS, MAX_NAME_LENGTH } from '../lib/habits.ts';
         </Button>
       </p>
       <PushControls />
+    </section>
+
+    <section class="stack" aria-labelledby="checks-heading">
+      <h2 id="checks-heading">Check marks</h2>
+      <p class="muted">
+        Habits keeps up to {new Intl.NumberFormat('en-US').format(MAX_CHECKS)} check marks: enough
+        for 10 habits ticked every day for over 2½ years. To make room, delete the ones from a year
+        you no longer need.
+      </p>
+      <div>
+        <Button icon="trash" aria-haspopup="dialog" data-action="delete-year">
+          Delete check marks from a year…
+        </Button>
+      </div>
+      <p class="muted" role="status" data-year-status></p>
     </section>
 
     <SyncControls />
@@ -174,12 +193,13 @@ import { EDITABLE_DAYS, MAX_NAME_LENGTH } from '../lib/habits.ts';
           <p class="field__error" id="edit-reminder-error" data-error-for="reminder"></p>
         </div>
       </div>
-      <fieldset class="stack stack--sm" aria-describedby="edit-done-hint">
+      <fieldset class="stack stack--sm" aria-describedby="edit-done-hint edit-done-error">
         <legend class="field__label">Done on</legend>
         <p class="field__hint" id="edit-done-hint">
           Forgot to tick a day? Fix the last {EDITABLE_DAYS / 7} weeks here.
         </p>
         <div class="past-days" data-past-days></div>
+        <p class="field__error" id="edit-done-error" data-error-for="past"></p>
       </fieldset>
       <div class="cluster dialog__actions">
         <Button type="submit" variant="primary">
@@ -188,6 +208,31 @@ import { EDITABLE_DAYS, MAX_NAME_LENGTH } from '../lib/habits.ts';
         <Button data-action="cancel">Cancel</Button>
         <Button variant="danger" icon="trash" data-action="delete" class="dialog__delete">
           Delete
+        </Button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- "Delete check marks from a year…": every habit's, from the year chosen, to make room. -->
+  <dialog class="dialog" aria-labelledby="year-title" data-year-dialog>
+    <form class="stack" data-year-form novalidate>
+      <h2 id="year-title">Delete check marks from a year</h2>
+      <div class="field">
+        <label class="field__label" for="year-select">
+          Year
+        </label>
+        <select
+          class="input"
+          id="year-select"
+          aria-describedby="year-text"
+          data-year-select
+        ></select>
+      </div>
+      <p id="year-text" aria-live="polite" data-year-text></p>
+      <div class="cluster">
+        <Button data-action="cancel">Cancel</Button>
+        <Button type="submit" variant="danger" icon="trash">
+          <span data-year-confirm>Delete</span>
         </Button>
       </div>
     </form>

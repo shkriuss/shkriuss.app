@@ -114,6 +114,32 @@ test('says when repeating times may be an hour off', async ({ page }) => {
   );
 });
 
+test('an event that lasts too long is listed, and the rest still imported', async ({ page }) => {
+  // Such a duration used to stop the whole import without a word (audit F1-8).
+  const file = WORK_FILE.replace(
+    'END:VCALENDAR',
+    [
+      'BEGIN:VEVENT',
+      'UID:forever@example.com',
+      'DTSTART;VALUE=DATE:20261017',
+      'DURATION:P100000000D',
+      'SUMMARY:For ever',
+      'END:VEVENT',
+      'END:VCALENDAR',
+    ].join('\r\n'),
+  );
+  await importFile(page, 'work.ics', file);
+  await expect(dialog(page)).toContainText('Found 4 events in “work.ics”.');
+  await expect(dialog(page).getByRole('listitem')).toHaveText([
+    'Every other Wednesday: It repeats in a way Calendar can’t show yet (for example every 2 weeks).',
+    'For ever: An event can last up to 366 days.',
+  ]);
+  await dialog(page).getByRole('button', { name: 'Add 2 events' }).click();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Added 2 events from the file.' }),
+  ).toBeAttached();
+});
+
 test('explains files it can’t use', async ({ page }) => {
   await importFile(page, 'notes.txt', 'Buy milk');
   await expect(dialog(page)).toContainText('This doesn’t look like a calendar (.ics) file.');
@@ -125,6 +151,19 @@ test('explains files it can’t use', async ({ page }) => {
 
   await importFile(page, 'empty.ics', 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nEND:VCALENDAR\r\n');
   await expect(dialog(page)).toContainText('There are no events in this file.');
+});
+
+test('says so when what reads the file can’t load', async ({ page, guard }) => {
+  // It loads only once a file is chosen; here it can't.
+  guard.allowConsole('net::ERR_FAILED');
+  await page.route('**/_astro/import-results.*.js', (route) => route.abort());
+  await importFile(page, 'work.ics', WORK_FILE);
+  await expect(
+    page
+      .getByRole('status')
+      .filter({ hasText: 'Calendar couldn’t read this file. Please try again.' }),
+  ).toBeVisible();
+  await expect(dialog(page)).toBeHidden();
 });
 
 test('imports what Calendar exports', async ({ page }) => {

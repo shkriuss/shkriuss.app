@@ -45,6 +45,11 @@ export async function turnOnSync(page: Page, appName: string): Promise<void> {
   // "Sync is on" shows before the first sync is over. Wait for it, upload
   // included: a test waiting for the upload of its next change mustn't get
   // this one instead (and check the other device too early).
+  await syncedSince(page, since);
+}
+
+/** Resolves once the app on `page` has finished a sync that started at `since` or later (its own clock). */
+export async function syncedSince(page: Page, since: number): Promise<void> {
   await page.waitForFunction((after) => {
     const state = JSON.parse(localStorage.getItem('shkriuss-device:sync') ?? 'null') as {
       last?: number | null;

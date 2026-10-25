@@ -89,16 +89,25 @@ export const API_HEADERS: Readonly<Record<string, string>> = {
   'X-Content-Type-Options': 'nosniff',
 };
 
+/**
+ * API_HEADERS, and the server's clock (Date, as Cloudflare adds anyway): a
+ * device whose own clock is far off can go by it (audit F1-4).
+ */
+const apiHeaders = (): Record<string, string> => ({
+  ...API_HEADERS,
+  Date: new Date().toUTCString(),
+});
+
 export function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json; charset=utf-8', ...API_HEADERS },
+    headers: { 'Content-Type': 'application/json; charset=utf-8', ...apiHeaders() },
   });
 }
 
 export const problem = (status: number, error: string): Response => json({ error }, status);
 
-export const noContent = (): Response => new Response(null, { status: 204, headers: API_HEADERS });
+export const noContent = (): Response => new Response(null, { status: 204, headers: apiHeaders() });
 
 // ---------- Requests ----------
 

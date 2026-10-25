@@ -20,7 +20,9 @@ colour are in [`packages/registry/apps.json`](../../packages/registry/apps.json)
 - **Import**: "Import .ics file" reads a calendar file from Google Calendar,
   Apple Calendar, Outlook or this app. You see what will be added (and what
   can't be, and why) before anything changes. Importing the same file twice
-  doesn't make copies.
+  doesn't make copies: each event keeps the id (UID) the file gives it, and
+  one without gets an id made from what it is (its times, repeat, title,
+  notes and place).
 - **Export**: "Download .ics file" saves your events, with their reminders,
   in the standard calendar format for other calendar apps.
 - **Holidays and fasts in Georgia**, worked out on the device for 1901–2099
@@ -57,7 +59,8 @@ its notification server, docs/adr/0009).
 - Page behaviour: `src/scripts/`
   - `calendar.ts`: the month, the lists and the event editor
   - `reminder-alerts.ts`: due reminders and notifications
-  - `import-dialog.ts`: importing a file
+  - `import-dialog.ts`: choosing a file to import; the dialog that reads it
+    and shows what it adds (`import-results.ts`) loads only then
   - `special-days.ts`: holidays and fasts: what to show, and their list items
   - `shared.ts`: small helpers they share
 - Rules, as plain functions with unit tests next to them:
@@ -90,10 +93,14 @@ its notification server, docs/adr/0009).
   locked on the device and kept in sync through Calendar's own server
   (`@shkriuss/sync`). When an event is changed on two devices before they
   sync, both versions are kept: the second becomes its own event, titled
-  "… (second version)", with its own reminder. A reminder is part of its
-  event, so it syncs too; each device then uploads it to its own notification
-  service, the next time Calendar opens there (`e2e/sync.spec.ts` checks
-  this). See [ADR 0010](../../docs/adr/0010-account-and-sync.md).
+  "… (second version)", with its own reminder. An editor that's open while a
+  sync (or another tab) changes its event saves only what was changed in it
+  (`editEvent`), so the other change stays; an event deleted meanwhile comes
+  back with the change, as a change wins over a deletion. A reminder is part
+  of its event, so it syncs too; each device then uploads it to its own
+  notification service, the next time Calendar opens there
+  (`e2e/sync.spec.ts` checks this). See
+  [ADR 0010](../../docs/adr/0010-account-and-sync.md).
 - **Phones without Google services** (like GrapheneOS): use a browser with
   UnifiedPush, such as IronFox with the Sunup app.
 - **On iPhone and iPad**, notifications only work after adding Calendar to
@@ -107,7 +114,10 @@ its notification server, docs/adr/0009).
   other dates than the phone's, some of the times end up an hour off: a weekly
   9:00 London meeting imported in Tbilisi shows at 12:00 every week, but from
   late October to late March it's really at 13:00. Before anything is added,
-  the import says how many events this affects. It also says when a monthly or
+  the import says how many events this affects. Comparing clocks costs a
+  year of readings for each time zone and year, so a file gets at most 100
+  of them; past that (only in odd files), a repeat counts as one that may be
+  an hour off. It also says when a monthly or
   yearly event moved to another day near the end of a month: 22:00 UTC on the
   31st is 02:00 on the 1st in Tbilisi, and Calendar would show it on the 1st
   of every month, also after months without a 31st.

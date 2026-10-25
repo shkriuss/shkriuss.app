@@ -18,6 +18,12 @@ Drink enough water each day. Lives at <https://water.shkriuss.app>.
 - History compares every day with today's goal. "Days in a row" counts days
   the goal was reached, up to today; today doesn't break it while the day
   isn't over.
+- In fl oz, each drink shows to a tenth of an ounce but is saved rounded to
+  whole millilitres, and that adds up: five 20 fl oz bottles are 2,955 ml,
+  while 100 fl oz is 2,957 ml. So a day's drinks are added up as they're
+  shown (`totalOn`): five 20 fl oz bottles make 100 fl oz and reach a 100 fl
+  oz goal. "Goal reached", the streak, the history and the reminders all use
+  that one rule (`goalReached`).
 - `src/scripts/reminders.ts`: reminders to drink, from a time, every so often,
   until a time. Shown while Water is open, and, if "Also remind me when Water
   is closed" is on, sent by the shared notification service
@@ -32,7 +38,13 @@ Drink enough water each day. Lives at <https://water.shkriuss.app>.
 - `src/worker.ts`: runs the shared notification and sync servers
   ([ADR 0010](../../docs/adr/0010-account-and-sync.md)). Drinks are only
   added or removed, never changed, so they never conflict; for each setting,
-  the newest change wins.
+  the newest change wins. While sync is on, letting go of a drink deletes it
+  on every device, so a phone whose clock is set far ahead must not decide
+  which drinks are a year old: Water counts the year back from the sync
+  server's clock at the last sync, if that's earlier than the phone's
+  (`trustedNow` in `@shkriuss/sync`), and lets nothing go until it knows it.
+  With sync off, it counts from the phone's clock, so drinks still go after
+  a year, however long sync stays off.
 - `e2e/`: browser tests (`helpers.ts` is shared by them). The shared
   accessibility, security, offline and sync checks in `tests/e2e/` run too.
 

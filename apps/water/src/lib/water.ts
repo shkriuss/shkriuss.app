@@ -79,9 +79,13 @@ export const ML_PER_OZ = 29.5735;
 export const toMl = (amount: number, unit: Unit): number =>
   Math.round(unit === 'ml' ? amount : amount * ML_PER_OZ);
 
+/** An amount counted in the smallest step shown: whole millilitres, or tenths of an ounce. */
+const steps = (ml: number, unit: Unit): number =>
+  Math.round(unit === 'ml' ? ml : (ml / ML_PER_OZ) * 10);
+const STEPS_PER_UNIT: Record<Unit, number> = { ml: 1, oz: 10 };
+
 /** An amount in the units shown: whole millilitres, or ounces to one decimal. */
-export const inUnit = (ml: number, unit: Unit): number =>
-  unit === 'ml' ? Math.round(ml) : Math.round((ml / ML_PER_OZ) * 10) / 10;
+export const inUnit = (ml: number, unit: Unit): number => steps(ml, unit) / STEPS_PER_UNIT[unit];
 
 /** The defaults, in millilitres: round numbers in the units in use. */
 export const DEFAULTS: Record<Unit, Record<Amount, number>> = {
@@ -220,13 +224,17 @@ export function setReminders(state: SettingsState, reminders: Reminders): Settin
 
 // ---------- Amounts for people ----------
 
-/** "1,250 ml" or "42.3 fl oz". */
-export function formatAmount(ml: number, unit: Unit, locale?: string): string {
+/** An amount already in the units shown, for people: "1,250 ml" or "42.3 fl oz". */
+function formatInUnit(amount: number, unit: Unit, locale?: string): string {
   const number = new Intl.NumberFormat(locale, {
     maximumFractionDigits: unit === 'ml' ? 0 : 1,
-  }).format(inUnit(ml, unit));
+  }).format(amount);
   return `${number} ${UNIT_LABELS[unit]}`;
 }
+
+/** "1,250 ml" or "42.3 fl oz". */
+export const formatAmount = (ml: number, unit: Unit, locale?: string): string =>
+  formatInUnit(inUnit(ml, unit), unit, locale);
 
 /**
  * What's wrong with a typed amount, in the units shown, or undefined when
@@ -284,27 +292,48 @@ export const drinksOn = (state: DrinksState, date: IsoDate): Drink[] =>
     .sort(drinkOrder)
     .reverse();
 
-export const totalOn = (state: DrinksState, date: IsoDate): number =>
-  state.drinks.reduce((sum, drink) => (drink.date === date ? sum + drink.ml : sum), 0);
+/**
+ * A drink as it's shown, in millilitres. In ounces each drink shows to a
+ * tenth of an ounce, as it was typed (or as the glass or bottle size), but
+ * is saved rounded to whole millilitres, and that adds up: five 20 fl oz
+ * bottles are saved as 2,955 ml, while 100 fl oz is 2,957 ml. Adding up the
+ * drinks as shown, five 20 fl oz bottles make 100 fl oz (audit F1-1).
+ */
+const asShown = (ml: number, unit: Unit): number =>
+  unit === 'ml' ? ml : (steps(ml, unit) / STEPS_PER_UNIT[unit]) * ML_PER_OZ;
 
 /**
- * Whether `total` reaches `goal`, as the person sees them. In ounces each
- * drink is rounded to whole millilitres, so four 16 fl oz bottles (1,892 ml)
- * must still reach a 64 fl oz goal (1,893 ml).
+ * What was drunk on a day, in millilitres: its drinks added up as they're
+ * shown in `unit` (see asShown), so the total is what the list adds up to.
+ */
+export const totalOn = (state: DrinksState, date: IsoDate, unit: Unit = 'ml'): number =>
+  state.drinks.reduce(
+    (sum, drink) => (drink.date === date ? sum + asShown(drink.ml, unit) : sum),
+    0,
+  );
+
+/**
+ * Whether `total` (from totalOn) reaches `goal`, as the person sees them: to
+ * the millilitre, or to a tenth of an ounce. The same rule decides "Goal
+ * reached", the streak, the history and the reminders.
  */
 export const goalReached = (total: number, goal: number, unit: Unit = 'ml'): boolean =>
-  inUnit(total, unit) >= inUnit(goal, unit);
+  steps(total, unit) >= steps(goal, unit);
 
 /** "750 ml to go." or "Goal reached. Well done!" */
-export const progressText = (total: number, goal: number, unit: Unit, locale?: string): string =>
-  goalReached(total, goal, unit)
-    ? 'Goal reached. Well done!'
-    : `${formatAmount(goal - total, unit, locale)} to go.`;
+export function progressText(total: number, goal: number, unit: Unit, locale?: string): string {
+  if (goalReached(total, goal, unit)) return 'Goal reached. Well done!';
+  // The goal less what was drunk, as both are shown: never 0 while it isn't
+  // reached.
+  const left = (steps(goal, unit) - steps(total, unit)) / STEPS_PER_UNIT[unit];
+  return `${formatInUnit(left, unit, locale)} to go.`;
+}
 
 // ---------- History ----------
 
 export interface DayTotal {
   date: IsoDate;
+  /** What was drunk, as in totalOn. */
   ml: number;
   reached: boolean;
 }
@@ -317,7 +346,7 @@ export function recentDays(
   count = 7,
   unit: Unit = 'ml',
 ): DayTotal[] {
-  const totals = totalsByDay(state);
+  const totals = totalsByDay(state, unit);
   return Array.from({ length: count }, (_, index) => {
     const date = addDays(today, -index);
     const ml = totals.get(date) ?? 0;
@@ -325,10 +354,11 @@ export function recentDays(
   });
 }
 
-function totalsByDay(state: DrinksState): Map<IsoDate, number> {
+/** Each day's total, as in totalOn. */
+function totalsByDay(state: DrinksState, unit: Unit): Map<IsoDate, number> {
   const totals = new Map<IsoDate, number>();
   for (const drink of state.drinks)
-    totals.set(drink.date, (totals.get(drink.date) ?? 0) + drink.ml);
+    totals.set(drink.date, (totals.get(drink.date) ?? 0) + asShown(drink.ml, unit));
   return totals;
 }
 
@@ -342,7 +372,7 @@ export function streak(
   today: IsoDate,
   unit: Unit = 'ml',
 ): number {
-  const totals = totalsByDay(state);
+  const totals = totalsByDay(state, unit);
   const reached = (date: IsoDate) => goalReached(totals.get(date) ?? 0, goal, unit);
   let day = reached(today) ? today : addDays(today, -1);
   let count = 0;
@@ -403,7 +433,8 @@ export function reminderNotices(
 ): Notice[] {
   const reminders = remindersOf(settings);
   if (!reminders.on) return [];
-  const reached = goalReached(totalOn(drinks, today), amountOf(settings, 'goal'), unitOf(settings));
+  const unit = unitOf(settings);
+  const reached = goalReached(totalOn(drinks, today, unit), amountOf(settings, 'goal'), unit);
   const date = reached ? addDays(today, 1) : today;
   return reminderTimes(reminders).map((time) => ({
     id: `drink~${time}`,
@@ -431,7 +462,8 @@ export function reminderDue(
   const reminders = remindersOf(settings);
   const date = to.slice(0, 10);
   const goal = amountOf(settings, 'goal');
-  if (!reminders.on || goalReached(totalOn(drinks, date), goal, unitOf(settings))) return false;
+  const unit = unitOf(settings);
+  if (!reminders.on || goalReached(totalOn(drinks, date, unit), goal, unit)) return false;
   return reminderTimes(reminders).some((time) => {
     const due = toStamp(date, time);
     return from < due && due <= to;
