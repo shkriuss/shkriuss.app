@@ -23,6 +23,31 @@ test('shows this month with today selected', async ({ page }) => {
   await expect(page.getByText('Nothing planned in the next 7 days.')).toBeVisible();
 });
 
+test('moves “today” along at midnight while it stays open', async ({ page }) => {
+  // Left open overnight, on a tablet or a desktop (audit F1-12).
+  await seed(page, [
+    { title: 'Tomorrow’s walk', startDate: '2026-10-18', endDate: '2026-10-18' },
+    { title: 'Next week’s run', startDate: '2026-10-25', endDate: '2026-10-25' },
+  ]);
+  await expect(day(page, /^Saturday, October 17, 2026, today/)).toHaveAttribute(
+    'aria-current',
+    'date',
+  );
+  await expect(upcoming(page).getByRole('button')).toHaveText([/Tomorrow’s walk/]);
+
+  await page.clock.setFixedTime(new Date('2026-10-18T00:00:30'));
+  await page.clock.runFor('01:00');
+  await expect(day(page, /^Sunday, October 18, 2026, today/)).toHaveAttribute(
+    'aria-current',
+    'date',
+  );
+  await expect(day(page, /^Saturday, October 17, 2026/)).not.toHaveAttribute('aria-current');
+  await expect(page.locator('[data-day-heading]')).toHaveText('Today, Sunday, October 18');
+  await expect(dayList(page).getByRole('button')).toHaveText([/Tomorrow’s walk/]);
+  // The next 7 days start on Monday now.
+  await expect(upcoming(page).getByRole('button')).toHaveText([/Next week’s run/]);
+});
+
 test('in a Windows contrast theme, the chosen day and event dots still show', async ({ page }) => {
   // Contrast themes replace backgrounds with the theme's own colours (audit G-6).
   await seed(page, [{ startDate: '2026-10-20', endDate: '2026-10-20' }]);

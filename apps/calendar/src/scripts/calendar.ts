@@ -86,6 +86,8 @@ const store = createStore<CalendarState>({
 
 /** Days in the "Next 7 days" list (starting tomorrow). */
 const UPCOMING_DAYS = 7;
+/** How often to check whether the day has changed while Calendar is open. */
+const NEW_DAY_CHECK_MS = 60_000;
 /** Most dots shown under a day in the month grid. */
 const MAX_DOTS = 3;
 /** Form fields in the order they appear, for focusing the first problem. */
@@ -658,13 +660,17 @@ export function mountCalendar(root: Document): void {
     }
   });
 
-  // Coming back to the app on a new day: move "today" along.
+  // A new day, while Calendar stays open or when it comes back on screen:
+  // move "today" along, as the other apps do (audit F1-12).
+  const checkDay = (): void => {
+    if (today() === todayDate) return;
+    if (selected === todayDate) selected = today();
+    viewMonth = shiftMonth(selected, 0);
+    render();
+  };
+  window.setInterval(checkDay, NEW_DAY_CHECK_MS);
   root.addEventListener('visibilitychange', () => {
-    if (root.visibilityState === 'visible' && today() !== todayDate) {
-      if (selected === todayDate) selected = today();
-      viewMonth = shiftMonth(selected, 0);
-      render();
-    }
+    if (root.visibilityState === 'visible') checkDay();
   });
 
   mountImportDialog(root, page);
