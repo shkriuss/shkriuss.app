@@ -156,14 +156,19 @@ import { MAX_NAME_LENGTH } from '../lib/counters.ts';
     gap: var(--space-3);
   }
 
+  /* The name, and its buttons at the end of the line; with large text the
+     buttons go under it, not the name squeezed into a column of letters (audit G-4). */
   .counter__header {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    justify-content: space-between;
     gap: var(--space-2);
   }
 
+  /* 5rem: in the narrowest card, at the usual text size, the buttons still fit beside it. */
   .counter__name {
+    flex: 1 1 5rem;
+    min-width: 0;
     font-size: var(--text-lg);
     overflow-wrap: anywhere;
   }
@@ -171,6 +176,7 @@ import { MAX_NAME_LENGTH } from '../lib/counters.ts';
   .counter__tools {
     display: flex;
     flex: none;
+    margin-inline-start: auto;
   }
 
   .counter__value {
