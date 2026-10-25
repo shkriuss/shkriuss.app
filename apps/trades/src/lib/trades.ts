@@ -20,6 +20,7 @@
  */
 import { addDays, isIsoDate, type IsoDate } from '@shkriuss/dates';
 import { csvFile } from '@shkriuss/storage/csv';
+import { defineSettings, type SettingsState as SavedSettings } from '@shkriuss/storage/settings';
 import {
   CURRENCIES,
   decimalText,
@@ -918,12 +919,7 @@ export interface Setting {
   currency: Currency;
 }
 
-export interface SettingsState {
-  /** Only the settings ever changed. */
-  settings: Setting[];
-}
-
-export const emptySettings = (): SettingsState => ({ settings: [] });
+export type SettingsState = SavedSettings<Setting>;
 
 const isSetting = (value: unknown): value is Setting =>
   typeof value === 'object' &&
@@ -931,26 +927,16 @@ const isSetting = (value: unknown): value is Setting =>
   (value as Record<string, unknown>)['id'] === 'currency' &&
   CURRENCIES.includes((value as Record<string, unknown>)['currency'] as Currency);
 
-export function isSettingsState(value: unknown): value is SettingsState {
-  if (typeof value !== 'object' || value === null) return false;
-  const { settings } = value as Record<string, unknown>;
-  return Array.isArray(settings) && settings.every(isSetting);
-}
+/** Trades' settings, saved only once changed (@shkriuss/storage/settings). */
+const SETTINGS = defineSettings<Setting>(['currency'], isSetting);
 
-/** Settings from sync: the ones that look right. */
-export const withSettings = (items: readonly unknown[]): SettingsState => ({
-  settings: items.filter(isSetting).slice(0, 1),
-});
+export const emptySettings = SETTINGS.empty;
+export const isSettingsState = SETTINGS.isState;
+/** Settings from sync: the ones that look right, once each. */
+export const withSettings = SETTINGS.fromItems;
 
 export const currencyOf = (state: SettingsState): Currency =>
-  state.settings.find((setting) => setting.id === 'currency')?.currency ?? 'USD';
+  SETTINGS.get(state, 'currency')?.currency ?? 'USD';
 
 export const setCurrency = (state: SettingsState, currency: Currency): SettingsState =>
-  CURRENCIES.includes(currency)
-    ? {
-        settings: [
-          ...state.settings.filter((setting) => setting.id !== 'currency'),
-          { id: 'currency', currency },
-        ],
-      }
-    : state;
+  SETTINGS.set(state, { id: 'currency', currency });

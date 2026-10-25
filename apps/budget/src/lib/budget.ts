@@ -29,6 +29,7 @@ import {
 } from '@shkriuss/dates';
 import type { Notice } from '@shkriuss/push';
 import { csvFile } from '@shkriuss/storage/csv';
+import { defineSettings, type SettingsState as SavedSettings } from '@shkriuss/storage/settings';
 import {
   CURRENCIES,
   currencyDigits,
@@ -585,14 +586,7 @@ export const DEFAULT_REMINDER: Reminder = { on: false, day: 1, time: '09:00' };
 
 export type Setting = { id: 'currency'; currency: Currency } | ({ id: 'reminder' } & Reminder);
 
-const SETTING_IDS: readonly Setting['id'][] = ['currency', 'reminder'];
-
-export interface SettingsState {
-  /** Only the settings ever changed. */
-  settings: Setting[];
-}
-
-export const emptySettings = (): SettingsState => ({ settings: [] });
+export type SettingsState = SavedSettings<Setting>;
 
 const isReminderDay = (value: unknown): value is ReminderDay =>
   REMINDER_DAYS.includes(value as ReminderDay);
@@ -612,41 +606,30 @@ function isSetting(value: unknown): value is Setting {
   }
 }
 
-export function isSettingsState(value: unknown): value is SettingsState {
-  if (typeof value !== 'object' || value === null) return false;
-  const { settings } = value as Record<string, unknown>;
-  return Array.isArray(settings) && settings.every(isSetting);
-}
+/** Budget's settings, saved only once changed (@shkriuss/storage/settings). */
+const SETTINGS = defineSettings<Setting>(['currency', 'reminder'], isSetting);
 
+export const emptySettings = SETTINGS.empty;
+export const isSettingsState = SETTINGS.isState;
 /** Settings from sync: the ones that look right, once each, in a fixed order. */
-export const withSettings = (items: readonly unknown[]): SettingsState => ({
-  settings: SETTING_IDS.flatMap((id) => {
-    const item = items.find((entry): entry is Setting => isSetting(entry) && entry.id === id);
-    return item ? [item] : [];
-  }),
-});
-
-const withSetting = (state: SettingsState, setting: Setting): SettingsState =>
-  withSettings([...state.settings.filter((item) => item.id !== setting.id), setting]);
+export const withSettings = SETTINGS.fromItems;
 
 export const currencyOf = (state: SettingsState): Currency =>
-  state.settings.find((setting) => setting.id === 'currency')?.currency ?? 'USD';
+  SETTINGS.get(state, 'currency')?.currency ?? 'USD';
 
 export const setCurrency = (state: SettingsState, currency: Currency): SettingsState =>
-  CURRENCIES.includes(currency) ? withSetting(state, { id: 'currency', currency }) : state;
+  SETTINGS.set(state, { id: 'currency', currency });
 
 export function reminderOf(state: SettingsState): Reminder {
-  const saved = state.settings.find((setting) => setting.id === 'reminder');
+  const saved = SETTINGS.get(state, 'reminder');
   if (!saved) return { ...DEFAULT_REMINDER };
   const { on, day, time } = saved;
   return { on, day, time };
 }
 
 /** Sets the reminder. Returns the same state if it isn't valid. */
-export function setReminder(state: SettingsState, reminder: Reminder): SettingsState {
-  const setting = { id: 'reminder' as const, ...reminder };
-  return isSetting(setting) ? withSetting(state, setting) : state;
-}
+export const setReminder = (state: SettingsState, reminder: Reminder): SettingsState =>
+  SETTINGS.set(state, { id: 'reminder', ...reminder });
 
 // ---------- The monthly reminder ----------
 

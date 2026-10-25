@@ -21,6 +21,7 @@ import {
   type Stamp,
 } from '@shkriuss/dates';
 import type { Notice } from '@shkriuss/push';
+import { defineSettings, type SettingsState as SavedSettings } from '@shkriuss/storage/settings';
 import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
 /** Millilitres, or US fluid ounces. */
@@ -63,15 +64,10 @@ export type Setting =
   | { id: 'bottle'; ml: number }
   | ({ id: 'reminders' } & Reminders);
 
-export interface SettingsState {
-  /** Only the settings ever changed, in SETTING_IDS order. */
-  settings: Setting[];
-}
+export type SettingsState = SavedSettings<Setting>;
 
 /** The settings' data version. */
 export const SETTINGS_VERSION = 1;
-
-const SETTING_IDS: readonly Setting['id'][] = ['unit', 'goal', 'glass', 'bottle', 'reminders'];
 
 /** A US fluid ounce. */
 export const ML_PER_OZ = 29.5735;
@@ -112,7 +108,6 @@ export const DEFAULT_REMINDERS: Reminders = {
 };
 
 export const emptyDrinks = (): DrinksState => ({ drinks: [] });
-export const emptySettings = (): SettingsState => ({ settings: [] });
 
 // ---------- Checking saved data ----------
 
@@ -156,11 +151,14 @@ export function isDrinksState(value: unknown): value is DrinksState {
   return Array.isArray(drinks) && drinks.every(isDrink);
 }
 
-export function isSettingsState(value: unknown): value is SettingsState {
-  if (typeof value !== 'object' || value === null) return false;
-  const { settings } = value as Record<string, unknown>;
-  return Array.isArray(settings) && settings.every(isSetting);
-}
+/** Water's settings, saved only once changed (@shkriuss/storage/settings). */
+const SETTINGS = defineSettings<Setting>(
+  ['unit', 'goal', 'glass', 'bottle', 'reminders'],
+  isSetting,
+);
+
+export const emptySettings = SETTINGS.empty;
+export const isSettingsState = SETTINGS.isState;
 
 /** Oldest first. Drinks at the same minute keep their order (the one added last, last). */
 const drinkOrder = (a: Drink, b: Drink): number =>
@@ -172,55 +170,35 @@ export const withDrinks = (items: readonly unknown[]): DrinksState => ({
 });
 
 /** Settings from sync: the ones that look right, once each, in a fixed order. */
-export const withSettings = (items: readonly unknown[]): SettingsState => ({
-  settings: SETTING_IDS.flatMap((id) => {
-    const item = items.find(
-      (entry): entry is Setting => isSetting(entry) && (entry as Setting).id === id,
-    );
-    return item ? [item] : [];
-  }),
-});
+export const withSettings = SETTINGS.fromItems;
 
 // ---------- Settings ----------
 
-function find<T extends Setting['id']>(
-  state: SettingsState,
-  id: T,
-): Extract<Setting, { id: T }> | undefined {
-  return state.settings.find((setting) => setting.id === id) as
-    Extract<Setting, { id: T }> | undefined;
-}
-
-const withSetting = (state: SettingsState, setting: Setting): SettingsState =>
-  withSettings([...state.settings.filter((item) => item.id !== setting.id), setting]);
-
-export const unitOf = (state: SettingsState): Unit => find(state, 'unit')?.unit ?? 'ml';
+export const unitOf = (state: SettingsState): Unit => SETTINGS.get(state, 'unit')?.unit ?? 'ml';
 
 /** The goal or a size, in millilitres. */
 export const amountOf = (state: SettingsState, amount: Amount): number =>
-  find(state, amount)?.ml ?? DEFAULTS[unitOf(state)][amount];
+  SETTINGS.get(state, amount)?.ml ?? DEFAULTS[unitOf(state)][amount];
 
 export function remindersOf(state: SettingsState): Reminders {
-  const saved = find(state, 'reminders');
+  const saved = SETTINGS.get(state, 'reminders');
   if (!saved) return { ...DEFAULT_REMINDERS };
   const { on, every, from, until } = saved;
   return { on, every, from, until };
 }
 
 export const setUnit = (state: SettingsState, unit: Unit): SettingsState =>
-  UNITS.includes(unit) ? withSetting(state, { id: 'unit', unit }) : state;
+  SETTINGS.set(state, { id: 'unit', unit });
 
 /** Sets the goal or a size. Returns the same state if it isn't a valid amount. */
 export const setAmount = (state: SettingsState, amount: Amount, ml: number): SettingsState =>
-  isAmount(ml) ? withSetting(state, { id: amount, ml }) : state;
+  SETTINGS.set(state, { id: amount, ml });
 
 /** Sets the reminders. Returns the same state if they aren't valid. */
-export function setReminders(state: SettingsState, reminders: Reminders): SettingsState {
-  const setting = { id: 'reminders' as const, ...reminders };
-  return isSetting(setting) && reminders.from <= reminders.until
-    ? withSetting(state, setting)
+export const setReminders = (state: SettingsState, reminders: Reminders): SettingsState =>
+  reminders.from <= reminders.until
+    ? SETTINGS.set(state, { id: 'reminders', ...reminders })
     : state;
-}
 
 // ---------- Amounts for people ----------
 

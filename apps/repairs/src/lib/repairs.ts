@@ -23,6 +23,7 @@
  */
 import { isIsoDate, type IsoDate } from '@shkriuss/dates';
 import { csvFile } from '@shkriuss/storage/csv';
+import { defineSettings, type SettingsState as SavedSettings } from '@shkriuss/storage/settings';
 import {
   CURRENCIES,
   currencyDigits,
@@ -958,14 +959,7 @@ export function toCsv(
 
 export type Setting = { id: 'unit'; unit: Unit } | { id: 'currency'; currency: Currency };
 
-const SETTING_IDS: readonly Setting['id'][] = ['unit', 'currency'];
-
-export interface SettingsState {
-  /** Only the settings ever changed. */
-  settings: Setting[];
-}
-
-export const emptySettings = (): SettingsState => ({ settings: [] });
+export type SettingsState = SavedSettings<Setting>;
 
 function isSetting(value: unknown): value is Setting {
   if (typeof value !== 'object' || value === null) return false;
@@ -980,35 +974,21 @@ function isSetting(value: unknown): value is Setting {
   }
 }
 
-export function isSettingsState(value: unknown): value is SettingsState {
-  if (typeof value !== 'object' || value === null) return false;
-  const { settings } = value as Record<string, unknown>;
-  return Array.isArray(settings) && settings.every(isSetting);
-}
+/** Repairs' settings, saved only once changed (@shkriuss/storage/settings). */
+const SETTINGS = defineSettings<Setting>(['unit', 'currency'], isSetting);
 
+export const emptySettings = SETTINGS.empty;
+export const isSettingsState = SETTINGS.isState;
 /** Settings from sync: the ones that look right, once each, in a fixed order. */
-export const withSettings = (items: readonly unknown[]): SettingsState => ({
-  settings: SETTING_IDS.flatMap((id) => {
-    const item = items.find((entry): entry is Setting => isSetting(entry) && entry.id === id);
-    return item ? [item] : [];
-  }),
-});
+export const withSettings = SETTINGS.fromItems;
 
-const withSetting = (state: SettingsState, setting: Setting): SettingsState =>
-  withSettings([...state.settings.filter((item) => item.id !== setting.id), setting]);
+export const unitOf = (state: SettingsState): Unit => SETTINGS.get(state, 'unit')?.unit ?? 'km';
 
-export function unitOf(state: SettingsState): Unit {
-  const setting = state.settings.find((item) => item.id === 'unit');
-  return setting?.id === 'unit' ? setting.unit : 'km';
-}
-
-export function currencyOf(state: SettingsState): Currency {
-  const setting = state.settings.find((item) => item.id === 'currency');
-  return setting?.id === 'currency' ? setting.currency : 'USD';
-}
+export const currencyOf = (state: SettingsState): Currency =>
+  SETTINGS.get(state, 'currency')?.currency ?? 'USD';
 
 export const setUnit = (state: SettingsState, unit: Unit): SettingsState =>
-  UNITS.includes(unit) ? withSetting(state, { id: 'unit', unit }) : state;
+  SETTINGS.set(state, { id: 'unit', unit });
 
 export const setCurrency = (state: SettingsState, currency: Currency): SettingsState =>
-  CURRENCIES.includes(currency) ? withSetting(state, { id: 'currency', currency }) : state;
+  SETTINGS.set(state, { id: 'currency', currency });

@@ -8,7 +8,8 @@
     ".": "./src/index.ts",
     "./backup": "./src/backup.ts",
     "./csv": "./src/csv.ts",
-    "./files": "./src/files.ts"
+    "./files": "./src/files.ts",
+    "./settings": "./src/settings.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"

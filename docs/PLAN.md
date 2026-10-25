@@ -91,7 +91,8 @@ How the shared packages work:
   versioning and migrations, plus back up (locked with a passphrase, or a
   plain copy), restore and "delete all data". Photos and other big files go
   in IndexedDB (`@shkriuss/storage/files`). Spreadsheets to download are
-  made with `@shkriuss/storage/csv`.
+  made with `@shkriuss/storage/csv`, and settings saved one at a time (so
+  sync can merge them) with `@shkriuss/storage/settings`.
 
 Shared versions: a pnpm **catalog** in `pnpm-workspace.yaml` pins each
 third-party version once for the whole repo.

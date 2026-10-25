@@ -122,8 +122,11 @@ Sync works on lists of items, each with a string `id`. Settings (single
 values like a unit or a goal) sync the same way: save each one as its own
 item, like `{ id: 'unit', unit: 'ml' }`, and only the settings someone
 changed are saved. Then two devices changing different settings don't undo
-each other. Water is the example (`withSettings` in
-`apps/water/src/lib/water.ts`); Budget, Repairs and Trades do the same.
+each other. `defineSettings` from `@shkriuss/storage/settings` does the work:
+give it the settings' ids and a check for one setting, and it gives the
+store's `fallback` and `validate`, the list for sync (`fromItems`), and
+`get` and `set`. Water is the example (`apps/water/src/lib/water.ts`);
+Budget, Repairs and Trades use it too.
 
 ### Data that belongs to one device
 
