@@ -25,6 +25,14 @@ export interface FileStore<T extends StoredFile> {
   /** Saves several files together: all are saved, or none. */
   putAll(files: readonly T[]): Promise<void>;
   removeAll(ids: readonly string[]): Promise<void>;
+  /** A file ready to save together with files of other kinds (putTogether). */
+  entry(file: T): FileEntry;
+}
+
+/** A file of some kind, for putTogether(): made by its store's entry(). */
+export interface FileEntry {
+  readonly key: string;
+  readonly file: StoredFile;
 }
 
 /**
@@ -102,6 +110,7 @@ export function createFileStore<T extends StoredFile>(kind: string): FileStore<T
   const keyOf = (id: string) => `${kind}:${id}`;
   // Every key from "<kind>:" up to "<kind>;" (the next character) is this kind's.
   const range = () => IDBKeyRange.bound(`${kind}:`, `${kind};`, false, true);
+  const entry = (file: T): FileEntry => ({ key: keyOf(file.id), file });
   return {
     async get(id) {
       return (
@@ -112,13 +121,7 @@ export function createFileStore<T extends StoredFile>(kind: string): FileStore<T
     async all() {
       return (await transact<T[]>('readonly', (table) => table.getAll(range()))) ?? [];
     },
-    async putAll(files) {
-      if (files.length === 0) return;
-      await transact('readwrite', (table) => {
-        for (const file of files) table.put(file, keyOf(file.id));
-        return undefined;
-      });
-    },
+    putAll: (files) => putTogether(files.map(entry)),
     async removeAll(ids) {
       if (ids.length === 0) return;
       await transact('readwrite', (table) => {
@@ -126,7 +129,21 @@ export function createFileStore<T extends StoredFile>(kind: string): FileStore<T
         return undefined;
       });
     },
+    entry,
   };
+}
+
+/**
+ * Saves files of several kinds together, in one transaction: all are saved,
+ * or none. For records that must never disagree, like a photo's details and
+ * its files (each store's entry() makes them).
+ */
+export async function putTogether(entries: readonly FileEntry[]): Promise<void> {
+  if (entries.length === 0) return;
+  await transact('readwrite', (table) => {
+    for (const { key, file } of entries) table.put(file, key);
+    return undefined;
+  });
 }
 
 /**

@@ -43,9 +43,10 @@ import {
   keepThumb,
   loadProgress,
   moveFiles,
-  removeOriginals,
+  removeOriginal,
   saveDetails,
   saveProgress,
+  withOriginals,
   type OnlineProgress,
 } from './library.ts';
 
@@ -195,12 +196,17 @@ export function startOnline(list: PhotoList): Online {
 
   /**
    * What was online is gone (the library was deleted), or in another library
-   * now: photos only there go too, and those here go up again.
+   * now: photos only there go too, and those here go up again. A photo
+   * marked as here without its original (an older version's "Free up space"
+   * stopped half-way) was only online too, so it isn't kept as here
+   * (audit F3-1).
    */
   async function forgetOnline(library?: string, removals: string[] = []): Promise<void> {
     const all = list.all();
-    const gone = all.filter((photo) => !photo.here).map((photo) => photo.id);
-    const stay = all.filter((photo) => photo.here && photo.online);
+    const originals = await withOriginals();
+    const here = (photo: Photo) => photo.here && originals.has(photo.id);
+    const gone = all.filter((photo) => !here(photo)).map((photo) => photo.id);
+    const stay = all.filter((photo) => here(photo) && photo.online);
     const offline = stay.map((photo) => ({ ...photo, online: null }));
     if (offline.length > 0) await saveDetails(offline);
     if (gone.length > 0) await deletePhotos(gone);
@@ -544,9 +550,14 @@ export function startOnline(list: PhotoList): Online {
         const chosen = new Set(photos.map((photo) => photo.id));
         const still = freeable(list.all()).photos.filter((photo) => chosen.has(photo.id));
         if (!canFreeUp(state()) || still.length === 0) throw new Error('Nothing to free up.');
-        await removeOriginals(still);
-        list.changed({ save: still.map((photo) => ({ ...photo, here: false })) });
-        return still.reduce((sum, photo) => sum + photo.size, 0);
+        const freed: Photo[] = [];
+        try {
+          for (const photo of still) freed.push(await removeOriginal(photo));
+        } finally {
+          // Those freed before anything went wrong too.
+          list.changed({ save: freed });
+        }
+        return freed.reduce((sum, photo) => sum + photo.size, 0);
       }),
   };
 }
