@@ -25,7 +25,9 @@ private car's service history. Lives at <https://repairs.shkriuss.app>.
   vehicle (name, model, plate), system, damage, work and parts; a word of only
   letters and digits must start a word, so "7" finds Bus 7 but not a part
   number with a 7 inside (`matchesSearch`). The vehicle filter, or a
-  vehicle's "Show repairs", shows one vehicle's history.
+  vehicle's "Show repairs", shows one vehicle's history. The list is drawn
+  again once typing pauses, and how many repairs a search or the filter
+  finds is read out to screen readers ("2 repairs found.").
 - Suggestions: the systems in `SYSTEMS` (for city buses first) and any typed
   before; the part names used before, and their last part number, filled in
   when the name is chosen (`partNames`); the vehicles; the models

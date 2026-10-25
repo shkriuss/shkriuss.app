@@ -8,6 +8,7 @@ import { today } from '@shkriuss/dates';
 import { createStore, downloadFile } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
 import { keepFocus } from '@shkriuss/ui/keep-focus';
+import { waitForTyping } from '@shkriuss/ui/long-lists';
 import { focusProblem, reportSave } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { typedText } from '@shkriuss/ui/typed-text';
@@ -97,6 +98,8 @@ const settingsStore = createStore<SettingsState>({
 
 /** Repairs shown at first, and added by "Show more". */
 const PAGE_SIZE = 50;
+/** Search results are read out this long after the last key press. */
+const ANNOUNCE_DELAY_MS = 700;
 const EMPTY_PART: PartForm = { name: '', number: '', quantity: '1', price: '' };
 const PART_FIELDS = ['name', 'number', 'quantity', 'price'] as const;
 
@@ -161,6 +164,7 @@ export function mountRepairs(root: Document): void {
   let deleting: { type: 'repair' | 'vehicle'; id: string } | null = null;
   let saving = false;
   let syncWasOn = false;
+  let announceTimer: number | undefined;
   const formPhotos = mountFormPhotos(root, repairForm, { syncOn: () => sync.status().on });
   const photoViewer = mountPhotoViewer(root, () => vehicles);
 
@@ -789,14 +793,33 @@ export function mountRepairs(root: Document): void {
     }
   });
 
-  searchInput.addEventListener('input', () => {
+  /** How many repairs the search and the vehicle chosen find, for screen readers (audit G-6). */
+  function announceFound(): void {
+    const found = findRepairs(repairs, vehicles, {
+      vehicle: filterVehicle(),
+      query: searchInput.value,
+    });
+    announce(`${countLabel(found.length, 'repair', 'repairs')} found.`);
+  }
+
+  // The list is drawn again once typing pauses, not at every key (audit J-1).
+  const typedSearch = waitForTyping(() => {
     shown = PAGE_SIZE;
     renderRepairs();
+    window.clearTimeout(announceTimer);
+    announceTimer = window.setTimeout(() => {
+      if (searchInput.value.trim()) announceFound();
+    }, ANNOUNCE_DELAY_MS);
   });
+  searchInput.addEventListener('input', typedSearch);
 
   vehicleFilter.addEventListener('change', () => {
+    // Drawn now, with what's typed too: read out once.
+    typedSearch.cancel();
+    window.clearTimeout(announceTimer);
     shown = PAGE_SIZE;
     renderRepairs();
+    announceFound();
   });
 
   repairDialog.addEventListener('close', () => {
