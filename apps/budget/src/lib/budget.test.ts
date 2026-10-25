@@ -223,6 +223,9 @@ describe('entries', () => {
     expect(readEntry({ ...form, amount: '0.004' }, 'x', 0, categories).problems).toEqual({
       amount: 'Enter at least 0.01.',
     });
+    // Rounded to the cent as written (1.005 * 100 is 100.49999999999999).
+    expect(readEntry({ ...form, amount: '1.005' }, 'x', 0, categories).entry?.amount).toBe(1.01);
+    expect(readEntry({ ...form, amount: '0.005' }, 'x', 0, categories).entry?.amount).toBe(0.01);
     expect(
       readEntry({ ...form, amount: '1.234,50' }, 'x', 0, categories, { locale: 'en-US' }).problems,
     ).toEqual({
@@ -361,6 +364,21 @@ describe('months', () => {
       { category: categories.categories[2], spent: 0, left: null },
       { category: null, spent: 40.1, left: null },
     ]);
+  });
+
+  // Audit F2-11: 3.30 spent, then refunded as 1.10 and 2.20, showed "Spent -$0.00".
+  it('never adds up to -0, which would show as "-$0.00"', () => {
+    const evened = [
+      entry({ id: 'a', amount: 3.3 }),
+      entry({ id: 'b', kind: 'refund', amount: 1.1 }),
+      entry({ id: 'c', kind: 'refund', amount: 2.2 }),
+    ];
+    const totals = summary(evened, categories);
+    expect(Object.is(totals.spent, 0)).toBe(true);
+    expect(Object.is(totals.spentWithLimit, 0)).toBe(true);
+    expect(formatMoney(totals.spent, 'USD', { locale: 'en-US' })).toBe('$0.00');
+    expect(formatMoney(totals.left, 'USD', { signed: true, locale: 'en-US' })).toBe('$0.00');
+    expect(Object.is(byCategory(evened, categories)[0]?.spent, 0)).toBe(true);
   });
 
   it('takes refunds off their category’s spending, and off what was spent', () => {

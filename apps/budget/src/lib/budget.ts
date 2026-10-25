@@ -33,6 +33,7 @@ import {
   decimalText,
   formatMoney,
   parseDecimal,
+  roundDecimal,
   type Currency,
 } from '@shkriuss/ui/numbers';
 import { DATE_LOCALE } from '@shkriuss/ui/locale';
@@ -100,8 +101,12 @@ export const SUGGESTED = [
   'Other',
 ] as const;
 
-/** Rounds away the tiny errors of decimal sums (0.1 + 0.2). */
-const tidy = (value: number): number => Math.round(value * 100) / 100;
+/**
+ * Rounds to the cent, away the tiny errors of decimal sums (0.1 + 0.2): by
+ * the amount's own digits (1.005 is 1.01, not 1.00), and never to -0, which
+ * would show as "-$0.00" (roundDecimal).
+ */
+const tidy = (value: number): number => roundDecimal(value, 2);
 
 // ---------- Checking ----------
 
