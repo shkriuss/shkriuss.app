@@ -235,9 +235,10 @@ Everything here fits Cloudflare's and GitHub's free plans:
   which ran out, so it was made public on 22 October 2026.)
 - Notifications while an app is closed, the optional account and sync use
   Durable Objects, free up to 100,000 requests a day (each notification sent
-  is about two; signing in, adding a device or opening the Account page
-  takes a handful; an app with
-  sync open uses about one a minute, plus one or two per change).
+  is about two; signing in or opening the Account page takes a handful, and
+  a device code shown to add a device takes one every 2 seconds, up to 300
+  in its 10 minutes; an app with sync open uses about one a minute, plus one
+  or two per change).
 - Durable Objects also keep up to 5 GB, for every app together. Each app's
   servers have a limit, and copies nobody uses for 13 months are deleted
   ([ADR 0017](adr/0017-storage-limits.md)). A unit test checks that the

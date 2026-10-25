@@ -72,7 +72,8 @@ browsers like IronFox receive Web Push through **UnifiedPush**.
   1.5 MB of messages in all (so a schedule fits in one stored value; the app
   sends the soonest ones that fit), https push addresses with a domain name only (no redirects), schedule
   changes rate-limited, and at most 2,000 messages per app per day (UTC):
-  past that, sending waits until 00:00 UTC. Each whole second spent waiting
+  past that, sending waits until 00:00 UTC, and messages more than an hour
+  late by then are skipped, as always. Each whole second spent waiting
   for push services counts as one more message, so one app can't keep the
   server waiting for more than about 2,000 seconds a day.
 - **Checked by the device's object:** the Worker only reads an upload, in
