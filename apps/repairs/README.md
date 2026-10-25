@@ -70,6 +70,9 @@ private car's service history. Lives at <https://repairs.shkriuss.app>.
   deletes their photos (online too, with sync on); "Delete all data"
   deletes them on this device only (sync is turned off first). A photo
   taken off a repair on another device is deleted here at the next sync.
+  Any other photo no repair uses (left by an older backup restored, say) is
+  deleted when Repairs opens and after each sync, unless it was saved in
+  the last minute (`deleteUnusedPhotos`).
   `src/scripts/photos.ts` does the photo work.
 - `src/scripts/repairs.ts`: connects the page to those rules.
 - `src/pages/index.astro`: the page, built from `@shkriuss/ui` components.

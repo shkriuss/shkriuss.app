@@ -72,7 +72,13 @@ import {
   REPAIRS_VERSION,
   VEHICLES_VERSION,
 } from '../lib/repairs.ts';
-import { deletePhotos, downloadPhotosWith, readPhotoFile, thumbUrl } from './photos.ts';
+import {
+  deletePhotos,
+  deleteUnusedPhotos,
+  downloadPhotosWith,
+  readPhotoFile,
+  thumbUrl,
+} from './photos.ts';
 import { required } from '@shkriuss/ui/dom';
 import { mountFormPhotos } from './form-photos.ts';
 import { mountPhotoViewer } from './photo-viewer.ts';
@@ -920,6 +926,17 @@ export function mountRepairs(root: Document): void {
     if (event.key !== null && keys.includes(event.key)) reload();
   });
 
+  /**
+   * Deletes the photos no repair uses, and no repair form open here
+   * (deleteUnusedPhotos). Not while the repairs saved can't be read (saved
+   * by a newer Repairs, say): every photo would look unused then.
+   */
+  function deleteUnused(): void {
+    if (repairsStore.status() !== 'ok') return;
+    const inForm = repairDialog.open ? formPhotos.inUse() : [];
+    void deleteUnusedPhotos(new Set([...photosOf(repairsStore.load().repairs), ...inForm]));
+  }
+
   // Sync between devices through the shkriuss account (if turned on). The
   // newest change to each vehicle, repair and setting wins. Vehicles and
   // repairs are passed on as they come: repairs from an older version of
@@ -963,7 +980,10 @@ export function mountRepairs(root: Document): void {
   syncWasOn = sync.status().on;
   mountSyncControls(required<HTMLElement>(root, '[data-sync-controls]'), sync);
   sync.subscribe((status, event) => {
-    if (event === 'synced' || event === 'kept-both') refreshMissingThumbs();
+    if (event === 'synced' || event === 'kept-both') {
+      refreshMissingThumbs();
+      deleteUnused();
+    }
     // Turned on or off: photos say where they are.
     if (status.on !== syncWasOn) {
       syncWasOn = status.on;
@@ -972,4 +992,6 @@ export function mountRepairs(root: Document): void {
   });
 
   render();
+  // Photos left behind (by an older backup restored, say) go.
+  deleteUnused();
 }
