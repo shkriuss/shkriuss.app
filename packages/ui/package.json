@@ -23,6 +23,7 @@
     "./long-lists": "./src/lib/long-lists.ts",
     "./push-controls": "./src/scripts/push-controls.ts",
     "./numbers": "./src/lib/numbers.ts",
+    "./photos": "./src/lib/photos.ts",
     "./problem": "./src/scripts/problem.ts",
     "./text": "./src/lib/text.ts",
     "./text-limit": "./src/scripts/text-limit.ts",

@@ -192,19 +192,6 @@ export function librarySummary(photos: readonly Photo[]): string {
   return `${countLabel(photos.length, 'photo', 'photos')} · ${formatBytes(bytes)}`;
 }
 
-/** A width and height scaled down (never up) so the longest side is at most `max`. */
-export function fitWithin(
-  width: number,
-  height: number,
-  max: number,
-): { width: number; height: number } {
-  const scale = Math.min(1, max / Math.max(width, height));
-  return {
-    width: Math.max(1, Math.round(width * scale)),
-    height: Math.max(1, Math.round(height * scale)),
-  };
-}
-
 const EXTENSIONS: Record<string, string> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',

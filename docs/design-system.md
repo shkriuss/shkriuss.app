@@ -107,8 +107,11 @@ app: `showProblem` puts it in the notice at the top of every page, which is
 read out at once; `reportSave(store.save(…))` says when saving didn't work,
 and why; `focusProblem` goes to a form's first wrong field, or reads its error
 out if the person is in it already; `clearProblem` takes the notice away),
-`@shkriuss/ui/worker` (`startWorker`, for heavy work, and, inside a worker of
-an app with `"webAssembly": true`, `allowThreadScripts`), `@shkriuss/ui/busy`
+`@shkriuss/ui/worker` (`startWorker`, for heavy work; `askWorker` and, in the
+worker, `answerQuestions`, to ask it something and wait for the answer; and,
+inside a worker of an app with `"webAssembly": true`, `allowThreadScripts`),
+`@shkriuss/ui/photos` (`smallerJpeg`, a smaller JPEG copy of a photo, made in
+a worker, as Photos and Repairs do), `@shkriuss/ui/busy`
 (`setBusy`, below), `@shkriuss/ui/keep-focus` (`keepFocus`, below),
 `@shkriuss/ui/qr-code`, `@shkriuss/ui/service-worker`
 (`offlineCopySaved`, to wait until the site works offline),

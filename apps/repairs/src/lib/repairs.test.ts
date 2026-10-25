@@ -6,7 +6,6 @@ import {
   byDay,
   currencyOf,
   dateLabel,
-  fitWithin,
   fromPhotoFile,
   dayLabel,
   emptyRepairs,
@@ -870,12 +869,5 @@ describe('photos', () => {
     expect(fromPhotoFile('p2.thumb')).toEqual({ photo: 'p2', part: 'thumb' });
     for (const file of ['p2', 'p2.png', '.thumb', 'a/b.full'])
       expect(fromPhotoFile(file)).toBeNull();
-  });
-
-  it('are made smaller, never bigger', () => {
-    expect(fitWithin(4000, 3000, 1600)).toEqual({ width: 1600, height: 1200 });
-    expect(fitWithin(3000, 4000, 320)).toEqual({ width: 240, height: 320 });
-    expect(fitWithin(800, 600, 1600)).toEqual({ width: 800, height: 600 });
-    expect(fitWithin(10_000, 1, 320)).toEqual({ width: 320, height: 1 });
   });
 });

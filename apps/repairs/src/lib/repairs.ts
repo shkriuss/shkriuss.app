@@ -811,19 +811,6 @@ export function systemNames(state: RepairsState): string[] {
 /** The longest side of a saved photo, and of its thumbnail, in pixels. */
 export const PHOTO_SIZES = { full: 1600, thumb: 320 };
 
-/** A width and height scaled down (never up) so the longest side is at most `max`. */
-export function fitWithin(
-  width: number,
-  height: number,
-  max: number,
-): { width: number; height: number } {
-  const scale = Math.min(1, max / Math.max(width, height));
-  return {
-    width: Math.max(1, Math.round(width * scale)),
-    height: Math.max(1, Math.round(height * scale)),
-  };
-}
-
 /** The photos of these repairs (to delete with them). */
 export const photosOf = (repairs: readonly Repair[]): string[] =>
   repairs.flatMap((repair) => repair.photos);

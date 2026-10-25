@@ -13,9 +13,10 @@ reasons: [ADR 0015](../../docs/adr/0015-photos-app.md) (on the device) and
 - `src/lib/exif.ts`: when a JPEG was taken, from what the camera wrote in it
   (Exif `DateTimeOriginal`, else `DateTime`), as the camera's local time.
 - `src/scripts/process.worker.ts`: reads each picked photo in a web worker
-  (started by `process.ts`): its SHA-256 (so the same photo isn't added twice),
+  (asked by `process.ts`): its SHA-256 (so the same photo isn't added twice),
   when it was taken, a 512-pixel JPEG thumbnail and a 2,048-pixel JPEG for
-  looking at it. The original is kept exactly as picked.
+  looking at it (`@shkriuss/ui/photos`, which Repairs uses too). The
+  original is kept exactly as picked.
 - `src/scripts/library.ts`: the library on this device, in IndexedDB through
   `@shkriuss/storage/files`: each photo's details and where it is
   (`photo:<id>`), its files (`photo-files:<id>`: the original and the two

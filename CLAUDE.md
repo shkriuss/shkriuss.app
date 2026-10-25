@@ -63,8 +63,9 @@ a quicker run while working on a few apps; CI always tests every site.
   third-party URLs. Build DOM with `<template>` + `textContent`.
   `pnpm check:dist` and the e2e guard enforce this. Trusted Types are on.
   Heavy work goes in a worker started with `startWorker()` from
-  `@shkriuss/ui/worker`; only apps with `"webAssembly": true` in `apps.json`
-  may compile WebAssembly ([ADR 0011](docs/adr/0011-on-device-grammar-checking.md))
+  `@shkriuss/ui/worker` (`askWorker()` asks it something and waits for the
+  answer, like making photos smaller); only apps with `"webAssembly": true`
+  in `apps.json` may compile WebAssembly ([ADR 0011](docs/adr/0011-on-device-grammar-checking.md))
   or start WebAssembly threads with `allowThreadScripts()`.
 - **Big optional downloads** (like Grammar's Deep check model) go in an
   app's `public/on-demand/`: never precached, downloaded only when the person
