@@ -13,7 +13,9 @@ import {
   replacedSecrets,
   saveAccount,
 } from './device.ts';
+import { sha256Text } from '@shkriuss/server';
 import { successorTag } from './secret.ts';
+import { HUB, testPasskey } from './testing.ts';
 import { isReplaced, replaceAccountKey, replacedNote } from './status.ts';
 import worker, {
   AccountPasskey,
@@ -73,8 +75,28 @@ const stranger = (origin: string, path: string, init: RequestInit = {}) =>
     }),
     server.env,
   );
-/** A sealed passkey lock, as the device sends it. */
-const lock = () => JSON.stringify({ wrap: toBase64Url(randomBytes(60)) });
+/** A request to the passkey routes, from `origin`, with `body`. */
+const passkeyRequest = (
+  origin: string,
+  path: string,
+  lookup: string,
+  method: string,
+  body: unknown,
+) =>
+  worker.fetch(
+    new Request(`${origin}/api/account/passkey${path}`, {
+      method,
+      body: JSON.stringify(body),
+      headers: { Authorization: `Bearer ${lookup}`, 'Content-Type': 'application/json' },
+    }),
+    server.env,
+  );
+
+/** A new passkey lock, as the Account page at `origin` sends it, signed by `passkey`. */
+async function newLock(passkey: Awaited<ReturnType<typeof testPasskey>>, origin = HUB.origin) {
+  const assertion = await passkey.sign({ origin, rpId: new URL(origin).hostname, purpose: 'add' });
+  return { wrap: toBase64Url(randomBytes(60)), ...passkey.key, assertion };
+}
 
 describe('replacing the account key', () => {
   it('marks the old key as replaced for good, and signs in with the new one', async () => {
@@ -180,6 +202,109 @@ describe('replaced keys and other accounts (audit A-3)', () => {
   });
 });
 
+describe('passkey locks (audit C-1)', () => {
+  const signed = async (
+    passkey: Awaited<ReturnType<typeof testPasskey>>,
+    purpose: 'open' | 'remove',
+    origin = HUB.origin,
+  ) => ({ assertion: await passkey.sign({ origin, rpId: new URL(origin).hostname, purpose }) });
+
+  it('are given out only for the passkey’s signature made on the Account page', async () => {
+    const passkey = await testPasskey(-7);
+    const lookup = madeUpToken();
+    const lock = await newLock(passkey);
+    expect((await passkeyRequest(HUB.origin, '', lookup, 'PUT', lock)).status).toBe(204);
+
+    // A script on an app's page can use the same passkey, but its signature says where it was made.
+    const fromApp = await signed(passkey, 'open', 'https://tally.shkriuss.app');
+    expect((await passkeyRequest(HUB.origin, '/open', lookup, 'POST', fromApp)).status).toBe(403);
+    // Nor does a signature for removing it open it.
+    const forRemoving = await signed(passkey, 'remove');
+    expect((await passkeyRequest(HUB.origin, '/open', lookup, 'POST', forRemoving)).status).toBe(
+      403,
+    );
+
+    const opened = await passkeyRequest(
+      HUB.origin,
+      '/open',
+      lookup,
+      'POST',
+      await signed(passkey, 'open'),
+    );
+    expect(opened.status).toBe(200);
+    expect(await opened.json()).toEqual({ wrap: lock.wrap });
+  });
+
+  it('can’t be replaced, and only its own passkey removes it', async () => {
+    const passkey = await testPasskey(-257);
+    const lookup = madeUpToken();
+    expect(
+      (await passkeyRequest(HUB.origin, '', lookup, 'PUT', await newLock(passkey))).status,
+    ).toBe(204);
+    // Someone with the passkey's PRF value (and so the lookup token) can't put their own lock there.
+    const theirs = await newLock(await testPasskey(-7));
+    expect((await passkeyRequest(HUB.origin, '', lookup, 'PUT', theirs)).status).toBe(409);
+    const notMine = await signed(await testPasskey(-7), 'remove');
+    expect((await passkeyRequest(HUB.origin, '/remove', lookup, 'POST', notMine)).status).toBe(403);
+
+    const mine = await signed(passkey, 'remove');
+    expect((await passkeyRequest(HUB.origin, '/remove', lookup, 'POST', mine)).status).toBe(204);
+    const gone = await passkeyRequest(
+      HUB.origin,
+      '/open',
+      lookup,
+      'POST',
+      await signed(passkey, 'open'),
+    );
+    expect(gone.status).toBe(404);
+    // Only then may the browser forget the passkey (audit A-4).
+    expect(await gone.json()).toMatchObject({ unknown: true });
+  });
+
+  it('refuses a new lock signed elsewhere, or by another passkey', async () => {
+    const passkey = await testPasskey(-7);
+    const fromApp = await newLock(passkey, 'https://tally.shkriuss.app');
+    expect((await passkeyRequest(HUB.origin, '', madeUpToken(), 'PUT', fromApp)).status).toBe(403);
+    const otherKey = { ...(await newLock(passkey)), ...(await testPasskey(-7)).key };
+    expect((await passkeyRequest(HUB.origin, '', madeUpToken(), 'PUT', otherKey)).status).toBe(403);
+  });
+
+  it('a lock from before signatures were checked no longer opens, and can be removed', async () => {
+    const passkey = await testPasskey(-7);
+    const lookup = madeUpToken();
+    // Pages from before: GET and DELETE are refused.
+    const get = await worker.fetch(
+      new Request(`${HUB.origin}/api/account/passkey`, {
+        headers: { Authorization: `Bearer ${lookup}` },
+      }),
+      server.env,
+    );
+    expect(get.status).toBe(405);
+    // A lock saved by them: only its sealed secret, no public key.
+    await passkeyRequest(HUB.origin, '/open', lookup, 'POST', await signed(passkey, 'open'));
+    const object = server.passkeys.objects.get(await sha256Text(lookup));
+    object?.storage.map.set('wrap', toBase64Url(randomBytes(60)));
+
+    const opened = await passkeyRequest(
+      HUB.origin,
+      '/open',
+      lookup,
+      'POST',
+      await signed(passkey, 'open'),
+    );
+    expect(opened.status).toBe(410);
+    expect(await opened.json()).toMatchObject({ old: true });
+    const removed = await passkeyRequest(
+      HUB.origin,
+      '/remove',
+      lookup,
+      'POST',
+      await signed(passkey, 'remove'),
+    );
+    expect(removed.status).toBe(204);
+  });
+});
+
 describe('the account service’s room', () => {
   it('stops made-up tokens from noting replaced keys past its limit', async () => {
     let kept = 0;
@@ -227,30 +352,33 @@ describe('the account service’s room', () => {
   });
 
   it('stops made-up passkey locks past its limit, and gets room back when one is removed', async () => {
-    const lookups: string[] = [];
+    // A stranger can make passkeys of their own, and sign whatever they like with them.
+    const made: { lookup: string; passkey: Awaited<ReturnType<typeof testPasskey>> }[] = [];
     for (let tries = 0; tries < 1000; tries += 1) {
       const lookup = madeUpToken();
-      const response = await worker.fetch(
-        new Request(`${PREVIEW}/api/account/passkey`, {
-          method: 'PUT',
-          body: lock(),
-          headers: { Authorization: `Bearer ${lookup}` },
-        }),
-        server.env,
+      const passkey = await testPasskey(-7);
+      const response = await passkeyRequest(
+        PREVIEW,
+        '',
+        lookup,
+        'PUT',
+        await newLock(passkey, PREVIEW),
       );
       if (response.status === 507) break;
       expect(response.status).toBe(204);
-      lookups.push(lookup);
+      made.push({ lookup, passkey });
     }
-    expect(lookups).toHaveLength(Math.floor(STORAGE_LIMITS.passkeys.preview / (16 * 1024)));
-    const remove = await worker.fetch(
-      new Request(`${PREVIEW}/api/account/passkey`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${lookups[0] ?? ''}` },
-      }),
-      server.env,
-    );
+    expect(made).toHaveLength(Math.floor(STORAGE_LIMITS.passkeys.preview / (16 * 1024)));
+    const [first] = made;
+    if (!first) throw new Error('No lock');
+    const assertion = await first.passkey.sign({
+      origin: PREVIEW,
+      rpId: new URL(PREVIEW).hostname,
+      purpose: 'remove',
+    });
+    const remove = await passkeyRequest(PREVIEW, '/remove', first.lookup, 'POST', { assertion });
     expect(remove.status).toBe(204);
-    expect((await stranger(PREVIEW, 'passkey', { method: 'PUT', body: lock() })).status).toBe(204);
+    const another = await newLock(await testPasskey(-7), PREVIEW);
+    expect((await passkeyRequest(PREVIEW, '', madeUpToken(), 'PUT', another)).status).toBe(204);
   });
 });

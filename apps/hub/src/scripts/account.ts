@@ -84,6 +84,10 @@ const PROBLEMS: Record<AccountErrorCode, string> = {
     'This browser or password manager can’t use a passkey to unlock an account. Use your recovery key, or add this device with a code from another one. (Google Password Manager on Android and iCloud Keychain on iPhone, iPad and Mac can.)',
   'unknown-passkey':
     'That passkey isn’t connected to a shkriuss account. Try another passkey, or use your recovery key.',
+  'old-passkey':
+    'This passkey was added before a security update, so it can’t sign in any more. Sign in with your recovery key, or add this device with a code from another one, then add a passkey again.',
+  'passkey-refused':
+    'The account service didn’t accept this passkey. Check that this device’s date and time are right and try again, or use your recovery key.',
   'link-used': 'This code has expired. Show a new one on your other device.',
   'link-taken':
     'Someone already used this code. If it wasn’t you, replace your account key on your other device now: whoever used it can see what you sync.',

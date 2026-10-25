@@ -3,6 +3,7 @@
  * Worker, so both sides agree). Everything it stores is already encrypted on
  * the device, so these checks are about shape and size only.
  */
+import { ALGORITHMS, type Assertion, type PasskeyKey } from './webauthn.ts';
 
 /** A device link lasts this long, and works once. */
 export const LINK_LIFETIME_MS = 10 * 60 * 1000;
@@ -44,6 +45,63 @@ export function checkLinkBody(body: unknown): Checked<{ data: string; cancel: st
     return { ok: false, error: '"cancel" must be a token.' };
   }
   return { ok: true, value: { data: data.value, cancel } };
+}
+
+/** Passkey requests carry a signature and maybe a public key (an RSA one is the biggest). */
+export const MAX_PASSKEY_REQUEST_BYTES = 4096;
+const BASE64URL = /^[A-Za-z0-9_-]+$/;
+const isBase64Url = (value: unknown, max: number): value is string =>
+  typeof value === 'string' && value.length > 0 && value.length <= max && BASE64URL.test(value);
+
+/** Checks a passkey's signature, as the browser gave it: { authenticatorData, clientDataJSON, signature }. */
+export function checkAssertionShape(value: unknown): Checked<Assertion> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return { ok: false, error: '"assertion" must be an object.' };
+  }
+  const { authenticatorData, clientDataJSON, signature, ...rest } = value as Record<
+    string,
+    unknown
+  >;
+  if (
+    Object.keys(rest).length > 0 ||
+    !isBase64Url(authenticatorData, 1024) ||
+    !isBase64Url(clientDataJSON, 1500) ||
+    !isBase64Url(signature, 700)
+  ) {
+    return { ok: false, error: '"assertion" must hold a passkey’s signature, and nothing else.' };
+  }
+  return { ok: true, value: { authenticatorData, clientDataJSON, signature } };
+}
+
+/**
+ * Checks a new passkey lock: { wrap, publicKey, algorithm, assertion }, the
+ * assertion made on the Account page with that passkey right after making it.
+ */
+export function checkNewLock(
+  body: unknown,
+): Checked<{ wrap: string; key: PasskeyKey; assertion: Assertion }> {
+  if (typeof body !== 'object' || body === null || Array.isArray(body)) {
+    return { ok: false, error: 'Body must be an object.' };
+  }
+  const { wrap, publicKey, algorithm, assertion, ...rest } = body as Record<string, unknown>;
+  const sealed = checkSealedBody({ wrap }, 'wrap');
+  if (!sealed.ok) return sealed;
+  if (Object.keys(rest).length > 0) return { ok: false, error: 'Unexpected fields.' };
+  if (!isBase64Url(publicKey, 800))
+    return { ok: false, error: '"publicKey" must be a public key.' };
+  if (!ALGORITHMS.includes(algorithm as (typeof ALGORITHMS)[number])) {
+    return { ok: false, error: '"algorithm" must be ES256 (-7) or RS256 (-257).' };
+  }
+  const signed = checkAssertionShape(assertion);
+  if (!signed.ok) return signed;
+  return {
+    ok: true,
+    value: {
+      wrap: sealed.value,
+      key: { publicKey, algorithm: algorithm as number },
+      assertion: signed.value,
+    },
+  };
 }
 
 /** Checks a body of the form { [field]: "<sealed value>" }. */

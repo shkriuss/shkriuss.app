@@ -132,8 +132,9 @@ const LAST_UPDATED = '23 October 2026';
       </li>
       <li>
         <strong>If you add a passkey:</strong> the account's own server on Cloudflare keeps your
-        account key locked so that only that passkey can unlock it. The server can't unlock it and
-        doesn't know whose it is. Removing the passkey deletes it.
+        account key locked so that only that passkey can unlock it, with the passkey's public key,
+        to check that it's used on the Account page. The server can't unlock it and doesn't know
+        whose it is. Removing the passkey deletes it.
       </li>
       <li>
         <strong>When you add a device with a code:</strong> for at most 10 minutes, the server keeps

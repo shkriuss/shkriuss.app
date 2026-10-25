@@ -8,6 +8,9 @@ each app's copies together have a limit, and copies (and replaced-key notes)
 nobody uses for 13 months are deleted. Extended by
 [ADR 0016](0016-online-photo-library.md): Photos' online library goes through
 the account and is kept in Cloudflare R2, free up to 10 GB, then paid.
+Changed by [ADR 0018](0018-passkey-signatures.md): the account service keeps
+each passkey's public key, and only hands out or removes a lock for the
+passkey's signature made on the Account page.
 
 ## Context
 
@@ -56,12 +59,16 @@ The requirements:
    - The server keeps the account secret sealed with the wrap key (AES-256-GCM),
      stored under the SHA-256 hash of the lookup token.
    - The passkey belongs to the hub's own domain, `shkriuss.app`. Browsers let
-     any subdomain ask for a passkey of its parent domain, so only the hub's
-     pages allow passkeys (their `Permissions-Policy` header). Every app's
-     pages refuse them, and `defineAppConfig` won't build an app that asks. So
-     no subdomain may ever be served by anyone but these Workers.
+     any subdomain ask for a passkey of its parent domain. Every app's pages
+     refuse passkeys (their `Permissions-Policy` header), and
+     `defineAppConfig` won't build an app that asks, but only Chromium-based
+     browsers honour that header. So the account service also keeps each
+     passkey's public key, and hands out or removes a lock only for the
+     passkey's signature made on the Account page itself
+     ([ADR 0018](0018-passkey-signatures.md)).
    - A passkey that can't do PRF is refused, and the browser is asked to forget
-     it (WebAuthn "signal" API, where supported).
+     it (WebAuthn "signal" API, where supported). So is one the account service
+     says no lock uses.
    - "Remove a passkey" deletes its lock.
 3. **Adding a device with a QR code.**
    - The signed-in device seals the secret with a new one-time 256-bit key.
@@ -105,7 +112,8 @@ HKDF), like `K7Q2-M9XD`.
 
 - **Checks on the server:**
   - Requests from other sites are refused (`Sec-Fetch-Site`).
-  - Bodies are limited to 1 KB.
+  - Bodies are limited to 1 KB (4 KB for passkeys, which carry a signature
+    and a public key).
   - Only sealed values of the right shape are accepted.
   - Shared helpers live in `packages/server`.
 

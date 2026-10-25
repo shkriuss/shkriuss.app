@@ -5,6 +5,10 @@ export type AccountErrorCode =
   | 'no-prf'
   /** No account is connected to the passkey that was used. */
   | 'unknown-passkey'
+  /** The passkey was added before the service checked passkeys' signatures: add it again. */
+  | 'old-passkey'
+  /** The service didn't accept the passkey's signature (a device clock far off, say). */
+  | 'passkey-refused'
   /** The device link has expired, or doesn't exist (or doesn't work). */
   | 'link-used'
   /** Someone already used the device link: maybe not the person. */
