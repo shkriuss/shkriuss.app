@@ -10,6 +10,15 @@ Build habits one day at a time. Lives at <https://habits.shkriuss.app>.
 - `src/scripts/habits.ts`: connects the page to those rules and saves on the
   device with `@shkriuss/storage` (two stores: `habits` and `habit-checks`).
   It notices when a new day starts while the app is open.
+- Check marks are kept until you delete them. Habits keeps up to 10,000
+  (`MAX_CHECKS`): enough for 10 habits ticked every day for over 2½ years,
+  and measured to fit on the device and in the sync copy, where sync's own
+  records of them take more room than the marks themselves (`habits.test.ts`,
+  "room for every check mark"). Once it's nearly full, a note at the top
+  says so; when it's full, a new tick waits until there's room. "Delete check
+  marks from a year…" (under Check marks) makes room: every habit's marks
+  from the year chosen go, on every device with sync on, and streaks then
+  count only the days that are kept.
 - `src/pages/index.astro`: the page, built from `@shkriuss/ui` components.
   `<template>`s hold the markup for one habit and one day of its week. The
   edit dialog changes the name, days and reminder, ticks the last 2 weeks

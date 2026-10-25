@@ -48,8 +48,19 @@ export interface ChecksState {
   checks: Check[];
 }
 
+/** The data versions of the habits and of the check marks. */
+export const HABITS_VERSION = 1;
+export const CHECKS_VERSION = 1;
+
 export const MAX_NAME_LENGTH = 60;
 export const MAX_HABITS = 50;
+/**
+ * The most check marks Habits keeps, so they fit on the device and in the
+ * sync copy (measured in habits.test.ts: "room for every check mark"):
+ * enough for 10 habits ticked every day for over 2½ years. To make room, the
+ * person deletes the check marks from a year (audit F1-5).
+ */
+export const MAX_CHECKS = 10_000;
 export const EVERY_DAY: readonly number[] = [1, 2, 3, 4, 5, 6, 7];
 /** How many days back (today included) the edit form can mark done. */
 export const EDITABLE_DAYS = 14;
@@ -208,6 +219,66 @@ export function setDone(
   const others = checks.checks.filter((check) => check.id !== id);
   return { checks: done ? [...others, { id, habit, date }] : others };
 }
+
+// ---------- Making room ----------
+
+const number = (value: number, locale?: string): string =>
+  new Intl.NumberFormat(locale).format(value);
+
+/** "1 check mark", "3,650 check marks". */
+export const checksCount = (count: number, locale?: string): string =>
+  `${number(count, locale)} check ${count === 1 ? 'mark' : 'marks'}`;
+
+/** Why `adding` more check marks can't be kept: Habits is full. Undefined while they fit. */
+export const checksProblem = (
+  checks: ChecksState,
+  adding = 1,
+  locale?: string,
+): string | undefined =>
+  checks.checks.length + adding > MAX_CHECKS
+    ? `Habits keeps up to ${checksCount(MAX_CHECKS, locale)}. To make room, delete the check marks from a year (under Check marks).`
+    : undefined;
+
+/**
+ * What the page says once Habits is nearly full (over 90% of the check marks
+ * it keeps): how many more fit, and how to make room. Null until then.
+ */
+export function roomNote(count: number, locale?: string): string | null {
+  if (count <= MAX_CHECKS * 0.9) return null;
+  const left = MAX_CHECKS - count;
+  const start =
+    left > 0
+      ? `Habits is nearly full: there’s room for ${number(left, locale)} more check ${left === 1 ? 'mark' : 'marks'} (it keeps up to ${number(MAX_CHECKS, locale)}).`
+      : `Habits is full: it keeps up to ${checksCount(MAX_CHECKS, locale)}.`;
+  return `${start} To make room, use “Delete check marks from a year…” under Check marks, below.`;
+}
+
+export interface YearCount {
+  /** "2025". */
+  year: string;
+  count: number;
+}
+
+const yearOf = (date: IsoDate): string => date.slice(0, 4);
+
+/** The years with check marks, the earliest first, with how many each has. */
+export function checkYears(checks: ChecksState): YearCount[] {
+  const counts = new Map<string, number>();
+  for (const check of checks.checks) {
+    counts.set(yearOf(check.date), (counts.get(yearOf(check.date)) ?? 0) + 1);
+  }
+  return [...counts]
+    .map(([year, count]) => ({ year, count }))
+    .sort((a, b) => a.year.localeCompare(b.year));
+}
+
+/**
+ * Deletes every habit's check marks from a year ("2025"). Streaks then count
+ * only the days that are kept: one that ran through that year starts after it.
+ */
+export const removeYear = (checks: ChecksState, year: string): ChecksState => ({
+  checks: checks.checks.filter((check) => yearOf(check.date) !== year),
+});
 
 export const isPlanned = (habit: Habit, date: IsoDate): boolean =>
   habit.days.includes(weekday(date));
