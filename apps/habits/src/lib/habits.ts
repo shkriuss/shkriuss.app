@@ -21,6 +21,7 @@ import {
   type Stamp,
 } from '@shkriuss/dates';
 import type { Notice } from '@shkriuss/push';
+import { withEdits } from '@shkriuss/sync/edits';
 import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
 export interface Habit {
@@ -145,6 +146,39 @@ export function updateHabit(
       return next;
     }),
   };
+}
+
+/** What the edit form changes on a habit (null: no reminder). */
+export interface HabitDraft {
+  name: string;
+  days: number[];
+  reminder: IsoTime | null;
+}
+
+export const draftOf = (habit: Habit): HabitDraft => ({
+  name: habit.name,
+  days: [...habit.days],
+  reminder: habit.reminder ?? null,
+});
+
+/**
+ * Saves the edit form. While it was open, a sync (or another tab) may have
+ * changed the habit: only what was changed in the form goes on the habit as
+ * it is now, so the other change stays (withEdits, audit F1-2). If that
+ * isn't valid (another habit got the same name meanwhile), the form wins, as
+ * it was checked. `opened` is the form as it opened, `edited` as it is now.
+ * The same state if the habit is gone.
+ */
+export function editHabit(
+  state: HabitsState,
+  id: string,
+  opened: HabitDraft,
+  edited: HabitDraft,
+): HabitsState {
+  const habit = state.habits.find((entry) => entry.id === id);
+  if (!habit) return state;
+  const merged = updateHabit(state, id, withEdits(opened, edited, draftOf(habit)));
+  return merged === state ? updateHabit(state, id, edited) : merged;
 }
 
 /** Removes a habit and its check marks. */

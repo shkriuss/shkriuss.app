@@ -16,6 +16,7 @@ import {
   dayLabel,
   doneDates,
   EDITABLE_DAYS,
+  editHabit,
   emptyChecks,
   emptyHabits,
   isChecksState,
@@ -28,11 +29,11 @@ import {
   setDone,
   streakLabel,
   timeLabel,
-  updateHabit,
   weekdayName,
   weekOrder,
   type ChecksState,
   type Habit,
+  type HabitDraft,
   type HabitsState,
 } from '../lib/habits.ts';
 import { mountReminders } from './reminders.ts';
@@ -102,6 +103,8 @@ export function mountHabits(root: Document): void {
   let day = today();
   /** The habit in the edit dialog. */
   let editing: string | null = null;
+  /** The edit form as it opened, to tell what the person changed (see editHabit). */
+  let opened: HabitDraft | null = null;
 
   const announce = (message: string): void => {
     announcer.textContent = message;
@@ -260,6 +263,15 @@ export function mountHabits(root: Document): void {
     reminderInput.disabled = !remindBox.checked;
   }
 
+  /** The edit form's name, planned days and reminder, as they are now. */
+  const formDraft = (): HabitDraft => ({
+    name: editName.value,
+    days: [...dayChecks.querySelectorAll<HTMLInputElement>('input:checked')].map((box) =>
+      Number(box.value),
+    ),
+    reminder: remindBox.checked ? reminderInput.value : null,
+  });
+
   function openEditor(habit: Habit): void {
     editing = habit.id;
     editName.value = habit.name;
@@ -283,6 +295,7 @@ export function mountHabits(root: Document): void {
         return checkbox(dayLabel(date, day), date, done.has(date));
       }),
     );
+    opened = formDraft();
     editDialog.showModal();
   }
 
@@ -293,15 +306,12 @@ export function mountHabits(root: Document): void {
       editDialog.close();
       return;
     }
-    const name = editName.value;
-    const days = [...dayChecks.querySelectorAll<HTMLInputElement>('input:checked')].map((box) =>
-      Number(box.value),
-    );
+    const edited = formDraft();
+    const { name, days, reminder } = edited;
     const nameProblem = nameError(name, habits, habit.id);
     nameErrorText.textContent = nameProblem ?? '';
     editName.toggleAttribute('aria-invalid', nameProblem !== undefined);
     daysErrorText.textContent = days.length === 0 ? 'Choose at least one day.' : '';
-    const reminder = remindBox.checked ? reminderInput.value : null;
     const reminderProblem = reminder !== null && !isIsoTime(reminder);
     reminderErrorText.textContent = reminderProblem ? 'Choose a time for the reminder.' : '';
     reminderInput.toggleAttribute('aria-invalid', reminderProblem);
@@ -325,11 +335,11 @@ export function mountHabits(root: Document): void {
       }
     }
     editDialog.close();
-    if (
-      save({ habits: updateHabit(habits, habit.id, { name, days, reminder }), checks: nextChecks })
-    ) {
-      announce(`Saved ${name.trim()}.`);
-    }
+    // A sync while the form was open may have changed the habit on another
+    // device: keep that, and put on only what was changed here.
+    const next = editHabit(habits, habit.id, opened ?? edited, edited);
+    const saved = next.habits.find((entry) => entry.id === habit.id)?.name ?? name.trim();
+    if (save({ habits: next, checks: nextChecks })) announce(`Saved ${saved}.`);
     if (reminder !== null) reminders.offerNotifications();
   });
 
@@ -354,6 +364,7 @@ export function mountHabits(root: Document): void {
 
   editDialog.addEventListener('close', () => {
     editing = null;
+    opened = null;
   });
 
   deleteDialog.addEventListener('close', () => {

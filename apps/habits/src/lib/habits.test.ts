@@ -7,7 +7,9 @@ import {
   currentStreak,
   dayLabel,
   doneDates,
+  draftOf,
   dueReminders,
+  editHabit,
   emptyChecks,
   emptyHabits,
   EVERY_DAY,
@@ -85,6 +87,38 @@ describe('habits', () => {
     expect(updateHabit(state, 'water', { name: 'Water', days: EVERY_DAY, reminder: '25:00' })).toBe(
       state,
     );
+  });
+
+  // While the edit form is open, a sync (or another tab) may change the habit
+  // (audit F1-2): saving puts on only what was changed in the form.
+  it('saves the edit form on top of a change made elsewhere meanwhile', () => {
+    const opened = draftOf(daily);
+    const weekdays = updateHabit({ habits: [daily, weekdaysOnly] }, 'water', {
+      name: 'Water',
+      days: [1, 2, 3, 4, 5],
+      reminder: '08:00',
+    });
+    const renamed = editHabit(weekdays, 'water', opened, { ...opened, name: 'Drink water' });
+    expect(renamed.habits[0]).toEqual({
+      id: 'water',
+      name: 'Drink water',
+      days: [1, 2, 3, 4, 5],
+      reminder: '08:00',
+    });
+    // Where both changed the same thing, the change here wins.
+    expect(
+      editHabit(weekdays, 'water', opened, { ...opened, days: [6, 7] }).habits[0]?.days,
+    ).toEqual([6, 7]);
+    // Renamed meanwhile to the other habit's name (on two devices at once,
+    // which sync can bring together): the form as it is.
+    const clash = { habits: [{ ...daily, name: 'Run' }, weekdaysOnly] };
+    const changed = { ...opened, days: [6, 7] };
+    expect(editHabit(clash, 'water', opened, changed).habits[0]).toEqual({
+      id: 'water',
+      name: 'Water',
+      days: [6, 7],
+    });
+    expect(editHabit(weekdays, 'gone', opened, changed)).toBe(weekdays);
   });
 
   it('removes a habit with its check marks', () => {

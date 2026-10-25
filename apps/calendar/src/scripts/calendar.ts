@@ -32,6 +32,7 @@ import {
   addEvent,
   DATA_VERSION,
   draftProblems,
+  editEvent,
   emptyState,
   isCalendarState,
   isValidReminder,
@@ -42,7 +43,6 @@ import {
   removeEvent,
   secondVersion,
   timeLabel,
-  updateEvent,
   type CalendarEvent,
   type CalendarState,
   type DraftField,
@@ -144,6 +144,8 @@ export function mountCalendar(root: Document): void {
   let viewMonth = shiftMonth(selected, 0);
   /** The event open in the editor (null for a new one). */
   let editingId: string | null = null;
+  /** The editor as it opened, to tell what the person changed (see editEvent). */
+  let openedDraft: EventDraft | null = null;
   /** Where keyboard focus goes back to when the editor closes. */
   let opener: HTMLElement | null = null;
   /** The event just saved, so focus can go to it in the list. */
@@ -461,6 +463,7 @@ export function mountCalendar(root: Document): void {
     lastStartDate = startDateInput.value;
     lastStartTime = startTimeInput.value;
     syncFields();
+    openedDraft = event ? readDraft() : null;
     editor.showModal();
     titleInput.focus();
   }
@@ -533,13 +536,18 @@ export function mountCalendar(root: Document): void {
     if (showProblems(problems)) return;
 
     const id = editingId ?? crypto.randomUUID();
-    const next = editingId ? updateEvent(state, id, draft) : addEvent(state, draft, id);
-    const day = dayToShow(next, id, draft.startDate);
+    // A sync while the editor was open may have changed the event on another
+    // device: keep that, and put on only what was changed here.
+    const next = editingId
+      ? editEvent(state, id, openedDraft ?? draft, draft)
+      : addEvent(state, draft, id);
+    const saved = next.events.find((event) => event.id === id);
+    const day = dayToShow(next, id, saved?.startDate ?? draft.startDate);
     if (day !== selected) {
       selected = day;
       viewMonth = shiftMonth(day, 0);
     }
-    if (save(next)) announce(`Saved ${draft.title.trim()}.`);
+    if (save(next)) announce(`Saved ${saved?.title ?? draft.title.trim()}.`);
     // Asking now, right after choosing a reminder, makes the question clear.
     if (draft.reminder !== null) alerts.offerNotifications();
     savedId = id;

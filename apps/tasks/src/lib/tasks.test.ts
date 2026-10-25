@@ -7,6 +7,7 @@ import {
   draftProblems,
   dueReminders,
   dueText,
+  editedTask,
   emptyTasks,
   everyUnit,
   formatDay,
@@ -260,6 +261,68 @@ describe('changes', () => {
         updated: 5000,
       },
     ]);
+  });
+
+  // While the form is open, a sync (or another tab) may change the task
+  // (audit F1-2): saving puts on only what was changed in the form.
+  describe('saving a form that was open while the task changed elsewhere', () => {
+    const plants = task({
+      title: 'Water plants',
+      date: TODAY,
+      repeat: 'weekly',
+      steps: [{ id: 'fern', title: 'The fern', done: true }],
+    });
+    const opened = draftOf(plants);
+    // Ticked off on the other device: next week, its step unticked.
+    const ticked = completeTask(stateOf(plants), plants.id, 5000, TODAY, 'copy').state;
+    const current = ticked.tasks.find((entry) => entry.id === plants.id);
+
+    it('keeps the other change', () => {
+      const saved = editedTask(
+        opened,
+        { ...opened, title: 'Water the plants' },
+        plants.id,
+        6000,
+        current,
+      );
+      expect(saved).toMatchObject({
+        title: 'Water the plants',
+        date: '2026-10-27',
+        steps: [{ id: 'fern', title: 'The fern', done: false }],
+        updated: 6000,
+      });
+      // Saving with nothing changed changes nothing but the time.
+      expect(editedTask(opened, opened, plants.id, 6000, current)).toEqual({
+        ...current,
+        updated: 6000,
+      });
+    });
+
+    it('lets the change here win where both changed the same thing', () => {
+      const moved = editedTask(opened, { ...opened, date: '2026-10-22' }, plants.id, 6000, current);
+      expect(moved).toMatchObject({ date: '2026-10-22', title: 'Water plants' });
+    });
+
+    it('uses the form as it is if the two don’t fit together', () => {
+      // The date was cleared there; a reminder was set here (it needs a date).
+      const cleared = updateTask(stateOf(plants), {
+        ...plants,
+        date: null,
+        repeat: 'none',
+        updated: 5000,
+      }).tasks[0];
+      const reminded = { ...opened, reminder: '60' };
+      expect(editedTask(opened, reminded, plants.id, 6000, cleared)).toMatchObject({
+        date: TODAY,
+        repeat: 'weekly',
+        reminder: 60,
+      });
+    });
+
+    it('brings back a task deleted meanwhile, with the change', () => {
+      const saved = editedTask(opened, { ...opened, notes: 'Not too much' }, plants.id, 6000);
+      expect(saved).toMatchObject({ id: plants.id, date: TODAY, notes: 'Not too much' });
+    });
   });
 
   it('comes back to its day of the month after a short month', () => {

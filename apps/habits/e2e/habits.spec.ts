@@ -115,6 +115,26 @@ test('edits the name, the planned days and past days', async ({ page }) => {
   await expect(card(page, 'Morning run')).toContainText('Weekdays');
 });
 
+test('saving the editor keeps what changed elsewhere while it was open', async ({ page }) => {
+  await addHabit(page, 'Run');
+  await page.getByRole('button', { name: 'Edit Run' }).click();
+  // Meanwhile, another tab (or a sync from another device) plans it for weekdays only.
+  const other = await page.context().newPage();
+  await other.goto('/');
+  await other.getByRole('button', { name: 'Edit Run' }).click();
+  for (const day of ['Saturday', 'Sunday']) {
+    await editor(other).getByLabel(day, { exact: true }).uncheck();
+  }
+  await editor(other).getByRole('button', { name: 'Save' }).click();
+  await expect(card(other, 'Run')).toContainText('Weekdays');
+  await other.close();
+
+  // Only the name is changed here (audit F1-2).
+  await editor(page).getByLabel('Name').fill('Morning run');
+  await editor(page).getByRole('button', { name: 'Save' }).click();
+  await expect(card(page, 'Morning run')).toContainText('Weekdays');
+});
+
 test('says when a habit isn’t planned for today', async ({ page }) => {
   await addHabit(page, 'Long walk');
   await page.getByRole('button', { name: 'Edit Long walk' }).click();

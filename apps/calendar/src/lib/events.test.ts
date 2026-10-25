@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   addEvent,
   draftProblems,
+  editEvent,
   emptyState,
   importEvents,
   isCalendarState,
@@ -164,6 +165,37 @@ describe('add, update and remove', () => {
     expect(state.events.map((e) => e.title)).toEqual(['Dentist', 'Swim']);
     state = removeEvent(state, 'e0');
     expect(state.events.map((e) => e.id)).toEqual(['e1']);
+  });
+
+  // While the editor is open, a sync (or another tab) may change the event
+  // (audit F1-2): saving puts on only what was changed in the editor.
+  it('saves the editor on top of a change made elsewhere meanwhile', () => {
+    const opened = draft({ reminder: 15 });
+    const moved = updateEvent(withEvents(opened), 'e0', {
+      ...opened,
+      startTime: '14:00',
+      endTime: '15:00',
+      reminder: 60,
+    });
+    const notes = editEvent(moved, 'e0', opened, { ...opened, notes: 'Bring the X-ray' });
+    expect(notes.events).toEqual([
+      {
+        ...opened,
+        id: 'e0',
+        startTime: '14:00',
+        endTime: '15:00',
+        reminder: 60,
+        notes: 'Bring the X-ray',
+      },
+    ]);
+    // Where both changed the same thing, the change here wins.
+    const later = editEvent(moved, 'e0', opened, { ...opened, reminder: 30 });
+    expect(later.events[0]).toMatchObject({ startTime: '14:00', reminder: 30 });
+    // Changes that don't fit together (an end before the new start): the editor wins.
+    const ends = editEvent(moved, 'e0', opened, { ...opened, endTime: '11:00' });
+    expect(ends.events).toEqual([{ ...opened, id: 'e0', endTime: '11:00' }]);
+    // Nothing changed here: nothing changes.
+    expect(editEvent(moved, 'e0', opened, opened)).toEqual(moved);
   });
 
   it('validates saved data', () => {

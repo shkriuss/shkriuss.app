@@ -26,6 +26,7 @@ import {
 } from '@shkriuss/dates';
 import type { Notice } from '@shkriuss/push';
 import { secondVersionName } from '@shkriuss/sync';
+import { withEdits } from '@shkriuss/sync/edits';
 import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
 export type Repeat = 'none' | 'daily' | 'weekdays' | 'weekly' | 'monthly' | 'yearly';
@@ -161,6 +162,40 @@ export const updateReminder = (
       : reminder,
   ),
 });
+
+/** A reminder's fields, as the change form holds them. */
+export const draftOf = ({ text, date, time, repeat }: Reminder): Draft => ({
+  text,
+  date,
+  time,
+  repeat,
+});
+
+/**
+ * Saves the change form. While it was open, a sync (or another tab) may have
+ * changed the reminder: only what was changed in the form goes on the
+ * reminder as it is now (withEdits, audit F1-2). Saving sets it again (not
+ * done), unless it was ticked done elsewhere meanwhile and when it comes
+ * wasn't changed here. `opened` is the reminder as the form opened with it.
+ */
+export function editReminder(
+  state: RemindersState,
+  opened: Reminder,
+  edited: Draft,
+): RemindersState {
+  const current = state.reminders.find((reminder) => reminder.id === opened.id);
+  if (!current) return state;
+  const before = draftOf(opened);
+  const when = (values: Draft) => `${toStamp(values.date, values.time)} ${values.repeat}`;
+  const done = opened.done === null && when(before) === when(edited) ? current.done : null;
+  return {
+    reminders: updateReminder(
+      state,
+      opened.id,
+      withEdits(before, edited, draftOf(current)),
+    ).reminders.map((reminder) => (reminder.id === opened.id ? { ...reminder, done } : reminder)),
+  };
+}
 
 export const removeReminder = (state: RemindersState, id: string): RemindersState => ({
   reminders: state.reminders.filter((reminder) => reminder.id !== id),

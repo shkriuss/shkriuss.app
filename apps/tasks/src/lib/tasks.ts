@@ -24,6 +24,7 @@ import {
   type Stamp,
 } from '@shkriuss/dates';
 import type { Notice } from '@shkriuss/push';
+import { withEdits } from '@shkriuss/sync/edits';
 import { compareText, foldText } from '@shkriuss/ui/text';
 import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
@@ -283,6 +284,27 @@ export function taskFromDraft(draft: TaskDraft, id: string, now: number, existin
     created: existing?.created ?? now,
     updated: now,
   };
+}
+
+/**
+ * The task a saved form makes, when the task may have changed while the form
+ * was open (a sync, or another tab): only what was changed in the form goes
+ * on the task as it is now, so the other change stays (withEdits, audit
+ * F1-2). If the two don't fit together (say, a reminder set here on a task
+ * whose date was cleared there), the form wins, as it was checked. `opened`
+ * is the form as it opened and `edited` as it is now; `current` is the task
+ * now, if it's still there (one deleted meanwhile comes back with the change).
+ */
+export function editedTask(
+  opened: TaskDraft,
+  edited: TaskDraft,
+  id: string,
+  now: number,
+  current?: Task,
+): Task {
+  const merged = current ? withEdits(opened, edited, draftOf(current)) : edited;
+  const draft = Object.keys(draftProblems(merged)).length === 0 ? merged : edited;
+  return taskFromDraft(draft, id, now, current);
 }
 
 /** The form's values for a task, to edit it. */

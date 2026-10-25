@@ -95,6 +95,34 @@ test('edits and deletes an event, with a confirmation', async ({ page }) => {
   await expect(page.getByText('Nothing planned on this day.')).toBeVisible();
 });
 
+test('saving keeps what changed elsewhere while the editor was open', async ({ page }) => {
+  await seed(page, [{ title: 'Dentist', reminder: 15 }]);
+  await dayList(page)
+    .getByRole('button', { name: /Dentist/ })
+    .click();
+  // Meanwhile, another tab (or a sync from another device) moves it to the
+  // afternoon and changes its reminder.
+  const other = await page.context().newPage();
+  await other.goto('/');
+  await dayList(other)
+    .getByRole('button', { name: /Dentist/ })
+    .click();
+  await editor(other).getByLabel('Start time').fill('14:00');
+  await editor(other).getByLabel('End time (optional)').fill('15:00');
+  await editor(other).getByLabel('Reminder').selectOption({ label: '1 hour before' });
+  await save(other);
+  await other.close();
+
+  // Only the notes are changed here (audit F1-2).
+  await editor(page).getByLabel('Notes (optional)').fill('Bring the X-ray');
+  await save(page);
+  const item = dayList(page).getByRole('button', { name: /Dentist/ });
+  await expect(item).toHaveAccessibleName(/^2:00\sPM – 3:00\sPM, Dentist, with a reminder$/);
+  await item.click();
+  await expect(editor(page).getByLabel('Notes (optional)')).toHaveValue('Bring the X-ray');
+  await expect(editor(page).getByLabel('Reminder')).toHaveValue('60');
+});
+
 test('closing the editor without saving changes nothing', async ({ page }) => {
   await newEvent(page, 'Not this one');
   await editor(page).getByRole('button', { name: 'Cancel' }).click();

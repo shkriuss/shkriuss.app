@@ -33,7 +33,9 @@ Build habits one day at a time. Lives at <https://habits.shkriuss.app>.
   devices is the same check mark, never a conflict. When a habit's name,
   days or reminder change on two devices before they sync, the newest change
   wins
-  (a second copy would start with no check marks, so it wouldn't help).
+  (a second copy would start with no check marks, so it wouldn't help). The
+  edit form saves only what was changed in it (`editHabit`), so a change
+  that a sync (or another tab) brings while it's open stays.
 - `e2e/habits.spec.ts`, `e2e/reminders.spec.ts` and `e2e/sync.spec.ts`:
   browser tests. The shared
   accessibility, security and offline checks in `tests/e2e/` run too.

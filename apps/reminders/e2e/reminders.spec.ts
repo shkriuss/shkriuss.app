@@ -148,6 +148,29 @@ test('ticks reminders done, puts off overdue ones, and clears done ones', async 
   await expect(page.getByRole('button', { name: 'Buy bread' })).toHaveCount(0);
 });
 
+test('saving a change keeps what changed elsewhere while it was open', async ({ page }) => {
+  await seed(page, [reminder('a', 'Call the dentist', '2026-10-21', '18:30')]);
+  await page.getByRole('button', { name: 'Call the dentist' }).click();
+  // Meanwhile, another tab (or a sync from another device) ticks it done.
+  const other = await page.context().newPage();
+  await other.goto('/');
+  await other.getByRole('checkbox', { name: 'Call the dentist: done' }).click();
+  await expect(other.locator('[data-done-section]')).toBeVisible();
+  await other.close();
+
+  // Only the text is changed here: it stays done (audit F1-2).
+  const dialog = editDialog(page);
+  await dialog.getByLabel('Remind me to').fill('Call the dentist about the X-ray');
+  await dialog.getByRole('button', { name: 'Save' }).click();
+  await expect(dialog).toBeHidden();
+  const done = page.locator('[data-done-section]');
+  await expect(done.locator('summary')).toHaveText('Done (1)');
+  await done.locator('summary').click();
+  await expect(
+    page.getByRole('checkbox', { name: 'Call the dentist about the X-ray: done' }),
+  ).toBeChecked();
+});
+
 test('changes and deletes a reminder', async ({ page }) => {
   await seed(page, [reminder('a', 'Water the plants', '2026-10-21', '18:30')]);
   await page.getByRole('button', { name: 'Water the plants' }).click();

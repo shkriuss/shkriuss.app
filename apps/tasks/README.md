@@ -42,7 +42,10 @@ Your to-do list, with dates, lists and reminders. Lives at
   in the form) and a list button; the forms are dialogs.
 - `src/worker.ts`: runs the shared notification and sync servers. With
   sync on ([ADR 0010](../../docs/adr/0010-account-and-sync.md)), the newest
-  change to each task and list wins.
+  change to each task and list wins. A task's form that's open while a sync
+  (or another tab) changes the task saves only what was changed in the form
+  (`editedTask`), so the other change stays: a task ticked off elsewhere
+  stays on its next date.
 - `e2e/`: browser tests (`helpers.ts` is shared by them). The shared
   accessibility, security and offline checks in `tests/e2e/` run too.
 
