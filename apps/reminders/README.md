@@ -31,6 +31,9 @@ Get reminded at the right time, once or again and again. Lives at
   ([ADR 0010](../../docs/adr/0010-account-and-sync.md)). With sync on, the
   newest change to each reminder wins; one changed on two devices at once is
   kept in both versions. Each device uploads its own notification schedule.
+  The change form, if a sync (or another tab) changes its reminder while
+  it's open, saves only what was changed in it (`editReminder`): one ticked
+  done elsewhere stays done, unless its time was changed here.
 - `e2e/`: browser tests (`helpers.ts` is shared by them). The shared
   accessibility, security, offline and sync checks in `tests/e2e/` run too.
 

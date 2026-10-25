@@ -11,6 +11,7 @@ import {
   isPushDeletePending,
   isPushEnabled,
   PushError,
+  pushHolds,
   syncPush,
   timeLimit,
   type Notice,
@@ -201,6 +202,50 @@ describe('syncPush', () => {
     });
     elapse();
     expect(((await uploading) as PushError).code).toBe('server');
+  });
+});
+
+// An open app shows reminders itself unless the server has them as they are
+// now: after a change that couldn't be uploaded, nothing else would (audit F1-7).
+describe('pushHolds', () => {
+  const later = notice({ id: 'event-2', start: '2099-01-02T09:00', title: 'Gym' });
+
+  it('says whether the server has the notifications as they are now', async () => {
+    // Turned on, nothing uploaded yet.
+    expect(await pushHolds([notice()])).toBe(false);
+    await syncPush([notice()]);
+    expect(await pushHolds([notice()])).toBe(true);
+    // Changed here: not until it's uploaded.
+    expect(await pushHolds([notice(), later])).toBe(false);
+    expect(await pushHolds([notice({ title: 'Dentist at 10' })])).toBe(false);
+    await syncPush([notice(), later]);
+    expect(await pushHolds([notice(), later])).toBe(true);
+  });
+
+  it('is false after a change that couldn’t be uploaded, true again once it is', async () => {
+    await syncPush([notice()]);
+    network = 'down';
+    await expect(syncPush([notice(), later])).rejects.toThrow(PushError);
+    expect(await pushHolds([notice(), later])).toBe(false);
+    // What it does have.
+    expect(await pushHolds([notice()])).toBe(true);
+    network = 'up';
+    await syncPush([notice(), later]);
+    expect(await pushHolds([notice(), later])).toBe(true);
+  });
+
+  it('stays true as time passes, also once a reminder is over', async () => {
+    const soon = notice({ start: '2099-01-01T09:00' });
+    await syncPush([soon, later]);
+    vi.useFakeTimers({ now: Date.UTC(2099, 0, 1, 12), toFake: ['Date'] });
+    expect(await pushHolds([soon, later])).toBe(true);
+    vi.useRealTimers();
+  });
+
+  it('is false while push is off', async () => {
+    await syncPush([notice()]);
+    await disablePush();
+    expect(await pushHolds([notice()])).toBe(false);
   });
 });
 

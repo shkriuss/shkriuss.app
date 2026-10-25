@@ -2,9 +2,37 @@
 // and a new day starting while the app is open. Shared checks (accessibility,
 // security headers, offline, privacy) run for every app from tests/e2e/.
 import type { Page } from '@playwright/test';
+import { addDays } from '@shkriuss/dates';
 import { checkA11y, expect, failSaving, test } from '../../../tests/e2e/fixtures.ts';
+import { seedStores } from '../../../tests/e2e/storage.ts';
+import {
+  checkId,
+  CHECKS_VERSION,
+  EVERY_DAY,
+  HABITS_VERSION,
+  MAX_CHECKS,
+  type Check,
+  type Habit,
+} from '../src/lib/habits.ts';
 
 test.use({ timezoneId: 'Europe/Berlin' });
+
+/** Saves habits and check marks straight into storage, then reloads. */
+async function seed(page: Page, habits: Habit[], checks: Check[]): Promise<void> {
+  await seedStores(page, {
+    habits: { version: HABITS_VERSION, data: { habits } },
+    'habit-checks': { version: CHECKS_VERSION, data: { checks } },
+  });
+}
+
+/** Habits ticked every day back from yesterday, one after another: `count` check marks. */
+function ticked(habits: readonly Habit[], count: number): Check[] {
+  return Array.from({ length: count }, (_, index) => {
+    const habit = habits[index % habits.length]?.id ?? '';
+    const date = addDays('2026-10-18', -Math.floor(index / habits.length));
+    return { id: checkId(habit, date), habit, date };
+  });
+}
 
 const card = (page: Page, name: string) =>
   page.getByRole('listitem').filter({ has: page.getByRole('heading', { name, exact: true }) });
@@ -115,6 +143,26 @@ test('edits the name, the planned days and past days', async ({ page }) => {
   await expect(card(page, 'Morning run')).toContainText('Weekdays');
 });
 
+test('saving the editor keeps what changed elsewhere while it was open', async ({ page }) => {
+  await addHabit(page, 'Run');
+  await page.getByRole('button', { name: 'Edit Run' }).click();
+  // Meanwhile, another tab (or a sync from another device) plans it for weekdays only.
+  const other = await page.context().newPage();
+  await other.goto('/');
+  await other.getByRole('button', { name: 'Edit Run' }).click();
+  for (const day of ['Saturday', 'Sunday']) {
+    await editor(other).getByLabel(day, { exact: true }).uncheck();
+  }
+  await editor(other).getByRole('button', { name: 'Save' }).click();
+  await expect(card(other, 'Run')).toContainText('Weekdays');
+  await other.close();
+
+  // Only the name is changed here (audit F1-2).
+  await editor(page).getByLabel('Name').fill('Morning run');
+  await editor(page).getByRole('button', { name: 'Save' }).click();
+  await expect(card(page, 'Morning run')).toContainText('Weekdays');
+});
+
 test('says when a habit isn’t planned for today', async ({ page }) => {
   await addHabit(page, 'Long walk');
   await page.getByRole('button', { name: 'Edit Long walk' }).click();
@@ -146,6 +194,79 @@ test('starts a new day while open, keeping the streak', async ({ page }) => {
   await expect(page.locator('[data-today]')).toHaveText('Tuesday, October 20');
   await expect(doneToday(page, 'Stretch')).toHaveAttribute('aria-pressed', 'false');
   await expect(streak(page, 'Stretch')).toHaveText('1-day streak');
+});
+
+test('deletes the check marks from a year, to make room', async ({ page }) => {
+  // Read every day since 20 December 2025, up to yesterday (audit F1-5).
+  const read: Habit = { id: 'read', name: 'Read', days: [...EVERY_DAY] };
+  const days = 303;
+  await seed(page, [read], ticked([read], days));
+  await expect(streak(page, 'Read')).toHaveText('303-day streak');
+  const deleteYear = page.getByRole('button', { name: 'Delete check marks from a year…' });
+  await deleteYear.click();
+  const dialog = page.getByRole('dialog', { name: 'Delete check marks from a year' });
+  const year = dialog.getByLabel('Year');
+  await expect(year).toBeFocused();
+  await expect(year.locator('option')).toHaveText([
+    '2025 (12 check marks)',
+    '2026 (291 check marks)',
+  ]);
+  // The oldest year to begin with.
+  await expect(year).toHaveValue('2025');
+  await expect(dialog.locator('[data-year-text]')).toHaveText(
+    'The 12 check marks from 2025 will be deleted, for every habit. Streaks then count only the days that are kept. With sync on, they’re deleted on your other devices too. This can’t be undone.',
+  );
+  await checkA11y(page, 'delete check marks from a year');
+  // Cancel deletes nothing.
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(streak(page, 'Read')).toHaveText('303-day streak');
+
+  await deleteYear.click();
+  await dialog.getByRole('button', { name: 'Delete 12 check marks' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Deleted 12 check marks from 2025.' }),
+  ).toBeAttached();
+  await expect(deleteYear).toBeFocused();
+  // The streak counts the days kept: from 1 January.
+  await expect(streak(page, 'Read')).toHaveText('291-day streak');
+});
+
+test('says when Habits is nearly full, and how to make room', async ({ page }) => {
+  const habits = Array.from({ length: 10 }, (_, index): Habit => ({
+    id: `h${index}`,
+    name: `Habit ${index + 1}`,
+    days: [...EVERY_DAY],
+  }));
+  // Just over 90% of the check marks Habits keeps.
+  await seed(page, habits, ticked(habits, MAX_CHECKS * 0.9 + 1));
+  const note = page.locator('[data-room-note]');
+  const makeRoom = 'To make room, use “Delete check marks from a year…” under Check marks, below.';
+  await expect(note).toHaveText(
+    `Habits is nearly full: there’s room for 999 more check marks (it keeps up to 10,000). ${makeRoom}`,
+  );
+  await checkA11y(page, 'nearly full');
+
+  // Full: a tick waits until there's room, and says how to make it.
+  await seed(page, habits, ticked(habits, MAX_CHECKS));
+  await expect(note).toHaveText(`Habits is full: it keeps up to 10,000 check marks. ${makeRoom}`);
+  await doneToday(page, 'Habit 1').click();
+  await expect(page.getByRole('alert')).toHaveText(
+    /Habits keeps up to 10,000 check marks\. To make room, delete the check marks from a year \(under Check marks\)\./,
+  );
+  await expect(doneToday(page, 'Habit 1')).toHaveAttribute('aria-pressed', 'false');
+
+  // Deleting the oldest year makes room, and the tick can be made.
+  await page.getByRole('button', { name: 'Delete check marks from a year…' }).click();
+  await page
+    .getByRole('dialog', { name: 'Delete check marks from a year' })
+    .getByRole('button', { name: /^Delete [\d,]+ check marks$/ })
+    .click();
+  await expect(note).toBeHidden();
+  await expect(page.getByRole('alert')).toBeHidden();
+  await doneToday(page, 'Habit 1').click();
+  await expect(doneToday(page, 'Habit 1')).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('reads out a name’s problem after Enter in the field, in the editor too', async ({ page }) => {

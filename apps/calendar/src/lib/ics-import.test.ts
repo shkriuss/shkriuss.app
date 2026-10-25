@@ -1,9 +1,9 @@
-import { describe, expect, it } from 'vitest';
-import type { CalendarEvent, EventDraft } from './events.ts';
+import { describe, expect, it, vi } from 'vitest';
+import { importEvents, type CalendarEvent, type EventDraft } from './events.ts';
 import { parseDuration, parseIcs, unescapeText, type ParseOptions } from './ics-import.ts';
 import { toIcs } from './ics.ts';
 
-const options: ParseOptions = { timeZone: 'Asia/Tbilisi', makeId: () => 'new-id' };
+const options: ParseOptions = { timeZone: 'Asia/Tbilisi' };
 
 /** A .ics file around some event lines (CRLF line endings, as files use). */
 const calendar = (...events: string[][]) =>
@@ -187,6 +187,28 @@ describe('parseIcs', () => {
     expect(
       only(calendar(['DTSTART:20261017T100000', 'DTEND:20261017T090000', 'SUMMARY:x'])),
     ).toMatchObject({ endDate: '2026-10-17', endTime: null });
+    expect(
+      only(calendar(['DTSTART:20261017T100000', 'DURATION:-P100000000D', 'SUMMARY:x'])),
+    ).toMatchObject({ endDate: '2026-10-17', endTime: null });
+  });
+
+  it('turns down an event that would last longer than Calendar allows', () => {
+    // Such a DURATION used to throw, which stopped the whole import (audit F1-8).
+    const result = parseIcs(
+      calendar(
+        ['DTSTART;VALUE=DATE:20261017', 'DURATION:P100000000D', 'SUMMARY:For ever'],
+        ['DTSTART:20261017T090000', `DURATION:PT${'9'.repeat(400)}M`, 'SUMMARY:Even longer'],
+        ['DTSTART:20261017T090000', 'DURATION:P367D', 'SUMMARY:A year and a day'],
+        ['DTSTART:20261017T090000', 'SUMMARY:Fine'],
+      ),
+      options,
+    );
+    expect(result.events.map((event) => event.draft.title)).toEqual(['Fine']);
+    expect(result.skipped).toEqual([
+      { title: 'For ever', reason: 'An event can last up to 366 days.' },
+      { title: 'Even longer', reason: 'An event can last up to 366 days.' },
+      { title: 'A year and a day', reason: 'An event can last up to 366 days.' },
+    ]);
   });
 
   it('reads the repeats Calendar can show', () => {
@@ -252,6 +274,27 @@ describe('parseIcs', () => {
     });
   });
 
+  it('ends an all-day repeat on the day its UNTIL says, wherever the phone is', () => {
+    // Some apps (Outlook) write an all-day repeat's last day as a UTC time.
+    // Converting it to the phone's time zone moved it a day either way (audit F1-10).
+    const until = (rule: string, timeZone: string) =>
+      only(
+        calendar([
+          'DTSTART;VALUE=DATE:20261228',
+          'DTEND;VALUE=DATE:20261229',
+          `RRULE:FREQ=DAILY;UNTIL=${rule}`,
+          'SUMMARY:Holiday camp',
+        ]),
+        { ...options, timeZone },
+      ).repeatUntil;
+    for (const timeZone of ['America/New_York', 'Europe/London', 'Asia/Tbilisi']) {
+      expect(until('20261231', timeZone)).toBe('2026-12-31');
+      expect(until('20261231T000000Z', timeZone)).toBe('2026-12-31');
+      expect(until('20261231T235959Z', timeZone)).toBe('2026-12-31');
+      expect(until('20261231T120000', timeZone)).toBe('2026-12-31');
+    }
+  });
+
   it('says when some repeating times may be an hour off', () => {
     const weekly = (start: string, rule = 'FREQ=WEEKLY') => [start, `RRULE:${rule}`, 'SUMMARY:x'];
     const london = 'DTSTART;TZID=Europe/London:20260714T090000';
@@ -292,6 +335,36 @@ describe('parseIcs', () => {
     // London and Berlin change on the same dates.
     expect(notes(london, 'Europe/Berlin')).toEqual([]);
     expect(notes(london, 'Europe/London')).toEqual([]);
+  });
+
+  it('reads a file of repeats from many time zones and years without freezing', () => {
+    // Each new time zone and year to compare clocks in costs a year of clock
+    // readings: a crafted file of thousands took minutes (audit F1-9). The
+    // work for a file is capped; past that, the note says what may be off.
+    const zones = Intl.supportedValuesOf('timeZone').filter((zone) => zone !== 'Asia/Tbilisi');
+    const events = Array.from({ length: 2000 }, (_, index) => [
+      `DTSTART;TZID=${zones[index % zones.length]}:${1100 + index}0101T090000`,
+      'RRULE:FREQ=WEEKLY',
+      'SUMMARY:x',
+    ]);
+    // Counts the clock readings, and stops at too many.
+    const read = Intl.DateTimeFormat.prototype.formatToParts;
+    let readings = 0;
+    vi.spyOn(Intl.DateTimeFormat.prototype, 'formatToParts').mockImplementation(function (
+      this: Intl.DateTimeFormat,
+      date,
+    ) {
+      readings += 1;
+      if (readings > 100_000) throw new Error('Too many clock readings');
+      return read.call(this, date);
+    });
+    try {
+      const result = parseIcs(calendar(...events), options);
+      expect(result.events).toHaveLength(2000);
+      expect(result.notes[0]).toMatch(/^\d+ repeating events are from a time zone/);
+    } finally {
+      vi.restoreAllMocks();
+    }
   });
 
   it('says when a monthly or yearly repeat moves to another day', () => {
@@ -408,11 +481,41 @@ describe('parseIcs', () => {
       calendar(
         ['UID:abc@calendar.shkriuss.app', 'DTSTART:20261017T090000'],
         ['UID:XYZ-1@example.com', 'DTSTART:20261017T090000'],
-        ['DTSTART:20261017T090000'],
+        // Escaped like any text (audit F1-11).
+        ['UID:meeting\\,2026\\;room\\\\4@example.com', 'DTSTART:20261017T090000'],
       ),
       options,
     ).events.map((event) => event.id);
-    expect(ids).toEqual(['abc', 'XYZ-1@example.com', 'new-id']);
+    expect(ids).toEqual(['abc', 'XYZ-1@example.com', 'meeting,2026;room\\4@example.com']);
+  });
+
+  it('spots an event Calendar exported when it’s imported again, whatever its id', () => {
+    // Ids from other calendars' UIDs can hold "," or ";" (audit F1-11).
+    for (const id of ['meeting,2026;room\\4@example.com', 'line\nbreak', 'mine']) {
+      const event: CalendarEvent = { id, ...base };
+      const parsed = parseIcs(toIcs([event]), options).events;
+      expect(parsed.map((entry) => entry.id)).toEqual([id]);
+      expect(importEvents({ events: [event] }, parsed)).toMatchObject({ added: 0, duplicates: 1 });
+    }
+  });
+
+  it('gives an event without a UID the same id each time, so it isn’t added twice', () => {
+    const file = calendar(
+      ['DTSTAMP:20261017T080000Z', 'DTSTART:20261017T090000', 'SUMMARY:Dentist'],
+      ['DTSTART:20261017T090000', 'SUMMARY:Gym'],
+      ['DTSTART:20261018T090000', 'SUMMARY:Dentist'],
+      ['DTSTART:20261017T090000', 'RRULE:FREQ=WEEKLY', 'SUMMARY:Dentist'],
+    );
+    const ids = parseIcs(file, options).events.map((event) => event.id);
+    expect(new Set(ids).size).toBe(4);
+    for (const id of ids) expect(id).toMatch(/^ics-[0-9a-z]+$/);
+    // The same file again, written at another time.
+    const again = parseIcs(file.replace('DTSTAMP:20261017T080000Z', 'DTSTAMP:20261018T120000Z'), {
+      ...options,
+    }).events;
+    expect(again.map((event) => event.id)).toEqual(ids);
+    const first = importEvents({ events: [] }, parseIcs(file, options).events);
+    expect(importEvents(first.state, again)).toMatchObject({ added: 0, duplicates: 4 });
   });
 
   it('turns down files that aren’t calendars, or have no events', () => {

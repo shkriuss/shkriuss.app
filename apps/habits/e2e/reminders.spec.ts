@@ -83,6 +83,21 @@ test('reminds while Habits is open, unless it’s done already', async ({ page }
   await expect(card(page, 'Drink water').locator('[data-reminder]')).toBeHidden();
 });
 
+test('a reminder in the hour that clocks skip still goes off', async ({ page }) => {
+  // In Berlin, clocks go from 02:00 to 03:00 on 29 March 2026 (audit F1-6).
+  await fakeNotifications(page, 'granted');
+  await page.clock.install({ time: new Date('2026-03-29T01:50:00+01:00') });
+  await page.goto('/');
+  await addHabit(page, 'Medicine');
+  await setReminder(page, 'Medicine', '02:30');
+  // Open through the night: it goes off as the clocks change, at 3:00.
+  await page.clock.runFor('01:00:00');
+  await expect(page.getByRole('status').filter({ hasText: 'Reminder: Medicine.' })).toBeAttached();
+  expect(await shownNotifications(page)).toEqual([
+    expect.objectContaining({ title: 'Medicine', body: REMINDER_BODY }),
+  ]);
+});
+
 test('asks to show notifications when a reminder is set', async ({ page }) => {
   await fakeNotifications(page, 'default');
   await page.goto('/');
@@ -149,6 +164,53 @@ test.describe('while Habits is closed', () => {
       expect(on(entries, '2026-10-19')).toBeUndefined();
       expect(on(entries, '2026-10-26')?.start).toBe('2026-10-26T20:00');
       expect(on(entries, '2026-10-20')?.start).toBe('2026-10-20T20:00');
+    } finally {
+      rig.server.close();
+    }
+  });
+
+  test('the open page shows reminders the server doesn’t have yet', async ({ page, guard }) => {
+    // The notification service sends reminders, so the open page doesn't show
+    // them too, unless a change couldn't be uploaded (audit F1-7).
+    // The browser logs the upload this test stops.
+    guard.allowConsole('net::ERR_FAILED');
+    const rig = await startRig();
+    try {
+      await page.clock.install({ time: new Date('2026-10-19T10:00:00+02:00') });
+      await fakeSubscription(page, rig);
+      await page.addInitScript(() => {
+        const shown: unknown[] = [];
+        (window as unknown as Record<string, unknown>)['shownNotifications'] = shown;
+        ServiceWorkerRegistration.prototype.showNotification = async (title, options) => {
+          shown.push({ title, ...options });
+        };
+      });
+      await page.goto('/');
+      await page.getByLabel('Also remind me when Habits is closed').check();
+      await expect(page.locator('[data-closed-status]')).toHaveText(
+        'On: reminders arrive even when Habits is closed.',
+      );
+      await addHabit(page, 'Walk');
+      const uploaded = page.waitForResponse(
+        (response) =>
+          response.url().endsWith('/api/push/schedule') &&
+          response.request().method() === 'PUT' &&
+          response.ok(),
+      );
+      await setReminder(page, 'Walk', '10:05');
+      await uploaded;
+      await page.clock.runFor('06:00');
+      await expect(page.getByRole('status').filter({ hasText: 'Reminder: Walk.' })).toBeAttached();
+      expect(await shownNotifications(page)).toEqual([]);
+
+      // Offline: the new time can't reach the server, so the page shows it.
+      await page.route('**/api/push/schedule', (route) => route.abort());
+      await setReminder(page, 'Walk', '10:15');
+      await expect(page.locator('[data-closed-status]')).toHaveText(/^Couldn’t reach/);
+      await page.clock.runFor('10:00');
+      await expect
+        .poll(() => shownNotifications(page))
+        .toEqual([expect.objectContaining({ title: 'Walk', body: REMINDER_BODY })]);
     } finally {
       rig.server.close();
     }

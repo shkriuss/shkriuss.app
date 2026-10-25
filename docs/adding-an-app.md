@@ -234,7 +234,10 @@ app automatically. When an item is changed on two devices before they sync,
 the newest change wins, unless the store passes `conflictCopy` to keep both
 versions, as Calendar, Meals, Notes, Reminders, Shelf and Tally do (Tally
 is the simplest: see `secondVersion` in `src/lib/counters.ts`). Moving to a
-new account key (after a lost device) needs no extra code.
+new account key (after a lost device) needs no extra code. A form for
+changing an item can stay open while a sync brings another device's change
+to that item: on Save, put on only what the person changed, with
+`withEdits` from `@shkriuss/sync/edits` (see `editedTask` in Tasks).
 
 ## Listing it on the hub
 

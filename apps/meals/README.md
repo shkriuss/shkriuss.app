@@ -50,7 +50,12 @@ Plan your meals for the week, and what to buy for them. Lives at
 - `src/worker.ts`: runs the shared notification and sync servers
   ([ADR 0010](../../docs/adr/0010-account-and-sync.md)). With sync on, the
   newest change to each planned meal, tick and reminder time wins; a meal
-  changed on two devices at once is kept in both versions.
+  changed on two devices at once is kept in both versions. While sync is
+  on, letting go of old plans and lists deletes them on every device, so a
+  phone whose clock is set far ahead mustn't decide what's old: Meals
+  counts back from the sync server's clock at the last sync, if that's
+  earlier than the phone's (`trustedNow` in `@shkriuss/sync`), as Water
+  does.
 - `e2e/`: browser tests (`helpers.ts` is shared by them). The shared
   accessibility, security, offline and sync checks in `tests/e2e/` run too.
 

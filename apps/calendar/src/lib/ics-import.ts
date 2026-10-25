@@ -13,6 +13,7 @@
  * off; a note says so. Another note says when a monthly or yearly repeat moved
  * to another day near the end of a month, where its dates can come out wrong.
  */
+import { fingerprint } from '@shkriuss/sync';
 import {
   addDays,
   addMinutes,
@@ -31,6 +32,7 @@ import {
   draftProblems,
   isValidReminder,
   MAX_NOTES_LENGTH,
+  MAX_SPAN_DAYS,
   MAX_TITLE_LENGTH,
   occurrencesBetween,
   type EventDraft,
@@ -59,8 +61,6 @@ export interface ParseResult {
 export interface ParseOptions {
   /** The device's time zone, e.g. "Europe/Tbilisi". */
   timeZone: string;
-  /** Makes an id for events without one. */
-  makeId: () => string;
   /** Events exported by this app keep their id (so importing twice doesn't duplicate). */
   domain?: string;
 }
@@ -313,19 +313,29 @@ function readWhen(property: Property, timeZone: string): When | null {
 const DAY_MS = 86_400_000;
 
 /**
+ * Time zones and years compared per file, at most (each costs a year of clock
+ * readings). Calendars use a few zones over some years; a crafted file of
+ * thousands froze the page for minutes (audit F1-9). Past this, a repeat
+ * counts as one whose times may be an hour off, and the note says so.
+ */
+const MAX_CLOCK_CHECKS = 100;
+
+/**
  * The days (as day numbers) in `year` when clocks in `zone` and in `timeZone`
- * move further apart or closer together, checked at noon (UTC) each day.
- * `seen` keeps them for the next event; `timeZone` is the same for a whole file.
+ * move further apart or closer together, checked at noon (UTC) each day, or
+ * null once the file has had its MAX_CLOCK_CHECKS. `seen` keeps them for the
+ * next event; `timeZone` is the same for a whole file.
  */
 function clockChangeDays(
   zone: string,
   timeZone: string,
   year: number,
   seen: Map<string, number[]>,
-): number[] {
+): number[] | null {
   const key = `${zone} ${year}`;
   const known = seen.get(key);
   if (known) return known;
+  if (seen.size >= MAX_CLOCK_CHECKS) return null;
   const apart = (day: number) => {
     const noon = day * DAY_MS + DAY_MS / 2;
     return offsetOf(noon, zone) - offsetOf(noon, timeZone);
@@ -344,8 +354,9 @@ function clockChangeDays(
 
 /**
  * True when clocks in `zone` and in `timeZone` don't stay the same time apart
- * from `from` to `to`. Clocks change on a yearly pattern, so at most a year is
- * checked (also when `to` is null: "forever").
+ * from `from` to `to`, or may not (past MAX_CLOCK_CHECKS). Clocks change on a
+ * yearly pattern, so at most a year is checked (also when `to` is null:
+ * "forever").
  */
 function clocksChangeApart(
   zone: string,
@@ -359,7 +370,7 @@ function clocksChangeApart(
   const last = Math.min(to ? toDayNumber(to) : Infinity, first + 366, toDayNumber('9999-12-31'));
   for (let year = parts(from).year; year <= parts(fromDayNumber(last)).year; year += 1) {
     const days = clockChangeDays(zone, timeZone, year, seen);
-    if (days.some((day) => day > first && day <= last)) return true;
+    if (!days || days.some((day) => day > first && day <= last)) return true;
   }
   return false;
 }
@@ -515,7 +526,14 @@ function toEvent(
   const endProperty = get('DTEND');
   const end = endProperty ? readWhen(endProperty, options.timeZone) : null;
   const durationProperty = get('DURATION');
-  const duration = durationProperty ? parseDuration(durationProperty.value) : null;
+  const parsed = durationProperty ? parseDuration(durationProperty.value) : null;
+  // One that ends before it starts is ignored, like an end before the start.
+  const duration = parsed !== null && parsed > 0 ? parsed : null;
+  // Longer than any event can last: turned down before the date maths, which
+  // fails for a big enough number and stopped the whole import (audit F1-8).
+  if (duration !== null && duration > (MAX_SPAN_DAYS + 1) * 1440) {
+    return skip(`An event can last up to ${MAX_SPAN_DAYS} days.`);
+  }
   if (start.time === null) {
     // All-day ends are "the day after", or a number of days.
     if (end) endDate = addDays(end.date, -1);
@@ -542,9 +560,13 @@ function toEvent(
   const rules = raw.props.filter((property) => property.name === 'RRULE');
   if (rules.length > 1 || get('RDATE')) return skip(UNSUPPORTED_REPEAT);
   if (rules[0]) {
-    // Rules use the time zone the start is written in.
+    // Rules use the time zone the start is written in. A whole day's last day
+    // is the date written, even as a UTC time (as Outlook writes it): moved to
+    // the phone's time zone, it would be a day off on one side of the world
+    // or the other (audit F1-10).
     const { written } = start;
-    const rule = readRule(rules[0].value, written.date, start.zone ?? options.timeZone);
+    const zone = allDay ? 'UTC' : (start.zone ?? options.timeZone);
+    const rule = readRule(rules[0].value, written.date, zone);
     if (!rule) return skip(UNSUPPORTED_REPEAT);
     repeat = rule.repeat;
     count = rule.count;
@@ -607,10 +629,29 @@ function toEvent(
     if (repeatMoves(draft.repeat, start.written.date, startDate)) flags.movedRepeats += 1;
   }
 
-  const uid = get('UID')?.value.trim() ?? '';
+  // A UID is text, escaped like any other: Calendar's own ids can hold ","
+  // or ";" from other calendars' UIDs (audit F1-11).
+  const uid = unescapeText(get('UID')?.value ?? '').trim();
   const ownSuffix = `@${options.domain ?? 'calendar.shkriuss.app'}`;
   const id = uid.endsWith(ownSuffix) ? uid.slice(0, -ownSuffix.length) : uid;
-  return { id: id ? id.slice(0, 200) : options.makeId(), draft };
+  return { id: id ? id.slice(0, 200) : contentId(raw), draft };
+}
+
+/** What makes an event without a UID that event, for contentId: never when the file was written. */
+const CONTENT = ['DTSTART', 'DTEND', 'DURATION', 'RRULE', 'SUMMARY', 'DESCRIPTION', 'LOCATION'];
+
+/**
+ * An id for an event without a UID, made from what the event is, so it's
+ * the same each time the file is imported, and isn't added twice (audit
+ * F1-11).
+ */
+function contentId(raw: RawEvent): string {
+  const content = CONTENT.map((name) =>
+    raw.props
+      .filter((property) => property.name === name)
+      .map(({ params, value }) => [params, value]),
+  );
+  return `ics-${fingerprint(content)}`;
 }
 
 /** Reads every event in a .ics file. */

@@ -202,6 +202,33 @@ test('repeats every 2 weeks, or however often', async ({ page }) => {
   await expect(every).toHaveValue('2');
 });
 
+test('saving the form keeps what changed elsewhere while it was open', async ({ page }) => {
+  await seed(page, [
+    {
+      title: 'Water plants',
+      date: '2026-10-20',
+      repeat: 'weekly',
+      steps: [{ id: 'fern', title: 'The fern', done: true }],
+    },
+  ]);
+  await page.getByRole('button', { name: 'Edit Water plants' }).click();
+  // Meanwhile, another tab (or a sync from another device) ticks it off: it
+  // moves on to next week with its step unticked, and a done copy is kept.
+  const other = await page.context().newPage();
+  await other.goto('/');
+  await box(other, 'Water plants').click();
+  await expect(row(other, 'Water plants').locator('[data-due]')).toHaveText('Tue, Oct 27');
+  await other.close();
+
+  // Only the title is changed here (audit F1-2).
+  await editor(page).getByLabel('Title').fill('Water the plants');
+  await editor(page).getByRole('button', { name: 'Save' }).click();
+  const plants = row(page, 'Water the plants');
+  await expect(plants.locator('[data-due]')).toHaveText('Tue, Oct 27');
+  await expect(plants.locator('[data-steps-count]')).toHaveText('0 of 1 step');
+  await expect(page.locator('[data-done-summary]')).toHaveText('Done (1)');
+});
+
 test('deletes a task, and done ones, with a confirmation', async ({ page }) => {
   await seed(page, [
     { title: 'Old receipt', done: 5 },

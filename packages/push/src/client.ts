@@ -3,6 +3,7 @@
  *
  *   enablePush()        ask permission, subscribe this device
  *   syncPush(notices)   upload the app's scheduled notifications, encrypted
+ *   pushHolds(notices)  whether the server has them as they are now
  *   sendTestPush()      one notification right now
  *   disablePush()       forget this device on the server and unsubscribe
  *   finishPushDelete()  try again to forget it, if the server couldn't be reached
@@ -263,6 +264,38 @@ async function current(): Promise<DeviceState | null> {
 }
 
 /**
+ * What syncPush uploads for these notices at `now`: the ones that will still
+ * happen, soonest first, up to the server's limit, and its fingerprint.
+ */
+async function scheduleOf(notices: readonly Notice[], endpoint: string, now: number) {
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const upcoming = notices
+    // Leave out any the server would turn down, so one odd reminder can't stop the rest.
+    .filter((notice) => timingProblem(notice) === undefined)
+    .map((notice) => ({ notice, next: nextFireTime(notice, timeZone, now) }))
+    .filter((item): item is { notice: Notice; next: number } => item.next !== null)
+    .sort((a, b) => a.next - b.next)
+    .slice(0, LIMITS.entries)
+    .map((item) => item.notice);
+  return { timeZone, upcoming, hash: await hashOf({ upcoming, timeZone, endpoint }) };
+}
+
+/**
+ * Whether the notification service has these notifications as they are now
+ * (the last upload of them got through), so it sends them, and an open app
+ * mustn't show them a second time. False while push is off, and after a
+ * change that couldn't be uploaded (say, offline): then nothing would send
+ * them, so the open app shows them itself (audit F1-7).
+ */
+export async function pushHolds(notices: readonly Notice[]): Promise<boolean> {
+  const state = load();
+  if (!state?.synced) return false;
+  // As they were worked out then: time passing changes nothing.
+  const { hash } = await scheduleOf(notices, state.endpoint, state.synced.at);
+  return hash === state.synced.hash;
+}
+
+/**
  * Uploads the app's scheduled notifications (replacing earlier ones). Skips
  * the upload when nothing changed recently. Returns how many are scheduled.
  */
@@ -274,19 +307,8 @@ export async function syncPush(
   if (isPushDeletePending()) await finishPushDelete();
   const state = await current();
   if (!state) return 0;
-  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  // Only ones that will still happen, soonest first, up to the server's limit.
   const now = Date.now();
-  const upcoming = notices
-    // Leave out any the server would turn down, so one odd reminder can't stop the rest.
-    .filter((notice) => timingProblem(notice) === undefined)
-    .map((notice) => ({ notice, next: nextFireTime(notice, timeZone, now) }))
-    .filter((item): item is { notice: Notice; next: number } => item.next !== null)
-    .sort((a, b) => a.next - b.next)
-    .slice(0, LIMITS.entries)
-    .map((item) => item.notice);
-
-  const hash = await hashOf({ upcoming, timeZone, endpoint: state.endpoint });
+  const { timeZone, upcoming, hash } = await scheduleOf(notices, state.endpoint, now);
   if (!options.force && state.synced?.hash === hash && now - state.synced.at < REFRESH_MS) {
     return upcoming.length;
   }
