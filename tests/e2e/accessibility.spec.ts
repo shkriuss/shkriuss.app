@@ -58,6 +58,32 @@ test('the theme switch changes and remembers the theme', async ({ page }) => {
   await expect(page.locator('html')).not.toHaveAttribute('data-theme', /.*/);
 });
 
+test('the theme switch shows which option has keyboard focus, in contrast themes too', async ({
+  page,
+}) => {
+  // In Windows contrast themes, the checked option's outline hid the focus ring (audit G-7).
+  await page.goto('/');
+  const system = page.locator('.theme-switch__option', {
+    has: page.getByRole('radio', { name: 'System' }),
+  });
+  const outline = () =>
+    system.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return `${style.outlineStyle} ${style.outlineWidth} ${style.outlineColor} ${style.outlineOffset}`;
+    });
+  for (const forcedColors of ['none', 'active'] as const) {
+    await page.emulateMedia({ forcedColors });
+    // From the footer link before it, as with the Tab key.
+    await page.getByRole('navigation', { name: 'Footer' }).getByRole('link').last().focus();
+    const checked = await outline();
+    await page.keyboard.press('Tab');
+    await expect(page.getByRole('radio', { name: 'System' })).toBeFocused();
+    const focused = await outline();
+    expect(focused, `forced colours: ${forcedColors}`).toMatch(/^solid 3px /);
+    expect(focused, `forced colours: ${forcedColors}`).not.toBe(checked);
+  }
+});
+
 test('every page has a language, a title and exactly one main heading', async ({ page }) => {
   for (const path of await discoverPages(page)) {
     await page.goto(path);

@@ -700,6 +700,13 @@ select.input {
     outline: 2px solid CanvasText;
   }
 
+  /* The option with focus (always the checked one: arrow keys check what they
+     move to) shows the theme's focus colour, not only the checked outline (audit G-7). */
+  .theme-switch__option:has(input:focus-visible) {
+    outline: 3px solid Highlight;
+    outline-offset: 2px;
+  }
+
   /* Contrast themes replace backgrounds, so a toggle that's on uses the theme's
      own "selected" colours (audit G-6). */
   .btn[aria-pressed='true'] {

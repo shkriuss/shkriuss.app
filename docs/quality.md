@@ -28,7 +28,8 @@ package age check run only in GitHub Actions.
   text at 200% (also apps' pages with things in them, and their dialogs,
   with no text squeezed into a column of letters:
   `tests/e2e/large-text.spec.ts`); footer links are big enough to tap; the
-  theme switch works and is remembered.
+  theme switch works, is remembered, and shows which option has focus (in
+  Windows contrast themes too).
 - **Keyboard focus:** in apps with lists, focus stays on the same control
   when a list is drawn again after a change in another tab (the same as a
   change from sync), when a dialog closes after that, and when Budget and
