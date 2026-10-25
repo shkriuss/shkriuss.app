@@ -16,7 +16,10 @@ Your trading journal: log your trades and see what works. Lives at
   - Results for a period (all time, this or last month, this year; by the
     day trades were exited): net result, win rate, profit factor (won for
     each 1 lost), average win and loss, best and worst trade, average R
-    (`stats`), and the same by setup and by month.
+    (`stats`), and the same by setup and by month. The form takes prices
+    and quantities up to a trillion (`LIMITS.number`); a trade restored from
+    a backup or synced can be bigger (older data must stay readable), and a
+    result too big to work out shows as "—" (`formatResult`).
   - Closing part of a trade (`readClose`): the close form's "Quantity
     closed" is all that's still open unless it's changed. Less than all of
     it adds the part closed as a trade of its own (a new id, that quantity,

@@ -24,10 +24,12 @@ import {
   dateLabel,
   emptySettings,
   emptyTrades,
-  formatMoney,
+  formatCount,
+  formatFactor,
   formatNumber,
   formatPercent,
   formatR,
+  formatResult,
   isOpen,
   isSettingsState,
   isTradesState,
@@ -118,10 +120,10 @@ function rateText(rate: number): string {
   }).format(value);
 }
 
-/** Green for a win, red for a loss. */
+/** Green for a win, red for a loss (neither for a result too big to work out). */
 function tone(element: Element, amount: number): void {
-  element.classList.toggle('win', amount > 0);
-  element.classList.toggle('loss', amount < 0);
+  element.classList.toggle('win', Number.isFinite(amount) && amount > 0);
+  element.classList.toggle('loss', Number.isFinite(amount) && amount < 0);
 }
 
 export function mountTrades(root: Document): void {
@@ -179,7 +181,7 @@ export function mountTrades(root: Document): void {
   };
   const find = (id: string | null | undefined) => state.trades.find((trade) => trade.id === id);
   const money = (amount: number, signed = false) =>
-    formatMoney(amount, currencyOf(settings), { signed });
+    formatResult(amount, currencyOf(settings), { signed });
 
   /** Saves, shows the change, and tells other devices. */
   function save(next: { trades?: TradesState; settings?: SettingsState }, message: string): void {
@@ -213,11 +215,15 @@ export function mountTrades(root: Document): void {
     tiles.hidden = found.count === 0;
     if (found.count === 0) return;
     tile('total', money(found.total, true), '', found.total);
-    tile('count', String(found.count), `${found.wins} won, ${found.losses} lost`);
+    tile(
+      'count',
+      formatCount(found.count),
+      `${formatCount(found.wins)} won, ${formatCount(found.losses)} lost`,
+    );
     tile('win-rate', found.winRate === null ? '—' : rateText(found.winRate));
     tile(
       'profit-factor',
-      found.profitFactor === null ? '—' : found.profitFactor.toFixed(2),
+      found.profitFactor === null ? '—' : formatFactor(found.profitFactor),
       found.profitFactor === null ? 'No losses yet' : 'Won for each 1 lost',
     );
     tile(
@@ -328,7 +334,7 @@ export function mountTrades(root: Document): void {
         total.textContent = money(group.total, true);
         tone(total, group.total);
         required<HTMLElement>(item, '[data-group-counts]').textContent =
-          `${group.count} ${group.count === 1 ? 'trade' : 'trades'}, ${rateText(group.wins / group.count)} won`;
+          `${formatCount(group.count)} ${group.count === 1 ? 'trade' : 'trades'}, ${rateText(group.wins / group.count)} won`;
         return item;
       }),
     );

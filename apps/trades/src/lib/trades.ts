@@ -25,6 +25,7 @@ import {
   formatMoney,
   parseDecimal,
   type Currency,
+  type MoneyOptions,
 } from '@shkriuss/ui/numbers';
 import { DATE_LOCALE } from '@shkriuss/ui/locale';
 import { foldText } from '@shkriuss/ui/text';
@@ -781,6 +782,30 @@ export function setupNames(state: TradesState): string[] {
 export { CURRENCIES, formatMoney, type Currency };
 
 /**
+ * Shown for a result too big to work out: a trade restored from a backup,
+ * or synced, can have prices far beyond LIMITS.number (only the form checks
+ * them, so data saved before can't become unreadable), and its results are
+ * then infinite, or not a number at all.
+ */
+const NO_RESULT = '—';
+
+/** An amount of money, like a result: "+$480.00", or "—" if it isn't finite. */
+export const formatResult = (amount: number, currency: string, options?: MoneyOptions): string =>
+  Number.isFinite(amount) ? formatMoney(amount, currency, options) : NO_RESULT;
+
+/** A count of trades: "1,234". */
+export const formatCount = (count: number, locale?: string): string =>
+  new Intl.NumberFormat(locale).format(count);
+
+/** The profit factor: "1.50", or "—" if it isn't finite. */
+export const formatFactor = (value: number, locale?: string): string =>
+  Number.isFinite(value)
+    ? new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(
+        value,
+      )
+    : NO_RESULT;
+
+/**
  * A price or amount, with as many decimals as it has (up to 8). Below 1, up
  * to 8 significant digits, so a price of 0.000000001234 isn't shown as 0.
  */
@@ -802,15 +827,23 @@ export function shownRate(rate: number): { value: number; digits: number } {
   return { value: rate, digits: 0 };
 }
 
-/** "+3.2%", "-1.05%". */
+/** "+3.2%", "-1.05%"; "—" if it isn't finite. */
 export const formatPercent = (value: number, locale?: string): string =>
-  new Intl.NumberFormat(locale, { maximumFractionDigits: 2, signDisplay: 'exceptZero' }).format(
-    value,
-  ) + '%';
+  Number.isFinite(value)
+    ? new Intl.NumberFormat(locale, { maximumFractionDigits: 2, signDisplay: 'exceptZero' }).format(
+        value,
+      ) + '%'
+    : NO_RESULT;
 
-/** "+2.0R", "-1.0R". */
-export const formatR = (value: number): string =>
-  `${value > 0 ? '+' : value < 0 ? '-' : ''}${Math.abs(value).toFixed(1)}R`;
+/** "+2.0R", "-1.0R"; "0.0R" for what rounds to 0 (never "-0.0R"); "—" if it isn't finite. */
+export const formatR = (value: number, locale?: string): string =>
+  Number.isFinite(value)
+    ? new Intl.NumberFormat(locale, {
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 1,
+        signDisplay: 'exceptZero',
+      }).format(value) + 'R'
+    : NO_RESULT;
 
 /** "October 2026". */
 export function monthLabel(month: string, locale = DATE_LOCALE): string {

@@ -15,10 +15,13 @@ import {
   dateLabel,
   emptySettings,
   emptyTrades,
+  formatCount,
+  formatFactor,
   formatMoney,
   formatNumber,
   formatPercent,
   formatR,
+  formatResult,
   isTradesState,
   LIMITS,
   matchesSearch,
@@ -711,8 +714,18 @@ describe('words and numbers', () => {
     expect(formatNumber(1_000_000_000_000, 'en-US')).toBe('1,000,000,000,000');
     expect(formatPercent(3.2, 'en-US')).toBe('+3.2%');
     expect(formatPercent(-1.05, 'en-US')).toBe('-1.05%');
-    expect(formatR(2)).toBe('+2.0R');
-    expect(formatR(-0.5)).toBe('-0.5R');
+    expect(formatR(2, 'en-US')).toBe('+2.0R');
+    expect(formatR(-0.5, 'en-US')).toBe('-0.5R');
+    // Near 0 it's 0, never "-0.0R" (audit F2-13).
+    expect(formatR(-0.04, 'en-US')).toBe('0.0R');
+    expect(formatR(0.04, 'en-US')).toBe('0.0R');
+    // In the person's own style, like the other numbers.
+    expect(formatR(2, 'de-DE')).toBe('+2,0R');
+    expect(formatFactor(1.5, 'en-US')).toBe('1.50');
+    expect(formatFactor(1234.5, 'en-US')).toBe('1,234.50');
+    expect(formatFactor(1.5, 'de-DE')).toBe('1,50');
+    expect(formatCount(1234, 'en-US')).toBe('1,234');
+    expect(formatResult(480, 'USD', { signed: true, locale: 'en-US' })).toBe('+$480.00');
     expect(monthLabel('2026-10', 'en-US')).toBe('October 2026');
     expect(dateLabel('2026-10-19', 'en-US')).toBe('Oct 19, 2026');
   });
@@ -731,6 +744,23 @@ describe('number sizes', () => {
       'Enter a smaller number.',
     );
     expect(readTrade({ ...form, quantity: '1000000000000' }, 'a', 0).trade?.quantity).toBe(1e12);
+  });
+
+  // Audit F2-12: a trade restored or synced with prices far beyond what the
+  // form takes still passes the check (older data must stay readable), and
+  // its results showed "+$∞" and "$NaN".
+  it('shows "—" for results too big to work out', () => {
+    const huge = (id: string, side: Trade['side']) =>
+      trade({ id, side, entryPrice: 1e300, exitPrice: 2e300, quantity: 1e10 });
+    const restored = state(huge('a', 'long'), huge('b', 'short'));
+    expect(isTradesState(restored)).toBe(true);
+    const result = stats(restored.trades);
+    for (const value of [result.total, profit(restored.trades[0] as Trade) ?? 0]) {
+      expect(formatResult(value, 'USD', { signed: true, locale: 'en-US' })).toBe('—');
+    }
+    expect(formatPercent(returnPercent(restored.trades[0] as Trade) ?? 0, 'en-US')).toBe('—');
+    expect(formatR(Number.NaN, 'en-US')).toBe('—');
+    expect(formatFactor(Number.POSITIVE_INFINITY, 'en-US')).toBe('—');
   });
 });
 
