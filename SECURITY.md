@@ -27,7 +27,9 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
   by the server and never exported. Requests are size-limited, rate-limited
   and checked; push addresses must be https with a domain name, and
   redirects are refused. A device whose messages all fail or are refused for
-  two days is forgotten, and each app sends at most 2,000 messages a day.
+  two days is forgotten, and each app sends at most 2,000 messages a day. A
+  push service gets 5 seconds to answer, and time spent waiting counts
+  against those messages, so a slow push address can't tie up the servers.
 - The hub also runs a small Worker for `/api/account/*`, for the optional
   **shkriuss account** ([ADR 0010](docs/adr/0010-account-and-sync.md)). It
   only holds values sealed on the device (AES-256-GCM): passkey locks, under

@@ -4,10 +4,11 @@
  * the push service.
  */
 import { randomBytes, toBase64Url } from '@shkriuss/crypto';
+import { METER } from '@shkriuss/server/meter';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { deviceKey, memoryPush } from './testing.ts';
 import { LIMITS } from './validate.ts';
-import { STORAGE_LIMITS } from './worker.ts';
+import { DAILY_SENDS, SEND_MS, STORAGE_LIMITS } from './worker.ts';
 
 const ORIGIN = 'https://calendar.example';
 const ENDPOINT = 'https://push.example.com/device-1';
@@ -246,6 +247,123 @@ describe('what’s kept for how long', () => {
     expect((await device().test()).status).toBe(200);
     await passDays(1);
     expect([...server.devices.values()].map(({ storage }) => storage.map.size)).toEqual([0]);
+  });
+});
+
+describe('a push service that’s slow or never answers (audit B-1)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({
+      now: Date.UTC(2026, 9, 22),
+      toFake: ['Date', 'setTimeout', 'clearTimeout'],
+    });
+  });
+
+  /** A push service that answers after `ms` (201: delivered), or never (null). */
+  function slowPushService(ms: number | null) {
+    const sent = vi.fn(
+      (_input: string, init?: RequestInit) =>
+        new Promise<Response>((resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(init.signal?.reason));
+          if (ms === null) {
+            // Only a time limit ends the wait.
+            vi.advanceTimersToNextTimer();
+            return;
+          }
+          vi.advanceTimersByTime(ms);
+          resolve(new Response(null, { status: 201 }));
+        }),
+    );
+    vi.stubGlobal('fetch', sent);
+    return sent;
+  }
+
+  /** The app's messages counted today. */
+  const counted = async () => (await server.keysStorage.get<{ sends: number }>('sent'))?.sends ?? 0;
+
+  /** 25 reminders, all at 09:00 every day. */
+  const together = () => Array.from({ length: 25 }, (_, index) => entry({ id: `e${index}` }));
+
+  it('gives up on a test message after a few seconds, counting each second as a message', async () => {
+    const sent = slowPushService(null);
+    expect((await device().test()).status).toBe(502);
+    expect(sent).toHaveBeenCalledOnce();
+    expect(await counted()).toBe(1 + SEND_MS / 1000);
+  });
+
+  it('stops a wake-up at the first message with no answer, and forgets the device after two days', async () => {
+    const sent = slowPushService(null);
+    expect((await device().schedule(together())).status).toBe(200);
+    vi.setSystemTime(Date.UTC(2026, 9, 22, 9));
+    await server.runAlarms();
+    // One message waited; the other 24 are tried again with it, a minute later.
+    expect(sent).toHaveBeenCalledOnce();
+    const [found] = [...server.devices.values()];
+    const record = await found?.storage.get<{
+      entries: { attempts: number }[];
+      failingSince: number;
+    }>('device');
+    expect(record?.entries.map(({ attempts }) => attempts)).toEqual(Array(25).fill(1));
+    expect(record?.failingSince).toBe(Date.UTC(2026, 9, 22, 9));
+    await passDays(3);
+    expect(
+      [...server.devices.values()].map(({ storage }) => [storage.map.size, storage.alarm]),
+    ).toEqual([[0, null]]);
+    // Four tries a day (each a single wait), then gone on the third morning.
+    expect(sent).toHaveBeenCalledTimes(9);
+  });
+
+  it('keeps each wake-up short when answers are slow, sending the rest straight after', async () => {
+    const sent = slowPushService(3_000);
+    expect((await device().schedule(together())).status).toBe(200);
+    vi.setSystemTime(Date.UTC(2026, 9, 22, 9));
+    const [found] = [...server.devices.values()];
+    const lengths: number[] = [];
+    while (found && found.storage.alarm !== null && found.storage.alarm <= Date.now()) {
+      found.storage.alarm = null;
+      const start = Date.now();
+      await found.device.alarm();
+      lengths.push(Date.now() - start);
+    }
+    expect(sent).toHaveBeenCalledTimes(25);
+    // Far inside the 30 seconds Cloudflare gives a wake-up.
+    expect(Math.max(...lengths)).toBeLessThanOrEqual(15_000);
+    // Every second of the 75 spent waiting counts as one more message.
+    expect(await counted()).toBeGreaterThanOrEqual(25 + 75);
+  });
+
+  it('can make an app wait about DAILY_SENDS seconds a day at most', async () => {
+    // A test message at a time, each to a push address that answers just before the limit.
+    slowPushService(SEND_MS - 1);
+    let waited = 0;
+    for (let tries = 0; tries < DAILY_SENDS; tries += 1) {
+      const start = Date.now();
+      const response = await device().test();
+      if (response.status === 429) break;
+      waited += Date.now() - start;
+    }
+    expect(waited / 1000).toBeLessThanOrEqual(DAILY_SENDS);
+  });
+
+  it('wakes up again later when something fails during a wake-up (audit B-2)', async () => {
+    pushService(410);
+    expect((await device().schedule([entry()])).status).toBe(200);
+    // The push service says the device is gone, but the storage meter can't be reached.
+    const { PUSH_DEVICES } = server.env;
+    server.env.PUSH_DEVICES = {
+      idFromName: (name) => PUSH_DEVICES.idFromName(name),
+      get: (id) =>
+        id.toString() === METER
+          ? { fetch: async () => new Response(null, { status: 503 }) }
+          : PUSH_DEVICES.get(id),
+    };
+    vi.setSystemTime(Date.UTC(2026, 9, 22, 9));
+    await server.runAlarms();
+    const [found] = [...server.devices.values()];
+    expect(found?.storage.alarm).toBe(Date.now() + 60_000);
+    // Once it's back, the device is forgotten as it should be.
+    server.env.PUSH_DEVICES = PUSH_DEVICES;
+    await passDays(1);
+    expect([found?.storage.map.size, found?.storage.alarm]).toEqual([0, null]);
   });
 });
 

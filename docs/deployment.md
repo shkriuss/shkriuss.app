@@ -241,6 +241,11 @@ Everything here fits Cloudflare's and GitHub's free plans:
 - Durable Objects also keep up to 5 GB, for every app together. Each app's
   servers have a limit that keeps them all within it, and copies nobody uses
   for 13 months are deleted ([ADR 0017](adr/0017-storage-limits.md)).
+- Durable Objects also have 13,000 GB-s of time a day, counted while an
+  object waits too. Push services are given 5 seconds to answer, and each
+  second spent waiting counts against the app's 2,000 messages a day, so
+  notifications can't use more than a small part of it
+  ([ADR 0009](adr/0009-push-notifications.md)).
 - Photos' online library uses R2: free up to 10 GB, then about $0.015 per GB
   a month (about $15 a month for 1 TB, the most it holds), and downloads are
   free. Each photo put online is one Worker request and four Durable Object
