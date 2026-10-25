@@ -51,9 +51,9 @@ pnpm --filter notes dev
 
 1. Copies `templates/app/` to `apps/<slug>/`, replacing `template-app` with
    the slug.
-2. Adds the app to `packages/registry/apps.json` with `"status": "live"` and
-   `"storage": "device"` (change it to `"none"` if the app saves nothing),
-   then formats the new files.
+2. Adds the app to `packages/registry/apps.json` with `"status": "live"`,
+   `"storage": "device"` and the theme choice in `dataStored` (every page
+   saves it, so keep both), then formats the new files.
 
 That's all: the hub, the privacy page, the browser tests, the build and the
 deploy all read from the registry and the `apps/` folder. (One shared test

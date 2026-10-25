@@ -75,6 +75,21 @@ describe('validateRegistry', () => {
     }
   });
 
+  it('refuses "storage": "none" for an app that says it stores something', () => {
+    expect(() =>
+      validateRegistry({
+        site: validSite,
+        apps: [{ ...validApp, storage: 'none', dataStored: ['Your light or dark theme choice'] }],
+      }),
+    ).toThrow(/apps\[0\]\.storage can't be "none"/);
+    expect(
+      validateRegistry({
+        site: validSite,
+        apps: [{ ...validApp, storage: 'none', dataStored: [] }],
+      }).apps,
+    ).toHaveLength(1);
+  });
+
   it('accepts an optional pushNotifications flag, true or false only', () => {
     const registry = validateRegistry({
       site: validSite,
