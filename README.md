@@ -28,8 +28,9 @@ You never need a computer:
 - **Review it:** open the pull request on GitHub and check the green ticks.
   To try it first, approve its preview links
   ([how](docs/deployment.md#seeing-a-preview)).
-- **Ship it:** tap **Merge pull request**. The sites update a minute or two
-  later.
+- **Ship it:** tap **Merge pull request**. The sites update about half an
+  hour later: every check runs again on `main` first, then the deploy (you
+  can watch it under **Actions**).
 - **New app:** ask Claude, or use **Actions → New app → Run workflow**
   ([guide](docs/adding-an-app.md)).
 

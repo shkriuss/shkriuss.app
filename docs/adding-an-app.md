@@ -32,8 +32,9 @@ opens a pull request with preview links.
 5. Wait for the checks (green ticks). For preview links, approve **Deploy
    previews** ([how](deployment.md#seeing-a-preview)); the **Preview links**
    comment then appears.
-6. When you're happy, tap **Merge pull request**. A few minutes later the app
-   is live at `https://<slug>.shkriuss.app` and listed on the hub.
+6. When you're happy, tap **Merge pull request**. About half an hour later
+   (every check runs again on `main` first, then the deploy) the app is live
+   at `https://<slug>.shkriuss.app` and listed on the hub.
 
 The new app starts as a placeholder page. Ask Claude to build the real thing
 in that pull request, or in a new one.
