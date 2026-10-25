@@ -31,7 +31,9 @@ changes on its next deploy.
     in them and their dialogs). For that, rows of fixed widths shrink or
     wrap: `minmax(min(100%, 9rem), 1fr)` in grids, `flex-wrap` in rows, and
     `min-width: 0` on a `<fieldset>` (browsers make it as wide as its
-    content otherwise).
+    content otherwise). A word or number that can't fit a line by itself
+    (a long amount, "Wednesday" beside a checkbox) breaks rather than going
+    past the edge: `overflow-wrap: anywhere`, as `.check` labels do.
   - States shown only by colour (a pressed toggle, a selected day) also get
     a rule for Windows contrast themes (`@media (forced-colors: active)`),
     which replace backgrounds.

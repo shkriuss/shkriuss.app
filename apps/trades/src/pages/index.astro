@@ -532,8 +532,10 @@ const STAT_TILES = [
     gap: var(--space-1) var(--space-2);
   }
 
+  /* A big amount breaks rather than going past the edge, with large text (audit G-4). */
   .trade__profit {
     font-weight: var(--weight-bold);
+    overflow-wrap: anywhere;
   }
 
   .trade__extra {

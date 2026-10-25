@@ -484,16 +484,21 @@ select.input {
   gap: var(--space-3);
 }
 
-/* Checkbox with its label, sized as a comfortable tap target. */
+/* Checkbox with its label, sized as a comfortable tap target. With large text
+   on a small screen, a long word in the label breaks rather than going past
+   its box (audit G-4). */
 .check {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
+  min-width: 0;
   min-height: var(--tap-target);
+  overflow-wrap: anywhere;
   cursor: pointer;
 }
 
 .check input {
+  flex-shrink: 0;
   width: 1.25rem;
   height: 1.25rem;
   margin: 0;
