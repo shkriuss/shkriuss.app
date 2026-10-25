@@ -7,7 +7,8 @@
  * Worker with createWorker(): requests to /api/<feature>/* go to that
  * feature's handler, and everything else is the site's static files, served
  * as before. Features: notifications (@shkriuss/push), the account on the hub
- * (@shkriuss/account).
+ * (@shkriuss/account), sync (@shkriuss/sync) and an online library
+ * (@shkriuss/library).
  */
 import { toBase64Url, sha256, utf8 } from '@shkriuss/crypto';
 

@@ -32,8 +32,9 @@ opens a pull request with preview links.
 5. Wait for the checks (green ticks). For preview links, approve **Deploy
    previews** ([how](deployment.md#seeing-a-preview)); the **Preview links**
    comment then appears.
-6. When you're happy, tap **Merge pull request**. A few minutes later the app
-   is live at `https://<slug>.shkriuss.app` and listed on the hub.
+6. When you're happy, tap **Merge pull request**. About half an hour later
+   (every check runs again on `main` first, then the deploy) the app is live
+   at `https://<slug>.shkriuss.app` and listed on the hub.
 
 The new app starts as a placeholder page. Ask Claude to build the real thing
 in that pull request, or in a new one.
@@ -51,9 +52,9 @@ pnpm --filter notes dev
 
 1. Copies `templates/app/` to `apps/<slug>/`, replacing `template-app` with
    the slug.
-2. Adds the app to `packages/registry/apps.json` with `"status": "live"` and
-   `"storage": "device"` (change it to `"none"` if the app saves nothing),
-   then formats the new files.
+2. Adds the app to `packages/registry/apps.json` with `"status": "live"`,
+   `"storage": "device"` and the theme choice in `dataStored` (every page
+   saves it, so keep both), then formats the new files.
 
 That's all: the hub, the privacy page, the browser tests, the build and the
 deploy all read from the registry and the `apps/` folder. (One shared test
@@ -88,6 +89,48 @@ alphabetical order, so where an entry sits in `apps.json` doesn't matter.
 - If the app needs a browser feature (for example keeping the screen on),
   allow it in `astro.config.ts`:
   `defineAppConfig({ slug: 'notes', allowFeatures: ['screen-wake-lock'] })`.
+
+### Changing what an app saves
+
+People keep what an older version saved, and with sync, another device may
+still run an older (or newer) version. So when a change saves data in a new
+shape (a new field that must be there, a stricter check, a renamed field):
+
+1. Raise the store's `version` in its `createStore` options, and add
+   `migrate(data, fromVersion)`, which turns what older versions saved into
+   the new shape. Never make `validate` stricter without it.
+2. Test it: data saved by the old version (`seedStores()` with the old
+   version number) loads, and saves back in the new shape.
+3. What happens then: data from a newer version is never saved over. A
+   device with an older version keeps it, shows nothing for that store, and
+   (with sync) waits until it's updated
+   ([ADR 0010](adr/0010-account-and-sync.md)); a backup made by a newer
+   version won't restore in an older one. Don't roll back past such a change
+   ([deployment](deployment.md#rolling-back)): fix forward instead.
+
+### Syncing settings
+
+Sync works on lists of items, each with a string `id`. Settings (single
+values like a unit or a goal) sync the same way: save each one as its own
+item, like `{ id: 'unit', unit: 'ml' }`, and only the settings someone
+changed are saved. Then two devices changing different settings don't undo
+each other. Water is the example (`withSettings` in
+`apps/water/src/lib/water.ts`); Budget, Repairs and Trades do the same.
+
+### Data that belongs to one device
+
+Keys that start with `shkriuss-device:` (the sync state, notification keys,
+the account) are left out of backups on purpose. **Delete all data**
+(`deleteAll()`) only removes `shkriuss:` keys, so a new feature that keeps
+something under `shkriuss-device:` must delete it in the delete handler of
+`packages/ui/src/scripts/data-controls.ts` too, as notifications and sync
+do.
+
+### Building on a computer
+
+The first `pnpm build` (and `pnpm verify`) downloads Grammar's 361 MB model.
+To build everything else without it:
+`pnpm -r --filter "./apps/*" --filter "!grammar" build`.
 
 ## Notifications while the app is closed (optional)
 
@@ -202,6 +245,27 @@ placeholder, change its `"status"` in `apps.json` to `"hidden"`, and back to
 
 ## Removing an app
 
-Delete `apps/<slug>/` and its entry in `apps.json` in one pull request. After
-merging, delete the Worker in the Cloudflare dashboard (**Workers & Pages** →
-the app → **Settings** → **Delete**). That also removes its address.
+People's data for an app is on their own devices, under the app's address,
+and with sync, notifications or an online library on its servers too. Once
+the app is gone, they can't open it any more to back up or to delete what's
+online. So remove an app in steps (ask Claude for each):
+
+1. **Tell people first.** Ship a version that says when the app goes away
+   and asks them to tap **Download backup** and, if sync is on, **Delete
+   the online copy**. Leave it up for a few weeks.
+2. **If it has servers** (`sync`, `pushNotifications` or `library` in
+   `apps.json`): in one pull request, take those out of `apps.json` and the
+   app, and in `wrangler.jsonc` remove its `durable_objects` and add a last
+   migration that deletes their classes (`"deleted_classes"`; Cloudflare's
+   [guide](https://developers.cloudflare.com/durable-objects/reference/durable-object-class-migrations-legacy/)).
+   When it deploys, everything its servers kept is deleted.
+3. **Remove it:** delete `apps/<slug>/` and its entry in `apps.json` in one
+   pull request. After merging, delete the Worker in the Cloudflare
+   dashboard (**Workers & Pages** → the app → **Settings** → **Delete**).
+   That removes its address and its previews too.
+4. **An app with an online library** also has two R2 buckets,
+   `shkriuss-<slug>` and `shkriuss-<slug>-preview`, and a storage code
+   secret in GitHub (`<SLUG>_STORAGE_CODE`). Delete the buckets in the
+   dashboard (**R2** → the bucket → **Settings**; R2 asks you to empty it
+   first) and the secret in GitHub (**Settings** → **Secrets and variables**
+   → **Actions**).

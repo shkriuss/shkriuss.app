@@ -58,8 +58,9 @@ the first audit found, and what happened to each finding, is in
   - 14 apps, each at `<slug>.shkriuss.app`. The list is in
     [`packages/registry/apps.json`](../../packages/registry/apps.json).
 - **Data stays on the device** by default, in `localStorage` and IndexedDB.
-  It leaves the device only through these optional features, which are
-  always sealed on the device first:
+  It leaves the device only through these optional features, sealed on the
+  device first (apart from what notifications need to be sent on time: their
+  times, repeat pattern, time zone and push address):
   - **Account** (hub): links someone's devices, without email, password or
     name.
   - **Sync**: every app, through the account.

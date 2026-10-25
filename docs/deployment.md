@@ -168,7 +168,10 @@ I-1 to I-10).
    **DNS → Records → Add record**, type `CAA`, name `@`, flags `0`, tag
    **Only allow specific hostnames**, three times, with `letsencrypt.org`,
    `pki.goog` and `ssl.com`. All three are needed: Cloudflare uses each of
-   them for some of the sites' certificates. Then **SSL/TLS → Edge
+   them for some of the sites' certificates. (Looked up from outside, the
+   domain allows two more, `comodoca.com` and `digicert.com`: Cloudflare adds
+   those itself, and they aren't in the zone's own records. That's
+   expected.) Then **SSL/TLS → Edge
    Certificates → Certificate Transparency Monitoring: On**, which emails you
    when a certificate is issued for the domain.
 4. **Nothing rewrites the pages:** turn off **SSL/TLS → Edge Certificates →
@@ -180,8 +183,13 @@ I-1 to I-10).
    after each deploy fails if a page has changed.
 5. **Limit requests to the servers:** **Security → WAF → Rate limiting
    rules → Create rule**: "URI Path starts with `/api/`", 30 requests per 10
-   seconds, action **Block**. It stops one fast script from using up the free
-   daily requests that all the apps share.
+   seconds, action **Block**. It slows down a script trying to use up the
+   free daily requests that all the apps share, but on the free plan it can't
+   stop one: just under 3 requests a second from one address is never
+   blocked, and is more than the 100,000 a day by the end of the day. PR
+   previews (`*.workers.dev`) aren't behind it at all. So the servers keep
+   what a stranger can make them do cheap, and a day of free requests used
+   up only pauses the online features until 00:00 UTC (audit I-1).
 6. **Account safety:** **Manage Account → Members → Enforce two-factor
    authentication: On.** And **Notifications → Add → Usage Based Billing →
    R2**: an alert when storage passes 20 GB, so unusual uploads show up before
@@ -233,6 +241,18 @@ those Workers' preview addresses (**Workers & Pages** → the Worker →
   in the new shape, which the older version can't read: it keeps that data
   safe, but shows nothing, and can't save or sync, until the newer version
   is back.
+
+## When a service CI needs is down
+
+A deploy runs every check first, and they need a few outside services:
+npm (the packages, installed again from scratch for the deploy itself),
+Ubuntu's mirrors (the browser's system libraries) and GitHub. Playwright's
+browser and Grammar's model come from CI's cache once they've been
+downloaded, so their download servers are only needed after an update. If
+one of these is down, a merge (even a fix) can't deploy until it's back:
+re-run the failed job then. The live sites stay as they were meanwhile; to
+undo a bad deploy in the meantime, use the dashboard's **Rollback** above
+(audit H-2).
 
 ## Costs
 
