@@ -111,6 +111,16 @@ const MAX_ROUNDS = 3;
 
 /** A copy the server sent that can't be opened: from a newer version, damaged, or too big. */
 class UnopenedCopyError extends SyncError {}
+
+/**
+ * Whether a store's value keeps every item merged into it as it was. An app
+ * drops or changes items it can't read (a setting a newer version added, say),
+ * and those would then spread as this device's own deletions and edits.
+ */
+function keepsAll(synced: SyncedStore, value: unknown, merged: readonly Identified[]): boolean {
+  const kept = new Map(synced.items(value).map((item) => [item.id, canonical(item)]));
+  return merged.every((item) => kept.get(item.id) === canonical(item));
+}
 /** A store whose data is a list of items with ids, and how to get the list in and out. */
 export interface SyncedStore<T = unknown, I extends Identified = Identified> {
   store: Store<T>;
@@ -336,6 +346,7 @@ export function createSync(options: {
         const values = valuesOf(upgraded) as Identified[];
         const value = synced.withItems(synced.store.empty(), values);
         if (synced.store.read(synced.store.version, value) === undefined) return 'wait';
+        if (!keepsAll(synced, value, values)) return 'wait';
         ready[synced.store.key] = upgraded;
       }
     } catch {
@@ -498,15 +509,26 @@ export function createSync(options: {
     // copy of the data and saves from it: it must never save what it showed
     // before over the merge, even if the upload below fails.
     checkStillOn(secret);
+    const nexts: unknown[] = [];
+    for (const synced of stores) {
+      const result = merged[synced.store.key] as StoreSnapshot;
+      const current = synced.store.load();
+      if (canonical(current) !== before[synced.store.key]) return false;
+      const values = valuesOf(result) as Identified[];
+      const next = synced.withItems(current, values);
+      if (synced.store.read(synced.store.version, next) === undefined) {
+        throw new SyncError('server');
+      }
+      // An item this version can't keep as it is (from a newer version, say)
+      // would become a deletion or an edit at the next sync, and win on every
+      // device: wait for this app to update instead (audit F2-8).
+      if (!keepsAll(synced, next, values)) throw new SyncError('update-needed');
+      nexts.push(next);
+    }
     let appChanged = false;
     try {
-      for (const synced of stores) {
-        const result = merged[synced.store.key] as StoreSnapshot;
-        const current = synced.store.load();
-        if (canonical(current) !== before[synced.store.key]) return false;
-        const next = synced.withItems(current, valuesOf(result) as Identified[]);
-        if (synced.store.read(synced.store.version, next) === undefined)
-          throw new SyncError('server');
+      for (const [index, synced] of stores.entries()) {
+        const next = nexts[index];
         if (canonical(next) === before[synced.store.key]) continue;
         if (!synced.store.save(next)) {
           throw new SyncError(lastSaveProblem() === 'full' ? 'full' : 'storage');

@@ -873,6 +873,82 @@ describe('turning sync off while a sync is under way', () => {
   }
 });
 
+describe('items this version of the app can’t keep (audit F2-8)', () => {
+  interface Currency {
+    id: 'currency';
+    currency: string;
+  }
+  interface Settings {
+    settings: Currency[];
+  }
+
+  /** A device with one setting, the currency; `known` are the ones its version of the app offers. */
+  function settingsDevice(secret: Uint8Array<ArrayBuffer>, known: readonly string[]) {
+    const storage = new MemoryStorage();
+    const use = () => vi.stubGlobal('localStorage', storage);
+    use();
+    storage.setItem(
+      'shkriuss-device:sync',
+      JSON.stringify({ secret: toBase64Url(secret), code: 'K7Q2-M9XD' }),
+    );
+    const isCurrency = (item: unknown): item is Currency =>
+      typeof item === 'object' &&
+      item !== null &&
+      (item as Currency).id === 'currency' &&
+      known.includes((item as Currency).currency);
+    const store = createStore<Settings>({
+      key: 'settings',
+      version: 1,
+      fallback: () => ({ settings: [] }),
+      validate: (value): value is Settings =>
+        Array.isArray((value as Settings | null)?.settings) &&
+        (value as Settings).settings.every(isCurrency),
+    });
+    // Like the apps' settings: keeps only the ones this version can read.
+    const sync = createSync({
+      app: 'tally',
+      stores: [
+        syncedStore({
+          store,
+          items: (value) => value.settings,
+          withItems: (_value, items) => ({ settings: items.filter(isCurrency) }),
+        }),
+      ],
+      onChange: () => undefined,
+    });
+    return {
+      set(currency: string) {
+        use();
+        expect(store.save({ settings: [{ id: 'currency', currency }] })).toBe(true);
+        sync.changed();
+      },
+      get currency() {
+        use();
+        return store.load().settings[0]?.currency ?? null;
+      },
+      async syncNow() {
+        use();
+        await sync.syncNow();
+        return sync.status();
+      },
+    };
+  }
+
+  it('waits for an update instead of deleting a newer version’s setting everywhere', async () => {
+    const secret = randomBytes(32);
+    // The phone has a newer version, which added rupees; the tablet doesn't have it yet.
+    const phone = settingsDevice(secret, ['USD', 'INR']);
+    const tablet = settingsDevice(secret, ['USD']);
+    phone.set('INR');
+    expect((await phone.syncNow()).problem).toBeNull();
+
+    expect((await tablet.syncNow()).problem).toBe('update-needed');
+    expect((await tablet.syncNow()).problem).toBe('update-needed');
+    expect(await phone.syncNow()).toMatchObject({ problem: null });
+    expect(phone.currency).toBe('INR');
+  });
+});
+
 describe('a browser with no room left', () => {
   it('says this device is full, not that storage is blocked (audit E-3)', async () => {
     const secret = randomBytes(32);

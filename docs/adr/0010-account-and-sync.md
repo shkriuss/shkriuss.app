@@ -218,7 +218,11 @@ in with `sync: true` in `apps.json`.
     device's second sync after updating to this version, because it needs to
     know which data version the device last synced.
   - Data from a newer version of the app is never overwritten: the older
-    device waits until it updates. Older data is upgraded with the store's own
+    device waits until it updates. That includes single items a newer
+    version added without a new data version (a currency an older version
+    doesn't offer, say): an app drops or changes items it can't read, and
+    those would spread as deletions, so the device waits instead of saving
+    them (audit finding F2-8). Older data is upgraded with the store's own
     migration and checked with its own validation before it's saved. After
     such an update, only what was really changed on a device counts as
     edited: it compares with its data as still saved in the old version.
