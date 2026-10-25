@@ -580,6 +580,19 @@ select.input {
   background: var(--color-accent);
 }
 
+/* Contrast themes replace backgrounds: the part done keeps the theme's own colour (audit G-14). */
+@media (forced-colors: active) {
+  .progress::-webkit-progress-value {
+    forced-color-adjust: none;
+    background: Highlight;
+  }
+
+  .progress::-moz-progress-bar {
+    forced-color-adjust: none;
+    background: Highlight;
+  }
+}
+
 /* ---------- Disclosures ---------- */
 
 /* <details class="disclosure"><summary>Question?</summary>…</details>: help that opens on tap. */

@@ -432,8 +432,12 @@ export function mountPhotos(root: Document): void {
   }
 
   function openPhoto(id: string): void {
-    if (!viewer.open) viewer.showModal();
+    const opening = !viewer.open;
+    if (opening) viewer.showModal();
     void showPhoto(id);
+    // Focus starts on which photo it is, not on "Previous", where Enter would
+    // show another one (audit G-14).
+    if (opening) viewerTitle.focus();
   }
 
   function stepPhoto(by: number): void {

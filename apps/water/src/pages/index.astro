@@ -238,7 +238,13 @@ import { DEFAULT_REMINDERS, EVERY_CHOICES, everyLabel } from '../lib/water.ts';
           <label class="field__label" for="other-day">
             Day
           </label>
-          <select class="input" id="other-day" name="day" data-other-day></select>
+          <select
+            class="input"
+            id="other-day"
+            name="day"
+            aria-describedby="other-day-error"
+            data-other-day
+          ></select>
         </div>
         <div class="field">
           <label class="field__label" for="other-time">
@@ -255,7 +261,7 @@ import { DEFAULT_REMINDERS, EVERY_CHOICES, everyLabel } from '../lib/water.ts';
           <p class="field__error" id="other-time-error" data-error-for="time"></p>
         </div>
       </div>
-      <p class="field__error" data-error-for="day"></p>
+      <p class="field__error" id="other-day-error" data-error-for="day"></p>
       <div class="cluster">
         <Button type="submit" variant="primary">
           Add

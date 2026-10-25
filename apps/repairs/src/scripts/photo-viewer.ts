@@ -56,6 +56,9 @@ export function mountPhotoViewer(root: ParentNode, vehicles: () => VehiclesState
       }
       await showPhoto();
       photoDialog.showModal();
+      // Focus starts on which photo it is, not on "Previous", where Enter would
+      // show another one (audit G-14).
+      photoTitle.focus();
     },
     step(by) {
       if (!viewing) return;
