@@ -10,6 +10,13 @@ anything else, with brands, prices, shops and links. Lives at
   price and currency, shop, size or variant, one link, the day you last
   bought it and notes. Links must be `http://` or `https://` web addresses.
   Saved on the device under `shkriuss:shelf` (data version 1).
+- `src/lib/hosts.ts`: the website a link goes to, as people read it, with
+  tests (`hosts.test.ts`). Browsers keep a name like "მაღაზია.გე" as
+  punycode ("xn--lodaaxko2f.xn--node"); Shelf shows it in its own letters
+  when each such part is in one script whose letters don't look like Latin
+  ones (Georgian, Chinese, Japanese kana, Korean). Others, which could pass
+  for another site's name (a Cyrillic "аррӏе" looks like "apple"), stay as
+  punycode, as browsers show them.
 - `src/lib/categories.ts`: the categories, with tests (`categories.test.ts`).
   Shelf starts with seven; any can be renamed or removed, and you can add
   your own (up to 100). Only those changes are saved, under
