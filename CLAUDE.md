@@ -86,6 +86,8 @@ a quicker run while working on a few apps; CI always tests every site.
   current Chrome, Edge and Firefox. Use anything newer only with a fallback
   or a feature check, like the colours for browsers without `light-dark()`
   in `tokens.css`. Tests run in Chromium only, so check the support tables.
+  The build won't help: Astro ships the JavaScript and CSS as written (its
+  target is "esnext"), so newer syntax or functions reach Safari 16.4 as is.
 - **Registry is the source of truth.** Never hard-code app names, domains or
   lists; read `@shkriuss/registry`.
 - **Security headers live in one place:** `packages/astro-config/src/headers.ts`.
