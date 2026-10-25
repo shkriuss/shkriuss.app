@@ -27,6 +27,10 @@ package age check run only in GitHub Actions.
   the skip link works; no sideways scrolling at 320px wide, or at 360px with
   text at 200%; footer links are big enough to tap; the theme switch works
   and is remembered.
+- **Keyboard focus:** in apps with lists, focus stays on the same control
+  when a list is drawn again after a change in another tab (the same as a
+  change from sync), when a dialog closes after that, and when Budget and
+  Trades are opened again (`tests/e2e/keep-focus.spec.ts`).
 - **Security:** every security header is present on pages, the 404 page and
   other files; no console errors (so no CSP or Trusted Types violations); no
   cookies; no requests to any other website; build files are cached and pages
