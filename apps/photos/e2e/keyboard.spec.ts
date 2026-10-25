@@ -13,12 +13,11 @@ const outline = (element: Locator) =>
     return `${style.outlineStyle} ${style.outlineWidth} ${style.outlineColor} ${style.outlineOffset}`;
   });
 
-/** Adds `count` small photos. */
+/** Adds `count` small photos (each a different colour: the same photo isn't added twice). */
 async function addSome(page: Page, count: number): Promise<void> {
-  const colors = ['#c33', '#36c', '#3a6', '#c93', '#93c', '#3cc'];
   const files = await Promise.all(
     Array.from({ length: count }, (_, index) =>
-      picture(page, { width: 120, height: 90, color: colors[index % colors.length] }),
+      picture(page, { width: 120, height: 90, color: `hsl(${index * 11} 70% 50%)` }),
     ),
   );
   await addPhotos(
@@ -65,4 +64,61 @@ test('a chosen photo with keyboard focus shows the focus ring', async ({ page })
   await expect(tiles(page).nth(1)).toBeFocused();
   expect(await outline(tiles(page).nth(1))).toBe(forcedRing);
   expect(await outline(tiles(page).first())).not.toBe(forcedRing);
+});
+
+/** Where the selection bar and the element with focus are on the screen. */
+const places = (page: Page) =>
+  page.evaluate(() => {
+    const box = (element: Element | null) => {
+      const { top, bottom } = element?.getBoundingClientRect() ?? { top: 0, bottom: 0 };
+      return { top: Math.round(top), bottom: Math.round(bottom) };
+    };
+    return {
+      bar: box(document.querySelector('[data-selection]')),
+      focused: box(document.activeElement),
+      screen: innerHeight,
+    };
+  });
+
+/** Presses a key `times` times. */
+async function press(page: Page, key: string, times: number): Promise<void> {
+  for (let count = 0; count < times; count += 1) await page.keyboard.press(key);
+}
+
+test('the selection bar stays in sight while choosing, never over the photo with focus', async ({
+  page,
+}) => {
+  // It came before the photos but stuck to the bottom, so it scrolled away (audit G-12).
+  await page.setViewportSize({ width: 360, height: 640 });
+  // Scrolling to what gets focus happens at once, so where things are can be measured.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/');
+  await addSome(page, 30);
+  await page.getByRole('button', { name: 'Select' }).click();
+  await expect(page.getByRole('button', { name: 'Done' })).toBeFocused();
+
+  // Tabbing through the photos, as with a keyboard, to one near the end, then back up.
+  await press(page, 'Tab', 28);
+  await expect(tiles(page).nth(27)).toBeFocused();
+  const goingDown = await places(page);
+  await press(page, 'Shift+Tab', 12);
+  await expect(tiles(page).nth(15)).toBeFocused();
+  const goingUp = await places(page);
+  for (const { bar, focused, screen } of [goingDown, goingUp]) {
+    expect(bar.top).toBeGreaterThanOrEqual(0);
+    expect(bar.bottom).toBeLessThanOrEqual(screen);
+    // The photo with focus is in sight (to the pixel), below the bar.
+    expect(focused.top).toBeGreaterThanOrEqual(bar.bottom);
+    expect(focused.bottom).toBeLessThanOrEqual(screen + 1);
+  }
+
+  // With large text the bar is tall: it scrolls with the page instead of covering the photos.
+  await page.evaluate(() => {
+    document.documentElement.style.fontSize = '200%';
+  });
+  await expect(page.locator('[data-selection]')).toHaveClass(/selection--tall/);
+  await page.keyboard.press('Shift+Tab');
+  await expect(tiles(page).nth(14)).toBeFocused();
+  const large = await places(page);
+  expect(large.focused.top >= large.bar.bottom || large.focused.bottom <= large.bar.top).toBe(true);
 });

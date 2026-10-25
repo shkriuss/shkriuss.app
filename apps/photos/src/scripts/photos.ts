@@ -336,6 +336,16 @@ export function mountPhotos(root: Document): void {
 
   // ---------- Choosing several ----------
 
+  /** Above this share of the screen's height, the bar scrolls with the page instead of staying in sight. */
+  const TALL = 0.3;
+  // With large text the bar is tall: it mustn't cover most of the photos (audit G-12).
+  const fitSelection = (): void => {
+    const height = selection.getBoundingClientRect().height;
+    selection.classList.toggle('selection--tall', height > window.innerHeight * TALL);
+  };
+  new ResizeObserver(fitSelection).observe(selection);
+  window.addEventListener('resize', fitSelection);
+
   function renderChoosing(): void {
     selection.hidden = !choosing;
     selectedCount.textContent =

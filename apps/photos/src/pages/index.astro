@@ -326,16 +326,31 @@ import { AppShell, Button, DataControls, Icon, SyncControls } from '@shkriuss/ui
     opacity: 0.75;
   }
 
-  /* Stays in sight at the bottom while choosing. */
+  /*
+   * Stays in sight at the top while choosing (it comes before the photos, so
+   * it can't stay at the bottom: audit G-12), unless it would cover much of
+   * the screen, with large text (.selection--tall): then it scrolls with the
+   * page, as the problem notice does.
+   */
   .selection {
     position: sticky;
-    inset-block-end: var(--space-3);
+    inset-block-start: var(--space-2);
     z-index: 1;
     padding: var(--space-2) var(--space-3);
     border: var(--border-width) solid var(--color-border);
     border-radius: var(--radius);
     background: var(--color-surface);
     box-shadow: var(--shadow);
+  }
+
+  .selection--tall {
+    position: static;
+  }
+
+  /* A photo that gets focus scrolls into view below the bar, never under it
+     (the bar is at most 30% of the screen while it stays in sight). */
+  :global(:root:has(.selection:not([hidden], .selection--tall))) {
+    scroll-padding-block-start: calc(var(--space-2) + 30dvh);
   }
 
   .selection__count {
