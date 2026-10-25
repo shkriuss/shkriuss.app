@@ -180,7 +180,10 @@ in with `sync: true` in `apps.json`.
     more, over the free plan's 10 ms (audit finding B-9). Now it takes at
     most about 6 ms. An object has 30 seconds.
 - **The copy.** The data of every synced store, as JSON, compressed (gzip),
-  then sealed with AES-256-GCM, labelled with the app's name.
+  then sealed with AES-256-GCM, labelled with the app's name. A device
+  doesn't open a copy that would unpack to more than 64 MB (real copies are a
+  few MB): a lost device could otherwise upload a few KB that unpack to
+  gigabytes and crash the app wherever it's opened.
 - **Merging** (`packages/sync/src/merge.ts`).
   - An app's data is a list of items with ids, such as Calendar's events or
     Tally's counters.
