@@ -29,6 +29,27 @@ export async function stored(page: Page): Promise<{ photos: number; files: numbe
   };
 }
 
+/** How far this device has caught up with the online library ("photos-online:state"), if at all. */
+export const onlinePlace = (page: Page) =>
+  page.evaluate(
+    () =>
+      new Promise<{ library: string; epoch: string | null; since: number } | null>((resolve) => {
+        const request = indexedDB.open('shkriuss-files');
+        request.onupgradeneeded = () => request.transaction?.abort();
+        request.onerror = () => resolve(null);
+        request.onsuccess = () => {
+          const database = request.result;
+          const get = database.transaction('files').objectStore('files').get('photos-online:state');
+          get.onsuccess = () => {
+            database.close();
+            resolve(
+              (get.result as { library: string; epoch: string | null; since: number }) ?? null,
+            );
+          };
+        };
+      }),
+  );
+
 /** How many photos are marked as on this device without their original there (never any). */
 export const hereWithoutOriginal = (page: Page) =>
   page.evaluate(
