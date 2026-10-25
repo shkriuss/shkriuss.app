@@ -18,6 +18,12 @@ Drink enough water each day. Lives at <https://water.shkriuss.app>.
 - History compares every day with today's goal. "Days in a row" counts days
   the goal was reached, up to today; today doesn't break it while the day
   isn't over.
+- In fl oz, each drink shows to a tenth of an ounce but is saved rounded to
+  whole millilitres, and that adds up: five 20 fl oz bottles are 2,955 ml,
+  while 100 fl oz is 2,957 ml. So a day's drinks are added up as they're
+  shown (`totalOn`): five 20 fl oz bottles make 100 fl oz and reach a 100 fl
+  oz goal. "Goal reached", the streak, the history and the reminders all use
+  that one rule (`goalReached`).
 - `src/scripts/reminders.ts`: reminders to drink, from a time, every so often,
   until a time. Shown while Water is open, and, if "Also remind me when Water
   is closed" is on, sent by the shared notification service
