@@ -4,7 +4,7 @@
  * or an online library adds its own limits, so a new app can't quietly use
  * up what all of them share (audit J-2, B-1).
  */
-import { readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { STORAGE_LIMITS as ACCOUNT } from '../../packages/account/src/worker.ts';
@@ -13,6 +13,7 @@ import { STORAGE_LIMITS as LIBRARY } from '../../packages/library/src/worker.ts'
 import { DAILY_SENDS, STORAGE_LIMITS as PUSH } from '../../packages/push/src/worker.ts';
 import { apps } from '../../packages/registry/src/index.ts';
 import { STORAGE_LIMITS as SYNC } from '../../packages/sync/src/worker.ts';
+import { parseJsonc } from '../../scripts/lib/jsonc.ts';
 
 const repoRoot = join(import.meta.dirname, '../..');
 
@@ -20,7 +21,11 @@ const repoRoot = join(import.meta.dirname, '../..');
 const FREE_STORAGE = 5_000_000_000;
 /** What the limits may add up to; the rest is a margin. */
 const STORAGE_BUDGET = 4_500_000_000;
-/** Open PR previews to leave room for: each has its own storage, with smaller limits. */
+/**
+ * Pull requests whose previews fit at once (docs/deployment.md says how
+ * many). Each set of previews has its own storage, with smaller limits, and
+ * its own Durable Object namespaces.
+ */
 const PREVIEWS = 2;
 /** The owner's online library list, outside the meters (docs/adr/0016: about 400 bytes a photo). */
 const LIBRARY_LIST = LIBRARY_LIMITS.items * 400;
@@ -28,11 +33,33 @@ const LIBRARY_LIST = LIBRARY_LIMITS.items * 400;
 /** Durable Object time on the free plan, a day: 13,000 GB-s, an object counting as 128 MB. */
 const FREE_SECONDS = 13_000 / 0.128;
 
+/** Durable Object namespaces on the free plan, for the whole account: one per storage class. */
+const FREE_NAMESPACES = 100;
+
 /** An app whose sync keeps files too, like Repairs' photos: `syncHandler({ files: true })`. */
 const syncsFiles = (slug: string): boolean =>
   /syncHandler\(\{\s*files:\s*true\s*\}\)/.test(
     readFileSync(join(repoRoot, 'apps', slug, 'src/worker.ts'), 'utf8'),
   );
+
+/** Every site's Durable Object namespaces: its own, or one set of previews'. */
+function namespaces(where: 'site' | 'preview'): number {
+  const sites = readdirSync(join(repoRoot, 'apps')).filter((slug) =>
+    existsSync(join(repoRoot, 'apps', slug, 'wrangler.jsonc')),
+  );
+  let total = 0;
+  for (const slug of sites) {
+    const config = parseJsonc(
+      readFileSync(join(repoRoot, 'apps', slug, 'wrangler.jsonc'), 'utf8'),
+    ) as {
+      durable_objects?: { bindings: unknown[] };
+      previews?: { durable_objects?: { bindings: unknown[] } };
+    };
+    const own = where === 'site' ? config.durable_objects : config.previews?.durable_objects;
+    total += own?.bindings.length ?? 0;
+  }
+  return total;
+}
 
 /** Every namespace's limit together, on the real sites or on one preview. */
 function storageLimits(where: 'site' | 'preview'): number {
@@ -53,6 +80,14 @@ describe('the free plan, shared by every app', () => {
       total,
       'The storage limits add up to too much: lower them before adding this app (docs/adr/0017).',
     ).toBeLessThanOrEqual(STORAGE_BUDGET);
+  });
+
+  it('has Durable Object namespaces for every site and two pull requests’ previews', () => {
+    expect(namespaces('preview')).toBe(namespaces('site'));
+    expect(
+      namespaces('site') + PREVIEWS * namespaces('preview'),
+      'Fewer pull requests can have previews at once: say how many in PREVIEWS and in docs/deployment.md.',
+    ).toBeLessThanOrEqual(FREE_NAMESPACES);
   });
 
   it('can be kept waiting by push services for a quarter of its daily time at most', () => {

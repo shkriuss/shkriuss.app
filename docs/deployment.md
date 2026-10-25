@@ -198,6 +198,16 @@ look at doesn't need approving: merging doesn't wait for previews.
 Approve only pull requests you trust: the preview runs that pull request's
 code with the Cloudflare token.
 
+**Two pull requests' previews at a time.** Each set of previews gets its own
+server storage: as many Durable Object namespaces as the live sites (33
+today), and the free plan has 100 for the whole account. So the live sites
+and the previews of two pull requests fit. A third pull request's previews
+fail with "reached the Workers Free limit of 100 Durable Object namespaces";
+once one of the others is merged or closed (the next deploy of `main`
+deletes its previews), re-run **Deploy previews** there. A unit test
+(`tests/unit/free-plan.test.ts`) checks that two still fit: one more app
+with sync or notifications leaves room for only one.
+
 **Old version addresses.** Before the sites had server code, Cloudflare gave
 each production deploy of the hub, Calendar, Grammar, Photos and Tally a
 permanent address like `1a2b3c4d-tally.shkriuss.workers.dev` (36 of them,
