@@ -17,7 +17,9 @@ test('shows this month with today selected', async ({ page }) => {
   const today = day(page, /^Saturday, October 17, 2026, today/);
   await expect(today).toHaveAttribute('aria-current', 'date');
   await expect(today).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.locator('[data-weekdays] th').first()).toHaveText(/^SunSunday$/);
+  // "Sun", "S" (shown instead with large text: audit G-4) and "Sunday" for screen readers.
+  await expect(page.locator('[data-weekdays] th').first()).toHaveText(/^SunSSunday$/);
+  await expect(page.getByRole('columnheader').first()).toHaveAccessibleName('Sunday');
   await expect(page.locator('[data-day-heading]')).toHaveText('Today, Saturday, October 17');
   await expect(page.getByText('Nothing planned on this day.')).toBeVisible();
   await expect(page.getByText('Nothing planned in the next 7 days.')).toBeVisible();

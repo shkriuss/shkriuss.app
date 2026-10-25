@@ -27,7 +27,11 @@ changes on its next deploy.
     about 340px, where seven columns can't each be 44px wide. They stay 44px
     tall, well above WCAG's 24px minimum.
   - Pages fit a 320px screen, and a 360px one with text at 200%, without
-    sideways scrolling (tested on every page).
+    sideways scrolling (tested on every page, and on apps' pages with things
+    in them and their dialogs). For that, rows of fixed widths shrink or
+    wrap: `minmax(min(100%, 9rem), 1fr)` in grids, `flex-wrap` in rows, and
+    `min-width: 0` on a `<fieldset>` (browsers make it as wide as its
+    content otherwise).
   - States shown only by colour (a pressed toggle, a selected day) also get
     a rule for Windows contrast themes (`@media (forced-colors: active)`),
     which replace backgrounds.

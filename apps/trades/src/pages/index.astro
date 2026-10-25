@@ -549,26 +549,32 @@ const STAT_TILES = [
     border-block-start: var(--border-width) solid var(--color-border);
   }
 
+  /* The name, and its total at the end of the line; with large text the total
+     goes under it, not the name squeezed into a column of letters (audit G-4). */
   .group {
-    display: grid;
-    grid-template-columns: 1fr auto;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
     gap: 0 var(--space-3);
     padding-block: var(--space-2);
     border-block-end: var(--border-width) solid var(--color-border);
   }
 
   .group__name {
+    flex: 1 1 8rem;
+    min-width: 0;
     font-weight: var(--weight-semibold);
     overflow-wrap: anywhere;
   }
 
   .group__total {
+    margin-inline-start: auto;
     font-weight: var(--weight-bold);
     text-align: end;
   }
 
   .group__counts {
-    grid-column: 1 / -1;
+    flex-basis: 100%;
     font-size: var(--text-sm);
   }
 
@@ -588,7 +594,9 @@ const STAT_TILES = [
     --cluster-gap: var(--space-1) var(--space-4);
   }
 
+  /* min-width: browsers make a fieldset as wide as its content otherwise (audit G-4). */
   fieldset {
+    min-width: 0;
     margin: 0;
     padding: 0;
     border: 0;

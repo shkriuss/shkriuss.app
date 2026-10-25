@@ -25,8 +25,10 @@ package age check run only in GitHub Actions.
   practices, on every page reachable from the home page (and the 404 page),
   in **light and dark** mode; one `<h1>`, a `lang` and a title on every page;
   the skip link works; no sideways scrolling at 320px wide, or at 360px with
-  text at 200%; footer links are big enough to tap; the theme switch works
-  and is remembered.
+  text at 200% (also apps' pages with things in them, and their dialogs,
+  with no text squeezed into a column of letters:
+  `tests/e2e/large-text.spec.ts`); footer links are big enough to tap; the
+  theme switch works and is remembered.
 - **Keyboard focus:** in apps with lists, focus stays on the same control
   when a list is drawn again after a change in another tab (the same as a
   change from sync), when a dialog closes after that, and when Budget and

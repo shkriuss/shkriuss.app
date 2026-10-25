@@ -435,6 +435,33 @@ import { MAX_NOTES_LENGTH, MAX_TITLE_LENGTH, REPEAT_LABELS, REPEATS } from '../l
     text-align: center;
   }
 
+  /*
+   * With large text, seven columns leave little room: weekdays are "M T W"
+   * instead of "Mon Tue Wed" running together, and day numbers grow only as
+   * big as their day (audit G-4). The month's width decides (cqi: 1% of it).
+   */
+  .month {
+    container-type: inline-size;
+  }
+
+  .month__grid :global(.weekday__narrow) {
+    display: none;
+  }
+
+  @container (max-width: 15rem) {
+    .month__grid :global(.weekday__short) {
+      display: none;
+    }
+
+    .month__grid :global(.weekday__narrow) {
+      display: inline;
+    }
+  }
+
+  .month__grid :global(.day-cell__number) {
+    font-size: min(1em, 9cqi);
+  }
+
   .month__grid :global(td) {
     padding: 0;
     vertical-align: top;

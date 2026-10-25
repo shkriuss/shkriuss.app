@@ -73,6 +73,7 @@ import {
   shortDate,
   utc,
   weekdayLong,
+  weekdayNarrow,
   weekdayShort,
   type CalendarPage,
 } from './shared.ts';
@@ -210,13 +211,22 @@ export function mountCalendar(root: Document): void {
       const date = utc(makeDate(2024, 1, ((weekStart - 1 + index) % 7) + 1));
       const header = document.createElement('th');
       header.scope = 'col';
-      const short = document.createElement('span');
-      short.setAttribute('aria-hidden', 'true');
-      short.textContent = weekdayShort.format(date);
+      // "Mon", or "M" when there's no room for that (large text): the page's CSS picks.
+      const shown = (className: string, format: Intl.DateTimeFormat): HTMLSpanElement => {
+        const span = document.createElement('span');
+        span.className = className;
+        span.setAttribute('aria-hidden', 'true');
+        span.textContent = format.format(date);
+        return span;
+      };
       const full = document.createElement('span');
       full.className = 'visually-hidden';
       full.textContent = weekdayLong.format(date);
-      header.append(short, full);
+      header.append(
+        shown('weekday__short', weekdayShort),
+        shown('weekday__narrow', weekdayNarrow),
+        full,
+      );
       return header;
     });
     weekdaysRow.replaceChildren(...headers);
