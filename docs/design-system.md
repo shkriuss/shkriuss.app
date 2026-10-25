@@ -83,8 +83,13 @@ sorting lists alphabetically, and `foldText`, for comparing and searching
 without minding case, accents or extra spaces: the accents of Latin, Greek
 and Cyrillic letters, while the vowel signs of scripts like Hindi or Thai,
 which are letters, still count),
-`@shkriuss/ui/local-reminders` (notifications while the app is open, with
-the same texts and the same iPhone and "blocked" cases in every app),
+`@shkriuss/ui/text-limit` (`watchTextLimit`, for a text box with a
+`maxlength`: browsers keep only the start of a paste that's too long, and
+ignore typing past the limit, without a word, so it says so under the box
+and reads it out; say the limit in the box's hint too, where a paste could
+reach it), `@shkriuss/ui/local-reminders` (notifications while the app is
+open, with the same texts and the same iPhone and "blocked" cases in every
+app),
 `@shkriuss/ui/long-lists` (for lists that
 can grow to thousands: `shownCount` draws `PAGE_SIZE` (100) at a time behind
 a "Show more" button, always keeping what has focus or was just saved, and

@@ -101,8 +101,12 @@ import { MAX_BODY_LENGTH, MAX_TITLE_LENGTH } from '../lib/notes.ts';
         id="note-body"
         rows="12"
         maxlength={MAX_BODY_LENGTH}
+        aria-describedby="note-body-hint"
         data-body
       ></textarea>
+      <p class="field__hint" id="note-body-hint">
+        Up to {MAX_BODY_LENGTH.toLocaleString('en')} characters, about 50 pages.
+      </p>
     </div>
     <p class="muted" data-edited></p>
   </section>

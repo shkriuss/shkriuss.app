@@ -2,6 +2,7 @@
 // support, privacy, sync) already run for every app from tests/e2e/.
 // The locale is en-US.
 import type { Page } from '@playwright/test';
+import { paste } from '../../../tests/e2e/clipboard.ts';
 import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
 import { seedStores } from '../../../tests/e2e/storage.ts';
 import { SHELF_VERSION, type Item } from '../src/lib/items.ts';
@@ -110,6 +111,38 @@ test('explains what to fix before saving', async ({ page }) => {
   await save(page);
   await expect(card(page, 'Phone case').locator('[data-price]')).toHaveText(/^GEL\s12\.35$/);
   await expect(card(page, 'Phone case').getByRole('link')).toBeHidden();
+});
+
+test('says when a pasted link doesn’t all fit', async ({ page }) => {
+  // A link cut short by the box still looks like one, but leads nowhere
+  // (audit F3-3).
+  await page.getByRole('button', { name: 'Add item' }).click();
+  const link = form(page).getByLabel('Link (optional)');
+  await expect(link).toHaveAccessibleDescription(
+    'A page where you can see or buy it, up to 2,000 characters.',
+  );
+  const address = `https://example.com/item?ref=${'a'.repeat(2_100)}`;
+  await paste(link, address);
+  await expect(link).toHaveValue(address.slice(0, 2_000));
+  const cut =
+    'Only part of that fit. This box takes up to 2,000 characters, so the rest wasn’t added.';
+  await expect(form(page).getByText(cut, { exact: true })).toBeVisible();
+  await expect(
+    form(page)
+      .getByRole('alert')
+      .filter({ hasText: `Link (optional): ${cut}` }),
+  ).toBeAttached();
+  await checkA11y(page, 'item form: a link that didn’t all fit');
+
+  // The notes say how much they take too.
+  await expect(form(page).getByLabel('Notes (optional)')).toHaveAccessibleDescription(
+    'Up to 5,000 characters.',
+  );
+
+  // The form opens again without the message.
+  await form(page).getByRole('button', { name: 'Cancel' }).click();
+  await page.getByRole('button', { name: 'Add item' }).click();
+  await expect(form(page).getByText(cut, { exact: true })).toBeHidden();
 });
 
 test('changes and deletes an item, with a confirmation', async ({ page }) => {

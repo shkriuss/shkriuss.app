@@ -253,6 +253,10 @@ test('replacing the key signs out every device that has the old one', async ({
   // On the phone: replace the key. Nothing changes until the new key is saved.
   await page.getByRole('button', { name: 'Replace the account key' }).click();
   await expect(view(page, 'replace')).toBeVisible();
+  // As under "Lost a device?": apps sync with the old key until sync is turned on again (audit F3-7).
+  await expect(view(page, 'replace')).toContainText(
+    'Their apps keep syncing until you turn on sync again in each app',
+  );
   await checkA11y(page, 'account: replace the key');
   await page.getByRole('button', { name: 'Get a new key' }).click();
   const key = (await page.locator('[data-new-key]').textContent()) ?? '';

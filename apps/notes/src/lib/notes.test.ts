@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   addNote,
+  dropEmptyNotes,
   dropIfEmpty,
   editedLabel,
   editNote,
+  EMPTY_NOTE_MS,
   emptyState,
   isNotesState,
   MAX_BODY_LENGTH,
@@ -13,6 +15,7 @@ import {
   notesCount,
   removeNote,
   keepOtherVersion,
+  keptVersion,
   secondVersion,
   setPinned,
   titleOf,
@@ -97,6 +100,44 @@ describe('writing notes', () => {
     expect(secondVersion(note('a', 't'.repeat(MAX_TITLE_LENGTH)), 'b').title).toBe(
       `${'t'.repeat(MAX_TITLE_LENGTH - 17)} (second version)`,
     );
+    // A long title is cut between whole characters, not inside an emoji (audit F3-9).
+    const family = '👨‍👩‍👧';
+    expect(secondVersion(note('a', family.repeat(25)), 'b').title).toBe(
+      `${family.repeat(22)} (second version)`,
+    );
+  });
+
+  it('finds the text shown here, kept as a second version by a sync', () => {
+    // The note open here was changed on another device too (audit F3-6).
+    const before = { notes: [note('a', 'Groceries', 'Milk')] };
+    const shown = { title: 'Groceries', body: 'Milk' };
+    const kept = note('b', 'Groceries (second version)', 'Milk');
+    const after = { notes: [note('a', 'Groceries', 'Bread', 2000), kept] };
+    expect(keptVersion(before, after, 'a', shown)).toBe(kept);
+    // Changed on the other device only, or not at all: nothing was kept.
+    const theirs = { notes: [note('a', 'Groceries', 'Bread', 2000)] };
+    expect(keptVersion(before, theirs, 'a', shown)).toBeUndefined();
+    expect(keptVersion(before, before, 'a', shown)).toBeUndefined();
+    // A second version that was there already isn't this one.
+    expect(keptVersion(after, after, 'a', shown)).toBeUndefined();
+  });
+
+  it('drops notes left empty a while ago, but not one opened or new', () => {
+    // A page closed in a new note left it behind (audit F3-9).
+    const now = 100 * EMPTY_NOTE_MS;
+    const old = now - EMPTY_NOTE_MS - 1;
+    const state = {
+      notes: [
+        note('a', '', '', old),
+        note('b', ' ', '\n', old),
+        note('c', 'Written', '', old),
+        note('d', '', '', old),
+        note('e', '', '', now - 60_000),
+      ],
+    };
+    expect(dropEmptyNotes(state, 'd', now).notes.map((entry) => entry.id)).toEqual(['c', 'd', 'e']);
+    const tidy = { notes: [note('c', 'Written', '', old)] };
+    expect(dropEmptyNotes(tidy, null, now)).toBe(tidy);
   });
 });
 
@@ -146,6 +187,10 @@ describe('what the list shows', () => {
     const title = titleOf(note('a', '😀'.repeat(100)));
     expect([...title]).toHaveLength(80);
     expect(title.endsWith('😀…')).toBe(true);
+    // Nor emoji made of several (a family, a flag, a skin tone), nor accents (audit F3-9).
+    for (const character of ['👨‍👩‍👧', '🇬🇪', '👍🏽', 'e\u0301']) {
+      expect(titleOf(note('a', character.repeat(100)))).toBe(`${character.repeat(79)}…`);
+    }
   });
 
   it('lists pinned notes first, then the most recently edited', () => {

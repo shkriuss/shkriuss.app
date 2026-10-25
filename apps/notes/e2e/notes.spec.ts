@@ -2,6 +2,7 @@
 // Shared checks (accessibility, security headers, offline, privacy) run for
 // every app from tests/e2e/.
 import type { Page } from '@playwright/test';
+import { paste } from '../../../tests/e2e/clipboard.ts';
 import { checkA11y, expect, failedSaves, failSaving, test } from '../../../tests/e2e/fixtures.ts';
 
 const titleBox = (page: Page) => page.getByRole('textbox', { name: 'Title' });
@@ -85,6 +86,35 @@ test('saves typing straight away when leaving the page', async ({ page }) => {
   await titleBox(page).pressSequentially('Typed fast');
   await page.reload();
   await expect(titleBox(page)).toHaveValue('Typed fast');
+});
+
+test('says when a pasted title or note doesn’t all fit', async ({ page }) => {
+  // Each box takes so much; the browser keeps the start of a longer paste,
+  // and nothing said so (audit F3-3).
+  await page.getByRole('button', { name: 'New note' }).click();
+  const title = 'A long title. '.repeat(20);
+  await paste(titleBox(page), title);
+  await expect(titleBox(page)).toHaveValue(title.slice(0, 200));
+  const titleCut =
+    'Only part of that fit. This box takes up to 200 characters, so the rest wasn’t added.';
+  await expect(page.getByText(titleCut, { exact: true })).toBeVisible();
+  await expect(page.getByRole('alert').filter({ hasText: `Title: ${titleCut}` })).toBeAttached();
+
+  await expect(bodyBox(page)).toHaveAccessibleDescription(
+    'Up to 100,000 characters, about 50 pages.',
+  );
+  await paste(bodyBox(page), 'Some words. '.repeat(9_000));
+  const bodyCut =
+    'Only part of that fit. This box takes up to 100,000 characters, so the rest wasn’t added.';
+  await expect(page.getByText(bodyCut, { exact: true })).toBeVisible();
+  await expect(page.getByRole('alert').filter({ hasText: `Note: ${bodyCut}` })).toBeAttached();
+  await checkA11y(page, 'editor: pastes that didn’t all fit');
+
+  // Another note opens without them.
+  await page.getByRole('button', { name: 'All notes' }).click();
+  await page.getByRole('button', { name: 'New note' }).click();
+  await expect(page.getByText(titleCut, { exact: true })).toBeHidden();
+  await expect(page.getByText(bodyCut, { exact: true })).toBeHidden();
 });
 
 test('finds notes by title or text, ignoring case and accents', async ({ page }) => {
@@ -257,6 +287,58 @@ test('typing doesn’t overwrite a change made elsewhere: that version is kept t
   await page.getByRole('button', { name: 'All notes' }).click();
   await card(page, 'Trip (second version)').getByRole('link').click();
   await expect(bodyBox(page)).toHaveValue('Pack bags and passports');
+});
+
+test('the Pin button shows a pin made elsewhere while typing', async ({ page }) => {
+  // Typing here waits a moment before it's saved: that moment is held still below.
+  await page.clock.install();
+  await page.reload();
+  await writeNote(page, 'Trip', 'Pack bags');
+  const other = await page.context().newPage();
+  await other.goto('/');
+  await other.getByRole('link', { name: 'Trip', exact: true }).click();
+  await page.getByRole('link', { name: 'Trip', exact: true }).click();
+  await page.clock.pauseAt((await page.evaluate(() => Date.now())) + 1000);
+
+  // Typing here, not saved yet, when the other tab pins the note.
+  await bodyBox(page).pressSequentially(' and tickets');
+  await other.getByRole('button', { name: 'Pin' }).click();
+  const pin = page.getByRole('button', { name: 'Pin' });
+  // The button shows it, so a tap unpins it, as it says (audit F3-9).
+  await expect(pin).toHaveAttribute('aria-pressed', 'true');
+  await pin.click();
+  await expect(pin).toHaveAttribute('aria-pressed', 'false');
+  await page.getByRole('button', { name: 'All notes' }).click();
+  await expect(card(page, 'Trip').locator('[data-pinned]')).toBeHidden();
+});
+
+test('a new note left empty goes with the page', async ({ page }) => {
+  // Closed or reloaded in a new note: it was left in the list, and synced
+  // (audit F3-9).
+  await page.getByRole('button', { name: 'New note' }).click();
+  await expect(titleBox(page)).toBeFocused();
+  await page.reload();
+  await expect(page.getByText('No notes yet')).toBeVisible();
+  // Not said to be missing: it was only empty.
+  await expect(page.getByRole('alert')).toHaveCount(0);
+
+  // One left behind by a page that couldn't drop it (closed by the system,
+  // or by an older version) goes the next time Notes opens, once it's had a while.
+  await page.evaluate(() => {
+    const note = (id: string, title: string, updated: number) => ({
+      id,
+      title,
+      body: '',
+      created: updated,
+      updated,
+      pinned: false,
+    });
+    const old = Date.now() - 60 * 60 * 1000;
+    const notes = [note('a', '', old), note('b', 'Kept', old), note('c', '', Date.now())];
+    localStorage.setItem('shkriuss:notes', JSON.stringify({ v: 2, data: { notes } }));
+  });
+  await page.reload();
+  expect(await titles(page)).toEqual(['New note', 'Kept']);
 });
 
 test('says so in the editor when typing can’t be saved', async ({ page }) => {

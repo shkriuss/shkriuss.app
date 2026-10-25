@@ -67,6 +67,30 @@ describe('wordsOf', () => {
     const go = wordsOf(text).find((word) => word.text === 'go');
     expect(go && text.slice(go.start, go.end)).toBe('go');
   });
+
+  it('splits punctuation off the end in order, however much there is', () => {
+    expect(wordsOf('(It’s done…)!”').map((w) => w.model)).toEqual([
+      '(',
+      'It',
+      "'s",
+      'done',
+      '…',
+      ')',
+      '!',
+      '"',
+    ]);
+    // Each mark was split off by looking at all the rest again: a word with
+    // 19,999 ")" after it took seconds, on the page (audit F3-11).
+    const start = performance.now();
+    const counts = [
+      `a${')'.repeat(19_999)}`,
+      `a${'!'.repeat(19_999)}`,
+      `a${'.)'.repeat(10_000)}`,
+      `https://example.com${')'.repeat(19_980)}`,
+    ].map((text) => wordsOf(text).length);
+    expect(performance.now() - start).toBeLessThan(1_000);
+    expect(counts).toEqual([20_000, 20_000, 20_001, 19_981]);
+  });
 });
 
 describe('sentencesOf', () => {
@@ -114,5 +138,13 @@ describe('sentencesOf', () => {
     expect(pieces).toHaveLength(2);
     expect(pieces[0]?.at(-1)).toBe(',');
     for (const piece of pieces) expect(piece.length).toBeLessThanOrEqual(MAX_SENTENCE_WORDS);
+  });
+
+  it('reads long text without full stops in one pass', () => {
+    // Each word looked back over its whole sentence for a full stop (audit F3-11).
+    const start = performance.now();
+    const sentences = sentencesOf('word '.repeat(16_000));
+    expect(performance.now() - start).toBeLessThan(1_000);
+    expect(sentences).toHaveLength(16_000 / MAX_SENTENCE_WORDS);
   });
 });

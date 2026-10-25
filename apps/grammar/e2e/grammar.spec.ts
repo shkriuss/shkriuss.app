@@ -5,6 +5,7 @@
 // (accessibility, security headers, offline, privacy) run for every app from
 // tests/e2e/.
 import type { Page } from '@playwright/test';
+import { paste } from '../../../tests/e2e/clipboard.ts';
 import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
 
 // Loading the checker (16 MB of WebAssembly) takes a few seconds.
@@ -128,6 +129,37 @@ test('words in my dictionary aren’t marked as misspelled', async ({ page }) =>
   await expect(page.getByText('No words yet.')).toBeVisible();
 });
 
+test('says when the dictionary is full', async ({ page }) => {
+  // With 500 words, "Add to my dictionary" added nothing but said "Added"
+  // (audit F3-8).
+  await page.goto('/');
+  const words = Array.from({ length: 500 }, (_, index) => `word${index}`);
+  await page.evaluate((list) => {
+    const data = { text: '', english: 'american', words: list };
+    localStorage.setItem('shkriuss:grammar', JSON.stringify({ v: 1, data }));
+  }, words);
+  await open(page);
+  await text(page).fill('Mtskheta is near Tbilisi.');
+  const add = suggestion(page, 'Mtskheta').getByRole('button', {
+    name: 'Add to my dictionary: “Mtskheta”',
+  });
+  await add.click();
+  const full = page
+    .getByRole('alert')
+    .filter({ hasText: 'Your dictionary is full (500 words). Remove one to add another.' });
+  await expect(full).toBeVisible();
+  await expect(add).toBeFocused();
+  await expect(suggestion(page, 'Mtskheta')).toBeVisible();
+  await expect(page.locator('[data-words] [data-word="Mtskheta"]')).toHaveCount(0);
+
+  // With room again, the note goes, and the word is added.
+  await page.getByRole('button', { name: 'Remove “word0” from my dictionary' }).click();
+  await expect(full).toHaveCount(0);
+  await add.click();
+  await expect(page.getByRole('status').filter({ hasText: 'Added “Mtskheta”' })).toBeAttached();
+  await expect(suggestion(page, 'Mtskheta')).toHaveCount(0);
+});
+
 test('shows a problem in the text', async ({ page }) => {
   await open(page);
   await text(page).fill('She go to school.');
@@ -154,6 +186,78 @@ test('copies and clears the text', async ({ page, context }) => {
   await expect(text(page)).toHaveValue('');
   await expect(text(page)).toBeFocused();
   await expect(status(page)).toHaveText(READY);
+});
+
+test('the English chosen elsewhere while the checker starts: it still checks', async ({ page }) => {
+  // Another tab here (or another device, through sync) switches to British
+  // while Harper is loading: the new English and the dictionary reach the
+  // checker together (audit F3-4). The change comes as another tab's does,
+  // with a storage event (a second Grammar tab would load Harper too, and two
+  // downloads of it at once can make the browser fail one).
+  const starting = page.waitForRequest((request) => request.url().endsWith('.wasm'));
+  await page.goto('/');
+  await starting;
+  await page.evaluate(() => {
+    const key = 'shkriuss:grammar';
+    const data = { text: '', english: 'british', words: ['Shkriuss'] };
+    localStorage.setItem(key, JSON.stringify({ v: 1, data }));
+    window.dispatchEvent(new StorageEvent('storage', { key, storageArea: localStorage }));
+  });
+  await expect(page.getByLabel('British (UK)')).toBeChecked();
+  await text(page).fill('I has a apple. Shkriuss likes the colour.');
+  await expect(status(page)).toHaveText('2 suggestions.', { timeout: 30_000 });
+});
+
+test('the checker is started again if it stops working', async ({ page }) => {
+  // As if it crashed once, after it had started (audit F3-4): its first
+  // check fails. The next copy of it works.
+  let started = 0;
+  await page.route('**/_astro/checker.worker-*.js', async (route) => {
+    started += 1;
+    const response = await route.fetch();
+    const script = await response.text();
+    const failing = `${script}
+addEventListener('message', (event) => {
+  if (event.data.type === 'check') postMessage({ type: 'failed' });
+});`;
+    await route.fulfill({ response, body: started === 1 ? failing : script });
+  });
+  await open(page);
+  await page.getByLabel('American (US)').check();
+  await text(page).fill('I has a apple.');
+  await expect(status(page)).toHaveText('2 suggestions.');
+  expect(started).toBe(2);
+});
+
+test('says when a pasted text doesn’t all fit', async ({ page }) => {
+  // The box takes 20,000 characters; the browser keeps the start of a
+  // longer paste, and nothing said so (audit F3-3).
+  await open(page);
+  const hint = 'Type or paste your text (up to 20,000 characters). It’s checked as you type.';
+  await expect(text(page)).toHaveAccessibleDescription(hint);
+  const essay = Array.from(
+    { length: 600 },
+    (_, index) => `Paragraph ${index + 1} has a few sentences in it.`,
+  ).join(' ');
+  await paste(text(page), essay);
+  await expect(text(page)).toHaveValue(essay.slice(0, 20_000));
+  const cut =
+    'Only part of that fit. This box takes up to 20,000 characters, so the rest wasn’t added.';
+  await expect(page.getByText(cut, { exact: true })).toBeVisible();
+  // Read out at once, and with the box when it's read again.
+  await expect(page.getByRole('alert').filter({ hasText: `Your text: ${cut}` })).toBeAttached();
+  await expect(text(page)).toHaveAccessibleDescription(`${hint} ${cut}`);
+  await checkA11y(page, 'a paste that didn’t all fit');
+
+  // Typing at the limit adds nothing: that's said too.
+  await page.keyboard.type('!');
+  await expect(text(page)).toHaveValue(essay.slice(0, 20_000));
+  const none = 'That didn’t fit. This box takes up to 20,000 characters, so it wasn’t added.';
+  await expect(page.getByText(none, { exact: true })).toBeVisible();
+  // Gone once the text is changed and all of it fits.
+  await page.keyboard.press('Backspace');
+  await expect(page.getByText(none, { exact: true })).toBeHidden();
+  await expect(text(page)).toHaveAccessibleDescription(hint);
 });
 
 test('the text never leaves the device', async ({ page }) => {

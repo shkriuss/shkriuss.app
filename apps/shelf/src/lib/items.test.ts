@@ -283,6 +283,10 @@ describe('showing items', () => {
     expect(linkHost('https://www.amazon.com/dp/B0')).toBe('amazon.com');
     expect(linkHost('https://shop.ge/x')).toBe('shop.ge');
     expect(linkHost('')).toBe('');
+    // A Georgian address, as typed: not as punycode (audit F3-10).
+    expect(linkHost(normalizeLink('www.მაღაზია.გე/item') ?? '')).toBe('მაღაზია.გე');
+    // Unless its letters could pass for another site's: Cyrillic "аррӏе" looks like "apple".
+    expect(linkHost('https://xn--80ak6aa92e.com/')).toBe('xn--80ak6aa92e.com');
     // Saved data from a backup or another device: only web links are shown.
     expect(linkHost('javascript://shop.example/%0Aalert(1)')).toBe('');
     expect(linkHost('intent://shop.example/#Intent;end')).toBe('');

@@ -328,7 +328,7 @@ import { CURRENCIES, LIMITS, OPINIONS, OPINION_LABELS, SORTS, SORT_LABELS } from
           aria-describedby="item-link-hint item-link-error"
         />
         <p class="field__hint" id="item-link-hint">
-          A page where you can see or buy it.
+          A page where you can see or buy it, up to {LIMITS.link.toLocaleString('en')} characters.
         </p>
         <p class="field__error" id="item-link-error" data-error-for="link"></p>
       </div>
@@ -358,7 +358,11 @@ import { CURRENCIES, LIMITS, OPINIONS, OPINION_LABELS, SORTS, SORT_LABELS } from
           name="notes"
           rows="3"
           maxlength={LIMITS.notes}
+          aria-describedby="item-notes-hint"
         ></textarea>
+        <p class="field__hint" id="item-notes-hint">
+          Up to {LIMITS.notes.toLocaleString('en')} characters.
+        </p>
       </div>
 
       <p class="field__error" role="alert" data-error-for="form"></p>

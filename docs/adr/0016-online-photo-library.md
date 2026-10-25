@@ -75,7 +75,10 @@ every device. That's far beyond what sync can hold:
   only once the library has answered since Photos opened, while it isn't
   being deleted, moved or out of reach: what this device noted earlier may
   be out of date. Just before anything is removed, the library is asked
-  again, and only photos it still has are freed.
+  again, and only photos it still has are freed. Each photo's original goes
+  in the same step as the note that it's only online, so stopping half-way
+  never leaves a photo marked as on the device without its original (audit
+  finding F3-1).
 - **The same photo twice:** a device skips a photo already in the library
   (same SHA-256). If two devices add it at once, the one with the larger id
   is deleted. Picking a photo again whose original isn't on the device

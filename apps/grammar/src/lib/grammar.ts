@@ -160,11 +160,18 @@ export function wordToAdd(issue: Pick<Issue, 'kind' | 'problem'>): string | unde
     : undefined;
 }
 
-/** The dictionary with a word added (once), in alphabetical order. */
-export function addWord(words: readonly string[], word: string): string[] {
-  if (words.includes(word) || words.length >= MAX_WORDS) return [...words];
+/**
+ * The dictionary with a word added (once), in alphabetical order; null when
+ * it's full (MAX_WORDS words), so the word can't be added (audit F3-8).
+ */
+export function addWord(words: readonly string[], word: string): string[] | null {
+  if (words.includes(word)) return [...words];
+  if (words.length >= MAX_WORDS) return null;
   return [...words, word].sort((a, b) => a.localeCompare(b));
 }
+
+/** What the page says when a word can't be added. */
+export const DICTIONARY_FULL = `Your dictionary is full (${MAX_WORDS} words). Remove one to add another.`;
 
 export const removeWord = (words: readonly string[], word: string): string[] =>
   words.filter((entry) => entry !== word);

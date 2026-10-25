@@ -30,6 +30,7 @@ import {
   applyChanges,
   canFreeUp,
   freeable,
+  onlyOnline,
   RECORDS,
   waitingToGoUp,
   type OnlineProblem,
@@ -43,9 +44,10 @@ import {
   keepThumb,
   loadProgress,
   moveFiles,
-  removeOriginals,
+  removeOriginal,
   saveDetails,
   saveProgress,
+  withOriginals,
   type OnlineProgress,
 } from './library.ts';
 
@@ -74,6 +76,12 @@ export interface Online {
   subscribe(listener: () => void): void;
   /** Photos were added here: they go up soon. */
   added(): void;
+  /**
+   * Sync is off: these photos (only online) go from this device until it's
+   * on again, and where this device had got to in the library starts again
+   * from the beginning, so they're found again then.
+   */
+  hideOnlyOnline(ids: readonly string[]): Promise<void>;
   /** Photos are being deleted here: those online are deleted there too. */
   removed(photos: readonly Photo[]): Promise<void>;
   unlock(code: string): Promise<UnlockResult>;
@@ -195,12 +203,17 @@ export function startOnline(list: PhotoList): Online {
 
   /**
    * What was online is gone (the library was deleted), or in another library
-   * now: photos only there go too, and those here go up again.
+   * now: photos only there go too, and those here go up again. A photo
+   * marked as here without its original (an older version's "Free up space"
+   * stopped half-way) was only online too, so it isn't kept as here
+   * (audit F3-1).
    */
   async function forgetOnline(library?: string, removals: string[] = []): Promise<void> {
     const all = list.all();
-    const gone = all.filter((photo) => !photo.here).map((photo) => photo.id);
-    const stay = all.filter((photo) => photo.here && photo.online);
+    const originals = await withOriginals();
+    const here = (photo: Photo) => photo.here && originals.has(photo.id);
+    const gone = all.filter((photo) => !here(photo)).map((photo) => photo.id);
+    const stay = all.filter((photo) => here(photo) && photo.online);
     const offline = stay.map((photo) => ({ ...photo, online: null }));
     if (offline.length > 0) await saveDetails(offline);
     if (gone.length > 0) await deletePhotos(gone);
@@ -208,24 +221,45 @@ export function startOnline(list: PhotoList): Online {
     list.changed({ save: offline, remove: gone });
   }
 
-  /** Sync is off here: photos only online can't be seen until it's on again. */
-  async function hideOnlyOnline(): Promise<void> {
-    const gone = list
-      .all()
-      .filter((photo) => !photo.here)
-      .map((photo) => photo.id);
-    if (gone.length > 0) await deletePhotos(gone);
-    // Start again from the beginning next time, to find them again.
-    await updateProgress((current) => ({
-      ...fresh(current?.library ?? ''),
-      removals: current?.removals ?? [],
-    }));
-    list.changed({ remove: gone });
+  /**
+   * Sync is off here: photos only online can't be seen until it's on again.
+   * They go from the list at once, and from the device in turn, after a
+   * round under way (which stops at its next step), so that round can't
+   * write back where it had got to (audit F3-2).
+   */
+  function hideOnlyOnline(
+    ids: readonly string[] = onlyOnline(list.all()).map((photo) => photo.id),
+  ): Promise<void> {
+    list.changed({ remove: ids });
+    return inTurn(async () => {
+      const gone = [...new Set([...ids, ...onlyOnline(list.all()).map((photo) => photo.id)])];
+      if (gone.length > 0) await deletePhotos(gone);
+      // Start again from the beginning next time, to find them again.
+      await updateProgress((current) => ({
+        ...fresh(current?.library ?? ''),
+        removals: current?.removals ?? [],
+      }));
+      list.changed({ remove: gone });
+    });
+  }
+
+  /** Sync's key now, as text to compare, or null while sync is off. */
+  const keyNow = (): string | null => sync.secret()?.join() ?? null;
+
+  /**
+   * A check that sync is still on, with the key it has now. A round stops at
+   * its next step once it isn't: nothing more comes in, is noted or goes up
+   * after sync is turned off here, or on with another key (audit F3-2).
+   */
+  function stillOnCheck(): () => boolean {
+    const key = keyNow();
+    return () => key !== null && keyNow() === key;
   }
 
   /** Brings in changes from other devices, a page at a time. */
-  async function pull(api: LibraryApi, library: string): Promise<void> {
+  async function pull(api: LibraryApi, library: string, stillOn: () => boolean): Promise<void> {
     for (;;) {
+      if (!stillOn()) return;
       const before = await loadProgress();
       if (before && before.library !== library) {
         // Another library now (another account's, an older one of this
@@ -239,6 +273,7 @@ export function startOnline(list: PhotoList): Online {
       }
       const progress = before ?? fresh(library);
       const page = await api.changes(progress.since);
+      if (!stillOn()) return;
       checked = true;
       unlocked = page.unlocked;
       usage = page.usage;
@@ -279,10 +314,11 @@ export function startOnline(list: PhotoList): Online {
   }
 
   /** Puts a few photos from here online. */
-  async function goUp(api: LibraryApi): Promise<void> {
+  async function goUp(api: LibraryApi, stillOn: () => boolean): Promise<void> {
     if (!unlocked || (retryAt !== null && Date.now() < retryAt)) return;
     retryAt = null;
     for (const photo of waitingToGoUp(list.all(), skip).slice(0, UPLOADS_PER_ROUND)) {
+      if (!stillOn()) return;
       const found = await getFiles(photo.id);
       if (!found?.original) {
         skip.add(photo.id);
@@ -349,6 +385,7 @@ export function startOnline(list: PhotoList): Online {
     running = true;
     try {
       await inTurn(async () => {
+        const stillOn = stillOnCheck();
         const record = await ensureRecord();
         // Another library only once a sync has finished: until then, the records may be half moved.
         const api = record && (synced || record.library === inUse) ? await connect(record) : null;
@@ -359,9 +396,10 @@ export function startOnline(list: PhotoList): Online {
         }
         inUse = record.library;
         problem = null;
-        await pull(api, record.library);
+        await pull(api, record.library, stillOn);
+        if (!stillOn()) return;
         await sendRemovals(api);
-        await goUp(api);
+        await goUp(api, stillOn);
       });
     } catch (error) {
       if (error instanceof LibraryError) problem = asProblem(error.problem);
@@ -409,8 +447,13 @@ export function startOnline(list: PhotoList): Online {
       synced = false;
       checked = false;
     }
-    if (event === 'deleted-online' || status.problem === 'deleted') void forgetOnline();
-    else if (event === 'turned-off' || status.problem === 'moved') void hideOnlyOnline();
+    // In turn, after a round under way (audit F3-2). If one fails, what's left
+    // is tidied when Photos opens again (photos.ts reload) or uses a library.
+    if (event === 'deleted-online' || status.problem === 'deleted') {
+      inTurn(() => forgetOnline()).catch(() => undefined);
+    } else if (event === 'turned-off' || status.problem === 'moved') {
+      hideOnlyOnline().catch(() => undefined);
+    }
     if (!status.on) {
       synced = false;
       checked = false;
@@ -475,6 +518,7 @@ export function startOnline(list: PhotoList): Online {
     added() {
       if (sync.status().on) schedule();
     },
+    hideOnlyOnline,
     async removed(photos) {
       const online = photos.filter((photo) => photo.online).map((photo) => photo.id);
       if (online.length === 0) return;
@@ -531,22 +575,30 @@ export function startOnline(list: PhotoList): Online {
       inTurn(async () => {
         // Only with the library that answered since Photos opened, asked again
         // now: an original goes only if its photo is still online.
+        const stillOn = stillOnCheck();
         const secret = sync.secret();
         const record = secret ? await usableRecord(secret, allRecords()) : undefined;
         const api = record?.library === inUse && canFreeUp(state()) ? await connect(record) : null;
         if (!record || !api) throw new Error('The online library hasn’t answered.');
         try {
-          await pull(api, record.library);
+          await pull(api, record.library, stillOn);
         } finally {
           // The status line catches up, whatever happened.
           schedule();
         }
         const chosen = new Set(photos.map((photo) => photo.id));
         const still = freeable(list.all()).photos.filter((photo) => chosen.has(photo.id));
-        if (!canFreeUp(state()) || still.length === 0) throw new Error('Nothing to free up.');
-        await removeOriginals(still);
-        list.changed({ save: still.map((photo) => ({ ...photo, here: false })) });
-        return still.reduce((sum, photo) => sum + photo.size, 0);
+        if (!stillOn() || !canFreeUp(state()) || still.length === 0) {
+          throw new Error('Nothing to free up.');
+        }
+        const freed: Photo[] = [];
+        try {
+          for (const photo of still) freed.push(await removeOriginal(photo));
+        } finally {
+          // Those freed before anything went wrong too.
+          list.changed({ save: freed });
+        }
+        return freed.reduce((sum, photo) => sum + photo.size, 0);
       }),
   };
 }
