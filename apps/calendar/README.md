@@ -59,7 +59,8 @@ its notification server, docs/adr/0009).
 - Page behaviour: `src/scripts/`
   - `calendar.ts`: the month, the lists and the event editor
   - `reminder-alerts.ts`: due reminders and notifications
-  - `import-dialog.ts`: importing a file
+  - `import-dialog.ts`: choosing a file to import; the dialog that reads it
+    and shows what it adds (`import-results.ts`) loads only then
   - `special-days.ts`: holidays and fasts: what to show, and their list items
   - `shared.ts`: small helpers they share
 - Rules, as plain functions with unit tests next to them:

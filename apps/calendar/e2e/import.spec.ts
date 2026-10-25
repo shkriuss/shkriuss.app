@@ -148,6 +148,19 @@ test('explains files it can’t use', async ({ page }) => {
   await expect(dialog(page)).toContainText('There are no events in this file.');
 });
 
+test('says so when what reads the file can’t load', async ({ page, guard }) => {
+  // It loads only once a file is chosen; here it can't.
+  guard.allowConsole('net::ERR_FAILED');
+  await page.route('**/_astro/import-results.*.js', (route) => route.abort());
+  await importFile(page, 'work.ics', WORK_FILE);
+  await expect(
+    page
+      .getByRole('status')
+      .filter({ hasText: 'Calendar couldn’t read this file. Please try again.' }),
+  ).toBeVisible();
+  await expect(dialog(page)).toBeHidden();
+});
+
 test('imports what Calendar exports', async ({ page }) => {
   // Make an event, download it, delete everything, and import the file.
   await page.evaluate(() => {
