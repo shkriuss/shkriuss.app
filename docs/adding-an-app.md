@@ -193,6 +193,27 @@ placeholder, change its `"status"` in `apps.json` to `"hidden"`, and back to
 
 ## Removing an app
 
-Delete `apps/<slug>/` and its entry in `apps.json` in one pull request. After
-merging, delete the Worker in the Cloudflare dashboard (**Workers & Pages** →
-the app → **Settings** → **Delete**). That also removes its address.
+People's data for an app is on their own devices, under the app's address,
+and with sync, notifications or an online library on its servers too. Once
+the app is gone, they can't open it any more to back up or to delete what's
+online. So remove an app in steps (ask Claude for each):
+
+1. **Tell people first.** Ship a version that says when the app goes away
+   and asks them to tap **Download backup** and, if sync is on, **Delete
+   the online copy**. Leave it up for a few weeks.
+2. **If it has servers** (`sync`, `pushNotifications` or `library` in
+   `apps.json`): in one pull request, take those out of `apps.json` and the
+   app, and in `wrangler.jsonc` remove its `durable_objects` and add a last
+   migration that deletes their classes (`"deleted_classes"`; Cloudflare's
+   [guide](https://developers.cloudflare.com/durable-objects/reference/durable-object-class-migrations-legacy/)).
+   When it deploys, everything its servers kept is deleted.
+3. **Remove it:** delete `apps/<slug>/` and its entry in `apps.json` in one
+   pull request. After merging, delete the Worker in the Cloudflare
+   dashboard (**Workers & Pages** → the app → **Settings** → **Delete**).
+   That removes its address and its previews too.
+4. **An app with an online library** also has two R2 buckets,
+   `shkriuss-<slug>` and `shkriuss-<slug>-preview`, and a storage code
+   secret in GitHub (`<SLUG>_STORAGE_CODE`). Delete the buckets in the
+   dashboard (**R2** → the bucket → **Settings**; R2 asks you to empty it
+   first) and the secret in GitHub (**Settings** → **Secrets and variables**
+   → **Actions**).
