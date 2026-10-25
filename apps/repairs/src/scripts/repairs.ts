@@ -1,8 +1,9 @@
 /**
  * Repairs' page behaviour: connects pages/index.astro to the rules in
  * lib/repairs.ts, saves on the device, and syncs the vehicles, repairs,
- * settings and photos when sync is on. Photos: photos.ts; in the repair form,
- * form-photos.ts; looking at them, photo-viewer.ts.
+ * settings and photos when sync is on. "Delete a year…" deletes a year's
+ * repairs and their photos, to make room. Photos: photos.ts; in the repair
+ * form, form-photos.ts; looking at them, photo-viewer.ts.
  */
 import { today } from '@shkriuss/dates';
 import { createStore, downloadFile } from '@shkriuss/storage';
@@ -42,7 +43,11 @@ import {
   readVehicle,
   removeRepair,
   removeVehicle,
+  removeYear,
   repairCost,
+  repairsIn,
+  repairYears,
+  roomNote,
   saveRepair,
   saveVehicle,
   setCurrency,
@@ -150,6 +155,13 @@ export function mountRepairs(root: Document): void {
   const deleteDialog = required<HTMLDialogElement>(root, '[data-delete-dialog]');
   const deleteTitle = required<HTMLElement>(deleteDialog, '[data-delete-title]');
   const deleteText = required<HTMLElement>(deleteDialog, '[data-delete-text]');
+  const roomText = required<HTMLElement>(root, '[data-room-note]');
+  const deleteYearButton = required<HTMLButtonElement>(root, '[data-action="delete-year"]');
+  const yearDialog = required<HTMLDialogElement>(root, '[data-year-dialog]');
+  const yearForm = required<HTMLFormElement>(yearDialog, '[data-year-form]');
+  const yearSelect = required<HTMLSelectElement>(yearForm, '[data-year-select]');
+  const yearText = required<HTMLElement>(yearForm, '[data-year-text]');
+  const yearConfirm = required<HTMLElement>(yearForm, '[data-year-confirm]');
 
   let vehicles = vehiclesStore.load();
   let repairs = repairsStore.load();
@@ -379,6 +391,9 @@ export function mountRepairs(root: Document): void {
   }
 
   function render(): void {
+    const room = roomNote(repairs.repairs.length);
+    roomText.hidden = room === null;
+    roomText.textContent = room ?? '';
     renderVehicles();
     renderRepairs();
     unitSelect.value = unitOf(settings);
@@ -693,6 +708,64 @@ export function mountRepairs(root: Document): void {
     }
   });
 
+  // ---------- Deleting a year ----------
+
+  const repairsCount = (count: number) => countLabel(count, 'repair', 'repairs');
+
+  /** How many repairs the year chosen has (0 if it has none now). */
+  const yearCount = (year: string) =>
+    repairYears(repairs).find((entry) => entry.year === year)?.count ?? 0;
+
+  /** Says what deleting the year chosen removes. */
+  function showYear(): void {
+    const year = yearSelect.value;
+    const count = repairsCount(yearCount(year));
+    yearText.textContent = `The ${count} from ${year} will be deleted, with their photos. With sync on, they’re deleted on your other devices too. This can’t be undone.`;
+    yearConfirm.textContent = `Delete ${count}`;
+  }
+
+  /** The years with repairs to choose from (the year chosen stays chosen while it has any). */
+  function fillYears(): void {
+    const chosen = yearSelect.value;
+    const years = repairYears(repairs);
+    yearSelect.replaceChildren(
+      ...years.map(({ year, count }) => new Option(`${year} (${repairsCount(count)})`, year)),
+    );
+    // Else the first, the earliest year: the oldest repairs are the likeliest to go.
+    if (years.some(({ year }) => year === chosen)) yearSelect.value = chosen;
+    showYear();
+  }
+
+  function openYears(): void {
+    if (repairs.repairs.length === 0) {
+      csvStatus.textContent = 'There are no repairs to delete.';
+      return;
+    }
+    yearSelect.replaceChildren();
+    fillYears();
+    required<HTMLElement>(yearForm, '[data-csv-status]').textContent = '';
+    yearDialog.showModal();
+    yearSelect.focus();
+  }
+
+  yearSelect.addEventListener('change', showYear);
+
+  yearForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const year = yearSelect.value;
+    const gone = repairsIn(repairs, year);
+    yearDialog.close();
+    deleteYearButton.focus();
+    if (gone.length === 0) return;
+    // Like deleting repairs one by one: other devices delete them too, and their photos go.
+    save(
+      { repairs: removeYear(repairs, year) },
+      `Deleted ${repairsCount(gone.length)} from ${year}.`,
+    );
+    void deletePhotos(photosOf(gone));
+    sync.filesRemoved(photoFiles(photosOf(gone)));
+  });
+
   // ---------- Everything else ----------
 
   root.addEventListener('click', (event) => {
@@ -773,15 +846,22 @@ export function mountRepairs(root: Document): void {
       case 'delete-vehicle':
         askToDelete('vehicle');
         break;
-      case 'csv':
-        // The answer shows under the button (and is read out).
+      case 'delete-year':
+        openYears();
+        break;
+      case 'csv': {
+        // The answer shows under the button tapped (and is read out).
+        const status =
+          button?.closest('dialog, section')?.querySelector<HTMLElement>('[data-csv-status]') ??
+          csvStatus;
         if (repairs.repairs.length === 0) {
-          csvStatus.textContent = 'There’s nothing to download yet.';
+          status.textContent = 'There’s nothing to download yet.';
           break;
         }
         downloadFile(`repairs-${today()}.csv`, toCsv(repairs, vehicles, settings), 'text/csv');
-        csvStatus.textContent = 'Downloaded your repairs as a spreadsheet.';
+        status.textContent = 'Downloaded your repairs as a spreadsheet.';
         break;
+      }
     }
   });
 
@@ -827,6 +907,10 @@ export function mountRepairs(root: Document): void {
     // What's being changed was deleted on another device or tab.
     if (editingRepair !== null && !findRepair(editingRepair)) repairDialog.close();
     if (editingVehicle !== null && !findVehicle(editingVehicle)) vehicleDialog.close();
+    if (yearDialog.open) {
+      if (repairs.repairs.length === 0) yearDialog.close();
+      else fillYears();
+    }
     render();
   }
 

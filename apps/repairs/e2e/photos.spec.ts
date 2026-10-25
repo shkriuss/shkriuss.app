@@ -18,6 +18,7 @@ import {
   storedPhotos,
   TIME_ZONE,
   vehicle,
+  yearDialog,
 } from './helpers.ts';
 
 test.use({ timezoneId: TIME_ZONE });
@@ -102,6 +103,23 @@ test('adds photos to a repair, made smaller, and keeps them on the device', asyn
     })
     .click();
   await expect(status(page, 'Deleted the repair.')).toBeAttached();
+  await expect.poll(() => storedPhotos(page)).toBe(0);
+});
+
+test('deleting a year deletes its repairs’ photos', async ({ page }) => {
+  await page.getByRole('button', { name: 'New repair' }).click();
+  const dialog = repairDialog(page);
+  await dialog.getByLabel('Vehicle').fill('Bus 105');
+  await dialog.getByLabel('Day').fill('2025-06-01');
+  await addPhotos(page, [jpeg('door.jpg', await picture(page, { width: 400, height: 300 }))]);
+  await expect(dialog.locator('[data-form-photos] img')).toHaveCount(1);
+  await fillRepair(page, {});
+  await expect(status(page, 'Saved the repair on Bus 105')).toBeAttached();
+  expect(await storedPhotos(page)).toBe(1);
+
+  await page.getByRole('button', { name: 'Delete a year…' }).click();
+  await yearDialog(page).getByRole('button', { name: 'Delete 1 repair' }).click();
+  await expect(status(page, 'Deleted 1 repair from 2025.')).toBeAttached();
   await expect.poll(() => storedPhotos(page)).toBe(0);
 });
 

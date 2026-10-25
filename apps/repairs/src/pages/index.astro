@@ -1,9 +1,9 @@
 ---
 /**
  * Repairs: every repair, the latest day first, with search and a filter for
- * one vehicle; the vehicles; kilometres or miles and a spreadsheet download;
- * forms for a repair (with its parts) and a vehicle. Behaviour:
- * ../scripts/repairs.ts.
+ * one vehicle; the vehicles; kilometres or miles, a spreadsheet download and
+ * "Delete a year"; forms for a repair (with its parts) and a vehicle.
+ * Behaviour: ../scripts/repairs.ts.
  */
 import { AppShell, Button, DataControls, Icon, SyncControls } from '@shkriuss/ui';
 import { CURRENCIES, LIMITS, UNIT_LABELS, UNITS } from '../lib/repairs.ts';
@@ -17,6 +17,9 @@ import { CURRENCIES, LIMITS, UNIT_LABELS, UNITS } from '../lib/repairs.ts';
         A record of every repair, vehicle by vehicle. Your records are saved on this device.
       </p>
     </header>
+
+    <!-- Once Repairs is nearly full: how much room is left, and how to make more. -->
+    <p class="notice" data-room-note hidden></p>
 
     <div>
       <Button variant="primary" icon="plus" data-action="new-repair">
@@ -108,9 +111,12 @@ import { CURRENCIES, LIMITS, UNIT_LABELS, UNITS } from '../lib/repairs.ts';
           </p>
         </div>
       </div>
-      <div>
+      <div class="cluster">
         <Button icon="download" data-action="csv">
           Download as a spreadsheet (CSV)
+        </Button>
+        <Button icon="trash" aria-haspopup="dialog" data-action="delete-year">
+          Delete a year…
         </Button>
       </div>
       <p class="muted" role="status" data-csv-status></p>
@@ -618,6 +624,41 @@ import { CURRENCIES, LIMITS, UNIT_LABELS, UNITS } from '../lib/repairs.ts';
         </Button>
         <Button type="submit" variant="danger" value="confirm">
           Delete
+        </Button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- "Delete a year…": every repair of the year chosen, with its photos, to make room. -->
+  <dialog class="dialog" aria-labelledby="year-title" data-year-dialog>
+    <form class="stack" data-year-form novalidate>
+      <h2 id="year-title">Delete a year</h2>
+      <div class="field">
+        <label class="field__label" for="year-select">
+          Year
+        </label>
+        <select
+          class="input"
+          id="year-select"
+          aria-describedby="year-text"
+          data-year-select
+        ></select>
+      </div>
+      <p id="year-text" aria-live="polite" data-year-text></p>
+      <p class="muted">
+        To keep a copy of them, download the spreadsheet first: it has every repair (photos aren’t
+        in it).
+      </p>
+      <div>
+        <Button icon="download" data-action="csv">
+          Download as a spreadsheet (CSV)
+        </Button>
+      </div>
+      <p class="muted" role="status" data-csv-status></p>
+      <div class="cluster">
+        <Button data-action="cancel">Cancel</Button>
+        <Button type="submit" variant="danger" icon="trash">
+          <span data-year-confirm>Delete</span>
         </Button>
       </div>
     </form>

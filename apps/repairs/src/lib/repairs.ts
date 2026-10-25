@@ -104,7 +104,11 @@ export const LIMITS = {
   photos: 10,
   money: 1_000_000_000,
   vehicles: 500,
-  repairs: 10_000,
+  /**
+   * The most repairs kept, so they fit on the device and in the sync copy
+   * (measured in repairs.test.ts: "room for every repair").
+   */
+  repairs: 3000,
 };
 
 /**
@@ -459,7 +463,8 @@ export function readRepair(
   }
   const isNew = !repairs.repairs.some((repair) => repair.id === id);
   if (isNew && repairs.repairs.length >= LIMITS.repairs) {
-    problems['vehicle'] ??= `You can keep up to ${LIMITS.repairs} repairs.`;
+    problems['vehicle'] ??=
+      `You can keep up to ${new Intl.NumberFormat(locale).format(LIMITS.repairs)} repairs. To make room, delete a year (under Units and spreadsheet).`;
   }
 
   if (Object.keys(problems).length > 0 || !vehicle) return { problems };
@@ -518,6 +523,51 @@ export function saveRepair(state: RepairsState, repair: Repair): RepairsState {
 export const removeRepair = (state: RepairsState, id: string): RepairsState => ({
   repairs: state.repairs.filter((repair) => repair.id !== id),
 });
+
+// ---------- Making room ----------
+
+export interface YearCount {
+  /** "2024". */
+  year: string;
+  count: number;
+}
+
+const yearOf = (date: IsoDate): string => date.slice(0, 4);
+
+/** The years that have repairs, the earliest first, with how many each has (for "Delete a year"). */
+export function repairYears(state: RepairsState): YearCount[] {
+  const counts = new Map<string, number>();
+  for (const repair of state.repairs) {
+    counts.set(yearOf(repair.date), (counts.get(yearOf(repair.date)) ?? 0) + 1);
+  }
+  return [...counts]
+    .map(([year, count]) => ({ year, count }))
+    .sort((a, b) => a.year.localeCompare(b.year));
+}
+
+/** The repairs of a year ("2024"), to delete with their photos. */
+export const repairsIn = (state: RepairsState, year: string): Repair[] =>
+  state.repairs.filter((repair) => yearOf(repair.date) === year);
+
+/** Removes every repair of a year ("2024"). Vehicles stay. */
+export const removeYear = (state: RepairsState, year: string): RepairsState => ({
+  repairs: state.repairs.filter((repair) => yearOf(repair.date) !== year),
+});
+
+/**
+ * What the page says once Repairs is nearly full (over 90% of the repairs it
+ * keeps): how many more fit, and how to make room. Null until then.
+ */
+export function roomNote(count: number, locale?: string): string | null {
+  if (count <= LIMITS.repairs * 0.9) return null;
+  const left = LIMITS.repairs - count;
+  const number = new Intl.NumberFormat(locale);
+  const start =
+    left > 0
+      ? `Repairs is nearly full: there’s room for ${number.format(left)} more ${left === 1 ? 'repair' : 'repairs'} (it keeps up to ${number.format(LIMITS.repairs)}).`
+      : `Repairs is full: it keeps up to ${number.format(LIMITS.repairs)} repairs.`;
+  return `${start} To make room, download the spreadsheet, then use “Delete a year…” under Units and spreadsheet, below.`;
+}
 
 /** The vehicle's name, or a stand-in if it was deleted (on another device). */
 export const vehicleName = (state: VehiclesState, id: string): string =>

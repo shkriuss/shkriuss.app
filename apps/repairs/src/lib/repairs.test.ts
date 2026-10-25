@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { addDays } from '@shkriuss/dates';
+import { footprint, sampleText } from '@shkriuss/sync/testing';
+import { MAX_SEALED_CHARS } from '../../../../packages/sync/src/validate.ts';
 import {
   byDay,
   currencyOf,
@@ -29,7 +32,12 @@ import {
   readVehicle,
   removeRepair,
   removeVehicle,
+  removeYear,
   repairCost,
+  repairsIn,
+  repairYears,
+  REPAIRS_VERSION,
+  roomNote,
   saveRepair,
   saveVehicle,
   setCurrency,
@@ -371,6 +379,96 @@ describe('repairs', () => {
     }));
     expect(isRepairsState(repairs(repair({ parts: many })))).toBe(false);
   });
+});
+
+describe('making room', () => {
+  const years = repairs(
+    repair({ id: 'a', date: '2024-03-02', photos: ['p1', 'p2'] }),
+    repair({ id: 'b', date: '2026-10-21' }),
+    repair({ id: 'c', date: '2024-12-31', vehicle: 'b12', photos: ['p3'] }),
+    repair({ id: 'd', date: '2025-01-01' }),
+  );
+
+  it('lists the years with repairs, and deletes one with its photos', () => {
+    expect(repairYears(years)).toEqual([
+      { year: '2024', count: 2 },
+      { year: '2025', count: 1 },
+      { year: '2026', count: 1 },
+    ]);
+    expect(repairYears(emptyRepairs())).toEqual([]);
+    expect(photosOf(repairsIn(years, '2024'))).toEqual(['p1', 'p2', 'p3']);
+    expect(removeYear(years, '2024').repairs.map((item) => item.id)).toEqual(['b', 'd']);
+    expect(removeYear(years, '2023')).toEqual(years);
+  });
+
+  it('says so once Repairs is nearly full', () => {
+    const number = (value: number) => new Intl.NumberFormat('en-US').format(value);
+    const nearly = LIMITS.repairs * 0.9;
+    const makeRoom =
+      'To make room, download the spreadsheet, then use “Delete a year…” under Units and spreadsheet, below.';
+    expect(roomNote(nearly, 'en-US')).toBeNull();
+    expect(roomNote(nearly + 1, 'en-US')).toBe(
+      `Repairs is nearly full: there’s room for ${number(LIMITS.repairs - nearly - 1)} more repairs (it keeps up to ${number(LIMITS.repairs)}). ${makeRoom}`,
+    );
+    expect(roomNote(LIMITS.repairs - 1, 'en-US')).toContain('there’s room for 1 more repair (');
+    expect(roomNote(LIMITS.repairs, 'en-US')).toBe(
+      `Repairs is full: it keeps up to ${number(LIMITS.repairs)} repairs. ${makeRoom}`,
+    );
+    const full = repairs(
+      ...Array.from({ length: LIMITS.repairs }, (_, index) => repair({ id: `r${index}` })),
+    );
+    expect(readRepair(form({}), 'new', full, vehicles, newId, 'en-US').problems).toEqual({
+      vehicle: `You can keep up to ${number(LIMITS.repairs)} repairs. To make room, delete a year (under Units and spreadsheet).`,
+    });
+    // A repair already kept can still be changed.
+    expect(readRepair(form({}), 'r0', full, vehicles, newId, 'en-US').repair).toBeDefined();
+  });
+
+  // Audit F2-3: 10,000 repairs didn't fit. Every repair is saved on the device
+  // (in localStorage, about 5 MB for each site), and with sync on, also goes
+  // into the copy that goes online.
+  it('has room for every repair, on the device and in the sync copy', async () => {
+    const ids = Array.from({ length: 60 }, () => crypto.randomUUID());
+    const list = Array.from({ length: LIMITS.repairs }, (_, index): Repair => ({
+      id: crypto.randomUUID(),
+      vehicle: ids[index % ids.length] ?? '',
+      // Five a working day.
+      date: addDays('2020-01-01', Math.floor(index / 5)),
+      mileage: 100_000 + index * 37,
+      system: SYSTEMS[index % SYSTEMS.length] ?? '',
+      // Modest texts: 200 characters (of the 4,000 allowed).
+      problem: sampleText(80, index),
+      work: sampleText(120, index + 1),
+      // Two parts on two repairs in three, a photo or two on one in four.
+      parts:
+        index % 3 === 0
+          ? []
+          : [
+              { name: 'Brake pads', number: '8-97366-123-0', quantity: 2, price: 45.5 },
+              { name: 'Brake disc', number: '', quantity: 1, price: null },
+            ],
+      hours: 1.5,
+      labour: index % 2 ? 50 : null,
+      photos: index % 4 === 0 ? [crypto.randomUUID(), crypto.randomUUID()] : [],
+    }));
+    const size = await footprint({
+      app: 'repairs',
+      store: 'shkriuss:repairs',
+      version: REPAIRS_VERSION,
+      data: { repairs: list },
+      items: list,
+      // A quarter of them deleted ("Delete a year") less than 180 days ago.
+      deleted: LIMITS.repairs / 4,
+    });
+    expect(size.saved).toBeLessThan(2_000_000);
+    expect(size.compressed).toBeLessThan(1_000_000);
+    expect(size.sealed).toBeLessThan(MAX_SEALED_CHARS);
+    // Safari allows 5 MiB (5,242,880 bytes), and counts 2 bytes for each
+    // character of text with any character beyond Latin-1 (like ’ from an
+    // iPhone's keyboard, or Georgian). Sync's own records are plain letters
+    // and digits: 1 byte each. Some room is left for the rest (the vehicles).
+    expect(2 * size.saved + size.syncState).toBeLessThan(4_500_000);
+  }, 60_000);
 });
 
 describe('finding repairs', () => {
