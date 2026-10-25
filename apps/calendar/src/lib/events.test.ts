@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   addEvent,
+  dayToShow,
   draftProblems,
   editEvent,
   emptyState,
@@ -15,6 +16,7 @@ import {
   secondVersion,
   timeLabel,
   updateEvent,
+  type CalendarEvent,
   type CalendarState,
   type EventDraft,
 } from './events.ts';
@@ -215,6 +217,33 @@ describe('add, update and remove', () => {
     expect(isCalendarState({ events: [{ ...draft(), id: 'x', startDate: 'nope' }] })).toBe(false);
     expect(isCalendarState({ events: [draft()] })).toBe(false); // no id
     expect(isCalendarState(null)).toBe(false);
+  });
+});
+
+describe('dayToShow', () => {
+  const weekly = { ...draft({ repeat: 'weekly' }), id: 'yoga' };
+
+  it('shows the chosen day if a saved event is on it, else its next day', () => {
+    const state = { events: [weekly] };
+    // Saturdays from 17 October.
+    expect(dayToShow(state, 'yoga', '2026-10-24')).toBe('2026-10-24');
+    expect(dayToShow(state, 'yoga', '2026-10-20')).toBe('2026-10-24');
+    // Not on any day in the year from the chosen one: its first day.
+    const over = { events: [{ ...weekly, repeatUntil: '2026-10-31' }] };
+    expect(dayToShow(over, 'yoga', '2026-12-01')).toBe('2026-10-17');
+    expect(dayToShow(state, 'gone', '2026-12-01')).toBe('2026-12-01');
+  });
+
+  it('works out only the saved event’s days', () => {
+    // Every event's, a year of them, took seconds with many events (audit F1-13).
+    const other = new Proxy({} as CalendarEvent, {
+      get: (_, property) => {
+        if (property === 'id') return 'other';
+        throw new Error('Another event was looked at');
+      },
+    });
+    const state = { events: [other, weekly, other] };
+    expect(dayToShow(state, 'yoga', '2026-10-20')).toBe('2026-10-24');
   });
 });
 

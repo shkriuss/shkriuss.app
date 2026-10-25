@@ -376,6 +376,21 @@ export function occurrencesBetween(state: CalendarState, from: IsoDate, to: IsoD
   return result.sort(compareOccurrences);
 }
 
+/**
+ * The day to show after an event is saved: the selected day if the event is
+ * on it, else the next day it's on (within a year), else its first day.
+ * Works out only this event's days: working out every event's for a year
+ * made saving slow with many repeating events (audit F1-13).
+ */
+export function dayToShow(state: CalendarState, id: string, selected: IsoDate): IsoDate {
+  const event = state.events.find((entry) => entry.id === id);
+  if (!event) return selected;
+  const [first] = occurrencesBetween({ events: [event] }, selected, addDays(selected, 366));
+  if (!first) return event.startDate;
+  // Sorted by start, so one starting on or before the selected day covers it.
+  return first.start <= selected ? selected : first.start;
+}
+
 /** Occurrences that cover `day`, from a list made by occurrencesBetween. */
 export function onDay(occurrences: readonly Occurrence[], day: IsoDate): Occurrence[] {
   return occurrences.filter(

@@ -31,6 +31,7 @@ import {
 import {
   addEvent,
   DATA_VERSION,
+  dayToShow,
   draftProblems,
   editEvent,
   emptyState,
@@ -480,16 +481,6 @@ export function mountCalendar(root: Document): void {
     opener = null;
   });
 
-  /** The day to show after saving: the selected day if the event is on it, else its next day. */
-  function dayToShow(next: CalendarState, id: string, start: IsoDate): IsoDate {
-    const [first] = occurrencesBetween(next, selected, addDays(selected, 366)).filter(
-      (occurrence) => occurrence.event.id === id,
-    );
-    if (!first) return start;
-    // Sorted by start, so one starting on or before the selected day covers it.
-    return first.start <= selected ? selected : first.start;
-  }
-
   // Moving the start keeps the event the same length.
   startDateInput.addEventListener('change', () => {
     const start = startDateInput.value;
@@ -544,7 +535,7 @@ export function mountCalendar(root: Document): void {
       ? editEvent(state, id, openedDraft ?? draft, draft)
       : addEvent(state, draft, id);
     const saved = next.events.find((event) => event.id === id);
-    const day = dayToShow(next, id, saved?.startDate ?? draft.startDate);
+    const day = dayToShow(next, id, selected);
     if (day !== selected) {
       selected = day;
       viewMonth = shiftMonth(day, 0);
