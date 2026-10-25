@@ -232,6 +232,18 @@ those Workers' preview addresses (**Workers & Pages** → the Worker →
   safe, but shows nothing, and can't save or sync, until the newer version
   is back.
 
+## When a service CI needs is down
+
+A deploy runs every check first, and they need a few outside services:
+npm (the packages, installed again from scratch for the deploy itself),
+Ubuntu's mirrors (the browser's system libraries) and GitHub. Playwright's
+browser and Grammar's model come from CI's cache once they've been
+downloaded, so their download servers are only needed after an update. If
+one of these is down, a merge (even a fix) can't deploy until it's back:
+re-run the failed job then. The live sites stay as they were meanwhile; to
+undo a bad deploy in the meantime, use the dashboard's **Rollback** above
+(audit H-2).
+
 ## Costs
 
 Everything here fits Cloudflare's and GitHub's free plans:
