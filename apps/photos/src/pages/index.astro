@@ -305,6 +305,19 @@ import { AppShell, Button, DataControls, Icon, SyncControls } from '@shkriuss/ui
     outline-offset: -3px;
   }
 
+  /* A chosen photo with keyboard focus shows the focus ring, not the chosen
+     outline (audit G-1); its tick still says it's chosen. */
+  .tile[aria-pressed='true']:focus-visible {
+    outline: 3px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+
+  @media (forced-colors: active) {
+    .tile[aria-pressed='true']:focus-visible {
+      outline-color: Highlight;
+    }
+  }
+
   .tile[aria-pressed='true'] .tile__check {
     display: grid;
   }
