@@ -314,19 +314,29 @@ function readWhen(property: Property, timeZone: string): When | null {
 const DAY_MS = 86_400_000;
 
 /**
+ * Time zones and years compared per file, at most (each costs a year of clock
+ * readings). Calendars use a few zones over some years; a crafted file of
+ * thousands froze the page for minutes (audit F1-9). Past this, a repeat
+ * counts as one whose times may be an hour off, and the note says so.
+ */
+const MAX_CLOCK_CHECKS = 100;
+
+/**
  * The days (as day numbers) in `year` when clocks in `zone` and in `timeZone`
- * move further apart or closer together, checked at noon (UTC) each day.
- * `seen` keeps them for the next event; `timeZone` is the same for a whole file.
+ * move further apart or closer together, checked at noon (UTC) each day, or
+ * null once the file has had its MAX_CLOCK_CHECKS. `seen` keeps them for the
+ * next event; `timeZone` is the same for a whole file.
  */
 function clockChangeDays(
   zone: string,
   timeZone: string,
   year: number,
   seen: Map<string, number[]>,
-): number[] {
+): number[] | null {
   const key = `${zone} ${year}`;
   const known = seen.get(key);
   if (known) return known;
+  if (seen.size >= MAX_CLOCK_CHECKS) return null;
   const apart = (day: number) => {
     const noon = day * DAY_MS + DAY_MS / 2;
     return offsetOf(noon, zone) - offsetOf(noon, timeZone);
@@ -345,8 +355,9 @@ function clockChangeDays(
 
 /**
  * True when clocks in `zone` and in `timeZone` don't stay the same time apart
- * from `from` to `to`. Clocks change on a yearly pattern, so at most a year is
- * checked (also when `to` is null: "forever").
+ * from `from` to `to`, or may not (past MAX_CLOCK_CHECKS). Clocks change on a
+ * yearly pattern, so at most a year is checked (also when `to` is null:
+ * "forever").
  */
 function clocksChangeApart(
   zone: string,
@@ -360,7 +371,7 @@ function clocksChangeApart(
   const last = Math.min(to ? toDayNumber(to) : Infinity, first + 366, toDayNumber('9999-12-31'));
   for (let year = parts(from).year; year <= parts(fromDayNumber(last)).year; year += 1) {
     const days = clockChangeDays(zone, timeZone, year, seen);
-    if (days.some((day) => day > first && day <= last)) return true;
+    if (!days || days.some((day) => day > first && day <= last)) return true;
   }
   return false;
 }

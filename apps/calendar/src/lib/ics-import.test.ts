@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { CalendarEvent, EventDraft } from './events.ts';
 import { parseDuration, parseIcs, unescapeText, type ParseOptions } from './ics-import.ts';
 import { toIcs } from './ics.ts';
@@ -314,6 +314,36 @@ describe('parseIcs', () => {
     // London and Berlin change on the same dates.
     expect(notes(london, 'Europe/Berlin')).toEqual([]);
     expect(notes(london, 'Europe/London')).toEqual([]);
+  });
+
+  it('reads a file of repeats from many time zones and years without freezing', () => {
+    // Each new time zone and year to compare clocks in costs a year of clock
+    // readings: a crafted file of thousands took minutes (audit F1-9). The
+    // work for a file is capped; past that, the note says what may be off.
+    const zones = Intl.supportedValuesOf('timeZone').filter((zone) => zone !== 'Asia/Tbilisi');
+    const events = Array.from({ length: 2000 }, (_, index) => [
+      `DTSTART;TZID=${zones[index % zones.length]}:${1100 + index}0101T090000`,
+      'RRULE:FREQ=WEEKLY',
+      'SUMMARY:x',
+    ]);
+    // Counts the clock readings, and stops at too many.
+    const read = Intl.DateTimeFormat.prototype.formatToParts;
+    let readings = 0;
+    vi.spyOn(Intl.DateTimeFormat.prototype, 'formatToParts').mockImplementation(function (
+      this: Intl.DateTimeFormat,
+      date,
+    ) {
+      readings += 1;
+      if (readings > 100_000) throw new Error('Too many clock readings');
+      return read.call(this, date);
+    });
+    try {
+      const result = parseIcs(calendar(...events), options);
+      expect(result.events).toHaveLength(2000);
+      expect(result.notes[0]).toMatch(/^\d+ repeating events are from a time zone/);
+    } finally {
+      vi.restoreAllMocks();
+    }
   });
 
   it('says when a monthly or yearly repeat moves to another day', () => {
