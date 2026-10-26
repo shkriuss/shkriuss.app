@@ -695,6 +695,21 @@ describe('monthly reminder', () => {
     expect(reminderDue(settings('last'), '2026-10-30T08:59', '2026-10-30T09:00')).toBe(false);
   });
 
+  // A page asleep over midnight looked only at the new day (audit 4 F1-11).
+  it('is due when the page wakes just after midnight, from the day before', () => {
+    expect(reminderDue(settings('last', '23:59'), '2026-10-31T23:58', '2026-11-01T00:02')).toBe(
+      true,
+    );
+    expect(reminderDue(settings(1, '23:59'), '2026-11-01T23:58', '2026-11-02T00:02')).toBe(true);
+    // Just after midnight on the day itself, too.
+    expect(reminderDue(settings(1, '00:00'), '2026-10-31T23:58', '2026-11-01T00:02')).toBe(true);
+    // Not on a day it isn't on, nor twice: the minute before was checked already.
+    expect(reminderDue(settings(1, '23:59'), '2026-10-31T23:58', '2026-11-01T00:02')).toBe(false);
+    expect(reminderDue(settings('last', '23:59'), '2026-10-31T23:59', '2026-11-01T00:02')).toBe(
+      false,
+    );
+  });
+
   it('says when it’s next', () => {
     expect(nextReminder(settings(21, '11:00'), '2026-10-21T10:00')).toBe('2026-10-21T11:00');
     expect(nextReminder(settings(21, '09:00'), '2026-10-21T10:00')).toBe('2026-11-21T09:00');
