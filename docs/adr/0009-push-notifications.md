@@ -41,7 +41,10 @@ browsers like IronFox receive Web Push through **UnifiedPush**.
 - **The phone encrypts every message** to its own push subscription
   (RFC 8291) before uploading it. The server stores and forwards only
   ciphertext; neither it nor the push service (Google, Apple, Mozilla or a
-  UnifiedPush server) can read a title or time label.
+  UnifiedPush server) can read a title or time label. Each message is
+  padded first, to a multiple of 256 bytes (RFC 8188's padding, which
+  browsers remove), so its size shows little about how long its text is
+  (audit 3 D-6).
 - **What the server stores, per device:** the push address (a URL from the
   push service), the phone's time zone, and for each scheduled notification:
   a number to tell it apart (never the app's own id, which for an imported
