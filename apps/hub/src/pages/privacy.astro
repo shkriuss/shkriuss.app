@@ -64,7 +64,7 @@ const LAST_UPDATED = '26 October 2026';
                 {whereLabel[site.storage]}
                 {site.sync && ' (and, if you turn on sync, a locked copy online)'}
                 {site.pushNotifications &&
-                  ' (and, if you turn on reminders while it’s closed, your reminders, locked, on its server)'}
+                  ' (and, if you turn on reminders while it’s closed, your reminders on its server, with what they say locked)'}
                 {site.slug === HUB_SLUG &&
                   ' (and, if you add a passkey, your account key, locked, on its server)'}
               </td>
@@ -90,8 +90,12 @@ const LAST_UPDATED = '26 October 2026';
           </li>
           <li>
             The server stores, for your device: the delivery address your browser's push service
-            gave it, your time zone, and for each reminder when it's due and how it repeats. It
-            never gets what the reminders are about.
+            gave it; your time zone; for each reminder, when it starts, how long before to remind
+            you, how it repeats and until when, and its locked message, padded so that the server
+            can't tell its exact length; how many reminders there are; and when the app last sent
+            them, when deliveries started failing (if they do), and when you last sent a test
+            notification. Only the message is locked: the server needs the rest to send it on time.
+            It never gets what the reminders are about.
           </li>
           <li>
             Each reminder that won't happen again is deleted after it's sent. Turning the option
@@ -143,10 +147,13 @@ const LAST_UPDATED = '26 October 2026';
       </li>
       <li>
         <strong>If you replace your account key</strong> (after losing a device): the server keeps a
-        note that the old key was replaced, so devices that still have it sign out, with a tag that
-        only a device with both the old and the new key can check. The note is deleted once no
-        device has asked about it for 13 months. Your device keeps the old key until you sign out
-        (or sign in to another account), so your apps can move their synced data to the new one.
+        note that the old key was replaced, with a tag that only a device with both the old and the
+        new key can check, so devices that still have it sign out and forget it. The note is deleted
+        once no device has asked about it for 13 months. The device you replace it on keeps the old
+        key until you sign out (or sign in to another account), so your apps can move their synced
+        data to the new one. Passkeys you added before can't sign in any more, but the old key stays
+        on the server, locked for each of them, until you remove that passkey (“Remove a passkey” on
+        the Account page).
       </li>
       <li>
         That's all. There's no list of accounts, and nothing stored that connects an account to you,
@@ -170,16 +177,22 @@ const LAST_UPDATED = '26 October 2026';
             data with it on your device before sending it. Only your devices can unlock it.
           </li>
           <li>
-            The app's own server on Cloudflare keeps one locked copy of the app's data. It sees how
-            big the copy is and when it changes, but never what's in it. Nothing it stores says
-            which account is yours, or links one app's copy to another's (each sync comes with your
-            internet address and the time, which aren't kept).
+            The app's own server on Cloudflare keeps one locked copy of the app's data, with when it
+            was made (to the second), last changed and last used. It sees how big the copy is and
+            when it changes, but never what's in it. Nothing it stores says which account is yours.
+            Nothing links one app's copy to another's either, except that someone who could read the
+            servers' storage might pair them up by those times (say, if you turned on sync in
+            several apps one after another). Each sync also comes with your internet address and the
+            time, which aren't kept.
           </li>
           <li>
-            A copy that no device has synced with for 13 months is deleted, photos and all. Your
-            devices keep their data, and the next sync from one of them puts it online again. So
-            that the storage all the apps share can't fill up, the server also keeps how much room
-            each copy takes.
+            A copy that no device has synced with for 13 months is deleted, with the photos synced
+            with it. Your devices keep their data, and the next sync from one of them puts it online
+            again.
+            {librarySites.length > 0 &&
+              'An online library isn’t deleted that way, even unused: it stays until you tap “Delete the online copy” (below).'}
+            So that the storage all the apps share can't fill up, the server also keeps how much
+            room each copy takes.
           </li>
           <li>
             In apps with photos, each photo is locked on your device in the same way and kept with
@@ -196,8 +209,9 @@ const LAST_UPDATED = '26 October 2026';
               the storage bill under control. When someone types a wrong code, a scrambled form of
               their internet address is kept for up to an hour, to limit guessing. With sync on,
               deleting a photo deletes it online and on your other devices; with sync off, only on
-              that device. A deleted photo leaves a small note online for as long as the library is
-              there, so that devices that were away learn it was deleted.
+              that device. A small note of a deleted photo stays for as long as the library does
+              (its id, when, and a proof made with your library's key that your device deleted it),
+              so devices that haven't checked yet learn it was deleted.
             </li>
           )}
           <li>

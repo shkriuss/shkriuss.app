@@ -98,13 +98,17 @@ const problemOf = (error: unknown): string =>
 
 const SIGN_IN_AGAIN =
   'Sign in with your new recovery key, or add this device with a code from one of your signed-in devices.';
+/** What to do next, after replacing the key. Old passkeys can still unlock the old key (audit 3 D-8). */
+const AFTER_REPLACING = [
+  'Now turn on sync again in each app (below), on each of your devices: until then, a lost device can still see that app’s changes.',
+  'If you use passkeys, remove the old ones and add a new one.',
+].join(' ');
 const REPLACED = {
   here: `Your account key was replaced on another device, so this device is signed out. ${SIGN_IN_AGAIN}`,
   key: `This key was replaced on another device, so it can’t sign in any more. ${SIGN_IN_AGAIN}`,
   passkey: `This passkey is for an account key that was replaced on another device, so it can’t sign in any more. ${SIGN_IN_AGAIN} Then you can add a new passkey.`,
-  done: 'Your account key is replaced. Devices with the old key are signed out when they next open this page. Now turn on sync again in each app (below), on each of your devices: until then, a lost device can still see that app’s changes. Add a new passkey if you use one.',
-  unnoted:
-    'Your account key is replaced, but the account service had no room to note the old one just now, so devices that still have it won’t sign out by themselves. Now turn on sync again in each app (below), on each of your devices: until then, a lost device can still see that app’s changes. Add a new passkey if you use one.',
+  done: `Your account key is replaced. Devices with the old key are signed out when they next open this page. ${AFTER_REPLACING}`,
+  unnoted: `Your account key is replaced, but the account service had no room to note the old one just now, so devices that still have it won’t sign out by themselves. ${AFTER_REPLACING}`,
 };
 
 const listFormat = new Intl.ListFormat('en-GB', { type: 'conjunction' });
