@@ -10,6 +10,39 @@ test.use({ serviceWorkers: 'allow', timezoneId: 'Europe/Berlin' });
 
 const closedSwitch = (page: Page) => page.getByLabel('Also remind me when Calendar is closed');
 const closedStatus = (page: Page) => page.locator('[data-closed-status]');
+const isSchedule =
+  (method: string) => (response: { url(): string; request(): { method(): string } }) =>
+    response.url().endsWith('/api/push/schedule') && response.request().method() === method;
+
+/** Holds the next request with this method on its way to the server until release(). */
+async function holdNext(page: Page, method: 'PUT' | 'DELETE') {
+  let release = (): void => undefined;
+  let started = (): void => undefined;
+  const waiting = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const reached = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  let held = false;
+  await page.route('**/api/push/schedule', async (route: Route) => {
+    if (route.request().method() !== method || held) return route.fallback();
+    held = true;
+    started();
+    await waiting;
+    return route.fallback();
+  });
+  return { reached, release };
+}
+
+async function addEventWithReminder(page: Page, title: string) {
+  await newEvent(page, title);
+  await editor(page).getByLabel('Start time').fill('14:30');
+  await editor(page)
+    .getByLabel('Reminder', { exact: true })
+    .selectOption({ label: '15 minutes before' });
+  await save(page);
+}
 
 let rig: PushRig;
 test.beforeEach(async () => {
@@ -157,6 +190,77 @@ test('turning it off, or deleting all data, removes it from the server', async (
   await deleted;
   await page.waitForLoadState('load');
   await expect(closedSwitch(page)).not.toBeChecked();
+});
+
+// An upload on its way when it's turned off turned it back on, and could reach
+// the server after the deletion, which then kept every reminder (audit 3 D-1).
+test.describe('turned off while an upload is on its way (audit 3 D-1)', () => {
+  // In the future for the local server's real clock too, so it keeps the reminder.
+  const TODAY = new Date('2027-01-11T10:00:00+01:00');
+
+  test.beforeEach(async ({ page }) => {
+    await page.clock.setFixedTime(TODAY);
+    await fakeSubscription(page, rig);
+    await page.goto('/');
+    await closedSwitch(page).check();
+    await expect(closedStatus(page)).toHaveText(/^On:/);
+  });
+
+  test('“Turn off” deletes after the upload, and stays off', async ({ page }) => {
+    const put = await holdNext(page, 'PUT');
+    await addEventWithReminder(page, 'Dentist');
+    await put.reached;
+    const answers: string[] = [];
+    page.on('response', (response) => {
+      if (response.url().endsWith('/api/push/schedule')) {
+        answers.push(`${response.request().method()} ${response.status()}`);
+      }
+    });
+    await closedSwitch(page).uncheck();
+    // Off on this device at once; the deletion waits for the upload.
+    await expect(closedStatus(page)).toHaveText('Turning off…');
+    expect(await page.evaluate(() => localStorage.getItem('shkriuss-device:push'))).toBeNull();
+    const deleted = page.waitForResponse(isSchedule('DELETE'));
+    put.release();
+    expect((await deleted).status()).toBe(204);
+    await expect(closedStatus(page)).toHaveText(
+      'Off: reminders only arrive while Calendar is open.',
+    );
+    // The server got the deletion last.
+    expect(answers).toEqual(['PUT 200', 'DELETE 204']);
+
+    await page.unroute('**/api/push/schedule');
+    await page.reload();
+    await expect(closedStatus(page)).toHaveText(/^Off:/);
+    await expect(closedSwitch(page)).not.toBeChecked();
+    expect(
+      await page.evaluate(() => [
+        localStorage.getItem('shkriuss-device:push'),
+        localStorage.getItem('shkriuss-device:push-delete'),
+      ]),
+    ).toEqual([null, null]);
+  });
+
+  test('“Delete all data” deletes after the upload, and stays off', async ({ page }) => {
+    const put = await holdNext(page, 'PUT');
+    await addEventWithReminder(page, 'Dentist');
+    await put.reached;
+    await page.getByRole('button', { name: 'Delete all data' }).click();
+    const reloaded = page.waitForEvent('load');
+    await page
+      .getByRole('dialog', { name: 'Delete all data?' })
+      .getByRole('button', { name: 'Delete everything' })
+      .click();
+    const deleted = page.waitForResponse(isSchedule('DELETE'));
+    put.release();
+    expect((await deleted).status()).toBe(204);
+    await reloaded;
+    await expect(closedSwitch(page)).not.toBeChecked();
+    await expect(closedStatus(page)).toHaveText(
+      'Off: reminders only arrive while Calendar is open.',
+    );
+    expect(await page.evaluate(() => localStorage.getItem('shkriuss-device:push'))).toBeNull();
+  });
 });
 
 test('says so when turning it off can’t reach the server, and finishes later', async ({

@@ -39,6 +39,30 @@ let server: ReturnType<typeof memoryPush>;
 let network: 'up' | 'down' | 'failing' | 'hanging';
 /** The time limits of requests so far (see hangingNetwork). */
 let limits: { ms: number; controller: AbortController }[];
+/** Requests to the app's server so far, as "METHOD /path". */
+let requests: string[];
+/** Requests to hold on their way (see holdNext), by "METHOD /path". */
+let holds: Map<string, { when: 'before' | 'after'; wait: Promise<void>; reached: () => void }>;
+/** The browser gives this device a new push address, as browsers sometimes do. */
+let renewSubscription: () => void;
+
+/**
+ * Holds the next `request` ("PUT /api/push/schedule") until release(): before
+ * it reaches the server, or after (only its answer waits). `arrived` is when
+ * it was sent.
+ */
+function holdNext(request: string, when: 'before' | 'after') {
+  let release = (): void => undefined;
+  let reached = (): void => undefined;
+  const wait = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const arrived = new Promise<void>((resolve) => {
+    reached = resolve;
+  });
+  holds.set(request, { when, wait, reached });
+  return { arrived, release };
+}
 
 /**
  * A network that hangs: requests to the app's server never answer, and wait
@@ -71,20 +95,28 @@ async function phone(): Promise<void> {
   const p256dh = await crypto.subtle.exportKey('raw', keys.publicKey);
   const auth = crypto.getRandomValues(new Uint8Array(16)).buffer;
   let subscription: object | null = null;
+  const make = (endpoint: string, applicationServerKey: Uint8Array) => {
+    const made = {
+      endpoint,
+      options: { applicationServerKey },
+      getKey: (name: string) => (name === 'p256dh' ? p256dh : auth),
+      unsubscribe: async () => {
+        if (subscription === made) subscription = null;
+        return true;
+      },
+    };
+    return made;
+  };
   const pushManager = {
     getSubscription: async () => subscription,
     subscribe: async ({ applicationServerKey }: { applicationServerKey: Uint8Array }) => {
-      subscription = {
-        endpoint: ENDPOINT,
-        options: { applicationServerKey },
-        getKey: (name: string) => (name === 'p256dh' ? p256dh : auth),
-        unsubscribe: async () => {
-          subscription = null;
-          return true;
-        },
-      };
+      subscription = make(ENDPOINT, applicationServerKey);
       return subscription;
     },
+  };
+  renewSubscription = () => {
+    const { options } = subscription as { options: { applicationServerKey: Uint8Array } };
+    subscription = make(`${ENDPOINT}/renewed`, options.applicationServerKey);
   };
   vi.stubGlobal('localStorage', new MemoryStorage());
   vi.stubGlobal('window', { PushManager: {}, Notification: {} });
@@ -97,6 +129,17 @@ async function phone(): Promise<void> {
   vi.stubGlobal('fetch', async (input: string, init?: RequestInit) => {
     // The push service (the server sends to it) accepts everything.
     if (input.startsWith(ENDPOINT)) return new Response(null, { status: 201 });
+    const request = `${init?.method ?? 'GET'} ${input}`;
+    requests.push(request);
+    const hold = holds.get(request);
+    if (hold) {
+      holds.delete(request);
+      hold.reached();
+      if (hold.when === 'before') await hold.wait;
+      const response = await server.fetch(new Request(`${ORIGIN}${input}`, init));
+      if (hold.when === 'after') await hold.wait;
+      return response;
+    }
     if (network === 'down') throw new TypeError('Failed to fetch');
     if (network === 'failing') return new Response(null, { status: 503 });
     if (network === 'hanging') {
@@ -116,6 +159,8 @@ beforeEach(async () => {
   server = memoryPush();
   network = 'up';
   limits = [];
+  requests = [];
+  holds = new Map();
   await phone();
 });
 afterEach(() => {
@@ -316,5 +361,89 @@ describe('disablePush', () => {
     await syncPush([notice()]);
     expect(devicesKept()).toBe(1);
     expect(isPushDeletePending()).toBe(false);
+  });
+});
+
+// "Turn off" and "Delete all data" while an upload is on its way: the
+// upload's answer turned it back on, and the server could get the upload
+// after the deletion and keep every reminder (audit 3 D-1).
+describe('turning it off while an upload is on its way (audit 3 D-1)', () => {
+  const later = notice({ id: 'event-2', start: '2099-01-02T09:00', title: 'Gym' });
+  const devicesKept = () =>
+    [...server.devices.values()].filter(({ storage }) => storage.map.has('device')).length;
+  const deviceKeyHere = () =>
+    (JSON.parse(localStorage.getItem('shkriuss-device:push') ?? '{}') as { deviceKey: string })
+      .deviceKey;
+
+  for (const when of ['before', 'after'] as const) {
+    it(`stays off, and the server keeps nothing (it gets the upload ${when} the deletion)`, async () => {
+      await syncPush([notice()]);
+      // "after": the upload is slow to get there. "before": its answer is slow to come back.
+      const put = holdNext('PUT /api/push/schedule', when === 'after' ? 'before' : 'after');
+      const uploading = syncPush([notice(), later]);
+      await put.arrived;
+      const disabling = disablePush();
+      expect(isPushEnabled()).toBe(false);
+      put.release();
+      expect(await uploading).toBe(0);
+      expect(await disabling).toBe(true);
+      expect(isPushEnabled()).toBe(false);
+      expect(isPushDeletePending()).toBe(false);
+      expect(devicesKept()).toBe(0);
+      // The deletion went after the upload, once.
+      expect(requests.slice(-2)).toEqual(['PUT /api/push/schedule', 'DELETE /api/push/schedule']);
+      // Opening the app again doesn't turn it back on.
+      expect(await syncPush([notice(), later])).toBe(0);
+      expect(await subscription()).toBeNull();
+      expect(devicesKept()).toBe(0);
+    });
+  }
+
+  it('deletes again what it put back after another tab turned it off', async () => {
+    await syncPush([notice()]);
+    const put = holdNext('PUT /api/push/schedule', 'before');
+    const uploading = syncPush([notice(), later]);
+    await put.arrived;
+    // Another tab turns it off, and can't wait for this tab's upload.
+    const key = deviceKeyHere();
+    localStorage.removeItem('shkriuss-device:push');
+    await server.fetch(
+      new Request(`${ORIGIN}/api/push/schedule`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${key}` },
+      }),
+    );
+    put.release();
+    expect(await uploading).toBe(0);
+    expect(devicesKept()).toBe(0);
+    expect(isPushDeletePending()).toBe(false);
+  });
+
+  it('sends nothing if it was turned off before the upload left', async () => {
+    await syncPush([notice()]);
+    // Turned off while the reminders are being locked for the upload.
+    const uploading = syncPush([notice(), later]);
+    const disabling = disablePush();
+    expect(await uploading).toBe(0);
+    expect(await disabling).toBe(true);
+    expect(requests.filter((request) => request.startsWith('PUT'))).toHaveLength(1);
+    expect(devicesKept()).toBe(0);
+  });
+
+  it('isn’t turned on again by a push address the browser renewed meanwhile', async () => {
+    await syncPush([notice()]);
+    renewSubscription();
+    // The next upload finds the new address and subscribes again with it…
+    const key = holdNext('GET /api/push/key', 'after');
+    const uploading = syncPush([notice()]);
+    await key.arrived;
+    // …while the person turns it off.
+    const disabling = disablePush();
+    key.release();
+    expect(await uploading).toBe(0);
+    expect(await disabling).toBe(true);
+    expect(isPushEnabled()).toBe(false);
+    expect(await subscription()).toBeNull();
+    expect(devicesKept()).toBe(0);
   });
 });

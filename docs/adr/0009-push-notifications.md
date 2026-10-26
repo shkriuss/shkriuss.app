@@ -24,7 +24,10 @@ browsers like IronFox receive Web Push through **UnifiedPush**.
   (it unsubscribes without waiting for the server), and "Delete all data"
   deletes everything on the device first, so a network that hangs can't
   stop it. A request that gets no answer within 20 seconds (more for a big
-  upload on a slow connection) counts as "can't be reached".
+  upload on a slow connection) counts as "can't be reached". An upload
+  already on its way is waited for, so the server gets the deletion last,
+  and one that still lands after it (from another tab, say) is deleted
+  again; it never turns the option back on (audit 3 D-1).
 - **Shared code, separate servers.** The code lives in `@shkriuss/push`. Each
   app that uses it runs the routes in its **own** Worker
   (`apps/<slug>/src/worker.ts`, `/api/push/*`; everything else is still

@@ -127,6 +127,15 @@ function storePendingDeletes(keys: readonly string[]): void {
   }
 }
 
+/** Notes a device key whose reminders are still on the server, to delete them. */
+function noteDelete(deviceKey: string): void {
+  const keys = pendingDeletes();
+  if (!keys.includes(deviceKey)) storePendingDeletes([...keys, deviceKey]);
+}
+
+/** The upload on its way, if any: disablePush() waits for it (audit 3 D-1). */
+let uploading: Promise<unknown> = Promise.resolve();
+
 /** Whether this browser can get notifications while the app is closed. */
 export function pushSupport(): PushSupport {
   if ('serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window) {
@@ -181,7 +190,14 @@ const keyOf = (subscription: PushSubscription, name: PushEncryptionKeyName): str
  * Asks for permission (call it from a tap) and subscribes this device.
  * Throws PushError explaining what's missing.
  */
-export async function enablePush(): Promise<void> {
+export const enablePush = (): Promise<void> => subscribe();
+
+/**
+ * enablePush(), or with `renewing` (a device key), a subscription the browser
+ * renewed: kept only if push is still on with that key, so turning it off
+ * meanwhile isn't undone (audit 3 D-1).
+ */
+async function subscribe(renewing?: string): Promise<void> {
   if (pushSupport() !== 'supported') {
     throw new PushError('unsupported', 'This browser can’t get notifications while closed.');
   }
@@ -211,6 +227,11 @@ export async function enablePush(): Promise<void> {
     throw new PushError('unavailable', 'This browser couldn’t connect to a push service.');
   }
   const previous = load();
+  if (renewing !== undefined && previous?.deviceKey !== renewing) {
+    // Turned off while it was renewed: nothing stays subscribed.
+    await subscription.unsubscribe().catch(() => false);
+    return;
+  }
   store({
     deviceKey: previous?.deviceKey ?? toBase64Url(crypto.getRandomValues(new Uint8Array(32))),
     endpoint: subscription.endpoint,
@@ -254,12 +275,14 @@ async function current(): Promise<DeviceState | null> {
   if (!state) return null;
   const subscription = await (await registration()).pushManager.getSubscription();
   if (subscription?.endpoint === state.endpoint) return state;
+  // Turned off meanwhile (here or in another tab): it stays off (audit 3 D-1).
+  if (load()?.deviceKey !== state.deviceKey) return null;
   if (Notification.permission !== 'granted') {
     // Turned off in the browser's settings: forget it here and on the server.
     await disablePush();
     return null;
   }
-  await enablePush();
+  await subscribe(state.deviceKey);
   return load();
 }
 
@@ -312,27 +335,53 @@ export async function syncPush(
   if (!options.force && state.synced?.hash === hash && now - state.synced.at < REFRESH_MS) {
     return upcoming.length;
   }
-  const target = { p256dh: fromBase64Url(state.p256dh), auth: fromBase64Url(state.auth) };
-  const entries = [];
-  let payloadsLength = 0;
-  for (const [index, notice] of upcoming.entries()) {
-    const payload = toBase64Url(await encryptPayload(messageOf(notice), target));
-    // Only as many as the server can keep (very long texts make big messages).
-    payloadsLength += payload.length;
-    if (payloadsLength > LIMITS.payloadsLength) break;
-    const { start, repeat, until, offset } = notice;
-    // A number, never the app's own id: an imported event's id can say where it came from.
-    entries.push({ id: String(index + 1), start, repeat, until, offset, payload });
+  // disablePush() waits for this upload, so the server gets its deletion last (audit 3 D-1).
+  let done = (): void => undefined;
+  uploading = Promise.all([
+    uploading,
+    new Promise<void>((resolve) => {
+      done = resolve;
+    }),
+  ]);
+  let sent = false;
+  try {
+    const target = { p256dh: fromBase64Url(state.p256dh), auth: fromBase64Url(state.auth) };
+    const entries = [];
+    let payloadsLength = 0;
+    for (const [index, notice] of upcoming.entries()) {
+      const payload = toBase64Url(await encryptPayload(messageOf(notice), target));
+      // Only as many as the server can keep (very long texts make big messages).
+      payloadsLength += payload.length;
+      if (payloadsLength > LIMITS.payloadsLength) break;
+      const { start, repeat, until, offset } = notice;
+      // A number, never the app's own id: an imported event's id can say where it came from.
+      entries.push({ id: String(index + 1), start, repeat, until, offset, payload });
+    }
+    // Turned off meanwhile: nothing to send.
+    if (load()?.deviceKey !== state.deviceKey) return 0;
+    sent = true;
+    const response = await api(
+      '/schedule',
+      { method: 'PUT', body: JSON.stringify({ endpoint: state.endpoint, timeZone, entries }) },
+      state.deviceKey,
+    );
+    if (!response.ok)
+      throw new PushError('refused', 'The notification service didn’t accept the update.');
+    // Saved only while it's still on with this device key.
+    const latest = load();
+    if (latest?.deviceKey !== state.deviceKey) return 0;
+    store({ ...latest, synced: { hash, at: now } });
+    return entries.length;
+  } finally {
+    // Turned off while it was on its way (here, in another tab, or by "Delete
+    // all data"): what it may have put back on the server is deleted again,
+    // after it, whether its answer came or not (audit 3 D-1).
+    if (sent && load()?.deviceKey !== state.deviceKey) {
+      noteDelete(state.deviceKey);
+      await finishPushDelete();
+    }
+    done();
   }
-  const response = await api(
-    '/schedule',
-    { method: 'PUT', body: JSON.stringify({ endpoint: state.endpoint, timeZone, entries }) },
-    state.deviceKey,
-  );
-  if (!response.ok)
-    throw new PushError('refused', 'The notification service didn’t accept the update.');
-  store({ ...state, synced: { hash, at: now } });
-  return entries.length;
 }
 
 /** Sends one notification to this device right now. */
@@ -380,14 +429,16 @@ async function unsubscribe(): Promise<void> {
  * It's off on this device as soon as this is called: the deletion is noted
  * before anything waits, so a caller doesn't need to wait for the server
  * (like "Delete all data", which deletes everything here straight away).
+ * The deletion waits for an upload already on its way, so the server gets it
+ * last (audit 3 D-1).
  */
 export async function disablePush(): Promise<boolean> {
   const state = load();
   // Noted before the device key is gone, so the deletion can be tried again.
-  if (state) storePendingDeletes([...pendingDeletes(), state.deviceKey]);
+  if (state) noteDelete(state.deviceKey);
   store(null);
   // Unsubscribing doesn't wait for the server: then nothing more arrives on
   // this device, even while the server can't be reached.
-  const [deleted] = await Promise.all([finishPushDelete(), unsubscribe()]);
+  const [deleted] = await Promise.all([uploading.then(() => finishPushDelete()), unsubscribe()]);
   return deleted;
 }
