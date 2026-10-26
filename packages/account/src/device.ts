@@ -2,13 +2,13 @@
  * The account on this device: the secret, kept in this browser's storage for
  * the hub only. It's under "shkriuss-device:", so it's never in backups.
  *
- * It also keeps account keys this device knows were replaced (by replacing
- * the key here, or by being signed out because it was replaced elsewhere).
- * When an app connects, it gets its keys from those too, so it can move its
- * old online copy to the new key (packages/sync). Each comes with a tag for
- * the key that replaced it (successorTag), so they're kept only when this
- * device signs in to that account: another account mustn't get this one's
- * old data (audit A-3).
+ * It also keeps account keys this device replaced. When an app connects, it
+ * gets its keys from those too, so it can move its old online copy to the
+ * new key (packages/sync). Each comes with a tag for the key that replaced
+ * it (successorTag), so they're kept only when this device signs in to that
+ * account: another account mustn't get this one's old data (audit A-3). A
+ * device signed out because its key was replaced elsewhere keeps nothing,
+ * as if it had signed out (forgetReplaced, audit 3 D-8).
  *
  * And it keeps which apps this device turned on sync for, so the Account
  * page can offer to turn it off again (see `syncedApps`).
@@ -225,4 +225,21 @@ export function forgetAccount(): void {
   } catch {
     // Storage blocked: nothing was saved.
   }
+}
+
+/**
+ * Signs this device out because its account key was replaced on another
+ * device (a lost one), forgetting what signing out forgets: the key and
+ * which apps turned on sync here. That page has no "Sign out" to tap, and
+ * only the device that replaced the key needs the old one, to move the
+ * apps' copies (audit 3 D-8). Returns the apps that synced here with it:
+ * each keeps its own key, and syncs with the old one until sync is turned
+ * on in it again. Null, and nothing changes, if this device is signed in
+ * with another key by now (in another tab).
+ */
+export function forgetReplaced(account: Account): string[] | null {
+  if (read().secret !== toBase64Url(account.secret)) return null;
+  const apps = [...syncedApps(account.code).keys()];
+  forgetAccount();
+  return apps;
 }

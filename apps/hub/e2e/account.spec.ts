@@ -249,6 +249,17 @@ test('replacing the key signs out every device that has the old one', async ({
   await tablet.goto('/account/');
   await signInWithKey(tablet, old.key);
   await expect(accountCode(tablet)).toHaveText(old.code);
+  // An app turned sync on there (what the Account page remembers when it does).
+  const [synced] = syncApps;
+  if (!synced) throw new Error('No app syncs');
+  await tablet.evaluate(
+    ({ app, code }) =>
+      localStorage.setItem(
+        'shkriuss-device:synced-apps',
+        JSON.stringify([{ app, code, origin: `https://${app}.shkriuss.app` }]),
+      ),
+    { app: synced.slug, code: old.code },
+  );
 
   // On the phone: replace the key. Nothing changes until the new key is saved.
   await page.getByRole('button', { name: 'Replace the account key' }).click();
@@ -279,6 +290,18 @@ test('replacing the key signs out every device that has the old one', async ({
   await tablet.reload();
   await expect(view(tablet, 'signed-out')).toBeVisible();
   await expect(message(tablet)).toHaveText(/^Your account key was replaced on another device/);
+  // As signing out does, it keeps neither the key nor its apps, and says
+  // which app may still sync there with the old key (audit 3 D-8).
+  await expect(message(tablet)).toContainText(
+    `${synced.name} may still sync here with the old key: once you’re signed in, turn on sync in it again.`,
+  );
+  expect(
+    await tablet.evaluate(() =>
+      ['shkriuss-device:account', 'shkriuss-device:synced-apps'].map((key) =>
+        localStorage.getItem(key),
+      ),
+    ),
+  ).toEqual([null, null]);
   await checkA11y(tablet, 'account: signed out after the key was replaced');
   await signInWithKey(tablet, old.key);
   await expect(message(tablet)).toHaveText(/^This key was replaced on another device/);
