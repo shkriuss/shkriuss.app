@@ -96,7 +96,11 @@ browsers like IronFox receive Web Push through **UnifiedPush**.
   that never answers is forgotten after two days like any other. A
   wake-up that fails (say the storage meter can't be reached) runs again a
   minute later, then later each time, up to a day apart, instead of
-  stopping for good after Cloudflare's own retries (audit B-2).
+  stopping for good after Cloudflare's own retries (audit B-2). And if
+  Cloudflare ever doesn't run a wake-up at all (perhaps while the day's
+  free requests are used up), the device's next upload, at least weekly
+  while the app is used, or its next test message sets it again (audit 3
+  B-4).
 - **Limits:** 500 scheduled notifications per device, 4 KB per message and
   1.5 MB of messages in all (so a schedule fits in one stored value; the app
   sends the soonest ones that fit), https push addresses with a domain name only (no redirects), schedule

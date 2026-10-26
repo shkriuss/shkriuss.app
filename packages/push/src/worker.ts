@@ -290,6 +290,17 @@ export class PushDevice {
     }
     const bytes = JSON.stringify(record).length;
     if (!(await reserve(this.state, this.env.PUSH_DEVICES, bytes, limit))) return false;
+    await this.#arm(record);
+    await this.state.storage.put('device', record);
+    return true;
+  }
+
+  /**
+   * Sets the next wake-up. Every upload, wake-up and test message sets it
+   * again, so one Cloudflare didn't run (if the day's free requests ran
+   * out, say) doesn't stop the device's reminders for good (audit 3 B-4).
+   */
+  async #arm(record: DeviceRecord): Promise<void> {
     await this.state.storage.setAlarm(
       Math.min(
         ...record.entries.map((entry) => entry.retryAt ?? entry.next),
@@ -300,8 +311,6 @@ export class PushDevice {
         (record.failingSince ?? Infinity) + GIVE_UP_MS,
       ),
     );
-    await this.state.storage.put('device', record);
-    return true;
   }
 
   async #forget(): Promise<void> {
@@ -413,6 +422,7 @@ export class PushDevice {
       await this.state.storage.put('lastTest', now);
       // Without a schedule, the test's time is kept only as long as it's needed.
       if (!record) await this.state.storage.setAlarm(now + TEST_GAP_MS);
+      else await this.#arm(record);
       // Test messages have their own share of the day: any made-up device can ask for them.
       const signed = await this.#sign(endpoint, 1, 'test');
       if (signed === 'limit') return problem(429, 'No more notifications today; try tomorrow.');

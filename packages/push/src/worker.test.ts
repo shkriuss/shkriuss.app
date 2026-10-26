@@ -403,6 +403,46 @@ describe('a push service that’s slow or never answers (audit B-1)', () => {
   });
 });
 
+// If Cloudflare ever doesn't run a device's wake-up at all (perhaps while the
+// day's free requests are used up), it may not come back by itself (audit 3 B-4).
+describe('a wake-up Cloudflare didn’t run', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ now: Date.UTC(2026, 9, 22), toFake: ['Date'] });
+  });
+
+  /** A phone with a daily reminder at 09:00 whose wake-up was lost. */
+  async function lost() {
+    const phone = device();
+    expect((await phone.schedule([entry()])).status).toBe(200);
+    const [found] = [...server.devices.values()];
+    if (!found) throw new Error('No device');
+    found.storage.alarm = null;
+    return { phone, storage: found.storage };
+  }
+
+  it('is set again by the next upload (at least weekly while the app is used)', async () => {
+    const sent = pushService();
+    const { phone, storage } = await lost();
+    await passDays(2);
+    expect(sent).not.toHaveBeenCalled();
+    // The same schedule, uploaded again.
+    expect((await phone.schedule([entry()])).status).toBe(200);
+    expect(storage.alarm).toBe(Date.UTC(2026, 9, 24, 9));
+    await passDays(1);
+    expect(sent).toHaveBeenCalledOnce();
+  });
+
+  it('is set again by a test message', async () => {
+    const sent = pushService();
+    const { phone, storage } = await lost();
+    expect((await phone.test()).status).toBe(200);
+    expect(storage.alarm).toBe(Date.UTC(2026, 9, 22, 9));
+    await passDays(1);
+    // The test, then the reminder at 09:00.
+    expect(sent).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe('the app’s daily limit', () => {
   it('signs once per wake-up, not once per message', async () => {
     vi.useFakeTimers({ now: Date.UTC(2026, 9, 22), toFake: ['Date'] });
