@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { exifDate, takenFromExif } from './exif.ts';
+import { exifDate, readTaken, takenFromExif } from './exif.ts';
 
 /** A picture a real encoder made (./fixtures/README.md). */
 const fixture = (name: string) =>
@@ -224,6 +224,8 @@ describe('when a photo was taken', () => {
     expect(takenFromExif(webpWithExif(dates, true))).toBe('2019-07-04T18:30:05');
   });
 
+  // Checked without takenFromExif's safety net, which would hide a read past
+  // the end (as the review of audit 4 F3-3 found).
   it('never reads past the end of a broken HEIF, PNG or WebP file', () => {
     const dates = { original: '2019:07:04 18:30:05' };
     for (const whole of [
@@ -233,13 +235,13 @@ describe('when a photo was taken', () => {
       webpWithExif(dates),
     ]) {
       for (let length = 0; length < whole.length; length += 1) {
-        expect(() => takenFromExif(whole.slice(0, length))).not.toThrow();
+        expect(() => readTaken(whole.slice(0, length))).not.toThrow();
       }
       // Each byte changed in turn: still nothing thrown.
       for (let at = 0; at < whole.length; at += 1) {
         const broken = whole.slice();
         broken[at] = 0xff;
-        expect(() => takenFromExif(broken)).not.toThrow();
+        expect(() => readTaken(broken)).not.toThrow();
       }
     }
   });
@@ -247,12 +249,50 @@ describe('when a photo was taken', () => {
   it('never reads past the end of a broken file', () => {
     const whole = jpegWithExif({ original: '2019:07:04 18:30:05' });
     for (let length = 0; length < whole.length; length += 1) {
-      expect(() => takenFromExif(whole.slice(0, length))).not.toThrow();
+      expect(() => readTaken(whole.slice(0, length))).not.toThrow();
     }
     // A pointer that points far away.
     const broken = whole.slice();
     broken[broken.length - 30] = 0xff;
-    expect(() => takenFromExif(broken)).not.toThrow();
+    expect(() => readTaken(broken)).not.toThrow();
+  });
+
+  it('gives up at once on a HEIF file whose item pieces take no bytes', () => {
+    // An item list (iloc) whose offsets and lengths take 0 bytes, with
+    // thousands of items of 65,535 pieces each: the reader went round 65,535
+    // times an item, reading nothing, which took minutes for a few-MB file
+    // (review of audit 4 F3-3).
+    const ftyp = box('ftyp', ...bytesOf('heic'), 0, 0, 0, 0, ...bytesOf('mif1heic'));
+    const infe = box('infe', 2, 0, 0, 0, ...be16(2), 0, 0, ...bytesOf('Exif'), 0);
+    const iinf = box('iinf', 0, 0, 0, 0, ...be16(1), ...infe);
+    const items = 20_000;
+    // Each item (version 0): its id, a data reference and 65,535 pieces of nothing.
+    const entries = Array.from({ length: items }, (_, index) => [
+      ...be16(index + 3),
+      ...be16(0),
+      ...be16(0xffff),
+    ]).flat();
+    const iloc = box('iloc', 0, 0, 0, 0, 0x00, 0x00, ...be16(items), ...entries);
+    const file = new Uint8Array([...ftyp, ...box('meta', 0, 0, 0, 0, ...iinf, ...iloc)]);
+    const started = performance.now();
+    expect(readTaken(file)).toBeNull();
+    expect(performance.now() - started).toBeLessThan(50);
+    // Pieces that do take bytes, but more than the list has: null too, at once.
+    const short = box(
+      'iloc',
+      0,
+      0,
+      0,
+      0,
+      0x44,
+      0x00,
+      ...be16(1),
+      ...be16(3),
+      ...be16(0),
+      ...be16(0xffff),
+    );
+    const shortFile = new Uint8Array([...ftyp, ...box('meta', 0, 0, 0, 0, ...iinf, ...short)]);
+    expect(readTaken(shortFile)).toBeNull();
   });
 
   it('only takes real dates', () => {

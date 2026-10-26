@@ -196,10 +196,12 @@ describe('the service worker', () => {
     expect(await (await worker.open('/')).text()).toBe('saved');
     answer = page('Not found', 404);
     expect((await worker.open('/missing/')).status).toBe(404);
-    // A redirect is passed on as it is.
-    answer = Object.defineProperty(new Response(null, { status: 200 }), 'type', {
-      value: 'opaqueredirect',
-    });
+    // A redirect is passed on as it is: like a real one, it has status 0 and isn't "ok".
+    const redirect = new Response(null, { status: 200 });
+    for (const [key, value] of Object.entries({ type: 'opaqueredirect', status: 0, ok: false })) {
+      Object.defineProperty(redirect, key, { value });
+    }
+    answer = redirect;
     expect((await worker.open('/')).type).toBe('opaqueredirect');
   });
 
@@ -209,7 +211,7 @@ describe('the service worker', () => {
       new Response(url, { headers: { 'Content-Security-Policy': csp } });
     const first = running(network(CSP_BEFORE), {
       version: 'v1',
-      files: ['/', '/_astro/worker.js'],
+      files: ['/', '/_astro/worker.js', '/_astro/old.js'],
       csp: CSP_BEFORE,
     });
     await first.start();
@@ -221,6 +223,12 @@ describe('the service worker', () => {
       stores,
     });
     await second.start();
+    // Saved with the new policy once, when copied, not changed each time it's served:
+    // so is a file kept for pages still open from the version before.
+    const policyIn = (cache: string, path: string) =>
+      stores.get(cache)?.get(`${ORIGIN}${path}`)?.headers.get('Content-Security-Policy');
+    expect(policyIn('shkriuss-v2', '/_astro/worker.js')).toBe(CSP_NOW);
+    expect(policyIn('shkriuss-previous', '/_astro/old.js')).toBe(CSP_NOW);
     const saved = await second.file('/_astro/worker.js');
     expect(saved.headers.get('Content-Security-Policy')).toBe(CSP_NOW);
     expect(await saved.text()).toBe(`${ORIGIN}/_astro/worker.js`);

@@ -28,16 +28,25 @@ const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
 /** The date and time a photo was taken, as "YYYY-MM-DDTHH:MM:SS", or null. */
 export function takenFromExif(bytes: Uint8Array): string | null {
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   try {
-    if (bytes.length >= 4 && view.getUint16(0) === SOI) return fromJpeg(bytes, view);
-    if (bytes.length >= 12 && fourCC(view, 4) === 'ftyp') return fromHeif(bytes, view);
-    if (PNG_SIGNATURE.every((byte, index) => bytes[index] === byte)) return fromPng(bytes, view);
-    if (bytes.length >= 12 && fourCC(view, 0) === 'RIFF' && fourCC(view, 8) === 'WEBP') {
-      return fromWebp(bytes, view);
-    }
+    return readTaken(bytes);
   } catch {
     // Every read is checked first; this is only a safety net for a file nobody expected.
+  }
+  return null;
+}
+
+/**
+ * takenFromExif without its safety net: a read past the end throws. Only for
+ * tests, which show that none does.
+ */
+export function readTaken(bytes: Uint8Array): string | null {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (bytes.length >= 4 && view.getUint16(0) === SOI) return fromJpeg(bytes, view);
+  if (bytes.length >= 12 && fourCC(view, 4) === 'ftyp') return fromHeif(bytes, view);
+  if (PNG_SIGNATURE.every((byte, index) => bytes[index] === byte)) return fromPng(bytes, view);
+  if (bytes.length >= 12 && fourCC(view, 0) === 'RIFF' && fourCC(view, 8) === 'WEBP') {
+    return fromWebp(bytes, view);
   }
   return null;
 }
@@ -185,6 +194,12 @@ function itemPlace(
     at += size;
     return value;
   };
+  // Each piece (extent) of an item is an index, an offset and a length. One
+  // of no bytes at all can't say where anything is, and let a crafted file
+  // make the reader go round 65,535 times an item, reading nothing: minutes
+  // for a small file. Other items' pieces are stepped over, not read.
+  const extentSize = indexSize + offsetSize + lengthSize;
+  if (extentSize === 0) return null;
   const count = read(version < 2 ? 2 : 4);
   if (count === null) return null;
   for (let item = 0; item < count; item += 1) {
@@ -195,16 +210,17 @@ function itemPlace(
     const extents = read(2);
     if (itemId === null || method === null || reference === null) return null;
     if (base === null || extents === null) return null;
-    let first: [number, number] | null = null;
-    for (let extent = 0; extent < extents; extent += 1) {
-      if (indexSize > 0 && read(indexSize) === null) return null;
-      const offset = read(offsetSize);
-      const length = read(lengthSize);
-      if (offset === null || length === null) return null;
-      if (extent === 0) first = [base + offset, length];
+    if (at + extents * extentSize > iloc.end) return null;
+    if (itemId !== id) {
+      at += extents * extentSize;
+      continue;
     }
-    if (itemId !== id) continue;
-    if (!first || extents !== 1 || reference !== 0) return null;
+    if (extents !== 1 || reference !== 0) return null;
+    if (indexSize > 0 && read(indexSize) === null) return null;
+    const offset = read(offsetSize);
+    const length = read(lengthSize);
+    if (offset === null || length === null) return null;
+    const first: [number, number] = [base + offset, length];
     const construction = method & 0xf;
     if (construction === 0) return first;
     // In the meta box's own data.

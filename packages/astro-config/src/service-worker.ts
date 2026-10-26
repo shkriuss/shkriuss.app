@@ -94,10 +94,11 @@ function withPolicy(response) {
 }
 
 self.addEventListener('install', (event) => {
-  // Hashed build files never change: copy ones the previous version saved.
+  // Hashed build files never change: copy ones the previous version saved,
+  // with this version's policy, so they needn't be changed each time they're served.
   const save = (cache, url) =>
     (url.startsWith('/_astro/') ? caches.match(url) : Promise.resolve(undefined)).then((saved) =>
-      saved ? cache.put(url, saved) : cache.add(url),
+      saved ? cache.put(url, withPolicy(saved)) : cache.add(url),
     );
   event.waitUntil(
     caches
@@ -120,7 +121,7 @@ async function keepPrevious(oldCaches) {
       if (!new URL(request.url).pathname.startsWith('/_astro/')) continue;
       if (await current.match(request)) continue;
       const response = await cache.match(request);
-      if (response) await previous.put(request, response);
+      if (response) await previous.put(request, withPolicy(response));
     }
   }
 }

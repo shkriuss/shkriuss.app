@@ -144,13 +144,30 @@ function placeOf(
 }
 
 /**
+ * `photos` (newest first) with `photo`, a new one (not in it yet), put in its
+ * place: one search. withChanges would also look through every photo for an
+ * old copy of it, which with 100,000 photos took tens of milliseconds for each
+ * photo added (review of audit 4 J-1).
+ */
+export function withAdded(
+  photos: readonly Photo[],
+  photo: Photo,
+  compare: (a: Photo, b: Photo) => number = byNewest,
+): Photo[] {
+  const next = photos.slice();
+  next.splice(placeOf(next, photo, compare), 0, photo);
+  return next;
+}
+
+/**
  * `photos` (newest first) with the photos in `save` and the ids in `remove`
  * taken out, and those in `save` put in their places: a new list, still in
  * order. Each change used to sort the whole library again, which froze a
  * big library's page for each photo added or uploaded, up to a second and
  * more with 100,000 of them on a phone (audit 4 J-1). Now a few changes
  * cost a search each, and many one pass over the list. A photo in both
- * `save` and `remove` is kept, as saved.
+ * `save` and `remove` is kept, as saved. One not found where it belongs
+ * (moved, or new) is looked for through the list: for new ones, withAdded.
  */
 export function withChanges(
   photos: readonly Photo[],
