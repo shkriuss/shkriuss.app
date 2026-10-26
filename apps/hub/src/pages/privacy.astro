@@ -17,7 +17,7 @@ const whereLabel: Record<StorageKind, string> = {
   server: 'On a server (explained in the app)',
 };
 
-const LAST_UPDATED = '23 October 2026';
+const LAST_UPDATED = '26 October 2026';
 ---
 
 <AppShell
@@ -194,8 +194,10 @@ const LAST_UPDATED = '23 October 2026';
               and when they're added or deleted, never what they show, their names or their dates.
               Adding photos needs a storage code that only the owner of these apps has, which keeps
               the storage bill under control. When someone types a wrong code, a scrambled form of
-              their internet address is kept for up to an hour, to limit guessing. Deleting a photo
-              deletes it online and on your other devices.
+              their internet address is kept for up to an hour, to limit guessing. With sync on,
+              deleting a photo deletes it online and on your other devices; with sync off, only on
+              that device. A deleted photo leaves a small note online for as long as the library is
+              there, so that devices that were away learn it was deleted.
             </li>
           )}
           <li>
@@ -206,7 +208,9 @@ const LAST_UPDATED = '23 October 2026';
             copy” deletes the copy (and its photos, and any online library) from the server; your
             devices keep what they have. A small note stays, so your other devices learn it was
             deleted: when, and how many times it was changed, never what was in it. It's deleted too
-            once no device has asked about it for 13 months.
+            once no device has asked about it for 13 months, and so is what's left of an online
+            library (scrambled codes only your devices can match, and how many changes and uploads
+            it had).
           </li>
           <li>
             If you replace your account key, turning on sync again moves the app's copy to the new
