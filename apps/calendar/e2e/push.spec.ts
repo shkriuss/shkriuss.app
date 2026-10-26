@@ -489,6 +489,32 @@ test('device settings stay out of backups', async ({ page }) => {
   expect(text).not.toContain(rig.endpoint);
 });
 
+// It said "On" though nothing could be kept or uploaded (audit 3 F1-4).
+test('says so when this device can’t keep the setting', async ({ page }) => {
+  await fakeSubscription(page, rig);
+  await page.addInitScript(() => {
+    const setItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key: string, value: string) {
+      if (key.startsWith('shkriuss-device:push')) {
+        throw new DOMException('Full', 'QuotaExceededError');
+      }
+      setItem.call(this, key, value);
+    };
+  });
+  const uploads: string[] = [];
+  page.on('request', (request) => {
+    if (request.url().endsWith('/api/push/schedule')) uploads.push(request.method());
+  });
+  await page.goto('/');
+  // click(), not check(): the switch turns itself back off.
+  await closedSwitch(page).click();
+  await expect(closedStatus(page)).toHaveText(
+    'Calendar couldn’t save this setting on this device, so it’s off. Its storage may be full or blocked.',
+  );
+  await expect(closedSwitch(page)).not.toBeChecked();
+  expect(uploads).toEqual([]);
+});
+
 test('explains when this browser can’t get push', async ({ page }) => {
   await fakeSubscription(page, rig, { fail: true });
   await page.goto('/');

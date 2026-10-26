@@ -311,6 +311,18 @@ describe('pushHolds', () => {
   });
 });
 
+describe('enablePush', () => {
+  // It said "On" though nothing was kept, so nothing was uploaded (audit 3 F1-4).
+  it('says so when this device can’t keep the setting', async () => {
+    await disablePush();
+    (localStorage as unknown as MemoryStorage).blocked = true;
+    const error = await enablePush().catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(PushError);
+    expect((error as PushError).code).toBe('storage');
+    expect(isPushEnabled()).toBe(false);
+  });
+});
+
 describe('timeLimit', () => {
   it('waits 20 seconds for an answer, and longer for a big upload on a slow connection', () => {
     expect(timeLimit(0)).toBe(20_000);

@@ -65,6 +65,7 @@ export function mountPushControls(block: HTMLElement, options: PushControlsOptio
       'This browser couldn’t connect to a push service. On phones without Google services, like GrapheneOS, use a browser with UnifiedPush, such as IronFox.',
     server: `Couldn’t reach ${app}'s notification service. Check your connection and try again.`,
     refused: `${app}'s notification service had a problem. Please try again later.`,
+    storage: `${app} couldn’t save this setting on this device, so it’s off. Its storage may be full or blocked.`,
   };
   const problemOf = (error: unknown): string =>
     error instanceof PushError ? PROBLEMS[error.code] : 'Something went wrong. Please try again.';
@@ -131,8 +132,10 @@ export function mountPushControls(block: HTMLElement, options: PushControlsOptio
         .then(() => syncPush(options.notices(), { force: true }))
         .then(
           () => {
-            render(ON);
-            options.announce(`Reminders will arrive even when ${app} is closed.`);
+            // "On" only if it really is (audit 3 F1-4).
+            render();
+            if (isPushEnabled())
+              options.announce(`Reminders will arrive even when ${app} is closed.`);
           },
           (error: unknown) => {
             render(problemOf(error));

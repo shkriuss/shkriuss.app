@@ -30,8 +30,13 @@ export const timeLimit = (bytes: number): number =>
 
 export type PushSupport = 'supported' | 'needs-home-screen' | 'unsupported';
 
-/** 'server': it couldn't be reached. 'refused': it answered, but with a problem. */
-export type PushErrorCode = 'unsupported' | 'denied' | 'unavailable' | 'server' | 'refused';
+/**
+ * 'server': it couldn't be reached. 'refused': it answered, but with a
+ * problem. 'storage': this device couldn't keep the setting (storage full or
+ * blocked), so it's still off.
+ */
+export type PushErrorCode =
+  'unsupported' | 'denied' | 'unavailable' | 'server' | 'refused' | 'storage';
 
 export class PushError extends Error {
   readonly code: PushErrorCode;
@@ -71,12 +76,15 @@ export function load(): DeviceState | null {
   }
 }
 
-export function store(state: DeviceState | null): void {
+/** Saves the push state (null: off); false if storage refused. */
+export function store(state: DeviceState | null): boolean {
   try {
     if (state) localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     else localStorage.removeItem(STORAGE_KEY);
+    return true;
   } catch {
-    // Storage blocked: the device simply won't stay enabled.
+    // Storage full or blocked: the device simply won't stay enabled.
+    return false;
   }
 }
 
@@ -216,13 +224,15 @@ export async function subscribe(renewing?: string): Promise<void> {
     await subscription.unsubscribe().catch(() => false);
     return;
   }
-  store({
+  const saved = store({
     deviceKey: previous?.deviceKey ?? toBase64Url(crypto.getRandomValues(new Uint8Array(32))),
     endpoint: subscription.endpoint,
     p256dh: keyOf(subscription, 'p256dh'),
     auth: keyOf(subscription, 'auth'),
     serverKey: publicKey,
   });
+  // Not "on" when nothing could be kept: nothing would be uploaded (audit 3 F1-4).
+  if (!saved) throw new PushError('storage', 'This device couldn’t keep the setting.');
 }
 
 /**
