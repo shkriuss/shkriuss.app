@@ -395,6 +395,26 @@ test('deletes a year, after saying what it deletes', async ({ page }) => {
   await expect(vehicleItem(page, 'Bus 12')).toHaveCount(1);
 });
 
+// Audit 4 G-5: "Add a part" added a 31st part without a word, and the
+// problem shown on saving wasn't read out: focus went to "Add a part".
+test('a repair has up to 30 parts, and the form says so', async ({ page }) => {
+  await page.getByRole('button', { name: 'New repair' }).click();
+  const dialog = repairDialog(page);
+  const add = dialog.getByRole('button', { name: 'Add a part' });
+  await expect(add).toHaveAccessibleDescription(`Up to ${LIMITS.parts} parts.`);
+  // A new repair starts with one part.
+  for (let count = 1; count < LIMITS.parts; count += 1) await add.click();
+  await expect(dialog.locator('[data-part-rows] > li')).toHaveCount(LIMITS.parts);
+  await expect(partRow(page, LIMITS.parts).getByLabel('Name')).toBeFocused();
+  await expect(add).toBeHidden();
+  await expect(dialog.getByText(`Up to ${LIMITS.parts} parts.`)).toBeVisible();
+  // One fewer, and it's back.
+  await partRow(page, 3).getByRole('button', { name: 'Remove part 3' }).click();
+  await expect(add).toBeVisible();
+  // The problem with the parts, if there ever is one, is read out by itself.
+  await expect(dialog.locator('[data-error-for="parts"]')).toHaveAttribute('role', 'alert');
+});
+
 // Audit 4 F2-1: "Delete a year…" quietly moved to another year, and its red
 // button then deleted that one; "Delete Bus 105?" deleted repairs added after
 // it said how many go.

@@ -14,6 +14,7 @@ import {
   formatMileage,
   knownPart,
   lastMileage,
+  LIMITS,
   photoFiles,
   readEditedRepair,
   saveRepair,
@@ -141,6 +142,8 @@ export function mountRepairForm(root: ParentNode, page: RepairFormPage): RepairF
         return row;
       }),
     );
+    // As many as a repair can have: the hint under it says how many (audit 4 G-5).
+    addPartButton.hidden = parts.length >= LIMITS.parts;
   }
 
   const partInput = (index: number, key: keyof PartForm) =>
@@ -176,8 +179,11 @@ export function mountRepairForm(root: ParentNode, page: RepairFormPage): RepairF
     const input = repairForm.elements.namedItem(first);
     // Too many photos, with those added on another device: "Remove photo" (audit 3 F2-1).
     const photo = repairForm.querySelector<HTMLElement>('[data-action="remove-photo"]');
+    // Too many parts: the last one, near its "Remove"; the problem is read
+    // out by itself (role="alert"), not "Add a part" (audit 4 G-5).
+    const lastPart = partInput(partValues().length - 1, 'name');
     focusProblem(
-      input instanceof HTMLElement ? input : first === 'photos' ? photo : addPartButton,
+      input instanceof HTMLElement ? input : first === 'photos' ? photo : lastPart,
       problems[first],
     );
     return true;
@@ -322,6 +328,7 @@ export function mountRepairForm(root: ParentNode, page: RepairFormPage): RepairF
     inUse: () => (repairDialog.open ? formPhotos.inUse() : []),
     addPart() {
       const parts = partValues();
+      if (parts.length >= LIMITS.parts) return;
       renderParts([...parts, EMPTY_PART]);
       partInput(parts.length, 'name')?.focus();
     },

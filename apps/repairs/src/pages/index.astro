@@ -438,12 +438,16 @@ import { CURRENCIES, LIMITS, UNIT_LABELS, UNITS } from '../lib/repairs.ts';
       <fieldset class="stack stack--sm parts">
         <legend class="field__label">Parts replaced</legend>
         <ol role="list" class="stack stack--sm part-rows" data-part-rows></ol>
-        <p class="field__error" data-error-for="parts"></p>
+        <!-- Read out when it's shown: focus is elsewhere then (audit 4 G-5). -->
+        <p class="field__error" role="alert" id="repair-parts-error" data-error-for="parts"></p>
         <div>
-          <Button icon="plus" data-action="add-part">
+          <Button icon="plus" data-action="add-part" aria-describedby="repair-parts-hint">
             Add a part
           </Button>
         </div>
+        <p class="field__hint" id="repair-parts-hint">
+          Up to {LIMITS.parts} parts.
+        </p>
       </fieldset>
       <fieldset class="stack stack--sm">
         <legend class="field__label">Photos</legend>

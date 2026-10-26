@@ -13,8 +13,9 @@ private car's service history. Lives at <https://repairs.shkriuss.app>.
     `newVehicle`). Deleting a vehicle deletes its repairs, after asking;
   - repairs (`shkriuss:repairs`): the vehicle (by id, so it can be renamed),
     the day, the mileage, the system (brakes, doors…), the damage found, the
-    work done, the parts replaced (name, part number, quantity, price each),
-    the hours worked and the labour (and other) cost. Version 2 added the
+    work done, the parts replaced (name, part number, quantity, price each;
+    up to 30, which the form says under "Add a part", and that button goes
+    once there are 30), the hours worked and the labour (and other) cost. Version 2 added the
     hours, labour and prices, version 3 the photos' ids; `migrateRepairs`
     upgrades older versions (here, from a backup, or from a device that synced
     before), leaving them unknown or empty;
