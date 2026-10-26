@@ -1,7 +1,9 @@
 # 0018. The account service checks that a passkey was used on the Account page
 
 Status: Accepted (2026-10-25). Changes [ADR 0010](0010-account-and-sync.md)
-(passkeys). Audit findings C-1 (second audit) and A-4.
+(passkeys). Audit findings C-1 (second audit) and A-4. Updated in October
+2026 (audit 4 A-2): what the signature on adding a lock proves, and why no
+passkey is left without a lock.
 
 ## Context
 
@@ -45,6 +47,13 @@ Status: Accepted (2026-10-25). Changes [ADR 0010](0010-account-and-sync.md)
   sees the real site's address instead, set it (`ACCOUNT_ORIGIN`).
 - **A lock can't be replaced.** Adding a lock where one exists is refused,
   and only the lock's own passkey can remove it.
+- **What the signature on adding proves.** It's checked with the public key
+  that comes with it, so it shows only that whoever adds the lock has that
+  key pair, not that it's a real passkey used on the Account page: a script
+  can make a key pair of its own and sign anything. That's enough for a
+  passkey that has a lock (a second one is refused), so the Account page
+  leaves no passkey without one: when its lock can't be saved, the browser
+  is asked to forget it (audit 4 A-2).
 - **Passkeys added before this can't be checked**: their locks have no
   public key. They no longer open; the Account page says to sign in with
   the recovery key (or a device link) and add the passkey again. They can
@@ -67,7 +76,8 @@ Status: Accepted (2026-10-25). Changes [ADR 0010](0010-account-and-sync.md)
 
 - On every browser, a page other than the Account page gets nothing from
   the account service with the passkey: not the lock, not removing it, not
-  putting its own lock in the person's place.
+  putting its own lock in the place of the person's (only a passkey with
+  no lock could get one, and the Account page leaves none, above).
 - Nothing new is secret: the service keeps a public key with each lock.
 
 **Bad**

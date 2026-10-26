@@ -187,13 +187,26 @@ export async function addPasskey(
     );
   }
   // Used once more, for its PRF value (some browsers only give it then) and
-  // a signature that shows the passkey was added on this page.
-  const { prf, assertion } = await usePasskey(rpId, 'add', credential.rawId);
-  const { lookup, wrapKey } = await keysOf(prf);
+  // a signature that shows the passkey was added on this page. A passkey left
+  // without its lock is forgotten: it can't unlock anything, and a lock made
+  // somewhere else could take its place first (audit 4 A-2).
+  let used: Awaited<ReturnType<typeof usePasskey>>;
+  try {
+    used = await usePasskey(rpId, 'add', credential.rawId);
+  } catch (error) {
+    await forgetPasskey(rpId, credential.rawId);
+    throw error;
+  }
+  const { lookup, wrapKey } = await keysOf(used.prf);
   const wrap = await seal(wrapKey, secret, WRAP_LABEL);
-  const body = { wrap, publicKey: base64Url(publicKey), algorithm, assertion };
+  const body = { wrap, publicKey: base64Url(publicKey), algorithm, assertion: used.assertion };
+  // No answer (offline): the lock may have been kept, so the passkey stays. If
+  // it wasn't, signing in with it says so, and the browser forgets it then.
   const response = await api('/passkey', { method: 'PUT', body: JSON.stringify(body) }, lookup);
-  if (!response.ok) throw new AccountError('server', 'Couldn’t save the passkey.');
+  if (!response.ok) {
+    await forgetPasskey(rpId, credential.rawId);
+    throw new AccountError('server', 'Couldn’t save the passkey.');
+  }
 }
 
 /** Signs in with a passkey: returns the account secret it unlocks. */

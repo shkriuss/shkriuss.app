@@ -312,6 +312,11 @@ const pushApps = listedApps.filter((app) => app.pushNotifications === true);
           (Google, Apple or another) keeps it, and your other devices with the same password manager
           can use it too.
         </p>
+        <p class="muted">
+          To stop using one, tap “Remove a passkey” here before you delete it from your password
+          manager: only the passkey can remove what the server keeps for it (your account key,
+          locked).
+        </p>
         <div class="cluster" data-needs-passkey>
           <Button icon="key" data-action="add-passkey">
             Add a passkey

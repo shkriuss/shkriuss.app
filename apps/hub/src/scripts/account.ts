@@ -76,6 +76,8 @@ function connectRequestOf(
 const LINK_POLL_MS = 2000;
 /** A message that appears is shown (and read out) this long after it's put on the page. */
 const SAY_DELAY_MS = 100;
+/** "Add this device" works this long after its question is on screen (see holdAccept). */
+const ACCEPT_DELAY_MS = 500;
 
 const PROBLEMS: Record<AccountErrorCode, string> = {
   cancelled: 'Cancelled.',
@@ -187,6 +189,7 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
   const finishCreate = required<HTMLButtonElement>(root, '[data-action="finish-create"]');
 
   const linkCode = required<HTMLElement>(root, '[data-link-code]');
+  const acceptLinkButton = required<HTMLButtonElement>(root, '[data-action="accept-link"]');
   const linkReplace = required<HTMLElement>(root, '[data-link-replace]');
 
   const accountCode = required<HTMLElement>(root, '[data-account-code]');
@@ -497,8 +500,27 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
     linkCode.textContent = await accountCodeOf(linked);
     linkReplace.hidden = !account;
     show('link-confirm');
+    holdAccept();
     return true;
   }
+
+  /**
+   * "Add this device" works only once the question has been on screen, in a
+   * window that has focus, for half a second. A press sooner may be the
+   * second half of a double-click another website asked for, closing its own
+   * window over this one in between ("DoubleClickjacking", audit 4 C-6).
+   */
+  let acceptTimer: number | undefined;
+  function holdAccept(): void {
+    window.clearTimeout(acceptTimer);
+    acceptLinkButton.disabled = true;
+    if (!linked || !document.hasFocus()) return;
+    acceptTimer = window.setTimeout(() => {
+      acceptLinkButton.disabled = false;
+    }, ACCEPT_DELAY_MS);
+  }
+  window.addEventListener('focus', holdAccept);
+  window.addEventListener('blur', holdAccept);
 
   // ---------- Passkeys ----------
 
@@ -736,9 +758,30 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
     }
     if (event.key !== null && event.key !== 'shkriuss-device:account') return;
     void currentAccount().then((current) => {
+      const before = account;
       account = current;
       if (!current) void dropLink();
-      if (!pending && !linked) home(false);
+      // Another account now, or none: what's open about the one before goes,
+      // its recovery key above all, and the page says why (audit 4 G-4).
+      const changed = before?.code !== current?.code;
+      if (changed) {
+        if (keyDialog.open) keyDialog.close();
+        if (signOutDialog.open) signOutDialog.close();
+        say(
+          !current
+            ? 'This device was signed out in another tab.'
+            : before
+              ? 'The account on this device changed in another tab.'
+              : 'This device was signed in, in another tab.',
+        );
+      }
+      if (pending || linked) return;
+      home(false);
+      // Focus that was in what's now hidden goes to the top of what's shown.
+      const active = document.activeElement;
+      if (changed && (!active || active === document.body || active.closest('[hidden]'))) {
+        root.querySelector<HTMLElement>('[data-view]:not([hidden]) [tabindex="-1"]')?.focus();
+      }
     });
   });
 
