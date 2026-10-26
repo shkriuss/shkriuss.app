@@ -20,7 +20,7 @@ const whereLabel: Record<StorageKind, string> = {
 // The day this page's text last changed (people rely on it), and a
 // fingerprint of that text: ../privacy.test.ts fails when the text changes
 // but they don't, and says what to set (audit 3 D-7).
-const LAST_UPDATED = '26 October 2026'; // text 8afa28c9872fac14
+const LAST_UPDATED = '26 October 2026'; // text 2c106c768145eb64
 ---
 
 <AppShell
@@ -114,8 +114,10 @@ const LAST_UPDATED = '26 October 2026'; // text 8afa28c9872fac14
             device when none of its reminders can be delivered for two days.
           </li>
           <li>
-            The app sends your reminders again each week while you use it. If you don't open the app
-            on that device for 13 months, the server deletes everything it has for that device.
+            The app sends your reminders again each week while you use it, and once a day asks the
+            server whether it still has them (the server answers only how many it has); if it
+            doesn't, the app sends them again. If you don't open the app on that device for 13
+            months, the server deletes everything it has for that device.
           </li>
           <li>
             These reminders aren't part of your shkriuss account: each device has its own random key

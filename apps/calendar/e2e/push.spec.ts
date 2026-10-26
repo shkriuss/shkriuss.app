@@ -495,6 +495,38 @@ test('after a trip, coming back to Calendar sends the new time zone', async ({ p
   await expect.poll(() => timeZones).toEqual(['Europe/London']);
 });
 
+test('writes its status line only when what it says changes', async ({ page }) => {
+  // The line is read out: written again with the same words on every return
+  // to Calendar and every change, it could be read out each time (audit 4 G-8).
+  // A day whose reminders are still to come, for the local server's real clock too.
+  await page.clock.setFixedTime(new Date('2027-01-11T10:00:00+01:00'));
+  await fakeSubscription(page, rig);
+  await page.goto('/');
+  await closedSwitch(page).check();
+  await expect(closedStatus(page)).toHaveText(/^On:/);
+  await page.evaluate(() => {
+    const line = document.querySelector('[data-closed-status]');
+    const writes: string[] = [];
+    Object.assign(window, { writes });
+    if (line) {
+      new MutationObserver(() => writes.push(line.textContent ?? '')).observe(line, {
+        childList: true,
+        characterData: true,
+        subtree: true,
+      });
+    }
+  });
+  for (let back = 0; back < 3; back += 1) {
+    await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  }
+  // A change: the reminders go up again, and the line still says the same.
+  const uploaded = page.waitForResponse(isSchedule('PUT'));
+  await addEventWithReminder(page, 'Dentist');
+  await uploaded;
+  await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 200)));
+  expect(await page.evaluate(() => (window as unknown as { writes: string[] }).writes)).toEqual([]);
+});
+
 test('device settings stay out of backups', async ({ page }) => {
   await fakeSubscription(page, rig);
   await page.goto('/');

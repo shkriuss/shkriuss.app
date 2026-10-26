@@ -1,4 +1,4 @@
-import { nowStamp, toStamp, type Stamp } from '@shkriuss/dates';
+import { addMinutes, nowStamp, toStamp, type Stamp } from '@shkriuss/dates';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { reminderWindow, type ReminderCheck } from './reminder-window.ts';
 
@@ -16,6 +16,46 @@ describe('the times an open page checks for reminders', () => {
     expect(reminderWindow(check('2026-10-21T10:01'), check('2026-10-21T10:01', 1 / 3))).toBeNull();
     // Clocks going back in autumn: the hour again was checked already.
     expect(reminderWindow(check('2026-10-25T02:59'), check('2026-10-25T02:00', 1 / 3))).toBeNull();
+  });
+
+  // Audit 4 F1-1: nothing was checked until the clock caught up, for hours.
+  it('after the clock went back further than summer time does, start again from now', () => {
+    // 19:00 in Tbilisi; on landing, New York's time: 11:00, a few minutes later.
+    expect(reminderWindow(check('2026-10-21T19:00'), check('2026-10-21T11:00', 5))).toEqual({
+      from: '2026-10-21T10:59',
+      to: '2026-10-21T11:00',
+    });
+    // The same while asleep for hours: 13:00 on landing, two hours on.
+    expect(reminderWindow(check('2026-10-21T19:00'), check('2026-10-21T13:00', 120))).toEqual({
+      from: '2026-10-21T12:59',
+      to: '2026-10-21T13:00',
+    });
+    // Set back by hand three hours: the device's own clock went back too.
+    expect(reminderWindow(check('2026-10-21T19:00'), check('2026-10-21T16:00', -180))).toEqual({
+      from: '2026-10-21T15:59',
+      to: '2026-10-21T16:00',
+    });
+    // Summer time ending puts clocks back two hours at most: checked already.
+    expect(reminderWindow(check('2026-10-25T02:59'), check('2026-10-25T01:00', 1 / 3))).toBeNull();
+    expect(reminderWindow(check('2026-10-25T03:00'), check('2026-10-25T00:59', 1 / 3))).toEqual({
+      from: '2026-10-25T00:58',
+      to: '2026-10-25T00:59',
+    });
+  });
+
+  it('after flying west with the page open, remind as the clock goes on from there', () => {
+    // A reminder at 12:00 each day; the clock goes from 19:00 back to 11:00.
+    let last = check('2026-10-21T19:00');
+    const fired: Stamp[] = [];
+    for (let minute = 1; minute <= 62; minute += 1) {
+      const now = check(addMinutes('2026-10-21T10:59', minute), minute);
+      const window = reminderWindow(last, now);
+      if (!window) continue;
+      last = now;
+      if (window.from < '2026-10-21T12:00' && '2026-10-21T12:00' <= window.to)
+        fired.push(window.to);
+    }
+    expect(fired).toEqual(['2026-10-21T12:00']);
   });
 
   it('after sleep, are only the last few minutes', () => {

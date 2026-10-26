@@ -56,6 +56,25 @@ test('reminds at the time while Reminders is open', async ({ page }) => {
   await expect(page.locator('[data-groups] h3').first()).toHaveText('Overdue');
 });
 
+test('open in two tabs, a reminder goes off once', async ({ page }) => {
+  // Each tab checked on its own, so it rang twice (audit 4 F1-6).
+  await fakeNotifications(page, 'granted');
+  await page.clock.install({ time: NOW });
+  await page.goto('/');
+  await seed(page, [reminder('a', 'Stretch', '2026-10-21', '10:04')]);
+  const other = await page.context().newPage();
+  await fakeNotifications(other, 'granted');
+  await other.goto('/');
+  await page.clock.fastForward('05:00');
+  const said = (tab: typeof page) =>
+    tab.getByRole('status').filter({ hasText: 'Reminder: Stretch.' }).count();
+  await expect.poll(async () => (await said(page)) + (await said(other))).toBe(1);
+  await page.clock.fastForward('01:00');
+  const shown = async (tab: typeof page) => ((await shownNotifications(tab)) as unknown[]).length;
+  expect((await shown(page)) + (await shown(other))).toBe(1);
+  await other.close();
+});
+
 test('asks to show notifications when a reminder is set', async ({ page }) => {
   await fakeNotifications(page, 'default');
   await page.goto('/');

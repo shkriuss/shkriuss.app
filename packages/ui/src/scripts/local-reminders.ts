@@ -4,7 +4,8 @@
  * page, and shows it as a notification if the person allowed them. After
  * the page slept, only reminders a few minutes late are shown; when the
  * clocks change, ones in the skipped hour go off as they do
- * (../lib/reminder-window.ts). It keeps
+ * (../lib/reminder-window.ts). The app's open tabs share their last check,
+ * so each reminder goes off in one of them, not in each. It keeps
  * the "Notifications are …" line and the "Turn on notifications" button
  * (`[data-notify-status]`, `[data-notify-enable]`) right, and mounts
  * "Also remind me when … is closed" (./push-controls.ts, docs/adr/0009):
@@ -32,7 +33,48 @@ import { reminderWindow, type ReminderCheck } from '../lib/reminder-window.ts';
 import { mountPushControls } from './push-controls.ts';
 import { required } from './dom.ts';
 
+export { MAX_SUMMER_TIME_MINUTES } from '../lib/reminder-window.ts';
+
 const CHECK_EVERY_MS = 20_000;
+/**
+ * The last check, shared by the app's open tabs, so a reminder rings once,
+ * not once in each (audit 4 F1-6), as in Calendar. On this device only.
+ */
+const CHECKED_KEY = 'shkriuss-device:reminders-checked';
+const STAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
+
+function loadChecked(): ReminderCheck | null {
+  try {
+    const value = JSON.parse(localStorage.getItem(CHECKED_KEY) ?? 'null') as {
+      stamp?: unknown;
+      at?: unknown;
+    } | null;
+    const { stamp, at } = value ?? {};
+    return typeof stamp === 'string' && STAMP_PATTERN.test(stamp) && typeof at === 'number'
+      ? { stamp, at }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveChecked(check: ReminderCheck): void {
+  try {
+    localStorage.setItem(CHECKED_KEY, JSON.stringify(check));
+  } catch {
+    // Storage blocked or full: each tab goes by its own checks.
+  }
+}
+
+/** Runs `work` in one tab at a time, where the browser can say so (Web Locks). */
+function oneTabAtATime(work: () => void): void {
+  const locks = (navigator as Partial<Navigator>).locks;
+  if (!locks) {
+    work();
+    return;
+  }
+  locks.request('shkriuss-reminders-check', work).catch(() => undefined);
+}
 
 /** One notification that's due. */
 export interface DueReminder {
@@ -185,7 +227,11 @@ export function mountLocalReminders(
   const spoken =
     options.spoken ??
     ((due: readonly DueReminder[]) => `Reminder: ${due.map((item) => item.title).join(', ')}.`);
-  /** Reminders up to this local time have been checked, then (see ../lib/reminder-window.ts). */
+  /**
+   * Reminders up to this local time have been checked, then (see
+   * ../lib/reminder-window.ts), by this tab. A later check by another tab
+   * counts too (loadChecked).
+   */
   let checked: ReminderCheck = { stamp: nowStamp(), at: Date.now() };
 
   const status = mountNotificationStatus(
@@ -200,17 +246,20 @@ export function mountLocalReminders(
 
   function check(): void {
     const now = { stamp: nowStamp(), at: Date.now() };
+    const shared = loadChecked();
+    const last = shared && shared.at > checked.at && shared.at <= now.at ? shared : checked;
     // After sleep, only reminders a few minutes late; after the clocks
     // changed, every time they skipped (audit F1-6).
-    const window = reminderWindow(checked, now);
+    const window = reminderWindow(last, now);
     if (!window) return;
     checked = now;
+    saveChecked(now);
     const due = options.due(window.from, window.to);
     if (due.length === 0) return;
     options.announce(spoken(due));
     void showNotifications(due, options.notices);
   }
 
-  window.setInterval(check, CHECK_EVERY_MS);
+  window.setInterval(() => oneTabAtATime(check), CHECK_EVERY_MS);
   return { changed: push.sync, offerNotifications: status.offer };
 }

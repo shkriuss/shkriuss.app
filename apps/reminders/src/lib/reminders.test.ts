@@ -66,6 +66,20 @@ describe('checking', () => {
     );
   });
 
+  it('lets an overdue reminder’s text be corrected without moving it (audit 4 F1-8)', () => {
+    const overdue = reminder('r', '2026-10-21', '09:00');
+    const saved = state(overdue);
+    expect(problems({ ...draftOf(overdue), text: 'Call Mum' }, saved, NOW, 'r')).toEqual({});
+    // Moved, or one that's done (saving sets it again): still to come.
+    expect(problems({ ...draftOf(overdue), time: '09:30' }, saved, NOW, 'r')).toEqual({
+      time: 'Choose a time that’s still to come.',
+    });
+    const done = { ...overdue, done: NOW };
+    expect(problems({ ...draftOf(done), text: 'Call Mum' }, state(done), NOW, 'r')).toEqual({
+      time: 'Choose a time that’s still to come.',
+    });
+  });
+
   it(`allows up to ${MAX_REMINDERS} reminders`, () => {
     const full = state(
       ...Array.from({ length: MAX_REMINDERS }, (_, index) =>

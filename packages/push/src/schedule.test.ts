@@ -73,6 +73,38 @@ describe('nextFireTime', () => {
     ]);
   });
 
+  // A time worked back from an event isn't one the person chose: an hour
+  // later was after the event had started (audit 4 F1-4).
+  it('sends a reminder before an event as the clocks skip past its time, never after the start', () => {
+    for (const [zone, start, before, changed] of [
+      // Berlin skips 02:00–03:00 on 29 March: 15 minutes before 03:10 is 02:55.
+      ['Europe/Berlin', '2026-03-29T03:10', 15, '2026-03-29T01:00:00.000Z'],
+      ['America/New_York', '2026-03-08T03:15', 30, '2026-03-08T07:00:00.000Z'],
+      // Santiago skips 00:00–01:00 on 6 September.
+      ['America/Santiago', '2026-09-06T01:05', 10, '2026-09-06T04:00:00.000Z'],
+      // Lord Howe skips half an hour, 02:00–02:30, on 4 October.
+      ['Australia/Lord_Howe', '2026-10-04T02:40', 15, '2026-10-03T15:30:00.000Z'],
+    ] as const) {
+      const train = timing({ start, offset: before });
+      expect(iso(nextFireTime(train, zone, at(changed) - 6 * 60 * 60 * 1000)), zone).toBe(changed);
+    }
+    // An event in the skipped time itself: its reminder as the clocks change too.
+    const inGap = timing({ start: '2026-03-29T02:30', offset: 15 });
+    expect(iso(nextFireTime(inGap, 'Europe/Berlin', at('2026-03-28T00:00:00Z')))).toBe(
+      '2026-03-29T01:00:00.000Z',
+    );
+    // After the start ("10 minutes after"), in the skipped time: as the clocks change too.
+    const after = timing({ start: '2026-03-29T01:55', offset: -10 });
+    expect(iso(nextFireTime(after, 'Europe/Berlin', at('2026-03-28T00:00:00Z')))).toBe(
+      '2026-03-29T01:00:00.000Z',
+    );
+    // A time the person chose in it still goes off an hour later (as before).
+    const chosen = timing({ start: '2026-03-29T02:55' });
+    expect(iso(nextFireTime(chosen, 'Europe/Berlin', at('2026-03-28T00:00:00Z')))).toBe(
+      '2026-03-29T01:55:00.000Z',
+    );
+  });
+
   // In the hour that repeats when clocks go back, the server took the second
   // time east of UTC and the first west of it; an open app takes the first
   // (@shkriuss/ui's reminder-window), so now both do (audit 3 F1-3).

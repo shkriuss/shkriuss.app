@@ -22,11 +22,25 @@ import {
   type DeviceState,
 } from './device.ts';
 import { encryptPayload, MAX_PLAINTEXT_BYTES } from './encrypt.ts';
-import { nextFireTime, type Repeat } from './schedule.ts';
+import { nextOccurrence, type Repeat } from './schedule.ts';
 import { LIMITS, timingProblem } from './validate.ts';
 
 /** Re-upload at least this often, even if nothing changed (keeps the server's copy fresh). */
 const REFRESH_MS = 7 * 24 * 60 * 60 * 1000;
+/**
+ * In between, ask at most this often whether the server still has this
+ * device: it forgets one whose push service said its subscription is gone,
+ * or that hasn't had a message through for two days, and nothing else tells
+ * the device (audit 4 F1-2). Only asked when the app is used.
+ */
+const CHECK_MS = 24 * 60 * 60 * 1000;
+
+/** Whether the server still has this device; null if that can't be told now. */
+async function serverHas(deviceKey: string): Promise<boolean | null> {
+  const response = await api('/schedule', { method: 'GET' }, deviceKey).catch(() => null);
+  if (response?.ok) return true;
+  return response?.status === 404 ? false : null;
+}
 
 /** One scheduled notification, in the app's own local time. */
 export interface Notice {
@@ -108,24 +122,34 @@ const NONE: PushSynced = { scheduled: 0, left: 0 };
  * What syncPush uploads for these notices at `now`: the ones that will still
  * happen, soonest first, up to the server's limit, and its fingerprint; and
  * the rest still to come (`later`), which the server can't have.
+ *
+ * The fingerprint is of what the server will do from `now` on: each
+ * repeating notice as starting at its next occurrence. So the same reminders
+ * worked out from another day (Habits and Water start each week's or day's
+ * from today) are the same, and an open app doesn't take them for a change
+ * the server hasn't got at midnight, and show them a second time (audit 4
+ * F1-5).
  */
 async function scheduleOf(notices: readonly Notice[], endpoint: string, now: number) {
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const later: Notice[] = [];
-  const upcoming = notices
+  const coming = notices
     .flatMap((notice) => {
       // Any the server would turn down stays here, so one odd reminder can't stop the rest.
       if (timingProblem(notice) !== undefined) {
         later.push(notice);
         return [];
       }
-      const next = nextFireTime(notice, timeZone, now);
+      const next = nextOccurrence(notice, timeZone, now);
       return next === null ? [] : [{ notice, next }];
     })
-    .sort((a, b) => a.next - b.next)
-    .map((item) => item.notice);
-  later.push(...upcoming.splice(LIMITS.entries));
-  return { timeZone, upcoming, later, hash: await hashOf({ upcoming, timeZone, endpoint }) };
+    .sort((a, b) => a.next.moment - b.next.moment);
+  later.push(...coming.splice(LIMITS.entries).map((item) => item.notice));
+  const upcoming = coming.map((item) => item.notice);
+  const fromNow = coming.map(({ notice, next }) =>
+    notice.repeat === 'none' ? notice : { ...notice, start: next.start },
+  );
+  return { timeZone, upcoming, later, hash: await hashOf({ fromNow, timeZone, endpoint }) };
 }
 
 /**
@@ -163,15 +187,39 @@ export async function syncPush(
 ): Promise<PushSynced> {
   // An earlier copy still on the server (turned off while offline) would send twice.
   if (isPushDeletePending()) await finishPushDelete();
-  const state = await current();
+  let state = await current();
   if (!state) return NONE;
   const now = Date.now();
-  const { timeZone, upcoming, later, hash } = await scheduleOf(notices, state.endpoint, now);
   const { synced } = state;
-  if (!options.force && synced?.hash === hash && now - synced.at < REFRESH_MS) {
+  // Unchanged since the last upload: as worked out then, so time passing
+  // (a reminder going off) changes nothing, as in pushHolds.
+  if (
+    !options.force &&
+    synced &&
+    now - synced.at < REFRESH_MS &&
+    (await scheduleOf(notices, state.endpoint, synced.at)).hash === synced.hash
+  ) {
+    const { upcoming, later } = await scheduleOf(notices, state.endpoint, now);
     const scheduled = synced.count ?? upcoming.length;
-    return { scheduled, left: upcoming.length - scheduled + later.length };
+    const unchanged = { scheduled, left: Math.max(0, upcoming.length - scheduled) + later.length };
+    if (upcoming.length === 0 || now - (synced.checked ?? synced.at) < CHECK_MS) return unchanged;
+    const kept = await serverHas(state.deviceKey);
+    const latest = load();
+    if (latest?.deviceKey !== state.deviceKey) return NONE;
+    if (kept !== false) {
+      if (kept) store({ ...latest, synced: { ...synced, checked: now } });
+      return unchanged;
+    }
+    // Forgotten there, though it has reminders to send: a new subscription
+    // (the push service may have said the old one is gone), and the schedule
+    // again. Until it's up, nothing says the server has them (pushHolds).
+    const { synced: _forgotten, ...forgotten } = latest;
+    store(forgotten);
+    await subscribe(state.deviceKey, true);
+    state = load();
+    if (state?.deviceKey !== latest.deviceKey) return NONE;
   }
+  const { timeZone, upcoming, later, hash } = await scheduleOf(notices, state.endpoint, now);
   // disablePush() waits for this upload, so the server gets its deletion last (audit 3 D-1).
   const done = startUpload();
   let sent = false;

@@ -14,6 +14,12 @@ const STORAGE_KEY = 'shkriuss-device:push';
 const DELETE_KEY = 'shkriuss-device:push-delete';
 const API = '/api/push';
 const SERVICE_WORKER_TIMEOUT_MS = 10_000;
+/**
+ * The browser's push service must give a subscription within this long:
+ * one that never answers (a network that blocks it) kept "Turning on…" for
+ * ever (audit 4 G-7).
+ */
+export const SUBSCRIBE_TIMEOUT_MS = 30_000;
 /** The server must answer within this long (plus the time to send what's uploaded). */
 const ANSWER_MS = 20_000;
 /** A slow connection that still works, in bytes per millisecond (32 KB a second, about 256 kbit/s). */
@@ -58,9 +64,10 @@ export interface DeviceState {
   /**
    * What was last uploaded, and when, and how many of the upcoming
    * notifications that was: the soonest ones, as many as fit on the server
-   * (audit 3 F1-5; all of them, in what older versions saved).
+   * (audit 3 F1-5; all of them, in what older versions saved). `checked`:
+   * when the server last said it still has them (audit 4 F1-2).
    */
-  synced?: { hash: string; at: number; count?: number };
+  synced?: { hash: string; at: number; count?: number; checked?: number };
 }
 
 const isDeviceState = (value: unknown): value is DeviceState => {
@@ -149,13 +156,23 @@ export const isPushEnabled = (): boolean => load() !== null;
 /** True while reminders turned off on this device are still on the server. */
 export const isPushDeletePending = (): boolean => pendingDeletes().length > 0;
 
-export async function registration(): Promise<ServiceWorkerRegistration> {
+/** `promise`, or a rejection if it hasn't settled within `ms`. */
+function withTimeLimit<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
-    setTimeout(() => {
-      reject(new PushError('unavailable', 'The app’s service worker isn’t running.'));
-    }, SERVICE_WORKER_TIMEOUT_MS);
+    timer = setTimeout(() => {
+      reject(new PushError('unavailable', 'No answer in time.'));
+    }, ms);
   });
-  return Promise.race([navigator.serviceWorker.ready, timeout]);
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+export async function registration(): Promise<ServiceWorkerRegistration> {
+  try {
+    return await withTimeLimit(navigator.serviceWorker.ready, SERVICE_WORKER_TIMEOUT_MS);
+  } catch {
+    throw new PushError('unavailable', 'The app’s service worker isn’t running.');
+  }
 }
 
 export async function api(path: string, init: RequestInit, deviceKey?: string): Promise<Response> {
@@ -191,9 +208,11 @@ export const enablePush = (): Promise<void> => subscribe();
 /**
  * enablePush(), or with `renewing` (a device key), a subscription the browser
  * renewed: kept only if push is still on with that key, so turning it off
- * meanwhile isn't undone (audit 3 D-1).
+ * meanwhile isn't undone (audit 3 D-1). `fresh`: a new subscription, not the
+ * browser's current one (the server forgot this device, perhaps because the
+ * push service said that one is gone: audit 4 F1-2).
  */
-export async function subscribe(renewing?: string): Promise<void> {
+export async function subscribe(renewing?: string, fresh = false): Promise<void> {
   if (pushSupport() !== 'supported') {
     throw new PushError('unsupported', 'This browser can’t get notifications while closed.');
   }
@@ -209,17 +228,21 @@ export async function subscribe(renewing?: string): Promise<void> {
   let subscription = await worker.pushManager.getSubscription();
   // A subscription made with another server key can't be used with this one.
   const usedKey = subscription?.options.applicationServerKey;
-  if (subscription && (!usedKey || toBase64Url(new Uint8Array(usedKey)) !== publicKey)) {
-    await subscription.unsubscribe();
+  if (subscription && (fresh || !usedKey || toBase64Url(new Uint8Array(usedKey)) !== publicKey)) {
+    await subscription.unsubscribe().catch(() => false);
     subscription = null;
   }
   try {
-    subscription ??= await worker.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: fromBase64Url(publicKey),
-    });
+    subscription ??= await withTimeLimit(
+      worker.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: fromBase64Url(publicKey),
+      }),
+      SUBSCRIBE_TIMEOUT_MS,
+    );
   } catch {
-    // For example a phone without Google services and no UnifiedPush.
+    // For example a phone without Google services and no UnifiedPush, or a
+    // network that blocks the push service, so it never answers.
     throw new PushError('unavailable', 'This browser couldn’t connect to a push service.');
   }
   const previous = load();

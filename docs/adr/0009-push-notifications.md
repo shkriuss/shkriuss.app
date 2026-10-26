@@ -3,7 +3,9 @@
 Status: Accepted (2026-10-17). All of an app's schedules together have a
 limit: [ADR 0017](0017-storage-limits.md). There are no pull request previews
 any more ([ADR 0019](0019-no-pull-request-previews.md)), so what this says
-about them no longer applies.
+about them no longer applies. Changed by audit 4: the app checks daily that
+the server still has its schedule, and "minutes before" reminders in the
+hour clocks skip go off as they change (both below).
 
 ## Context
 
@@ -31,7 +33,9 @@ browsers like IronFox receive Web Push through **UnifiedPush**.
   can't stop the deletion either: the push settings are removed first,
   which makes room to note the device key, and the deletion is sent with
   the key held in memory anyway. If it can neither be sent nor noted, the
-  app says the reminders couldn't be removed (audit 3 D-3).
+  app says the reminders couldn't be removed (audit 3 D-3). Turning it on
+  waits at most 30 seconds for the browser's push service, then says it
+  couldn't, instead of "Turning on…" for ever (audit 4 G-7).
 - **Shared code, separate servers.** The code lives in `@shkriuss/push`. Each
   app that uses it runs the routes in its **own** Worker
   (`apps/<slug>/src/worker.ts`, `/api/push/*`; everything else is still
@@ -58,9 +62,15 @@ browsers like IronFox receive Web Push through **UnifiedPush**.
 - **Repeating notifications keep working** without opening the app: the server
   computes each next time from the pattern, in the phone's time zone (so
   daylight saving doesn't shift them). A time the clocks skip goes off as
-  much later as they skip; one they show twice, in the hour that repeats
-  when they go back, goes off the first time, as in the open app (audit 3
-  F1-3). The same encrypted message is sent
+  much later as they skip, but one worked back from a start ("15 minutes
+  before") goes off as they change, and never after the start (audit 4
+  F1-4); one they show twice, in the hour that repeats when they go back,
+  goes off the first time, as in the open app (audit 3 F1-3). So a one-off
+  reminder set during that hour, for later in it, doesn't go off, here or
+  in the open app: its first time has passed. A known limit (audit 4
+  F1-7): sending it the second time would need the phone and the server to
+  remember which reminders went off the first time, or those would come
+  twice, and it can only happen in one hour a year. The same encrypted message is sent
   each time, so its text can't say "tomorrow". It has the same tag each
   time too, so it replaces the one before it on the screen, and it's shown
   with `renotify`, so it still rings or buzzes (audit 3 F1-1; the open app's
@@ -129,7 +139,15 @@ browsers like IronFox receive Web Push through **UnifiedPush**.
   uploaded yet), so nothing is missed and nothing shows twice (audit F1-7).
   That's worked out for each reminder: with more than fit on the server
   (500), the open app shows the ones left out itself, and the switch says
-  how many the server has (audit 3 F1-5).
+  how many the server has (audit 3 F1-5). The schedule is compared from
+  each reminder's next time, so the same reminders worked out from a new
+  day (Habits and Water work theirs out from today) aren't a change the
+  server hasn't got at midnight (audit 4 F1-5). And once a day the app asks
+  the server whether it still has the schedule (`GET /api/push/schedule`,
+  which answers only how many reminders it has): one that forgot the device
+  (after two days of failures, say) made the app believe for ever that the
+  server sends them, so neither did. Then the app subscribes again and
+  uploads the schedule (audit 4 F1-2).
 
 ## Consequences
 

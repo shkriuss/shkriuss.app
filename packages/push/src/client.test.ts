@@ -16,6 +16,7 @@ import {
   timeLimit,
   type Notice,
 } from './client.ts';
+import { SUBSCRIBE_TIMEOUT_MS } from './device.ts';
 import { memoryPush } from './testing.ts';
 
 const ORIGIN = 'https://calendar.example';
@@ -183,6 +184,8 @@ beforeEach(async () => {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  // Also after a test that failed before putting the clock back.
+  vi.useRealTimers();
 });
 
 const notice = (overrides: Partial<Notice> = {}): Notice => ({
@@ -347,6 +350,35 @@ describe('pushHolds', () => {
     expect(await holds([notice()])).toBe(false);
   });
 
+  // Habits' and Water's reminders start from today: at midnight one of them
+  // moves on, though the server sends the same ones. The page took that for
+  // a change it hadn't got, and showed a 00:00 reminder the server sent too
+  // (audit 4 F1-5).
+  it('stays true when the same reminders are worked out from the next day', async () => {
+    vi.useFakeTimers({ now: new Date(2099, 0, 5, 20).getTime(), toFake: ['Date'] });
+    const pad = (value: number) => String(value).padStart(2, '0');
+    /** "Pills" at 00:00 every day, a week of them from the day `from` days on. */
+    const week = (from: number) =>
+      Array.from({ length: 7 }, (_, index) => {
+        const date = new Date(2099, 0, 5 + from + index);
+        const day = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+        const id = `pills~${date.getDay()}`;
+        return notice({ id, tag: 'pills', start: `${day}T00:00`, repeat: 'weekly', offset: 0 });
+      });
+    await syncPush(week(0));
+    vi.setSystemTime(new Date(2099, 0, 6, 0, 0, 10).getTime());
+    expect(await holds(week(1), 'pills')).toBe(true);
+    // Nor is it uploaded again for it.
+    await syncPush(week(1));
+    expect(requests.filter((request) => request.startsWith('PUT'))).toHaveLength(1);
+    // A real change still counts.
+    const moved = week(1).map((one, index) =>
+      index === 0 ? { ...one, start: '2099-01-06T08:00' } : one,
+    );
+    expect(await holds(moved, 'pills')).toBe(false);
+    vi.useRealTimers();
+  });
+
   // Only the 500 soonest fit on the server, but it said it held them all, so
   // the open app showed none of the rest either (audit 3 F1-5).
   const day = (index: number, tag = `e${index}`) =>
@@ -380,6 +412,69 @@ describe('pushHolds', () => {
   });
 });
 
+// The server forgets a device whose push service said it's gone, or with
+// nothing through for two days. The switch said On, nothing was sent, and the
+// open app left its reminders to the server (audit 4 F1-2).
+describe('a device the server forgot', () => {
+  const asked = () => requests.filter((request) => request === 'GET /api/push/schedule').length;
+  const deviceKey = () =>
+    (JSON.parse(localStorage.getItem('shkriuss-device:push') ?? '{}') as { deviceKey: string })
+      .deviceKey;
+  const forget = () =>
+    server.fetch(
+      new Request(`${ORIGIN}/api/push/schedule`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${deviceKey()}` },
+      }),
+    );
+
+  it('is noticed within a day, and gets a new subscription and its schedule again', async () => {
+    vi.useFakeTimers({ now: Date.UTC(2026, 9, 22), toFake: ['Date'] });
+    await syncPush([notice()]);
+    await forget();
+    // The same day: not asked.
+    vi.setSystemTime(Date.UTC(2026, 9, 22, 20));
+    await syncPush([notice()]);
+    expect(asked()).toBe(0);
+    // A day on: asked, and found forgotten.
+    vi.setSystemTime(Date.UTC(2026, 9, 23, 1));
+    requests = [];
+    const before = await subscription();
+    expect(await syncPush([notice()])).toEqual({ scheduled: 1, left: 0 });
+    expect(requests).toEqual([
+      'GET /api/push/schedule',
+      'GET /api/push/key',
+      'PUT /api/push/schedule',
+    ]);
+    expect(await subscription()).not.toBe(before);
+    expect(await pushHolds([notice()]).then((held) => held('any'))).toBe(true);
+    // Kept now: not asked again that day.
+    await syncPush([notice()]);
+    expect(asked()).toBe(1);
+  });
+
+  it('asks again later when the server can’t be reached, and not at all with nothing to send', async () => {
+    vi.useFakeTimers({ now: Date.UTC(2026, 9, 22), toFake: ['Date'] });
+    await syncPush([notice()]);
+    vi.setSystemTime(Date.UTC(2026, 9, 23, 1));
+    network = 'down';
+    await syncPush([notice()]);
+    network = 'up';
+    await syncPush([notice()]);
+    expect(asked()).toBe(2);
+    // Still there: asked again only a day on.
+    await syncPush([notice()]);
+    expect(asked()).toBe(2);
+
+    // Only reminders that are over: the server has nothing to keep.
+    const over = notice({ start: '2026-10-22T09:00' });
+    await syncPush([over], { force: true });
+    vi.setSystemTime(Date.UTC(2026, 9, 25));
+    await syncPush([over]);
+    expect(asked()).toBe(2);
+  });
+});
+
 describe('enablePush', () => {
   // It said "On" though nothing was kept, so nothing was uploaded (audit 3 F1-4).
   it('says so when this device can’t keep the setting', async () => {
@@ -388,6 +483,23 @@ describe('enablePush', () => {
     const error = await enablePush().catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(PushError);
     expect((error as PushError).code).toBe('storage');
+    expect(isPushEnabled()).toBe(false);
+  });
+
+  // A push service that never answers (a network that blocks it) kept
+  // "Turning on…" for ever (audit 4 G-7).
+  it('gives up on a push service that never answers', async () => {
+    await disablePush();
+    const { pushManager } = (await navigator.serviceWorker.ready) as unknown as {
+      pushManager: { subscribe: () => Promise<never> };
+    };
+    pushManager.subscribe = () => new Promise<never>(() => undefined);
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const turningOn = enablePush().catch((caught: unknown) => caught);
+    await vi.advanceTimersByTimeAsync(SUBSCRIBE_TIMEOUT_MS);
+    const error = await turningOn;
+    expect(error).toBeInstanceOf(PushError);
+    expect((error as PushError).code).toBe('unavailable');
     expect(isPushEnabled()).toBe(false);
   });
 });

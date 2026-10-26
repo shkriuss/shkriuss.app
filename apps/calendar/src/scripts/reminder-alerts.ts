@@ -16,6 +16,7 @@
 import { createStore } from '@shkriuss/storage';
 import { keepFocus } from '@shkriuss/ui/keep-focus';
 import {
+  MAX_SUMMER_TIME_MINUTES,
   mountNotificationStatus,
   showNotifications,
   type Permission,
@@ -105,15 +106,21 @@ export function mountReminderAlerts(root: Document, page: CalendarPage): Reminde
       checkedInMemory = stamp;
       checks.save({ checkedUntil: stamp });
     };
-    // First visit, or the clock was far ahead: start from now.
-    if (!last || last > addMinutes(now, 1440)) {
+    // First visit: start from now.
+    if (!last) {
       remember(now);
       return;
     }
-    if (last >= now) return;
+    // The clock went back further than summer time does (a new time zone
+    // after flying west, say): from the minute now, or nothing would be
+    // checked until it caught up, even after Calendar is opened again
+    // (audit 4 F1-1). Within that, the hour shown again was checked already.
+    const wentBack = last > addMinutes(now, MAX_SUMMER_TIME_MINUTES);
+    if (!wentBack && last >= now) return;
+    const from = wentBack ? addMinutes(now, -1) : last;
     remember(now);
 
-    const due = dueReminders(page.state(), last, now).map(({ occurrence }) => occurrence);
+    const due = dueReminders(page.state(), from, now).map(({ occurrence }) => occurrence);
     if (due.length === 0) return;
     for (const { event, start } of due) {
       if (!shown.some((item) => item.id === event.id && item.start === start)) {

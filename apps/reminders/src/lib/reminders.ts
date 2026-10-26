@@ -110,9 +110,23 @@ export interface Draft {
 export type Problems = Partial<Record<'text' | 'date' | 'time', string>>;
 
 /**
+ * Whether saving `draft` sets a reminder for a time (so it must still be to
+ * come): a new one, one done (saving sets it again), or one given another
+ * day, time or repeat. Only an overdue one's text corrected doesn't (audit 4
+ * F1-8).
+ */
+const setsTime = (reminder: Reminder | undefined, draft: Draft): boolean =>
+  reminder === undefined ||
+  reminder.done !== null ||
+  reminder.date !== draft.date ||
+  reminder.time !== draft.time ||
+  reminder.repeat !== draft.repeat;
+
+/**
  * What's wrong with a reminder as typed, field by field. A reminder that
- * doesn't repeat must still be to come (`now`); `editing` is the one being
- * changed, if any (it doesn't count towards the limit).
+ * doesn't repeat must still be to come (`now`), when it's set (setsTime);
+ * `editing` is the one being changed, if any (it doesn't count towards the
+ * limit).
  */
 export function problems(
   draft: Draft,
@@ -130,7 +144,15 @@ export function problems(
   }
   if (!isIsoDate(draft.date)) found.date = 'Choose a day.';
   if (!isIsoTime(draft.time)) found.time = 'Choose a time.';
-  else if (!found.date && draft.repeat === 'none' && toStamp(draft.date, draft.time) <= now) {
+  else if (
+    !found.date &&
+    draft.repeat === 'none' &&
+    toStamp(draft.date, draft.time) <= now &&
+    setsTime(
+      state.reminders.find((reminder) => reminder.id === editing),
+      draft,
+    )
+  ) {
     found.time = 'Choose a time that’s still to come.';
   }
   return found;

@@ -73,6 +73,36 @@ test('shows reminders missed while Calendar was closed', async ({ page }) => {
   await checkA11y(page, 'with a reminder showing (dark)');
 });
 
+test.describe('after flying west', () => {
+  test.use({ timezoneId: 'Pacific/Honolulu' });
+
+  test('reminds again at once, though its last check was later on the clock', async ({ page }) => {
+    // Last checked at 19:00 in Auckland; on landing in Honolulu it's 06:00 on
+    // the same day. It used to wait until 19:00 there (audit 4 F1-1).
+    await fakeNotifications(page, 'granted');
+    await page.clock.install({ time: new Date('2026-10-27T16:00:00Z') });
+    await page.goto('/');
+    await seed(
+      page,
+      [
+        {
+          title: 'Hotel shuttle',
+          startDate: '2026-10-27',
+          endDate: '2026-10-27',
+          startTime: '08:30',
+          endTime: '09:00',
+          reminder: 15,
+        },
+      ],
+      { 'calendar-reminders': { version: 1, data: { checkedUntil: '2026-10-27T19:00' } } },
+    );
+    // 08:16 there, a minute after the reminder's 08:15.
+    await page.clock.fastForward('02:16:00');
+    await expect(reminders(page).getByRole('button', { name: /Hotel shuttle/ })).toBeVisible();
+    expect(await shownNotifications(page)).toHaveLength(1);
+  });
+});
+
 test('asks to show notifications after saving an event with a reminder', async ({ page }) => {
   await fakeNotifications(page, 'default');
   await page.clock.setFixedTime(new Date('2026-10-17T10:00:00'));
