@@ -534,15 +534,23 @@ export function mountShelf(root: Document): void {
     editor.close();
   });
 
+  /**
+   * The item in the form was deleted on another device meanwhile: there's
+   * nothing to delete. Says so, rather than doing nothing (audit 3 F3-9),
+   * also when that happened while "Delete this item?" was open, where the
+   * form stayed open and "Save" brought the item back (audit 4 F3-5).
+   */
+  function itemGone(): void {
+    editingId = null;
+    opener = focusSpot(addButton);
+    editor.close();
+    say('That item was already deleted on another device.');
+  }
+
   deleteButton.addEventListener('click', () => {
     const item = find(editingId);
     if (!item) {
-      // Deleted on another device while the form was open: there's nothing
-      // to delete. Say so, rather than doing nothing (audit 3 F3-9).
-      editingId = null;
-      opener = focusSpot(addButton);
-      editor.close();
-      say('That item was already deleted on another device.');
+      itemGone();
       return;
     }
     deleteName.textContent = item.name;
@@ -552,8 +560,12 @@ export function mountShelf(root: Document): void {
   });
 
   deleteDialog.addEventListener('close', () => {
+    if (deleteDialog.returnValue !== 'confirm') return;
     const item = find(editingId);
-    if (deleteDialog.returnValue !== 'confirm' || !item) return;
+    if (!item) {
+      itemGone();
+      return;
+    }
     const before = state;
     if (!save(removeItem(state, item.id))) {
       notSaved(before);

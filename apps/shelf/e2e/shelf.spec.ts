@@ -207,6 +207,36 @@ test('says so when the open item was already deleted on another device', async (
   await expect(names(page)).toHaveCount(0);
 });
 
+test('says so when the item is deleted on another device while “Delete this item?” is open', async ({
+  page,
+}) => {
+  // Before, "Delete" there did nothing, and "Save" then brought it back (audit 4 F3-5).
+  await seed(page, [{ name: 'Running shoes' }]);
+  await page.getByRole('button', { name: 'Edit Running shoes' }).click();
+  await form(page).getByRole('button', { name: 'Delete' }).click();
+  const confirm = page.getByRole('dialog', { name: 'Delete this item?' });
+  await expect(confirm).toBeVisible();
+  const other = await page.context().newPage();
+  await other.goto('/');
+  await other.getByRole('button', { name: 'Edit Running shoes' }).click();
+  await form(other).getByRole('button', { name: 'Delete' }).click();
+  await other
+    .getByRole('dialog', { name: 'Delete this item?' })
+    .getByRole('button', { name: 'Delete' })
+    .click();
+  await expect(names(other)).toHaveCount(0);
+  await other.close();
+  await expect(names(page)).toHaveCount(0);
+
+  await confirm.getByRole('button', { name: 'Delete' }).click();
+  await expect(form(page)).toBeHidden();
+  await expect(
+    page.getByRole('alert').filter({ hasText: 'That item was already deleted on another device.' }),
+  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Add item' })).toBeFocused();
+  await expect(names(page)).toHaveCount(0);
+});
+
 test('finds items by search, category, how you like them, and brand', async ({ page }) => {
   await seed(page, [
     { name: 'Greek yogurt', brand: 'Fage', opinion: 'love', price: 4.5 },
