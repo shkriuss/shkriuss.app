@@ -820,6 +820,31 @@ describe('what’s left after “Delete the online copy” (audit 3 D-2)', () =>
   });
 });
 
+// The other tests read these from the code, so they check how each works,
+// never its value. These pin the values that the docs promise: changing
+// one fails here, and means changing those lines too (audit 3 J-4).
+describe('how long things are kept, as the docs promise', () => {
+  const DAY = 24 * 60 * 60 * 1000;
+
+  it('a library never unlocked: 30 days after it was last used', () => {
+    // ADR 0017: "An online library that was never unlocked (with the storage
+    // code) is deleted 30 days after it was last used."
+    expect(LOCKED_UNUSED_MS).toBe(30 * DAY);
+  });
+
+  it('files left outside the list: looked for once a week', () => {
+    // ADR 0016: "So once a week, a library with files deletes those in R2 that
+    // its list doesn't have".
+    expect(SWEEP_MS).toBe(7 * DAY);
+  });
+
+  it('what’s left after “Delete the online copy”: 13 months after it was last used', () => {
+    // ADR 0016: "once nobody has used it for 13 months"; the same 13 months as
+    // sync's note that a copy was deleted (UNUSED_MS in packages/sync).
+    expect(WIPED_UNUSED_MS).toBe(396 * DAY);
+  });
+});
+
 describe('how many libraries there can be (docs/adr/0017)', () => {
   it('stops made-up libraries at the limit, and keeps nothing for one turned down', async () => {
     // A small limit, so they fill it quickly.

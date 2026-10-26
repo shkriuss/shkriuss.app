@@ -114,3 +114,27 @@ it('counts days in UTC', () => {
   expect(utcDay(Date.UTC(2026, 9, 22, 23, 59))).toBe('2026-10-22');
   expect(utcDay(Date.UTC(2026, 9, 23, 0, 0))).toBe('2026-10-23');
 });
+
+// The other tests read these limits from the code, so they check how each
+// works, never its value. These pin the values that the docs promise:
+// changing one fails here, and means changing those lines too (audit 3 J-4).
+describe('the limits the docs promise', () => {
+  it('20 wrong storage codes an hour from each internet address', () => {
+    // SECURITY.md: "20 wrong tries an hour from each internet address";
+    // ADR 0016: "20 wrong codes an hour from each internet address".
+    expect(LIMITS.unlockTries).toBe(20);
+  });
+
+  it('10,000 uploads a day, 1 TB in all; 400,000 photos per library, 95 MB each', () => {
+    // SECURITY.md: "Hard limits across all libraries (1 TB, 10,000 uploads a
+    // day), plus 400,000 photos per library and 95 MB each"; ADR 0016: "1 TB
+    // stored and 10,000 uploads a day in all", "400,000 photos, and 95 MB per
+    // photo"; docs/deployment.md: "At most 10,000 photos go up a day";
+    // Photos' status line (apps/photos/src/lib/online.ts): "too big to keep
+    // online (over 95 MB)".
+    expect(LIMITS.uploadsPerDay).toBe(10_000);
+    expect(LIMITS.bytes).toBe(1_000_000_000_000);
+    expect(LIMITS.items).toBe(400_000);
+    expect(LIMITS.itemBytes).toBe(95_000_000);
+  });
+});
