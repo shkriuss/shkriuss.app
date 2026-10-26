@@ -38,6 +38,12 @@ export { MAX_SUMMER_TIME_MINUTES } from '../lib/reminder-window.ts';
 
 const CHECK_EVERY_MS = 20_000;
 /**
+ * How far apart two tabs' clocks can read at once: some browsers blur the
+ * time a page reads, for privacy. A check another tab made up to this much
+ * "later" than now is one it made just before.
+ */
+const CLOCK_BLUR_MS = 1_000;
+/**
  * The last check, shared by the app's open tabs, so a reminder rings once,
  * not once in each (audit 4 F1-6), as in Calendar. On this device only.
  */
@@ -68,12 +74,18 @@ function saveChecked(check: ReminderCheck): void {
 }
 
 /**
+ * How long a tab keeps its turn after a check: another tab's copy of
+ * storage can take a moment to show the check it saved, and a tab that
+ * checked straight after (as all do when a phone wakes) showed the same
+ * reminders again.
+ */
+const SETTLE_MS = 250;
+/** How long a tab waits for its turn at most: one put to sleep during its turn would stop the others' checks. */
+const WAIT_MS = 2_000;
+
+/**
  * Runs `work` in one tab at a time, where the browser can say so (Web
- * Locks). Not held any longer: a tab put to sleep while holding it would
- * stop the others' checks. So, rarely, a tab that checks straight after
- * another may not see its check yet (another tab's copy of storage can take
- * a moment) and show the same reminder: it replaces itself, as it has the
- * same tag.
+ * Locks); in this tab alone when its turn doesn't come in time.
  */
 function oneTabAtATime(work: () => void): void {
   const locks = (navigator as Partial<Navigator>).locks;
@@ -81,7 +93,14 @@ function oneTabAtATime(work: () => void): void {
     work();
     return;
   }
-  locks.request('shkriuss-reminders-check', work).catch(() => undefined);
+  locks
+    .request('shkriuss-reminders-check', { signal: AbortSignal.timeout(WAIT_MS) }, async () => {
+      work();
+      await new Promise((resolve) => window.setTimeout(resolve, SETTLE_MS));
+    })
+    .catch((error: unknown) => {
+      if (error instanceof DOMException && error.name === 'TimeoutError') work();
+    });
 }
 
 /** One notification that's due. */
@@ -277,7 +296,8 @@ export function mountLocalReminders(
   function notify(): void {
     const now = { stamp: nowStamp(), at: Date.now() };
     const shared = loadChecked();
-    const last = shared && shared.at > checked.at && shared.at <= now.at ? shared : checked;
+    const last =
+      shared && shared.at > checked.at && shared.at <= now.at + CLOCK_BLUR_MS ? shared : checked;
     const window = reminderWindow(last, now);
     if (!window) return;
     checked = now;
