@@ -43,6 +43,7 @@ import {
   openTrades,
   overClosedNote,
   partsOf,
+  periodSummary,
   PERIODS,
   profit,
   readEdited,
@@ -639,6 +640,10 @@ export function mountTrades(root: Document): void {
     period = PERIODS.find((entry) => entry === periodSelect.value) ?? 'all';
     shown = PAGE_SIZE;
     render();
+    // Every result changed: read out what they are now (audit 4 G-9).
+    announce(
+      periodSummary(period, closedIn(state, period, today()), (amount) => money(amount, true)),
+    );
   });
 
   /** How many closed trades the search finds, for screen readers (audit G-6). */

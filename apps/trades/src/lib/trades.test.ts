@@ -33,6 +33,7 @@ import {
   overClosed,
   overClosedNote,
   partsOf,
+  periodSummary,
   profit,
   readChange,
   readClose,
@@ -54,6 +55,7 @@ import {
   toForm,
   TRADES_VERSION,
   withSettings,
+  type Period,
   type Trade,
   type TradeForm,
   type TradesState,
@@ -846,6 +848,18 @@ describe('results', () => {
     expect(ids(closedIn(trades, 'last-month', TODAY))).toEqual(['c']);
     expect(ids(closedIn(trades, 'this-year', TODAY))).toEqual(['a', 'b', 'c']);
     expect(ids(closedIn(trades, 'last-month', '2026-01-15'))).toEqual(['d']);
+  });
+
+  // Audit 4 G-9: choosing another period changed every result without a word.
+  it('says what a period’s results are, to read out when it’s chosen', () => {
+    const money = (amount: number) =>
+      formatResult(amount, 'USD', { signed: true, locale: 'en-US' });
+    const summary = (period: Period, today = TODAY) =>
+      periodSummary(period, closedIn(trades, period, today), money, 'en-US');
+    expect(summary('this-month')).toBe('This month: 2 closed trades, net result +$150.00.');
+    expect(summary('last-month')).toBe('Last month: 1 closed trade, net result +$300.00.');
+    expect(summary('all')).toBe('All time: 4 closed trades, net result +$350.00.');
+    expect(summary('last-month', '2027-03-15')).toBe('Last month: no closed trades.');
   });
 
   it('adds up wins and losses', () => {

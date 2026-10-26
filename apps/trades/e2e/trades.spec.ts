@@ -140,8 +140,11 @@ test('results for a period, by setup and by month, and search', async ({ page })
   await page.getByLabel('Results for').selectOption({ label: 'This month' });
   await expect(tile(page, 'Net result')).toHaveText('+$150.00');
   await expect(page.locator('[data-closed-list] [data-symbol]')).toHaveText(['MSFT', 'AAPL']);
+  // Read out, as every result changed (audit 4 G-9).
+  await expect(status(page, 'This month: 2 closed trades, net result +$150.00.')).toBeAttached();
   await page.getByLabel('Results for').selectOption({ label: 'Last month' });
   await expect(page.locator('[data-closed-list] [data-symbol]')).toHaveText(['EURUSD']);
+  await expect(status(page, 'Last month: 1 closed trade, net result +$300.00.')).toBeAttached();
 
   await page.getByLabel('Results for').selectOption({ label: 'All time' });
   await page.getByLabel('Search').fill('retest');

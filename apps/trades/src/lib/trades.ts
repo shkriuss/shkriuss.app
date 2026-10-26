@@ -849,6 +849,24 @@ export function stats(trades: readonly Trade[]): Stats {
   };
 }
 
+/**
+ * What's read out when "Results for" changes, as the results change without
+ * a word otherwise (audit 4 G-9): the period, how many trades were closed in
+ * it, and their net result, `money` formatting it as the tile does.
+ */
+export function periodSummary(
+  period: Period,
+  closed: readonly Trade[],
+  money: (amount: number) => string,
+  locale?: string,
+): string {
+  const { count, total } = stats(closed);
+  const label = PERIOD_LABELS[period];
+  return count === 0
+    ? `${label}: no closed trades.`
+    : `${label}: ${closedCount(count, locale)}, net result ${money(total)}.`;
+}
+
 export interface Group {
   /** A setup name ("" = none), or a month ("2026-10"). */
   key: string;
