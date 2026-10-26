@@ -111,12 +111,12 @@ export function mountNotificationStatus(
       () => {
         const hadFocus = enable.contains(root.activeElement);
         render();
-        // The button is gone now; keep keyboard focus nearby.
+        // The button is gone now; keep keyboard focus nearby. Moving focus
+        // there reads the line out, so it isn't announced as well (audit 3 G-11).
         if (hadFocus && enable.hidden) {
           status.tabIndex = -1;
           status.focus();
-        }
-        if (permission() === 'granted') announce('Notifications are on.');
+        } else if (permission() === 'granted') announce('Notifications are on.');
       },
       () => undefined,
     );
@@ -195,7 +195,6 @@ export function mountLocalReminders(
   );
   const push = mountPushControls(required<HTMLElement>(root, '[data-push-controls]'), {
     notices: options.notices,
-    announce: options.announce,
     onChange: status.render,
   });
 

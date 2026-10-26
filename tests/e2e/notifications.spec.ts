@@ -26,6 +26,8 @@ test('turns on notifications with the button, keeping focus near it', async ({ p
   await expect(enable(page)).toBeHidden();
   await expect(status(page)).toHaveText(/^Notifications are on\./);
   await expect(status(page)).toBeFocused();
+  // Focus reads it out: it isn't said a second time (audit 3 G-11).
+  await expect(page.locator('[data-announcer]')).not.toHaveText(/Notifications are on/);
 });
 
 test('says when notifications are blocked', async ({ page }, testInfo) => {

@@ -58,6 +58,8 @@ test('sends a test notification that only this device can read', async ({ page }
   await expect(closedStatus(page)).toHaveText(/^Off:/);
   await closedSwitch(page).check();
   await expect(closedStatus(page)).toHaveText(/^On: reminders arrive even when Calendar is closed/);
+  // The status line is read out: it isn't said a second time (audit 3 G-11).
+  await expect(page.locator('[data-announcer]')).not.toHaveText(/arrive even when/);
   await checkA11y(page, 'reminders while closed: on');
 
   await page.getByRole('button', { name: 'Send a test notification' }).click();
