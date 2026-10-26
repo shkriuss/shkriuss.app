@@ -237,16 +237,31 @@ test('signed out in another tab: says so, closes the recovery key, and moves foc
 
 test('another account in another tab: the old one’s code stops working, and its key replacement goes', async ({
   page,
+  browser,
+  baseURL,
 }) => {
-  /** Signs this browser in to a new account, as another tab would. */
-  const switchAccount = (tab: Page) =>
-    tab.evaluate((secret) => {
-      const since = new Date().toISOString();
-      localStorage.setItem(
-        'shkriuss-device:account',
-        JSON.stringify({ secret, since, replaced: [], successors: {} }),
-      );
-    }, randomBytes(32).toString('base64url'));
+  /** A code to add a device to a new account, made on a device of its own. */
+  async function newAccountCode(): Promise<{ url: string; close: () => Promise<void> }> {
+    const device = await otherDevice(browser, baseURL);
+    const tab = await device.newPage();
+    await createAccount(tab);
+    await tab.getByRole('button', { name: 'Show a code' }).click();
+    await expect(tab.locator('[data-link-url]')).toHaveText(/#link=/);
+    return {
+      url: (await tab.locator('[data-link-url]').textContent()) ?? '',
+      close: () => device.close(),
+    };
+  }
+  /** In `tab`, of this browser: opens the code, and switches to its account. */
+  async function switchWith(tab: Page, url: string): Promise<void> {
+    await tab.bringToFront();
+    await tab.goto(url);
+    await expect(tab.locator('[data-link-replace]')).toBeVisible();
+    const add = tab.getByRole('button', { name: 'Add this device' });
+    await expect(add).not.toHaveAttribute('aria-disabled');
+    await add.click();
+    await expect(view(tab, 'signed-in')).toBeVisible();
+  }
 
   await createAccount(page);
   const cancelled = page.waitForResponse(
@@ -256,25 +271,27 @@ test('another account in another tab: the old one’s code stops working, and it
   await page.getByRole('button', { name: 'Show a code' }).click();
   await expect(page.locator('[data-link-status]')).toHaveText(/Waiting for your other device/);
   const other = await page.context().newPage();
-  await other.goto('/account/');
-  await switchAccount(other);
+  const first = await newAccountCode();
+  await switchWith(other, first.url);
   expect((await cancelled).status()).toBe(204);
   await expect(message(page)).toHaveText('The account on this device changed in another tab.');
   await expect(page.locator('[data-link-qr] svg')).toHaveCount(0);
   await expect(page.locator('[data-link-status]')).toHaveText('');
 
   // Replacing the key, started for the account before: it can't replace the new one's.
+  await page.bringToFront();
   const before = (await accountCode(page).textContent()) ?? '';
   await page.getByRole('button', { name: 'Replace the account key' }).click();
   await page.getByRole('button', { name: 'Get a new key' }).click();
   await expect(page.getByRole('heading', { name: 'Save your new recovery key' })).toBeVisible();
-  await switchAccount(other);
+  const second = await newAccountCode();
+  await switchWith(other, second.url);
   await expect(view(page, 'signed-in')).toBeVisible();
   await expect(accountCode(page)).not.toHaveText(before);
   await expect(view(page, 'new')).toBeHidden();
   await expect(page.locator('[data-new-key]')).toHaveText('');
   await expect(page.locator('[data-view="signed-in"] [tabindex="-1"]')).toBeFocused();
-  await other.close();
+  await Promise.all([first.close(), second.close(), other.close()]);
 });
 
 test('“Done” makes the code stop working, so someone who saw it can’t use it', async ({
