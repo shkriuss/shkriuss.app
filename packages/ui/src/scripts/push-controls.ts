@@ -29,11 +29,6 @@ const SYNC_DELAY_MS = 800;
 export interface PushControlsOptions {
   /** The app's notifications as they are now. */
   notices: () => Notice[];
-  /**
-   * Not needed any more: the switch's status line is read out itself, and
-   * saying it again read it out twice (audit 3 G-11).
-   */
-  announce?: (message: string) => void;
   /** After it was turned on or off (notification permission may have changed). */
   onChange?: () => void;
 }

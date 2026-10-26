@@ -175,6 +175,53 @@ test.describe('while Habits is closed', () => {
     }
   });
 
+  test('a new day uploads the reminders again, so they don’t come twice', async ({ page }) => {
+    // The reminders are worked out from today: without an upload at
+    // midnight, the open page took the server's copy for an old one and
+    // showed them too, while the server sent them as well (audit 3 F1-6).
+    const rig = await startRig();
+    try {
+      // Monday 19 October 2026, 23:50.
+      await page.clock.install({ time: new Date('2026-10-19T23:50:00+02:00') });
+      await fakeSubscription(page, rig);
+      await page.addInitScript(() => {
+        const shown: unknown[] = [];
+        (window as unknown as Record<string, unknown>)['shownNotifications'] = shown;
+        ServiceWorkerRegistration.prototype.showNotification = async (title, options) => {
+          shown.push({ title, ...options });
+        };
+      });
+      await page.goto('/');
+      await page.getByLabel('Also remind me when Habits is closed').check();
+      await expect(page.locator('[data-closed-status]')).toHaveText(
+        'On: reminders arrive even when Habits is closed.',
+      );
+      await addHabit(page, 'Walk');
+      const upload = () =>
+        page.waitForResponse(
+          (response) =>
+            response.url().endsWith('/api/push/schedule') &&
+            response.request().method() === 'PUT' &&
+            response.ok(),
+        );
+      let uploaded = upload();
+      await setReminder(page, 'Walk', '00:30');
+      await uploaded;
+
+      // Just after midnight (time moves on by itself from there, so the
+      // upload's own time limit doesn't run out at once).
+      uploaded = upload();
+      await page.clock.fastForward('10:10');
+      await uploaded;
+      // 00:30 on Tuesday: read out on the page, and sent by the server only.
+      await page.clock.fastForward('30:00');
+      await expect(page.getByRole('status').filter({ hasText: 'Reminder: Walk.' })).toBeAttached();
+      expect(await shownNotifications(page)).toEqual([]);
+    } finally {
+      rig.server.close();
+    }
+  });
+
   test('the open page shows reminders the server doesn’t have yet', async ({ page, guard }) => {
     // The notification service sends reminders, so the open page doesn't show
     // them too, unless a change couldn't be uploaded (audit F1-7).

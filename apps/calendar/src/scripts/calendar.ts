@@ -1,64 +1,44 @@
 /**
  * Calendar's page behaviour: connects the HTML in pages/index.astro to the
- * rules in lib/ and saves everything on the device. Reminders, importing, and
- * holidays and fasts have their own files (reminder-alerts.ts,
- * import-dialog.ts and special-days.ts).
+ * rules in lib/ and saves everything on the device. The event editor,
+ * reminders, importing, and holidays and fasts have their own files
+ * (event-editor.ts, reminder-alerts.ts, import-dialog.ts and special-days.ts).
  */
 import { createStore, downloadFile } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
-import { showFieldProblems } from '@shkriuss/ui/dom';
-import { keepFocus } from '@shkriuss/ui/keep-focus';
-import { reportSave } from '@shkriuss/ui/problem';
+import { focusSpot, keepFocus } from '@shkriuss/ui/keep-focus';
+import { reportSave, showProblem } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { site } from 'virtual:shkriuss/site';
 import {
   addDays,
-  daysBetween,
   daysInMonth,
   firstDayOfWeek,
   isIsoDate,
-  isIsoTime,
   makeDate,
-  minutesOf,
   monthGrid,
   parts,
   sameDayInMonth,
   shiftMonth,
-  shiftTime,
   today,
   weekday,
   type IsoDate,
 } from '../lib/dates.ts';
 import {
-  addEvent,
   DATA_VERSION,
-  dayToShow,
-  draftProblems,
-  editEvent,
   emptyState,
   isCalendarState,
-  isValidReminder,
-  MAX_EVENTS,
   migrateState,
   occurrencesBetween,
   onDay,
-  removeEvent,
   secondVersion,
   timeLabel,
   type CalendarEvent,
   type CalendarState,
-  type DraftField,
-  type EventDraft,
   type Occurrence,
-  type Repeat,
 } from '../lib/events.ts';
 import { isNotable, type SpecialDay } from '../lib/holidays.ts';
-import {
-  ALL_DAY_REMINDERS,
-  DEFAULT_REMINDER,
-  reminderLabel,
-  TIMED_REMINDERS,
-} from '../lib/reminders.ts';
+import type { EventEditor } from './event-editor.ts';
 import { mountImportDialog } from './import-dialog.ts';
 import { mountPushReminders } from './push-reminders.ts';
 import { mountReminderAlerts } from './reminder-alerts.ts';
@@ -92,17 +72,6 @@ const UPCOMING_DAYS = 7;
 const NEW_DAY_CHECK_MS = 60_000;
 /** Most dots shown under a day in the month grid. */
 const MAX_DOTS = 3;
-/** Form fields in the order they appear, for focusing the first problem. */
-const FIELD_ORDER: DraftField[] = [
-  'title',
-  'startDate',
-  'startTime',
-  'endDate',
-  'endTime',
-  'repeatUntil',
-  'reminder',
-  'notes',
-];
 
 export function mountCalendar(root: Document): void {
   const monthTitle = required<HTMLElement>(root, '[data-month-title]');
@@ -118,45 +87,12 @@ export function mountCalendar(root: Document): void {
   const template = required<HTMLTemplateElement>(root, '[data-event-template]');
   const announcer = required<HTMLElement>(root, '[data-announcer]');
 
-  const editor = required<HTMLDialogElement>(root, '[data-event-dialog]');
-  const form = required<HTMLFormElement>(editor, '[data-event-form]');
-  const editorTitle = required<HTMLElement>(editor, '[data-dialog-title]');
-  const repeatNote = required<HTMLElement>(editor, '[data-repeat-note]');
-  const deleteButton = required<HTMLButtonElement>(editor, '[data-action="delete"]');
-  const untilField = required<HTMLElement>(editor, '[data-until-field]');
-  const timeFields = [...editor.querySelectorAll<HTMLElement>('[data-time-field]')];
-  const input = <T extends HTMLElement>(name: string): T => required<T>(form, `[name="${name}"]`);
-  const titleInput = input<HTMLInputElement>('title');
-  const allDayInput = input<HTMLInputElement>('allDay');
-  const startDateInput = input<HTMLInputElement>('startDate');
-  const startTimeInput = input<HTMLInputElement>('startTime');
-  const endDateInput = input<HTMLInputElement>('endDate');
-  const endTimeInput = input<HTMLInputElement>('endTime');
-  const repeatInput = input<HTMLSelectElement>('repeat');
-  const repeatUntilInput = input<HTMLInputElement>('repeatUntil');
-  const reminderInput = input<HTMLSelectElement>('reminder');
-  const notesInput = input<HTMLTextAreaElement>('notes');
-
-  const deleteDialog = required<HTMLDialogElement>(root, '[data-delete-dialog]');
-  const deleteMessage = required<HTMLElement>(deleteDialog, '[data-delete-message]');
-
   const weekStart = firstDayOfWeek(navigator.language);
   let state = store.load();
   let todayDate = today();
   let selected = todayDate;
   /** First day of the month on screen. */
   let viewMonth = shiftMonth(selected, 0);
-  /** The event open in the editor (null for a new one). */
-  let editingId: string | null = null;
-  /** The editor as it opened, to tell what the person changed (see editEvent). */
-  let openedDraft: EventDraft | null = null;
-  /** Where keyboard focus goes back to when the editor closes. */
-  let opener: HTMLElement | null = null;
-  /** The event just saved, so focus can go to it in the list. */
-  let savedId: string | null = null;
-  // Remembered so changing the start can move the end by the same amount.
-  let lastStartDate = '';
-  let lastStartTime = '';
 
   const announce = (message: string): void => {
     announcer.textContent = message;
@@ -252,7 +188,10 @@ export function mountCalendar(root: Document): void {
     // One day in the grid is reachable with Tab; arrow keys move between days.
     const tabbable = selected.startsWith(viewMonth.slice(0, 8)) ? selected : viewMonth;
 
-    monthTitle.textContent = monthFormat.format(utc(viewMonth));
+    // A live region, read out each time its text is set: so only when the
+    // month changes, not at every arrow key, save or sync (audit 3 G-10).
+    const title = monthFormat.format(utc(viewMonth));
+    if (monthTitle.textContent !== title) monthTitle.textContent = title;
     const rows = monthGrid(viewMonth, weekStart).map((week) => {
       const row = document.createElement('tr');
       for (const date of week) {
@@ -395,194 +334,34 @@ export function mountCalendar(root: Document): void {
 
   // ---------- The event editor ----------
 
-  function syncFields(): void {
-    const allDay = allDayInput.checked;
-    for (const field of timeFields) field.hidden = allDay;
-    startTimeInput.disabled = allDay;
-    endTimeInput.disabled = allDay;
-    const repeats = repeatInput.value !== 'none';
-    untilField.hidden = !repeats;
-    repeatUntilInput.disabled = !repeats;
-  }
-
-  /** Fills the reminder list with the choices for timed or all-day events. */
-  function fillReminders(allDay: boolean, value: number | null): void {
-    const choices: number[] = [...(allDay ? ALL_DAY_REMINDERS : TIMED_REMINDERS)];
-    // A reminder from an imported file may not be one of the usual choices.
-    if (value !== null && !choices.includes(value) && isValidReminder(value, allDay)) {
-      choices.push(value);
-      choices.sort((a, b) => a - b);
-    }
-    const option = (optionValue: string, label: string): HTMLOptionElement => {
-      const created = document.createElement('option');
-      created.value = optionValue;
-      created.textContent = label;
-      return created;
-    };
-    reminderInput.replaceChildren(
-      option('', 'No reminder'),
-      ...choices.map((minutes) =>
-        option(String(minutes), reminderLabel(minutes, allDay, formatTime)),
-      ),
-    );
-    reminderInput.value = value === null ? '' : String(value);
-  }
-
-  const readReminder = (): number | null =>
-    reminderInput.value === '' ? null : Number(reminderInput.value);
-
-  function readDraft(): EventDraft {
-    const allDay = allDayInput.checked;
-    const repeat = repeatInput.value as Repeat;
-    return {
-      title: titleInput.value,
-      startDate: startDateInput.value,
-      // A blank end date means a one-day event.
-      endDate: endDateInput.value || startDateInput.value,
-      startTime: allDay ? null : startTimeInput.value,
-      endTime: allDay || !endTimeInput.value ? null : endTimeInput.value,
-      repeat,
-      repeatUntil: repeat === 'none' || !repeatUntilInput.value ? null : repeatUntilInput.value,
-      reminder: readReminder(),
-      notes: notesInput.value,
-    };
-  }
-
-  /** Shows each problem next to its field; focuses the first. Returns true if there are any. */
-  const showProblems = (problems: Partial<Record<DraftField, string>>, onlyClear = false) =>
-    showFieldProblems(form, [...FIELD_ORDER, 'form'], problems, {
-      onlyClear,
-      focusFirst: !onlyClear,
-    });
+  /** The editor (./event-editor.ts), loaded the first time it opens. */
+  let editor: Promise<EventEditor> | null = null;
 
   function openEditor(event: CalendarEvent | null): void {
-    editingId = event?.id ?? null;
-    opener = root.activeElement instanceof HTMLElement ? root.activeElement : null;
-    showProblems({});
-    editorTitle.textContent = event ? 'Edit event' : 'New event';
-    deleteButton.hidden = !event;
-    repeatNote.hidden = !event || event.repeat === 'none';
-
-    titleInput.value = event?.title ?? '';
-    allDayInput.checked = event ? event.startTime === null : false;
-    startDateInput.value = event?.startDate ?? selected;
-    endDateInput.value = event?.endDate ?? selected;
-    // Times to start from if an all-day event is changed to a timed one.
-    startTimeInput.value = event?.startTime ?? '09:00';
-    endTimeInput.value = event ? (event.endTime ?? (event.startTime ? '' : '10:00')) : '10:00';
-    repeatInput.value = event?.repeat ?? 'none';
-    repeatUntilInput.value = event?.repeatUntil ?? '';
-    fillReminders(allDayInput.checked, event?.reminder ?? null);
-    notesInput.value = event?.notes ?? '';
-    lastStartDate = startDateInput.value;
-    lastStartTime = startTimeInput.value;
-    syncFields();
-    openedDraft = event ? readDraft() : null;
-    editor.showModal();
-    titleInput.focus();
-  }
-
-  // However the editor closes (Save, Cancel, Escape), put focus somewhere useful.
-  editor.addEventListener('close', () => {
-    const item = savedId
-      ? dayList.querySelector<HTMLButtonElement>(`[data-id="${CSS.escape(savedId)}"] button`)
-      : null;
-    (item ?? (opener?.isConnected ? opener : newEventButton)).focus();
-    savedId = null;
-    opener = null;
-  });
-
-  // Moving the start keeps the event the same length.
-  startDateInput.addEventListener('change', () => {
-    const start = startDateInput.value;
-    const end = endDateInput.value;
-    if (isIsoDate(lastStartDate) && isIsoDate(start) && isIsoDate(end)) {
-      endDateInput.value = addDays(end, daysBetween(lastStartDate, start));
-    } else if (isIsoDate(start) && (!isIsoDate(end) || end < start)) {
-      endDateInput.value = start;
-    }
-    lastStartDate = start;
-  });
-
-  startTimeInput.addEventListener('change', () => {
-    const start = startTimeInput.value;
-    const end = endTimeInput.value;
-    if (isIsoTime(lastStartTime) && isIsoTime(start) && isIsoTime(end)) {
-      const moved = shiftTime(end, minutesOf(start) - minutesOf(lastStartTime));
-      if (moved) endTimeInput.value = moved;
-    }
-    lastStartTime = start;
-  });
-
-  allDayInput.addEventListener('change', () => {
-    syncFields();
-    // "15 minutes before" means something else for an all-day event: switch to that kind's default.
-    const allDay = allDayInput.checked;
-    fillReminders(
-      allDay,
-      readReminder() === null ? null : allDay ? DEFAULT_REMINDER.allDay : DEFAULT_REMINDER.timed,
+    // Where focus goes back to when it closes: where it is now, before loading.
+    const from = focusSpot();
+    editor ??= import('./event-editor.ts').then(({ mountEventEditor }) =>
+      mountEventEditor(root, {
+        ...page,
+        selected: () => selected,
+        show(day) {
+          if (day === selected) return;
+          selected = day;
+          viewMonth = shiftMonth(day, 0);
+        },
+        offerNotifications: alerts.offerNotifications,
+      }),
     );
-  });
-  repeatInput.addEventListener('change', syncFields);
-
-  // Clear a field's error as soon as it is fixed.
-  form.addEventListener('input', () => {
-    if (form.querySelector('[aria-invalid="true"]')) showProblems(draftProblems(readDraft()), true);
-  });
-
-  form.addEventListener('submit', (submitEvent) => {
-    submitEvent.preventDefault();
-    const draft = readDraft();
-    const problems = draftProblems(draft);
-    if (!editingId && state.events.length >= MAX_EVENTS) {
-      problems.form = `You can have up to ${MAX_EVENTS} events. Delete some to add more.`;
-    }
-    if (showProblems(problems)) return;
-
-    const id = editingId ?? crypto.randomUUID();
-    // A sync while the editor was open may have changed the event on another
-    // device: keep that, and put on only what was changed here.
-    const next = editingId
-      ? editEvent(state, id, openedDraft ?? draft, draft)
-      : addEvent(state, draft, id);
-    const saved = next.events.find((event) => event.id === id);
-    const day = dayToShow(next, id, selected);
-    if (day !== selected) {
-      selected = day;
-      viewMonth = shiftMonth(day, 0);
-    }
-    // "Saved" only when it's in what was saved.
-    if (save(next) && saved) announce(`Saved ${saved.title}.`);
-    // Asking now, right after choosing a reminder, makes the question clear.
-    if (draft.reminder !== null) alerts.offerNotifications();
-    savedId = id;
-    editor.close();
-  });
-
-  required<HTMLButtonElement>(editor, '[data-action="cancel"]').addEventListener('click', () => {
-    editor.close();
-  });
-
-  deleteButton.addEventListener('click', () => {
-    const event = state.events.find((entry) => entry.id === editingId);
-    if (!event) return;
-    deleteMessage.textContent =
-      event.repeat === 'none'
-        ? `“${event.title}” will be removed.`
-        : `“${event.title}” will be removed, including every time it repeats.`;
-    deleteDialog.returnValue = '';
-    // Opens on top of the editor; "Cancel" goes back to editing.
-    deleteDialog.showModal();
-  });
-
-  deleteDialog.addEventListener('close', () => {
-    const event = state.events.find((entry) => entry.id === editingId);
-    if (deleteDialog.returnValue !== 'confirm' || !event) return;
-    editingId = null;
-    opener = newEventButton;
-    if (save(removeEvent(state, event.id))) announce(`Deleted ${event.title}.`);
-    editor.close();
-  });
+    editor.then(
+      (loaded) => {
+        loaded.open(event, from);
+      },
+      () => {
+        editor = null;
+        showProblem('Calendar couldn’t open the event. Please try again.');
+      },
+    );
+  }
 
   // ---------- Buttons and keys ----------
 

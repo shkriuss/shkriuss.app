@@ -23,6 +23,7 @@ import {
 import type { Notice } from '@shkriuss/push';
 import { withEdits } from '@shkriuss/sync/edits';
 import { DATE_LOCALE } from '@shkriuss/ui/locale';
+import { foldText } from '@shkriuss/ui/text';
 
 export interface Habit {
   id: string;
@@ -119,8 +120,11 @@ export function nameError(name: string, state: HabitsState, editing?: string): s
   const trimmed = name.trim();
   if (trimmed.length === 0) return 'Enter a name for the habit.';
   if (trimmed.length > MAX_NAME_LENGTH) return `Use ${MAX_NAME_LENGTH} characters or fewer.`;
+  // Capitals, accents and extra spaces don't make another name, as in the
+  // other apps: "Café" is "cafe" (audit 3 J-12).
+  const wanted = foldText(trimmed);
   const taken = state.habits.some(
-    (habit) => habit.id !== editing && habit.name.toLowerCase() === trimmed.toLowerCase(),
+    (habit) => habit.id !== editing && foldText(habit.name) === wanted,
   );
   if (taken) return 'You already have a habit with that name.';
   if (editing === undefined && state.habits.length >= MAX_HABITS) {

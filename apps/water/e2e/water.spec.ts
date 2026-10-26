@@ -174,8 +174,10 @@ test('the goal, the glass and bottle sizes, and the units can be changed', async
 
   await goal.fill('300');
   await goal.press('Enter');
-  await expect(page.getByText('Enter at least 500 ml.')).toBeVisible();
+  await expect(page.locator('#setting-goal-error')).toHaveText('Enter at least 500 ml.');
   await expect(goal).toHaveAttribute('aria-invalid', 'true');
+  // Read out, focus being in the field (audit 3 G-5).
+  await expect(page.getByRole('alert')).toHaveText('Daily goal (ml): Enter at least 500 ml.');
   await checkA11y(page, 'goal problem');
   await goal.fill('2500');
   await goal.press('Enter');
@@ -206,4 +208,29 @@ test('the goal, the glass and bottle sizes, and the units can be changed', async
   await page.getByLabel('Millilitres (ml)').check();
   await expect(page.getByLabel('Daily goal (ml)')).toHaveValue('2500');
   await expect(todaysDrinks(page).first()).toHaveText(/355 ml/);
+});
+
+test('a goal or size that can’t be used is read out after leaving its field too', async ({
+  page,
+}) => {
+  // It was shown but not said, so nothing told a screen reader user it
+  // wasn't saved (audit 3 G-5).
+  const goal = page.getByLabel('Daily goal (ml)');
+  await goal.fill('0');
+  await goal.press('Tab');
+  await expect(page.locator('#setting-goal-error')).toHaveText('Enter at least 500 ml.');
+  await expect(goal).toHaveAttribute('aria-invalid', 'true');
+  await expect(status(page, 'Daily goal: Enter at least 500 ml.')).toBeAttached();
+  // Focus goes on, where the person sent it.
+  await expect(page.getByLabel('Glass (ml)')).toBeFocused();
+
+  await page.getByLabel('Bottle (ml)').fill('5');
+  await page.getByLabel('Bottle (ml)').blur();
+  await expect(status(page, 'Bottle: Enter at least 10 ml.')).toBeAttached();
+
+  // After Enter, focus stays in the field, which reads it out (once).
+  await page.getByLabel('Glass (ml)').fill('2');
+  await page.getByLabel('Glass (ml)').press('Enter');
+  await expect(page.getByRole('alert')).toHaveText('Glass (ml): Enter at least 10 ml.');
+  await expect(status(page, 'Glass: Enter at least 10 ml.')).toHaveCount(0);
 });

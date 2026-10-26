@@ -7,6 +7,7 @@
 import { addDays, firstDayOfWeek, isIsoTime, today, weekday, type IsoDate } from '@shkriuss/dates';
 import { createStore } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
+import { keepFocus } from '@shkriuss/ui/keep-focus';
 import { clearProblem, focusProblem, reportSave, showProblem } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { site } from 'virtual:shkriuss/site';
@@ -209,26 +210,21 @@ export function mountHabits(root: Document): void {
     return item;
   }
 
+  /**
+   * Draws the list again, with keyboard focus on the same button (or, if its
+   * habit is gone, the one like it next to it, or "New habit": audit 3 G-3).
+   */
   function render(): void {
-    // Keep keyboard focus on the same button after re-rendering.
-    const active = root.activeElement;
-    const focusId = active?.closest<HTMLElement>('[data-id]')?.dataset['id'];
-    const focusAction = active?.getAttribute('data-action');
+    keepFocus(draw, input);
+  }
 
+  function draw(): void {
     todayText.textContent = dateFormat.format(dateOf(day));
     list.replaceChildren(...habits.habits.map(renderHabit));
     empty.hidden = habits.habits.length > 0;
     const room = roomNote(checks.checks.length);
     roomText.hidden = room === null;
     roomText.textContent = room ?? '';
-
-    if (focusId && focusAction) {
-      list
-        .querySelector<HTMLElement>(
-          `[data-id="${CSS.escape(focusId)}"] [data-action="${CSS.escape(focusAction)}"]`,
-        )
-        ?.focus();
-    }
   }
 
   // ---------- Adding ----------
@@ -479,8 +475,13 @@ export function mountHabits(root: Document): void {
   function reload(): void {
     habits = habitsStore.load();
     checks = checksStore.load();
-    // The habit being edited was deleted on another device or tab.
-    if (editing !== null && !find(editing)) editDialog.close();
+    // The habit being edited was deleted on another device or tab: its form
+    // closes, saying why, as Notes does (audit 3 G-6).
+    if (editing !== null && !find(editing)) {
+      if (deleteDialog.open) deleteDialog.close();
+      editDialog.close();
+      showProblem('That habit was deleted on another device.');
+    }
     if (yearDialog.open) {
       if (checks.checks.length === 0) yearDialog.close();
       else fillYears();
@@ -494,6 +495,10 @@ export function mountHabits(root: Document): void {
     if (today() === day) return;
     day = today();
     render();
+    // The reminders are worked out from today, so they're uploaded again, as
+    // in Water. Else the open page takes the notification service's copy for
+    // an old one, and both send them (audit 3 F1-6).
+    reminders.changed();
   };
   window.setInterval(checkDay, NEW_DAY_CHECK_MS);
   document.addEventListener('visibilitychange', () => {

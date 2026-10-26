@@ -42,8 +42,9 @@ colour are in [`packages/registry/apps.json`](../../packages/registry/apps.json)
   - They show in the day's list (with their Georgian names) and in "Next 7
     days" (a long fast only on its first day). They aren't events: they
     can't be changed, and they're not in downloaded .ics files.
-- Weeks start on the day usual where you live, and times show as 12- or
-  24-hour, both from the phone's language and region settings.
+- Weeks start on the day usual where you live (on Monday where the browser
+  can't tell, as some can't), and times show as 12- or 24-hour, both from the
+  phone's language and region settings.
 
 Everything is saved in the browser on this device (`shkriuss:calendar` for
 events, `shkriuss:calendar-reminders` for when reminders were last checked,
@@ -57,7 +58,9 @@ its notification server, docs/adr/0009).
 
 - Page: `src/pages/index.astro`
 - Page behaviour: `src/scripts/`
-  - `calendar.ts`: the month, the lists and the event editor
+  - `calendar.ts`: the month and the lists
+  - `event-editor.ts`: the event editor (new, change, delete); it loads the
+    first time it opens, so the page starts with less to load
   - `reminder-alerts.ts`: due reminders on the page, and as notifications
     (with the shared parts of `@shkriuss/ui/local-reminders`)
   - `import-dialog.ts`: choosing a file to import; the dialog that reads it
@@ -67,7 +70,11 @@ its notification server, docs/adr/0009).
 - Rules, as plain functions with unit tests next to them:
   - `src/lib/dates.ts`: date maths without time zones ("2026-10-17", "14:30")
   - `src/lib/events.ts`: checking, saving and repeating events
-  - `src/lib/reminders.ts`: when reminders go off and what they're called
+  - `src/lib/editing.ts`: adding, changing and deleting events, and adding
+    them from a file (loaded with the editor and the import)
+  - `src/lib/reminders.ts`: when reminders go off
+  - `src/lib/reminder-choices.ts`: the reminders the editor offers, and what
+    they're called
   - `src/lib/ics.ts`: writing .ics files
   - `src/lib/ics-import.ts`: reading .ics files
   - `src/lib/holidays.ts`: days off, Orthodox holidays and fasts in Georgia
@@ -109,16 +116,27 @@ its notification server, docs/adr/0009).
 - **Import limits.** Calendar can't show everything a .ics file can say yet:
   repeats like "every 2 weeks" or "Mondays and Wednesdays", and changes to
   single dates of a repeating event, are listed as not imported. Times with a
-  time zone are moved to the phone's time zone.
+  time zone are moved to the phone's time zone. A repeat that stops after a
+  number of times (up to 5,000; more counts as for ever) ends on the day of
+  its last time, worked out without going through every time. Only monthly
+  repeats on the 29th to the 31st and yearly ones on 29 February have their
+  months or years counted one by one, 500,000 at most for a whole file
+  (a monthly one on the 31st for 10 years takes about 200); past that (only
+  in odd files), the rest are listed as not imported.
 - **Repeating events from another time zone** keep the time their first date
   has on the phone. When that time zone changes its clocks (summer time) on
   other dates than the phone's, some of the times end up an hour off: a weekly
   9:00 London meeting imported in Tbilisi shows at 12:00 every week, but from
   late October to late March it's really at 13:00. Before anything is added,
-  the import says how many events this affects. Comparing clocks costs a
-  year of readings for each time zone and year, so a file gets at most 100
-  of them; past that (only in odd files), a repeat counts as one that may be
-  an hour off. It also says when a monthly or
+  the import says how many events this affects: it finds when either clock
+  changes in the year from each repeat's first time (also on its first day,
+  and two changes on one day, as in New York and Chicago), and compares the
+  two clocks at the next time after each change. Only that first year is
+  compared, so a yearly event a few days before the clocks change can still
+  be an hour off in some later years without a word. Finding the changes
+  costs a year of readings for each time zone and year, so a file gets at
+  most 100 of them; past that (only in odd files), a repeat counts as one
+  that may be an hour off. It also says when a monthly or
   yearly event moved to another day near the end of a month: 22:00 UTC on the
   31st is 02:00 on the 1st in Tbilisi, and Calendar would show it on the 1st
   of every month, also after months without a 31st.

@@ -171,6 +171,27 @@ test('saving a change keeps what changed elsewhere while it was open', async ({ 
   ).toBeChecked();
 });
 
+test('says so when the reminder being changed is deleted on another device', async ({ page }) => {
+  // The form closed by itself, and what was typed went, without a word (audit 3 G-6).
+  await seed(page, [reminder('a', 'Call the dentist', '2026-10-21', '18:30')]);
+  const other = await page.context().newPage();
+  await other.goto('/');
+  await page.bringToFront();
+  await page.getByRole('button', { name: 'Call the dentist' }).click();
+  await editDialog(page).getByLabel('Remind me to').fill('Call the dentist about the X-ray');
+
+  // Deleted in another tab, as a sync from another device does.
+  await other.getByRole('button', { name: 'Call the dentist' }).click();
+  await editDialog(other).getByRole('button', { name: 'Delete' }).click();
+  await other
+    .getByRole('dialog', { name: 'Delete this reminder?' })
+    .getByRole('button', { name: 'Delete' })
+    .click();
+  await expect(editDialog(page)).toBeHidden();
+  await expect(page.getByRole('alert')).toHaveText('That reminder was deleted on another device.');
+  await expect(page.getByText('No reminders yet.', { exact: false })).toBeVisible();
+});
+
 test('changes and deletes a reminder', async ({ page }) => {
   await seed(page, [reminder('a', 'Water the plants', '2026-10-21', '18:30')]);
   await page.getByRole('button', { name: 'Water the plants' }).click();

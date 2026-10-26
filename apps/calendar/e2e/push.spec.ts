@@ -4,6 +4,8 @@ import type { Page, Route } from '@playwright/test';
 import { fromBase64Url } from '../../../packages/push/src/base64.ts';
 import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
 import { fakeSubscription, startRig, type PushRig } from '../../../tests/e2e/notifications.ts';
+import { readStore } from '../../../tests/e2e/storage.ts';
+import type { CalendarState } from '../src/lib/events.ts';
 import { dayList, editor, newEvent, save, seed } from './helpers.ts';
 
 test.use({ serviceWorkers: 'allow', timezoneId: 'Europe/Berlin' });
@@ -132,9 +134,14 @@ test('uploads reminders encrypted, never in plain text', async ({ page }) => {
     until: null,
     offset: 15,
   });
+  const id = (await readStore<CalendarState>(page, 'calendar'))?.data.events[0]?.id;
+  expect(id).toMatch(/^[\w-]{36}$/);
   expect(await rig.open(fromBase64Url(entry?.payload ?? ''))).toMatchObject({
     title: 'Secret dentist visit',
     body: expect.stringMatching(/^Sat, Oct 17 · 2:30\sPM – 3:30\sPM$/),
+    // The event's id, like the open page's own copy (reminders.spec.ts), so
+    // the two replace each other instead of showing twice (audit 3 F1-6).
+    tag: id,
   });
   expect(request.headers()['authorization']).toMatch(/^Bearer [\w-]{43}$/);
 });

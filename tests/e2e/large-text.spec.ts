@@ -256,6 +256,31 @@ test('with text at 200%, pages with things in them, and their dialogs, fit a pho
   }
 });
 
+test('with large text, Tasks’ own order with Move up / Move down open fits', async ({ page }) => {
+  // The box, the handle and the two buttons left the title a letter's width,
+  // and the page scrolled sideways (audit 3 G-2).
+  test.skip(test.info().project.name !== 'tasks', 'Only Tasks has its own order.');
+  await page.goto('/');
+  await enter(page, 'New task', LONG);
+  await enter(page, 'New task', 'Call mum');
+  await page.getByLabel('Order').selectOption('mine');
+  await button(page, `Move ${LONG}`).click();
+  await expect(button(page, `Move ${LONG} up`)).toBeVisible();
+  for (const [width, size] of [
+    [360, '200%'],
+    [360, '150%'],
+    [412, '200%'],
+    [412, '175%'],
+    [320, '100%'],
+  ] as const) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.evaluate((textSize) => {
+      document.documentElement.style.fontSize = textSize;
+    }, size);
+    expect(await pageProblems(page), `${width}px, text ${size}`).toEqual([]);
+  }
+});
+
 test('with text at 175% on a 412px screen, Calendar’s weekdays and days fit', async ({ page }) => {
   // Weekday names ran together from 175% on ordinary phones (audit G-4).
   test.skip(test.info().project.name !== 'calendar', 'Only Calendar has a month grid.');

@@ -132,8 +132,10 @@ export function mountReminderAlerts(root: Document, page: CalendarPage): Reminde
       due.map((occurrence) => ({
         title: occurrence.event.title,
         body: whenText(occurrence),
-        // The same reminder from two open tabs shows once.
-        tag: `${occurrence.event.id}/${occurrence.start}`,
+        // The event's id, as the notification service's copy has
+        // (push-reminders.ts), so the two replace each other and it shows
+        // once, also from two open tabs (audit 3 F1-6).
+        tag: occurrence.event.id,
       })),
       () => noticesOf(page.state().events),
     );

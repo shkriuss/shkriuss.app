@@ -18,9 +18,11 @@ import {
   addDays,
   addMinutes,
   daysBetween,
+  daysInMonth,
   fromDayNumber,
   isIsoDate,
   makeDate,
+  minutesOf,
   parts,
   toDayNumber,
   toStamp,
@@ -35,6 +37,7 @@ import {
   MAX_SPAN_DAYS,
   MAX_TITLE_LENGTH,
   occurrencesBetween,
+  type CalendarEvent,
   type EventDraft,
   type Repeat,
 } from './events.ts';
@@ -196,6 +199,8 @@ interface When {
   written: { date: IsoDate; time: IsoTime | null };
   /** The time zone it was written in ("UTC" for UTC); null for whole days, floating times and unknown zones. */
   zone: string | null;
+  /** The moment it is (ms since 1970, UTC), when it has a zone. */
+  moment: number | null;
   /** True when the time was written as 23:59:59 (Calendar's "until the end of the day"). */
   endOfDay: boolean;
   /** True when the time zone wasn't recognised and the time was kept as written. */
@@ -265,10 +270,19 @@ function knownZone(timeZone: string): string | null {
   return null;
 }
 
-/** The moment when clocks in `timeZone` (a known zone) show `wall` (a UTC-based number). */
+/**
+ * The moment when clocks in `timeZone` (a known zone) show `wall` (a UTC-based
+ * number). As RFC 5545 says, a time the clocks show twice is the first one, and
+ * a time they skip is read with the offset from before, so 02:30 is 03:30.
+ * Guessing from one offset gave the second time east of UTC, and an hour early
+ * in the skipped hour west of it (audit 3 F1-2).
+ */
 function zonedToUtc(wall: number, timeZone: string): number {
-  const guess = wall - offsetOf(wall, timeZone);
-  return wall - offsetOf(guess, timeZone);
+  // The offsets a day before and after: a clock change near `wall` is between them.
+  const before = offsetOf(wall - DAY_MS, timeZone);
+  const after = offsetOf(wall + DAY_MS, timeZone);
+  const fits = [wall - before, wall - after].filter((ms) => ms + offsetOf(ms, timeZone) === wall);
+  return fits.length > 0 ? Math.min(...fits) : wall - before;
 }
 
 function inZone(ms: number, timeZone: string): { date: IsoDate; time: IsoTime } {
@@ -290,6 +304,7 @@ function readWhen(property: Property, timeZone: string): When | null {
     time: null,
     written: { date, time: null },
     zone: null,
+    moment: null,
     endOfDay: false,
     unknownZone: false,
   };
@@ -307,10 +322,12 @@ function readWhen(property: Property, timeZone: string): When | null {
   const zone = knownZone(named);
   if (!zone) return { ...asWritten, unknownZone: true };
   const wall = Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute));
-  return { ...asWritten, ...inZone(zonedToUtc(wall, zone), timeZone), zone };
+  const moment = zonedToUtc(wall, zone);
+  return { ...asWritten, ...inZone(moment, timeZone), zone, moment };
 }
 
 const DAY_MS = 86_400_000;
+const MINUTE_MS = 60_000;
 
 /**
  * Time zones and years compared per file, at most (each costs a year of clock
@@ -321,56 +338,105 @@ const DAY_MS = 86_400_000;
 const MAX_CLOCK_CHECKS = 100;
 
 /**
- * The days (as day numbers) in `year` when clocks in `zone` and in `timeZone`
- * move further apart or closer together, checked at noon (UTC) each day, or
- * null once the file has had its MAX_CLOCK_CHECKS. `seen` keeps them for the
- * next event; `timeZone` is the same for a whole file.
+ * The moments (to the minute) when clocks in `zone` change in `year`, from
+ * noon (UTC) on 31 December the year before to noon on 31 December: read at
+ * noon each day, then to the minute between two readings that differ. Null
+ * once the file has had its MAX_CLOCK_CHECKS; `seen` keeps them for the next
+ * event.
  */
-function clockChangeDays(
-  zone: string,
-  timeZone: string,
-  year: number,
-  seen: Map<string, number[]>,
-): number[] | null {
+function clockChanges(zone: string, year: number, seen: Map<string, number[]>): number[] | null {
   const key = `${zone} ${year}`;
   const known = seen.get(key);
   if (known) return known;
   if (seen.size >= MAX_CLOCK_CHECKS) return null;
-  const apart = (day: number) => {
-    const noon = day * DAY_MS + DAY_MS / 2;
-    return offsetOf(noon, zone) - offsetOf(noon, timeZone);
-  };
-  const days: number[] = [];
-  const first = toDayNumber(makeDate(year, 1, 1));
-  let before = apart(first - 1);
-  for (let day = first; day < toDayNumber(makeDate(year + 1, 1, 1)); day += 1) {
-    const now = apart(day);
-    if (now !== before) days.push(day);
+  const changes: number[] = [];
+  let noon = Date.UTC(year - 1, 11, 31, 12);
+  let before = offsetOf(noon, zone);
+  for (noon += DAY_MS; noon <= Date.UTC(year, 11, 31, 12); noon += DAY_MS) {
+    const now = offsetOf(noon, zone);
+    if (now !== before) {
+      // The clocks still read as before at `early`, and not at `late`.
+      let early = noon - DAY_MS;
+      let late = noon;
+      while (late - early > MINUTE_MS) {
+        const middle = early + Math.floor((late - early) / MINUTE_MS / 2) * MINUTE_MS;
+        if (offsetOf(middle, zone) === before) early = middle;
+        else late = middle;
+      }
+      changes.push(late);
+    }
     before = now;
   }
-  seen.set(key, days);
-  return days;
+  seen.set(key, changes);
+  return changes;
 }
 
+/** How far ahead (days) a repeat's next time is, at most. */
+const NEXT_WITHIN: Record<Repeat, number> = {
+  none: 0,
+  daily: 1,
+  weekly: 7,
+  monthly: 62,
+  yearly: 366 * 8,
+};
+
 /**
- * True when clocks in `zone` and in `timeZone` don't stay the same time apart
- * from `from` to `to`, or may not (past MAX_CLOCK_CHECKS). Clocks change on a
- * yearly pattern, so at most a year is checked (also when `to` is null:
- * "forever").
+ * True when some times of a repeat from another time zone, in the year from
+ * its first, are an hour off here, or may be (past MAX_CLOCK_CHECKS). Every
+ * time keeps the first one's time of day on this device, so a time is off
+ * when the two zones' clocks are a different time apart then than at the
+ * first. That changes only when either clock changes, so after each change,
+ * the next time is compared. Comparing at noon each day missed changes on
+ * the first day and two changes on one day (audit 3 F1-2).
  */
-function clocksChangeApart(
-  zone: string,
+function someTimesOff(
+  draft: EventDraft,
+  start: When,
   timeZone: string,
-  from: IsoDate,
-  to: IsoDate | null,
   seen: Map<string, number[]>,
 ): boolean {
-  if (zone === timeZone) return false;
-  const first = toDayNumber(from);
-  const last = Math.min(to ? toDayNumber(to) : Infinity, first + 366, toDayNumber('9999-12-31'));
-  for (let year = parts(from).year; year <= parts(fromDayNumber(last)).year; year += 1) {
-    const days = clockChangeDays(zone, timeZone, year, seen);
-    if (!days || days.some((day) => day > first && day <= last)) return true;
+  const { zone, moment: first, written } = start;
+  if (zone === null || zone === timeZone || first === null || written.time === null) return false;
+  const apart = (ms: number) => offsetOf(ms, zone) - offsetOf(ms, timeZone);
+  // Clocks change on a yearly pattern, so a year is compared. (The dates move
+  // a little: a yearly event a few days before a change can still be off in
+  // some later years.)
+  const end = Math.min(first + 366 * DAY_MS, Date.UTC(9999, 11, 31, 12));
+  // A year's changes start at noon (UTC) on 31 December the year before.
+  const yearOf = (ms: number) => new Date(ms + DAY_MS / 2 - 1).getUTCFullYear();
+  const changes: number[] = [];
+  for (const clocks of [zone, timeZone]) {
+    for (let year = yearOf(first); year <= yearOf(end); year += 1) {
+      const found = clockChanges(clocks, year, seen);
+      if (!found) return true;
+      changes.push(...found.filter((at) => at > first && at <= end));
+    }
+  }
+  if (changes.length === 0) return false;
+  // Its times as written in its own zone: there, its dates may be a day off ours.
+  const shift = daysBetween(written.date, draft.startDate);
+  const own: CalendarEvent = {
+    ...draft,
+    id: 'clocks',
+    startDate: written.date,
+    endDate: written.date,
+    repeatUntil: draft.repeatUntil === null ? null : addDays(draft.repeatUntil, -shift),
+  };
+  const time = minutesOf(written.time) * MINUTE_MS;
+  const apartAtFirst = apart(first);
+  for (const at of changes) {
+    const from = inZone(at, zone).date;
+    const dates = occurrencesBetween(
+      { events: [own] },
+      from,
+      addDays(from, NEXT_WITHIN[own.repeat]),
+    );
+    for (const { start: date } of dates) {
+      const next = zonedToUtc(toDayNumber(date) * DAY_MS + time, zone);
+      if (next < at) continue;
+      if (apart(next) !== apartAtFirst) return true;
+      break;
+    }
   }
   return false;
 }
@@ -396,6 +462,16 @@ const RULE_PARTS = new Set([
 ]);
 /** Longer COUNTs are treated as "forever". */
 const MAX_COUNT = 5000;
+/**
+ * Months and years looked at, at most, for the whole file, to find when
+ * repeats with a COUNT end (lastStart). Only monthly repeats on the 29th to
+ * 31st and yearly ones on 29 February need any: a monthly one on the 31st
+ * for 10 years takes about 200, so 2,000 of those fit. Working out every
+ * time instead, a crafted file far under 5 MB froze the page for minutes
+ * (audit 3 C-2). Past this (only in odd files), an event is listed as not
+ * imported.
+ */
+const MAX_COUNT_STEPS = 500_000;
 
 interface Rule {
   repeat: Repeat;
@@ -438,26 +514,53 @@ function readRule(value: string, written: IsoDate, timeZone: string): Rule | nul
   return { repeat, until, count };
 }
 
-/** The start of the `count`-th time an event happens, or null if that's very far away. */
-function lastStart(draft: EventDraft, count: number): IsoDate | null {
-  if (count > MAX_COUNT) return null;
-  const daysPer: Record<Repeat, number> = {
-    none: 0,
-    daily: 1,
-    weekly: 7,
-    monthly: 62,
-    yearly: 366 * 8,
-  };
-  const end = Math.min(
-    toDayNumber(draft.startDate) + daysPer[draft.repeat] * count,
-    toDayNumber('9999-12-31'),
-  );
-  const starts = occurrencesBetween(
-    { events: [{ id: 'count', ...draft }] },
-    draft.startDate,
-    fromDayNumber(end),
-  ).filter((occurrence) => occurrence.start >= draft.startDate);
-  return starts[count - 1]?.start ?? null;
+/** How many months and years lastStart has looked at, for a whole file. */
+export interface CountSteps {
+  taken: number;
+}
+
+/**
+ * The start of the `count`-th time a repeating event happens (the first is
+ * its start), or null if that's very far away (after 9999, or a COUNT over
+ * MAX_COUNT: "forever"). Worked out without going through every time (audit
+ * 3 C-2): daily and weekly by counting days; monthly and yearly by stepping
+ * through the months or years with the same rule as occurrencesBetween (a
+ * day missing from a month, like the 31st or 29 February, is skipped there).
+ * Undefined once the file's MAX_COUNT_STEPS are used up.
+ */
+export function lastStart(
+  draft: EventDraft,
+  count: number,
+  steps: CountSteps = { taken: 0 },
+): IsoDate | null | undefined {
+  // With an UNTIL too (which files shouldn't have), the earlier of the two.
+  const until = draft.repeatUntil;
+  if (count > MAX_COUNT) return until;
+  const { year, month, day } = parts(draft.startDate);
+  const later = count - 1;
+  let found: IsoDate | null = null;
+  if (draft.repeat === 'daily' || draft.repeat === 'weekly') {
+    const last = toDayNumber(draft.startDate) + later * (draft.repeat === 'daily' ? 1 : 7);
+    if (last <= toDayNumber('9999-12-31')) found = fromDayNumber(last);
+  } else {
+    // Months since the year 0 (monthly), or years (yearly).
+    const monthly = draft.repeat === 'monthly';
+    const yearOf = (step: number) => (monthly ? Math.floor(step / 12) : step);
+    const monthOf = (step: number) => (monthly ? (step % 12) + 1 : month);
+    let step = monthly ? year * 12 + month - 1 : year;
+    // Every month has the 1st to the 28th, and every year has every day but 29 February.
+    const always = day <= 28 || (!monthly && !(month === 2 && day === 29));
+    if (always) step += later;
+    let left = always ? 0 : later;
+    while (left > 0 && yearOf(step) <= 9999) {
+      step += 1;
+      steps.taken += 1;
+      if (steps.taken > MAX_COUNT_STEPS) return undefined;
+      if (day <= daysInMonth(yearOf(step), monthOf(step))) left -= 1;
+    }
+    if (yearOf(step) <= 9999) found = makeDate(yearOf(step), monthOf(step), day);
+  }
+  return until !== null && (found === null || found > until) ? until : found;
 }
 
 /**
@@ -484,6 +587,8 @@ function repeatMoves(repeat: Repeat, written: IsoDate, moved: IsoDate): boolean 
 
 const UNSUPPORTED_REPEAT =
   'It repeats in a way Calendar can’t show yet (for example every 2 weeks).';
+const TOO_MANY_COUNTS =
+  'The file has too many repeats for Calendar to work out when this one stops.';
 
 const truncate = (text: string, max: number): string =>
   text.length > max ? `${text.slice(0, max - 1)}…` : text;
@@ -501,7 +606,8 @@ function toEvent(
   raw: RawEvent,
   options: ParseOptions,
   flags: Flags,
-  changeDays: Map<string, number[]>,
+  clockChangesSeen: Map<string, number[]>,
+  countSteps: CountSteps,
 ): ParsedEvent | SkippedEvent | null {
   const get = (name: string) => raw.props.find((property) => property.name === name);
   const text = (name: string) => unescapeText(get(name)?.value ?? '').trim();
@@ -615,7 +721,11 @@ function toEvent(
     reminder,
     notes,
   };
-  if (count !== null && repeat !== 'none') draft.repeatUntil = lastStart(draft, count);
+  if (count !== null && repeat !== 'none') {
+    const last = lastStart(draft, count, countSteps);
+    if (last === undefined) return skip(TOO_MANY_COUNTS);
+    draft.repeatUntil = last;
+  }
 
   const problems = draftProblems(draft);
   const problem = Object.values(problems)[0];
@@ -623,10 +733,8 @@ function toEvent(
 
   // Every later time keeps the first one's time, and day of the month, on this device.
   if (draft.repeat !== 'none' && start.zone) {
-    const { startDate, repeatUntil: last } = draft;
-    if (clocksChangeApart(start.zone, options.timeZone, startDate, last, changeDays))
-      flags.clockChanges += 1;
-    if (repeatMoves(draft.repeat, start.written.date, startDate)) flags.movedRepeats += 1;
+    if (someTimesOff(draft, start, options.timeZone, clockChangesSeen)) flags.clockChanges += 1;
+    if (repeatMoves(draft.repeat, start.written.date, draft.startDate)) flags.movedRepeats += 1;
   }
 
   // A UID is text, escaped like any other: Calendar's own ids can hold ","
@@ -674,11 +782,12 @@ export function parseIcs(file: string, options: ParseOptions): ParseResult {
     clockChanges: 0,
     movedRepeats: 0,
   };
-  const changeDays = new Map<string, number[]>();
+  const clockChangesSeen = new Map<string, number[]>();
+  const countSteps: CountSteps = { taken: 0 };
   const events: ParsedEvent[] = [];
   const skipped: SkippedEvent[] = [];
   for (const raw of readEvents(text)) {
-    const result = toEvent(raw, options, flags, changeDays);
+    const result = toEvent(raw, options, flags, clockChangesSeen, countSteps);
     if (!result) continue;
     if ('draft' in result) events.push(result);
     else skipped.push(result);

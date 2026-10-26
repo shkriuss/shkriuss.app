@@ -1,6 +1,6 @@
 /**
- * Helpers shared by Calendar's page scripts (calendar.ts, reminder-alerts.ts
- * and import-dialog.ts).
+ * Helpers shared by Calendar's page scripts (calendar.ts, event-editor.ts,
+ * reminder-alerts.ts and import-dialog.ts).
  */
 import { parts, type IsoDate, type IsoTime } from '../lib/dates.ts';
 import type { CalendarState, Occurrence } from '../lib/events.ts';
@@ -39,7 +39,7 @@ export const formatTime = (time: IsoTime): string => {
 export const plural = (count: number, word: string): string =>
   `${count} ${word}${count === 1 ? '' : 's'}`;
 
-/** What the main script (calendar.ts) shares with the reminder and import parts. */
+/** What the main script (calendar.ts) shares with the editor, reminder and import parts. */
 export interface CalendarPage {
   /** The events as they are now. */
   state(): CalendarState;
