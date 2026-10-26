@@ -500,9 +500,12 @@ export function readChange(
   // A part closed off a trade stays closed: opened again and closed in parts
   // of its own, "Delete a year" had to choose between counting what they
   // closed as open again, here or in its trade (audit 4 F2-6). Deleting it
-  // opens its quantity in its trade again.
+  // opens its quantity in its trade again. Only while that trade is there:
+  // a part whose trade was deleted (with "Delete a year") is a trade of its
+  // own, and can be opened again like one.
   if (
     saved?.parent !== undefined &&
+    state.trades.some((trade) => trade.id === saved.parent) &&
     !isOpen(saved) &&
     form.exitDate.trim() === '' &&
     form.exitPrice.trim() === ''

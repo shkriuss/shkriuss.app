@@ -754,6 +754,35 @@ describe('making room', () => {
         'en-US',
       ).trade,
     ).toMatchObject({ id: 'p', parent: 'a', notes: 'Sold early', exitDate: '2024-03-01' });
+
+    // From review: 100 bought, 40 closed in 2024, 60 in 2025. Deleting 2024
+    // deletes its part and the emptied trade; the 2025 part stays, as a
+    // trade of its own, which can be opened again: there's no trade to
+    // delete it into, so the advice would have lost the 60.
+    const split = state(
+      lot,
+      trade({ id: 'p1', quantity: 40, exitDate: '2024-06-01', exitPrice: 110, parent: 'a' }),
+      trade({ id: 'p2', quantity: 60, exitDate: '2025-02-01', exitPrice: 120, parent: 'a' }),
+    );
+    const left = removeClosedYear(split, '2024');
+    expect(left.trades.map((entry) => entry.id)).toEqual(['p2']);
+    const orphan = left.trades[0] as Trade;
+    const reopened = readChange(
+      { ...toForm(orphan, 'en-US'), exitDate: '', exitPrice: '' },
+      left,
+      { id: 'p2', newId: 'x' },
+      'en-US',
+    );
+    expect(reopened.problems).toBeUndefined();
+    expect(reopened.trade).toMatchObject({
+      id: 'p2',
+      quantity: 60,
+      exitDate: null,
+      exitPrice: null,
+    });
+    expect(openTrades(saveTrade(left, reopened.trade as Trade)).map((entry) => entry.id)).toEqual([
+      'p2',
+    ]);
   });
 
   it('says so once Trades is nearly full', () => {
