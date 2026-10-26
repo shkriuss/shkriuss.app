@@ -67,6 +67,31 @@ const box = (type: string, ...contents: number[]) => [
   ...bytesOf(type),
   ...contents,
 ];
+/** Parts one after another, as bytes: a big file's bytes can't be spread into a call. */
+function joined(...parts: ArrayLike<number>[]): Uint8Array<ArrayBuffer> {
+  const bytes = new Uint8Array(parts.reduce((total, part) => total + part.length, 0));
+  let at = 0;
+  for (const part of parts) {
+    bytes.set(part, at);
+    at += part.length;
+  }
+  return bytes;
+}
+/** A box with big contents. */
+const bigBox = (type: string, ...contents: ArrayLike<number>[]) => {
+  const inside = joined(...contents);
+  return joined([...be32(8 + inside.length), ...bytesOf(type)], inside);
+};
+/** `count` boxes of `type` one after another, each `size` bytes (its own 8 included). */
+function boxes(type: string, count: number, size = 8): Uint8Array<ArrayBuffer> {
+  const bytes = new Uint8Array(count * size);
+  const view = new DataView(bytes.buffer);
+  for (let at = 0; at < bytes.length; at += size) {
+    view.setUint32(at, size);
+    bytes.set(bytesOf(type), at + 4);
+  }
+  return bytes;
+}
 
 /** A tiny JPEG start (SOI) with an Exif segment holding these dates, then image data. */
 function jpegWithExif(dates: Dates, little = false): Uint8Array<ArrayBuffer> {
@@ -257,42 +282,77 @@ describe('when a photo was taken', () => {
     expect(() => readTaken(broken)).not.toThrow();
   });
 
+  /** A HEIF file's start, and an item list (iinf) of one item, of type Exif (its id is 2). */
+  const FTYP = box('ftyp', ...bytesOf('heic'), 0, 0, 0, 0, ...bytesOf('mif1heic'));
+  const EXIF_ITEM_LIST = box(
+    'iinf',
+    0,
+    0,
+    0,
+    0,
+    ...be16(1),
+    ...box('infe', 2, 0, 0, 0, ...be16(2), 0, 0, ...bytesOf('Exif'), 0),
+  );
+
   it('gives up at once on a HEIF file whose item pieces take no bytes', () => {
     // An item list (iloc) whose offsets and lengths take 0 bytes, with
     // thousands of items of 65,535 pieces each: the reader went round 65,535
     // times an item, reading nothing, which took minutes for a few-MB file
     // (review of audit 4 F3-3).
-    const ftyp = box('ftyp', ...bytesOf('heic'), 0, 0, 0, 0, ...bytesOf('mif1heic'));
-    const infe = box('infe', 2, 0, 0, 0, ...be16(2), 0, 0, ...bytesOf('Exif'), 0);
-    const iinf = box('iinf', 0, 0, 0, 0, ...be16(1), ...infe);
     const items = 20_000;
     // Each item (version 0): its id, a data reference and 65,535 pieces of nothing.
-    const entries = Array.from({ length: items }, (_, index) => [
-      ...be16(index + 3),
-      ...be16(0),
-      ...be16(0xffff),
-    ]).flat();
-    const iloc = box('iloc', 0, 0, 0, 0, 0x00, 0x00, ...be16(items), ...entries);
-    const file = new Uint8Array([...ftyp, ...box('meta', 0, 0, 0, 0, ...iinf, ...iloc)]);
+    const entries = new Uint8Array(items * 6);
+    const view = new DataView(entries.buffer);
+    for (let index = 0; index < items; index += 1) {
+      view.setUint16(index * 6, index + 3);
+      view.setUint16(index * 6 + 4, 0xffff);
+    }
+    const iloc = bigBox('iloc', [0, 0, 0, 0, 0x00, 0x00, ...be16(items)], entries);
+    const file = joined(FTYP, bigBox('meta', [0, 0, 0, 0], EXIF_ITEM_LIST, iloc));
     const started = performance.now();
     expect(readTaken(file)).toBeNull();
     expect(performance.now() - started).toBeLessThan(50);
-    // Pieces that do take bytes, but more than the list has: null too, at once.
+    // Pieces that do take bytes, but more than the list has, then the Exif
+    // item: stepping over them goes past the list's end, so the next read
+    // gives up, at once.
     const short = box(
       'iloc',
-      0,
-      0,
-      0,
-      0,
-      0x44,
-      0x00,
-      ...be16(1),
-      ...be16(3),
-      ...be16(0),
-      ...be16(0xffff),
+      ...[0, 0, 0, 0, 0x44, 0x00],
+      ...be16(2),
+      ...[...be16(3), ...be16(0), ...be16(0xffff)],
+      ...[...be16(2), ...be16(0), ...be16(1), ...be32(0), ...be32(40)],
     );
-    const shortFile = new Uint8Array([...ftyp, ...box('meta', 0, 0, 0, 0, ...iinf, ...short)]);
-    expect(readTaken(shortFile)).toBeNull();
+    expect(() =>
+      readTaken(joined(FTYP, box('meta', 0, 0, 0, 0, ...EXIF_ITEM_LIST, ...short))),
+    ).not.toThrow();
+    expect(
+      readTaken(joined(FTYP, box('meta', 0, 0, 0, 0, ...EXIF_ITEM_LIST, ...short))),
+    ).toBeNull();
+  });
+
+  it('gives up soon on a HEIF file of a great many tiny boxes', () => {
+    // 10 MB of 8-byte boxes took more than half a second, and 20 MB about
+    // 240 MB of memory, with every box in the meta box listed first; or
+    // before the meta box, or as items (review of audit 4 F3-3).
+    const many = 1_250_000;
+    const files = [
+      joined(FTYP, bigBox('meta', [0, 0, 0, 0], boxes('free', many), EXIF_ITEM_LIST)),
+      joined(FTYP, boxes('free', many), bigBox('meta', [0, 0, 0, 0], EXIF_ITEM_LIST)),
+      // An item list that says it has 4 billion items, of 12 bytes each.
+      joined(
+        FTYP,
+        bigBox(
+          'meta',
+          [0, 0, 0, 0],
+          bigBox('iinf', [1, 0, 0, 0, ...be32(0xffffffff)], boxes('infe', many, 12)),
+        ),
+      ),
+    ];
+    for (const file of files) {
+      const started = performance.now();
+      expect(readTaken(file)).toBeNull();
+      expect(performance.now() - started).toBeLessThan(50);
+    }
   });
 
   it('only takes real dates', () => {
