@@ -162,10 +162,14 @@ I-1 to I-10).
    - type `TXT`, name `_dmarc`, content
      `v=DMARC1; p=reject; sp=reject; adkim=s; aspf=s`.
 
-   Then **Email → Email Routing → Routing rules**: delete the `security@`
-   and `support@` rules (mail to them doesn't arrive anyway, but they would
-   again if Email Routing were turned back on). Security reports come
-   through GitHub, as every site's `/.well-known/security.txt` says.
+   Leave **Email Routing** off. Two old rules that forwarded mail for
+   `security@` and `support@` are still stored with it, but they do nothing
+   while it's off, and Cloudflare's Email Routing page doesn't show a domain
+   where it's off, so they can't be deleted there. Don't press **Onboard
+   Domain** for shkriuss.app: that turns Email Routing on, and the two rules
+   would forward mail again. If it's ever turned on, delete them first,
+   under its **Routing rules** (audit 3 I-1). Security reports come through
+   GitHub, as every site's `/.well-known/security.txt` says.
 
    Optional: the same `MX` and SPF records for each app's own address, like
    `tally.shkriuss.app`, since `sp=reject` covers only mail servers that
@@ -185,12 +189,14 @@ I-1 to I-10).
    Certificates → Certificate Transparency Monitoring: On**, which emails you
    when a certificate is issued for the domain.
 4. **Nothing rewrites the pages:** turn off **SSL/TLS → Edge Certificates →
-   Automatic HTTPS Rewrites**, **Scrape Shield → Server-side Excludes** (if
-   it's there) and **Security → Settings → Replace insecure JavaScript
-   libraries**. Delete the site under **Analytics & Logs → Web Analytics**,
-   and leave Zaraz and Rocket Loader off. The pages already work without
-   them, and the security rules would block what they add. The live check
-   after each deploy fails if a page has changed.
+   Automatic HTTPS Rewrites** and **Security → Settings → Replace insecure
+   JavaScript libraries**. Delete the site under **Analytics & Logs → Web
+   Analytics**, and leave Zaraz and Rocket Loader off. The pages already
+   work without them, and the security rules would block what they add. The
+   live check after each deploy fails if a page has changed. Server-side
+   Excludes, once under Scrape Shield, needs nothing: Cloudflare retired it
+   in June 2024, so it has no switch, and the zone's old setting (the API
+   still says `on`) does nothing.
 5. **Limit requests to the servers:** **Security → WAF → Rate limiting
    rules → Create rule**: "URI Path starts with `/api/`", 30 requests per 10
    seconds, action **Block**. It slows down a script trying to use up the
