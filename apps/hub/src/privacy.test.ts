@@ -16,13 +16,29 @@ const DATE_LINE = /^const LAST_UPDATED = '([^']*)'; \/\/ text ([0-9a-f]{16})$/m;
 const MONTHS =
   'January|February|March|April|May|June|July|August|September|October|November|December';
 
+/**
+ * Text without its HTML comments, each from "<!--" to the "-->" that ends it.
+ * Cut at the markers rather than with a pattern, which CodeQL takes for an
+ * incomplete HTML sanitizer (this text is only hashed, never shown).
+ */
+const withoutComments = (text: string): string =>
+  text
+    .split('<!--')
+    .map((part, index) => {
+      if (index === 0) return part;
+      const end = part.indexOf('-->');
+      return end === -1 ? '' : part.slice(end + 3);
+    })
+    .join('');
+
 /** The page's text: without the date line, comments and styles, and however its lines wrap. */
 function pageText(text: string): string {
-  return text
-    .replace(DATE_LINE, '')
-    .replace(/<style>[\s\S]*?<\/style>/g, '')
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/<!--[\s\S]*?-->/g, '')
+  return withoutComments(
+    text
+      .replace(DATE_LINE, '')
+      .replace(/<style>[\s\S]*?<\/style>/g, '')
+      .replace(/\/\*[\s\S]*?\*\//g, ''),
+  )
     .replace(/^\s*\/\/.*$/gm, '')
     .replace(/\s+/g, ' ')
     .trim();
