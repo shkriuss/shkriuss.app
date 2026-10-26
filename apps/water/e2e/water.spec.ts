@@ -176,6 +176,19 @@ test('in fluid ounces, drinking exactly the goal reaches it', async ({ page }) =
   await expect(history(page).first()).toHaveText(/goal reached$/);
 });
 
+test('reads amounts typed with a decimal comma', async ({ page }) => {
+  // The fields were type="number", which dropped the comma as it was typed:
+  // "8,5" fl oz was logged as 85 (audit 4 G-1).
+  await seed(page, { settings: [{ id: 'unit', unit: 'oz' }] });
+  await page.getByRole('button', { name: 'Other amount' }).click();
+  const field = otherDialog(page).getByLabel(/^Amount/);
+  await field.pressSequentially('8,5');
+  await expect(field).toHaveValue('8,5');
+  await otherDialog(page).getByRole('button', { name: 'Add' }).click();
+  await expect(status(page, 'Added 8.5 fl oz.')).toBeAttached();
+  await expect(total(page)).toHaveText('8.5 fl oz');
+});
+
 test('the goal, the glass and bottle sizes, and the units can be changed', async ({ page }) => {
   await seed(page, { drinks: [drink(TODAY, '08:00', 500)] });
   const goal = page.getByLabel('Daily goal (ml)');

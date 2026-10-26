@@ -99,9 +99,9 @@ import { DEFAULT_REMINDERS, EVERY_CHOICES, everyLabel } from '../lib/water.ts';
                 class="input"
                 id={`setting-${amount}`}
                 name={amount}
-                type="number"
+                type="text"
                 inputmode="decimal"
-                step="any"
+                autocomplete="off"
                 aria-describedby={`setting-${amount}-error`}
                 data-amount={amount}
               />
@@ -225,9 +225,9 @@ import { DEFAULT_REMINDERS, EVERY_CHOICES, everyLabel } from '../lib/water.ts';
           class="input other__amount"
           id="other-amount"
           name="amount"
-          type="number"
+          type="text"
           inputmode="decimal"
-          step="any"
+          autocomplete="off"
           aria-describedby="other-amount-error"
           required
         />
