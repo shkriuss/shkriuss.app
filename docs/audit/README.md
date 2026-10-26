@@ -494,8 +494,10 @@ subdomain.
 **Check:**
 
 - Is logic copied between apps that should be in a shared package? Are there
-  files too large to work with? The largest is
-  `apps/tasks/src/scripts/tasks.ts`.
+  files too large to work with? The largest page script is
+  `apps/tasks/src/scripts/tasks.ts` (Repairs' was split: audit 3 J-9); the
+  largest files are Trades' and Repairs' rules
+  (`apps/trades/src/lib/trades.ts`, `apps/repairs/src/lib/repairs.ts`).
 - Do the docs still match the code? Every AI session reads them before it
   works, so a wrong step there becomes a wrong change. Check each concrete
   claim (paths and names, commands, limits and numbers, steps, what a

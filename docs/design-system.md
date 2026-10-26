@@ -76,7 +76,11 @@ for an element the page must have, and `showFieldProblems`, which shows each
 of a form's problems next to its field, marks the field, and can focus the
 first), `@shkriuss/ui/numbers` (`parseDecimal`, for amounts typed with a
 point or a comma, read the way the person's language writes thousands, so
-"1,500" is 1500 in English and 1.5 in German, in their own digits too;
+"1,500" is 1500 in English and 1.5 in German, in their own digits too; a
+space between digits groups thousands and is checked like a comma, so
+"12 50" isn't a number; with `{ cents: true }`, for amounts kept to the
+cent, a point or comma that could be either before three digits ("1.500"
+in French) isn't read, and `whichAmount` says what to ask;
 `parseWhole`, for whole numbers like a mileage; `decimalText`, to fill a
 field with a number so it reads back the same; `roundDecimal`; and
 `formatMoney` with `CURRENCIES` and `currencyDigits`: number fields are
