@@ -475,8 +475,13 @@ export function mountHabits(root: Document): void {
   function reload(): void {
     habits = habitsStore.load();
     checks = checksStore.load();
-    // The habit being edited was deleted on another device or tab.
-    if (editing !== null && !find(editing)) editDialog.close();
+    // The habit being edited was deleted on another device or tab: its form
+    // closes, saying why, as Notes does (audit 3 G-6).
+    if (editing !== null && !find(editing)) {
+      if (deleteDialog.open) deleteDialog.close();
+      editDialog.close();
+      showProblem('That habit was deleted on another device.');
+    }
     if (yearDialog.open) {
       if (checks.checks.length === 0) yearDialog.close();
       else fillYears();

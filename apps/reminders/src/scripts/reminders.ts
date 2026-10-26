@@ -7,7 +7,7 @@ import { nowStamp, type Stamp } from '@shkriuss/dates';
 import { createStore } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
 import { keepFocus } from '@shkriuss/ui/keep-focus';
-import { focusProblem, reportSave } from '@shkriuss/ui/problem';
+import { focusProblem, reportSave, showProblem } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { site } from 'virtual:shkriuss/site';
 import {
@@ -368,8 +368,13 @@ export function mountReminders(root: Document): void {
 
   function reload(): void {
     state = store.load();
-    // The reminder being changed was deleted on another device or tab.
-    if (editing !== null && !find(editing)) editDialog.close();
+    // The reminder being changed was deleted on another device or tab: its
+    // form closes, saying why, as Notes does (audit 3 G-6).
+    if (editing !== null && !find(editing)) {
+      if (deleteDialog.open) deleteDialog.close();
+      editDialog.close();
+      showProblem('That reminder was deleted on another device.');
+    }
     render();
     notify.changed();
   }

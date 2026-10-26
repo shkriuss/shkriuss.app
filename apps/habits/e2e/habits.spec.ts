@@ -163,6 +163,27 @@ test('saving the editor keeps what changed elsewhere while it was open', async (
   await expect(card(page, 'Morning run')).toContainText('Weekdays');
 });
 
+test('says so when the habit being edited is deleted on another device', async ({ page }) => {
+  // The form closed by itself, and what was typed went, without a word (audit 3 G-6).
+  await addHabit(page, 'Read');
+  const other = await page.context().newPage();
+  await other.goto('/');
+  await page.bringToFront();
+  await page.getByRole('button', { name: 'Edit Read' }).click();
+  await editor(page).getByLabel('Name').fill('Read a book every evening');
+
+  // Deleted in another tab, as a sync from another device does.
+  await other.getByRole('button', { name: 'Edit Read' }).click();
+  await editor(other).getByRole('button', { name: 'Delete' }).click();
+  await other
+    .getByRole('dialog', { name: 'Delete this habit?' })
+    .getByRole('button', { name: 'Delete' })
+    .click();
+  await expect(editor(page)).toBeHidden();
+  await expect(page.getByRole('alert')).toHaveText('That habit was deleted on another device.');
+  await expect(card(page, 'Read')).toHaveCount(0);
+});
+
 test('says when a habit isn’t planned for today', async ({ page }) => {
   await addHabit(page, 'Long walk');
   await page.getByRole('button', { name: 'Edit Long walk' }).click();
