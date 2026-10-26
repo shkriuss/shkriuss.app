@@ -3,7 +3,7 @@
  *
  * - On install it saves every built file (the "precache"). Hashed build
  *   files already saved by the previous version are copied, not downloaded
- *   again: they never change (Grammar's checker alone is 16 MB).
+ *   again: they never change (Grammar's checker alone is about 20 MB).
  * - Hashed build files (/_astro/…) are served from the cache first: they
  *   never change.
  * - Pages are fetched from the network first, so updates show up right away.
