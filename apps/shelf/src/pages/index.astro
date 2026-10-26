@@ -511,8 +511,13 @@ import { CURRENCIES, LIMITS, OPINIONS, OPINION_LABELS, SORTS, SORT_LABELS } from
     font-size: var(--text-lg);
   }
 
-  /* The name opens the item: it reads as a heading, works as a button. */
+  /*
+   * The name opens the item: it reads as a heading, works as a button. It
+   * fills its row, so a short name is as easy to tap (audit 3 G-9).
+   */
   .item__edit {
+    display: block;
+    width: 100%;
     min-height: var(--tap-target);
     padding: 0;
     border: 0;
