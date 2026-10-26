@@ -17,7 +17,10 @@ const whereLabel: Record<StorageKind, string> = {
   server: 'On a server (explained in the app)',
 };
 
-const LAST_UPDATED = '26 October 2026';
+// The day this page's text last changed (people rely on it), and a
+// fingerprint of that text: ../privacy.test.ts fails when the text changes
+// but they don't, and says what to set (audit 3 D-7).
+const LAST_UPDATED = '26 October 2026'; // text 76c03dfaf5f1d43a
 ---
 
 <AppShell

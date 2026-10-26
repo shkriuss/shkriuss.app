@@ -9,7 +9,10 @@ page, and the Account page for the optional shkriuss account.
 - `src/pages/privacy.astro`: what each app keeps and where. It's built from
   each app's `storage` and `dataStored` in `apps.json`, so a new app is
   listed by itself; its own text (like "two days" or "13 months") repeats
-  numbers from the code, so update it when they change.
+  numbers from the code, so update it when they change. When its text
+  changes, so does its "Last updated" date: `src/privacy.test.ts` keeps a
+  fingerprint of the text next to the date, and fails until both are
+  updated, saying what to set.
 - `src/pages/account.astro` and `src/scripts/account.ts`: the Account page.
   The account itself is in `packages/account`
   ([ADR 0010](../../docs/adr/0010-account-and-sync.md)).
