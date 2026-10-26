@@ -395,6 +395,120 @@ describe('syncing between devices', () => {
     expect(tablet.counters).toEqual([counter('water')]);
   });
 
+  it('says it was deleted here, also when a sync under way finds it gone', async () => {
+    // The sync found the copy gone after "Delete the online copy" had said
+    // it was deleted here, and said it was deleted on another device.
+    const secret = randomBytes(32);
+    const phone = new Device(secret);
+    phone.counters = [counter('water')];
+    await phone.syncNow();
+    const realFetch = globalThis.fetch;
+    let deleting: Promise<void> | undefined;
+    const restore = intercept((path, init) => {
+      if (deleting || !path.startsWith('/api/sync/copy') || init?.method !== undefined) {
+        return undefined;
+      }
+      // The sync asks for the copy as it's deleted: the answer comes after.
+      deleting = phone.sync.deleteOnline();
+      return deleting.then(() => realFetch(path, init)) as unknown as Response;
+    });
+    const status = await phone.syncNow();
+    restore();
+    expect(deleting).toBeDefined();
+    expect(phone.events).toContain('deleted-online');
+    expect(status).toMatchObject({ on: false, problem: null });
+  });
+
+  it('says so too for a sync that starts while the copy is being deleted', async () => {
+    // A sync started meanwhile (a minute's check, say) still said "deleted
+    // on another device" (review of the fix above).
+    const secret = randomBytes(32);
+    const phone = new Device(secret);
+    phone.counters = [counter('water')];
+    await phone.syncNow();
+    const realFetch = globalThis.fetch;
+    let syncing: Promise<SyncStatus> | undefined;
+    const restore = intercept((path, init) => {
+      if (!path.startsWith('/api/sync/copy')) return undefined;
+      if (!syncing && init?.method === 'DELETE') {
+        syncing = phone.syncNow();
+        return undefined;
+      }
+      // The sync's question about the copy is answered once it's deleted.
+      if (syncing && init?.method === undefined) {
+        return deleting.then(() => realFetch(path, init)) as unknown as Response;
+      }
+      return undefined;
+    });
+    const deleting = phone.sync.deleteOnline();
+    await deleting;
+    const status = await syncing;
+    restore();
+    expect(phone.events).toContain('deleted-online');
+    expect(status).toMatchObject({ on: false, problem: null });
+  });
+
+  it('still says what went wrong with a sync while deleting the copy failed', async () => {
+    // A delete that failed hid the problem of a sync under way, and sync
+    // stayed on without a word (review).
+    const secret = randomBytes(32);
+    const phone = new Device(secret);
+    phone.counters = [counter('water')];
+    await phone.syncNow();
+    phone.counters = [counter('water', 5)];
+    const realFetch = globalThis.fetch;
+    let deleting: Promise<void> | undefined;
+    const restore = intercept((path, init) => {
+      if (!path.startsWith('/api/sync/copy')) return undefined;
+      if (init?.method === 'DELETE') return new Response('Not now', { status: 500 });
+      // The sync's upload is answered "too big", after the delete failed.
+      if (init?.method === 'PUT') {
+        const after = (deleting ?? Promise.resolve()).catch(() => undefined);
+        return after.then(() => new Response('', { status: 413 })) as unknown as Response;
+      }
+      if (!deleting) {
+        deleting = phone.sync.deleteOnline();
+        deleting.catch(() => undefined);
+      }
+      return realFetch(path, init) as unknown as Response;
+    });
+    const status = await phone.syncNow();
+    const deleted = await (deleting as Promise<void>).then(
+      () => true,
+      () => false,
+    );
+    restore();
+    expect(deleted).toBe(false);
+    expect(status).toMatchObject({ on: true, problem: 'too-big' });
+  });
+
+  it('doesn’t turn off sync turned on again with another key while it waited', async () => {
+    // Another tab deleted the copy and turned sync on again, with a new key,
+    // while this tab's sync waited for an answer; its "gone" answer then
+    // turned the new one off (review).
+    const secret = randomBytes(32);
+    const phone = new Device(secret);
+    phone.counters = [counter('water')];
+    await phone.syncNow();
+    const tab = phone.reopen(1);
+    const fresh = randomBytes(32);
+    const realFetch = globalThis.fetch;
+    let other: Promise<void> | undefined;
+    const restore = intercept((path, init) => {
+      if (other || !path.startsWith('/api/sync/copy') || init?.method !== undefined) {
+        return undefined;
+      }
+      other = tab.sync.deleteOnline().then(() => {
+        tab.connect(fresh);
+      });
+      return other.then(() => realFetch(path, init)) as unknown as Response;
+    });
+    await phone.syncNow();
+    restore();
+    expect(tab.sync.status().on).toBe(true);
+    expect((await tab.syncNow()).on).toBe(true);
+  });
+
   it('turned off and on again, still syncs what was deleted in between', async () => {
     const secret = randomBytes(32);
     const phone = new Device(secret);
