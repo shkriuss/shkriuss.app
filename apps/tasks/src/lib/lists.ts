@@ -3,7 +3,7 @@
  * tasks without a list are simply in "All". A list can be renamed or
  * deleted at any time.
  */
-import { foldText } from '@shkriuss/ui/text';
+import { cutToLength, foldText } from '@shkriuss/ui/text';
 import { byText } from './tasks.ts';
 
 export interface List {
@@ -44,7 +44,8 @@ export const sortedLists = (state: ListsState): List[] =>
 export const listName = (state: ListsState, id: string): string =>
   state.lists.find((list) => list.id === id)?.name ?? '';
 
-const cutName = (name: string): string => name.trim().slice(0, LIST_NAME_MAX).trim();
+/** A name cut to fit, by whole characters: never half an emoji (audit 4 F3-4). */
+const cutName = (name: string): string => cutToLength(name.trim(), LIST_NAME_MAX).trim();
 
 /**
  * What's wrong with a name for a list, or null if it can be saved. `id` is

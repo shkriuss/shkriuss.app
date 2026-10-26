@@ -268,7 +268,7 @@ export function taskFromDraft(draft: TaskDraft, id: string, now: number, existin
   return {
     id,
     title: cut(draft.title, LIMITS.title),
-    notes: draft.notes.trim().slice(0, LIMITS.notes),
+    notes: cut(draft.notes, LIMITS.notes),
     steps: draft.steps
       .map((step) => ({ ...step, title: cut(step.title, LIMITS.step) }))
       .filter((step) => step.title !== '')

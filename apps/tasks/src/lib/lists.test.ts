@@ -3,6 +3,7 @@ import {
   addList,
   emptyLists,
   isListsState,
+  LIST_NAME_MAX,
   listName,
   listProblem,
   MAX_LISTS,
@@ -31,6 +32,14 @@ describe('lists', () => {
     expect(listProblem(state, '  ', null)).toBe('Give it a name.');
     expect(listProblem(state, ' HOME', null)).toBe('You already have a list called “Home”.');
     expect(listProblem(state, 'home', 'h')).toBeNull();
+  });
+
+  it('cuts a long name by whole characters, never half an emoji', () => {
+    // .slice() kept half of the last emoji, which showed as "�" (audit 4 F3-4).
+    const name = `${'a'.repeat(LIST_NAME_MAX - 1)}🎉`;
+    expect(listName(addList(emptyLists(), 'p', name), 'p')).toBe(name);
+    expect(listName(addList(emptyLists(), 'p', `${name}🎉 `), 'p')).toBe(name);
+    expect(listName(renameList(emptyLists(), 'p', ` ${name}🎉`), 'p')).toBe(name);
   });
 
   it('keeps to the most lists', () => {
