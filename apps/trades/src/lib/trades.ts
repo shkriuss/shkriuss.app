@@ -21,6 +21,7 @@
 import { addDays, isIsoDate, type IsoDate } from '@shkriuss/dates';
 import { csvFile } from '@shkriuss/storage/csv';
 import { defineSettings, type SettingsState as SavedSettings } from '@shkriuss/storage/settings';
+import { withEdits } from '@shkriuss/sync/edits';
 import {
   CURRENCIES,
   decimalText,
@@ -83,7 +84,12 @@ export const LIMITS = {
    * the sync copy (measured in trades.test.ts: "room for every trade").
    */
   trades: 3500,
-  /** The biggest price, quantity or fee (results stay exact far beyond it). */
+  /**
+   * The biggest price, quantity or fee. Results are worked out to 8
+   * decimals (tidy), so with very big positions they can be a hair off:
+   * 1,000,000 shares bought at $1,234.56 and sold at $1,234.57 make
+   * $9,999.99999999, not $10,000 (audit 3 F2-11).
+   */
   number: 1e12,
 };
 
@@ -217,14 +223,17 @@ export type Problems = Partial<Record<keyof TradeForm, string>>;
 
 /**
  * Reads the form into a trade (with the given id), or says what's wrong,
- * field by field. `count` is how many other trades there are. Numbers are
- * read as typed in `locale` (the browser's own when left out): "1,25" is
- * 1.25, and "1,250" is 1250 in English (parseDecimal).
+ * field by field. `count` is how many trades there are, for a new one; null
+ * for a change to one kept already, which adds none, so it's never refused
+ * for the limit: with more than that, after two devices' trades were put
+ * together, any change was, and closing any trade (audit 3 F2-5). Numbers
+ * are read as typed in `locale` (the browser's own when left out): "1,25"
+ * is 1.25, and "1,250" is 1250 in English (parseDecimal).
  */
 export function readTrade(
   form: TradeForm,
   id: string,
-  count: number,
+  count: number | null,
   locale?: string,
 ): { trade: Trade; problems?: undefined } | { trade?: undefined; problems: Problems } {
   const parseNumber = (text: string) => parseDecimal(text, locale);
@@ -233,7 +242,7 @@ export function readTrade(
   if (symbol === '') problems.symbol = 'Enter the symbol, like AAPL.';
   else if (symbol.length > LIMITS.symbol) {
     problems.symbol = `Use ${LIMITS.symbol} characters or fewer.`;
-  } else if (count >= LIMITS.trades) {
+  } else if (count !== null && count >= LIMITS.trades) {
     problems.symbol = `You can keep up to ${new Intl.NumberFormat().format(LIMITS.trades)} trades. To make room, delete a year (under Currency and spreadsheet).`;
   }
   const side = SIDES.find((entry) => entry === form.side);
@@ -325,15 +334,52 @@ export type CloseProblems = Problems & { closeQuantity?: string };
 /**
  * The trade form read: the trade to save and, when it's a part closed off
  * another trade, that trade too (`rest`, unchanged unless the form changed
- * it); or what's wrong.
+ * it), and the trade's parts closed already that change with it (`parts`,
+ * only if any do: followingParts); or what's wrong.
  */
 export type ReadTrades =
-  | { trade: Trade; rest: Trade | null; problems?: undefined }
-  | { trade?: undefined; rest?: undefined; problems: CloseProblems };
+  | { trade: Trade; rest: Trade | null; parts?: Trade[]; problems?: undefined }
+  | { trade?: undefined; rest?: undefined; parts?: undefined; problems: CloseProblems };
 
 /** Whether two trades are the same in every way. */
 const sameTrade = (a: Trade, b: Trade): boolean =>
   (Object.keys({ ...a, ...b }) as (keyof Trade)[]).every((key) => a[key] === b[key]);
+
+/** What a trade's parts closed already take from it when it's changed (followingParts). */
+const FOLLOWED = ['entryPrice', 'side', 'setup'] as const;
+
+/**
+ * A trade's parts closed already, changed with it: its entry price, side or
+ * setup put right (a typo, say) is theirs too, as they're the same trade,
+ * so their results follow (audit 3 F2-10). A part whose own value was
+ * different (changed on its own) keeps it. `before` is the trade as saved.
+ */
+function followingParts(state: TradesState, before: Trade | undefined, after: Trade): Trade[] {
+  if (!before || FOLLOWED.every((key) => before[key] === after[key])) return [];
+  return state.trades.flatMap((part) => {
+    const take = (key: (typeof FOLLOWED)[number]) =>
+      part[key] === before[key] && part[key] !== after[key];
+    if (part.parent !== after.id || !FOLLOWED.some(take)) return [];
+    return [
+      {
+        ...part,
+        entryPrice: take('entryPrice') ? after.entryPrice : part.entryPrice,
+        side: take('side') ? after.side : part.side,
+        setup: take('setup') ? after.setup : part.setup,
+      },
+    ];
+  });
+}
+
+/** `read`, with the parts that change with its trade, if any (followingParts). */
+function withParts(
+  read: { trade: Trade; rest: Trade | null },
+  state: TradesState,
+  before: Trade | undefined,
+): ReadTrades {
+  const parts = followingParts(state, before, read.rest ?? read.trade);
+  return parts.length === 0 ? read : { ...read, parts };
+}
 
 /**
  * Reads the close form of a trade in `state` (`ids.id`): the trade form, and
@@ -355,9 +401,8 @@ export function readClose(
   locale?: string,
 ): ReadTrades {
   const saved = state.trades.find((trade) => trade.id === ids.id);
-  const others = state.trades.length - (saved ? 1 : 0);
   const split = partsOf(state.trades).get(ids.id) ?? NO_PARTS;
-  const read = readTrade(form, ids.id, others, locale);
+  const read = readTrade(form, ids.id, saved ? null : state.trades.length, locale);
   const problems: CloseProblems = { ...read.problems };
   const bought = parseDecimal(form.quantity, locale);
   const open = isPrice(bought) ? tidy(bought - split.quantity) : null;
@@ -378,7 +423,8 @@ export function readClose(
   if (part && !problems.closeQuantity) {
     if (form.exitDate.trim() === '' && form.exitPrice.trim() === '') {
       problems.exitPrice = 'Enter the exit price, to close part of the trade.';
-    } else if (others + 1 >= LIMITS.trades) {
+    } else if (state.trades.length >= LIMITS.trades) {
+      // The part closed is a trade of its own: one more.
       const most = `You can keep up to ${new Intl.NumberFormat(locale).format(LIMITS.trades)} trades`;
       problems.closeQuantity =
         split.quantity > 0
@@ -396,10 +442,15 @@ export function readClose(
     exitPrice: null,
     fees: saved?.fees ?? 0,
   };
-  return {
-    trade: { ...read.trade, id: ids.newId, quantity: closed as number, parent: ids.id },
-    rest: saved && sameTrade(kept, saved) ? saved : kept,
-  };
+  const rest = saved && sameTrade(kept, saved) ? saved : kept;
+  return withParts(
+    {
+      trade: { ...read.trade, id: ids.newId, quantity: closed as number, parent: ids.id },
+      rest,
+    },
+    state,
+    saved,
+  );
 }
 
 /**
@@ -425,7 +476,7 @@ export function readChange(
     const { closeQuantity, ...problems } = read.problems;
     return { problems: { quantity: closeQuantity, ...problems } };
   }
-  const read = readTrade(form, ids.id, state.trades.length - (saved ? 1 : 0), locale);
+  const read = readTrade(form, ids.id, saved ? null : state.trades.length, locale);
   if (!read.trade) return { problems: read.problems };
   if (read.trade.quantity < split.quantity) {
     return {
@@ -434,10 +485,14 @@ export function readChange(
       },
     };
   }
-  return {
-    trade: saved?.parent === undefined ? read.trade : { ...read.trade, parent: saved.parent },
-    rest: null,
-  };
+  return withParts(
+    {
+      trade: saved?.parent === undefined ? read.trade : { ...read.trade, parent: saved.parent },
+      rest: null,
+    },
+    state,
+    saved,
+  );
 }
 
 /**
@@ -462,6 +517,12 @@ export function toForm(trade: Trade, locale?: string): TradeForm {
   };
 }
 
+/** What the trade form holds: the trade's fields, and "Quantity closed" ("" unless closing). */
+export interface FormValues {
+  form: TradeForm;
+  closeQuantity: string;
+}
+
 /**
  * The close form of an open trade: the trade form, with its fees still to
  * count (openFees) as this close's fees, and all that's still open of it as
@@ -471,12 +532,46 @@ export function toCloseForm(
   trade: Trade,
   parts: ReadonlyMap<string, Parts>,
   locale?: string,
-): { form: TradeForm; closeQuantity: string } {
+): FormValues {
   const fees = openFees(trade, parts);
   return {
     form: { ...toForm(trade, locale), fees: fees === 0 ? '' : decimalText(fees, locale) },
     closeQuantity: decimalText(openQuantity(trade, parts), locale),
   };
+}
+
+/**
+ * Reads the trade form (readClose when `closing`, else readChange) when the
+ * trade may have changed while the form was open, on another device or in
+ * another tab. Only what was changed in the form goes on the trade as it is
+ * now, so the other change stays (withEdits, audit 3 F2-1): a stop loss
+ * moved there isn't moved back, and "Quantity closed", unless it was
+ * changed, is all that's still open now. If the two don't fit together,
+ * the form wins, as it was checked. `opened` is the form as it opened,
+ * `edited` as it is now; a new trade, or one deleted meanwhile, is read as
+ * the form is.
+ */
+export function readEdited(
+  opened: FormValues,
+  edited: FormValues,
+  state: TradesState,
+  ids: { id: string; newId: string },
+  closing: boolean,
+  locale?: string,
+): ReadTrades {
+  const read = ({ form, closeQuantity }: FormValues) =>
+    closing
+      ? readClose(form, closeQuantity, state, ids, locale)
+      : readChange(form, state, ids, locale);
+  const current = state.trades.find((trade) => trade.id === ids.id);
+  if (!current) return read(edited);
+  const now = closing
+    ? toCloseForm(current, partsOf(state.trades), locale)
+    : { form: toForm(current, locale), closeQuantity: '' };
+  const flat = ({ form, closeQuantity }: FormValues) => ({ ...form, closeQuantity });
+  const { closeQuantity, ...form } = withEdits(flat(opened), flat(edited), flat(now));
+  const merged = read({ form, closeQuantity });
+  return merged.trade ? merged : read(edited);
 }
 
 // ---------- Changing ----------
@@ -525,43 +620,71 @@ export const closePart = (state: TradesState, closed: Trade, rest: Trade): Trade
 export interface YearCount {
   /** "2024". */
   year: string;
+  /** How many closed trades "Delete a year" deletes. */
   count: number;
+  /** How many it keeps: parts of trades still open (keptPart). */
+  kept: number;
 }
 
 /** The year a trade was closed in, or null while it's open. */
 const closedYear = (trade: Trade): string | null => trade.exitDate?.slice(0, 4) ?? null;
 
 /**
+ * Whether "Delete a year" keeps a trade closed in that year: part of a trade
+ * still open, which needs its parts to know how much of it is (audit 3
+ * F2-2). It goes with a later year, once nothing of the trade is open.
+ */
+function keptPart(
+  trade: Trade,
+  byId: ReadonlyMap<string, Trade>,
+  parts: ReadonlyMap<string, Parts>,
+): boolean {
+  const whole = trade.parent === undefined ? undefined : byId.get(trade.parent);
+  return whole !== undefined && openQuantity(whole, parts) > 0;
+}
+
+/**
  * The years trades were closed in (by the day they were exited, like the
- * results), the earliest first, with how many each (for "Delete a year").
+ * results), the earliest first, with how many each has to delete and to
+ * keep (for "Delete a year"). A year whose trades are all kept isn't one.
  */
 export function closedYears(state: TradesState): YearCount[] {
-  const counts = new Map<string, number>();
+  const parts = partsOf(state.trades);
+  const byId = new Map(state.trades.map((trade) => [trade.id, trade]));
+  const counts = new Map<string, YearCount>();
   for (const trade of state.trades) {
     const year = closedYear(trade);
-    if (year !== null) counts.set(year, (counts.get(year) ?? 0) + 1);
+    if (year === null) continue;
+    const counted = counts.get(year) ?? { year, count: 0, kept: 0 };
+    if (keptPart(trade, byId, parts)) counted.kept += 1;
+    else counted.count += 1;
+    counts.set(year, counted);
   }
-  return [...counts]
-    .map(([year, count]) => ({ year, count }))
+  return [...counts.values()]
+    .filter((counted) => counted.count > 0)
     .sort((a, b) => a.year.localeCompare(b.year));
 }
 
 /**
- * Removes the trades closed in a year ("2024"). Open trades always stay,
- * with as much still open as before: one whose parts go keeps less of its
- * quantity and fees (theirs), and goes too if they closed all of it.
+ * Removes the trades closed in a year ("2024"). It never changes a trade,
+ * so a change to one on a device that hadn't synced can't bring back what
+ * was deleted (audit 3 F2-2). Open trades stay, and so do the parts of
+ * them still open (keptPart). A trade closed in parts, all of it, goes
+ * with its parts of that year, as it would count them as open again; its
+ * other parts stay, as trades of their own.
  */
 export function removeClosedYear(state: TradesState, year: string): TradesState {
-  const gone = partsOf(state.trades.filter((trade) => closedYear(trade) === year));
+  const parts = partsOf(state.trades);
+  const byId = new Map(state.trades.map((trade) => [trade.id, trade]));
+  const gone = state.trades.filter(
+    (trade) => closedYear(trade) === year && !keptPart(trade, byId, parts),
+  );
+  const ids = new Set(gone.map((trade) => trade.id));
+  const emptied = new Set(gone.map((trade) => trade.parent));
   return {
-    trades: state.trades.flatMap((trade) => {
-      if (closedYear(trade) === year) return [];
-      const parts = gone.get(trade.id);
-      if (!parts || !isOpen(trade)) return [trade];
-      const quantity = tidy(trade.quantity - parts.quantity);
-      if (quantity <= 0) return [];
-      return [{ ...trade, quantity, fees: Math.max(0, tidy(trade.fees - parts.fees)) }];
-    }),
+    trades: state.trades.filter(
+      (trade) => !ids.has(trade.id) && !(isOpen(trade) && emptied.has(trade.id)),
+    ),
   };
 }
 

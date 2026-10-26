@@ -95,6 +95,12 @@ describe('categories', () => {
     expect(readCategory({ name: 'groceries', limit: '' }, 'p', categories).problems).toEqual({
       name: 'You already have a category with that name.',
     });
+    // Accents and spaces aside too, as in the other apps (audit 3 J-12).
+    const cafe = { categories: [{ id: 'c', name: 'Café', limit: null }] };
+    expect(readCategory({ name: ' cafe ', limit: '' }, 'p', cafe).problems).toEqual({
+      name: 'You already have a category with that name.',
+    });
+    expect(readCategory({ name: 'CAFE', limit: '' }, 'c', cafe).category?.name).toBe('CAFE');
     // Its own name is fine when changing it.
     expect(readCategory({ name: 'Groceries', limit: '500' }, 'food', categories).category).toEqual({
       id: 'food',
@@ -213,6 +219,28 @@ describe('entries', () => {
     expect(toCategoryForm(rent, 'de-DE')).toEqual({ name: 'Rent', limit: '1200,5' });
   });
 
+  // Audit 3 F2-3: in French (and wherever thousands are grouped with a space),
+  // "1.500" was saved as 1.50, though an amount is never kept to three decimals.
+  it('asks again about an amount that could be thousands or decimals', () => {
+    const amount = (text: string, locale: string) =>
+      readEntry({ ...form, amount: text }, 'x', 0, categories, { locale });
+    expect(amount('1.500', 'fr-FR').problems).toEqual({
+      amount: 'Enter 1500 or 1,5 to show which you mean.',
+    });
+    expect(amount('12.500', 'de-AT').problems).toEqual({
+      amount: 'Enter 12500 or 12,5 to show which you mean.',
+    });
+    expect(
+      readCategory({ name: 'Rent', limit: '1.200' }, 'r', categories, { locale: 'pl-PL' }).problems,
+    ).toEqual({ limit: 'Enter 1200 or 1,2 to show which you mean.' });
+    // Typed the way the language writes it, or with two decimals: as before.
+    expect(amount('1 500', 'fr-FR').entry?.amount).toBe(1500);
+    expect(amount('1,5', 'fr-FR').entry?.amount).toBe(1.5);
+    expect(amount('1.50', 'fr-FR').entry?.amount).toBe(1.5);
+    expect(amount('1.500', 'de-DE').entry?.amount).toBe(1500);
+    expect(amount('1.500', 'en-US').entry?.amount).toBe(1.5);
+  });
+
   it('says what’s wrong', () => {
     expect(readEntry({ ...form, amount: '', date: '' }, 'x', 0, categories).problems).toEqual({
       amount: 'Enter an amount.',
@@ -227,9 +255,15 @@ describe('entries', () => {
     ).toEqual({
       amount: 'Enter at least 0.01.',
     });
-    // Rounded to the cent as written (1.005 * 100 is 100.49999999999999).
-    expect(readEntry({ ...form, amount: '1.005' }, 'x', 0, categories).entry?.amount).toBe(1.01);
-    expect(readEntry({ ...form, amount: '0.005' }, 'x', 0, categories).entry?.amount).toBe(0.01);
+    // Rounded to the cent as written (1.005 * 100 is 100.49999999999999). In
+    // English: "1.005" is 1005 in German, and asked again in French (audit 3 J-5).
+    const english = { locale: 'en-US' };
+    expect(readEntry({ ...form, amount: '1.005' }, 'x', 0, categories, english).entry?.amount).toBe(
+      1.01,
+    );
+    expect(readEntry({ ...form, amount: '0.005' }, 'x', 0, categories, english).entry?.amount).toBe(
+      0.01,
+    );
     expect(
       readEntry({ ...form, amount: '1.234,50' }, 'x', 0, categories, { locale: 'en-US' }).problems,
     ).toEqual({
@@ -241,6 +275,9 @@ describe('entries', () => {
     expect(readEntry(form, 'x', LIMITS.entries, categories).problems).toEqual({
       amount: `You can keep up to ${new Intl.NumberFormat().format(LIMITS.entries)} entries. To make room, delete a year (under Currency and spreadsheet).`,
     });
+    // Audit 3 F2-5: with more than that (two devices' entries put together by
+    // sync), every change was refused. A change adds none, so it's fine.
+    expect(readEntry(form, 'x', null, categories).entry?.amount).toBe(12.5);
   });
 
   // Audit F2-13: yen kept cents, so 0.01 yen was saved and shown as "¥0",
@@ -552,7 +589,8 @@ describe('spreadsheet', () => {
         categories,
       ).split('\r\n'),
     ).toEqual([
-      'Date,Type,Amount,Category,Note',
+      // A byte-order mark first, for Excel (audit 3 F2-6).
+      '\uFEFFDate,Type,Amount,Category,Note',
       '2026-10-04,Refund,4.5,Groceries,Sour milk',
       "2026-10-03,Income,2000,,'=pay",
       '2026-10-02,Expense,-10,Groceries,"Milk, ""fresh"""',

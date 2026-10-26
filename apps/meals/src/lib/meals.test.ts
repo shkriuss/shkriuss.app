@@ -1,5 +1,5 @@
 import { addDays } from '@shkriuss/dates';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   addExtra,
   addMeal,
@@ -21,8 +21,10 @@ import {
   isPlanState,
   isRemindersState,
   isShoppingState,
+  LIMITS,
   MAX_INGREDIENTS,
   MAX_PLANNED,
+  MAX_SHOPPING,
   mealDraftOf,
   mealFromDraft,
   mealProblems,
@@ -126,6 +128,48 @@ describe('your meals', () => {
       '500 g minced beef',
     ]);
     expect(parseIngredients(`${'x'.repeat(150)}`)).toEqual(['x'.repeat(100)]);
+  });
+
+  // Audit 3 F2-7: a line over 100 characters was cut without a word, in the
+  // middle of an emoji, and two long lines that start the same became one.
+  it('says when an ingredient line is too long, and cuts an older one between whole characters', () => {
+    const line =
+      '200 g dark chocolate (70% cocoa or more), chopped finely, plus extra for decorating the top of the cake';
+    const draft = { name: 'Cake', ingredients: `Eggs\n${line}`, notes: '' };
+    expect(mealProblems(emptyMeals(), draft)).toEqual({
+      ingredients: 'Use at most 100 characters on each line.',
+    });
+    // 100 is fine, and spaces at the ends don't count.
+    const hundred = { ...draft, ingredients: `  ${'x'.repeat(100)}  \nEggs` };
+    expect(mealProblems(emptyMeals(), hundred)).toEqual({});
+    // Cut where it must be: never in the middle of a flag or a family.
+    for (const emoji of ['🇬🇪', '👨‍👩‍👧']) {
+      expect(parseIngredients(`${'x'.repeat(LIMITS.ingredient - 1)}${emoji}`)).toEqual([
+        'x'.repeat(LIMITS.ingredient - 1),
+      ]);
+    }
+    expect(parseIngredients(`${'x'.repeat(LIMITS.ingredient - 2)}🇬🇪`)).toEqual([
+      `${'x'.repeat(LIMITS.ingredient - 2)}🇬🇪`,
+    ]);
+  });
+
+  it('cuts by code points where the browser can’t tell characters apart', async () => {
+    // Firefox before 125 has no Intl.Segmenter.
+    vi.stubGlobal(
+      'Intl',
+      Object.assign(Object.create(Intl) as typeof Intl, { Segmenter: undefined }),
+    );
+    vi.resetModules();
+    try {
+      const old = await import('./meals.ts');
+      expect(old.parseIngredients(`${'x'.repeat(LIMITS.ingredient - 1)}🇬🇪`)).toEqual([
+        `${'x'.repeat(LIMITS.ingredient - 1)}🇬`,
+      ]);
+      expect(old.parseIngredients(`${'x'.repeat(150)}`)).toEqual(['x'.repeat(100)]);
+    } finally {
+      vi.unstubAllGlobals();
+      vi.resetModules();
+    }
   });
 
   it('checks the form', () => {
@@ -438,6 +482,30 @@ describe('shopping', () => {
       'onions',
     ]);
     expect(removeExtra(shopping, 'm').items).toEqual([]);
+  });
+
+  // Audit 3 F2-9: "The shopping list is full. Tick some things off first."
+  // couldn't make room: ticking keeps what was added, and ticks counted too.
+  it('holds up to 2,000 things added by hand, and says how to make room', () => {
+    const added = (count: number, extra: boolean) => ({
+      items: Array.from({ length: count }, (_, index) => ({
+        id: extra ? `x${index}` : `${MONDAY}:thing ${index}`,
+        week: MONDAY,
+        name: `Thing ${index}`,
+        extra,
+        done: !extra,
+      })),
+    });
+    const full = added(MAX_SHOPPING, true);
+    const problem =
+      'You can add up to 2,000 things by hand, over all the weeks’ lists. Remove some you don’t need first.';
+    expect(extraProblem(full, 'Milk')).toBe(problem);
+    const [first] = shoppingList(emptyPlan(), emptyMeals(), full, MONDAY);
+    if (!first) throw new Error('Nothing on the list');
+    expect(extraProblem(setDone(full, MONDAY, first, true), 'Milk')).toBe(problem);
+    expect(extraProblem(removeExtra(full, first.key), 'Milk')).toBeNull();
+    // Ticks on the planned meals' ingredients don't count.
+    expect(extraProblem(added(MAX_SHOPPING, false), 'Milk')).toBeNull();
   });
 
   it('shows the same ticks and added things on devices whose weeks start on other days', () => {

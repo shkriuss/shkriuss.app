@@ -188,6 +188,43 @@ test('up to 10 photos, and moving between them', async ({ page }) => {
   await expect(viewer).toBeVisible();
 });
 
+// Audit 3 F2-1: the form kept its own photos as they were when it opened, so
+// saving it took off a photo added in another tab (or on another device).
+test('a photo added in another tab shows in a form open here, 10 at most', async ({ page }) => {
+  const small = await picture(page, { width: 40, height: 30 });
+  const elsewhere = Array.from({ length: 9 }, (_, index) => `on-the-tablet-${index}`);
+  await seed(page, {
+    vehicles: [vehicle({ id: 'b105', name: 'Bus 105' })],
+    repairs: [repair({ id: 'r', photos: elsewhere })],
+  });
+  const other = await page.context().newPage();
+  await other.clock.setFixedTime(NOW);
+  await other.goto('/');
+
+  // Here: a photo added in the form, not saved yet.
+  await repairItems(page).first().locator('[data-action="edit-repair"]').click();
+  const dialog = repairDialog(page);
+  await addPhotos(page, [jpeg('here.jpg', small)]);
+  await expect(dialog.locator('[data-form-photos] img')).toHaveCount(1);
+  // In the other tab: another one, saved.
+  await repairItems(other).first().locator('[data-action="edit-repair"]').click();
+  await addPhotos(other, [jpeg('there.jpg', small)]);
+  await expect(repairDialog(other).locator('[data-form-photos] img')).toHaveCount(1);
+  await fillRepair(other, {});
+  await expect(repairDialog(other)).toBeHidden();
+
+  // It shows here too: 11 in all, one more than a repair keeps, so one has to go.
+  await expect(dialog.locator('[data-form-photos] img')).toHaveCount(2);
+  await dialog.getByRole('button', { name: 'Save' }).click();
+  await expect(dialog.locator('[data-error-for="photos"]')).toHaveText('Add up to 10 photos.');
+  await expect(dialog.getByRole('button', { name: 'Remove photo 1' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await fillRepair(page, {});
+  await expect(dialog).toBeHidden();
+  const saved = await readStore<{ repairs: { photos: string[] }[] }>(page, 'repairs');
+  expect(saved?.data.repairs[0]?.photos).toEqual([...elsewhere, expect.any(String)]);
+});
+
 test('photos on another device, and deleting all data', async ({ page }) => {
   await seed(page, {
     vehicles: [vehicle({ id: 'b105', name: 'Bus 105' })],

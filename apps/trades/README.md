@@ -36,13 +36,24 @@ Your trading journal: log your trades and see what works. Lives at
     the trade and its parts say so (`overClosed`), until the close that's
     wrong is deleted. Deleting a part counts what it closed as open again;
     deleting a trade leaves its parts as trades of their own.
+  - Each part counts as a closed trade of its own in the results (the
+    number of closed trades, the win rate, the averages, by setup and by
+    month), as it has its own exit and result: one position closed in three
+    parts is three closed trades. The page says so under the results when
+    the trades shown have parts. A part takes the trade's entry price, side
+    and setup as they were when it was closed; putting one of those right
+    on the trade later changes its parts too, in the same save, unless a
+    part was given its own (`followingParts`), so their results follow. A
+    stop loss moved later, or the trade's notes, stay the trade's own.
   - Parts came in data version 2 (`TRADES_VERSION`). What version 1 saved
     reads the same (`migrateTrades`): its parts were trades of their own,
     next to the rest, made smaller. A device still on version 1 waits for
     its update before it syncs, instead of counting parts twice.
   - "Download as a spreadsheet (CSV)" saves every trade with its result
     (each part of a trade, and what's still open of it). Text that a
-    spreadsheet could read as a formula starts with `'`.
+    spreadsheet could read as a formula starts with `'`. The file starts
+    with a byte-order mark, so Excel shows text beyond plain English
+    letters (Georgian, "’") as typed.
   - Trades keeps up to 3,500 trades, open and closed (`LIMITS.trades`).
     Why not more: each trade is saved on the device, where a browser keeps
     about 5 MB for each site, and with sync on, sync keeps records of its
@@ -50,12 +61,19 @@ Your trading journal: log your trades and see what works. Lives at
     with realistic trades (notes of a few sentences) and checks that it all
     still fits, on an iPhone too, and in the copy that syncs. If a change
     makes trades bigger, that test fails, and the limit has to come down.
+    Only a new trade, or closing part of one (a trade of its own), is
+    refused once Trades is full: with more than that (two devices' trades
+    put together when sync is turned on), trades can still be changed and
+    closed.
   - To make room, "Delete a year…" (next to the spreadsheet download)
     deletes the trades closed in one year, by the day they were closed
-    (`closedYears`, `removeClosedYear`). Open trades always stay, with as
-    much still open as before (a trade whose parts go keeps less of its
-    quantity, and goes too once nothing is left of it). It says how many
-    that is, and offers the spreadsheet first. With sync on, they're
+    (`closedYears`, `removeClosedYear`). It never changes a trade, so a
+    change to one on a device that hadn't synced can't bring back what was
+    deleted. Open trades always stay, and so do the parts of them closed
+    that year, which say how much is still open: they go once all of their
+    trade is closed (and then the trade goes with them; its parts from other
+    years stay, as trades of their own). It says how many that is, and what
+    stays, and offers the spreadsheet first. With sync on, they're
     deleted on the other devices too. Once more than 90% of the 3,500 are
     used, a note at the top says how many are left and points to it
     (`roomNote`).
@@ -76,7 +94,11 @@ Your trading journal: log your trades and see what works. Lives at
   ([ADR 0010](../../docs/adr/0010-account-and-sync.md)). The newest change
   to each trade wins: one changed on two devices at once isn't kept twice,
   which would count it twice in the results. Parts are trades of their
-  own, so closing part of a trade is never undone by a change to it.
+  own, so closing part of a trade is never undone by a change to it. The
+  trade form (also when closing) that's open while a sync (or another tab)
+  changes the trade saves only what was changed in it (`readEdited`), so
+  a stop loss moved there stays, and "Quantity closed", unless it was
+  changed, is what's still open by then.
 - `e2e/`: browser tests (`helpers.ts` is shared by them). The shared
   accessibility, security, offline and sync checks in `tests/e2e/` run too.
 

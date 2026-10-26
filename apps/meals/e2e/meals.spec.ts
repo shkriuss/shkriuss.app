@@ -189,6 +189,51 @@ test('keeps ticks saved by the older version, under the week’s Monday', async 
   ]);
 });
 
+// Audit 3 F2-1: the forms saved every field as it was when they opened, so
+// another tab's (or another device's) change was put back.
+test('a change made in another tab survives a form that was open here', async ({ page }) => {
+  await newMeal(page, 'Lentil soup', ['Lentils', 'Onions']);
+  await plan(page, '2026-10-21', 'Lentil soup', 'Dinner');
+  const other = await page.context().newPage();
+  await other.clock.setFixedTime(NOW);
+  await other.goto('/');
+
+  // Here: the meal's form is opened. In the other tab, its ingredients change.
+  const meals = (tab: typeof page) => tab.locator('[data-meals]');
+  await meals(page).getByRole('button', { name: 'Lentil soup' }).click();
+  await meals(other).getByRole('button', { name: 'Lentil soup' }).click();
+  await mealDialog(other).getByLabel('Ingredients (optional)').fill('Lentils\nOnions\nCarrots');
+  await mealDialog(other).getByRole('button', { name: 'Save' }).click();
+  await expect(meals(page).locator('li')).toHaveText([/Lentil soup\s*3 ingredients/]);
+  // Here, notes are added: the carrots stay.
+  await mealDialog(page).getByLabel('Notes (optional)').fill('Soak the lentils first.');
+  await mealDialog(page).getByRole('button', { name: 'Save' }).click();
+  await expect(meals(page).locator('li')).toHaveText([/Lentil soup\s*3 ingredients/]);
+  await expect(shoppingNames(page)).toContainText(['Carrots']);
+
+  // A planned meal moved to lunch there, while it's renamed here: lunch it stays.
+  const planned = (tab: typeof page) =>
+    day(tab, '2026-10-21').getByRole('button', { name: /^Lentil soup/ });
+  await planned(page).click();
+  await planned(other).click();
+  await other.getByLabel('For', { exact: true }).selectOption({ label: 'Lunch' });
+  await planDialog(other).getByRole('button', { name: 'Save' }).click();
+  await expect(dayMeals(page, '2026-10-21')).toHaveText([/Lunch\s*Lentil soup/]);
+  await page.getByLabel('Meal', { exact: true }).fill('Lentil soup with bread');
+  await planDialog(page).getByRole('button', { name: 'Save' }).click();
+  await expect(dayMeals(page, '2026-10-21')).toHaveText([/Lunch\s*Lentil soup with bread/]);
+});
+
+// Audit 3 G-9: a name button was only as wide as the name.
+test('a meal’s name fills its line, a big target however short', async ({ page }) => {
+  await newMeal(page, '7');
+  const meal = page.locator('[data-meals] li').first();
+  const name = await meal.getByRole('button', { name: '7', exact: true }).boundingBox();
+  const line = await meal.boundingBox();
+  expect(name?.width).toBeGreaterThanOrEqual(44);
+  expect(name?.width).toBeGreaterThan((line?.width ?? 0) / 2);
+});
+
 test('your meals’ ingredients make the shopping list', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await expect(page.getByText('No meals yet.')).toBeVisible();

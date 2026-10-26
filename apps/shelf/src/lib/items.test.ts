@@ -59,7 +59,10 @@ describe('the form', () => {
     expect(parsePrice('12,50')).toBe(12.5);
     expect(parsePrice('1 299')).toBe(1299);
     expect(parsePrice('1 299,99')).toBe(1299.99);
-    for (const wrong of ['abc', '12.345', '-3', '1,2,3', '12$', '2000000000']) {
+    expect(parsePrice(' 1 234 567 ')).toBe(1234567);
+    expect(parsePrice('1 299')).toBe(1299);
+    // A space that doesn't group thousands isn't a price: "12 50" was 1,250 (audit 3 F2-4).
+    for (const wrong of ['abc', '12.345', '-3', '1,2,3', '12$', '2000000000', '12 50', '1 2345']) {
       expect(parsePrice(wrong), wrong).toBeUndefined();
     }
   });

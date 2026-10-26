@@ -3,7 +3,8 @@
 import { readFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
 import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
-import { LIMITS, REPAIRS_VERSION } from '../src/lib/repairs.ts';
+import { readStore } from '../../../tests/e2e/storage.ts';
+import { LIMITS, REPAIRS_VERSION, type VehiclesState } from '../src/lib/repairs.ts';
 import {
   fillRepair,
   NOW,
@@ -272,6 +273,45 @@ test('changes and deletes repairs and vehicles', async ({ page }) => {
   ).toBeFocused();
 });
 
+// Audit 3 G-9: a repair opens through its vehicle's name, which was only as
+// wide as the name: vehicle "7" was 9 by 44 px.
+test('a repair’s vehicle fills its line, a big target however short', async ({ page }) => {
+  await seed(page, {
+    vehicles: [vehicle({ id: 'v7', name: '7' })],
+    repairs: [repair({ vehicle: 'v7' })],
+  });
+  const title = await repairItems(page)
+    .first()
+    .locator('[data-action="edit-repair"]')
+    .boundingBox();
+  const line = await repairItems(page).first().locator('.repair__top').boundingBox();
+  expect(title?.width).toBeGreaterThanOrEqual(44);
+  expect(title?.width).toBeGreaterThan((line?.width ?? 0) / 2);
+});
+
+// Audit 3 F2-1: the vehicle's form saved every field as it was when it opened.
+test('a change made in another tab survives a vehicle form open here', async ({ page }) => {
+  await seed(page, { vehicles: fleet });
+  const other = await page.context().newPage();
+  await other.clock.setFixedTime(NOW);
+  await other.goto('/');
+  await page.getByRole('button', { name: 'Edit Bus 105' }).click();
+  // In the other tab: the number plate added.
+  await other.getByRole('button', { name: 'Edit Bus 105' }).click();
+  await vehicleDialog(other).getByLabel('Number plate (optional)').fill('tb-105-aa');
+  await vehicleDialog(other).getByRole('button', { name: 'Save' }).click();
+  await expect(vehicleItem(page, 'Bus 105')).toContainText('TB-105-AA');
+  // Here, a note: the plate stays.
+  await vehicleDialog(page).getByLabel('Notes (optional)').fill('The rear door sticks');
+  await vehicleDialog(page).getByRole('button', { name: 'Save' }).click();
+  await expect(vehicleItem(page, 'Bus 105')).toContainText('TB-105-AA');
+  const saved = await readStore<VehiclesState>(page, 'repairs-vehicles');
+  expect(saved?.data.vehicles.find((entry) => entry.name === 'Bus 105')).toMatchObject({
+    plate: 'TB-105-AA',
+    notes: 'The rear door sticks',
+  });
+});
+
 test('miles, and a spreadsheet of every repair', async ({ page }) => {
   await seed(page, {
     vehicles: fleet,
@@ -294,7 +334,8 @@ test('miles, and a spreadsheet of every repair', async ({ page }) => {
   expect(file.suggestedFilename()).toBe('repairs-2026-10-21.csv');
   const text = await readFile((await file.path()) ?? '', 'utf8');
   expect(text.split('\r\n')).toEqual([
-    'Date,Vehicle,Model,Plate,Mileage (mi),System,Damage found,Work done,Parts replaced,Hours worked,Parts cost (USD),Labour cost (USD),Total cost (USD)',
+    // A byte-order mark first, for Excel (audit 3 F2-6).
+    '\uFEFFDate,Vehicle,Model,Plate,Mileage (mi),System,Damage found,Work done,Parts replaced,Hours worked,Parts cost (USD),Labour cost (USD),Total cost (USD)',
     '2026-10-21,Bus 105,Isuzu Novociti Life,,120000,Brakes,"Door sensor fault, ""intermittent""",Replaced the front pads,Door sensor (DS-4),,,,',
     '',
   ]);

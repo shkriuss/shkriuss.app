@@ -131,11 +131,13 @@ export interface ItemDraft {
 export type DraftField = 'name' | 'price' | 'link' | 'bought' | 'form';
 
 /**
- * A price as typed: "12.50", "12,50" or "1 299" (spaces are ignored). Null
+ * A price as typed: "12.50", "12,50" or "1 299". A space may group
+ * thousands (three digits after it), so "12 50" isn't a price: it was read
+ * as 1,250 (audit 3 F2-4, which Budget's and Trades' amounts had too). Null
  * when empty; undefined when it isn't a price.
  */
 export function parsePrice(text: string): number | null | undefined {
-  const compact = text.replace(/\s/g, '');
+  const compact = text.trim().replace(/(\d)\s+(?=\d{3}(?!\d))/g, '$1');
   if (compact === '') return null;
   if (!/^\d+([.,]\d{1,2})?$/.test(compact)) return undefined;
   const price = Number(compact.replace(',', '.'));

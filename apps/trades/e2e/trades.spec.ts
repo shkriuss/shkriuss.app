@@ -190,7 +190,8 @@ test('the currency, and a spreadsheet of the trades', async ({ page }) => {
   expect(file.suggestedFilename()).toBe('trades-2026-10-21.csv');
   const text = await readFile((await file.path()) ?? '', 'utf8');
   expect(text.split('\r\n').slice(0, 2)).toEqual([
-    'Symbol,Side,Entry date,Entry price,Quantity,Stop loss,Exit date,Exit price,Fees,Net result,Return %,R,Setup,Notes',
+    // A byte-order mark first, for Excel (audit 3 F2-6).
+    '\uFEFFSymbol,Side,Entry date,Entry price,Quantity,Stop loss,Exit date,Exit price,Fees,Net result,Return %,R,Setup,Notes',
     'AAPL,Long,2026-10-01,100,10,,2026-10-05,110,0,100,10,,,"Good, ""clean"" entry"',
   ]);
 });
@@ -258,7 +259,34 @@ test('closes part of a trade, then the rest', async ({ page }) => {
   const confirm = page.getByRole('dialog', { name: 'Delete this trade?' });
   await expect(confirm).toContainText('count as open again, in the AAPL trade.');
   await confirm.getByRole('button', { name: 'Delete' }).click();
-  await expect(page.locator('[data-open-list] [data-meta]')).toHaveText(/^\d+ at 150, since/);
+  // The 40 of the first part (audit 3 F2-11: any number passed).
+  await expect(page.locator('[data-open-list] [data-meta]')).toHaveText(
+    '40 at 150, since Oct 1, 2026',
+  );
+});
+
+// Audit 3 F2-10: a part kept the trade's entry price as it was when it was
+// closed, so putting a typo right left its result wrong.
+test('a trade’s entry price put right changes its parts closed already', async ({ page }) => {
+  const lot = trade({ id: 'lot', entryPrice: 15, quantity: 100, exitDate: null, exitPrice: null });
+  await seed(page, [
+    lot,
+    { ...lot, id: 'part', quantity: 40, exitDate: '2026-10-05', exitPrice: 160, parent: 'lot' },
+  ]);
+  // Parts count as closed trades: the page says so.
+  await expect(page.locator('[data-parts-note]')).toHaveText(
+    'A trade closed in parts counts as a closed trade for each part, here and below.',
+  );
+  const closed = page.locator('[data-closed-list]');
+  await expect(closed.locator('[data-profit]')).toHaveText('+$5,800.00');
+  await page.locator('[data-open-list]').getByRole('button', { name: 'AAPL Long' }).click();
+  await fillTrade(page, { entryPrice: '150' });
+  await expect(
+    status(page, 'Saved the AAPL trade, still open. Its closed part changed with it.'),
+  ).toBeAttached();
+  await expect(closed.locator('[data-meta]')).toHaveText('40 · 150 → 160 · Oct 5, 2026');
+  await expect(closed.locator('[data-profit]')).toHaveText('+$400.00');
+  await expect(tile(page, 'Net result')).toHaveText('+$400.00');
 });
 
 // Audit F2-4: what two devices closed at once, before they synced, is never
@@ -345,6 +373,39 @@ test('deletes a year of closed trades, never open ones', async ({ page }) => {
   await expect(page.locator('[data-open-list] [data-symbol]')).toHaveText(['TSLA']);
   await page.reload();
   await expect(page.locator('[data-closed-list] [data-symbol]')).toHaveText(['NVDA']);
+});
+
+// Audit 3 F2-2: deleting a year made the open trade smaller, so a change to it
+// on a device that hadn't synced brought back what was deleted, as open.
+test('deleting a year keeps what was closed of a trade still open', async ({ page }) => {
+  const lot = trade({
+    id: 'lot',
+    symbol: 'AMD',
+    entryDate: '2024-04-01',
+    quantity: 100,
+    exitDate: null,
+    exitPrice: null,
+  });
+  await seed(page, [
+    lot,
+    { ...lot, id: 'part', quantity: 40, exitDate: '2024-06-03', exitPrice: 110, parent: 'lot' },
+    trade({ symbol: 'AAPL', entryDate: '2024-02-01', exitDate: '2024-03-02' }),
+  ]);
+  await page.getByRole('button', { name: 'Delete a year…' }).click();
+  const dialog = yearDialog(page);
+  await expect(dialog.getByLabel('Year').locator('option')).toHaveText(['2024 (1 closed trade)']);
+  await expect(dialog.locator('[data-year-text]')).toHaveText(
+    'The 1 closed trade from 2024 will be deleted. Open trades stay, and so does 1 closed trade from 2024 that’s part of one still open, until all of it is closed. With sync on, they’re deleted on your other devices too. This can’t be undone.',
+  );
+  await dialog.getByRole('button', { name: 'Delete 1 closed trade' }).click();
+  await expect(status(page, 'Deleted 1 closed trade from 2024.')).toBeAttached();
+  await expect(page.locator('[data-closed-list] [data-symbol]')).toHaveText(['AMD']);
+  await expect(page.locator('[data-open-list] [data-meta]')).toHaveText(
+    '60 at 100, since Apr 1, 2024',
+  );
+  // Nothing else from 2024 to delete now.
+  await page.getByRole('button', { name: 'Delete a year…' }).click();
+  await expect(status(page, 'There are no closed trades to delete.')).toBeVisible();
 });
 
 test('says when Trades is nearly full, and how to make room', async ({ page }) => {

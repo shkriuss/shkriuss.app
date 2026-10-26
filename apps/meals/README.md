@@ -22,7 +22,9 @@ Plan your meals for the week, and what to buy for them. Lives at
     week (`shoppingWeek`), so a phone whose weeks start on Monday and a
     tablet whose weeks start on Sunday share it when they sync (version 1
     used each device's own first day; `migrateShopping` moves it). Weeks
-    older than 8 are let go (`pruneShopping`);
+    older than 8 are let go (`pruneShopping`). Up to 2,000 things added by
+    hand are kept, all weeks together (`MAX_SHOPPING`): then the list says
+    to remove some first (ticks don't count, as ticking doesn't remove);
   - reminders (`shkriuss:meal-reminders`): for each meal of the day, a time
     to be told what's planned ("Dinner: Lentil soup"), or off. Only the ones
     ever set are saved, so a new device has nothing that could win over
@@ -50,7 +52,10 @@ Plan your meals for the week, and what to buy for them. Lives at
 - `src/worker.ts`: runs the shared notification and sync servers
   ([ADR 0010](../../docs/adr/0010-account-and-sync.md)). With sync on, the
   newest change to each planned meal, tick and reminder time wins; a meal
-  changed on two devices at once is kept in both versions. While sync is
+  changed on two devices at once is kept in both versions. A meal's or a
+  planned meal's form that's open while a sync (or another tab) changes it
+  saves only what was changed in the form (`withEdits` from
+  `@shkriuss/sync/edits`), so the other change stays. While sync is
   on, letting go of old plans and lists deletes them on every device, so a
   phone whose clock is set far ahead mustn't decide what's old: Meals
   counts back from the sync server's clock at the last sync, if that's

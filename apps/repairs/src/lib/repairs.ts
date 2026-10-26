@@ -24,6 +24,7 @@
 import { isIsoDate, type IsoDate } from '@shkriuss/dates';
 import { csvFile } from '@shkriuss/storage/csv';
 import { defineSettings, type SettingsState as SavedSettings } from '@shkriuss/storage/settings';
+import { withEdits } from '@shkriuss/sync/edits';
 import {
   CURRENCIES,
   currencyDigits,
@@ -32,6 +33,7 @@ import {
   parseDecimal,
   parseWhole,
   roundDecimal,
+  whichAmount,
   type Currency,
 } from '@shkriuss/ui/numbers';
 import { compareText, foldText } from '@shkriuss/ui/text';
@@ -316,6 +318,14 @@ export function readVehicle(
   return { vehicle: { id, name, model, plate, notes } };
 }
 
+/** A vehicle as its form shows it. */
+export const toVehicleForm = ({ name, model, plate, notes }: Vehicle): VehicleForm => ({
+  name,
+  model,
+  plate,
+  notes,
+});
+
 export function saveVehicle(state: VehiclesState, vehicle: Vehicle): VehiclesState {
   const exists = state.vehicles.some((item) => item.id === vehicle.id);
   return {
@@ -381,7 +391,8 @@ export type RepairProblems = Partial<Record<string, string>>;
  * from `newId`, and returned as `newVehicle`. Numbers are read as typed in
  * `locale` (the browser's own when left out): "1,5" is 1.5, and "1,500" is
  * 1500 in English (parseDecimal); the mileage is a whole number ("120.000"
- * is 120000 in German).
+ * is 120000 in German). Prices and labour are amounts of money: "1.500" in
+ * French, which could be 1500 or 1.5, is asked again (`cents`, audit 3 F2-3).
  */
 export function readRepair(
   form: RepairForm,
@@ -394,6 +405,12 @@ export function readRepair(
   | { repair: Repair; newVehicle: Vehicle | null; problems?: undefined }
   | { repair?: undefined; newVehicle?: undefined; problems: RepairProblems } {
   const parseNumber = (text: string) => parseDecimal(text, locale);
+  const parseMoney = (text: string) => parseDecimal(text, locale, { cents: true });
+  // Over the most allowed: said so, not that it isn't a number (audit 3 F2-8).
+  const over = (value: number | null, most: number) =>
+    value !== null && Number.isFinite(value) && value > most;
+  const atMost = (most: number, unit = '') =>
+    `Enter at most ${new Intl.NumberFormat(locale).format(most)}${unit}.`;
   const problems: RepairProblems = {};
 
   const name = oneLine(form.vehicle);
@@ -414,7 +431,8 @@ export function readRepair(
   if (!isIsoDate(form.date)) problems['date'] = 'Choose the day.';
 
   const mileage = parseWhole(form.mileage, locale);
-  if (mileage !== null && !isMileage(mileage)) {
+  if (over(mileage, LIMITS.mileage)) problems['mileage'] = atMost(LIMITS.mileage);
+  else if (mileage !== null && !isMileage(mileage)) {
     problems['mileage'] = 'Enter the mileage as a whole number, or leave it empty.';
   }
 
@@ -431,7 +449,7 @@ export function readRepair(
     const partName = oneLine(row.name);
     const number = oneLine(row.number).toUpperCase();
     const typedQuantity = parseNumber(row.quantity);
-    const price = parseNumber(row.price);
+    const price = parseMoney(row.price);
     // An empty row is left out.
     if (
       partName === '' &&
@@ -449,19 +467,30 @@ export function readRepair(
       problems[`part-number-${index}`] = `Use ${LIMITS.partNumber} characters or fewer.`;
     }
     const quantity = typedQuantity ?? 1;
-    if (!isQuantity(quantity)) problems[`part-quantity-${index}`] = 'Enter a number above 0.';
-    if (!isMoneyOrNull(price))
-      problems[`part-price-${index}`] = 'Enter a price, or leave it empty.';
+    if (over(quantity, LIMITS.quantity)) {
+      problems[`part-quantity-${index}`] = atMost(LIMITS.quantity);
+    } else if (!isQuantity(quantity)) {
+      problems[`part-quantity-${index}`] = 'Enter a number above 0.';
+    }
+    if (over(price, LIMITS.money)) problems[`part-price-${index}`] = atMost(LIMITS.money);
+    else if (!isMoneyOrNull(price)) {
+      problems[`part-price-${index}`] =
+        whichAmount(row.price, locale) ?? 'Enter a price, or leave it empty.';
+    }
     parts.push({ name: partName, number, quantity, price });
   });
   if (parts.length > LIMITS.parts) problems['parts'] = `Add up to ${LIMITS.parts} parts.`;
 
   const hours = parseNumber(form.hours);
-  if (hours !== null && !isHours(hours)) {
+  if (over(hours, LIMITS.hours)) problems['hours'] = atMost(LIMITS.hours, ' hours');
+  else if (hours !== null && !isHours(hours)) {
     problems['hours'] = 'Enter the hours as a number above 0, or leave it empty.';
   }
-  const labour = parseNumber(form.labour);
-  if (!isMoneyOrNull(labour)) problems['labour'] = 'Enter an amount, or leave it empty.';
+  const labour = parseMoney(form.labour);
+  if (over(labour, LIMITS.money)) problems['labour'] = atMost(LIMITS.money);
+  else if (!isMoneyOrNull(labour)) {
+    problems['labour'] = whichAmount(form.labour, locale) ?? 'Enter an amount, or leave it empty.';
+  }
 
   if (form.photos.length > LIMITS.photos) {
     problems['photos'] = `Add up to ${LIMITS.photos} photos.`;
@@ -518,6 +547,50 @@ export function toRepairForm(repair: Repair, vehicles: VehiclesState, locale?: s
     labour: number(repair.labour),
     photos: [...repair.photos],
   };
+}
+
+/**
+ * A repair's photos when the repair changed while its form was open (a
+ * sync, or another tab): its photos now, with those added in the form and
+ * without those removed in it (audit 3 F2-1). Keeping the form's own list
+ * would take off the photos added on another device meanwhile, which are
+ * then deleted on every device. `before` is the list the form started
+ * from, `form` the form's list now, `now` the repair's photos now.
+ */
+export function mergePhotos(
+  before: readonly string[],
+  form: readonly string[],
+  now: readonly string[],
+): string[] {
+  const added = form.filter((id) => !before.includes(id));
+  const removed = before.filter((id) => !form.includes(id));
+  return [...new Set([...now.filter((id) => !removed.includes(id)), ...added])];
+}
+
+/**
+ * Reads the repair form (readRepair) when the repair may have changed while
+ * it was open, on another device or in another tab: only what was changed
+ * in the form goes on the repair as it is now (withEdits), so the other
+ * change stays (audit 3 F2-1). The photos are the form's, which follow the
+ * repair's while it's open (mergePhotos). If the two don't fit together,
+ * the form wins, as it was checked. `opened` is the form as it opened (null
+ * for a new repair), `edited` as it is now.
+ */
+export function readEditedRepair(
+  opened: RepairForm | null,
+  edited: RepairForm,
+  id: string,
+  repairs: RepairsState,
+  vehicles: VehiclesState,
+  newId: () => string,
+  locale?: string,
+): ReturnType<typeof readRepair> {
+  const read = (form: RepairForm) => readRepair(form, id, repairs, vehicles, newId, locale);
+  const current = repairs.repairs.find((repair) => repair.id === id);
+  if (!opened || !current) return read(edited);
+  const now = toRepairForm(current, vehicles, locale);
+  const merged = read({ ...withEdits(opened, edited, now), photos: edited.photos });
+  return merged.repair ? merged : read(edited);
 }
 
 export function saveRepair(state: RepairsState, repair: Repair): RepairsState {

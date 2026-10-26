@@ -22,6 +22,13 @@ export function csvCell(value: CsvValue): string {
   return /[",\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
 }
 
-/** Rows of cells (the header first) as a CSV file: lines end in CRLF, the last one too. */
+/**
+ * Rows of cells (the header first) as a CSV file: lines end in CRLF, the
+ * last one too. It starts with a byte-order mark (U+FEFF): without it, Excel
+ * reads the file in the computer's older encoding, so anything beyond plain
+ * English letters comes out garbled ("Mike’s bus" as "Mikeâ€™s bus", and
+ * Georgian names). Numbers, Google Sheets and LibreOffice read it too
+ * (audit 3 F2-6).
+ */
 export const csvFile = (rows: readonly (readonly CsvValue[])[]): string =>
-  rows.map((row) => row.map(csvCell).join(',')).join('\r\n') + '\r\n';
+  '\uFEFF' + rows.map((row) => row.map(csvCell).join(',')).join('\r\n') + '\r\n';

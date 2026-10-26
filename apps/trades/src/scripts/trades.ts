@@ -9,7 +9,7 @@ import { createStore, downloadFile } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
 import { keepFocus } from '@shkriuss/ui/keep-focus';
 import { PAGE_SIZE, shownCount, waitForTyping } from '@shkriuss/ui/long-lists';
-import { reportSave } from '@shkriuss/ui/problem';
+import { reportSave, showProblem } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { typedText } from '@shkriuss/ui/typed-text';
 import { site } from 'virtual:shkriuss/site';
@@ -44,8 +44,7 @@ import {
   partsOf,
   PERIODS,
   profit,
-  readChange,
-  readClose,
+  readEdited,
   removeClosedYear,
   removeNote,
   removeTrade,
@@ -63,6 +62,7 @@ import {
   toForm,
   withSettings,
   type CloseProblems,
+  type FormValues,
   type Group,
   type Parts,
   type Period,
@@ -134,6 +134,7 @@ export function mountTrades(root: Document): void {
   const periodSelect = required<HTMLSelectElement>(root, '[data-period]');
   const noResults = required<HTMLElement>(root, '[data-no-results]');
   const tiles = required<HTMLElement>(root, '[data-tiles]');
+  const partsNote = required<HTMLElement>(root, '[data-parts-note]');
   const openSection = required<HTMLElement>(root, '[data-open-section]');
   const openList = required<HTMLUListElement>(root, '[data-open-list]');
   const searchInput = required<HTMLInputElement>(root, '[data-search]');
@@ -176,6 +177,8 @@ export function mountTrades(root: Document): void {
   let editing: string | null = null;
   /** Whether the form is closing an open trade ("Close"), so it can close part of it. */
   let closing = false;
+  /** The form as it opened, to tell what the person changed (see withEdits). */
+  let opened: FormValues | null = null;
   let announceTimer: number | undefined;
   /** What was closed off each trade in parts, and every trade by id: worked out at each render. */
   let parts = new Map<string, Parts>();
@@ -218,6 +221,8 @@ export function mountTrades(root: Document): void {
     const found = stats(closed);
     noResults.hidden = found.count > 0;
     tiles.hidden = found.count === 0;
+    // Each part of a trade closed in parts is a closed trade (audit 3 F2-10).
+    partsNote.hidden = found.count === 0 || !closed.some((trade) => trade.parent !== undefined);
     if (found.count === 0) return;
     tile('total', money(found.total, true), '', found.total);
     tile(
@@ -400,26 +405,23 @@ export function mountTrades(root: Document): void {
     deleteButton.hidden = !trade;
     // Closing: all that's still open, unless less is typed, with the fees not counted yet.
     const closeForm = closing && trade ? toCloseForm(trade, parts) : null;
+    opened = closeForm ?? (trade ? { form: toForm(trade), closeQuantity: '' } : null);
     closeQuantityField.hidden = !closing;
-    (field('closeQuantity') as HTMLInputElement).value = closeForm?.closeQuantity ?? '';
+    (field('closeQuantity') as HTMLInputElement).value = opened?.closeQuantity ?? '';
     fillForm(
-      closeForm
-        ? closeForm.form
-        : trade
-          ? toForm(trade)
-          : {
-              symbol: '',
-              side: 'long',
-              entryDate: today(),
-              entryPrice: '',
-              quantity: '',
-              stop: '',
-              exitDate: '',
-              exitPrice: '',
-              fees: '',
-              setup: '',
-              notes: '',
-            },
+      opened?.form ?? {
+        symbol: '',
+        side: 'long',
+        entryDate: today(),
+        entryPrice: '',
+        quantity: '',
+        stop: '',
+        exitDate: '',
+        exitPrice: '',
+        fees: '',
+        setup: '',
+        notes: '',
+      },
     );
     dialog.showModal();
     if (closing) {
@@ -437,32 +439,49 @@ export function mountTrades(root: Document): void {
     (button ?? newButton).focus();
   }
 
+  /**
+   * `next`, with the trade's parts closed already that change with it (its
+   * entry price put right, say), saved at once; and what to say of them.
+   */
+  function withParts(next: TradesState, parts: readonly Trade[]): [TradesState, string] {
+    const saved = parts.reduce((all, part) => saveTrade(all, part), next);
+    const count = parts.length;
+    const words =
+      count === 0
+        ? ''
+        : count === 1
+          ? ' Its closed part changed with it.'
+          : ` Its ${formatCount(count)} closed parts changed with it.`;
+    return [saved, words];
+  }
+
   /** Saves part of a trade closed, with the trade it was closed off, and says what's still open. */
-  function saveClosedPart(part: Trade, rest: Trade): void {
+  function saveClosedPart(part: Trade, rest: Trade, parts: readonly Trade[]): void {
     dialog.close();
-    const next = closePart(state, part, rest);
+    const [next, more] = withParts(closePart(state, part, rest), parts);
     const open = openQuantity(rest, partsOf(next.trades));
     const result = money(profit(part) ?? 0, true);
     reveal = part.id;
     save(
       { trades: next },
-      open > 0
+      (open > 0
         ? `Closed ${formatNumber(part.quantity)} of the ${part.symbol} trade: ${result}. ${formatNumber(open)} still open.`
-        : `Closed the rest of the ${part.symbol} trade: ${result}.`,
+        : `Closed the rest of the ${part.symbol} trade: ${result}.`) + more,
     );
     focusTrade(part.id);
   }
 
   /** Saves the trade read from the form, and says how it stands. */
-  function saveFromForm(trade: Trade): void {
+  function saveFromForm(trade: Trade, parts: readonly Trade[]): void {
     dialog.close();
+    const [next, more] = withParts(saveTrade(state, trade), parts);
     const result = profit(trade);
     reveal = trade.id;
     save(
-      { trades: saveTrade(state, trade) },
-      result === null
+      { trades: next },
+      (result === null
         ? `Saved the ${trade.symbol} trade, still open.`
-        : `Saved the ${trade.symbol} trade: ${money(result, true)}.`,
+        : `Saved the ${trade.symbol} trade: ${money(result, true)}.`) + more,
     );
     focusTrade(trade.id);
   }
@@ -470,17 +489,20 @@ export function mountTrades(root: Document): void {
   form.addEventListener('submit', (event) => {
     event.preventDefault();
     const ids = { id: editing ?? crypto.randomUUID(), newId: crypto.randomUUID() };
-    // Closing: all of it, or part of it (the rest stays open).
-    const read =
-      closing && editing
-        ? readClose(readForm(), (field('closeQuantity') as HTMLInputElement).value, state, ids)
-        : readChange(readForm(), state, ids);
+    const edited = {
+      form: readForm(),
+      closeQuantity: (field('closeQuantity') as HTMLInputElement).value,
+    };
+    // Closing: all of it, or part of it (the rest stays open). A sync or
+    // another tab may have changed the trade meanwhile: only what was
+    // changed here goes on it (audit 3 F2-1).
+    const read = readEdited(opened ?? edited, edited, state, ids, closing && editing !== null);
     if (!read.trade) {
       showProblems(read.problems);
       return;
     }
-    if (read.rest) saveClosedPart(read.trade, read.rest);
-    else saveFromForm(read.trade);
+    if (read.rest) saveClosedPart(read.trade, read.rest, read.parts ?? []);
+    else saveFromForm(read.trade, read.parts ?? []);
   });
 
   form.addEventListener('click', (event) => {
@@ -504,6 +526,7 @@ export function mountTrades(root: Document): void {
   dialog.addEventListener('close', () => {
     editing = null;
     closing = false;
+    opened = null;
   });
 
   deleteDialog.addEventListener('close', () => {
@@ -516,16 +539,23 @@ export function mountTrades(root: Document): void {
 
   // ---------- Deleting a year ----------
 
-  /** How many trades were closed in the year chosen (0 if none are now). */
+  /** The year chosen: how many trades closed in it are deleted, and kept (none if it has none now). */
   const yearCount = (year: string) =>
-    closedYears(state).find((entry) => entry.year === year)?.count ?? 0;
+    closedYears(state).find((entry) => entry.year === year) ?? { year, count: 0, kept: 0 };
 
-  /** Says what deleting the year chosen removes. */
+  /** Says what deleting the year chosen removes, and what stays. */
   function showYear(): void {
     const year = yearSelect.value;
-    const count = closedCount(yearCount(year));
-    yearText.textContent = `The ${count} from ${year} will be deleted. Open trades stay. With sync on, they’re deleted on your other devices too. This can’t be undone.`;
-    yearConfirm.textContent = `Delete ${count}`;
+    const { count, kept } = yearCount(year);
+    // Parts of a trade still open stay with it (audit 3 F2-2).
+    const parts =
+      kept === 0
+        ? 'Open trades stay.'
+        : kept === 1
+          ? `Open trades stay, and so does 1 closed trade from ${year} that’s part of one still open, until all of it is closed.`
+          : `Open trades stay, and so do ${closedCount(kept)} from ${year} that are parts of ones still open, until all of each is closed.`;
+    yearText.textContent = `The ${closedCount(count)} from ${year} will be deleted. ${parts} With sync on, they’re deleted on your other devices too. This can’t be undone.`;
+    yearConfirm.textContent = `Delete ${closedCount(count)}`;
   }
 
   /** The years trades were closed in, to choose from (the year chosen stays chosen while it has any). */
@@ -557,7 +587,7 @@ export function mountTrades(root: Document): void {
   yearForm.addEventListener('submit', (event) => {
     event.preventDefault();
     const year = yearSelect.value;
-    const count = yearCount(year);
+    const { count } = yearCount(year);
     yearDialog.close();
     deleteYearButton.focus();
     if (count === 0) return;
@@ -631,10 +661,15 @@ export function mountTrades(root: Document): void {
     state = tradesStore.load();
     settings = settingsStore.load();
     // The trade being changed was deleted on another device or tab, or the
-    // one being closed was closed there.
+    // one being closed was closed there: the form closes, and says why (audit 3 G-6).
     const trade = find(editing);
-    if (editing !== null && !trade) dialog.close();
-    else if (closing && trade && openQuantity(trade, partsOf(state.trades)) <= 0) dialog.close();
+    if (editing !== null && !trade) {
+      dialog.close();
+      showProblem('That trade was deleted on another device.');
+    } else if (closing && trade && openQuantity(trade, partsOf(state.trades)) <= 0) {
+      dialog.close();
+      showProblem('That trade was closed on another device.');
+    }
     if (yearDialog.open) {
       if (closedYears(state).length === 0) yearDialog.close();
       else fillYears();

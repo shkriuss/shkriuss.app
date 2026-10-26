@@ -37,9 +37,11 @@ import {
   formatMoney,
   parseDecimal,
   roundDecimal,
+  whichAmount,
   type Currency,
 } from '@shkriuss/ui/numbers';
 import { DATE_LOCALE } from '@shkriuss/ui/locale';
+import { foldText } from '@shkriuss/ui/text';
 
 export type Kind = 'expense' | 'income' | 'refund';
 export const KINDS: readonly Kind[] = ['expense', 'income', 'refund'];
@@ -174,10 +176,12 @@ export interface ReadOptions {
 
 /**
  * A typed amount: null when empty, NaN when it isn't a number. "12,50" is
- * 12.5, and "1,500" is 1500 in English (parseDecimal).
+ * 12.5, and "1,500" is 1500 in English (parseDecimal). Amounts are kept to
+ * the cent, so "1.500" in French, which could be 1500 or 1.5, is asked
+ * again (`cents`, audit 3 F2-3).
  */
 const parseAmount = (text: string, { locale }: ReadOptions): number | null =>
-  parseDecimal(text, locale);
+  parseDecimal(text, locale, { cents: true });
 
 /**
  * An amount kept as its currency has it: to the cent, or to the yen (no
@@ -190,7 +194,9 @@ const keep = (amount: number, { currency = 'USD' }: ReadOptions): number =>
 function amountProblem(text: string, optional: boolean, options: ReadOptions): string | undefined {
   const value = parseAmount(text, options);
   if (value === null) return optional ? undefined : 'Enter an amount.';
-  if (!Number.isFinite(value)) return 'Enter a number, like 12.50 or 12,50.';
+  if (!Number.isFinite(value)) {
+    return whichAmount(text, options.locale) ?? 'Enter a number, like 12.50 or 12,50.';
+  }
   if (value <= 0) return 'Enter an amount above 0.';
   // Kept to the cent (or the yen), so one that rounds to 0 would be saved as 0.
   if (keep(value, options) <= 0) {
@@ -224,14 +230,16 @@ export function readCategory(
   const own = state.categories.find((category) => category.id === id);
   const editing = own !== undefined;
   // Its own name, unchanged, is fine even if another category has it too:
-  // two devices that each added "Groceries" before they first synced.
-  const unchanged = own?.name.toLowerCase() === name.toLowerCase();
+  // two devices that each added "Groceries" before they first synced. Names
+  // are the same without minding case or accents, as in the other apps:
+  // "Café" is "Cafe" (foldText, audit 3 J-12).
+  const unchanged = own !== undefined && foldText(own.name) === foldText(name);
   if (name === '') problems.name = 'Enter a name for the category.';
   else if (name.length > LIMITS.name) problems.name = `Use ${LIMITS.name} characters or fewer.`;
   else if (
     !unchanged &&
     state.categories.some(
-      (category) => category.id !== id && category.name.toLowerCase() === name.toLowerCase(),
+      (category) => category.id !== id && foldText(category.name) === foldText(name),
     )
   ) {
     problems.name = 'You already have a category with that name.';
@@ -268,8 +276,8 @@ export const removeCategory = (state: CategoriesState, id: string): CategoriesSt
 
 /** Adds the suggested categories that aren't there yet (by name), with new ids. */
 export function addSuggested(state: CategoriesState, newId: () => string): CategoriesState {
-  const taken = new Set(state.categories.map((category) => category.name.toLowerCase()));
-  const added = SUGGESTED.filter((name) => !taken.has(name.toLowerCase()))
+  const taken = new Set(state.categories.map((category) => foldText(category.name)));
+  const added = SUGGESTED.filter((name) => !taken.has(foldText(name)))
     .slice(0, Math.max(0, LIMITS.categories - state.categories.length))
     .map((name) => ({ id: newId(), name, limit: null }));
   return { categories: [...state.categories, ...added] };
@@ -287,11 +295,17 @@ export interface EntryForm {
 
 export type EntryProblems = Partial<Record<keyof EntryForm, string>>;
 
-/** Reads the entry form, or says what's wrong. `count` is how many other entries there are. */
+/**
+ * Reads the entry form, or says what's wrong. `count` is how many entries
+ * there are, for a new one; null for a change to one kept already, which
+ * adds none, so it's never refused for the limit: with more than that,
+ * after two devices' entries were put together, any change was (audit 3
+ * F2-5).
+ */
 export function readEntry(
   form: EntryForm,
   id: string,
-  count: number,
+  count: number | null,
   categories: CategoriesState,
   options: ReadOptions = {},
 ): { entry: Entry; problems?: undefined } | { entry?: undefined; problems: EntryProblems } {
@@ -300,7 +314,7 @@ export function readEntry(
   if (!kind) problems.kind = 'Choose expense, income or refund.';
   const amountText = amountProblem(form.amount, false, options);
   if (amountText) problems.amount = amountText;
-  else if (count >= LIMITS.entries) {
+  else if (count !== null && count >= LIMITS.entries) {
     problems.amount = `You can keep up to ${new Intl.NumberFormat().format(LIMITS.entries)} entries. To make room, delete a year (under Currency and spreadsheet).`;
   }
   if (!isIsoDate(form.date)) problems.date = 'Choose a day.';

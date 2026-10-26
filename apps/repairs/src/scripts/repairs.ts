@@ -1,17 +1,19 @@
 /**
  * Repairs' page behaviour: connects pages/index.astro to the rules in
  * lib/repairs.ts, saves on the device, and syncs the vehicles, repairs,
- * settings and photos when sync is on. "Delete a year…" deletes a year's
- * repairs and their photos, to make room. Photos: photos.ts; in the repair
- * form, form-photos.ts; looking at them, photo-viewer.ts.
+ * settings and photos when sync is on. Here: the lists, search, settings,
+ * deleting, and keeping up with other devices and tabs. The forms are in
+ * repair-form.ts (its photos in form-photos.ts) and vehicle-form.ts.
+ * "Delete a year…", which deletes a year's repairs and their photos to make
+ * room, is in delete-year.ts. Photos: photos.ts; looking at them,
+ * photo-viewer.ts.
  */
 import { today } from '@shkriuss/dates';
 import { createStore, downloadFile } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
 import { keepFocus } from '@shkriuss/ui/keep-focus';
 import { PAGE_SIZE, shownCount, waitForTyping } from '@shkriuss/ui/long-lists';
-import { decimalText } from '@shkriuss/ui/numbers';
-import { focusProblem, reportSave } from '@shkriuss/ui/problem';
+import { reportSave, showProblem } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { typedText } from '@shkriuss/ui/typed-text';
 import { site } from 'virtual:shkriuss/site';
@@ -26,15 +28,12 @@ import {
   emptySettings,
   emptyVehicles,
   findRepairs,
-  findVehicleByName,
   formatHours,
   formatMileage,
   formatMoney,
   isRepairsState,
   isSettingsState,
   isVehiclesState,
-  knownPart,
-  lastMileage,
   migrateRepairs,
   modelNames,
   partCost,
@@ -42,34 +41,24 @@ import {
   partNames,
   photoFiles,
   photosOf,
-  readRepair,
-  readVehicle,
   removeRepair,
   removeVehicle,
-  removeYear,
   repairCost,
-  repairsIn,
-  repairYears,
   roomNote,
-  saveRepair,
-  saveVehicle,
   setCurrency,
   setUnit,
   systemNames,
   toCsv,
-  toRepairForm,
   totals,
   unitOf,
   UNITS,
   vehicleName,
   vehicleSummaries,
   withSettings,
-  type PartForm,
   type Repair,
   type RepairsState,
   type SettingsState,
   type Totals,
-  type Vehicle,
   type VehiclesState,
   type VehicleSummary,
   REPAIRS_VERSION,
@@ -83,8 +72,10 @@ import {
   thumbUrl,
 } from './photos.ts';
 import { required } from '@shkriuss/ui/dom';
-import { mountFormPhotos } from './form-photos.ts';
+import { mountDeleteYear } from './delete-year.ts';
 import { mountPhotoViewer } from './photo-viewer.ts';
+import { mountRepairForm } from './repair-form.ts';
+import { mountVehicleForm } from './vehicle-form.ts';
 
 const vehiclesStore = createStore<VehiclesState>({
   key: 'repairs-vehicles',
@@ -111,15 +102,6 @@ const settingsStore = createStore<SettingsState>({
 
 /** Search results are read out this long after the last key press. */
 const ANNOUNCE_DELAY_MS = 700;
-const EMPTY_PART: PartForm = { name: '', number: '', quantity: '1', price: '' };
-const PART_FIELDS = ['name', 'number', 'quantity', 'price'] as const;
-
-/** Shows or clears a field's problem. */
-function markField(input: HTMLElement, error: HTMLElement | null, problem: string | undefined) {
-  if (error) error.textContent = problem ?? '';
-  if (problem) input.setAttribute('aria-invalid', 'true');
-  else input.removeAttribute('aria-invalid');
-}
 
 export function mountRepairs(root: Document): void {
   const announcer = required<HTMLElement>(root, '[data-announcer]');
@@ -140,7 +122,6 @@ export function mountRepairs(root: Document): void {
   const dayTemplate = required<HTMLTemplateElement>(root, '[data-day-template]');
   const repairTemplate = required<HTMLTemplateElement>(root, '[data-repair-template]');
   const vehicleTemplate = required<HTMLTemplateElement>(root, '[data-vehicle-template]');
-  const partTemplate = required<HTMLTemplateElement>(root, '[data-part-template]');
   const thumbTemplate = required<HTMLTemplateElement>(root, '[data-thumb-template]');
   const suggestions = {
     vehicles: required<HTMLDataListElement>(root, '[data-vehicle-names]'),
@@ -150,27 +131,14 @@ export function mountRepairs(root: Document): void {
   };
 
   const repairDialog = required<HTMLDialogElement>(root, '[data-repair-dialog]');
-  const repairForm = required<HTMLFormElement>(repairDialog, '[data-repair-form]');
-  const repairTitle = required<HTMLElement>(repairDialog, '[data-repair-title]');
-  const mileageLabel = required<HTMLElement>(repairForm, '[data-mileage-label]');
-  const mileageHint = required<HTMLElement>(repairForm, '[data-mileage-hint]');
-  const labourHint = required<HTMLElement>(repairForm, '[data-labour-hint]');
-  const partRows = required<HTMLOListElement>(repairForm, '[data-part-rows]');
-  const addPartButton = required<HTMLButtonElement>(repairForm, '[data-action="add-part"]');
+  const mileageLabel = required<HTMLElement>(repairDialog, '[data-mileage-label]');
+  const labourHint = required<HTMLElement>(repairDialog, '[data-labour-hint]');
   const csvStatus = required<HTMLElement>(root, '[data-csv-status]');
   const vehicleDialog = required<HTMLDialogElement>(root, '[data-vehicle-dialog]');
-  const vehicleForm = required<HTMLFormElement>(vehicleDialog, '[data-vehicle-form]');
-  const vehicleTitle = required<HTMLElement>(vehicleDialog, '[data-vehicle-title]');
   const deleteDialog = required<HTMLDialogElement>(root, '[data-delete-dialog]');
   const deleteTitle = required<HTMLElement>(deleteDialog, '[data-delete-title]');
   const deleteText = required<HTMLElement>(deleteDialog, '[data-delete-text]');
   const roomText = required<HTMLElement>(root, '[data-room-note]');
-  const deleteYearButton = required<HTMLButtonElement>(root, '[data-action="delete-year"]');
-  const yearDialog = required<HTMLDialogElement>(root, '[data-year-dialog]');
-  const yearForm = required<HTMLFormElement>(yearDialog, '[data-year-form]');
-  const yearSelect = required<HTMLSelectElement>(yearForm, '[data-year-select]');
-  const yearText = required<HTMLElement>(yearForm, '[data-year-text]');
-  const yearConfirm = required<HTMLElement>(yearForm, '[data-year-confirm]');
 
   let vehicles = vehiclesStore.load();
   let repairs = repairsStore.load();
@@ -178,14 +146,9 @@ export function mountRepairs(root: Document): void {
   let shown = PAGE_SIZE;
   /** A repair just saved: never hidden behind "Show more" (shownCount). */
   let reveal: string | null = null;
-  /** What's in the forms: the repair or vehicle being changed (null: a new one). */
-  let editingRepair: string | null = null;
-  let editingVehicle: string | null = null;
   let deleting: { type: 'repair' | 'vehicle'; id: string } | null = null;
-  let saving = false;
   let syncWasOn = false;
   let announceTimer: number | undefined;
-  const formPhotos = mountFormPhotos(root, repairForm, { syncOn: () => sync.status().on });
   const photoViewer = mountPhotoViewer(root, () => vehicles);
 
   const announce = (message: string): void => {
@@ -291,6 +254,8 @@ export function mountRepairs(root: Document): void {
       const url = urls[index];
       return url ? [{ id, url }] : [];
     });
+    // Named with their repair: "Photo 1" in every repair said nothing of which (audit 3 G-8).
+    const which = `${vehicleName(vehicles, repair.vehicle)}, ${dateLabel(repair.date)}`;
     list.replaceChildren(
       ...shown.map(({ id, url }, index) => {
         const fragment = thumbTemplate.content.cloneNode(true) as DocumentFragment;
@@ -298,7 +263,7 @@ export function mountRepairs(root: Document): void {
         required<HTMLElement>(entry, '[data-action="view-photo"]').dataset['photo'] = id;
         const image = required<HTMLImageElement>(entry, '[data-thumb]');
         image.src = url;
-        image.alt = `Photo ${index + 1}`;
+        image.alt = `Photo ${index + 1} of ${shown.length}, ${which}`;
         return entry;
       }),
     );
@@ -440,252 +405,38 @@ export function mountRepairs(root: Document): void {
     (button ?? fallback).focus();
   }
 
-  // ---------- The repair form ----------
+  // ---------- The forms: repair-form.ts, vehicle-form.ts ----------
 
-  const field = <T extends HTMLElement>(name: string) =>
-    repairForm.elements.namedItem(name) as T & { value: string };
-
-  /** The parts as they're typed in the form. */
-  function partValues(): PartForm[] {
-    return [...partRows.children].map((row) => ({
-      name: required<HTMLInputElement>(row, '[data-part="name"]').value,
-      number: required<HTMLInputElement>(row, '[data-part="number"]').value,
-      quantity: required<HTMLInputElement>(row, '[data-part="quantity"]').value,
-      price: required<HTMLInputElement>(row, '[data-part="price"]').value,
-    }));
-  }
-
-  /** Shows these parts in the form, numbered from 1. */
-  function renderParts(parts: readonly PartForm[]): void {
-    partRows.replaceChildren(
-      ...parts.map((part, index) => {
-        const fragment = partTemplate.content.cloneNode(true) as DocumentFragment;
-        const row = required<HTMLLIElement>(fragment, 'li');
-        required<HTMLElement>(row, '[data-legend]').textContent = `Part ${index + 1}`;
-        required<HTMLElement>(row, '[data-hidden-part]').textContent = ` part ${index + 1}`;
-        for (const key of PART_FIELDS) {
-          const id = `part-${key}-${index}`;
-          const input = required<HTMLInputElement>(row, `[data-part="${key}"]`);
-          const error = required<HTMLElement>(row, `[data-error="${key}"]`);
-          input.id = id;
-          input.name = id;
-          input.value = part[key];
-          error.id = `${id}-error`;
-          error.dataset['errorFor'] = id;
-          input.setAttribute('aria-describedby', error.id);
-        }
-        return row;
-      }),
-    );
-  }
-
-  const partInput = (index: number, key: keyof PartForm) =>
-    partRows.querySelector<HTMLInputElement>(`#part-${key}-${index}`);
-
-  /** "Last noted for Bus 105: 121,000 km on Oct 20, 2026." under the mileage. */
-  function renderMileageHint(): void {
-    const vehicle = findVehicleByName(vehicles, field<HTMLInputElement>('vehicle').value);
-    const last = vehicle ? lastMileage(repairs, vehicle.id, editingRepair) : null;
-    mileageHint.textContent =
-      vehicle && last
-        ? `Last noted for ${vehicle.name}: ${mileage(last.mileage)} on ${dateLabel(last.date)}.`
-        : '';
-  }
-
-  /** Shows the form's problems; focuses the first. Returns true if there are any. */
-  function showRepairProblems(problems: Partial<Record<string, string>>): boolean {
-    // In the form's order.
-    const names = [
-      ...['vehicle', 'date', 'mileage', 'system', 'problem', 'work'],
-      ...partValues().flatMap((_, index) => PART_FIELDS.map((key) => `part-${key}-${index}`)),
-      ...['parts', 'hours', 'labour'],
-    ];
-    for (const name of names) {
-      const error = repairForm.querySelector<HTMLElement>(`[data-error-for="${name}"]`);
-      const input = repairForm.elements.namedItem(name);
-      if (input instanceof HTMLElement) markField(input, error, problems[name]);
-      else if (error) error.textContent = problems[name] ?? '';
-    }
-    const first = names.find((name) => problems[name]);
-    if (!first) return false;
-    const input = repairForm.elements.namedItem(first);
-    focusProblem(input instanceof HTMLElement ? input : addPartButton, problems[first]);
-    return true;
-  }
-
-  function openRepair(repair: Repair | undefined): void {
-    editingRepair = repair?.id ?? null;
-    repairTitle.textContent = repair ? 'Change repair' : 'New repair';
-    const only = findVehicle(filterVehicle());
-    const values = repair
-      ? toRepairForm(repair, vehicles)
-      : {
-          vehicle: only?.name ?? '',
-          date: today(),
-          mileage: '',
-          system: '',
-          problem: '',
-          work: '',
-          parts: [EMPTY_PART],
-          hours: '',
-          labour: '',
-          photos: [],
-        };
-    for (const name of [
-      'vehicle',
-      'date',
-      'mileage',
-      'system',
-      'problem',
-      'work',
-      'hours',
-      'labour',
-    ] as const) {
-      field<HTMLInputElement>(name).value = values[name];
-    }
-    renderParts(values.parts.length > 0 ? values.parts : [EMPTY_PART]);
-    formPhotos.reset(values.photos);
-    required<HTMLElement>(repairForm, '[data-action="delete-repair"]').hidden = !repair;
-    showRepairProblems({});
-    renderMileageHint();
-    repairDialog.showModal();
-    // Straight to what's needed: the vehicle, or the mileage once it's known.
-    field<HTMLInputElement>(values.vehicle ? 'mileage' : 'vehicle').focus();
-  }
-
-  repairForm.addEventListener('input', (event) => {
-    if ((event.target as HTMLInputElement).name === 'vehicle') renderMileageHint();
+  const repairEditor = mountRepairForm(root, {
+    data: () => ({ vehicles, repairs, settings }),
+    shownVehicle: () => findVehicle(filterVehicle()),
+    save,
+    keepShown(id) {
+      reveal = id;
+    },
+    focusRepair: (id) => focusItem(daysList, id, 'edit-repair', newRepairButton),
+    syncOn: () => sync.status().on,
+    filesAdded: (files) => sync.filesAdded(files),
+    filesRemoved: (files) => sync.filesRemoved(files),
   });
 
-  // A part used before: fill in its part number and price, if they're empty.
-  repairForm.addEventListener('change', (event) => {
-    const input = event.target as HTMLInputElement;
-    const match = /^part-name-(\d+)$/.exec(input.name);
-    if (!match) return;
-    const known = knownPart(repairs, input.value);
-    if (!known) return;
-    const number = partInput(Number(match[1]), 'number');
-    if (number && number.value.trim() === '') number.value = known.number;
-    const price = partInput(Number(match[1]), 'price');
-    if (price && price.value.trim() === '' && known.price !== null) {
-      price.value = decimalText(known.price);
-    }
-  });
-
-  repairForm.addEventListener('submit', (event) => {
-    event.preventDefault();
-    if (saving) return;
-    saving = true;
-    // Photos still being made smaller are waited for.
-    void formPhotos
-      .ready()
-      .then(submitRepair)
-      .finally(() => {
-        saving = false;
-      });
-  });
-
-  async function submitRepair(): Promise<void> {
-    const id = editingRepair ?? crypto.randomUUID();
-    const read = readRepair(
-      {
-        vehicle: field<HTMLInputElement>('vehicle').value,
-        date: field<HTMLInputElement>('date').value,
-        mileage: field<HTMLInputElement>('mileage').value,
-        system: field<HTMLInputElement>('system').value,
-        problem: field<HTMLTextAreaElement>('problem').value,
-        work: field<HTMLTextAreaElement>('work').value,
-        parts: partValues(),
-        hours: field<HTMLInputElement>('hours').value,
-        labour: field<HTMLInputElement>('labour').value,
-        photos: formPhotos.ids(),
-      },
-      id,
-      repairs,
-      vehicles,
-      () => crypto.randomUUID(),
-    );
-    if (!read.repair) {
-      showRepairProblems(read.problems);
-      return;
-    }
-    const { repair, newVehicle } = read;
-    const photos = await formPhotos.save();
-    if (!photos) return;
-    sync.filesAdded(photoFiles(photos.added));
-    sync.filesRemoved(photoFiles(photos.removed));
-    repairDialog.close();
-    const name = newVehicle?.name ?? vehicleName(vehicles, repair.vehicle);
-    reveal = repair.id;
-    save(
-      {
-        repairs: saveRepair(repairs, repair),
-        ...(newVehicle ? { vehicles: saveVehicle(vehicles, newVehicle) } : {}),
-      },
-      newVehicle
-        ? `Saved the repair on ${name}, and added ${name} to your vehicles.`
-        : `Saved the repair on ${name}.`,
-    );
-    focusItem(daysList, repair.id, 'edit-repair', newRepairButton);
-  }
-
-  // ---------- The vehicle form ----------
-
-  const VEHICLE_FIELDS = ['name', 'model', 'plate', 'notes'] as const;
-
-  function showVehicleProblems(problems: Partial<Record<string, string>>): void {
-    for (const name of VEHICLE_FIELDS) {
-      markField(
-        vehicleForm.elements.namedItem(name) as HTMLElement,
-        vehicleForm.querySelector<HTMLElement>(`[data-error-for="${name}"]`),
-        problems[name],
-      );
-    }
-    const first = VEHICLE_FIELDS.find((name) => problems[name]);
-    if (first) focusProblem(vehicleForm.elements.namedItem(first) as HTMLElement, problems[first]);
-  }
-
-  function openVehicle(vehicle: Vehicle | undefined): void {
-    editingVehicle = vehicle?.id ?? null;
-    vehicleTitle.textContent = vehicle ? 'Change vehicle' : 'Add vehicle';
-    for (const name of VEHICLE_FIELDS) {
-      (vehicleForm.elements.namedItem(name) as HTMLInputElement).value = vehicle?.[name] ?? '';
-    }
-    required<HTMLElement>(vehicleForm, '[data-action="delete-vehicle"]').hidden = !vehicle;
-    showVehicleProblems({});
-    vehicleDialog.showModal();
-  }
-
-  vehicleForm.addEventListener('submit', (event) => {
-    event.preventDefault();
-    const value = (name: string) =>
-      (vehicleForm.elements.namedItem(name) as HTMLInputElement).value;
-    const read = readVehicle(
-      { name: value('name'), model: value('model'), plate: value('plate'), notes: value('notes') },
-      editingVehicle ?? crypto.randomUUID(),
-      vehicles,
-    );
-    if (!read.vehicle) {
-      showVehicleProblems(read.problems);
-      return;
-    }
-    const { vehicle } = read;
-    vehicleDialog.close();
-    save({ vehicles: saveVehicle(vehicles, vehicle) }, `Saved ${vehicle.name}.`);
-    focusItem(vehicleList, vehicle.id, 'edit-vehicle', newVehicleButton);
+  const vehicleEditor = mountVehicleForm(root, {
+    vehicles: () => vehicles,
+    save,
+    focusVehicle: (id) => focusItem(vehicleList, id, 'edit-vehicle', newVehicleButton),
   });
 
   // ---------- Deleting ----------
 
   function askToDelete(type: 'repair' | 'vehicle'): void {
     if (type === 'repair') {
-      const repair = findRepair(editingRepair);
+      const repair = findRepair(repairEditor.editing());
       if (!repair) return;
       deleting = { type, id: repair.id };
       deleteTitle.textContent = 'Delete this repair?';
       deleteText.textContent = `The repair on ${vehicleName(vehicles, repair.vehicle)} on ${dateLabel(repair.date)} will be removed.`;
     } else {
-      const vehicle = findVehicle(editingVehicle);
+      const vehicle = findVehicle(vehicleEditor.editing());
       if (!vehicle) return;
       deleting = { type, id: vehicle.id };
       const count = repairs.repairs.filter((repair) => repair.vehicle === vehicle.id).length;
@@ -729,62 +480,12 @@ export function mountRepairs(root: Document): void {
     }
   });
 
-  // ---------- Deleting a year ----------
+  // ---------- Deleting a year: delete-year.ts ----------
 
-  const repairsCount = (count: number) => countLabel(count, 'repair', 'repairs');
-
-  /** How many repairs the year chosen has (0 if it has none now). */
-  const yearCount = (year: string) =>
-    repairYears(repairs).find((entry) => entry.year === year)?.count ?? 0;
-
-  /** Says what deleting the year chosen removes. */
-  function showYear(): void {
-    const year = yearSelect.value;
-    const count = repairsCount(yearCount(year));
-    yearText.textContent = `The ${count} from ${year} will be deleted, with their photos. With sync on, they’re deleted on your other devices too. This can’t be undone.`;
-    yearConfirm.textContent = `Delete ${count}`;
-  }
-
-  /** The years with repairs to choose from (the year chosen stays chosen while it has any). */
-  function fillYears(): void {
-    const chosen = yearSelect.value;
-    const years = repairYears(repairs);
-    yearSelect.replaceChildren(
-      ...years.map(({ year, count }) => new Option(`${year} (${repairsCount(count)})`, year)),
-    );
-    // Else the first, the earliest year: the oldest repairs are the likeliest to go.
-    if (years.some(({ year }) => year === chosen)) yearSelect.value = chosen;
-    showYear();
-  }
-
-  function openYears(): void {
-    if (repairs.repairs.length === 0) {
-      csvStatus.textContent = 'There are no repairs to delete.';
-      return;
-    }
-    yearSelect.replaceChildren();
-    fillYears();
-    required<HTMLElement>(yearForm, '[data-csv-status]').textContent = '';
-    yearDialog.showModal();
-    yearSelect.focus();
-  }
-
-  yearSelect.addEventListener('change', showYear);
-
-  yearForm.addEventListener('submit', (event) => {
-    event.preventDefault();
-    const year = yearSelect.value;
-    const gone = repairsIn(repairs, year);
-    yearDialog.close();
-    deleteYearButton.focus();
-    if (gone.length === 0) return;
-    // Like deleting repairs one by one: other devices delete them too, and their photos go.
-    save(
-      { repairs: removeYear(repairs, year) },
-      `Deleted ${repairsCount(gone.length)} from ${year}.`,
-    );
-    void deletePhotos(photosOf(gone));
-    sync.filesRemoved(photoFiles(photosOf(gone)));
+  const yearDeleter = mountDeleteYear(root, {
+    repairs: () => repairs,
+    save,
+    filesRemoved: (files) => sync.filesRemoved(files),
   });
 
   // ---------- Everything else ----------
@@ -795,30 +496,22 @@ export function mountRepairs(root: Document): void {
     const id = button?.closest<HTMLElement>('li[data-id]')?.dataset['id'];
     switch (action) {
       case 'new-repair':
-        openRepair(undefined);
+        repairEditor.open(undefined);
         break;
       case 'edit-repair':
-        openRepair(findRepair(id));
+        repairEditor.open(findRepair(id));
         break;
-      case 'add-part': {
-        const parts = partValues();
-        renderParts([...parts, EMPTY_PART]);
-        partInput(parts.length, 'name')?.focus();
+      case 'add-part':
+        repairEditor.addPart();
         break;
-      }
-      case 'remove-part': {
-        const row = button?.closest('li');
-        const index = [...partRows.children].indexOf(row as Element);
-        const parts = partValues().filter((_, at) => at !== index);
-        renderParts(parts);
-        (partInput(Math.min(index, parts.length - 1), 'name') ?? addPartButton).focus();
+      case 'remove-part':
+        repairEditor.removePart(button?.closest('li'));
         break;
-      }
       case 'new-vehicle':
-        openVehicle(undefined);
+        vehicleEditor.open(undefined);
         break;
       case 'edit-vehicle':
-        openVehicle(findVehicle(id));
+        vehicleEditor.open(findVehicle(id));
         break;
       case 'show-vehicle': {
         const vehicle = findVehicle(id);
@@ -840,11 +533,11 @@ export function mountRepairs(root: Document): void {
         break;
       }
       case 'add-photos':
-        formPhotos.pick();
+        repairEditor.pickPhotos();
         break;
       case 'remove-photo': {
         const photo = button?.closest<HTMLElement>('li[data-photo]')?.dataset['photo'];
-        if (photo) formPhotos.remove(photo);
+        if (photo) repairEditor.removePhoto(photo);
         break;
       }
       case 'view-photo': {
@@ -872,7 +565,7 @@ export function mountRepairs(root: Document): void {
         askToDelete('vehicle');
         break;
       case 'delete-year':
-        openYears();
+        yearDeleter.open();
         break;
       case 'csv': {
         // The answer shows under the button tapped (and is read out).
@@ -919,14 +612,6 @@ export function mountRepairs(root: Document): void {
     announceFound();
   });
 
-  repairDialog.addEventListener('close', () => {
-    editingRepair = null;
-    formPhotos.close(saving);
-  });
-  vehicleDialog.addEventListener('close', () => {
-    editingVehicle = null;
-  });
-
   unitSelect.addEventListener('change', () => {
     const chosen = UNITS.find((unit) => unit === unitSelect.value);
     if (!chosen || chosen === unitOf(settings)) return;
@@ -949,13 +634,21 @@ export function mountRepairs(root: Document): void {
     vehicles = vehiclesStore.load();
     repairs = repairsStore.load();
     settings = settingsStore.load();
-    // What's being changed was deleted on another device or tab.
-    if (editingRepair !== null && !findRepair(editingRepair)) repairDialog.close();
-    if (editingVehicle !== null && !findVehicle(editingVehicle)) vehicleDialog.close();
-    if (yearDialog.open) {
-      if (repairs.repairs.length === 0) yearDialog.close();
-      else fillYears();
+    // What's being changed was deleted on another device or tab: the form
+    // closes, and says why (audit 3 G-6). Changed there, the form's photos
+    // follow (audit 3 F2-1).
+    const editingRepair = repairEditor.editing();
+    const current = findRepair(editingRepair);
+    if (editingRepair !== null && !current) {
+      repairDialog.close();
+      showProblem('That repair was deleted on another device.');
+    } else if (current) repairEditor.follow(current);
+    const editingVehicle = vehicleEditor.editing();
+    if (editingVehicle !== null && !findVehicle(editingVehicle)) {
+      vehicleDialog.close();
+      showProblem('That vehicle was deleted on another device.');
     }
+    yearDeleter.refresh();
     keepFocus(render, newRepairButton);
   }
 
@@ -972,7 +665,7 @@ export function mountRepairs(root: Document): void {
    */
   function deleteUnused(): void {
     if (repairsStore.status() !== 'ok') return;
-    const inForm = repairDialog.open ? formPhotos.inUse() : [];
+    const inForm = repairEditor.inUse();
     void deleteUnusedPhotos(new Set([...photosOf(repairsStore.load().repairs), ...inForm]));
   }
 
@@ -1005,7 +698,7 @@ export function mountRepairs(root: Document): void {
       reload();
       // Photos taken off repairs on another device (or with them) aren't needed
       // here now, unless the repair form being filled in has them.
-      const inForm = repairDialog.open ? formPhotos.inUse() : [];
+      const inForm = repairEditor.inUse();
       const used = new Set([...photosOf(repairs.repairs), ...inForm]);
       const unused = before.filter((id) => !used.has(id));
       if (unused.length > 0) void deletePhotos(unused);

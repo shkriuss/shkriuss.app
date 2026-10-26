@@ -22,8 +22,9 @@ See where your money goes, month by month. Lives at
     into data it can't read;
   - settings (`shkriuss:budget-settings`): the currency, only for showing
     amounts (nothing is converted; an amount typed is kept to the
-    currency's own decimals: to the cent, or to the yen), and the monthly
-    reminder. Each is saved only once changed (US dollars and no reminder
+    currency's own decimals: to the cent, or to the yen, so one that could
+    be read two ways, like "1.500" typed in French, 1500 or 1.5, is asked
+    again), and the monthly reminder. Each is saved only once changed (US dollars and no reminder
     until then), so a new device has nothing to win over another's when
     they first sync.
 - A month shows what was spent, earned and is left (`summary`), each
@@ -38,14 +39,18 @@ See where your money goes, month by month. Lives at
   saved in another month shows that month.
 - "Download as a spreadsheet (CSV)" saves every entry (expenses negative;
   income and refunds positive). Text that a spreadsheet could read as a
-  formula starts with `'`.
+  formula starts with `'`. The file starts with a byte-order mark, so Excel
+  shows text beyond plain English letters (Georgian, "’") as typed.
 - Budget keeps up to 6,000 entries (`LIMITS.entries`). Why not more: each
   entry is saved on the device, where a browser keeps about 5 MB for each
   site, and with sync on, sync keeps about as much again to know what
   changed. The test "has room for every entry" fills Budget up with
   realistic entries and checks that it all still fits, on an iPhone too, and
   in the copy that syncs. If a change makes entries bigger, that test fails,
-  and the limit has to come down (or the change be made smaller).
+  and the limit has to come down (or the change be made smaller). Only a
+  new entry is refused once Budget is full: with more than that (two
+  devices' entries put together when sync is turned on), entries can still
+  be changed.
 - To make room, "Delete a year…" (next to the spreadsheet download) deletes
   every entry of one year (`entryYears`, `removeYear`). It says how many
   that is, and offers the spreadsheet first. With sync on, the entries are
@@ -67,7 +72,10 @@ See where your money goes, month by month. Lives at
   ([ADR 0009](../../docs/adr/0009-push-notifications.md)) and sync server
   ([ADR 0010](../../docs/adr/0010-account-and-sync.md)). The newest change to
   each entry, category and setting wins: an entry changed on two devices at
-  once isn't kept twice, which would count it twice.
+  once isn't kept twice, which would count it twice. An entry's or a
+  category's form that's open while a sync (or another tab) changes it
+  saves only what was changed in the form (`withEdits` from
+  `@shkriuss/sync/edits`), so the other change stays.
 - `e2e/`: browser tests (`helpers.ts` is shared by them). The shared
   accessibility, security, offline and sync checks in `tests/e2e/` run too.
 

@@ -331,7 +331,8 @@ import {
           Ingredients (optional)
         </label>
         <p class="field__hint" id="meal-ingredients-hint">
-          One per line, like “500 g minced beef”. Up to {MAX_INGREDIENTS}.
+          One per line, like “500 g minced beef”, each up to {LIMITS.ingredient} characters. Up to
+          {MAX_INGREDIENTS}.
         </p>
         <textarea
           dir="auto"
@@ -569,7 +570,10 @@ import {
     border-block-end: var(--border-width) solid var(--color-border);
   }
 
+  /* It fills its line, beside how many ingredients: a short name is still a big target (audit 3 G-9). */
   .meal__name {
+    flex: 1 1 auto;
+    min-width: var(--tap-target);
     font-weight: var(--weight-semibold);
   }
 

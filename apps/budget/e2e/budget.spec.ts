@@ -147,6 +147,72 @@ test('changes and deletes entries and categories', async ({ page }) => {
   await expect(entryItems(page).first()).toContainText('No category');
 });
 
+// Audit 3 F2-1: the form saved every field as it was when it opened, so the
+// other tab's (or another device's) change to the entry was put back.
+test('a change made in another tab survives a form that was open here', async ({ page }) => {
+  await seed(page, {
+    categories: [{ id: 'g', name: 'Groceries', limit: null }],
+    entries: [entry({ id: 'a', amount: 20, category: 'g', note: 'Bread' })],
+  });
+  const other = await page.context().newPage();
+  await other.clock.setFixedTime(NOW);
+  await other.goto('/');
+
+  // Here: the entry's form is opened (to change the note).
+  await entryItems(page).first().getByRole('button').click();
+  await expect(entryDialog(page).getByLabel('Amount')).toHaveValue('20');
+  // In the other tab: the amount is corrected to 25. This tab has it too, behind the form.
+  await entryItems(other).first().getByRole('button').click();
+  await fillEntry(other, { amount: '25' });
+  await expect(entryItems(page).first()).toContainText('-$25.00');
+
+  // Here, the form is saved with a new note: the other tab's 25 stays.
+  await fillEntry(page, { note: 'Bread and milk' });
+  await expect(entryItems(page).first()).toContainText('Bread and milk');
+  await expect(entryItems(page).first()).toContainText('-$25.00');
+  await other.reload();
+  await expect(entryItems(other).first()).toContainText('-$25.00');
+
+  // A category's limit, changed there while its name is changed here, the same way.
+  await categoryButton(page, 'Groceries').click();
+  await categoryButton(other, 'Groceries').click();
+  await categoryDialog(other).getByLabel('Monthly limit (optional)').fill('300');
+  await categoryDialog(other).getByRole('button', { name: 'Save' }).click();
+  await expect(categoryItem(page, 'Groceries')).toContainText('of $300.00');
+  await categoryDialog(page).getByLabel('Name').fill('Food');
+  await categoryDialog(page).getByRole('button', { name: 'Save' }).click();
+  await expect(categoryItem(page, 'Food')).toContainText('of $300.00');
+});
+
+// Audit 3 G-6: the form closed by itself, and what was typed was gone, without a word.
+test('says so when the entry being changed is deleted in another tab', async ({ page }) => {
+  await seed(page, { entries: [entry({ id: 'a', amount: 20, note: 'Bread' })] });
+  const other = await page.context().newPage();
+  await other.clock.setFixedTime(NOW);
+  await other.goto('/');
+  await entryItems(page).first().getByRole('button').click();
+  await entryDialog(page).getByLabel('Note (optional)').fill('Bread and milk');
+
+  await entryItems(other).first().getByRole('button').click();
+  await entryDialog(other).getByRole('button', { name: 'Delete' }).click();
+  await other
+    .getByRole('dialog', { name: 'Delete this entry?' })
+    .getByRole('button', { name: 'Delete' })
+    .click();
+  await expect(entryDialog(page)).toBeHidden();
+  await expect(page.getByRole('alert')).toHaveText('That entry was deleted on another device.');
+  await expect(entryItems(page)).toHaveCount(0);
+});
+
+// Audit 3 G-9: a name button was only as wide as the name ("7": 9 px).
+test('a category’s name fills its line, a big target however short', async ({ page }) => {
+  await seed(page, { categories: [{ id: 's', name: '7', limit: null }] });
+  const name = await categoryButton(page, '7').boundingBox();
+  const line = await categoryItem(page, '7').locator('.category__line').boundingBox();
+  expect(name?.width).toBeGreaterThanOrEqual(44);
+  expect(name?.width).toBeGreaterThan((line?.width ?? 0) / 2);
+});
+
 test('moves between months', async ({ page }) => {
   await seed(page, {
     entries: [
@@ -193,7 +259,8 @@ test('the currency, and a spreadsheet of the entries', async ({ page }) => {
   expect(file.suggestedFilename()).toBe('budget-2026-10-21.csv');
   const text = await readFile((await file.path()) ?? '', 'utf8');
   expect(text.split('\r\n')).toEqual([
-    'Date,Type,Amount,Category,Note',
+    // A byte-order mark first, for Excel (audit 3 F2-6).
+    '\uFEFFDate,Type,Amount,Category,Note',
     '2026-10-23,Refund,2.5,Groceries,',
     '2026-10-22,Income,100,,Gift',
     '2026-10-21,Expense,-12.5,Groceries,"Milk, ""fresh"""',

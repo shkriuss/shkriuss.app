@@ -40,9 +40,13 @@ private car's service history. Lives at <https://repairs.shkriuss.app>.
   shown amounts, so they match what's on the screen. Hours and costs are
   added up for each day, for what the list shows, and for each vehicle
   (`totals`). A part chosen from the suggestions gets its last price too.
+  A price or labour cost typed in a way that could be read two ways, like
+  "1.500" in French (1500 or 1.5), is asked again.
 - "Download as a spreadsheet (CSV)" saves every repair, one row each, with
   the hours and the parts, labour and total cost. Text a spreadsheet could
-  read as a formula starts with `'`.
+  read as a formula starts with `'`. The file starts with a byte-order mark,
+  so Excel shows text beyond plain English letters (Georgian, "’", the "×"
+  of a part's quantity) as typed.
 - Repairs keeps up to 3,000 repairs (`LIMITS.repairs`). Why not more: each
   repair is saved on the device, where a browser keeps about 5 MB for each
   site, and with sync on, sync keeps records of its own there too. The test
@@ -81,14 +85,23 @@ private car's service history. Lives at <https://repairs.shkriuss.app>.
   `src/scripts/photos.ts` does the photo work; `make-photo.worker.ts` makes
   picked photos smaller in a web worker (with `@shkriuss/ui/photos`), so a
   big photo doesn't freeze the page.
-- `src/scripts/repairs.ts`: connects the page to those rules.
+- `src/scripts/repairs.ts`: connects the page to those rules: the lists,
+  search, settings and deleting, and keeping up with other devices and
+  tabs. The repair form is in `repair-form.ts` (its photos in
+  `form-photos.ts`), the vehicle form in `vehicle-form.ts`, "Delete a
+  year" in `delete-year.ts`, and the photo viewer in `photo-viewer.ts`.
 - `src/pages/index.astro`: the page, built from `@shkriuss/ui` components.
   `<template>`s hold the markup for a day, a repair, a vehicle and a part row;
   the forms and "Delete a year" are dialogs.
 - `src/worker.ts`: runs the shared sync server
   ([ADR 0010](../../docs/adr/0010-account-and-sync.md)), with files on for the
   photos (`syncHandler({ files: true })`). The newest change to
-  each vehicle, repair and setting wins. Vehicles and repairs reach
+  each vehicle, repair and setting wins. A repair's form that's open while
+  a sync (or another tab) changes the repair saves only what was changed in
+  it (`readEditedRepair`), and its photos follow the repair's while it's
+  open (`mergePhotos`): a photo added on another device meanwhile stays,
+  and one taken off in the form stays off. The vehicle form saves only
+  what was changed in it too. Vehicles and repairs reach
   `withItems` unchecked, so ones from an older version can be upgraded first;
   they're checked after.
 - `e2e/`: browser tests (`helpers.ts` is shared by them). The shared

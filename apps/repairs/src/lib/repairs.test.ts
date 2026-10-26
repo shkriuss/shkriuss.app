@@ -21,6 +21,7 @@ import {
   knownPart,
   LIMITS,
   lastMileage,
+  mergePhotos,
   migrateRepairs,
   modelNames,
   partCost,
@@ -28,6 +29,7 @@ import {
   partNames,
   photoFiles,
   photosOf,
+  readEditedRepair,
   readRepair,
   readVehicle,
   removeRepair,
@@ -372,6 +374,62 @@ describe('repairs', () => {
         'part-quantity-0': 'Enter a number above 0.',
       });
     }
+    // Audit 3 F2-3: in French, a price typed "1.500" was saved as 1.5. A price
+    // or labour that could be thousands or decimals is asked again; a quantity
+    // or hours (not money) are read as typed.
+    expect(
+      typed({ parts: [part('1.500', '1.500')], labour: '2.000', hours: '1.5' }, 'fr-FR').problems,
+    ).toEqual({
+      'part-price-0': 'Enter 1500 or 1,5 to show which you mean.',
+      labour: 'Enter 2000 or 2 to show which you mean.',
+    });
+    expect(
+      typed({ parts: [part('1.500', '1 500,50')], labour: '2,5' }, 'fr-FR').repair,
+    ).toMatchObject({ parts: [{ quantity: 1.5, price: 1500.5 }], labour: 2.5 });
+  });
+
+  // Audit 3 F2-1: a form opened before a sync brought another device's change
+  // saved its old values back, and took off (so deleted everywhere) the
+  // photos added there meanwhile.
+  it('keeps a change made on another device while the form was open', () => {
+    const before = repair({ work: 'Replaced the door glass', photos: ['a'] });
+    const opened = toRepairForm(before, vehicles);
+    // Meanwhile, on the tablet: the mileage noted, and a photo added.
+    const now = repairs({ ...before, mileage: 121_000, photos: ['a', 'b'] });
+    // Here, the work done changed; the form's photos have followed the repair's.
+    const photos = mergePhotos(opened.photos, opened.photos, ['a', 'b']);
+    const edited = { ...opened, work: 'Replaced the door glass and its seal', photos };
+    expect(readEditedRepair(opened, edited, 'r', now, vehicles, newId).repair).toEqual({
+      ...before,
+      work: 'Replaced the door glass and its seal',
+      mileage: 121_000,
+      photos: ['a', 'b'],
+    });
+    // A new repair, or one deleted meanwhile, is read as the form is.
+    expect(readEditedRepair(null, edited, 'r', now, vehicles, newId).repair?.mileage).toBe(120_000);
+    expect(readEditedRepair(opened, edited, 'r', emptyRepairs(), vehicles, newId).repair).toEqual(
+      readRepair(edited, 'r', emptyRepairs(), vehicles, newId).repair,
+    );
+    // Changed so they don't fit together (the work done cleared there, the
+    // damage found here: nothing would say what was done): the form wins, as
+    // it was checked.
+    const both = repair({ problem: 'Glass cracked', work: 'Replaced the door glass' });
+    const form2 = toRepairForm(both, vehicles);
+    const cleared = repairs({ ...both, work: '' });
+    expect(
+      readEditedRepair(form2, { ...form2, problem: '' }, 'r', cleared, vehicles, newId).repair,
+    ).toMatchObject({ problem: '', work: 'Replaced the door glass' });
+  });
+
+  it('keeps the photos added on another device, and those taken off here stay off', () => {
+    // The repair's photos now, then those added in the form, without those removed in it.
+    expect(mergePhotos(['a', 'b'], ['a', 'b', 'c'], ['a', 'b', 'd'])).toEqual(['a', 'b', 'd', 'c']);
+    expect(mergePhotos(['a', 'b'], ['b'], ['a', 'b', 'd'])).toEqual(['b', 'd']);
+    // Taken off on the other device: off here too, unless it was added here.
+    expect(mergePhotos(['a', 'b'], ['a', 'b'], ['b'])).toEqual(['b']);
+    expect(mergePhotos([], ['c'], [])).toEqual(['c']);
+    // The same photo is never there twice.
+    expect(mergePhotos(['a'], ['a', 'c'], ['a', 'c'])).toEqual(['a', 'c']);
   });
 
   it('are saved, changed and removed', () => {
@@ -616,7 +674,8 @@ describe('for people', () => {
       setCurrency(emptySettings(), 'GEL'),
     );
     expect(csv.split('\r\n')).toEqual([
-      'Date,Vehicle,Model,Plate,Mileage (km),System,Damage found,Work done,Parts replaced,Hours worked,Parts cost (GEL),Labour cost (GEL),Total cost (GEL)',
+      // A byte-order mark first, for Excel (audit 3 F2-6).
+      '\uFEFFDate,Vehicle,Model,Plate,Mileage (km),System,Damage found,Work done,Parts replaced,Hours worked,Parts cost (GEL),Labour cost (GEL),Total cost (GEL)',
       '2026-10-21,Bus 12,Isuzu Novociti Life,TB-012-BB,,,,Pads,Brake pads × 2 (BP-1); Clip,1.5,90,20,110',
       `2026-10-20,Bus 105,Isuzu Novociti Life,,120000,Brakes,'=cmd,"Fixed, ""properly""",,,,,`,
       '',
@@ -697,6 +756,42 @@ describe('hours worked and costs', () => {
       'part-price-0': 'Enter a price, or leave it empty.',
       'part-name-1': 'Enter the part’s name.',
     });
+  });
+
+  // Audit 3 F2-8: a number over the most allowed was refused with a message
+  // about something else ("Enter the hours as a number above 0").
+  it('says what the most is', () => {
+    const read = (fields: Partial<RepairForm>) =>
+      readRepair(form(fields), 'r', emptyRepairs(), vehicles, newId, 'en-US');
+    const part = (quantity: string, price: string) => ({
+      name: 'Rivets',
+      number: '',
+      quantity,
+      price,
+    });
+    expect(
+      read({
+        mileage: '12000000',
+        hours: '1,500',
+        labour: '2000000000',
+        parts: [part('20000', '1000000001')],
+      }).problems,
+    ).toEqual({
+      mileage: 'Enter at most 9,999,999.',
+      hours: 'Enter at most 1,000 hours.',
+      labour: 'Enter at most 1,000,000,000.',
+      'part-quantity-0': 'Enter at most 10,000.',
+      'part-price-0': 'Enter at most 1,000,000,000.',
+    });
+    // The most itself is fine.
+    expect(
+      read({
+        mileage: '9999999',
+        hours: '1000',
+        labour: '1000000000',
+        parts: [part('10000', '1000000000')],
+      }).repair,
+    ).toMatchObject({ mileage: 9_999_999, hours: 1000, labour: 1e9 });
   });
 
   it('works out what a repair cost', () => {
