@@ -328,6 +328,15 @@ in with `sync: true` in `apps.json`.
   - If the lost device also has the person's password manager, a new passkey
     would reach it too. The Account page says to remove the device from the
     password manager first.
+  - Notifications while an app is closed ([ADR 0009](0009-push-notifications.md))
+    aren't tied to the account: each device has its own random key for
+    them, which only it knows. So replacing the key doesn't stop them on the
+    lost device: its repeating reminders keep arriving there (an Android
+    lock screen shows their titles by default) until it's erased, its
+    browser stops allowing the app's notifications, or the app hasn't been
+    opened on it for 13 months. Nothing the person's other devices do can
+    stop them. The Account page and the privacy page say so, and to erase or
+    lock the lost device remotely (Find My, Find My Device) (audit 3 A-1).
 - **Passkey support varies.** Where a password manager can't do PRF, the
   recovery key and QR codes still work.
 - **Device clocks decide "newest".** A device whose clock is far off can win

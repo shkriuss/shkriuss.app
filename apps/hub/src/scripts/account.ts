@@ -98,9 +98,19 @@ const problemOf = (error: unknown): string =>
 
 const SIGN_IN_AGAIN =
   'Sign in with your new recovery key, or add this device with a code from one of your signed-in devices.';
-/** What to do next, after replacing the key. Old passkeys can still unlock the old key (audit 3 D-8). */
+/**
+ * What to do next, after replacing the key. Reminders while an app is
+ * closed aren't tied to the account: replacing it doesn't stop them on a
+ * lost device (audit 3 A-1). Old passkeys can still unlock the old key
+ * (audit 3 D-8).
+ */
 const AFTER_REPLACING = [
   'Now turn on sync again in each app (below), on each of your devices: until then, a lost device can still see that app’s changes.',
+  ...(apps.some((app) => app.pushNotifications === true)
+    ? [
+        'Reminders while an app is closed still reach a lost device until you erase it (Find My, Find My Device).',
+      ]
+    : []),
   'If you use passkeys, remove the old ones and add a new one.',
 ].join(' ');
 const REPLACED = {

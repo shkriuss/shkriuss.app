@@ -10,6 +10,8 @@ import { hub, listedApps } from '@shkriuss/registry';
 import { AppShell, Button } from '@shkriuss/ui';
 
 const syncApps = listedApps.filter((app) => app.sync === true);
+// Their reminders while closed aren't tied to the account (audit 3 A-1).
+const pushApps = listedApps.filter((app) => app.pushNotifications === true);
 ---
 
 <AppShell
@@ -164,6 +166,15 @@ const syncApps = listedApps.filter((app) => app.sync === true);
           If the lost device has your password manager, remove the device from it too (for example
           in your Google or Apple account) before you add a new passkey.
         </li>
+        {pushApps.length > 0 && (
+          <li>
+            Reminders while an app is closed aren't part of your account, so they keep reaching the
+            lost device (an Android lock screen shows their titles) until it's erased, its browser
+            stops allowing the app's notifications, or the app hasn't been opened on it for 13
+            months. Erase or lock it remotely if you can (Find My on Apple devices, Find My Device
+            on Android): erasing it stops them.
+          </li>
+        )}
       </ul>
       <p class="notice">
         Anything synced before now could already have been seen on the lost device. Replacing the
@@ -327,6 +338,8 @@ const syncApps = listedApps.filter((app) => app.sync === true);
           device with the old key when it next opens this page. Each app stops syncing with the old
           key once you turn on sync in it again, with the links above: do that for every app, on
           each of your devices. Until then, the lost device can still see that app's changes.
+          {pushApps.length > 0 &&
+            "Reminders while an app is closed keep reaching it until it's erased."}
         </p>
         <p>
           <Button data-action="replace">Replace the account key</Button>

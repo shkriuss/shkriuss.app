@@ -113,6 +113,15 @@ const LAST_UPDATED = '26 October 2026';
             on that device for 13 months, the server deletes everything it has for that device.
           </li>
           <li>
+            These reminders aren't part of your shkriuss account: each device has its own random key
+            for them. So replacing your account key after losing a device doesn't stop them. The
+            lost device keeps getting its repeating reminders (an Android lock screen shows their
+            titles by default) until it's erased, its browser stops allowing the app's
+            notifications, or the app hasn't been opened on it for 13 months. Erase or lock the lost
+            device remotely if you can (Find My on Apple devices, Find My Device on Android):
+            erasing it stops them.
+          </li>
+          <li>
             The push service sees when each reminder is sent, which app sends it, and roughly how
             long it is, but not what it says. It already knows which phone or browser it delivers
             to, as it does for any app's notifications.
@@ -154,6 +163,12 @@ const LAST_UPDATED = '26 October 2026';
         data to the new one. Passkeys you added before can't sign in any more, but the old key stays
         on the server, locked for each of them, until you remove that passkey (“Remove a passkey” on
         the Account page).
+        {pushSites.length > 0 && (
+          <>
+            Reminders while an app is closed aren't part of the account, so the lost device keeps
+            getting them (<a href="#closed-notifications">see above</a>).
+          </>
+        )}
       </li>
       <li>
         That's all. There's no list of accounts, and nothing stored that connects an account to you,
