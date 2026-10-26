@@ -570,7 +570,10 @@ import {
     border-block-end: var(--border-width) solid var(--color-border);
   }
 
+  /* It fills its line, beside how many ingredients: a short name is still a big target (audit 3 G-9). */
   .meal__name {
+    flex: 1 1 auto;
+    min-width: var(--tap-target);
     font-weight: var(--weight-semibold);
   }
 

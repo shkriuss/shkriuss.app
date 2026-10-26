@@ -272,6 +272,22 @@ test('changes and deletes repairs and vehicles', async ({ page }) => {
   ).toBeFocused();
 });
 
+// Audit 3 G-9: a repair opens through its vehicle's name, which was only as
+// wide as the name: vehicle "7" was 9 by 44 px.
+test('a repair’s vehicle fills its line, a big target however short', async ({ page }) => {
+  await seed(page, {
+    vehicles: [vehicle({ id: 'v7', name: '7' })],
+    repairs: [repair({ vehicle: 'v7' })],
+  });
+  const title = await repairItems(page)
+    .first()
+    .locator('[data-action="edit-repair"]')
+    .boundingBox();
+  const line = await repairItems(page).first().locator('.repair__top').boundingBox();
+  expect(title?.width).toBeGreaterThanOrEqual(44);
+  expect(title?.width).toBeGreaterThan((line?.width ?? 0) / 2);
+});
+
 test('miles, and a spreadsheet of every repair', async ({ page }) => {
   await seed(page, {
     vehicles: fleet,

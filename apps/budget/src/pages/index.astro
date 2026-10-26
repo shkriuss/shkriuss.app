@@ -522,7 +522,10 @@ import {
     cursor: pointer;
   }
 
+  /* It fills its line, beside what was spent: a short name is still a big target (audit 3 G-9). */
   .category__name {
+    flex: 1 1 auto;
+    min-width: var(--tap-target);
     font-weight: var(--weight-semibold);
     overflow-wrap: anywhere;
   }

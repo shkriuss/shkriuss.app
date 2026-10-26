@@ -723,8 +723,14 @@ import { CURRENCIES, LIMITS, UNIT_LABELS, UNITS } from '../lib/repairs.ts';
     gap: 0 var(--space-3);
   }
 
-  /* The vehicle opens the repair: it reads as text, works as a button. */
+  /*
+   * The vehicle opens the repair: it reads as text, works as a button. It
+   * fills its line, beside the mileage, so vehicle "7" is still a big
+   * target (audit 3 G-9).
+   */
   .repair__title {
+    flex: 1 1 auto;
+    min-width: var(--tap-target);
     min-height: var(--tap-target);
     padding: 0;
     border: 0;

@@ -204,6 +204,15 @@ test('says so when the entry being changed is deleted in another tab', async ({ 
   await expect(entryItems(page)).toHaveCount(0);
 });
 
+// Audit 3 G-9: a name button was only as wide as the name ("7": 9 px).
+test('a category’s name fills its line, a big target however short', async ({ page }) => {
+  await seed(page, { categories: [{ id: 's', name: '7', limit: null }] });
+  const name = await categoryButton(page, '7').boundingBox();
+  const line = await categoryItem(page, '7').locator('.category__line').boundingBox();
+  expect(name?.width).toBeGreaterThanOrEqual(44);
+  expect(name?.width).toBeGreaterThan((line?.width ?? 0) / 2);
+});
+
 test('moves between months', async ({ page }) => {
   await seed(page, {
     entries: [

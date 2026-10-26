@@ -224,6 +224,16 @@ test('a change made in another tab survives a form that was open here', async ({
   await expect(dayMeals(page, '2026-10-21')).toHaveText([/Lunch\s*Lentil soup with bread/]);
 });
 
+// Audit 3 G-9: a name button was only as wide as the name.
+test('a meal’s name fills its line, a big target however short', async ({ page }) => {
+  await newMeal(page, '7');
+  const meal = page.locator('[data-meals] li').first();
+  const name = await meal.getByRole('button', { name: '7', exact: true }).boundingBox();
+  const line = await meal.boundingBox();
+  expect(name?.width).toBeGreaterThanOrEqual(44);
+  expect(name?.width).toBeGreaterThan((line?.width ?? 0) / 2);
+});
+
 test('your meals’ ingredients make the shopping list', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await expect(page.getByText('No meals yet.')).toBeVisible();
