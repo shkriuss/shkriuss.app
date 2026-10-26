@@ -42,8 +42,9 @@ colour are in [`packages/registry/apps.json`](../../packages/registry/apps.json)
   - They show in the day's list (with their Georgian names) and in "Next 7
     days" (a long fast only on its first day). They aren't events: they
     can't be changed, and they're not in downloaded .ics files.
-- Weeks start on the day usual where you live, and times show as 12- or
-  24-hour, both from the phone's language and region settings.
+- Weeks start on the day usual where you live (on Monday where the browser
+  can't tell, as some can't), and times show as 12- or 24-hour, both from the
+  phone's language and region settings.
 
 Everything is saved in the browser on this device (`shkriuss:calendar` for
 events, `shkriuss:calendar-reminders` for when reminders were last checked,
