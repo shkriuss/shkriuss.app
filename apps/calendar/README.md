@@ -109,7 +109,13 @@ its notification server, docs/adr/0009).
 - **Import limits.** Calendar can't show everything a .ics file can say yet:
   repeats like "every 2 weeks" or "Mondays and Wednesdays", and changes to
   single dates of a repeating event, are listed as not imported. Times with a
-  time zone are moved to the phone's time zone.
+  time zone are moved to the phone's time zone. A repeat that stops after a
+  number of times (up to 5,000; more counts as for ever) ends on the day of
+  its last time, worked out without going through every time. Only monthly
+  repeats on the 29th to the 31st and yearly ones on 29 February have their
+  months or years counted one by one, 500,000 at most for a whole file
+  (a monthly one on the 31st for 10 years takes about 200); past that (only
+  in odd files), the rest are listed as not imported.
 - **Repeating events from another time zone** keep the time their first date
   has on the phone. When that time zone changes its clocks (summer time) on
   other dates than the phone's, some of the times end up an hour off: a weekly

@@ -18,6 +18,7 @@ import {
   addDays,
   addMinutes,
   daysBetween,
+  daysInMonth,
   fromDayNumber,
   isIsoDate,
   makeDate,
@@ -34,7 +35,6 @@ import {
   MAX_NOTES_LENGTH,
   MAX_SPAN_DAYS,
   MAX_TITLE_LENGTH,
-  occurrencesBetween,
   type EventDraft,
   type Repeat,
 } from './events.ts';
@@ -396,6 +396,16 @@ const RULE_PARTS = new Set([
 ]);
 /** Longer COUNTs are treated as "forever". */
 const MAX_COUNT = 5000;
+/**
+ * Months and years looked at, at most, for the whole file, to find when
+ * repeats with a COUNT end (lastStart). Only monthly repeats on the 29th to
+ * 31st and yearly ones on 29 February need any: a monthly one on the 31st
+ * for 10 years takes about 200, so 2,000 of those fit. Working out every
+ * time instead, a crafted file far under 5 MB froze the page for minutes
+ * (audit 3 C-2). Past this (only in odd files), an event is listed as not
+ * imported.
+ */
+const MAX_COUNT_STEPS = 500_000;
 
 interface Rule {
   repeat: Repeat;
@@ -438,26 +448,53 @@ function readRule(value: string, written: IsoDate, timeZone: string): Rule | nul
   return { repeat, until, count };
 }
 
-/** The start of the `count`-th time an event happens, or null if that's very far away. */
-function lastStart(draft: EventDraft, count: number): IsoDate | null {
-  if (count > MAX_COUNT) return null;
-  const daysPer: Record<Repeat, number> = {
-    none: 0,
-    daily: 1,
-    weekly: 7,
-    monthly: 62,
-    yearly: 366 * 8,
-  };
-  const end = Math.min(
-    toDayNumber(draft.startDate) + daysPer[draft.repeat] * count,
-    toDayNumber('9999-12-31'),
-  );
-  const starts = occurrencesBetween(
-    { events: [{ id: 'count', ...draft }] },
-    draft.startDate,
-    fromDayNumber(end),
-  ).filter((occurrence) => occurrence.start >= draft.startDate);
-  return starts[count - 1]?.start ?? null;
+/** How many months and years lastStart has looked at, for a whole file. */
+export interface CountSteps {
+  taken: number;
+}
+
+/**
+ * The start of the `count`-th time a repeating event happens (the first is
+ * its start), or null if that's very far away (after 9999, or a COUNT over
+ * MAX_COUNT: "forever"). Worked out without going through every time (audit
+ * 3 C-2): daily and weekly by counting days; monthly and yearly by stepping
+ * through the months or years with the same rule as occurrencesBetween (a
+ * day missing from a month, like the 31st or 29 February, is skipped there).
+ * Undefined once the file's MAX_COUNT_STEPS are used up.
+ */
+export function lastStart(
+  draft: EventDraft,
+  count: number,
+  steps: CountSteps = { taken: 0 },
+): IsoDate | null | undefined {
+  // With an UNTIL too (which files shouldn't have), the earlier of the two.
+  const until = draft.repeatUntil;
+  if (count > MAX_COUNT) return until;
+  const { year, month, day } = parts(draft.startDate);
+  const later = count - 1;
+  let found: IsoDate | null = null;
+  if (draft.repeat === 'daily' || draft.repeat === 'weekly') {
+    const last = toDayNumber(draft.startDate) + later * (draft.repeat === 'daily' ? 1 : 7);
+    if (last <= toDayNumber('9999-12-31')) found = fromDayNumber(last);
+  } else {
+    // Months since the year 0 (monthly), or years (yearly).
+    const monthly = draft.repeat === 'monthly';
+    const yearOf = (step: number) => (monthly ? Math.floor(step / 12) : step);
+    const monthOf = (step: number) => (monthly ? (step % 12) + 1 : month);
+    let step = monthly ? year * 12 + month - 1 : year;
+    // Every month has the 1st to the 28th, and every year has every day but 29 February.
+    const always = day <= 28 || (!monthly && !(month === 2 && day === 29));
+    if (always) step += later;
+    let left = always ? 0 : later;
+    while (left > 0 && yearOf(step) <= 9999) {
+      step += 1;
+      steps.taken += 1;
+      if (steps.taken > MAX_COUNT_STEPS) return undefined;
+      if (day <= daysInMonth(yearOf(step), monthOf(step))) left -= 1;
+    }
+    if (yearOf(step) <= 9999) found = makeDate(yearOf(step), monthOf(step), day);
+  }
+  return until !== null && (found === null || found > until) ? until : found;
 }
 
 /**
@@ -484,6 +521,8 @@ function repeatMoves(repeat: Repeat, written: IsoDate, moved: IsoDate): boolean 
 
 const UNSUPPORTED_REPEAT =
   'It repeats in a way Calendar can’t show yet (for example every 2 weeks).';
+const TOO_MANY_COUNTS =
+  'The file has too many repeats for Calendar to work out when this one stops.';
 
 const truncate = (text: string, max: number): string =>
   text.length > max ? `${text.slice(0, max - 1)}…` : text;
@@ -502,6 +541,7 @@ function toEvent(
   options: ParseOptions,
   flags: Flags,
   changeDays: Map<string, number[]>,
+  countSteps: CountSteps,
 ): ParsedEvent | SkippedEvent | null {
   const get = (name: string) => raw.props.find((property) => property.name === name);
   const text = (name: string) => unescapeText(get(name)?.value ?? '').trim();
@@ -615,7 +655,11 @@ function toEvent(
     reminder,
     notes,
   };
-  if (count !== null && repeat !== 'none') draft.repeatUntil = lastStart(draft, count);
+  if (count !== null && repeat !== 'none') {
+    const last = lastStart(draft, count, countSteps);
+    if (last === undefined) return skip(TOO_MANY_COUNTS);
+    draft.repeatUntil = last;
+  }
 
   const problems = draftProblems(draft);
   const problem = Object.values(problems)[0];
@@ -675,10 +719,11 @@ export function parseIcs(file: string, options: ParseOptions): ParseResult {
     movedRepeats: 0,
   };
   const changeDays = new Map<string, number[]>();
+  const countSteps: CountSteps = { taken: 0 };
   const events: ParsedEvent[] = [];
   const skipped: SkippedEvent[] = [];
   for (const raw of readEvents(text)) {
-    const result = toEvent(raw, options, flags, changeDays);
+    const result = toEvent(raw, options, flags, changeDays, countSteps);
     if (!result) continue;
     if ('draft' in result) events.push(result);
     else skipped.push(result);

@@ -1,6 +1,26 @@
 import { describe, expect, it, vi } from 'vitest';
-import { importEvents, type CalendarEvent, type EventDraft } from './events.ts';
-import { parseDuration, parseIcs, unescapeText, type ParseOptions } from './ics-import.ts';
+import {
+  daysInMonth,
+  fromDayNumber,
+  isLeapYear,
+  makeDate,
+  toDayNumber,
+  type IsoDate,
+} from './dates.ts';
+import {
+  importEvents,
+  occurrencesBetween,
+  type CalendarEvent,
+  type EventDraft,
+  type Repeat,
+} from './events.ts';
+import {
+  lastStart,
+  parseDuration,
+  parseIcs,
+  unescapeText,
+  type ParseOptions,
+} from './ics-import.ts';
 import { toIcs } from './ics.ts';
 
 const options: ParseOptions = { timeZone: 'Asia/Tbilisi' };
@@ -367,6 +387,56 @@ describe('parseIcs', () => {
     }
   });
 
+  it('reads a file of repeats with a COUNT quickly', () => {
+    // Working out every time up to COUNT took about 28 ms for each of these
+    // (2.9 s for 100), so a 5 MB file froze the page for minutes (audit 3 C-2).
+    const events = Array.from({ length: 2000 }, (_, index) => [
+      `UID:e${index}`,
+      'DTSTART:20261026T090000',
+      'DTEND:20261026T100000',
+      `RRULE:FREQ=${['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'][index % 4]};COUNT=5000`,
+      `SUMMARY:x${index}`,
+    ]);
+    const started = performance.now();
+    const result = parseIcs(calendar(...events), options);
+    expect(performance.now() - started).toBeLessThan(1000);
+    expect(result.skipped).toEqual([]);
+    expect(result.events.slice(0, 4).map((event) => event.draft.repeatUntil)).toEqual([
+      '2040-07-03',
+      '2122-08-17',
+      '2443-05-26',
+      '7025-10-26',
+    ]);
+  });
+
+  it('gives a file only so much work for its COUNTs, and says which events it left out', () => {
+    // Monthly on the 31st skips 5 months a year, so its months are counted one
+    // by one: about 8,600 of them for COUNT=5000.
+    const events = Array.from({ length: 2000 }, (_, index) => [
+      `UID:e${index}`,
+      'DTSTART;VALUE=DATE:20261231',
+      'RRULE:FREQ=MONTHLY;COUNT=5000',
+      'SUMMARY:Rent',
+    ]);
+    const started = performance.now();
+    const result = parseIcs(calendar(['DTSTART:20261031T090000', 'SUMMARY:Fine'], ...events), {
+      ...options,
+    });
+    expect(performance.now() - started).toBeLessThan(1000);
+    // The first ones fit in the file's work, with the right last date.
+    expect(result.events.map((event) => event.draft.title)).toEqual([
+      'Fine',
+      ...Array.from({ length: result.events.length - 1 }, () => 'Rent'),
+    ]);
+    expect(result.events.length).toBeGreaterThan(50);
+    expect(result.events[1]?.draft).toMatchObject({ repeat: 'monthly', repeatUntil: '2741-01-31' });
+    expect(result.skipped.length).toBe(2001 - result.events.length);
+    expect(result.skipped[0]).toEqual({
+      title: 'Rent',
+      reason: 'The file has too many repeats for Calendar to work out when this one stops.',
+    });
+  });
+
   it('says when a monthly or yearly repeat moves to another day', () => {
     // 22:00 UTC is 02:00 the next day in Tbilisi. Monthly on the 31st (in UTC)
     // becomes monthly on the 1st, which would show in months without a 31st.
@@ -521,6 +591,88 @@ describe('parseIcs', () => {
   it('turns down files that aren’t calendars, or have no events', () => {
     expect(parseIcs('hello', options).error).toBe('This doesn’t look like a calendar (.ics) file.');
     expect(parseIcs(calendar(), options).error).toBe('There are no events in this file.');
+  });
+});
+
+describe('lastStart', () => {
+  /** How the last start was worked out before (audit 3 C-2): every time up to COUNT, one by one. */
+  function everyTimeUpTo(draft: EventDraft, count: number): IsoDate | null {
+    if (count > 5000) return null;
+    const daysPer: Record<Repeat, number> = {
+      none: 0,
+      daily: 1,
+      weekly: 7,
+      monthly: 62,
+      yearly: 366 * 8,
+    };
+    const end = Math.min(
+      toDayNumber(draft.startDate) + daysPer[draft.repeat] * count,
+      toDayNumber('9999-12-31'),
+    );
+    const starts = occurrencesBetween(
+      { events: [{ id: 'count', ...draft }] },
+      draft.startDate,
+      fromDayNumber(end),
+    ).filter((occurrence) => occurrence.start >= draft.startDate);
+    return starts[count - 1]?.start ?? null;
+  }
+
+  /** The same random numbers every run. */
+  function random(seed: number): () => number {
+    return () => {
+      seed = (seed * 1664525 + 1013904223) >>> 0;
+      return seed / 2 ** 32;
+    };
+  }
+
+  it('gives what working out every time gave, for every kind of repeat', () => {
+    const next = random(2026);
+    const between = (low: number, high: number) => low + Math.floor(next() * (high - low + 1));
+    const startOf = (repeat: Repeat): IsoDate => {
+      // Mostly now, and some near the years 1000 and 9999, where dates stop.
+      const pick = next();
+      const year =
+        pick < 0.7 ? between(1990, 2100) : pick < 0.85 ? between(9980, 9999) : between(1000, 1100);
+      // 29 February, for some yearly ones: in a leap year (one after a century that isn't).
+      if (repeat === 'yearly' && next() < 0.3) {
+        const leap = 4 * between(250, 2499);
+        return makeDate(isLeapYear(leap) ? leap : leap + 4, 2, 29);
+      }
+      const month = between(1, 12);
+      // Half the time, the days that some months don't have.
+      const day = next() < 0.5 ? between(29, 31) : between(1, 28);
+      return makeDate(year, month, Math.min(day, daysInMonth(year, month)));
+    };
+    const countOf = (): number => {
+      const pick = next();
+      return pick < 0.45 ? between(1, 30) : pick < 0.85 ? between(1, 500) : between(1, 5000);
+    };
+    const repeats = ['daily', 'weekly', 'monthly', 'yearly'] as const;
+    const cases: [Repeat, IsoDate, number][] = Array.from({ length: 400 }, (_, index) => {
+      const repeat = repeats[index % 4] ?? 'daily';
+      return [repeat, startOf(repeat), countOf()];
+    });
+    // The longest COUNT, and one more (for ever); after 29 February 2096, the next is in 2104.
+    for (const repeat of repeats) {
+      for (const start of ['2026-01-31', '2026-10-17', '2096-02-29', '9990-12-31']) {
+        cases.push([repeat, start, 5000], [repeat, start, 5001]);
+      }
+    }
+    for (const [repeat, startDate, count] of cases) {
+      const draft: EventDraft = { ...base, startDate, endDate: startDate, repeat };
+      expect(lastStart(draft, count), `${repeat} from ${startDate}, COUNT=${count}`).toBe(
+        everyTimeUpTo(draft, count),
+      );
+    }
+    // The old way takes a second or two for all of them, longer on a busy computer.
+  }, 30_000);
+
+  it('ends at UNTIL if a file gives an earlier one too', () => {
+    // Files shouldn't have both (RFC 5545); before, this one repeated for ever.
+    const weekly: EventDraft = { ...base, repeat: 'weekly', repeatUntil: '2026-10-31' };
+    expect(lastStart(weekly, 10)).toBe('2026-10-31');
+    expect(lastStart(weekly, 2)).toBe('2026-10-24');
+    expect(lastStart(weekly, 6000)).toBe('2026-10-31');
   });
 });
 
