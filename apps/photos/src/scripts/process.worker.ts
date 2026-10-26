@@ -15,7 +15,8 @@ import type { FromProcessor } from './process.ts';
 async function process(file: File): Promise<FromProcessor> {
   const bytes = new Uint8Array(await file.arrayBuffer());
   const hash = toBase64Url(await sha256(bytes));
-  const taken = file.type === 'image/jpeg' || file.type === '' ? takenFromExif(bytes) : null;
+  // JPEG, HEIC and other HEIF, PNG and WebP: told apart by their first bytes (audit 4 F3-3).
+  const taken = takenFromExif(bytes);
   let image: ImageBitmap | null = null;
   try {
     image = await createImageBitmap(file);

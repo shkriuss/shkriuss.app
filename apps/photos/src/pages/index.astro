@@ -81,7 +81,7 @@ import { AppShell, Button, DataControls, Icon, SyncControls } from '@shkriuss/ui
       </p>
       <div class="stack" data-online hidden>
         <p data-online-status></p>
-        <form class="stack" data-unlock-form hidden>
+        <form class="stack" data-unlock-form novalidate hidden>
           <p>
             Adding photos to the online library costs money, so it needs the storage code. Enter it
             once: your other devices won’t need it.
@@ -107,6 +107,7 @@ import { AppShell, Button, DataControls, Icon, SyncControls } from '@shkriuss/ui
               Unlock online storage
             </Button>
           </div>
+          <p class="muted" role="status" data-unlock-status></p>
         </form>
         <div data-free-up hidden>
           <Button data-action="free-up-space">Free up space on this device</Button>

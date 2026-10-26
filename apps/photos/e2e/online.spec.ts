@@ -86,6 +86,53 @@ const recordUploaded = (page: Page) =>
     return state?.dirty === false && known.some((id) => id.startsWith('library'));
   });
 
+test('the storage code: asks for one, says it’s checking, and counts a code once', async ({
+  page,
+  guard,
+}) => {
+  // Before, an empty field did nothing, and a second press while a wrong code
+  // was being checked was a second wrong try (audit 4 G-6).
+  guard.allowConsole('status of 403 (Forbidden)');
+  await createAccount(page);
+  await page.goto('/');
+  await turnOnSync(page, 'Photos');
+  await expect(onlineStatus(page)).toHaveText('To keep photos online, enter the storage code.');
+  const form = page.locator('[data-unlock-form]');
+  const field = page.getByLabel('Storage code');
+  const button = page.getByRole('button', { name: 'Unlock online storage' });
+  const error = page.locator('[data-unlock-error]');
+  const status = page.locator('[data-unlock-status]');
+
+  await field.press('Enter');
+  await expect(error).toHaveText('Enter the storage code.');
+  await expect(field).toHaveAttribute('aria-invalid', 'true');
+  // Focus was in the field already: the problem is read out.
+  await expect(form.getByRole('alert')).toHaveText('Storage code: Enter the storage code.');
+
+  let answer: () => void = () => undefined;
+  const answered = new Promise<void>((resolve) => {
+    answer = resolve;
+  });
+  const tries: string[] = [];
+  await page.route('**/api/library/unlock', async (route) => {
+    tries.push(route.request().method());
+    await answered;
+    await route.fallback();
+  });
+  await field.fill('a wrong guess');
+  await button.click();
+  await expect(status).toHaveText('Checking the storage code…');
+  await expect(button).toHaveAttribute('aria-disabled', 'true');
+  await checkA11y(page, 'online library: checking the storage code');
+  await field.press('Enter');
+  await button.click({ force: true });
+  answer();
+  await expect(error).toHaveText('That isn’t the storage code. Check it and try again.');
+  await expect(status).toHaveText('');
+  await expect(button).not.toHaveAttribute('aria-disabled');
+  expect(tries).toEqual(['POST']);
+});
+
 test('puts photos online, and shows them on the other devices', async ({
   page,
   browser,

@@ -3,7 +3,8 @@
 Status: Accepted (2026-10-21). Builds on [ADR 0013](0013-photos-on-the-device.md)
 (files on the device). Extended by [ADR 0016](0016-online-photo-library.md):
 with sync on, the library is also online, in Cloudflare R2, and "Free up
-space" can leave only the thumbnail on a device.
+space" can leave only the thumbnail on a device. Updated in October 2026
+(audit 4 F3-3): dates are read from HEIC, PNG and WebP files too.
 
 ## Context
 
@@ -36,11 +37,14 @@ This first part works on the device only, like every other app.
 
 - **Read in a worker** (`process.worker.ts`): the SHA-256 of the original,
   when it was taken, and the two copies. Big photos never freeze the page.
-- **When it was taken:** for a JPEG, from what the camera wrote in it (Exif
-  `DateTimeOriginal`, else `DateTime`, read by `src/lib/exif.ts`). Otherwise,
-  from the file's own date. It's kept as the camera's local time
-  (`"2026-10-21T14:03:22"`) with no time zone, so a photo stays in the same
-  month wherever it's looked at.
+- **When it was taken:** from what the camera wrote in it (Exif
+  `DateTimeOriginal`, else `DateTime`, read by `src/lib/exif.ts`), in a
+  JPEG, a HEIC or other HEIF file (AVIF too), a PNG or a WebP. HEIC was
+  added for audit 4 F3-3: it's what iPhones keep, and the way to keep
+  originals there (Files, then "Choose File") gives HEIC files, whose own
+  date is usually when they were saved. Otherwise, from the file's own
+  date. It's kept as the camera's local time (`"2026-10-21T14:03:22"`) with
+  no time zone, so a photo stays in the same month wherever it's looked at.
 - **Never twice:** a photo whose SHA-256 is already in the library isn't
   added again.
 - **Photos a browser can't show** (like HEIC outside Safari) are still kept,

@@ -16,6 +16,7 @@ import {
   shownLabel,
   takenLabel,
   toPhoto,
+  withChanges,
   type Photo,
 } from './photos.ts';
 
@@ -122,6 +123,102 @@ describe('the library', () => {
   });
 });
 
+describe('changes to the list (audit 4 J-1)', () => {
+  /** A library of `count` photos taken at random moments, newest first. */
+  function library(count: number, seed = 7): Photo[] {
+    let state = seed;
+    const random = () => {
+      state = (state * 1664525 + 1013904223) >>> 0;
+      return state / 2 ** 32;
+    };
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return Array.from({ length: count }, (_, index) => {
+      const at = new Date(Date.UTC(2010, 0, 1) + Math.floor(random() * 16 * 365) * 86_400_000);
+      const taken = `${at.getUTCFullYear()}-${pad(at.getUTCMonth() + 1)}-${pad(at.getUTCDate())}T12:00:00`;
+      return photo({ id: `p${index}`, taken, added: index % 5 });
+    }).sort(byNewest);
+  }
+
+  it('give the same list as sorting it all again, for any mix of changes', () => {
+    const before = library(300);
+    const changes: [Photo[], string[]][] = [
+      [[photo({ id: 'new', taken: '2015-06-01T12:00:00' })], []],
+      [[], ['p3', 'p10', 'nope']],
+      // A photo changed in place (its place online, say), and one moved in time.
+      [
+        [
+          { ...(before[5] as Photo), here: false },
+          { ...(before[7] as Photo), taken: '2030-01-01T00:00:00' },
+        ],
+        [],
+      ],
+      // Many at once: a page of changes from other devices.
+      [
+        library(40, 99).map((one, index) => ({ ...one, id: `q${index}` })),
+        before.slice(0, 20).map((one) => one.id),
+      ],
+    ];
+    for (const [save, remove] of changes) {
+      const gone = new Set([...remove, ...save.map((one) => one.id)]);
+      const expected = [...before.filter((one) => !gone.has(one.id)), ...save].sort(byNewest);
+      expect(withChanges(before, save, remove)).toEqual(expected);
+    }
+    // The list given isn't changed.
+    expect(before).toEqual(library(300));
+  });
+
+  it('keep a photo both saved and taken out, as saved; and the last change to each', () => {
+    const before = library(50);
+    const kept = { ...(before[9] as Photo), here: false };
+    const moved = { ...(before[20] as Photo), taken: '2001-01-01T00:00:00' };
+    const next = withChanges(
+      before,
+      [{ ...kept, here: true }, kept, { ...moved, here: false }, moved],
+      [kept.id, moved.id, 'p30'],
+    );
+    expect(next).toHaveLength(49);
+    expect(next.filter((one) => one.id === kept.id)).toEqual([kept]);
+    expect(next.filter((one) => one.id === moved.id)).toEqual([moved]);
+    expect(next.at(-1)).toEqual(moved);
+    expect(next.some((one) => one.id === 'p30')).toBe(false);
+  });
+
+  it('don’t sort the whole library for one photo', () => {
+    const big = library(100_000);
+    let comparisons = 0;
+    const counted = (a: Photo, b: Photo) => {
+      comparisons += 1;
+      return byNewest(a, b);
+    };
+    const added = photo({ id: 'new', taken: '2020-02-02T12:00:00' });
+    const next = withChanges(big, [added], [], counted);
+    expect(next).toHaveLength(100_001);
+    expect(comparisons).toBeLessThan(40);
+    const at = next.indexOf(added);
+    expect(byNewest(next[at - 1] as Photo, added)).toBeLessThanOrEqual(0);
+    expect(byNewest(added, next[at + 1] as Photo)).toBeLessThanOrEqual(0);
+  });
+
+  it('find a photo uploaded where it is, without looking through every photo', () => {
+    let looks = 0;
+    const big = library(100_000).map(({ id, ...rest }) =>
+      Object.defineProperty(rest, 'id', {
+        enumerable: true,
+        get: () => {
+          looks += 1;
+          return id;
+        },
+      }),
+    ) as Photo[];
+    const uploaded = { ...(big[54_321] as Photo), online: { key: 'k', parts: [1, 2, 3] } };
+    looks = 0;
+    const next = withChanges(big, [uploaded]);
+    expect(next[54_321]).toBe(uploaded);
+    expect(next).toHaveLength(100_000);
+    expect(looks).toBeLessThan(100);
+  });
+});
+
 describe('for people', () => {
   it('names months and moments as written, whatever the time zone', () => {
     expect(monthLabel('2026-10', EN)).toBe('October 2026');
@@ -173,6 +270,18 @@ describe('for people', () => {
     expect(formatLabel({ name: 'IMG_0001.HEIC', type: 'image/heic' })).toBe('HEIC');
     expect(formatLabel({ name: 'scan', type: 'image/png' })).toBe('PNG');
     expect(formatLabel({ name: 'scan', type: '' })).toBe('FILE');
+  });
+
+  it('takes a type that’s the name of an object’s own function for an unknown one (audit 4 C-2)', () => {
+    // From another device: in a plain object, these found functions and broke the grid.
+    for (const type of ['constructor', 'toString', 'valueOf', '__proto__', 'hasOwnProperty']) {
+      expect(isPhotoDetails(photo({ name: 'IMG_0001', type }))).toBe(true);
+      expect(formatLabel({ name: 'IMG_0001', type })).toBe('FILE');
+      expect(downloadName(photo({ name: 'IMG_0001', type }))).toBe('IMG_0001');
+    }
+    expect(formatLabel({ name: 'IMG_0001', type: 'image/x-portable' })).toBe('X-PORTABLE');
+    // Longer than any real type: not a photo's details.
+    expect(isPhotoDetails(photo({ type: `image/${'x'.repeat(95)}` }))).toBe(false);
   });
 
   it('saves the original under its own name, made safe', () => {
