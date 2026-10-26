@@ -73,6 +73,32 @@ describe('nextFireTime', () => {
     ]);
   });
 
+  // In the hour that repeats when clocks go back, the server took the second
+  // time east of UTC and the first west of it; an open app takes the first
+  // (@shkriuss/ui's reminder-window), so now both do (audit 3 F1-3).
+  it('takes the first of a time the clocks show twice, east and west of UTC', () => {
+    for (const [zone, wall, first] of [
+      // Berlin goes back from 03:00 to 02:00 on 25 October 2026.
+      ['Europe/Berlin', '2026-10-25T02:30', '2026-10-25T00:30:00.000Z'],
+      // Sydney goes back from 03:00 to 02:00 on 5 April 2026.
+      ['Australia/Sydney', '2026-04-05T02:30', '2026-04-04T15:30:00.000Z'],
+      // New York goes back from 02:00 to 01:00 on 1 November 2026.
+      ['America/New_York', '2026-11-01T01:30', '2026-11-01T05:30:00.000Z'],
+      // Lord Howe goes back half an hour, from 02:00 to 01:30, on 5 April 2026.
+      ['Australia/Lord_Howe', '2026-04-05T01:45', '2026-04-04T14:45:00.000Z'],
+    ] as const) {
+      const once = timing({ start: wall });
+      expect(iso(nextFireTime(once, zone, at(first) - 12 * 60 * 60 * 1000)), zone).toBe(first);
+    }
+    // A daily reminder goes off once that night too, at the first 02:30.
+    const nightly = timing({ start: '2026-10-20T02:30', repeat: 'daily' });
+    expect(fires(nightly, 'Europe/Berlin', '2026-10-24T00:00:00Z', 3)).toEqual([
+      '2026-10-24T00:30:00.000Z',
+      '2026-10-25T00:30:00.000Z',
+      '2026-10-26T01:30:00.000Z',
+    ]);
+  });
+
   it('stops after the last day', () => {
     const walk = timing({ start: '2026-10-17T07:00', repeat: 'daily', until: '2026-10-19' });
     expect(fires(walk, 'UTC', '2026-10-16T00:00:00Z', 5)).toEqual([

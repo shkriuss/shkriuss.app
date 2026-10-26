@@ -54,7 +54,10 @@ browsers like IronFox receive Web Push through **UnifiedPush**.
   daily limit (audit 3 B-2).
 - **Repeating notifications keep working** without opening the app: the server
   computes each next time from the pattern, in the phone's time zone (so
-  daylight saving doesn't shift them). The same encrypted message is sent
+  daylight saving doesn't shift them). A time the clocks skip goes off as
+  much later as they skip; one they show twice, in the hour that repeats
+  when they go back, goes off the first time, as in the open app (audit 3
+  F1-3). The same encrypted message is sent
   each time, so its text can't say "tomorrow". It has the same tag each
   time too, so it replaces the one before it on the screen, and it's shown
   with `renotify`, so it still rings or buzzes (audit 3 F1-1; the open app's
