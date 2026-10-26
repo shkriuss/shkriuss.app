@@ -758,6 +758,42 @@ describe('hours worked and costs', () => {
     });
   });
 
+  // Audit 3 F2-8: a number over the most allowed was refused with a message
+  // about something else ("Enter the hours as a number above 0").
+  it('says what the most is', () => {
+    const read = (fields: Partial<RepairForm>) =>
+      readRepair(form(fields), 'r', emptyRepairs(), vehicles, newId, 'en-US');
+    const part = (quantity: string, price: string) => ({
+      name: 'Rivets',
+      number: '',
+      quantity,
+      price,
+    });
+    expect(
+      read({
+        mileage: '12000000',
+        hours: '1,500',
+        labour: '2000000000',
+        parts: [part('20000', '1000000001')],
+      }).problems,
+    ).toEqual({
+      mileage: 'Enter at most 9,999,999.',
+      hours: 'Enter at most 1,000 hours.',
+      labour: 'Enter at most 1,000,000,000.',
+      'part-quantity-0': 'Enter at most 10,000.',
+      'part-price-0': 'Enter at most 1,000,000,000.',
+    });
+    // The most itself is fine.
+    expect(
+      read({
+        mileage: '9999999',
+        hours: '1000',
+        labour: '1000000000',
+        parts: [part('10000', '1000000000')],
+      }).repair,
+    ).toMatchObject({ mileage: 9_999_999, hours: 1000, labour: 1e9 });
+  });
+
   it('works out what a repair cost', () => {
     expect(
       repairCost(

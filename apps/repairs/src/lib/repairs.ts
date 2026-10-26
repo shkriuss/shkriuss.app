@@ -398,6 +398,11 @@ export function readRepair(
   | { repair?: undefined; newVehicle?: undefined; problems: RepairProblems } {
   const parseNumber = (text: string) => parseDecimal(text, locale);
   const parseMoney = (text: string) => parseDecimal(text, locale, { cents: true });
+  // Over the most allowed: said so, not that it isn't a number (audit 3 F2-8).
+  const over = (value: number | null, most: number) =>
+    value !== null && Number.isFinite(value) && value > most;
+  const atMost = (most: number, unit = '') =>
+    `Enter at most ${new Intl.NumberFormat(locale).format(most)}${unit}.`;
   const problems: RepairProblems = {};
 
   const name = oneLine(form.vehicle);
@@ -418,7 +423,8 @@ export function readRepair(
   if (!isIsoDate(form.date)) problems['date'] = 'Choose the day.';
 
   const mileage = parseWhole(form.mileage, locale);
-  if (mileage !== null && !isMileage(mileage)) {
+  if (over(mileage, LIMITS.mileage)) problems['mileage'] = atMost(LIMITS.mileage);
+  else if (mileage !== null && !isMileage(mileage)) {
     problems['mileage'] = 'Enter the mileage as a whole number, or leave it empty.';
   }
 
@@ -453,8 +459,13 @@ export function readRepair(
       problems[`part-number-${index}`] = `Use ${LIMITS.partNumber} characters or fewer.`;
     }
     const quantity = typedQuantity ?? 1;
-    if (!isQuantity(quantity)) problems[`part-quantity-${index}`] = 'Enter a number above 0.';
-    if (!isMoneyOrNull(price)) {
+    if (over(quantity, LIMITS.quantity)) {
+      problems[`part-quantity-${index}`] = atMost(LIMITS.quantity);
+    } else if (!isQuantity(quantity)) {
+      problems[`part-quantity-${index}`] = 'Enter a number above 0.';
+    }
+    if (over(price, LIMITS.money)) problems[`part-price-${index}`] = atMost(LIMITS.money);
+    else if (!isMoneyOrNull(price)) {
       problems[`part-price-${index}`] =
         whichAmount(row.price, locale) ?? 'Enter a price, or leave it empty.';
     }
@@ -463,11 +474,13 @@ export function readRepair(
   if (parts.length > LIMITS.parts) problems['parts'] = `Add up to ${LIMITS.parts} parts.`;
 
   const hours = parseNumber(form.hours);
-  if (hours !== null && !isHours(hours)) {
+  if (over(hours, LIMITS.hours)) problems['hours'] = atMost(LIMITS.hours, ' hours');
+  else if (hours !== null && !isHours(hours)) {
     problems['hours'] = 'Enter the hours as a number above 0, or leave it empty.';
   }
   const labour = parseMoney(form.labour);
-  if (!isMoneyOrNull(labour)) {
+  if (over(labour, LIMITS.money)) problems['labour'] = atMost(LIMITS.money);
+  else if (!isMoneyOrNull(labour)) {
     problems['labour'] = whichAmount(form.labour, locale) ?? 'Enter an amount, or leave it empty.';
   }
 
