@@ -2,7 +2,8 @@
 
 Status: Accepted (2026-10-18). There are no pull request previews any more
 ([ADR 0019](0019-no-pull-request-previews.md)), so the model isn't uploaded to
-them.
+them. Changed in October 2026 (audit 3 F3-2): short forms typed without an
+apostrophe are split into words as spaCy splits them (see Decision).
 
 ## Context
 
@@ -48,6 +49,15 @@ Published results on the same set agree: GPT-4 asked to correct scores 43
   Face's tokenizer (731 words) and the labels against the tested Python code
   (126 cases). Run on the raw test sentences, the whole pipeline scored
   67.4% matched, 248 fixed (F0.5 57.3), against 67.0%, 256 (57.7) measured.
+
+  _Changed in October 2026 (audit 3 F3-2):_ `sentences.ts` didn't split
+  short forms typed without an apostrophe, or times, as spaCy does: "dont" is
+  "do" and "nt", "Ive" is "I" and "ve", "5pm" is "5" and "pm". The model met
+  words it had never seen, and changed "dont" to "do". They're now split as
+  spaCy's English exceptions split them, and the real words spaCy keeps whole
+  stay whole ("its", "ill", "well", "were"…). The scores above were measured
+  before this change.
+
 - **It runs with onnxruntime-web** (WebAssembly, on the processor, no WebGPU)
   in a worker (`deep-check.worker.ts`), on up to 4 cores.
 - **Downloaded only when asked.** Files in an app's `public/on-demand/` are
