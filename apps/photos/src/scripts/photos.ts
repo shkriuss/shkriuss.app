@@ -8,6 +8,7 @@
 import { focusProblem, showProblem } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { setBusy } from '@shkriuss/ui/busy';
+import { keepFocus } from '@shkriuss/ui/keep-focus';
 import { canFreeUp, freeable, onlineMessage, onlyOnline } from '../lib/online.ts';
 import {
   addedMessage,
@@ -135,9 +136,11 @@ export function mountPhotos(root: Document): void {
       photos = [...photos.filter((photo) => !gone.has(photo.id)), ...save].sort(byNewest);
       for (const id of remove) chosen.delete(id);
       if (viewing && remove.includes(viewing.id) && viewer.open) viewer.close();
-      // Many changes can come in a row: show them together.
+      // Many changes can come in a row: show them together. Drawn in the
+      // background (after each upload, too), so keyboard focus stays on the
+      // photo it was on (audit 3 G-1).
       window.clearTimeout(renderTimer);
-      renderTimer = window.setTimeout(render, 100);
+      renderTimer = window.setTimeout(() => keepFocus(render, libraryHeading), 100);
     },
   });
   mountSyncControls(required<HTMLElement>(root, '[data-sync-controls]'), online.sync);
@@ -681,7 +684,8 @@ export function mountPhotos(root: Document): void {
       photos = loaded;
       const known = new Set(photos.map((photo) => photo.id));
       for (const id of chosen) if (!known.has(id)) chosen.delete(id);
-      render();
+      // Changed in another tab: keyboard focus stays where it was (audit 3 G-1).
+      keepFocus(render, libraryHeading);
     } catch {
       problem('Couldn’t open the photos on this device. Is storage blocked in this browser?');
     }

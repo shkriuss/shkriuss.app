@@ -165,6 +165,49 @@ test('puts photos online, and shows them on the other devices', async ({
   await tablet.context().close();
 });
 
+test('keyboard focus stays on a photo while photos go online', async ({ page }) => {
+  // The grid is drawn again after each upload: focus fell to the top of the page (audit 3 G-1).
+  await createAccount(page);
+  await page.goto('/');
+  const october = withExif(await picture(page, { width: 400, height: 300 }), '2026:10:21 14:03:22');
+  const july = withExif(
+    await picture(page, { width: 400, height: 300, color: '#36c' }),
+    '2019:07:04 18:30:05',
+  );
+  await addPhotos(page, [jpeg('IMG_0015.JPG', october), jpeg('IMG_0016.JPG', july)]);
+
+  // Uploads wait until a photo has keyboard focus.
+  let letGo = (): void => undefined;
+  const goOn = new Promise<void>((resolve) => {
+    letGo = resolve;
+  });
+  await page.route('**/api/library/items/**', async (route) => {
+    if (route.request().method() === 'PUT') await goOn;
+    await route.continue();
+  });
+  await turnOnSync(page, 'Photos');
+  await unlock(page);
+  const tile = page.getByRole('button', { name: 'Photo taken Jul 4, 2019, 6:30:05 PM' });
+  await tile.focus();
+  await page.evaluate(() => {
+    (window as unknown as { focusedBefore: Element | null }).focusedBefore = document.activeElement;
+  });
+
+  letGo();
+  await expect(onlineStatus(page)).toHaveText(/^Online: 2 photos · /, ONLINE);
+  // Drawn again (the tile is a new copy), with focus on the same photo.
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          document.activeElement ===
+          (window as unknown as { focusedBefore: Element | null }).focusedBefore,
+      ),
+    )
+    .toBe(false);
+  await expect(tile).toBeFocused();
+});
+
 test('sync turned off while the online library is being asked: nothing is lost, and nothing more goes up', async ({
   page,
   browser,
