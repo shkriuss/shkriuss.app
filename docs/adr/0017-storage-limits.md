@@ -64,6 +64,11 @@ stops the others, and there's room left for the owner's online library list
 and a couple of open previews. The per-account limits stay as they were
 (a copy is at most about 1.4 MB, an account's photos at most 800 MB).
 
+**Device links** (the hub's "Show a code") are the one thing a stranger can
+make the servers keep that no meter counts: each is small and deleted 10
+minutes after it's made, so the free daily requests cap them at about 700
+at a time, a few megabytes at most (audit 4 B-1).
+
 Each new app with sync or notifications adds its own limits, so a unit test
 (`tests/unit/free-plan.test.ts`) adds them all up from `apps.json`, with two
 open previews and the library list, and fails above 4.5 GB (audit J-2).

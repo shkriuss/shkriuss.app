@@ -103,8 +103,7 @@ each audit found, and what happened to each finding, is in
 1. The server, Cloudflare and the owner can't read anyone's data.
 2. Only a person's own devices can read or change their data.
 3. One app can't get another app's key or data.
-4. Nobody can make the owner pay more than the limits in the ADRs, or use up
-   the free daily limits all the apps share.
+4. Nobody can make the owner pay more than the limits in the ADRs.
 5. Pages run only our own code, and load nothing from other websites.
 6. "Delete" deletes, on the device and online.
 7. Only code that passed every check in CI reaches production.
@@ -113,8 +112,12 @@ each audit found, and what happened to each finding, is in
    limit, [ADR 0017](../adr/0017-storage-limits.md), and, for notifications
    while an app is closed, a day's messages for push addresses outside
    Google's, Apple's, Mozilla's and Microsoft's push services (UnifiedPush),
-   and a day's test messages, [ADR 0009](../adr/0009-push-notifications.md)),
-   and no outside service can stop a fix from being deployed.
+   and a day's test messages, [ADR 0009](../adr/0009-push-notifications.md);
+   and the free daily requests all the apps' servers share: on the free plan
+   a script can use them up, which pauses every app's online features until
+   00:00 UTC, [deployment.md](../deployment.md) and
+   [ADR 0010](../adr/0010-account-and-sync.md), "Free quota"), and no outside
+   service can stop a fix from being deployed.
 
 ## Intentional choices
 
@@ -131,8 +134,8 @@ reasoning is wrong, and say why.
 - **Photos' storage code** ([ADR 0016](../adr/0016-online-photo-library.md))
   is a shared passphrase that stops strangers filling the owner's storage.
   It isn't a person's login: their key does that.
-- **Notifications go through the browser's push service** (Google, Apple or
-  Mozilla), encrypted ([ADR 0009](../adr/0009-push-notifications.md)). It's
+- **Notifications go through the browser's push service** (Google, Apple,
+  Mozilla or Microsoft), encrypted ([ADR 0009](../adr/0009-push-notifications.md)). It's
   the only third party, and only for people who turn notifications on.
 - **`'wasm-unsafe-eval'`** is in the CSP only for apps with
   `"webAssembly": true` (Grammar,
