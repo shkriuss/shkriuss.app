@@ -21,6 +21,7 @@
 import { addDays, isIsoDate, type IsoDate } from '@shkriuss/dates';
 import { csvFile } from '@shkriuss/storage/csv';
 import { defineSettings, type SettingsState as SavedSettings } from '@shkriuss/storage/settings';
+import { withEdits } from '@shkriuss/sync/edits';
 import {
   CURRENCIES,
   decimalText,
@@ -462,6 +463,12 @@ export function toForm(trade: Trade, locale?: string): TradeForm {
   };
 }
 
+/** What the trade form holds: the trade's fields, and "Quantity closed" ("" unless closing). */
+export interface FormValues {
+  form: TradeForm;
+  closeQuantity: string;
+}
+
 /**
  * The close form of an open trade: the trade form, with its fees still to
  * count (openFees) as this close's fees, and all that's still open of it as
@@ -471,12 +478,46 @@ export function toCloseForm(
   trade: Trade,
   parts: ReadonlyMap<string, Parts>,
   locale?: string,
-): { form: TradeForm; closeQuantity: string } {
+): FormValues {
   const fees = openFees(trade, parts);
   return {
     form: { ...toForm(trade, locale), fees: fees === 0 ? '' : decimalText(fees, locale) },
     closeQuantity: decimalText(openQuantity(trade, parts), locale),
   };
+}
+
+/**
+ * Reads the trade form (readClose when `closing`, else readChange) when the
+ * trade may have changed while the form was open, on another device or in
+ * another tab. Only what was changed in the form goes on the trade as it is
+ * now, so the other change stays (withEdits, audit 3 F2-1): a stop loss
+ * moved there isn't moved back, and "Quantity closed", unless it was
+ * changed, is all that's still open now. If the two don't fit together,
+ * the form wins, as it was checked. `opened` is the form as it opened,
+ * `edited` as it is now; a new trade, or one deleted meanwhile, is read as
+ * the form is.
+ */
+export function readEdited(
+  opened: FormValues,
+  edited: FormValues,
+  state: TradesState,
+  ids: { id: string; newId: string },
+  closing: boolean,
+  locale?: string,
+): ReadTrades {
+  const read = ({ form, closeQuantity }: FormValues) =>
+    closing
+      ? readClose(form, closeQuantity, state, ids, locale)
+      : readChange(form, state, ids, locale);
+  const current = state.trades.find((trade) => trade.id === ids.id);
+  if (!current) return read(edited);
+  const now = closing
+    ? toCloseForm(current, partsOf(state.trades), locale)
+    : { form: toForm(current, locale), closeQuantity: '' };
+  const flat = ({ form, closeQuantity }: FormValues) => ({ ...form, closeQuantity });
+  const { closeQuantity, ...form } = withEdits(flat(opened), flat(edited), flat(now));
+  const merged = read({ form, closeQuantity });
+  return merged.trade ? merged : read(edited);
 }
 
 // ---------- Changing ----------

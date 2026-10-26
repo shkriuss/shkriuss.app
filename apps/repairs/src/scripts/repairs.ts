@@ -42,7 +42,7 @@ import {
   partNames,
   photoFiles,
   photosOf,
-  readRepair,
+  readEditedRepair,
   readVehicle,
   removeRepair,
   removeVehicle,
@@ -66,6 +66,7 @@ import {
   withSettings,
   type PartForm,
   type Repair,
+  type RepairForm,
   type RepairsState,
   type SettingsState,
   type Totals,
@@ -181,6 +182,8 @@ export function mountRepairs(root: Document): void {
   /** What's in the forms: the repair or vehicle being changed (null: a new one). */
   let editingRepair: string | null = null;
   let editingVehicle: string | null = null;
+  /** The repair form as it opened, to tell what the person changed (see withEdits). */
+  let openedRepair: RepairForm | null = null;
   let deleting: { type: 'repair' | 'vehicle'; id: string } | null = null;
   let saving = false;
   let syncWasOn = false;
@@ -498,7 +501,7 @@ export function mountRepairs(root: Document): void {
     const names = [
       ...['vehicle', 'date', 'mileage', 'system', 'problem', 'work'],
       ...partValues().flatMap((_, index) => PART_FIELDS.map((key) => `part-${key}-${index}`)),
-      ...['parts', 'hours', 'labour'],
+      ...['parts', 'photos', 'hours', 'labour'],
     ];
     for (const name of names) {
       const error = repairForm.querySelector<HTMLElement>(`[data-error-for="${name}"]`);
@@ -509,28 +512,32 @@ export function mountRepairs(root: Document): void {
     const first = names.find((name) => problems[name]);
     if (!first) return false;
     const input = repairForm.elements.namedItem(first);
-    focusProblem(input instanceof HTMLElement ? input : addPartButton, problems[first]);
+    // Too many photos, with those added on another device: "Remove photo" (audit 3 F2-1).
+    const photo = repairForm.querySelector<HTMLElement>('[data-action="remove-photo"]');
+    focusProblem(
+      input instanceof HTMLElement ? input : first === 'photos' ? photo : addPartButton,
+      problems[first],
+    );
     return true;
   }
 
   function openRepair(repair: Repair | undefined): void {
     editingRepair = repair?.id ?? null;
+    openedRepair = repair ? toRepairForm(repair, vehicles) : null;
     repairTitle.textContent = repair ? 'Change repair' : 'New repair';
     const only = findVehicle(filterVehicle());
-    const values = repair
-      ? toRepairForm(repair, vehicles)
-      : {
-          vehicle: only?.name ?? '',
-          date: today(),
-          mileage: '',
-          system: '',
-          problem: '',
-          work: '',
-          parts: [EMPTY_PART],
-          hours: '',
-          labour: '',
-          photos: [],
-        };
+    const values = openedRepair ?? {
+      vehicle: only?.name ?? '',
+      date: today(),
+      mileage: '',
+      system: '',
+      problem: '',
+      work: '',
+      parts: [EMPTY_PART],
+      hours: '',
+      labour: '',
+      photos: [],
+    };
     for (const name of [
       'vehicle',
       'date',
@@ -587,7 +594,10 @@ export function mountRepairs(root: Document): void {
 
   async function submitRepair(): Promise<void> {
     const id = editingRepair ?? crypto.randomUUID();
-    const read = readRepair(
+    // A sync or another tab may have changed the repair while the form was
+    // open: only what was changed here goes on it (audit 3 F2-1).
+    const read = readEditedRepair(
+      openedRepair,
       {
         vehicle: field<HTMLInputElement>('vehicle').value,
         date: field<HTMLInputElement>('date').value,
@@ -949,8 +959,11 @@ export function mountRepairs(root: Document): void {
     vehicles = vehiclesStore.load();
     repairs = repairsStore.load();
     settings = settingsStore.load();
-    // What's being changed was deleted on another device or tab.
-    if (editingRepair !== null && !findRepair(editingRepair)) repairDialog.close();
+    // What's being changed was deleted on another device or tab; or changed
+    // there, and the form's photos follow (audit 3 F2-1).
+    const current = findRepair(editingRepair);
+    if (editingRepair !== null && !current) repairDialog.close();
+    else if (current) formPhotos.follow(current.photos);
     if (editingVehicle !== null && !findVehicle(editingVehicle)) vehicleDialog.close();
     if (yearDialog.open) {
       if (repairs.repairs.length === 0) yearDialog.close();

@@ -78,7 +78,11 @@ Your trading journal: log your trades and see what works. Lives at
   ([ADR 0010](../../docs/adr/0010-account-and-sync.md)). The newest change
   to each trade wins: one changed on two devices at once isn't kept twice,
   which would count it twice in the results. Parts are trades of their
-  own, so closing part of a trade is never undone by a change to it.
+  own, so closing part of a trade is never undone by a change to it. The
+  trade form (also when closing) that's open while a sync (or another tab)
+  changes the trade saves only what was changed in it (`readEdited`), so
+  a stop loss moved there stays, and "Quantity closed", unless it was
+  changed, is what's still open by then.
 - `e2e/`: browser tests (`helpers.ts` is shared by them). The shared
   accessibility, security, offline and sync checks in `tests/e2e/` run too.
 

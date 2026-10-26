@@ -24,6 +24,7 @@
 import { isIsoDate, type IsoDate } from '@shkriuss/dates';
 import { csvFile } from '@shkriuss/storage/csv';
 import { defineSettings, type SettingsState as SavedSettings } from '@shkriuss/storage/settings';
+import { withEdits } from '@shkriuss/sync/edits';
 import {
   CURRENCIES,
   currencyDigits,
@@ -525,6 +526,50 @@ export function toRepairForm(repair: Repair, vehicles: VehiclesState, locale?: s
     labour: number(repair.labour),
     photos: [...repair.photos],
   };
+}
+
+/**
+ * A repair's photos when the repair changed while its form was open (a
+ * sync, or another tab): its photos now, with those added in the form and
+ * without those removed in it (audit 3 F2-1). Keeping the form's own list
+ * would take off the photos added on another device meanwhile, which are
+ * then deleted on every device. `before` is the list the form started
+ * from, `form` the form's list now, `now` the repair's photos now.
+ */
+export function mergePhotos(
+  before: readonly string[],
+  form: readonly string[],
+  now: readonly string[],
+): string[] {
+  const added = form.filter((id) => !before.includes(id));
+  const removed = before.filter((id) => !form.includes(id));
+  return [...new Set([...now.filter((id) => !removed.includes(id)), ...added])];
+}
+
+/**
+ * Reads the repair form (readRepair) when the repair may have changed while
+ * it was open, on another device or in another tab: only what was changed
+ * in the form goes on the repair as it is now (withEdits), so the other
+ * change stays (audit 3 F2-1). The photos are the form's, which follow the
+ * repair's while it's open (mergePhotos). If the two don't fit together,
+ * the form wins, as it was checked. `opened` is the form as it opened (null
+ * for a new repair), `edited` as it is now.
+ */
+export function readEditedRepair(
+  opened: RepairForm | null,
+  edited: RepairForm,
+  id: string,
+  repairs: RepairsState,
+  vehicles: VehiclesState,
+  newId: () => string,
+  locale?: string,
+): ReturnType<typeof readRepair> {
+  const read = (form: RepairForm) => readRepair(form, id, repairs, vehicles, newId, locale);
+  const current = repairs.repairs.find((repair) => repair.id === id);
+  if (!opened || !current) return read(edited);
+  const now = toRepairForm(current, vehicles, locale);
+  const merged = read({ ...withEdits(opened, edited, now), photos: edited.photos });
+  return merged.repair ? merged : read(edited);
 }
 
 export function saveRepair(state: RepairsState, repair: Repair): RepairsState {

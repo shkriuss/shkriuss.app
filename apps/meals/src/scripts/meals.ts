@@ -16,6 +16,7 @@
 import { addDays, firstDayOfWeek, today as todayOf, type IsoDate } from '@shkriuss/dates';
 import { createStore } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
+import { withEdits } from '@shkriuss/sync/edits';
 import { keepFocus } from '@shkriuss/ui/keep-focus';
 import { clearProblem, focusProblem, reportSave, showProblem } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
@@ -192,6 +193,9 @@ export function mountMeals(root: Document): void {
   /** The planned meal or meal open in a form (null: a new one). */
   let editingPlanned: string | null = null;
   let editingMeal: string | null = null;
+  /** The forms as they opened, to tell what the person changed (see withEdits). */
+  let openedPlanned: PlanDraft | null = null;
+  let openedMeal: MealDraft | null = null;
 
   const announce = (text: string): void => {
     announcer.textContent = text;
@@ -422,6 +426,7 @@ export function mountMeals(root: Document): void {
   /** Opens the plan form for a planned meal, or for a new one on `date`. */
   function openPlan(entry: Planned | null, date: IsoDate, name = ''): void {
     editingPlanned = entry?.id ?? null;
+    openedPlanned = entry && { name: entry.name, date: entry.date, slot: entry.slot };
     planTitle.textContent = entry ? 'Change meal' : 'Add a meal';
     removePlannedButton.hidden = !entry;
     planDate.replaceChildren(
@@ -460,7 +465,13 @@ export function mountMeals(root: Document): void {
       else planName.focus();
       return;
     }
-    const entry = plannedFromDraft(draft, editingPlanned ?? crypto.randomUUID());
+    // A sync or another tab may have changed it while the form was open:
+    // keep that, and put on only what was changed here (audit 3 F2-1).
+    const current = plan.planned.find((planned) => planned.id === editingPlanned);
+    const entry = plannedFromDraft(
+      current && openedPlanned ? withEdits(openedPlanned, draft, current) : draft,
+      editingPlanned ?? crypto.randomUUID(),
+    );
     const saved = savePlan(editingPlanned ? updatePlanned(plan, entry) : addPlanned(plan, entry));
     planDialog.close();
     render();
@@ -499,6 +510,7 @@ export function mountMeals(root: Document): void {
 
   function openMeal(meal: Meal | null): void {
     editingMeal = meal?.id ?? null;
+    openedMeal = meal && mealDraftOf(meal);
     mealTitle.textContent = meal ? 'Edit meal' : 'New meal';
     planMealButton.hidden = !meal;
     deleteMealButton.hidden = !meal;
@@ -530,7 +542,11 @@ export function mountMeals(root: Document): void {
       return;
     }
     const before = meals.meals.find((meal) => meal.id === editingMeal);
-    const meal = mealFromDraft(draft, editingMeal ?? crypto.randomUUID());
+    // Changed meanwhile on another device or tab: only what was changed here goes on it.
+    const meal = mealFromDraft(
+      before && openedMeal ? withEdits(openedMeal, draft, mealDraftOf(before)) : draft,
+      editingMeal ?? crypto.randomUUID(),
+    );
     let stored = saveMeals(before ? updateMeal(meals, meal) : addMeal(meals, meal), false);
     // Renamed: what's planned with the old name follows.
     if (before) {

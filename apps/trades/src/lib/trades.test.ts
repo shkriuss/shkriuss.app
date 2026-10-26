@@ -36,6 +36,7 @@ import {
   profit,
   readChange,
   readClose,
+  readEdited,
   readTrade,
   removeClosedYear,
   removeNote,
@@ -474,6 +475,60 @@ describe('closing part of a trade', () => {
       },
     );
     expect(overClosed(both.trades[0] as Trade, partsOf(both.trades))).toBe(40);
+  });
+
+  // Audit 3 F2-1: a form opened before a sync brought another device's change
+  // to the trade saved its old values back: "100 bought" again, so 60 showed
+  // as open instead of 80, and the stop loss moved back.
+  it('keeps a change made on another device while the form was open', () => {
+    const before = trade({
+      id: 'aapl',
+      entryPrice: 150,
+      quantity: 100,
+      stop: 145,
+      exitDate: null,
+      exitPrice: null,
+    });
+    const ids = { id: 'aapl', newId: 'p' };
+    const opened = toCloseForm(before, new Map(), 'en-US');
+    // Meanwhile a sync brings the tablet's change: 120 bought (a typo fixed), the stop moved up.
+    const now = state({ ...before, quantity: 120, stop: 148 });
+    const closeWith = (changes: Partial<TradeForm>, closeQuantity: string, from = now) => {
+      const form = { ...opened.form, exitDate: '2026-10-21', exitPrice: '160', ...changes };
+      return readEdited(opened, { form, closeQuantity }, from, ids, true, 'en-US');
+    };
+    const part = closeWith({}, '40');
+    expect(part.rest).toBe(now.trades[0]);
+    expect(part.trade).toMatchObject({ id: 'p', quantity: 40, stop: 148, parent: 'aapl' });
+    const after = closePart(now, part.trade as Trade, part.rest as Trade);
+    expect(openQuantity(after.trades[0] as Trade, partsOf(after.trades))).toBe(80);
+    // "Quantity closed" as it opened: all that's still open now.
+    expect(closeWith({}, opened.closeQuantity)).toMatchObject({
+      trade: { id: 'aapl', quantity: 120, stop: 148, exitPrice: 160 },
+      rest: null,
+    });
+    // What was changed here goes on it too.
+    expect(closeWith({ notes: 'Took profits' }, '40').rest).toMatchObject({
+      quantity: 120,
+      stop: 148,
+      notes: 'Took profits',
+    });
+    // Changed so they don't fit together (short there, a stop loss below the
+    // entry here): the form wins, as it was checked.
+    const short = state({ ...before, side: 'short', stop: 155 });
+    expect(closeWith({ stop: '140' }, '40', short).rest).toMatchObject({ side: 'long', stop: 140 });
+    // The change form, and a new trade, the same way.
+    const change = { form: toForm(before, 'en-US'), closeQuantity: '' };
+    const edited = { form: { ...change.form, notes: 'Earnings next week' }, closeQuantity: '' };
+    expect(readEdited(change, edited, now, ids, false, 'en-US').trade).toMatchObject({
+      quantity: 120,
+      stop: 148,
+      notes: 'Earnings next week',
+    });
+    expect(readEdited(edited, edited, emptyTrades(), ids, false, 'en-US').trade).toMatchObject({
+      quantity: 100,
+      stop: 145,
+    });
   });
 
   it('says what becomes of a part, or of a trade’s parts, when it’s deleted', () => {

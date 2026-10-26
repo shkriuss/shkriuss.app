@@ -4,7 +4,7 @@
  * deletes it only once the form is saved. Split from repairs.ts (audit J-7).
  */
 import { required } from '@shkriuss/ui/dom';
-import { countLabel, LIMITS } from '../lib/repairs.ts';
+import { countLabel, LIMITS, mergePhotos } from '../lib/repairs.ts';
 import {
   deletePhotos,
   makePhoto,
@@ -18,6 +18,12 @@ import {
 export interface FormPhotos {
   /** Opening the form: shows these photos (the repair's, or none). */
   reset(ids: readonly string[]): void;
+  /**
+   * The repair changed on another device or tab while the form is open:
+   * shows its photos now, with those added here and without those removed
+   * here (mergePhotos, audit 3 F2-1).
+   */
+  follow(ids: readonly string[]): void;
   /** Closing the form: photos picked but not saved are deleted, unless the form is saving them. */
   close(saving: boolean): void;
   /** The photos the repair will have. */
@@ -52,6 +58,8 @@ export function mountFormPhotos(
 
   /** The repair form's photos: every id (some may be on another device)… */
   let formPhotos: string[] = [];
+  /** …the repair's when the form opened, or when it last changed elsewhere… */
+  let basePhotos: string[] = [];
   /** …the ones picked but not saved yet… */
   const pendingPhotos = new Map<string, PhotoFile>();
   /** …and saved ones removed in the form (deleted once it's saved). */
@@ -153,11 +161,19 @@ export function mountFormPhotos(
       formSession += 1;
       dropPendingPhotos();
       formPhotos = [...ids];
+      basePhotos = [...ids];
       removedPhotos = [];
       formPhotoList.replaceChildren();
       void renderFormPhotos();
       showPhotoProblem('');
       photosBusy.hidden = true;
+    },
+    follow(ids) {
+      const merged = mergePhotos(basePhotos, formPhotos, ids);
+      basePhotos = [...ids];
+      if (merged.join() === formPhotos.join()) return;
+      formPhotos = merged;
+      void renderFormPhotos();
     },
     close(saving) {
       formSession += 1;

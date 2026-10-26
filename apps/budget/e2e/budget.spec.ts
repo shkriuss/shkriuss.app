@@ -147,6 +147,43 @@ test('changes and deletes entries and categories', async ({ page }) => {
   await expect(entryItems(page).first()).toContainText('No category');
 });
 
+// Audit 3 F2-1: the form saved every field as it was when it opened, so the
+// other tab's (or another device's) change to the entry was put back.
+test('a change made in another tab survives a form that was open here', async ({ page }) => {
+  await seed(page, {
+    categories: [{ id: 'g', name: 'Groceries', limit: null }],
+    entries: [entry({ id: 'a', amount: 20, category: 'g', note: 'Bread' })],
+  });
+  const other = await page.context().newPage();
+  await other.clock.setFixedTime(NOW);
+  await other.goto('/');
+
+  // Here: the entry's form is opened (to change the note).
+  await entryItems(page).first().getByRole('button').click();
+  await expect(entryDialog(page).getByLabel('Amount')).toHaveValue('20');
+  // In the other tab: the amount is corrected to 25. This tab has it too, behind the form.
+  await entryItems(other).first().getByRole('button').click();
+  await fillEntry(other, { amount: '25' });
+  await expect(entryItems(page).first()).toContainText('-$25.00');
+
+  // Here, the form is saved with a new note: the other tab's 25 stays.
+  await fillEntry(page, { note: 'Bread and milk' });
+  await expect(entryItems(page).first()).toContainText('Bread and milk');
+  await expect(entryItems(page).first()).toContainText('-$25.00');
+  await other.reload();
+  await expect(entryItems(other).first()).toContainText('-$25.00');
+
+  // A category's limit, changed there while its name is changed here, the same way.
+  await categoryButton(page, 'Groceries').click();
+  await categoryButton(other, 'Groceries').click();
+  await categoryDialog(other).getByLabel('Monthly limit (optional)').fill('300');
+  await categoryDialog(other).getByRole('button', { name: 'Save' }).click();
+  await expect(categoryItem(page, 'Groceries')).toContainText('of $300.00');
+  await categoryDialog(page).getByLabel('Name').fill('Food');
+  await categoryDialog(page).getByRole('button', { name: 'Save' }).click();
+  await expect(categoryItem(page, 'Food')).toContainText('of $300.00');
+});
+
 test('moves between months', async ({ page }) => {
   await seed(page, {
     entries: [

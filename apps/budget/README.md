@@ -69,7 +69,10 @@ See where your money goes, month by month. Lives at
   ([ADR 0009](../../docs/adr/0009-push-notifications.md)) and sync server
   ([ADR 0010](../../docs/adr/0010-account-and-sync.md)). The newest change to
   each entry, category and setting wins: an entry changed on two devices at
-  once isn't kept twice, which would count it twice.
+  once isn't kept twice, which would count it twice. An entry's or a
+  category's form that's open while a sync (or another tab) changes it
+  saves only what was changed in the form (`withEdits` from
+  `@shkriuss/sync/edits`), so the other change stays.
 - `e2e/`: browser tests (`helpers.ts` is shared by them). The shared
   accessibility, security, offline and sync checks in `tests/e2e/` run too.
 

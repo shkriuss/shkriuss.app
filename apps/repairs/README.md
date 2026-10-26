@@ -92,7 +92,11 @@ private car's service history. Lives at <https://repairs.shkriuss.app>.
 - `src/worker.ts`: runs the shared sync server
   ([ADR 0010](../../docs/adr/0010-account-and-sync.md)), with files on for the
   photos (`syncHandler({ files: true })`). The newest change to
-  each vehicle, repair and setting wins. Vehicles and repairs reach
+  each vehicle, repair and setting wins. A repair's form that's open while
+  a sync (or another tab) changes the repair saves only what was changed in
+  it (`readEditedRepair`), and its photos follow the repair's while it's
+  open (`mergePhotos`): a photo added on another device meanwhile stays,
+  and one taken off in the form stays off. Vehicles and repairs reach
   `withItems` unchecked, so ones from an older version can be upgraded first;
   they're checked after.
 - `e2e/`: browser tests (`helpers.ts` is shared by them). The shared

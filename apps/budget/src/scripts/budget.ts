@@ -7,6 +7,7 @@
 import { isIsoTime, nowStamp, today } from '@shkriuss/dates';
 import { createStore, downloadFile } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
+import { withEdits } from '@shkriuss/sync/edits';
 import { keepFocus } from '@shkriuss/ui/keep-focus';
 import { focusProblem, reportSave } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
@@ -60,9 +61,11 @@ import {
   withSettings,
   type CategoriesState,
   type Category,
+  type CategoryForm,
   type CategoryTotal,
   type EntriesState,
   type Entry,
+  type EntryForm,
   type Kind,
   type Reminder,
   type SettingsState,
@@ -157,6 +160,9 @@ export function mountBudget(root: Document): void {
   /** What's in the forms: the entry or category being changed (null: a new one). */
   let editingEntry: string | null = null;
   let editingCategory: string | null = null;
+  /** The forms as they opened, to tell what the person changed (see withEdits). */
+  let openedEntry: EntryForm | null = null;
+  let openedCategory: CategoryForm | null = null;
   let deleting: { type: 'entry' | 'category'; id: string } | null = null;
 
   const announce = (message: string): void => {
@@ -319,9 +325,14 @@ export function mountBudget(root: Document): void {
 
   function openEntry(entry: Entry | undefined, kind: Kind = 'expense'): void {
     editingEntry = entry?.id ?? null;
-    const values = entry
-      ? toEntryForm(entry)
-      : { kind, amount: '', date: suggestedDay(month, today()), category: '', note: '' };
+    openedEntry = entry ? toEntryForm(entry) : null;
+    const values = openedEntry ?? {
+      kind,
+      amount: '',
+      date: suggestedDay(month, today()),
+      category: '',
+      note: '',
+    };
     categorySelect.replaceChildren(
       new Option('No category', ''),
       ...categories.categories.map((category) => new Option(category.name, category.id)),
@@ -347,14 +358,18 @@ export function mountBudget(root: Document): void {
   entryForm.addEventListener('submit', (event) => {
     event.preventDefault();
     const value = (name: string) => (entryForm.elements.namedItem(name) as { value: string }).value;
+    const edited: EntryForm = {
+      kind: kindOf(),
+      amount: value('amount'),
+      date: value('date'),
+      category: value('category'),
+      note: value('note'),
+    };
+    // A sync or another tab may have changed the entry while the form was
+    // open: keep that, and put on only what was changed here (audit 3 F2-1).
+    const current = findEntry(editingEntry);
     const read = readEntry(
-      {
-        kind: kindOf(),
-        amount: value('amount'),
-        date: value('date'),
-        category: value('category'),
-        note: value('note'),
-      },
+      current && openedEntry ? withEdits(openedEntry, edited, toEntryForm(current)) : edited,
       editingEntry ?? crypto.randomUUID(),
       entries.entries.length - (editingEntry ? 1 : 0),
       categories,
@@ -386,8 +401,9 @@ export function mountBudget(root: Document): void {
 
   function openCategory(category: Category | undefined): void {
     editingCategory = category?.id ?? null;
+    openedCategory = category ? toCategoryForm(category) : null;
     categoryTitle.textContent = category ? 'Change category' : 'New category';
-    const values = category ? toCategoryForm(category) : { name: '', limit: '' };
+    const values = openedCategory ?? { name: '', limit: '' };
     (categoryForm.elements.namedItem('name') as HTMLInputElement).value = values.name;
     (categoryForm.elements.namedItem('limit') as HTMLInputElement).value = values.limit;
     required<HTMLElement>(categoryForm, '[data-action="delete-category"]').hidden = !category;
@@ -397,11 +413,16 @@ export function mountBudget(root: Document): void {
 
   categoryForm.addEventListener('submit', (event) => {
     event.preventDefault();
+    const edited: CategoryForm = {
+      name: (categoryForm.elements.namedItem('name') as HTMLInputElement).value,
+      limit: (categoryForm.elements.namedItem('limit') as HTMLInputElement).value,
+    };
+    // Changed meanwhile on another device or tab: only what was changed here goes on it.
+    const current = findCategory(editingCategory);
     const read = readCategory(
-      {
-        name: (categoryForm.elements.namedItem('name') as HTMLInputElement).value,
-        limit: (categoryForm.elements.namedItem('limit') as HTMLInputElement).value,
-      },
+      current && openedCategory
+        ? withEdits(openedCategory, edited, toCategoryForm(current))
+        : edited,
       editingCategory ?? crypto.randomUUID(),
       categories,
       { currency: currencyOf(settings) },

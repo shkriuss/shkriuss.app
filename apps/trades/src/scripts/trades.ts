@@ -44,8 +44,7 @@ import {
   partsOf,
   PERIODS,
   profit,
-  readChange,
-  readClose,
+  readEdited,
   removeClosedYear,
   removeNote,
   removeTrade,
@@ -63,6 +62,7 @@ import {
   toForm,
   withSettings,
   type CloseProblems,
+  type FormValues,
   type Group,
   type Parts,
   type Period,
@@ -176,6 +176,8 @@ export function mountTrades(root: Document): void {
   let editing: string | null = null;
   /** Whether the form is closing an open trade ("Close"), so it can close part of it. */
   let closing = false;
+  /** The form as it opened, to tell what the person changed (see withEdits). */
+  let opened: FormValues | null = null;
   let announceTimer: number | undefined;
   /** What was closed off each trade in parts, and every trade by id: worked out at each render. */
   let parts = new Map<string, Parts>();
@@ -400,26 +402,23 @@ export function mountTrades(root: Document): void {
     deleteButton.hidden = !trade;
     // Closing: all that's still open, unless less is typed, with the fees not counted yet.
     const closeForm = closing && trade ? toCloseForm(trade, parts) : null;
+    opened = closeForm ?? (trade ? { form: toForm(trade), closeQuantity: '' } : null);
     closeQuantityField.hidden = !closing;
-    (field('closeQuantity') as HTMLInputElement).value = closeForm?.closeQuantity ?? '';
+    (field('closeQuantity') as HTMLInputElement).value = opened?.closeQuantity ?? '';
     fillForm(
-      closeForm
-        ? closeForm.form
-        : trade
-          ? toForm(trade)
-          : {
-              symbol: '',
-              side: 'long',
-              entryDate: today(),
-              entryPrice: '',
-              quantity: '',
-              stop: '',
-              exitDate: '',
-              exitPrice: '',
-              fees: '',
-              setup: '',
-              notes: '',
-            },
+      opened?.form ?? {
+        symbol: '',
+        side: 'long',
+        entryDate: today(),
+        entryPrice: '',
+        quantity: '',
+        stop: '',
+        exitDate: '',
+        exitPrice: '',
+        fees: '',
+        setup: '',
+        notes: '',
+      },
     );
     dialog.showModal();
     if (closing) {
@@ -470,11 +469,14 @@ export function mountTrades(root: Document): void {
   form.addEventListener('submit', (event) => {
     event.preventDefault();
     const ids = { id: editing ?? crypto.randomUUID(), newId: crypto.randomUUID() };
-    // Closing: all of it, or part of it (the rest stays open).
-    const read =
-      closing && editing
-        ? readClose(readForm(), (field('closeQuantity') as HTMLInputElement).value, state, ids)
-        : readChange(readForm(), state, ids);
+    const edited = {
+      form: readForm(),
+      closeQuantity: (field('closeQuantity') as HTMLInputElement).value,
+    };
+    // Closing: all of it, or part of it (the rest stays open). A sync or
+    // another tab may have changed the trade meanwhile: only what was
+    // changed here goes on it (audit 3 F2-1).
+    const read = readEdited(opened ?? edited, edited, state, ids, closing && editing !== null);
     if (!read.trade) {
       showProblems(read.problems);
       return;
@@ -504,6 +506,7 @@ export function mountTrades(root: Document): void {
   dialog.addEventListener('close', () => {
     editing = null;
     closing = false;
+    opened = null;
   });
 
   deleteDialog.addEventListener('close', () => {

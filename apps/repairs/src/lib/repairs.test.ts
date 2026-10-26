@@ -21,6 +21,7 @@ import {
   knownPart,
   LIMITS,
   lastMileage,
+  mergePhotos,
   migrateRepairs,
   modelNames,
   partCost,
@@ -28,6 +29,7 @@ import {
   partNames,
   photoFiles,
   photosOf,
+  readEditedRepair,
   readRepair,
   readVehicle,
   removeRepair,
@@ -384,6 +386,50 @@ describe('repairs', () => {
     expect(
       typed({ parts: [part('1.500', '1 500,50')], labour: '2,5' }, 'fr-FR').repair,
     ).toMatchObject({ parts: [{ quantity: 1.5, price: 1500.5 }], labour: 2.5 });
+  });
+
+  // Audit 3 F2-1: a form opened before a sync brought another device's change
+  // saved its old values back, and took off (so deleted everywhere) the
+  // photos added there meanwhile.
+  it('keeps a change made on another device while the form was open', () => {
+    const before = repair({ work: 'Replaced the door glass', photos: ['a'] });
+    const opened = toRepairForm(before, vehicles);
+    // Meanwhile, on the tablet: the mileage noted, and a photo added.
+    const now = repairs({ ...before, mileage: 121_000, photos: ['a', 'b'] });
+    // Here, the work done changed; the form's photos have followed the repair's.
+    const photos = mergePhotos(opened.photos, opened.photos, ['a', 'b']);
+    const edited = { ...opened, work: 'Replaced the door glass and its seal', photos };
+    expect(readEditedRepair(opened, edited, 'r', now, vehicles, newId).repair).toEqual({
+      ...before,
+      work: 'Replaced the door glass and its seal',
+      mileage: 121_000,
+      photos: ['a', 'b'],
+    });
+    // A new repair, or one deleted meanwhile, is read as the form is.
+    expect(readEditedRepair(null, edited, 'r', now, vehicles, newId).repair?.mileage).toBe(120_000);
+    expect(readEditedRepair(opened, edited, 'r', emptyRepairs(), vehicles, newId).repair).toEqual(
+      readRepair(edited, 'r', emptyRepairs(), vehicles, newId).repair,
+    );
+    // Changed so they don't fit together (the work done cleared there, the
+    // damage found here: nothing would say what was done): the form wins, as
+    // it was checked.
+    const both = repair({ problem: 'Glass cracked', work: 'Replaced the door glass' });
+    const form2 = toRepairForm(both, vehicles);
+    const cleared = repairs({ ...both, work: '' });
+    expect(
+      readEditedRepair(form2, { ...form2, problem: '' }, 'r', cleared, vehicles, newId).repair,
+    ).toMatchObject({ problem: '', work: 'Replaced the door glass' });
+  });
+
+  it('keeps the photos added on another device, and those taken off here stay off', () => {
+    // The repair's photos now, then those added in the form, without those removed in it.
+    expect(mergePhotos(['a', 'b'], ['a', 'b', 'c'], ['a', 'b', 'd'])).toEqual(['a', 'b', 'd', 'c']);
+    expect(mergePhotos(['a', 'b'], ['b'], ['a', 'b', 'd'])).toEqual(['b', 'd']);
+    // Taken off on the other device: off here too, unless it was added here.
+    expect(mergePhotos(['a', 'b'], ['a', 'b'], ['b'])).toEqual(['b']);
+    expect(mergePhotos([], ['c'], [])).toEqual(['c']);
+    // The same photo is never there twice.
+    expect(mergePhotos(['a'], ['a', 'c'], ['a', 'c'])).toEqual(['a', 'c']);
   });
 
   it('are saved, changed and removed', () => {

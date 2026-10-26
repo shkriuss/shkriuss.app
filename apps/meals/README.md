@@ -50,7 +50,10 @@ Plan your meals for the week, and what to buy for them. Lives at
 - `src/worker.ts`: runs the shared notification and sync servers
   ([ADR 0010](../../docs/adr/0010-account-and-sync.md)). With sync on, the
   newest change to each planned meal, tick and reminder time wins; a meal
-  changed on two devices at once is kept in both versions. While sync is
+  changed on two devices at once is kept in both versions. A meal's or a
+  planned meal's form that's open while a sync (or another tab) changes it
+  saves only what was changed in the form (`withEdits` from
+  `@shkriuss/sync/edits`), so the other change stays. While sync is
   on, letting go of old plans and lists deletes them on every device, so a
   phone whose clock is set far ahead mustn't decide what's old: Meals
   counts back from the sync server's clock at the last sync, if that's

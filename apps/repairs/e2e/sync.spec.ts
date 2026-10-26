@@ -4,6 +4,8 @@
 import type { Browser, Page } from '@playwright/test';
 import { createAccount, hubURL, signInWithKey, turnOnSync } from '../../../tests/e2e/account.ts';
 import { expect, test } from '../../../tests/e2e/fixtures.ts';
+import { readStore } from '../../../tests/e2e/storage.ts';
+import type { RepairsState } from '../src/lib/repairs.ts';
 import {
   addPhotos,
   addRepair,
@@ -143,6 +145,69 @@ test('photos sync between devices, and deleting one deletes it on both', async (
   await page.getByRole('button', { name: 'Sync now' }).click();
   await expect(repairItems(page).first().locator('[data-row="photos"]')).toHaveCount(0);
   await expect.poll(() => storedPhotos(page)).toBe(0);
+  await tablet.context().close();
+});
+
+/** Resolves once a device has uploaded its sync copy. */
+const copyUploaded = (device: Page) =>
+  device.waitForResponse(
+    (response) =>
+      response.url().endsWith('/api/sync/copy') && response.request().method() === 'PUT',
+  );
+
+/** The repairs a device has saved: the work done, the mileage and how many photos. */
+const savedRepairs = async (device: Page) =>
+  ((await readStore<RepairsState>(device, 'repairs'))?.data.repairs ?? []).map((repair) => ({
+    work: repair.work,
+    mileage: repair.mileage,
+    photos: repair.photos.length,
+  }));
+
+// Audit 3 F2-1: saving the phone's form put back the repair as it was when the
+// form opened, so the photo added on the tablet meanwhile was taken off the
+// repair, and then deleted on both devices.
+test('a change made on another device while the form was open stays, photos too', async ({
+  page,
+  browser,
+  guard,
+}) => {
+  test.setTimeout(90_000);
+  guard.allowOrigin(hubURL);
+  await page.clock.setFixedTime(NOW);
+  const { key } = await createAccount(page);
+  await page.goto('/');
+  await turnOnSync(page, 'Repairs');
+  let uploaded = copyUploaded(page);
+  await addRepair(page, { vehicle: 'Bus 105', work: 'Replaced the door glass' });
+  await uploaded;
+  const tablet = await tabletFor(browser, key, new URL(page.url()).origin);
+  await expect(repairItems(tablet)).toHaveCount(1);
+
+  // On the phone: the repair's form is opened (to add a word to the work done).
+  await repairItems(page).first().locator('[data-action="edit-repair"]').click();
+  await expect(repairDialog(page)).toBeVisible();
+
+  // On the tablet: a photo and the mileage added to the same repair.
+  await repairItems(tablet).first().locator('[data-action="edit-repair"]').click();
+  await addPhotos(tablet, [jpeg('door.jpg', await picture(tablet, { width: 800, height: 600 }))]);
+  await expect(repairDialog(tablet).locator('[data-form-photos] img')).toHaveCount(1);
+  uploaded = copyUploaded(tablet);
+  await fillRepair(tablet, { mileage: '121000' });
+  await uploaded;
+
+  // The phone comes back on screen and syncs, its form still open: the photo shows in it.
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await expect(repairDialog(page).locator('[data-form-photos] img')).toHaveCount(1);
+
+  // The phone's form is saved, with the word added: the tablet's changes stay.
+  uploaded = copyUploaded(page);
+  await fillRepair(page, { work: 'Replaced the door glass and its seal' });
+  await uploaded;
+  const expected = [{ work: 'Replaced the door glass and its seal', mileage: 121_000, photos: 1 }];
+  expect(await savedRepairs(page)).toEqual(expected);
+  await tablet.getByRole('button', { name: 'Sync now' }).click();
+  await expect.poll(() => savedRepairs(tablet)).toEqual(expected);
+  expect(await storedPhotos(tablet)).toBe(1);
   await tablet.context().close();
 });
 
