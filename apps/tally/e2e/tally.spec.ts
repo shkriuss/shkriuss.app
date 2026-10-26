@@ -17,11 +17,14 @@ test.beforeEach(async ({ page }) => {
 test('what’s typed stays on the device, even before the page’s script runs', async ({
   browser,
   baseURL,
+  guard,
 }) => {
   // On a slow first visit the form is there before its script. Enter would
   // then send the form the browser's own way, with the text in the address:
   // the CSP's form-action 'none' stops it (audit 4 C-1). A page of its own,
-  // so the console guard doesn't take the CSP's report for a problem.
+  // without the site's scripts (their requests fail on purpose).
+  guard.allowConsole("form-action 'none'");
+  guard.allowConsole('net::ERR_FAILED');
   const context = await browser.newContext({
     ...(baseURL ? { baseURL } : {}),
     serviceWorkers: 'block',
@@ -33,11 +36,14 @@ test('what’s typed stays on the device, even before the page’s script runs',
     if (request.resourceType() === 'document') documents.push(request.url());
   });
   await page.goto('/');
-  await page.getByLabel('New counter').fill('Pills: Sertraline 50mg');
+  const field = page.getByLabel('New counter');
+  await field.fill('Pills: Sertraline 50mg');
   const blocked = page.waitForEvent('console', (message) =>
     message.text().includes("form-action 'none'"),
   );
-  await page.getByLabel('New counter').press('Enter');
+  // What Enter in the field does (sent from here: Playwright would wait for
+  // the page the form asks for, which never comes).
+  await field.evaluate((input: HTMLInputElement) => input.form?.requestSubmit());
   await blocked;
   expect(documents).toEqual([new URL('/', page.url()).href]);
   await context.close();
