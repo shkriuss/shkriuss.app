@@ -20,7 +20,7 @@ const whereLabel: Record<StorageKind, string> = {
 // The day this page's text last changed (people rely on it), and a
 // fingerprint of that text: ../privacy.test.ts fails when the text changes
 // but they don't, and says what to set (audit 3 D-7).
-const LAST_UPDATED = '26 October 2026'; // text b71c2424357428d5
+const LAST_UPDATED = '26 October 2026'; // text ca277474157cde21
 ---
 
 <AppShell
@@ -94,11 +94,10 @@ const LAST_UPDATED = '26 October 2026'; // text b71c2424357428d5
           <li>
             The server stores, for your device: the delivery address your browser's push service
             gave it; your time zone; for each reminder, when it starts, how long before to remind
-            you, how it repeats and until when, and its locked message, padded so that the server
-            can't tell its exact length; how many reminders there are; and when the app last sent
-            them, when deliveries started failing (if they do), and when you last sent a test
-            notification. Only the message is locked: the server needs the rest to send it on time.
-            It never gets what the reminders are about.
+            you, how it repeats and until when, and its locked message; how many reminders there
+            are; and when the app last sent them, when deliveries started failing (if they do), and
+            when you last sent a test notification. Only the message is locked: the server needs the
+            rest to send it on time. It never gets what the reminders are about.
           </li>
           <li>
             Each reminder that won't happen again is deleted after it's sent. Turning the option

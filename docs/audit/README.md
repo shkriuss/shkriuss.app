@@ -190,7 +190,8 @@ don't stop at these questions: anything else you find in the area counts.
   - none can be replayed or guessed;
   - guessing is limited.
 - Replacing the account key shuts the old key out everywhere: sync copies,
-  synced photos, the online library and notifications.
+  synced photos and the online library (notifications while closed aren't
+  tied to the account: ADR 0010, "Lost device").
 - Encrypted backups:
   - how the key is derived from the passphrase (algorithm, iterations);
   - format checks;
