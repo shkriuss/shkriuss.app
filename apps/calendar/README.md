@@ -121,10 +121,15 @@ its notification server, docs/adr/0009).
   other dates than the phone's, some of the times end up an hour off: a weekly
   9:00 London meeting imported in Tbilisi shows at 12:00 every week, but from
   late October to late March it's really at 13:00. Before anything is added,
-  the import says how many events this affects. Comparing clocks costs a
-  year of readings for each time zone and year, so a file gets at most 100
-  of them; past that (only in odd files), a repeat counts as one that may be
-  an hour off. It also says when a monthly or
+  the import says how many events this affects: it finds when either clock
+  changes in the year from each repeat's first time (also on its first day,
+  and two changes on one day, as in New York and Chicago), and compares the
+  two clocks at the next time after each change. Only that first year is
+  compared, so a yearly event a few days before the clocks change can still
+  be an hour off in some later years without a word. Finding the changes
+  costs a year of readings for each time zone and year, so a file gets at
+  most 100 of them; past that (only in odd files), a repeat counts as one
+  that may be an hour off. It also says when a monthly or
   yearly event moved to another day near the end of a month: 22:00 UTC on the
   31st is 02:00 on the 1st in Tbilisi, and Calendar would show it on the 1st
   of every month, also after months without a 31st.

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  addDays,
   daysInMonth,
   fromDayNumber,
   isLeapYear,
@@ -42,6 +43,14 @@ const only = (text: string, opts = options): EventDraft => {
   if (!event) throw new Error('Expected one event');
   return event.draft;
 };
+
+/** Random numbers, the same every run. */
+function random(seed: number): () => number {
+  return () => {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    return seed / 2 ** 32;
+  };
+}
 
 const base: EventDraft = {
   title: 'Dentist',
@@ -357,6 +366,136 @@ describe('parseIcs', () => {
     expect(notes(london, 'Europe/London')).toEqual([]);
   });
 
+  it('says so when the clocks change on the first day, or twice on one day', () => {
+    // Clocks were compared at noon each day, from the second day: these said
+    // nothing, though every time from the second was an hour off (audit 3 F1-2).
+    const notes = (start: string, rule: string, timeZone: string) =>
+      parseIcs(calendar([start, `RRULE:${rule}`, 'SUMMARY:x']), { ...options, timeZone }).notes;
+    const hourOff = [
+      '1 repeating event is from a time zone that doesn’t change its clocks on the same dates as yours, so some of its times may be an hour off.',
+    ];
+    // 03:45 in Tbilisi is 00:45 in Berlin on 29 March, and 01:45 from the 30th:
+    // Berlin's clocks change at 02:00 that night, just after the first time.
+    expect(
+      notes('DTSTART;TZID=Asia/Tbilisi:20260329T034500', 'FREQ=DAILY;COUNT=5', 'Europe/Berlin'),
+    ).toEqual(hourOff);
+    // London's clocks change 45 minutes after the first time.
+    expect(
+      notes('DTSTART;TZID=Europe/London:20260329T001500', 'FREQ=MONTHLY;COUNT=3', 'Asia/Kolkata'),
+    ).toEqual(hourOff);
+    // On 8 March, New York's clocks change an hour before Chicago's: 03:30 in
+    // New York is 01:30 in Chicago that day, not 02:30.
+    expect(
+      notes('DTSTART;TZID=America/New_York:20260301T033000', 'FREQ=DAILY', 'America/Chicago'),
+    ).toEqual(hourOff);
+    // At 09:00 in New York, it's 08:00 in Chicago every time.
+    expect(
+      notes('DTSTART;TZID=America/New_York:20260301T090000', 'FREQ=DAILY', 'America/Chicago'),
+    ).toEqual([]);
+  });
+
+  it('says so whenever some times in a repeat’s first year are an hour off', () => {
+    // Random repeats between eleven time zones, compared with when they really
+    // happen (RFC 5545: a time the clocks skip is moved on by the gap, a time
+    // they repeat is the first one). Only the first year is compared: past it,
+    // a yearly event a few days before the clocks change can be an hour off in
+    // some years (README).
+    const zones = [
+      'UTC',
+      'Europe/London',
+      'Europe/Berlin',
+      'America/New_York',
+      'America/Chicago',
+      'America/Los_Angeles',
+      'Asia/Tbilisi',
+      'Australia/Sydney',
+      'Asia/Kolkata',
+      'America/Santiago',
+      'Pacific/Auckland',
+    ];
+    const DAY = 86_400_000;
+    const formats = new Map<string, Intl.DateTimeFormat>();
+    /** What clocks in `zone` show at `ms`, as a number like Date.UTC gives. */
+    const wallAt = (ms: number, zone: string): number => {
+      let format = formats.get(zone);
+      if (!format) {
+        format = new Intl.DateTimeFormat('en-US', {
+          timeZone: zone,
+          hourCycle: 'h23',
+          year: 'numeric',
+          month: 'numeric',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: 'numeric',
+        });
+        formats.set(zone, format);
+      }
+      const part = (type: string) =>
+        Number(format.formatToParts(ms).find((entry) => entry.type === type)?.value);
+      return Date.UTC(part('year'), part('month') - 1, part('day'), part('hour'), part('minute'));
+    };
+    /** The moment of a date and time in `zone`. */
+    const momentOf = (date: IsoDate, time: string, zone: string): number => {
+      const wall = Date.parse(`${date}T${time}:00Z`);
+      const offsets = [wall - DAY, wall + DAY].map((ms) => wallAt(ms, zone) - ms);
+      const fits = offsets.map((offset) => wall - offset).filter((ms) => wallAt(ms, zone) === wall);
+      return fits.length > 0 ? Math.min(...fits) : wall - (offsets[0] ?? 0);
+    };
+    const next = random(99);
+    const pick = <T>(list: readonly T[]): T => list[Math.floor(next() * list.length)] as T;
+    const pad = (value: number) => String(value).padStart(2, '0');
+    let checked = 0;
+    const wrong: string[] = [];
+    for (let index = 0; index < 500; index += 1) {
+      const from = pick(zones);
+      const here = pick(zones);
+      const freq = pick(['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'] as const);
+      const month = 1 + Math.floor(next() * 12);
+      const lastDay = daysInMonth(2026, month);
+      const day =
+        next() < 0.3 ? Math.min(pick([28, 29, 30, 31]), lastDay) : 1 + Math.floor(next() * 28);
+      const time = `${pad(Math.floor(next() * 24))}:${pick(['00', '15', '30', '45'])}`;
+      const first = makeDate(2026, month, day);
+      // When it really happens, in its own zone: up to a year on.
+      const dates: IsoDate[] = [];
+      for (let step = 0; dates.length < 60 && step < 400; step += 1) {
+        if (freq === 'DAILY') dates.push(addDays(first, step));
+        else if (freq === 'WEEKLY') dates.push(addDays(first, 7 * step));
+        else {
+          const months = freq === 'MONTHLY' ? step : 12 * step;
+          const year = 2026 + Math.floor((month - 1 + months) / 12);
+          const inMonth = ((month - 1 + months) % 12) + 1;
+          if (day <= daysInMonth(year, inMonth)) dates.push(makeDate(year, inMonth, day));
+        }
+      }
+      const start = momentOf(first, time, from);
+      const truth = dates
+        .map((date) => momentOf(date, time, from))
+        .filter((moment) => moment <= start + 366 * DAY);
+      const count = Math.max(2, Math.floor(next() * truth.length));
+      const compact = `${first.replace(/-/g, '')}T${time.replace(':', '')}00`;
+      const dtstart = from === 'UTC' ? `DTSTART:${compact}Z` : `DTSTART;TZID=${from}:${compact}`;
+      const result = parseIcs(
+        calendar([dtstart, `RRULE:FREQ=${freq};COUNT=${count}`, 'SUMMARY:x']),
+        { ...options, timeZone: here },
+      );
+      const draft = result.events[0]?.draft;
+      if (result.notes.length > 0 || !draft?.startTime) continue;
+      checked += 1;
+      const shown = occurrencesBetween(
+        { events: [{ id: 'x', ...draft }] },
+        draft.startDate,
+        addDays(draft.startDate, 400),
+      ).map((occurrence) => momentOf(occurrence.start, draft.startTime ?? '', here));
+      const expected = truth.slice(0, count);
+      if (JSON.stringify(shown.slice(0, expected.length)) !== JSON.stringify(expected)) {
+        wrong.push(`${dtstart} FREQ=${freq};COUNT=${count} seen in ${here}`);
+      }
+    }
+    expect(checked).toBeGreaterThan(200);
+    expect(wrong).toEqual([]);
+  }, 30_000);
+
   it('reads a file of repeats from many time zones and years without freezing', () => {
     // Each new time zone and year to compare clocks in costs a year of clock
     // readings: a crafted file of thousands took minutes (audit F1-9). The
@@ -615,14 +754,6 @@ describe('lastStart', () => {
       fromDayNumber(end),
     ).filter((occurrence) => occurrence.start >= draft.startDate);
     return starts[count - 1]?.start ?? null;
-  }
-
-  /** The same random numbers every run. */
-  function random(seed: number): () => number {
-    return () => {
-      seed = (seed * 1664525 + 1013904223) >>> 0;
-      return seed / 2 ** 32;
-    };
   }
 
   it('gives what working out every time gave, for every kind of repeat', () => {
