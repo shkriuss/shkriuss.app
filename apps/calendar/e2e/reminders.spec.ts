@@ -31,6 +31,7 @@ test('reminds on the page and with a notification when the time comes', async ({
       body: expect.stringMatching(/^Today · 10:20\sAM – 11:20\sAM$/),
       tag: 'seed-0/2026-10-17',
       icon: '/icon-192.png',
+      renotify: true,
     },
   ]);
   await checkA11y(page, 'with a reminder showing');

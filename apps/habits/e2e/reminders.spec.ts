@@ -69,7 +69,13 @@ test('reminds while Habits is open, unless it’s done already', async ({ page }
     page.getByRole('status').filter({ hasText: 'Reminder: Drink water.' }),
   ).toBeAttached();
   expect(await shownNotifications(page)).toEqual([
-    { title: 'Drink water', body: REMINDER_BODY, tag: expect.any(String), icon: '/icon-192.png' },
+    {
+      title: 'Drink water',
+      body: REMINDER_BODY,
+      tag: expect.any(String),
+      renotify: true,
+      icon: '/icon-192.png',
+    },
   ]);
 
   // Once only.

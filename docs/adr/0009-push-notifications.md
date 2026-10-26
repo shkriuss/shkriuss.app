@@ -55,7 +55,11 @@ browsers like IronFox receive Web Push through **UnifiedPush**.
 - **Repeating notifications keep working** without opening the app: the server
   computes each next time from the pattern, in the phone's time zone (so
   daylight saving doesn't shift them). The same encrypted message is sent
-  each time, so its text can't say "tomorrow". The app uploads the schedule
+  each time, so its text can't say "tomorrow". It has the same tag each
+  time too, so it replaces the one before it on the screen, and it's shown
+  with `renotify`, so it still rings or buzzes (audit 3 F1-1; the open app's
+  own notifications too). Chrome and Edge do that; Safari and Firefox don't
+  know `renotify`. The app uploads the schedule
   again at least weekly while it's used; a device whose schedule isn't
   uploaded for 13 months is forgotten, so nothing stays on the server for a
   device that stopped using the app.

@@ -59,6 +59,7 @@ test('reminds of what’s planned while Meals is open', async ({ page }) => {
       body: REMINDER_BODY,
       tag: '2026-10-21~dinner',
       icon: '/icon-192.png',
+      renotify: true,
     },
   ]);
   // Once only.

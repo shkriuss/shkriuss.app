@@ -158,7 +158,13 @@ export async function showNotifications(
       ? await navigator.serviceWorker.getRegistration().catch(() => undefined)
       : undefined;
   for (const item of due) {
-    const shown: NotificationOptions = { tag: item.tag, icon: '/icon-192.png' };
+    // A repeat replaces the one before it with the same tag, and still rings
+    // or buzzes (audit 3 F1-1). Chrome refuses renotify without a tag.
+    const shown: NotificationOptions & { renotify?: boolean } = {
+      tag: item.tag,
+      renotify: Boolean(item.tag),
+      icon: '/icon-192.png',
+    };
     if (item.body !== undefined) shown.body = item.body;
     try {
       if (registration) await registration.showNotification(item.title, shown);

@@ -54,7 +54,13 @@ test('reminds once a month while Budget is open', async ({ page }) => {
   await page.clock.fastForward('03:00');
   await expect(status(page, 'Reminder: check your budget.')).toBeAttached();
   expect(await shownNotifications(page)).toEqual([
-    { title: REMINDER_TITLE, body: REMINDER_BODY, tag: 'budget', icon: '/icon-192.png' },
+    {
+      title: REMINDER_TITLE,
+      body: REMINDER_BODY,
+      tag: 'budget',
+      renotify: true,
+      icon: '/icon-192.png',
+    },
   ]);
 
   // Kept after a reload; turned off again.

@@ -91,13 +91,21 @@ function running(
       return undefined;
     },
   };
-  const shown: { title: string; options: { data: { url: string } } }[] = [];
+  interface Shown {
+    data: { url: string };
+    tag?: string;
+    renotify?: boolean;
+  }
+  const shown: { title: string; options: Shown }[] = [];
   const self = {
     location: { origin: ORIGIN },
     addEventListener: (type: string, listener: Listener) => listeners.set(type, listener),
     registration: {
-      showNotification: async (title: string, options: { data: { url: string } }) =>
-        void shown.push({ title, options }),
+      showNotification: async (title: string, options: Shown) => {
+        // As Chrome does.
+        if (options.renotify && !options.tag) throw new TypeError('renotify needs a tag');
+        shown.push({ title, options });
+      },
     },
     skipWaiting: async () => undefined,
     clients: { claim: async () => undefined },
@@ -234,5 +242,20 @@ describe('the service worker', () => {
     expect(await opens(undefined)).toBe(`${ORIGIN}/`);
     // Its path starts with "//", which on its own would mean another website.
     expect(await opens('/.//example.com/x')).toBe(`${ORIGIN}//example.com/x`);
+  });
+
+  // Each repeat of a reminder has the same tag, so it replaced the last one
+  // without a sound or vibration (audit 3 F1-1).
+  it('rings again for a notification that replaces one with the same tag', async () => {
+    const worker = running(() => page(''));
+    await worker.push({ title: 'Take my pills', tag: 'pills' });
+    await worker.push({ title: 'Take my pills', tag: 'pills' });
+    expect(worker.shown.map(({ options }) => [options.tag, options.renotify])).toEqual([
+      ['pills', true],
+      ['pills', true],
+    ]);
+    // Without a tag, nothing to replace.
+    await worker.push({ title: 'Reminder' });
+    expect(worker.shown.at(-1)?.options).toMatchObject({ tag: undefined, renotify: false });
   });
 });
