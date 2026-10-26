@@ -1,5 +1,6 @@
 // Importing .ics files. The browser runs in Tbilisi time (UTC+4), so times
 // written in UTC (as Google Calendar does) must move by 4 hours.
+import { writeFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
 import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
 import { dayList, upcoming } from './helpers.ts';
@@ -164,6 +165,86 @@ test('says so when what reads the file can’t load', async ({ page, guard }) =>
       .filter({ hasText: 'Calendar couldn’t read this file. Please try again.' }),
   ).toBeVisible();
   await expect(dialog(page)).toBeHidden();
+});
+
+test('says so when the worker that reads the file can’t load', async ({ page, guard }) => {
+  guard.allowConsole('net::ERR_FAILED');
+  await page.route('**/_astro/read-ics.worker*.js', (route) => route.abort());
+  await importFile(page, 'work.ics', WORK_FILE);
+  await expect(dialog(page)).toContainText('Calendar couldn’t read this file.');
+  await dialog(page).getByRole('button', { name: 'Close' }).click();
+  await expect(page.getByRole('button', { name: 'Import .ics file' })).toBeEnabled();
+});
+
+test('says it’s reading a file, and takes one at a time', async ({ page }) => {
+  // The worker waits until let go, as on a big file.
+  let letGo: (() => void) | undefined;
+  const waiting = new Promise<void>((resolve) => {
+    letGo = resolve;
+  });
+  await page.route('**/_astro/read-ics.worker*.js', async (route) => {
+    await waiting;
+    await route.continue();
+  });
+  await importFile(page, 'work.ics', WORK_FILE);
+  await expect(page.getByRole('status').filter({ hasText: 'Reading “work.ics”…' })).toBeVisible();
+  const button = page.getByRole('button', { name: 'Import .ics file' });
+  await expect(button).toHaveAttribute('aria-disabled', 'true');
+  letGo?.();
+  await expect(dialog(page)).toContainText('Found 3 events in “work.ics”.');
+  await expect(page.getByText('Reading “work.ics”…')).toBeHidden();
+  await dialog(page).getByRole('button', { name: 'Cancel' }).click();
+  await expect(button).toBeFocused();
+  await expect(button).not.toHaveAttribute('aria-disabled');
+});
+
+test.describe('a big file', () => {
+  test.use({ timezoneId: 'Europe/Berlin' });
+
+  test('is read without freezing the page, up to 5000 events', async ({ page }, testInfo) => {
+    // Yearly events in Paris time on a device in Berlin: reading a crafted
+    // 5 MB file of these froze the page for 17 seconds (audit 4 C-3).
+    const events = Array.from({ length: 40_000 }, (_, index) =>
+      [
+        'BEGIN:VEVENT',
+        `UID:${index}`,
+        `DTSTART;TZID=Europe/Paris:${2000 + (index % 50)}${String(1 + (index % 12)).padStart(2, '0')}01T100000`,
+        'RRULE:FREQ=YEARLY',
+        'SUMMARY:a',
+        'END:VEVENT',
+      ].join('\r\n'),
+    );
+    const file = ['BEGIN:VCALENDAR', 'VERSION:2.0', ...events, 'END:VCALENDAR'].join('\r\n');
+    expect(file.length).toBeLessThan(5 * 1024 * 1024);
+    // The browser times what keeps the page busy for over 50 ms.
+    await page.evaluate(() => {
+      const busy: number[] = [];
+      (window as unknown as { busy: number[] }).busy = busy;
+      new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) busy.push(entry.duration);
+      }).observe({ type: 'longtask' });
+    });
+    // From a file on disk: given as text, the test itself keeps the page busy making the file.
+    const path = testInfo.outputPath('big.ics');
+    await writeFile(path, file);
+    const chooser = page.waitForEvent('filechooser');
+    await page.getByRole('button', { name: 'Import .ics file' }).click();
+    await (await chooser).setFiles(path);
+    await expect(dialog(page)).toContainText('Found 5000 events in “big.ics”.', {
+      timeout: 30_000,
+    });
+    await expect(dialog(page)).toContainText(
+      '35000 more events in the file weren’t read: Calendar reads up to 5000 from a file, and holds up to 2000.',
+    );
+    await expect(dialog(page)).toContainText(
+      '3000 events won’t fit: Calendar holds up to 2000 events.',
+    );
+    const longest = await page.evaluate(() =>
+      Math.max(0, ...(window as unknown as { busy: number[] }).busy),
+    );
+    // About 0.1 s; read on the page itself, even 5,000 took over a second.
+    expect(longest).toBeLessThan(800);
+  });
 });
 
 test('imports what Calendar exports', async ({ page }) => {

@@ -33,6 +33,7 @@ import {
 import {
   draftProblems,
   isValidReminder,
+  MAX_EVENTS,
   MAX_NOTES_LENGTH,
   MAX_SPAN_DAYS,
   MAX_TITLE_LENGTH,
@@ -61,6 +62,21 @@ export interface ParseResult {
   error?: string;
 }
 
+/** What reading a file gives when something in it wasn't expected (audit F1-8). */
+export const UNREADABLE: ParseResult = {
+  events: [],
+  skipped: [],
+  notes: [],
+  error: 'Calendar couldn’t read this file.',
+};
+
+/**
+ * Events read from one file, at most. Calendar holds MAX_EVENTS; reading
+ * every event of a 5 MB file took seconds, and a crafted one 17 (audit 4
+ * C-3). The rest are counted in a note.
+ */
+export const MAX_READ_EVENTS = 5000;
+
 export interface ParseOptions {
   /** The device's time zone, e.g. "Europe/Tbilisi". */
   timeZone: string;
@@ -77,6 +93,8 @@ interface Property {
 interface RawEvent {
   props: Property[];
   alarms: Property[][];
+  /** The file ended before this event did. */
+  cutOff?: true;
 }
 
 const plural = (count: number, word: string, many = `${word}s`): string =>
@@ -133,8 +151,14 @@ function unfold(text: string): string[] {
     .filter((line) => line.trim() !== '');
 }
 
-function readEvents(text: string): RawEvent[] {
+/** The file's events, up to `max`, and how many more it has. */
+function readEvents(text: string, max: number): { events: RawEvent[]; more: number } {
   const events: RawEvent[] = [];
+  let more = 0;
+  const keep = (raw: RawEvent) => {
+    if (events.length < max) events.push(raw);
+    else more += 1;
+  };
   let event: RawEvent | null = null;
   let alarm: Property[] | null = null;
   // Components inside an event other than alarms (rare) are ignored.
@@ -155,14 +179,17 @@ function readEvents(text: string): RawEvent[] {
         event.alarms.push(alarm);
         alarm = null;
       } else if (component === 'VEVENT') {
-        events.push(event);
+        keep(event);
         event = null;
       }
     } else if (event && ignoredDepth === 0) {
       (alarm ?? event.props).push(property);
     }
   }
-  return events;
+  // A file cut off in the middle of an event: listed as not imported, rather
+  // than dropped without a word (audit 4 F1-12).
+  if (event) keep({ ...event, cutOff: true });
+  return { events, more };
 }
 
 /** Undoes text escaping (RFC 5545 §3.3.11). */
@@ -337,6 +364,14 @@ const MINUTE_MS = 60_000;
  */
 const MAX_CLOCK_CHECKS = 100;
 
+/** What a file's repeats share about clocks, so each is worked out once. */
+interface Clocks {
+  /** clockChanges' answers, by zone and year. */
+  changes: Map<string, number[]>;
+  /** How far apart a zone's clocks and the device's are just after each clock change. */
+  apart: Map<string, number>;
+}
+
 /**
  * The moments (to the minute) when clocks in `zone` change in `year`, from
  * noon (UTC) on 31 December the year before to noon on 31 December: read at
@@ -344,7 +379,7 @@ const MAX_CLOCK_CHECKS = 100;
  * once the file has had its MAX_CLOCK_CHECKS; `seen` keeps them for the next
  * event.
  */
-function clockChanges(zone: string, year: number, seen: Map<string, number[]>): number[] | null {
+function clockChanges(zone: string, year: number, seen: Clocks['changes']): number[] | null {
   const key = `${zone} ${year}`;
   const known = seen.get(key);
   if (known) return known;
@@ -385,16 +420,12 @@ const NEXT_WITHIN: Record<Repeat, number> = {
  * its first, are an hour off here, or may be (past MAX_CLOCK_CHECKS). Every
  * time keeps the first one's time of day on this device, so a time is off
  * when the two zones' clocks are a different time apart then than at the
- * first. That changes only when either clock changes, so after each change,
- * the next time is compared. Comparing at noon each day missed changes on
- * the first day and two changes on one day (audit 3 F1-2).
+ * first. That changes only when either clock changes, so after each change
+ * that moves one clock against the other, the next time is compared.
+ * Comparing at noon each day missed changes on the first day and two changes
+ * on one day (audit 3 F1-2).
  */
-function someTimesOff(
-  draft: EventDraft,
-  start: When,
-  timeZone: string,
-  seen: Map<string, number[]>,
-): boolean {
+function someTimesOff(draft: EventDraft, start: When, timeZone: string, clocks: Clocks): boolean {
   const { zone, moment: first, written } = start;
   if (zone === null || zone === timeZone || first === null || written.time === null) return false;
   const apart = (ms: number) => offsetOf(ms, zone) - offsetOf(ms, timeZone);
@@ -405,9 +436,9 @@ function someTimesOff(
   // A year's changes start at noon (UTC) on 31 December the year before.
   const yearOf = (ms: number) => new Date(ms + DAY_MS / 2 - 1).getUTCFullYear();
   const changes: number[] = [];
-  for (const clocks of [zone, timeZone]) {
+  for (const clockZone of [zone, timeZone]) {
     for (let year = yearOf(first); year <= yearOf(end); year += 1) {
-      const found = clockChanges(clocks, year, seen);
+      const found = clockChanges(clockZone, year, clocks.changes);
       if (!found) return true;
       changes.push(...found.filter((at) => at > first && at <= end));
     }
@@ -425,6 +456,18 @@ function someTimesOff(
   const time = minutesOf(written.time) * MINUTE_MS;
   const apartAtFirst = apart(first);
   for (const at of changes) {
+    // Until the next change, the clocks stay as far apart as just after this
+    // one, so a time can only be off after a change that leaves them a
+    // different time apart than at the first. In zones with the same rules
+    // (Paris and Berlin) none does, and comparing a time after each change
+    // anyway, a file of thousands of those took seconds (audit 4 C-3).
+    const key = `${zone} ${at}`;
+    let then = clocks.apart.get(key);
+    if (then === undefined) {
+      then = apart(at);
+      clocks.apart.set(key, then);
+    }
+    if (then === apartAtFirst) continue;
     const from = inZone(at, zone).date;
     const dates = occurrencesBetween(
       { events: [own] },
@@ -590,8 +633,20 @@ const UNSUPPORTED_REPEAT =
 const TOO_MANY_COUNTS =
   'The file has too many repeats for Calendar to work out when this one stops.';
 
-const truncate = (text: string, max: number): string =>
-  text.length > max ? `${text.slice(0, max - 1)}…` : text;
+/**
+ * `text` cut to `max` (counted as the limits count), ending in "…". Cut by
+ * whole characters, so an emoji is never cut in half, which showed as "�"
+ * (audit 4 F1-10).
+ */
+function truncate(text: string, max: number): string {
+  if (text.length <= max) return text;
+  let kept = '';
+  for (const character of text) {
+    if (kept.length + character.length > max - 1) break;
+    kept += character;
+  }
+  return `${kept}…`;
+}
 
 interface Flags {
   unknownZone: number;
@@ -606,13 +661,14 @@ function toEvent(
   raw: RawEvent,
   options: ParseOptions,
   flags: Flags,
-  clockChangesSeen: Map<string, number[]>,
+  clocks: Clocks,
   countSteps: CountSteps,
 ): ParsedEvent | SkippedEvent | null {
   const get = (name: string) => raw.props.find((property) => property.name === name);
   const text = (name: string) => unescapeText(get(name)?.value ?? '').trim();
   const title = truncate(text('SUMMARY') || 'Untitled event', MAX_TITLE_LENGTH);
   const skip = (reason: string): SkippedEvent => ({ title, reason });
+  if (raw.cutOff) return skip('The file ends in the middle of this event.');
 
   // A change to one date of a repeating event: Calendar can't store those yet.
   if (get('RECURRENCE-ID')) {
@@ -733,7 +789,7 @@ function toEvent(
 
   // Every later time keeps the first one's time, and day of the month, on this device.
   if (draft.repeat !== 'none' && start.zone) {
-    if (someTimesOff(draft, start, options.timeZone, clockChangesSeen)) flags.clockChanges += 1;
+    if (someTimesOff(draft, start, options.timeZone, clocks)) flags.clockChanges += 1;
     if (repeatMoves(draft.repeat, start.written.date, draft.startDate)) flags.movedRepeats += 1;
   }
 
@@ -762,7 +818,7 @@ function contentId(raw: RawEvent): string {
   return `ics-${fingerprint(content)}`;
 }
 
-/** Reads every event in a .ics file. */
+/** Reads the events in a .ics file (up to MAX_READ_EVENTS). */
 export function parseIcs(file: string, options: ParseOptions): ParseResult {
   // Some apps start files with an invisible "byte order mark".
   const text = file.replace(/^\uFEFF/, '');
@@ -782,18 +838,24 @@ export function parseIcs(file: string, options: ParseOptions): ParseResult {
     clockChanges: 0,
     movedRepeats: 0,
   };
-  const clockChangesSeen = new Map<string, number[]>();
+  const clocks: Clocks = { changes: new Map(), apart: new Map() };
   const countSteps: CountSteps = { taken: 0 };
   const events: ParsedEvent[] = [];
   const skipped: SkippedEvent[] = [];
-  for (const raw of readEvents(text)) {
-    const result = toEvent(raw, options, flags, clockChangesSeen, countSteps);
+  const read = readEvents(text, MAX_READ_EVENTS);
+  for (const raw of read.events) {
+    const result = toEvent(raw, options, flags, clocks, countSteps);
     if (!result) continue;
     if ('draft' in result) events.push(result);
     else skipped.push(result);
   }
 
   const notes: string[] = [];
+  if (read.more) {
+    notes.push(
+      `${plural(read.more, 'more event')} in the file ${read.more === 1 ? 'wasn’t' : 'weren’t'} read: Calendar reads up to ${MAX_READ_EVENTS} from a file, and holds up to ${MAX_EVENTS}.`,
+    );
+  }
   if (flags.unknownZone) {
     notes.push(
       `${plural(flags.unknownZone, 'event')} used a time zone Calendar doesn’t know, so ${flags.unknownZone === 1 ? 'its times were' : 'their times were'} kept as written.`,

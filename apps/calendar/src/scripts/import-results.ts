@@ -1,17 +1,29 @@
 /**
  * The import dialog, loaded once a file is chosen (./import-dialog.ts): reads
- * the file on the device (lib/ics-import.ts), shows what will be added (and
- * what can't be, and why), then adds the events when the person confirms.
+ * the file on the device (lib/ics-import.ts, in a worker: ./read-ics.worker.ts),
+ * shows what will be added (and what can't be, and why), then adds the events
+ * when the person confirms.
  */
+import { askWorker, startWorker } from '@shkriuss/ui/worker';
 import { importEvents } from '../lib/editing.ts';
 import { MAX_EVENTS } from '../lib/events.ts';
-import { parseIcs, type ParseResult } from '../lib/ics-import.ts';
+import { UNREADABLE, type ParseResult } from '../lib/ics-import.ts';
+import readIcsUrl from './read-ics.worker.ts?worker&url';
 import { plural, required, type CalendarPage } from './shared.ts';
 
 /** Bigger files are turned down (years of a busy calendar fit in well under 1 MB). */
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 /** Events that can't be imported are listed by name up to this many. */
 const MAX_LISTED = 20;
+
+/** What the worker is asked: the file, and the time zone to show its times in. */
+export interface ReadFile {
+  file: File;
+  timeZone: string;
+}
+
+/** Reads a file in a worker, so the page doesn't freeze on a big one (audit 4 C-3). */
+const readFile = askWorker<ReadFile, ParseResult>(() => startWorker(readIcsUrl), UNREADABLE);
 
 const element = <K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -103,15 +115,8 @@ export async function showImport(root: Document, page: CalendarPage, file: File)
     fail('This file is too big to import (over 5 MB).');
     return;
   }
-  let result: ParseResult;
-  try {
-    const text = await file.text();
-    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    result = parseIcs(text, { timeZone });
-  } catch {
-    // Something in the file it didn't expect: say so, rather than nothing (audit F1-8).
-    fail('Calendar couldn’t read this file.');
-    return;
-  }
-  show(result, file.name);
+  // Something in the file it didn't expect gives UNREADABLE: it says so,
+  // rather than nothing (audit F1-8).
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  show(await readFile({ file, timeZone }), file.name);
 }

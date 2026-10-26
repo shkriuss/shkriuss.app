@@ -13,6 +13,7 @@ import { importEvents } from './editing.ts';
 import { occurrencesBetween, type CalendarEvent, type EventDraft, type Repeat } from './events.ts';
 import {
   lastStart,
+  MAX_READ_EVENTS,
   parseDuration,
   parseIcs,
   unescapeText,
@@ -574,6 +575,65 @@ describe('parseIcs', () => {
     }
   });
 
+  it('reads thousands of repeats from a zone with the same rules quickly', () => {
+    // Paris and Berlin change their clocks at the same moments, so no time is
+    // off; comparing one after every change anyway took about 36 clock
+    // readings an event, and a crafted 5 MB file 17 seconds (audit 4 C-3).
+    const events = Array.from({ length: 2000 }, (_, index) => [
+      `UID:e${index}`,
+      `DTSTART;TZID=Europe/Paris:${fromDayNumber(toDayNumber('2026-01-01') + index).replaceAll('-', '')}T100000`,
+      `RRULE:FREQ=${['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'][index % 4]}`,
+      'SUMMARY:x',
+    ]);
+    const read = Intl.DateTimeFormat.prototype.formatToParts;
+    let readings = 0;
+    vi.spyOn(Intl.DateTimeFormat.prototype, 'formatToParts').mockImplementation(function (
+      this: Intl.DateTimeFormat,
+      date,
+    ) {
+      readings += 1;
+      return read.call(this, date);
+    });
+    try {
+      const result = parseIcs(calendar(...events), { timeZone: 'Europe/Berlin' });
+      expect(result.events).toHaveLength(2000);
+      expect(result.notes).toEqual([]);
+      // Reading each start takes a few; the clock changes are looked up once.
+      expect(readings / 2000).toBeLessThan(12);
+    } finally {
+      vi.restoreAllMocks();
+    }
+    // From a zone with other rules, times are still an hour off: the daily
+    // and weekly ones, here, as the monthly and yearly ones (on 3, 4, 7 and
+    // 8 January) don't come between London's change and New York's.
+    const london = parseIcs(calendar(...events.slice(0, 8)).replaceAll('Paris', 'London'), {
+      timeZone: 'America/New_York',
+    });
+    expect(london.notes).toEqual([
+      '4 repeating events are from a time zone that doesn’t change its clocks on the same dates as yours, so some of their times may be an hour off.',
+    ]);
+  });
+
+  it(`reads up to ${MAX_READ_EVENTS} events from a file, and says how many more it has`, () => {
+    // Calendar holds 2,000; reading all of a crafted 5 MB file took seconds (audit 4 C-3).
+    const events = Array.from({ length: MAX_READ_EVENTS + 2 }, (_, index) => [
+      `UID:e${index}`,
+      'DTSTART:20261026T090000',
+      `SUMMARY:Event ${index}`,
+    ]);
+    const result = parseIcs(calendar(...events), options);
+    expect(result.events).toHaveLength(MAX_READ_EVENTS);
+    expect(result.events.at(-1)?.draft.title).toBe(`Event ${MAX_READ_EVENTS - 1}`);
+    expect(result.notes).toEqual([
+      `2 more events in the file weren’t read: Calendar reads up to ${MAX_READ_EVENTS} from a file, and holds up to 2000.`,
+    ]);
+    const one = parseIcs(calendar(...events.slice(0, MAX_READ_EVENTS + 1)), options);
+    expect(one.notes).toEqual([
+      `1 more event in the file wasn’t read: Calendar reads up to ${MAX_READ_EVENTS} from a file, and holds up to 2000.`,
+    ]);
+    expect(parseIcs(calendar(...events.slice(0, MAX_READ_EVENTS)), options).notes).toEqual([]);
+  });
+
   it('reads a file of repeats with a COUNT quickly', () => {
     // Working out every time up to COUNT took about 28 ms for each of these
     // (2.9 s for 100), so a 5 MB file froze the page for minutes (audit 3 C-2).
@@ -729,6 +789,50 @@ describe('parseIcs', () => {
     expect(draft.notes).toHaveLength(1000);
     expect(draft.notes.endsWith('…')).toBe(true);
     expect(only(calendar(['DTSTART:20261017T090000'])).title).toBe('Untitled event');
+  });
+
+  it('cuts long titles and notes by whole characters, so an emoji isn’t cut in half', () => {
+    // Cut in the middle, half an emoji showed as "�", in notifications too
+    // (audit 4 F1-10). Each emoji here is two of the characters the limits count.
+    const lone = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+    for (const before of [97, 98]) {
+      const draft = only(
+        calendar([
+          'DTSTART:20261017T090000',
+          `SUMMARY:${'a'.repeat(before)}${'🎉'.repeat(10)}`,
+          `DESCRIPTION:${'b'.repeat(before * 10)}${'🎉'.repeat(100)}`,
+        ]),
+      );
+      for (const [text, max] of [
+        [draft.title, 100],
+        [draft.notes, 1000],
+      ] as const) {
+        expect(text.length).toBeLessThanOrEqual(max);
+        expect(text.length).toBeGreaterThanOrEqual(max - 1);
+        expect(text.endsWith('…')).toBe(true);
+        expect(lone.test(text)).toBe(false);
+      }
+    }
+  });
+
+  it('lists an event the file ends in the middle of as not imported', () => {
+    // It was dropped without a word: "There are no events in this file" (audit 4 F1-12).
+    const cut = (text: string) => text.slice(0, text.indexOf('END:VEVENT'));
+    const one = calendar(['DTSTART:20261017T090000', 'SUMMARY:Dentist']);
+    expect(parseIcs(cut(one), options)).toEqual({
+      events: [],
+      skipped: [{ title: 'Dentist', reason: 'The file ends in the middle of this event.' }],
+      notes: [],
+    });
+    const two = calendar(
+      ['DTSTART:20261017T090000', 'SUMMARY:Gym'],
+      ['DTSTART:20261018T090000', 'SUMMARY:Dentist'],
+    );
+    const result = parseIcs(two.slice(0, two.lastIndexOf('END:VEVENT')), options);
+    expect(result.events.map((event) => event.draft.title)).toEqual(['Gym']);
+    expect(result.skipped).toEqual([
+      { title: 'Dentist', reason: 'The file ends in the middle of this event.' },
+    ]);
   });
 
   it('keeps ids, so importing the same file twice can be spotted', () => {
