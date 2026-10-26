@@ -251,6 +251,25 @@ describe('finding items', () => {
     ]);
   });
 
+  it('sorts the items without a price by name, whatever currency the form had (audit 3 F3-7)', () => {
+    // A new item starts in the currency used last, so items without a price
+    // have different ones once a dollar price was saved; it isn't shown.
+    const noPrices = stateOf(
+      item({ name: 'Apples', price: '', currency: 'USD' }, 'a'),
+      item({ name: 'Bread', price: '', currency: 'GEL' }, 'b'),
+      item({ name: 'Cheese', price: '', currency: 'USD' }, 'c'),
+      item({ name: 'Dates', price: '', currency: 'EUR' }, 'd'),
+      item({ name: 'Olive oil', price: '18', currency: 'GEL' }, 'e'),
+    );
+    expect(names(visibleItems(noPrices, { ...NO_FILTERS, sort: 'price' }, []))).toEqual([
+      'Olive oil',
+      'Apples',
+      'Bread',
+      'Cheese',
+      'Dates',
+    ]);
+  });
+
   it('lists brands, the most loved first, spelled the usual way', () => {
     const more = stateOf(...state.items, item({ name: 'Yogurt drink', brand: 'Fage' }));
     expect(brandsOf(more)).toEqual([
