@@ -87,6 +87,27 @@ test('plans meals on the days of the week, and changes or removes them', async (
   ).toBeFocused();
 });
 
+test('moves “Today” on when the page comes back on screen after midnight', async ({ page }) => {
+  // A phone's sleeping page runs its timers late, or not at all: Meals only
+  // looked for a new day every minute, so it showed yesterday as today until
+  // then (audit 4 J-11).
+  const show = (state: 'hidden' | 'visible') =>
+    page.evaluate((state) => {
+      Object.defineProperty(document, 'visibilityState', {
+        configurable: true,
+        get: () => state,
+      });
+      document.dispatchEvent(new Event('visibilitychange'));
+    }, state);
+  await expect(day(page, '2026-10-21').getByText('Today')).toBeVisible();
+  await show('hidden');
+  // Thursday morning: no timer has run meanwhile.
+  await page.clock.setFixedTime(new Date('2026-10-22T07:00:00+04:00'));
+  await show('visible');
+  await expect(day(page, '2026-10-22').getByText('Today')).toBeVisible();
+  await expect(day(page, '2026-10-21').getByText('Today')).toBeHidden();
+});
+
 test('moves between weeks, and copies last week’s meals', async ({ page }) => {
   await seed(page, {
     planned: [

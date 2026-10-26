@@ -51,6 +51,35 @@ test('moves “today” along at midnight while it stays open', async ({ page })
   await expect(upcoming(page).getByRole('button')).toHaveText([/Next week’s run/]);
 });
 
+test('moves the chosen day along at midnight, also after a redraw that came first', async ({
+  page,
+}) => {
+  // A change from another tab just after midnight drew the page again with
+  // the new "today", and the check that moves the chosen day along then took
+  // the day for unchanged: yesterday stayed chosen (audit 4 J-11).
+  await page.clock.setFixedTime(new Date('2026-10-18T00:00:05'));
+  const other = await page.context().newPage();
+  await other.goto('/');
+  await newEvent(other, 'Breakfast');
+  await save(other);
+  await expect(editor(other)).toBeHidden();
+  await other.close();
+  // Drawn again here: Sunday is today, and Saturday still chosen.
+  await expect(day(page, /^Sunday, October 18, 2026, today/)).toHaveAttribute(
+    'aria-current',
+    'date',
+  );
+  await expect(day(page, /^Saturday, October 17, 2026/)).toHaveAttribute('aria-pressed', 'true');
+
+  await page.clock.runFor('01:00');
+  await expect(page.locator('[data-day-heading]')).toHaveText('Today, Sunday, October 18');
+  await expect(day(page, /^Sunday, October 18, 2026, today/)).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await expect(dayList(page).getByRole('button')).toHaveText([/Breakfast/]);
+});
+
 test('in a Windows contrast theme, the chosen day and event dots still show', async ({ page }) => {
   // Contrast themes replace backgrounds with the theme's own colours (audit G-6).
   await seed(page, [{ startDate: '2026-10-20', endDate: '2026-10-20' }]);
