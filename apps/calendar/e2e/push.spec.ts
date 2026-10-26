@@ -489,6 +489,35 @@ test('device settings stay out of backups', async ({ page }) => {
   expect(text).not.toContain(rig.endpoint);
 });
 
+// Only the 500 soonest fit on the server, and nothing said so (audit 3 F1-5).
+test('says when not all the reminders fit on the server', async ({ page }) => {
+  await fakeSubscription(page, rig);
+  await page.goto('/');
+  // 520 events with reminders, one a day from 2027 (still to come for the
+  // local server's real clock too).
+  const day = (index: number) =>
+    new Date(Date.UTC(2027, 0, 1) + index * 86_400_000).toISOString().slice(0, 10);
+  await seed(
+    page,
+    Array.from({ length: 520 }, (_, index) => ({
+      title: `Event ${index}`,
+      startDate: day(index),
+      endDate: day(index),
+      reminder: 15,
+    })),
+  );
+  const upload = page.waitForRequest(
+    (request) => request.url().endsWith('/api/push/schedule') && request.method() === 'PUT',
+  );
+  await closedSwitch(page).check();
+  const sent = JSON.parse((await upload).postData() ?? '{}') as { entries: unknown[] };
+  expect(sent.entries).toHaveLength(500);
+  await expect(closedStatus(page)).toHaveText(
+    "On, but only for your next 500 reminders: Calendar's server can’t keep more. The other 20 arrive only while Calendar is open.",
+  );
+  await checkA11y(page, 'reminders while closed: not all fit');
+});
+
 // It said "On" though nothing could be kept or uploaded (audit 3 F1-4).
 test('says so when this device can’t keep the setting', async ({ page }) => {
   await fakeSubscription(page, rig);

@@ -196,6 +196,9 @@ const notice = (overrides: Partial<Notice> = {}): Notice => ({
   ...overrides,
 });
 
+/** What syncPush says when it uploaded nothing (push is off). */
+const NONE = { scheduled: 0, left: 0 };
+
 /** What the server keeps for this phone. */
 const stored = () => [...server.devices.values()].map(({ storage }) => [...storage.map]);
 const storedIds = () =>
@@ -210,7 +213,7 @@ describe('syncPush', () => {
     const google = '8f3kq0c5b1@google.com';
     const outlook = '0'.repeat(56) + 'f'.repeat(56);
     const notices = [notice({ id: google }), notice({ id: outlook, start: '2099-01-02T09:00' })];
-    expect(await syncPush(notices)).toBe(2);
+    expect(await syncPush(notices)).toEqual({ scheduled: 2, left: 0 });
     expect(storedIds()).toEqual(['1', '2']);
     const kept = JSON.stringify(stored());
     expect(kept).not.toContain('google');
@@ -223,10 +226,10 @@ describe('syncPush', () => {
       // Two events with the same id (a file can have that).
       notice({ id: 'b', start: '2099-01-02T09:00' }),
       notice({ id: 'b', start: '2099-01-03T09:00' }),
-      // Five weeks before: more than the server takes.
+      // Five weeks before: more than the server takes (only the open app shows it).
       notice({ id: 'c', offset: 5 * 7 * 1440 }),
     ];
-    expect(await syncPush(notices)).toBe(3);
+    expect(await syncPush(notices)).toEqual({ scheduled: 3, left: 1 });
     expect(storedIds()).toEqual(['1', '2', '3']);
   });
 
@@ -240,9 +243,12 @@ describe('syncPush', () => {
         title: '\u0001'.repeat(200),
         body: '\u0001'.repeat(450),
       });
-    const scheduled = await syncPush(Array.from({ length: 500 }, (_, index) => long(index)));
+    const { scheduled, left } = await syncPush(
+      Array.from({ length: 500 }, (_, index) => long(index)),
+    );
     expect(scheduled).toBeGreaterThan(200);
     expect(scheduled).toBeLessThan(500);
+    expect(left).toBe(500 - scheduled);
     expect(storedIds()).toHaveLength(scheduled);
   });
 
@@ -271,43 +277,77 @@ describe('syncPush', () => {
 // now: after a change that couldn't be uploaded, nothing else would (audit F1-7).
 describe('pushHolds', () => {
   const later = notice({ id: 'event-2', start: '2099-01-02T09:00', title: 'Gym' });
+  /** Whether the server has a reminder of these, by its tag. */
+  const holds = async (notices: Notice[], tag = 'any') => (await pushHolds(notices))(tag);
 
   it('says whether the server has the notifications as they are now', async () => {
     // Turned on, nothing uploaded yet.
-    expect(await pushHolds([notice()])).toBe(false);
+    expect(await holds([notice()])).toBe(false);
     await syncPush([notice()]);
-    expect(await pushHolds([notice()])).toBe(true);
+    expect(await holds([notice()])).toBe(true);
     // Changed here: not until it's uploaded.
-    expect(await pushHolds([notice(), later])).toBe(false);
-    expect(await pushHolds([notice({ title: 'Dentist at 10' })])).toBe(false);
+    expect(await holds([notice(), later])).toBe(false);
+    expect(await holds([notice({ title: 'Dentist at 10' })])).toBe(false);
     await syncPush([notice(), later]);
-    expect(await pushHolds([notice(), later])).toBe(true);
+    expect(await holds([notice(), later])).toBe(true);
   });
 
   it('is false after a change that couldn’t be uploaded, true again once it is', async () => {
     await syncPush([notice()]);
     network = 'down';
     await expect(syncPush([notice(), later])).rejects.toThrow(PushError);
-    expect(await pushHolds([notice(), later])).toBe(false);
+    expect(await holds([notice(), later])).toBe(false);
     // What it does have.
-    expect(await pushHolds([notice()])).toBe(true);
+    expect(await holds([notice()])).toBe(true);
     network = 'up';
     await syncPush([notice(), later]);
-    expect(await pushHolds([notice(), later])).toBe(true);
+    expect(await holds([notice(), later])).toBe(true);
   });
 
   it('stays true as time passes, also once a reminder is over', async () => {
     const soon = notice({ start: '2099-01-01T09:00' });
     await syncPush([soon, later]);
     vi.useFakeTimers({ now: Date.UTC(2099, 0, 1, 12), toFake: ['Date'] });
-    expect(await pushHolds([soon, later])).toBe(true);
+    expect(await holds([soon, later])).toBe(true);
     vi.useRealTimers();
   });
 
   it('is false while push is off', async () => {
     await syncPush([notice()]);
     await disablePush();
-    expect(await pushHolds([notice()])).toBe(false);
+    expect(await holds([notice()])).toBe(false);
+  });
+
+  // Only the 500 soonest fit on the server, but it said it held them all, so
+  // the open app showed none of the rest either (audit 3 F1-5).
+  const day = (index: number, tag = `e${index}`) =>
+    notice({
+      id: `e${index}`,
+      tag,
+      start: new Date(Date.UTC(2099, 0, 1) + index * 86_400_000).toISOString().slice(0, 16),
+    });
+
+  it('holds only the reminders that fit on the server', async () => {
+    const notices = Array.from({ length: 520 }, (_, index) => day(index));
+    expect(await syncPush(notices)).toEqual({ scheduled: 500, left: 20 });
+    const held = await pushHolds(notices);
+    expect([held('e0'), held('e499'), held('e500'), held('e519')]).toEqual([
+      true,
+      true,
+      false,
+      false,
+    ]);
+    // Unchanged, it isn't uploaded again, and still says so.
+    expect(await syncPush(notices)).toEqual({ scheduled: 500, left: 20 });
+    expect(requests.filter((request) => request.startsWith('PUT'))).toHaveLength(1);
+  });
+
+  it('leaves a reminder to the open app too when one that didn’t fit has its tag', async () => {
+    // Like a habit's reminders on each of its days, with one tag.
+    const notices = Array.from({ length: 501 }, (_, index) => day(index, `e${index % 500}`));
+    await syncPush(notices);
+    const held = await pushHolds(notices);
+    expect([held('e1'), held('e0')]).toEqual([true, false]);
   });
 });
 
@@ -414,7 +454,7 @@ describe('turning it off while an upload is on its way (audit 3 D-1)', () => {
       const disabling = disablePush();
       expect(isPushEnabled()).toBe(false);
       put.release();
-      expect(await uploading).toBe(0);
+      expect(await uploading).toEqual(NONE);
       expect(await disabling).toBe(true);
       expect(isPushEnabled()).toBe(false);
       expect(isPushDeletePending()).toBe(false);
@@ -422,7 +462,7 @@ describe('turning it off while an upload is on its way (audit 3 D-1)', () => {
       // The deletion went after the upload, once.
       expect(requests.slice(-2)).toEqual(['PUT /api/push/schedule', 'DELETE /api/push/schedule']);
       // Opening the app again doesn't turn it back on.
-      expect(await syncPush([notice(), later])).toBe(0);
+      expect(await syncPush([notice(), later])).toEqual(NONE);
       expect(await subscription()).toBeNull();
       expect(devicesKept()).toBe(0);
     });
@@ -443,7 +483,7 @@ describe('turning it off while an upload is on its way (audit 3 D-1)', () => {
       }),
     );
     put.release();
-    expect(await uploading).toBe(0);
+    expect(await uploading).toEqual(NONE);
     expect(devicesKept()).toBe(0);
     expect(isPushDeletePending()).toBe(false);
   });
@@ -453,7 +493,7 @@ describe('turning it off while an upload is on its way (audit 3 D-1)', () => {
     // Turned off while the reminders are being locked for the upload.
     const uploading = syncPush([notice(), later]);
     const disabling = disablePush();
-    expect(await uploading).toBe(0);
+    expect(await uploading).toEqual(NONE);
     expect(await disabling).toBe(true);
     expect(requests.filter((request) => request.startsWith('PUT'))).toHaveLength(1);
     expect(devicesKept()).toBe(0);
@@ -469,7 +509,7 @@ describe('turning it off while an upload is on its way (audit 3 D-1)', () => {
     // …while the person turns it off.
     const disabling = disablePush();
     key.release();
-    expect(await uploading).toBe(0);
+    expect(await uploading).toEqual(NONE);
     expect(await disabling).toBe(true);
     expect(isPushEnabled()).toBe(false);
     expect(await subscription()).toBeNull();

@@ -144,20 +144,23 @@ export function mountNotificationStatus(
  * them. With "Also remind me when … is closed" on, the notification service
  * sends them instead, so they don't show twice; unless it doesn't have them
  * as they are now (`notices`), say after a change made offline: then
- * nothing else would show them (audit F1-7).
+ * nothing else would show them (audit F1-7). Nor does it have those that
+ * didn't fit on it (more than 500): those show here too (audit 3 F1-5).
  */
 export async function showNotifications(
   due: readonly DueReminder[],
   notices: () => Notice[],
 ): Promise<void> {
   if (permission() !== 'granted') return;
-  if (await pushHolds(notices())) return;
+  const held = await pushHolds(notices()).catch(() => () => false);
+  const shown = due.filter((item) => !held(item.tag));
+  if (shown.length === 0) return;
   // Phones only show notifications through the service worker.
   const registration =
     'serviceWorker' in navigator
       ? await navigator.serviceWorker.getRegistration().catch(() => undefined)
       : undefined;
-  for (const item of due) {
+  for (const item of shown) {
     // A repeat replaces the one before it with the same tag, and still rings
     // or buzzes (audit 3 F1-1). Chrome refuses renotify without a tag.
     const shown: NotificationOptions & { renotify?: boolean } = {

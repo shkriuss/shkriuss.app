@@ -55,8 +55,12 @@ export interface DeviceState {
   auth: string;
   /** The server key the subscription was made with. */
   serverKey: string;
-  /** What was last uploaded, and when. */
-  synced?: { hash: string; at: number };
+  /**
+   * What was last uploaded, and when, and how many of the upcoming
+   * notifications that was: the soonest ones, as many as fit on the server
+   * (audit 3 F1-5; all of them, in what older versions saved).
+   */
+  synced?: { hash: string; at: number; count?: number };
 }
 
 const isDeviceState = (value: unknown): value is DeviceState => {

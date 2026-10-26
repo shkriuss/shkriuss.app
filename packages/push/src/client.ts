@@ -3,7 +3,7 @@
  *
  *   enablePush()        ask permission, subscribe this device
  *   syncPush(notices)   upload the app's scheduled notifications, encrypted
- *   pushHolds(notices)  whether the server has them as they are now
+ *   pushHolds(notices)  which of them the server has as they are now
  *   sendTestPush()      one notification right now
  *   disablePush()       forget this device on the server and unsubscribe
  *   finishPushDelete()  try again to forget it, if the server couldn't be reached
@@ -28,7 +28,7 @@ export {
   type PushErrorCode,
   type PushSupport,
 } from './device.ts';
-export type { Notice } from './upload.ts';
+export type { Notice, PushSynced } from './upload.ts';
 
 const upload = (): Promise<typeof Upload> => import('./upload.ts');
 
@@ -37,7 +37,7 @@ export const syncPush: typeof Upload.syncPush = async (...args) =>
 
 // Nothing to load to know that nothing was uploaded (push is off, say).
 export const pushHolds: typeof Upload.pushHolds = async (...args) =>
-  load()?.synced ? (await upload()).pushHolds(...args) : false;
+  load()?.synced ? (await upload()).pushHolds(...args) : () => false;
 
 export const sendTestPush: typeof Upload.sendTestPush = async (...args) =>
   (await upload()).sendTestPush(...args);

@@ -92,54 +92,82 @@ async function current(): Promise<DeviceState | null> {
   return load();
 }
 
+/** What an upload left on the server: how many notifications, and how many more didn't fit. */
+export interface PushSynced {
+  scheduled: number;
+  /** Upcoming ones the server doesn't have (more than it keeps): only an open app shows them. */
+  left: number;
+}
+
+const NONE: PushSynced = { scheduled: 0, left: 0 };
+
 /**
  * What syncPush uploads for these notices at `now`: the ones that will still
- * happen, soonest first, up to the server's limit, and its fingerprint.
+ * happen, soonest first, up to the server's limit, and its fingerprint; and
+ * the rest still to come (`later`), which the server can't have.
  */
 async function scheduleOf(notices: readonly Notice[], endpoint: string, now: number) {
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const later: Notice[] = [];
   const upcoming = notices
-    // Leave out any the server would turn down, so one odd reminder can't stop the rest.
-    .filter((notice) => timingProblem(notice) === undefined)
-    .map((notice) => ({ notice, next: nextFireTime(notice, timeZone, now) }))
-    .filter((item): item is { notice: Notice; next: number } => item.next !== null)
+    .flatMap((notice) => {
+      // Any the server would turn down stays here, so one odd reminder can't stop the rest.
+      if (timingProblem(notice) !== undefined) {
+        later.push(notice);
+        return [];
+      }
+      const next = nextFireTime(notice, timeZone, now);
+      return next === null ? [] : [{ notice, next }];
+    })
     .sort((a, b) => a.next - b.next)
-    .slice(0, LIMITS.entries)
     .map((item) => item.notice);
-  return { timeZone, upcoming, hash: await hashOf({ upcoming, timeZone, endpoint }) };
+  later.push(...upcoming.splice(LIMITS.entries));
+  return { timeZone, upcoming, later, hash: await hashOf({ upcoming, timeZone, endpoint }) };
 }
 
 /**
- * Whether the notification service has these notifications as they are now
- * (the last upload of them got through), so it sends them, and an open app
- * mustn't show them a second time. False while push is off, and after a
- * change that couldn't be uploaded (say, offline): then nothing would send
- * them, so the open app shows them itself (audit F1-7).
+ * Which of these notifications the notification service has as they are
+ * now (the last upload of them got through), so it sends them, and an open
+ * app mustn't show them a second time: a test of a notification's tag.
+ * None while push is off, and after a change that couldn't be uploaded (say,
+ * offline): then nothing would send them, so the open app shows them itself
+ * (audit F1-7). Nor those that didn't fit on the server (audit 3 F1-5).
  */
-export async function pushHolds(notices: readonly Notice[]): Promise<boolean> {
+export async function pushHolds(notices: readonly Notice[]): Promise<(tag: string) => boolean> {
   const state = load();
-  if (!state?.synced) return false;
+  const synced = state?.synced;
+  if (!state || !synced) return () => false;
   // As they were worked out then: time passing changes nothing.
-  const { hash } = await scheduleOf(notices, state.endpoint, state.synced.at);
-  return hash === state.synced.hash;
+  const { upcoming, later, hash } = await scheduleOf(notices, state.endpoint, synced.at);
+  if (hash !== synced.hash) return () => false;
+  const count = synced.count ?? upcoming.length;
+  const left = new Set([...upcoming.slice(count), ...later].map((notice) => notice.tag));
+  if (left.size === 0) return () => true;
+  // A tag also used by one that didn't fit (a habit's other days, say): shown
+  // here too, as twice is better than never.
+  const held = new Set(upcoming.slice(0, count).map((notice) => notice.tag));
+  return (tag) => held.has(tag) && !left.has(tag);
 }
 
 /**
  * Uploads the app's scheduled notifications (replacing earlier ones). Skips
- * the upload when nothing changed recently. Returns how many are scheduled.
+ * the upload when nothing changed recently. Says how many are scheduled, and
+ * how many more didn't fit (audit 3 F1-5).
  */
 export async function syncPush(
   notices: readonly Notice[],
   options: { force?: boolean } = {},
-): Promise<number> {
+): Promise<PushSynced> {
   // An earlier copy still on the server (turned off while offline) would send twice.
   if (isPushDeletePending()) await finishPushDelete();
   const state = await current();
-  if (!state) return 0;
+  if (!state) return NONE;
   const now = Date.now();
-  const { timeZone, upcoming, hash } = await scheduleOf(notices, state.endpoint, now);
-  if (!options.force && state.synced?.hash === hash && now - state.synced.at < REFRESH_MS) {
-    return upcoming.length;
+  const { timeZone, upcoming, later, hash } = await scheduleOf(notices, state.endpoint, now);
+  const { synced } = state;
+  if (!options.force && synced?.hash === hash && now - synced.at < REFRESH_MS) {
+    const scheduled = synced.count ?? upcoming.length;
+    return { scheduled, left: upcoming.length - scheduled + later.length };
   }
   // disablePush() waits for this upload, so the server gets its deletion last (audit 3 D-1).
   const done = startUpload();
@@ -158,7 +186,7 @@ export async function syncPush(
       entries.push({ id: String(index + 1), start, repeat, until, offset, payload });
     }
     // Turned off meanwhile: nothing to send.
-    if (load()?.deviceKey !== state.deviceKey) return 0;
+    if (load()?.deviceKey !== state.deviceKey) return NONE;
     sent = true;
     const response = await api(
       '/schedule',
@@ -169,9 +197,9 @@ export async function syncPush(
       throw new PushError('refused', 'The notification service didn’t accept the update.');
     // Saved only while it's still on with this device key.
     const latest = load();
-    if (latest?.deviceKey !== state.deviceKey) return 0;
-    store({ ...latest, synced: { hash, at: now } });
-    return entries.length;
+    if (latest?.deviceKey !== state.deviceKey) return NONE;
+    store({ ...latest, synced: { hash, at: now, count: entries.length } });
+    return { scheduled: entries.length, left: upcoming.length - entries.length + later.length };
   } finally {
     // Turned off while it was on its way (here, in another tab, or by "Delete
     // all data"): what it may have put back on the server is deleted again,

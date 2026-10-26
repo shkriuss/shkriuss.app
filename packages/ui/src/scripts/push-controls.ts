@@ -19,6 +19,7 @@ import {
   syncPush,
   type Notice,
   type PushErrorCode,
+  type PushSynced,
 } from '@shkriuss/push';
 import { setBusy } from './busy.ts';
 
@@ -69,6 +70,13 @@ export function mountPushControls(block: HTMLElement, options: PushControlsOptio
   };
   const problemOf = (error: unknown): string =>
     error instanceof PushError ? PROBLEMS[error.code] : 'Something went wrong. Please try again.';
+  /** What the last upload left on the server (audit 3 F1-5). */
+  let fit: PushSynced = { scheduled: 0, left: 0 };
+  /** "On", or how many reminders the server has when they don't all fit. */
+  const onText = ({ scheduled, left }: PushSynced): string =>
+    left > 0
+      ? `On, but only for your next ${scheduled} reminders: ${app}'s server can’t keep more. ${left === 1 ? 'The other one arrives' : `The other ${left} arrive`} only while ${app} is open.`
+      : ON;
 
   function render(message?: string): void {
     const on = isPushEnabled();
@@ -79,24 +87,26 @@ export function mountPushControls(block: HTMLElement, options: PushControlsOptio
     status.textContent =
       message ??
       (on
-        ? ON
+        ? onText(fit)
         : isPushDeletePending()
           ? `${OFF_NOT_DELETED} ${app} will try again when it’s open and online.`
           : OFF);
   }
 
+  /** After an upload got through: what the server has now. */
+  function uploaded(synced: PushSynced): void {
+    fit = synced;
+    // Also takes away a problem that's over, or shows it was turned off in
+    // the browser's settings meanwhile.
+    render();
+  }
+
   function upload(force = false): void {
     queue = queue.then(
       () =>
-        syncPush(options.notices(), { force }).then(
-          () => {
-            // Turned off in the browser's settings meanwhile?
-            if (!isPushEnabled()) render();
-          },
-          (error: unknown) => {
-            render(problemOf(error));
-          },
-        ),
+        syncPush(options.notices(), { force }).then(uploaded, (error: unknown) => {
+          render(problemOf(error));
+        }),
       () => undefined,
     );
   }
@@ -131,9 +141,9 @@ export function mountPushControls(block: HTMLElement, options: PushControlsOptio
       enablePush()
         .then(() => syncPush(options.notices(), { force: true }))
         .then(
-          () => {
+          (synced) => {
             // "On" only if it really is (audit 3 F1-4).
-            render();
+            uploaded(synced);
             if (isPushEnabled())
               options.announce(`Reminders will arrive even when ${app} is closed.`);
           },

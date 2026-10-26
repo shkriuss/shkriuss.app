@@ -114,6 +114,9 @@ browsers like IronFox receive Web Push through **UnifiedPush**.
   them as notifications too only when the server doesn't have the schedule
   as it is now (`pushHolds`: a change made offline, say, couldn't be
   uploaded yet), so nothing is missed and nothing shows twice (audit F1-7).
+  That's worked out for each reminder: with more than fit on the server
+  (500), the open app shows the ones left out itself, and the switch says
+  how many the server has (audit 3 F1-5).
 
 ## Consequences
 
