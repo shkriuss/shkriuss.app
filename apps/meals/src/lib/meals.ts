@@ -40,11 +40,20 @@ import { DATE_LOCALE } from '@shkriuss/ui/locale';
  * its own: the test "has room for everything at its limits" fills Meals up
  * and checks it all fits. The plan (a year is kept: about 1,500 meals with
  * all four meals of every day) and the things added by hand were 5,000 and
- * 2,000, more than fit (audit 4 F2-13).
+ * 2,000, more than fit; and 500 meals each at all of a meal's own limits
+ * would be 5.5 million characters, so all your meals' text together has a
+ * limit too, MAX_MEALS_TEXT (audit 4 F2-13).
  */
 export const LIMITS = { name: 100, ingredient: 100, notes: 5000 } as const;
 export const MAX_INGREDIENTS = 60;
 export const MAX_MEALS = 500;
+/**
+ * The most text all your meals hold together: their names, ingredients and
+ * notes, in characters as they're saved (an emoji counts as two). About 50
+ * meals at every limit of their own, or 300 with a long recipe (1,500
+ * characters) and 15 ingredients each.
+ */
+export const MAX_MEALS_TEXT = 600_000;
 export const MAX_PLANNED = 2000;
 /** The most things added by hand to the shopping lists, all weeks kept together. */
 export const MAX_SHOPPING = 500;
@@ -241,9 +250,26 @@ export function mealProblems(
   }
   if (editing === undefined && state.meals.length >= MAX_MEALS) {
     problems.form = `You have ${MAX_MEALS} meals, as many as Meals keeps. Delete one to add another.`;
+  } else if (Object.keys(problems).length === 0) {
+    // Only more text is refused: a meal saved before, over it, can still be changed.
+    const before = mealsText(state);
+    const after = before - (own ? mealText(own) : 0) + mealText(mealFromDraft(draft, ''));
+    if (after > MAX_MEALS_TEXT && after > before) {
+      problems.form = `Your meals hold up to ${MAX_MEALS_TEXT.toLocaleString('en')} characters of names, ingredients and notes, all together. Shorten this one, or delete meals you don’t need, to make room.`;
+    }
   }
   return problems;
 }
+
+/** How much text a meal holds, as MAX_MEALS_TEXT counts it. */
+export const mealText = (meal: Meal): number =>
+  meal.name.length +
+  meal.ingredients.reduce((sum, ingredient) => sum + ingredient.length, 0) +
+  meal.notes.length;
+
+/** How much text all your meals hold (MAX_MEALS_TEXT). */
+export const mealsText = (state: MealsState): number =>
+  state.meals.reduce((sum, meal) => sum + mealText(meal), 0);
 
 export const mealFromDraft = (draft: MealDraft, id: string): Meal => ({
   id,

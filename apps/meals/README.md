@@ -7,7 +7,11 @@ Plan your meals for the week, and what to buy for them. Lives at
   them (`meals.test.ts`). Four lists, saved on the device and synced
   separately:
   - your meals (`shkriuss:meals`): dishes you make, each with its
-    ingredients (one per line) and notes;
+    ingredients (one per line) and notes. Up to 500 meals, with 600,000
+    characters of names, ingredients and notes all together
+    (`MAX_MEALS_TEXT`): about 300 meals with a long recipe each. Then the
+    form says to shorten the meal or delete some first; a meal kept can
+    still be changed, but not made longer;
   - the plan (`shkriuss:meal-plan`): a name for a day and a meal of the day
     (breakfast, lunch, dinner or snack). A planned meal uses the
     ingredients of your meal with the same name (capitals and accents
@@ -23,8 +27,11 @@ Plan your meals for the week, and what to buy for them. Lives at
     tablet whose weeks start on Sunday share it when they sync (version 1
     used each device's own first day; `migrateShopping` moves it). Weeks
     older than 8 are let go (`pruneShopping`). Up to 500 things added by
-    hand are kept, all weeks together (`MAX_SHOPPING`): then the list says
-    to remove some first (ticks don't count, as ticking doesn't remove);
+    hand are kept, all weeks together, ticked or not (`MAX_SHOPPING`):
+    about 55 a week over the 9 weeks' lists kept. Then adding one is
+    refused, and the list says to remove some first; ticking still works
+    (ticks on the planned meals' ingredients don't count), and room comes
+    back as old weeks are let go;
   - reminders (`shkriuss:meal-reminders`): for each meal of the day, a time
     to be told what's planned ("Dinner: Lentil soup"), or off. Only the ones
     ever set are saved, so a new device has nothing that could win over
@@ -32,12 +39,15 @@ Plan your meals for the week, and what to buy for them. Lives at
 
   All of it is saved on the device, where a browser keeps about 5 MB for
   each site, and with sync on, sync keeps about as much again to know what
-  changed. The test "has room for everything at its limits" fills Meals up
-  (500 meals, each with a 1,500-character recipe, a full plan and full
-  shopping lists) and checks that it all still fits, on an iPhone too, and
-  in the copy that syncs. If a change makes them bigger, that test fails,
-  and a limit has to come down (audit 4 F2-13: the plan held 5,000 and the
-  lists 2,000 things added by hand, more than fit).
+  changed. The test "has room for everything at its limits" fills every
+  limit, at its longest: all the text meals can hold, a full plan and
+  everything that can be added by hand. How many ticks and deleted things
+  sync remembers depends on use, so for those it takes a generous guess
+  (100 ticks a week). It checks that it all still fits, on an iPhone too,
+  and in the copy that syncs. If a change makes them bigger, that test
+  fails, and a limit has to come down (audit 4 F2-13: the plan held 5,000
+  and the lists 2,000 things added by hand, and 500 meals each at every
+  limit of their own were 5.5 million characters: more than fits).
 
 - `src/scripts/reminders.ts`: reminders while Meals is open, and, if "Also
   remind me when Meals is closed" is on, through the shared notification
