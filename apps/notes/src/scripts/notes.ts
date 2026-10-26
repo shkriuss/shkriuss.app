@@ -204,6 +204,7 @@ export function mountNotes(root: Document): void {
 
   function openNote(note: Note): void {
     current = note.id;
+    unsaved = false;
     fromList = listShown;
     titleField.value = note.title;
     bodyField.value = note.body;
@@ -221,6 +222,13 @@ export function mountNotes(root: Document): void {
     creating = null;
   }
 
+  /**
+   * True while the open note has typing that couldn't be saved (the device
+   * is full): the box is newer than what's saved, so a change saved
+   * elsewhere mustn't put the saved text back in it (audit 4 F3-1).
+   */
+  let unsaved = false;
+
   /** Saves what's typed. If the note was deleted on another device meanwhile, it comes back. */
   function saveText(): void {
     if (current === null) return;
@@ -231,17 +239,21 @@ export function mountNotes(root: Document): void {
       editNote(base, current, { title: titleField.value, body: bodyField.value }, now),
       { repeat: false },
     );
+    unsaved = !saved;
     const note = find(current);
     if (note) showEdited(note);
     if (!saved) edited.textContent = 'Not saved';
   }
 
-  /** What the note was when the typing that's waiting to be saved began. */
+  /**
+   * What the note was, as saved, when the typing that's waiting to be saved
+   * began: while typing couldn't be saved, from before that typing.
+   */
   let typingFrom: { title: string; body: string } | null = null;
 
-  /** Saves typing now instead of a moment later. */
+  /** Saves typing now instead of a moment later, or tries again what couldn't be saved. */
   function flush(): void {
-    if (saveTimer === undefined) return;
+    if (saveTimer === undefined && !unsaved) return;
     window.clearTimeout(saveTimer);
     saveTimer = undefined;
     saveText();
@@ -253,6 +265,7 @@ export function mountNotes(root: Document): void {
     flush();
     left = current;
     current = null;
+    unsaved = false;
     const next = dropIfEmpty(state, left);
     if (next !== state) save(next);
   }
@@ -313,10 +326,11 @@ export function mountNotes(root: Document): void {
       if (!listView.hidden) keepFocus(() => renderList(), newButton);
       return;
     }
-    // Typing here is newer than what came in: keep it. If the note changed
-    // on another device meanwhile, that version is kept as a second note
-    // (the one a sync made, if it did: audit 3 F3-4).
-    if (saveTimer !== undefined) {
+    // Typing here is newer than what came in: keep it, also typing that
+    // couldn't be saved, which is tried again (audit 4 F3-1). If the note
+    // changed on another device meanwhile, that version is kept as a second
+    // note (the one a sync made, if it did: audit 3 F3-4).
+    if (saveTimer !== undefined || unsaved) {
       const stored = find(current);
       if (
         stored &&
@@ -390,7 +404,9 @@ export function mountNotes(root: Document): void {
   });
 
   editorView.addEventListener('input', () => {
-    if (saveTimer === undefined) {
+    // Not after typing that couldn't be saved: the note in memory has that
+    // typing, which was never saved (audit 4 F3-1).
+    if (saveTimer === undefined && !unsaved) {
       const note = current === null ? undefined : find(current);
       typingFrom = note ? { title: note.title, body: note.body } : null;
     }
@@ -437,6 +453,7 @@ export function mountNotes(root: Document): void {
     if (deleteDialog.returnValue !== 'confirm' || current === null) return;
     const id = current;
     current = null;
+    unsaved = false;
     left = null;
     const saved = save(removeNote(state, id));
     backToList();

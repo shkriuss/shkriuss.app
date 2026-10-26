@@ -4,6 +4,7 @@
 import type { Page } from '@playwright/test';
 import { paste } from '../../../tests/e2e/clipboard.ts';
 import { checkA11y, expect, failedSaves, failSaving, test } from '../../../tests/e2e/fixtures.ts';
+import { fillStorage } from '../../../tests/e2e/storage.ts';
 
 const titleBox = (page: Page) => page.getByRole('textbox', { name: 'Title' });
 const bodyBox = (page: Page) => page.getByRole('textbox', { name: 'Note' });
@@ -370,4 +371,87 @@ test('says so in the editor when typing can’t be saved', async ({ page }) => {
   await page.reload();
   await card(page, 'Shopping').getByRole('link').click();
   await expect(bodyBox(page)).toHaveValue('');
+});
+
+test.describe('with the device full (audit 4 F3-1)', () => {
+  const edited = (page: Page) => page.locator('[data-edited]');
+  const savedNotes = (page: Page) =>
+    page.evaluate(() =>
+      (
+        JSON.parse(localStorage.getItem('shkriuss:notes') ?? 'null') as {
+          data: { notes: { title: string; body: string }[] };
+        }
+      ).data.notes.map((note) => `${note.title} | ${note.body}`),
+    );
+
+  /** Deletes a note in another tab (what a sync from another device does too). */
+  async function deleteElsewhere(page: Page, title: string): Promise<void> {
+    const other = await page.context().newPage();
+    await other.goto('/');
+    await other.getByRole('link', { name: title, exact: true }).click();
+    await other.getByRole('button', { name: 'Delete', exact: true }).click();
+    await other
+      .getByRole('dialog', { name: 'Delete this note?' })
+      .getByRole('button', { name: 'Delete' })
+      .click();
+    await expect(other.getByRole('link', { name: title, exact: true })).toHaveCount(0);
+    await other.close();
+  }
+
+  test('typing that couldn’t be saved stays, through a change saved elsewhere', async ({
+    page,
+  }) => {
+    // Before, the note's saved text came back into the box, and the typing was lost.
+    await writeNote(page, 'Keep', 'A short note.');
+    await writeNote(page, 'Old', 'x'.repeat(2000));
+    await writeNote(page, 'Diary', 'Start');
+    await fillStorage(page, 10);
+    await page.getByRole('link', { name: 'Diary', exact: true }).click();
+    await bodyBox(page).press('End');
+    await bodyBox(page).pressSequentially(' — what I wrote today.');
+    await expect(edited(page)).toHaveText('Not saved');
+
+    // Another tab shortens another note: that saves, as it takes less room,
+    // but leaves too little for the typing.
+    const other = await page.context().newPage();
+    await other.goto('/');
+    await other.getByRole('link', { name: 'Keep', exact: true }).click();
+    await bodyBox(other).fill('Short.');
+    await other.getByRole('button', { name: 'All notes' }).click();
+    await expect.poll(() => savedNotes(page)).toContain('Keep | Short.');
+    await other.close();
+    await expect(bodyBox(page)).toHaveValue('Start — what I wrote today.');
+    await expect(edited(page)).toHaveText('Not saved');
+
+    // Room again (a big note deleted elsewhere): the typing is saved.
+    await deleteElsewhere(page, 'Old');
+    await expect(edited(page)).toHaveText(/^Edited /);
+    await expect(bodyBox(page)).toHaveValue('Start — what I wrote today.');
+    expect(await savedNotes(page)).toContain('Diary | Start — what I wrote today.');
+  });
+
+  test('typing on after a save that failed isn’t taken for a change made elsewhere', async ({
+    page,
+  }) => {
+    // Before, the typing that wasn't saved was taken for the note as it was,
+    // and the saved note for another device's version: a false second version.
+    await page.clock.install();
+    await page.reload();
+    await writeNote(page, 'Old', 'x'.repeat(2000));
+    await writeNote(page, 'Diary', 'Start');
+    await fillStorage(page, 10);
+    await page.getByRole('link', { name: 'Diary', exact: true }).click();
+    await bodyBox(page).press('End');
+    await bodyBox(page).pressSequentially(' first part');
+    // The save after the pause: it fails.
+    await page.clock.runFor(600);
+    await expect(edited(page)).toHaveText('Not saved');
+    // Typing on, not saved yet, when another tab makes room.
+    await page.clock.pauseAt((await page.evaluate(() => Date.now())) + 10_000);
+    await bodyBox(page).pressSequentially(' second part');
+    await deleteElsewhere(page, 'Old');
+
+    await expect.poll(() => savedNotes(page)).toEqual(['Diary | Start first part second part']);
+    await expect(page.locator('[data-announcer]')).not.toHaveText(/changed on another device/);
+  });
 });

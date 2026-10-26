@@ -62,6 +62,20 @@ describe('writing notes', () => {
     expect(addNote(full, 'one-more', 1)).toBe(full);
   });
 
+  it('keeps all a title box let in, counted as Safari counts (audit 4 F3-4)', () => {
+    // Safari's maxlength counts characters as people see them, so its box
+    // takes 120 thumbs-up with a skin tone, which JavaScript counts as 480.
+    const state: NotesState = { notes: [note('a', '')] };
+    const thumbs = '👍🏽'.repeat(120);
+    expect(editNote(state, 'a', { title: thumbs }, 2).notes[0]?.title).toBe(thumbs);
+    const hindi = 'नमस्ते दुनिया '.repeat(14);
+    expect(editNote(state, 'a', { title: hindi }, 2).notes[0]?.title).toBe(hindi);
+    // Never half an emoji: before, 199 letters and an emoji kept half of it.
+    const nearly = `${'a'.repeat(199)}😀`;
+    expect(editNote(state, 'a', { title: nearly }, 2).notes[0]?.title).toBe(nearly);
+    expect(editNote(state, 'a', { title: `${nearly}😀` }, 2).notes[0]?.title).toBe(nearly);
+  });
+
   it('pins, unpins and removes notes', () => {
     let state: NotesState = { notes: [note('a', 'A'), note('b', 'B')] };
     state = setPinned(state, 'b', true);

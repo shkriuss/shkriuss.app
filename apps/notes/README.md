@@ -15,6 +15,11 @@ Write things down. Lives at <https://notes.shkriuss.app>.
   it's left, closing the page too (one a closed page left behind goes the
   next time Notes opens, ten minutes on). List titles are cut between whole
   characters: an emoji, a flag, a letter with its accent.
+  When the device is full, typing that can't be saved says "Not saved" and
+  stays in the box, also through changes saved elsewhere; it's saved as soon
+  as there's room (audit 4 F3-1). Titles (200) and notes (100,000) are
+  limited in characters as people see them, as Safari's text boxes count,
+  so nothing a box lets in is cut (audit 4 F3-4).
 - `src/pages/index.astro`: the page, built from `@shkriuss/ui` components.
   A `<template>` holds the markup for one note in the list.
 - Sync between devices (optional): `src/worker.ts` runs the shared sync
