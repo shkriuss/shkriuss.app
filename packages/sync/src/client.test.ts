@@ -1453,6 +1453,41 @@ describe('a copy older than one a device saw', () => {
     expect(tablet.counters).toEqual([counter('a'), counter('b')]);
     expect(phone.counters).toEqual([counter('a'), counter('b')]);
   });
+
+  it('doesn’t either for a copy from before the count was sealed in (audit 3 B-3)', async () => {
+    const secret = randomBytes(32);
+    const { key } = await syncKeys(secret);
+    const phone = new Device(secret);
+    const tablet = new Device(secret);
+    phone.counters = [counter('a')];
+    await phone.syncNow();
+    vi.setSystemTime(Date.now() + 1000);
+    phone.counters = [counter('a'), counter('b')];
+    await phone.syncNow();
+    await tablet.syncNow();
+
+    // A copy sealed before copies said how many times they were written,
+    // with only "a", sent again as a newer version of the same copy.
+    const { snapshot } = observe(undefined, [counter('a')], 1, Date.now());
+    const file = {
+      format: 'shkriuss-sync',
+      version: 1,
+      app: 'tally',
+      stores: { 'shkriuss:tally': snapshot },
+    };
+    const gzipped = await new Response(
+      new Blob([utf8(JSON.stringify(file))]).stream().pipeThrough(new CompressionStream('gzip')),
+    ).arrayBuffer();
+    const now = await copyNow(secret);
+    const data = await seal(key, new Uint8Array(gzipped), 'shkriuss sync v1 tally');
+    serveOnce({ ...now, version: now.version + 50, data });
+    vi.setSystemTime(Date.now() + 1000);
+    await tablet.syncNow();
+    await phone.syncNow();
+    expect(tablet.counters).toEqual([counter('a'), counter('b')]);
+    expect(phone.counters).toEqual([counter('a'), counter('b')]);
+    vi.useRealTimers();
+  });
 });
 
 // ---------- Files, like photos ----------
@@ -1818,5 +1853,140 @@ describe('syncing files', () => {
     expect((await call(secret, '/files/p1')).status).toBe(404);
     expect((await put('/files/p1', randomBytes(100))).status).toBe(204);
     expect((await call(secret, '/files/p1')).status).toBe(200);
+  });
+});
+
+// ---------- An internal request that fails half-way ----------
+
+describe('the storage meter can’t be reached while a copy is deleted or moved (audit 3 B-1)', () => {
+  /** The server's storage meter (another object) can't be reached while `broken()` says so. */
+  function breakMeter(broken: () => boolean): void {
+    const real = server.SYNC_COPIES;
+    server.SYNC_COPIES = {
+      idFromName: (name) => real.idFromName(name),
+      get: (id) => {
+        const stub = real.get(id);
+        return {
+          fetch: (input, init) =>
+            broken() && id.toString() === 'meter'
+              ? Promise.reject(new Error('Network connection lost.'))
+              : stub.fetch(input, init),
+        };
+      },
+    };
+  }
+
+  /** Only the first request that matches `first` finds the meter out of reach. */
+  function failFirst(first: (input: string, init?: RequestInit) => boolean): void {
+    let during = false;
+    let seen = 0;
+    breakMeter(() => during && seen === 1);
+    const realFetch = globalThis.fetch;
+    vi.stubGlobal('fetch', async (input: string, init?: RequestInit) => {
+      during = first(input, init);
+      if (during) seen += 1;
+      try {
+        return await realFetch(input, init);
+      } finally {
+        during = false;
+      }
+    });
+  }
+
+  it('moving a copy with files still shuts out the old key, on the next try', async () => {
+    const oldKey = randomBytes(32);
+    const newKey = randomBytes(32);
+    const lost = new Device(oldKey, 1, false, true);
+    const tablet = new Device(oldKey, 1, false, true);
+    const laptop = new Device(oldKey, 1, false, true);
+    tablet.counters = [counter('door')];
+    tablet.addFile('door', 'p1', photo('glass'));
+    await tablet.syncNow();
+    await laptop.syncNow();
+    await lost.syncNow();
+
+    failFirst((input, init) => init?.method === 'DELETE' && input.includes('moved'));
+    tablet.connect(newKey, [oldKey]);
+    expect((await tablet.syncNow()).problem).not.toBeNull();
+    // Nothing was deleted: the old copy and its photo are still there to move.
+    expect(await fileIds(oldKey)).toEqual(['p1']);
+    expect((await tablet.syncNow()).problem).toBeNull();
+    expect(JSON.parse(tablet.storage.getItem('shkriuss-device:sync') ?? '{}').previous).toEqual([]);
+
+    expect(await lost.syncNow()).toMatchObject({ on: false, problem: 'moved' });
+    expect(await laptop.syncNow()).toMatchObject({ on: false, problem: 'moved' });
+    expect(await fileIds(newKey)).toEqual(['p1']);
+  });
+
+  it('“Delete the online copy” with files says so to the other devices, after a retry', async () => {
+    const secret = randomBytes(32);
+    const phone = new Device(secret, 1, false, true);
+    const tablet = new Device(secret, 1, false, true);
+    phone.counters = [counter('door')];
+    phone.addFile('door', 'p1', photo('glass'));
+    await phone.syncNow();
+    await tablet.syncNow();
+
+    failFirst((input, init) => init?.method === 'DELETE' && input.endsWith('/copy'));
+    phone.use();
+    await expect(phone.sync.deleteOnline()).rejects.toThrow();
+    // Nothing was deleted yet.
+    expect(await fileIds(secret)).toEqual(['p1']);
+    await phone.sync.deleteOnline();
+    expect(phone.events).toContain('deleted-online');
+    expect(await tablet.syncNow()).toMatchObject({ on: false, problem: 'deleted' });
+    expect((await call(secret, '/copy')).status).toBe(410);
+  });
+
+  it('an old key with nothing online still gets the note that it moved', async () => {
+    const oldKey = randomBytes(32);
+    const newKey = randomBytes(32);
+    // The app never synced with the old key (or its copy was deleted half-way).
+    const tablet = new Device(null);
+    tablet.connect(newKey, [oldKey]);
+    expect((await tablet.syncNow()).problem).toBeNull();
+    // A lost device with the old key can't start a copy with it now.
+    const restart = { method: 'PUT', body: JSON.stringify({ base: null, data: 'A'.repeat(40) }) };
+    const answer = await call(oldKey, '/copy', restart, worker);
+    expect(answer.status).toBe(410);
+    expect(await answer.json()).toMatchObject({ moved: true });
+  });
+});
+
+describe('what a device knew can’t be saved right after the data was (audit 3 E-1)', () => {
+  it('puts the data back, so a newer edit from another device isn’t undone', async () => {
+    const secret = randomBytes(32);
+    const phone = new Device(secret);
+    const tablet = new Device(secret);
+    const laptop = new Device(secret);
+    phone.counters = [counter('water', 1)];
+    await phone.syncNow();
+    await tablet.syncNow();
+    await laptop.syncNow();
+    vi.setSystemTime(Date.now() + 1000);
+    laptop.counters = [counter('water', 2)];
+    await laptop.syncNow();
+
+    // The tablet syncs, but the browser is full when it saves what it knew.
+    const realSet = tablet.storage.setItem.bind(tablet.storage);
+    tablet.storage.setItem = (key: string, value: string) => {
+      if (key === 'shkriuss-device:sync') throw new DOMException('full', 'QuotaExceededError');
+      realSet(key, value);
+    };
+    expect((await tablet.syncNow()).problem).not.toBeNull();
+    expect(tablet.counters).toEqual([counter('water', 1)]);
+    tablet.storage.setItem = realSet;
+
+    // Meanwhile the phone changes it again.
+    vi.setSystemTime(Date.now() + 1000);
+    phone.counters = [counter('water', 5)];
+    await phone.syncNow();
+
+    vi.setSystemTime(Date.now() + 1000);
+    expect((await tablet.syncNow()).problem).toBeNull();
+    await phone.syncNow();
+    expect(tablet.counters).toEqual([counter('water', 5)]);
+    expect(phone.counters).toEqual([counter('water', 5)]);
+    vi.useRealTimers();
   });
 });
