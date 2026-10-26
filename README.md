@@ -8,8 +8,8 @@ Small, private web apps, all in one place.
 
 No ads, analytics or trackers, and no account needed. What you save in an app
 stays on your device, unless you turn on sync (an optional account, with
-everything locked on your devices first). See the
-[privacy page](https://shkriuss.app/privacy/).
+everything locked on your devices first) or reminders while an app is closed.
+See the [privacy page](https://shkriuss.app/privacy/).
 
 ## How it works (short version)
 
