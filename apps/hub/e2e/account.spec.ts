@@ -421,6 +421,8 @@ test.describe('the account service', () => {
     expect((await put({ data: sealed, extra: true })).status()).toBe(400);
     expect((await put({ data: 'A'.repeat(5000) })).status()).toBe(413);
     expect((await put({ data: sealed }, { 'Sec-Fetch-Site': 'cross-site' })).status()).toBe(403);
+    // Nor from a page on another of our own subdomains, like an app's (audit 3 J-3).
+    expect((await put({ data: sealed }, { 'Sec-Fetch-Site': 'same-site' })).status()).toBe(403);
     expect((await request.get('/api/account/link/not-an-id')).status()).toBe(404);
     expect((await request.get('/api/account/passkey')).status()).toBe(401);
     expect((await request.get('/api/account/status')).status()).toBe(401);
