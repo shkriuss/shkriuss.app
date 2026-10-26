@@ -125,6 +125,17 @@ test('drags with a finger too', async ({ page }) => {
   await expect(handle(page, 'Write report')).toHaveAttribute('aria-expanded', 'false');
 });
 
+test('says which tasks are overdue, as By date does with its heading', async ({ page }) => {
+  // My order has no "Overdue" heading: only red, bold text said so (audit 3 G-11).
+  await seed(page, [{ title: 'Renew passport', date: '2020-01-06' }, { title: 'Water plants' }]);
+  const due = row(page, 'Renew passport').locator('[data-due]');
+  await expect(page.locator('[data-group-title]').first()).toHaveText('Overdue');
+  await expect(due).toHaveText('Mon, Jan 6, 2020');
+  await order(page).selectOption({ label: 'My order' });
+  await expect(due).toHaveText('Mon, Jan 6, 2020, overdue');
+  await expect(due.locator('.visually-hidden')).toHaveText(', overdue');
+});
+
 test('My order is accessible, in both themes', async ({ page }) => {
   await order(page).selectOption({ label: 'My order' });
   await handle(page, 'Call mum').click();

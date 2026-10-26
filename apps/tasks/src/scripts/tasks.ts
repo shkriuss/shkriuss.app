@@ -252,7 +252,15 @@ export function mountTasks(root: Document): void {
 
     const due = required<HTMLElement>(row, '[data-due]');
     due.textContent = dueText(task, day);
-    due.classList.toggle('task__due--overdue', !done && whenOf(task, day) === 'overdue');
+    const overdue = !done && whenOf(task, day) === 'overdue';
+    due.classList.toggle('task__due--overdue', overdue);
+    // By date, the "Overdue" heading says so; in My order, red alone would (audit 3 G-11).
+    if (overdue && settings.order === 'mine') {
+      const said = document.createElement('span');
+      said.className = 'visually-hidden';
+      said.textContent = ', overdue';
+      due.append(said);
+    }
     required<HTMLElement>(row, '[data-star]').hidden = !task.important;
     required<HTMLElement>(row, '[data-repeat-tag]').hidden = task.repeat === 'none';
     required<HTMLElement>(row, '[data-repeat]').textContent = repeatText(task.repeat, task.every);
