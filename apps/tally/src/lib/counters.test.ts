@@ -1,7 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { appSecret, Device, pretendBrowser } from '../../../../tests/unit/sync-devices.ts';
 import {
   addCounter,
   changeCount,
+  COUNTER_SYNC,
   emptyState,
   isTallyState,
   MAX_COUNTERS,
@@ -10,6 +12,7 @@ import {
   removeCounter,
   resetCounter,
   secondVersion,
+  type Counter,
   type TallyState,
 } from './counters.ts';
 
@@ -103,5 +106,56 @@ describe('isTallyState', () => {
     { counters: [{ id: '', name: 'A', count: 1 }] },
   ])('rejects %j', (value) => {
     expect(isTallyState(value)).toBe(false);
+  });
+});
+
+describe('counting on two devices before they sync (audit 4 F2-3)', () => {
+  beforeEach(() => pretendBrowser('https://tally.shkriuss.app'));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  /** Tally's store, synced as the page syncs it. */
+  const setup = {
+    key: 'tally',
+    version: 1,
+    fallback: emptyState,
+    validate: isTallyState,
+    items: (value: TallyState) => value.counters,
+    withItems: (value: TallyState, counters: Counter[]) => ({ ...value, counters }),
+    ...COUNTER_SYNC,
+  };
+
+  it('keeps both counts, also when both counted to the same number', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(Date.UTC(2026, 9, 26, 12));
+    const secret = appSecret();
+    const phone = new Device('tally', secret, setup);
+    const tablet = new Device('tally', secret, setup);
+    phone.save(changeCount(addCounter(emptyState(), 'Water', 'w'), 'w', 5));
+    await phone.syncNow();
+    await tablet.syncNow();
+    expect(tablet.value.counters).toEqual([{ id: 'w', name: 'Water', count: 5 }]);
+
+    // A glass on each, before the tablet syncs: two glasses, not one.
+    vi.setSystemTime(Date.now() + 60_000);
+    phone.save(changeCount(phone.value, 'w', 1));
+    tablet.save(changeCount(tablet.value, 'w', 1));
+    await phone.syncNow();
+    vi.setSystemTime(Date.now() + 60_000);
+    await tablet.syncNow();
+    await phone.syncNow();
+    const counts = (device: typeof phone) =>
+      device.value.counters.map((counter) => `${counter.name}: ${counter.count}`);
+    expect(counts(tablet)).toEqual(['Water: 6', 'Water (second version): 6']);
+    expect(counts(phone)).toEqual(counts(tablet));
+
+    // Counting on one device only, as usual: one counter.
+    vi.setSystemTime(Date.now() + 60_000);
+    phone.save(changeCount(phone.value, 'w', 1));
+    await phone.syncNow();
+    await tablet.syncNow();
+    expect(counts(tablet)).toEqual(['Water: 7', 'Water (second version): 6']);
   });
 });

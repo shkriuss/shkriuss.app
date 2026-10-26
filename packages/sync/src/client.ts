@@ -136,6 +136,14 @@ export interface SyncedStore<T = unknown, I extends Identified = Identified> {
    * the item). Edits then also win over deletions on another device.
    */
   conflictCopy?(mine: I, theirs: I): I;
+  /**
+   * With conflictCopy: keep both also when the two devices' versions are
+   * the same, for items whose changes are events, not edits. Tally's water
+   * at 5, counted once on each device, is 6 on both, and that's two glasses,
+   * not one (audit 4 F2-3). Text changed the same way on two devices is one
+   * edit, so it's off unless asked for.
+   */
+  keepSame?: boolean;
 }
 
 /**
@@ -603,7 +611,14 @@ export function createSync(options: {
         // Deleted elsewhere longer ago than the markers last: deleted here too.
         if (sameCopy && base) result = dropForgotten(result, theirs, base);
         if (synced.conflictCopy && known?.v === version && base?.v === version) {
-          const both = keepBoth(base, result, theirs, synced.conflictCopy, now);
+          const both = keepBoth(
+            base,
+            result,
+            theirs,
+            synced.conflictCopy,
+            now,
+            synced.keepSame ?? false,
+          );
           result = both.snapshot;
           kept += both.kept;
         }

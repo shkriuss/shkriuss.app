@@ -276,7 +276,10 @@ in with `sync: true` in `apps.json`.
     this device's becomes a new item, named "… (second version)"
     (`secondVersionName`, which shortens the name to fit the app's
     limits). A change also wins over a
-    deletion on another device, so no edit is lost. It starts from a
+    deletion on another device, so no edit is lost. The same change made
+    on both is one edit, unless the app also asks for `keepSame`, for
+    items whose changes are events: Tally does, so a glass counted on each
+    device (5 to 6 on both) is kept twice (audit 4 F2-3). It starts from a
     device's second sync after updating to this version, because it needs to
     know which data version the device last synced.
   - Data from a newer version of the app is never overwritten: the older

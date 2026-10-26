@@ -95,6 +95,17 @@ export const secondVersion = (counter: Counter, id: string): Counter => ({
   name: secondVersionName(counter.name, MAX_NAME_LENGTH),
 });
 
+/**
+ * How the counters sync (packages/sync, syncedStore): a counter changed on
+ * two devices before they sync is kept twice, the same count too. Water at
+ * 5, counted once on each device, is 6 on both: two glasses, which were
+ * one counter of 6 (audit 4 F2-3).
+ */
+export const COUNTER_SYNC = {
+  conflictCopy: (mine: Counter): Counter => secondVersion(mine, crypto.randomUUID()),
+  keepSame: true,
+};
+
 export function removeCounter(state: TallyState, id: string): TallyState {
   return { counters: state.counters.filter((counter) => counter.id !== id) };
 }

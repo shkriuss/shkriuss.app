@@ -309,6 +309,27 @@ describe('keepBoth', () => {
     expect(result.kept).toBe(0);
     expect(valuesOf(merge(result.snapshot, server))).toEqual([counter('b', 1)]);
   });
+
+  // Audit 4 F2-3: Tally's water at 5, counted once on each device, was 6
+  // on both, and one counter of 6 after they synced: a glass was lost.
+  it('with `keepSame`, keeps both of the same change made on two devices', () => {
+    const { phone, tablet } = synced([counter('a', 5)]);
+    phone.items = [counter('a', 6)];
+    const server = phone.sync(undefined, 2000);
+    tablet.items = [counter('a', 6)];
+    const mine = tablet.snapshot(3000).snapshot;
+    // Without it, one edit (text changed the same way on both, say).
+    expect(keepBoth(tablet.known as Known, mine, server, copy, 3000).kept).toBe(0);
+    const both = keepBoth(tablet.known as Known, mine, server, copy, 3000, true);
+    expect(both.kept).toBe(1);
+    expect(valuesOf(merge(both.snapshot, server))).toEqual([
+      counter('a', 6),
+      counter('a-copy', 6, 'a'),
+    ]);
+    // This device's own change, back from an upload whose answer was lost
+    // (made at the same moment), isn't kept twice.
+    expect(keepBoth(tablet.known as Known, mine, mine, copy, 3000, true).kept).toBe(0);
+  });
 });
 
 describe('ids', () => {

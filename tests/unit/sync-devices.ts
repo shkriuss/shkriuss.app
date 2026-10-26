@@ -60,6 +60,9 @@ export interface SyncedStoreSetup<T, I extends Identified> {
   migrate?: (old: unknown, version: number) => T | undefined;
   items: (value: T) => readonly I[];
   withItems: (value: T, items: I[]) => T;
+  /** Keeping both versions of an item changed on two devices, as the app does (SyncedStore). */
+  conflictCopy?: (mine: I, theirs: I) => I;
+  keepSame?: boolean;
 }
 
 /** An app's key from the account, the same on every device of one person. */
@@ -91,7 +94,15 @@ export class Device<T, I extends Identified> {
     );
     this.sync = createSync({
       app,
-      stores: [syncedStore({ store: this.store, items: setup.items, withItems: setup.withItems })],
+      stores: [
+        syncedStore({
+          store: this.store,
+          items: setup.items,
+          withItems: setup.withItems,
+          ...(setup.conflictCopy ? { conflictCopy: setup.conflictCopy } : {}),
+          ...(setup.keepSame === undefined ? {} : { keepSame: setup.keepSame }),
+        }),
+      ],
       onChange: () => undefined,
     });
   }
