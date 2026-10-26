@@ -19,12 +19,14 @@ export function mountPhotoViewer(root: ParentNode, vehicles: () => VehiclesState
   const photoDialog = required<HTMLDialogElement>(root, '[data-photo-dialog]');
   const photoTitle = required<HTMLElement>(photoDialog, '[data-photo-title]');
   const photoImage = required<HTMLImageElement>(photoDialog, '[data-photo-image]');
+  const photoSaid = required<HTMLElement>(photoDialog, '[data-photo-said]');
   const savePhotoButton = required<HTMLElement>(photoDialog, '[data-action="save-photo"]');
 
   /** The photo being looked at: its repair, the photos on this device, which one. */
   let viewing: { repair: Repair; ids: string[]; index: number; url: string | null } | null = null;
 
-  async function showPhoto(): Promise<void> {
+  /** Shows the photo `viewing` is on; `say`: reads out which it is (focus is on Next or Previous). */
+  async function showPhoto(say = false): Promise<void> {
     if (!viewing) return;
     const { repair, ids, index } = viewing;
     const photo = await getPhoto(ids[index] ?? '');
@@ -38,12 +40,16 @@ export function mountPhotoViewer(root: ParentNode, vehicles: () => VehiclesState
     photoTitle.textContent = ids.length === 1 ? 'Photo' : `Photo ${index + 1} of ${ids.length}`;
     photoImage.alt =
       ids.length === 1 ? `From ${what}` : `${index + 1} of ${ids.length}, from ${what}`;
+    // Next and Previous said nothing of the photo they showed (audit 3 G-8).
+    if (say) photoSaid.textContent = photoTitle.textContent;
   }
 
   photoDialog.addEventListener('close', () => {
     if (viewing?.url) URL.revokeObjectURL(viewing.url);
     viewing = null;
     photoImage.removeAttribute('src');
+    // Empty, so the same words are read out again next time.
+    photoSaid.textContent = '';
   });
 
   return {
@@ -63,7 +69,7 @@ export function mountPhotoViewer(root: ParentNode, vehicles: () => VehiclesState
     step(by) {
       if (!viewing) return;
       viewing.index = (viewing.index + by + viewing.ids.length) % viewing.ids.length;
-      void showPhoto();
+      void showPhoto(true);
     },
     async saveCopy() {
       if (!viewing) return;

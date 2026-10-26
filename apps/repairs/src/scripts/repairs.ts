@@ -294,6 +294,8 @@ export function mountRepairs(root: Document): void {
       const url = urls[index];
       return url ? [{ id, url }] : [];
     });
+    // Named with their repair: "Photo 1" in every repair said nothing of which (audit 3 G-8).
+    const which = `${vehicleName(vehicles, repair.vehicle)}, ${dateLabel(repair.date)}`;
     list.replaceChildren(
       ...shown.map(({ id, url }, index) => {
         const fragment = thumbTemplate.content.cloneNode(true) as DocumentFragment;
@@ -301,7 +303,7 @@ export function mountRepairs(root: Document): void {
         required<HTMLElement>(entry, '[data-action="view-photo"]').dataset['photo'] = id;
         const image = required<HTMLImageElement>(entry, '[data-thumb]');
         image.src = url;
-        image.alt = `Photo ${index + 1}`;
+        image.alt = `Photo ${index + 1} of ${shown.length}, ${which}`;
         return entry;
       }),
     );
