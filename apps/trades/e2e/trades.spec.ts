@@ -259,7 +259,10 @@ test('closes part of a trade, then the rest', async ({ page }) => {
   const confirm = page.getByRole('dialog', { name: 'Delete this trade?' });
   await expect(confirm).toContainText('count as open again, in the AAPL trade.');
   await confirm.getByRole('button', { name: 'Delete' }).click();
-  await expect(page.locator('[data-open-list] [data-meta]')).toHaveText(/^\d+ at 150, since/);
+  // The 40 of the first part (audit 3 F2-11: any number passed).
+  await expect(page.locator('[data-open-list] [data-meta]')).toHaveText(
+    '40 at 150, since Oct 1, 2026',
+  );
 });
 
 // Audit 3 F2-10: a part kept the trade's entry price as it was when it was

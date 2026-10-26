@@ -8,9 +8,12 @@ import {
   fillRepair,
   NOW,
   partRow,
+  repair,
   repairDialog,
   repairItems,
+  seed,
   TIME_ZONE,
+  vehicle,
   vehicleItem,
 } from './helpers.ts';
 
@@ -100,6 +103,24 @@ test('hours worked and costs, added up by day, list and vehicle', async ({ page 
   await expect(page.locator('[data-result-count]')).toHaveText(
     /^2 repairs in all · 3\.5 hours · GEL\s140\.00\.$/,
   );
+});
+
+// The first audit's F2-7, which had no test of its own (audit 3 F2-11): a day
+// cut by "Show more" showed only the total of the repairs shown.
+test('a day cut by “Show more” shows the whole day’s total', async ({ page }) => {
+  // 99 repairs on 20 October, then 3 on 1 October: the 100th is the first of 1 October.
+  await seed(page, {
+    vehicles: [vehicle({ id: 'b105' })],
+    repairs: [
+      ...Array.from({ length: 3 }, () => repair({ date: '2026-10-01', hours: 1, labour: 10 })),
+      ...Array.from({ length: 99 }, () => repair({ date: '2026-10-20', hours: 1 })),
+    ],
+  });
+  await expect(repairItems(page)).toHaveCount(100);
+  const lastDay = page.locator('[data-days] > *').last();
+  await expect(lastDay.locator('[data-day-heading]')).toHaveText('Thursday, October 1, 2026');
+  await expect(lastDay.locator('li.repair')).toHaveCount(1);
+  await expect(lastDay.locator('[data-day-total]')).toHaveText('3 hours · $30.00');
 });
 
 test('keeps repairs saved before there were hours and costs', async ({ page }) => {

@@ -84,7 +84,12 @@ export const LIMITS = {
    * the sync copy (measured in trades.test.ts: "room for every trade").
    */
   trades: 3500,
-  /** The biggest price, quantity or fee (results stay exact far beyond it). */
+  /**
+   * The biggest price, quantity or fee. Results are worked out to 8
+   * decimals (tidy), so with very big positions they can be a hair off:
+   * 1,000,000 shares bought at $1,234.56 and sold at $1,234.57 make
+   * $9,999.99999999, not $10,000 (audit 3 F2-11).
+   */
   number: 1e12,
 };
 
