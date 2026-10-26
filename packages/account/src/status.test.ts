@@ -385,6 +385,13 @@ describe('the account service’s room', () => {
     expect(await isReplaced(old)).toBe(false);
   });
 
+  it('keeps a replaced-key note 13 months after a device last asked, as the docs say (audit 3 J-4)', () => {
+    // The privacy page ("deleted once no device has asked about it for 13
+    // months") and ADR 0017 ("13 months after a device last asked about
+    // it"): 396 days. Change them with it.
+    expect(UNUSED_MS).toBe(396 * 24 * 60 * 60 * 1000);
+  });
+
   it('deletes a note nobody has asked about for 13 months, and keeps one that’s asked about', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     const [asked, forgotten] = [randomBytes(32), randomBytes(32)];
