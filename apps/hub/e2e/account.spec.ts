@@ -75,6 +75,8 @@ test('creates an account once the recovery key is saved', async ({ page }) => {
   expect(code).toMatch(ACCOUNT_CODE);
   expect(text).toContain(`Account code: ${code}`);
   await checkA11y(page, 'account: signed in');
+  // A sentence shown only when some app needs it keeps its space before it.
+  expect(await view(page, 'signed-in').innerText()).not.toMatch(/[a-z)’”]\.[A-Z“]/);
 
   // Still signed in after a reload, and the key can be seen again.
   await page.reload();

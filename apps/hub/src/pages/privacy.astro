@@ -20,7 +20,7 @@ const whereLabel: Record<StorageKind, string> = {
 // The day this page's text last changed (people rely on it), and a
 // fingerprint of that text: ../privacy.test.ts fails when the text changes
 // but they don't, and says what to set (audit 3 D-7).
-const LAST_UPDATED = '26 October 2026'; // text 76c03dfaf5f1d43a
+const LAST_UPDATED = '26 October 2026'; // text b71c2424357428d5
 ---
 
 <AppShell
@@ -165,7 +165,7 @@ const LAST_UPDATED = '26 October 2026'; // text 76c03dfaf5f1d43a
         key until you sign out (or sign in to another account), so your apps can move their synced
         data to the new one. Passkeys you added before can't sign in any more, but the old key stays
         on the server, locked for each of them, until you remove that passkey (“Remove a passkey” on
-        the Account page).
+        the Account page).{' '}
         {pushSites.length > 0 && (
           <>
             Reminders while an app is closed aren't part of the account, so the lost device keeps
@@ -206,9 +206,9 @@ const LAST_UPDATED = '26 October 2026'; // text 76c03dfaf5f1d43a
           <li>
             A copy that no device has synced with for 13 months is deleted, with the photos synced
             with it. Your devices keep their data, and the next sync from one of them puts it online
-            again.
+            again.{' '}
             {librarySites.length > 0 &&
-              'An online library isn’t deleted that way, even unused: it stays until you tap “Delete the online copy” (below).'}
+              'An online library isn’t deleted that way, even unused: it stays until you tap “Delete the online copy” (below). '}
             So that the storage all the apps share can't fill up, the server also keeps how much
             room each copy takes.
           </li>
