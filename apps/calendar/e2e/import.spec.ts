@@ -160,9 +160,10 @@ test('says so when what reads the file can’t load', async ({ page, guard }) =>
   await page.route('**/_astro/import-results.*.js', (route) => route.abort());
   await importFile(page, 'work.ics', WORK_FILE);
   await expect(
-    page
-      .getByRole('status')
-      .filter({ hasText: 'Calendar couldn’t read this file. Please try again.' }),
+    page.getByRole('status').filter({
+      hasText:
+        'Calendar couldn’t read this file. Reload the page to get the latest version, then try again.',
+    }),
   ).toBeVisible();
   await expect(dialog(page)).toBeHidden();
 });

@@ -129,10 +129,10 @@ test('ticks reminders done, puts off overdue ones, and clears done ones', async 
   // Done again: the list of done ones is still open.
   await page.getByRole('checkbox', { name: 'Buy bread: done' }).click();
 
-  // Clearing asks first, and Cancel keeps them (audit G-4).
-  const clearDone = page.getByRole('button', { name: 'Clear done' });
+  // Deleting the done ones asks first, and Cancel keeps them (audit G-4).
+  const clearDone = page.getByRole('button', { name: 'Delete done reminders' });
   await clearDone.click();
-  const ask = page.getByRole('dialog', { name: 'Clear the done reminders?' });
+  const ask = page.getByRole('dialog', { name: 'Delete done reminders?' });
   await expect(ask).toContainText('The done reminder will be removed. This can’t be undone.');
   await expect(ask.getByRole('button', { name: 'Cancel' })).toBeFocused();
   await checkA11y(page, 'clear done dialog');
@@ -142,8 +142,8 @@ test('ticks reminders done, puts off overdue ones, and clears done ones', async 
   await expect(done.locator('summary')).toHaveText('Done (1)');
 
   await clearDone.click();
-  await ask.getByRole('button', { name: 'Clear done' }).click();
-  await expect(status(page, 'Cleared the done reminders.')).toBeAttached();
+  await ask.getByRole('button', { name: 'Delete' }).click();
+  await expect(status(page, 'Deleted 1 done reminder.')).toBeAttached();
   await expect(done).toBeHidden();
   await expect(page.getByRole('button', { name: 'Buy bread' })).toHaveCount(0);
 });
@@ -215,7 +215,7 @@ test('changes and deletes a reminder', async ({ page }) => {
   await page.getByRole('button', { name: 'Water the garden' }).click();
   await dialog.getByRole('button', { name: 'Delete' }).click();
   const confirm = page.getByRole('dialog', { name: 'Delete this reminder?' });
-  await expect(confirm).toContainText('“Water the garden” will be removed.');
+  await expect(confirm).toContainText('“Water the garden” will be removed. This can’t be undone.');
   await confirm.getByRole('button', { name: 'Cancel' }).click();
   await expect(dialog).toBeVisible();
   await dialog.getByRole('button', { name: 'Delete' }).click();

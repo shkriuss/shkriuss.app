@@ -16,6 +16,7 @@ import {
 import { createStore } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
 import { keepFocus } from '@shkriuss/ui/keep-focus';
+import { onNewDay } from '@shkriuss/ui/new-day';
 import { decimalText } from '@shkriuss/ui/numbers';
 import { focusProblem, reportSave } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
@@ -83,8 +84,6 @@ const settingsStore = createStore<SettingsState>({
   validate: isSettingsState,
 });
 
-/** How often to check whether the day has changed while Water is open. */
-const NEW_DAY_CHECK_MS = 60 * 1000;
 const AMOUNT_LABELS: Record<Amount, string> = {
   goal: 'Daily goal',
   glass: 'Glass',
@@ -462,19 +461,14 @@ export function mountWater(root: Document): void {
   }
 
   // A new day while Water is open (or when it comes back on screen).
-  const checkDay = (): void => {
-    if (today() === day) return;
-    day = today();
+  onNewDay((now) => {
+    day = now;
     // Letting go of old drinks draws it again too.
     redraw(() => {
       render();
       prune();
     });
     reminders.changed();
-  };
-  window.setInterval(checkDay, NEW_DAY_CHECK_MS);
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') checkDay();
   });
 
   // If Water is open in two tabs, keep them the same.

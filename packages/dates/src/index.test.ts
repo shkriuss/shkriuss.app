@@ -9,6 +9,7 @@ import {
   isIsoTime,
   minutesOf,
   monthGrid,
+  monthOf,
   nowStamp,
   sameDayInMonth,
   shiftMonth,
@@ -16,6 +17,7 @@ import {
   stampMinutes,
   today,
   weekday,
+  yearOf,
 } from './index.ts';
 
 describe('validation', () => {
@@ -76,6 +78,11 @@ describe('arithmetic', () => {
 
   it('reads today from the device clock', () => {
     expect(today(new Date(2026, 9, 17, 23, 59))).toBe('2026-10-17');
+  });
+
+  it('names the month and the year a date is in', () => {
+    expect(monthOf('2026-10-17')).toBe('2026-10');
+    expect(yearOf('2026-10-17')).toBe('2026');
   });
 });
 

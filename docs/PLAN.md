@@ -330,6 +330,14 @@ they ran out.)
 - Deploy only the apps that changed, if CI time becomes a problem.
 - Upgrades when tooling allows: Node 26 LTS, TypeScript 7, pnpm 11+
   ([ADR 0005](adr/0005-pnpm-typescript-versions.md)).
+- Before an app's page script grows much more: split it by feature, as was
+  done for Calendar and Repairs. The biggest are Tasks (about 850 lines),
+  Photos, Meals, Shelf, Repairs, Budget, the Account page and Trades (about
+  600 each). If that's no longer enough, [ADR 0001](adr/0001-static-astro-sites.md) says
+  when to consider a UI framework, with a decision record (audit 4 J-10).
+- Before Photos' libraries reach many tens of thousands of photos: load its
+  list of photos a page at a time from the device's database (an index, and
+  a step up in its version), instead of all of it at once (audit 4 J-10).
 
 **Milestone 3: real apps**
 

@@ -142,7 +142,7 @@ test('edits and deletes an event, with a confirmation', async ({ page }) => {
     .click();
   await editor(page).getByRole('button', { name: 'Delete' }).click();
   const confirm = page.getByRole('dialog', { name: 'Delete this event?' });
-  await expect(confirm).toContainText('“Dentist check-up” will be removed.');
+  await expect(confirm).toContainText('“Dentist check-up” will be removed. This can’t be undone.');
   await checkA11y(page, 'delete dialog');
 
   // Cancel goes back to editing.
@@ -263,6 +263,18 @@ test('an event deleted elsewhere stays deleted after Save with no change, or Del
     page.getByRole('status').filter({ hasText: 'Dentist was already deleted.' }),
   ).toBeAttached();
   await expect(page.getByText('Nothing planned on this day.')).toBeVisible();
+});
+
+test('an editor that can’t load asks for a reload', async ({ page, guard }) => {
+  // It loads the first time it opens. After an update while the page was
+  // open, its old file is gone: "Please try again" couldn't help (audit 4 J-10).
+  guard.allowConsole('net::ERR_FAILED');
+  await page.route('**/_astro/event-editor.*.js', (route) => route.abort());
+  await page.getByRole('button', { name: 'New event' }).click();
+  await expect(page.getByRole('alert')).toHaveText(
+    'Calendar couldn’t open the event. Reload the page to get the latest version, then try again.',
+  );
+  await expect(editor(page)).toBeHidden();
 });
 
 test('closing the editor without saving changes nothing', async ({ page }) => {

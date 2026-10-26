@@ -4,7 +4,7 @@
  * settings when sync is on. "Delete a year…" deletes a year's entries, to
  * make room. The monthly reminder: reminders.ts.
  */
-import { isIsoTime, nowStamp, today } from '@shkriuss/dates';
+import { isIsoTime, monthOf, nowStamp, today } from '@shkriuss/dates';
 import { createStore, downloadFile } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
 import { withEdits } from '@shkriuss/sync/edits';
@@ -37,7 +37,6 @@ import {
   KINDS,
   migrateEntries,
   monthLabel,
-  monthOf,
   nextReminder,
   readCategory,
   readEntry,
@@ -455,13 +454,13 @@ export function mountBudget(root: Document): void {
       deleting = { type, id: entry.id };
       deleteTitle.textContent = 'Delete this entry?';
       const refund = entry.kind === 'refund' ? ' refund' : '';
-      deleteText.textContent = `${money(entry.amount)}${refund} (${categoryName(entry)}, ${dayLabel(entry.date)}) will be removed.`;
+      deleteText.textContent = `${money(entry.amount)}${refund} (${categoryName(entry)}, ${dayLabel(entry.date)}) will be removed. This can’t be undone.`;
     } else {
       const category = findCategory(editingCategory);
       if (!category) return;
       deleting = { type, id: category.id };
       deleteTitle.textContent = 'Delete this category?';
-      deleteText.textContent = `“${category.name}” will be removed. Its expenses stay, under “No category”.`;
+      deleteText.textContent = `“${category.name}” will be removed. Its expenses stay, under “No category”. This can’t be undone.`;
     }
     deleteDialog.returnValue = '';
     deleteDialog.showModal();

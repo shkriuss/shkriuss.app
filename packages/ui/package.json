@@ -23,6 +23,7 @@
     "./long-lists": "./src/lib/long-lists.ts",
     "./push-controls": "./src/scripts/push-controls.ts",
     "./reminder-window": "./src/lib/reminder-window.ts",
+    "./new-day": "./src/scripts/new-day.ts",
     "./numbers": "./src/lib/numbers.ts",
     "./photos": "./src/lib/photos.ts",
     "./problem": "./src/scripts/problem.ts",
@@ -30,6 +31,7 @@
     "./text-limit": "./src/scripts/text-limit.ts",
     "./typed-text": "./src/scripts/typed-text.ts",
     "./qr-code": "./src/scripts/qr-code.ts",
+    "./room-note": "./src/lib/room-note.ts",
     "./service-worker": "./src/scripts/service-worker.ts",
     "./sync-controls": "./src/scripts/sync-controls.ts",
     "./worker": "./src/scripts/worker.ts"

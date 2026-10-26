@@ -21,7 +21,7 @@
  * A repair names its vehicle by id, so a vehicle can be renamed. Typing a new
  * vehicle in the repair form adds it.
  */
-import { isIsoDate, type IsoDate } from '@shkriuss/dates';
+import { isIsoDate, yearOf, type IsoDate } from '@shkriuss/dates';
 import { csvFile } from '@shkriuss/storage/csv';
 import { defineSettings, type SettingsState as SavedSettings } from '@shkriuss/storage/settings';
 import { withEdits } from '@shkriuss/sync/edits';
@@ -37,6 +37,7 @@ import {
   type Currency,
 } from '@shkriuss/ui/numbers';
 import { compareText, foldText } from '@shkriuss/ui/text';
+import { roomNote as sharedRoomNote } from '@shkriuss/ui/room-note';
 import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
 export interface Vehicle {
@@ -614,8 +615,6 @@ export interface YearCount {
   count: number;
 }
 
-const yearOf = (date: IsoDate): string => date.slice(0, 4);
-
 /** The years that have repairs, the earliest first, with how many each has (for "Delete a year"). */
 export function repairYears(state: RepairsState): YearCount[] {
   const counts = new Map<string, number>();
@@ -640,16 +639,17 @@ export const removeYear = (state: RepairsState, year: string): RepairsState => (
  * What the page says once Repairs is nearly full (over 90% of the repairs it
  * keeps): how many more fit, and how to make room. Null until then.
  */
-export function roomNote(count: number, locale?: string): string | null {
-  if (count <= LIMITS.repairs * 0.9) return null;
-  const left = LIMITS.repairs - count;
-  const number = new Intl.NumberFormat(locale);
-  const start =
-    left > 0
-      ? `Repairs is nearly full: there’s room for ${number.format(left)} more ${left === 1 ? 'repair' : 'repairs'} (it keeps up to ${number.format(LIMITS.repairs)}).`
-      : `Repairs is full: it keeps up to ${number.format(LIMITS.repairs)} repairs.`;
-  return `${start} To make room, download the spreadsheet, then use “Delete a year…” under Units and spreadsheet, below.`;
-}
+export const roomNote = (count: number, locale?: string): string | null =>
+  sharedRoomNote({
+    app: 'Repairs',
+    count,
+    most: LIMITS.repairs,
+    one: 'repair',
+    many: 'repairs',
+    makeRoom:
+      'To make room, download the spreadsheet, then use “Delete a year…” under Units and spreadsheet, below.',
+    locale,
+  });
 
 /** The vehicle's name, or a stand-in if it was deleted (on another device). */
 export const vehicleName = (state: VehiclesState, id: string): string =>

@@ -7,7 +7,8 @@
 import { createStore, downloadFile } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
 import { focusSpot, keepFocus } from '@shkriuss/ui/keep-focus';
-import { reportSave, showProblem } from '@shkriuss/ui/problem';
+import { onNewDay } from '@shkriuss/ui/new-day';
+import { RELOAD_TO_UPDATE, reportSave, showProblem } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { site } from 'virtual:shkriuss/site';
 import {
@@ -68,8 +69,6 @@ const store = createStore<CalendarState>({
 
 /** Days in the "Next 7 days" list (starting tomorrow). */
 const UPCOMING_DAYS = 7;
-/** How often to check whether the day has changed while Calendar is open. */
-const NEW_DAY_CHECK_MS = 60_000;
 /** Most dots shown under a day in the month grid. */
 const MAX_DOTS = 3;
 
@@ -372,7 +371,7 @@ export function mountCalendar(root: Document): void {
       },
       () => {
         editor = null;
-        showProblem('Calendar couldn’t open the event. Please try again.');
+        showProblem(`Calendar couldn’t open the event. ${RELOAD_TO_UPDATE}`);
       },
     );
   }
@@ -466,17 +465,12 @@ export function mountCalendar(root: Document): void {
 
   // A new day, while Calendar stays open or when it comes back on screen:
   // move "today" along, as the other apps do (audit F1-12).
-  const checkDay = (): void => {
-    if (today() === todayDate) return;
-    if (selected === todayDate) selected = today();
+  onNewDay((day, before) => {
+    if (selected === before) selected = day;
     viewMonth = shiftMonth(selected, 0);
     // Drawn again in the background: keyboard focus stays where it was (audit G-3).
     keepFocus(render, newEventButton);
-  };
-  window.setInterval(checkDay, NEW_DAY_CHECK_MS);
-  root.addEventListener('visibilitychange', () => {
-    if (root.visibilityState === 'visible') checkDay();
-  });
+  }, root);
 
   mountImportDialog(root, page);
 

@@ -232,7 +232,9 @@ test('changes and deletes repairs and vehicles', async ({ page }) => {
   await repairItems(page).nth(1).getByRole('button').click();
   await dialog.getByRole('button', { name: 'Delete' }).click();
   const confirm = page.getByRole('dialog', { name: 'Delete this repair?' });
-  await expect(confirm).toContainText('The repair on Bus 105 on Oct 20, 2026 will be removed.');
+  await expect(confirm).toContainText(
+    'The repair on Bus 105 on Oct 20, 2026 will be removed. This can’t be undone.',
+  );
   await confirm.getByRole('button', { name: 'Delete' }).click();
   await expect(status(page, 'Deleted the repair.')).toBeAttached();
   await expect(repairItems(page)).toHaveCount(1);
@@ -257,7 +259,9 @@ test('changes and deletes repairs and vehicles', async ({ page }) => {
   await vehicleItem(page, 'Bus 012').getByRole('button', { name: 'Edit Bus 012' }).click();
   await form.getByRole('button', { name: 'Delete' }).click();
   const confirmVehicle = page.getByRole('dialog', { name: 'Delete Bus 012?' });
-  await expect(confirmVehicle).toContainText('Bus 012 and its 1 repair will be removed.');
+  await expect(confirmVehicle).toContainText(
+    'Bus 012 and its 1 repair will be removed. This can’t be undone.',
+  );
   await confirmVehicle.getByRole('button', { name: 'Delete' }).click();
   await expect(status(page, 'Deleted Bus 012 and its 1 repair.')).toBeAttached();
   await expect(vehicleItem(page, 'Bus 012')).toHaveCount(0);

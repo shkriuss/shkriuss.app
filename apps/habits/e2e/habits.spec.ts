@@ -201,7 +201,9 @@ test('deletes a habit after asking', async ({ page }) => {
   await page.getByRole('button', { name: 'Edit Remove me' }).click();
   await editor(page).getByRole('button', { name: 'Delete' }).click();
   const confirm = page.getByRole('dialog', { name: 'Delete this habit?' });
-  await expect(confirm).toContainText('“Remove me” and all its check marks will be removed.');
+  await expect(confirm).toContainText(
+    '“Remove me” and all its check marks will be removed. This can’t be undone.',
+  );
   await confirm.getByRole('button', { name: 'Delete' }).click();
   await expect(card(page, 'Remove me')).toHaveCount(0);
   await expect(card(page, 'Keep')).toBeVisible();

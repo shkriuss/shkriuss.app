@@ -274,6 +274,9 @@ importers:
       '@shkriuss/astro-config':
         specifier: workspace:*
         version: link:../../packages/astro-config
+      '@shkriuss/dates':
+        specifier: workspace:*
+        version: link:../../packages/dates
       '@shkriuss/registry':
         specifier: workspace:*
         version: link:../../packages/registry

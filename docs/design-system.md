@@ -118,11 +118,18 @@ ending by the time that passed),
 can grow to thousands: `shownCount` draws `PAGE_SIZE` (100) at a time behind
 a "Show more" button, always keeping what has focus or was just saved, and
 `waitForTyping` draws a search once typing pauses, not at every key),
+`@shkriuss/ui/new-day` (`onNewDay`, for an app that shows "today": it calls
+back when the date changes while the page is open, looked for every minute
+and when the page comes back on screen),
 `@shkriuss/ui/problem` (telling people about a problem the same way in every
 app: `showProblem` puts it in the notice at the top of every page, which is
 read out at once; `reportSave(store.save(…))` says when saving didn't work,
 and why; `focusProblem` goes to a form's first wrong field, or reads its error
-out if the person is in it already; `clearProblem` takes the notice away),
+out if the person is in it already; `clearProblem` takes the notice away;
+`RELOAD_TO_UPDATE`, to say when a part of the page that loads later can't be
+loaded, which mostly happens after an update while the page stayed open),
+`@shkriuss/ui/room-note` (`roomNote`, the note an app shows once it keeps
+over 90% of what it can: how many more fit, and how to make room),
 `@shkriuss/ui/worker` (`startWorker`, for heavy work; `askWorker` and, in the
 worker, `answerQuestions`, to ask it something and wait for the answer; and,
 inside a worker of an app with `"webAssembly": true`, `allowThreadScripts`),

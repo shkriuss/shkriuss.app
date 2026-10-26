@@ -82,6 +82,11 @@ export function monthOf(date: IsoDate): string {
   return date.slice(0, 7);
 }
 
+/** "YYYY" of the year containing `date`. */
+export function yearOf(date: IsoDate): string {
+  return date.slice(0, 4);
+}
+
 /** First day of the month `offset` months away from the month of `date`. */
 export function shiftMonth(date: IsoDate, offset: number): IsoDate {
   const { year, month } = parts(date);

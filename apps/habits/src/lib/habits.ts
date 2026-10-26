@@ -16,6 +16,7 @@ import {
   isIsoTime,
   toStamp,
   weekday,
+  yearOf,
   type IsoDate,
   type IsoTime,
   type Stamp,
@@ -24,6 +25,7 @@ import type { Notice } from '@shkriuss/push';
 import { withEdits } from '@shkriuss/sync/edits';
 import { DATE_LOCALE } from '@shkriuss/ui/locale';
 import { foldText } from '@shkriuss/ui/text';
+import { roomNote as sharedRoomNote } from '@shkriuss/ui/room-note';
 
 export interface Habit {
   id: string;
@@ -263,23 +265,22 @@ export const checksProblem = (
  * What the page says once Habits is nearly full (over 90% of the check marks
  * it keeps): how many more fit, and how to make room. Null until then.
  */
-export function roomNote(count: number, locale?: string): string | null {
-  if (count <= MAX_CHECKS * 0.9) return null;
-  const left = MAX_CHECKS - count;
-  const start =
-    left > 0
-      ? `Habits is nearly full: there’s room for ${number(left, locale)} more check ${left === 1 ? 'mark' : 'marks'} (it keeps up to ${number(MAX_CHECKS, locale)}).`
-      : `Habits is full: it keeps up to ${checksCount(MAX_CHECKS, locale)}.`;
-  return `${start} To make room, use “Delete check marks from a year…” under Check marks, below.`;
-}
+export const roomNote = (count: number, locale?: string): string | null =>
+  sharedRoomNote({
+    app: 'Habits',
+    count,
+    most: MAX_CHECKS,
+    one: 'check mark',
+    many: 'check marks',
+    makeRoom: 'To make room, use “Delete check marks from a year…” under Check marks, below.',
+    locale,
+  });
 
 export interface YearCount {
   /** "2025". */
   year: string;
   count: number;
 }
-
-const yearOf = (date: IsoDate): string => date.slice(0, 4);
 
 /** The years with check marks, the earliest first, with how many each has. */
 export function checkYears(checks: ChecksState): YearCount[] {

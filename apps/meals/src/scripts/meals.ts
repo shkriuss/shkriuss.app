@@ -18,6 +18,7 @@ import { createStore } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
 import { withEdits } from '@shkriuss/sync/edits';
 import { keepFocus } from '@shkriuss/ui/keep-focus';
+import { onNewDay } from '@shkriuss/ui/new-day';
 import { clearProblem, focusProblem, reportSave, showProblem } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { watchTextLimits } from '@shkriuss/ui/text-limit';
@@ -125,9 +126,6 @@ const remindersStore = createStore<RemindersState>({
   fallback: emptyReminders,
   validate: isRemindersState,
 });
-
-/** How often to look for a new day (the "Today" mark moves at midnight). */
-const NEW_DAY_CHECK_MS = 60_000;
 
 export function mountMeals(root: Document): void {
   const announcer = required<HTMLElement>(root, '[data-announcer]');
@@ -756,17 +754,16 @@ export function mountMeals(root: Document): void {
     keepFocus(render, weekHeading);
   }
 
-  // A new day: move "Today" (and this week, if the page was showing it).
-  window.setInterval(() => {
-    const now = todayOf();
-    if (now === today) return;
+  // A new day: move "Today" (and this week, if the page was showing it),
+  // also when the page comes back on screen.
+  onNewDay((now) => {
     const wasThisWeek = shown === thisWeek;
     today = now;
     thisWeek = weekStartOf(today, firstDay);
     if (wasThisWeek) shown = thisWeek;
     prune();
     keepFocus(render, weekHeading);
-  }, NEW_DAY_CHECK_MS);
+  }, root);
 
   // If Meals is open in two tabs, keep them the same.
   window.addEventListener('storage', (event) => {

@@ -21,8 +21,10 @@ import {
   isIsoDate,
   isIsoTime,
   makeDate,
+  monthOf,
   parts,
   toStamp,
+  yearOf,
   type IsoDate,
   type IsoTime,
   type Stamp,
@@ -42,6 +44,7 @@ import {
 } from '@shkriuss/ui/numbers';
 import { DATE_LOCALE, monthLabel, ordinal, timeLabel } from '@shkriuss/ui/locale';
 import { foldText } from '@shkriuss/ui/text';
+import { roomNote as sharedRoomNote } from '@shkriuss/ui/room-note';
 
 export type Kind = 'expense' | 'income' | 'refund';
 export const KINDS: readonly Kind[] = ['expense', 'income', 'refund'];
@@ -380,8 +383,6 @@ export interface YearCount {
   count: number;
 }
 
-const yearOf = (date: IsoDate): string => date.slice(0, 4);
-
 /** The years that have entries, the earliest first, with how many each has (for "Delete a year"). */
 export function entryYears(state: EntriesState): YearCount[] {
   const counts = new Map<string, number>();
@@ -406,20 +407,19 @@ export const entriesCount = (count: number, locale?: string): string =>
  * What the page says once Budget is nearly full (over 90% of the entries it
  * keeps): how many more fit, and how to make room. Null until then.
  */
-export function roomNote(count: number, locale?: string): string | null {
-  if (count <= LIMITS.entries * 0.9) return null;
-  const left = LIMITS.entries - count;
-  const number = new Intl.NumberFormat(locale);
-  const start =
-    left > 0
-      ? `Budget is nearly full: there’s room for ${number.format(left)} more ${left === 1 ? 'entry' : 'entries'} (it keeps up to ${number.format(LIMITS.entries)}).`
-      : `Budget is full: it keeps up to ${entriesCount(LIMITS.entries, locale)}.`;
-  return `${start} To make room, download the spreadsheet, then use “Delete a year…” under Currency and spreadsheet, below.`;
-}
+export const roomNote = (count: number, locale?: string): string | null =>
+  sharedRoomNote({
+    app: 'Budget',
+    count,
+    most: LIMITS.entries,
+    one: 'entry',
+    many: 'entries',
+    makeRoom:
+      'To make room, download the spreadsheet, then use “Delete a year…” under Currency and spreadsheet, below.',
+    locale,
+  });
 
 // ---------- Months ----------
-
-export const monthOf = (date: IsoDate): string => date.slice(0, 7);
 
 /** The month before or after ("2026-10" → "2026-09" with -1). */
 export function shiftMonth(month: string, offset: number): string {

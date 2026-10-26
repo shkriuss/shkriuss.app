@@ -130,7 +130,9 @@ test('changes and deletes entries and categories', async ({ page }) => {
   await entryItems(page).first().getByRole('button').click();
   await entryDialog(page).getByRole('button', { name: 'Delete' }).click();
   const confirm = page.getByRole('dialog', { name: 'Delete this entry?' });
-  await expect(confirm).toContainText('$22.50 (Fun, Wed, Oct 21) will be removed.');
+  await expect(confirm).toContainText(
+    '$22.50 (Fun, Wed, Oct 21) will be removed. This can’t be undone.',
+  );
   await confirm.getByRole('button', { name: 'Delete' }).click();
   await expect(entryItems(page)).toHaveCount(1);
 

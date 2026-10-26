@@ -3,6 +3,7 @@
  * Everything happens on the device; @shkriuss/storage/backup explains how
  * backup files are locked.
  */
+import { today } from '@shkriuss/dates';
 import { disablePush, isPushDeletePending, isPushEnabled } from '@shkriuss/push';
 import { deleteAll, downloadFile, exportAll, type ExportFile } from '@shkriuss/storage';
 import { deleteAllFiles } from '@shkriuss/storage/files';
@@ -43,13 +44,6 @@ function find<T extends Element>(root: ParentNode, selector: string): T {
   const element = root.querySelector<T>(selector);
   if (!element) throw new Error(`DataControls: missing element ${selector}`);
   return element;
-}
-
-/** Today's date on this device, "YYYY-MM-DD", for file names. */
-function today(): string {
-  const now = new Date();
-  const pad = (value: number) => String(value).padStart(2, '0');
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
 
 function dateOf(iso: string): string {

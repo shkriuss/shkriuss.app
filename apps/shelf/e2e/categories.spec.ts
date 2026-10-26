@@ -111,7 +111,9 @@ test('renames, adds and deletes categories, and the items follow', async ({ page
   // Delete a category, moving its items to another.
   await chip(page, 'Clothes and shoes').click();
   await categoryForm(page).getByRole('button', { name: 'Delete' }).click();
-  await expect(deleteDialog(page)).toContainText('“Clothes and shoes” will be removed.');
+  await expect(deleteDialog(page)).toContainText(
+    '“Clothes and shoes” will be removed. Its items stay. This can’t be undone.',
+  );
   await deleteDialog(page).getByLabel('Move its 1 item to').selectOption({ label: 'Other' });
   await deleteDialog(page).getByRole('button', { name: 'Delete' }).click();
   await expect(categoryForm(page)).toBeHidden();

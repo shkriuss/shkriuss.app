@@ -100,7 +100,7 @@ import { MAX_TEXT_LENGTH, REPEAT_CHOICES, REPEATS } from '../lib/reminders.ts';
           <ul role="list" class="reminders" aria-label="Done" data-done-list></ul>
           <div>
             <Button icon="trash" data-action="clear-done">
-              Clear done
+              Delete done reminders
             </Button>
           </div>
         </div>
@@ -257,14 +257,14 @@ import { MAX_TEXT_LENGTH, REPEAT_CHOICES, REPEATS } from '../lib/reminders.ts';
 
   <dialog class="dialog" aria-labelledby="clear-title" data-clear-dialog>
     <form method="dialog" class="stack">
-      <h2 id="clear-title">Clear the done reminders?</h2>
+      <h2 id="clear-title">Delete done reminders?</h2>
       <p data-clear-text>The done reminders will be removed. This can’t be undone.</p>
       <div class="cluster">
         <Button type="submit" value="cancel">
           Cancel
         </Button>
         <Button type="submit" variant="danger" value="confirm">
-          Clear done
+          Delete
         </Button>
       </div>
     </form>
@@ -274,7 +274,7 @@ import { MAX_TEXT_LENGTH, REPEAT_CHOICES, REPEATS } from '../lib/reminders.ts';
     <form method="dialog" class="stack">
       <h2 id="delete-title">Delete this reminder?</h2>
       <p>
-        “<span dir="auto" data-delete-text></span>” will be removed.
+        “<span dir="auto" data-delete-text></span>” will be removed. This can’t be undone.
       </p>
       <div class="cluster">
         <Button type="submit" value="cancel">

@@ -18,6 +18,7 @@ import { createStore } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
 import { hasEdits } from '@shkriuss/sync/edits';
 import { focusSpot, keepFocus, returnFocus, type FocusSpot } from '@shkriuss/ui/keep-focus';
+import { onNewDay } from '@shkriuss/ui/new-day';
 import { PAGE_SIZE, shownCount, waitForTyping } from '@shkriuss/ui/long-lists';
 import { clearProblem, focusProblem, reportSave, showProblem } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
@@ -107,8 +108,6 @@ const viewStore = createStore<ViewSettings>({
 
 /** Form fields with a place for a problem, in the order they appear. */
 const FIELD_ORDER: DraftField[] = ['title', 'date', 'time', 'every'];
-/** How often to look for a new day (the groups change at midnight). */
-const NEW_DAY_CHECK_MS = 60_000;
 /** A handle has to move this far (px) before it counts as dragging, not a tap. */
 const DRAG_START_PX = 6;
 /** While dragging this close (px) to the top or bottom of the screen, it scrolls. */
@@ -979,15 +978,10 @@ export function mountTasks(root: Document): void {
   });
 
   // At midnight, "Tomorrow" becomes "Today".
-  const checkDay = (): void => {
-    if (todayOf() === day) return;
-    day = todayOf();
+  onNewDay((now) => {
+    day = now;
     keepFocus(render, viewHeading);
-  };
-  window.setInterval(checkDay, NEW_DAY_CHECK_MS);
-  root.addEventListener('visibilitychange', () => {
-    if (root.visibilityState === 'visible') checkDay();
-  });
+  }, root);
 
   const reminders = mountReminders(root, { tasks: () => tasks, announce });
 

@@ -14,7 +14,7 @@ import { createStore, downloadFile } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
 import { keepFocus } from '@shkriuss/ui/keep-focus';
 import { PAGE_SIZE, shownCount, waitForTyping } from '@shkriuss/ui/long-lists';
-import { reportSave, showProblem } from '@shkriuss/ui/problem';
+import { RELOAD_TO_UPDATE, reportSave, showProblem } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { typedText } from '@shkriuss/ui/typed-text';
 import { site } from 'virtual:shkriuss/site';
@@ -136,7 +136,7 @@ function later<T>(load: () => Promise<T>): Later<T> {
         loading = null;
         if (next === null) return;
         next = null;
-        showProblem('Repairs couldn’t open that. Please try again.');
+        showProblem(`Repairs couldn’t open that. ${RELOAD_TO_UPDATE}`);
       },
     );
   };
@@ -514,7 +514,7 @@ export function mountRepairs(root: Document): void {
       if (!repair) return;
       deleting = { type, id: repair.id };
       deleteTitle.textContent = 'Delete this repair?';
-      deleteText.textContent = `The repair on ${vehicleName(vehicles, repair.vehicle)} on ${dateLabel(repair.date)} will be removed.`;
+      deleteText.textContent = `The repair on ${vehicleName(vehicles, repair.vehicle)} on ${dateLabel(repair.date)} will be removed. This can’t be undone.`;
     } else {
       const vehicle = findVehicle(vehicleEditor.now?.editing());
       if (!vehicle) return;
@@ -523,8 +523,8 @@ export function mountRepairs(root: Document): void {
       deleteTitle.textContent = `Delete ${vehicle.name}?`;
       deleteText.textContent =
         count === 0
-          ? `${vehicle.name} will be removed. It has no repairs.`
-          : `${vehicle.name} and its ${countLabel(count, 'repair', 'repairs')} will be removed.`;
+          ? `${vehicle.name} will be removed. It has no repairs. This can’t be undone.`
+          : `${vehicle.name} and its ${countLabel(count, 'repair', 'repairs')} will be removed. This can’t be undone.`;
     }
     deleteDialog.returnValue = '';
     deleteDialog.showModal();

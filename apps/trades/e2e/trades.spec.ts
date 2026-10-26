@@ -173,7 +173,9 @@ test('changes and deletes a trade', async ({ page }) => {
   await page.getByRole('button', { name: 'AAPL Long' }).click();
   await dialog.getByRole('button', { name: 'Delete' }).click();
   const confirm = page.getByRole('dialog', { name: 'Delete this trade?' });
-  await expect(confirm).toContainText('The AAPL long trade will be removed from your journal.');
+  await expect(confirm).toContainText(
+    'The AAPL long trade will be removed from your journal. This can’t be undone.',
+  );
   await confirm.getByRole('button', { name: 'Delete' }).click();
   await expect(status(page, 'Deleted the AAPL trade.')).toBeAttached();
   await expect(page.getByText('No closed trades yet.')).toBeVisible();
