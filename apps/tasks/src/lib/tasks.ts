@@ -26,7 +26,7 @@ import {
 import type { Notice } from '@shkriuss/push';
 import { withEdits } from '@shkriuss/sync/edits';
 import { compareText, foldText } from '@shkriuss/ui/text';
-import { DATE_LOCALE } from '@shkriuss/ui/locale';
+import { DATE_LOCALE, timeLabel } from '@shkriuss/ui/locale';
 
 export const REPEATS = ['none', 'daily', 'weekdays', 'weekly', 'monthly', 'yearly'] as const;
 export type Repeat = (typeof REPEATS)[number];
@@ -634,16 +634,6 @@ const utc = (date: IsoDate): Date => {
   return new Date(Date.UTC(year, month - 1, day));
 };
 
-/** "14:30" or "2:30 PM", in the person's style. */
-export function formatTime(time: IsoTime, locale = DATE_LOCALE): string {
-  const [hour, minute] = time.split(':').map(Number) as [number, number];
-  return new Intl.DateTimeFormat(locale, {
-    hour: 'numeric',
-    minute: '2-digit',
-    timeZone: 'UTC',
-  }).format(new Date(Date.UTC(2000, 0, 1, hour, minute)));
-}
-
 /** "Today", "Tomorrow", "Yesterday", "Friday" (this week), or "Mon, 26 Oct" (with the year if not this one). */
 export function formatDay(date: IsoDate, today: IsoDate, locale = DATE_LOCALE): string {
   const days = daysBetween(today, date);
@@ -666,7 +656,7 @@ export function formatDay(date: IsoDate, today: IsoDate, locale = DATE_LOCALE): 
 export function dueText(task: Task, today: IsoDate, locale = DATE_LOCALE): string {
   if (task.date === null) return '';
   const day = formatDay(task.date, today, locale);
-  return task.time ? `${day}, ${formatTime(task.time, locale)}` : day;
+  return task.time ? `${day}, ${timeLabel(task.time, locale)}` : day;
 }
 
 /** The moment a task's reminder is due, local time, or null if it has none. */

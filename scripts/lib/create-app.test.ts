@@ -5,8 +5,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   createApp,
   optionProblems,
+  SHARED_TEST_TABLES,
   TEMPLATE_SLUG,
   THEME_CHOICE,
+  withSiteLine,
   type NewAppOptions,
 } from './create-app.ts';
 
@@ -74,6 +76,11 @@ describe('createApp', () => {
     await cp(join(repoRoot, 'templates/app'), join(root, 'templates/app'), { recursive: true });
     await mkdir(join(root, 'packages/registry'), { recursive: true });
     await writeFile(join(root, 'packages/registry/apps.json'), JSON.stringify(sampleRegistry));
+    // The shared browser tests' tables, with one app in each.
+    await mkdir(join(root, 'tests/e2e'), { recursive: true });
+    for (const { file, start } of SHARED_TEST_TABLES) {
+      await writeFile(join(root, file), `${start}Case> = {\n  tally: tallyCase,\n};\n`);
+    }
   });
 
   afterEach(async () => {
@@ -132,6 +139,31 @@ describe('createApp', () => {
       await readFile(join(repoRoot, 'packages/registry/apps.json'), 'utf8'),
     ) as { apps: { dataStored: string[] }[] };
     for (const app of registry.apps) expect(app.dataStored).toContain(THEME_CHOICE);
+  });
+
+  it('gives the new app a line, to fill in, in each shared browser test (audit 3 J-11)', async () => {
+    await createApp(root, options);
+    for (const { file, start } of SHARED_TEST_TABLES) {
+      const source = await readFile(join(root, file), 'utf8');
+      expect(source, file).toBe(
+        `${start}Case> = {\n  tally: tallyCase,\n  // New: nothing for this test yet. Put what to do here once the app has it.\n  'notes': null,\n};\n`,
+      );
+    }
+  });
+
+  it('finds the tables in the real shared browser tests', async () => {
+    for (const { file, start } of SHARED_TEST_TABLES) {
+      const source = await readFile(join(repoRoot, file), 'utf8');
+      expect(withSiteLine(source, start, 'notes'), file).toContain("  'notes': null,\n};");
+    }
+  });
+
+  it('changes nothing when a table can’t be found', async () => {
+    await writeFile(join(root, SHARED_TEST_TABLES[0].file), 'const changes = {};\n');
+    await expect(createApp(root, options)).rejects.toThrow(/Can't find the table/);
+    await expect(readFile(join(root, 'apps/notes/package.json'), 'utf8')).rejects.toThrow();
+    const registry = JSON.parse(await readFile(join(root, 'packages/registry/apps.json'), 'utf8'));
+    expect(registry.apps).toHaveLength(1);
   });
 
   it('refuses to overwrite an existing folder', async () => {

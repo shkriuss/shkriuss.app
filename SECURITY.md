@@ -100,7 +100,10 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
 - No secrets in the repository. The Cloudflare API token is stored only as a
   GitHub Actions secret, with just three permissions: _Workers Scripts: Edit_
   and _Workers R2 Storage: Edit_ (account), and _Workers Routes: Edit_ (the
-  `shkriuss.app` zone only). It's a secret of the `production` environment,
+  `shkriuss.app` zone only). The two account permissions reach every site in
+  the Cloudflare account, which is why
+  [deployment.md](docs/deployment.md#create-the-cloudflare-api-token)
+  suggests an account of its own for shkriuss.app. It's a secret of the `production` environment,
   which only `main` can use: no code runs with it before it's merged (there
   are no pull request previews: [ADR 0019](docs/adr/0019-no-pull-request-previews.md)).
   Photos' storage code is a secret of `production` too, handed to its Worker

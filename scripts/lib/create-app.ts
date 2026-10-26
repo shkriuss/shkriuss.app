@@ -71,7 +71,34 @@ export interface CreateAppResult {
 /** What every page saves (its theme switch), so every app lists it on the privacy page. */
 export const THEME_CHOICE = 'Your light or dark theme choice';
 
-/** Copies the template, replaces the slug and appends the app to apps.json. */
+/**
+ * The shared browser tests whose tables need a line for every site
+ * (tests/e2e/every-site.ts), and how each table starts.
+ */
+export const SHARED_TEST_TABLES = [
+  { file: 'tests/e2e/saving.spec.ts', start: 'const changes: EverySite<' },
+  { file: 'tests/e2e/keep-focus.spec.ts', start: 'const cases: EverySite<' },
+  { file: 'tests/e2e/large-text.spec.ts', start: 'const cases: EverySite<' },
+] as const;
+
+/**
+ * `source` with a line for `slug` at the end of the table that starts with
+ * `start`: null, as the template has nothing for the test yet, with a
+ * comment saying to fill it in. Without a line, the test fails for the app
+ * (audit 3 J-11).
+ */
+export function withSiteLine(source: string, start: string, slug: string): string {
+  const at = source.indexOf(start);
+  const end = at === -1 ? -1 : source.indexOf('\n};', at);
+  if (end === -1) throw new Error(`Can't find the table "${start}…" to add ${slug} to.`);
+  const line = `\n  // New: nothing for this test yet. Put what to do here once the app has it.\n  '${slug}': null,`;
+  return source.slice(0, end) + line + source.slice(end);
+}
+
+/**
+ * Copies the template, replaces the slug, appends the app to apps.json and
+ * gives it a line in each shared browser test's table (SHARED_TEST_TABLES).
+ */
 export async function createApp(
   repoRoot: string,
   options: NewAppOptions,
@@ -88,6 +115,13 @@ export async function createApp(
   if (problems.length > 0) {
     throw new Error(`Can't create the app:\n- ${problems.join('\n- ')}`);
   }
+  // Worked out before anything is written, so a table that can't be found stops it all.
+  const tables = await Promise.all(
+    SHARED_TEST_TABLES.map(async ({ file, start }) => {
+      const path = join(repoRoot, file);
+      return { path, content: withSiteLine(await readFile(path, 'utf8'), start, options.slug) };
+    }),
+  );
 
   await cp(join(repoRoot, 'templates/app'), appDir, { recursive: true });
   for (const file of await listFilesRecursive(appDir)) {
@@ -117,6 +151,7 @@ export async function createApp(
   const updated = { ...registry, apps: [...registry.apps, entry] };
   validateRegistry(updated);
   await writeFile(registryPath, `${JSON.stringify(updated, null, 2)}\n`);
+  for (const { path, content } of tables) await writeFile(path, content);
 
   return { appDir, entry };
 }

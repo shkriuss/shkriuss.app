@@ -970,15 +970,8 @@ export const formatR = (value: number, locale?: string): string =>
       }).format(value) + 'R'
     : NO_RESULT;
 
-/** "October 2026". */
-export function monthLabel(month: string, locale = DATE_LOCALE): string {
-  const [year, number] = month.split('-').map(Number) as [number, number];
-  return new Intl.DateTimeFormat(locale, {
-    month: 'long',
-    year: 'numeric',
-    timeZone: 'UTC',
-  }).format(Date.UTC(year, number - 1, 1));
-}
+// "October 2026", as in the other apps.
+export { monthLabel } from '@shkriuss/ui/locale';
 
 /** "Oct 19, 2026"-style dates. */
 export function dateLabel(date: IsoDate, locale = DATE_LOCALE): string {

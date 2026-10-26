@@ -60,6 +60,13 @@ secret, so it's written in the workflows.
    - `Zone` · `Workers Routes` · `Edit`
 5. **Account Resources:** `Include` · `shkriuss` (your account).
 6. **Zone Resources:** `Include` · `Specific zone` · `shkriuss.app`.
+
+   The two `Account` permissions can't be limited to one zone: they reach
+   every site in the Cloudflare account. If the account has other sites, a
+   leaked token could change their Workers and buckets too. Keeping
+   shkriuss.app in a Cloudflare account of its own avoids that (optional;
+   audit 3 I-3).
+
 7. Leave IP filtering empty. TTL: optional (if you set an end date, set a
    calendar reminder to replace the token before it expires).
 8. Tap **Continue to summary** → **Create Token**, then copy the token.
@@ -156,8 +163,16 @@ I-1 to I-10).
      `v=DMARC1; p=reject; sp=reject; adkim=s; aspf=s`.
 
    Then **Email → Email Routing → Routing rules**: delete the `security@`
-   and `support@` rules (mail to them doesn't arrive anyway). Security reports
-   come through GitHub, as `/.well-known/security.txt` says.
+   and `support@` rules (mail to them doesn't arrive anyway, but they would
+   again if Email Routing were turned back on). Security reports come
+   through GitHub, as every site's `/.well-known/security.txt` says.
+
+   Optional: the same `MX` and SPF records for each app's own address, like
+   `tally.shkriuss.app`, since `sp=reject` covers only mail servers that
+   check DMARC. For each app in
+   [`apps.json`](../packages/registry/apps.json): type `MX`, name its slug
+   (`tally`), mail server `.`, priority `0`; and type `TXT`, name its slug,
+   content `v=spf1 -all` (audit 3 I-3).
 
 3. **Only Cloudflare's certificate authorities may issue certificates:**
    **DNS → Records → Add record**, type `CAA`, name `@`, flags `0`, tag

@@ -58,6 +58,16 @@ jobs:
       - name: Unit tests (Vitest)
         run: pnpm test
 
+      # The same tests on a computer set to German, so a test that passes
+      # only in English (one expecting "1,234" or "2:03 PM") fails here, not
+      # on a contributor's computer, where it can look like a money bug
+      # (audit 3 J-5).
+      - name: Unit tests, in German
+        run: pnpm test
+        env:
+          LANG: de_DE.UTF-8
+          LC_ALL: de_DE.UTF-8
+
       - name: Build every site
         run: pnpm build
 

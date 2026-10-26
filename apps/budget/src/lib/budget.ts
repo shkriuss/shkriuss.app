@@ -40,7 +40,7 @@ import {
   whichAmount,
   type Currency,
 } from '@shkriuss/ui/numbers';
-import { DATE_LOCALE } from '@shkriuss/ui/locale';
+import { DATE_LOCALE, monthLabel, ordinal, timeLabel } from '@shkriuss/ui/locale';
 import { foldText } from '@shkriuss/ui/text';
 
 export type Kind = 'expense' | 'income' | 'refund';
@@ -533,18 +533,9 @@ export function byCategory(
 
 // ---------- Money and dates for people ----------
 
-// The currencies and formatMoney are shared with Trades and Repairs.
-export { CURRENCIES, formatMoney, type Currency };
-
-/** "October 2026". */
-export function monthLabel(month: string, locale = DATE_LOCALE): string {
-  const [year, number] = month.split('-').map(Number) as [number, number];
-  return new Intl.DateTimeFormat(locale, {
-    month: 'long',
-    year: 'numeric',
-    timeZone: 'UTC',
-  }).format(Date.UTC(year, number - 1, 1));
-}
+// The currencies and formatMoney are shared with Trades and Repairs, and
+// "October 2026" and "9:00 AM" with other apps.
+export { CURRENCIES, formatMoney, monthLabel, timeLabel, type Currency };
 
 /** "Wed, Oct 21". */
 export function dayLabel(date: IsoDate, locale = DATE_LOCALE): string {
@@ -709,21 +700,8 @@ export function nextReminder(settings: SettingsState, now: Stamp): Stamp | null 
 }
 
 /** "1st", "2nd", "23rd"… or "Last day". */
-export function dayChoiceLabel(day: ReminderDay): string {
-  if (day === 'last') return 'Last day';
-  const suffix = { one: 'st', two: 'nd', few: 'rd', other: 'th' } as Record<string, string>;
-  return `${day}${suffix[new Intl.PluralRules('en-US', { type: 'ordinal' }).select(day)] ?? 'th'}`;
-}
-
-/** "9:00 AM" (in the person's own style). */
-export function timeLabel(time: IsoTime, locale = DATE_LOCALE): string {
-  const [hour, minute] = time.split(':').map(Number) as [number, number];
-  return new Intl.DateTimeFormat(locale, {
-    hour: 'numeric',
-    minute: '2-digit',
-    timeZone: 'UTC',
-  }).format(Date.UTC(2024, 0, 1, hour, minute));
-}
+export const dayChoiceLabel = (day: ReminderDay): string =>
+  day === 'last' ? 'Last day' : ordinal(day);
 
 /** "Reminder on the 1st of every month, at 9:00 AM." or that it's off. */
 export function reminderSentence(reminder: Reminder, locale = DATE_LOCALE): string {

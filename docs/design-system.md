@@ -88,7 +88,10 @@ field with a number so it reads back the same; `roundDecimal`; and
 `type="number"`, which reads "120.000" as 120),
 `@shkriuss/ui/locale` (`DATE_LOCALE`: format dates and times with it, so
 weekdays and months are in English like the rest of the page, even on a
-phone set to another language), `@shkriuss/ui/text` (`compareText`, for
+phone set to another language; and the words several apps use for dates
+and times: `timeLabel` for "8:00 PM" or "20:00", `dayLabel` for "Today",
+"Yesterday" or "Monday 19 October", `monthLabel` for "October 2026" and
+`ordinal` for "23rd"), `@shkriuss/ui/text` (`compareText`, for
 sorting lists alphabetically, and `foldText`, for comparing and searching
 without minding case, accents or extra spaces: the accents of Latin, Greek
 and Cyrillic letters, while the vowel signs of scripts like Hindi or Thai,

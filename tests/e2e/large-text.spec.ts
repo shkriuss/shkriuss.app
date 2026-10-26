@@ -5,6 +5,7 @@
  * letters. The shared accessibility test checks the pages empty.
  */
 import type { Locator, Page } from '@playwright/test';
+import { forThisSite, type EverySite } from './every-site.ts';
 import { expect, test } from './fixtures.ts';
 import { jpeg, picture } from './photos.ts';
 
@@ -43,7 +44,8 @@ interface Case {
   dialogs: ((page: Page) => Promise<Locator>)[];
 }
 
-const cases: Record<string, Case> = {
+/** Every site, and what to put on its page (null: nothing). */
+const cases: EverySite<Case> = {
   budget: {
     fill: async (page) => {
       await button(page, 'Add expense').click();
@@ -60,10 +62,24 @@ const cases: Record<string, Case> = {
     },
     dialogs: [opens('New event')],
   },
+  grammar: {
+    fill: async (page) => {
+      // The checker (20 MB) loads first.
+      test.slow();
+      await expect(page.locator('[data-status]')).toHaveText(/^Type or paste/, { timeout: 60_000 });
+      await page.getByLabel('American (US)').check();
+      // Suggestions, which quote their sentence, one with a long word in it.
+      await page.getByLabel('Your text').fill(`I has a apple. The ${LONG} were here.`);
+      await expect(page.locator('[data-status]')).toHaveText(/^\d+ suggestions?\.$/);
+    },
+    dialogs: [],
+  },
   habits: {
     fill: (page) => enter(page, 'New habit', 'Read'),
     dialogs: [opens('Edit Read')],
   },
+  // Nothing to put on its pages: the accessibility test checks them with text at 200%.
+  hub: null,
   meals: {
     fill: async (page) => {
       await button(page, /^Add a meal/).click();
@@ -234,7 +250,7 @@ const calendarOverlaps = (page: Page) =>
 test('with text at 200%, pages with things in them, and their dialogs, fit a phone', async ({
   page,
 }) => {
-  const app = cases[test.info().project.name];
+  const app = forThisSite(cases);
   test.skip(!app, 'Nothing to put on this page.');
   if (!app) return;
   await page.setViewportSize({ width: 360, height: 640 });

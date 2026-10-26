@@ -15,7 +15,7 @@
 import { execFileSync } from 'node:child_process';
 import { relative } from 'node:path';
 import { parseArgs } from 'node:util';
-import { createApp } from './lib/create-app.ts';
+import { createApp, SHARED_TEST_TABLES } from './lib/create-app.ts';
 
 const repoRoot = new URL('..', import.meta.url).pathname;
 
@@ -52,19 +52,29 @@ try {
   // Match the repo's formatting so the first CI run is clean.
   execFileSync(
     'pnpm',
-    ['exec', 'prettier', '--write', '--log-level=warn', appDir, 'packages/registry/apps.json'],
+    [
+      'exec',
+      'prettier',
+      '--write',
+      '--log-level=warn',
+      appDir,
+      'packages/registry/apps.json',
+      ...SHARED_TEST_TABLES.map(({ file }) => file),
+    ],
     { cwd: repoRoot, stdio: 'inherit' },
   );
 
   console.log(`
-Created ${entry.name} in ${relative(repoRoot, appDir)}/ and added it to packages/registry/apps.json.
+Created ${entry.name} in ${relative(repoRoot, appDir)}/ and added it to packages/registry/apps.json,
+and to the shared browser tests' tables (as null: nothing to test yet).
 It's listed on the hub once merged. To deploy it without listing it, set "status" to "hidden" in apps.json.
 
 Next:
   1. pnpm install
   2. Build the app in ${relative(repoRoot, appDir)}/src/pages/index.astro
-  3. Open a pull request. CI checks it.
-  4. Merge: it goes live at https://${entry.slug}.shkriuss.app
+  3. Fill in its lines in the shared browser tests (search tests/e2e for "New: nothing")
+  4. Open a pull request. CI checks it.
+  5. Merge: it goes live at https://${entry.slug}.shkriuss.app
 `);
 } catch (error) {
   console.error((error as Error).message);
