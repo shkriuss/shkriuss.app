@@ -27,7 +27,7 @@ import {
 import type { Notice } from '@shkriuss/push';
 import { secondVersionName } from '@shkriuss/sync';
 import { withEdits } from '@shkriuss/sync/edits';
-import { DATE_LOCALE } from '@shkriuss/ui/locale';
+import { DATE_LOCALE, ordinal, timeLabel } from '@shkriuss/ui/locale';
 
 export type Repeat = 'none' | 'daily' | 'weekdays' | 'weekly' | 'monthly' | 'yearly';
 export const REPEATS: readonly Repeat[] = [
@@ -391,15 +391,8 @@ const dateParts = (date: IsoDate) => {
   return Date.UTC(year, month - 1, day);
 };
 
-/** A time of day for people: "8:00 PM", or "20:00" where that's how times are written. */
-export function timeLabel(time: IsoTime, locale = DATE_LOCALE): string {
-  const [hour, minute] = time.split(':').map(Number) as [number, number];
-  return new Intl.DateTimeFormat(locale, {
-    hour: 'numeric',
-    minute: '2-digit',
-    timeZone: 'UTC',
-  }).format(Date.UTC(2024, 0, 1, hour, minute));
-}
+// "8:00 PM", or "20:00" where that's how times are written, as in the other apps.
+export { timeLabel };
 
 /** "Today at 3:00 PM", "Tomorrow at …", "Yesterday at …", or "Friday, October 23 at …". */
 export function whenLabel(at: Stamp, now: Stamp, locale = DATE_LOCALE): string {
@@ -422,11 +415,6 @@ export function whenLabel(at: Stamp, now: Stamp, locale = DATE_LOCALE): string {
 /** whenLabel() for the middle of a sentence: "today at 3:00 PM", "Friday, October 23 at …". */
 export const whenInSentence = (at: Stamp, now: Stamp, locale = DATE_LOCALE): string =>
   whenLabel(at, now, locale).replace(/^(Today|Tomorrow|Yesterday) /, (word) => word.toLowerCase());
-
-const ordinal = (day: number): string => {
-  const suffix = { one: 'st', two: 'nd', few: 'rd', other: 'th' } as Record<string, string>;
-  return `${day}${suffix[new Intl.PluralRules('en-US', { type: 'ordinal' }).select(day)] ?? 'th'}`;
-};
 
 /** "Every day", "Every weekday", "Every Friday", "Every month on the 23rd", "Every year on October 23". */
 export function repeatLabel(reminder: Reminder, locale = DATE_LOCALE): string {

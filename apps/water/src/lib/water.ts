@@ -22,7 +22,6 @@ import {
 } from '@shkriuss/dates';
 import type { Notice } from '@shkriuss/push';
 import { defineSettings, type SettingsState as SavedSettings } from '@shkriuss/storage/settings';
-import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
 /** Millilitres, or US fluid ounces. */
 export type Unit = 'ml' | 'oz';
@@ -450,25 +449,6 @@ export function reminderDue(
 
 // ---------- Dates and times for people ----------
 
-/** "Today", "Yesterday", or a date like "Monday 19 October". */
-export function dayLabel(date: IsoDate, today: IsoDate, locale = DATE_LOCALE): string {
-  if (date === today) return 'Today';
-  if (date === addDays(today, -1)) return 'Yesterday';
-  const [year, month, day] = date.split('-').map(Number) as [number, number, number];
-  return new Intl.DateTimeFormat(locale, {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    timeZone: 'UTC',
-  }).format(Date.UTC(year, month - 1, day));
-}
-
-/** A time of day for people: "8:00 PM", or "20:00" where that's how times are written. */
-export function timeLabel(time: IsoTime, locale = DATE_LOCALE): string {
-  const [hour, minute] = time.split(':').map(Number) as [number, number];
-  return new Intl.DateTimeFormat(locale, {
-    hour: 'numeric',
-    minute: '2-digit',
-    timeZone: 'UTC',
-  }).format(Date.UTC(2024, 0, 1, hour, minute));
-}
+// "Today", "Yesterday" or "Monday 19 October", and "8:00 PM" or "20:00",
+// as in the other apps.
+export { dayLabel, timeLabel } from '@shkriuss/ui/locale';

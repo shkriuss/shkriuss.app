@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { englishLocale } from './locale.ts';
+import { dayLabel, englishLocale, monthLabel, ordinal, timeLabel } from './locale.ts';
 
 const weekday = (locale: string) =>
   new Intl.DateTimeFormat(locale, { weekday: 'long', timeZone: 'UTC' }).format(
@@ -33,5 +33,58 @@ describe('englishLocale', () => {
     // Some systems report their language like this; every date would fail to show.
     expect(englishLocale(['en-US@posix'])).toBe('en-US');
     expect(englishLocale(['', 'ka-GE'])).toMatch(/^en-GB/);
+  });
+});
+
+describe('timeLabel', () => {
+  it("writes a time of day in the person's style", () => {
+    expect(timeLabel('20:05', 'en-US')).toMatch(/^8:05\s?PM$/);
+    expect(timeLabel('08:00', 'en-US')).toMatch(/^8:00\s?AM$/);
+    expect(timeLabel('00:00', 'en-US')).toMatch(/^12:00\s?AM$/);
+    expect(timeLabel('20:05', 'en-GB')).toBe('20:05');
+    expect(timeLabel('00:00', 'en-GB')).toBe('0:00');
+    expect(timeLabel('23:59', englishLocale(['ka-GE']))).toBe('23:59');
+  });
+});
+
+describe('dayLabel', () => {
+  it('says today and yesterday in words', () => {
+    expect(dayLabel('2026-10-26', '2026-10-26', 'en-GB')).toBe('Today');
+    expect(dayLabel('2026-10-25', '2026-10-26', 'en-GB')).toBe('Yesterday');
+    // Across a month and a year.
+    expect(dayLabel('2026-12-31', '2027-01-01', 'en-GB')).toBe('Yesterday');
+  });
+
+  it('writes other days with their weekday', () => {
+    expect(dayLabel('2026-10-24', '2026-10-26', 'en-GB')).toBe('Saturday 24 October');
+    expect(dayLabel('2026-10-24', '2026-10-26', 'en-US')).toBe('Saturday, October 24');
+    // A day after today isn't "Tomorrow": these lists have only past days.
+    expect(dayLabel('2026-10-27', '2026-10-26', 'en-GB')).toBe('Tuesday 27 October');
+  });
+});
+
+describe('monthLabel', () => {
+  it('writes a month with its year', () => {
+    expect(monthLabel('2026-10', 'en-GB')).toBe('October 2026');
+    expect(monthLabel('2027-01', 'en-US')).toBe('January 2027');
+    expect(monthLabel('2026-12', englishLocale(['ar-EG']))).toBe('December 2026');
+  });
+});
+
+describe('ordinal', () => {
+  it('writes English ordinals', () => {
+    expect([1, 2, 3, 4, 11, 12, 13, 21, 22, 23, 31].map(ordinal)).toEqual([
+      '1st',
+      '2nd',
+      '3rd',
+      '4th',
+      '11th',
+      '12th',
+      '13th',
+      '21st',
+      '22nd',
+      '23rd',
+      '31st',
+    ]);
   });
 });
