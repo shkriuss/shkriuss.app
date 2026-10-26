@@ -22,10 +22,13 @@ package age check and the unit tests in German run only in GitHub Actions.
 | Time limit           | The **Checks** job (`timeout-minutes` in `.github/workflows/ci.yml`) | The job runs longer than 30 minutes and is stopped: every check fails. Each new app adds about a minute of browser tests                                                                                                                                                                                                 | Never skip or remove tests to fit. Ask Claude to split the browser tests into groups of sites that run side by side (a matrix job, keeping one check that branch protection asks for), or, for now, raise `timeout-minutes` a little                                                                                                                                                |
 
 `pnpm check:dist` also reads every built script, the packages' code in it
-too, as ES2022: the newest JavaScript Safari 16.4 reads. A script that
-isn't fails it (audit 4 J-3). Write that code the ES2022 way, or leave out
-the package that brings it. The type check holds the code here to ES2022 as
-well (`tsconfig.base.json`).
+too, as ES2022: the newest JavaScript syntax Safari 16.4 reads. A script
+written in newer syntax fails it (audit 4 J-3). Write that code the ES2022
+way, or leave out the package that brings it. It checks only the syntax:
+a package that calls a function Safari 16.4 doesn't have (like
+`Object.groupBy`) passes, so check that in the support tables. The type
+check holds the code here to ES2022, functions included
+(`tsconfig.base.json`).
 
 ## What the shared browser tests cover (every site, automatically)
 

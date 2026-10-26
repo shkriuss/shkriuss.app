@@ -95,7 +95,9 @@ a quicker run while working on a few apps; CI always tests every site.
   What holds JavaScript to Safari 16.4's: the type check (ES2022, plus
   ES2023's array methods, in `tsconfig.base.json`) for the code here, and
   `pnpm check:dist`, which reads every built script, packages' code
-  included, as ES2022. Browser features (DOM, CSS) still need the tables.
+  included, as ES2022, but only its syntax: a package that calls a newer
+  function (like `Object.groupBy`) passes. Check packages' functions, and
+  browser features (DOM, CSS), in the tables.
 - **Registry is the source of truth.** Never hard-code app names, domains or
   lists; read `@shkriuss/registry`.
 - **Security headers live in one place:** `packages/astro-config/src/headers.ts`.
