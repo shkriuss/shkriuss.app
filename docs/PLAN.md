@@ -320,8 +320,9 @@ they ran out.)
 - Manual accessibility pass on a phone (VoiceOver or TalkBack).
 - `www.shkriuss.app` → `shkriuss.app` redirect (a free Cloudflare Redirect
   Rule), if you want it.
-- [x] `security.txt` (at `shkriuss.app/.well-known/security.txt`): it points
-      to GitHub's private security reports.
+- [x] `security.txt` (at `/.well-known/security.txt` on every site, written
+      by the build from `packages/astro-config/src/security-txt.ts`): it
+      points to GitHub's private security reports.
 - [x] Email anti-spoofing DNS records (SPF `-all`, DMARC `reject`, null MX),
       since the domain sends no email.
 - [x] Import-from-file for app data: **Back up** (locked with a passphrase)

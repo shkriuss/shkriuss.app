@@ -2,7 +2,7 @@
  * After a production deploy, checks every live site: it answers, serves
  * exactly the home page that was deployed (apps/<slug>/dist/index.html, so a
  * Cloudflare feature can't quietly rewrite pages), and sends our security
- * headers, and the hub its /.well-known/security.txt as deployed. Apps with
+ * headers and its /.well-known/security.txt as deployed. Apps with
  * notifications while closed must
  * also answer /api/push/key with their public key, and the hub its account
  * service (/api/account/ping), and apps with sync /api/sync/hub, and apps
@@ -76,13 +76,17 @@ const onDemand = new Map(
     }),
 );
 const SECURITY_TXT = '.well-known/security.txt';
-const securityTxtPath = join(repoRoot, 'apps', HUB_SLUG, 'dist', SECURITY_TXT);
-if (!existsSync(securityTxtPath)) {
-  console.error(`No build to compare with: ${securityTxtPath}. Run pnpm build first.`);
-  process.exit(1);
-}
-/** The hub's security.txt, as deployed (its "Expires" date is set at build time). */
-const deployedSecurityTxt = readFileSync(securityTxtPath, 'utf8');
+/** Each site's security.txt, as deployed (its "Expires" date is set at build time). */
+const deployedSecurityTxt = new Map(
+  slugs.map((slug) => {
+    const path = join(repoRoot, 'apps', slug, 'dist', SECURITY_TXT);
+    if (!existsSync(path)) {
+      console.error(`No build to compare with: ${path}. Run pnpm build first.`);
+      process.exit(1);
+    }
+    return [getSite(slug).origin, readFileSync(path, 'utf8')];
+  }),
+);
 /** Each site's expected CSP (apps that run WebAssembly allow just that). */
 const expectedCsp = new Map(
   slugs.map((slug) => {
@@ -105,11 +109,11 @@ async function check(origin: string): Promise<string | undefined> {
     if (origin === getSite(HUB_SLUG).origin) {
       const ping = await fetch(`${origin}/api/account/ping`);
       if (!ping.ok) return 'account service not answering';
-      // In a folder whose name starts with a dot, which is easy to leave out.
-      const securityTxt = await fetch(`${origin}/${SECURITY_TXT}`);
-      if (!securityTxt.ok || (await securityTxt.text()) !== deployedSecurityTxt) {
-        return `/${SECURITY_TXT} isn't the one deployed`;
-      }
+    }
+    // In a folder whose name starts with a dot, which is easy to leave out.
+    const securityTxt = await fetch(`${origin}/${SECURITY_TXT}`);
+    if (!securityTxt.ok || (await securityTxt.text()) !== deployedSecurityTxt.get(origin)) {
+      return `/${SECURITY_TXT} isn't the one deployed`;
     }
     if (syncOrigins.has(origin)) {
       const hub = await fetch(`${origin}/api/sync/hub`);

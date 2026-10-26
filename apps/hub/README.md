@@ -15,8 +15,6 @@ page, and the Account page for the optional shkriuss account.
   ([ADR 0010](../../docs/adr/0010-account-and-sync.md)).
 - `src/worker.ts`: runs the account service (`/api/account/*`) from
   `packages/account`; everything else is the built site.
-- `src/pages/[folder]/security.txt.ts`: `/.well-known/security.txt`, where to
-  report a security problem ([SECURITY.md](../../SECURITY.md)).
 - `e2e/`: browser tests for the list of apps and the Account page. The
   shared accessibility, security and offline checks in `tests/e2e/` run
   here too.

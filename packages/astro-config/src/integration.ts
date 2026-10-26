@@ -5,18 +5,20 @@
  * entry) to pages. When the build finishes it writes into dist/:
  *
  * - _headers: the shared security headers;
+ * - .well-known/security.txt: where to report a security problem;
  * - manifest.webmanifest, favicon.svg and PNG icons, for installing the app;
  * - sw.js: the offline service worker (it lists every other file, except
  *   on-demand ones, so it is written last).
  */
 import { createHash } from 'node:crypto';
-import { readdir, readFile, writeFile } from 'node:fs/promises';
-import { join, relative, sep } from 'node:path';
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { AstroIntegration } from 'astro';
 import { hubOrigin, type SiteInfo } from '@shkriuss/registry';
 import { appIconSvg, ICON_VARIANTS, renderPng, type IconVariant } from './app-icons.ts';
 import { headersFile, type HeaderOptions } from './headers.ts';
+import { SECURITY_TXT, securityTxt } from './security-txt.ts';
 import { webManifest } from './manifest.ts';
 import { ON_DEMAND_DIR, precacheUrls, serviceWorkerSource } from './service-worker.ts';
 import { workerVersion } from './worker-version.ts';
@@ -91,16 +93,20 @@ export function shkriussIntegration(options: IntegrationOptions): AstroIntegrati
           writeFile(join(distDir, file), content);
 
         await write('_headers', headersFile(options));
+        await mkdir(join(distDir, dirname(SECURITY_TXT)), { recursive: true });
+        await write(SECURITY_TXT, securityTxt(site.origin));
         await write('manifest.webmanifest', `${JSON.stringify(webManifest(site), null, 2)}\n`);
         await write('favicon.svg', appIconSvg(site, ICON_VARIANTS.favicon));
         for (const [file, { size, variant }] of Object.entries(PNG_ICONS)) {
           await write(file, await renderPng(appIconSvg(site, variant), size));
         }
-        logger.info('Wrote _headers, manifest.webmanifest and icons.');
+        logger.info('Wrote _headers, security.txt, manifest.webmanifest and icons.');
 
         if (options.pwa) {
           const files = (await listFiles(distDir)).filter(
-            (file) => file !== '_headers' && !file.startsWith(ON_DEMAND_DIR),
+            // security.txt isn't needed offline, and its date would change the version.
+            (file) =>
+              file !== '_headers' && file !== SECURITY_TXT && !file.startsWith(ON_DEMAND_DIR),
           );
           const urls = precacheUrls(files);
           // The version covers the saved files, the worker's own code and
