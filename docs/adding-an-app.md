@@ -157,11 +157,12 @@ with `E2E_SITES=$(ls apps | grep -v '^grammar$' | paste -sd, -) pnpm test:e2e`
 (audit 4 J-9).
 
 Each site's local server keeps its data between runs, in
-`apps/<slug>/.wrangler/state`. Photos' online-library test types one wrong
-storage code each run on purpose, and the server takes only 20 wrong codes an
-hour from one internet address (on a computer, every run comes from the same
-one): after 20 runs in an hour, the right code is refused too, until the hour
-is over. Delete `apps/photos/.wrangler/state` to start afresh.
+`apps/<slug>/.wrangler/state`. Photos' online-library tests type two wrong
+storage codes each run on purpose (in `apps/photos/e2e/online.spec.ts`), and
+the server takes only 20 wrong codes an hour from one internet address (on a
+computer, every run comes from the same one): after 10 runs in an hour, the
+right code is refused too, until the hour is over. Delete
+`apps/photos/.wrangler/state` to start afresh.
 
 The app template (`templates/app/`) is linted with everything else, but it's
 type-checked and built only once an app is made from it. So after changing a
