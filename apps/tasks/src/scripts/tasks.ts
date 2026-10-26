@@ -16,7 +16,7 @@
 import { today as todayOf } from '@shkriuss/dates';
 import { createStore } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
-import { keepFocus } from '@shkriuss/ui/keep-focus';
+import { focusSpot, keepFocus, returnFocus, type FocusSpot } from '@shkriuss/ui/keep-focus';
 import { PAGE_SIZE, shownCount, waitForTyping } from '@shkriuss/ui/long-lists';
 import { clearProblem, focusProblem, reportSave, showProblem } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
@@ -184,7 +184,7 @@ export function mountTasks(root: Document): void {
   let editingId: string | null = null;
   /** The form as it opened, to tell what the person changed (see editedTask). */
   let openedDraft: TaskDraft | null = null;
-  let opener: HTMLElement | null = null;
+  let opener: FocusSpot | null = null;
   let savedId: string | null = null;
   /** Tasks whose steps are folded out in the list. */
   const openSteps = new Set<string>();
@@ -823,7 +823,7 @@ export function mountTasks(root: Document): void {
 
   function openEditor(task: Task): void {
     editingId = task.id;
-    opener = root.activeElement instanceof HTMLElement ? root.activeElement : null;
+    opener = focusSpot();
     showProblems({});
     fillForm(draftOf(task));
     openedDraft = readDraft();
@@ -831,10 +831,18 @@ export function mountTasks(root: Document): void {
     field<HTMLInputElement>('title').focus();
   }
 
-  // However the form closes (Save, Cancel, Escape), put focus somewhere useful.
+  // However the form closes (Save, Cancel, Escape), put focus somewhere useful:
+  // on the task just saved, or where the form was opened from (its new copy,
+  // if the list was drawn again meanwhile: audit 3 G-3).
   editor.addEventListener('close', () => {
     const saved = savedId ? control(savedId, '[data-action="edit"]') : null;
-    (saved ?? (opener?.isConnected ? opener : viewHeading)).focus();
+    if (saved) saved.focus();
+    else if (opener) {
+      // Focus left in the closed form goes nowhere.
+      const active = root.activeElement;
+      if (active instanceof HTMLElement && editor.contains(active)) active.blur();
+      returnFocus(opener, viewHeading);
+    } else viewHeading.focus();
     savedId = null;
     opener = null;
   });
@@ -883,7 +891,7 @@ export function mountTasks(root: Document): void {
     const task = find(editingId);
     if (deleteDialog.returnValue !== 'confirm' || !task) return;
     editingId = null;
-    opener = viewHeading;
+    opener = focusSpot(viewHeading);
     if (saveTasks(removeTask(tasks, task.id))) announce(`Deleted ${task.title}.`);
     editor.close();
   });

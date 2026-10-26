@@ -7,6 +7,7 @@
 import { addDays, firstDayOfWeek, isIsoTime, today, weekday, type IsoDate } from '@shkriuss/dates';
 import { createStore } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
+import { keepFocus } from '@shkriuss/ui/keep-focus';
 import { clearProblem, focusProblem, reportSave, showProblem } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { site } from 'virtual:shkriuss/site';
@@ -209,26 +210,21 @@ export function mountHabits(root: Document): void {
     return item;
   }
 
+  /**
+   * Draws the list again, with keyboard focus on the same button (or, if its
+   * habit is gone, the one like it next to it, or "New habit": audit 3 G-3).
+   */
   function render(): void {
-    // Keep keyboard focus on the same button after re-rendering.
-    const active = root.activeElement;
-    const focusId = active?.closest<HTMLElement>('[data-id]')?.dataset['id'];
-    const focusAction = active?.getAttribute('data-action');
+    keepFocus(draw, input);
+  }
 
+  function draw(): void {
     todayText.textContent = dateFormat.format(dateOf(day));
     list.replaceChildren(...habits.habits.map(renderHabit));
     empty.hidden = habits.habits.length > 0;
     const room = roomNote(checks.checks.length);
     roomText.hidden = room === null;
     roomText.textContent = room ?? '';
-
-    if (focusId && focusAction) {
-      list
-        .querySelector<HTMLElement>(
-          `[data-id="${CSS.escape(focusId)}"] [data-action="${CSS.escape(focusAction)}"]`,
-        )
-        ?.focus();
-    }
   }
 
   // ---------- Adding ----------

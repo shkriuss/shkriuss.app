@@ -346,6 +346,46 @@ const goneCases: Record<
     },
     next: (page) => button(page, 'Add 1 to Steps'),
   },
+  // These two looked only for the same item again (audit 3 G-3).
+  habits: {
+    setup: async (page) => {
+      await enter(page, 'New habit', 'Read');
+      await enter(page, 'New habit', 'Walk');
+      return button(page, 'Read: done today');
+    },
+    // Deleted on the other device.
+    change: async (other) => {
+      await button(other, 'Edit Read').click();
+      await other
+        .getByRole('dialog', { name: 'Edit habit' })
+        .getByRole('button', { name: 'Delete' })
+        .click();
+      await other
+        .getByRole('dialog', { name: 'Delete this habit?' })
+        .getByRole('button', { name: 'Delete' })
+        .click();
+    },
+    next: (page) => button(page, 'Walk: done today'),
+  },
+  reminders: {
+    setup: async (page) => {
+      await enter(page, 'Remind me to', 'Call the dentist');
+      await enter(page, 'Remind me to', 'Water the plants');
+      return page.getByRole('checkbox', { name: 'Call the dentist: done', exact: true });
+    },
+    change: async (other) => {
+      await button(other, 'Call the dentist').click();
+      await other
+        .getByRole('dialog', { name: 'Change reminder' })
+        .getByRole('button', { name: 'Delete' })
+        .click();
+      await other
+        .getByRole('dialog', { name: 'Delete this reminder?' })
+        .getByRole('button', { name: 'Delete' })
+        .click();
+    },
+    next: (page) => page.getByRole('checkbox', { name: 'Water the plants: done', exact: true }),
+  },
 };
 
 test('when the focused item is taken away in another tab, focus goes to the next one', async ({
@@ -377,6 +417,27 @@ const dialogCases: Record<string, Case | undefined> = {
   // Its own close handler sent focus to "Add item" after a redraw (audit 3 G-3).
   shelf: cases['shelf'],
   trades: cases['trades'],
+  // These two put focus back themselves, and sent it to a fallback (audit 3 G-3).
+  calendar: {
+    setup: async (page) => {
+      await button(page, 'New event').click();
+      await fillDialog(page, { Title: 'Dentist' });
+      return page.locator('[data-day-events]').getByRole('button', { name: /Dentist/ });
+    },
+    change: async (other) => {
+      await button(other, 'New event').click();
+      await fillDialog(other, { Title: 'Gym' });
+    },
+    shown: (page) => page.locator('[data-day-events]').getByRole('button', { name: /Gym/ }),
+  },
+  tasks: {
+    setup: async (page) => {
+      await enter(page, 'New task', 'Pay rent');
+      return button(page, 'Edit Pay rent');
+    },
+    change: (other) => enter(other, 'New task', 'Buy milk'),
+    shown: (page) => button(page, 'Edit Buy milk'),
+  },
 };
 
 test('a dialog opened from a list gives focus back after the list was drawn again', async ({

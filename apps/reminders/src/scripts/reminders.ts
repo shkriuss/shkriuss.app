@@ -6,6 +6,7 @@
 import { nowStamp, type Stamp } from '@shkriuss/dates';
 import { createStore } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
+import { keepFocus } from '@shkriuss/ui/keep-focus';
 import { focusProblem, reportSave } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { site } from 'virtual:shkriuss/site';
@@ -184,14 +185,17 @@ export function mountReminders(root: Document): void {
     return li;
   }
 
+  /**
+   * Draws the list again, with keyboard focus on the same control (or, if
+   * its reminder is gone, the one like it next to it, or the form: audit 3
+   * G-3).
+   */
   function render(): void {
-    now = nowStamp();
-    // Keep keyboard focus on the same control after drawing the list again.
-    const active = root.activeElement;
-    const focusId = active?.closest<HTMLElement>('li[data-id]')?.dataset['id'];
-    const focusAction =
-      active?.getAttribute('data-action') ?? (active?.matches('[data-done]') ? 'done' : null);
+    keepFocus(draw, add.text);
+  }
 
+  function draw(): void {
+    now = nowStamp();
     const found = groups(state, now);
     groupsBox.replaceChildren(
       ...GROUPS.filter(([key]) => found[key].length > 0).map(([key, title]) => {
@@ -208,8 +212,6 @@ export function mountReminders(root: Document): void {
     doneSection.hidden = found.done.length === 0;
     doneCount.textContent = String(found.done.length);
     doneList.replaceChildren(...found.done.map((item) => renderItem(item, 'done')));
-
-    if (focusId && focusAction) focusOn(focusId, focusAction);
   }
 
   /** Focuses a reminder's control (its tick box, or its text if it has none). */

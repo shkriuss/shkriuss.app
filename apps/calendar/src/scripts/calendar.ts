@@ -7,7 +7,7 @@
 import { createStore, downloadFile } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
 import { showFieldProblems } from '@shkriuss/ui/dom';
-import { keepFocus } from '@shkriuss/ui/keep-focus';
+import { focusSpot, keepFocus, returnFocus, type FocusSpot } from '@shkriuss/ui/keep-focus';
 import { reportSave } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { site } from 'virtual:shkriuss/site';
@@ -151,7 +151,7 @@ export function mountCalendar(root: Document): void {
   /** The editor as it opened, to tell what the person changed (see editEvent). */
   let openedDraft: EventDraft | null = null;
   /** Where keyboard focus goes back to when the editor closes. */
-  let opener: HTMLElement | null = null;
+  let opener: FocusSpot | null = null;
   /** The event just saved, so focus can go to it in the list. */
   let savedId: string | null = null;
   // Remembered so changing the start can move the end by the same amount.
@@ -457,7 +457,7 @@ export function mountCalendar(root: Document): void {
 
   function openEditor(event: CalendarEvent | null): void {
     editingId = event?.id ?? null;
-    opener = root.activeElement instanceof HTMLElement ? root.activeElement : null;
+    opener = focusSpot();
     showProblems({});
     editorTitle.textContent = event ? 'Edit event' : 'New event';
     deleteButton.hidden = !event;
@@ -482,12 +482,20 @@ export function mountCalendar(root: Document): void {
     titleInput.focus();
   }
 
-  // However the editor closes (Save, Cancel, Escape), put focus somewhere useful.
+  // However the editor closes (Save, Cancel, Escape), put focus somewhere
+  // useful: on the event just saved, or where the editor was opened from (its
+  // new copy, if a list was drawn again meanwhile: audit 3 G-3).
   editor.addEventListener('close', () => {
     const item = savedId
       ? dayList.querySelector<HTMLButtonElement>(`[data-id="${CSS.escape(savedId)}"] button`)
       : null;
-    (item ?? (opener?.isConnected ? opener : newEventButton)).focus();
+    if (item) item.focus();
+    else if (opener) {
+      // Focus left in the closed editor goes nowhere.
+      const active = root.activeElement;
+      if (active instanceof HTMLElement && editor.contains(active)) active.blur();
+      returnFocus(opener, newEventButton);
+    } else newEventButton.focus();
     savedId = null;
     opener = null;
   });
@@ -579,7 +587,7 @@ export function mountCalendar(root: Document): void {
     const event = state.events.find((entry) => entry.id === editingId);
     if (deleteDialog.returnValue !== 'confirm' || !event) return;
     editingId = null;
-    opener = newEventButton;
+    opener = focusSpot(newEventButton);
     if (save(removeEvent(state, event.id))) announce(`Deleted ${event.title}.`);
     editor.close();
   });
