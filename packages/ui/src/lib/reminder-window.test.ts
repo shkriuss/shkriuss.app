@@ -99,3 +99,41 @@ for (const place of [
     });
   });
 }
+
+// When clocks go back, a time in the hour that repeats is on the clock twice:
+// the page shows its reminder once, the first time, the moment the
+// notification service picks too (@shkriuss/push's zonedMoment, audit 3 F1-3).
+for (const place of [
+  { zone: 'Europe/Berlin', from: '2026-10-24T22:00:00Z', due: '2026-10-25T02:30' },
+  { zone: 'Australia/Sydney', from: '2026-04-04T13:00:00Z', due: '2026-04-05T02:30' },
+  { zone: 'America/New_York', from: '2026-11-01T03:00:00Z', due: '2026-11-01T01:30' },
+]) {
+  describe(`in ${place.zone}, as the clocks go back`, () => {
+    const before = process.env['TZ'];
+    beforeAll(() => {
+      process.env['TZ'] = place.zone;
+    });
+    afterAll(() => {
+      if (before === undefined) delete process.env['TZ'];
+      else process.env['TZ'] = before;
+    });
+
+    it('a reminder in the hour that repeats goes off once, the first time', () => {
+      const fired: string[] = [];
+      const start = Date.parse(place.from);
+      let last: ReminderCheck = { stamp: nowStamp(new Date(start)), at: start };
+      for (let at = start + 20_000; at <= start + 5 * 60 * MINUTE; at += 20_000) {
+        const now = { stamp: nowStamp(new Date(at)), at };
+        const window = reminderWindow(last, now);
+        if (!window) continue;
+        last = now;
+        if (window.from < place.due && place.due <= window.to) {
+          fired.push(new Date(at).toISOString());
+        }
+      }
+      // Its first time, in UTC: 02:30 CEST, 02:30 AEDT, 01:30 EDT.
+      const first = new Date(Date.parse(place.from) + 150 * MINUTE).toISOString();
+      expect(fired).toEqual([first]);
+    });
+  });
+}

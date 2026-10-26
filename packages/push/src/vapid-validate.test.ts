@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { fromBase64Url, toBase64Url } from './base64.ts';
-import { checkSchedule, checkTest, endpointProblem, LIMITS } from './validate.ts';
+import {
+  checkSchedule,
+  checkTest,
+  endpointProblem,
+  isKnownPushService,
+  LIMITS,
+} from './validate.ts';
 import { generateVapidKeys, vapidAuthorization, VAPID_SUBJECT } from './vapid.ts';
 
 describe('vapidAuthorization', () => {
@@ -72,6 +78,31 @@ describe('endpointProblem', () => {
   it('allows a local receiver only when asked (tests)', () => {
     expect(endpointProblem('http://127.0.0.1:9999/push')).toBeDefined();
     expect(endpointProblem('http://127.0.0.1:9999/push', true)).toBeUndefined();
+  });
+});
+
+// Addresses there share most of an app's daily messages (audit 3 B-2).
+describe('isKnownPushService', () => {
+  it('knows the push services browsers use, by whole parts of their host names', () => {
+    for (const endpoint of [
+      'https://fcm.googleapis.com/fcm/send/abc:def',
+      'https://fcm.googleapis.com/wp/abc',
+      'https://web.push.apple.com/QGkz',
+      'https://updates.push.services.mozilla.com/wpush/v2/gAAA',
+      'https://wns2-par02p.notify.windows.com/w/?token=abc',
+    ]) {
+      expect(isKnownPushService(endpoint), endpoint).toBe(true);
+    }
+    for (const endpoint of [
+      'https://ntfy.example.org/upABC?up=1',
+      'https://push.example.com/x',
+      'https://fcm.googleapis.com.example.com/x',
+      'https://notfcm.googleapis.com/x',
+      'https://pushapple.com/x',
+      'not a url',
+    ]) {
+      expect(isKnownPushService(endpoint), endpoint).toBe(false);
+    }
   });
 });
 

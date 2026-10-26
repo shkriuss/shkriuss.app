@@ -119,14 +119,23 @@ export function canonicalTimeZone(timeZone: string): string | null {
   }
 }
 
-/** The moment when clocks in `timeZone` show `wall`. In a daylight-saving gap, an hour later. */
+/**
+ * The moment when clocks in `timeZone` show `wall`. When they show it twice
+ * (the hour that repeats when clocks go back), the first time, as an open
+ * app does (audit 3 F1-3). In a daylight-saving gap, an hour later.
+ */
 export function zonedMoment(wall: number, timeZone: string): number {
-  const guess = wall - (wallClock(wall, timeZone) - wall);
-  const moment = wall - (wallClock(guess, timeZone) - guess);
-  // West of UTC, a time that doesn't exist that night lands an hour early
-  // (the clocks show 01:30 for 02:30): move it past the gap.
-  const shown = wallClock(moment, timeZone);
-  return shown < wall ? moment + (wall - shown) : moment;
+  // The offsets in force a day before and a day after: the same, except
+  // around a clock change.
+  const before = wallClock(wall - DAY, timeZone) - (wall - DAY);
+  const after = wallClock(wall + DAY, timeZone) - (wall + DAY);
+  const shown = [wall - before, wall - after].filter(
+    (moment) => wallClock(moment, timeZone) === wall,
+  );
+  if (shown.length > 0) return Math.min(...shown);
+  // Not shown at all that night (the time clocks skip): with the offset from
+  // before the change, it's as much later as they skip (an hour, mostly).
+  return wall - before;
 }
 
 /** Start times (wall ms) of each occurrence that starts on or after `fromDay` (days since 1970). */

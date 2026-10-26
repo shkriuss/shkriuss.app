@@ -16,6 +16,13 @@ const RECORD_SIZE = 4096;
 const HEADER_BYTES = 86;
 /** Push services accept bodies up to 4096 bytes: header, text, end marker, 16-byte tag. */
 export const MAX_PLAINTEXT_BYTES = RECORD_SIZE - HEADER_BYTES - 1 - 16;
+/**
+ * Each message's text is padded to a multiple of this many bytes (RFC 8188:
+ * zeros after the end marker, which the browser takes off), so the size the
+ * server and push services see shows little of how long the text is
+ * (audit 3 D-6). Most reminders take one step: 358 bytes sent.
+ */
+export const PADDED_TO = 256;
 
 /** The two keys a push subscription hands out (PushSubscription.getKey()). */
 export interface PushTarget {
@@ -58,11 +65,14 @@ async function contentKeys(
   return { key, nonce };
 }
 
-/** Encrypts a message for one push subscription. Returns the HTTP body to send. */
+/**
+ * Encrypts a message for one push subscription. Returns the HTTP body to
+ * send. Tests can pass fixed keys and salt, and `paddedTo: 1` for no padding.
+ */
 export async function encryptPayload(
   plaintext: Uint8Array<ArrayBuffer>,
   target: PushTarget,
-  options: { senderKeys?: CryptoKeyPair; salt?: Uint8Array<ArrayBuffer> } = {},
+  options: { senderKeys?: CryptoKeyPair; salt?: Uint8Array<ArrayBuffer>; paddedTo?: number } = {},
 ): Promise<Uint8Array<ArrayBuffer>> {
   if (plaintext.length > MAX_PLAINTEXT_BYTES) throw new Error('Notification too long');
   // A new key pair and salt for every message (tests pass fixed ones).
@@ -75,8 +85,14 @@ export async function encryptPayload(
   );
   const salt = options.salt ?? crypto.getRandomValues(new Uint8Array(16));
   const { key, nonce } = await contentKeys(secret, target.auth, target.p256dh, senderPublic, salt);
-  // One record: the text, then 0x02 ("last record").
-  const record = concat(plaintext, new Uint8Array([2]));
+  // One record: the text, then 0x02 ("last record"), then zeros up to a
+  // multiple of PADDED_TO bytes, as far as push services take.
+  const paddedTo = options.paddedTo ?? PADDED_TO;
+  const record = new Uint8Array(
+    Math.min(Math.ceil((plaintext.length + 1) / paddedTo) * paddedTo, MAX_PLAINTEXT_BYTES + 1),
+  );
+  record.set(plaintext);
+  record[plaintext.length] = 2;
   const ciphertext = new Uint8Array(
     await crypto.subtle.encrypt({ name: 'AES-GCM', iv: nonce }, key, record),
   );

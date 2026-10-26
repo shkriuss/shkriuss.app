@@ -113,7 +113,12 @@ export async function fakeNotifications(page: Page, permission: Permission): Pro
     let current = initial;
     const shown: unknown[] = [];
     target['shownNotifications'] = shown;
-    function FakeNotification(title: string, options: NotificationOptions): void {
+    function FakeNotification(
+      title: string,
+      options: NotificationOptions & { renotify?: boolean },
+    ): void {
+      // As Chrome does.
+      if (options.renotify && !options.tag) throw new TypeError('renotify needs a tag');
       shown.push({ title, ...options });
     }
     Object.defineProperty(FakeNotification, 'permission', { get: () => current });

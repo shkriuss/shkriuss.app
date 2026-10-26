@@ -75,6 +75,33 @@ export function endpointProblem(endpoint: unknown, allowLocal = false): string |
   return undefined;
 }
 
+/**
+ * The push services browsers use: Google's (Chrome, Android, Samsung
+ * Internet), Apple's (Safari), Mozilla's (Firefox) and Microsoft's (Edge on
+ * Windows), by the end of their addresses' host names.
+ */
+const PUSH_SERVICES = [
+  'fcm.googleapis.com',
+  'push.apple.com',
+  'push.services.mozilla.com',
+  'notify.windows.com',
+];
+
+/**
+ * Whether this push address is at one of the push services browsers use.
+ * Any other (a UnifiedPush server, or one a stranger made up) shares a
+ * smaller part of an app's daily messages (audit 3 B-2).
+ */
+export function isKnownPushService(endpoint: string): boolean {
+  let host: string;
+  try {
+    host = new URL(endpoint).hostname;
+  } catch {
+    return false;
+  }
+  return PUSH_SERVICES.some((service) => host === service || host.endsWith(`.${service}`));
+}
+
 function payloadProblem(payload: unknown): string | undefined {
   if (typeof payload !== 'string') return 'Message missing.';
   let bytes: Uint8Array;

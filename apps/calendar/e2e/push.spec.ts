@@ -10,6 +10,39 @@ test.use({ serviceWorkers: 'allow', timezoneId: 'Europe/Berlin' });
 
 const closedSwitch = (page: Page) => page.getByLabel('Also remind me when Calendar is closed');
 const closedStatus = (page: Page) => page.locator('[data-closed-status]');
+const isSchedule =
+  (method: string) => (response: { url(): string; request(): { method(): string } }) =>
+    response.url().endsWith('/api/push/schedule') && response.request().method() === method;
+
+/** Holds the next request with this method on its way to the server until release(). */
+async function holdNext(page: Page, method: 'PUT' | 'DELETE') {
+  let release = (): void => undefined;
+  let started = (): void => undefined;
+  const waiting = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const reached = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  let held = false;
+  await page.route('**/api/push/schedule', async (route: Route) => {
+    if (route.request().method() !== method || held) return route.fallback();
+    held = true;
+    started();
+    await waiting;
+    return route.fallback();
+  });
+  return { reached, release };
+}
+
+async function addEventWithReminder(page: Page, title: string) {
+  await newEvent(page, title);
+  await editor(page).getByLabel('Start time').fill('14:30');
+  await editor(page)
+    .getByLabel('Reminder', { exact: true })
+    .selectOption({ label: '15 minutes before' });
+  await save(page);
+}
 
 let rig: PushRig;
 test.beforeEach(async () => {
@@ -25,6 +58,8 @@ test('sends a test notification that only this device can read', async ({ page }
   await expect(closedStatus(page)).toHaveText(/^Off:/);
   await closedSwitch(page).check();
   await expect(closedStatus(page)).toHaveText(/^On: reminders arrive even when Calendar is closed/);
+  // The status line is read out: it isn't said a second time (audit 3 G-11).
+  await expect(page.locator('[data-announcer]')).not.toHaveText(/arrive even when/);
   await checkA11y(page, 'reminders while closed: on');
 
   await page.getByRole('button', { name: 'Send a test notification' }).click();
@@ -157,6 +192,137 @@ test('turning it off, or deleting all data, removes it from the server', async (
   await deleted;
   await page.waitForLoadState('load');
   await expect(closedSwitch(page)).not.toBeChecked();
+});
+
+// An upload on its way when it's turned off turned it back on, and could reach
+// the server after the deletion, which then kept every reminder (audit 3 D-1).
+test.describe('turned off while an upload is on its way (audit 3 D-1)', () => {
+  // In the future for the local server's real clock too, so it keeps the reminder.
+  const TODAY = new Date('2027-01-11T10:00:00+01:00');
+
+  test.beforeEach(async ({ page }) => {
+    await page.clock.setFixedTime(TODAY);
+    await fakeSubscription(page, rig);
+    await page.goto('/');
+    await closedSwitch(page).check();
+    await expect(closedStatus(page)).toHaveText(/^On:/);
+  });
+
+  test('“Turn off” deletes after the upload, and stays off', async ({ page }) => {
+    const put = await holdNext(page, 'PUT');
+    await addEventWithReminder(page, 'Dentist');
+    await put.reached;
+    const answers: string[] = [];
+    page.on('response', (response) => {
+      if (response.url().endsWith('/api/push/schedule')) {
+        answers.push(`${response.request().method()} ${response.status()}`);
+      }
+    });
+    await closedSwitch(page).uncheck();
+    // Off on this device at once; the deletion waits for the upload.
+    await expect(closedStatus(page)).toHaveText('Turning off…');
+    expect(await page.evaluate(() => localStorage.getItem('shkriuss-device:push'))).toBeNull();
+    const deleted = page.waitForResponse(isSchedule('DELETE'));
+    put.release();
+    expect((await deleted).status()).toBe(204);
+    await expect(closedStatus(page)).toHaveText(
+      'Off: reminders only arrive while Calendar is open.',
+    );
+    // The server got the deletion last.
+    expect(answers).toEqual(['PUT 200', 'DELETE 204']);
+
+    await page.unroute('**/api/push/schedule');
+    await page.reload();
+    await expect(closedStatus(page)).toHaveText(/^Off:/);
+    await expect(closedSwitch(page)).not.toBeChecked();
+    expect(
+      await page.evaluate(() => [
+        localStorage.getItem('shkriuss-device:push'),
+        localStorage.getItem('shkriuss-device:push-delete'),
+      ]),
+    ).toEqual([null, null]);
+  });
+
+  test('“Delete all data” deletes after the upload, and stays off', async ({ page }) => {
+    const put = await holdNext(page, 'PUT');
+    await addEventWithReminder(page, 'Dentist');
+    await put.reached;
+    await page.getByRole('button', { name: 'Delete all data' }).click();
+    const reloaded = page.waitForEvent('load');
+    await page
+      .getByRole('dialog', { name: 'Delete all data?' })
+      .getByRole('button', { name: 'Delete everything' })
+      .click();
+    const deleted = page.waitForResponse(isSchedule('DELETE'));
+    put.release();
+    expect((await deleted).status()).toBe(204);
+    await reloaded;
+    await expect(closedSwitch(page)).not.toBeChecked();
+    await expect(closedStatus(page)).toHaveText(
+      'Off: reminders only arrive while Calendar is open.',
+    );
+    expect(await page.evaluate(() => localStorage.getItem('shkriuss-device:push'))).toBeNull();
+  });
+});
+
+// With storage full, nothing was sent to the server, and it said "Off" as if
+// the reminders were gone (audit 3 D-3).
+test.describe('turned off with the browser’s storage full (audit 3 D-3)', () => {
+  test.beforeEach(async ({ page }) => {
+    await fakeSubscription(page, rig);
+    await page.goto('/');
+    await closedSwitch(page).check();
+    await expect(closedStatus(page)).toHaveText(/^On:/);
+  });
+
+  test('still deletes the reminders on the server', async ({ page }) => {
+    // Fill this site's storage, as on a full iPhone.
+    await page.evaluate(() => {
+      for (let size = 1 << 20, index = 0; size >= 1;) {
+        try {
+          localStorage.setItem(`filler-${index}`, 'x'.repeat(size));
+          index += 1;
+        } catch {
+          size = Math.floor(size / 2);
+        }
+      }
+    });
+    const deletes: string[] = [];
+    page.on('request', (request) => {
+      if (request.url().endsWith('/api/push/schedule') && request.method() === 'DELETE') {
+        deletes.push(request.url());
+      }
+    });
+    const deleted = page.waitForResponse(isSchedule('DELETE'));
+    await closedSwitch(page).uncheck();
+    expect((await deleted).status()).toBe(204);
+    await expect(closedStatus(page)).toHaveText(
+      'Off: reminders only arrive while Calendar is open.',
+    );
+    expect(deletes).toHaveLength(1);
+  });
+
+  test('says the reminders couldn’t be removed when it can’t note to try again', async ({
+    page,
+    guard,
+  }) => {
+    // The browser logs the deletion this test stops.
+    guard.allowConsole('net::ERR_FAILED');
+    // Nothing can be saved here any more, and the deletion can't get through.
+    await page.evaluate(() => {
+      Storage.prototype.setItem = () => {
+        throw new DOMException('Full', 'QuotaExceededError');
+      };
+    });
+    await page.route('**/api/push/schedule', (route) =>
+      route.request().method() === 'DELETE' ? route.abort() : route.continue(),
+    );
+    await closedSwitch(page).uncheck();
+    await expect(closedStatus(page)).toHaveText(
+      "Off, but your reminders couldn’t be removed from Calendar's server yet.",
+    );
+    await expect(closedSwitch(page)).not.toBeChecked();
+  });
 });
 
 test('says so when turning it off can’t reach the server, and finishes later', async ({
@@ -323,6 +489,61 @@ test('device settings stay out of backups', async ({ page }) => {
   expect(text).toContain('"app": "calendar"');
   expect(text).not.toContain('shkriuss-device');
   expect(text).not.toContain(rig.endpoint);
+});
+
+// Only the 500 soonest fit on the server, and nothing said so (audit 3 F1-5).
+test('says when not all the reminders fit on the server', async ({ page }) => {
+  await fakeSubscription(page, rig);
+  await page.goto('/');
+  // 520 events with reminders, one a day from 2027 (still to come for the
+  // local server's real clock too).
+  const day = (index: number) =>
+    new Date(Date.UTC(2027, 0, 1) + index * 86_400_000).toISOString().slice(0, 10);
+  await seed(
+    page,
+    Array.from({ length: 520 }, (_, index) => ({
+      title: `Event ${index}`,
+      startDate: day(index),
+      endDate: day(index),
+      reminder: 15,
+    })),
+  );
+  const upload = page.waitForRequest(
+    (request) => request.url().endsWith('/api/push/schedule') && request.method() === 'PUT',
+  );
+  await closedSwitch(page).check();
+  const sent = JSON.parse((await upload).postData() ?? '{}') as { entries: unknown[] };
+  expect(sent.entries).toHaveLength(500);
+  await expect(closedStatus(page)).toHaveText(
+    "On, but only for your next 500 reminders: Calendar's server can’t keep more. The other 20 arrive only while Calendar is open.",
+  );
+  await checkA11y(page, 'reminders while closed: not all fit');
+});
+
+// It said "On" though nothing could be kept or uploaded (audit 3 F1-4).
+test('says so when this device can’t keep the setting', async ({ page }) => {
+  await fakeSubscription(page, rig);
+  await page.addInitScript(() => {
+    const setItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key: string, value: string) {
+      if (key.startsWith('shkriuss-device:push')) {
+        throw new DOMException('Full', 'QuotaExceededError');
+      }
+      setItem.call(this, key, value);
+    };
+  });
+  const uploads: string[] = [];
+  page.on('request', (request) => {
+    if (request.url().endsWith('/api/push/schedule')) uploads.push(request.method());
+  });
+  await page.goto('/');
+  // click(), not check(): the switch turns itself back off.
+  await closedSwitch(page).click();
+  await expect(closedStatus(page)).toHaveText(
+    'Calendar couldn’t save this setting on this device, so it’s off. Its storage may be full or blocked.',
+  );
+  await expect(closedSwitch(page)).not.toBeChecked();
+  expect(uploads).toEqual([]);
 });
 
 test('explains when this browser can’t get push', async ({ page }) => {

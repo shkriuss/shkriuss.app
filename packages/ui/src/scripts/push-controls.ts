@@ -19,6 +19,7 @@ import {
   syncPush,
   type Notice,
   type PushErrorCode,
+  type PushSynced,
 } from '@shkriuss/push';
 import { setBusy } from './busy.ts';
 
@@ -28,8 +29,11 @@ const SYNC_DELAY_MS = 800;
 export interface PushControlsOptions {
   /** The app's notifications as they are now. */
   notices: () => Notice[];
-  /** Tells screen reader users (the app's live region). */
-  announce: (message: string) => void;
+  /**
+   * Not needed any more: the switch's status line is read out itself, and
+   * saying it again read it out twice (audit 3 G-11).
+   */
+  announce?: (message: string) => void;
   /** After it was turned on or off (notification permission may have changed). */
   onChange?: () => void;
 }
@@ -57,7 +61,7 @@ export function mountPushControls(block: HTMLElement, options: PushControlsOptio
 
   const ON = `On: reminders arrive even when ${app} is closed.`;
   const OFF = `Off: reminders only arrive while ${app} is open.`;
-  const OFF_NOT_DELETED = `Off, but your reminders couldn’t be removed from ${app}'s server yet. ${app} will try again when it’s open and online.`;
+  const OFF_NOT_DELETED = `Off, but your reminders couldn’t be removed from ${app}'s server yet.`;
   const PROBLEMS: Record<PushErrorCode, string> = {
     unsupported: `This browser can’t get notifications while ${app} is closed.`,
     denied: `Notifications are blocked for ${app}. To allow them, change this site’s settings in your browser.`,
@@ -65,9 +69,17 @@ export function mountPushControls(block: HTMLElement, options: PushControlsOptio
       'This browser couldn’t connect to a push service. On phones without Google services, like GrapheneOS, use a browser with UnifiedPush, such as IronFox.',
     server: `Couldn’t reach ${app}'s notification service. Check your connection and try again.`,
     refused: `${app}'s notification service had a problem. Please try again later.`,
+    storage: `${app} couldn’t save this setting on this device, so it’s off. Its storage may be full or blocked.`,
   };
   const problemOf = (error: unknown): string =>
     error instanceof PushError ? PROBLEMS[error.code] : 'Something went wrong. Please try again.';
+  /** What the last upload left on the server (audit 3 F1-5). */
+  let fit: PushSynced = { scheduled: 0, left: 0 };
+  /** "On", or how many reminders the server has when they don't all fit. */
+  const onText = ({ scheduled, left }: PushSynced): string =>
+    left > 0
+      ? `On, but only for your next ${scheduled} reminders: ${app}'s server can’t keep more. ${left === 1 ? 'The other one arrives' : `The other ${left} arrive`} only while ${app} is open.`
+      : ON;
 
   function render(message?: string): void {
     const on = isPushEnabled();
@@ -75,21 +87,29 @@ export function mountPushControls(block: HTMLElement, options: PushControlsOptio
     // Turned off while focus is on "Send a test notification": it goes to the switch.
     if (!on && testRow.contains(document.activeElement)) toggle.focus();
     testRow.hidden = !on;
-    status.textContent = message ?? (on ? ON : isPushDeletePending() ? OFF_NOT_DELETED : OFF);
+    status.textContent =
+      message ??
+      (on
+        ? onText(fit)
+        : isPushDeletePending()
+          ? `${OFF_NOT_DELETED} ${app} will try again when it’s open and online.`
+          : OFF);
+  }
+
+  /** After an upload got through: what the server has now. */
+  function uploaded(synced: PushSynced): void {
+    fit = synced;
+    // Also takes away a problem that's over, or shows it was turned off in
+    // the browser's settings meanwhile.
+    render();
   }
 
   function upload(force = false): void {
     queue = queue.then(
       () =>
-        syncPush(options.notices(), { force }).then(
-          () => {
-            // Turned off in the browser's settings meanwhile?
-            if (!isPushEnabled()) render();
-          },
-          (error: unknown) => {
-            render(problemOf(error));
-          },
-        ),
+        syncPush(options.notices(), { force }).then(uploaded, (error: unknown) => {
+          render(problemOf(error));
+        }),
       () => undefined,
     );
   }
@@ -124,10 +144,9 @@ export function mountPushControls(block: HTMLElement, options: PushControlsOptio
       enablePush()
         .then(() => syncPush(options.notices(), { force: true }))
         .then(
-          () => {
-            render(ON);
-            options.announce(`Reminders will arrive even when ${app} is closed.`);
-          },
+          // "On" only if it really is (audit 3 F1-4). The status line is read
+          // out, so nothing is announced as well (audit 3 G-11).
+          uploaded,
           (error: unknown) => {
             render(problemOf(error));
           },
@@ -138,9 +157,10 @@ export function mountPushControls(block: HTMLElement, options: PushControlsOptio
         });
     } else {
       status.textContent = 'Turning off…';
-      void disablePush().finally(() => {
-        // Says so if the reminders couldn't be removed from the server yet.
-        render();
+      void disablePush().then((deleted) => {
+        // Says so if the reminders couldn't be removed from the server yet, also
+        // when storage was too full to note that and try again (audit 3 D-3).
+        render(deleted || isPushDeletePending() ? undefined : OFF_NOT_DELETED);
         setBusy(toggle, false);
         options.onChange?.();
       });

@@ -43,7 +43,13 @@ import {
 } from '@shkriuss/server/meter';
 import { fromBase64Url } from './base64.ts';
 import { nextFireTime } from './schedule.ts';
-import { checkSchedule, checkTest, LIMITS, type ScheduleEntry } from './validate.ts';
+import {
+  checkSchedule,
+  checkTest,
+  isKnownPushService,
+  LIMITS,
+  type ScheduleEntry,
+} from './validate.ts';
 import { generateVapidKeys, vapidAuthorization, type VapidKeys } from './vapid.ts';
 
 export interface PushEnv extends SiteEnv {
@@ -78,6 +84,22 @@ const GIVE_UP_MS = 2 * DAY_MS;
  * seconds a day, however slow a push address someone makes up.
  */
 export const DAILY_SENDS = 2000;
+/**
+ * How DAILY_SENDS is shared, each part used up on its own (audit 3 B-2):
+ * push addresses at the push services browsers use (isKnownPushService) get
+ * most of it; any other address (a UnifiedPush server, or one a stranger
+ * made up) shares a small part; and test messages, which any made-up device
+ * can ask for, another. So strangers' made-up devices can't use up the
+ * messages of people at Google's, Apple's, Mozilla's or Microsoft's.
+ */
+export const DAILY_SHARES = { known: 1700, other: 200, test: 100 } as const;
+type Share = keyof typeof DAILY_SHARES;
+/**
+ * Messages one device may get in a day (UTC), tries again included. Real
+ * ones get a few dozen at most; past it, the rest that day are skipped like
+ * late ones, so a few made-up devices can't use up a share (audit 3 B-2).
+ */
+export const DEVICE_DAILY_SENDS = 100;
 /**
  * How long a push service has to answer a message (real ones take well under
  * a second). One that doesn't is treated as busy: tried again later.
@@ -174,33 +196,48 @@ export class PushKeys {
     const keys = await this.#load();
     if (pathname === '/public-key') return json({ publicKey: keys.publicKey });
     if (pathname === '/sign' && request.method === 'POST') {
-      const { endpoint, sends } = (await request.json()) as { endpoint: string; sends: number };
-      if (!(await this.#count(sends))) return problem(429, 'Today’s messages are used up.');
+      const { endpoint, sends, share } = (await request.json()) as {
+        endpoint: string;
+        sends: number;
+        share: Share;
+      };
+      if (!(await this.#count(share, sends))) return problem(429, 'Today’s messages are used up.');
       return json({ authorization: await vapidAuthorization(endpoint, keys) });
     }
     if (pathname === '/waited' && request.method === 'POST') {
-      const { seconds } = (await request.json()) as { seconds: number };
-      if (Number.isSafeInteger(seconds) && seconds > 0) await this.#count(seconds, true);
+      const { seconds, share } = (await request.json()) as { seconds: number; share: Share };
+      if (Number.isSafeInteger(seconds) && seconds > 0) await this.#count(share, seconds, true);
       return noContent();
     }
     return problem(404, 'Not found.');
   }
 
   /**
-   * Counts `sends` more messages today (UTC); false if that would go over the
-   * limit. Time already spent waiting is counted `anyway`.
+   * Counts `sends` more messages today (UTC) in this share of the day's
+   * messages; false if that would go over it. Time already spent waiting is
+   * counted `anyway`.
    */
-  async #count(sends: number, anyway = false): Promise<boolean> {
+  async #count(share: Share, sends: number, anyway = false): Promise<boolean> {
     return this.state.blockConcurrencyWhile(async () => {
       const today = Math.floor(Date.now() / DAY_MS);
-      const saved = await this.state.storage.get<{ day: number; sends: number }>('sent');
-      const sent = saved?.day === today ? saved.sends : 0;
-      if (sent + sends > DAILY_SENDS && !anyway) return false;
-      await this.state.storage.put('sent', { day: today, sends: sent + sends });
+      const saved = await this.state.storage.get<{ day: number; shares?: Record<string, number> }>(
+        'sent',
+      );
+      const shares = saved?.day === today ? (saved.shares ?? {}) : {};
+      const name = share in DAILY_SHARES ? share : 'other';
+      const sent = shares[name] ?? 0;
+      if (sent + sends > DAILY_SHARES[name] && !anyway) return false;
+      await this.state.storage.put('sent', {
+        day: today,
+        shares: { ...shares, [name]: sent + sends },
+      });
       return true;
     });
   }
 }
+
+/** Which share of the day's messages one to this push address counts against. */
+const shareOf = (endpoint: string): Share => (isKnownPushService(endpoint) ? 'known' : 'other');
 
 // ---------- One device's scheduled notifications ----------
 
@@ -219,7 +256,13 @@ interface DeviceRecord {
   updates: { windowStart: number; count: number };
   /** Since when every message has failed or been refused (null: the last one got through). */
   failingSince?: number | null;
+  /** Messages sent to it on this day (days since 1970, UTC): see DEVICE_DAILY_SENDS. */
+  sentToday?: { day: number; sends: number };
 }
+
+/** How many messages this device has had today (UTC). */
+const sentToday = (record: DeviceRecord, now: number): number =>
+  record.sentToday?.day === Math.floor(now / DAY_MS) ? record.sentToday.sends : 0;
 
 type SendResult = 'sent' | 'gone' | 'rejected' | 'retry';
 /** The Authorization header for messages, or why there's none. */
@@ -247,15 +290,27 @@ export class PushDevice {
     }
     const bytes = JSON.stringify(record).length;
     if (!(await reserve(this.state, this.env.PUSH_DEVICES, bytes, limit))) return false;
+    await this.#arm(record);
+    await this.state.storage.put('device', record);
+    return true;
+  }
+
+  /**
+   * Sets the next wake-up. Every upload, wake-up and test message sets it
+   * again, so one Cloudflare didn't run (if the day's free requests ran
+   * out, say) doesn't stop the device's reminders for good (audit 3 B-4).
+   */
+  async #arm(record: DeviceRecord): Promise<void> {
     await this.state.storage.setAlarm(
       Math.min(
         ...record.entries.map((entry) => entry.retryAt ?? entry.next),
-        // Wakes up to forget it, too, if it isn't uploaded again in time.
+        // Wakes up to forget it, too, if it isn't uploaded again in time…
         record.updates.windowStart + UNUSED_MS,
+        // …or once nothing has got through for two days, not only at the
+        // next message, which may be a year away (audit 3 D-4).
+        (record.failingSince ?? Infinity) + GIVE_UP_MS,
       ),
     );
-    await this.state.storage.put('device', record);
-    return true;
   }
 
   async #forget(): Promise<void> {
@@ -265,16 +320,16 @@ export class PushDevice {
   }
 
   /**
-   * Signs for `sends` messages to `endpoint`. One signature lasts 12 hours, so
-   * a whole wake-up needs only one. 'limit': the app's messages for today
-   * are used up.
+   * Signs for `sends` messages to `endpoint`, counted in `share` of the
+   * app's day. One signature lasts 12 hours, so a whole wake-up needs only
+   * one. 'limit': that share of today's messages is used up.
    */
-  async #sign(endpoint: string, sends: number): Promise<Signed> {
+  async #sign(endpoint: string, sends: number, share: Share): Promise<Signed> {
     const keys = this.env.PUSH_KEYS.get(this.env.PUSH_KEYS.idFromName('vapid'));
     try {
       const response = await keys.fetch('https://keys/sign', {
         method: 'POST',
-        body: JSON.stringify({ endpoint, sends }),
+        body: JSON.stringify({ endpoint, sends, share }),
       });
       if (response.status === 429) return 'limit';
       return response.ok ? ((await response.json()) as { authorization: string }) : 'failed';
@@ -285,16 +340,16 @@ export class PushDevice {
 
   /**
    * Counts each whole second spent waiting for the push service since
-   * `started` as one more message toward the app's day (see DAILY_SENDS).
+   * `started` as one more message in `share` of the app's day (see DAILY_SENDS).
    */
-  async #countWaiting(started: number): Promise<void> {
+  async #countWaiting(started: number, share: Share): Promise<void> {
     const seconds = Math.floor((Date.now() - started) / 1000);
     if (seconds < 1) return;
     const keys = this.env.PUSH_KEYS.get(this.env.PUSH_KEYS.idFromName('vapid'));
     try {
       await keys.fetch('https://keys/waited', {
         method: 'POST',
-        body: JSON.stringify({ seconds }),
+        body: JSON.stringify({ seconds, share }),
       });
     } catch {
       // Only counting: the time limits keep each wait short anyway.
@@ -367,12 +422,14 @@ export class PushDevice {
       await this.state.storage.put('lastTest', now);
       // Without a schedule, the test's time is kept only as long as it's needed.
       if (!record) await this.state.storage.setAlarm(now + TEST_GAP_MS);
-      const signed = await this.#sign(endpoint, 1);
+      else await this.#arm(record);
+      // Test messages have their own share of the day: any made-up device can ask for them.
+      const signed = await this.#sign(endpoint, 1, 'test');
       if (signed === 'limit') return problem(429, 'No more notifications today; try tomorrow.');
       const started = Date.now();
       const result =
         signed === 'failed' ? 'retry' : await this.#send(endpoint, payload, signed.authorization);
-      await this.#countWaiting(started);
+      await this.#countWaiting(started, 'test');
       if (result === 'gone') {
         await this.#forget();
         return problem(410, 'This device is no longer subscribed.');
@@ -405,6 +462,8 @@ export class PushDevice {
         updates,
         // Still failing for the same push address: an upload doesn't start the count again.
         failingSince: record?.endpoint === schedule.endpoint ? (record.failingSince ?? null) : null,
+        // Nor the day's messages (audit 3 B-2).
+        ...(record?.sentToday ? { sentToday: record.sentToday } : {}),
       },
       limitOf(request),
     );
@@ -421,35 +480,47 @@ export class PushDevice {
   async #sendDue(): Promise<void> {
     const record = await this.#record();
     const now = Date.now();
-    // No schedule (only a test's time), or not uploaded for 13 months
-    // (updates.windowStart is the last upload, give or take 10 minutes).
-    if (!record || now - record.updates.windowStart >= UNUSED_MS) {
+    // No schedule (only a test's time), not uploaded for 13 months
+    // (updates.windowStart is the last upload, give or take 10 minutes), or
+    // nothing has got through for two days (a made-up or long-dead push address).
+    if (
+      !record ||
+      now - record.updates.windowStart >= UNUSED_MS ||
+      now - (record.failingSince ?? Infinity) >= GIVE_UP_MS
+    ) {
       await this.#forget();
       return;
     }
     // What's due (at most SENDS_PER_ALARM; the rest go out straight after), and
-    // how many of those to send: ones more than an hour late are skipped.
+    // which of those to send: ones more than an hour late are skipped, and so
+    // are ones past the device's messages for the day (audit 3 B-2).
     const due = new Set(
       record.entries
         .filter((entry) => (entry.retryAt ?? entry.next) <= now)
         .slice(0, SENDS_PER_ALARM),
     );
-    const sends = [...due].filter((entry) => now - entry.next <= LATE_LIMIT_MS).length;
-    // One signature for them all (none needed if all are too late).
-    const signed = sends > 0 ? await this.#sign(record.endpoint, sends) : 'failed';
+    const toSend = new Set(
+      [...due]
+        .filter((entry) => now - entry.next <= LATE_LIMIT_MS)
+        .slice(0, Math.max(0, DEVICE_DAILY_SENDS - sentToday(record, now))),
+    );
+    const share = shareOf(record.endpoint);
+    // One signature for them all (none needed if none are sent).
+    const signed =
+      toSend.size > 0 ? await this.#sign(record.endpoint, toSend.size, share) : 'failed';
     if (signed === 'limit') {
-      // The app's messages for today are used up: try again after 00:00 UTC.
+      // This share of the app's messages for today is used up: try again after 00:00 UTC.
       await this.state.storage.setAlarm((Math.floor(now / DAY_MS) + 1) * DAY_MS);
       return;
     }
     const started = Date.now();
     try {
-      const sent = await this.#sendBatch(record, due, signed, now);
+      const sent = await this.#sendBatch(record, due, toSend, signed, now);
       // What it already had, give or take a few bytes: never refused.
       if (sent) await this.#save(sent, NO_LIMIT);
       else await this.#forget();
     } finally {
-      await this.#countWaiting(started);
+      await this.#countWaiting(started, share);
     }
   }
 
@@ -460,6 +531,7 @@ export class PushDevice {
   async #sendBatch(
     record: DeviceRecord,
     due: ReadonlySet<StoredEntry>,
+    toSend: ReadonlySet<StoredEntry>,
     signed: Exclude<Signed, 'limit'>,
     now: number,
   ): Promise<DeviceRecord | null> {
@@ -468,14 +540,16 @@ export class PushDevice {
     // busy or doesn't answer), the rest wait for the retry with it: sending
     // them now would only meet the same.
     let busy = false;
+    let sends = 0;
     const entries: StoredEntry[] = [];
     for (const entry of record.entries) {
       if (!due.has(entry)) {
         entries.push(entry);
         continue;
       }
+      // Due but not to be sent: skipped, like one more than an hour late.
       let result: SendResult | 'late' = 'late';
-      if (now - entry.next <= LATE_LIMIT_MS) {
+      if (toSend.has(entry)) {
         if (busy || signed === 'failed') {
           // If signing failed (our side), try again as if the push service were busy.
           result = 'retry';
@@ -484,6 +558,7 @@ export class PushDevice {
           entries.push(entry);
           continue;
         } else {
+          sends += 1;
           result = await this.#send(record.endpoint, entry.payload, signed.authorization);
           busy = result === 'retry';
         }
@@ -501,10 +576,16 @@ export class PushDevice {
         entries.push({ ...entry, attempts, retryAt: now + attempts * 60_000 });
         continue;
       }
-      // Sent, refused, too late, or out of retries: on to the next time, if any.
+      // Sent, refused, skipped, or out of retries: on to the next time, if any.
       const next = nextFireTime(entry, record.timeZone, Math.max(entry.next, now));
       if (next !== null) entries.push({ ...entry, next, attempts: 0, retryAt: null });
     }
-    return { ...record, entries, failingSince };
+    const day = Math.floor(now / DAY_MS);
+    return {
+      ...record,
+      entries,
+      failingSince,
+      sentToday: { day, sends: sentToday(record, now) + sends },
+    };
   }
 }

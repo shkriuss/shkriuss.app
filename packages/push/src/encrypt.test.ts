@@ -41,8 +41,29 @@ describe('encryptPayload', () => {
     const body = await encryptPayload(encoder.encode(RFC.plaintext), target, {
       senderKeys: await keyPair(RFC.asPrivate, RFC.asPublic),
       salt: fromBase64Url(RFC.salt),
+      // The example has no padding.
+      paddedTo: 1,
     });
     expect(toBase64Url(body)).toBe(RFC.body);
+  });
+
+  // Without padding, each message's size showed how long its text was (audit 3 D-6).
+  it('pads every message to a multiple of 256 bytes, and it still opens', async () => {
+    const receiver = await keyPair(RFC.uaPrivate, RFC.uaPublic);
+    const sizes: number[] = [];
+    for (const length of [0, 1, 100, 255, 256, 1000, MAX_PLAINTEXT_BYTES]) {
+      const text = new Uint8Array(length).fill(0x61);
+      const body = await encryptPayload(text, target);
+      sizes.push(body.length);
+      const opened = await decryptPayload(body, {
+        privateKey: receiver.privateKey,
+        publicKey: target.p256dh,
+        auth: target.auth,
+      });
+      expect(opened).toEqual(text);
+    }
+    // Header (86 bytes) + the padded text + tag (16): the biggest still fits in 4096.
+    expect(sizes).toEqual([358, 358, 358, 358, 614, 1126, 4096]);
   });
 
   it('can be opened by the receiving browser, and only by it', async () => {

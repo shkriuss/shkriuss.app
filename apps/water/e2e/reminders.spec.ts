@@ -51,7 +51,14 @@ test('reminds to drink while Water is open, until the goal is reached', async ({
     page.getByRole('status').filter({ hasText: 'Reminder: time for some water.' }),
   ).toBeAttached();
   expect(await shownNotifications(page)).toEqual([
-    { title: REMINDER_TITLE, body: REMINDER_BODY, tag: 'drink', icon: '/icon-192.png' },
+    // Each one rings again, though it replaces the last (audit 3 F1-1).
+    {
+      title: REMINDER_TITLE,
+      body: REMINDER_BODY,
+      tag: 'drink',
+      renotify: true,
+      icon: '/icon-192.png',
+    },
   ]);
 
   // Goal reached: no more today.

@@ -3,7 +3,7 @@
  *
  * - On install it saves every built file (the "precache"). Hashed build
  *   files already saved by the previous version are copied, not downloaded
- *   again: they never change (Grammar's checker alone is 16 MB).
+ *   again: they never change (Grammar's checker alone is about 20 MB).
  * - Hashed build files (/_astro/…) are served from the cache first: they
  *   never change.
  * - Pages are fetched from the network first, so updates show up right away.
@@ -181,10 +181,14 @@ self.addEventListener('push', (event) => {
   } catch {
     url = '/';
   }
+  const tag = text(message.tag);
   event.waitUntil(
     self.registration.showNotification(text(message.title) || 'Reminder', {
       body: text(message.body),
-      tag: text(message.tag) || undefined,
+      tag: tag || undefined,
+      // A repeat replaces the one before it with the same tag, and still
+      // rings or buzzes (audit 3 F1-1). Chrome refuses renotify without a tag.
+      renotify: Boolean(tag),
       icon: '/icon-192.png',
       data: { url },
     }),
