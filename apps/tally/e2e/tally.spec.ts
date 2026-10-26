@@ -199,6 +199,52 @@ test('passes accessibility checks with counters on the page', async ({ page }) =
   await checkA11y(page, 'with counters (dark)');
 });
 
+test('the − and + buttons stay inside their card, with large text too', async ({ page }) => {
+  // With text at 200%, + ran past the card's edge, and on a 320px screen the
+  // page scrolled sideways (audit 4 G-11).
+  await addCounter(page, 'Water');
+  const card = counter(page, 'Water');
+  const minus = card.getByRole('button', { name: 'Subtract 1 from Water' });
+  const plus = card.getByRole('button', { name: 'Add 1 to Water' });
+  for (const [width, size] of [
+    [320, '200%'],
+    [360, '200%'],
+    [412, '200%'],
+    [320, '100%'],
+  ] as const) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.evaluate((textSize) => {
+      document.documentElement.style.fontSize = textSize;
+    }, size);
+    const problems = await card.evaluate((element) => {
+      const found: string[] = [];
+      const sideways = document.documentElement.scrollWidth - document.documentElement.clientWidth;
+      if (sideways > 0) found.push(`The page scrolls sideways by ${sideways}px`);
+      const style = getComputedStyle(element);
+      const outer = element.getBoundingClientRect();
+      const left = outer.left + parseFloat(style.borderLeftWidth) + parseFloat(style.paddingLeft);
+      const right =
+        outer.right - parseFloat(style.borderRightWidth) - parseFloat(style.paddingRight);
+      for (const button of element.querySelectorAll('.counter__controls button')) {
+        const box = button.getBoundingClientRect();
+        if (box.left < left - 0.5 || box.right > right + 0.5) {
+          found.push(`${button.getAttribute('aria-label')} goes past the card's padding`);
+        }
+      }
+      return found;
+    });
+    expect(problems, `${width}px, text ${size}`).toEqual([]);
+  }
+
+  // At the usual text size they share a row, and + is twice as wide as −.
+  await page.evaluate(() => {
+    document.documentElement.style.fontSize = '';
+  });
+  const [minusBox, plusBox] = [await minus.boundingBox(), await plus.boundingBox()];
+  expect(minusBox && plusBox && Math.abs(minusBox.y - plusBox.y)).toBe(0);
+  expect(minusBox && plusBox && Math.abs(plusBox.width - 2 * minusBox.width)).toBeLessThan(1);
+});
+
 test('backs up, deletes and restores the data', async ({ page }) => {
   await addCounter(page, 'Water');
   await counter(page, 'Water').getByRole('button', { name: 'Add 1 to Water' }).click();
