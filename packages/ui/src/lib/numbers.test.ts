@@ -7,6 +7,7 @@ import {
   parseDecimal,
   parseWhole,
   roundDecimal,
+  whichAmount,
 } from './numbers.ts';
 
 /** Expects each text to read as its number (or NaN, or null) in `locale`. */
@@ -66,7 +67,10 @@ describe('parseDecimal', () => {
       '1,234.50': Number.NaN,
       '1.234.50': Number.NaN,
     });
-    // Thousands are grouped with a space in French and Georgian.
+    // Thousands are grouped with a space in French and Georgian, so a point
+    // is a decimal sign: "1.500" is 1.5, as for Trades' prices, which can
+    // have three decimals. Amounts kept to the cent ask instead, as it could
+    // be 1500 written the German way (audit 3 F2-3, below).
     reads('fr-FR', { '1\u202F234,56': 1234.56, '1 500': 1500, '1,500': 1.5, '1.500': 1.5 });
     reads('ka-GE', { '1\u00A0500': 1500, '1,500': 1.5, '1.500': 1.5, '1.234,5': Number.NaN });
     // India groups by two after the first three; one sign is still one thousand.
@@ -99,6 +103,61 @@ describe('parseDecimal', () => {
     reads('en-US', { ' -5 ': -5, '- 5': -5, '12 ,50': 12.5 });
     expect(parseWhole('12 50', 'fr-FR')).toBeNaN();
     expect(parseWhole('120 000', 'en-US')).toBe(120_000);
+  });
+
+  // Audit 3 F2-3: "1.500" was saved as 1.50 in Budget in the languages that
+  // group thousands with a space, though three decimals are never kept there.
+  it('asks again about an amount kept to the cent that could be two numbers', () => {
+    const cents = (locale: string, cases: Record<string, number>) => {
+      for (const [text, value] of Object.entries(cases)) {
+        expect(parseDecimal(text, locale, { cents: true }), `${locale} "${text}"`).toBe(value);
+      }
+    };
+    const spaced = [
+      'de-AT',
+      'pt-PT',
+      'pl-PL',
+      'cs-CZ',
+      'hu-HU',
+      'sv-SE',
+      'nb-NO',
+      'ru-RU',
+      'uk-UA',
+    ];
+    for (const locale of [...spaced, 'fr-FR', 'ka-GE']) {
+      cents(locale, {
+        '1.500': Number.NaN,
+        '12.500': Number.NaN,
+        '-1.500': Number.NaN,
+        // A point before more or fewer digits, or after a zero, can only be decimals.
+        '1.50': 1.5,
+        '1.5000': 1.5,
+        '0.500': 0.5,
+        '1234.500': 1234.5,
+        '1,500': 1.5,
+        '1 500': 1500,
+        '1 500,25': 1500.25,
+      });
+      expect(whichAmount('1.500', locale)).toBe('Enter 1500 or 1,5 to show which you mean.');
+      // Trades' prices, which aren't kept to the cent: as typed.
+      expect(parseDecimal('1.500', locale)).toBe(1.5);
+    }
+    // Switzerland groups with an apostrophe, so it's a comma there.
+    cents('de-CH', { '1,500': Number.NaN, '1.500': 1.5, "1'500": 1500 });
+    expect(whichAmount('1,500', 'de-CH')).toBe('Enter 1500 or 1.5 to show which you mean.');
+    // Where the point and the comma are the locale's own signs, it's clear.
+    cents('de-DE', { '1.500': 1500, '1,500': 1.5 });
+    cents('en-US', { '1.500': 1.5, '1,500': 1500 });
+    cents('ar-EG', { '1.500': 1.5, '1,500': 1500, '١٬٥٠٠': 1500 });
+    for (const [text, locale] of [
+      ['1.500', 'de-DE'],
+      ['1,500', 'fr-FR'],
+      ['1.234,50', 'fr-FR'],
+      ['abc', 'fr-FR'],
+      ['', 'fr-FR'],
+    ] as const) {
+      expect(whichAmount(text, locale), `${locale} "${text}"`).toBeNull();
+    }
   });
 
   // Audit F2-10: amounts were shown in the browser's own digits, and those were refused.

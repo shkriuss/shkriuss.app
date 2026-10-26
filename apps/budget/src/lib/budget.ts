@@ -37,6 +37,7 @@ import {
   formatMoney,
   parseDecimal,
   roundDecimal,
+  whichAmount,
   type Currency,
 } from '@shkriuss/ui/numbers';
 import { DATE_LOCALE } from '@shkriuss/ui/locale';
@@ -174,10 +175,12 @@ export interface ReadOptions {
 
 /**
  * A typed amount: null when empty, NaN when it isn't a number. "12,50" is
- * 12.5, and "1,500" is 1500 in English (parseDecimal).
+ * 12.5, and "1,500" is 1500 in English (parseDecimal). Amounts are kept to
+ * the cent, so "1.500" in French, which could be 1500 or 1.5, is asked
+ * again (`cents`, audit 3 F2-3).
  */
 const parseAmount = (text: string, { locale }: ReadOptions): number | null =>
-  parseDecimal(text, locale);
+  parseDecimal(text, locale, { cents: true });
 
 /**
  * An amount kept as its currency has it: to the cent, or to the yen (no
@@ -190,7 +193,9 @@ const keep = (amount: number, { currency = 'USD' }: ReadOptions): number =>
 function amountProblem(text: string, optional: boolean, options: ReadOptions): string | undefined {
   const value = parseAmount(text, options);
   if (value === null) return optional ? undefined : 'Enter an amount.';
-  if (!Number.isFinite(value)) return 'Enter a number, like 12.50 or 12,50.';
+  if (!Number.isFinite(value)) {
+    return whichAmount(text, options.locale) ?? 'Enter a number, like 12.50 or 12,50.';
+  }
   if (value <= 0) return 'Enter an amount above 0.';
   // Kept to the cent (or the yen), so one that rounds to 0 would be saved as 0.
   if (keep(value, options) <= 0) {

@@ -213,6 +213,28 @@ describe('entries', () => {
     expect(toCategoryForm(rent, 'de-DE')).toEqual({ name: 'Rent', limit: '1200,5' });
   });
 
+  // Audit 3 F2-3: in French (and wherever thousands are grouped with a space),
+  // "1.500" was saved as 1.50, though an amount is never kept to three decimals.
+  it('asks again about an amount that could be thousands or decimals', () => {
+    const amount = (text: string, locale: string) =>
+      readEntry({ ...form, amount: text }, 'x', 0, categories, { locale });
+    expect(amount('1.500', 'fr-FR').problems).toEqual({
+      amount: 'Enter 1500 or 1,5 to show which you mean.',
+    });
+    expect(amount('12.500', 'de-AT').problems).toEqual({
+      amount: 'Enter 12500 or 12,5 to show which you mean.',
+    });
+    expect(
+      readCategory({ name: 'Rent', limit: '1.200' }, 'r', categories, { locale: 'pl-PL' }).problems,
+    ).toEqual({ limit: 'Enter 1200 or 1,2 to show which you mean.' });
+    // Typed the way the language writes it, or with two decimals: as before.
+    expect(amount('1 500', 'fr-FR').entry?.amount).toBe(1500);
+    expect(amount('1,5', 'fr-FR').entry?.amount).toBe(1.5);
+    expect(amount('1.50', 'fr-FR').entry?.amount).toBe(1.5);
+    expect(amount('1.500', 'de-DE').entry?.amount).toBe(1500);
+    expect(amount('1.500', 'en-US').entry?.amount).toBe(1.5);
+  });
+
   it('says what’s wrong', () => {
     expect(readEntry({ ...form, amount: '', date: '' }, 'x', 0, categories).problems).toEqual({
       amount: 'Enter an amount.',

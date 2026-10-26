@@ -86,11 +86,29 @@ function kindOf(character: string, style: Style): 'decimal' | 'group' | null {
   return character === style.group ? 'group' : 'decimal';
 }
 
+/** How parseDecimal reads a typed number. */
+export interface ParseOptions {
+  /**
+   * For amounts kept to the cent (or to the yen), like Budget's: a point or
+   * a comma that's neither the locale's decimal sign nor its thousands
+   * separator, before exactly three digits, isn't read. "1.500" typed in
+   * French could be 1.5 (a phone keyboard's only point) or 1500 (written
+   * the German way), and three decimals can't be what's kept, so the person
+   * is asked which (whichAmount, audit 3 F2-3).
+   */
+  cents?: boolean;
+}
+
 /**
  * What's typed, as plain digits for Number(): "-1234.5", or "" when nothing
  * is typed. Null when it isn't a number. `whole`: no decimal sign allowed.
  */
-function plainDigits(text: string, style: Style, whole: boolean): string | null {
+function plainDigits(
+  text: string,
+  style: Style,
+  whole: boolean,
+  { cents = false }: ParseOptions = {},
+): string | null {
   // Full-width digits and signs are plain ones, and any script's digits are 0 to 9.
   const compact = text
     .normalize('NFKC')
@@ -116,6 +134,11 @@ function plainDigits(text: string, style: Style, whole: boolean): string | null 
   const [only, ...more] = signs.filter((sign) => /^[.,]$/.test(body.charAt(sign.at)));
   if (only && more.length === 0) {
     if (!isGrouped([body.slice(0, only.at), body.slice(only.at + 1)], 3)) only.kind = 'decimal';
+    // Kept to the cent, it's read as a decimal sign only if it's this
+    // locale's own: "1.500" in French could as well be thousands (ParseOptions).
+    else if (cents && only.kind === 'decimal' && body.charAt(only.at) !== style.decimal) {
+      return null;
+    }
   }
   const points = signs.filter((sign) => sign.kind === 'decimal');
   if (points.length > (whole ? 0 : 1)) return null;
@@ -150,11 +173,27 @@ function plainDigits(text: string, style: Style, whole: boolean): string | null 
  *   checked the same way: "1 234,50" (French) is 1234.5, "12 50" isn't a
  *   number.
  * - Exponents ("1e3"), "Infinity" and anything else aren't numbers.
+ * - With `cents`, for amounts kept to the cent: what could be read two ways
+ *   isn't a number ("1.500" in French: see ParseOptions).
  */
-export function parseDecimal(text: string, locale?: string): number | null {
-  const digits = plainDigits(text, styleOf(locale), false);
+export function parseDecimal(text: string, locale?: string, options?: ParseOptions): number | null {
+  const digits = plainDigits(text, styleOf(locale), false, options);
   if (digits === '') return null;
   return digits === null ? Number.NaN : Number(digits);
+}
+
+/**
+ * What to ask when an amount kept to the cent could be two numbers, so
+ * parseDecimal with `cents` didn't read it: for "1.500" in French, "Enter
+ * 1500 or 1,5 to show which you mean." Null when it's one number, or none.
+ */
+export function whichAmount(text: string, locale?: string): string | null {
+  const style = styleOf(locale);
+  const digits = plainDigits(text, style, false);
+  if (!digits || plainDigits(text, style, false, { cents: true }) !== null) return null;
+  // Read the other way, its point groups thousands: the same digits without it.
+  const thousands = Number(digits.replace('.', ''));
+  return `Enter ${decimalText(thousands, locale)} or ${decimalText(Number(digits), locale)} to show which you mean.`;
 }
 
 /**

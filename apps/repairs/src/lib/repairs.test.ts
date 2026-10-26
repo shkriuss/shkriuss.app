@@ -372,6 +372,18 @@ describe('repairs', () => {
         'part-quantity-0': 'Enter a number above 0.',
       });
     }
+    // Audit 3 F2-3: in French, a price typed "1.500" was saved as 1.5. A price
+    // or labour that could be thousands or decimals is asked again; a quantity
+    // or hours (not money) are read as typed.
+    expect(
+      typed({ parts: [part('1.500', '1.500')], labour: '2.000', hours: '1.5' }, 'fr-FR').problems,
+    ).toEqual({
+      'part-price-0': 'Enter 1500 or 1,5 to show which you mean.',
+      labour: 'Enter 2000 or 2 to show which you mean.',
+    });
+    expect(
+      typed({ parts: [part('1.500', '1 500,50')], labour: '2,5' }, 'fr-FR').repair,
+    ).toMatchObject({ parts: [{ quantity: 1.5, price: 1500.5 }], labour: 2.5 });
   });
 
   it('are saved, changed and removed', () => {

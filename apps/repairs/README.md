@@ -40,6 +40,8 @@ private car's service history. Lives at <https://repairs.shkriuss.app>.
   shown amounts, so they match what's on the screen. Hours and costs are
   added up for each day, for what the list shows, and for each vehicle
   (`totals`). A part chosen from the suggestions gets its last price too.
+  A price or labour cost typed in a way that could be read two ways, like
+  "1.500" in French (1500 or 1.5), is asked again.
 - "Download as a spreadsheet (CSV)" saves every repair, one row each, with
   the hours and the parts, labour and total cost. Text a spreadsheet could
   read as a formula starts with `'`.

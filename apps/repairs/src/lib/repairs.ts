@@ -32,6 +32,7 @@ import {
   parseDecimal,
   parseWhole,
   roundDecimal,
+  whichAmount,
   type Currency,
 } from '@shkriuss/ui/numbers';
 import { compareText, foldText } from '@shkriuss/ui/text';
@@ -381,7 +382,8 @@ export type RepairProblems = Partial<Record<string, string>>;
  * from `newId`, and returned as `newVehicle`. Numbers are read as typed in
  * `locale` (the browser's own when left out): "1,5" is 1.5, and "1,500" is
  * 1500 in English (parseDecimal); the mileage is a whole number ("120.000"
- * is 120000 in German).
+ * is 120000 in German). Prices and labour are amounts of money: "1.500" in
+ * French, which could be 1500 or 1.5, is asked again (`cents`, audit 3 F2-3).
  */
 export function readRepair(
   form: RepairForm,
@@ -394,6 +396,7 @@ export function readRepair(
   | { repair: Repair; newVehicle: Vehicle | null; problems?: undefined }
   | { repair?: undefined; newVehicle?: undefined; problems: RepairProblems } {
   const parseNumber = (text: string) => parseDecimal(text, locale);
+  const parseMoney = (text: string) => parseDecimal(text, locale, { cents: true });
   const problems: RepairProblems = {};
 
   const name = oneLine(form.vehicle);
@@ -431,7 +434,7 @@ export function readRepair(
     const partName = oneLine(row.name);
     const number = oneLine(row.number).toUpperCase();
     const typedQuantity = parseNumber(row.quantity);
-    const price = parseNumber(row.price);
+    const price = parseMoney(row.price);
     // An empty row is left out.
     if (
       partName === '' &&
@@ -450,8 +453,10 @@ export function readRepair(
     }
     const quantity = typedQuantity ?? 1;
     if (!isQuantity(quantity)) problems[`part-quantity-${index}`] = 'Enter a number above 0.';
-    if (!isMoneyOrNull(price))
-      problems[`part-price-${index}`] = 'Enter a price, or leave it empty.';
+    if (!isMoneyOrNull(price)) {
+      problems[`part-price-${index}`] =
+        whichAmount(row.price, locale) ?? 'Enter a price, or leave it empty.';
+    }
     parts.push({ name: partName, number, quantity, price });
   });
   if (parts.length > LIMITS.parts) problems['parts'] = `Add up to ${LIMITS.parts} parts.`;
@@ -460,8 +465,10 @@ export function readRepair(
   if (hours !== null && !isHours(hours)) {
     problems['hours'] = 'Enter the hours as a number above 0, or leave it empty.';
   }
-  const labour = parseNumber(form.labour);
-  if (!isMoneyOrNull(labour)) problems['labour'] = 'Enter an amount, or leave it empty.';
+  const labour = parseMoney(form.labour);
+  if (!isMoneyOrNull(labour)) {
+    problems['labour'] = whichAmount(form.labour, locale) ?? 'Enter an amount, or leave it empty.';
+  }
 
   if (form.photos.length > LIMITS.photos) {
     problems['photos'] = `Add up to ${LIMITS.photos} photos.`;

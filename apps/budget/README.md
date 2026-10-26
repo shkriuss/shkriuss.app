@@ -22,8 +22,9 @@ See where your money goes, month by month. Lives at
     into data it can't read;
   - settings (`shkriuss:budget-settings`): the currency, only for showing
     amounts (nothing is converted; an amount typed is kept to the
-    currency's own decimals: to the cent, or to the yen), and the monthly
-    reminder. Each is saved only once changed (US dollars and no reminder
+    currency's own decimals: to the cent, or to the yen, so one that could
+    be read two ways, like "1.500" typed in French, 1500 or 1.5, is asked
+    again), and the monthly reminder. Each is saved only once changed (US dollars and no reminder
     until then), so a new device has nothing to win over another's when
     they first sync.
 - A month shows what was spent, earned and is left (`summary`), each
