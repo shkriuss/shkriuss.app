@@ -18,7 +18,7 @@ const CSP = [
   "manifest-src 'self'",
   "worker-src 'self'",
   "base-uri 'none'",
-  "form-action 'self'",
+  "form-action 'none'",
   "frame-ancestors 'none'",
   "require-trusted-types-for 'script'",
   'trusted-types shkriuss-sw shkriuss-worker',

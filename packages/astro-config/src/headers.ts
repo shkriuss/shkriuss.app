@@ -73,7 +73,11 @@ export function contentSecurityPolicy(options: Pick<HeaderOptions, 'webAssembly'
     'manifest-src': "'self'",
     'worker-src': "'self'",
     'base-uri': "'none'",
-    'form-action': "'self'",
+    // No form is ever sent the browser's own way: each page's script handles
+    // its forms, and dialogs close without a request. Until that script runs,
+    // pressing Enter in a form would put what was typed in the address, sent
+    // to the server and kept in the browser's history (audit 4 C-1).
+    'form-action': "'none'",
     'frame-ancestors': "'none'",
     'require-trusted-types-for': "'script'",
     'trusted-types': [

@@ -14,6 +14,35 @@ test.beforeEach(async ({ page }) => {
   await page.goto('/');
 });
 
+test('what’s typed stays on the device, even before the page’s script runs', async ({
+  browser,
+  baseURL,
+}) => {
+  // On a slow first visit the form is there before its script. Enter would
+  // then send the form the browser's own way, with the text in the address:
+  // the CSP's form-action 'none' stops it (audit 4 C-1). A page of its own,
+  // so the console guard doesn't take the CSP's report for a problem.
+  const context = await browser.newContext({
+    ...(baseURL ? { baseURL } : {}),
+    serviceWorkers: 'block',
+  });
+  const page = await context.newPage();
+  await page.route('**/_astro/*.js', (route) => route.abort());
+  const documents: string[] = [];
+  page.on('request', (request) => {
+    if (request.resourceType() === 'document') documents.push(request.url());
+  });
+  await page.goto('/');
+  await page.getByLabel('New counter').fill('Pills: Sertraline 50mg');
+  const blocked = page.waitForEvent('console', (message) =>
+    message.text().includes("form-action 'none'"),
+  );
+  await page.getByLabel('New counter').press('Enter');
+  await blocked;
+  expect(documents).toEqual([new URL('/', page.url()).href]);
+  await context.close();
+});
+
 test('counts up and down and remembers counts after a reload', async ({ page }) => {
   await expect(page.getByText('No counters yet')).toBeVisible();
   await addCounter(page, 'Water');
