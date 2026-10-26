@@ -326,6 +326,8 @@ const dialogCases: Record<string, Case | undefined> = {
     shown: (page) => page.getByRole('checkbox', { name: 'Bread', exact: true }),
   },
   repairs: cases['repairs'],
+  // Its own close handler sent focus to "Add item" after a redraw (audit 3 G-3).
+  shelf: cases['shelf'],
   trades: cases['trades'],
 };
 
