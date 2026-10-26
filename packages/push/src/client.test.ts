@@ -262,6 +262,21 @@ describe('syncPush', () => {
     expect((down as PushError).code).toBe('server');
   });
 
+  // The privacy page: "The app sends your reminders again each week while you
+  // use it" (pinned so changing it means changing the page too: audit 3 J-4).
+  it('uploads an unchanged schedule again after a week, not before', async () => {
+    vi.useFakeTimers({ now: Date.UTC(2026, 9, 22), toFake: ['Date'] });
+    const puts = () => requests.filter((request) => request.startsWith('PUT')).length;
+    await syncPush([notice()]);
+    vi.setSystemTime(Date.UTC(2026, 9, 29) - 1);
+    await syncPush([notice()]);
+    expect(puts()).toBe(1);
+    vi.setSystemTime(Date.UTC(2026, 9, 29));
+    await syncPush([notice()]);
+    expect(puts()).toBe(2);
+    vi.useRealTimers();
+  });
+
   it('gives up on a server that never answers, as on one it can’t reach', async () => {
     const { elapse } = hangingNetwork();
     const uploading = syncPush([notice()], { force: true }).catch((error: unknown) => error);

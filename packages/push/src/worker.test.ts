@@ -561,6 +561,48 @@ describe('strangers’ made-up devices (audit 3 B-2)', () => {
   });
 });
 
+// Numbers the docs promise: changing one means changing them too (audit 3 J-4).
+describe('what the docs promise', () => {
+  it('gives a push service 5 seconds to answer', () => {
+    // SECURITY.md: "A push service gets 5 seconds to answer".
+    expect(SEND_MS).toBe(5_000);
+  });
+
+  it('asks the push service to keep a message 6 hours, and says it’s urgent', async () => {
+    // ADR 0009: "messages go with `TTL` 6 hours and `Urgency: high`".
+    const sent = pushService();
+    expect((await device().test()).status).toBe(200);
+    const headers = new Headers(sent.mock.calls[0]?.[1]?.headers);
+    expect([headers.get('TTL'), headers.get('Urgency')]).toEqual(['21600', 'high']);
+  });
+
+  it('skips a message more than an hour late', async () => {
+    // ADR 0009: "A message more than an hour late is skipped."
+    vi.useFakeTimers({ now: Date.UTC(2026, 9, 22), toFake: ['Date'] });
+    const sent = pushService();
+    const once = (start: string) => [entry({ start, repeat: 'none' })];
+    const onTime = `${ENDPOINT}/59-minutes-late`;
+    const late = `${ENDPOINT}/61-minutes-late`;
+    expect((await device().schedule(once('2026-10-22T09:00'), { endpoint: onTime })).status).toBe(
+      200,
+    );
+    expect((await device().schedule(once('2026-10-22T08:58'), { endpoint: late })).status).toBe(
+      200,
+    );
+    // The server only gets to them at 09:59 (busy, say).
+    vi.setSystemTime(Date.UTC(2026, 9, 22, 9, 59));
+    await server.runAlarms();
+    expect(sent.mock.calls.map(([url]) => url)).toEqual([onTime]);
+  });
+
+  it('sends 2,000 messages a day, shared out, and 100 to a device', () => {
+    // ADR 0009 (Limits) and SECURITY.md.
+    expect(DAILY_SENDS).toBe(2000);
+    expect(DAILY_SHARES).toEqual({ known: 1700, other: 200, test: 100 });
+    expect(DEVICE_DAILY_SENDS).toBe(100);
+  });
+});
+
 describe('size', () => {
   it('keeps the biggest schedule the checks allow, in one stored value', async () => {
     // 500 entries with the longest ids, and messages adding up to the limit.
