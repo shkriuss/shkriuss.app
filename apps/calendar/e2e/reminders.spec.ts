@@ -29,7 +29,9 @@ test('reminds on the page and with a notification when the time comes', async ({
     {
       title: 'Dentist',
       body: expect.stringMatching(/^Today · 10:20\sAM – 11:20\sAM$/),
-      tag: 'seed-0/2026-10-17',
+      // The event's id, like the copy the notification service sends
+      // (push.spec.ts), so the two replace each other (audit 3 F1-6).
+      tag: 'seed-0',
       icon: '/icon-192.png',
       renotify: true,
     },

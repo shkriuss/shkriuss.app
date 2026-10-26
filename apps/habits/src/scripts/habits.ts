@@ -494,6 +494,10 @@ export function mountHabits(root: Document): void {
     if (today() === day) return;
     day = today();
     render();
+    // The reminders are worked out from today, so they're uploaded again, as
+    // in Water. Else the open page takes the notification service's copy for
+    // an old one, and both send them (audit 3 F1-6).
+    reminders.changed();
   };
   window.setInterval(checkDay, NEW_DAY_CHECK_MS);
   document.addEventListener('visibilitychange', () => {
