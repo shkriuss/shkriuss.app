@@ -247,25 +247,22 @@ export function mountDataControls(section: HTMLElement): void {
     setError(restoreForm, 'passphrase', '');
   });
 
+  /** Shows a problem with the backup's passphrase, and reads it out (after Enter too: audit 3 G-4). */
+  function unlockProblem(message: string): null {
+    setError(restoreForm, 'passphrase', message);
+    focusProblem(restorePassphrase, message);
+    return null;
+  }
+
   async function unlocked(file: BackupFile): Promise<ExportFile | null> {
     if (file.kind === 'plain') return file.file;
-    if (!restorePassphrase.value) {
-      setError(restoreForm, 'passphrase', 'Enter the passphrase for this backup.');
-      restorePassphrase.focus();
-      return null;
-    }
+    if (!restorePassphrase.value) return unlockProblem('Enter the passphrase for this backup.');
     busy(restoreDialog, 'Unlocking…');
     try {
       return await decryptBackup(file.backup, restorePassphrase.value);
     } catch (error) {
       busy(restoreDialog, '');
-      setError(
-        restoreForm,
-        'passphrase',
-        error instanceof BackupError ? error.message : 'Something went wrong.',
-      );
-      restorePassphrase.focus();
-      return null;
+      return unlockProblem(error instanceof BackupError ? error.message : 'Something went wrong.');
     }
   }
 

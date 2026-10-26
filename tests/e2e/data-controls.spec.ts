@@ -87,6 +87,17 @@ test('a locked backup restores everything, only with its passphrase', async ({ p
   await unlock.fill('not the right passphrase');
   await restoreDialog(page).getByRole('button', { name: 'Restore' }).click();
   await expect(unlock).toHaveAccessibleDescription(/doesn’t unlock this backup/);
+  // Enter in the field: focus is there already, so the problem is read out (audit 3 G-4).
+  await unlock.fill('');
+  await unlock.press('Enter');
+  await expect(restoreDialog(page).getByRole('alert')).toHaveText(
+    'Passphrase: Enter the passphrase for this backup.',
+  );
+  await unlock.fill('still not the right passphrase');
+  await unlock.press('Enter');
+  await expect(restoreDialog(page).getByRole('alert')).toHaveText(
+    'Passphrase: That passphrase doesn’t unlock this backup. Check it and try again.',
+  );
 
   await unlock.fill(PASSPHRASE);
   // Restoring reloads the page.
