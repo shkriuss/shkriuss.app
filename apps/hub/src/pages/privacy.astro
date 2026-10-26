@@ -20,7 +20,7 @@ const whereLabel: Record<StorageKind, string> = {
 // The day this page's text last changed (people rely on it), and a
 // fingerprint of that text: ../privacy.test.ts fails when the text changes
 // but they don't, and says what to set (audit 3 D-7).
-const LAST_UPDATED = '26 October 2026'; // text 7e3ccfcc44748ddc
+const LAST_UPDATED = '26 October 2026'; // text 600c14b4e792c11c
 ---
 
 <AppShell
@@ -89,7 +89,8 @@ const LAST_UPDATED = '26 October 2026'; // text 7e3ccfcc44748ddc
           <li>
             Your device locks each reminder so that only that device can read it, then sends it to
             the app's own server on Cloudflare. Neither the server nor the push service that
-            delivers it (Google, Apple, Mozilla, or a UnifiedPush server you chose) can read it.
+            delivers it (Google, Apple, Mozilla, Microsoft, or a UnifiedPush server you chose) can
+            read it.
           </li>
           <li>
             The server stores, for your device: the delivery address your browser's push service
@@ -107,10 +108,10 @@ const LAST_UPDATED = '26 October 2026'; // text 7e3ccfcc44748ddc
             can't be reached then, the app says so and tries again each time it's opened.
           </li>
           <li>
-            Blocking notifications deletes everything for that device the next time you open the
-            app, or when a reminder is due and the push service says the device no longer takes
-            them. The server also deletes everything for a device when none of its reminders can be
-            delivered for two days.
+            Blocking notifications (in the browser, or in your phone's settings) deletes everything
+            for that device the next time you open the app, or when a reminder is due and the push
+            service says the device no longer takes them. The server also deletes everything for a
+            device when none of its reminders can be delivered for two days.
           </li>
           <li>
             The app sends your reminders again each week while you use it. If you don't open the app
@@ -151,7 +152,9 @@ const LAST_UPDATED = '26 October 2026'; // text 7e3ccfcc44748ddc
         <strong>If you add a passkey:</strong> the account's own server on Cloudflare keeps your
         account key locked so that only that passkey can unlock it, with the passkey's public key,
         to check that it's used on the Account page. The server can't unlock it and doesn't know
-        whose it is. Removing the passkey deletes it.
+        whose it is. Removing the passkey (“Remove a passkey” on the Account page) deletes it.
+        Remove it there before you delete it from your password manager: only the passkey itself can
+        remove what the server keeps for it, so after that it stays on the server for good, locked.
       </li>
       <li>
         <strong>When you add a device with a code:</strong> for at most 10 minutes, the server keeps
@@ -166,7 +169,8 @@ const LAST_UPDATED = '26 October 2026'; // text 7e3ccfcc44748ddc
         key until you sign out (or sign in to another account), so your apps can move their synced
         data to the new one. Passkeys you added before can't sign in any more, but the old key stays
         on the server, locked for each of them, until you remove that passkey (“Remove a passkey” on
-        the Account page).{' '}
+        the Account page; one already deleted from your password manager can't be removed, so it
+        stays, locked).{' '}
         {pushSites.length > 0 && (
           <>
             Reminders while an app is closed aren't part of the account, so the lost device keeps
@@ -215,22 +219,24 @@ const LAST_UPDATED = '26 October 2026'; // text 7e3ccfcc44748ddc
           </li>
           <li>
             In apps with photos, each photo is locked on your device in the same way and kept with
-            the copy. The server sees how many there are and how big, never what they show. Deleting
-            a photo deletes it online too.
+            the copy. The server sees how many there are, how big, and when each was put online,
+            never what they show. Deleting a photo deletes it online too.
           </li>
           {librarySites.length > 0 && (
             <li>
               {listOf(librarySites.map((site) => site.name))} also keeps your whole library online,
               as the original files. Each photo is locked on your device before it's sent, and kept
               in Cloudflare's file storage (R2). The server sees how many photos there are, how big,
-              and when they're added or deleted, never what they show, their names or their dates.
-              Adding photos needs a storage code that only the owner of these apps has, which keeps
-              the storage bill under control. When someone types a wrong code, a scrambled form of
-              their internet address is kept for up to an hour, to limit guessing. With sync on,
-              deleting a photo deletes it online and on your other devices; with sync off, only on
-              that device. A small note of a deleted photo stays for as long as the library does
-              (its id, when, and a proof made with your library's key that your device deleted it),
-              so devices that haven't checked yet learn it was deleted.
+              when they're added or deleted, and which of your account keys locked each one (by a
+              scrambled name, so it can tell when the account key was replaced), never what they
+              show, their names or their dates. Adding photos needs a storage code that only the
+              owner of these apps has, which keeps the storage bill under control. When someone
+              types a wrong code, a scrambled form of their internet address is kept for up to an
+              hour, to limit guessing. With sync on, deleting a photo deletes it online and on your
+              other devices; with sync off, only on that device. A small note of a deleted photo
+              stays for as long as the library does (its id, when, and a proof made with your
+              library's key that your device deleted it), so devices that haven't checked yet learn
+              it was deleted.
             </li>
           )}
           <li>
@@ -240,10 +246,15 @@ const LAST_UPDATED = '26 October 2026'; // text 7e3ccfcc44748ddc
             “Turn off on this device” stops syncing there and keeps your data. “Delete the online
             copy” deletes the copy (and its photos, and any online library) from the server; your
             devices keep what they have. A small note stays, so your other devices learn it was
-            deleted: when, and how many times it was changed, never what was in it. It's deleted too
-            once no device has asked about it for 13 months, and so is what's left of an online
-            library (scrambled codes only your devices can match, and how many changes and uploads
-            it had).
+            deleted: when the copy was made and when it was deleted, how many times it was changed,
+            and when a device last asked about it, never what was in it. It's deleted too once no
+            device has asked about it for 13 months, and so is what's left of an online library
+            (scrambled codes only your devices can match, a scrambled form of the storage code it
+            was unlocked with, how many changes and uploads it had, the day of its last uploads, and
+            when it was last used). Turning on sync again later starts a new copy, which replaces
+            the note and keeps the random ids of up to 20 copies deleted before it, so devices still
+            using one of them learn it was deleted. An online library has to be unlocked with the
+            storage code again.
           </li>
           <li>
             If you replace your account key, turning on sync again moves the app's copy to the new

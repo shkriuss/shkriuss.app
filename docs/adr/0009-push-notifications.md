@@ -40,8 +40,8 @@ browsers like IronFox receive Web Push through **UnifiedPush**.
   their own separate storage, so the whole thing can be tested before merging.
 - **The phone encrypts every message** to its own push subscription
   (RFC 8291) before uploading it. The server stores and forwards only
-  ciphertext; neither it nor the push service (Google, Apple, Mozilla or a
-  UnifiedPush server) can read a title or time label. Each message is
+  ciphertext; neither it nor the push service (Google, Apple, Mozilla,
+  Microsoft or a UnifiedPush server) can read a title or time label. Each message is
   padded first, to a multiple of 256 bytes (RFC 8188's padding, which
   browsers remove), so its size shows little about how long its text is
   (audit 3 D-6).

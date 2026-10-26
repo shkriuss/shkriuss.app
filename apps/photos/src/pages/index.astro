@@ -114,7 +114,10 @@ import { AppShell, Button, DataControls, Icon, SyncControls } from '@shkriuss/ui
       </div>
     </SyncControls>
 
-    <DataControls backup={false}>
+    <DataControls
+      backup={false}
+      keepFirst="To keep your photos, save the originals you want first (open one and tap “Save original”, or choose several with “Select”), or turn on sync to keep them online."
+    >
       <p class="muted">
         Photos are too big for backup files. To keep them somewhere else too, turn on sync to keep
         them online, or save originals: open one and tap “Save original”, or choose several with
