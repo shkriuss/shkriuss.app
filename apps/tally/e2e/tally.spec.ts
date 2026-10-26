@@ -45,6 +45,14 @@ test('keeps keyboard focus on the button after counting', async ({ page }) => {
   await expect(
     counter(page, 'Steps').getByRole('button', { name: 'Add 1 to Steps' }),
   ).toBeFocused();
+  // Counted down to 0, "Subtract 1" can't keep focus: "Add 1" takes it.
+  await counter(page, 'Steps').getByRole('button', { name: 'Subtract 1 from Steps' }).focus();
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Enter');
+  await expect(counter(page, 'Steps').locator('[data-value]')).toHaveText('0');
+  await expect(
+    counter(page, 'Steps').getByRole('button', { name: 'Add 1 to Steps' }),
+  ).toBeFocused();
 });
 
 test('explains invalid names', async ({ page }) => {

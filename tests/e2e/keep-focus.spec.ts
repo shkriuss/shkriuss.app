@@ -298,6 +298,19 @@ const goneCases: Record<
     change: (other) => button(other, /^Remove 500 ml/).click(),
     next: (page) => button(page, /^Remove 250 ml/),
   },
+  // Audit 3 G-3: focus fell to the top of the page.
+  tally: {
+    setup: async (page) => {
+      await enter(page, 'New counter', 'Cups');
+      await enter(page, 'New counter', 'Steps');
+      return button(page, 'Add 1 to Cups');
+    },
+    change: async (other) => {
+      await button(other, 'Delete Cups').click();
+      await other.getByRole('dialog').getByRole('button', { name: 'Delete' }).click();
+    },
+    next: (page) => button(page, 'Add 1 to Steps'),
+  },
 };
 
 test('when the focused item is taken away in another tab, focus goes to the next one', async ({

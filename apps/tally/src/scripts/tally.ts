@@ -4,6 +4,7 @@
  */
 import { createStore } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
+import { keepFocus } from '@shkriuss/ui/keep-focus';
 import { focusProblem, reportSave } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { site } from 'virtual:shkriuss/site';
@@ -82,25 +83,30 @@ export function mountTally(root: Document): void {
     return item;
   }
 
-  function render(): void {
-    // Keep keyboard focus on the same button after re-rendering.
-    const active = root.activeElement;
-    const focusId = active?.closest<HTMLElement>('[data-id]')?.dataset['id'];
-    const focusAction = active?.getAttribute('data-action');
-
+  function draw(): void {
     list.replaceChildren(...state.counters.map(renderCounter));
     empty.hidden = state.counters.length > 0;
+  }
 
-    if (focusId && focusAction) {
-      const target =
-        list.querySelector<HTMLButtonElement>(
-          `[data-id="${CSS.escape(focusId)}"] [data-action="${focusAction}"]:not(:disabled)`,
-        ) ??
-        list.querySelector<HTMLButtonElement>(
-          `[data-id="${CSS.escape(focusId)}"] [data-action="increment"]`,
-        );
-      target?.focus();
+  /**
+   * Draws the counters again. Keyboard focus stays on the same button, or
+   * on the one like it in the next counter if this one was deleted on
+   * another device, or else on the name field (keepFocus, audit 3 G-3).
+   * Counted down to 0, "Subtract 1" can't keep it: "Add 1" takes it.
+   */
+  function render(): void {
+    const active = root.activeElement;
+    const counter = state.counters.find(
+      (entry) => entry.id === active?.closest<HTMLElement>('[data-id]')?.dataset['id'],
+    );
+    if (counter?.count !== 0 || active?.getAttribute('data-action') !== 'decrement') {
+      keepFocus(draw, input);
+      return;
     }
+    draw();
+    list
+      .querySelector<HTMLElement>(`[data-id="${CSS.escape(counter.id)}"] [data-action="increment"]`)
+      ?.focus();
   }
 
   form.addEventListener('submit', (event) => {
@@ -190,8 +196,9 @@ export function mountTally(root: Document): void {
     pendingDeleteId = undefined;
     if (dialog.returnValue !== 'confirm' || !id) return;
     const counter = state.counters.find((entry) => entry.id === id);
-    if (save(removeCounter(state, id)) && counter) announce(`Deleted ${counter.name}.`);
+    // To the name field, as the counter goes (before it's drawn again, so focus moves once).
     input.focus();
+    if (save(removeCounter(state, id)) && counter) announce(`Deleted ${counter.name}.`);
   });
 
   // Sync between devices through the shkriuss account (if turned on).
