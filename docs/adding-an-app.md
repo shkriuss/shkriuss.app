@@ -52,12 +52,16 @@ pnpm --filter notes dev
    the slug.
 2. Adds the app to `packages/registry/apps.json` with `"status": "live"`,
    `"storage": "device"` and the theme choice in `dataStored` (every page
-   saves it, so keep both), then formats the new files.
+   saves it, so keep both).
+3. Adds a line for the app to the three shared browser tests' tables
+   (`tests/e2e/saving.spec.ts`, `keep-focus.spec.ts` and
+   `large-text.spec.ts`), as `null` with "New: nothing for this test yet",
+   so they don't fail for it. Fill them in as the app grows (see below).
+   Then it formats the new files.
 
 That's all: the hub, the privacy page, the browser tests, the build and the
-deploy all read from the registry and the `apps/` folder. (One shared test
-needs a line once the app saves something; see below.) The hub lists apps in
-alphabetical order, so where an entry sits in `apps.json` doesn't matter.
+deploy all read from the registry and the `apps/` folder. The hub lists apps
+in alphabetical order, so where an entry sits in `apps.json` doesn't matter.
 
 ## Building the app
 
@@ -143,11 +147,30 @@ something under `shkriuss-device:` must delete it in the delete handler of
 `packages/ui/src/scripts/data-controls.ts` too, as notifications and sync
 do.
 
-### Building on a computer
+### Working on a computer
 
 The first `pnpm build` (and `pnpm verify`) downloads Grammar's 361 MB model.
 To build everything else without it:
-`pnpm -r --filter "./apps/*" --filter "!grammar" build`.
+`pnpm -r --filter "./apps/*" --filter "!grammar" build`. `pnpm test:e2e`
+then stops at the start, as Grammar has nothing built: test the other sites
+with `E2E_SITES=$(ls apps | grep -v '^grammar$' | paste -sd, -) pnpm test:e2e`
+(audit 4 J-9).
+
+Each site's local server keeps its data between runs, in
+`apps/<slug>/.wrangler/state`. Photos' online-library test types one wrong
+storage code each run on purpose, and the server takes only 20 wrong codes an
+hour from one internet address (on a computer, every run comes from the same
+one): after 20 runs in an hour, the right code is refused too, until the hour
+is over. Delete `apps/photos/.wrangler/state` to start afresh.
+
+The app template (`templates/app/`) is linted with everything else, but it's
+type-checked and built only once an app is made from it. So after changing a
+shared component it uses, try one:
+`pnpm new-app scratch --name "Scratch" --description "A test."`,
+`pnpm install`, then `pnpm --filter scratch typecheck` and
+`pnpm --filter scratch build`. Undo it all before committing: the app's
+folder, and its lines in `packages/registry/apps.json`, the three shared
+tests and `pnpm-lock.yaml`.
 
 `pnpm --filter <slug> dev` shows the page only: it has no `/api`, so "Turn
 on sync", notifications while closed and the online library don't work
@@ -280,6 +303,12 @@ or:
    `createSync({ app: site.slug, stores: [syncedStore({ store, items, withItems })], onChange })`,
    then `mountSyncControls(…)`, and `sync.changed()` after every save. See
    `apps/tally/src/scripts/tally.ts`.
+6. Test the app's rules across devices with `tests/unit/sync-devices.ts`:
+   pretend devices, each with its own storage, running the real sync client
+   against the real sync server in memory (Budget's and Trades' unit tests
+   use it). Browser tests of syncing go in `apps/<slug>/e2e/sync.spec.ts`,
+   with the helpers in `tests/e2e/account.ts` (`expectSealed()` checks that
+   what goes online is sealed).
 
 **An online library** like Photos' (big files in R2, [ADR 0016](adr/0016-online-photo-library.md))
 needs more: `"library": true` in `apps.json`; an R2 bucket named

@@ -44,7 +44,10 @@ each audit found, and what happened to each finding, is in
    `pnpm test:e2e` needs `pnpm build` first and Playwright's Chromium. The
    first `pnpm build` downloads Grammar's 361 MB model from Hugging Face;
    without it, build the rest with
-   `pnpm -r --filter "./apps/*" --filter "!grammar" build`.
+   `pnpm -r --filter "./apps/*" --filter "!grammar" build`, and give
+   `pnpm test:e2e` the other sites in `E2E_SITES`. More, like starting the
+   local servers' data afresh: "Working on a computer" in
+   [adding-an-app.md](../adding-an-app.md).
 
 ## What this is
 

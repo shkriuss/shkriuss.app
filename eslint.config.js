@@ -14,7 +14,9 @@ export default tseslint.config(
       // Made by the build: big downloads (e.g. onnxruntime-web, as published).
       '**/.cache/',
       'apps/*/public/on-demand/',
-      'templates/',
+      // Not templates/: the app template is linted like an app, so a change
+      // to a shared component can't break the next new app's first pull
+      // request unseen (audit 4 J-9).
       'test-results/',
       'playwright-report/',
     ],
