@@ -512,7 +512,15 @@ export function mountShelf(root: Document): void {
 
   deleteButton.addEventListener('click', () => {
     const item = find(editingId);
-    if (!item) return;
+    if (!item) {
+      // Deleted on another device while the form was open: there's nothing
+      // to delete. Say so, rather than doing nothing (audit 3 F3-9).
+      editingId = null;
+      opener = focusSpot(addButton);
+      editor.close();
+      say('That item was already deleted on another device.');
+      return;
+    }
     deleteName.textContent = item.name;
     deleteDialog.returnValue = '';
     // Opens on top of the form; "Cancel" goes back to it.
