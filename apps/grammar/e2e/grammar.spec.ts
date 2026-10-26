@@ -160,6 +160,37 @@ test('says when the dictionary is full', async ({ page }) => {
   await expect(suggestion(page, 'Mtskheta')).toHaveCount(0);
 });
 
+test('says how many words to remove when the dictionary has more than it keeps', async ({
+  page,
+}) => {
+  // Sync can bring two devices' dictionaries together past 500 words; then
+  // "Remove one to add another" wasn't enough (audit 3 F3-9).
+  await page.goto('/');
+  const words = Array.from({ length: 600 }, (_, index) => `word${index}`);
+  await page.evaluate((list) => {
+    const data = { text: '', english: 'american', words: list };
+    localStorage.setItem('shkriuss:grammar', JSON.stringify({ v: 1, data }));
+  }, words);
+  await open(page);
+  await text(page).fill('Mtskheta is near Tbilisi.');
+  await suggestion(page, 'Mtskheta')
+    .getByRole('button', { name: 'Add to my dictionary: “Mtskheta”' })
+    .click();
+  const full = page.getByRole('alert').filter({
+    hasText: 'Your dictionary has 600 words; it can keep 500. Remove 101 to add another.',
+  });
+  await expect(full).toBeVisible();
+
+  // Down to 499 on another device (the change comes as another tab's does): the note goes.
+  await page.evaluate((list) => {
+    const key = 'shkriuss:grammar';
+    const data = { text: 'Mtskheta is near Tbilisi.', english: 'american', words: list };
+    localStorage.setItem(key, JSON.stringify({ v: 1, data }));
+    window.dispatchEvent(new StorageEvent('storage', { key, storageArea: localStorage }));
+  }, words.slice(101));
+  await expect(full).toHaveCount(0);
+});
+
 test('shows a problem in the text', async ({ page }) => {
   await open(page);
   await text(page).fill('She go to school.');

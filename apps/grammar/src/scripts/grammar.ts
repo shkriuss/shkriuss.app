@@ -23,7 +23,7 @@ import {
   addWord,
   applyFix,
   contextOf,
-  DICTIONARY_FULL,
+  dictionaryFull,
   emptyState,
   fixDone,
   fixesToShow,
@@ -97,6 +97,8 @@ export function mountGrammar(root: Document): void {
   let saveTimer: number | undefined;
   /** True while a fix changes the text (see fixText). */
   let fixing = false;
+  /** The note that the dictionary is full, while it's shown. */
+  let fullNote: string | null = null;
 
   const announce = (message: string): void => {
     announcer.textContent = message;
@@ -283,9 +285,15 @@ export function mountGrammar(root: Document): void {
     tell({ type: 'words', words });
     renderWords();
     check();
-    // There's room again: the note that the dictionary is full goes.
-    if (words.length < MAX_WORDS) clearProblem(DICTIONARY_FULL);
+    roomAgain();
     return saved;
+  }
+
+  /** There's room in the dictionary again: the note that it's full goes. */
+  function roomAgain(): void {
+    if (fullNote === null || state.words.length >= MAX_WORDS) return;
+    clearProblem(fullNote);
+    fullNote = null;
   }
 
   /** The English choice or the dictionary changed elsewhere (another tab or device). */
@@ -295,6 +303,7 @@ export function mountGrammar(root: Document): void {
     tell({ type: 'words', words: state.words });
     renderWords();
     check();
+    roomAgain();
   }
 
   // ---------- Deep check ----------
@@ -363,7 +372,8 @@ export function mountGrammar(root: Document): void {
       const words = addWord(state.words, word);
       if (words === null) {
         // Shown at the top of the page and read out; focus stays on the button.
-        showProblem(DICTIONARY_FULL);
+        fullNote = dictionaryFull(state.words.length);
+        showProblem(fullNote);
         return;
       }
       focusAfterCheck = index;

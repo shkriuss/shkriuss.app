@@ -8,10 +8,10 @@ import {
 } from '../../../../packages/sync/src/merge.ts';
 import {
   addWord,
-  DICTIONARY_FULL,
   applyFix,
   contextOf,
   defaultEnglish,
+  dictionaryFull,
   emptyState,
   fixDone,
   fixesToShow,
@@ -149,7 +149,28 @@ describe('dictionary', () => {
     // A word already in it is still in it.
     expect(addWord(full, 'w7')).toEqual(full);
     expect(addWord(full.slice(1), 'Tbilisi')).toHaveLength(MAX_WORDS);
-    expect(DICTIONARY_FULL).toBe('Your dictionary is full (500 words). Remove one to add another.');
+    expect(dictionaryFull(MAX_WORDS)).toBe(
+      'Your dictionary is full (500 words). Remove one to add another.',
+    );
+  });
+
+  it('says how many to remove when sync brought more words than it keeps', () => {
+    // Two devices' dictionaries merged can pass 500 words; then "Remove one"
+    // wasn't enough to add another (audit 3 F3-9).
+    const merged = Array.from({ length: 600 }, (_, index) => `w${index}`);
+    expect(addWord(merged, 'Tbilisi')).toBeNull();
+    expect(dictionaryFull(merged.length)).toBe(
+      'Your dictionary has 600 words; it can keep 500. Remove 101 to add another.',
+    );
+    // Removing that many makes room for one.
+    expect(addWord(merged.slice(101), 'Tbilisi')).toHaveLength(MAX_WORDS);
+    expect(addWord(merged.slice(100), 'Tbilisi')).toBeNull();
+    expect(dictionaryFull(501)).toBe(
+      'Your dictionary has 501 words; it can keep 500. Remove 2 to add another.',
+    );
+    expect(dictionaryFull(2500)).toBe(
+      'Your dictionary has 2,500 words; it can keep 500. Remove 2,001 to add another.',
+    );
   });
 });
 
