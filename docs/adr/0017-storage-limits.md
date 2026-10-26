@@ -91,7 +91,9 @@ app need lowering first.
 - **An online library that was never unlocked** (with the storage code) is
   deleted 30 days after it was last used. It can't hold photos before it's
   unlocked, so nothing is lost: a device still using it makes it again.
-  Unlocked libraries stay.
+  Unlocked libraries stay. What's left of one after "Delete the online
+  copy" is deleted 13 months after a device last used it, and its room is
+  given back (audit 3 D-2); one that gets photos again stays.
 - A token that only asks (a copy that doesn't exist, a file, a replaced-key
   check) keeps nothing at all.
 

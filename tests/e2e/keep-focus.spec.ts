@@ -7,6 +7,7 @@
  */
 import type { Locator, Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
+import { jpeg, picture, withExif } from './photos.ts';
 
 /** Types into a text field and presses Enter (which adds it, in these apps). */
 async function enter(page: Page, label: string, text: string): Promise<void> {
@@ -59,6 +60,30 @@ async function twoTasks(page: Page): Promise<Locator> {
   await enter(page, 'New task', 'Call mum');
   return page.getByRole('checkbox', { name: 'Done: Pay rent', exact: true });
 }
+
+/** Photos: adds a photo taken at `taken` ("YYYY:MM:DD HH:MM:SS", as a camera writes it). */
+async function addPhoto(page: Page, taken: string, color: string): Promise<void> {
+  const chooser = page.waitForEvent('filechooser');
+  await button(page, 'Add photos').click();
+  const photo = withExif(await picture(page, { width: 400, height: 300, color }), taken);
+  await (await chooser).setFiles([jpeg(`${color.slice(1)}.jpg`, photo)]);
+  await expect(page.getByRole('status').filter({ hasText: 'Added 1 photo.' })).toBeAttached();
+}
+
+/**
+ * Photos looks for another tab's changes when it's switched back to (audit
+ * J-3), so the first tab is: what the browser does then.
+ */
+async function switchBackFrom(other: Page): Promise<void> {
+  const first = other
+    .context()
+    .pages()
+    .find((open) => open !== other);
+  await first?.evaluate(() => window.dispatchEvent(new Event('focus')));
+}
+
+const OCTOBER_PHOTO = 'Photo taken Oct 21, 2026, 2:03:22 PM';
+const JULY_PHOTO = 'Photo taken Jul 4, 2019, 6:30:05 PM';
 
 interface Case {
   /** Adds what's needed, and gives the control to focus. */
@@ -123,6 +148,19 @@ const cases: Record<string, Case> = {
       await other.getByLabel('Title').fill('Holidays');
     },
     shown: (page) => page.getByRole('link', { name: 'Holidays', exact: true }),
+  },
+  // The grid is drawn again the same way after each photo of this device goes
+  // online, and after changes from other devices (audit 3 G-1).
+  photos: {
+    setup: async (page) => {
+      await addPhoto(page, '2026:10:21 14:03:22', '#c33');
+      return button(page, OCTOBER_PHOTO);
+    },
+    change: async (other) => {
+      await addPhoto(other, '2019:07:04 18:30:05', '#36c');
+      await switchBackFrom(other);
+    },
+    shown: (page) => button(page, JULY_PHOTO),
   },
   reminders: {
     setup: async (page) => {
@@ -225,6 +263,25 @@ const goneCases: Record<
     next: (page: Page) => Locator;
   }
 > = {
+  photos: {
+    setup: async (page) => {
+      await addPhoto(page, '2026:10:21 14:03:22', '#c33');
+      await addPhoto(page, '2019:07:04 18:30:05', '#36c');
+      return button(page, OCTOBER_PHOTO);
+    },
+    // Deleted in the other tab, from its viewer.
+    change: async (other) => {
+      await button(other, OCTOBER_PHOTO).click();
+      await other.locator('[data-viewer]').getByRole('button', { name: 'Delete' }).click();
+      await other
+        .getByRole('dialog', { name: 'Delete this photo?' })
+        .getByRole('button', { name: 'Delete' })
+        .click();
+      await expect(other.locator('[data-viewer-announcer]')).toHaveText(/^Deleted the photo\./);
+      await switchBackFrom(other);
+    },
+    next: (page) => button(page, JULY_PHOTO),
+  },
   tasks: {
     setup: twoTasks,
     // Ticked off on the other device: it leaves the tasks to do.

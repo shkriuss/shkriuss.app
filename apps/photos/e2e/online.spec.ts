@@ -5,7 +5,7 @@
 // each device uses the right library. The shared tests (tests/e2e/sync.spec.ts)
 // cover turning sync on and off, deleting the online copy and a new account key.
 import { readFile } from 'node:fs/promises';
-import type { Page, Route } from '@playwright/test';
+import type { Browser, Page, Route } from '@playwright/test';
 import { appSecretOf, parseRecoveryKey } from '../../../packages/account/src/secret.ts';
 import { randomBytes, toBase64Url } from '../../../packages/crypto/src/index.ts';
 import { libraryAccess, libraryRecord } from '../../../packages/library/src/client.ts';
@@ -124,7 +124,7 @@ test('puts photos online, and shows them on the other devices', async ({
   await expect(tiles(tablet)).toHaveCount(2, ONLINE);
   await expect(onlineStatus(tablet)).toHaveText(/^Online: 2 photos · /, ONLINE);
   await expect(tablet.getByLabel('Storage code')).toBeHidden();
-  const julyTile = tablet.getByRole('button', { name: 'Photo taken Jul 4, 2019, 6:30 PM' });
+  const julyTile = tablet.getByRole('button', { name: 'Photo taken Jul 4, 2019, 6:30:05 PM' });
   await expect.poll(() => naturalWidth(julyTile.locator('img')), ONLINE).toBe(512);
   expect(await originalsHere(tablet)).toBe(0);
 
@@ -162,6 +162,158 @@ test('puts photos online, and shows them on the other devices', async ({
   await expect(tiles(tablet)).toHaveCount(0);
   await turnOnSync(tablet, 'Photos');
   await expect(tiles(tablet)).toHaveCount(1, ONLINE);
+  await tablet.context().close();
+});
+
+test('keyboard focus stays on a photo while photos go online', async ({ page }) => {
+  // The grid is drawn again after each upload: focus fell to the top of the page (audit 3 G-1).
+  await createAccount(page);
+  await page.goto('/');
+  const october = withExif(await picture(page, { width: 400, height: 300 }), '2026:10:21 14:03:22');
+  const july = withExif(
+    await picture(page, { width: 400, height: 300, color: '#36c' }),
+    '2019:07:04 18:30:05',
+  );
+  await addPhotos(page, [jpeg('IMG_0015.JPG', october), jpeg('IMG_0016.JPG', july)]);
+
+  // Uploads wait until a photo has keyboard focus.
+  let letGo = (): void => undefined;
+  const goOn = new Promise<void>((resolve) => {
+    letGo = resolve;
+  });
+  await page.route('**/api/library/items/**', async (route) => {
+    if (route.request().method() === 'PUT') await goOn;
+    await route.continue();
+  });
+  await turnOnSync(page, 'Photos');
+  await unlock(page);
+  const tile = page.getByRole('button', { name: 'Photo taken Jul 4, 2019, 6:30:05 PM' });
+  await tile.focus();
+  await page.evaluate(() => {
+    (window as unknown as { focusedBefore: Element | null }).focusedBefore = document.activeElement;
+  });
+
+  letGo();
+  await expect(onlineStatus(page)).toHaveText(/^Online: 2 photos · /, ONLINE);
+  // Drawn again (the tile is a new copy), with focus on the same photo.
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          document.activeElement ===
+          (window as unknown as { focusedBefore: Element | null }).focusedBefore,
+      ),
+    )
+    .toBe(false);
+  await expect(tile).toBeFocused();
+});
+
+/** A second device signed in to the same account, with sync on in Photos. */
+async function tabletWith(browser: Browser, key: string, appURL: string): Promise<Page> {
+  const tablet = await (await otherDevice(browser)).newPage();
+  await signInWithKey(tablet, key);
+  await tablet.goto(`${appURL}/`);
+  await turnOnSync(tablet, 'Photos');
+  return tablet;
+}
+
+/** "Sync now", then waits until the online library has been asked for its changes. */
+async function syncNow(page: Page): Promise<void> {
+  const asked = page.waitForResponse((response) => response.url().includes('/api/library/changes'));
+  await page.getByRole('button', { name: 'Sync now' }).click();
+  await asked;
+}
+
+/** Deletes the photo open in the viewer, and says what the dialog said. */
+async function deleteInViewer(page: Page): Promise<string> {
+  await page.locator('[data-viewer]').getByRole('button', { name: 'Delete' }).click();
+  const confirm = page.getByRole('dialog', { name: 'Delete this photo?' });
+  const said = (await confirm.locator('[data-delete-text]').textContent()) ?? '';
+  await confirm.getByRole('button', { name: 'Delete' }).click();
+  return said;
+}
+
+test('a photo deleted while sync is off is deleted only on this device: the online library and the other devices keep it', async ({
+  page,
+  browser,
+}) => {
+  // It was deleted online, and from every device, once sync was on again (audit 3 F3-1).
+  const { key } = await createAccount(page);
+  await page.goto('/');
+  const appURL = new URL(page.url()).origin;
+  await photoOnline(page, 'IMG_0021.JPG');
+  const tablet = await tabletWith(browser, key, appURL);
+  await expect(tiles(tablet)).toHaveCount(1, ONLINE);
+  const removals: string[] = [];
+  page.on('request', (request) => {
+    if (request.url().endsWith('/api/library/remove')) removals.push(request.url());
+  });
+
+  // The phone turns sync off, then deletes the photo there, as its dialog says.
+  await page.getByRole('button', { name: 'Turn off on this device' }).click();
+  await tiles(page).first().click();
+  expect(await deleteInViewer(page)).toBe(
+    'The original and its copies are deleted from this device. Your online library keeps it, so it shows here again when you turn sync on again.',
+  );
+  await expect(tiles(page)).toHaveCount(0);
+  expect(await stored(page)).toEqual({ photos: 0, files: 0 });
+
+  // On again: it's back on the phone, only online, and still on the tablet.
+  await turnOnSync(page, 'Photos');
+  await expect(tiles(page)).toHaveCount(1, ONLINE);
+  await expect(onlineStatus(page)).toHaveText(/^Online: 1 photo · /, ONLINE);
+  await syncNow(page);
+  await tiles(page).first().click();
+  await expect(page.locator('[data-viewer] [data-detail="where"]')).toHaveText(
+    'Online (the original isn’t on this device)',
+  );
+  expect(removals).toEqual([]);
+  await syncNow(tablet);
+  await tablet.waitForTimeout(500);
+  await expect(tiles(tablet)).toHaveCount(1);
+  await tablet.context().close();
+});
+
+test('a photo deleted while sync is on is deleted everywhere, even if sync is turned off before that gets online', async ({
+  page,
+  browser,
+  guard,
+}) => {
+  // The online library is cut off on purpose.
+  guard.allowConsole('net::ERR_FAILED');
+  const { key } = await createAccount(page);
+  await page.goto('/');
+  const appURL = new URL(page.url()).origin;
+  await photoOnline(page, 'IMG_0022.JPG');
+  const tablet = await tabletWith(browser, key, appURL);
+  await expect(tiles(tablet)).toHaveCount(1, ONLINE);
+
+  // Deleted with sync on, as the dialog says, but it can't reach the online library just now.
+  const cutOff = (route: Route) => route.abort();
+  await page.route('**/api/library/remove', cutOff);
+  await tiles(page).first().click();
+  expect(await deleteInViewer(page)).toBe(
+    'It’s deleted from this device and from your online library, so from your other devices too. This can’t be undone.',
+  );
+  await expect(tiles(page)).toHaveCount(0);
+  await expect(onlineStatus(page)).toHaveText(
+    'Couldn’t reach the online library: no connection. It will try again.',
+    ONLINE,
+  );
+
+  // Sync is turned off before it gets there, and on again later: then it does.
+  await page.getByRole('button', { name: 'Turn off on this device' }).click();
+  await page.unroute('**/api/library/remove', cutOff);
+  const removed = page.waitForResponse(
+    (response) => response.url().endsWith('/api/library/remove') && response.ok(),
+  );
+  await turnOnSync(page, 'Photos');
+  await removed;
+  // It never came back on the phone meanwhile, and goes from the tablet.
+  await expect(tiles(page)).toHaveCount(0);
+  expect(await stored(page)).toEqual({ photos: 0, files: 0 });
+  await syncNow(tablet);
+  await expect(tiles(tablet)).toHaveCount(0);
   await tablet.context().close();
 });
 
@@ -302,10 +454,31 @@ test('frees up space on this device, and the photos still show', async ({ page }
   await expect(freeUp).toBeHidden();
 
   // It still shows, and its original comes back from online.
-  const tile = page.getByRole('button', { name: 'Photo taken Oct 21, 2026, 2:03 PM' });
+  const tile = page.getByRole('button', { name: 'Photo taken Oct 21, 2026, 2:03:22 PM' });
   await expect.poll(() => naturalWidth(tile.locator('img')), ONLINE).toBe(512);
-  await tile.click();
   const dialog = page.locator('[data-viewer]');
+
+  // Closed while its screen-sized copy is still downloading: nothing goes
+  // wrong when it arrives (any error on the page fails the test).
+  let arrive = (): void => undefined;
+  const arriving = new Promise<void>((resolve) => {
+    arrive = resolve;
+  });
+  await page.route('**/api/library/items/**', async (route) => {
+    await arriving;
+    await route.continue();
+  });
+  const downloaded = page.waitForResponse((response) =>
+    response.url().includes('/api/library/items/'),
+  );
+  await tile.click();
+  await dialog.getByRole('button', { name: 'Close' }).click();
+  await expect(dialog).toBeHidden();
+  arrive();
+  await downloaded;
+  await page.unroute('**/api/library/items/**');
+
+  await tile.click();
   await expect.poll(() => naturalWidth(dialog.getByRole('img')), ONLINE).toBe(2048);
 
   // While it downloads, the viewer says so, and another tap doesn't start a
@@ -323,7 +496,7 @@ test('frees up space on this device, and the photos still show', async ({ page }
   const download = page.waitForEvent('download');
   const saveOriginal = dialog.getByRole('button', { name: 'Save original' });
   await saveOriginal.click();
-  const viewerStatus = dialog.getByRole('status');
+  const viewerStatus = dialog.getByRole('status').and(dialog.locator('[data-viewer-status]'));
   await expect(viewerStatus).toHaveText('Downloading the original…');
   await expect(saveOriginal).toHaveAttribute('aria-disabled', 'true');
   await expect(saveOriginal).toBeFocused();
@@ -459,7 +632,7 @@ test('a photo is never marked as on this device without its original, even if fr
   await expect(onlineStatus(page)).toHaveText(/^Online: 2 photos · /, ONLINE);
   expect(await hereWithoutOriginal(page)).toBe(0);
   expect(await originalsHere(page)).toBe(1);
-  await page.getByRole('button', { name: 'Photo taken Oct 21, 2026, 2:03 PM' }).click();
+  await page.getByRole('button', { name: 'Photo taken Oct 21, 2026, 2:03:22 PM' }).click();
   const dialog = page.locator('[data-viewer]');
   await expect(dialog.locator('[data-detail="where"]')).toHaveText(
     'Online (the original isn’t on this device)',

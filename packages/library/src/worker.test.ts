@@ -6,7 +6,7 @@ import { randomBytes, sha256, toBase64Url } from '@shkriuss/crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { memoryLibrary } from './testing.ts';
 import { LIMITS, type Changes } from './validate.ts';
-import { LOCKED_UNUSED_MS, STORAGE_LIMITS, SWEEP_MS } from './worker.ts';
+import { LOCKED_UNUSED_MS, STORAGE_LIMITS, SWEEP_MS, WIPED_UNUSED_MS } from './worker.ts';
 
 const ORIGIN = 'https://photos.example';
 const CODE = 'correct horse battery staple';
@@ -177,11 +177,48 @@ describe('the storage code', () => {
     const kept = [...server.gateStorage.map.keys()].filter((key) => key.startsWith('try:'));
     expect(kept).toHaveLength(1);
     expect(JSON.stringify([...server.gateStorage.map])).not.toContain('198.51.100');
+    // Not even as a hash of the address and the code, which someone with the
+    // code could find by trying every IPv4 address (audit 3 D-8): mixed with
+    // a random salt the gate keeps only for the hour.
+    const unsalted = toBase64Url(
+      await sha256(new TextEncoder().encode(`shkriuss library caller v1 ${CODE} 198.51.100.4`)),
+    );
+    expect(kept[0]).not.toContain(unsalted.slice(0, 16));
+    expect(
+      [...server.gateStorage.map.keys()].filter((key) => key.startsWith('salt:')),
+    ).toHaveLength(1);
     expect(server.gateStorage.alarm).toBe(Date.UTC(2026, 9, 22, 13));
 
     vi.setSystemTime(Date.UTC(2026, 9, 22, 13));
+    // As Cloudflare runs it: the alarm is cleared first. Nothing's left, so it isn't set again.
+    server.gateStorage.alarm = null;
     await server.gate.alarm();
-    expect([...server.gateStorage.map.keys()].filter((key) => key.startsWith('try:'))).toEqual([]);
+    expect([...server.gateStorage.map.keys()].filter((key) => /^(try|salt):/.test(key))).toEqual(
+      [],
+    );
+    expect(server.gateStorage.alarm).toBeNull();
+  });
+
+  it('a right code makes no salt; a new hour has a new one, so tries can’t be linked across hours', async () => {
+    vi.useFakeTimers({ now: Date.UTC(2026, 9, 22, 12, 30) });
+    expect((await client(libraryId(), token(), '198.51.100.4').unlock()).status).toBe(204);
+    expect([...server.gateStorage.map.keys()]).toEqual([]);
+
+    const tried = async () => {
+      expect((await client(libraryId(), token(), '198.51.100.4').unlock('guess')).status).toBe(403);
+      return [...server.gateStorage.map.keys()].filter((key) => key.startsWith('try:')).at(-1);
+    };
+    const first = await tried();
+    vi.setSystemTime(Date.UTC(2026, 9, 22, 13, 30));
+    await server.gate.alarm();
+    const second = await tried();
+    expect(first?.split(':')[2]).not.toBe(second?.split(':')[2]);
+    // The same caller in the same hour is still one caller.
+    await tried();
+    expect([...server.gateStorage.map.keys()].filter((key) => key.startsWith('try:'))).toEqual([
+      second,
+    ]);
+    expect(await server.gateStorage.get(second ?? '')).toBe(2);
   });
 
   it('unlocks only while it’s still the code: changing it locks every library', async () => {
@@ -433,7 +470,8 @@ describe('deleting a library', () => {
     expect((await device.put('photo-0002', [100])).status).toBe(503);
 
     const { library: object, storage } = [...server.objects.values()][0] ?? {};
-    while (storage?.alarm !== null && storage?.alarm !== undefined) {
+    // Each batch's alarm is due at once; what's left has its own, months away (audit 3 D-2).
+    while (storage?.alarm !== null && storage?.alarm !== undefined && storage.alarm <= Date.now()) {
       storage.alarm = null;
       await object?.alarm();
     }
@@ -679,6 +717,131 @@ describe('libraries nobody unlocked (docs/adr/0017)', () => {
     vi.setSystemTime(START + 20 * DAY);
     expect((await client(library, token()).call('/changes?since=0')).status).toBe(403);
     expect(object.storage.alarm).toBe(START + LOCKED_UNUSED_MS);
+  });
+});
+
+describe('what’s left after “Delete the online copy” (audit 3 D-2)', () => {
+  const START = Date.UTC(2026, 9, 25, 12);
+  const DAY = 24 * 60 * 60 * 1000;
+
+  /** An unlocked library with a photo, deleted at START: its files are gone a moment later. */
+  async function deleted() {
+    vi.useFakeTimers({ now: START, toFake: ['Date'] });
+    const library = libraryId();
+    const device = client(library, token());
+    await device.unlock();
+    expect((await device.put(ITEM, [100])).status).toBe(200);
+    const object = server.objects.get(library);
+    const meter = server.objects.get('meter')?.storage;
+    if (!object || !meter) throw new Error('No library');
+    const total = (await meter.get<number>('total')) ?? 0;
+    expect((await device.call('', { method: 'DELETE' })).status).toBe(202);
+    await until(object, START + 60_000);
+    expect(server.bucket.files.size).toBe(0);
+    return { library, device, object, meter, total };
+  }
+
+  /** Lets time pass until `end`, waking the library whenever its alarm is due, as Cloudflare does. */
+  async function until(
+    object: { library: { alarm(): Promise<void> }; storage: { alarm: number | null } },
+    end: number,
+  ) {
+    while (object.storage.alarm !== null && object.storage.alarm <= end) {
+      vi.setSystemTime(Math.max(Date.now(), object.storage.alarm));
+      object.storage.alarm = null;
+      await object.library.alarm();
+    }
+    vi.setSystemTime(end);
+  }
+
+  it('goes 13 months after it was last used, and gives its room back', async () => {
+    const { object, meter, total } = await deleted();
+    // Who it belongs to and how many changes it had, for now; the room it takes stays counted.
+    expect([...object.storage.map.keys()].sort()).toEqual(['active', 'meta', 'meter:granted']);
+    expect(object.storage.alarm).toBe(START + WIPED_UNUSED_MS);
+
+    await until(object, START + WIPED_UNUSED_MS - DAY);
+    expect(object.storage.map.has('meta')).toBe(true);
+    await until(object, START + WIPED_UNUSED_MS);
+    expect(object.storage.map.size).toBe(0);
+    expect(object.storage.alarm).toBeNull();
+    expect(await meter.get('total')).toBe(total - 16 * 1024);
+  });
+
+  it('stays while a device still uses it: the 13 months start again (at most once a day)', async () => {
+    const { device, object } = await deleted();
+    await until(object, START + 200 * DAY);
+    expect((await device.changes()).rows).toEqual([]);
+    expect(object.storage.alarm).toBe(START + 200 * DAY + WIPED_UNUSED_MS);
+    await until(object, START + WIPED_UNUSED_MS + DAY);
+    expect(object.storage.map.has('meta')).toBe(true);
+    await until(object, START + 200 * DAY + WIPED_UNUSED_MS);
+    expect(object.storage.map.size).toBe(0);
+    // A device that comes back later just makes it again, locked.
+    expect((await device.changes()).unlocked).toBe(false);
+  });
+
+  it('with photos again, it’s kept like any unlocked library, with its weekly clean-up', async () => {
+    const { device, object } = await deleted();
+    await until(object, START + DAY);
+    expect((await device.put('photo-0002', [100])).status).toBe(200);
+    expect(object.storage.map.has('active')).toBe(false);
+    expect(object.storage.alarm).toBe(START + DAY + SWEEP_MS);
+    await until(object, START + 3 * WIPED_UNUSED_MS);
+    expect((await device.changes()).rows.map((row) => row.id)).toEqual(['photo-0002']);
+    expect(server.bucket.files.size).toBe(1);
+  });
+
+  it('deletes a file an upload left in R2 after the deletion, before it goes', async () => {
+    const { library, object } = await deleted();
+    // An upload begun after the deletion, whose commit failed: its file is outside the list.
+    server.bucket.files.set(await fileKey(library, 'photo-0003'), new Uint8Array(1));
+    await until(object, START + WIPED_UNUSED_MS);
+    expect(server.bucket.files.size).toBe(0);
+    expect(object.storage.map.size).toBe(0);
+  });
+
+  it('giving the storage code again (a new one) doesn’t keep it for good', async () => {
+    const { device, object } = await deleted();
+    server.env.LIBRARY_STORAGE_CODE = 'a new passphrase';
+    await until(object, START + DAY);
+    expect((await device.unlock('a new passphrase')).status).toBe(204);
+    expect(object.storage.alarm).toBe(START + DAY + WIPED_UNUSED_MS);
+    await until(object, START + DAY + WIPED_UNUSED_MS);
+    expect(object.storage.map.size).toBe(0);
+  });
+
+  it('deleted again, it starts its 13 months again once its files are gone', async () => {
+    const { device, object } = await deleted();
+    await until(object, START + 100 * DAY);
+    expect((await device.call('', { method: 'DELETE' })).status).toBe(202);
+    await until(object, START + 100 * DAY + 60_000);
+    expect(object.storage.alarm).toBe(START + 100 * DAY + WIPED_UNUSED_MS);
+  });
+});
+
+// The other tests read these from the code, so they check how each works,
+// never its value. These pin the values that the docs promise: changing
+// one fails here, and means changing those lines too (audit 3 J-4).
+describe('how long things are kept, as the docs promise', () => {
+  const DAY = 24 * 60 * 60 * 1000;
+
+  it('a library never unlocked: 30 days after it was last used', () => {
+    // ADR 0017: "An online library that was never unlocked (with the storage
+    // code) is deleted 30 days after it was last used."
+    expect(LOCKED_UNUSED_MS).toBe(30 * DAY);
+  });
+
+  it('files left outside the list: looked for once a week', () => {
+    // ADR 0016: "So once a week, a library with files deletes those in R2 that
+    // its list doesn't have".
+    expect(SWEEP_MS).toBe(7 * DAY);
+  });
+
+  it('what’s left after “Delete the online copy”: 13 months after it was last used', () => {
+    // ADR 0016: "once nobody has used it for 13 months"; the same 13 months as
+    // sync's note that a copy was deleted (UNUSED_MS in packages/sync).
+    expect(WIPED_UNUSED_MS).toBe(396 * DAY);
   });
 });
 

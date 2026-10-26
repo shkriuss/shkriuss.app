@@ -64,6 +64,27 @@ This first part works on the device only, like every other app.
   the person saves the originals themselves.
 - Loading the list of all photos at once is fine for tens of thousands of
   photos. Much bigger libraries will want the list loaded a page at a time.
+  It still takes seconds on a phone, so meanwhile the page says "Loading
+  your photos…" (not "No photos yet"), and nothing is compared with the
+  list until it's loaded: photos picked meanwhile, and the online library's
+  changes ([ADR 0016](0016-online-photo-library.md)), wait for it (audit 3
+  F3-8).
+
+- **On iPhone and iPad, the originals may not reach the app** (audit 3
+  F3-3: likely, from WebKit's code; not yet tried on a device). Safari's
+  photo picker, which every browser there uses, asks iOS for the
+  "compatible" version of each photo, so HEIC photos picked from the Photo
+  Library likely arrive as JPEG copies made by iOS, without the HDR, depth
+  and Live Photo parts. The app can't change the picker. So on those
+  devices (a guess from what the browser says about itself), the page says
+  so next to "Add photos", with two ways to keep originals: save the
+  photos to Files and add them with "Choose File", or take new photos as
+  JPEG (Settings → Camera → Formats → Most Compatible). To check on a
+  device: add a HEIC photo from the Photo Library and open it: a name
+  ending in ".jpeg", or the kind "JPEG", means it was converted. Also
+  check that picking the same photo again gives the identical file, which
+  putting an original back after "Free up space" needs
+  ([ADR 0016](0016-online-photo-library.md)).
 
 ## Alternatives
 

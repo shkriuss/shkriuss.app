@@ -65,13 +65,23 @@ every device. That's far beyond what sync can hold:
 - **Changes reach other devices** through the list: each device asks for
   changes after the last `seq` it saw, about once a minute while Photos is
   open, and keeps that place in its photo database (so "Delete all data"
-  forgets it too).
+  forgets it too). It asks only once its own photos are loaded: compared
+  with a list not loaded yet, a photo here that the changes mentioned
+  looked new from another device, and was saved as only online (audit 3
+  F3-8).
 - **Other devices download little:** thumbnails for the photos on screen
   (up to 40 in one request), the screen-sized copy when a photo is opened,
   and the original only to save it. Downloads read just that part of the
   file (a byte range).
 - **Deleting a photo deletes it everywhere:** online at once, and on every
-  device at its next check.
+  device at its next check. That's with sync on. With sync off on a
+  device, deleting a photo there deletes it only there, as its dialog says:
+  the online library and the other devices keep it, and it shows there
+  again, as only online, once sync is on again (audit 3 F3-1; before, it
+  was deleted everywhere then, though the dialog had said "from this
+  device"). A photo deleted while sync was on is still deleted everywhere
+  if sync is turned off before that reaches the online library, and it
+  doesn't come back on that device meanwhile.
 - **"Free up space on this device"** removes originals (and screen-sized
   copies) that are safely online, keeping thumbnails. Only when tapped, and
   only once the library has answered since Photos opened, while it isn't
@@ -108,7 +118,10 @@ every device. That's far beyond what sync can hold:
   network: the first 64 bits), whatever the library. Not 20 for everyone
   together: then a stranger could use them up every hour and nobody could
   give the right code. The gate keeps only a hash of the address mixed with
-  the code, and deletes it when the hour is over. Someone with many
+  the code, hashed again with a random salt it makes for each hour, and
+  deletes both when the hour is over. (Without the salt, someone with the
+  code could find the address by trying every IPv4 address, and tell the
+  same caller's tries in different hours: audit 3 D-8.) Someone with many
   addresses gets more tries, so what really stops guessing is the code
   itself: five or more random words (about 64 bits), far too many to guess.
 - **Limits per library:** 400,000 photos, and 95 MB per photo (Cloudflare
@@ -143,14 +156,23 @@ every device. That's far beyond what sync can hold:
   first, since that may have been the lost one.
 - **"Delete the online copy"** deletes the account's libraries first: each
   list is cleared at once, then the files are deleted in batches of 1,000
-  (a Durable Object alarm, which keeps trying while R2 fails: audit B-2). Photos on each device stay; those only online
-  are gone. A library known to be taken is left alone; if one refuses
+  (a Durable Object alarm, which keeps trying while R2 fails: audit B-2).
+  Photos on each device stay; those only online are gone. A library known to be taken is left alone; if one refuses
   (another device took it), the copy stays, and the device says it
   couldn't delete the online copy instead of saying it's done.
   `packages/sync` gains a `linked` option for this: data an app keeps
   online beside its copy, deleted and moved with it.
   A photo still on its way up while its library is deleted isn't added to
   the new one: its file is deleted instead (audit finding B-7).
+  What's left of a deleted library (its empty list, with the hashes of its
+  token and of any replaced ones, a hash of the storage code it was
+  unlocked with, how many changes it had, and the day and number of its
+  last uploads) was kept for good. Now it's deleted too, with any file
+  an upload left in R2 since, once nobody has used it for 13 months, and
+  its room is given back (audit 3 D-2). A device that uses it in that time
+  keeps it 13 months more; one that adds photos to it again makes it an
+  ordinary library, which stays ([ADR 0017](0017-storage-limits.md)). A
+  library deleted before this change keeps its record, as before.
 - **Files left outside the list.** A photo's file reaches R2 before the
   list has it. If adding it to the list then fails (say the day's free
   writes are used up), the file would stay in R2 for good, counted nowhere.
@@ -190,6 +212,18 @@ every device. That's far beyond what sync can hold:
   or the Workers paid plan ($5 a month) lifts the daily limits.
 - **The list's size:** about 400 bytes per photo in the Durable Object
   (about 160 MB at 400,000 photos), well inside 1 GB.
+- **Deleted photos leave small notes for good** (audit 3 B-5): two rows
+  for each, about 300 bytes together, for the library's life. One is the
+  note that it was deleted, with the deleting device's seal, which a
+  device that hasn't checked since must still see, however long it was
+  away; the other marks its id as used, so an upload of it still on its
+  way, or from such a device, is refused. No rule for removing them is safe: the
+  server doesn't know the devices (one may come back after months), and
+  without the sealed note a device can't tell a deleted photo from one a
+  server hides (audit A-8), so it would put the photo back online. The
+  400,000-photo limit, and the free-plan budget in
+  `tests/unit/free-plan.test.ts`, count photos that are there, not these
+  notes: 100,000 deletions add about 30 MB, still well inside 1 GB.
 - **Uploads only while Photos is open.** Browsers don't upload in the
   background for a website.
 - **A lost device** keeps whatever it already downloaded, and still knows

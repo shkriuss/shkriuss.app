@@ -69,10 +69,13 @@ const samePlace = (a: OnlinePlace | null, b: OnlinePlace) =>
  * Applies changes from the online library to this device's photos. The
  * same photo (by SHA-256) is kept once: one only here takes the online
  * one's id; of two online, the smaller id stays (every device agrees).
+ * Photos in `deletedHere` were deleted here and are still to be deleted
+ * online: they don't come back meanwhile (audit 3 F3-1).
  */
 export function applyChanges(
   photos: ReadonlyMap<string, Photo>,
   changes: readonly LibraryChange[],
+  deletedHere: ReadonlySet<string> = new Set(),
 ): Applied {
   const working = new Map(photos);
   const byHash = new Map([...photos.values()].map((photo) => [photo.hash, photo.id]));
@@ -101,6 +104,7 @@ export function applyChanges(
       if (working.has(change.id)) drop(change.id);
       continue;
     }
+    if (deletedHere.has(change.id)) continue;
     if (!isPhotoDetails(change.details) || change.details.id !== change.id) {
       skipped += 1;
       continue;
@@ -142,6 +146,38 @@ export function freeable(photos: readonly Photo[]): { photos: Photo[]; bytes: nu
 export const onlyOnline = (photos: readonly Photo[]): Photo[] =>
   photos.filter((photo) => !photo.here);
 
+/**
+ * What the delete dialog says happens to `count` photos, `online` of which
+ * are in the online library (as far as this device knows). With sync on,
+ * they go from every device. With sync off, only from this one: the online
+ * library keeps its own, which show here again once sync is on, so nothing
+ * is deleted from the other devices that the person didn't ask for (audit
+ * 3 F3-1).
+ */
+export function deleteMessage(
+  count: number,
+  online: number,
+  syncOn: boolean,
+  locale?: string,
+): string {
+  const one = count === 1;
+  if (syncOn) {
+    return `${one ? 'It’s' : 'They’re'} deleted from this device and from your online library, so from your other devices too. This can’t be undone.`;
+  }
+  const here = `The original${one ? ' and its copies are' : 's and their copies are'} deleted from this device.`;
+  const again = 'here again when you turn sync on again';
+  if (online === 0) return `${here} This can’t be undone.`;
+  if (online >= count) {
+    return `${here} Your online library keeps ${one ? `it, so it shows ${again}` : `them, so they show ${again}`}.`;
+  }
+  const kept =
+    online === 1
+      ? `the one that’s in it, which shows ${again}`
+      : `the ${online.toLocaleString(locale)} that are in it, which show ${again}`;
+  const others = count - online === 1 ? 'the other one' : 'the others';
+  return `${here} Your online library keeps ${kept}; ${others} can’t be brought back.`;
+}
+
 export type OnlineProblem =
   | Exclude<LibraryProblem, 'wrong-code' | 'too-many-tries' | 'deleted' | 'exists' | 'too-big'>
   /** This browser won't save. */
@@ -176,20 +212,30 @@ export const canFreeUp = (state: OnlineState): boolean =>
   state.checked && (state.problem === null || UPLOADS_ONLY.has(state.problem));
 
 const timeFormat = new Intl.DateTimeFormat(DATE_LOCALE, { hour: 'numeric', minute: '2-digit' });
+const timeLabel = (time: number, locale?: string): string =>
+  (locale === undefined
+    ? timeFormat
+    : new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' })
+  ).format(time);
 
 const TAKEN =
   'Your online library was taken by a device that still had your old account key, perhaps the lost one, so it can’t be used any more. Photos that were only in it can’t be brought back. Photos on this device go into a new online library.';
 
-/** The status line: what happened to the library this device used, if it was taken, then how it's going. */
-export const onlineMessage = (state: OnlineState): string =>
-  state.taken ? `${TAKEN} ${statusOf(state)}` : statusOf(state);
+/**
+ * The status line: what happened to the library this device used, if it was
+ * taken, then how it's going. Numbers and times are in `locale` when it's
+ * given (tests: audit 3 J-5); else numbers in the browser's own language,
+ * and times in English (DATE_LOCALE).
+ */
+export const onlineMessage = (state: OnlineState, locale?: string): string =>
+  state.taken ? `${TAKEN} ${statusOf(state, locale)}` : statusOf(state, locale);
 
-function statusOf(state: OnlineState): string {
+function statusOf(state: OnlineState, locale: string | undefined): string {
   const tooBig =
     state.tooBig > 0
-      ? ` ${countLabel(state.tooBig, 'photo is', 'photos are')} too big to keep online (over 95 MB), so ${state.tooBig === 1 ? 'it stays' : 'they stay'} on this device.`
+      ? ` ${countLabel(state.tooBig, 'photo is', 'photos are', locale)} too big to keep online (over 95 MB), so ${state.tooBig === 1 ? 'it stays' : 'they stay'} on this device.`
       : '';
-  const waiting = countLabel(state.waiting, 'photo', 'photos');
+  const waiting = countLabel(state.waiting, 'photo', 'photos', locale);
   switch (state.problem) {
     case 'not-set-up':
       return 'Online storage isn’t set up yet, so photos can’t go online. Everything still works on this device.';
@@ -198,7 +244,7 @@ function statusOf(state: OnlineState): string {
     case 'full':
       return `The online library is full, so ${waiting} stay on this device.`;
     case 'daily-limit':
-      return `That’s all the uploads for today. The other ${waiting} go online after ${timeFormat.format(state.retryAt ?? Date.now())}.`;
+      return `That’s all the uploads for today. The other ${waiting} go online after ${timeLabel(state.retryAt ?? Date.now(), locale)}.`;
     case 'wiping':
       return 'The online library is being deleted. Try again in a few minutes.';
     case 'offline':
@@ -217,5 +263,5 @@ function statusOf(state: OnlineState): string {
     return `Putting photos online: ${waiting} to go. Keep Photos open until it’s done.${tooBig}`;
   }
   const usage = state.usage ?? { items: 0, bytes: 0 };
-  return `Online: ${countLabel(usage.items, 'photo', 'photos')} · ${formatBytes(usage.bytes)}.${tooBig}`;
+  return `Online: ${countLabel(usage.items, 'photo', 'photos', locale)} · ${formatBytes(usage.bytes, locale)}.${tooBig}`;
 }

@@ -147,49 +147,81 @@ function asWritten(taken: string): Date {
   return new Date(Date.UTC(year ?? 1970, (month ?? 1) - 1, day ?? 1, hour, minute, second));
 }
 
-const monthFormat = new Intl.DateTimeFormat(DATE_LOCALE, {
-  month: 'long',
-  year: 'numeric',
-  timeZone: 'UTC',
-});
-const takenFormat = new Intl.DateTimeFormat(DATE_LOCALE, {
-  dateStyle: 'medium',
-  timeStyle: 'short',
-  timeZone: 'UTC',
-});
+/**
+ * A date format for each locale, made once: making one takes a while, and
+ * the grid names every photo it shows.
+ */
+function dateFormat(options: Intl.DateTimeFormatOptions): (locale: string) => Intl.DateTimeFormat {
+  const made = new Map<string, Intl.DateTimeFormat>();
+  return (locale) => {
+    let format = made.get(locale);
+    if (!format) {
+      format = new Intl.DateTimeFormat(locale, options);
+      made.set(locale, format);
+    }
+    return format;
+  };
+}
+
+const monthFormat = dateFormat({ month: 'long', year: 'numeric', timeZone: 'UTC' });
+// To the second: photos taken in the same minute have names of their own (audit 3 G-8).
+const takenFormat = dateFormat({ dateStyle: 'medium', timeStyle: 'medium', timeZone: 'UTC' });
+
+// Each label below takes a `locale` too, which tests give, so they pass on a
+// computer set to any language (audit 3 J-5). Left out, dates are in
+// English (DATE_LOCALE) and numbers in the browser's own language.
 
 /** "2026-10" → "October 2026" */
-export const monthLabel = (month: string): string =>
-  monthFormat.format(asWritten(`${month}-01T00:00:00`));
+export const monthLabel = (month: string, locale = DATE_LOCALE): string =>
+  monthFormat(locale).format(asWritten(`${month}-01T00:00:00`));
 
-/** "2026-10-21T14:03:22" → "Oct 21, 2026, 2:03 PM" */
-export const takenLabel = (taken: string): string => takenFormat.format(asWritten(taken));
+/** "2026-10-21T14:03:22" → "Oct 21, 2026, 2:03:22 PM" */
+export const takenLabel = (taken: string, locale = DATE_LOCALE): string =>
+  takenFormat(locale).format(asWritten(taken));
 
 /** A photo's text alternative: what we know is when it was taken. */
-export const photoAlt = (photo: Photo): string => `Photo taken ${takenLabel(photo.taken)}`;
+export const photoAlt = (photo: Photo, locale = DATE_LOCALE): string =>
+  `Photo taken ${takenLabel(photo.taken, locale)}`;
+
+/**
+ * Which photo the viewer shows (`index` from 0), read out when Next or
+ * Previous shows another (audit 3 G-8): "Photo 2 of 3, taken Oct 20, 2026,
+ * 2:05:03 PM".
+ */
+export const shownLabel = (photo: Photo, index: number, count: number, locale?: string): string =>
+  `Photo ${(index + 1).toLocaleString(locale)} of ${count.toLocaleString(locale)}, taken ${takenLabel(photo.taken, locale)}`;
 
 /** "1 photo", "2 photos" */
-export const countLabel = (count: number, one: string, many: string): string =>
-  `${count.toLocaleString()} ${count === 1 ? one : many}`;
+export const countLabel = (count: number, one: string, many: string, locale?: string): string =>
+  `${count.toLocaleString(locale)} ${count === 1 ? one : many}`;
+
+/** A size as it's shown: to one decimal below 10, else whole ("4.2", "48"). */
+function rounded(value: number): number {
+  const tenths = Math.round(value * 10) / 10;
+  return tenths < 10 ? tenths : Math.round(value);
+}
 
 /** Bytes as people read them on phones (1 KB = 1,000 bytes): "820 KB", "4.2 MB", "1.3 GB". */
-export function formatBytes(bytes: number): string {
-  if (bytes < 1000) return countLabel(bytes, 'byte', 'bytes');
+export function formatBytes(bytes: number, locale?: string): string {
+  if (bytes < 1000) return countLabel(bytes, 'byte', 'bytes', locale);
   const units = ['KB', 'MB', 'GB', 'TB'];
   let value = bytes / 1000;
   let unit = 0;
-  while (value >= 1000 && unit < units.length - 1) {
+  // Rounded as it's shown before the unit is chosen, so 999,999 bytes is
+  // "1.0 MB", not "1,000 KB" (audit 3 F3-9).
+  while (rounded(value) >= 1000 && unit < units.length - 1) {
     value /= 1000;
     unit += 1;
   }
-  const digits = value < 10 ? 1 : 0;
-  return `${value.toLocaleString(undefined, { maximumFractionDigits: digits, minimumFractionDigits: digits })} ${units[unit]}`;
+  const shown = rounded(value);
+  const digits = shown < 10 ? 1 : 0;
+  return `${shown.toLocaleString(locale, { maximumFractionDigits: digits, minimumFractionDigits: digits })} ${units[unit]}`;
 }
 
 /** "12 photos · 48 MB" */
-export function librarySummary(photos: readonly Photo[]): string {
+export function librarySummary(photos: readonly Photo[], locale?: string): string {
   const bytes = photos.reduce((sum, photo) => sum + photo.size, 0);
-  return `${countLabel(photos.length, 'photo', 'photos')} · ${formatBytes(bytes)}`;
+  return `${countLabel(photos.length, 'photo', 'photos', locale)} · ${formatBytes(bytes, locale)}`;
 }
 
 const EXTENSIONS: Record<string, string> = {
@@ -202,6 +234,21 @@ const EXTENSIONS: Record<string, string> = {
   'image/avif': 'avif',
 };
 
+/**
+ * A guess, from what the browser says about itself, that it's on an iPhone
+ * or iPad (audit 3 F3-3). There, the photo picker likely gives JPEG copies
+ * of HEIC photos instead of the originals (every browser on them uses
+ * Safari's), which the app can't change, so the page says so. iPads say
+ * they're Macs, but only they have a touch screen. Browsers can say
+ * anything, so it's only a guess: the hint names the devices it's about.
+ */
+export function isIPhoneOrIPad(userAgent: string, touchPoints: number): boolean {
+  return (
+    /\b(?:iPhone|iPad|iPod)\b/.test(userAgent) ||
+    (/\bMacintosh\b/.test(userAgent) && touchPoints > 1)
+  );
+}
+
 /** The kind of file, for people: "JPG", "HEIC"… */
 export function formatLabel(photo: Pick<Photo, 'name' | 'type'>): string {
   const fromName = /\.([A-Za-z0-9]{1,5})$/.exec(photo.name)?.[1];
@@ -212,15 +259,16 @@ export function formatLabel(photo: Pick<Photo, 'name' | 'type'>): string {
 export function downloadName(photo: Pick<Photo, 'name' | 'type' | 'taken'>): string {
   // Characters files can't have in their names, and invisible ones, become "-".
   // Invisible ones include direction marks, which can make "gpj.exe" show as "exe.jpg".
-  const safe = [...photo.name]
+  const cleaned = [...photo.name]
     .map((char) =>
       /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(char) || '\\/:*?"<>|'.includes(char) ? '-' : char,
     )
     .join('')
     .replace(/-{2,}/g, '-')
     .replace(/^[.\s]+/, '')
-    .trim()
-    .slice(0, 120);
+    .trim();
+  // Cut by whole characters, so an emoji is never cut in half (audit 3 C-6).
+  const safe = [...cleaned].slice(0, 120).join('').trimEnd();
   const fallback = `photo-${photo.taken.replace(/[:T]/g, '-')}`;
   const name = safe || fallback;
   const extension = EXTENSIONS[photo.type];
@@ -240,22 +288,18 @@ export interface Added {
   failed: number;
 }
 
-export function addedMessage({
-  added,
-  restored = 0,
-  duplicates,
-  notPhotos,
-  failed,
-}: Added): string {
+export function addedMessage(
+  { added, restored = 0, duplicates, notPhotos, failed }: Added,
+  locale?: string,
+): string {
+  const count = (value: number, one: string, many: string) => countLabel(value, one, many, locale);
   const parts = [
     added > 0 || restored > 0 ? '' : 'No photos were added.',
-    added > 0 ? `Added ${countLabel(added, 'photo', 'photos')}.` : '',
-    restored > 0
-      ? `${countLabel(restored, 'original is', 'originals are')} back on this device.`
-      : '',
-    duplicates > 0 ? `${countLabel(duplicates, 'photo was', 'photos were')} already here.` : '',
-    notPhotos > 0 ? `${countLabel(notPhotos, 'file isn’t a photo', 'files aren’t photos')}.` : '',
-    failed > 0 ? `${countLabel(failed, 'photo couldn’t', 'photos couldn’t')} be saved.` : '',
+    added > 0 ? `Added ${count(added, 'photo', 'photos')}.` : '',
+    restored > 0 ? `${count(restored, 'original is', 'originals are')} back on this device.` : '',
+    duplicates > 0 ? `${count(duplicates, 'photo was', 'photos were')} already here.` : '',
+    notPhotos > 0 ? `${count(notPhotos, 'file isn’t a photo', 'files aren’t photos')}.` : '',
+    failed > 0 ? `${count(failed, 'photo couldn’t', 'photos couldn’t')} be saved.` : '',
   ];
   return parts.filter(Boolean).join(' ');
 }

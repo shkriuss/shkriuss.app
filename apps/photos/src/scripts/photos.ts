@@ -8,7 +8,8 @@
 import { focusProblem, showProblem } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { setBusy } from '@shkriuss/ui/busy';
-import { canFreeUp, freeable, onlineMessage, onlyOnline } from '../lib/online.ts';
+import { keepFocus } from '@shkriuss/ui/keep-focus';
+import { canFreeUp, deleteMessage, freeable, onlineMessage, onlyOnline } from '../lib/online.ts';
 import {
   addedMessage,
   byMonth,
@@ -17,11 +18,13 @@ import {
   downloadName,
   formatBytes,
   formatLabel,
+  isIPhoneOrIPad,
   librarySummary,
   localDateTime,
   monthLabel,
   PAGE_SIZE,
   photoAlt,
+  shownLabel,
   takenLabel,
   type Added,
   type Photo,
@@ -63,6 +66,7 @@ export function mountPhotos(root: Document): void {
   const libraryHeading = required<HTMLElement>(root, '[data-library-heading]');
   const summary = required<HTMLElement>(root, '[data-summary]');
   const adding = required<HTMLElement>(root, '[data-adding]');
+  const loadingNote = required<HTMLElement>(root, '[data-loading]');
   const empty = required<HTMLElement>(root, '[data-empty]');
   const selection = required<HTMLElement>(root, '[data-selection]');
   const selectedCount = required<HTMLElement>(root, '[data-selected-count]');
@@ -76,6 +80,7 @@ export function mountPhotos(root: Document): void {
   const viewerImage = required<HTMLImageElement>(viewer, '[data-viewer-image]');
   const viewerNone = required<HTMLElement>(viewer, '[data-viewer-none]');
   const viewerStatus = required<HTMLElement>(viewer, '[data-viewer-status]');
+  const viewerAnnouncer = required<HTMLElement>(viewer, '[data-viewer-announcer]');
   const saveOriginalButton = required<HTMLButtonElement>(viewer, '[data-action="save-original"]');
   const deleteDialog = required<HTMLDialogElement>(root, '[data-delete-dialog]');
   const deleteTitle = required<HTMLElement>(deleteDialog, '[data-delete-title]');
@@ -92,6 +97,17 @@ export function mountPhotos(root: Document): void {
 
   /** Every photo, newest first. */
   let photos: Photo[] = [];
+  /**
+   * Whether the library on this device has been loaded since the page
+   * opened; `ready` resolves then. Until it has, `photos` is empty whatever
+   * the device holds, which takes seconds when the library is big, so
+   * nothing is compared with it before (audit 3 F3-8).
+   */
+  let loaded = false;
+  let markLoaded = (): void => undefined;
+  const ready = new Promise<void>((resolve) => {
+    markLoaded = resolve;
+  });
   let shown = PAGE_SIZE;
   let busy = false;
   /** While choosing photos: the chosen ones. */
@@ -99,12 +115,14 @@ export function mountPhotos(root: Document): void {
   const chosen = new Set<string>();
   /** The photo being looked at, and its URL while it's shown. */
   let viewing: { id: string; url: string | null } | null = null;
-  /** What the delete dialog would delete. */
+  /** What the delete dialog would delete, and whether it said online too. */
   let deleting: string[] = [];
+  let deletingEverywhere = false;
   let renderTimer: number | undefined;
 
   const announce = (message: string): void => {
-    announcer.textContent = message;
+    // In the photo viewer while it's open: the page behind it can't be heard (audit 3 G-8).
+    (viewer.open ? viewerAnnouncer : announcer).textContent = message;
   };
   /**
    * Tells the person something that went wrong, where they are: in the photo
@@ -124,6 +142,7 @@ export function mountPhotos(root: Document): void {
   // ---------- The online library ----------
 
   const online = startOnline({
+    ready,
     all: () => photos,
     get: find,
     changed({ save = [], remove = [] }) {
@@ -132,9 +151,11 @@ export function mountPhotos(root: Document): void {
       photos = [...photos.filter((photo) => !gone.has(photo.id)), ...save].sort(byNewest);
       for (const id of remove) chosen.delete(id);
       if (viewing && remove.includes(viewing.id) && viewer.open) viewer.close();
-      // Many changes can come in a row: show them together.
+      // Many changes can come in a row: show them together. Drawn in the
+      // background (after each upload, too), so keyboard focus stays on the
+      // photo it was on (audit 3 G-1).
       window.clearTimeout(renderTimer);
-      renderTimer = window.setTimeout(render, 100);
+      renderTimer = window.setTimeout(() => keepFocus(render, libraryHeading), 100);
     },
   });
   mountSyncControls(required<HTMLElement>(root, '[data-sync-controls]'), online.sync);
@@ -225,7 +246,10 @@ export function mountPhotos(root: Document): void {
         return section;
       }),
     );
-    empty.hidden = photos.length > 0;
+    // "No photos yet" only once the library is loaded: before, it would make
+    // people think their photos are gone (audit 3 F3-8).
+    loadingNote.hidden = loaded;
+    empty.hidden = !loaded || photos.length > 0;
     summary.hidden = photos.length === 0;
     summary.textContent = librarySummary(photos);
     showMoreButton.hidden = photos.length <= shown;
@@ -258,6 +282,13 @@ export function mountPhotos(root: Document): void {
 
   // ---------- Adding photos ----------
 
+  // On iPhone and iPad, picked photos may be JPEG copies: the page says so,
+  // and how to keep the originals (audit 3 F3-3).
+  required<HTMLElement>(root, '[data-apple-hint]').hidden = !isIPhoneOrIPad(
+    navigator.userAgent,
+    navigator.maxTouchPoints,
+  );
+
   addButton.addEventListener('click', () => photoInput.click());
 
   photoInput.addEventListener('change', () => {
@@ -275,6 +306,8 @@ export function mountPhotos(root: Document): void {
     busy = true;
     // Busy, not disabled, so focus stays on it while photos are added (audit G-7).
     setBusy(addButton, true);
+    // Picked while the library loads: checked against all of it (audit 3 F3-8).
+    await ready;
     const result: Required<Added> = {
       added: 0,
       restored: 0,
@@ -421,7 +454,8 @@ export function mountPhotos(root: Document): void {
     // The screen-sized copy: from this device, or downloaded (photos only online).
     const view =
       (await getFiles(id))?.view ?? (photo.online ? await online.download(photo, 'view') : null);
-    if (viewing.id !== id) return;
+    // Another photo is shown now, or the viewer was closed while this one downloaded.
+    if (viewing?.id !== id) return;
     viewing.url = view ? URL.createObjectURL(view) : null;
     if (viewing.url) viewerImage.src = viewing.url;
     viewerNone.textContent =
@@ -443,8 +477,12 @@ export function mountPhotos(root: Document): void {
   function stepPhoto(by: number): void {
     if (!viewing || photos.length === 0) return;
     const index = photos.findIndex((photo) => photo.id === viewing?.id);
-    const next = photos[(index + by + photos.length) % photos.length];
-    if (next) void showPhoto(next.id);
+    const at = (index + by + photos.length) % photos.length;
+    const next = photos[at];
+    if (!next) return;
+    void showPhoto(next.id);
+    // Focus stays on Next or Previous: say which photo is shown now (audit 3 G-8).
+    announce(shownLabel(next, at, photos.length));
   }
 
   viewer.addEventListener('keydown', (event) => {
@@ -457,6 +495,7 @@ export function mountPhotos(root: Document): void {
     if (viewing?.url) URL.revokeObjectURL(viewing.url);
     viewing = null;
     tellInViewer('');
+    viewerAnnouncer.textContent = '';
     viewerImage.removeAttribute('src');
     // Back to the photo in the grid (showing it, if it's further down).
     const at = photos.findIndex((photo) => photo.id === id);
@@ -519,13 +558,16 @@ export function mountPhotos(root: Document): void {
 
   function askToDelete(ids: string[]): void {
     deleting = ids;
+    // With sync off, from this device only. What the dialog says is what's
+    // done, even if sync is turned on or off before it's answered (audit 3 F3-1).
+    deletingEverywhere = online.state().on;
+    const asked = new Set(ids);
+    const inLibrary = photos.filter((photo) => asked.has(photo.id) && photo.online).length;
     deleteTitle.textContent =
       ids.length === 1
         ? 'Delete this photo?'
         : `Delete ${countLabel(ids.length, 'photo', 'photos')}?`;
-    deleteText.textContent = online.state().on
-      ? `${ids.length === 1 ? 'It’s' : 'They’re'} deleted from this device and from your online library, so from your other devices too. This can’t be undone.`
-      : `The original${ids.length === 1 ? ' and its copies are' : 's and their copies are'} deleted from this device. This can’t be undone.`;
+    deleteText.textContent = deleteMessage(ids.length, inLibrary, deletingEverywhere);
     deleteDialog.returnValue = '';
     deleteDialog.showModal();
   }
@@ -534,16 +576,19 @@ export function mountPhotos(root: Document): void {
     const ids = deleting;
     deleting = [];
     if (deleteDialog.returnValue !== 'confirm' || ids.length === 0) return;
-    void removePhotos(ids);
+    void removePhotos(ids, deletingEverywhere);
   });
 
-  async function removePhotos(ids: readonly string[]): Promise<void> {
+  async function removePhotos(ids: readonly string[], everywhere: boolean): Promise<void> {
     // Where to go next in the viewer: the photo after the deleted one.
     const at = viewing ? photos.findIndex((photo) => photo.id === viewing?.id) : -1;
     const gone = new Set(ids);
     try {
-      // Online too (now, or when sync is on again).
-      await online.removed(photos.filter((photo) => gone.has(photo.id)));
+      // Online too, now or when sync is on again, if the dialog said so.
+      await online.removed(
+        photos.filter((photo) => gone.has(photo.id)),
+        everywhere,
+      );
       await deletePhotos(ids);
     } catch {
       problem('Couldn’t delete. Please try again.');
@@ -553,18 +598,26 @@ export function mountPhotos(root: Document): void {
     for (const id of ids) chosen.delete(id);
     if (choosing && photos.length === 0) choosing = false;
     render();
-    announce(
+    const deleted =
       ids.length === 1
         ? 'Deleted the photo.'
-        : `Deleted ${countLabel(ids.length, 'photo', 'photos')}.`,
-    );
+        : `Deleted ${countLabel(ids.length, 'photo', 'photos')}.`;
     if (viewer.open) {
-      const next = photos[Math.min(at, photos.length - 1)];
+      const index = Math.min(at, photos.length - 1);
+      const next = photos[index];
       if (next) {
+        // Said in the viewer, with the photo it shows now (audit 3 G-8).
+        announce(`${deleted} ${shownLabel(next, index, photos.length)}.`);
         await showPhoto(next.id);
         required<HTMLElement>(viewer, '[data-action="delete-photo"]').focus();
-      } else viewer.close();
-    } else if (choosing) {
+      } else {
+        viewer.close();
+        announce(deleted);
+      }
+      return;
+    }
+    announce(deleted);
+    if (choosing) {
       required<HTMLElement>(selection, '[data-action="done-selecting"]').focus();
     } else {
       (photos.length > 0 ? selectButton : addButton).focus();
@@ -664,11 +717,16 @@ export function mountPhotos(root: Document): void {
       photos = loaded;
       const known = new Set(photos.map((photo) => photo.id));
       for (const id of chosen) if (!known.has(id)) chosen.delete(id);
-      render();
+      // Changed in another tab: keyboard focus stays where it was (audit 3 G-1).
+      keepFocus(render, libraryHeading);
     } catch {
       problem('Couldn’t open the photos on this device. Is storage blocked in this browser?');
     }
   }
 
-  void reload().then(render);
+  void reload().then(() => {
+    loaded = true;
+    markLoaded();
+    render();
+  });
 }
