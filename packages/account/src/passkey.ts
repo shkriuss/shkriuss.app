@@ -200,11 +200,15 @@ export async function addPasskey(
   const { lookup, wrapKey } = await keysOf(used.prf);
   const wrap = await seal(wrapKey, secret, WRAP_LABEL);
   const body = { wrap, publicKey: base64Url(publicKey), algorithm, assertion: used.assertion };
-  // No answer (offline): the lock may have been kept, so the passkey stays. If
-  // it wasn't, signing in with it says so, and the browser forgets it then.
+  // No answer (offline), or a server error, which may come after the lock was
+  // kept: the passkey stays, or the lock could never be removed. If it wasn't
+  // kept, signing in with it says so, and the browser forgets it then. Only
+  // a refusal (nothing kept, 507: no room) makes the browser forget it now.
   const response = await api('/passkey', { method: 'PUT', body: JSON.stringify(body) }, lookup);
   if (!response.ok) {
-    await forgetPasskey(rpId, credential.rawId);
+    if (response.status < 500 || response.status === 507) {
+      await forgetPasskey(rpId, credential.rawId);
+    }
     throw new AccountError('server', 'Couldn’t save the passkey.');
   }
 }

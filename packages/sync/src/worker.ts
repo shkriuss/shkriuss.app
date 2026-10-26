@@ -2,7 +2,7 @@
  * Server side of syncing an app (docs/adr/0010). Runs in the app's own
  * Worker, like notifications (@shkriuss/push):
  *
- *   GET    /api/sync/hub            where this app's hub (Account page) is
+ *   GET    /api/sync/hub            where this app's hub (Account page) is, and the time
  *   GET    /api/sync/copy?since=N   the account's sealed copy (204 if still N; version 0 if none yet)
  *   PUT    /api/sync/copy           replace it: { base, data } (409 if base is out of date)
  *   DELETE /api/sync/copy           delete it, and its files (leaves a note that it was deleted)
@@ -111,7 +111,9 @@ export async function handleSync(
   if (path === '/api/sync/hub') {
     if (request.method !== 'GET') return problem(405, 'Use GET.');
     const origin = hubOriginFor(new URL(request.url), env.HUB_ORIGIN);
-    return origin ? json({ origin }) : problem(404, 'No hub for this address.');
+    // With the time (ms): when "Turn on sync" was pressed, to the millisecond
+    // (the Date header has only seconds), for a copy deleted just before.
+    return origin ? json({ origin, now: Date.now() }) : problem(404, 'No hub for this address.');
   }
   const file = options.files ? /^\/api\/sync\/files(?:\/([^/]*))?$/.exec(path) : null;
   if (path !== '/api/sync/copy' && !file) return problem(404, 'Not found.');
@@ -183,24 +185,14 @@ export default createWorker<SyncEnv>({ '/api/sync': handleSync });
 // ---------- One account's copy of one app's data, and its files ----------
 
 /**
- * The copy, or the note that it was deleted. `ended` lists the copies deleted
- * before this one was started again (their epochs, newest last): a device
- * still syncing one of them stops when it sees the new copy, as it would
- * have at the deletion (audit 4 E-1).
+ * The copy, or the note that it was deleted (`at`: when). A copy started
+ * again after a deletion keeps when that was (`endedAt`, this server's
+ * clock): only a device where sync was turned on since then may join it
+ * (audit 4 E-1).
  */
 type Saved =
-  | { version: number; epoch: string; data: string; at: number; ended?: string[] }
-  | {
-      version: number;
-      epoch: string;
-      deleted: true;
-      moved?: true;
-      at: number;
-      ended?: string[];
-    };
-
-/** How many deleted copies a copy remembers (see Saved). */
-const MAX_ENDED = 20;
+  | { version: number; epoch: string; data: string; at: number; endedAt?: number }
+  | { version: number; epoch: string; deleted: true; moved?: true; at: number };
 
 /** Changes counted since `start` (ms). */
 interface WriteWindow {
@@ -214,26 +206,13 @@ const isMoved = (saved: Saved | undefined): boolean =>
 
 /**
  * 410 Gone, saying whether the copy was deleted or moved to a new account key.
- * A deleted one says how long ago (ms), so a device that turned sync on after
- * that starts a new copy instead of turning off (audit 4 E-1).
+ * A deleted one says when (this server's clock, ms), so a device where sync
+ * was turned on since starts a new copy instead of turning off (audit 4 E-1).
  */
 const gone = (saved: Saved | undefined, now: number): Response =>
   saved && isDeleted(saved) && saved.moved
     ? json({ error: 'The online copy was moved to a new account key.', moved: true }, 410)
-    : json(
-        {
-          error: 'The online copy was deleted.',
-          deletedAgo: saved ? Math.max(0, now - saved.at) : 0,
-        },
-        410,
-      );
-
-/** The copies deleted before a new one is started after `saved` (see Saved). */
-function endedBefore(saved: Saved | undefined): { ended?: string[] } {
-  if (!saved || !isDeleted(saved)) return {};
-  const ended = [...(saved.ended ?? []), ...(saved.epoch ? [saved.epoch] : [])].slice(-MAX_ENDED);
-  return ended.length > 0 ? { ended } : {};
-}
+    : json({ error: 'The online copy was deleted.', deletedAt: saved?.at ?? now }, 410);
 
 const fileKey = (id: string) => `file:${id}`;
 
@@ -281,8 +260,8 @@ export class SyncCopy {
         if (isDeleted(saved)) return gone(saved, now);
         const since = url.searchParams.get('since');
         if (since === String(saved.version)) return noContent();
-        const { version, epoch, data, ended } = saved;
-        return json({ version, epoch, data, ...(ended ? { ended } : {}) });
+        const { version, epoch, data, endedAt } = saved;
+        return json({ version, epoch, data, ...(endedAt === undefined ? {} : { endedAt }) });
       }
 
       if (request.method === 'DELETE') {
@@ -306,7 +285,6 @@ export class SyncCopy {
           deleted: true,
           ...(moved ? { moved: true as const } : {}),
           at: now,
-          ...(saved?.ended ? { ended: saved.ended } : {}),
         } satisfies Saved);
         await this.#touch(now);
         return noContent();
@@ -345,14 +323,15 @@ export class SyncCopy {
             epoch: live.epoch,
             data,
             at: now,
-            ...(live.ended ? { ended: live.ended } : {}),
+            ...(live.endedAt === undefined ? {} : { endedAt: live.endedAt }),
           }
         : {
             version: saved ? saved.version + 1 : firstVersion(now),
             epoch: crypto.randomUUID(),
             data,
             at: now,
-            ...endedBefore(saved),
+            // Started again after a deletion (a moved copy can't be: see above).
+            ...(saved ? { endedAt: saved.at } : {}),
           };
       await storage.put('writes', writes);
       await storage.put('copy', next);

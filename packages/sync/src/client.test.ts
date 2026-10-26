@@ -17,7 +17,7 @@ import {
   type SyncClient,
   type SyncStatus,
 } from './client.ts';
-import { turnOffProof } from './connect.ts';
+import { parseConnectRequest, sealForApp, turnOffProof } from './connect.ts';
 import { observe } from './merge.ts';
 import { sealStores, syncKeys } from './snapshot.ts';
 import { memorySync, withFiles } from './testing.ts';
@@ -542,21 +542,6 @@ describe('syncing between devices', () => {
   });
 
   describe('an old copy a lost device wrote (audit A-1)', () => {
-    /** What a device with the old app key can do: put any sealed bytes online as the copy. */
-    async function plant(secret: Uint8Array<ArrayBuffer>, packed: Uint8Array<ArrayBuffer>) {
-      const { key } = await syncKeys(secret);
-      const data = await seal(key, packed, 'shkriuss sync v1 tally');
-      const current = (await (await call(secret, '/copy')).json()) as { version: number };
-      const body = JSON.stringify({ base: current.version || null, data });
-      expect((await call(secret, '/copy', { method: 'PUT', body })).status).toBe(200);
-    }
-    const gzip = async (text: string) =>
-      new Uint8Array(
-        await new Response(
-          new Blob([text]).stream().pipeThrough(new CompressionStream('gzip')),
-        ).arrayBuffer(),
-      );
-
     /** The tablet's data, synced with the old key, then the key is replaced on the tablet. */
     async function replaced(plantOld: (oldKey: Uint8Array<ArrayBuffer>) => Promise<void>) {
       const oldKey = randomBytes(32);
@@ -584,12 +569,7 @@ describe('syncing between devices', () => {
 
     it('from a newer version doesn’t stop syncing with the new key, and waits for an update', async () => {
       const { oldKey, newKey, tablet } = await replaced(async (oldKey) =>
-        plant(
-          oldKey,
-          await gzip(
-            JSON.stringify({ format: 'shkriuss-sync', version: 2, app: 'tally', stores: {} }),
-          ),
-        ),
+        plant(oldKey, await fromNewerVersion()),
       );
       expect((await tablet.syncNow()).problem).toBeNull();
       const fresh = (await (await call(newKey, '/copy')).json()) as { version: number };
@@ -1564,6 +1544,173 @@ describe('turning sync on again after "Delete the online copy" (audit 4 E-1)', (
     expect(status.on).toBe(false);
     expect(status.problem).toBe('deleted');
   });
+
+  it('turns off a device turned on before the deletion, also once another device started again', async () => {
+    const secret = randomBytes(32);
+    const phone = new Device(secret);
+    vi.setSystemTime(T0);
+    phone.counters = [counter('a')];
+    await phone.syncNow();
+    // Turned on on the tablet, which was offline, so it never synced.
+    const tablet = new Device(null);
+    tablet.counters = [counter('old')];
+    tablet.connect(secret);
+    vi.setSystemTime(T0 + HOUR);
+    phone.use();
+    await phone.sync.deleteOnline();
+    vi.setSystemTime(T0 + 2 * HOUR);
+    phone.connect(secret);
+    expect((await phone.syncNow()).on).toBe(true);
+
+    vi.setSystemTime(T0 + 3 * HOUR);
+    expect(await tablet.syncNow()).toMatchObject({ on: false, problem: 'deleted' });
+    await phone.syncNow();
+    expect(phone.counters).toEqual([counter('a')]);
+  });
+
+  it('starts again on a device that hadn’t heard of the deletion, once sync is turned on there', async () => {
+    const secret = randomBytes(32);
+    const phone = new Device(secret);
+    const tablet = new Device(secret);
+    vi.setSystemTime(T0);
+    phone.counters = [counter('a')];
+    await phone.syncNow();
+    await tablet.syncNow();
+    vi.setSystemTime(T0 + HOUR);
+    phone.use();
+    await phone.sync.deleteOnline();
+    // "Turn on sync" from the hub's list, on the tablet, where sync is still on.
+    vi.setSystemTime(T0 + DAY);
+    tablet.connect(secret);
+    expect(await tablet.syncNow()).toMatchObject({ on: true, problem: null });
+    phone.connect(secret);
+    expect(await phone.syncNow()).toMatchObject({ on: true, problem: null });
+    expect(phone.counters).toEqual([counter('a')]);
+  });
+
+  /**
+   * "Turn on sync" as the person does it: to the hub and back, where the
+   * app's page opens again. The sync server's clock says `serverNow`
+   * meanwhile, whatever this device's own clock says. `offline`: the first
+   * sync after it finds no connection.
+   */
+  async function turnOnFromHub(
+    device: Device,
+    secret: Uint8Array<ArrayBuffer>,
+    serverNow: number,
+    offlineAfter = false,
+  ): Promise<Device> {
+    const realFetch = globalThis.fetch;
+    vi.stubGlobal('fetch', async (input: string, init?: RequestInit) => {
+      const response = await realFetch(input, init);
+      const headers = new Headers(response.headers);
+      headers.set('Date', new Date(serverNow).toUTCString());
+      // Where the hub is, and the time to the millisecond.
+      const body = input.endsWith('/hub')
+        ? JSON.stringify({ ...((await response.json()) as object), now: serverNow })
+        : response.body;
+      return new Response(body, { status: response.status, headers });
+    });
+    const page = { hash: '', pathname: '/', search: '', origin: ORIGIN, opened: '' };
+    vi.stubGlobal('location', {
+      ...page,
+      assign: (url: string) => {
+        page.opened = url;
+      },
+    });
+    device.use();
+    await device.sync.connect();
+    // The hub seals the app's key for the request.
+    const request = parseConnectRequest(new URL(page.opened).search);
+    if (!request) throw new Error('No request');
+    const result = await sealForApp(request, { secret, code: 'N3W5-K3Y8', replaces: [] });
+    offline = offlineAfter;
+    // Back in the app.
+    const later: (() => void)[] = [];
+    const noop = () => 0;
+    vi.stubGlobal('location', { ...page, hash: `#connect=${result}` });
+    vi.stubGlobal('history', { replaceState: noop });
+    vi.stubGlobal('window', {
+      setTimeout: (run: () => void) => later.push(run),
+      clearTimeout: noop,
+      setInterval: noop,
+      addEventListener: noop,
+    });
+    const opened = device.reopen(1);
+    for (const run of later.splice(0)) run();
+    await vi.waitFor(() => {
+      expect(opened.events).toContain('connected');
+      expect(opened.use().sync.status().busy).toBe(false);
+    });
+    vi.stubGlobal('fetch', realFetch);
+    vi.stubGlobal('window', {
+      setTimeout: noop,
+      clearTimeout: noop,
+      setInterval: noop,
+      addEventListener: noop,
+    });
+    vi.stubGlobal('location', { hash: '', pathname: '/', search: '', origin: ORIGIN });
+    return opened;
+  }
+
+  it('goes by the server’s clock, not this device’s when sync was turned on', async () => {
+    // A clock put right between "Turn on sync" and the first sync mustn't
+    // change which came first, sync or the deletion.
+    const secret = randomBytes(32);
+    const phone = new Device(secret);
+    vi.setSystemTime(T0);
+    phone.counters = [counter('a')];
+    await phone.syncNow();
+
+    // The tablet's clock is a day ahead when sync is turned on there, offline.
+    vi.setSystemTime(T0 + DAY);
+    const before = new Device(null);
+    before.counters = [counter('old')];
+    const tablet = await turnOnFromHub(before, secret, T0, true);
+    // An hour later the phone deletes the online copy; the tablet's clock is put right.
+    vi.setSystemTime(T0 + HOUR);
+    offline = false;
+    phone.use();
+    await phone.sync.deleteOnline();
+    vi.setSystemTime(T0 + 2 * HOUR);
+    expect(await tablet.syncNow()).toMatchObject({ on: false, problem: 'deleted' });
+
+    // The phone's clock is a day behind when sync is turned on there again,
+    // half a second after the deletion (the time is to the millisecond: the
+    // server's Date header has only seconds); it's put right before the
+    // first sync.
+    vi.setSystemTime(T0 + HOUR - DAY);
+    const again = await turnOnFromHub(phone, secret, T0 + HOUR + 500, true);
+    vi.setSystemTime(T0 + HOUR + 60_000);
+    offline = false;
+    expect(await again.syncNow()).toMatchObject({ on: true, problem: null });
+    expect(again.counters).toEqual([counter('a')]);
+  });
+
+  it('a device still on a deleted copy puts none of its files in a new one', async () => {
+    const secret = randomBytes(32);
+    const phone = new Device(secret, 1, false, true);
+    const tablet = new Device(secret, 1, false, true);
+    vi.setSystemTime(T0);
+    phone.counters = [counter('door')];
+    await phone.syncNow();
+    await tablet.syncNow();
+    // A photo added on the tablet with no connection waits to go online.
+    offline = true;
+    tablet.addFile('door', 'p1', photo('glass'));
+    await tablet.syncNow();
+    offline = false;
+    vi.setSystemTime(T0 + HOUR);
+    phone.use();
+    await phone.sync.deleteOnline();
+    vi.setSystemTime(T0 + 2 * HOUR);
+    phone.connect(secret);
+    expect((await phone.syncNow()).on).toBe(true);
+
+    vi.setSystemTime(T0 + 3 * HOUR);
+    expect(await tablet.syncNow()).toMatchObject({ on: false, problem: 'deleted' });
+    expect(await fileIds(secret)).toEqual([]);
+  });
 });
 
 describe('a copy older than one a device saw', () => {
@@ -1685,6 +1832,26 @@ async function fileIds(secret: Uint8Array<ArrayBuffer>): Promise<string[] | numb
   return Object.keys(((await response.json()) as FileList).files).sort();
 }
 
+/** What a device with an app key (a lost one, say) can do: put any sealed bytes online as the copy. */
+async function plant(secret: Uint8Array<ArrayBuffer>, packed: Uint8Array<ArrayBuffer>) {
+  const { key } = await syncKeys(secret);
+  const data = await seal(key, packed, 'shkriuss sync v1 tally');
+  const current = (await (await call(secret, '/copy')).json()) as { version: number };
+  const body = JSON.stringify({ base: current.version || null, data });
+  expect((await call(secret, '/copy', { method: 'PUT', body })).status).toBe(200);
+}
+
+const gzip = async (text: string) =>
+  new Uint8Array(
+    await new Response(
+      new Blob([text]).stream().pipeThrough(new CompressionStream('gzip')),
+    ).arrayBuffer(),
+  );
+
+/** A copy only a newer version of the app can read. */
+const fromNewerVersion = () =>
+  gzip(JSON.stringify({ format: 'shkriuss-sync', version: 2, app: 'tally', stores: {} }));
+
 describe('data linked to the copy', () => {
   /** What the app's linked data was asked to do, in order. */
   function recorder(fail = { delete: false, move: false }) {
@@ -1756,6 +1923,32 @@ describe('data linked to the copy', () => {
     laptop.use();
     await laptop.sync.deleteOnline();
     expect(given).toEqual([]);
+  });
+
+  it('is deleted with the copies even when an old key’s copy can’t be read', async () => {
+    // Whoever has the old key (a lost device) can write anything there, like
+    // a copy only a newer version of the app reads: it mustn't stop "Delete
+    // the online copy" (or make it say to check the connection).
+    const oldKey = randomBytes(32);
+    const newKey = randomBytes(32);
+    const linked = recorder();
+    const tablet = new Device(oldKey, 1, false, false, linked.linked);
+    tablet.counters = [counter('water')];
+    await tablet.syncNow();
+    await plant(oldKey, await fromNewerVersion());
+    tablet.connect(newKey, [oldKey]);
+    // The old copy waits for an update.
+    expect((await tablet.syncNow()).problem).toBeNull();
+
+    tablet.use();
+    await tablet.sync.deleteOnline();
+    expect(linked.calls).toEqual([
+      `delete ${toBase64Url(oldKey)}`,
+      `delete ${toBase64Url(newKey)}`,
+    ]);
+    expect((await call(oldKey, '/copy')).status).toBe(410);
+    expect((await call(newKey, '/copy')).status).toBe(410);
+    expect(tablet.sync.status().on).toBe(false);
   });
 
   it('moves to a new account key before the old copy is deleted, and only once', async () => {

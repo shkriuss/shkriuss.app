@@ -20,7 +20,7 @@ const whereLabel: Record<StorageKind, string> = {
 // The day this page's text last changed (people rely on it), and a
 // fingerprint of that text: ../privacy.test.ts fails when the text changes
 // but they don't, and says what to set (audit 3 D-7).
-const LAST_UPDATED = '26 October 2026'; // text 600c14b4e792c11c
+const LAST_UPDATED = '26 October 2026'; // text 8afa28c9872fac14
 ---
 
 <AppShell
@@ -252,8 +252,8 @@ const LAST_UPDATED = '26 October 2026'; // text 600c14b4e792c11c
             (scrambled codes only your devices can match, a scrambled form of the storage code it
             was unlocked with, how many changes and uploads it had, the day of its last uploads, and
             when it was last used). Turning on sync again later starts a new copy, which replaces
-            the note and keeps the random ids of up to 20 copies deleted before it, so devices still
-            using one of them learn it was deleted. An online library has to be unlocked with the
+            the note and keeps when the copy before it was deleted, so devices where sync was on
+            before then still learn it was deleted. An online library has to be unlocked with the
             storage code again.
           </li>
           <li>

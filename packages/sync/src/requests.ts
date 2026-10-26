@@ -68,30 +68,30 @@ export const problemOf = (error: unknown): SyncProblem =>
   error instanceof SyncError ? error.problem : isTimeout(error) ? 'offline' : 'server';
 
 /**
- * The copy was deleted, or moved to a new account key. A deleted one says how
- * long ago (ms; null from a server that doesn't say), for a device that turned
- * sync on after that (audit 4 E-1).
+ * The copy was deleted, or moved to a new account key. A deleted one says
+ * when (the server's clock, ms; null from a server that doesn't say), for a
+ * device where sync was turned on since (audit 4 E-1).
  */
 export class GoneError extends SyncError {
-  readonly deletedAgo: number | null;
-  constructor(problem: 'deleted' | 'moved', deletedAgo: number | null) {
+  readonly deletedAt: number | null;
+  constructor(problem: 'deleted' | 'moved', deletedAt: number | null) {
     super(problem);
-    this.deletedAgo = deletedAgo;
+    this.deletedAt = deletedAt;
   }
 }
+
+/** A time the server sent (ms), or null if it isn't one. */
+export const timeOf = (value: unknown): number | null =>
+  typeof value === 'number' && Number.isFinite(value) ? value : null;
 
 /** A 410 from the server: the copy was deleted, or moved to a new account key. */
 export async function goneError(response: Response): Promise<GoneError> {
   const body = (await response.json().catch(() => null)) as {
     moved?: unknown;
-    deletedAgo?: unknown;
+    deletedAt?: unknown;
   } | null;
   if (body?.moved === true) return new GoneError('moved', null);
-  const ago = body?.deletedAgo;
-  return new GoneError(
-    'deleted',
-    typeof ago === 'number' && Number.isFinite(ago) && ago >= 0 ? ago : null,
-  );
+  return new GoneError('deleted', timeOf(body?.deletedAt));
 }
 
 export const isGone = (error: unknown): boolean =>

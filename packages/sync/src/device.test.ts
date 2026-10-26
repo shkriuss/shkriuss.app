@@ -104,12 +104,14 @@ describe('when sync was turned on (audit 4 E-1)', () => {
     expect(loadState()?.connected).toBe(T0 + 60_000);
   });
 
-  it('stays the same when the same key comes again', () => {
+  it('is the latest time, with the same key too, and the time given (the server’s)', () => {
     const mine = randomBytes(32);
-    syncingWith(mine, randomBytes(32));
-    vi.setSystemTime(T0 + 60_000);
-    expect(saveConnection({ secret: mine, code: 'AAAA-AAAA', replaces: [] })).toBe(true);
-    expect(loadState()?.connected).toBe(T0);
+    const state = syncingWith(mine, randomBytes(32));
+    // Turned on again from the hub, with sync still on here: what it knew stays.
+    expect(saveConnection({ secret: mine, code: 'AAAA-AAAA', replaces: [] }, T0 + 60_000)).toBe(
+      true,
+    );
+    expect(loadState()).toEqual({ ...state, connected: T0 + 60_000 });
   });
 
   it('is unknown in state saved before it was kept', () => {

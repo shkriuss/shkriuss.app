@@ -116,8 +116,9 @@ export function createFileSync(app: string) {
   }
 
   /**
-   * Before a sync: files saved here go online, so other devices find them
-   * as soon as the data that uses them arrives.
+   * During a sync, once the copy online is one this device may sync: files
+   * saved here go online, so other devices find them as soon as the data
+   * that uses them arrives.
    */
   async function uploadFiles(synced: SyncedFiles): Promise<void> {
     const work = await fileWork(Date.now());
@@ -133,10 +134,10 @@ export function createFileSync(app: string) {
         dequeue('uploads', id);
       }
     } catch (error) {
-      // Not synced since sync was turned on, and the copy was deleted: the
-      // round decides whether to start a new one (audit 4 E-1). The files
-      // stay queued, and the daily check after that round puts them up.
-      if (isGone(error) && !work.state.remote) return;
+      // The copy was deleted: this round is about to start a new one (sync
+      // was turned on here since, audit 4 E-1), or finds out it can't. The
+      // files stay queued, for the copy that follows.
+      if (isGone(error)) return;
       pauseOn(error);
     }
   }

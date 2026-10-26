@@ -234,51 +234,64 @@ describe('two devices writing the same copy (audit 3 J-1)', () => {
   });
 });
 
+describe('where the hub is', () => {
+  it('says so, with the time to the millisecond, for “Turn on sync” (audit 4 E-1)', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const now = Date.UTC(2026, 9, 26, 12, 0, 0, 345);
+    vi.setSystemTime(now);
+    const answer = await memorySync().fetch(new Request(`${SITE}/api/sync/hub`));
+    expect(await answer.json()).toEqual({ origin: 'https://shkriuss.app', now });
+  });
+});
+
 describe('a deleted copy (audit 4 E-1)', () => {
   const get = (token: string) => request(SITE, 'copy', token);
   const remove = (token: string) => request(SITE, 'copy', token, { method: 'DELETE' });
 
-  it('says how long ago it was deleted', async () => {
-    vi.useFakeTimers();
+  const T0 = Date.UTC(2026, 9, 26, 12);
+  const endedAt = async (server: ReturnType<typeof memorySync>, token: string) =>
+    ((await (await server.fetch(get(token))).json()) as { endedAt?: number }).endedAt;
+
+  it('says when it was deleted, by the server’s clock', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(T0);
     const server = memorySync();
     const token = madeUpToken();
     await server.fetch(put(SITE, token, null, sealed(100)));
+    vi.setSystemTime(T0 + DAY_MS);
     await server.fetch(remove(token));
-    vi.setSystemTime(Date.now() + 3 * DAY_MS);
+    vi.setSystemTime(T0 + 3 * DAY_MS);
     const answer = await server.fetch(get(token));
     expect(answer.status).toBe(410);
     expect(await answer.json()).toEqual({
       error: 'The online copy was deleted.',
-      deletedAgo: 3 * DAY_MS,
+      deletedAt: T0 + DAY_MS,
     });
   });
 
-  it('starts again, listing the copies deleted before it, at most 20', async () => {
+  it('started again, says when the one before was deleted, through every change', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(T0);
     const server = memorySync();
     const token = madeUpToken();
-    const epochs: string[] = [];
-    for (let time = 0; time < 22; time += 1) {
-      const started = await server.fetch(put(SITE, token, null, sealed(100)));
-      expect(started.status).toBe(200);
-      epochs.push(((await started.json()) as { epoch: string }).epoch);
-      const copy = (await (await server.fetch(get(token))).json()) as { ended?: string[] };
-      expect(copy.ended).toEqual(time === 0 ? undefined : epochs.slice(0, -1).slice(-20));
-      await server.fetch(remove(token));
-    }
-  });
-
-  it('keeps the list through changes, and through being deleted again', async () => {
-    const server = memorySync();
-    const token = madeUpToken();
-    const first = (await (await server.fetch(put(SITE, token, null, sealed(100)))).json()) as {
-      epoch: string;
-    };
+    expect((await server.fetch(put(SITE, token, null, sealed(100)))).status).toBe(200);
+    // A first copy: no deletion before it.
+    expect(await endedAt(server, token)).toBeUndefined();
+    vi.setSystemTime(T0 + DAY_MS);
     await server.fetch(remove(token));
-    const second = (await (await server.fetch(put(SITE, token, null, sealed(100)))).json()) as {
-      version: number;
-    };
-    expect((await server.fetch(put(SITE, token, second.version, sealed(200)))).status).toBe(200);
-    expect(await (await server.fetch(get(token))).json()).toMatchObject({ ended: [first.epoch] });
+    vi.setSystemTime(T0 + 2 * DAY_MS);
+    const second = await server.fetch(put(SITE, token, null, sealed(100)));
+    const { version } = (await second.json()) as { version: number };
+    expect(await endedAt(server, token)).toBe(T0 + DAY_MS);
+    expect((await server.fetch(put(SITE, token, version, sealed(200)))).status).toBe(200);
+    expect(await endedAt(server, token)).toBe(T0 + DAY_MS);
+    // Deleted again, and started again: the latest deletion.
+    vi.setSystemTime(T0 + 3 * DAY_MS);
+    await server.fetch(remove(token));
+    await server.fetch(remove(token));
+    vi.setSystemTime(T0 + 4 * DAY_MS);
+    expect((await server.fetch(put(SITE, token, null, sealed(100)))).status).toBe(200);
+    expect(await endedAt(server, token)).toBe(T0 + 3 * DAY_MS);
   });
 
   it('can’t be started again once moved to a new account key', async () => {

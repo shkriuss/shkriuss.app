@@ -176,7 +176,8 @@ every device. That's far beyond what sync can hold:
   - A deleted library is locked until the storage code is given again.
     Another device that was putting photos online learns of the deletion
     only at its next sync, and its upload rounds would otherwise fill the
-    library again, to be kept for good (audit 4 D-1).
+    library again, to be kept for good (audit 4 D-1). One deleted before
+    this change is locked the first time it's used.
   - The device deleting reads the online copy's library records first, so
     one whose first sync hadn't finished (with no records of its own)
     deletes the libraries too (audit 4 D-2).

@@ -85,6 +85,7 @@ import {
   problemOf,
   serverClock,
   SyncError,
+  timeOf,
   type Keys,
   type SyncProblem,
 } from './requests.ts';
@@ -266,8 +267,8 @@ function knownNow(stores: readonly SyncedStore[], known: Record<string, Known>) 
 }
 
 /**
- * The online copy, or why there isn't one. `ended`: the copies deleted
- * before this one was started again (their epochs), see fetchCopy.
+ * The online copy, or why there isn't one. `endedAt`: when the copy before
+ * it was deleted, for one started again (see fetchCopy).
  */
 type Remote =
   | { kind: 'same' }
@@ -278,8 +279,15 @@ type Remote =
       epoch: string;
       stores: Stores;
       written: number | null;
-      ended: string[];
+      endedAt: number | null;
     };
+
+/**
+ * Kept while the person is on the hub after "Turn on sync": the request's
+ * key, and when it was pressed by the sync server's clock (see
+ * DeviceState.connected; missing if the page was saved by an older version).
+ */
+type Pending = PendingConnect & { turnedOn?: number };
 
 // ---------- The client ----------
 
@@ -332,7 +340,7 @@ export function createSync(options: {
       version: number;
       epoch?: string;
       data?: string;
-      ended?: unknown;
+      endedAt?: unknown;
     };
     if (copy.data === undefined || copy.epoch === undefined) return { kind: 'none' } as Remote;
     let opened: OpenedCopy;
@@ -342,19 +350,15 @@ export function createSync(options: {
       throw new UnopenedCopyError(error instanceof RangeError ? 'update-needed' : 'server');
     }
     const { version, epoch } = copy;
-    const ended = Array.isArray(copy.ended)
-      ? copy.ended.filter((item): item is string => typeof item === 'string')
-      : [];
-    return { kind: 'copy', version, epoch, ended, ...opened } as Remote;
+    return { kind: 'copy', version, epoch, endedAt: timeOf(copy.endedAt), ...opened } as Remote;
   }
 
   /**
    * The online copy, for a round. "Delete the online copy" turns sync off on
-   * the devices that were syncing it, but a device where sync was turned on
-   * after the deletion starts a new copy: turning sync on again works (audit
-   * 4 E-1). A device still on the deleted copy stops even once another device
-   * has started a new one, as it would have at the deletion: the new copy
-   * lists the deleted ones.
+   * every device where it was on then, whether it had synced yet or not; one
+   * where sync was turned on after the deletion starts a new copy, or joins
+   * one another device started, so turning sync on again works (audit 4
+   * E-1). Both times are the sync server's.
    */
   async function fetchCopy(
     state: DeviceState,
@@ -368,44 +372,46 @@ export function createSync(options: {
       if (
         error instanceof GoneError &&
         error.problem === 'deleted' &&
-        connectedSince(state, error)
+        turnedOnSince(state, error.deletedAt)
       ) {
         return { kind: 'none' };
       }
       throw error;
     }
-    const seen = state.remote?.epoch;
-    if (remote.kind === 'copy' && seen && remote.epoch !== seen && remote.ended.includes(seen)) {
-      throw new GoneError('deleted', null);
+    if (
+      remote.kind === 'copy' &&
+      remote.endedAt !== null &&
+      remote.epoch !== state.remote?.epoch &&
+      !turnedOnSince(state, remote.endedAt)
+    ) {
+      throw new GoneError('deleted', remote.endedAt);
     }
     return remote;
   }
 
+  /** Whether sync was turned on here after `at` (the server's clock). Not known: no. */
+  const turnedOnSince = (state: DeviceState, at: number | null): boolean =>
+    state.connected !== null && at !== null && state.connected > at;
+
   /**
    * Every item in an online copy, for deleting the data linked to it: a device
    * that hasn't synced yet has none of them, and would leave that data online
-   * (audit 4 D-2). None if the copy is gone or damaged. One that needs a
-   * newer version of the app can't be read, so the deletion waits for it.
+   * (audit 4 D-2). None if the copy is gone, or can't be read (damaged, or
+   * from a newer version of the app): the deletion goes ahead without them,
+   * as nothing someone with the key wrote in it (a lost device has an old
+   * key) may stop it.
    */
   async function onlineItems({ token, key }: Keys): Promise<unknown[]> {
     let remote: Remote;
     try {
       remote = await fetchRemote(null, token, key);
     } catch (error) {
-      if (isGone(error)) return [];
-      if (error instanceof UnopenedCopyError && error.problem !== 'update-needed') return [];
+      if (isGone(error) || error instanceof UnopenedCopyError) return [];
       throw error;
     }
     if (remote.kind !== 'copy') return [];
     return Object.values(remote.stores).flatMap((snapshot) => valuesOf(snapshot));
   }
-
-  /** Whether sync was turned on here after the copy was deleted (each side timed by its own clock). */
-  const connectedSince = (state: DeviceState, gone: GoneError): boolean =>
-    state.remote === null &&
-    state.connected !== null &&
-    gone.deletedAgo !== null &&
-    gone.deletedAgo > Date.now() - state.connected;
 
   /** The other device's items for one store, in this app's current data version. */
   function upgrade(synced: SyncedStore, remote: StoreSnapshot): StoreSnapshot {
@@ -529,8 +535,12 @@ export function createSync(options: {
     // 1. This device.
     const { before, local, changed: localChanged } = observeAll(state, now);
 
-    // 2. The online copy, and any old copies to bring along.
+    // 2. The online copy, and any old copies to bring along. Files saved here
+    // go online now, before the data that uses them, so other devices find
+    // them as soon as it arrives; only now, so a device that may not sync the
+    // copy (still on a deleted one) never puts its files there (audit 4 E-1).
     const remote = await fetchCopy(state, token, key);
+    if (files) await fileSync.uploadFiles(files);
     const {
       copies: moving,
       movedAway,
@@ -759,7 +769,6 @@ export function createSync(options: {
     let event: SyncEvent | undefined;
     try {
       fileSync.start();
-      if (files) await fileSync.uploadFiles(files);
       let done = false;
       for (let attempt = 0; attempt < MAX_ROUNDS && !done; attempt += 1) done = await round();
       if (done && files) done = await fileSync.tidyFiles(files);
@@ -795,9 +804,9 @@ export function createSync(options: {
     const result = parseConnectResult(location.hash);
     if (!result) return;
     history.replaceState(null, '', `${location.pathname}${location.search}`);
-    let pending: PendingConnect | null;
+    let pending: Pending | null;
     try {
-      pending = JSON.parse(sessionStorage.getItem(PENDING_KEY) ?? 'null') as PendingConnect | null;
+      pending = JSON.parse(sessionStorage.getItem(PENDING_KEY) ?? 'null') as Pending | null;
       sessionStorage.removeItem(PENDING_KEY);
     } catch {
       pending = null;
@@ -809,7 +818,8 @@ export function createSync(options: {
     try {
       if (!pending || Date.now() - pending.at > CONNECT_LIFETIME_MS) throw new Error('No request');
       const connection = await openConnection(options.app, pending, result);
-      if (!saveConnection(connection)) throw new SyncError(stateProblem());
+      const turnedOn = timeOf(pending.turnedOn) ?? Date.now();
+      if (!saveConnection(connection, turnedOn)) throw new SyncError(stateProblem());
       problem = null;
       emit('connected');
       await run();
@@ -848,10 +858,12 @@ export function createSync(options: {
     async connect() {
       const response = await api('/hub');
       if (!response.ok) throw new SyncError('server');
-      const { origin } = (await response.json()) as { origin: string };
+      const { origin, now } = (await response.json()) as { origin: string; now?: unknown };
+      // Pressed now, by the server's clock (see DeviceState.connected).
+      const turnedOn = timeOf(now) ?? serverClock() ?? Date.now();
       const { request, pending } = await newConnectRequest(options.app, location.origin);
       try {
-        sessionStorage.setItem(PENDING_KEY, JSON.stringify(pending));
+        sessionStorage.setItem(PENDING_KEY, JSON.stringify({ ...pending, turnedOn } as Pending));
       } catch (error) {
         throw new SyncError(isStorageFull(error) ? 'full' : 'storage');
       }

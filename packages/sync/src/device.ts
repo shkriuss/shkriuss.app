@@ -41,9 +41,11 @@ export interface DeviceState {
    */
   serverTime: number | null;
   /**
-   * When sync was turned on here with this key (this device's clock, ms):
-   * an online copy deleted before that is started again, not a reason to
-   * turn sync off (audit 4 E-1). Null in state saved before it was kept.
+   * When sync was last turned on here (ms; the sync server's clock, so a
+   * wrong clock here can't change what it means). An online copy deleted
+   * before that is started again, and one started again after a deletion
+   * before that is joined; otherwise sync turns off (audit 4 E-1). Null in
+   * state saved before it was kept.
    */
   connected: number | null;
   /** The app's keys from replaced account keys: their online copies are moved here, then deleted. */
@@ -188,13 +190,14 @@ export const offState = (state: DeviceState): DeviceState => ({
 });
 
 /**
- * Saves the connection the hub sent (coming back from "Turn on sync").
- * Connecting again with the same key changes nothing; with another key, this
- * device's data is merged into that account's copy at the next sync. Keys
- * the new one replaced are remembered until their copies are moved. Returns
- * false if the browser won't save.
+ * Saves the connection the hub sent (coming back from "Turn on sync", which
+ * the person pressed at `turnedOn`: see DeviceState.connected). Connecting
+ * again with the same key keeps what this device knew; with another key,
+ * this device's data is merged into that account's copy at the next sync.
+ * Keys the new one replaced are remembered until their copies are moved.
+ * Returns false if the browser won't save.
  */
-export function saveConnection(connection: Connection): boolean {
+export function saveConnection(connection: Connection, turnedOn = Date.now()): boolean {
   const existing = loadState();
   const secret = toBase64Url(connection.secret);
   const replaces = connection.replaces.map(toBase64Url);
@@ -202,11 +205,14 @@ export function saveConnection(connection: Connection): boolean {
     const previous = [...new Set([...existing.previous, ...replaces])].filter(
       (key) => key !== secret,
     );
-    return saveState({ ...existing, code: connection.code, previous });
+    return saveState({ ...existing, code: connection.code, connected: turnedOn, previous });
   }
   // Another key: only the keys it replaced move into it. Old keys the last
   // one was still moving belong to that key's account, which may not be
   // this one: its copies must not move into someone else's (audit 4 A-1).
+  // (If it is this account, but the hub no longer knows those keys, their
+  // copies stay where they are, as when sync turns off: nothing in them is
+  // lost, and a copy nobody uses is deleted after 13 months.)
   const previous = [...new Set(replaces)].filter((key) => key !== secret);
   const waiting = Object.fromEntries(
     Object.entries(existing?.waiting ?? {}).filter(([key]) => previous.includes(key)),
@@ -221,7 +227,7 @@ export function saveConnection(connection: Connection): boolean {
     base: existing?.base ?? null,
     last: null,
     serverTime: existing?.serverTime ?? null,
-    connected: Date.now(),
+    connected: turnedOn,
     previous,
     waiting,
   });

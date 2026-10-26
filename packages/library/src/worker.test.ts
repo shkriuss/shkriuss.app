@@ -507,6 +507,30 @@ describe('deleting a library', () => {
     expect(server.bucket.files.size).toBe(0);
     expect((await tablet.changes()).rows).toEqual([]);
   });
+
+  it('one deleted before deleted libraries were locked is locked too (audit 4 D-1)', async () => {
+    const library = libraryId();
+    const access = token();
+    const phone = client(library, access);
+    await phone.unlock();
+    const { library: object, storage } = [...server.objects.values()][0] ?? {};
+    const meta = () => storage?.map.get('meta') as Record<string, unknown>;
+    const code = meta()['unlockedWith'];
+    expect((await phone.call('', { method: 'DELETE' })).status).toBe(202);
+    while (storage?.alarm !== null && storage?.alarm !== undefined && storage.alarm <= Date.now()) {
+      storage.alarm = null;
+      await object?.alarm();
+    }
+    // What a deletion left before then: still unlocked with the code.
+    const { wipeLocked: _, ...before } = meta();
+    storage?.map.set('meta', { ...before, unlockedWith: code });
+    expect((await phone.changes()).unlocked).toBe(false);
+    expect((await phone.put(ITEM, [100])).status).toBe(423);
+    // Given again, the code works, and stays working.
+    expect((await phone.unlock()).status).toBe(204);
+    expect((await phone.put(ITEM, [100])).status).toBe(200);
+    expect((await phone.put('photo-0002', [100])).status).toBe(200);
+  });
 });
 
 describe('an alarm while R2 fails (audit B-2)', () => {

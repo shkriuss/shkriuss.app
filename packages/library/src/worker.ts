@@ -490,6 +490,11 @@ interface Meta {
    * left goes when unused for WIPED_UNUSED_MS (audit 3 D-2).
    */
   wiped?: true;
+  /**
+   * Locked when it was deleted (unlockedWith: WIPED_LOCK). One deleted before
+   * that was done is locked the first time it's used (audit 4 D-1).
+   */
+  wipeLocked?: true;
 }
 
 /** What the list knows of each item it ever had. */
@@ -597,6 +602,11 @@ export class Library {
       if (meta.unlocked && meta.unlockedWith === undefined && code !== '') {
         meta.unlockedWith = code;
       }
+      // Deleted before deleted libraries were locked: locked now, like one deleted today.
+      if (meta.wiped && !meta.wipeLocked) {
+        meta.unlockedWith = WIPED_LOCK;
+        meta.wipeLocked = true;
+      }
 
       if (meta.retired.includes(token)) {
         return json({ error: 'The library moved to a new account key.', moved: true }, 410);
@@ -694,6 +704,7 @@ export class Library {
         wiping: false,
         wiped: true,
         unlockedWith: WIPED_LOCK,
+        wipeLocked: true,
       });
       await this.#touch(Date.now(), WIPED_UNUSED_MS);
     });
@@ -888,7 +899,7 @@ export class Library {
     const row: ItemRow = { ...item, seq, at: now };
     await this.state.storage.put(seqKey(seq), row);
     await this.state.storage.put(itemKey(item.id), { seq, size } satisfies Entry);
-    const { wiped, ...kept } = meta;
+    const { wiped, wipeLocked: _, ...kept } = meta;
     await this.#save({
       ...kept,
       seq,

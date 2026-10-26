@@ -509,14 +509,16 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
    * window that has focus, for half a second. A press sooner may be the
    * second half of a double-click another website asked for, closing its own
    * window over this one in between ("DoubleClickjacking", audit 4 C-6).
+   * Meanwhile it's marked busy, not disabled: keyboard focus stays on it
+   * when the person comes back from another window (audit G-7).
    */
   let acceptTimer: number | undefined;
   function holdAccept(): void {
     window.clearTimeout(acceptTimer);
-    acceptLinkButton.disabled = true;
+    setBusy(acceptLinkButton, true);
     if (!linked || !document.hasFocus()) return;
     acceptTimer = window.setTimeout(() => {
-      acceptLinkButton.disabled = false;
+      setBusy(acceptLinkButton, false);
     }, ACCEPT_DELAY_MS);
   }
   window.addEventListener('focus', holdAccept);
@@ -637,7 +639,7 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
       location.replace(connectResultUrl(connecting.request.from, 'cancelled'));
     },
     'accept-link': async () => {
-      if (!linked) return;
+      if (!linked || acceptLinkButton.ariaDisabled === 'true') return;
       const secret = linked;
       linked = null;
       await signIn(secret, 'This device is now signed in to your account.');
@@ -760,11 +762,18 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
     void currentAccount().then((current) => {
       const before = account;
       account = current;
-      if (!current) void dropLink();
       // Another account now, or none: what's open about the one before goes,
-      // its recovery key above all, and the page says why (audit 4 G-4).
+      // its recovery key above all, and the page says why (audit 4 G-4). Its
+      // code to add a device stops working, and a key replacement started
+      // for it can't go on to replace the new account's key.
       const changed = before?.code !== current?.code;
       if (changed) {
+        void dropLink();
+        linkStatus.textContent = '';
+        if (pending?.replacing) {
+          pending = null;
+          newKey.textContent = '';
+        }
         if (keyDialog.open) keyDialog.close();
         if (signOutDialog.open) signOutDialog.close();
         say(
@@ -775,6 +784,8 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
               : 'This device was signed in, in another tab.',
         );
       }
+      // Asked whether to add this device: says whether it would replace an account.
+      linkReplace.hidden = !account;
       if (pending || linked) return;
       home(false);
       // Focus that was in what's now hidden goes to the top of what's shown.
