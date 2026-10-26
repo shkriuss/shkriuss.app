@@ -74,7 +74,14 @@ every device. That's far beyond what sync can hold:
   and the original only to save it. Downloads read just that part of the
   file (a byte range).
 - **Deleting a photo deletes it everywhere:** online at once, and on every
-  device at its next check.
+  device at its next check. That's with sync on. With sync off on a
+  device, deleting a photo there deletes it only there, as its dialog says:
+  the online library and the other devices keep it, and it shows there
+  again, as only online, once sync is on again (audit 3 F3-1; before, it
+  was deleted everywhere then, though the dialog had said "from this
+  device"). A photo deleted while sync was on is still deleted everywhere
+  if sync is turned off before that reaches the online library, and it
+  doesn't come back on that device meanwhile.
 - **"Free up space on this device"** removes originals (and screen-sized
   copies) that are safely online, keeping thumbnails. Only when tapped, and
   only once the library has answered since Photos opened, while it isn't

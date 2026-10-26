@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
   applyChanges,
   canFreeUp,
+  deleteMessage,
   freeable,
   onlineMessage,
   onlyOnline,
@@ -106,6 +107,40 @@ describe('changes from the online library', () => {
     const applied = applyChanges(library(), [item(b, 1), deleted('b', 2), item(photo('c'), 3)]);
     expect(applied.save.map((one) => one.id)).toEqual(['c']);
     expect(applied.remove).toEqual(['b']);
+  });
+
+  it('don’t bring back a photo deleted here that’s still to be deleted online (audit 3 F3-1)', () => {
+    // Deleted with sync on, and sync turned off before the deletion got there.
+    const applied = applyChanges(library(), [item(photo('a')), item(photo('b'))], new Set(['a']));
+    expect(applied.save.map((one) => one.id)).toEqual(['b']);
+    expect(applied).toMatchObject({ remove: [], duplicates: [], skipped: 0 });
+  });
+});
+
+describe('the delete dialog (audit 3 F3-1)', () => {
+  it('with sync on, says photos go from every device', () => {
+    expect(deleteMessage(1, 1, true)).toBe(
+      'It’s deleted from this device and from your online library, so from your other devices too. This can’t be undone.',
+    );
+    expect(deleteMessage(3, 0, true)).toMatch(/^They’re deleted from this device and from/);
+  });
+
+  it('with sync off, says photos go from this device only, and the online library keeps its own', () => {
+    expect(deleteMessage(1, 0, false)).toBe(
+      'The original and its copies are deleted from this device. This can’t be undone.',
+    );
+    expect(deleteMessage(1, 1, false)).toBe(
+      'The original and its copies are deleted from this device. Your online library keeps it, so it shows here again when you turn sync on again.',
+    );
+    expect(deleteMessage(2, 2, false)).toBe(
+      'The originals and their copies are deleted from this device. Your online library keeps them, so they show here again when you turn sync on again.',
+    );
+    expect(deleteMessage(3, 1, false)).toBe(
+      'The originals and their copies are deleted from this device. Your online library keeps the one that’s in it, which shows here again when you turn sync on again; the others can’t be brought back.',
+    );
+    expect(deleteMessage(1234, 1233, false, 'en-US')).toBe(
+      'The originals and their copies are deleted from this device. Your online library keeps the 1,233 that are in it, which show here again when you turn sync on again; the other one can’t be brought back.',
+    );
   });
 });
 

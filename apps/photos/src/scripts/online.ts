@@ -89,8 +89,13 @@ export interface Online {
    * from the beginning, so they're found again then.
    */
   hideOnlyOnline(ids: readonly string[]): Promise<void>;
-  /** Photos are being deleted here: those online are deleted there too. */
-  removed(photos: readonly Photo[]): Promise<void>;
+  /**
+   * Photos are being deleted here. With `everywhere` (sync was on when the
+   * person was asked), those online are deleted there too, now or once sync
+   * is on again. Without it, only here: the online library keeps them, and
+   * they show here again, as only online, once sync is on (audit 3 F3-1).
+   */
+  removed(photos: readonly Photo[], everywhere: boolean): Promise<void>;
   unlock(code: string): Promise<UnlockResult>;
   /** A thumbnail of a photo that's only online: downloaded and kept. */
   thumb(photo: Photo): Promise<string | null>;
@@ -293,6 +298,9 @@ export function startOnline(list: PhotoList): Online {
       const applied = applyChanges(
         new Map(list.all().map((photo) => [photo.id, photo])),
         page.changes,
+        // Deleted here, and not online yet (say sync was turned off before
+        // it got there): they don't come back (audit 3 F3-1).
+        new Set(progress.removals),
       );
       for (const { from, to } of applied.moves) await moveFiles(from, to);
       if (applied.save.length > 0) await saveDetails(applied.save);
@@ -528,9 +536,18 @@ export function startOnline(list: PhotoList): Online {
       if (sync.status().on) schedule();
     },
     hideOnlyOnline,
-    async removed(photos) {
+    async removed(photos, everywhere) {
       const online = photos.filter((photo) => photo.online).map((photo) => photo.id);
       if (online.length === 0) return;
+      if (!everywhere) {
+        // Nothing to delete online. Where this device had got to in the
+        // library starts again (as after turning sync off), so they're found
+        // again once sync is on, even if it was turned on meanwhile.
+        if (await loadProgress()) {
+          await updateProgress((current) => ({ ...(current ?? fresh(inUse)), since: 0 }));
+        }
+        return;
+      }
       await updateProgress((current) => ({
         ...(current ?? fresh(inUse)),
         removals: [...new Set([...(current?.removals ?? []), ...online])],

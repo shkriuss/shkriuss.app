@@ -9,7 +9,7 @@ import { focusProblem, showProblem } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { setBusy } from '@shkriuss/ui/busy';
 import { keepFocus } from '@shkriuss/ui/keep-focus';
-import { canFreeUp, freeable, onlineMessage, onlyOnline } from '../lib/online.ts';
+import { canFreeUp, deleteMessage, freeable, onlineMessage, onlyOnline } from '../lib/online.ts';
 import {
   addedMessage,
   byMonth,
@@ -114,8 +114,9 @@ export function mountPhotos(root: Document): void {
   const chosen = new Set<string>();
   /** The photo being looked at, and its URL while it's shown. */
   let viewing: { id: string; url: string | null } | null = null;
-  /** What the delete dialog would delete. */
+  /** What the delete dialog would delete, and whether it said online too. */
   let deleting: string[] = [];
+  let deletingEverywhere = false;
   let renderTimer: number | undefined;
 
   const announce = (message: string): void => {
@@ -549,13 +550,16 @@ export function mountPhotos(root: Document): void {
 
   function askToDelete(ids: string[]): void {
     deleting = ids;
+    // With sync off, from this device only. What the dialog says is what's
+    // done, even if sync is turned on or off before it's answered (audit 3 F3-1).
+    deletingEverywhere = online.state().on;
+    const asked = new Set(ids);
+    const inLibrary = photos.filter((photo) => asked.has(photo.id) && photo.online).length;
     deleteTitle.textContent =
       ids.length === 1
         ? 'Delete this photo?'
         : `Delete ${countLabel(ids.length, 'photo', 'photos')}?`;
-    deleteText.textContent = online.state().on
-      ? `${ids.length === 1 ? 'It’s' : 'They’re'} deleted from this device and from your online library, so from your other devices too. This can’t be undone.`
-      : `The original${ids.length === 1 ? ' and its copies are' : 's and their copies are'} deleted from this device. This can’t be undone.`;
+    deleteText.textContent = deleteMessage(ids.length, inLibrary, deletingEverywhere);
     deleteDialog.returnValue = '';
     deleteDialog.showModal();
   }
@@ -564,16 +568,19 @@ export function mountPhotos(root: Document): void {
     const ids = deleting;
     deleting = [];
     if (deleteDialog.returnValue !== 'confirm' || ids.length === 0) return;
-    void removePhotos(ids);
+    void removePhotos(ids, deletingEverywhere);
   });
 
-  async function removePhotos(ids: readonly string[]): Promise<void> {
+  async function removePhotos(ids: readonly string[], everywhere: boolean): Promise<void> {
     // Where to go next in the viewer: the photo after the deleted one.
     const at = viewing ? photos.findIndex((photo) => photo.id === viewing?.id) : -1;
     const gone = new Set(ids);
     try {
-      // Online too (now, or when sync is on again).
-      await online.removed(photos.filter((photo) => gone.has(photo.id)));
+      // Online too, now or when sync is on again, if the dialog said so.
+      await online.removed(
+        photos.filter((photo) => gone.has(photo.id)),
+        everywhere,
+      );
       await deletePhotos(ids);
     } catch {
       problem('Couldn’t delete. Please try again.');

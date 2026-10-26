@@ -27,9 +27,11 @@ reasons: [ADR 0015](../../docs/adr/0015-photos-app.md) (on the device) and
     devices do here (`applyChanges`, which also keeps the same photo once),
     which photos go up next, what "Free up space" frees, the status line.
   - `src/scripts/online.ts`: does the work after each sync: brings in
-    changes, deletes online what was deleted here, puts photos online a few
-    at a time, and downloads thumbnails (several at once), screen-sized
-    copies and originals when they're needed.
+    changes, deletes online what was deleted here with sync on (with sync
+    off, a photo is deleted only on this device: the online library keeps
+    it), puts photos online a few at a time, and downloads thumbnails
+    (several at once), screen-sized copies and originals when they're
+    needed.
   - `src/worker.ts`: the Worker for `/api/sync/*` and `/api/library/*`.
     `wrangler.jsonc` has the R2 bucket, `shkriuss-photos`.
   - Adding photos online needs the storage code once per account (the

@@ -69,10 +69,13 @@ const samePlace = (a: OnlinePlace | null, b: OnlinePlace) =>
  * Applies changes from the online library to this device's photos. The
  * same photo (by SHA-256) is kept once: one only here takes the online
  * one's id; of two online, the smaller id stays (every device agrees).
+ * Photos in `deletedHere` were deleted here and are still to be deleted
+ * online: they don't come back meanwhile (audit 3 F3-1).
  */
 export function applyChanges(
   photos: ReadonlyMap<string, Photo>,
   changes: readonly LibraryChange[],
+  deletedHere: ReadonlySet<string> = new Set(),
 ): Applied {
   const working = new Map(photos);
   const byHash = new Map([...photos.values()].map((photo) => [photo.hash, photo.id]));
@@ -101,6 +104,7 @@ export function applyChanges(
       if (working.has(change.id)) drop(change.id);
       continue;
     }
+    if (deletedHere.has(change.id)) continue;
     if (!isPhotoDetails(change.details) || change.details.id !== change.id) {
       skipped += 1;
       continue;
@@ -141,6 +145,38 @@ export function freeable(photos: readonly Photo[]): { photos: Photo[]; bytes: nu
 /** Photos that are only online: they need the online library to be seen. */
 export const onlyOnline = (photos: readonly Photo[]): Photo[] =>
   photos.filter((photo) => !photo.here);
+
+/**
+ * What the delete dialog says happens to `count` photos, `online` of which
+ * are in the online library (as far as this device knows). With sync on,
+ * they go from every device. With sync off, only from this one: the online
+ * library keeps its own, which show here again once sync is on, so nothing
+ * is deleted from the other devices that the person didn't ask for (audit
+ * 3 F3-1).
+ */
+export function deleteMessage(
+  count: number,
+  online: number,
+  syncOn: boolean,
+  locale?: string,
+): string {
+  const one = count === 1;
+  if (syncOn) {
+    return `${one ? 'It’s' : 'They’re'} deleted from this device and from your online library, so from your other devices too. This can’t be undone.`;
+  }
+  const here = `The original${one ? ' and its copies are' : 's and their copies are'} deleted from this device.`;
+  const again = 'here again when you turn sync on again';
+  if (online === 0) return `${here} This can’t be undone.`;
+  if (online >= count) {
+    return `${here} Your online library keeps ${one ? `it, so it shows ${again}` : `them, so they show ${again}`}.`;
+  }
+  const kept =
+    online === 1
+      ? `the one that’s in it, which shows ${again}`
+      : `the ${online.toLocaleString(locale)} that are in it, which show ${again}`;
+  const others = count - online === 1 ? 'the other one' : 'the others';
+  return `${here} Your online library keeps ${kept}; ${others} can’t be brought back.`;
+}
 
 export type OnlineProblem =
   | Exclude<LibraryProblem, 'wrong-code' | 'too-many-tries' | 'deleted' | 'exists' | 'too-big'>
