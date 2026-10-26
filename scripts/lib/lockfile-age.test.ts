@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   addedPackages,
+  changedPackages,
   lockedPackages,
+  registryIntegrity,
   releaseAgeRules,
   tooNew,
   unregisteredPackages,
@@ -117,5 +119,76 @@ snapshots:
       'sneaky@https://codeload.github.com/someone/sneaky/tar.gz/0123456789abcdef0123456789abcdef01234567',
       'odd@4.5.6',
     ]);
+  });
+
+  it('finds a registry version that says where to download from, or hides how (audit 3 H-1)', () => {
+    // pnpm downloads from a `tarball:` beside the hash (checked: it installed
+    // this one from the address), so only a resolution that is a hash alone
+    // counts as the registry's.
+    const head = `lockfileVersion: '9.0'
+
+packages:
+
+  is-number@7.0.0:
+    resolution: {integrity: sha512-y3fHfHYvTerS7NhwClA/DMofcOEjmvlJP4eSdK9JuV4E4h0rXGRTpW8RQlW/76qPl7ZyFtrU5buXVzkPLYtYMw==, tarball: http://127.0.0.1:9988/evil.tgz}
+    engines: {node: '>=0.12.0'}
+
+  block@1.0.0:
+    resolution:
+      integrity: sha512-x
+      tarball: https://example.com/block.tgz
+
+  twice@1.0.0:
+    resolution: {integrity: sha512-x}
+    resolution: {integrity: sha512-x, tarball: https://example.com/twice.tgz}
+
+  none@1.0.0:
+    engines: {node: '>=20'}
+
+  fine@1.0.0:
+    resolution: {integrity: sha512-x}
+    engines: {node: '>=20'}
+
+snapshots:
+
+  is-number@7.0.0: {}
+`;
+    expect(unregisteredPackages(head)).toEqual([
+      'is-number@7.0.0',
+      'block@1.0.0',
+      'twice@1.0.0',
+      'none@1.0.0',
+    ]);
+  });
+
+  it('finds the registry versions a pull request adds or gives another hash (audit 3 H-1)', () => {
+    const entry = (key: string, integrity: string) =>
+      `  ${key}:\n    resolution: {integrity: ${integrity}}\n`;
+    const base = `packages:\n\n${entry('kept@1.0.0', 'sha512-a')}\n${entry("'@scope/swapped@2.0.0'", 'sha512-b')}`;
+    const head = `packages:\n\n${entry('kept@1.0.0', 'sha512-a')}\n${entry("'@scope/swapped@2.0.0'", 'sha512-evil')}\n${entry('new@3.0.0', 'sha512-c')}`;
+    expect(changedPackages(base, head)).toEqual([
+      ['@scope/swapped', '2.0.0', 'sha512-evil'],
+      ['new', '3.0.0', 'sha512-c'],
+    ]);
+    expect(changedPackages(head, head)).toEqual([]);
+  });
+
+  it('reads the registry’s hash as pnpm writes it, old SHA-1 ones too (audit 3 H-1)', () => {
+    const packument = {
+      versions: {
+        '1.0.0': { dist: { integrity: 'sha512-new', shasum: 'aa'.repeat(20) } },
+        '0.1.0': { dist: { shasum: '00112233445566778899aabbccddeeff00112233' } },
+      },
+    };
+    expect(registryIntegrity(packument, '1.0.0')).toBe('sha512-new');
+    expect(registryIntegrity(packument, '0.1.0')).toBe('sha1-ABEiM0RVZneImaq7zN3u/wARIjM=');
+    expect(registryIntegrity(packument, '9.9.9')).toBeUndefined();
+  });
+
+  it('finds no changed hashes in this repository’s own lockfile against itself', async () => {
+    const { readFileSync } = await import('node:fs');
+    const current = readFileSync('pnpm-lock.yaml', 'utf8');
+    expect(changedPackages(current, current)).toEqual([]);
+    expect(changedPackages('packages:\n', current).length).toBe(lockedPackages(current).size);
   });
 });

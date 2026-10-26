@@ -6,6 +6,7 @@
  * same key (fileLabel).
  */
 import { hkdf, open, seal, toBase64Url, utf8 } from '@shkriuss/crypto';
+import { nestedTooDeep } from '@shkriuss/storage/nesting';
 import type { StoreSnapshot } from './merge.ts';
 
 export const SYNC_FORMAT = 'shkriuss-sync';
@@ -108,6 +109,8 @@ export async function openStores(
   if (file.format !== SYNC_FORMAT || file.app !== app || typeof file.stores !== 'object') {
     throw new Error('Not this app’s sync data');
   }
+  // Nested deeper than any app's data would stop every sync here (audit 3 C-1).
+  if (nestedTooDeep(file.stores)) throw new Error('Not this app’s sync data');
   if (file.version !== SYNC_VERSION) throw new RangeError('Made by a newer version');
   const { written } = file;
   return {

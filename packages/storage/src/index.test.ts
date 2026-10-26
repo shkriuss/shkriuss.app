@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   allSaved,
   createStore,
@@ -288,5 +288,31 @@ describe('getLocalStorage', () => {
       configurable: true,
     });
     expect(getLocalStorage()).toBeUndefined();
+  });
+});
+
+describe('keeping the data (audit 3 J-4)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('asks the browser to keep the site’s data after the first save, once a page', async () => {
+    // The first audit's E-9: Safari deletes a website's data after a week
+    // without a visit, unless it's on the Home Screen or kept.
+    vi.resetModules();
+    const persist = vi.fn(async () => true);
+    vi.stubGlobal('navigator', { storage: { persisted: async () => false, persist } });
+    const fresh = await import('./index.ts');
+    const store = fresh.createStore<number>({
+      key: 'kept',
+      version: 1,
+      fallback: () => 0,
+      validate: (value): value is number => typeof value === 'number',
+      storage: new MemoryStorage(),
+    });
+    expect(persist).not.toHaveBeenCalled();
+    expect(store.save(1)).toBe(true);
+    expect(store.save(2)).toBe(true);
+    await vi.waitFor(() => expect(persist).toHaveBeenCalledTimes(1));
   });
 });

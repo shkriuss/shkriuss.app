@@ -104,9 +104,9 @@ export type { SyncProblem } from './requests.ts';
 
 const PENDING_KEY = 'shkriuss-device:connect';
 /** After a change, wait this long so quick edits go up together. */
-const CHANGE_DELAY_MS = 1500;
+export const CHANGE_DELAY_MS = 1500;
 /** While the app is open and visible, look for changes from other devices this often. */
-const POLL_MS = 60 * 1000;
+export const POLL_MS = 60 * 1000;
 /** Merge again at most this many times in a row when another device writes first. */
 const MAX_ROUNDS = 3;
 
@@ -369,8 +369,9 @@ export function createSync(options: {
 
   /**
    * The online copies of replaced keys still to move here (gone ones have
-   * nothing to bring), the replaced keys whose copy another device moved,
-   * and those whose copy waits for a newer version of the app.
+   * nothing to bring; a key with nothing online moves as an empty copy), the
+   * replaced keys whose copy another device moved, and those whose copy
+   * waits for a newer version of the app.
    *
    * A device with the old key (a lost one) can write anything to its copy,
    * so nothing in it may stop syncing with the new key (audit A-1): a copy
@@ -392,8 +393,10 @@ export function createSync(options: {
       let ready: Stores | 'wait';
       try {
         const remote = await fetchRemote(null, token, key);
-        if (remote.kind !== 'copy') continue;
-        ready = readOld(remote.stores);
+        // Nothing online for the old key (never synced, or deleted half-way)
+        // still gets the "moved" note below, so a lost device with that key
+        // can't start it again (audit 3 B-1).
+        ready = remote.kind === 'copy' ? readOld(remote.stores) : {};
       } catch (error) {
         if (error instanceof UnopenedCopyError) {
           ready = error.problem === 'update-needed' ? 'wait' : {};
@@ -470,12 +473,15 @@ export function createSync(options: {
     // A copy older than one this device saw (the server restored from a
     // backup, or sending an old copy again) is merged like a device that was
     // away for a while, but what it lacks isn't taken as deleted (audit A-8).
+    // The version is the server's word; how many times the copy was written
+    // is sealed in it, so a copy that doesn't say, after one that did, is
+    // older too, whatever version the server gives it (audit 3 B-3).
     const last =
       remote.kind === 'copy' && state.remote?.epoch === remote.epoch ? state.remote : null;
     const older =
       remote.kind === 'copy' &&
       last !== null &&
-      (remote.version < last.version || (remote.written ?? Infinity) < (last.written ?? 0));
+      (remote.version < last.version || (remote.written ?? 0) < (last.written ?? 0));
     /** The most times this copy was written, as far as this device knows. */
     const written =
       remote.kind === 'copy'
@@ -524,10 +530,12 @@ export function createSync(options: {
     // before over the merge, even if the upload below fails.
     checkStillOn(secret);
     const nexts: unknown[] = [];
+    const currents: unknown[] = [];
     for (const synced of stores) {
       const result = merged[synced.store.key] as StoreSnapshot;
       const current = synced.store.load();
       if (canonical(current) !== before[synced.store.key]) return false;
+      currents.push(current);
       const values = valuesOf(result) as Identified[];
       const next = synced.withItems(current, values);
       if (synced.store.read(synced.store.version, next) === undefined) {
@@ -540,19 +548,40 @@ export function createSync(options: {
       nexts.push(next);
     }
     let appChanged = false;
+    /** The stores saved this round: they hold the merge. */
+    const changed: number[] = [];
+    /**
+     * Puts back what the changed stores held before this round. When what
+     * this device knew can't be saved after the merge was (storage full),
+     * the next round would take what came in for edits made here, newer than
+     * every other device's (audit 3 E-1): undone, the round just failed.
+     */
+    const undo = (): void => {
+      for (const index of changed) stores[index]?.store.save(currents[index]);
+      changed.length = 0;
+    };
     try {
       for (const [index, synced] of stores.entries()) {
         const next = nexts[index];
         if (canonical(next) === before[synced.store.key]) continue;
         if (!synced.store.save(next)) {
+          undo();
           throw new SyncError(lastSaveProblem() === 'full' ? 'full' : 'storage');
         }
+        changed.push(index);
         appChanged = true;
       }
     } finally {
       if (appChanged) options.onChange();
     }
     keptBoth += kept;
+    const stateNotSaved = (): SyncError => {
+      if (changed.length > 0) {
+        undo();
+        options.onChange();
+      }
+      return new SyncError(stateProblem());
+    };
 
     // 5. Upload, if the copy online isn't already this.
     let online =
@@ -579,8 +608,10 @@ export function createSync(options: {
             ? null
             : state.base;
       if (!updateState(secret, { known: knowns, dirty: true, base: seenOnline })) {
-        throw new SyncError(stateProblem());
+        throw stateNotSaved();
       }
+      // What this device knew says the merge now: nothing to undo.
+      changed.length = 0;
       const data = await sealStores(key, options.app, merged, written + 1);
       if (data.length > MAX_SEALED_CHARS) throw new SyncError('too-big');
       const base = remote.kind === 'none' ? null : (online?.version ?? null);
@@ -601,7 +632,7 @@ export function createSync(options: {
     // 6. Remember. The copy online is now the merge.
     const base = online ? { epoch: online.epoch, stores: knowns } : null;
     const saved = { remote: online, known: knowns, dirty: false, base, last: now, ...answered() };
-    if (!updateState(secret, saved)) throw new SyncError(stateProblem());
+    if (!updateState(secret, saved)) throw stateNotSaved();
 
     // 7. The old copies are in the new one now (and their files, re-sealed with
     // the new key, and the app's linked data): delete them, so devices still

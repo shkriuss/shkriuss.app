@@ -183,6 +183,18 @@ describe('restoreAll', () => {
     expect(() => restoreAll(file, undefined)).toThrow(/isn’t letting the app save data/);
   });
 
+  it('refuses data nested deeper than any app’s, and changes nothing (audit 3 C-1)', () => {
+    const before = storage.entries();
+    // One item with an extra field nested 5,000 deep: under 10 KB, it passes
+    // the apps' own checks (they ignore fields they don't know), and would
+    // stop sync on this device for good.
+    const deep = JSON.parse('['.repeat(5000) + ']'.repeat(5000)) as unknown;
+    const item = { id: 'a', name: 'Olive oil', x: deep };
+    const crafted = { ...file, data: { 'shkriuss:shelf': { v: 1, data: { items: [item] } } } };
+    expect(() => restoreAll(crafted, storage)).toThrow(/can’t be read, so it wasn’t restored/);
+    expect(storage.entries()).toEqual(before);
+  });
+
   it('first checks the backup with the app’s stores, and changes nothing if they can’t read it', () => {
     // The app's store on this page: version 2.
     const store = createStore<{ repairs: string[] }>({

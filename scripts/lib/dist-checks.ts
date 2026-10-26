@@ -32,24 +32,115 @@ export const DEFAULT_BUDGET: Budget = {
   js: 35_000,
 };
 
+/** An attribute's value as the browser reads it: character references decoded. */
+const decoded = (value: string) =>
+  value
+    .replace(/&#x([0-9a-f]+);?/gi, (_, hex: string) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);?/g, (_, decimal: string) => String.fromCodePoint(Number(decimal)))
+    .replace(
+      /&(colon|tab|newline|amp);/gi,
+      (_, name: string) =>
+        ({ colon: ':', tab: '\t', newline: '\n', amp: '&' })[name.toLowerCase()] ?? '',
+    );
+
+interface StartTag {
+  /** In lower case. */
+  name: string;
+  /** [name in lower case, value], in order. */
+  attributes: [string, string][];
+  /** The tag as written. */
+  text: string;
+}
+
+/**
+ * The start tags in the HTML, read the way browsers read them: attributes
+ * by name, quoted or not, with spaces around "=" (so `data-src=` isn't
+ * `src=`, and `onerror ="…"` is a handler: audit 3 C-5). Comments are
+ * skipped, and so is the text of a script or style element.
+ */
+function startTags(html: string): StartTag[] {
+  const lower = html.toLowerCase();
+  const tags: StartTag[] = [];
+  const isSpace = (at: number) => /\s/.test(html.charAt(at));
+  let at = html.indexOf('<');
+  while (at !== -1) {
+    if (html.startsWith('<!--', at)) {
+      const end = html.indexOf('-->', at + 4);
+      at = end === -1 ? -1 : html.indexOf('<', end + 3);
+      continue;
+    }
+    const opening = /^<([a-zA-Z][^\s/>]*)/.exec(html.slice(at, at + 100));
+    if (!opening) {
+      at = html.indexOf('<', at + 1);
+      continue;
+    }
+    const name = (opening[1] ?? '').toLowerCase();
+    let i = at + opening[0].length;
+    const attributes: [string, string][] = [];
+    for (;;) {
+      while (i < html.length && (isSpace(i) || html[i] === '/')) i += 1;
+      if (i >= html.length || html[i] === '>') break;
+      const start = i;
+      // A name runs to a space, "/", ">" or "=" (an "=" first belongs to it).
+      i += 1;
+      while (i < html.length && !/[\s/>=]/.test(html.charAt(i))) i += 1;
+      const key = lower.slice(start, i);
+      while (i < html.length && isSpace(i)) i += 1;
+      let value = '';
+      if (html[i] === '=') {
+        i += 1;
+        while (i < html.length && isSpace(i)) i += 1;
+        const quote = html.charAt(i);
+        if (quote === '"' || quote === "'") {
+          const end = html.indexOf(quote, i + 1);
+          value = html.slice(i + 1, end === -1 ? html.length : end);
+          i = end === -1 ? html.length : end + 1;
+        } else {
+          const from = i;
+          while (i < html.length && !isSpace(i) && html[i] !== '>') i += 1;
+          value = html.slice(from, i);
+        }
+      }
+      attributes.push([key, decoded(value)]);
+    }
+    tags.push({ name, attributes, text: html.slice(at, i + 1) });
+    // What's inside a script or style element isn't HTML.
+    at =
+      name === 'script' || name === 'style' ? lower.indexOf(`</${name}`, i) : html.indexOf('<', i);
+  }
+  return tags;
+}
+
+/** Attributes whose value a browser follows as an address. */
+const URL_ATTRIBUTES = new Set(['href', 'src', 'action', 'formaction', 'xlink:href', 'data']);
+
+/**
+ * A "javascript:" address as browsers read it: control characters and
+ * spaces before it, and tabs and line breaks in it, don't count.
+ */
+function isScriptUrl(value: string): boolean {
+  const address = value.replace(/[\t\n\r]/g, '');
+  let start = 0;
+  while (start < address.length && address.charCodeAt(start) <= 0x20) start += 1;
+  return /^javascript:/i.test(address.slice(start));
+}
+
 /** Returns a description of every CSP problem in the HTML (empty when clean). */
 export function cspProblems(html: string): string[] {
   const problems: string[] = [];
-  for (const match of html.matchAll(/<script\b([^>]*)>/gi)) {
-    const attributes = match[1] ?? '';
-    const isData = /\btype=["']?application\/(?:ld\+)?json/i.test(attributes);
-    if (!/\bsrc=/i.test(attributes) && !isData) {
-      problems.push(`inline <script${attributes}>`);
+  for (const { name, attributes, text } of startTags(html)) {
+    const valueOf = (key: string) => attributes.find(([attribute]) => attribute === key)?.[1];
+    if (name === 'script') {
+      const isData = /^application\/(?:ld\+)?json$/i.test((valueOf('type') ?? '').trim());
+      if (valueOf('src') === undefined && !isData) problems.push(`inline ${text.slice(0, 60)}`);
+    }
+    if (name === 'style') problems.push('inline <style> element');
+    for (const [key, value] of attributes) {
+      if (key === 'style') problems.push(`style="" attribute in ${text.slice(0, 60)}…`);
+      if (/^on[a-z]+$/.test(key)) problems.push(`inline event handler ${key}=`);
+      if (URL_ATTRIBUTES.has(key) && isScriptUrl(value)) problems.push(`javascript: in ${key}=`);
     }
   }
-  if (/<style\b/i.test(html)) problems.push('inline <style> element');
-  for (const match of html.matchAll(/<[a-z][\w-]*\b[^>]*\sstyle=["'][^"']*["']/gi)) {
-    problems.push(`style="" attribute in ${match[0].slice(0, 60)}…`);
-  }
-  for (const match of html.matchAll(/<[a-z][\w-]*\b[^>]*\s(on[a-z]+)=/gi)) {
-    problems.push(`inline event handler ${match[1]}=`);
-  }
-  if (/\bhref=["']?\s*javascript:/i.test(html)) problems.push('javascript: link');
   return problems;
 }
 

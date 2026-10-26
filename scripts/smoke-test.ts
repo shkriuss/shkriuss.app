@@ -6,13 +6,16 @@
  * notifications while closed must
  * also answer /api/push/key with their public key, and the hub its account
  * service (/api/account/ping), and apps with sync /api/sync/hub, and apps
- * with an online library /api/library/* (asking for a token). Retries for a
- * few minutes because a brand new subdomain can take a moment to get its DNS
+ * with an online library /api/library/* (asking for a token). Apps with
+ * files downloaded only on request (like Grammar's Deep check) must serve
+ * each of their manifests as deployed: the saved build leaves those files
+ * out, and only the deploy puts them back (audit 3 J-7). Retries for a few
+ * minutes because a brand new subdomain can take a moment to get its DNS
  * record and certificate.
  *
  *   node scripts/smoke-test.ts
  */
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { apps, getSite, HUB_SLUG } from '../packages/registry/src/index.ts';
 import { contentSecurityPolicy } from '../packages/astro-config/src/headers.ts';
@@ -40,6 +43,37 @@ const deployedPages = new Map(
     }
     return [getSite(slug).origin, readFileSync(path, 'utf8')];
   }),
+);
+/**
+ * Each app's on-demand manifests, as deployed ("on-demand/deep-check/manifest.json"
+ * and its text), for the apps CI puts on-demand files back into (their
+ * "on-demand-into-dist" script). One of those whose build has none was
+ * deployed without them.
+ */
+const onDemand = new Map(
+  apps
+    .filter((app) => {
+      const manifest = readFileSync(join(repoRoot, 'apps', app.slug, 'package.json'), 'utf8');
+      const { scripts = {} } = JSON.parse(manifest) as { scripts?: Record<string, string> };
+      return 'on-demand-into-dist' in scripts;
+    })
+    .map((app) => {
+      const dir = join(repoRoot, 'apps', app.slug, 'dist', 'on-demand');
+      const manifests = existsSync(dir)
+        ? readdirSync(dir).filter((name) => existsSync(join(dir, name, 'manifest.json')))
+        : [];
+      if (manifests.length === 0) {
+        console.error(`${app.slug} was built without its on-demand files (${dir}).`);
+        process.exit(1);
+      }
+      return [
+        getSite(app.slug).origin,
+        manifests.map((name) => {
+          const path = `on-demand/${name}/manifest.json`;
+          return [path, readFileSync(join(dir, name, 'manifest.json'), 'utf8')] as const;
+        }),
+      ];
+    }),
 );
 const SECURITY_TXT = '.well-known/security.txt';
 const securityTxtPath = join(repoRoot, 'apps', HUB_SLUG, 'dist', SECURITY_TXT);
@@ -89,6 +123,11 @@ async function check(origin: string): Promise<string | undefined> {
       if (changes.status !== 401 || typeof body.error !== 'string') {
         return 'online library not answering';
       }
+    }
+    for (const [path, deployed] of onDemand.get(origin) ?? []) {
+      const manifest = await fetch(`${origin}/${path}`);
+      if (!manifest.ok || (await manifest.text()) !== deployed)
+        return `/${path} isn't the one deployed`;
     }
     if (pushOrigins.has(origin)) {
       const key = await fetch(`${origin}/api/push/key`);

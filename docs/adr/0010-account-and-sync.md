@@ -157,7 +157,9 @@ Then:
   stop the move: a copy that doesn't open has nothing to bring and is
   deleted all the same, and one from a newer version of the app (or that
   fails the app's checks) waits until the app is updated, while syncing with
-  the new key goes on.
+  the new key goes on. A replaced key with nothing online for the app gets
+  the note that it moved too, so the lost device can't start a copy with it
+  (audit 3 B-1).
 - **Sync history.** A device keeps what it knew at its last sync when sync is
   turned off (by the person, or because the copy was deleted or moved), and
   keeps noting edits and deletions while it's off. Turning sync on again, with
@@ -207,6 +209,13 @@ in with `sync: true` in `apps.json`.
   - "Delete the online copy" deletes the data and leaves a small note, so
     other devices learn it was deleted and turn sync off (keeping their data).
     Moving to a new account key does the same, with a note that it moved.
+    The copy asks the storage meter (another object) before it deletes
+    anything, so a request that fails half-way deletes nothing and can be
+    tried again (audit 3 B-1).
+  - If what a device knew can't be saved after a sync saved the data (the
+    browser is full), the data is put back as it was, and the sync just
+    failed: otherwise the next one would take what came in for new edits
+    made on this device (audit 3 E-1).
   - Limits: about 1.4 MB of compressed data per app, and 120 changes per 10
     minutes per account.
   - The Worker only reads an upload, in one go, and passes it on; the copy's
@@ -278,7 +287,9 @@ in with `sync: true` in `apps.json`.
   or sends it on purpose: each copy carries how many times devices have
   written it, sealed so the server can't change it, and a device that has
   seen a newer copy merges an older one like a device that was away, without
-  taking what it lacks as deleted. Whoever controls the servers could also
+  taking what it lacks as deleted. A copy from before that count existed is
+  older than any that has it, whatever version the server gives it
+  (audit 3 B-3). Whoever controls the servers could also
   change the apps themselves, so these limits matter most for mistakes.
 - **What doesn't sync:** settings that belong to one device, such as
   notifications, reminder bookkeeping and the theme. "Delete all data" turns

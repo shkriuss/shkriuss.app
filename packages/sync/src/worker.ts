@@ -258,12 +258,14 @@ export class SyncCopy {
         const files = await storage.get<FileIndex>('files');
         // Nothing was ever kept for this token: nothing to delete, or to note.
         if (!saved && !files && !moved) return noContent();
-        if (files) await this.#deleteAllBut(['writes', GRANTED_KEY]);
         // Deleting what's kept is never refused; only a note for nothing counts as new.
+        // The meter is asked first: it's another object, and if it can't be
+        // reached, nothing may be gone without the note saying so (audit 3 B-1).
         const kept = saved !== undefined || files !== undefined;
         if (!(await reserve(this.state, this.env.SYNC_COPIES, 0, kept ? NO_LIMIT : limit))) {
           return full();
         }
+        if (files) await this.#deleteAllBut(['writes', GRANTED_KEY]);
         await storage.put('copy', {
           version: (saved?.version ?? 0) + 1,
           epoch: saved?.epoch ?? '',
