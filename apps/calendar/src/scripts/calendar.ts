@@ -448,7 +448,7 @@ export function mountCalendar(root: Document): void {
         exportStatus.textContent = `Downloaded ${plural(state.events.length, 'event')}.`;
       },
       () => {
-        exportStatus.textContent = 'Calendar couldn’t make the file. Please try again.';
+        exportStatus.textContent = `Calendar couldn’t make the file. ${RELOAD_TO_UPDATE}`;
       },
     );
   });

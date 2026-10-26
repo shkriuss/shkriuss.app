@@ -499,15 +499,18 @@ test('downloads events as an .ics file', async ({ page }) => {
 });
 
 test('says so when the file can’t be made', async ({ page, guard }) => {
-  // What writes the file loads only when it's needed; here it can't.
+  // What writes the file loads only when it's needed; here it can't. After
+  // an update while the page was open, its old file is gone: "Please try
+  // again" couldn't help (audit 4 J-10).
   guard.allowConsole('net::ERR_FAILED');
   await seed(page, [{ title: 'Dentist' }]);
   await page.route('**/_astro/ics.*.js', (route) => route.abort());
   await page.getByRole('button', { name: 'Download .ics file' }).click();
   await expect(
-    page
-      .getByRole('status')
-      .filter({ hasText: 'Calendar couldn’t make the file. Please try again.' }),
+    page.getByRole('status').filter({
+      hasText:
+        'Calendar couldn’t make the file. Reload the page to get the latest version, then try again.',
+    }),
   ).toBeVisible();
 });
 
