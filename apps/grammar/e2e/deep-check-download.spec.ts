@@ -2,7 +2,8 @@
 // this is quick; deep-check.spec.ts downloads the real one): a second tap on
 // "Download Deep check" while the list of files comes doesn't download
 // everything twice, and "Stop the download" stops it (audit F3-5). The list
-// takes 300 ms, like a phone network.
+// takes 300 ms, like a phone network. While it comes, the page says so, and
+// it says when the list doesn't come (audit 3 G-7).
 import { createHash } from 'node:crypto';
 import type { Page } from '@playwright/test';
 import { expect, test } from '../../../tests/e2e/fixtures.ts';
@@ -21,13 +22,20 @@ const manifest = {
   model: [file('model-1'), file('model-2')],
 };
 
-/** Serves the stand-in files, each after `delay` ms; returns how often each was asked for. */
-async function standIns(page: Page, delay: number): Promise<Map<string, number>> {
+/**
+ * Serves the stand-in files, each after `delay` ms (the list of files after
+ * 300 ms, and not before `listed`); returns how often each was asked for.
+ */
+async function standIns(
+  page: Page,
+  delay: number,
+  listed: Promise<void> = Promise.resolve(),
+): Promise<Map<string, number>> {
   const fetched = new Map<string, number>();
   await page.route(`**${DIR}**`, async (route) => {
     const path = new URL(route.request().url()).pathname;
     if (path === `${DIR}manifest.json`) {
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      await Promise.all([new Promise((resolve) => setTimeout(resolve, 300)), listed]);
       await route.fulfill({ json: manifest });
       return;
     }
@@ -46,7 +54,13 @@ const downloadButton = (page: Page) =>
   deep(page).getByRole('button', { name: 'Download Deep check' });
 
 test('a double tap on “Download Deep check” downloads each file once', async ({ page }) => {
-  const fetched = await standIns(page, 200);
+  // The list comes once the second tap is made: on a busy machine, the
+  // checks below could take longer than the list's 300 ms.
+  let list = (): void => undefined;
+  const listed = new Promise<void>((resolve) => {
+    list = resolve;
+  });
+  const fetched = await standIns(page, 200, listed);
   await page.goto('/');
   await expect(downloadButton(page)).toBeVisible();
   await downloadButton(page).click();
@@ -54,6 +68,7 @@ test('a double tap on “Download Deep check” downloads each file once', async
   await expect(downloadButton(page)).toHaveAttribute('aria-disabled', 'true');
   await expect(downloadButton(page)).toBeFocused();
   await downloadButton(page).dispatchEvent('click');
+  list();
   await expect(deep(page).getByRole('button', { name: 'Check my text' })).toBeVisible({
     timeout: 15_000,
   });
@@ -62,6 +77,46 @@ test('a double tap on “Download Deep check” downloads each file once', async
   expect(Object.fromEntries(fetched)).toEqual(
     Object.fromEntries([...names, 'model-1', 'model-2'].map((name) => [file(name).path, 1])),
   );
+});
+
+test('says what it’s doing while the list of files comes, and when it can’t come', async ({
+  page,
+}) => {
+  // On a network that hangs (a dead Wi-Fi, a VPN with no route), the list of
+  // files never comes: the button stayed busy, without a word, for ever
+  // (audit 3 G-7). Here the time limit (20 seconds) runs out when the test
+  // says so.
+  await page.addInitScript(() => {
+    const limits: AbortController[] = [];
+    AbortSignal.timeout = () => {
+      const controller = new AbortController();
+      limits.push(controller);
+      return controller.signal;
+    };
+    const runOut = () => {
+      for (const controller of limits) {
+        controller.abort(new DOMException('The operation timed out.', 'TimeoutError'));
+      }
+    };
+    Object.assign(window, { runOut });
+  });
+  await page.route(`**${DIR}manifest.json`, () => new Promise<void>(() => undefined));
+  await page.goto('/');
+  await downloadButton(page).click();
+  const checking = 'Checking what to download…';
+  await expect(deep(page).getByText(checking)).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: checking })).toBeAttached();
+  await expect(downloadButton(page)).toHaveAttribute('aria-disabled', 'true');
+
+  await page.evaluate(() => {
+    (Reflect.get(window, 'runOut') as () => void)();
+  });
+  const problem = 'Couldn’t reach shkriuss.app. Check your internet connection and try again.';
+  await expect(deep(page).locator('[data-deep-problem]')).toHaveText(problem);
+  await expect(page.getByRole('status').filter({ hasText: problem })).toBeAttached();
+  await expect(deep(page).getByText(checking)).toBeHidden();
+  await expect(downloadButton(page)).not.toHaveAttribute('aria-disabled');
+  await expect(downloadButton(page)).toBeFocused();
 });
 
 test('after a double tap, “Stop the download” stops the download', async ({ page }) => {

@@ -91,6 +91,33 @@ test('downloads only when asked, then checks the text and makes its changes', as
   await text(page).press('ControlOrMeta+z');
   await expect(text(page)).toHaveValue('I has a apple. She go to school every days.');
 
+  // A short form typed without an apostrophe is split as the model learned
+  // it ("do" + "nt"): kept whole, the model didn't know "dont", and made it
+  // "do", the opposite (audit 3 F3-2).
+  await text(page).fill('I dont know where he is.');
+  await button(page, "Change “nt” to “n't”").click();
+  await expect(text(page)).toHaveValue("I don't know where he is.");
+  // With curly apostrophes, as iPhones type, the one it adds is curly too,
+  // without a space before it (audit 3 F3-5).
+  await text(page).fill('It’s late and its raining.');
+  await button(page, 'Change “its” to “it’s”').click();
+  await expect(text(page)).toHaveValue('It’s late and it’s raining.');
+
+  // The text changed in another tab: checked again and drawn again, the
+  // changes keep keyboard focus where it was (audit 3 G-1).
+  await text(page).fill('She go to school.');
+  const goes = button(page, 'Change “go” to “goes”');
+  await goes.focus();
+  await page.evaluate(() => {
+    const key = 'shkriuss:grammar';
+    const saved = JSON.parse(localStorage.getItem(key) ?? '{}') as { data?: object };
+    const data = { ...saved.data, text: 'She go to school. We has fun.' };
+    localStorage.setItem(key, JSON.stringify({ v: 1, data }));
+    window.dispatchEvent(new StorageEvent('storage', { key, storageArea: localStorage }));
+  });
+  await expect(button(page, 'Change “has” to “have”')).toBeVisible({ timeout: 60_000 });
+  await expect(goes).toBeFocused();
+
   // The text never left the device: only files were downloaded.
   expect(requests.filter((line) => !line.startsWith('GET '))).toEqual([]);
   expect(requests.join('\n')).not.toContain('apple');

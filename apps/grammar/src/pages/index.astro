@@ -87,6 +87,7 @@ import { MAX_TEXT_LENGTH } from '../lib/grammar.ts';
         it. Check its changes before you accept them: it’s right most of the time, not always.
       </p>
       <p class="notice notice--danger" data-deep-problem hidden></p>
+      <p class="muted" data-deep-preparing></p>
 
       <div class="stack stack--sm" data-deep-panel="absent">
         <p>
@@ -180,7 +181,9 @@ import { MAX_TEXT_LENGTH } from '../lib/grammar.ts';
     </section>
 
     <section class="stack" aria-labelledby="dictionary-heading">
-      <h2 id="dictionary-heading">Your dictionary</h2>
+      <h2 id="dictionary-heading" tabindex="-1" data-dictionary-heading>
+        Your dictionary
+      </h2>
       <p class="muted">
         Words here are never marked as misspelled. Add names and other words with “Add to my
         dictionary” on a spelling suggestion.
@@ -321,6 +324,7 @@ import { MAX_TEXT_LENGTH } from '../lib/grammar.ts';
 
   /* Empty until there's something to show (no gap in the page meanwhile). */
   [data-action-status]:empty,
+  [data-deep-preparing]:empty,
   [data-deep-status]:empty,
   .issues:empty,
   .words:empty,

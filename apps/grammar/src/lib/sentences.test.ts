@@ -46,6 +46,43 @@ describe('wordsOf', () => {
     ]);
   });
 
+  it('splits short forms typed without an apostrophe, and times, as the model learned them', () => {
+    // Kept whole, "dont" was a word the model never saw: it changed it to
+    // "do", the opposite (audit 3 F3-2). spaCy, whose splitting the model
+    // learned from, splits these.
+    const split = (text: string) => wordsOf(text).map((w) => w.model);
+    expect(split('I dont')).toEqual(['I', 'do', 'nt']);
+    expect(split('Ive been there, Im sure youre right and Theyre not.')).toEqual(['I', 've', 'been', 'there', ',', 'I', 'm', 'sure', 'you', 're', 'right', 'and', 'They', 're', 'not', '.']); // prettier-ignore
+    expect(split('He doesnt, she isnt, we cant, they wont, it didnt, Thats it')).toEqual(['He', 'does', 'nt', ',', 'she', 'is', 'nt', ',', 'we', 'ca', 'nt', ',', 'they', 'wo', 'nt', ',', 'it', 'did', 'nt', ',', 'That', 's', 'it']); // prettier-ignore
+    expect(split('Youll see what hes done: wed go if theyd let us, wouldnt we?')).toEqual(['You', 'll', 'see', 'what', 'he', 's', 'done', ':', 'we', 'd', 'go', 'if', 'they', 'd', 'let', 'us', ',', 'would', 'nt', 'we', '?']); // prettier-ignore
+    expect(split('I shouldve known, you couldntve, Ima go, gonna, gotta, yall')).toEqual(['I', 'should', 've', 'known', ',', 'you', 'could', 'nt', 've', ',', 'I', 'm', 'a', 'go', ',', 'gon', 'na', ',', 'got', 'ta', ',', 'y', 'all']); // prettier-ignore
+    // Times, as spaCy splits them: kept whole, "at 5pm" became "at 5 5pm".
+    expect(split('At 5pm, 9am or 10p.m. (not 13pm).')).toEqual(['At', '5', 'pm', ',', '9', 'am', 'or', '10', 'p.m.', '(', 'not', '13pm', ')', '.']); // prettier-ignore
+    // With punctuation around them, and where they are in the text.
+    const text = '(dont) “Ive”… isnt?';
+    const words = wordsOf(text);
+    expect(words.map((w) => w.model)).toEqual(['(', 'do', 'nt', ')', '"', 'I', 've', '"', '…', 'is', 'nt', '?']); // prettier-ignore
+    for (const word of words) expect(text.slice(word.start, word.end)).toBe(word.text);
+  });
+
+  it('keeps real words that look like short forms whole, as spaCy does', () => {
+    // "its" isn't "it" + "s", "ill" isn't "i" + "ll", "were" isn't "we" + "re"…
+    const whole = 'its Its ill Ill hell Hell shell Shell shed Shed were Were well Well whore Whore';
+    expect(wordsOf(whole).map((w) => w.model)).toEqual(whole.split(' '));
+    // So in "I think Ill go", "Ill" stays whole: the model learned to make it "I'll".
+    expect(wordsOf('I think Ill go.').map((w) => w.model)).toEqual([
+      'I',
+      'think',
+      'Ill',
+      'go',
+      '.',
+    ]);
+    // Only in small letters or with a capital first letter, as in spaCy.
+    expect(wordsOf('DONT IVE Yall dontt condont').map((w) => w.model)).toEqual(['DONT', 'IVE', 'Yall', 'dontt', 'condont']); // prettier-ignore
+    // Not inside a longer word, and not in a link.
+    expect(wordsOf('dont-care www.dont.com').map((w) => w.model)).toEqual(['dont', '-', 'care', 'www.dont.com']); // prettier-ignore
+  });
+
   it('keeps abbreviations, numbers, links and email addresses whole', () => {
     expect(wordsOf('Mr. Lee, e.g. 3.5 p.m. in the U.S. costs $5,000 (10%).').map((w) => w.model))
       .toEqual(['Mr.', 'Lee', ',', 'e.g.', '3.5', 'p.m.', 'in', 'the', 'U.S.', 'costs', '$', '5,000', '(', '10', '%', ')', '.']); // prettier-ignore

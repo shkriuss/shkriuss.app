@@ -120,6 +120,25 @@ const cases: Record<string, Case> = {
     },
     shown: (page) => page.locator('[data-weeks]').getByRole('button', { name: /today, 1 event/ }),
   },
+  grammar: {
+    setup: async (page) => {
+      // The checker (20 MB) loads first: two tabs loading it at once, or a
+      // reload meanwhile, can make one fail.
+      test.slow();
+      await expect(page.locator('[data-status]')).toHaveText(/^Type or paste/, { timeout: 60_000 });
+      // Two words in the dictionary, put there as another tab would.
+      await page.evaluate(() => {
+        const key = 'shkriuss:grammar';
+        const data = { text: '', english: 'american', words: ['Mtskheta', 'Tbilisi'] };
+        localStorage.setItem(key, JSON.stringify({ v: 1, data }));
+        window.dispatchEvent(new StorageEvent('storage', { key, storageArea: localStorage }));
+      });
+      return button(page, 'Remove “Mtskheta” from my dictionary');
+    },
+    // The dictionary is drawn again when the English changes elsewhere (audit 3 G-1).
+    change: (other) => other.getByLabel('British (UK)').check(),
+    shown: (page) => page.locator('input[name="english"][value="british"]:checked'),
+  },
   habits: {
     setup: async (page) => {
       await enter(page, 'New habit', 'Read');
@@ -263,6 +282,22 @@ const goneCases: Record<
     next: (page: Page) => Locator;
   }
 > = {
+  grammar: {
+    setup: async (page) => {
+      test.slow();
+      await expect(page.locator('[data-status]')).toHaveText(/^Type or paste/, { timeout: 60_000 });
+      await page.evaluate(() => {
+        const key = 'shkriuss:grammar';
+        const data = { text: '', english: 'american', words: ['Alpha', 'Beta', 'Gamma'] };
+        localStorage.setItem(key, JSON.stringify({ v: 1, data }));
+        window.dispatchEvent(new StorageEvent('storage', { key, storageArea: localStorage }));
+      });
+      return button(page, 'Remove “Beta” from my dictionary');
+    },
+    // Removed from the dictionary in the other tab (or on another device).
+    change: (other) => button(other, 'Remove “Beta” from my dictionary').click(),
+    next: (page) => button(page, 'Remove “Gamma” from my dictionary'),
+  },
   photos: {
     setup: async (page) => {
       await addPhoto(page, '2026:10:21 14:03:22', '#c33');

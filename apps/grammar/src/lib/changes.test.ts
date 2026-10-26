@@ -85,6 +85,31 @@ describe('sentenceChanges', () => {
     expect(fixed('I  has\ta apple.', 'I have an apple .')).toBe('I  have\tan apple.');
   });
 
+  it('adds short forms without a space before them, curly ones too', () => {
+    // Made curly to match the sentence, they were then written with a space
+    // before them: "it ’s raining", "Mary ’s house" (audit 3 F3-5).
+    expect(fixed('It’s late and its raining.', "It 's late and it 's raining .")).toBe(
+      'It’s late and it’s raining.',
+    );
+    expect(fixed('John’s car is at Marys house.', "John 's car is at Mary 's house .")).toBe(
+      'John’s car is at Mary’s house.',
+    );
+    expect(fixed('It’s me, I is here.', "It 's me , I 'm here .")).toBe('It’s me, I’m here.');
+    expect(fixed('I can’t come, I dont know.', "I ca n't come , I do n't know .")).toBe(
+      'I can’t come, I don’t know.',
+    );
+    expect(changesFor('It’s late and its raining.', "It 's late and it 's raining .")).toEqual([
+      { start: 14, end: 17, before: 'its', after: 'it’s' },
+    ]);
+    // The same with straight apostrophes.
+    expect(fixed("It's late and its raining.", "It 's late and it 's raining .")).toBe(
+      "It's late and it's raining.",
+    );
+    expect(written(['do', 'n’t', ',', 'he', '’s', 'here', ',', 'they', '’re', '’ll'])).toBe(
+      'don’t, he’s here, they’re’ll',
+    );
+  });
+
   it('suggests nothing when only the model’s spelling of quotes differs', () => {
     expect(changesFor('He said “hi”.', 'He said " hi " .')).toEqual([]);
   });

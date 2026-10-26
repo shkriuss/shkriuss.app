@@ -8,7 +8,7 @@ import type { Page } from '@playwright/test';
 import { paste } from '../../../tests/e2e/clipboard.ts';
 import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
 
-// Loading the checker (16 MB of WebAssembly) takes a few seconds.
+// Loading the checker (about 20 MB of WebAssembly) takes a few seconds.
 test.slow();
 
 const READY = 'Type or paste your text above, and suggestions show here.';
@@ -20,6 +20,25 @@ const suggestion = (page: Page, problem: string) =>
 async function open(page: Page): Promise<void> {
   await page.goto('/');
   await expect(status(page)).toHaveText(READY, { timeout: 30_000 });
+}
+
+/** Opens a second tab once the text is saved (half a second after typing stops), as another device. */
+async function secondTab(page: Page): Promise<Page> {
+  const typed = await text(page).inputValue();
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const saved = JSON.parse(localStorage.getItem('shkriuss:grammar') ?? '{}') as {
+          data?: { text?: string };
+        };
+        return saved.data?.text;
+      }),
+    )
+    .toBe(typed);
+  const other = await page.context().newPage();
+  await other.goto('/');
+  await page.bringToFront();
+  return other;
 }
 
 test('checks as you type, and fixes problems with a tap', async ({ page }) => {
@@ -158,6 +177,79 @@ test('says when the dictionary is full', async ({ page }) => {
   await add.click();
   await expect(page.getByRole('status').filter({ hasText: 'Added “Mtskheta”' })).toBeAttached();
   await expect(suggestion(page, 'Mtskheta')).toHaveCount(0);
+});
+
+test('says how many words to remove when the dictionary has more than it keeps', async ({
+  page,
+}) => {
+  // Sync can bring two devices' dictionaries together past 500 words; then
+  // "Remove one to add another" wasn't enough (audit 3 F3-9).
+  await page.goto('/');
+  const words = Array.from({ length: 600 }, (_, index) => `word${index}`);
+  await page.evaluate((list) => {
+    const data = { text: '', english: 'american', words: list };
+    localStorage.setItem('shkriuss:grammar', JSON.stringify({ v: 1, data }));
+  }, words);
+  await open(page);
+  await text(page).fill('Mtskheta is near Tbilisi.');
+  await suggestion(page, 'Mtskheta')
+    .getByRole('button', { name: 'Add to my dictionary: “Mtskheta”' })
+    .click();
+  const full = page.getByRole('alert').filter({
+    hasText: 'Your dictionary has 600 words; it can keep 500. Remove 101 to add another.',
+  });
+  await expect(full).toBeVisible();
+
+  // Down to 499 on another device (the change comes as another tab's does): the note goes.
+  await page.evaluate((list) => {
+    const key = 'shkriuss:grammar';
+    const data = { text: 'Mtskheta is near Tbilisi.', english: 'american', words: list };
+    localStorage.setItem(key, JSON.stringify({ v: 1, data }));
+    window.dispatchEvent(new StorageEvent('storage', { key, storageArea: localStorage }));
+  }, words.slice(101));
+  await expect(full).toHaveCount(0);
+});
+
+test('keeps keyboard focus on a suggestion when another tab changes the English', async ({
+  page,
+}) => {
+  // Another tab (or another device, through sync) chose British English:
+  // the text was checked again, the suggestions were drawn again, and
+  // keyboard focus fell to the top of the page (audit 3 G-1).
+  await open(page);
+  await page.getByLabel('American (US)').check();
+  await text(page).fill('I has a apple. She go home.');
+  await expect(status(page)).toHaveText(/suggestions/);
+  const other = await secondTab(page);
+  const show = page.getByRole('button', { name: 'Show in text: “go”' });
+  await show.focus();
+  await page.evaluate(() => {
+    Object.assign(window, { focusedBefore: document.activeElement });
+  });
+
+  await other.getByLabel('British (UK)').check();
+  await expect(page.getByLabel('British (UK)')).toBeChecked();
+  // Drawn again: focus is on the new copy of the same button.
+  await expect
+    .poll(() => page.evaluate(() => (Reflect.get(window, 'focusedBefore') as Element).isConnected))
+    .toBe(false);
+  await expect(show).toBeFocused();
+});
+
+test('when the suggestion with focus goes, and none is left, focus goes to the heading', async ({
+  page,
+}) => {
+  await open(page);
+  await page.getByLabel('American (US)').check();
+  await text(page).fill('The colour is nice.');
+  await expect(status(page)).toHaveText('1 suggestion.');
+  const other = await secondTab(page);
+  await page.getByRole('button', { name: 'Show in text: “colour”' }).focus();
+
+  // British English, chosen in the other tab: nothing to suggest any more.
+  await other.getByLabel('British (UK)').check();
+  await expect(status(page)).toHaveText('No problems found.');
+  await expect(page.getByRole('heading', { name: 'Suggestions' })).toBeFocused();
 });
 
 test('shows a problem in the text', async ({ page }) => {

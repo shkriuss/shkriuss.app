@@ -2,7 +2,9 @@
 
 Status: Accepted (2026-10-18). Extended by [ADR 0012](0012-deep-check-ai-model.md):
 apps with `"webAssembly": true` may also create the `default` Trusted Types
-policy, for WebAssembly threads.
+policy, for WebAssembly threads. Updated in October 2026 (audit 3 J-8,
+J-11): Harper's file is about 20 MB now, and Consequences say what to do if
+an update takes it near Cloudflare's 25 MiB limit for one file.
 
 ## Context
 
@@ -17,7 +19,9 @@ data there is.
 grammar checker written in Rust that runs entirely in the browser as
 WebAssembly. It supports American and British English, needs no server, and
 checks a page of text in milliseconds. Its downside is size: the WebAssembly
-file, which includes its dictionary, is 16 MB (about 8 MB compressed).
+file, which includes its dictionary, was 16 MB when this was decided
+(harper.js 2.10), and is about 20 MB since 2.13 (20,252,229 bytes); about
+8 MB compressed.
 
 Our Content Security Policy ([ADR 0004](0004-security-headers.md)) doesn't
 allow WebAssembly to run, and Harper's own "run in a worker" option builds its
@@ -66,6 +70,15 @@ worker from a `blob:` URL, which the CSP and Trusted Types also block.
 - Updates to Harper come through Dependabot like any dependency; the
   browser tests use the real checker, so a change in its behaviour shows up in
   CI.
+- Harper's file is one of the site's own build files, which Cloudflare serves
+  up to 25 MiB each (`pnpm check:dist` fails above that). It's 19.3 MiB, and
+  grew about 26% in one update (harper.js 2.10 to 2.13). Unlike Deep check's
+  files, it can't simply be split into parts: harper.js loads it from one
+  address, and the offline copy keeps it whole. If an update takes it near
+  25 MiB, keep the older harper.js until there's a way: a smaller build of
+  Harper, or serving the file in parts and joining them in the checker's
+  worker, which changes how it's loaded (and maybe the CSP), so it needs a
+  decision record of its own (audit 3 J-11).
 
 ## Alternatives
 

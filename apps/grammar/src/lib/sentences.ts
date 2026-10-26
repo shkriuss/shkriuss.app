@@ -1,9 +1,10 @@
 /**
  * Deep check, step 1: splits text into sentences and words the way the model
  * was trained to read them (like the spaCy library does): "don't" is "do" +
- * "n't", "apple." is "apple" + ".", "well-known" is "well" + "-" + "known".
- * Each word remembers where it is in the text (UTF-16 positions, like
- * JavaScript strings), so changes can be made in the right place.
+ * "n't", "dont" is "do" + "nt", "apple." is "apple" + ".", "well-known" is
+ * "well" + "-" + "known". Each word remembers where it is in the text (UTF-16
+ * positions, like JavaScript strings), so changes can be made in the right
+ * place.
  */
 
 export interface Word {
@@ -29,6 +30,55 @@ const PREFIXES = new Set([...'([{"\'“‘«¿¡$£€#*']);
 const SUFFIXES = new Set([...')]}"\'”’»,.!?;:%*']);
 /** "n't", "'s" and the like at the end of a word (after a letter: see cliticLength). */
 const CLITIC = /(?:n['’]t|['’](?:s|re|ve|ll|d|m))$/iu;
+/**
+ * Words without an apostrophe that spaCy splits (its English tokenizer
+ * exceptions), since the model learned from text split that way: short forms
+ * typed without an apostrophe ("dont" is "do" + "nt", "Ive" is "I" + "ve",
+ * "youre" is "you" + "re") and times ("5pm" is "5" + "pm"). Kept whole, the
+ * model didn't know them: it changed "dont" to "do", and "at 5pm" to "at 5
+ * 5pm" (audit 3 F3-2). Each row: words, then the endings each of them takes
+ * ("+" between the parts of a longer one, as in "couldntve").
+ */
+const SPLITS: readonly (readonly [words: string, endings: string])[] = [
+  ['ca could do does did had may might must need ought sha should wo would', 'nt nt+ve'],
+  ['ai are is was were have has dare', 'nt'],
+  ['could might must should would', 've'],
+  ['i', 'm m+a'],
+  ['i you he she it we they', 'll ll+ve d d+ve'],
+  ['i you we they', 've'],
+  ['you we they', 're'],
+  ['he she it', 's'],
+  ['who what when where why how there that this these those', 'll ll+ve d d+ve'],
+  ['who what when where why how there that this', 's'],
+  ['who what when where why how there these those', 're ve'],
+  ['not', 've'],
+  ['gon', 'na'],
+  ['got', 'ta'],
+  ['1 2 3 4 5 6 7 8 9 10 11 12', 'am pm a.m. p.m.'],
+];
+/** Real words that look like short forms: spaCy keeps them whole. */
+const NOT_SPLIT = new Set(['ill', 'its', 'hell', 'shell', 'shed', 'were', 'well', 'whore']);
+/**
+ * Each of them, as spaCy knows it (in small letters, or with a capital first
+ * letter: "dont", "Dont", not "DONT"), and the lengths of the endings split
+ * off it, the last first ("couldntve": 2, 2).
+ */
+const SPLIT_ENDINGS = new Map<string, number[]>();
+for (const [words, endings] of SPLITS) {
+  for (const word of words.split(' ')) {
+    for (const ending of endings.split(' ')) {
+      const parts = ending.split('+');
+      const whole = word + parts.join('');
+      if (NOT_SPLIT.has(whole)) continue;
+      const lengths = parts.map((part) => part.length).reverse();
+      SPLIT_ENDINGS.set(whole, lengths);
+      SPLIT_ENDINGS.set(whole.charAt(0).toUpperCase() + whole.slice(1), lengths);
+    }
+  }
+}
+// "yall" ("y" + "all") too, only in small letters.
+SPLIT_ENDINGS.set('yall', [3]);
+const LONGEST_SPLIT = Math.max(...[...SPLIT_ENDINGS.keys()].map((whole) => whole.length));
 /** Abbreviations keep their full stop ("Mr.", "e.g.", "U.S.", initials like "J."). */
 const ABBREVIATIONS = new Set([
   'mr.', 'mrs.', 'ms.', 'dr.', 'prof.', 'st.', 'jr.', 'sr.', 'vs.', 'etc.', 'approx.',
@@ -111,6 +161,16 @@ export function splitPiece(piece: string): [number, number][] {
   for (;;) {
     const length = to - from;
     if (length <= 1) break;
+    // "dont" is "do" + "nt", "5p.m." is "5" + "p.m.": checked first, as spaCy
+    // does, and that's the end of it (audit 3 F3-2).
+    const endings = length <= LONGEST_SPLIT ? SPLIT_ENDINGS.get(piece.slice(from, to)) : undefined;
+    if (endings) {
+      for (const ending of endings) {
+        tail.push([to - ending, to]);
+        to -= ending;
+      }
+      break;
+    }
     const last = piece[to - 1] ?? '';
     // "..." (as long as it is) or "…", after something else.
     const dots = Math.min(stops[to] ?? 0, length);

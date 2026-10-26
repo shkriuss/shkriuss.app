@@ -160,6 +160,17 @@ export function wordToAdd(issue: Pick<Issue, 'kind' | 'problem'>): string | unde
     : undefined;
 }
 
+const collator = new Intl.Collator('en');
+
+/**
+ * Alphabetical order, the same on every device: sorted in each device's own
+ * language, two devices with sync kept sorting the dictionary differently,
+ * and uploading it again and again (audit 3 F3-6). Words that sort the same
+ * ("é" written as one or two characters) are put in one order too.
+ */
+const alphabetical = (a: string, b: string): number =>
+  collator.compare(a, b) || (a < b ? -1 : a > b ? 1 : 0);
+
 /**
  * The dictionary with a word added (once), in alphabetical order; null when
  * it's full (MAX_WORDS words), so the word can't be added (audit F3-8).
@@ -167,11 +178,21 @@ export function wordToAdd(issue: Pick<Issue, 'kind' | 'problem'>): string | unde
 export function addWord(words: readonly string[], word: string): string[] | null {
   if (words.includes(word)) return [...words];
   if (words.length >= MAX_WORDS) return null;
-  return [...words, word].sort((a, b) => a.localeCompare(b));
+  return [...words, word].sort(alphabetical);
 }
 
-/** What the page says when a word can't be added. */
-export const DICTIONARY_FULL = `Your dictionary is full (${MAX_WORDS} words). Remove one to add another.`;
+/**
+ * What the page says when a word can't be added to a dictionary of `count`
+ * words. Sync can merge more than MAX_WORDS from two devices: then removing
+ * one isn't enough, so it says how many (audit 3 F3-9).
+ */
+export function dictionaryFull(count: number): string {
+  if (count <= MAX_WORDS) {
+    return `Your dictionary is full (${MAX_WORDS} words). Remove one to add another.`;
+  }
+  const extra = count - MAX_WORDS + 1;
+  return `Your dictionary has ${count.toLocaleString('en')} words; it can keep ${MAX_WORDS}. Remove ${extra.toLocaleString('en')} to add another.`;
+}
 
 export const removeWord = (words: readonly string[], word: string): string[] =>
   words.filter((entry) => entry !== word);
@@ -205,7 +226,7 @@ export function withSyncedSettings(
       words.add(setting.word);
     }
   }
-  return { ...state, english, words: [...words].sort((a, b) => a.localeCompare(b)) };
+  return { ...state, english, words: [...words].sort(alphabetical) };
 }
 
 /** Messages from the page to the checker (scripts/checker.worker.ts). */
