@@ -26,9 +26,11 @@ export function decimalSignOf(locale?: string): '.' | ',' {
  * spreadsheet that splits at the other one keeps it whole. Text that a
  * spreadsheet would run as a formula gets a ' in front: at its start (=, +,
  * -, @, a tab or a carriage return), so a note typed as "=HYPERLINK(…)"
- * stays text when the file is opened, and after a semicolon, a tab or a line
- * break inside it ("Lunch;=1+1"), where a spreadsheet splitting there would
- * start a new cell (audit 4 F2-9).
+ * stays text when the file is opened, and after a comma, a semicolon, a tab
+ * or a line break inside it ("Lunch;=1+1"), where a spreadsheet splitting
+ * there would start a new cell (audit 4 F2-9). After a comma too, as a file
+ * split at ";" can be opened by a spreadsheet that splits at ",": it doesn't
+ * see the quotes then, as they're in the middle of its cell.
  */
 export function csvCell(value: CsvValue, decimal: '.' | ',' = '.'): string {
   if (value === null) return '';
@@ -38,7 +40,7 @@ export function csvCell(value: CsvValue, decimal: '.' | ',' = '.'): string {
   }
   let text = value;
   if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
-  text = text.replace(/([;\t\r\n])([=+\-@])/g, "$1'$2");
+  text = text.replace(/([,;\t\r\n])([=+\-@])/g, "$1'$2");
   return /[",;\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
 }
 

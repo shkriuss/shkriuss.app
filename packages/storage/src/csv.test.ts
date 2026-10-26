@@ -17,6 +17,10 @@ describe('spreadsheet files', () => {
   // a formula, inside the note "Lunch;=1+1".
   it('keeps a cell whole and inert wherever a spreadsheet splits cells', () => {
     expect(csvCell('Lunch;=1+1')).toBe(`"Lunch;'=1+1"`);
+    // A file split at ";", opened by a spreadsheet that splits at ",": the
+    // quotes are in the middle of its cell, so they don't keep it whole.
+    expect(csvCell('Lunch,=HYPERLINK(CHAR(104)),x')).toBe(`"Lunch,'=HYPERLINK(CHAR(104)),x"`);
+    expect(csvCell('Lunch,=1+1')).toBe(`"Lunch,'=1+1"`);
     expect(csvCell('a\t+1')).toBe("a\t'+1");
     expect(csvCell('two\n@lines')).toBe(`"two\n'@lines"`);
     expect(csvCell('a, b')).toBe('"a, b"');
@@ -67,6 +71,27 @@ describe('spreadsheet files', () => {
       expect(csvFile(rows, locale), locale).toBe(
         '\uFEFFDate,Amount,Note\r\n2026-10-03,-12.5,"Lunch; with Ana"\r\n2026-10-04,1500,\r\n',
       );
+    }
+  });
+
+  // Audit 4 F2-9: whichever sign the file splits cells at, a spreadsheet
+  // splitting at either one finds no cell, whole or split, that is a formula.
+  it('leaves no formula to run, split at "," or ";"', () => {
+    const notes = ['Lunch,=HYPERLINK(CHAR(104)),x', 'Lunch;=1+1', 'a, +1; @b', 'x,-2;=3'];
+    for (const locale of ['en-US', 'de-DE']) {
+      const file = csvFile([['Note', 'Amount'], ...notes.map((note) => [note, -1.5])], locale);
+      for (const separator of [',', ';']) {
+        // A spreadsheet that ignores quotes in the middle of a cell, as when
+        // a file split at one sign is read at the other.
+        const cells = file
+          .replace('\uFEFF', '')
+          .split('\r\n')
+          .flatMap((line) => line.split(separator))
+          .map((cell) => cell.replace(/^"/, ''));
+        for (const cell of cells) {
+          expect(cell, `${locale}, split at "${separator}"`).not.toMatch(/^[=+@]|^-[^0-9]/);
+        }
+      }
     }
   });
 
