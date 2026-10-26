@@ -573,3 +573,33 @@ test.describe('offline', () => {
     await context.setOffline(false);
   });
 });
+
+// Audit 4 J-6, from review: the first form opened after each launch got
+// focus only once its file had loaded, after the tap, when an iPhone no
+// longer raises its keyboard.
+test('loads the forms soon after the page, so a tap opens one at once', async ({ page }) => {
+  const loaded = new Set<string>();
+  page.on('request', (request) => {
+    const part = /\/(repair-form|vehicle-form|delete-year|photo-viewer)\.[\w-]+\.js$/.exec(
+      request.url(),
+    )?.[1];
+    if (part) loaded.add(part);
+  });
+  await page.reload();
+  // Before any tap.
+  await expect
+    .poll(() => [...loaded].sort())
+    .toEqual(['delete-year', 'photo-viewer', 'repair-form', 'vehicle-form']);
+  // And ready: the forms add what they say when a paste doesn't fit.
+  await expect(page.locator('#repair-problem-limit')).toBeAttached();
+  await expect(page.locator('#vehicle-notes-limit')).toBeAttached();
+  // Within the tap: the form is open, and the field has focus, before the tap is over.
+  const opened = await page.evaluate(() => {
+    document.querySelector<HTMLElement>('[data-action="new-repair"]')?.click();
+    return {
+      open: document.querySelector<HTMLDialogElement>('[data-repair-dialog]')?.open,
+      focus: document.activeElement?.id,
+    };
+  });
+  expect(opened).toEqual({ open: true, focus: 'repair-vehicle' });
+});

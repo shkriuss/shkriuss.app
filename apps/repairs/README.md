@@ -101,8 +101,10 @@ private car's service history. Lives at <https://repairs.shkriuss.app>.
   tabs. The repair form is in `repair-form.ts` (its photos in
   `form-photos.ts`), the vehicle form in `vehicle-form.ts`, "Delete a
   year" in `delete-year.ts`, and the photo viewer in `photo-viewer.ts`.
-  Each loads the first time it opens (`later`), so the page stays within
-  its size budget.
+  Each loads after the page, once it has nothing else to do (`later`,
+  `whenIdle`), so the page stays within its size budget and a tap still
+  finds the form there: an iPhone raises its keyboard only for a field
+  focused within the tap.
 - `src/pages/index.astro`: the page, built from `@shkriuss/ui` components.
   `<template>`s hold the markup for a day, a repair, a vehicle and a part row;
   the forms and "Delete a year" are dialogs.

@@ -105,48 +105,63 @@ const settingsStore = createStore<SettingsState>({
 /** Search results are read out this long after the last key press. */
 const ANNOUNCE_DELAY_MS = 700;
 
-/** A part of the page that loads the first time it's used (later()). */
+/** A part of the page that loads after the page itself (later()). */
 interface Later<T> {
   /** The part, once loaded. Before, it was never opened: nothing in it needs keeping up. */
   readonly now: T | null;
+  /** Starts loading the part, without doing anything with it yet. */
+  load(): void;
   /** Loads the part if need be, then does `act` with it (while loading, only the last asked). */
   use(act: (part: T) => void): void;
 }
 
 /**
- * A part of the page loaded with import() the first time it's used: the
- * forms, "Delete a year…" and the photo viewer. Opening the page then loads
- * less, and stays within its size budget (audit 4 J-6).
+ * A part of the page loaded with import() after the page itself: the forms,
+ * "Delete a year…" and the photo viewer. Opening the page then loads less,
+ * and stays within its size budget (audit 4 J-6).
  */
 function later<T>(load: () => Promise<T>): Later<T> {
   let now: T | null = null;
   let loading: Promise<void> | null = null;
   let next: ((part: T) => void) | null = null;
+  const start = (): void => {
+    loading ??= load().then(
+      (part) => {
+        now = part;
+        next?.(part);
+        next = null;
+      },
+      () => {
+        // The next tap tries again. Said only when a tap is waiting for it.
+        loading = null;
+        if (next === null) return;
+        next = null;
+        showProblem('Repairs couldn’t open that. Please try again.');
+      },
+    );
+  };
   return {
     get now() {
       return now;
     },
+    load: start,
     use(act) {
       if (now) {
         act(now);
         return;
       }
       next = act;
-      loading ??= load().then(
-        (part) => {
-          now = part;
-          next?.(part);
-          next = null;
-        },
-        () => {
-          // The next tap tries again.
-          loading = null;
-          next = null;
-          showProblem('Repairs couldn’t open that. Please try again.');
-        },
-      );
+      start();
     },
   };
+}
+
+/** Runs `task` once the page has nothing else to do (soon after it opened). */
+function whenIdle(task: () => void): void {
+  // Safari has no requestIdleCallback: a moment after loading will do.
+  if (typeof window.requestIdleCallback === 'function') {
+    window.requestIdleCallback(task, { timeout: 2000 });
+  } else window.setTimeout(task, 500);
 }
 
 export function mountRepairs(root: Document): void {
@@ -825,4 +840,10 @@ export function mountRepairs(root: Document): void {
   render();
   // Photos left behind (by an older backup restored, say) go.
   deleteUnused();
+  // The parts that load later load now, while nothing else goes on, so a
+  // tap finds them here and opens the form at once, within the tap: an
+  // iPhone raises its keyboard only for a field focused then (audit 4 J-6).
+  whenIdle(() => {
+    for (const part of [repairEditor, vehicleEditor, yearDeleter, photoViewer]) part.load();
+  });
 }

@@ -39,10 +39,10 @@ reach production, and new apps should get strong checks without extra work.
 
   _Changed in October 2026 (audit 4 J-6):_ Repairs had become the biggest
   page, less than 1 KB under the budget. Its forms, "Delete a year…" and
-  its photo viewer now load the first time they're opened, with `import()`,
-  as Calendar's event editor does. Code loaded that way isn't counted
-  either, so it's how to cut weight before raising a budget
-  ([quality.md](../quality.md)).
+  its photo viewer now load with `import()` once the page has opened
+  (Calendar's event editor uses `import()` too, when first opened). Code
+  loaded that way isn't counted either, so it's how to cut weight before
+  raising a budget ([quality.md](../quality.md)).
 
 ## Consequences
 

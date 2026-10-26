@@ -213,11 +213,15 @@ removes the device from the server.
 
 Each page's JavaScript must stay under 35 KB gzipped, counting every file
 its scripts import before they run (`pnpm check:dist`). A part that's used
-now and then, like a form or a dialog, can load the first time it opens,
-with `import('./form.ts')`: what loads later isn't counted, and it's in the
-offline copy too. Calendar's event editor (`openEditor` in
-`apps/calendar/src/scripts/calendar.ts`) and Repairs' forms (`later` in
-`apps/repairs/src/scripts/repairs.ts`) show how (audit 4 J-6).
+now and then, like a form or a dialog, can load after the page, with
+`import('./form.ts')`: what loads later isn't counted, and it's in the
+offline copy too. Start loading it once the page has nothing else to do,
+not when it's tapped: an iPhone raises its keyboard only for a field
+focused within the tap, so the form has to be there by then. Repairs'
+forms (`later` and `whenIdle` in `apps/repairs/src/scripts/repairs.ts`)
+show how; Calendar's event editor (`openEditor` in
+`apps/calendar/src/scripts/calendar.ts`) loads when first opened (audit 4
+J-6).
 
 ## Heavy work and WebAssembly (optional)
 
