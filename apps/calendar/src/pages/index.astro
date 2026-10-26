@@ -564,7 +564,8 @@ import { MAX_NOTES_LENGTH, MAX_TITLE_LENGTH, REPEAT_LABELS, REPEATS } from '../l
   /* Windows contrast themes replace backgrounds, so the selected day, the dots
      and the fast line use the theme's own colours there (audit G-6). They
      also draw every day's border, so today's didn't stand out: only today's
-     shows, twice as thick (audit 4 G-10). */
+     shows, twice as thick (audit 4 G-10). Not while it has focus: the focus
+     ring shows instead, as on every other control. */
   @media (forced-colors: active) {
     .month__grid :global(.day-cell) {
       border-color: Canvas;
@@ -572,6 +573,9 @@ import { MAX_NOTES_LENGTH, MAX_TITLE_LENGTH, REPEAT_LABELS, REPEATS } from '../l
 
     .month__grid :global(.day-cell[aria-current='date']) {
       border-color: CanvasText;
+    }
+
+    .month__grid :global(.day-cell[aria-current='date']:not(:focus-visible)) {
       outline: var(--border-width) solid CanvasText;
       outline-offset: calc(-2 * var(--border-width));
     }

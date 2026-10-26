@@ -76,6 +76,15 @@ test('in a Windows contrast theme, today stands out from the other days', async 
   const other = await day(page, /^Friday, October 23, 2026/).evaluate(borderOf);
   expect(other).toBe(canvas);
   expect(today).not.toBe(canvas);
+  // With focus, today shows the focus ring, not its thinner frame (audit 4 G-10).
+  for (let step = 0; step < 3; step += 1) await page.keyboard.press('ArrowLeft');
+  const focused = day(page, /^Saturday, October 17, 2026, today/);
+  await expect(focused).toBeFocused();
+  const outline = await focused.evaluate((element) => {
+    const { outlineStyle, outlineWidth, outlineOffset } = getComputedStyle(element);
+    return { outlineStyle, outlineWidth, outlineOffset };
+  });
+  expect(outline).toEqual({ outlineStyle: 'solid', outlineWidth: '3px', outlineOffset: '2px' });
 });
 
 test('adds an event and remembers it after a reload', async ({ page }) => {
