@@ -27,7 +27,11 @@ browsers like IronFox receive Web Push through **UnifiedPush**.
   upload on a slow connection) counts as "can't be reached". An upload
   already on its way is waited for, so the server gets the deletion last,
   and one that still lands after it (from another tab, say) is deleted
-  again; it never turns the option back on (audit 3 D-1).
+  again; it never turns the option back on (audit 3 D-1). A full storage
+  can't stop the deletion either: the push settings are removed first,
+  which makes room to note the device key, and the deletion is sent with
+  the key held in memory anyway. If it can neither be sent nor noted, the
+  app says the reminders couldn't be removed (audit 3 D-3).
 - **Shared code, separate servers.** The code lives in `@shkriuss/push`. Each
   app that uses it runs the routes in its **own** Worker
   (`apps/<slug>/src/worker.ts`, `/api/push/*`; everything else is still

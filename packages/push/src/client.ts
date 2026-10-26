@@ -127,10 +127,11 @@ function storePendingDeletes(keys: readonly string[]): void {
   }
 }
 
-/** Notes a device key whose reminders are still on the server, to delete them. */
-function noteDelete(deviceKey: string): void {
+/** Notes a device key whose reminders are still on the server; false if storage refused. */
+function noteDelete(deviceKey: string): boolean {
   const keys = pendingDeletes();
   if (!keys.includes(deviceKey)) storePendingDeletes([...keys, deviceKey]);
+  return pendingDeletes().includes(deviceKey);
 }
 
 /** The upload on its way, if any: disablePush() waits for it (audit 3 D-1). */
@@ -378,7 +379,7 @@ export async function syncPush(
     // after it, whether its answer came or not (audit 3 D-1).
     if (sent && load()?.deviceKey !== state.deviceKey) {
       noteDelete(state.deviceKey);
-      await finishPushDelete();
+      await finishPushDelete(state.deviceKey);
     }
     done();
   }
@@ -402,14 +403,19 @@ export async function sendTestPush(title: string, body: string): Promise<void> {
 
 /**
  * Deletes reminders the server still has from when they were turned off on
- * this device without reaching it. True when none are left there.
+ * this device without reaching it, and `deviceKey`'s, held in memory in case
+ * storage was too full to note it (audit 3 D-3). True when none are left there.
  */
-export async function finishPushDelete(): Promise<boolean> {
-  for (const deviceKey of pendingDeletes()) {
-    const response = await api('/schedule', { method: 'DELETE' }, deviceKey).catch(() => null);
-    if (response?.ok) storePendingDeletes(pendingDeletes().filter((key) => key !== deviceKey));
+export async function finishPushDelete(deviceKey?: string): Promise<boolean> {
+  const keys = pendingDeletes();
+  if (deviceKey && !keys.includes(deviceKey)) keys.push(deviceKey);
+  let left = false;
+  for (const key of keys) {
+    const response = await api('/schedule', { method: 'DELETE' }, key).catch(() => null);
+    if (response?.ok) storePendingDeletes(pendingDeletes().filter((pending) => pending !== key));
+    else left = true;
   }
-  return !isPushDeletePending();
+  return !left;
 }
 
 async function unsubscribe(): Promise<void> {
@@ -423,8 +429,9 @@ async function unsubscribe(): Promise<void> {
 
 /**
  * Deletes this device's data on the server and unsubscribes. Never throws.
- * False if the server couldn't be reached: the deletion is kept, to be
- * finished later by finishPushDelete().
+ * False if the server couldn't be reached: the deletion is kept (if storage
+ * lets it be noted: isPushDeletePending()), to be finished later by
+ * finishPushDelete().
  *
  * It's off on this device as soon as this is called: the deletion is noted
  * before anything waits, so a caller doesn't need to wait for the server
@@ -433,12 +440,20 @@ async function unsubscribe(): Promise<void> {
  * last (audit 3 D-1).
  */
 export async function disablePush(): Promise<boolean> {
-  const state = load();
-  // Noted before the device key is gone, so the deletion can be tried again.
-  if (state) noteDelete(state.deviceKey);
+  const deviceKey = load()?.deviceKey;
+  // Removed first: that makes room to note the deletion when storage is full,
+  // so it can be tried again (audit 3 D-3).
   store(null);
+  const noted = deviceKey === undefined || noteDelete(deviceKey);
   // Unsubscribing doesn't wait for the server: then nothing more arrives on
   // this device, even while the server can't be reached.
-  const [deleted] = await Promise.all([uploading.then(() => finishPushDelete()), unsubscribe()]);
+  const [deleted] = await Promise.all([
+    // With the key held here, if it couldn't be noted.
+    uploading.then(() => finishPushDelete(noted ? undefined : deviceKey)),
+    unsubscribe(),
+  ]);
+  // Neither deleted nor noted: noted now if it can be ("Delete all data" has
+  // made room since).
+  if (!deleted && !noted) noteDelete(deviceKey);
   return deleted;
 }

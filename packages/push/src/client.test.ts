@@ -23,14 +23,31 @@ const ENDPOINT = 'https://push.example.com/phone';
 
 class MemoryStorage {
   readonly map = new Map<string, string>();
+  /** Characters it can hold in all (keys and values), like a browser's limit. */
+  quota = Infinity;
+  /** Like storage that's blocked: nothing can be saved. */
+  blocked = false;
   getItem(key: string): string | null {
     return this.map.get(key) ?? null;
   }
   setItem(key: string, value: string): void {
+    if (this.blocked || this.used(key) + key.length + value.length > this.quota) {
+      throw new DOMException('Full', 'QuotaExceededError');
+    }
     this.map.set(key, value);
   }
   removeItem(key: string): void {
     this.map.delete(key);
+  }
+  /** What it holds, leaving out `except`. */
+  used(except?: string): number {
+    let total = 0;
+    for (const [key, value] of this.map) if (key !== except) total += key.length + value.length;
+    return total;
+  }
+  /** Full: nothing more fits. */
+  fill(): void {
+    this.quota = this.used();
   }
 }
 
@@ -445,5 +462,55 @@ describe('turning it off while an upload is on its way (audit 3 D-1)', () => {
     expect(isPushEnabled()).toBe(false);
     expect(await subscription()).toBeNull();
     expect(devicesKept()).toBe(0);
+  });
+});
+
+// With the browser's storage full, the deletion couldn't be noted, so nothing
+// was sent to the server, and it still said everything was deleted (audit 3 D-3).
+describe('turning it off when storage is full (audit 3 D-3)', () => {
+  const storage = () => localStorage as unknown as MemoryStorage;
+  const devicesKept = () =>
+    [...server.devices.values()].filter(({ storage }) => storage.map.has('device')).length;
+
+  it('notes the deletion in the room it makes by removing the push settings', async () => {
+    await syncPush([notice()]);
+    storage().fill();
+    network = 'down';
+    expect(await disablePush()).toBe(false);
+    expect(isPushEnabled()).toBe(false);
+    expect(isPushDeletePending()).toBe(true);
+    network = 'up';
+    expect(await finishPushDelete()).toBe(true);
+    expect(devicesKept()).toBe(0);
+  });
+
+  it('deletes on the server with the key it holds, when nothing can be saved', async () => {
+    await syncPush([notice()]);
+    storage().blocked = true;
+    expect(await disablePush()).toBe(true);
+    expect(requests.at(-1)).toBe('DELETE /api/push/schedule');
+    expect(isPushEnabled()).toBe(false);
+    expect(devicesKept()).toBe(0);
+  });
+
+  it('says it couldn’t when the server can’t be reached either', async () => {
+    await syncPush([notice()]);
+    storage().blocked = true;
+    network = 'down';
+    expect(await disablePush()).toBe(false);
+    expect(requests.at(-1)).toBe('DELETE /api/push/schedule');
+    expect(isPushDeletePending()).toBe(false);
+    expect(devicesKept()).toBe(1);
+  });
+
+  it('notes it once “Delete all data” has made room', async () => {
+    await syncPush([notice()]);
+    storage().blocked = true;
+    network = 'down';
+    const disabling = disablePush();
+    // "Delete all data" deletes everything else here straight after.
+    storage().blocked = false;
+    expect(await disabling).toBe(false);
+    expect(isPushDeletePending()).toBe(true);
   });
 });

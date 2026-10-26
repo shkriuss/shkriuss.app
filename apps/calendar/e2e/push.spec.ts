@@ -263,6 +263,66 @@ test.describe('turned off while an upload is on its way (audit 3 D-1)', () => {
   });
 });
 
+// With storage full, nothing was sent to the server, and it said "Off" as if
+// the reminders were gone (audit 3 D-3).
+test.describe('turned off with the browser’s storage full (audit 3 D-3)', () => {
+  test.beforeEach(async ({ page }) => {
+    await fakeSubscription(page, rig);
+    await page.goto('/');
+    await closedSwitch(page).check();
+    await expect(closedStatus(page)).toHaveText(/^On:/);
+  });
+
+  test('still deletes the reminders on the server', async ({ page }) => {
+    // Fill this site's storage, as on a full iPhone.
+    await page.evaluate(() => {
+      for (let size = 1 << 20, index = 0; size >= 1;) {
+        try {
+          localStorage.setItem(`filler-${index}`, 'x'.repeat(size));
+          index += 1;
+        } catch {
+          size = Math.floor(size / 2);
+        }
+      }
+    });
+    const deletes: string[] = [];
+    page.on('request', (request) => {
+      if (request.url().endsWith('/api/push/schedule') && request.method() === 'DELETE') {
+        deletes.push(request.url());
+      }
+    });
+    const deleted = page.waitForResponse(isSchedule('DELETE'));
+    await closedSwitch(page).uncheck();
+    expect((await deleted).status()).toBe(204);
+    await expect(closedStatus(page)).toHaveText(
+      'Off: reminders only arrive while Calendar is open.',
+    );
+    expect(deletes).toHaveLength(1);
+  });
+
+  test('says the reminders couldn’t be removed when it can’t note to try again', async ({
+    page,
+    guard,
+  }) => {
+    // The browser logs the deletion this test stops.
+    guard.allowConsole('net::ERR_FAILED');
+    // Nothing can be saved here any more, and the deletion can't get through.
+    await page.evaluate(() => {
+      Storage.prototype.setItem = () => {
+        throw new DOMException('Full', 'QuotaExceededError');
+      };
+    });
+    await page.route('**/api/push/schedule', (route) =>
+      route.request().method() === 'DELETE' ? route.abort() : route.continue(),
+    );
+    await closedSwitch(page).uncheck();
+    await expect(closedStatus(page)).toHaveText(
+      "Off, but your reminders couldn’t be removed from Calendar's server yet.",
+    );
+    await expect(closedSwitch(page)).not.toBeChecked();
+  });
+});
+
 test('says so when turning it off can’t reach the server, and finishes later', async ({
   page,
   guard,

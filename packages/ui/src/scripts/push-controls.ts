@@ -57,7 +57,7 @@ export function mountPushControls(block: HTMLElement, options: PushControlsOptio
 
   const ON = `On: reminders arrive even when ${app} is closed.`;
   const OFF = `Off: reminders only arrive while ${app} is open.`;
-  const OFF_NOT_DELETED = `Off, but your reminders couldn’t be removed from ${app}'s server yet. ${app} will try again when it’s open and online.`;
+  const OFF_NOT_DELETED = `Off, but your reminders couldn’t be removed from ${app}'s server yet.`;
   const PROBLEMS: Record<PushErrorCode, string> = {
     unsupported: `This browser can’t get notifications while ${app} is closed.`,
     denied: `Notifications are blocked for ${app}. To allow them, change this site’s settings in your browser.`,
@@ -75,7 +75,13 @@ export function mountPushControls(block: HTMLElement, options: PushControlsOptio
     // Turned off while focus is on "Send a test notification": it goes to the switch.
     if (!on && testRow.contains(document.activeElement)) toggle.focus();
     testRow.hidden = !on;
-    status.textContent = message ?? (on ? ON : isPushDeletePending() ? OFF_NOT_DELETED : OFF);
+    status.textContent =
+      message ??
+      (on
+        ? ON
+        : isPushDeletePending()
+          ? `${OFF_NOT_DELETED} ${app} will try again when it’s open and online.`
+          : OFF);
   }
 
   function upload(force = false): void {
@@ -138,9 +144,10 @@ export function mountPushControls(block: HTMLElement, options: PushControlsOptio
         });
     } else {
       status.textContent = 'Turning off…';
-      void disablePush().finally(() => {
-        // Says so if the reminders couldn't be removed from the server yet.
-        render();
+      void disablePush().then((deleted) => {
+        // Says so if the reminders couldn't be removed from the server yet, also
+        // when storage was too full to note that and try again (audit 3 D-3).
+        render(deleted || isPushDeletePending() ? undefined : OFF_NOT_DELETED);
         setBusy(toggle, false);
         options.onChange?.();
       });
