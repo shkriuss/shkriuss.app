@@ -34,7 +34,7 @@ interface Props {
 const {
   level = 2,
   what = site.name,
-  deleteText = `This deletes ${site.name}'s data from its server and turns off sync on this device. Your data stays on this device. Your other devices keep theirs, but stop syncing.`,
+  deleteText = `This deletes ${site.name}’s data from its server and turns off sync on this device. Your data stays on this device. Your other devices keep theirs, but stop syncing.`,
 } = Astro.props;
 const Heading = `h${level}` as 'h2' | 'h3';
 ---
@@ -45,7 +45,7 @@ const Heading = `h${level}` as 'h2' | 'h3';
     <p>
       Keep {what} the same on your phone, tablet and computer with a free{' '}
       <a href={`${hubOrigin}/account/`}>shkriuss account</a>. Your data is locked on your devices
-      before it's sent, so only they can read it.
+      before it’s sent, so only they can read it.
     </p>
     <p>
       <Button variant="primary" icon="repeat" data-action="sync-on">
