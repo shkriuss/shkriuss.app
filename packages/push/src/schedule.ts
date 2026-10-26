@@ -246,6 +246,30 @@ export function nextOccurrence(
 }
 
 /**
+ * When this notification is due (moments, ms) for each of its occurrences
+ * due after `from` and up to `to` by the clock (wall ms: its start, less
+ * `offset` minutes): what the notification service sends for the local
+ * times an open app checks for due reminders (audit 4 F1-5).
+ */
+export function dueBetween(timing: Timing, timeZone: string, from: number, to: number): number[] {
+  const offset = timing.offset * MINUTE;
+  const moments: number[] = [];
+  let steps = 0;
+  for (const start of occurrences(timing, Math.floor((from + offset) / DAY) - 1)) {
+    if (start - offset > to || steps > MAX_STEPS) break;
+    if (start - offset > from) moments.push(momentOf(start, timing.offset, timeZone));
+    steps += 1;
+  }
+  return moments;
+}
+
+/** "YYYY-MM-DDTHH:MM" as wall ms (as wallClock gives them), or null if it isn't a real time. */
+export function wallOf(stamp: string): number | null {
+  const parts = parseStamp(stamp);
+  return parts && Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute);
+}
+
+/**
  * The first moment (ms) after `after` when this notification is due, or null
  * if it never is again.
  */

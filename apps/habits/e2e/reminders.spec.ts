@@ -194,13 +194,14 @@ test.describe('while Habits is closed', () => {
     // The reminders are worked out from today, so they change at midnight:
     // the open page took the server's copy for an old one and showed them
     // too, while the server sent them as well (audit 3 F1-6), and at 00:00
-    // itself even with an upload at midnight (audit 4 F1-5). The server's
-    // copy is compared from each reminder's next time, which midnight
+    // itself even with an upload at midnight (audit 4 F1-5), also after
+    // another reminder went off that evening. The server's copy is checked
+    // reminder by reminder, from each one's next time, which midnight
     // doesn't change.
     const rig = await startRig();
     try {
-      // Monday 19 October 2026, 23:50.
-      await page.clock.install({ time: new Date('2026-10-19T23:50:00+02:00') });
+      // Monday 19 October 2026, 20:50.
+      await page.clock.install({ time: new Date('2026-10-19T20:50:00+02:00') });
       await fakeSubscription(page, rig);
       await page.addInitScript(() => {
         const shown: unknown[] = [];
@@ -214,23 +215,31 @@ test.describe('while Habits is closed', () => {
       await expect(page.locator('[data-closed-status]')).toHaveText(
         'On: reminders arrive even when Habits is closed.',
       );
+      await addHabit(page, 'Read');
       await addHabit(page, 'Walk');
-      const uploaded = page.waitForResponse(
-        (response) =>
-          response.url().endsWith('/api/push/schedule') &&
-          response.request().method() === 'PUT' &&
-          response.ok(),
-      );
+      const uploaded = () =>
+        page.waitForResponse(
+          (response) =>
+            response.url().endsWith('/api/push/schedule') &&
+            response.request().method() === 'PUT' &&
+            response.ok(),
+        );
+      let done = uploaded();
+      await setReminder(page, 'Read', '21:00');
+      await done;
+      done = uploaded();
       await setReminder(page, 'Walk', '00:00');
-      await uploaded;
+      await done;
       let uploads = 0;
       page.on('request', (request) => {
         if (request.url().endsWith('/api/push/schedule') && request.method() === 'PUT')
           uploads += 1;
       });
 
-      // 00:00 on Tuesday: read out on the page, and sent by the server only.
+      // 21:00, then 00:00 on Tuesday: read out on the page, and sent by the server only.
       await page.clock.fastForward('10:10');
+      await expect(page.getByRole('status').filter({ hasText: 'Reminder: Read.' })).toBeAttached();
+      await page.clock.fastForward('03:00:00');
       await expect(page.getByRole('status').filter({ hasText: 'Reminder: Walk.' })).toBeAttached();
       expect(await shownNotifications(page)).toEqual([]);
       expect(uploads).toBe(0);

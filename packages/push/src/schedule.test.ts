@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   cachedTimeZones,
   canonicalTimeZone,
+  dueBetween,
   isDate,
   nextFireTime,
   parseStamp,
+  wallOf,
   type Timing,
 } from './schedule.ts';
 
@@ -178,6 +180,41 @@ describe('nextFireTime', () => {
     expect(iso(nextFireTime(yearly, 'UTC', at('2026-10-17T00:00:00Z')))).toBe(
       '2027-10-16T09:00:00.000Z',
     );
+  });
+});
+
+// What the notification service sends for the local times an open app
+// checks (audit 4 F1-5).
+describe('dueBetween', () => {
+  const between = (t: Timing, timeZone: string, from: string, to: string) =>
+    dueBetween(t, timeZone, wallOf(from) ?? 0, wallOf(to) ?? 0).map(iso);
+
+  it('finds each time due after the first local time and up to the second', () => {
+    const daily = timing({ start: '2026-10-01T09:00', repeat: 'daily', offset: 15 });
+    // 08:45 in Tbilisi (UTC+4).
+    expect(between(daily, 'Asia/Tbilisi', '2026-10-20T08:44', '2026-10-20T08:45')).toEqual([
+      '2026-10-20T04:45:00.000Z',
+    ]);
+    expect(between(daily, 'Asia/Tbilisi', '2026-10-20T08:45', '2026-10-20T08:46')).toEqual([]);
+    expect(between(daily, 'Asia/Tbilisi', '2026-09-30T08:44', '2026-09-30T08:45')).toEqual([]);
+    expect(between(daily, 'Asia/Tbilisi', '2026-10-20T08:00', '2026-10-22T08:00')).toEqual([
+      '2026-10-20T04:45:00.000Z',
+      '2026-10-21T04:45:00.000Z',
+    ]);
+    const once = timing({ start: '2026-10-20T00:05', offset: 10 });
+    // 23:55 the day before.
+    expect(between(once, 'UTC', '2026-10-19T23:50', '2026-10-20T00:00')).toEqual([
+      '2026-10-19T23:55:00.000Z',
+    ]);
+  });
+
+  it('gives a time the clocks skip as the server sends it', () => {
+    // Berlin skips 02:00–03:00 on 29 March: an open app finds 02:30 due as
+    // the clocks change, the server sends it at 03:30 (01:30 UTC).
+    const berlin = timing({ start: '2026-03-29T02:30' });
+    expect(between(berlin, 'Europe/Berlin', '2026-03-29T01:59', '2026-03-29T03:00')).toEqual([
+      '2026-03-29T01:30:00.000Z',
+    ]);
   });
 });
 

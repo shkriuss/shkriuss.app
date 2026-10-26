@@ -4,8 +4,9 @@ Status: Accepted (2026-10-17). All of an app's schedules together have a
 limit: [ADR 0017](0017-storage-limits.md). There are no pull request previews
 any more ([ADR 0019](0019-no-pull-request-previews.md)), so what this says
 about them no longer applies. Changed by audit 4: the app checks daily that
-the server still has its schedule, and "minutes before" reminders in the
-hour clocks skip go off as they change (both below).
+the server still has its schedule, "minutes before" reminders in the hour
+clocks skip go off as they change, and an open app tells whether the server
+sends a reminder reminder by reminder (all below).
 
 ## Context
 
@@ -133,21 +134,29 @@ browsers like IronFox receive Web Push through **UnifiedPush**.
 - **Not stored in backups:** the device key and subscription keys live under
   `shkriuss-device:` in `localStorage`, which backups skip, so restoring on
   another phone can't take over this one's notifications.
-- **While the app is open** it reads reminders out on the page. It shows
-  them as notifications too only when the server doesn't have the schedule
-  as it is now (`pushHolds`: a change made offline, say, couldn't be
-  uploaded yet), so nothing is missed and nothing shows twice (audit F1-7).
-  That's worked out for each reminder: with more than fit on the server
-  (500), the open app shows the ones left out itself, and the switch says
-  how many the server has (audit 3 F1-5). The schedule is compared from
-  each reminder's next time, so the same reminders worked out from a new
-  day (Habits and Water work theirs out from today) aren't a change the
-  server hasn't got at midnight (audit 4 F1-5). And once a day the app asks
+- **While the app is open** it reads reminders out on the page (in each
+  of its tabs on screen). It shows them as notifications too only when the
+  server doesn't send them (`pushHolds`: a change made offline, say,
+  couldn't be uploaded yet), so nothing is missed and nothing shows twice
+  (audit F1-7). That's worked out for each reminder that's due: the device
+  notes what each upload had, as short fingerprints (which reminder: its
+  tag and title; and its message) with the timing, and the server sends
+  a reminder if the last upload that got through had it due at that time,
+  before it was due. With more than fit on the server (500), the open app
+  shows the ones left out itself, and the switch says how many the server
+  has (audit 3 F1-5). Whether to upload again is worked out from now on,
+  each reminder from its next time: so the same reminders worked out from
+  a new day (Habits and Water work theirs out from today), or a reminder no
+  longer listed once it's due (Meals), aren't a change the server hasn't
+  got (audit 4 F1-5); and once some of the 500 are over, the next ones go
+  up. And once a day the app asks
   the server whether it still has the schedule (`GET /api/push/schedule`,
   which answers only how many reminders it has): one that forgot the device
   (after two days of failures, say) made the app believe for ever that the
   server sends them, so neither did. Then the app subscribes again and
-  uploads the schedule (audit 4 F1-2).
+  uploads the schedule (audit 4 F1-2), from one tab at a time: two tabs
+  that found it forgotten at once each subscribed again, and one could undo
+  the other's.
 
 ## Consequences
 

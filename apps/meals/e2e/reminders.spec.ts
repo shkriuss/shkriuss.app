@@ -134,4 +134,52 @@ test.describe('while Meals is closed', () => {
       rig.server.close();
     }
   });
+
+  test('a reminder the server sends isn’t shown again when it’s due', async ({ page }) => {
+    // Meals lists only reminders still to come, so the one due had gone from
+    // the list: the open page took that for a change the server hadn't got,
+    // showed it too, and uploaded again (audit 4 F1-5).
+    const rig = await startRig();
+    try {
+      await page.clock.install({ time: NOW });
+      await fakeSubscription(page, rig);
+      await page.addInitScript(() => {
+        const shown: unknown[] = [];
+        (window as unknown as Record<string, unknown>)['shownNotifications'] = shown;
+        ServiceWorkerRegistration.prototype.showNotification = async (title, options) => {
+          shown.push({ title, ...options });
+        };
+      });
+      await page.goto('/');
+      await page.getByLabel('Also remind me when Meals is closed').check();
+      await expect(page.locator('[data-closed-status]')).toHaveText(
+        'On: reminders arrive even when Meals is closed.',
+      );
+      await seed(page, { planned: PLAN });
+      const uploaded = page.waitForResponse(
+        (response) =>
+          response.url().endsWith('/api/push/schedule') &&
+          response.request().method() === 'PUT' &&
+          response.ok() &&
+          (response.request().postData() ?? '').includes('"start":"2026-10-21T10:04"'),
+      );
+      await page.getByRole('checkbox', { name: 'Dinner' }).check();
+      await page.getByLabel('Dinner reminder time').fill('10:04');
+      await uploaded;
+      let uploads = 0;
+      page.on('request', (request) => {
+        if (request.url().endsWith('/api/push/schedule') && request.method() === 'PUT')
+          uploads += 1;
+      });
+
+      await page.clock.fastForward('05:00');
+      await expect(
+        page.getByRole('status').filter({ hasText: 'Reminder: Dinner: Lentil soup, Salad.' }),
+      ).toBeAttached();
+      expect(await shownNotifications(page)).toEqual([]);
+      expect(uploads).toBe(0);
+    } finally {
+      rig.server.close();
+    }
+  });
 });

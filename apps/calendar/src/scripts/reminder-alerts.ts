@@ -32,7 +32,6 @@ import {
 } from '../lib/dates.ts';
 import { timeLabel, type Occurrence } from '../lib/events.ts';
 import { dueReminders } from '../lib/reminders.ts';
-import { noticesOf } from './push-reminders.ts';
 import { formatTime, plural, required, shortDate, utc, type CalendarPage } from './shared.ts';
 
 const CHECK_EVERY_MS = 20_000;
@@ -144,7 +143,7 @@ export function mountReminderAlerts(root: Document, page: CalendarPage): Reminde
         // once, also from two open tabs (audit 3 F1-6).
         tag: occurrence.event.id,
       })),
-      () => noticesOf(page.state().events),
+      { from, to: now },
     );
   }
 

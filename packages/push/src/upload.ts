@@ -20,9 +20,11 @@ import {
   store,
   subscribe,
   type DeviceState,
+  type Synced,
+  type SyncedEntry,
 } from './device.ts';
 import { encryptPayload, MAX_PLAINTEXT_BYTES } from './encrypt.ts';
-import { nextOccurrence, type Repeat } from './schedule.ts';
+import { dueBetween, nextOccurrence, REPEATS, wallOf, type Repeat } from './schedule.ts';
 import { LIMITS, timingProblem } from './validate.ts';
 
 /** Re-upload at least this often, even if nothing changed (keeps the server's copy fresh). */
@@ -78,12 +80,23 @@ function messageOf(
     : encoder.encode(JSON.stringify({ ...message, body: '' }));
 }
 
-async function hashOf(value: unknown): Promise<string> {
-  const digest = await crypto.subtle.digest(
-    'SHA-256',
-    new TextEncoder().encode(JSON.stringify(value)),
-  );
-  return toBase64Url(new Uint8Array(digest));
+/** A short fingerprint of some text or bytes: the first 72 bits of their SHA-256. */
+async function fingerprint(data: string | Uint8Array<ArrayBuffer>): Promise<string> {
+  const bytes = typeof data === 'string' ? new TextEncoder().encode(data) : data;
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return toBase64Url(new Uint8Array(digest, 0, 9));
+}
+
+/** Which reminder a notification is, as an open app knows it too: its tag and title. */
+const reminderOf = (tag: string | undefined, title: string): Promise<string> =>
+  fingerprint(JSON.stringify([tag ?? null, title]));
+
+const timeZoneNow = (): string => Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+/** Runs `work` in one tab at a time, where the browser can say so (Web Locks). */
+function oneTabAtATime<T>(name: string, work: () => Promise<T>): Promise<T> {
+  const locks = (navigator as Partial<Navigator>).locks;
+  return locks ? locks.request(name, work) : work();
 }
 
 /**
@@ -118,22 +131,24 @@ export interface PushSynced {
 
 const NONE: PushSynced = { scheduled: 0, left: 0 };
 
+/** A notification still to come: when it's next due, and the message the server sends. */
+interface Coming {
+  notice: Notice;
+  next: { moment: number; start: string };
+  message: Uint8Array<ArrayBuffer>;
+  /** A fingerprint of `message`. */
+  print: string;
+}
+
 /**
  * What syncPush uploads for these notices at `now`: the ones that will still
- * happen, soonest first, up to the server's limit, and its fingerprint; and
- * the rest still to come (`later`), which the server can't have.
- *
- * The fingerprint is of what the server will do from `now` on: each
- * repeating notice as starting at its next occurrence. So the same reminders
- * worked out from another day (Habits and Water start each week's or day's
- * from today) are the same, and an open app doesn't take them for a change
- * the server hasn't got at midnight, and show them a second time (audit 4
- * F1-5).
+ * happen, soonest first, up to the server's limit (`coming`); and the rest
+ * still to come (`later`), which the server can't have.
  */
-async function scheduleOf(notices: readonly Notice[], endpoint: string, now: number) {
-  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+async function scheduleOf(notices: readonly Notice[], now: number) {
+  const timeZone = timeZoneNow();
   const later: Notice[] = [];
-  const coming = notices
+  const soonest = notices
     .flatMap((notice) => {
       // Any the server would turn down stays here, so one odd reminder can't stop the rest.
       if (timingProblem(notice) !== undefined) {
@@ -144,42 +159,157 @@ async function scheduleOf(notices: readonly Notice[], endpoint: string, now: num
       return next === null ? [] : [{ notice, next }];
     })
     .sort((a, b) => a.next.moment - b.next.moment);
-  later.push(...coming.splice(LIMITS.entries).map((item) => item.notice));
-  const upcoming = coming.map((item) => item.notice);
-  const fromNow = coming.map(({ notice, next }) =>
-    notice.repeat === 'none' ? notice : { ...notice, start: next.start },
+  later.push(...soonest.splice(LIMITS.entries).map((item) => item.notice));
+  const coming: Coming[] = await Promise.all(
+    soonest.map(async (item) => {
+      const message = messageOf(item.notice);
+      return { ...item, message, print: await fingerprint(message) };
+    }),
   );
-  return { timeZone, upcoming, later, hash: await hashOf({ fromNow, timeZone, endpoint }) };
+  return { timeZone, coming, later };
+}
+
+type Schedule = Awaited<ReturnType<typeof scheduleOf>>;
+
+const isSyncedEntry = (value: unknown): value is SyncedEntry =>
+  Array.isArray(value) &&
+  value.length === 6 &&
+  typeof value[0] === 'string' &&
+  REPEATS.includes(value[1] as Repeat) &&
+  (value[2] === null || typeof value[2] === 'string') &&
+  Number.isFinite(value[3]) &&
+  typeof value[4] === 'string' &&
+  typeof value[5] === 'string';
+
+/** The notifications the last upload left on the server, or null if that isn't known here. */
+function entriesOf(synced: Synced | undefined): SyncedEntry[] | null {
+  const entries: unknown = synced?.entries;
+  return Array.isArray(entries) && entries.every(isSyncedEntry) ? entries : null;
 }
 
 /**
- * Which of these notifications the notification service has as they are
- * now (the last upload of them got through), so it sends them, and an open
- * app mustn't show them a second time: a test of a notification's tag.
- * None while push is off, and after a change that couldn't be uploaded (say,
- * offline): then nothing would send them, so the open app shows them itself
- * (audit F1-7). Nor those that didn't fit on the server (audit 3 F1-5).
+ * A notification as the server sends it from now on: a repeating one as
+ * starting at its next time.
  */
-export async function pushHolds(notices: readonly Notice[]): Promise<(tag: string) => boolean> {
-  const state = load();
-  const synced = state?.synced;
-  if (!state || !synced) return () => false;
-  // As they were worked out then: time passing changes nothing.
-  const { upcoming, later, hash } = await scheduleOf(notices, state.endpoint, synced.at);
-  if (hash !== synced.hash) return () => false;
-  const count = synced.count ?? upcoming.length;
-  const left = new Set([...upcoming.slice(count), ...later].map((notice) => notice.tag));
-  if (left.size === 0) return () => true;
-  // A tag also used by one that didn't fit (a habit's other days, say): shown
-  // here too, as twice is better than never.
-  const held = new Set(upcoming.slice(0, count).map((notice) => notice.tag));
-  return (tag) => held.has(tag) && !left.has(tag);
+const lineOf = (
+  { repeat, until, offset }: { repeat: Repeat; until: string | null; offset: number },
+  nextStart: string,
+  message: string,
+): string => JSON.stringify([nextStart, repeat, until, offset, message]);
+
+/**
+ * How many notifications still to come the server has, if they're just what
+ * uploading `coming` would give it now; null if not, or if that can't be
+ * told (another time zone, or noted by an older version). Both as they are
+ * from now on: so the same reminders worked out from another day (Habits and
+ * Water start each week's or day's from today) are the same, and so is a
+ * reminder an app no longer lists once it's due (Meals). Taken for a change,
+ * that showed a reminder twice (audit 4 F1-5).
+ */
+function sameOnServer(
+  synced: Synced,
+  coming: readonly Coming[],
+  timeZone: string,
+  now: number,
+): number | null {
+  const entries = entriesOf(synced);
+  if (!entries || synced.timeZone !== timeZone) return null;
+  const theirs = entries.flatMap(([start, repeat, until, offset, , message]) => {
+    const next = nextOccurrence({ start, repeat, until, offset }, timeZone, now);
+    return next === null ? [] : [lineOf({ repeat, until, offset }, next.start, message)];
+  });
+  // As many as it took, when very long texts left out some (`more`). Once
+  // some are over, the next ones are added: so the server's 500 move on as
+  // time passes (audit 3 F1-5).
+  const ours = (synced.more ? coming.slice(0, entries.length) : coming).map(
+    ({ notice, next, print }) => lineOf(notice, next.start, print),
+  );
+  theirs.sort();
+  ours.sort();
+  const same = theirs.length === ours.length && theirs.every((line, index) => line === ours[index]);
+  return same ? theirs.length : null;
+}
+
+/**
+ * Which of the reminders an open app found due after `from` and up to `to`
+ * (its local times, "YYYY-MM-DDTHH:MM") the notification service sends, so
+ * the app mustn't show them a second time: a test of a reminder's tag. It
+ * sends one if the last upload that got through has it (the same tag and
+ * title) due at that time on the clock, and had it before it was due.
+ * Reminder by reminder: so one worked out again from a new day, or no longer
+ * listed once it's due, still counts (audit 4 F1-5).
+ *
+ * None while push is off, and not one changed since in a way that couldn't
+ * be uploaded (say, offline): then nothing would send it as it is now, so
+ * the open app shows it itself (audit F1-7). Nor those that didn't fit on
+ * the server (audit 3 F1-5).
+ */
+export async function pushHolds(
+  due: readonly { tag: string; title: string }[],
+  window: { from: string; to: string },
+): Promise<(tag: string) => boolean> {
+  const synced = load()?.synced;
+  const entries = entriesOf(synced);
+  const timeZone = timeZoneNow();
+  const from = wallOf(window.from);
+  const to = wallOf(window.to);
+  if (!synced || !entries || synced.timeZone !== timeZone || from === null || to === null) {
+    return () => false;
+  }
+  const tags = new Map<string, string>();
+  for (const { tag, title } of due) tags.set(await reminderOf(tag, title), tag);
+  const held = new Set<string>();
+  for (const [start, repeat, until, offset, reminder] of entries) {
+    const tag = tags.get(reminder);
+    if (tag === undefined || held.has(tag)) continue;
+    // The server works out each time when it's uploaded: one due before that, it doesn't send.
+    const moments = dueBetween({ start, repeat, until, offset }, timeZone, from, to);
+    if (moments.some((moment) => moment > synced.at)) held.add(tag);
+  }
+  return (tag) => held.has(tag);
+}
+
+/**
+ * Whether the server still has this device ('kept'); if it forgot it, a new
+ * subscription in place of the one it forgot ('forgotten'), and the
+ * schedule goes up again. Asked in one tab at a time, so two tabs finding
+ * it forgotten at once don't both subscribe again, one undoing the other's
+ * (audit 4 F1-2).
+ */
+function checkServer(
+  deviceKey: string,
+  synced: Synced,
+  now: number,
+): Promise<'off' | 'kept' | 'forgotten'> {
+  return oneTabAtATime('shkriuss-push-check', async () => {
+    const latest = load();
+    if (latest?.deviceKey !== deviceKey) return 'off';
+    // Asked, or uploaded again, in another tab meanwhile.
+    if (latest.synced?.at !== synced.at || latest.synced.checked !== synced.checked) return 'kept';
+    const kept = await serverHas(deviceKey);
+    const after = load();
+    if (after?.deviceKey !== deviceKey) return 'off';
+    if (kept !== false) {
+      // Noted for the upload it was asked about, not one another tab made meanwhile.
+      if (kept && after.synced?.at === synced.at) {
+        store({ ...after, synced: { ...after.synced, checked: now } });
+      }
+      return 'kept';
+    }
+    // Forgotten there, though it has reminders to send: a new subscription
+    // (the push service may have said the old one is gone), and the schedule
+    // again. Until it's up, nothing says the server has them (pushHolds).
+    const { synced: _forgotten, ...forgotten } = after;
+    store(forgotten);
+    await subscribe(deviceKey, after.endpoint);
+    return 'forgotten';
+  });
 }
 
 /**
  * Uploads the app's scheduled notifications (replacing earlier ones). Skips
- * the upload when nothing changed recently. Says how many are scheduled, and
- * how many more didn't fit (audit 3 F1-5).
+ * the upload when the server sends the same from now on. Says how many are
+ * scheduled, and how many more didn't fit (audit 3 F1-5).
  */
 export async function syncPush(
   notices: readonly Notice[],
@@ -190,51 +320,48 @@ export async function syncPush(
   let state = await current();
   if (!state) return NONE;
   const now = Date.now();
+  const schedule = await scheduleOf(notices, now);
+  const { coming, later } = schedule;
   const { synced } = state;
-  // Unchanged since the last upload: as worked out then, so time passing
-  // (a reminder going off) changes nothing, as in pushHolds.
-  if (
-    !options.force &&
-    synced &&
-    now - synced.at < REFRESH_MS &&
-    (await scheduleOf(notices, state.endpoint, synced.at)).hash === synced.hash
-  ) {
-    const { upcoming, later } = await scheduleOf(notices, state.endpoint, now);
-    const scheduled = synced.count ?? upcoming.length;
-    const unchanged = { scheduled, left: Math.max(0, upcoming.length - scheduled) + later.length };
-    if (upcoming.length === 0 || now - (synced.checked ?? synced.at) < CHECK_MS) return unchanged;
-    const kept = await serverHas(state.deviceKey);
+  const kept =
+    !options.force && synced && now - synced.at < REFRESH_MS
+      ? sameOnServer(synced, coming, schedule.timeZone, now)
+      : null;
+  if (synced && kept !== null) {
+    const unchanged = { scheduled: kept, left: coming.length - kept + later.length };
+    if (kept === 0 || now - (synced.checked ?? synced.at) < CHECK_MS) return unchanged;
+    const found = await checkServer(state.deviceKey, synced, now);
+    if (found === 'off') return NONE;
+    if (found === 'kept') return unchanged;
     const latest = load();
     if (latest?.deviceKey !== state.deviceKey) return NONE;
-    if (kept !== false) {
-      if (kept) store({ ...latest, synced: { ...synced, checked: now } });
-      return unchanged;
-    }
-    // Forgotten there, though it has reminders to send: a new subscription
-    // (the push service may have said the old one is gone), and the schedule
-    // again. Until it's up, nothing says the server has them (pushHolds).
-    const { synced: _forgotten, ...forgotten } = latest;
-    store(forgotten);
-    await subscribe(state.deviceKey, true);
-    state = load();
-    if (state?.deviceKey !== latest.deviceKey) return NONE;
+    state = latest;
   }
-  const { timeZone, upcoming, later, hash } = await scheduleOf(notices, state.endpoint, now);
+  return uploadSchedule(state, schedule);
+}
+
+/** Uploads `schedule`, and notes what the server took. */
+async function uploadSchedule(
+  state: DeviceState,
+  { timeZone, coming, later }: Schedule,
+): Promise<PushSynced> {
   // disablePush() waits for this upload, so the server gets its deletion last (audit 3 D-1).
   const done = startUpload();
   let sent = false;
   try {
     const target = { p256dh: fromBase64Url(state.p256dh), auth: fromBase64Url(state.auth) };
     const entries = [];
+    const noted: SyncedEntry[] = [];
     let payloadsLength = 0;
-    for (const [index, notice] of upcoming.entries()) {
-      const payload = toBase64Url(await encryptPayload(messageOf(notice), target));
+    for (const [index, { notice, message, print }] of coming.entries()) {
+      const payload = toBase64Url(await encryptPayload(message, target));
       // Only as many as the server can keep (very long texts make big messages).
       payloadsLength += payload.length;
       if (payloadsLength > LIMITS.payloadsLength) break;
       const { start, repeat, until, offset } = notice;
       // A number, never the app's own id: an imported event's id can say where it came from.
       entries.push({ id: String(index + 1), start, repeat, until, offset, payload });
+      noted.push([start, repeat, until, offset, await reminderOf(notice.tag, notice.title), print]);
     }
     // Turned off meanwhile: nothing to send.
     if (load()?.deviceKey !== state.deviceKey) return NONE;
@@ -249,8 +376,15 @@ export async function syncPush(
     // Saved only while it's still on with this device key.
     const latest = load();
     if (latest?.deviceKey !== state.deviceKey) return NONE;
-    store({ ...latest, synced: { hash, at: now, count: entries.length } });
-    return { scheduled: entries.length, left: upcoming.length - entries.length + later.length };
+    // Taken by now: the server doesn't send what was due before (pushHolds).
+    const more = entries.length < coming.length;
+    const synced: Synced = { at: Date.now(), timeZone, entries: noted, more };
+    // No room to note it: then nothing says what the server has, rather than an older upload.
+    if (!store({ ...latest, synced })) {
+      const { synced: _older, ...unknown } = latest;
+      store(unknown);
+    }
+    return { scheduled: entries.length, left: coming.length - entries.length + later.length };
   } finally {
     // Turned off while it was on its way (here, in another tab, or by "Delete
     // all data"): what it may have put back on the server is deleted again,

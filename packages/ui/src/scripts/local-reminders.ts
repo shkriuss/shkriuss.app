@@ -5,7 +5,8 @@
  * the page slept, only reminders a few minutes late are shown; when the
  * clocks change, ones in the skipped hour go off as they do
  * (../lib/reminder-window.ts). The app's open tabs share their last check,
- * so each reminder goes off in one of them, not in each. It keeps
+ * so each reminder shows as a notification once, not once in each; each tab
+ * on screen reads it out itself. It keeps
  * the "Notifications are …" line and the "Turn on notifications" button
  * (`[data-notify-status]`, `[data-notify-enable]`) right, and mounts
  * "Also remind me when … is closed" (./push-controls.ts, docs/adr/0009):
@@ -66,7 +67,14 @@ function saveChecked(check: ReminderCheck): void {
   }
 }
 
-/** Runs `work` in one tab at a time, where the browser can say so (Web Locks). */
+/**
+ * Runs `work` in one tab at a time, where the browser can say so (Web
+ * Locks). Not held any longer: a tab put to sleep while holding it would
+ * stop the others' checks. So, rarely, a tab that checks straight after
+ * another may not see its check yet (another tab's copy of storage can take
+ * a moment) and show the same reminder: it replaces itself, as it has the
+ * same tag.
+ */
 function oneTabAtATime(work: () => void): void {
   const locks = (navigator as Partial<Navigator>).locks;
   if (!locks) {
@@ -182,19 +190,20 @@ export function mountNotificationStatus(
 }
 
 /**
- * Shows reminders that are due as notifications, if the person allowed
- * them. With "Also remind me when … is closed" on, the notification service
- * sends them instead, so they don't show twice; unless it doesn't have them
- * as they are now (`notices`), say after a change made offline: then
- * nothing else would show them (audit F1-7). Nor does it have those that
- * didn't fit on it (more than 500): those show here too (audit 3 F1-5).
+ * Shows reminders that are due (after `window.from` and up to `window.to`,
+ * local times) as notifications, if the person allowed them. With "Also
+ * remind me when … is closed" on, the notification service sends them
+ * instead, so they don't show twice; unless it doesn't have them as they are
+ * now, say after a change made offline: then nothing else would show them
+ * (audit F1-7). Nor does it have those that didn't fit on it (more than
+ * 500): those show here too (audit 3 F1-5).
  */
 export async function showNotifications(
   due: readonly DueReminder[],
-  notices: () => Notice[],
+  window: { from: Stamp; to: Stamp },
 ): Promise<void> {
   if (permission() !== 'granted') return;
-  const held = await pushHolds(notices()).catch(() => () => false);
+  const held = await pushHolds(due, window).catch(() => () => false);
   const shown = due.filter((item) => !held(item.tag));
   if (shown.length === 0) return;
   // Phones only show notifications through the service worker.
@@ -229,10 +238,12 @@ export function mountLocalReminders(
     ((due: readonly DueReminder[]) => `Reminder: ${due.map((item) => item.title).join(', ')}.`);
   /**
    * Reminders up to this local time have been checked, then (see
-   * ../lib/reminder-window.ts), by this tab. A later check by another tab
-   * counts too (loadChecked).
+   * ../lib/reminder-window.ts), for notifications, by this tab. A later
+   * check by another tab counts too (loadChecked).
    */
   let checked: ReminderCheck = { stamp: nowStamp(), at: Date.now() };
+  /** And for reading out, by this tab alone. */
+  let said: ReminderCheck = checked;
 
   const status = mountNotificationStatus(
     root,
@@ -244,22 +255,40 @@ export function mountLocalReminders(
     onChange: status.render,
   });
 
-  function check(): void {
+  /**
+   * Reads out what's due in each tab on screen, by its own checks: the tab
+   * that checks first, for notifications, may be a hidden one, where it
+   * isn't heard (audit 4 F1-6). A hidden tab checks too, without a word, so
+   * it doesn't say it again when it's back on screen.
+   */
+  function say(): void {
+    const now = { stamp: nowStamp(), at: Date.now() };
+    // After sleep, only reminders a few minutes late; after the clocks
+    // changed, every time they skipped (audit F1-6).
+    const window = reminderWindow(said, now);
+    if (!window) return;
+    said = now;
+    if (root.visibilityState !== 'visible') return;
+    const due = options.due(window.from, window.to);
+    if (due.length > 0) options.announce(spoken(due));
+  }
+
+  /** Shows what's due as notifications, in whichever of the app's tabs checks first. */
+  function notify(): void {
     const now = { stamp: nowStamp(), at: Date.now() };
     const shared = loadChecked();
     const last = shared && shared.at > checked.at && shared.at <= now.at ? shared : checked;
-    // After sleep, only reminders a few minutes late; after the clocks
-    // changed, every time they skipped (audit F1-6).
     const window = reminderWindow(last, now);
     if (!window) return;
     checked = now;
     saveChecked(now);
     const due = options.due(window.from, window.to);
-    if (due.length === 0) return;
-    options.announce(spoken(due));
-    void showNotifications(due, options.notices);
+    if (due.length > 0) void showNotifications(due, window);
   }
 
-  window.setInterval(() => oneTabAtATime(check), CHECK_EVERY_MS);
+  window.setInterval(() => {
+    say();
+    oneTabAtATime(notify);
+  }, CHECK_EVERY_MS);
   return { changed: push.sync, offerNotifications: status.offer };
 }

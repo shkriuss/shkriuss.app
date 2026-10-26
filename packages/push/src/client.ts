@@ -3,7 +3,7 @@
  *
  *   enablePush()        ask permission, subscribe this device
  *   syncPush(notices)   upload the app's scheduled notifications, encrypted
- *   pushHolds(notices)  which of them the server has as they are now
+ *   pushHolds(due, …)   which reminders due now the server sends
  *   sendTestPush()      one notification right now
  *   disablePush()       forget this device on the server and unsubscribe
  *   finishPushDelete()  try again to forget it, if the server couldn't be reached

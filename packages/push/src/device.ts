@@ -8,6 +8,7 @@
  * which backups skip: they belong to this device only.
  */
 import { fromBase64Url, toBase64Url } from './base64.ts';
+import type { Repeat } from './schedule.ts';
 
 const STORAGE_KEY = 'shkriuss-device:push';
 /** Device keys whose reminders are still on the server (it couldn't be reached to delete them). */
@@ -53,6 +54,39 @@ export class PushError extends Error {
   }
 }
 
+/**
+ * One uploaded notification, as this device notes it: its timing as
+ * uploaded, a fingerprint of its tag and title (which reminder it is), and
+ * one of the message the server sends. Fingerprints, so nothing the app
+ * keeps is copied here; short lists, as the server keeps up to 500.
+ */
+export type SyncedEntry = [
+  start: string,
+  repeat: Repeat,
+  until: string | null,
+  offset: number,
+  reminder: string,
+  message: string,
+];
+
+/** What was last uploaded (./upload.ts). */
+export interface Synced {
+  /** When the server took it (ms). */
+  at: number;
+  /** When the server last said it still has this device (audit 4 F1-2). */
+  checked?: number;
+  /** The time zone it was worked out in. */
+  timeZone?: string;
+  /**
+   * The soonest notifications, as many as fit on the server (audit 3 F1-5),
+   * so what the server sends is known reminder by reminder (audit 4 F1-5).
+   * Missing in what older versions saved: then it's uploaded again.
+   */
+  entries?: SyncedEntry[];
+  /** Whether very long texts left out some of the soonest (they don't all fit on the server). */
+  more?: boolean;
+}
+
 export interface DeviceState {
   /** Random; identifies this device to the server (which stores only its hash). */
   deviceKey: string;
@@ -61,13 +95,7 @@ export interface DeviceState {
   auth: string;
   /** The server key the subscription was made with. */
   serverKey: string;
-  /**
-   * What was last uploaded, and when, and how many of the upcoming
-   * notifications that was: the soonest ones, as many as fit on the server
-   * (audit 3 F1-5; all of them, in what older versions saved). `checked`:
-   * when the server last said it still has them (audit 4 F1-2).
-   */
-  synced?: { hash: string; at: number; count?: number; checked?: number };
+  synced?: Synced;
 }
 
 const isDeviceState = (value: unknown): value is DeviceState => {
@@ -208,11 +236,12 @@ export const enablePush = (): Promise<void> => subscribe();
 /**
  * enablePush(), or with `renewing` (a device key), a subscription the browser
  * renewed: kept only if push is still on with that key, so turning it off
- * meanwhile isn't undone (audit 3 D-1). `fresh`: a new subscription, not the
- * browser's current one (the server forgot this device, perhaps because the
- * push service said that one is gone: audit 4 F1-2).
+ * meanwhile isn't undone (audit 3 D-1). `forgotten`: the push address the
+ * server forgot (perhaps because the push service said it's gone): a new
+ * subscription in its place, but not in place of one another tab made since
+ * (audit 4 F1-2).
  */
-export async function subscribe(renewing?: string, fresh = false): Promise<void> {
+export async function subscribe(renewing?: string, forgotten?: string): Promise<void> {
   if (pushSupport() !== 'supported') {
     throw new PushError('unsupported', 'This browser can’t get notifications while closed.');
   }
@@ -228,7 +257,12 @@ export async function subscribe(renewing?: string, fresh = false): Promise<void>
   let subscription = await worker.pushManager.getSubscription();
   // A subscription made with another server key can't be used with this one.
   const usedKey = subscription?.options.applicationServerKey;
-  if (subscription && (fresh || !usedKey || toBase64Url(new Uint8Array(usedKey)) !== publicKey)) {
+  if (
+    subscription &&
+    (subscription.endpoint === forgotten ||
+      !usedKey ||
+      toBase64Url(new Uint8Array(usedKey)) !== publicKey)
+  ) {
     await subscription.unsubscribe().catch(() => false);
     subscription = null;
   }
