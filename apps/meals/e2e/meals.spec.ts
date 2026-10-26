@@ -224,6 +224,49 @@ test('a change made in another tab survives a form that was open here', async ({
   await expect(dayMeals(page, '2026-10-21')).toHaveText([/Lunch\s*Lentil soup with bread/]);
 });
 
+// Audit 4 F2-4: the form stayed open, then saved nothing but said "Changed …",
+// and keyboard focus fell to the top of the page.
+test('says so when what a form is changing is removed in another tab', async ({ page }) => {
+  await newMeal(page, 'Lentil soup', ['Lentils']);
+  await plan(page, '2026-10-21', 'Lentil soup', 'Dinner');
+  await plan(page, '2026-10-22', 'Lentil soup', 'Dinner');
+  const other = await page.context().newPage();
+  await other.clock.setFixedTime(NOW);
+  await other.goto('/');
+
+  // A planned meal, taken off the plan there.
+  const planned = (tab: typeof page, date: string) =>
+    day(tab, date).getByRole('button', { name: /^Lentil soup/ });
+  await planned(page, '2026-10-21').click();
+  await page.getByLabel('For', { exact: true }).selectOption({ label: 'Lunch' });
+  await planned(other, '2026-10-21').click();
+  await planDialog(other).getByRole('button', { name: 'Remove' }).click();
+  await expect(planDialog(page)).toBeHidden();
+  await expect(page.getByRole('alert')).toHaveText(
+    'That meal was taken off the plan on another device.',
+  );
+  await expect(day(page, '2026-10-21').getByText('Nothing planned.')).toBeVisible();
+  // Focus stays in the week, not at the top of the page.
+  await expect(planned(page, '2026-10-22')).toBeFocused();
+  expect((await readStore<{ planned: unknown[] }>(page, 'meal-plan'))?.data.planned).toHaveLength(
+    1,
+  );
+
+  // One of your meals, deleted there.
+  const meals = (tab: typeof page) => tab.locator('[data-meals]');
+  await meals(page).getByRole('button', { name: 'Lentil soup' }).click();
+  await meals(other).getByRole('button', { name: 'Lentil soup' }).click();
+  await mealDialog(other).getByRole('button', { name: 'Delete' }).click();
+  await other
+    .getByRole('dialog', { name: 'Delete this meal?' })
+    .getByRole('button', { name: 'Delete' })
+    .click();
+  await expect(mealDialog(page)).toBeHidden();
+  await expect(page.getByRole('alert')).toHaveText('That meal was deleted on another device.');
+  await expect(meals(page).locator('li')).toHaveCount(0);
+  await other.close();
+});
+
 // Audit 3 G-9: a name button was only as wide as the name.
 test('a meal’s name fills its line, a big target however short', async ({ page }) => {
   await newMeal(page, '7');

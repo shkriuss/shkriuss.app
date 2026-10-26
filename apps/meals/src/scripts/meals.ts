@@ -730,6 +730,20 @@ export function mountMeals(root: Document): void {
     shopping = shoppingStore.load();
     reminders = remindersStore.load();
     reminderControls.changed();
+    // What's being changed was removed on another device or tab: the form
+    // closes, and says why, instead of saving nothing and saying "Changed"
+    // (audit 4 F2-4, as audit 3 G-6 did for the other apps).
+    const gone = (items: readonly { id: string }[], id: string | null): boolean =>
+      id !== null && !items.some((item) => item.id === id);
+    if (planDialog.open && gone(plan.planned, editingPlanned)) {
+      planDialog.close();
+      showProblem('That meal was taken off the plan on another device.');
+    }
+    if (mealDialog.open && gone(meals.meals, editingMeal)) {
+      if (deleteDialog.open) deleteDialog.close();
+      mealDialog.close();
+      showProblem('That meal was deleted on another device.');
+    }
     keepFocus(render, weekHeading);
   }
 
