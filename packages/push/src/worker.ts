@@ -250,8 +250,11 @@ export class PushDevice {
     await this.state.storage.setAlarm(
       Math.min(
         ...record.entries.map((entry) => entry.retryAt ?? entry.next),
-        // Wakes up to forget it, too, if it isn't uploaded again in time.
+        // Wakes up to forget it, too, if it isn't uploaded again in time…
         record.updates.windowStart + UNUSED_MS,
+        // …or once nothing has got through for two days, not only at the
+        // next message, which may be a year away (audit 3 D-4).
+        (record.failingSince ?? Infinity) + GIVE_UP_MS,
       ),
     );
     await this.state.storage.put('device', record);
@@ -421,9 +424,14 @@ export class PushDevice {
   async #sendDue(): Promise<void> {
     const record = await this.#record();
     const now = Date.now();
-    // No schedule (only a test's time), or not uploaded for 13 months
-    // (updates.windowStart is the last upload, give or take 10 minutes).
-    if (!record || now - record.updates.windowStart >= UNUSED_MS) {
+    // No schedule (only a test's time), not uploaded for 13 months
+    // (updates.windowStart is the last upload, give or take 10 minutes), or
+    // nothing has got through for two days (a made-up or long-dead push address).
+    if (
+      !record ||
+      now - record.updates.windowStart >= UNUSED_MS ||
+      now - (record.failingSince ?? Infinity) >= GIVE_UP_MS
+    ) {
       await this.#forget();
       return;
     }

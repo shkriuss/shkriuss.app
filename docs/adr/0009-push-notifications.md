@@ -66,7 +66,9 @@ browsers like IronFox receive Web Push through **UnifiedPush**.
   is deleted. Busy or failing push services are retried 3 times. A message
   more than an hour late is skipped. If nothing gets through for two days
   (every message fails or is refused), the device is forgotten too: a real
-  push service accepts them. One signature covers a whole wake-up (it lasts
+  push service accepts them. Its object wakes up for that two days after
+  the first failed message, not only at its next message, which may be a
+  year away (audit 3 D-4). One signature covers a whole wake-up (it lasts
   12 hours), not one per message.
 - **Time limits** (audit B-1): a push service gets 5 seconds to answer a
   message, or it counts as failing. Once one message fails, the rest of

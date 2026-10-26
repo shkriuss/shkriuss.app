@@ -208,6 +208,30 @@ describe('devices whose messages don’t get through', () => {
     expect([...server.devices.values()].map(({ storage }) => storage.map.size)).toEqual([0]);
   });
 
+  // It was forgotten only at its next message: a week later for a weekly
+  // reminder, a year later for a yearly one (audit 3 D-4).
+  for (const repeat of ['weekly', 'monthly', 'yearly']) {
+    it(`is forgotten two days after its first refused message, with one ${repeat} reminder`, async () => {
+      const sent = pushService(403);
+      const reminder = entry({ start: '2026-10-22T09:00', repeat });
+      expect((await device().schedule([reminder])).status).toBe(200);
+      // The first message is refused at 09:00 on 22 October.
+      await passDays(1);
+      expect(sent).toHaveBeenCalledOnce();
+      // Kept until 09:00 on 24 October…
+      await passDays(1);
+      expect([...server.devices.values()].map(({ storage }) => storage.map.has('device'))).toEqual([
+        true,
+      ]);
+      // …and no longer.
+      await passDays(1);
+      expect(
+        [...server.devices.values()].map(({ storage }) => [storage.map.size, storage.alarm]),
+      ).toEqual([[0, null]]);
+      expect(sent).toHaveBeenCalledOnce();
+    });
+  }
+
   it('is kept while some messages get through', async () => {
     // The push service fails all day on 23 and 26 October.
     const badDays = ['2026-10-23', '2026-10-26'];
@@ -308,8 +332,9 @@ describe('a push service that’s slow or never answers (audit B-1)', () => {
     expect(
       [...server.devices.values()].map(({ storage }) => [storage.map.size, storage.alarm]),
     ).toEqual([[0, null]]);
-    // Four tries a day (each a single wait), then gone on the third morning.
-    expect(sent).toHaveBeenCalledTimes(9);
+    // Four tries a day (each a single wait), then gone two days after the
+    // first one, without trying again then (audit 3 D-4).
+    expect(sent).toHaveBeenCalledTimes(8);
   });
 
   it('keeps each wake-up short when answers are slow, sending the rest straight after', async () => {
