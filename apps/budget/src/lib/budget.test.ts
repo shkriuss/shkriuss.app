@@ -255,9 +255,15 @@ describe('entries', () => {
     ).toEqual({
       amount: 'Enter at least 0.01.',
     });
-    // Rounded to the cent as written (1.005 * 100 is 100.49999999999999).
-    expect(readEntry({ ...form, amount: '1.005' }, 'x', 0, categories).entry?.amount).toBe(1.01);
-    expect(readEntry({ ...form, amount: '0.005' }, 'x', 0, categories).entry?.amount).toBe(0.01);
+    // Rounded to the cent as written (1.005 * 100 is 100.49999999999999). In
+    // English: "1.005" is 1005 in German, and asked again in French (audit 3 J-5).
+    const english = { locale: 'en-US' };
+    expect(readEntry({ ...form, amount: '1.005' }, 'x', 0, categories, english).entry?.amount).toBe(
+      1.01,
+    );
+    expect(readEntry({ ...form, amount: '0.005' }, 'x', 0, categories, english).entry?.amount).toBe(
+      0.01,
+    );
     expect(
       readEntry({ ...form, amount: '1.234,50' }, 'x', 0, categories, { locale: 'en-US' }).problems,
     ).toEqual({
