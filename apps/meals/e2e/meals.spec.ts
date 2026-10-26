@@ -126,7 +126,7 @@ test('says so when the plan is too full to copy last week, and lets go of old me
       { id: 'old', date: '2025-10-01', slot: 'dinner', name: 'Stew' },
       { id: 'a', date: '2026-10-12', slot: 'dinner', name: 'Lentil soup' },
       { id: 'b', date: '2026-10-16', slot: 'lunch', name: 'Salad' },
-      ...Array.from({ length: 4998 }, (_, index) => ({
+      ...Array.from({ length: 1998 }, (_, index) => ({
         id: `later-${index}`,
         date: '2026-12-01',
         slot: 'dinner' as const,
@@ -138,14 +138,14 @@ test('says so when the plan is too full to copy last week, and lets go of old me
     const plan = (await readStore<{ planned: { id: string }[] }>(page, 'meal-plan'))?.data;
     return { count: plan?.planned.length, old: plan?.planned.some((e) => e.id === 'old') };
   };
-  expect(await saved()).toEqual({ count: 5000, old: false });
+  expect(await saved()).toEqual({ count: 2000, old: false });
 
   // Full: nothing is copied, and the notice at the top says why.
   const copy = page.getByRole('button', { name: 'Copy last week’s meals' });
   await copy.click();
   const notice = page.locator('[data-problem-text]');
   await expect(notice).toHaveText(
-    'The plan holds 5,000 meals at most, so nothing was copied. Remove some old ones first.',
+    'The plan holds 2,000 meals at most, so nothing was copied. Remove some old ones first.',
   );
   await expect(notice).toBeVisible();
   await expect(copy).toBeFocused();

@@ -1,5 +1,7 @@
 import { addDays } from '@shkriuss/dates';
+import { footprint, sampleText } from '@shkriuss/sync/testing';
 import { describe, expect, it, vi } from 'vitest';
+import { MAX_SEALED_CHARS } from '../../../../packages/sync/src/validate.ts';
 import {
   addExtra,
   addMeal,
@@ -23,14 +25,17 @@ import {
   isShoppingState,
   LIMITS,
   MAX_INGREDIENTS,
+  MAX_MEALS,
   MAX_PLANNED,
   MAX_SHOPPING,
+  MEALS_VERSION,
   mealDraftOf,
   mealFromDraft,
   mealProblems,
   migrateShopping,
   parseIngredients,
   PLAN_DAYS_KEPT,
+  PLAN_VERSION,
   plannedFromDraft,
   plannedInWeek,
   plannedOn,
@@ -58,10 +63,13 @@ import {
   weekName,
   weekStartOf,
   withReminders,
+  SHOPPING_VERSION,
+  SLOTS,
   type Meal,
   type MealsState,
   type Planned,
   type PlanState,
+  type ShoppingItem,
   type Slot,
 } from './meals.ts';
 
@@ -350,20 +358,20 @@ describe('the plan', () => {
     expect([some.copied, some.left]).toEqual([2, 1]);
     expect(some.state.planned).toHaveLength(MAX_PLANNED);
     expect(copyProblem(some.copied, some.left)).toBe(
-      'The plan holds 5,000 meals at most, so only 2 of last week’s 3 meals were copied.',
+      'The plan holds 2,000 meals at most, so only 2 of last week’s 3 meals were copied.',
     );
     expect(copyProblem(1, 2)).toBe(
-      'The plan holds 5,000 meals at most, so only 1 of last week’s 3 meals was copied.',
+      'The plan holds 2,000 meals at most, so only 1 of last week’s 3 meals was copied.',
     );
     // No room at all.
     const none = copyWeek(full(MAX_PLANNED), MONDAY, '2026-10-26', ids());
     expect([none.copied, none.left]).toEqual([0, 3]);
     expect(copyProblem(none.copied, none.left)).toBe(
-      'The plan holds 5,000 meals at most, so nothing was copied. Remove some old ones first.',
+      'The plan holds 2,000 meals at most, so nothing was copied. Remove some old ones first.',
     );
     // Adding one is stopped too, with a message in the form.
     expect(planProblems(full(MAX_PLANNED), { name: 'Salad', date: MONDAY, slot: 'lunch' })).toEqual(
-      { form: 'The plan holds 5,000 meals at most. Remove some old ones first.' },
+      { form: 'The plan holds 2,000 meals at most. Remove some old ones first.' },
     );
   });
 
@@ -486,7 +494,7 @@ describe('shopping', () => {
 
   // Audit 3 F2-9: "The shopping list is full. Tick some things off first."
   // couldn't make room: ticking keeps what was added, and ticks counted too.
-  it('holds up to 2,000 things added by hand, and says how to make room', () => {
+  it('holds up to 500 things added by hand, and says how to make room', () => {
     const added = (count: number, extra: boolean) => ({
       items: Array.from({ length: count }, (_, index) => ({
         id: extra ? `x${index}` : `${MONDAY}:thing ${index}`,
@@ -498,7 +506,7 @@ describe('shopping', () => {
     });
     const full = added(MAX_SHOPPING, true);
     const problem =
-      'You can add up to 2,000 things by hand, over all the weeks’ lists. Remove some you don’t need first.';
+      'You can add up to 500 things by hand, over all the weeks’ lists. Remove some you don’t need first.';
     expect(extraProblem(full, 'Milk')).toBe(problem);
     const [first] = shoppingList(emptyPlan(), emptyMeals(), full, MONDAY);
     if (!first) throw new Error('Nothing on the list');
@@ -695,4 +703,71 @@ describe('reminders', () => {
     ]);
     expect(dueReminders(plan, reminders, '2026-10-21T07:30', '2026-10-21T17:59')).toEqual([]);
   });
+});
+
+describe('room', () => {
+  // Audit 4 F2-13: at its limits, Meals held more than a browser keeps for a
+  // site. Everything is saved on the device (in localStorage, about 5 MB for
+  // each site), and with sync on, also goes into the copy that goes online.
+  it('has room for everything at its limits, on the device and in the sync copy', async () => {
+    const meals = Array.from({ length: MAX_MEALS }, (_, index): Meal => ({
+      id: crypto.randomUUID(),
+      name: sampleText(30, index),
+      ingredients: Array.from({ length: 15 }, (_, at) => sampleText(20, index * 100 + at)),
+      // A recipe pasted into every meal: 1,500 characters (of the 5,000 allowed).
+      notes: sampleText(1500, index + 7),
+    }));
+    // All four meals of the day, for a year and more.
+    const planned = Array.from({ length: MAX_PLANNED }, (_, index): Planned => ({
+      id: crypto.randomUUID(),
+      date: addDays('2026-01-01', Math.floor(index / 4)),
+      slot: SLOTS[index % 4] ?? 'dinner',
+      name: sampleText(30, index % MAX_MEALS),
+    }));
+    // Everything that can be added by hand, and 400 ticks: 8 weeks' lists.
+    const items = Array.from({ length: MAX_SHOPPING + 400 }, (_, index): ShoppingItem => ({
+      id: crypto.randomUUID(),
+      week: addDays('2026-08-31', 7 * (index % 8)),
+      name: sampleText(20, index),
+      extra: index < MAX_SHOPPING,
+      done: index % 2 === 0,
+    }));
+    const sizes = [
+      await footprint({
+        app: 'meals',
+        store: 'shkriuss:meals',
+        version: MEALS_VERSION,
+        data: { meals },
+        items: meals,
+        deleted: 100,
+      }),
+      await footprint({
+        app: 'meals',
+        store: 'shkriuss:meal-plan',
+        version: PLAN_VERSION,
+        data: { planned },
+        items: planned,
+        // Let go of after a year, or taken off, in the last 180 days.
+        deleted: 1000,
+      }),
+      await footprint({
+        app: 'meals',
+        store: 'shkriuss:meal-shopping',
+        version: SHOPPING_VERSION,
+        data: { items },
+        items,
+        // Each week's list let go of after 8 weeks, for 180 days.
+        deleted: 2900,
+      }),
+    ];
+    const total = (key: 'saved' | 'syncState' | 'sealed') =>
+      sizes.reduce((sum, size) => sum + size[key], 0);
+    // One copy for all of them goes online: less than the copies apart.
+    expect(total('sealed')).toBeLessThan(MAX_SEALED_CHARS);
+    // Safari allows 5 MiB (5,242,880 bytes), and counts 2 bytes for each
+    // character of text with any character beyond Latin-1 (like ’ from an
+    // iPhone's keyboard, or Georgian). Sync's own records are plain letters
+    // and digits: 1 byte each. Some room is left for the rest (reminders).
+    expect(2 * total('saved') + total('syncState')).toBeLessThan(4_500_000);
+  }, 60_000);
 });

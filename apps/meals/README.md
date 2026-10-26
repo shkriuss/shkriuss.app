@@ -14,7 +14,7 @@ Plan your meals for the week, and what to buy for them. Lives at
     don't matter, but the vowel signs of scripts like Hindi or Thai do:
     they're letters; `foldText`), so renaming a meal renames it in the
     plan too (`renamePlanned`). Planned meals more than a year old are let go
-    (`prunePlan`), so the plan (5,000 meals at most) doesn't fill up;
+    (`prunePlan`), so the plan (2,000 meals at most) doesn't fill up;
   - shopping (`shkriuss:meal-shopping`): what's ticked off on each week's
     list, and what was added to it by hand. The list itself is made from
     the week's planned meals (`shoppingList`): each ingredient once, with
@@ -22,13 +22,23 @@ Plan your meals for the week, and what to buy for them. Lives at
     week (`shoppingWeek`), so a phone whose weeks start on Monday and a
     tablet whose weeks start on Sunday share it when they sync (version 1
     used each device's own first day; `migrateShopping` moves it). Weeks
-    older than 8 are let go (`pruneShopping`). Up to 2,000 things added by
+    older than 8 are let go (`pruneShopping`). Up to 500 things added by
     hand are kept, all weeks together (`MAX_SHOPPING`): then the list says
     to remove some first (ticks don't count, as ticking doesn't remove);
   - reminders (`shkriuss:meal-reminders`): for each meal of the day, a time
     to be told what's planned ("Dinner: Lentil soup"), or off. Only the ones
     ever set are saved, so a new device has nothing that could win over
     another device's times when they first sync.
+
+  All of it is saved on the device, where a browser keeps about 5 MB for
+  each site, and with sync on, sync keeps about as much again to know what
+  changed. The test "has room for everything at its limits" fills Meals up
+  (500 meals, each with a 1,500-character recipe, a full plan and full
+  shopping lists) and checks that it all still fits, on an iPhone too, and
+  in the copy that syncs. If a change makes them bigger, that test fails,
+  and a limit has to come down (audit 4 F2-13: the plan held 5,000 and the
+  lists 2,000 things added by hand, more than fit).
+
 - `src/scripts/reminders.ts`: reminders while Meals is open, and, if "Also
   remind me when Meals is closed" is on, through the shared notification
   service ([ADR 0009](../../docs/adr/0009-push-notifications.md)). There's a
