@@ -5,6 +5,7 @@ import type { Page, Request } from '@playwright/test';
 import { fromBase64Url } from '../../../packages/push/src/base64.ts';
 import {
   createAccount,
+  expectSealed,
   hubURL,
   otherDevice,
   signInWithKey,
@@ -50,8 +51,9 @@ test('events sync between devices: added, changed and deleted', async ({
   await save(page);
   const response = await upload;
   expect(response.status()).toBe(200);
-  const body = response.request().postData() ?? '';
-  for (const text of ['Secret', 'dentist', 'forms']) expect(body).not.toContain(text);
+  for (const text of ['Secret dentist visit', 'Bring the forms']) {
+    await expectSealed(page, 'calendar', response, text);
+  }
 
   // The tablet gets it when it turns on sync.
   const tablet = await (await otherDevice(browser)).newPage();

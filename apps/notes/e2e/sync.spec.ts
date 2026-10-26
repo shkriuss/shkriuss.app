@@ -4,6 +4,7 @@
 import type { Page } from '@playwright/test';
 import {
   createAccount,
+  expectSealed,
   hubURL,
   otherDevice,
   signInWithKey,
@@ -88,7 +89,7 @@ test('notes, edits and deletions reach the other device', async ({ page, browser
   upload = uploaded(page);
   await page.getByRole('button', { name: 'New note' }).click();
   await titleBox(page).fill('Secret diary');
-  expect((await upload).request().postData() ?? '').not.toContain('Secret diary');
+  await expectSealed(page, 'notes', await upload, 'Secret diary');
   await tablet.context().close();
 });
 

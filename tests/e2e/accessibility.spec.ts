@@ -3,6 +3,7 @@
  * Pages are found by following links from the home page.
  */
 import type { Page } from '@playwright/test';
+import { getSite } from '../../packages/registry/src/index.ts';
 import { checkA11y, expect, test } from './fixtures.ts';
 
 const MAX_PAGES = 25;
@@ -138,10 +139,13 @@ test('the footer links are big enough to tap', async ({ page }) => {
   }
 });
 
-test('“What sync sends, and where” is big enough to tap', async ({ page }) => {
+test('“What sync sends, and where” is big enough to tap', async ({ page }, testInfo) => {
   // A link on a line of its own, under the sync buttons: the same 44px rule (audit G-13).
+  // Whether the site syncs is the registry's word, not the page's: a link
+  // gone missing fails here instead of skipping (audit 4 J-2).
+  test.skip(!getSite(testInfo.project.name).sync, 'This site doesn’t sync.');
   await page.goto('/');
   const link = page.getByRole('link', { name: 'What sync sends, and where' });
-  test.skip((await link.count()) === 0, 'This site doesn’t sync.');
+  await expect(link).toBeVisible();
   expect((await link.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
 });

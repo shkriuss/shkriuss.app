@@ -3,7 +3,9 @@
  * create one on the hub, sign in with a recovery key, turn on sync in an app
  * (which goes to the hub's Account page and back), and replace the key.
  */
-import type { Browser, BrowserContext, Page } from '@playwright/test';
+import type { Browser, BrowserContext, Page, Response } from '@playwright/test';
+import { fromBase64Url } from '../../packages/crypto/src/index.ts';
+import { openStores, syncKeys } from '../../packages/sync/src/snapshot.ts';
 import { expect } from './fixtures.ts';
 import { sites } from './sites.ts';
 
@@ -56,6 +58,39 @@ export async function syncedSince(page: Page, since: number): Promise<void> {
     } | null;
     return (state?.last ?? 0) >= after;
   }, since);
+}
+
+/**
+ * Checks that an upload of the app's copy (`upload`, a PUT to /api/sync/copy
+ * from `page`) reaches the server sealed: it opens only with this device's
+ * key, and then holds `text`, so the check can fail; without the key it's
+ * neither plain text nor merely compressed. Before, the tests looked for the
+ * text in the request, where base64url can never show it, sealed or not
+ * (audit 4 J-8).
+ */
+export async function expectSealed(
+  page: Page,
+  app: string,
+  upload: Response,
+  text: string,
+): Promise<void> {
+  const { data } = JSON.parse(upload.request().postData() ?? '{}') as { data?: unknown };
+  if (typeof data !== 'string') throw new Error('Not an upload of the copy');
+  const secret = await page.evaluate(
+    () =>
+      (
+        JSON.parse(localStorage.getItem('shkriuss-device:sync') ?? 'null') as {
+          secret?: string;
+        } | null
+      )?.secret ?? '',
+  );
+  const { key } = await syncKeys(fromBase64Url(secret));
+  const { stores } = await openStores(key, app, data);
+  expect(JSON.stringify(stores)).toContain(text);
+  const bytes = fromBase64Url(data);
+  // Not gzip (it starts 1f 8b), nor anything with the text in it.
+  expect([bytes[0], bytes[1]]).not.toEqual([0x1f, 0x8b]);
+  expect(new TextDecoder().decode(bytes)).not.toContain(text);
 }
 
 /**

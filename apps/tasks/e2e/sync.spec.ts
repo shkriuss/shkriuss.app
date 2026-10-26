@@ -4,6 +4,7 @@
 import type { Page } from '@playwright/test';
 import {
   createAccount,
+  expectSealed,
   hubURL,
   otherDevice,
   signInWithKey,
@@ -44,8 +45,7 @@ test('tasks, lists and ticks reach the other device', async ({ page, browser, gu
     .getByRole('button', { name: 'Save' })
     .click();
   await addTask(page, 'Secret gift');
-  const request = (await upload).request();
-  expect(request.postData() ?? '').not.toContain('Secret gift');
+  await expectSealed(page, 'tasks', await upload, 'Secret gift');
   await tablet.getByRole('button', { name: 'Sync now' }).click();
   await expect(chip(tablet, 'Shopping')).toHaveText(/1$/);
   await expect(titles(tablet)).toHaveText(['Secret gift']);
