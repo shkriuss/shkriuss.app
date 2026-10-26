@@ -11,6 +11,9 @@ catalog:
   '@eslint/js': ^10.0.1
   '@playwright/test': ^1.64.1
   '@types/node': ^24.19.0
+  # Reads every built script as ES2022, what Safari 16.4 runs (check:dist,
+  # audit 4 J-3). Already there for ESLint.
+  acorn: ^8.19.0
   astro: ^7.4.0
   eslint: ^10.13.0
   eslint-plugin-astro: ^3.2.1

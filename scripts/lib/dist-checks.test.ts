@@ -10,6 +10,7 @@ import {
   scriptsLoaded,
   spacingProblems,
   staticImports,
+  syntaxProblem,
 } from './dist-checks.ts';
 
 describe('cspProblems', () => {
@@ -140,5 +141,33 @@ describe('the size budgets (audit 3 J-4)', () => {
   it('are the ones docs/quality.md gives: 20/15/35 KB gzipped', () => {
     // Raise one only with a reason in an ADR (docs/adr/0007), and change quality.md too.
     expect(DEFAULT_BUDGET).toEqual({ html: 20_000, css: 15_000, js: 35_000 });
+  });
+});
+
+describe('syntaxProblem (audit 4 J-3)', () => {
+  it('accepts the JavaScript Safari 16.4 reads (ES2022)', () => {
+    const modern = `
+      class Counter { static #count = 0; static { Counter.#count = 1; } has(o) { return #count in o; } }
+      const value = await Promise.resolve(globalThis.x?.y ?? 1);
+      let total = 0; total ||= value; total ??= 2;
+      export const last = [1, 2, 3].at(-1) + 1_000;
+    `;
+    expect(syntaxProblem(modern)).toBeNull();
+    // A classic script too, like a service worker can be.
+    expect(syntaxProblem('with (Math) { self.answer = max(1, 2); }')).toBeNull();
+  });
+
+  it('refuses what’s newer, which stops the whole script there', () => {
+    for (const newer of [
+      // ES2024: a regular expression's "v" flag.
+      'const letters = /[\\p{L}--[a-z]]/v;',
+      // ES2025: import attributes.
+      "import data from './data.json' with { type: 'json' };",
+      // Explicit resource management.
+      'export function f() { using file = open(); return file; }',
+    ]) {
+      expect(syntaxProblem(newer), newer).toMatch(/^isn't ES2022, so Safari 16.4 can't run it/);
+    }
+    expect(syntaxProblem('const x = ;')).toMatch(/Unexpected token/);
   });
 });

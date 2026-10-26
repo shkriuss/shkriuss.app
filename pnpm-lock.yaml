@@ -21,6 +21,9 @@ catalogs:
     '@types/node':
       specifier: ^24.19.0
       version: 24.19.2
+    acorn:
+      specifier: ^8.19.0
+      version: 8.19.0
     astro:
       specifier: ^7.4.0
       version: 7.4.0
@@ -84,6 +87,9 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 24.19.2
+      acorn:
+        specifier: 'catalog:'
+        version: 8.19.0
       eslint:
         specifier: 'catalog:'
         version: 10.13.0

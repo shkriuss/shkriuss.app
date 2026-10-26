@@ -1,8 +1,11 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
   "compilerOptions": {
-    "target": "ES2024",
-    "lib": ["ES2024", "DOM", "DOM.Iterable", "WebWorker.ImportScripts"],
+    // The JavaScript Safari 16.4 runs: ES2022, and ES2023's array methods
+    // (findLast, toSorted…). Newer would stop a page's script there, and
+    // the build doesn't change it (CLAUDE.md, "Browsers"; audit 4 J-3).
+    "target": "ES2022",
+    "lib": ["ES2022", "ES2023.Array", "DOM", "DOM.Iterable", "WebWorker.ImportScripts"],
     "module": "preserve",
     "moduleResolution": "bundler",
     "moduleDetection": "force",
