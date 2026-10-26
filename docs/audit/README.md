@@ -110,8 +110,11 @@ the first audit found, and what happened to each finding, is in
 7. Only code that passed every check in CI reaches production.
 8. No stranger can lock people out of a feature (a limit that protects the
    bill must not let one person block everyone, except one app's storage
-   limit, [ADR 0017](../adr/0017-storage-limits.md)), and no outside service
-   can stop a fix from being deployed.
+   limit, [ADR 0017](../adr/0017-storage-limits.md), and, for notifications
+   while an app is closed, a day's messages for push addresses outside
+   Google's, Apple's, Mozilla's and Microsoft's push services (UnifiedPush),
+   and a day's test messages, [ADR 0009](../adr/0009-push-notifications.md)),
+   and no outside service can stop a fix from being deployed.
 
 ## Intentional choices
 
