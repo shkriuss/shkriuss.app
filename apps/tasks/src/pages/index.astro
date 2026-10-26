@@ -598,8 +598,12 @@ import {
     gap: var(--space-2);
   }
 
+  /* The box, the task, and in "My order" its handle at the end of the line.
+     With large text, the handle (and Move up / Move down) go under it, at the
+     end, not the title squeezed into a column of letters (audit 3 G-2). */
   .task {
     display: flex;
+    flex-wrap: wrap;
     align-items: start;
     gap: var(--space-1);
     padding: var(--space-1) var(--space-3) var(--space-1) var(--space-1);
@@ -646,6 +650,7 @@ import {
     display: flex;
     flex: none;
     align-items: center;
+    margin-inline-start: auto;
   }
 
   .task__move {
@@ -687,9 +692,10 @@ import {
     user-select: none;
   }
 
+  /* 5rem: at the usual text size, the handle and Move up / Move down still fit beside it. */
   .task__body {
     display: grid;
-    flex: 1;
+    flex: 1 1 5rem;
     min-width: 0;
     gap: var(--space-1);
     padding-block-end: var(--space-1);
