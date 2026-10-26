@@ -212,6 +212,18 @@ every device. That's far beyond what sync can hold:
   or the Workers paid plan ($5 a month) lifts the daily limits.
 - **The list's size:** about 400 bytes per photo in the Durable Object
   (about 160 MB at 400,000 photos), well inside 1 GB.
+- **Deleted photos leave small notes for good** (audit 3 B-5): two rows
+  for each, about 300 bytes together, for the library's life. One is the
+  note that it was deleted, with the deleting device's seal, which a
+  device that hasn't checked since must still see, however long it was
+  away; the other marks its id as used, so an upload of it still on its
+  way, or from such a device, is refused. No rule for removing them is safe: the
+  server doesn't know the devices (one may come back after months), and
+  without the sealed note a device can't tell a deleted photo from one a
+  server hides (audit A-8), so it would put the photo back online. The
+  400,000-photo limit, and the free-plan budget in
+  `tests/unit/free-plan.test.ts`, count photos that are there, not these
+  notes: 100,000 deletions add about 30 MB, still well inside 1 GB.
 - **Uploads only while Photos is open.** Browsers don't upload in the
   background for a website.
 - **A lost device** keeps whatever it already downloaded, and still knows
