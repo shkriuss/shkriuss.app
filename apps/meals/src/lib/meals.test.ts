@@ -24,6 +24,7 @@ import {
   LIMITS,
   MAX_INGREDIENTS,
   MAX_PLANNED,
+  MAX_SHOPPING,
   mealDraftOf,
   mealFromDraft,
   mealProblems,
@@ -481,6 +482,30 @@ describe('shopping', () => {
       'onions',
     ]);
     expect(removeExtra(shopping, 'm').items).toEqual([]);
+  });
+
+  // Audit 3 F2-9: "The shopping list is full. Tick some things off first."
+  // couldn't make room: ticking keeps what was added, and ticks counted too.
+  it('holds up to 2,000 things added by hand, and says how to make room', () => {
+    const added = (count: number, extra: boolean) => ({
+      items: Array.from({ length: count }, (_, index) => ({
+        id: extra ? `x${index}` : `${MONDAY}:thing ${index}`,
+        week: MONDAY,
+        name: `Thing ${index}`,
+        extra,
+        done: !extra,
+      })),
+    });
+    const full = added(MAX_SHOPPING, true);
+    const problem =
+      'You can add up to 2,000 things by hand, over all the weeks’ lists. Remove some you don’t need first.';
+    expect(extraProblem(full, 'Milk')).toBe(problem);
+    const [first] = shoppingList(emptyPlan(), emptyMeals(), full, MONDAY);
+    if (!first) throw new Error('Nothing on the list');
+    expect(extraProblem(setDone(full, MONDAY, first, true), 'Milk')).toBe(problem);
+    expect(extraProblem(removeExtra(full, first.key), 'Milk')).toBeNull();
+    // Ticks on the planned meals' ingredients don't count.
+    expect(extraProblem(added(MAX_SHOPPING, false), 'Milk')).toBeNull();
   });
 
   it('shows the same ticks and added things on devices whose weeks start on other days', () => {

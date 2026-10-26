@@ -38,6 +38,7 @@ export const LIMITS = { name: 100, ingredient: 100, notes: 5000 } as const;
 export const MAX_INGREDIENTS = 60;
 export const MAX_MEALS = 500;
 export const MAX_PLANNED = 5000;
+/** The most things added by hand to the shopping lists, all weeks kept together. */
 export const MAX_SHOPPING = 2000;
 /** Shopping lists older than this many weeks are let go. */
 export const SHOPPING_WEEKS_KEPT = 8;
@@ -594,8 +595,11 @@ export function extraProblem(shopping: ShoppingState, name: string): string | nu
   const text = tidy(name);
   if (text === '') return 'Write what to buy.';
   if (length(text) > LIMITS.ingredient) return `Use at most ${LIMITS.ingredient} characters.`;
-  if (shopping.items.length >= MAX_SHOPPING)
-    return 'The shopping list is full. Tick some things off first.';
+  // Only what was added by hand counts: ticking things off keeps them, so it
+  // couldn't make room, as the message said (audit 3 F2-9). Removing does.
+  if (shopping.items.filter((item) => item.extra).length >= MAX_SHOPPING) {
+    return `You can add up to ${MAX_SHOPPING.toLocaleString('en')} things by hand, over all the weeks’ lists. Remove some you don’t need first.`;
+  }
   return null;
 }
 

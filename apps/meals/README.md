@@ -22,7 +22,9 @@ Plan your meals for the week, and what to buy for them. Lives at
     week (`shoppingWeek`), so a phone whose weeks start on Monday and a
     tablet whose weeks start on Sunday share it when they sync (version 1
     used each device's own first day; `migrateShopping` moves it). Weeks
-    older than 8 are let go (`pruneShopping`);
+    older than 8 are let go (`pruneShopping`). Up to 2,000 things added by
+    hand are kept, all weeks together (`MAX_SHOPPING`): then the list says
+    to remove some first (ticks don't count, as ticking doesn't remove);
   - reminders (`shkriuss:meal-reminders`): for each meal of the day, a time
     to be told what's planned ("Dinner: Lentil soup"), or off. Only the ones
     ever set are saved, so a new device has nothing that could win over
