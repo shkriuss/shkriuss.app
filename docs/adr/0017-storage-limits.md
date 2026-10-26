@@ -79,7 +79,11 @@ app need lowering first.
   fails (R2 or the meter not answering for a while) runs again a minute
   later, then later each time, up to a day apart, so a clean-up or a
   deletion never stops for good (`runAlarm` in `@shkriuss/server`, audit
-  B-2).
+  B-2). If Cloudflare itself doesn't run an alarm (when the day's free
+  requests are used up, it may give up after its own few retries; its
+  documentation doesn't say), the object's next request sets it again: a
+  copy's at its next sync a day or more after the last, a notification
+  schedule's at its next upload (audit 3 B-4).
 - A device that comes back later finds no copy, as on a first sync, and
   puts its own data online again. So only copies nobody uses go for good.
 - **A note that a key was replaced** is deleted the same way, 13 months
