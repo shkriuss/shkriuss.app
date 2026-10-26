@@ -28,7 +28,10 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
   by the server and never exported. Requests are size-limited, rate-limited
   and checked; push addresses must be https with a domain name, and
   redirects are refused. A device whose messages all fail or are refused for
-  two days is forgotten, and each app sends at most 2,000 messages a day. A
+  two days is forgotten, and each app sends at most 2,000 messages a day:
+  each device at most 100, push addresses outside Google's, Apple's,
+  Mozilla's and Microsoft's push services 200 in all, and test messages
+  100, so made-up devices can't use up everyone's. A
   push service gets 5 seconds to answer, and time spent waiting counts
   against those messages, so a slow push address can't tie up the servers.
 - The hub also runs a small Worker for `/api/account/*`, for the optional

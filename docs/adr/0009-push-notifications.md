@@ -50,6 +50,8 @@ browsers like IronFox receive Web Push through **UnifiedPush**.
   to notify, and the encrypted message. Its tag and the page to open are
   inside the encrypted message. A device is addressed by a random key that only the phone has
   (sent as a bearer token; the server keeps only its SHA-256 hash).
+  It also counts how many messages the device got that day (UTC), for its
+  daily limit (audit 3 B-2).
 - **Repeating notifications keep working** without opening the app: the server
   computes each next time from the pattern, in the phone's time zone (so
   daylight saving doesn't shift them). The same encrypted message is sent
@@ -86,7 +88,14 @@ browsers like IronFox receive Web Push through **UnifiedPush**.
   past that, sending waits until 00:00 UTC, and messages more than an hour
   late by then are skipped, as always. Each whole second spent waiting
   for push services counts as one more message, so one app can't keep the
-  server waiting for more than about 2,000 seconds a day.
+  server waiting for more than about 2,000 seconds a day. The 2,000 are
+  shared out, each part used up on its own (audit 3 B-2): 1,700 for push
+  addresses at the push services browsers use (Google's, Apple's,
+  Mozilla's and Microsoft's), 200 for any other address (UnifiedPush
+  servers, and made-up ones), and 100 for test messages. And one device
+  gets at most 100 messages a day, tries again included: the rest that day
+  are skipped, like late ones, and uploading again doesn't start the count
+  again.
 - **Checked by the device's object:** the Worker only reads an upload, in
   one go, and passes it on; the device's object checks the rest. Reading
   and checking the biggest schedule in the Worker took more than the free
@@ -120,9 +129,16 @@ browsers like IronFox receive Web Push through **UnifiedPush**.
   upload a made-up schedule. One whose push address never accepts a message
   is forgotten after two days, and one app sends at most 2,000 messages a
   day in all, with each second spent waiting counted as a message. So
-  someone determined can use up only that app's messages for the day (its
-  notifications then pause until 00:00 UTC), not the Durable Object requests
-  or time the other apps need. It can't cost money on the free plan
+  someone can use up only that app's messages for the day, not the Durable
+  Object requests or time the other apps need. Before audit 3 B-2, four
+  made-up devices stopped everyone's reminders. Now two made-up devices
+  (uploaded once, kept for 13 months) still use up the 200 that addresses
+  outside the big push services share, which pauses notifications for
+  people using UnifiedPush until 00:00 UTC, and the 100 test messages can
+  be used up too. But to pause them for people at Google's, Apple's,
+  Mozilla's or Microsoft's push services, someone needs at least 17 devices
+  subscribed there (as a browser would subscribe), each getting its 100
+  messages a day. It can't cost money on the free plan
   and can't reveal anything. A Cloudflare rate-limiting rule on `/api/`
   slows this down ([deployment](../deployment.md)). Someone could also fill
   that app's room for schedules; then new devices wait until the junk is
