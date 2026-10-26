@@ -6,7 +6,10 @@ Status: Accepted (2026-10-23). Changes [ADR 0009](0009-push-notifications.md)
 [ADR 0016](0016-online-photo-library.md) (the online library). Audit
 finding B-1. Changed by [ADR 0019](0019-no-pull-request-previews.md): there
 are no pull request previews, so each namespace has one limit, the real
-site's, and the 4.5 GB is for the real sites alone.
+site's, and the 4.5 GB is for the real sites alone. Without previews the
+limits add up to about 3.1 GB, so about eight more apps with sync and
+notifications fit (160 MB each) before the limits need lowering, not two
+(audit 3 J-6).
 
 ## Context
 
