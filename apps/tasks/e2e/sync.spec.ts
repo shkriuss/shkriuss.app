@@ -36,7 +36,9 @@ test('tasks, lists and ticks reach the other device', async ({ page, browser, gu
   guard.allowOrigin(hubURL);
   const tablet = await twoDevices(page, browser);
 
-  // A list and a task in it, on the phone.
+  // A list and a task in it, on the phone. Each goes up on its own: on a
+  // slow machine, the list's upload went before the task was added, and the
+  // test looked for the task in it.
   let upload = uploaded(page);
   await page.getByRole('button', { name: 'New list' }).click();
   await page.getByRole('dialog', { name: 'New list' }).getByLabel('Name').fill('Shopping');
@@ -44,6 +46,8 @@ test('tasks, lists and ticks reach the other device', async ({ page, browser, gu
     .getByRole('dialog', { name: 'New list' })
     .getByRole('button', { name: 'Save' })
     .click();
+  await expectSealed(page, 'tasks', await upload, 'Shopping');
+  upload = uploaded(page);
   await addTask(page, 'Secret gift');
   await expectSealed(page, 'tasks', await upload, 'Secret gift');
   await tablet.getByRole('button', { name: 'Sync now' }).click();
