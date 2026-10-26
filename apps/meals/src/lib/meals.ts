@@ -52,10 +52,37 @@ export const byText = compareText;
 /** Trimmed, with runs of spaces made one. */
 const tidy = (text: string): string => text.trim().replace(/\s+/g, ' ');
 
-/** At most `max` characters (never in the middle of an emoji). */
-const cut = (text: string, max: number): string => [...text].slice(0, max).join('').trimEnd();
-
+/** How long text is, for the limits: in code points (an emoji's parts count apart). */
 const length = (text: string): number => [...text].length;
+
+/**
+ * The characters of text as people see them, to cut between: a flag, a
+ * family emoji or a letter with its accent is one. Code points where the
+ * browser can't tell (Firefox before 125).
+ */
+const characters =
+  typeof Intl.Segmenter === 'function'
+    ? new Intl.Segmenter('en', { granularity: 'grapheme' })
+    : null;
+
+/**
+ * At most `max` long (as `length` counts), cut between whole characters as
+ * people see them (audit 3 F2-7): splitting a flag would leave half of it.
+ */
+function cut(text: string, max: number): string {
+  if (length(text) <= max) return text;
+  const parts = characters
+    ? Array.from(characters.segment(text), ({ segment }) => segment)
+    : [...text];
+  let kept = '';
+  let size = 0;
+  for (const part of parts) {
+    size += length(part);
+    if (size > max) break;
+    kept += part;
+  }
+  return kept.trimEnd();
+}
 
 const plural = (count: number, one: string, many = `${one}s`): string =>
   `${count.toLocaleString('en')} ${count === 1 ? one : many}`;
@@ -141,7 +168,11 @@ export function findMeal(state: MealsState, name: string): Meal | undefined {
   return key === '' ? undefined : state.meals.find((meal) => foldText(meal.name) === key);
 }
 
-/** Ingredients typed one per line: tidied, without empty lines or the same one twice. */
+/**
+ * Ingredients typed one per line: tidied, without empty lines or the same
+ * one twice. The form refuses a line that's too long (mealProblems); if one
+ * comes anyway, it's cut.
+ */
 export function parseIngredients(text: string): string[] {
   const seen = new Set<string>();
   const ingredients: string[] = [];
@@ -190,7 +221,10 @@ export function mealProblems(
   if (name === '') problems.name = 'Give the meal a name.';
   else if (length(name) > LIMITS.name) problems.name = `Use at most ${LIMITS.name} characters.`;
   else if (same) problems.name = `You already have “${same.name}”.`;
-  if (parseIngredients(draft.ingredients).length > MAX_INGREDIENTS) {
+  // Too long a line was cut without a word, and two that start the same became one (audit 3 F2-7).
+  if (draft.ingredients.split('\n').some((line) => length(tidy(line)) > LIMITS.ingredient)) {
+    problems.ingredients = `Use at most ${LIMITS.ingredient} characters on each line.`;
+  } else if (parseIngredients(draft.ingredients).length > MAX_INGREDIENTS) {
     problems.ingredients = `Up to ${MAX_INGREDIENTS} ingredients.`;
   }
   if (length(draft.notes) > LIMITS.notes) {
