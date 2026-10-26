@@ -78,6 +78,18 @@ describe('habits', () => {
     });
   });
 
+  it('counts a name with other accents or spaces as the same name, as the other apps do', () => {
+    // Only toLowerCase() made "Café" and "Cafe" two habits (audit 3 J-12).
+    const state = { habits: [{ ...daily, id: 'cafe', name: 'Café with Ana' }] };
+    const taken = 'You already have a habit with that name.';
+    expect(nameError('cafe with ana', state)).toBe(taken);
+    expect(nameError('  CAFÉ  with   Ana ', state)).toBe(taken);
+    expect(nameError('Café with Ana', state, 'cafe')).toBeUndefined();
+    expect(nameError('Cafés with Ana', state)).toBeUndefined();
+    // Hindi's vowel signs are letters, not accents: these are two words.
+    expect(nameError('चना', { habits: [{ ...daily, name: 'चीनी' }] })).toBeUndefined();
+  });
+
   it('sets, keeps and removes a reminder', () => {
     const state = { habits: [daily] };
     const withReminder = updateHabit(state, 'water', {
