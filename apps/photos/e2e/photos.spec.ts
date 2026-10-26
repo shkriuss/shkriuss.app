@@ -171,6 +171,10 @@ test('“Delete all data” deletes the photos', async ({ page }) => {
   await expect(tiles(page)).toHaveCount(1);
   await expect(page.getByRole('button', { name: 'Back up' })).toBeHidden();
   await page.getByRole('button', { name: 'Delete all data' }).click();
+  // Not "Back up first": Photos has no backups (audit 4 D-4).
+  const dialog = page.getByRole('dialog', { name: 'Delete all data?' });
+  await expect(dialog).toContainText('save the originals you want first');
+  await expect(dialog).not.toContainText('Back up');
   await page.getByRole('button', { name: 'Delete everything' }).click();
   await expect(page.getByText('No photos yet.', { exact: false })).toBeVisible();
   expect(await stored(page)).toEqual({ photos: 0, files: 0 });

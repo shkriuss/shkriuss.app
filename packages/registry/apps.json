@@ -34,7 +34,7 @@
         "Your events: titles, dates, times, repeats, reminders and notes",
         "When reminders were last checked, so each one shows only once",
         "If you turn on reminders while Calendar is closed: this device's notification settings and a random device key (never in backups; after you turn it off, kept only until the server has deleted your reminders)",
-        "If you turn on sync: a copy of your events on Calendar's server, locked on your devices so only they can read it, and this device's sync key (never in backups)",
+        "If you turn on sync: a copy of your events on Calendar's server, locked on your devices so only they can read it, and this device's sync key (never in backups). A deleted event's id stays there and on your devices for 180 days, so your other devices delete it too (for an imported event, the id from its calendar file)",
         "Which holidays and fasts to show",
         "Your light or dark theme choice"
       ],
@@ -86,7 +86,7 @@
         "The text you're checking, so it's still here when you come back",
         "Whether you write American or British English",
         "Words you added to your dictionary",
-        "If you turn on sync: a copy of your dictionary and your English choice (never your text) on Grammar's server, locked on your devices so only they can read it, and this device's sync key (never in backups)",
+        "If you turn on sync: a copy of your dictionary and your English choice (never your text) on Grammar's server, locked on your devices so only they can read it, and this device's sync key (never in backups). A word you remove stays there and on your devices, hidden, for 180 days, so your other devices remove it too",
         "The Deep check model, if you download it (about 380 MB), so it works offline. You can remove it any time",
         "Your light or dark theme choice"
       ],

@@ -54,5 +54,7 @@ overrides:
 # broken release is usually caught and pulled before it reaches us. This must
 # match Dependabot's cooldown (.github/dependabot.yml): Dependabot applies its
 # cooldown to the whole lockfile, so a younger package here makes it fail.
-# For an urgent security fix, list the package under minimumReleaseAgeExclude.
+# For an urgent security fix, list the package under minimumReleaseAgeExclude,
+# in a pull request of its own, merged first: the check on pull requests
+# (scripts/lockfile-age.ts) reads this list from main (audit 4 H-1).
 minimumReleaseAge: 10080

@@ -16,9 +16,15 @@ interface Props {
    * no "Back up" or "Restore". Put what to do instead in the slot.
    */
   backup?: boolean;
+  /**
+   * With `backup={false}`: what "Delete all data?" says to do first to keep
+   * the data, instead of backing up, which isn't there (audit 4 D-4).
+   */
+  keepFirst?: string;
 }
 
-const { level = 2, backup = true } = Astro.props;
+const { level = 2, backup = true, keepFirst = '' } = Astro.props;
+const keep = backup ? 'Back up first if you might want it later.' : keepFirst;
 const Heading = `h${level}` as 'h2' | 'h3';
 // What the person can turn on that sends data off the device: reminders
 // while it's closed don't need sync or an account (audit 3 D-5).
@@ -180,8 +186,7 @@ const stays = `Everything ${site.name} saves stays in this browser on this devic
     <form method="dialog" class="stack">
       <h2 id="data-delete-title">Delete all data?</h2>
       <p>
-        This removes everything {site.name} has saved on this device. It can't be undone. Back up
-        first if you might want it later.
+        This removes everything {site.name} has saved on this device. It can't be undone. {keep}
       </p>
       {site.sync && (
         <p>

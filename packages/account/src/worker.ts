@@ -301,7 +301,10 @@ export class AccountPasskey {
       if (expected.purpose === 'add') {
         if (!lock) return problem(400, 'No lock.');
         if (saved || old) return problem(409, 'This passkey already has a lock.');
-        // Signed with the key being stored: the passkey is this one, used on the Account page.
+        // Signed with the key being stored: this shows only that whoever adds the
+        // lock has that key pair, which a script can make itself. So an existing
+        // lock is never replaced (above), and the Account page leaves no passkey
+        // without a lock (audit 4 A-2).
         if (!(await checkAssertion(assertion, lock, expected))) return refused();
         if (!(await reserve(this.state, this.env.ACCOUNT_PASSKEYS, 0, limitOf(request)))) {
           return problem(507, 'There’s no room for more passkeys just now.');

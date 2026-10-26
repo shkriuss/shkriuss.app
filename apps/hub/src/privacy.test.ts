@@ -3,10 +3,12 @@
  * D-7): people rely on it, and the page promises to change first when what
  * leaves the device does. Next to the date is a fingerprint of the text it
  * was set for, so changing the text without the date fails here, saying
- * what to set.
+ * what to set. Much of the page comes from the registry (apps.json), so
+ * what it shows from there counts too (audit 4 J-4).
  */
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { apps, byName, getSite, HUB_SLUG } from '@shkriuss/registry';
 import { describe, expect, it } from 'vitest';
 
 const PAGE = 'apps/hub/src/pages/privacy.astro';
@@ -44,8 +46,29 @@ function pageText(text: string): string {
     .trim();
 }
 
-const fingerprint = (text: string): string =>
-  createHash('sha256').update(pageText(text)).digest('hex').slice(0, 16);
+/**
+ * What the page shows from the registry, in its order: each site's name, what
+ * it stores and where, and which send reminders, sync or keep a library online.
+ */
+const shown = JSON.stringify(
+  [getSite(HUB_SLUG), ...[...apps].sort(byName).map((app) => getSite(app.slug))].map(
+    ({ slug, name, dataStored, storage, sync, pushNotifications, library }) => ({
+      slug,
+      name,
+      dataStored,
+      storage,
+      sync,
+      pushNotifications,
+      library,
+    }),
+  ),
+);
+
+const fingerprint = (text: string, registry = shown): string =>
+  createHash('sha256')
+    .update(`${pageText(text)}\n${registry}`)
+    .digest('hex')
+    .slice(0, 16);
 
 describe('the privacy page', () => {
   const [, date = '', saved = ''] = DATE_LINE.exec(source) ?? [];
@@ -68,5 +91,15 @@ describe('the privacy page', () => {
     const now = fingerprint(source);
     expect(fingerprint(source.replace('Short version', 'Short\n      version'))).toBe(now);
     expect(fingerprint(source.replace('Short version', 'Long version'))).not.toBe(now);
+  });
+
+  it('notices a change in what it shows from the registry (audit 4 J-4)', () => {
+    const now = fingerprint(source);
+    const before = JSON.parse(shown) as { pushNotifications: boolean }[];
+    const changed = before.map((site, index) =>
+      index === 1 ? { ...site, pushNotifications: !site.pushNotifications } : site,
+    );
+    expect(fingerprint(source, JSON.stringify(changed))).not.toBe(now);
+    expect(fingerprint(source, shown.replace('theme', 'colour'))).not.toBe(now);
   });
 });

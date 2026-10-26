@@ -151,8 +151,15 @@ test('adds another device with a one-time code', async ({ page, browser, baseURL
   await expect(second.locator('[data-link-code]')).toHaveText(code);
   expect(second.url(), 'the key is taken out of the address bar').not.toContain('#');
   for (const address of sent) expect(address).not.toContain(linkKey);
+  // "Add this device" works a moment after the question shows (audit 4 C-6):
+  // checked once it does, and its colours have finished changing.
+  const add = second.getByRole('button', { name: 'Add this device' });
+  await expect(add).not.toHaveAttribute('aria-disabled');
+  await add.evaluate((button) =>
+    Promise.all(button.getAnimations().map((animation) => animation.finished)),
+  );
   await checkA11y(second, 'account: confirm a linked device');
-  await second.getByRole('button', { name: 'Add this device' }).click();
+  await add.click();
   await expect(view(second, 'signed-in')).toBeVisible();
   await expect(accountCode(second)).toHaveText(code);
 
@@ -169,6 +176,122 @@ test('adds another device with a one-time code', async ({ page, browser, baseURL
   await expect(message(third)).toHaveText(/^Someone already used this code\. If it wasn’t you/);
   await expect(view(third, 'signed-out')).toBeVisible();
   await other.close();
+});
+
+test('“Add this device” works only a moment after its question is on screen', async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  // A press sooner may be the second click of a double-click another website
+  // asked for, closing its own window over this one in between (audit 4 C-6).
+  await createAccount(page);
+  await page.getByRole('button', { name: 'Show a code' }).click();
+  await expect(page.locator('[data-link-status]')).toHaveText(/Waiting for your other device/);
+  const url = (await page.locator('[data-link-url]').textContent()) ?? '';
+  const other = await otherDevice(browser, baseURL);
+  const second = await other.newPage();
+  // Paused: no timer fires but those the test runs.
+  await second.clock.install({ time: new Date('2026-10-26T12:00:00') });
+  await second.clock.pauseAt(new Date('2026-10-26T12:00:01'));
+  await second.goto(url);
+  await expect(view(second, 'link-confirm')).toBeVisible();
+  const add = second.getByRole('button', { name: 'Add this device' });
+  await expect(add).toHaveAttribute('aria-disabled', 'true');
+  // A press meanwhile does nothing.
+  await add.focus();
+  await second.keyboard.press('Enter');
+  await second.clock.runFor(400);
+  await expect(add).toHaveAttribute('aria-disabled', 'true');
+  await expect(view(second, 'link-confirm')).toBeVisible();
+  await second.clock.runFor(100);
+  await expect(add).not.toHaveAttribute('aria-disabled');
+  // Away from the window and back: another half second, and keyboard focus
+  // is still on the button (it's marked busy, not disabled).
+  await second.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await expect(add).toHaveAttribute('aria-disabled', 'true');
+  await second.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(add).toBeFocused();
+  await second.clock.runFor(500);
+  await expect(add).not.toHaveAttribute('aria-disabled');
+  await other.close();
+});
+
+test('signed out in another tab: says so, closes the recovery key, and moves focus', async ({
+  page,
+}) => {
+  // Not left showing the key of an account this device no longer has (audit 4 G-4).
+  await createAccount(page);
+  await page.getByRole('button', { name: 'Show recovery key' }).click();
+  const keyDialog = page.getByRole('dialog', { name: 'Your recovery key' });
+  await expect(keyDialog).toBeVisible();
+  const other = await page.context().newPage();
+  await other.goto('/account/');
+  await signOut(other);
+  await expect(message(page)).toHaveText('This device was signed out in another tab.');
+  await expect(keyDialog).toBeHidden();
+  await expect(view(page, 'signed-out')).toBeVisible();
+  await expect(page.locator('[data-view="signed-out"] [tabindex="-1"]')).toBeFocused();
+  await other.close();
+});
+
+test('another account in another tab: the old one’s code stops working, and its key replacement goes', async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  /** A code to add a device to a new account, made on a device of its own. */
+  async function newAccountCode(): Promise<{ url: string; close: () => Promise<void> }> {
+    const device = await otherDevice(browser, baseURL);
+    const tab = await device.newPage();
+    await createAccount(tab);
+    await tab.getByRole('button', { name: 'Show a code' }).click();
+    await expect(tab.locator('[data-link-url]')).toHaveText(/#link=/);
+    return {
+      url: (await tab.locator('[data-link-url]').textContent()) ?? '',
+      close: () => device.close(),
+    };
+  }
+  /** In `tab`, of this browser: opens the code, and switches to its account. */
+  async function switchWith(tab: Page, url: string): Promise<void> {
+    await tab.bringToFront();
+    await tab.goto(url);
+    await expect(tab.locator('[data-link-replace]')).toBeVisible();
+    const add = tab.getByRole('button', { name: 'Add this device' });
+    await expect(add).not.toHaveAttribute('aria-disabled');
+    await add.click();
+    await expect(view(tab, 'signed-in')).toBeVisible();
+  }
+
+  await createAccount(page);
+  const cancelled = page.waitForResponse(
+    (response) =>
+      response.url().includes('/api/account/link/') && response.request().method() === 'DELETE',
+  );
+  await page.getByRole('button', { name: 'Show a code' }).click();
+  await expect(page.locator('[data-link-status]')).toHaveText(/Waiting for your other device/);
+  const other = await page.context().newPage();
+  const first = await newAccountCode();
+  await switchWith(other, first.url);
+  expect((await cancelled).status()).toBe(204);
+  await expect(message(page)).toHaveText('The account on this device changed in another tab.');
+  await expect(page.locator('[data-link-qr] svg')).toHaveCount(0);
+  await expect(page.locator('[data-link-status]')).toHaveText('');
+
+  // Replacing the key, started for the account before: it can't replace the new one's.
+  await page.bringToFront();
+  const before = (await accountCode(page).textContent()) ?? '';
+  await page.getByRole('button', { name: 'Replace the account key' }).click();
+  await page.getByRole('button', { name: 'Get a new key' }).click();
+  await expect(page.getByRole('heading', { name: 'Save your new recovery key' })).toBeVisible();
+  const second = await newAccountCode();
+  await switchWith(other, second.url);
+  await expect(view(page, 'signed-in')).toBeVisible();
+  await expect(accountCode(page)).not.toHaveText(before);
+  await expect(view(page, 'new')).toBeHidden();
+  await expect(page.locator('[data-new-key]')).toHaveText('');
+  await expect(page.locator('[data-view="signed-in"] [tabindex="-1"]')).toBeFocused();
+  await Promise.all([first.close(), second.close(), other.close()]);
 });
 
 test('“Done” makes the code stop working, so someone who saw it can’t use it', async ({
@@ -399,6 +522,51 @@ test.describe('passkeys', () => {
     await page.getByRole('button', { name: 'Sign in with a passkey' }).click();
     await expect(message(page)).toHaveText(/^This passkey is for an account key that was replaced/);
     await expect(view(page, 'signed-out')).toBeVisible();
+  });
+
+  test('forgets a new passkey whose lock was refused, not one that may have been kept', async ({
+    page,
+    guard,
+  }) => {
+    // Left behind, it could get a lock made somewhere else first (audit 4 A-2).
+    // But after a server error the lock may have been kept, and without the
+    // passkey nobody could remove it.
+    await authenticator(page, true);
+    await page.addInitScript(() => {
+      const signals: unknown[] = [];
+      Object.assign(window, { signals });
+      Object.defineProperty(PublicKeyCredential, 'signalUnknownCredential', {
+        configurable: true,
+        value: async (options: unknown) => {
+          signals.push(options);
+        },
+      });
+    });
+    await createAccount(page);
+    const signals = () =>
+      page.evaluate(() => (window as unknown as { signals: unknown[] }).signals.length);
+    let status = 500;
+    guard.allowConsole('500');
+    guard.allowConsole('409');
+    await page.route('**/api/account/passkey', (route) =>
+      route.request().method() === 'PUT'
+        ? route.fulfill({ status, contentType: 'application/json', body: '{"error":"x"}' })
+        : route.fallback(),
+    );
+    const add = page.getByRole('button', { name: 'Add a passkey' });
+    const passkeyStatus = page.locator('[data-passkey-status]');
+    await add.click();
+    await expect(passkeyStatus).toHaveText(/^Couldn’t reach shkriuss\.app/);
+    expect(await signals()).toBe(0);
+
+    status = 409;
+    await expect(add).not.toHaveAttribute('aria-disabled');
+    await add.click();
+    await expect.poll(signals).toBe(1);
+    await expect(passkeyStatus).toHaveText(/^Couldn’t reach shkriuss\.app/);
+    expect(
+      await page.evaluate(() => (window as unknown as { signals: unknown[] }).signals[0]),
+    ).toMatchObject({ rpId: 'localhost' });
   });
 
   test('explains when a password manager can’t unlock accounts', async ({ page }) => {

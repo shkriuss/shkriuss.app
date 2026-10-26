@@ -185,7 +185,9 @@ in with `sync: true` in `apps.json`.
 
 - **Connecting an app ("Turn on sync").**
   - The app asks its own Worker where its hub is (`/api/sync/hub`; worked out
-    from the app's address, so PR previews pair with their own hub).
+    from the app's address, so PR previews pair with their own hub), and
+    keeps the time it answers with, to the millisecond, as when sync was
+    turned on (see Storage, below).
   - It makes a one-time ECDH P-256 key pair, keeps the private half in this
     tab, and opens `/account/?connect=<app>&from=<its address>&key=…&state=…`.
   - The hub only continues if `from` is that app's real address (on the real
@@ -218,6 +220,18 @@ in with `sync: true` in `apps.json`.
   - "Delete the online copy" deletes the data and leaves a small note, so
     other devices learn it was deleted and turn sync off (keeping their data).
     Moving to a new account key does the same, with a note that it moved.
+  - Turning sync on again after a deletion starts a new copy (a moved one
+    can't be started again). The note says when the copy was deleted, and
+    each device notes when sync was last turned on there (with the same key
+    or another), both by the sync server's clock (to the millisecond), so a
+    wrong clock on a device can't change the answer. A device where sync was turned on after
+    the deletion starts the new copy, or joins one another device started.
+    Every other device turns off, whether it had synced yet or not, before
+    it puts any files there: a new copy keeps when the copy before it was
+    deleted, for that check (audit 4 E-1). An app still running a version
+    from before this (a page left open, or the first time it opens after
+    the change, while the update downloads) doesn't check, and would join
+    a copy started again; the next time it opens, it does.
     The copy asks the storage meter (another object) before it deletes
     anything, so a request that fails half-way deletes nothing and can be
     tried again (audit 3 B-1).

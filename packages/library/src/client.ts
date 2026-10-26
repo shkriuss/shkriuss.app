@@ -553,9 +553,13 @@ export function linkedLibrary(
   save: (records: readonly LibraryRecord[]) => boolean = () => true,
 ): LinkedData {
   return {
-    async delete(secret) {
+    async delete(secret, online) {
       const { key } = await fromSecret(secret);
-      for (const found of tidyRecords(load())) {
+      // The records here, and those in the online copy: a device that hasn't
+      // synced yet has none of its own, and would leave the libraries online
+      // while saying the copy is deleted (audit 4 D-2).
+      const records = tidyRecords([...load(), ...online.filter(isLibraryRecord)]);
+      for (const found of records) {
         // Another account's, not moved to this key, or taken: nothing of ours to delete.
         if (found.taken || !hasKey(found, key.id)) continue;
         try {

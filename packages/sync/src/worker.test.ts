@@ -234,6 +234,77 @@ describe('two devices writing the same copy (audit 3 J-1)', () => {
   });
 });
 
+describe('where the hub is', () => {
+  it('says so, with the time to the millisecond, for “Turn on sync” (audit 4 E-1)', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const now = Date.UTC(2026, 9, 26, 12, 0, 0, 345);
+    vi.setSystemTime(now);
+    const answer = await memorySync().fetch(new Request(`${SITE}/api/sync/hub`));
+    expect(await answer.json()).toEqual({ origin: 'https://shkriuss.app', now });
+  });
+});
+
+describe('a deleted copy (audit 4 E-1)', () => {
+  const get = (token: string) => request(SITE, 'copy', token);
+  const remove = (token: string) => request(SITE, 'copy', token, { method: 'DELETE' });
+
+  const T0 = Date.UTC(2026, 9, 26, 12);
+  const endedAt = async (server: ReturnType<typeof memorySync>, token: string) =>
+    ((await (await server.fetch(get(token))).json()) as { endedAt?: number }).endedAt;
+
+  it('says when it was deleted, by the server’s clock', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(T0);
+    const server = memorySync();
+    const token = madeUpToken();
+    await server.fetch(put(SITE, token, null, sealed(100)));
+    vi.setSystemTime(T0 + DAY_MS);
+    await server.fetch(remove(token));
+    vi.setSystemTime(T0 + 3 * DAY_MS);
+    const answer = await server.fetch(get(token));
+    expect(answer.status).toBe(410);
+    expect(await answer.json()).toEqual({
+      error: 'The online copy was deleted.',
+      deletedAt: T0 + DAY_MS,
+    });
+  });
+
+  it('started again, says when the one before was deleted, through every change', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(T0);
+    const server = memorySync();
+    const token = madeUpToken();
+    expect((await server.fetch(put(SITE, token, null, sealed(100)))).status).toBe(200);
+    // A first copy: no deletion before it.
+    expect(await endedAt(server, token)).toBeUndefined();
+    vi.setSystemTime(T0 + DAY_MS);
+    await server.fetch(remove(token));
+    vi.setSystemTime(T0 + 2 * DAY_MS);
+    const second = await server.fetch(put(SITE, token, null, sealed(100)));
+    const { version } = (await second.json()) as { version: number };
+    expect(await endedAt(server, token)).toBe(T0 + DAY_MS);
+    expect((await server.fetch(put(SITE, token, version, sealed(200)))).status).toBe(200);
+    expect(await endedAt(server, token)).toBe(T0 + DAY_MS);
+    // Deleted again, and started again: the latest deletion.
+    vi.setSystemTime(T0 + 3 * DAY_MS);
+    await server.fetch(remove(token));
+    await server.fetch(remove(token));
+    vi.setSystemTime(T0 + 4 * DAY_MS);
+    expect((await server.fetch(put(SITE, token, null, sealed(100)))).status).toBe(200);
+    expect(await endedAt(server, token)).toBe(T0 + 3 * DAY_MS);
+  });
+
+  it('can’t be started again once moved to a new account key', async () => {
+    const server = memorySync();
+    const token = madeUpToken();
+    await server.fetch(put(SITE, token, null, sealed(100)));
+    await server.fetch(request(SITE, 'copy?moved', token, { method: 'DELETE' }));
+    const again = await server.fetch(put(SITE, token, null, sealed(100)));
+    expect(again.status).toBe(410);
+    expect(await again.json()).toMatchObject({ moved: true });
+  });
+});
+
 describe('the numbers the docs promise (audit 3 J-4)', () => {
   it('delete a copy nobody uses after 396 days', () => {
     // "13 months": the privacy page, docs/adr/0017-storage-limits.md.

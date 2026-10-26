@@ -25,7 +25,18 @@ const before = lockfileAt(base);
 const now = readFileSync('pnpm-lock.yaml', 'utf8');
 const added = addedPackages(before, now);
 const changed = changedPackages(before, now);
-const rules = releaseAgeRules(readFileSync('pnpm-workspace.yaml', 'utf8'));
+// The rules, exceptions included, are the base branch's: a pull request can't
+// let in a version it adds by listing it as an exception in the same change
+// (audit 4 H-1). An exception goes in a pull request of its own, merged first.
+const rules = releaseAgeRules(
+  execFileSync('git', ['show', `${base}:pnpm-workspace.yaml`], { encoding: 'utf8' }),
+);
+const proposed = releaseAgeRules(readFileSync('pnpm-workspace.yaml', 'utf8'));
+if (JSON.stringify(proposed) !== JSON.stringify(rules)) {
+  console.log(
+    `::warning title=Release age rules changed::This pull request changes minimumReleaseAge or its exceptions. They apply once it's merged; this check uses ${base}'s.`,
+  );
+}
 
 const elsewhere = unregisteredPackages(now).filter(
   (key) => !unregisteredPackages(before).includes(key),
@@ -72,7 +83,7 @@ console.log(`${added.length} package version(s) added to the lockfile; ${young.l
 if (young.length > 0) {
   const days = Math.round(rules.minutes / 1440);
   console.log(
-    `::error title=Too new::These were published less than ${days} days ago: ${young.join(', ')}. Wait, or for an urgent security fix list the package under minimumReleaseAgeExclude in pnpm-workspace.yaml.`,
+    `::error title=Too new::These were published less than ${days} days ago: ${young.join(', ')}. Wait, or for an urgent security fix list the package under minimumReleaseAgeExclude in pnpm-workspace.yaml, in a pull request of its own merged first (this check reads the list from ${base}).`,
   );
   process.exit(1);
 }

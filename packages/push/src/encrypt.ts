@@ -2,8 +2,9 @@
  * Web Push message encryption (RFC 8291, "aes128gcm" from RFC 8188).
  *
  * The phone encrypts each notification itself, to its own push subscription,
- * before sending it to our server. So the server (and Google's, Apple's or a
- * UnifiedPush push service) only ever carries text it can't read. Only the
+ * before sending it to our server. So the server (and Google's, Apple's,
+ * Mozilla's, Microsoft's or a UnifiedPush push service) only ever carries text
+ * it can't read. Only the
  * browser that created the subscription holds the private key to open it.
  *
  * decryptPayload() is what the browser does on arrival; it's here for tests.
