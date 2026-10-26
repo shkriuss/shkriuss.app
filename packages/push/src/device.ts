@@ -8,12 +8,19 @@
  * which backups skip: they belong to this device only.
  */
 import { fromBase64Url, toBase64Url } from './base64.ts';
+import type { Repeat } from './schedule.ts';
 
 const STORAGE_KEY = 'shkriuss-device:push';
 /** Device keys whose reminders are still on the server (it couldn't be reached to delete them). */
 const DELETE_KEY = 'shkriuss-device:push-delete';
 const API = '/api/push';
 const SERVICE_WORKER_TIMEOUT_MS = 10_000;
+/**
+ * The browser's push service must give a subscription within this long:
+ * one that never answers (a network that blocks it) kept "Turning on…" for
+ * ever (audit 4 G-7).
+ */
+export const SUBSCRIBE_TIMEOUT_MS = 30_000;
 /** The server must answer within this long (plus the time to send what's uploaded). */
 const ANSWER_MS = 20_000;
 /** A slow connection that still works, in bytes per millisecond (32 KB a second, about 256 kbit/s). */
@@ -47,6 +54,39 @@ export class PushError extends Error {
   }
 }
 
+/**
+ * One uploaded notification, as this device notes it: its timing as
+ * uploaded, a fingerprint of its tag and title (which reminder it is), and
+ * one of the message the server sends. Fingerprints, so nothing the app
+ * keeps is copied here; short lists, as the server keeps up to 500.
+ */
+export type SyncedEntry = [
+  start: string,
+  repeat: Repeat,
+  until: string | null,
+  offset: number,
+  reminder: string,
+  message: string,
+];
+
+/** What was last uploaded (./upload.ts). */
+export interface Synced {
+  /** When the server took it (ms). */
+  at: number;
+  /** When the server last said it still has this device (audit 4 F1-2). */
+  checked?: number;
+  /** The time zone it was worked out in. */
+  timeZone?: string;
+  /**
+   * The soonest notifications, as many as fit on the server (audit 3 F1-5),
+   * so what the server sends is known reminder by reminder (audit 4 F1-5).
+   * Missing in what older versions saved: then it's uploaded again.
+   */
+  entries?: SyncedEntry[];
+  /** Whether very long texts left out some of the soonest (they don't all fit on the server). */
+  more?: boolean;
+}
+
 export interface DeviceState {
   /** Random; identifies this device to the server (which stores only its hash). */
   deviceKey: string;
@@ -55,12 +95,7 @@ export interface DeviceState {
   auth: string;
   /** The server key the subscription was made with. */
   serverKey: string;
-  /**
-   * What was last uploaded, and when, and how many of the upcoming
-   * notifications that was: the soonest ones, as many as fit on the server
-   * (audit 3 F1-5; all of them, in what older versions saved).
-   */
-  synced?: { hash: string; at: number; count?: number };
+  synced?: Synced;
 }
 
 const isDeviceState = (value: unknown): value is DeviceState => {
@@ -149,13 +184,23 @@ export const isPushEnabled = (): boolean => load() !== null;
 /** True while reminders turned off on this device are still on the server. */
 export const isPushDeletePending = (): boolean => pendingDeletes().length > 0;
 
-export async function registration(): Promise<ServiceWorkerRegistration> {
+/** `promise`, or a rejection if it hasn't settled within `ms`. */
+function withTimeLimit<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
-    setTimeout(() => {
-      reject(new PushError('unavailable', 'The app’s service worker isn’t running.'));
-    }, SERVICE_WORKER_TIMEOUT_MS);
+    timer = setTimeout(() => {
+      reject(new PushError('unavailable', 'No answer in time.'));
+    }, ms);
   });
-  return Promise.race([navigator.serviceWorker.ready, timeout]);
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+export async function registration(): Promise<ServiceWorkerRegistration> {
+  try {
+    return await withTimeLimit(navigator.serviceWorker.ready, SERVICE_WORKER_TIMEOUT_MS);
+  } catch {
+    throw new PushError('unavailable', 'The app’s service worker isn’t running.');
+  }
 }
 
 export async function api(path: string, init: RequestInit, deviceKey?: string): Promise<Response> {
@@ -191,9 +236,12 @@ export const enablePush = (): Promise<void> => subscribe();
 /**
  * enablePush(), or with `renewing` (a device key), a subscription the browser
  * renewed: kept only if push is still on with that key, so turning it off
- * meanwhile isn't undone (audit 3 D-1).
+ * meanwhile isn't undone (audit 3 D-1). `forgotten`: the push address the
+ * server forgot (perhaps because the push service said it's gone): a new
+ * subscription in its place, but not in place of one another tab made since
+ * (audit 4 F1-2).
  */
-export async function subscribe(renewing?: string): Promise<void> {
+export async function subscribe(renewing?: string, forgotten?: string): Promise<void> {
   if (pushSupport() !== 'supported') {
     throw new PushError('unsupported', 'This browser can’t get notifications while closed.');
   }
@@ -209,17 +257,26 @@ export async function subscribe(renewing?: string): Promise<void> {
   let subscription = await worker.pushManager.getSubscription();
   // A subscription made with another server key can't be used with this one.
   const usedKey = subscription?.options.applicationServerKey;
-  if (subscription && (!usedKey || toBase64Url(new Uint8Array(usedKey)) !== publicKey)) {
-    await subscription.unsubscribe();
+  if (
+    subscription &&
+    (subscription.endpoint === forgotten ||
+      !usedKey ||
+      toBase64Url(new Uint8Array(usedKey)) !== publicKey)
+  ) {
+    await subscription.unsubscribe().catch(() => false);
     subscription = null;
   }
   try {
-    subscription ??= await worker.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: fromBase64Url(publicKey),
-    });
+    subscription ??= await withTimeLimit(
+      worker.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: fromBase64Url(publicKey),
+      }),
+      SUBSCRIBE_TIMEOUT_MS,
+    );
   } catch {
-    // For example a phone without Google services and no UnifiedPush.
+    // For example a phone without Google services and no UnifiedPush, or a
+    // network that blocks the push service, so it never answers.
     throw new PushError('unavailable', 'This browser couldn’t connect to a push service.');
   }
   const previous = load();

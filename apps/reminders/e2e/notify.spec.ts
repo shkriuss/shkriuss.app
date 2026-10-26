@@ -56,6 +56,50 @@ test('reminds at the time while Reminders is open', async ({ page }) => {
   await expect(page.locator('[data-groups] h3').first()).toHaveText('Overdue');
 });
 
+test('open in two tabs, a reminder goes off once, and is read out in the tab on screen', async ({
+  page,
+}) => {
+  // Each tab checked on its own, so it rang twice (audit 4 F1-6). Then only
+  // the tab that checked first read it out: often a hidden one, not heard.
+  await fakeNotifications(page, 'granted');
+  await page.clock.install({ time: NOW });
+  await page.goto('/');
+  await seed(page, [
+    reminder('a', 'Stretch', '2026-10-21', '10:04'),
+    reminder('b', 'Water the plants', '2026-10-21', '10:10'),
+  ]);
+  const other = await page.context().newPage();
+  await fakeNotifications(other, 'granted');
+  await other.goto('/');
+  /** As when another tab is in use. */
+  const hide = (tab: typeof page, hidden: boolean) =>
+    tab.evaluate((hidden) => {
+      Object.defineProperty(document, 'visibilityState', {
+        configurable: true,
+        get: () => (hidden ? 'hidden' : 'visible'),
+      });
+      document.dispatchEvent(new Event('visibilitychange'));
+    }, hidden);
+  const said = (tab: typeof page, text: string) =>
+    tab.getByRole('status').filter({ hasText: text }).count();
+  const shown = async (tab: typeof page) => ((await shownNotifications(tab)) as unknown[]).length;
+
+  // Whichever tab checks first, it's read out in the one on screen only.
+  await hide(page, true);
+  await page.clock.fastForward('05:00');
+  await expect.poll(() => said(other, 'Reminder: Stretch.')).toBe(1);
+  expect(await said(page, 'Reminder: Stretch.')).toBe(0);
+  await hide(page, false);
+  await hide(other, true);
+  await page.clock.fastForward('06:00');
+  await expect.poll(() => said(page, 'Reminder: Water the plants.')).toBe(1);
+  expect(await said(other, 'Reminder: Water the plants.')).toBe(0);
+  // And each shows as a notification once.
+  await page.clock.fastForward('01:00');
+  expect((await shown(page)) + (await shown(other))).toBe(2);
+  await other.close();
+});
+
 test('asks to show notifications when a reminder is set', async ({ page }) => {
   await fakeNotifications(page, 'default');
   await page.goto('/');

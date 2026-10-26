@@ -20,6 +20,7 @@ import {
   showNotifications,
   type Permission,
 } from '@shkriuss/ui/local-reminders';
+import { wentBackFar, type ReminderCheck } from '@shkriuss/ui/reminder-window';
 import {
   addDays,
   addMinutes,
@@ -31,7 +32,6 @@ import {
 } from '../lib/dates.ts';
 import { timeLabel, type Occurrence } from '../lib/events.ts';
 import { dueReminders } from '../lib/reminders.ts';
-import { noticesOf } from './push-reminders.ts';
 import { formatTime, plural, required, shortDate, utc, type CalendarPage } from './shared.ts';
 
 const CHECK_EVERY_MS = 20_000;
@@ -40,16 +40,26 @@ const STAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
 interface Checks {
   /** Reminders up to this time have been shown. */
   checkedUntil: Stamp;
+  /**
+   * When that was (ms since 1970), to tell the clock going back from time
+   * passing (audit 4 F1-1). Not in what older versions saved, which read
+   * what newer ones save too.
+   */
+  at?: number;
 }
 
 const checks = createStore<Checks>({
   key: 'calendar-reminders',
   version: 1,
   fallback: () => ({ checkedUntil: '' }),
-  validate: (value): value is Checks =>
-    typeof value === 'object' &&
-    value !== null &&
-    STAMP_PATTERN.test(String((value as Record<string, unknown>)['checkedUntil'])),
+  validate: (value): value is Checks => {
+    if (typeof value !== 'object' || value === null) return false;
+    const { checkedUntil, at } = value as Record<string, unknown>;
+    return (
+      STAMP_PATTERN.test(String(checkedUntil)) &&
+      (at === undefined || (typeof at === 'number' && Number.isFinite(at)))
+    );
+  },
 });
 
 const STATUS: Record<Permission, string> = {
@@ -77,7 +87,7 @@ export function mountReminderAlerts(root: Document, page: CalendarPage): Reminde
   /** Reminders on screen, as event id + the date that time of the event starts. */
   let shown: { id: string; start: IsoDate }[] = [];
   /** Used when the browser won't let Calendar save (it then works until the page closes). */
-  let checkedInMemory = '';
+  let checkedInMemory: ReminderCheck | null = null;
 
   function render(): void {
     const { events } = page.state();
@@ -100,20 +110,32 @@ export function mountReminderAlerts(root: Document, page: CalendarPage): Reminde
 
   function check(): void {
     const now = nowStamp();
-    const last = checks.load().checkedUntil || checkedInMemory;
-    const remember = (stamp: Stamp): void => {
-      checkedInMemory = stamp;
-      checks.save({ checkedUntil: stamp });
+    const current: ReminderCheck = { stamp: now, at: Date.now() };
+    const saved = checks.load();
+    // Saved by an older version, without when: as if just now, so only the
+    // time on the clock counts, as it did then.
+    const last: ReminderCheck | null = saved.checkedUntil
+      ? { stamp: saved.checkedUntil, at: saved.at ?? current.at }
+      : checkedInMemory;
+    const remember = (check: ReminderCheck): void => {
+      checkedInMemory = check;
+      checks.save({ checkedUntil: check.stamp, at: check.at });
     };
-    // First visit, or the clock was far ahead: start from now.
-    if (!last || last > addMinutes(now, 1440)) {
-      remember(now);
+    // First visit: start from now.
+    if (!last) {
+      remember(current);
       return;
     }
-    if (last >= now) return;
-    remember(now);
+    // The clock went back further than summer time does (a new time zone
+    // after flying west, say, also while Calendar was asleep or closed):
+    // from the minute now, or nothing would be checked until it caught up
+    // (audit 4 F1-1). Within that, the hour shown again was checked already.
+    const wentBack = now <= last.stamp && wentBackFar(last, current);
+    if (!wentBack && last.stamp >= now) return;
+    const from = wentBack ? addMinutes(now, -1) : last.stamp;
+    remember(current);
 
-    const due = dueReminders(page.state(), last, now).map(({ occurrence }) => occurrence);
+    const due = dueReminders(page.state(), from, now).map(({ occurrence }) => occurrence);
     if (due.length === 0) return;
     for (const { event, start } of due) {
       if (!shown.some((item) => item.id === event.id && item.start === start)) {
@@ -137,7 +159,7 @@ export function mountReminderAlerts(root: Document, page: CalendarPage): Reminde
         // once, also from two open tabs (audit 3 F1-6).
         tag: occurrence.event.id,
       })),
-      () => noticesOf(page.state().events),
+      { from, to: now },
     );
   }
 

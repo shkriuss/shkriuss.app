@@ -104,9 +104,13 @@ reach it), `@shkriuss/ui/local-reminders` (notifications while the app is
 open, with the same texts and the same iPhone and "blocked" cases in every
 app; after the page slept, only ones a few minutes late show, and on the
 night clocks go forward, ones in the skipped hour go off as the clocks
-change; Calendar, which lists reminders on its page and shows the ones
+change; after the clock goes back more than 2 hours (flying west), it
+checks from then on, and with the app open in two tabs, they share one
+check, so each reminder rings once; Calendar, which lists reminders on its page and shows the ones
 missed while it was closed, uses its parts, `mountNotificationStatus` and
-`showNotifications`, with its own words),
+`showNotifications`, with its own words, and `wentBackFar` from
+`@shkriuss/ui/reminder-window`, which tells flying west from summer time
+ending by the time that passed),
 `@shkriuss/ui/long-lists` (for lists that
 can grow to thousands: `shownCount` draws `PAGE_SIZE` (100) at a time behind
 a "Show more" button, always keeping what has focus or was just saved, and
@@ -164,7 +168,13 @@ window.addEventListener('storage', () => keepFocus(reload, addButton));
 Dialogs need nothing: when one closes after a redraw replaced the control
 that opened it, AppShell puts focus on its new copy. An app whose close
 handler moves focus itself (Shelf's forms) records `focusSpot()` when the
-dialog opens and calls `returnFocus(spot, fallback)` when it closes.
+dialog opens and calls `returnFocus(spot, fallback)` when it closes. And
+while a dialog is open, a screen reader can't hear the page behind it, its
+messages (`role="status"`) and problem notice included, so AppShell gives
+each dialog a hidden message area of its own and says there what they say
+meanwhile, like a reminder that comes due: in the dialog with focus, when one
+is open over another, and emptied when the dialog closes
+(`sayInOpenDialogs`, audit 4 G-2).
 
 QR codes (for example to open a link on another device) are drawn by a
 script, since their content is usually made on the page:

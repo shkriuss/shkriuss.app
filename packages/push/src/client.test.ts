@@ -16,6 +16,7 @@ import {
   timeLimit,
   type Notice,
 } from './client.ts';
+import { SUBSCRIBE_TIMEOUT_MS } from './device.ts';
 import { memoryPush } from './testing.ts';
 
 const ORIGIN = 'https://calendar.example';
@@ -104,6 +105,21 @@ function hangingNetwork(): { elapse(): void } {
 const subscription = async () =>
   (await navigator.serviceWorker.ready).pushManager.getSubscription();
 
+/** Web Locks, as browsers have them: each lock held by one tab at a time. */
+function memoryLocks() {
+  const queues = new Map<string, Promise<unknown>>();
+  return {
+    request: <T>(name: string, work: () => Promise<T>): Promise<T> => {
+      const result = (queues.get(name) ?? Promise.resolve()).then(work);
+      queues.set(
+        name,
+        result.catch(() => undefined),
+      );
+      return result;
+    },
+  };
+}
+
 /** A phone with notifications allowed, whose browser can subscribe to push. */
 async function phone(): Promise<void> {
   const keys = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, [
@@ -112,6 +128,8 @@ async function phone(): Promise<void> {
   const p256dh = await crypto.subtle.exportKey('raw', keys.publicKey);
   const auth = crypto.getRandomValues(new Uint8Array(16)).buffer;
   let subscription: object | null = null;
+  /** Each new subscription gets a push address of its own. */
+  let made = 0;
   const make = (endpoint: string, applicationServerKey: Uint8Array) => {
     const made = {
       endpoint,
@@ -127,7 +145,8 @@ async function phone(): Promise<void> {
   const pushManager = {
     getSubscription: async () => subscription,
     subscribe: async ({ applicationServerKey }: { applicationServerKey: Uint8Array }) => {
-      subscription = make(ENDPOINT, applicationServerKey);
+      made += 1;
+      subscription = make(`${ENDPOINT}/${made}`, applicationServerKey);
       return subscription;
     },
   };
@@ -183,6 +202,8 @@ beforeEach(async () => {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  // Also after a test that failed before putting the clock back.
+  vi.useRealTimers();
 });
 
 const notice = (overrides: Partial<Notice> = {}): Notice => ({
@@ -264,6 +285,12 @@ describe('syncPush', () => {
     expect(scheduled).toBeLessThan(500);
     expect(left).toBe(500 - scheduled);
     expect(storedIds()).toHaveLength(scheduled);
+    // Unchanged, it isn't uploaded again: the server has what it can.
+    expect(await syncPush(Array.from({ length: 500 }, (_, index) => long(index)))).toEqual({
+      scheduled,
+      left,
+    });
+    expect(requests.filter((request) => request.startsWith('PUT'))).toHaveLength(1);
   });
 
   it('tells a server that answers with a problem apart from one it can’t reach', async () => {
@@ -302,65 +329,130 @@ describe('syncPush', () => {
   });
 });
 
-// An open app shows reminders itself unless the server has them as they are
-// now: after a change that couldn't be uploaded, nothing else would (audit F1-7).
+// An open app shows reminders itself unless the server sends them: after a
+// change that couldn't be uploaded, nothing else would (audit F1-7).
 describe('pushHolds', () => {
-  const later = notice({ id: 'event-2', start: '2099-01-02T09:00', title: 'Gym' });
-  /** Whether the server has a reminder of these, by its tag. */
-  const holds = async (notices: Notice[], tag = 'any') => (await pushHolds(notices))(tag);
+  /** Due at 08:45 on 1 January 2099, 15 minutes before it starts. */
+  const dentist = notice({ tag: 'dentist' });
+  const gym = notice({ id: 'event-2', start: '2099-01-02T09:00', title: 'Gym', tag: 'gym' });
+  /** Whether the server sends `reminder` for an open app's check from `from` to `to`. */
+  const holds = async (reminder: Notice, from = '2099-01-01T08:44', to = '2099-01-01T08:45') => {
+    const tag = reminder.tag ?? '';
+    return (await pushHolds([{ tag, title: reminder.title }], { from, to }))(tag);
+  };
+  const puts = () => requests.filter((request) => request.startsWith('PUT')).length;
 
-  it('says whether the server has the notifications as they are now', async () => {
+  it('says whether the server sends a reminder that’s due', async () => {
     // Turned on, nothing uploaded yet.
-    expect(await holds([notice()])).toBe(false);
-    await syncPush([notice()]);
-    expect(await holds([notice()])).toBe(true);
-    // Changed here: not until it's uploaded.
-    expect(await holds([notice(), later])).toBe(false);
-    expect(await holds([notice({ title: 'Dentist at 10' })])).toBe(false);
-    await syncPush([notice(), later]);
-    expect(await holds([notice(), later])).toBe(true);
+    expect(await holds(dentist)).toBe(false);
+    await syncPush([dentist]);
+    expect(await holds(dentist)).toBe(true);
+    // Not at another time, nor one it doesn't have, nor with other words.
+    expect(await holds(dentist, '2099-01-01T08:45', '2099-01-01T08:46')).toBe(false);
+    expect(await holds(gym, '2099-01-02T08:44', '2099-01-02T08:45')).toBe(false);
+    expect(await holds({ ...dentist, title: 'Dentist at 10' })).toBe(false);
+    await syncPush([dentist, gym]);
+    expect(await holds(gym, '2099-01-02T08:44', '2099-01-02T08:45')).toBe(true);
   });
 
   it('is false after a change that couldn’t be uploaded, true again once it is', async () => {
-    await syncPush([notice()]);
+    await syncPush([dentist]);
     network = 'down';
-    await expect(syncPush([notice(), later])).rejects.toThrow(PushError);
-    expect(await holds([notice(), later])).toBe(false);
-    // What it does have.
-    expect(await holds([notice()])).toBe(true);
+    const moved = { ...dentist, start: '2099-01-01T10:00' };
+    await expect(syncPush([moved])).rejects.toThrow(PushError);
+    // The server sends it at 08:45, not now.
+    expect(await holds(moved, '2099-01-01T09:44', '2099-01-01T09:45')).toBe(false);
     network = 'up';
-    await syncPush([notice(), later]);
-    expect(await holds([notice(), later])).toBe(true);
+    await syncPush([moved]);
+    expect(await holds(moved, '2099-01-01T09:44', '2099-01-01T09:45')).toBe(true);
   });
 
-  it('stays true as time passes, also once a reminder is over', async () => {
-    const soon = notice({ start: '2099-01-01T09:00' });
-    await syncPush([soon, later]);
-    vi.useFakeTimers({ now: Date.UTC(2099, 0, 1, 12), toFake: ['Date'] });
-    expect(await holds([soon, later])).toBe(true);
-    vi.useRealTimers();
-  });
-
-  it('is false while push is off', async () => {
-    await syncPush([notice()]);
+  it('is false for one that was due before it was uploaded, and while push is off', async () => {
+    // Every day at 09:00, uploaded at 09:00 on 5 January: the server sends it the next day.
+    const daily = notice({ tag: 'pills', start: '2099-01-01T09:00', repeat: 'daily', offset: 0 });
+    vi.useFakeTimers({ now: new Date(2099, 0, 5, 9, 0, 30).getTime(), toFake: ['Date'] });
+    await syncPush([daily]);
+    expect(await holds(daily, '2099-01-05T08:59', '2099-01-05T09:00')).toBe(false);
+    expect(await holds(daily, '2099-01-06T08:59', '2099-01-06T09:00')).toBe(true);
     await disablePush();
-    expect(await holds([notice()])).toBe(false);
+    expect(await holds(daily, '2099-01-06T08:59', '2099-01-06T09:00')).toBe(false);
+  });
+
+  // Habits' and Water's reminders start from today: at midnight they're
+  // worked out again, though the server sends the same ones; and Meals lists
+  // only reminders still to come. Compared as a whole, they looked changed:
+  // the open page showed a reminder the server sent too, and uploaded them
+  // again (audit 4 F1-5). Compared one by one, and from now on, they're not.
+  const pad = (value: number) => String(value).padStart(2, '0');
+  /** A reminder at `time` every week, for each of the 7 days from `from` days after Monday 5 January 2099. */
+  const week = (tag: string, time: string, from: number) =>
+    Array.from({ length: 7 }, (_, index) => {
+      const date = new Date(2099, 0, 5 + from + index);
+      const day = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+      return notice({
+        id: `${tag}~${date.getDay()}`,
+        tag,
+        title: tag,
+        start: `${day}T${time}`,
+        repeat: 'weekly',
+        offset: 0,
+      });
+    });
+
+  it('stays true when the same reminders are worked out from the next day', async () => {
+    const habits = (from: number) => [
+      ...week('read', '21:00', from),
+      ...week('pills', '00:00', from),
+    ];
+    // Monday 10:00.
+    vi.useFakeTimers({ now: new Date(2099, 0, 5, 10).getTime(), toFake: ['Date'] });
+    await syncPush(habits(0));
+    // "Read" goes off at 21:00, then "Pills" at 00:00, worked out from Tuesday by then.
+    vi.setSystemTime(new Date(2099, 0, 5, 21, 0, 10).getTime());
+    expect(await holds(habits(0)[0] as Notice, '2099-01-05T20:59', '2099-01-05T21:00')).toBe(true);
+    vi.setSystemTime(new Date(2099, 0, 6, 0, 0, 10).getTime());
+    const pills = habits(1)[7] as Notice;
+    expect(await holds(pills, '2099-01-05T23:59', '2099-01-06T00:00')).toBe(true);
+    // Nor is it uploaded again for it.
+    await syncPush(habits(1));
+    expect(puts()).toBe(1);
+    // A real change still counts.
+    const moved = habits(1).map((one, index) =>
+      index === 7 ? { ...one, start: '2099-01-06T08:00' } : one,
+    );
+    expect(await holds(moved[7] as Notice, '2099-01-06T07:59', '2099-01-06T08:00')).toBe(false);
+    await syncPush(moved);
+    expect(puts()).toBe(2);
+  });
+
+  it('stays true for a reminder no longer listed once it’s due, as in Meals', async () => {
+    const meal = (tag: string, start: string) =>
+      notice({ id: tag, tag, title: tag, start, offset: 0 });
+    const dinner = meal('Dinner: Soup', '2099-01-05T18:00');
+    const lunch = meal('Lunch: Salad', '2099-01-06T12:00');
+    vi.useFakeTimers({ now: new Date(2099, 0, 5, 17).getTime(), toFake: ['Date'] });
+    await syncPush([dinner, lunch]);
+    vi.setSystemTime(new Date(2099, 0, 5, 18, 0, 5).getTime());
+    expect(await holds(dinner, '2099-01-05T17:59', '2099-01-05T18:00')).toBe(true);
+    await syncPush([lunch]);
+    expect(puts()).toBe(1);
   });
 
   // Only the 500 soonest fit on the server, but it said it held them all, so
   // the open app showed none of the rest either (audit 3 F1-5).
+  const dateOf = (index: number) =>
+    new Date(Date.UTC(2099, 0, 1) + index * 86_400_000).toISOString().slice(0, 10);
+  /** At 09:00 on day `index`, due at 08:45. */
   const day = (index: number, tag = `e${index}`) =>
-    notice({
-      id: `e${index}`,
-      tag,
-      start: new Date(Date.UTC(2099, 0, 1) + index * 86_400_000).toISOString().slice(0, 16),
-    });
+    notice({ id: `e${index}`, tag, start: `${dateOf(index)}T09:00` });
+  /** Whether the server sends the reminder on day `index`, by its tag. */
+  const holdsOn = (index: number, tag = `e${index}`) =>
+    holds(day(index, tag), `${dateOf(index)}T08:44`, `${dateOf(index)}T08:45`);
 
   it('holds only the reminders that fit on the server', async () => {
     const notices = Array.from({ length: 520 }, (_, index) => day(index));
     expect(await syncPush(notices)).toEqual({ scheduled: 500, left: 20 });
-    const held = await pushHolds(notices);
-    expect([held('e0'), held('e499'), held('e500'), held('e519')]).toEqual([
+    expect([await holdsOn(0), await holdsOn(499), await holdsOn(500), await holdsOn(519)]).toEqual([
       true,
       true,
       false,
@@ -368,15 +460,144 @@ describe('pushHolds', () => {
     ]);
     // Unchanged, it isn't uploaded again, and still says so.
     expect(await syncPush(notices)).toEqual({ scheduled: 500, left: 20 });
-    expect(requests.filter((request) => request.startsWith('PUT'))).toHaveLength(1);
+    expect(puts()).toBe(1);
   });
 
-  it('leaves a reminder to the open app too when one that didn’t fit has its tag', async () => {
+  it('moves the server’s 500 on when the soonest are over', async () => {
+    const notices = Array.from({ length: 520 }, (_, index) => day(index));
+    vi.useFakeTimers({ now: Date.UTC(2098, 11, 31), toFake: ['Date'] });
+    await syncPush(notices);
+    // The first two are over (each is due at 08:45 on its day, in any time zone by the 3rd).
+    vi.setSystemTime(Date.UTC(2099, 0, 3));
+    expect(await syncPush(notices.slice(2))).toEqual({ scheduled: 500, left: 18 });
+    expect(puts()).toBe(2);
+    expect(await holdsOn(501)).toBe(true);
+  });
+
+  it('holds a tag one that didn’t fit has too, only when the server has it', async () => {
     // Like a habit's reminders on each of its days, with one tag.
     const notices = Array.from({ length: 501 }, (_, index) => day(index, `e${index % 500}`));
     await syncPush(notices);
-    const held = await pushHolds(notices);
-    expect([held('e1'), held('e0')]).toEqual([true, false]);
+    expect([await holdsOn(1), await holdsOn(0, 'e0'), await holdsOn(500, 'e0')]).toEqual([
+      true,
+      true,
+      false,
+    ]);
+  });
+});
+
+// The server forgets a device whose push service said it's gone, or with
+// nothing through for two days. The switch said On, nothing was sent, and the
+// open app left its reminders to the server (audit 4 F1-2).
+describe('a device the server forgot', () => {
+  const asked = () => requests.filter((request) => request === 'GET /api/push/schedule').length;
+  const deviceKey = () =>
+    (JSON.parse(localStorage.getItem('shkriuss-device:push') ?? '{}') as { deviceKey: string })
+      .deviceKey;
+  const forget = () =>
+    server.fetch(
+      new Request(`${ORIGIN}/api/push/schedule`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${deviceKey()}` },
+      }),
+    );
+
+  const dentist = notice({ tag: 'dentist' });
+  /** Whether the server sends the dentist's reminder, as far as this device knows. */
+  const held = () =>
+    pushHolds([{ tag: 'dentist', title: 'Dentist' }], {
+      from: '2099-01-01T08:44',
+      to: '2099-01-01T08:45',
+    }).then((holds) => holds('dentist'));
+  /** The push address the server sends to. */
+  const serverEndpoint = () =>
+    [...server.devices.values()].map(
+      ({ storage }) => (storage.map.get('device') as { endpoint: string } | undefined)?.endpoint,
+    );
+
+  it('is noticed within a day, and gets a new subscription and its schedule again', async () => {
+    vi.useFakeTimers({ now: Date.UTC(2026, 9, 22), toFake: ['Date'] });
+    await syncPush([dentist]);
+    await forget();
+    // The same day: not asked.
+    vi.setSystemTime(Date.UTC(2026, 9, 22, 20));
+    await syncPush([dentist]);
+    expect(asked()).toBe(0);
+    // A day on: asked, and found forgotten.
+    vi.setSystemTime(Date.UTC(2026, 9, 23, 1));
+    requests = [];
+    const before = await subscription();
+    expect(await syncPush([dentist])).toEqual({ scheduled: 1, left: 0 });
+    expect(requests).toEqual([
+      'GET /api/push/schedule',
+      'GET /api/push/key',
+      'PUT /api/push/schedule',
+    ]);
+    expect(await subscription()).not.toBe(before);
+    expect(await held()).toBe(true);
+    // Kept now: not asked again that day.
+    await syncPush([dentist]);
+    expect(asked()).toBe(1);
+  });
+
+  it('is subscribed again once when two tabs find it forgotten at the same time', async () => {
+    // Both made a new subscription, and the second could undo the first's,
+    // which the first then uploaded: nothing would arrive.
+    vi.stubGlobal('navigator', { ...navigator, locks: memoryLocks() });
+    vi.useFakeTimers({ now: Date.UTC(2026, 9, 22), toFake: ['Date'] });
+    await syncPush([dentist]);
+    await forget();
+    vi.setSystemTime(Date.UTC(2026, 9, 23, 1));
+    requests = [];
+    await Promise.all([syncPush([dentist]), syncPush([dentist])]);
+    expect(asked()).toBe(1);
+    expect(requests.filter((request) => request === 'GET /api/push/key')).toHaveLength(1);
+    // The server sends to the address the browser has.
+    expect(serverEndpoint()).toEqual([(await subscription())?.endpoint]);
+    expect(await held()).toBe(true);
+  });
+
+  it('keeps an upload another tab made while it asked', async () => {
+    vi.useFakeTimers({ now: Date.UTC(2026, 9, 22), toFake: ['Date'] });
+    await syncPush([dentist]);
+    vi.setSystemTime(Date.UTC(2026, 9, 23, 1));
+    const asking = holdNext('GET /api/push/schedule', 'after');
+    const checking = syncPush([dentist]);
+    await asking.arrived;
+    // A change uploaded meanwhile (from another tab, say).
+    const moved = { ...dentist, start: '2099-01-01T10:00' };
+    await syncPush([moved]);
+    asking.release();
+    await checking;
+    // The server has the change: noting its check didn't put back what it had before.
+    expect(
+      await pushHolds([{ tag: 'dentist', title: 'Dentist' }], {
+        from: '2099-01-01T09:44',
+        to: '2099-01-01T09:45',
+      }).then((holds) => holds('dentist')),
+    ).toBe(true);
+    expect(await held()).toBe(false);
+  });
+
+  it('asks again later when the server can’t be reached, and not at all with nothing to send', async () => {
+    vi.useFakeTimers({ now: Date.UTC(2026, 9, 22), toFake: ['Date'] });
+    await syncPush([notice()]);
+    vi.setSystemTime(Date.UTC(2026, 9, 23, 1));
+    network = 'down';
+    await syncPush([notice()]);
+    network = 'up';
+    await syncPush([notice()]);
+    expect(asked()).toBe(2);
+    // Still there: asked again only a day on.
+    await syncPush([notice()]);
+    expect(asked()).toBe(2);
+
+    // Only reminders that are over: the server has nothing to keep.
+    const over = notice({ start: '2026-10-22T09:00' });
+    await syncPush([over], { force: true });
+    vi.setSystemTime(Date.UTC(2026, 9, 25));
+    await syncPush([over]);
+    expect(asked()).toBe(2);
   });
 });
 
@@ -388,6 +609,23 @@ describe('enablePush', () => {
     const error = await enablePush().catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(PushError);
     expect((error as PushError).code).toBe('storage');
+    expect(isPushEnabled()).toBe(false);
+  });
+
+  // A push service that never answers (a network that blocks it) kept
+  // "Turning on…" for ever (audit 4 G-7).
+  it('gives up on a push service that never answers', async () => {
+    await disablePush();
+    const { pushManager } = (await navigator.serviceWorker.ready) as unknown as {
+      pushManager: { subscribe: () => Promise<never> };
+    };
+    pushManager.subscribe = () => new Promise<never>(() => undefined);
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const turningOn = enablePush().catch((caught: unknown) => caught);
+    await vi.advanceTimersByTimeAsync(SUBSCRIBE_TIMEOUT_MS);
+    const error = await turningOn;
+    expect(error).toBeInstanceOf(PushError);
+    expect((error as PushError).code).toBe('unavailable');
     expect(isPushEnabled()).toBe(false);
   });
 });

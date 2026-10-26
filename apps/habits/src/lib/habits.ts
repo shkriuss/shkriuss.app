@@ -419,8 +419,10 @@ export function reminderNotices(
 }
 
 /**
- * Habits whose reminder time came after `from` and up to `to` (local times,
- * the same day as `to`), planned that day and not done yet.
+ * Habits whose reminder time came after `from` and up to `to` (local times),
+ * planned that day and not done yet. Both days a check covers count, so a
+ * page that wakes just after midnight still has one from just before it
+ * (audit 4 F1-11).
  */
 export function dueReminders(
   habits: HabitsState,
@@ -428,10 +430,14 @@ export function dueReminders(
   from: Stamp,
   to: Stamp,
 ): Habit[] {
-  const date = to.slice(0, 10);
-  return habits.habits.filter((habit) => {
-    if (!habit.reminder || !isPlanned(habit, date) || doneOn(checks, habit.id, date)) return false;
-    const due = toStamp(date, habit.reminder);
-    return from < due && due <= to;
-  });
+  const dates = [...new Set([from.slice(0, 10), to.slice(0, 10)])];
+  return habits.habits.filter((habit) =>
+    dates.some((date) => {
+      if (!habit.reminder || !isPlanned(habit, date) || doneOn(checks, habit.id, date)) {
+        return false;
+      }
+      const due = toStamp(date, habit.reminder);
+      return from < due && due <= to;
+    }),
+  );
 }

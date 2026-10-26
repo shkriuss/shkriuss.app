@@ -220,7 +220,16 @@ test('typing while a sync keeps both versions leaves one second version: the oth
   await bodyBox(page).pressSequentially('!');
 
   // Back online: the sync starts at once, and ends while the typing waits.
+  // It starts from a timer set when the page hears it's online, which can
+  // come a moment after going online here: the clock moves on once it has.
+  await page.evaluate(() => {
+    const target = window as unknown as Record<string, unknown>;
+    target['backOnline'] = new Promise<void>((resolve) => {
+      window.addEventListener('online', () => resolve(), { once: true });
+    });
+  });
   await page.context().setOffline(false);
+  await page.evaluate(() => (window as unknown as Record<string, unknown>)['backOnline']);
   await page.clock.runFor(10);
   await expect
     .poll(() => savedNotes(page), { timeout: 15_000 })

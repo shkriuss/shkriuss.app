@@ -32,13 +32,14 @@ import {
   emptySettings,
   everyLabel,
   formatAmount,
-  goalReached,
+  GOAL_REACHED,
   inUnit,
   isDrinksState,
   isSettingsState,
   LIMITS,
   progressText,
   pruneDrinks,
+  reachedOn,
   recentDays,
   remindersOf,
   removeDrink,
@@ -197,7 +198,7 @@ export function mountWater(root: Document): void {
     if (!entry.reached) required<HTMLElement>(item, '[data-day-reached]').remove();
     const bar = required<HTMLProgressElement>(item, '[data-day-progress]');
     bar.max = goal;
-    // Full once reached (in ounces, that can be a millilitre short).
+    // Full once reached (that can be a little short: see reachedOn).
     bar.value = entry.reached ? goal : Math.min(entry.ml, goal);
     return item;
   }
@@ -205,12 +206,13 @@ export function mountWater(root: Document): void {
   function renderToday(): void {
     const total = totalOn(drinks, day, unit());
     const goal = amountOf(settings, 'goal');
+    const reached = reachedOn(drinks, day, goal);
     dateText.textContent = dateFormat.format(dateOf(day));
     totalText.textContent = amount(total);
     goalText.textContent = amount(goal);
     progress.max = goal;
-    progress.value = goalReached(total, goal, unit()) ? goal : Math.min(total, goal);
-    leftText.textContent = progressText(total, goal, unit());
+    progress.value = reached ? goal : Math.min(total, goal);
+    leftText.textContent = reached ? GOAL_REACHED : progressText(total, goal, unit());
     for (const size of ['glass', 'bottle'] as const) {
       required<HTMLElement>(root, `[data-size="${size}"]`).textContent = amount(
         amountOf(settings, size),
@@ -225,7 +227,7 @@ export function mountWater(root: Document): void {
   function renderHistory(): void {
     const goal = amountOf(settings, 'goal');
     const days = recentDays(drinks, goal, day, 7, unit());
-    const count = streak(drinks, goal, day, unit());
+    const count = streak(drinks, goal, day);
     streakLine.textContent = streakText(count);
     streakLine.hidden = count === 0;
     averageLine.textContent = days.some((entry) => entry.ml > 0)
@@ -276,13 +278,12 @@ export function mountWater(root: Document): void {
   /** Adds a drink; says what's wrong instead if the day is full. */
   function add(ml: number, date: IsoDate, time: IsoTime): void {
     const goal = amountOf(settings, 'goal');
-    const before = totalOn(drinks, day, unit());
     const next = addDrink(drinks, { id: crypto.randomUUID(), date, time, ml });
     const total = totalOn(next, day, unit());
     const when = date === day ? '' : ` ${dayLabel(date, day).toLowerCase()}`;
     let message = `Added ${amount(ml)}${when}. ${amount(total)} of ${amount(goal)} today.`;
-    if (!goalReached(before, goal, unit()) && goalReached(total, goal, unit())) {
-      message += ' Goal reached. Well done!';
+    if (!reachedOn(drinks, day, goal) && reachedOn(next, day, goal)) {
+      message += ` ${GOAL_REACHED}`;
     }
     save({ drinks: next }, message);
   }

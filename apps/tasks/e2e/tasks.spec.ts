@@ -229,6 +229,59 @@ test('saving the form keeps what changed elsewhere while it was open', async ({ 
   await expect(page.locator('[data-done-summary]')).toHaveText('Done (1)');
 });
 
+test('a task deleted elsewhere while its form is open', async ({ page }) => {
+  // Delete did nothing, and Save with no change put it back everywhere
+  // (audit 4 F1-3). Now the form says so, and only a change brings it back.
+  const gone =
+    'This task was deleted on another device or in another tab. Saving a change brings it back.';
+  const deleteElsewhere = async (title: string) => {
+    const other = await page.context().newPage();
+    await other.goto('/');
+    await other.getByRole('button', { name: `Edit ${title}` }).click();
+    await editor(other).getByRole('button', { name: 'Delete' }).click();
+    await other
+      .getByRole('dialog', { name: 'Delete this task?' })
+      .getByRole('button', { name: 'Delete' })
+      .click();
+    await expect(editor(other)).toBeHidden();
+    await other.close();
+  };
+  await seed(page, [{ title: 'Call the bank' }, { title: 'Buy bread' }, { title: 'Pay rent' }]);
+
+  // Save with no change: it stays deleted.
+  await page.getByRole('button', { name: 'Edit Call the bank' }).click();
+  await deleteElsewhere('Call the bank');
+  await expect(editor(page).locator('[data-gone-note]')).toHaveText(gone);
+  await expect(editor(page).locator('[data-dialog-messages]')).toHaveText(gone);
+  await checkA11y(page, 'form of a task deleted elsewhere');
+  await editor(page).getByRole('button', { name: 'Save' }).click();
+  await expect(editor(page)).toBeHidden();
+  await expect(
+    page
+      .getByRole('status')
+      .filter({ hasText: 'Call the bank stays deleted: nothing in it was changed.' }),
+  ).toBeAttached();
+  await expect(row(page, 'Call the bank')).toHaveCount(0);
+  await expect(titles(page)).toHaveCount(2);
+
+  // Delete: it was already deleted.
+  await page.getByRole('button', { name: 'Edit Buy bread' }).click();
+  await deleteElsewhere('Buy bread');
+  await editor(page).getByRole('button', { name: 'Delete' }).click();
+  await expect(editor(page)).toBeHidden();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Buy bread was already deleted.' }),
+  ).toBeAttached();
+  await expect(page.getByRole('heading', { name: 'All tasks' })).toBeFocused();
+
+  // A change brings it back, as with sync.
+  await page.getByRole('button', { name: 'Edit Pay rent' }).click();
+  await deleteElsewhere('Pay rent');
+  await editor(page).getByLabel('Title').fill('Pay the rent');
+  await editor(page).getByRole('button', { name: 'Save' }).click();
+  await expect(titles(page)).toHaveText(['Pay the rent']);
+});
+
 test('deletes a task, and done ones, with a confirmation', async ({ page }) => {
   await seed(page, [
     { title: 'Old receipt', done: 5 },

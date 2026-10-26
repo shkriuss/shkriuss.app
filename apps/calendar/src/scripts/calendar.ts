@@ -136,6 +136,7 @@ export function mountCalendar(root: Document): void {
       state = store.load();
       // Drawn again in the background: keyboard focus stays where it was (audit G-3).
       keepFocus(render, newEventButton);
+      refreshEditor();
       pushReminders.sync();
     },
   });
@@ -252,6 +253,9 @@ export function mountCalendar(root: Document): void {
     const item = required<HTMLLIElement>(fragment, 'li');
     const { event } = occurrence;
     item.dataset['id'] = event.id;
+    // Each day a repeating event is listed on is an item of its own: focus
+    // kept through a redraw stays on that day's, not the first (audit 4 G-3).
+    item.dataset['day'] = day;
     const time = timeLabel(occurrence, day, formatTime);
     const when = withDate ? `${shortDate.format(utc(day))} · ${time}` : time;
     required<HTMLElement>(item, '[data-when]').textContent = when;
@@ -336,6 +340,16 @@ export function mountCalendar(root: Document): void {
 
   /** The editor (./event-editor.ts), loaded the first time it opens. */
   let editor: Promise<EventEditor> | null = null;
+
+  /** After a change from another device or tab: the editor says if its event was deleted there. */
+  function refreshEditor(): void {
+    void editor?.then(
+      (loaded) => {
+        loaded.refresh();
+      },
+      () => undefined,
+    );
+  }
 
   function openEditor(event: CalendarEvent | null): void {
     // Where focus goes back to when it closes: where it is now, before loading.
@@ -445,6 +459,7 @@ export function mountCalendar(root: Document): void {
     if (storageEvent.key === store.key) {
       state = store.load();
       keepFocus(render, newEventButton);
+      refreshEditor();
       pushReminders.sync();
     }
   });

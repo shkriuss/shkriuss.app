@@ -677,14 +677,19 @@ export function reminderNotices(settings: SettingsState, today: IsoDate): Notice
   ];
 }
 
-/** Whether the reminder went off after `from` and up to `to` (local times, the same day as `to`). */
+/**
+ * Whether the reminder went off after `from` and up to `to` (local times).
+ * Both days a check covers count, so a page that wakes just after midnight
+ * still has one from just before it (audit 4 F1-11).
+ */
 export function reminderDue(settings: SettingsState, from: Stamp, to: Stamp): boolean {
   const reminder = reminderOf(settings);
   if (!reminder.on) return false;
-  const date = to.slice(0, 10);
-  if (reminderDate(reminder.day, date) !== date) return false;
-  const due = toStamp(date, reminder.time);
-  return from < due && due <= to;
+  return [...new Set([from.slice(0, 10), to.slice(0, 10)])].some((date) => {
+    if (reminderDate(reminder.day, date) !== date) return false;
+    const due = toStamp(date, reminder.time);
+    return from < due && due <= to;
+  });
 }
 
 /** When the reminder goes off next, after `now` (local time), or null if it's off. */

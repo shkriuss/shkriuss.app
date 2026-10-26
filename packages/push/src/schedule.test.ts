@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   cachedTimeZones,
   canonicalTimeZone,
+  dueBetween,
   isDate,
   nextFireTime,
   parseStamp,
+  wallOf,
   type Timing,
 } from './schedule.ts';
 
@@ -71,6 +73,38 @@ describe('nextFireTime', () => {
       '2026-09-06T04:30:00.000Z',
       '2026-09-07T03:30:00.000Z',
     ]);
+  });
+
+  // A time worked back from an event isn't one the person chose: an hour
+  // later was after the event had started (audit 4 F1-4).
+  it('sends a reminder before an event as the clocks skip past its time, never after the start', () => {
+    for (const [zone, start, before, changed] of [
+      // Berlin skips 02:00–03:00 on 29 March: 15 minutes before 03:10 is 02:55.
+      ['Europe/Berlin', '2026-03-29T03:10', 15, '2026-03-29T01:00:00.000Z'],
+      ['America/New_York', '2026-03-08T03:15', 30, '2026-03-08T07:00:00.000Z'],
+      // Santiago skips 00:00–01:00 on 6 September.
+      ['America/Santiago', '2026-09-06T01:05', 10, '2026-09-06T04:00:00.000Z'],
+      // Lord Howe skips half an hour, 02:00–02:30, on 4 October.
+      ['Australia/Lord_Howe', '2026-10-04T02:40', 15, '2026-10-03T15:30:00.000Z'],
+    ] as const) {
+      const train = timing({ start, offset: before });
+      expect(iso(nextFireTime(train, zone, at(changed) - 6 * 60 * 60 * 1000)), zone).toBe(changed);
+    }
+    // An event in the skipped time itself: its reminder as the clocks change too.
+    const inGap = timing({ start: '2026-03-29T02:30', offset: 15 });
+    expect(iso(nextFireTime(inGap, 'Europe/Berlin', at('2026-03-28T00:00:00Z')))).toBe(
+      '2026-03-29T01:00:00.000Z',
+    );
+    // After the start ("10 minutes after"), in the skipped time: as the clocks change too.
+    const after = timing({ start: '2026-03-29T01:55', offset: -10 });
+    expect(iso(nextFireTime(after, 'Europe/Berlin', at('2026-03-28T00:00:00Z')))).toBe(
+      '2026-03-29T01:00:00.000Z',
+    );
+    // A time the person chose in it still goes off an hour later (as before).
+    const chosen = timing({ start: '2026-03-29T02:55' });
+    expect(iso(nextFireTime(chosen, 'Europe/Berlin', at('2026-03-28T00:00:00Z')))).toBe(
+      '2026-03-29T01:55:00.000Z',
+    );
   });
 
   // In the hour that repeats when clocks go back, the server took the second
@@ -146,6 +180,41 @@ describe('nextFireTime', () => {
     expect(iso(nextFireTime(yearly, 'UTC', at('2026-10-17T00:00:00Z')))).toBe(
       '2027-10-16T09:00:00.000Z',
     );
+  });
+});
+
+// What the notification service sends for the local times an open app
+// checks (audit 4 F1-5).
+describe('dueBetween', () => {
+  const between = (t: Timing, timeZone: string, from: string, to: string) =>
+    dueBetween(t, timeZone, wallOf(from) ?? 0, wallOf(to) ?? 0).map(iso);
+
+  it('finds each time due after the first local time and up to the second', () => {
+    const daily = timing({ start: '2026-10-01T09:00', repeat: 'daily', offset: 15 });
+    // 08:45 in Tbilisi (UTC+4).
+    expect(between(daily, 'Asia/Tbilisi', '2026-10-20T08:44', '2026-10-20T08:45')).toEqual([
+      '2026-10-20T04:45:00.000Z',
+    ]);
+    expect(between(daily, 'Asia/Tbilisi', '2026-10-20T08:45', '2026-10-20T08:46')).toEqual([]);
+    expect(between(daily, 'Asia/Tbilisi', '2026-09-30T08:44', '2026-09-30T08:45')).toEqual([]);
+    expect(between(daily, 'Asia/Tbilisi', '2026-10-20T08:00', '2026-10-22T08:00')).toEqual([
+      '2026-10-20T04:45:00.000Z',
+      '2026-10-21T04:45:00.000Z',
+    ]);
+    const once = timing({ start: '2026-10-20T00:05', offset: 10 });
+    // 23:55 the day before.
+    expect(between(once, 'UTC', '2026-10-19T23:50', '2026-10-20T00:00')).toEqual([
+      '2026-10-19T23:55:00.000Z',
+    ]);
+  });
+
+  it('gives a time the clocks skip as the server sends it', () => {
+    // Berlin skips 02:00–03:00 on 29 March: an open app finds 02:30 due as
+    // the clocks change, the server sends it at 03:30 (01:30 UTC).
+    const berlin = timing({ start: '2026-03-29T02:30' });
+    expect(between(berlin, 'Europe/Berlin', '2026-03-29T01:59', '2026-03-29T03:00')).toEqual([
+      '2026-03-29T01:30:00.000Z',
+    ]);
   });
 });
 

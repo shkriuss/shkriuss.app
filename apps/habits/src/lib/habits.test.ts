@@ -367,6 +367,16 @@ describe('reminders', () => {
     expect(names('2026-10-18T07:00', '2026-10-18T08:00')).toEqual(['Water']);
   });
 
+  it('finds one from just before midnight when the page wakes just after it (audit 4 F1-11)', () => {
+    const late = { habits: [{ ...daily, reminder: '23:59' }] };
+    const names = (checks = emptyChecks()) =>
+      dueReminders(late, checks, '2026-10-19T23:57', '2026-10-20T00:02').map((habit) => habit.name);
+    expect(names()).toEqual(['Water']);
+    // Done that day: not; done the new day only: still.
+    expect(names(setDone(emptyChecks(), 'water', MONDAY, true))).toEqual([]);
+    expect(names(setDone(emptyChecks(), 'water', '2026-10-20', true))).toEqual(['Water']);
+  });
+
   it('shows times the local way', () => {
     expect(timeLabel('07:30', 'en-GB')).toBe('7:30');
     expect(timeLabel('20:00', 'en-US')).toMatch(/^8:00\sPM$/);

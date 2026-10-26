@@ -138,6 +138,41 @@ export function zonedMoment(wall: number, timeZone: string): number {
   return wall - before;
 }
 
+/**
+ * The first moment when clocks in `timeZone` show `wall` or later: for a
+ * time the clocks skip, the moment they change. Clocks change on whole
+ * minutes, so it's found to the minute, between the moments `wall` would be
+ * with the offset before and after.
+ */
+function firstShowing(wall: number, timeZone: string): number {
+  const offsets = [DAY, -DAY].map((shift) => wallClock(wall + shift, timeZone) - (wall + shift));
+  let low = Math.floor((wall - Math.max(...offsets)) / MINUTE);
+  let high = Math.ceil((wall - Math.min(...offsets)) / MINUTE);
+  if (wallClock(low * MINUTE, timeZone) >= wall) return low * MINUTE;
+  while (high - low > 1) {
+    const middle = Math.floor((low + high) / 2);
+    if (wallClock(middle * MINUTE, timeZone) >= wall) high = middle;
+    else low = middle;
+  }
+  return high * MINUTE;
+}
+
+/**
+ * When a notification `offset` minutes before an occurrence that starts at
+ * `start` (wall ms) is due. In the time the clocks skip in spring: a time
+ * the person chose (no offset) goes off as much later as they skip, as
+ * zonedMoment says; one worked back from a start ("15 minutes before") goes
+ * off as the clocks change, as an open app does, and never after the start
+ * (audit 4 F1-4).
+ */
+function momentOf(start: number, offset: number, timeZone: string): number {
+  const wall = start - offset * MINUTE;
+  const moment = zonedMoment(wall, timeZone);
+  if (offset === 0 || wallClock(moment, timeZone) === wall) return moment;
+  const changed = firstShowing(wall, timeZone);
+  return offset > 0 ? Math.min(changed, zonedMoment(start, timeZone)) : changed;
+}
+
 /** Start times (wall ms) of each occurrence that starts on or after `fromDay` (days since 1970). */
 function* occurrences(timing: Timing, fromDay: number): Generator<number> {
   const start = parseStamp(timing.start);
@@ -189,19 +224,54 @@ function* occurrences(timing: Timing, fromDay: number): Generator<number> {
 }
 
 /**
- * The first moment (ms) after `after` when this notification is due, or null
- * if it never is again.
+ * The next time this notification is due after `after`: the moment (ms),
+ * and the start of the occurrence it's for ("YYYY-MM-DDTHH:MM", local), or
+ * null if it never is again.
  */
-export function nextFireTime(timing: Timing, timeZone: string, after: number): number | null {
+export function nextOccurrence(
+  timing: Timing,
+  timeZone: string,
+  after: number,
+): { moment: number; start: string } | null {
   // Start looking a day early: time zones and offsets shift things by hours.
-  const offset = timing.offset * MINUTE;
-  const fromDay = Math.floor((wallClock(after, timeZone) + offset) / DAY) - 1;
+  const fromDay = Math.floor((wallClock(after, timeZone) + timing.offset * MINUTE) / DAY) - 1;
   let steps = 0;
   for (const start of occurrences(timing, fromDay)) {
-    const moment = zonedMoment(start - offset, timeZone);
-    if (moment > after) return moment;
+    const moment = momentOf(start, timing.offset, timeZone);
+    if (moment > after) return { moment, start: new Date(start).toISOString().slice(0, 16) };
     steps += 1;
     if (steps > MAX_STEPS) return null;
   }
   return null;
 }
+
+/**
+ * When this notification is due (moments, ms) for each of its occurrences
+ * due after `from` and up to `to` by the clock (wall ms: its start, less
+ * `offset` minutes): what the notification service sends for the local
+ * times an open app checks for due reminders (audit 4 F1-5).
+ */
+export function dueBetween(timing: Timing, timeZone: string, from: number, to: number): number[] {
+  const offset = timing.offset * MINUTE;
+  const moments: number[] = [];
+  let steps = 0;
+  for (const start of occurrences(timing, Math.floor((from + offset) / DAY) - 1)) {
+    if (start - offset > to || steps > MAX_STEPS) break;
+    if (start - offset > from) moments.push(momentOf(start, timing.offset, timeZone));
+    steps += 1;
+  }
+  return moments;
+}
+
+/** "YYYY-MM-DDTHH:MM" as wall ms (as wallClock gives them), or null if it isn't a real time. */
+export function wallOf(stamp: string): number | null {
+  const parts = parseStamp(stamp);
+  return parts && Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute);
+}
+
+/**
+ * The first moment (ms) after `after` when this notification is due, or null
+ * if it never is again.
+ */
+export const nextFireTime = (timing: Timing, timeZone: string, after: number): number | null =>
+  nextOccurrence(timing, timeZone, after)?.moment ?? null;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { withEdits } from './edits.ts';
+import { hasEdits, withEdits } from './edits.ts';
 
 describe('withEdits', () => {
   const opened = { name: 'Shampoo', price: '5', notes: '', tags: ['hair'] };
@@ -26,5 +26,16 @@ describe('withEdits', () => {
       'travel',
     ]);
     expect(withEdits(opened, { ...opened, tags: [] }, current).tags).toEqual([]);
+  });
+});
+
+describe('hasEdits', () => {
+  const opened = { name: 'Shampoo', price: '5', tags: ['hair'] };
+
+  it('tells whether anything in the form was changed', () => {
+    expect(hasEdits(opened, { ...opened })).toBe(false);
+    expect(hasEdits(opened, { ...opened, tags: ['hair'] })).toBe(false);
+    expect(hasEdits(opened, { ...opened, price: '6' })).toBe(true);
+    expect(hasEdits(opened, { ...opened, tags: [] })).toBe(true);
   });
 });

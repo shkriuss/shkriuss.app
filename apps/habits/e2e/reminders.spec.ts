@@ -104,6 +104,65 @@ test('a reminder in the hour that clocks skip still goes off', async ({ page }) 
   ]);
 });
 
+test('a reminder that comes due while a form is open is read out in it', async ({ page }) => {
+  // A dialog hides the page behind it from screen readers, its messages too:
+  // "Reminder: Read." was never read out (audit 4 G-2).
+  await fakeNotifications(page, 'granted');
+  await page.clock.install({ time: new Date('2026-10-19T19:58:00+02:00') });
+  await page.goto('/');
+  await addHabit(page, 'Read');
+  await setReminder(page, 'Read', '20:00');
+  await page.getByRole('button', { name: 'Edit Read' }).click();
+  await expect(editor(page)).toBeVisible();
+  await page.clock.runFor('03:00');
+  await expect(editor(page).locator('[data-dialog-messages]')).toHaveText('Reminder: Read.');
+  await checkA11y(page, 'edit dialog after a reminder');
+
+  // Not left there for the next time the form opens: it was never emptied.
+  await editor(page).getByRole('button', { name: 'Cancel' }).click();
+  await expect(editor(page)).toBeHidden();
+  await page.getByRole('button', { name: 'Edit Read' }).click();
+  await expect(editor(page)).toBeVisible();
+  await expect(editor(page).locator('[data-dialog-messages]')).toHaveText('');
+});
+
+test('with “Delete this habit?” open over the form, a reminder is read out in it', async ({
+  page,
+}) => {
+  // Both are open, and it went to the form, behind the question (audit 4 G-2).
+  await fakeNotifications(page, 'granted');
+  await page.clock.install({ time: new Date('2026-10-19T19:58:00+02:00') });
+  await page.goto('/');
+  await addHabit(page, 'Read');
+  await setReminder(page, 'Read', '20:00');
+  await page.getByRole('button', { name: 'Edit Read' }).click();
+  await editor(page).getByRole('button', { name: 'Delete' }).click();
+  const question = page.getByRole('dialog', { name: 'Delete this habit?' });
+  await expect(question).toBeVisible();
+  await page.clock.runFor('03:00');
+  await expect(question.locator('[data-dialog-messages]')).toHaveText('Reminder: Read.');
+});
+
+test('a problem shown while a form is open is read out in it', async ({ page }) => {
+  // The page's problem notice is put there after the page loads, so it
+  // wasn't watched (audit 4 G-2).
+  await page.goto('/');
+  await addHabit(page, 'Read');
+  await page.getByRole('button', { name: 'Edit Read' }).click();
+  await expect(editor(page)).toBeVisible();
+  // What showProblem() does, as when a sync's changes can't be saved while the form is open.
+  const problem = 'Couldn’t save: there’s no room left for this app’s data in this browser.';
+  await page.evaluate((text) => {
+    const template = document.querySelector<HTMLTemplateElement>('[data-problem-template]');
+    const notice = template?.content.firstElementChild?.cloneNode(true);
+    if (!(notice instanceof HTMLElement)) throw new Error('No problem notice');
+    const words = notice.querySelector('[data-problem-text]');
+    if (words) words.textContent = text;
+    document.querySelector('[data-problem]')?.replaceChildren(notice);
+  }, problem);
+  await expect(editor(page).locator('[data-dialog-messages]')).toHaveText(problem);
+});
+
 test('asks to show notifications when a reminder is set', async ({ page }) => {
   await fakeNotifications(page, 'default');
   await page.goto('/');
@@ -175,14 +234,18 @@ test.describe('while Habits is closed', () => {
     }
   });
 
-  test('a new day uploads the reminders again, so they don’t come twice', async ({ page }) => {
-    // The reminders are worked out from today: without an upload at
-    // midnight, the open page took the server's copy for an old one and
-    // showed them too, while the server sent them as well (audit 3 F1-6).
+  test('a new day needs no upload, and reminders don’t come twice', async ({ page }) => {
+    // The reminders are worked out from today, so they change at midnight:
+    // the open page took the server's copy for an old one and showed them
+    // too, while the server sent them as well (audit 3 F1-6), and at 00:00
+    // itself even with an upload at midnight (audit 4 F1-5), also after
+    // another reminder went off that evening. The server's copy is checked
+    // reminder by reminder, from each one's next time, which midnight
+    // doesn't change.
     const rig = await startRig();
     try {
-      // Monday 19 October 2026, 23:50.
-      await page.clock.install({ time: new Date('2026-10-19T23:50:00+02:00') });
+      // Monday 19 October 2026, 20:50.
+      await page.clock.install({ time: new Date('2026-10-19T20:50:00+02:00') });
       await fakeSubscription(page, rig);
       await page.addInitScript(() => {
         const shown: unknown[] = [];
@@ -196,27 +259,34 @@ test.describe('while Habits is closed', () => {
       await expect(page.locator('[data-closed-status]')).toHaveText(
         'On: reminders arrive even when Habits is closed.',
       );
+      await addHabit(page, 'Read');
       await addHabit(page, 'Walk');
-      const upload = () =>
+      const uploaded = () =>
         page.waitForResponse(
           (response) =>
             response.url().endsWith('/api/push/schedule') &&
             response.request().method() === 'PUT' &&
             response.ok(),
         );
-      let uploaded = upload();
-      await setReminder(page, 'Walk', '00:30');
-      await uploaded;
+      let done = uploaded();
+      await setReminder(page, 'Read', '21:00');
+      await done;
+      done = uploaded();
+      await setReminder(page, 'Walk', '00:00');
+      await done;
+      let uploads = 0;
+      page.on('request', (request) => {
+        if (request.url().endsWith('/api/push/schedule') && request.method() === 'PUT')
+          uploads += 1;
+      });
 
-      // Just after midnight (time moves on by itself from there, so the
-      // upload's own time limit doesn't run out at once).
-      uploaded = upload();
+      // 21:00, then 00:00 on Tuesday: read out on the page, and sent by the server only.
       await page.clock.fastForward('10:10');
-      await uploaded;
-      // 00:30 on Tuesday: read out on the page, and sent by the server only.
-      await page.clock.fastForward('30:00');
+      await expect(page.getByRole('status').filter({ hasText: 'Reminder: Read.' })).toBeAttached();
+      await page.clock.fastForward('03:00:00');
       await expect(page.getByRole('status').filter({ hasText: 'Reminder: Walk.' })).toBeAttached();
       expect(await shownNotifications(page)).toEqual([]);
+      expect(uploads).toBe(0);
     } finally {
       rig.server.close();
     }

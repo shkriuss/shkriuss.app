@@ -82,13 +82,17 @@ export function mountPushControls(block: HTMLElement, options: PushControlsOptio
     // Turned off while focus is on "Send a test notification": it goes to the switch.
     if (!on && testRow.contains(document.activeElement)) toggle.focus();
     testRow.hidden = !on;
-    status.textContent =
+    const text =
       message ??
       (on
         ? onText(fit)
         : isPushDeletePending()
           ? `${OFF_NOT_DELETED} ${app} will try again when it’s open and online.`
           : OFF);
+    // A line that's read out: written again with the same words after every
+    // change and every return to the app, it can be read out again each time
+    // (audit 4 G-8).
+    if (status.textContent !== text) status.textContent = text;
   }
 
   /** After an upload got through: what the server has now. */

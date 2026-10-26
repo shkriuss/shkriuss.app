@@ -6,6 +6,7 @@
  * everything else is served from the app's static files as before.
  *
  *   GET    /api/push/key        the app's public VAPID key (for subscribing)
+ *   GET    /api/push/schedule   whether the server still has this device (404 if not)
  *   PUT    /api/push/schedule   replace this device's scheduled notifications
  *   DELETE /api/push/schedule   forget this device
  *   POST   /api/push/test       send one notification now
@@ -142,7 +143,8 @@ export async function handlePush(request: Request, env: PushEnv, path: string): 
   }
 
   const route =
-    path === '/api/push/schedule' && (request.method === 'PUT' || request.method === 'DELETE')
+    path === '/api/push/schedule' &&
+    (request.method === 'GET' || request.method === 'PUT' || request.method === 'DELETE')
       ? request.method
       : path === '/api/push/test' && request.method === 'POST'
         ? 'TEST'
@@ -153,7 +155,9 @@ export async function handlePush(request: Request, env: PushEnv, path: string): 
   if (!deviceKey) return problem(401, 'Missing or malformed device key.');
   const device = env.PUSH_DEVICES.get(env.PUSH_DEVICES.idFromName(await sha256Text(deviceKey)));
 
-  if (route === 'DELETE') return device.fetch('https://device/schedule', { method: 'DELETE' });
+  if (route === 'GET' || route === 'DELETE') {
+    return device.fetch('https://device/schedule', { method: route });
+  }
 
   // Only the size is checked here, and the device checks the rest: checking a
   // full schedule here took more than the free plan's 10 ms of CPU time
@@ -407,6 +411,12 @@ export class PushDevice {
     if (request.method === 'DELETE') {
       await this.#forget();
       return noContent();
+    }
+    // Whether it still has this device: it forgets one whose push service
+    // said it's gone, or that hasn't had a message through for two days, and
+    // the device asks now and then (audit 4 F1-2). Keeps nothing.
+    if (request.method === 'GET') {
+      return record ? json({ entries: record.entries.length }) : problem(404, 'Nothing kept.');
     }
 
     // Checked here rather than in the Worker (handlePush), before anything is kept.
