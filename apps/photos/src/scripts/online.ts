@@ -62,6 +62,13 @@ const allRecords = () => tidyRecords(records.load().items);
 
 /** The page's photos, and how to show changes to them (already saved on the device). */
 export interface PhotoList {
+  /**
+   * Resolves once the photos on this device are loaded. Until then all() has
+   * none of them (with a big library, for seconds), and changes from the
+   * online library mustn't be compared with that: every photo here would
+   * look new from another device, and be saved as only online (audit 3 F3-8).
+   */
+  ready: Promise<void>;
   all(): readonly Photo[];
   get(id: string): Photo | undefined;
   changed(change: { save?: readonly Photo[]; remove?: readonly string[] }): void;
@@ -384,6 +391,7 @@ export function startOnline(list: PhotoList): Online {
     }
     running = true;
     try {
+      await list.ready;
       await inTurn(async () => {
         const stillOn = stillOnCheck();
         const record = await ensureRecord();
@@ -447,12 +455,13 @@ export function startOnline(list: PhotoList): Online {
       synced = false;
       checked = false;
     }
-    // In turn, after a round under way (audit F3-2). If one fails, what's left
-    // is tidied when Photos opens again (photos.ts reload) or uses a library.
+    // In turn, after a round under way (audit F3-2), and once the photos here
+    // are loaded (audit 3 F3-8). If one fails, what's left is tidied when
+    // Photos opens again (photos.ts reload) or uses a library.
     if (event === 'deleted-online' || status.problem === 'deleted') {
-      inTurn(() => forgetOnline()).catch(() => undefined);
+      list.ready.then(() => inTurn(() => forgetOnline())).catch(() => undefined);
     } else if (event === 'turned-off' || status.problem === 'moved') {
-      hideOnlyOnline().catch(() => undefined);
+      list.ready.then(() => hideOnlyOnline()).catch(() => undefined);
     }
     if (!status.on) {
       synced = false;

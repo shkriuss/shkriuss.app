@@ -64,6 +64,11 @@ This first part works on the device only, like every other app.
   the person saves the originals themselves.
 - Loading the list of all photos at once is fine for tens of thousands of
   photos. Much bigger libraries will want the list loaded a page at a time.
+  It still takes seconds on a phone, so meanwhile the page says "Loading
+  your photos…" (not "No photos yet"), and nothing is compared with the
+  list until it's loaded: photos picked meanwhile, and the online library's
+  changes ([ADR 0016](0016-online-photo-library.md)), wait for it (audit 3
+  F3-8).
 
 ## Alternatives
 

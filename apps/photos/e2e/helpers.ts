@@ -20,6 +20,29 @@ export async function addPhotos(
     .waitFor();
 }
 
+/** Whether the photo saved as `name` is marked as on this device (its original here). */
+export const markedHere = (page: Page, name: string) =>
+  page.evaluate(
+    (name) =>
+      new Promise<boolean | null>((resolve, reject) => {
+        const request = indexedDB.open('shkriuss-files');
+        request.onerror = () => reject(request.error ?? new Error('No database'));
+        request.onsuccess = () => {
+          const database = request.result;
+          const range = IDBKeyRange.bound('photo:', 'photo;', false, true);
+          const photos = database.transaction('files').objectStore('files').getAll(range);
+          photos.onsuccess = () => {
+            database.close();
+            const found = (photos.result as { name: string; here?: boolean }[]).find(
+              (photo) => photo.name === name,
+            );
+            resolve(found ? found.here !== false : null);
+          };
+        };
+      }),
+    name,
+  );
+
 /** How many photos (and how many sets of files) are kept on this device. */
 export async function stored(page: Page): Promise<{ photos: number; files: number }> {
   const keys = await fileKeys(page);

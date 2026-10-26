@@ -65,6 +65,7 @@ export function mountPhotos(root: Document): void {
   const libraryHeading = required<HTMLElement>(root, '[data-library-heading]');
   const summary = required<HTMLElement>(root, '[data-summary]');
   const adding = required<HTMLElement>(root, '[data-adding]');
+  const loadingNote = required<HTMLElement>(root, '[data-loading]');
   const empty = required<HTMLElement>(root, '[data-empty]');
   const selection = required<HTMLElement>(root, '[data-selection]');
   const selectedCount = required<HTMLElement>(root, '[data-selected-count]');
@@ -95,6 +96,17 @@ export function mountPhotos(root: Document): void {
 
   /** Every photo, newest first. */
   let photos: Photo[] = [];
+  /**
+   * Whether the library on this device has been loaded since the page
+   * opened; `ready` resolves then. Until it has, `photos` is empty whatever
+   * the device holds, which takes seconds when the library is big, so
+   * nothing is compared with it before (audit 3 F3-8).
+   */
+  let loaded = false;
+  let markLoaded = (): void => undefined;
+  const ready = new Promise<void>((resolve) => {
+    markLoaded = resolve;
+  });
   let shown = PAGE_SIZE;
   let busy = false;
   /** While choosing photos: the chosen ones. */
@@ -128,6 +140,7 @@ export function mountPhotos(root: Document): void {
   // ---------- The online library ----------
 
   const online = startOnline({
+    ready,
     all: () => photos,
     get: find,
     changed({ save = [], remove = [] }) {
@@ -231,7 +244,10 @@ export function mountPhotos(root: Document): void {
         return section;
       }),
     );
-    empty.hidden = photos.length > 0;
+    // "No photos yet" only once the library is loaded: before, it would make
+    // people think their photos are gone (audit 3 F3-8).
+    loadingNote.hidden = loaded;
+    empty.hidden = !loaded || photos.length > 0;
     summary.hidden = photos.length === 0;
     summary.textContent = librarySummary(photos);
     showMoreButton.hidden = photos.length <= shown;
@@ -281,6 +297,8 @@ export function mountPhotos(root: Document): void {
     busy = true;
     // Busy, not disabled, so focus stays on it while photos are added (audit G-7).
     setBusy(addButton, true);
+    // Picked while the library loads: checked against all of it (audit 3 F3-8).
+    await ready;
     const result: Required<Added> = {
       added: 0,
       restored: 0,
@@ -691,5 +709,9 @@ export function mountPhotos(root: Document): void {
     }
   }
 
-  void reload().then(render);
+  void reload().then(() => {
+    loaded = true;
+    markLoaded();
+    render();
+  });
 }

@@ -36,7 +36,11 @@ import { AppShell, Button, DataControls, Icon, SyncControls } from '@shkriuss/ui
         <p class="muted" data-summary></p>
         <p class="muted" data-adding hidden></p>
       </div>
-      <p class="muted" data-empty>
+      <!-- Until the library here is loaded, which takes seconds when it's big (audit 3 F3-8). -->
+      <p class="muted" data-loading>
+        Loading your photos…
+      </p>
+      <p class="muted" data-empty hidden>
         No photos yet. Tap “Add photos” to choose some from this device.
       </p>
       <div class="selection cluster" data-selection hidden>

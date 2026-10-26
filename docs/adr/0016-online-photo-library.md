@@ -65,7 +65,10 @@ every device. That's far beyond what sync can hold:
 - **Changes reach other devices** through the list: each device asks for
   changes after the last `seq` it saw, about once a minute while Photos is
   open, and keeps that place in its photo database (so "Delete all data"
-  forgets it too).
+  forgets it too). It asks only once its own photos are loaded: compared
+  with a list not loaded yet, a photo here that the changes mentioned
+  looked new from another device, and was saved as only online (audit 3
+  F3-8).
 - **Other devices download little:** thumbnails for the photos on screen
   (up to 40 in one request), the screen-sized copy when a photo is opened,
   and the original only to save it. Downloads read just that part of the
