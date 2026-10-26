@@ -28,7 +28,12 @@ anything else, with brands, prices, shops and links. Lives at
   and sorting only change what's shown, never what's saved. The brands list
   puts the most loved first; tapping a brand shows just its items. Tapping
   a category opens it to rename or delete it; deleting one moves its items
-  to another category, or leaves them without one.
+  to another category, or leaves them without one (if another device
+  deletes that category meanwhile, it asks again: audit 4 F3-5). A form
+  that can't be saved (the device is full) stays open, saying why, with
+  what was typed (audit 4 F3-1). Text limits count characters as people see
+  them, as Safari's text boxes do, so nothing a box lets in is cut (audit 4
+  F3-4).
 - `src/pages/index.astro`: the page, built from `@shkriuss/ui` components.
   `<template>`s hold the markup for one item, brand and category; the forms
   are dialogs.

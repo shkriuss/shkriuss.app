@@ -4,7 +4,7 @@
 import type { Page } from '@playwright/test';
 import { paste } from '../../../tests/e2e/clipboard.ts';
 import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
-import { seedStores } from '../../../tests/e2e/storage.ts';
+import { fillStorage, seedStores } from '../../../tests/e2e/storage.ts';
 import { SHELF_VERSION, type Item } from '../src/lib/items.ts';
 
 const form = (page: Page) => page.getByRole('dialog', { name: /^(New|Edit) item$/ });
@@ -307,4 +307,42 @@ test('ignores saved data it doesn’t understand', async ({ page }) => {
   });
   await page.reload();
   await expect(page.getByText('Nothing here yet.')).toBeVisible();
+});
+
+test('with the device full, the form stays open with what was typed', async ({ page }) => {
+  // Before, it closed as if saved, the item showed from memory, and the next
+  // change from elsewhere made it vanish, with everything typed (audit 4 F3-1).
+  await seed(page, [{ name: 'Old shampoo', notes: 'y'.repeat(2000) }]);
+  await fillStorage(page, 10);
+  await page.getByRole('button', { name: 'Add item' }).click();
+  await form(page).getByLabel('Name').fill('Running shoes');
+  await form(page).getByLabel('Notes (optional)').fill('Size 43, the blue ones.');
+  await save(page);
+  // Said in the form, where a screen reader hears it.
+  await expect(form(page).getByRole('alert').filter({ hasText: 'Couldn’t save' })).toHaveText(
+    /^Couldn’t save: there’s no room left/,
+  );
+  await expect(names(page)).toHaveText(['Old shampoo']);
+
+  // Another tab deletes the big item, as a sync could: the form keeps the typing.
+  const other = await page.context().newPage();
+  await other.goto('/');
+  await other.getByRole('button', { name: 'Edit Old shampoo' }).click();
+  await form(other).getByRole('button', { name: 'Delete' }).click();
+  await other
+    .getByRole('dialog', { name: 'Delete this item?' })
+    .getByRole('button', { name: 'Delete' })
+    .click();
+  await expect(names(other)).toHaveCount(0);
+  await other.close();
+  await expect(names(page)).toHaveCount(0);
+  await expect(form(page)).toBeVisible();
+  await expect(form(page).getByLabel('Notes (optional)')).toHaveValue('Size 43, the blue ones.');
+
+  // Room again: Save works.
+  await save(page);
+  await expect(form(page)).toBeHidden();
+  await expect(names(page)).toHaveText(['Running shoes']);
+  await page.reload();
+  await expect(names(page)).toHaveText(['Running shoes']);
 });

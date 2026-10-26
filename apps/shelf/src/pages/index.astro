@@ -418,6 +418,7 @@ import { CURRENCIES, LIMITS, OPINIONS, OPINION_LABELS, SORTS, SORT_LABELS } from
         />
         <p class="field__error" id="category-name-error" data-category-error></p>
       </div>
+      <p class="field__error" role="alert" data-category-form-error></p>
       <div class="cluster dialog__actions">
         <Button type="submit" variant="primary">
           Save
@@ -440,7 +441,13 @@ import { CURRENCIES, LIMITS, OPINIONS, OPINION_LABELS, SORTS, SORT_LABELS } from
         <label class="field__label" for="category-move">
           Move its <span data-move-count>items</span> to
         </label>
-        <select class="input" id="category-move" data-move-to></select>
+        <select
+          class="input"
+          id="category-move"
+          aria-describedby="category-move-error"
+          data-move-to
+        ></select>
+        <p class="field__error" id="category-move-error" role="alert" data-move-error></p>
       </div>
       <div class="cluster">
         <Button type="submit" value="cancel">

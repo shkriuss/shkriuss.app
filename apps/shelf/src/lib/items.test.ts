@@ -122,6 +122,20 @@ describe('the form', () => {
     expect([odd.opinion, odd.currency]).toEqual(['use', 'GEL']);
     expect(itemFromDraft(draft({ category: NO_CATEGORY }), 'c', 1).category).toBe(NO_CATEGORY);
   });
+
+  it('keeps all a box let in, counted as Safari counts (audit 4 F3-4)', () => {
+    // Safari's maxlength counts characters as people see them: its name box
+    // takes 150 flags (300 in JavaScript), and its notes box 500 of these.
+    const flags = '🇬🇪'.repeat(150);
+    const notes = 'Great 👍🏽 '.repeat(500).trim();
+    const made = itemFromDraft(draft({ name: flags, notes }), 'a', 1);
+    expect(made.name).toBe(flags);
+    expect(made.notes).toBe(notes);
+    // Never half an emoji.
+    expect(itemFromDraft(draft({ brand: `${'b'.repeat(99)}😀😀` }), 'b', 1).brand).toBe(
+      `${'b'.repeat(99)}😀`,
+    );
+  });
 });
 
 describe('changes', () => {

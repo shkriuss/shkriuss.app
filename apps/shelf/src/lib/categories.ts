@@ -7,7 +7,7 @@
  * without saving anything, so when it syncs it never brings back a category
  * you removed on another device, or undoes a rename.
  */
-import { foldText } from '@shkriuss/ui/text';
+import { cutToLength, foldText } from '@shkriuss/ui/text';
 import { byText } from './items.ts';
 
 export interface Category {
@@ -78,7 +78,8 @@ export function categoriesOf(state: CategoriesState): Category[] {
 export const categoryName = (categories: readonly Category[], id: string): string =>
   categories.find((entry) => entry.id === id)?.name ?? '';
 
-const cutName = (name: string): string => name.trim().slice(0, CATEGORY_NAME_MAX).trim();
+/** A name cut as Safari's text boxes count, never an emoji in half (audit 4 F3-4). */
+const cutName = (name: string): string => cutToLength(name.trim(), CATEGORY_NAME_MAX).trim();
 
 /**
  * What's wrong with a name for a category, or null if it can be saved.

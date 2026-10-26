@@ -39,6 +39,15 @@ describe('categories', () => {
     expect(state).toEqual(noChanges());
   });
 
+  it('keeps a name as Safari’s box lets it in, never half an emoji (audit 4 F3-4)', () => {
+    const flags = '🇬🇪'.repeat(50);
+    expect(categoryName(categoriesOf(addCategory(noChanges(), 'f', flags)), 'f')).toBe(flags);
+    const long = `${'a'.repeat(49)}😀😀`;
+    expect(categoryName(categoriesOf(addCategory(noChanges(), 'g', long)), 'g')).toBe(
+      `${'a'.repeat(49)}😀`,
+    );
+  });
+
   it('renames and removes the starting ones, saving only the change', () => {
     let state = renameCategory(noChanges(), 'food', 'Groceries');
     state = removeCategory(state, 'tech');

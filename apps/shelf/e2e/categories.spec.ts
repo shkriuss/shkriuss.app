@@ -181,3 +181,66 @@ test('the category forms are accessible, in both themes', async ({ page }) => {
   await categoryForm(page).getByRole('button', { name: 'Delete' }).click();
   await checkA11y(page, 'deleting a category (dark)');
 });
+
+test.describe('another device deletes a category meanwhile (audit 4 F3-5)', () => {
+  /** Deletes a category in another tab, as a sync from another device would. */
+  async function deleteElsewhere(page: Page, name: string): Promise<void> {
+    const other = await page.context().newPage();
+    await other.goto('/');
+    await chip(other, name).click();
+    await categoryForm(other).getByRole('button', { name: 'Delete' }).click();
+    await deleteDialog(other).getByRole('button', { name: 'Delete' }).click();
+    await expect(chip(other, name)).toHaveCount(0);
+    await other.close();
+    await expect(chip(page, name)).toHaveCount(0);
+  }
+
+  test('Delete in its form says it was already deleted', async ({ page }) => {
+    // Before, it did nothing, and said nothing.
+    await seed(page, [], [{ id: 'gifts', name: 'Gifts', removed: false }]);
+    await chip(page, 'Gifts').click();
+    await deleteElsewhere(page, 'Gifts');
+    await categoryForm(page).getByRole('button', { name: 'Delete' }).click();
+    await expect(categoryForm(page)).toBeHidden();
+    await expect(
+      page
+        .getByRole('alert')
+        .filter({ hasText: 'That category was already deleted on another device.' }),
+    ).toBeVisible();
+  });
+
+  test('the category its items were to go to: asked again, not moved to none', async ({ page }) => {
+    // Before, the items lost their category without a word.
+    await seed(
+      page,
+      [{ name: 'Socks', category: 'mine' }],
+      [
+        { id: 'mine', name: 'Mine', removed: false },
+        { id: 'gifts', name: 'Gifts', removed: false },
+      ],
+    );
+    await chip(page, 'Mine').click();
+    await categoryForm(page).getByRole('button', { name: 'Delete' }).click();
+    const move = deleteDialog(page).getByLabel(/^Move its/);
+    await move.selectOption({ label: 'Gifts' });
+    await deleteElsewhere(page, 'Gifts');
+    await deleteDialog(page).getByRole('button', { name: 'Delete' }).click();
+
+    // The question stays, with the categories there are now, and says why.
+    await expect(deleteDialog(page)).toBeVisible();
+    await expect(deleteDialog(page).getByRole('alert')).toHaveText(
+      '“Gifts” was deleted on another device. Choose where the items go.',
+    );
+    await expect(move).toBeFocused();
+    await expect(move.locator('option')).not.toContainText(['Gifts']);
+    await checkA11y(page, 'deleting a category, asked again');
+    await move.selectOption({ label: 'Personal items' });
+    await deleteDialog(page).getByRole('button', { name: 'Delete' }).click();
+    await expect(deleteDialog(page)).toBeHidden();
+    await expect(categoryForm(page)).toBeHidden();
+    await expect(page.locator('[data-announcer]')).toHaveText(
+      'Deleted category Mine. Its items are in Personal items now.',
+    );
+    await expect(badge(page, 'Socks')).toHaveText('Personal items');
+  });
+});

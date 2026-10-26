@@ -104,6 +104,13 @@ export function reportSave(saved: boolean, { repeat = true }: ReportSaveOptions 
   return false;
 }
 
+/**
+ * What reportSave says about the last save that didn't work: for a form
+ * that stays open after it, to say it there too. The page's notice is
+ * behind a dialog, where a screen reader doesn't hear it.
+ */
+export const saveProblem = (): string => saveProblemText(lastSaveProblem());
+
 // ---------- Errors in forms ----------
 
 const textOf = (element: Element | null | undefined): string => element?.textContent ?? '';
