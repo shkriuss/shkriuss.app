@@ -8,7 +8,7 @@ import type { Page } from '@playwright/test';
 import { paste } from '../../../tests/e2e/clipboard.ts';
 import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
 
-// Loading the checker (16 MB of WebAssembly) takes a few seconds.
+// Loading the checker (about 20 MB of WebAssembly) takes a few seconds.
 test.slow();
 
 const READY = 'Type or paste your text above, and suggestions show here.';
