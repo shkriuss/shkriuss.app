@@ -17,8 +17,12 @@ export interface Change {
   after: string;
 }
 
-/** Written without a space before them: punctuation, closing quotes, "n't", "'s". */
-const NO_SPACE_BEFORE = /^(?:[.,!?;:%…)\]}”’»-]|\.{2,}|n't|'(?:s|re|ve|ll|d|m)|')$/i;
+/**
+ * Written without a space before them: punctuation, closing quotes, "n't",
+ * "'s", also with a curly apostrophe ("n’t", "’s"), as they are in a
+ * sentence that has one (audit 3 F3-5).
+ */
+const NO_SPACE_BEFORE = /^(?:[.,!?;:%…)\]}”’»-]|\.{2,}|n['’]t|['’](?:s|re|ve|ll|d|m)|')$/i;
 /** Written without a space after them: opening brackets and quotes, currency, hyphens. */
 const NO_SPACE_AFTER = /^[([{“‘«$£€#¿¡-]$/;
 
