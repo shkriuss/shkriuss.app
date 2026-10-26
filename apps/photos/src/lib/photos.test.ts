@@ -147,6 +147,17 @@ describe('for people', () => {
     expect(downloadName(photo({ name: 'a​b⁦c.jpg' }))).toBe('a-b-c.jpg');
   });
 
+  it('cuts a long name between whole characters, never in the middle of an emoji (audit 3 C-6)', () => {
+    // The 120th character is an emoji, which is two of JavaScript's units long.
+    const saved = downloadName(photo({ name: `${'a'.repeat(119)}😀😀 more.jpg` }));
+    expect(saved).toBe(`${'a'.repeat(119)}😀.jpg`);
+    expect(saved).not.toMatch(/\p{Cs}/u);
+    // Nor ends the name with a space before the extension.
+    expect(downloadName(photo({ name: `${'b'.repeat(119)} end.jpg` }))).toBe(
+      `${'b'.repeat(119)}.jpg`,
+    );
+  });
+
   it('says what happened when photos were picked', () => {
     expect(addedMessage({ added: 3, duplicates: 0, notPhotos: 0, failed: 0 }, EN)).toBe(
       'Added 3 photos.',

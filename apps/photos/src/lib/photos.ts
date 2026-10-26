@@ -235,15 +235,16 @@ export function formatLabel(photo: Pick<Photo, 'name' | 'type'>): string {
 export function downloadName(photo: Pick<Photo, 'name' | 'type' | 'taken'>): string {
   // Characters files can't have in their names, and invisible ones, become "-".
   // Invisible ones include direction marks, which can make "gpj.exe" show as "exe.jpg".
-  const safe = [...photo.name]
+  const cleaned = [...photo.name]
     .map((char) =>
       /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(char) || '\\/:*?"<>|'.includes(char) ? '-' : char,
     )
     .join('')
     .replace(/-{2,}/g, '-')
     .replace(/^[.\s]+/, '')
-    .trim()
-    .slice(0, 120);
+    .trim();
+  // Cut by whole characters, so an emoji is never cut in half (audit 3 C-6).
+  const safe = [...cleaned].slice(0, 120).join('').trimEnd();
   const fallback = `photo-${photo.taken.replace(/[:T]/g, '-')}`;
   const name = safe || fallback;
   const extension = EXTENSIONS[photo.type];
