@@ -270,10 +270,19 @@ function knownZone(timeZone: string): string | null {
   return null;
 }
 
-/** The moment when clocks in `timeZone` (a known zone) show `wall` (a UTC-based number). */
+/**
+ * The moment when clocks in `timeZone` (a known zone) show `wall` (a UTC-based
+ * number). As RFC 5545 says, a time the clocks show twice is the first one, and
+ * a time they skip is read with the offset from before, so 02:30 is 03:30.
+ * Guessing from one offset gave the second time east of UTC, and an hour early
+ * in the skipped hour west of it (audit 3 F1-2).
+ */
 function zonedToUtc(wall: number, timeZone: string): number {
-  const guess = wall - offsetOf(wall, timeZone);
-  return wall - offsetOf(guess, timeZone);
+  // The offsets a day before and after: a clock change near `wall` is between them.
+  const before = offsetOf(wall - DAY_MS, timeZone);
+  const after = offsetOf(wall + DAY_MS, timeZone);
+  const fits = [wall - before, wall - after].filter((ms) => ms + offsetOf(ms, timeZone) === wall);
+  return fits.length > 0 ? Math.min(...fits) : wall - before;
 }
 
 function inZone(ms: number, timeZone: string): { date: IsoDate; time: IsoTime } {

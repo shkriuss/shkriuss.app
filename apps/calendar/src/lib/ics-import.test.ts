@@ -5,6 +5,7 @@ import {
   fromDayNumber,
   isLeapYear,
   makeDate,
+  parts,
   toDayNumber,
   type IsoDate,
 } from './dates.ts';
@@ -177,6 +178,27 @@ describe('parseIcs', () => {
         london,
       ),
     ).toMatchObject({ startTime: '08:00', endTime: null });
+  });
+
+  it('reads a time the clocks skip or show twice as RFC 5545 says', () => {
+    // A time the clocks skip moves on by the gap; of one they show twice, the
+    // first. West of UTC the skipped hour came out an hour early, and east of
+    // it the hour shown twice gave the second (audit 3 F1-2).
+    const at = (start: string) =>
+      only(calendar([`DTSTART;TZID=${start}`, 'SUMMARY:x']), { ...options, timeZone: 'UTC' });
+    // New York skips 02:00 to 03:00 on 8 March: 02:30 is 03:30 (UTC−4).
+    expect(at('America/New_York:20260308T023000')).toMatchObject({ startTime: '07:30' });
+    // Berlin skips 02:00 to 03:00 on 29 March: 02:30 is 03:30 (UTC+2).
+    expect(at('Europe/Berlin:20260329T023000')).toMatchObject({ startTime: '01:30' });
+    // New York shows 01:00 to 02:00 twice on 1 November: the first is UTC−4.
+    expect(at('America/New_York:20261101T013000')).toMatchObject({ startTime: '05:30' });
+    // Berlin shows 02:00 to 03:00 twice on 25 October: the first is UTC+2.
+    expect(at('Europe/Berlin:20261025T023000')).toMatchObject({ startTime: '00:30' });
+    // Sydney shows 02:00 to 03:00 twice on 5 April: the first is UTC+11.
+    expect(at('Australia/Sydney:20260405T023000')).toMatchObject({
+      startDate: '2026-04-04',
+      startTime: '15:30',
+    });
   });
 
   it('reads a very long time zone name quickly, as unknown', () => {
@@ -446,33 +468,56 @@ describe('parseIcs', () => {
     const pad = (value: number) => String(value).padStart(2, '0');
     let checked = 0;
     const wrong: string[] = [];
-    for (let index = 0; index < 500; index += 1) {
+    // The days these zones change their clocks in 2026.
+    const changes = [
+      '2026-03-08',
+      '2026-03-29',
+      '2026-04-05',
+      '2026-09-06',
+      '2026-09-27',
+      '2026-10-04',
+      '2026-10-25',
+      '2026-11-01',
+    ];
+    for (let index = 0; index < 400; index += 1) {
       const from = pick(zones);
       const here = pick(zones);
       const freq = pick(['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'] as const);
-      const month = 1 + Math.floor(next() * 12);
-      const lastDay = daysInMonth(2026, month);
-      const day =
-        next() < 0.3 ? Math.min(pick([28, 29, 30, 31]), lastDay) : 1 + Math.floor(next() * 28);
-      const time = `${pad(Math.floor(next() * 24))}:${pick(['00', '15', '30', '45'])}`;
-      const first = makeDate(2026, month, day);
-      // When it really happens, in its own zone: up to a year on.
+      let first: IsoDate;
+      let time: string;
+      if (next() < 0.7) {
+        // Mostly within a day or so of when some of the zones change their clocks.
+        const moment =
+          Date.parse(`${pick(changes)}T00:00Z`) + (Math.floor(next() * 144) - 48) * 900_000;
+        const wall = new Date(wallAt(moment, from)).toISOString();
+        first = wall.slice(0, 10);
+        time = wall.slice(11, 16);
+      } else {
+        // Else any day, often the 28th to 31st.
+        const month = 1 + Math.floor(next() * 12);
+        const day =
+          next() < 0.3
+            ? Math.min(pick([28, 29, 30, 31]), daysInMonth(2026, month))
+            : 1 + Math.floor(next() * 28);
+        first = makeDate(2026, month, day);
+        time = `${pad(Math.floor(next() * 24))}:${pick(['00', '15', '30', '45'])}`;
+      }
+      const start = parts(first);
+      // When it really happens, in its own zone.
       const dates: IsoDate[] = [];
       for (let step = 0; dates.length < 60 && step < 400; step += 1) {
         if (freq === 'DAILY') dates.push(addDays(first, step));
         else if (freq === 'WEEKLY') dates.push(addDays(first, 7 * step));
         else {
-          const months = freq === 'MONTHLY' ? step : 12 * step;
-          const year = 2026 + Math.floor((month - 1 + months) / 12);
-          const inMonth = ((month - 1 + months) % 12) + 1;
-          if (day <= daysInMonth(year, inMonth)) dates.push(makeDate(year, inMonth, day));
+          const months = start.month - 1 + (freq === 'MONTHLY' ? step : 12 * step);
+          const year = start.year + Math.floor(months / 12);
+          const inMonth = (months % 12) + 1;
+          if (start.day <= daysInMonth(year, inMonth)) {
+            dates.push(makeDate(year, inMonth, start.day));
+          }
         }
       }
-      const start = momentOf(first, time, from);
-      const truth = dates
-        .map((date) => momentOf(date, time, from))
-        .filter((moment) => moment <= start + 366 * DAY);
-      const count = Math.max(2, Math.floor(next() * truth.length));
+      const count = Math.max(2, Math.floor(next() * dates.length));
       const compact = `${first.replace(/-/g, '')}T${time.replace(':', '')}00`;
       const dtstart = from === 'UTC' ? `DTSTART:${compact}Z` : `DTSTART;TZID=${from}:${compact}`;
       const result = parseIcs(
@@ -482,16 +527,24 @@ describe('parseIcs', () => {
       const draft = result.events[0]?.draft;
       if (result.notes.length > 0 || !draft?.startTime) continue;
       checked += 1;
+      // Its times in the first year, as they are, and as Calendar shows them here.
+      const firstMoment = momentOf(first, time, from);
+      const expected = dates
+        .slice(0, count)
+        .map((date) => momentOf(date, time, from))
+        .filter((moment) => moment <= firstMoment + 366 * DAY);
       const shown = occurrencesBetween(
         { events: [{ id: 'x', ...draft }] },
         draft.startDate,
         addDays(draft.startDate, 400),
-      ).map((occurrence) => momentOf(occurrence.start, draft.startTime ?? '', here));
-      const expected = truth.slice(0, count);
-      if (JSON.stringify(shown.slice(0, expected.length)) !== JSON.stringify(expected)) {
+      )
+        .slice(0, expected.length)
+        .map((occurrence) => momentOf(occurrence.start, draft.startTime ?? '', here));
+      if (JSON.stringify(shown) !== JSON.stringify(expected)) {
         wrong.push(`${dtstart} FREQ=${freq};COUNT=${count} seen in ${here}`);
       }
     }
+    // Most have no note, so the test can't pass by saying it about everything.
     expect(checked).toBeGreaterThan(200);
     expect(wrong).toEqual([]);
   }, 30_000);
