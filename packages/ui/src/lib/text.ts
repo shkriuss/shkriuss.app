@@ -32,7 +32,16 @@ const ACCENTS = /[\u0300-\u036F]/g;
 export const foldText = (text: string): string =>
   text.normalize('NFKD').replace(ACCENTS, '').toLowerCase().trim().replace(/\s+/g, ' ');
 
-const characters = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+/**
+ * Characters as people see them, to cut between. Firefox before 125 can't
+ * tell them apart: there, each code point is one (an emoji's two halves
+ * still stay together), and this file still loads, for the apps that use it
+ * only to compare text.
+ */
+const characters =
+  typeof Intl.Segmenter === 'function'
+    ? new Intl.Segmenter('en', { granularity: 'grapheme' })
+    : null;
 
 /**
  * The start of `text`, at most `max` characters as people see them: an
@@ -45,10 +54,8 @@ const characters = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
 export function cutToLength(text: string, max: number): string {
   // Never more characters than JavaScript counts: nothing to cut.
   if (text.length <= max) return text;
-  let count = 0;
-  for (const { index } of characters.segment(text)) {
-    if (count === max) return text.slice(0, index);
-    count += 1;
-  }
-  return text;
+  const parts = characters
+    ? Array.from(characters.segment(text), ({ segment }) => segment)
+    : [...text];
+  return parts.slice(0, max).join('');
 }

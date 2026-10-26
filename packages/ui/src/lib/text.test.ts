@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { compareText, cutToLength, foldText } from './text.ts';
 
 describe('compareText', () => {
@@ -91,5 +91,26 @@ describe('cutToLength (audit 4 F3-4)', () => {
     expect(cutToLength('é'.normalize('NFD').repeat(300), 200)).toBe(
       'é'.normalize('NFD').repeat(200),
     );
+  });
+
+  it('still loads, and keeps emoji whole, where the browser can’t tell characters apart', async () => {
+    // Firefox before 125 has no Intl.Segmenter. Most apps load this file only
+    // to compare text: it mustn't stop their page there.
+    vi.stubGlobal(
+      'Intl',
+      Object.assign(Object.create(Intl) as typeof Intl, { Segmenter: undefined }),
+    );
+    vi.resetModules();
+    try {
+      const old = await import('./text.ts');
+      expect(old.foldText(' Café ')).toBe('cafe');
+      expect(old.cutToLength(`${'a'.repeat(199)}😀😀`, 200)).toBe(`${'a'.repeat(199)}😀`);
+      // There, each half of a flag counts as one.
+      expect(old.cutToLength('🇬🇪'.repeat(150), 200)).toBe('🇬🇪'.repeat(100));
+      expect(old.cutToLength('Plain text', 200)).toBe('Plain text');
+    } finally {
+      vi.unstubAllGlobals();
+      vi.resetModules();
+    }
   });
 });
