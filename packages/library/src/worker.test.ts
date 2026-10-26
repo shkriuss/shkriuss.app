@@ -177,11 +177,48 @@ describe('the storage code', () => {
     const kept = [...server.gateStorage.map.keys()].filter((key) => key.startsWith('try:'));
     expect(kept).toHaveLength(1);
     expect(JSON.stringify([...server.gateStorage.map])).not.toContain('198.51.100');
+    // Not even as a hash of the address and the code, which someone with the
+    // code could find by trying every IPv4 address (audit 3 D-8): mixed with
+    // a random salt the gate keeps only for the hour.
+    const unsalted = toBase64Url(
+      await sha256(new TextEncoder().encode(`shkriuss library caller v1 ${CODE} 198.51.100.4`)),
+    );
+    expect(kept[0]).not.toContain(unsalted.slice(0, 16));
+    expect(
+      [...server.gateStorage.map.keys()].filter((key) => key.startsWith('salt:')),
+    ).toHaveLength(1);
     expect(server.gateStorage.alarm).toBe(Date.UTC(2026, 9, 22, 13));
 
     vi.setSystemTime(Date.UTC(2026, 9, 22, 13));
+    // As Cloudflare runs it: the alarm is cleared first. Nothing's left, so it isn't set again.
+    server.gateStorage.alarm = null;
     await server.gate.alarm();
-    expect([...server.gateStorage.map.keys()].filter((key) => key.startsWith('try:'))).toEqual([]);
+    expect([...server.gateStorage.map.keys()].filter((key) => /^(try|salt):/.test(key))).toEqual(
+      [],
+    );
+    expect(server.gateStorage.alarm).toBeNull();
+  });
+
+  it('a right code makes no salt; a new hour has a new one, so tries can’t be linked across hours', async () => {
+    vi.useFakeTimers({ now: Date.UTC(2026, 9, 22, 12, 30) });
+    expect((await client(libraryId(), token(), '198.51.100.4').unlock()).status).toBe(204);
+    expect([...server.gateStorage.map.keys()]).toEqual([]);
+
+    const tried = async () => {
+      expect((await client(libraryId(), token(), '198.51.100.4').unlock('guess')).status).toBe(403);
+      return [...server.gateStorage.map.keys()].filter((key) => key.startsWith('try:')).at(-1);
+    };
+    const first = await tried();
+    vi.setSystemTime(Date.UTC(2026, 9, 22, 13, 30));
+    await server.gate.alarm();
+    const second = await tried();
+    expect(first?.split(':')[2]).not.toBe(second?.split(':')[2]);
+    // The same caller in the same hour is still one caller.
+    await tried();
+    expect([...server.gateStorage.map.keys()].filter((key) => key.startsWith('try:'))).toEqual([
+      second,
+    ]);
+    expect(await server.gateStorage.get(second ?? '')).toBe(2);
   });
 
   it('unlocks only while it’s still the code: changing it locks every library', async () => {

@@ -118,7 +118,10 @@ every device. That's far beyond what sync can hold:
   network: the first 64 bits), whatever the library. Not 20 for everyone
   together: then a stranger could use them up every hour and nobody could
   give the right code. The gate keeps only a hash of the address mixed with
-  the code, and deletes it when the hour is over. Someone with many
+  the code, hashed again with a random salt it makes for each hour, and
+  deletes both when the hour is over. (Without the salt, someone with the
+  code could find the address by trying every IPv4 address, and tell the
+  same caller's tries in different hours: audit 3 D-8.) Someone with many
   addresses gets more tries, so what really stops guessing is the code
   itself: five or more random words (about 64 bits), far too many to guess.
 - **Limits per library:** 400,000 photos, and 95 MB per photo (Cloudflare

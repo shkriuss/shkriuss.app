@@ -33,7 +33,7 @@
  * what's left of a deleted one ("Delete the online copy"), after
  * WIPED_UNUSED_MS.
  */
-import { equalBytes, sha256, utf8 } from '@shkriuss/crypto';
+import { equalBytes, randomBytes, sha256, toBase64Url, utf8 } from '@shkriuss/crypto';
 import {
   API_HEADERS,
   bearerToken,
@@ -111,7 +111,10 @@ async function codeId(code: string | undefined): Promise<string> {
 
 /**
  * Who is trying a storage code: their network (callerNetwork), hashed with
- * the code, so the gate never keeps an address it could read back.
+ * the code, so the gate never gets the address. That alone could be turned
+ * back into an IPv4 address by someone with the code, trying all 2³² of
+ * them, so the gate hashes it again with a random salt it keeps only for
+ * the hour (LibraryGate, audit 3 D-8).
  */
 async function callerId(request: Request, code: string): Promise<string> {
   const network = callerNetwork(request.headers.get('CF-Connecting-IP'));
@@ -336,14 +339,21 @@ interface GateState {
   uploads: number;
 }
 
-/** Wrong storage codes from one caller in one hour: "try:<hour>:<callerId>" → count. */
-const tryKey = (hour: number, caller: string) => `try:${String(hour).padStart(8, '0')}:${caller}`;
+const hourText = (hour: number) => String(hour).padStart(8, '0');
+/** Wrong storage codes from one caller in one hour: "try:<hour>:<salted callerId>" → count. */
+const tryKey = (hour: number, caller: string) => `try:${hourText(hour)}:${caller}`;
+/** One hour's random salt for callers' ids: "salt:<hour>". */
+const saltKey = (hour: number) => `salt:${hourText(hour)}`;
 
 /**
  * What protects the bill, kept across every library: anyone can make up a
  * library, so limits kept in each would protect nothing. One object, named
  * "gate"; the Worker asks it before each upload and each try of the code.
- * Wrong tries are kept per caller and deleted when their hour is over.
+ * Wrong tries are kept per caller, as the caller's id hashed with a random
+ * salt made for that hour, and deleted with the salt when the hour is over
+ * (audit 3 D-8): from then on, nothing kept can be turned back into an
+ * address, even with the storage code, and one hour's tries can't be
+ * linked to another's.
  */
 export class LibraryGate {
   readonly state: DurableObjectListState;
@@ -374,7 +384,16 @@ export class LibraryGate {
 
       if (op === 'try') {
         const hour = Math.floor(now / HOUR_MS);
-        const key = tryKey(hour, body.caller ?? '');
+        let salt = await storage.get<string>(saltKey(hour));
+        // No salt yet: no wrong tries this hour, so a right code goes ahead.
+        if (salt === undefined && body.ok === true) return noContent();
+        if (salt === undefined) {
+          salt = toBase64Url(randomBytes(32));
+          await storage.put(saltKey(hour), salt);
+          if ((await storage.getAlarm()) === null) await storage.setAlarm((hour + 1) * HOUR_MS);
+        }
+        const caller = (await sha256Text(`${salt} ${body.caller ?? ''}`)).slice(0, 16);
+        const key = tryKey(hour, caller);
         const tries = (await storage.get<number>(key)) ?? 0;
         if (tries >= LIMITS.unlockTries) {
           return json(
@@ -416,19 +435,25 @@ export class LibraryGate {
     });
   }
 
-  /** When an hour is over: forget its wrong tries. */
+  /** When an hour is over: forget its wrong tries, and its salt. */
   async alarm(): Promise<void> {
     await runAlarm(this.state, async () => {
       const storage = this.state.storage;
       const hour = Math.floor(Date.now() / HOUR_MS);
-      for (;;) {
-        const keys = [...(await storage.list({ prefix: 'try:', limit: 128 })).keys()];
-        const old = keys.filter((key) => key < tryKey(hour, ''));
-        if (old.length === 0) break;
-        for (const key of old) await storage.delete(key);
+      let left = false;
+      for (const prefix of ['try:', 'salt:']) {
+        for (;;) {
+          const keys = [...(await storage.list({ prefix, limit: 128 })).keys()];
+          // Keys sort by their hour: this hour's come after every older one.
+          const old = keys.filter((key) => key < `${prefix}${hourText(hour)}`);
+          if (old.length === 0) {
+            left ||= keys.length > 0;
+            break;
+          }
+          for (const key of old) await storage.delete(key);
+        }
       }
-      const left = await storage.list({ prefix: 'try:', limit: 1 });
-      if (left.size > 0) await storage.setAlarm((hour + 1) * HOUR_MS);
+      if (left) await storage.setAlarm((hour + 1) * HOUR_MS);
     });
   }
 }
