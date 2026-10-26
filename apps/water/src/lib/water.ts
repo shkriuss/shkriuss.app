@@ -290,16 +290,30 @@ export const totalOn = (state: DrinksState, date: IsoDate, unit: Unit = 'ml'): n
   );
 
 /**
- * Whether `total` (from totalOn) reaches `goal`, as the person sees them: to
- * the millilitre, or to a tenth of an ounce. The same rule decides "Goal
- * reached", the streak, the history and the reminders.
+ * Whether `total` (from totalOn) reaches `goal` in `unit`, as the person sees
+ * them: to the millilitre, or to a tenth of an ounce. reachedOn asks it in
+ * both units.
  */
 export const goalReached = (total: number, goal: number, unit: Unit = 'ml'): boolean =>
   steps(total, unit) >= steps(goal, unit);
 
+/**
+ * Whether a day's drinks reach `goal`: in either unit, so switching units
+ * can't undo a day, or the streak. Drinks are saved to the millilitre, so
+ * they add up a little differently in each unit: five 20 fl oz bottles make
+ * a 100 fl oz goal, but in millilitres they're 2 ml short (audit 4 F1-9).
+ * The other way round, a day can count as reached a little short in the
+ * unit shown: at most about 1.5 ml for each drink and the goal. "Goal
+ * reached", the streak, the history and the reminders all use it.
+ */
+export const reachedOn = (state: DrinksState, date: IsoDate, goal: number): boolean =>
+  UNITS.some((unit) => goalReached(totalOn(state, date, unit), goal, unit));
+
+export const GOAL_REACHED = 'Goal reached. Well done!';
+
 /** "750 ml to go." or "Goal reached. Well done!" */
 export function progressText(total: number, goal: number, unit: Unit, locale?: string): string {
-  if (goalReached(total, goal, unit)) return 'Goal reached. Well done!';
+  if (goalReached(total, goal, unit)) return GOAL_REACHED;
   // The goal less what was drunk, as both are shown: never 0 while it isn't
   // reached.
   const left = (steps(goal, unit) - steps(total, unit)) / STEPS_PER_UNIT[unit];
@@ -312,10 +326,11 @@ export interface DayTotal {
   date: IsoDate;
   /** What was drunk, as in totalOn. */
   ml: number;
+  /** As in reachedOn. */
   reached: boolean;
 }
 
-/** The last `count` days, today first. */
+/** The last `count` days, today first, with what was drunk as shown in `unit`. */
 export function recentDays(
   state: DrinksState,
   goal: number,
@@ -324,10 +339,10 @@ export function recentDays(
   unit: Unit = 'ml',
 ): DayTotal[] {
   const totals = totalsByDay(state, unit);
+  const reached = reachedBy(state, goal);
   return Array.from({ length: count }, (_, index) => {
     const date = addDays(today, -index);
-    const ml = totals.get(date) ?? 0;
-    return { date, ml, reached: goalReached(ml, goal, unit) };
+    return { date, ml: totals.get(date) ?? 0, reached: reached(date) };
   });
 }
 
@@ -339,18 +354,18 @@ function totalsByDay(state: DrinksState, unit: Unit): Map<IsoDate, number> {
   return totals;
 }
 
+/** reachedOn, for many days: each unit's totals added up once. */
+function reachedBy(state: DrinksState, goal: number): (date: IsoDate) => boolean {
+  const totals = UNITS.map((unit) => [unit, totalsByDay(state, unit)] as const);
+  return (date) => totals.some(([unit, byDay]) => goalReached(byDay.get(date) ?? 0, goal, unit));
+}
+
 /**
  * Days in a row the goal was reached, up to today. Today counts once it's
  * reached, but doesn't break the streak while the day isn't over.
  */
-export function streak(
-  state: DrinksState,
-  goal: number,
-  today: IsoDate,
-  unit: Unit = 'ml',
-): number {
-  const totals = totalsByDay(state, unit);
-  const reached = (date: IsoDate) => goalReached(totals.get(date) ?? 0, goal, unit);
+export function streak(state: DrinksState, goal: number, today: IsoDate): number {
+  const reached = reachedBy(state, goal);
   let day = reached(today) ? today : addDays(today, -1);
   let count = 0;
   while (count < KEEP_DAYS && reached(day)) {
@@ -410,9 +425,7 @@ export function reminderNotices(
 ): Notice[] {
   const reminders = remindersOf(settings);
   if (!reminders.on) return [];
-  const unit = unitOf(settings);
-  const reached = goalReached(totalOn(drinks, today, unit), amountOf(settings, 'goal'), unit);
-  const date = reached ? addDays(today, 1) : today;
+  const date = reachedOn(drinks, today, amountOf(settings, 'goal')) ? addDays(today, 1) : today;
   return reminderTimes(reminders).map((time) => ({
     id: `drink~${time}`,
     start: toStamp(date, time),
@@ -427,8 +440,10 @@ export function reminderNotices(
 }
 
 /**
- * Whether a reminder went off after `from` and up to `to` (local times, the
- * same day as `to`): reminders are on and that day's goal isn't reached yet.
+ * Whether a reminder went off after `from` and up to `to` (local times):
+ * reminders are on and that day's goal isn't reached yet. Both days a check
+ * covers count, so a page that wakes just after midnight still has one from
+ * just before it (audit 4 F1-11).
  */
 export function reminderDue(
   drinks: DrinksState,
@@ -437,14 +452,16 @@ export function reminderDue(
   to: Stamp,
 ): boolean {
   const reminders = remindersOf(settings);
-  const date = to.slice(0, 10);
+  if (!reminders.on) return false;
   const goal = amountOf(settings, 'goal');
-  const unit = unitOf(settings);
-  if (!reminders.on || goalReached(totalOn(drinks, date, unit), goal, unit)) return false;
-  return reminderTimes(reminders).some((time) => {
-    const due = toStamp(date, time);
-    return from < due && due <= to;
-  });
+  return [...new Set([from.slice(0, 10), to.slice(0, 10)])].some(
+    (date) =>
+      !reachedOn(drinks, date, goal) &&
+      reminderTimes(reminders).some((time) => {
+        const due = toStamp(date, time);
+        return from < due && due <= to;
+      }),
+  );
 }
 
 // ---------- Dates and times for people ----------

@@ -64,7 +64,9 @@ its notification server, docs/adr/0009).
   - `reminder-alerts.ts`: due reminders on the page, and as notifications
     (with the shared parts of `@shkriuss/ui/local-reminders`)
   - `import-dialog.ts`: choosing a file to import; the dialog that reads it
-    and shows what it adds (`import-results.ts`) loads only then
+    and shows what it adds (`import-results.ts`) loads only then, and reads
+    the file in a worker (`read-ics.worker.ts`), so a big one doesn't freeze
+    the page
   - `special-days.ts`: holidays and fasts: what to show, and their list items
   - `shared.ts`: small helpers they share
 - Rules, as plain functions with unit tests next to them:
@@ -103,8 +105,9 @@ its notification server, docs/adr/0009).
   sync, both versions are kept: the second becomes its own event, titled
   "… (second version)", with its own reminder. An editor that's open while a
   sync (or another tab) changes its event saves only what was changed in it
-  (`editEvent`), so the other change stays; an event deleted meanwhile comes
-  back with the change, as a change wins over a deletion. A reminder is part
+  (`editEvent`), so the other change stays. An event deleted meanwhile: the
+  editor says so, and saving a change brings it back, as a change wins over
+  a deletion; Save with nothing changed, or Delete, leaves it deleted. A reminder is part
   of its event, so it syncs too; each device then uploads it to its own
   notification service, the next time Calendar opens there
   (`e2e/sync.spec.ts` checks this). See
@@ -122,7 +125,11 @@ its notification server, docs/adr/0009).
   repeats on the 29th to the 31st and yearly ones on 29 February have their
   months or years counted one by one, 500,000 at most for a whole file
   (a monthly one on the 31st for 10 years takes about 200); past that (only
-  in odd files), the rest are listed as not imported.
+  in odd files), the rest are listed as not imported. Only the first 5,000
+  events in a file are read (Calendar holds 2,000), and the import says how
+  many more there were; an event the file ends in the middle of is listed
+  as not imported. Titles over 100 characters and notes over 1,000 are cut
+  short, never in the middle of an emoji.
 - **Repeating events from another time zone** keep the time their first date
   has on the phone. When that time zone changes its clocks (summer time) on
   other dates than the phone's, some of the times end up an hour off: a weekly
@@ -136,7 +143,9 @@ its notification server, docs/adr/0009).
   be an hour off in some later years without a word. Finding the changes
   costs a year of readings for each time zone and year, so a file gets at
   most 100 of them; past that (only in odd files), a repeat counts as one
-  that may be an hour off. It also says when a monthly or
+  that may be an hour off. The two clocks are compared again only after a
+  change that moves one against the other, so time zones with the same
+  rules (Paris and Berlin) cost almost nothing. It also says when a monthly or
   yearly event moved to another day near the end of a month: 22:00 UTC on the
   31st is 02:00 on the 1st in Tbilisi, and Calendar would show it on the 1st
   of every month, also after months without a 31st.

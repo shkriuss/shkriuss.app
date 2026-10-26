@@ -22,6 +22,7 @@ import {
   MAX_DRINKS_PER_DAY,
   progressText,
   pruneDrinks,
+  reachedOn,
   recentDays,
   REMINDER_BODY,
   REMINDER_TITLE,
@@ -40,10 +41,12 @@ import {
   totalOn,
   typedMl,
   unitOf,
+  UNITS,
   withDrinks,
   withSettings,
   type Drink,
   type DrinksState,
+  type Unit,
 } from './water.ts';
 
 const TODAY = '2026-10-21';
@@ -243,7 +246,7 @@ describe('history', () => {
     expect(formatAmount(total, 'oz', 'en-US')).toBe('64 fl oz');
     expect(goalReached(total, goal, 'oz')).toBe(true);
     expect(progressText(total, goal, 'oz')).toBe('Goal reached. Well done!');
-    expect(streak(bottles, goal, TODAY, 'oz')).toBe(1);
+    expect(streak(bottles, goal, TODAY)).toBe(1);
     expect(recentDays(bottles, goal, TODAY, 1, 'oz')[0]?.reached).toBe(true);
     // In millilitres, a millilitre short is short.
     expect(goalReached(1999, 2000, 'ml')).toBe(false);
@@ -276,8 +279,10 @@ describe('history', () => {
         problems.push('total');
       if (!goalReached(total, goal, 'oz')) problems.push('not reached');
       if (progressText(total, goal, 'oz') !== 'Goal reached. Well done!') problems.push('to go');
-      if (streak(drinks, goal, TODAY, 'oz') !== 1) problems.push('streak');
+      if (streak(drinks, goal, TODAY) !== 1) problems.push('streak');
       if (!recentDays(drinks, goal, TODAY, 1, 'oz')[0]?.reached) problems.push('history');
+      // And still after switching to millilitres (audit 4 F1-9).
+      if (!recentDays(drinks, goal, TODAY, 1, 'ml')[0]?.reached) problems.push('history in ml');
       if (reminderDue(drinks, settings, `${TODAY}T09:59`, `${TODAY}T10:00`))
         problems.push('reminder');
       if (reminderNotices(drinks, settings, TODAY)[0]?.start !== '2026-10-22T09:00')
@@ -384,6 +389,80 @@ describe('history', () => {
     expect(streakText(1)).toBe('Goal reached 1 day in a row.');
     expect(streakText(3)).toBe('Goal reached 3 days in a row.');
   });
+
+  // Drinks are saved to the millilitre, so they add up a little differently
+  // in each unit: switching units turned these days into "not reached" and
+  // the streak to 0 (audit 4 F1-9).
+  describe('a day reached in one unit stays reached in the other', () => {
+    const remindersIn = (unit: Unit, goal: number) =>
+      setReminders(setAmount(setUnit(emptySettings(), unit), 'goal', goal), {
+        on: true,
+        every: 60,
+        from: '09:00',
+        until: '21:00',
+      });
+    /** Each of `days` with these drinks, at 09:00, 10:00 and so on. */
+    const daysOf = (days: readonly string[], amounts: readonly number[]): DrinksState =>
+      days.reduce(
+        (all, date) =>
+          amounts.reduce(
+            (some, ml, hour) =>
+              addDrink(some, drink(date, `${String(9 + hour).padStart(2, '0')}:00`, ml)),
+            all,
+          ),
+        emptyDrinks(),
+      );
+    const threeDays = ['2026-10-19', '2026-10-20', TODAY];
+
+    it('five 20 fl oz bottles for a 100 fl oz goal, seen in millilitres', () => {
+      const goal = toMl(100, 'oz');
+      const drinks = daysOf(
+        threeDays,
+        [20, 20, 20, 20, 20].map((oz) => toMl(oz, 'oz')),
+      );
+      // In millilitres, 2 ml short of the goal.
+      expect(totalOn(drinks, TODAY, 'ml')).toBe(2955);
+      expect(goal).toBe(2957);
+      expect(progressText(2955, goal, 'ml', 'en-US')).toBe('2 ml to go.');
+      expect(reachedOn(drinks, TODAY, goal)).toBe(true);
+      expect(streak(drinks, goal, TODAY)).toBe(3);
+      for (const unit of UNITS) {
+        expect(recentDays(drinks, goal, TODAY, 3, unit).map((day) => day.reached)).toEqual([
+          true,
+          true,
+          true,
+        ]);
+        const settings = remindersIn(unit, goal);
+        expect(reminderDue(drinks, settings, `${TODAY}T17:59`, `${TODAY}T18:00`)).toBe(false);
+        expect(reminderNotices(drinks, settings, TODAY)[0]?.start).toBe('2026-10-22T09:00');
+      }
+    });
+
+    it('five 400 ml glasses for a 2,000 ml goal, seen in ounces', () => {
+      const drinks = daysOf(threeDays, [400, 400, 400, 400, 400]);
+      // In ounces, 67.5 of 67.6 fl oz.
+      expect(progressText(totalOn(drinks, TODAY, 'oz'), 2000, 'oz', 'en-US')).toBe(
+        '0.1 fl oz to go.',
+      );
+      expect(reachedOn(drinks, TODAY, 2000)).toBe(true);
+      expect(streak(drinks, 2000, TODAY)).toBe(3);
+      expect(recentDays(drinks, 2000, TODAY, 3, 'oz').every((day) => day.reached)).toBe(true);
+      const settings = remindersIn('oz', 2000);
+      expect(reminderDue(drinks, settings, `${TODAY}T17:59`, `${TODAY}T18:00`)).toBe(false);
+    });
+
+    it('but not a day short in both', () => {
+      // 1,950 ml is 66 fl oz: short of 2,000 ml (67.6 fl oz) in either.
+      const drinks = daysOf([TODAY], [650, 650, 650]);
+      expect(reachedOn(drinks, TODAY, 2000)).toBe(false);
+      expect(streak(drinks, 2000, TODAY)).toBe(0);
+      for (const unit of UNITS) {
+        expect(recentDays(drinks, 2000, TODAY, 1, unit)[0]?.reached).toBe(false);
+        const settings = remindersIn(unit, 2000);
+        expect(reminderDue(drinks, settings, `${TODAY}T17:59`, `${TODAY}T18:00`)).toBe(true);
+      }
+    });
+  });
 });
 
 describe('reminders', () => {
@@ -451,6 +530,15 @@ describe('reminders', () => {
     const reached = log(drink(TODAY, '10:00', 2000));
     expect(reminderDue(reached, settings, '2026-10-21T10:55', '2026-10-21T11:00')).toBe(false);
     expect(reminderDue(none, emptySettings(), '2026-10-21T10:55', '2026-10-21T11:00')).toBe(false);
+  });
+
+  it('include one from just before midnight when the page wakes just after it (audit 4 F1-11)', () => {
+    const settings = setReminders(emptySettings(), { ...on, from: '21:59', until: '23:59' });
+    const none = emptyDrinks();
+    expect(reminderDue(none, settings, '2026-10-21T23:57', '2026-10-22T00:02')).toBe(true);
+    // That day's goal reached: not.
+    const reached = log(drink('2026-10-21', '20:00', 2000));
+    expect(reminderDue(reached, settings, '2026-10-21T23:57', '2026-10-22T00:02')).toBe(false);
   });
 });
 

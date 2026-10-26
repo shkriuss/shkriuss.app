@@ -47,7 +47,9 @@ Your to-do list, with dates, lists and reminders. Lives at
   change to each task and list wins. A task's form that's open while a sync
   (or another tab) changes the task saves only what was changed in the form
   (`editedTask`), so the other change stays: a task ticked off elsewhere
-  stays on its next date.
+  stays on its next date. A task deleted meanwhile: the form says so, and
+  saving a change brings it back; Save with nothing changed, or Delete,
+  leaves it deleted.
 - `e2e/`: browser tests (`helpers.ts` is shared by them). The shared
   accessibility, security and offline checks in `tests/e2e/` run too.
 

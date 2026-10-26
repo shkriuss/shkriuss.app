@@ -165,6 +165,15 @@ test('in fluid ounces, drinking exactly the goal reaches it', async ({ page }) =
   );
   await expect(page.getByText('Goal reached 1 day in a row.')).toBeVisible();
   await expect(history(page).first()).toHaveText(/goal reached$/);
+
+  // In millilitres the five bottles are 2,955 ml of 2,957 ml, but the day
+  // was reached, and stays so (audit 4 F1-9).
+  await page.getByLabel('Millilitres (ml)').check();
+  await expect(status(page, 'Amounts are in millilitres now.')).toBeAttached();
+  await expect(total(page)).toHaveText('2,955 ml');
+  await expect(left(page)).toHaveText('Goal reached. Well done!');
+  await expect(page.getByText('Goal reached 1 day in a row.')).toBeVisible();
+  await expect(history(page).first()).toHaveText(/goal reached$/);
 });
 
 test('the goal, the glass and bottle sizes, and the units can be changed', async ({ page }) => {

@@ -138,12 +138,15 @@ const currentPath = Astro.url.pathname;
     </template>
 
     <script>
+      import { sayInOpenDialogs } from '../scripts/dialog-messages.ts';
       import { returnFocusAfterDialogs } from '../scripts/keep-focus.ts';
       import { registerServiceWorker } from '../scripts/service-worker.ts';
 
       if (import.meta.env.PROD) registerServiceWorker();
       // A dialog's opener drawn again while it was open gets focus back (audit G-3).
       returnFocusAfterDialogs();
+      // Messages said while a dialog is open are heard there (audit 4 G-2).
+      sayInOpenDialogs();
     </script>
   </body>
 </html>

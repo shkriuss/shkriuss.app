@@ -16,6 +16,7 @@
 import { today as todayOf } from '@shkriuss/dates';
 import { createStore } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
+import { hasEdits } from '@shkriuss/sync/edits';
 import { focusSpot, keepFocus, returnFocus, type FocusSpot } from '@shkriuss/ui/keep-focus';
 import { PAGE_SIZE, shownCount, waitForTyping } from '@shkriuss/ui/long-lists';
 import { clearProblem, focusProblem, reportSave, showProblem } from '@shkriuss/ui/problem';
@@ -115,6 +116,9 @@ const SCROLL_EDGE_PX = 64;
 const SCROLL_STEP_PX = 16;
 /** Search results are read out this long after the last key press. */
 const ANNOUNCE_DELAY_MS = 700;
+/** Said in the form when its task was deleted on another device or in another tab. */
+const GONE =
+  'This task was deleted on another device or in another tab. Saving a change brings it back.';
 
 const keyOf = (view: View): string => (typeof view === 'string' ? view : `list:${view.list}`);
 const viewOf = (key: string): View =>
@@ -149,6 +153,7 @@ export function mountTasks(root: Document): void {
   const listField = required<HTMLElement>(form, '[data-list-field]');
   const everyField = required<HTMLElement>(form, '[data-every-field]');
   const everyUnitText = required<HTMLElement>(form, '[data-every-unit]');
+  const goneNote = required<HTMLElement>(form, '[data-gone-note]');
   const deleteDialog = required<HTMLDialogElement>(root, '[data-delete-dialog]');
   const deleteName = required<HTMLElement>(deleteDialog, '[data-delete-name]');
 
@@ -835,6 +840,7 @@ export function mountTasks(root: Document): void {
     showProblems({});
     fillForm(draftOf(task));
     openedDraft = readDraft();
+    goneNote.hidden = true;
     editor.showModal();
     field<HTMLInputElement>('title').focus();
   }
@@ -860,10 +866,37 @@ export function mountTasks(root: Document): void {
     if (form.querySelector('[aria-invalid="true"]')) showProblems(draftProblems(readDraft()), true);
   });
 
+  /** The form closes after its task was deleted, here or elsewhere. */
+  function closeDeleted(message: string): void {
+    editingId = null;
+    opener = focusSpot(viewHeading);
+    announce(message);
+    editor.close();
+  }
+
+  /**
+   * Says in the form when its task was deleted on another device or in
+   * another tab. It stays open, as a change wins over a deletion, but Delete
+   * and Save did nothing, or put the task back without a word (audit 4
+   * F1-3). Read out in the dialog (audit 4 G-2).
+   */
+  function showGone(): void {
+    const deleted = editor.open && editingId !== null && !find(editingId);
+    if (goneNote.hidden === !deleted) return;
+    goneNote.hidden = !deleted;
+    goneNote.textContent = deleted ? GONE : '';
+    if (deleted) announce(GONE);
+  }
+
   form.addEventListener('submit', (event) => {
     event.preventDefault();
     if (editingId === null) return;
     const draft = readDraft();
+    // Deleted elsewhere, and nothing changed here: it stays deleted.
+    if (!find(editingId) && openedDraft && !hasEdits(openedDraft, draft)) {
+      closeDeleted(`${openedDraft.title} stays deleted: nothing in it was changed.`);
+      return;
+    }
     const problems = draftProblems(draft);
     if (showProblems(problems)) return;
     // A sync while the form was open may have changed the task on another
@@ -888,7 +921,10 @@ export function mountTasks(root: Document): void {
 
   required<HTMLButtonElement>(editor, '[data-action="delete"]').addEventListener('click', () => {
     const task = find(editingId);
-    if (!task) return;
+    if (!task) {
+      if (openedDraft) closeDeleted(`${openedDraft.title} was already deleted.`);
+      return;
+    }
     deleteName.textContent = task.title;
     deleteDialog.returnValue = '';
     // Opens on top of the form; "Cancel" goes back to it.
@@ -896,8 +932,12 @@ export function mountTasks(root: Document): void {
   });
 
   deleteDialog.addEventListener('close', () => {
+    if (deleteDialog.returnValue !== 'confirm') return;
     const task = find(editingId);
-    if (deleteDialog.returnValue !== 'confirm' || !task) return;
+    if (!task) {
+      if (openedDraft) closeDeleted(`${openedDraft.title} was already deleted.`);
+      return;
+    }
     editingId = null;
     opener = focusSpot(viewHeading);
     if (saveTasks(removeTask(tasks, task.id))) announce(`Deleted ${task.title}.`);
@@ -928,6 +968,7 @@ export function mountTasks(root: Document): void {
     lists = listsStore.load();
     reminders.changed();
     keepFocus(render, viewHeading);
+    showGone();
   }
 
   // If Tasks is open in two tabs, keep them the same.

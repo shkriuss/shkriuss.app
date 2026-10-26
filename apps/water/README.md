@@ -22,8 +22,10 @@ Drink enough water each day. Lives at <https://water.shkriuss.app>.
   whole millilitres, and that adds up: five 20 fl oz bottles are 2,955 ml,
   while 100 fl oz is 2,957 ml. So a day's drinks are added up as they're
   shown (`totalOn`): five 20 fl oz bottles make 100 fl oz and reach a 100 fl
-  oz goal. "Goal reached", the streak, the history and the reminders all use
-  that one rule (`goalReached`).
+  oz goal. In millilitres they're still 2 ml short, so a day counts as
+  reached if it is in either unit (`reachedOn`): switching units can't undo
+  a day, or the streak. "Goal reached", the streak, the history and the
+  reminders all use that one rule.
 - `src/scripts/reminders.ts`: reminders to drink, from a time, every so often,
   until a time. Shown while Water is open, and, if "Also remind me when Water
   is closed" is on, sent by the shared notification service

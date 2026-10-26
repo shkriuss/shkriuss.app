@@ -5,6 +5,7 @@
  * J-11).
  */
 import { showFieldProblems } from '@shkriuss/ui/dom';
+import { hasEdits } from '@shkriuss/sync/edits';
 import { focusSpot, returnFocus, type FocusSpot } from '@shkriuss/ui/keep-focus';
 import {
   addDays,
@@ -33,6 +34,10 @@ import {
 } from '../lib/reminder-choices.ts';
 import { formatTime, required, type CalendarPage } from './shared.ts';
 
+/** Said in the editor when its event was deleted on another device or in another tab. */
+const GONE =
+  'This event was deleted on another device or in another tab. Saving a change brings it back.';
+
 /** Form fields in the order they appear, for focusing the first problem. */
 const FIELD_ORDER: DraftField[] = [
   'title',
@@ -58,6 +63,8 @@ export interface EditorPage extends CalendarPage {
 export interface EventEditor {
   /** Opens an event (null: a new one); focus goes back to `from` when it closes. */
   open(event: CalendarEvent | null, from: FocusSpot | null): void;
+  /** After a change from another device or tab: says if the event open was deleted there. */
+  refresh(): void;
 }
 
 export function mountEventEditor(root: Document, page: EditorPage): EventEditor {
@@ -66,6 +73,7 @@ export function mountEventEditor(root: Document, page: EditorPage): EventEditor 
   const form = required<HTMLFormElement>(editor, '[data-event-form]');
   const editorTitle = required<HTMLElement>(editor, '[data-dialog-title]');
   const repeatNote = required<HTMLElement>(editor, '[data-repeat-note]');
+  const goneNote = required<HTMLElement>(editor, '[data-gone-note]');
   const deleteButton = required<HTMLButtonElement>(editor, '[data-action="delete"]');
   const untilField = required<HTMLElement>(editor, '[data-until-field]');
   const timeFields = [...editor.querySelectorAll<HTMLElement>('[data-time-field]')];
@@ -165,6 +173,7 @@ export function mountEventEditor(root: Document, page: EditorPage): EventEditor 
     editorTitle.textContent = event ? 'Edit event' : 'New event';
     deleteButton.hidden = !event;
     repeatNote.hidden = !event || event.repeat === 'none';
+    goneNote.hidden = true;
 
     const selected = page.selected();
     titleInput.value = event?.title ?? '';
@@ -242,10 +251,41 @@ export function mountEventEditor(root: Document, page: EditorPage): EventEditor 
     if (form.querySelector('[aria-invalid="true"]')) showProblems(draftProblems(readDraft()), true);
   });
 
+  /** Whether the event open was deleted on another device or in another tab. */
+  const gone = (): boolean =>
+    editingId !== null && !page.state().events.some((event) => event.id === editingId);
+
+  /** The editor closes after its event was deleted, here or elsewhere. */
+  function closeDeleted(message: string): void {
+    editingId = null;
+    opener = focusSpot(page.newEventButton);
+    page.announce(message);
+    editor.close();
+  }
+
+  /**
+   * Says in the form when its event was deleted elsewhere. It stays open, as
+   * a change wins over a deletion, but Delete and Save did nothing, or put
+   * the event back without a word (audit 4 F1-3). Read out in the dialog
+   * (audit 4 G-2).
+   */
+  function refresh(): void {
+    const deleted = editor.open && gone();
+    if (goneNote.hidden === !deleted) return;
+    goneNote.hidden = !deleted;
+    goneNote.textContent = deleted ? GONE : '';
+    if (deleted) page.announce(GONE);
+  }
+
   form.addEventListener('submit', (submitEvent) => {
     submitEvent.preventDefault();
     const state = page.state();
     const draft = readDraft();
+    // Deleted elsewhere, and nothing changed here: it stays deleted.
+    if (gone() && openedDraft && !hasEdits(openedDraft, draft)) {
+      closeDeleted(`${openedDraft.title} stays deleted: nothing in it was changed.`);
+      return;
+    }
     const problems = draftProblems(draft);
     if (!editingId && state.events.length >= MAX_EVENTS) {
       problems.form = `You can have up to ${MAX_EVENTS} events. Delete some to add more.`;
@@ -274,7 +314,10 @@ export function mountEventEditor(root: Document, page: EditorPage): EventEditor 
 
   deleteButton.addEventListener('click', () => {
     const event = page.state().events.find((entry) => entry.id === editingId);
-    if (!event) return;
+    if (!event) {
+      if (openedDraft) closeDeleted(`${openedDraft.title} was already deleted.`);
+      return;
+    }
     deleteMessage.textContent =
       event.repeat === 'none'
         ? `“${event.title}” will be removed.`
@@ -285,14 +328,18 @@ export function mountEventEditor(root: Document, page: EditorPage): EventEditor 
   });
 
   deleteDialog.addEventListener('close', () => {
+    if (deleteDialog.returnValue !== 'confirm') return;
     const state = page.state();
     const event = state.events.find((entry) => entry.id === editingId);
-    if (deleteDialog.returnValue !== 'confirm' || !event) return;
+    if (!event) {
+      if (openedDraft) closeDeleted(`${openedDraft.title} was already deleted.`);
+      return;
+    }
     editingId = null;
     opener = focusSpot(page.newEventButton);
     if (page.save(removeEvent(state, event.id))) page.announce(`Deleted ${event.title}.`);
     editor.close();
   });
 
-  return { open };
+  return { open, refresh };
 }

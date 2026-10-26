@@ -12,8 +12,20 @@
  */
 export function withEdits<T extends object>(opened: T, edited: T, current: T): T {
   const result: T = { ...current };
-  for (const key of Object.keys(edited) as (keyof T)[]) {
-    if (JSON.stringify(edited[key]) !== JSON.stringify(opened[key])) result[key] = edited[key];
-  }
+  for (const key of changedFields(opened, edited)) result[key] = edited[key];
   return result;
 }
+
+/**
+ * Whether the person changed anything in the form. An item deleted on another
+ * device while its form was open comes back only with a change, so saving a
+ * form left as it was doesn't undo the deletion everywhere (audit 4 F1-3).
+ */
+export const hasEdits = <T extends object>(opened: T, edited: T): boolean =>
+  changedFields(opened, edited).length > 0;
+
+/** The fields that differ between `opened` and `edited`. */
+const changedFields = <T extends object>(opened: T, edited: T): (keyof T)[] =>
+  (Object.keys(edited) as (keyof T)[]).filter(
+    (key) => JSON.stringify(edited[key]) !== JSON.stringify(opened[key]),
+  );

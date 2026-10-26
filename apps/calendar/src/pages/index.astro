@@ -204,6 +204,7 @@ import { MAX_NOTES_LENGTH, MAX_TITLE_LENGTH, REPEAT_LABELS, REPEATS } from '../l
       <p class="muted" data-repeat-note hidden>
         This event repeats. Changes apply to every time it happens.
       </p>
+      <p class="notice" data-gone-note hidden></p>
 
       <div class="field">
         <label class="field__label" for="event-title">
@@ -561,8 +562,20 @@ import { MAX_NOTES_LENGTH, MAX_TITLE_LENGTH, REPEAT_LABELS, REPEATS } from '../l
   }
 
   /* Windows contrast themes replace backgrounds, so the selected day, the dots
-     and the fast line use the theme's own colours there (audit G-6). */
+     and the fast line use the theme's own colours there (audit G-6). They
+     also draw every day's border, so today's didn't stand out: only today's
+     shows, twice as thick (audit 4 G-10). */
   @media (forced-colors: active) {
+    .month__grid :global(.day-cell) {
+      border-color: Canvas;
+    }
+
+    .month__grid :global(.day-cell[aria-current='date']) {
+      border-color: CanvasText;
+      outline: var(--border-width) solid CanvasText;
+      outline-offset: calc(-2 * var(--border-width));
+    }
+
     .month__grid :global(.day-cell[aria-pressed='true']) {
       forced-color-adjust: none;
       background: SelectedItem;

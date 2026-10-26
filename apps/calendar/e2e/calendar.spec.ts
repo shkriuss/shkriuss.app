@@ -4,6 +4,7 @@
 // The browser's clock is fixed to Saturday 17 October 2026, and the locale is
 // en-US, so weeks start on Sunday and times read like "2:30 PM".
 import { readFile } from 'node:fs/promises';
+import type { Page } from '@playwright/test';
 import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
 import { day, dayList, editor, monthHeading, newEvent, save, seed, upcoming } from './helpers.ts';
 
@@ -63,6 +64,18 @@ test('in a Windows contrast theme, the chosen day and event dots still show', as
   const dotColour = await dot.evaluate(backgroundOf);
   expect(dotColour).not.toBe(canvas);
   expect(dotColour).not.toMatch(/^rgba\(.*, 0\)$|transparent/);
+});
+
+test('in a Windows contrast theme, today stands out from the other days', async ({ page }) => {
+  // Every day's border was drawn there, so today was only bold (audit 4 G-10).
+  await page.emulateMedia({ forcedColors: 'active' });
+  await day(page, /^Tuesday, October 20, 2026/).click();
+  const canvas = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  const borderOf = (element: Element) => getComputedStyle(element).borderTopColor;
+  const today = await day(page, /^Saturday, October 17, 2026, today/).evaluate(borderOf);
+  const other = await day(page, /^Friday, October 23, 2026/).evaluate(borderOf);
+  expect(other).toBe(canvas);
+  expect(today).not.toBe(canvas);
 });
 
 test('adds an event and remembers it after a reload', async ({ page }) => {
@@ -167,12 +180,8 @@ test('saving keeps what changed elsewhere while the editor was open', async ({ p
   await expect(editor(page).getByLabel('Reminder')).toHaveValue('60');
 });
 
-test('saving an event deleted elsewhere meanwhile keeps it, with the change', async ({ page }) => {
-  await seed(page, [{ title: 'Dentist' }]);
-  await dayList(page)
-    .getByRole('button', { name: /Dentist/ })
-    .click();
-  // Meanwhile, another tab (or a sync from another device) deletes it.
+/** Deletes Dentist in another tab (as a sync from another device would). */
+async function deleteElsewhere(page: Page): Promise<void> {
   const other = await page.context().newPage();
   await other.goto('/');
   await dayList(other)
@@ -185,6 +194,21 @@ test('saving an event deleted elsewhere meanwhile keeps it, with the change', as
     .click();
   await expect(other.getByText('Nothing planned on this day.')).toBeVisible();
   await other.close();
+}
+
+const GONE =
+  'This event was deleted on another device or in another tab. Saving a change brings it back.';
+
+test('saving an event deleted elsewhere meanwhile keeps it, with the change', async ({ page }) => {
+  await seed(page, [{ title: 'Dentist' }]);
+  await dayList(page)
+    .getByRole('button', { name: /Dentist/ })
+    .click();
+  await deleteElsewhere(page);
+  // Said in the editor, and read out there (audit 4 F1-3, G-2).
+  await expect(editor(page).locator('[data-gone-note]')).toHaveText(GONE);
+  await expect(editor(page).locator('[data-dialog-messages]')).toHaveText(GONE);
+  await checkA11y(page, 'editor of an event deleted elsewhere');
 
   // A change wins over a deletion, as with sync (audit F1-3).
   await editor(page).getByLabel('Notes (optional)').fill('Bring the X-ray');
@@ -196,6 +220,40 @@ test('saving an event deleted elsewhere meanwhile keeps it, with the change', as
     .getByRole('button', { name: /Dentist/ })
     .click();
   await expect(editor(page).getByLabel('Notes (optional)')).toHaveValue('Bring the X-ray');
+  await expect(editor(page).locator('[data-gone-note]')).toBeHidden();
+});
+
+test('an event deleted elsewhere stays deleted after Save with no change, or Delete', async ({
+  page,
+}) => {
+  // Save put it back everywhere, and Delete did nothing (audit 4 F1-3).
+  await seed(page, [{ title: 'Dentist' }]);
+  const open = () =>
+    dayList(page)
+      .getByRole('button', { name: /Dentist/ })
+      .click();
+  await open();
+  await deleteElsewhere(page);
+  await expect(editor(page).locator('[data-gone-note]')).toHaveText(GONE);
+  await save(page);
+  await expect(editor(page)).toBeHidden();
+  await expect(
+    page
+      .getByRole('status')
+      .filter({ hasText: 'Dentist stays deleted: nothing in it was changed.' }),
+  ).toBeAttached();
+  await expect(page.getByText('Nothing planned on this day.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'New event' })).toBeFocused();
+
+  await seed(page, [{ title: 'Dentist' }]);
+  await open();
+  await deleteElsewhere(page);
+  await editor(page).getByRole('button', { name: 'Delete' }).click();
+  await expect(editor(page)).toBeHidden();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Dentist was already deleted.' }),
+  ).toBeAttached();
+  await expect(page.getByText('Nothing planned on this day.')).toBeVisible();
 });
 
 test('closing the editor without saving changes nothing', async ({ page }) => {
@@ -239,6 +297,27 @@ test('repeats an event every week until a date', async ({ page }) => {
   await expect(page.getByRole('dialog', { name: 'Delete this event?' })).toContainText(
     'including every time it repeats',
   );
+});
+
+test('keeps focus on the same day’s copy of a repeating event when the list is drawn again', async ({
+  page,
+}) => {
+  // Every day's "Gym" was the same item, so focus jumped to the first (audit 4 G-3).
+  await seed(page, [{ title: 'Gym', repeat: 'daily' }]);
+  const gyms = upcoming(page).getByRole('button', { name: /Gym/ });
+  await expect(gyms).toHaveCount(7);
+  const fourth = gyms.nth(3);
+  const name = await fourth.getAttribute('aria-label');
+  await fourth.focus();
+  // Another tab adds an event: this one draws its lists again.
+  const other = await page.context().newPage();
+  await other.clock.setFixedTime(new Date('2026-10-17T10:00:00'));
+  await other.goto('/');
+  await newEvent(other, 'Dentist');
+  await save(other);
+  await expect(dayList(page).getByRole('button')).toHaveCount(2);
+  await expect(page.locator(':focus')).toHaveAttribute('aria-label', name ?? '');
+  await other.close();
 });
 
 test('adds an all-day event that lasts several days', async ({ page }) => {
