@@ -338,7 +338,7 @@ export function mountHabits(root: Document): void {
     }
     const edited = formDraft();
     const { name, days, reminder } = edited;
-    const nameProblem = nameError(name, habits, habit.id);
+    const nameProblem = nameError(name, habits, habit.id, opened?.name);
     nameErrorText.textContent = nameProblem ?? '';
     editName.toggleAttribute('aria-invalid', nameProblem !== undefined);
     daysErrorText.textContent = days.length === 0 ? 'Choose at least one day.' : '';

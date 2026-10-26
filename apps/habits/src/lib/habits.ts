@@ -114,18 +114,32 @@ export function isChecksState(value: unknown): value is ChecksState {
 
 /**
  * An error message for a habit's name, or undefined when it's fine.
- * `editing` is the habit being renamed (its own name doesn't count as taken).
+ * `editing` is the habit being renamed (its own name doesn't count as
+ * taken), and `was` the name it had when its form opened (if not given, its
+ * name now).
  */
-export function nameError(name: string, state: HabitsState, editing?: string): string | undefined {
+export function nameError(
+  name: string,
+  state: HabitsState,
+  editing?: string,
+  was?: string,
+): string | undefined {
   const trimmed = name.trim();
   if (trimmed.length === 0) return 'Enter a name for the habit.';
   if (trimmed.length > MAX_NAME_LENGTH) return `Use ${MAX_NAME_LENGTH} characters or fewer.`;
   // Capitals, accents and extra spaces don't make another name, as in the
   // other apps: "Café" is "cafe" (audit 3 J-12).
   const wanted = foldText(trimmed);
-  const taken = state.habits.some(
-    (habit) => habit.id !== editing && foldText(habit.name) === wanted,
-  );
+  // Its name, unchanged, is fine even if another habit has it too, as in
+  // Budget, Meals and Repairs: "Run 5km" and "Run ５km" were two names until
+  // wide and narrow letters were folded, so saved before, they're one now
+  // (audit 4 F3-6); so are two devices' "Run", each added before they first
+  // synced.
+  const own = was ?? state.habits.find((habit) => habit.id === editing)?.name;
+  const unchanged = editing !== undefined && own !== undefined && foldText(own) === wanted;
+  const taken =
+    !unchanged &&
+    state.habits.some((habit) => habit.id !== editing && foldText(habit.name) === wanted);
   if (taken) return 'You already have a habit with that name.';
   if (editing === undefined && state.habits.length >= MAX_HABITS) {
     return `You can have up to ${MAX_HABITS} habits.`;
@@ -141,16 +155,18 @@ export function addHabit(state: HabitsState, name: string, id: string): HabitsSt
 
 /**
  * Renames a habit, changes its days and/or its reminder (null = no reminder,
- * left out = as it was). Returns the same state if they aren't valid.
+ * left out = as it was). Returns the same state if they aren't valid. `was`
+ * is its name when its form opened (see nameError).
  */
 export function updateHabit(
   state: HabitsState,
   id: string,
   changes: { name: string; days: readonly number[]; reminder?: IsoTime | null },
+  was?: string,
 ): HabitsState {
   const days = [...new Set(changes.days)].sort((a, b) => a - b);
   const { reminder } = changes;
-  if (nameError(changes.name, state, id) || !isDays(days)) return state;
+  if (nameError(changes.name, state, id, was) || !isDays(days)) return state;
   if (reminder !== undefined && reminder !== null && !isIsoTime(reminder)) return state;
   return {
     habits: state.habits.map((habit) => {
@@ -192,8 +208,8 @@ export function editHabit(
 ): HabitsState {
   const habit = state.habits.find((entry) => entry.id === id);
   if (!habit) return state;
-  const merged = updateHabit(state, id, withEdits(opened, edited, draftOf(habit)));
-  return merged === state ? updateHabit(state, id, edited) : merged;
+  const merged = updateHabit(state, id, withEdits(opened, edited, draftOf(habit)), opened.name);
+  return merged === state ? updateHabit(state, id, edited, opened.name) : merged;
 }
 
 /** Removes a habit and its check marks. */
