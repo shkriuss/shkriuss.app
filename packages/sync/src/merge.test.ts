@@ -329,6 +329,15 @@ describe('keepBoth', () => {
     // This device's own change, back from an upload whose answer was lost
     // (made at the same moment), isn't kept twice.
     expect(keepBoth(tablet.known as Known, mine, mine, copy, 3000, true).kept).toBe(0);
+    // Or a rule for which values are events: here, counts other than 0.
+    const event = (value: Identified) => (value as unknown as { count: number }).count > 0;
+    expect(keepBoth(tablet.known as Known, mine, server, copy, 3000, event).kept).toBe(1);
+    phone.items = [counter('a', 0)];
+    const reset = phone.sync(undefined, 4000);
+    tablet.items = [counter('a', 0)];
+    const zero = tablet.snapshot(5000).snapshot;
+    expect(keepBoth(tablet.known as Known, zero, reset, copy, 5000, event).kept).toBe(0);
+    expect(keepBoth(tablet.known as Known, zero, reset, copy, 5000, true).kept).toBe(1);
   });
 });
 

@@ -21,7 +21,9 @@ This is the example app: it shows the patterns every app should follow.
   When a counter is changed on two devices before they sync, both counts are
   kept: the second becomes its own counter, "… (second version)", also when
   both reached the same number, as each glass counted counts (`COUNTER_SYNC`,
-  audit 4 F2-3). See
+  audit 4 F2-3); but not 0 on both, which is a reset (or the last − on
+  each), one change. Tabs of Tally on one device take turns to sync, so a
+  glass counted with two tabs open counts once. See
   [ADR 0010](../../docs/adr/0010-account-and-sync.md) and `e2e/sync.spec.ts`.
 
 Its name, description, icon and colour are in

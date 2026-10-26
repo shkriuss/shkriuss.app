@@ -13,7 +13,9 @@ each passkey's public key, and only hands out or removes a lock for the
 passkey's signature made on the Account page. Changed by
 [ADR 0019](0019-no-pull-request-previews.md): there are no pull request
 previews, so an app pairs only with the real hub (or, in tests, the local
-one).
+one). Changed by audit 4 (F2-3): an app can keep both versions of the same
+change too (`keepSame`, for counts), and only one tab of an app syncs at a
+time (see "keep both" below).
 
 ## Context
 
@@ -279,7 +281,14 @@ in with `sync: true` in `apps.json`.
     deletion on another device, so no edit is lost. The same change made
     on both is one edit, unless the app also asks for `keepSame`, for
     items whose changes are events: Tally does, so a glass counted on each
-    device (5 to 6 on both) is kept twice (audit 4 F2-3). It starts from a
+    device (5 to 6 on both) is kept twice, but 0 on both (a reset on each)
+    is one change (audit 4 F2-3). A change is known by the moment the
+    device's sync first noted it; two tabs of one device syncing at once
+    would each note the same change at a moment of their own, so only one
+    tab of an app syncs at a time (`navigator.locks`; a tab waits at most a
+    minute for another, which could be frozen in the background). Two
+    devices whose clocks are both behind the last change note theirs at the
+    same moment, and those still count as one, as before. It starts from a
     device's second sync after updating to this version, because it needs to
     know which data version the device last synced.
   - Data from a newer version of the app is never overwritten: the older
