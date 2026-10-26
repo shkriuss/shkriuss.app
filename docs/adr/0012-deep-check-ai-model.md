@@ -2,8 +2,9 @@
 
 Status: Accepted (2026-10-18). There are no pull request previews any more
 ([ADR 0019](0019-no-pull-request-previews.md)), so the model isn't uploaded to
-them. Changed in October 2026 (audit 3 F3-2): short forms typed without an
-apostrophe are split into words as spaCy splits them (see Decision).
+them. Changed in October 2026 (audit 3 F3-2, G-7): short forms typed without
+an apostrophe are split into words as spaCy splits them, and the list of
+files to download has a time limit (see Decision).
 
 ## Context
 
@@ -68,7 +69,11 @@ Published results on the same set agree: GPT-4 asked to correct scores 43
   saved files from any cache, and on updates now deletes only its own old
   caches (`shkriuss-…`), so the model survives updates. File names include
   part of their checksum, so an update downloads only changed files. "Remove
-  Deep check from this device" deletes the cache.
+  Deep check from this device" deletes the cache. While `manifest.json`
+  comes, the page shows and reads out "Checking what to download…". If the
+  site doesn't answer within 20 seconds (`fetchWithLimit`, as sync does), it
+  uses the list it got when the page opened, or else says it couldn't reach
+  shkriuss.app (audit 3 G-7).
 - **Hosted on the site itself.** Before each build,
   `apps/grammar/scripts/deep-check-files.ts` downloads the model from Hugging
   Face once (pinned commit; the build fails if the SHA-256 differs), splits

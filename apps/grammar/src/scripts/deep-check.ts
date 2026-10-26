@@ -6,6 +6,7 @@
  * Each sentence's result is remembered while the page is open, so after an
  * edit only the changed sentences are checked again.
  */
+import { fetchWithLimit } from '@shkriuss/sync/request';
 import { setBusy } from '@shkriuss/ui/busy';
 import { keepFocus } from '@shkriuss/ui/keep-focus';
 import { startWorker } from '@shkriuss/ui/worker';
@@ -41,6 +42,8 @@ import { required } from '@shkriuss/ui/dom';
 const SAVED_MANIFEST = `${DEEP_CHECK_PATH}saved-manifest.json`;
 /** Checks again this long after the last key press, once Deep check has been used. */
 const RECHECK_DELAY_MS = 800;
+/** Said while the list of files comes, before a download. */
+const PREPARING = 'Checking what to download…';
 /** Headers about how a file was sent, not about the file. */
 const TRANSFER_HEADERS = ['content-encoding', 'content-length', 'transfer-encoding'];
 
@@ -74,11 +77,15 @@ async function sha256(blob: Blob): Promise<string> {
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
-/** The manifest of the version on the site now (undefined when offline). */
+/**
+ * The manifest of the version on the site now (undefined when offline, or
+ * when the site doesn't answer in time: on a network that hangs, "Download
+ * Deep check" waited for ever, audit 3 G-7).
+ */
 async function currentManifest(): Promise<DeepCheckManifest | undefined> {
   if (!navigator.onLine) return undefined;
   try {
-    const response = await fetch(MANIFEST_URL, { cache: 'no-store' });
+    const response = await fetchWithLimit(MANIFEST_URL, { cache: 'no-store' });
     const manifest: unknown = response.ok ? await response.json() : undefined;
     return isManifest(manifest) ? manifest : undefined;
   } catch {
@@ -120,6 +127,7 @@ export function mountDeepCheck(root: Document, host: DeepCheckHost): { textChang
   const heading = required<HTMLElement>(section, 'h2');
   const panels = [...section.querySelectorAll<HTMLElement>('[data-deep-panel]')];
   const problem = required<HTMLElement>(section, '[data-deep-problem]');
+  const preparingNote = required<HTMLElement>(section, '[data-deep-preparing]');
   const size = required<HTMLElement>(section, '[data-deep-size]');
   const downloadButton = required<HTMLButtonElement>(section, '[data-action="deep-download"]');
   const downloadBar = required<HTMLProgressElement>(section, '[data-deep-download-bar]');
@@ -248,9 +256,13 @@ export function mountDeepCheck(root: Document, host: DeepCheckHost): { textChang
     // Busy, not disabled, so focus stays on it while the files are looked at.
     setBusy(button, true);
     setProblem('');
+    // Shown and read out: the button was busy without a word (audit 3 G-7).
+    preparingNote.textContent = PREPARING;
+    host.announce(PREPARING);
     const plan = await planDownload().finally(() => {
       preparing = false;
       setBusy(button, false);
+      preparingNote.textContent = '';
     });
     if (!plan) return;
     const { manifest, cache, files, missing, needed } = plan;
