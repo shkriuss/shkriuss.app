@@ -66,7 +66,7 @@ describe('parseDecimal', () => {
       '1,234.50': Number.NaN,
       '1.234.50': Number.NaN,
     });
-    // Thousands are grouped with a space in French and Georgian (ignored).
+    // Thousands are grouped with a space in French and Georgian.
     reads('fr-FR', { '1\u202F234,56': 1234.56, '1 500': 1500, '1,500': 1.5, '1.500': 1.5 });
     reads('ka-GE', { '1\u00A0500': 1500, '1,500': 1.5, '1.500': 1.5, '1.234,5': Number.NaN });
     // India groups by two after the first three; one sign is still one thousand.
@@ -74,6 +74,31 @@ describe('parseDecimal', () => {
     reads('en-IN', { '1,234,567': Number.NaN });
     // Switzerland groups with an apostrophe (typed straight, or curly by a phone).
     reads('de-CH', { "1'500": 1500, '1’500': 1500, "1'234.50": 1234.5, "1'50": Number.NaN });
+  });
+
+  // Audit 3 F2-4: spaces were left out wherever they were, so "12 50" was 1,250.
+  it('reads a space between digits as grouping thousands, checked like a comma', () => {
+    for (const locale of ['en-US', 'de-DE', 'fr-FR', 'ka-GE']) {
+      reads(locale, {
+        '1 500': 1500,
+        '12 345 678': 12_345_678,
+        '1 500,5': 1500.5,
+        '12 50': Number.NaN,
+        '1 2': Number.NaN,
+        '0 500': Number.NaN,
+        '1 500 00': Number.NaN,
+        '12,5 0': Number.NaN,
+      });
+    }
+    // A comma or point after the spaces can only be the decimal sign.
+    reads('en-US', { '1 234,5': 1234.5, '1 234.50': 1234.5, '1 23 456': Number.NaN });
+    reads('en-IN', { '1 23 456': 123_456, '1 500': 1500 });
+    // The no-break spaces locales group with, as when a number is copied.
+    reads('fr-FR', { '1 234 567,5': 1_234_567.5, '1 500': 1500 });
+    // Spaces that aren't between digits are left out.
+    reads('en-US', { ' -5 ': -5, '- 5': -5, '12 ,50': 12.5 });
+    expect(parseWhole('12 50', 'fr-FR')).toBeNaN();
+    expect(parseWhole('120 000', 'en-US')).toBe(120_000);
   });
 
   // Audit F2-10: amounts were shown in the browser's own digits, and those were refused.

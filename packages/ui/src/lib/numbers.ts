@@ -80,7 +80,7 @@ function isGrouped(groups: readonly string[], size: number): boolean {
 /** What a sign between digits is: the decimal sign, one that groups thousands, or neither. */
 function kindOf(character: string, style: Style): 'decimal' | 'group' | null {
   if (character === ARABIC_DECIMAL) return 'decimal';
-  if (character === ARABIC_GROUP) return 'group';
+  if (character === ARABIC_GROUP || character === ' ') return 'group';
   if (character === "'" || character === '’') return style.apostrophe ? 'group' : null;
   // A comma or a point that doesn't group thousands in this locale is a decimal sign.
   return character === style.group ? 'group' : 'decimal';
@@ -94,10 +94,16 @@ function plainDigits(text: string, style: Style, whole: boolean): string | null 
   // Full-width digits and signs are plain ones, and any script's digits are 0 to 9.
   const compact = text
     .normalize('NFKC')
-    .replace(/\s/g, '')
-    .replace(/(?![0-9])\p{Nd}/gu, latinDigit);
+    .replace(/(?![0-9])\p{Nd}/gu, latinDigit)
+    .trim()
+    // A space between digits (or a no-break space, as some locales group
+    // with) groups thousands, checked like a comma: "1 500" is 1500, but
+    // "12 50" isn't a number (audit 3 F2-4). Other spaces are left out.
+    .replace(/\s+/g, (space: string, at: number, all: string) =>
+      /\d/.test(all.charAt(at - 1)) && /\d/.test(all.charAt(at + space.length)) ? ' ' : '',
+    );
   if (compact === '') return '';
-  const match = /^([+-]?)([\d.,'’\u066B\u066C]+)$/.exec(compact);
+  const match = /^([+-]?)([\d.,'’ \u066B\u066C]+)$/.exec(compact);
   const [, minus = '', body = ''] = match ?? [];
   if (!/\d/.test(body)) return null;
   const signs = [...body.matchAll(/\D/g)].map((found) => ({
@@ -105,9 +111,10 @@ function plainDigits(text: string, style: Style, whole: boolean): string | null 
     kind: kindOf(found[0], style),
   }));
   if (signs.some((sign) => sign.kind === null)) return null;
-  // One comma or point that can't group thousands ("12,50", "1,5000") is a decimal sign.
-  const [only] = signs;
-  if (signs.length === 1 && only && /^[.,]$/.test(body.charAt(only.at))) {
+  // One comma or point that can't group thousands ("12,50", "1,5000", or
+  // "1 234,5", after a space that does) is a decimal sign.
+  const [only, ...more] = signs.filter((sign) => /^[.,]$/.test(body.charAt(sign.at)));
+  if (only && more.length === 0) {
     if (!isGrouped([body.slice(0, only.at), body.slice(only.at + 1)], 3)) only.kind = 'decimal';
   }
   const points = signs.filter((sign) => sign.kind === 'decimal');
@@ -139,7 +146,9 @@ function plainDigits(text: string, style: Style, whole: boolean): string | null 
  * - A number written in the locale's style is read too: "1,234.50" in
  *   English, "1.234,50" in German. Mixed or wrong grouping isn't a number
  *   ("1.234.50", or "1,23,456" outside India), so the person is asked
- *   again. Spaces are ignored ("1 234,50" in French).
+ *   again. A space between digits groups thousands in any locale, and is
+ *   checked the same way: "1 234,50" (French) is 1234.5, "12 50" isn't a
+ *   number.
  * - Exponents ("1e3"), "Infinity" and anything else aren't numbers.
  */
 export function parseDecimal(text: string, locale?: string): number | null {
