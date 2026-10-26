@@ -592,5 +592,5 @@ serious first.
    [results.md](results.md): what was checked, by which tools, and what was
    found and fixed.
 6. Each audit's numbers start again from 1, so the fixes name the audit too:
-   the fourth audit's B-2 is "(audit 4 B-2)" in code comments and commits,
-   and "4B-2" in results.md, which also says what the older numbers mean.
+   the fifth audit's B-2 is "(audit 5 B-2)" in code comments and commits,
+   and "5B-2" in results.md, which also says what the older numbers mean.

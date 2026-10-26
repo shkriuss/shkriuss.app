@@ -8,23 +8,24 @@ The repository is public, so anything still open that could be used against
 anyone is listed here without its details until it's fixed (see
 [SECURITY.md](../../SECURITY.md)).
 
-## Three audits, three sets of numbers
+## Four audits, four sets of numbers
 
 Each audit numbered its findings by area from 1, so "B-2" means a different
-finding in each. Here, the second audit's numbers start with 2 ("2B-2") and
-the third's with 3 ("3B-2"). Code comments, commits and docs name the finding
-they fix like this:
+finding in each. Here, the second audit's numbers start with 2 ("2B-2"), the
+third's with 3 ("3B-2") and the fourth's with 4 ("4B-2"). Code comments,
+commits and docs name the finding they fix like this:
 
 | Audit                                | Fixed in                                                                                                                              | Written there as                      | Here |
 | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- | ---- |
 | [First](#first-audit), 162 findings  | [#50](https://github.com/shkriuss/shkriuss.app/pull/50) to [#62](https://github.com/shkriuss/shkriuss.app/pull/62), 23 and 24 October | "(audit B-2)", in a change before #70 | B-2  |
 | [Second](#second-audit), 79 findings | [#70](https://github.com/shkriuss/shkriuss.app/pull/70) to [#77](https://github.com/shkriuss/shkriuss.app/pull/77), 25 October        | "(audit B-2)", in #70 to #77          | 2B-2 |
-| [Third](#third-audit), 77 findings   | [#79](https://github.com/shkriuss/shkriuss.app/pull/79) onwards, from 26 October                                                      | "(audit 3 B-2)"                       | 3B-2 |
+| [Third](#third-audit), 77 findings   | [#79](https://github.com/shkriuss/shkriuss.app/pull/79) to [#88](https://github.com/shkriuss/shkriuss.app/pull/88), 26 October        | "(audit 3 B-2)"                       | 3B-2 |
+| [Fourth](#fourth-audit), 78 findings | [#89](https://github.com/shkriuss/shkriuss.app/pull/89) to [#93](https://github.com/shkriuss/shkriuss.app/pull/93), 26 and 27 October | "(audit 4 B-2)"                       | 4B-2 |
 
 So an "(audit B-2)" without an audit number means the first or the second
 audit: the history of its line (`git blame`, or **Blame** on GitHub) shows
 which pull request wrote it. The next audit writes its own number the same
-way: "(audit 4 B-2)" in code, "4B-2" here (the brief says so too).
+way: "(audit 5 B-2)" in code, "5B-2" here (the brief says so too).
 
 ## First audit
 
@@ -591,3 +592,209 @@ Severity is the auditor's, as in the first audit.
 | 3J-10 | Info     | What a newcomer needs that no doc said                                      | Fixed (#80)                                                                                                           |
 | 3J-11 | Info     | What will be hard to change later                                           | Fixed: Calendar has room again (#83, #86), Harper's size is planned for (#85), the shared tests name every site (#87) |
 | 3J-12 | Info     | Small helpers copied between apps, and "same name" checks that differ       | Fixed (#84, #86, #87)                                                                                                 |
+
+## Fourth audit
+
+### How it was done
+
+- **Who:** Claude Code (26 October 2026), at commit `7e11f89`. It did areas
+  A, B, E, H, I and Z itself, and separate reviews did C, D, F1, F2, F3, G
+  and J; every finding they made was checked against the code again, by
+  running its test or reading the code it points to. Each batch of fixes was
+  then read again by a separate review before it was merged (the second
+  batch's just after, so its follow-ups are in #93), which found problems in
+  the first versions of the fixes; those are fixed too. Fixing them turned up
+  a few more, outside the audit's list (a sync message that gave the wrong
+  reason, and browser tests that failed now and then), fixed in the same
+  pull requests.
+- **What:** as before: the code, the workflows, and the live sites and
+  settings (read-only).
+- **Evidence:** each finding came with a test or a command that shows it.
+  Each fix comes with a test that fails without it, where one can be
+  written.
+- **Fixes:** in pull requests
+  [#89](https://github.com/shkriuss/shkriuss.app/pull/89),
+  [#90](https://github.com/shkriuss/shkriuss.app/pull/90),
+  [#91](https://github.com/shkriuss/shkriuss.app/pull/91),
+  [#92](https://github.com/shkriuss/shkriuss.app/pull/92) and
+  [#93](https://github.com/shkriuss/shkriuss.app/pull/93).
+
+### Totals
+
+| Severity | Found | Fixed | Partly fixed | Explained |
+| -------- | ----- | ----- | ------------ | --------- |
+| High     | –     | –     | –            | –         |
+| Medium   | 8     | 8     | –            | –         |
+| Low      | 47    | 45    | 1            | 1         |
+| Info     | 23    | 20    | –            | 3         |
+| **All**  | 78    | 73    | 1            | 4         |
+
+There were no Critical or High findings: no way was found for anyone to read
+or change someone else's data, take over an account, run code on the sites,
+or run up costs. Area I (the domain, Cloudflare and GitHub settings) matched
+the docs, so it has no findings.
+
+### What's left for you
+
+**Settings:** nothing.
+
+**Choices made for you, which you can change:**
+
+- Meals keeps fewer things than before, so that a full Meals fits on an
+  iPhone (4F2-13): 2,000 planned meals instead of 5,000, 500 things added to
+  shopping lists by hand instead of 2,000, and 600,000 characters of text in
+  all its meals together (about 300 meals with a long recipe each). What's
+  saved already stays.
+- A one-off reminder set during the hour that repeats when clocks go back,
+  for later in that same hour, still doesn't go off (4F1-7): sending it the
+  second time round would need the phone and the server to remember which
+  reminders went off the first time, or those would come twice. It can only
+  happen in one hour a year ([ADR 0009](../adr/0009-push-notifications.md)).
+- Two bigger pieces of work are planned rather than done (4J-10): splitting
+  the biggest page scripts, and loading Photos' list a page at a time
+  ([PLAN.md](../PLAN.md), Milestone 2).
+
+The second audit's Undo after one-tap removals is still open
+([above](#left-for-you-to-decide)).
+
+### Every finding
+
+Severity is the auditor's, as before.
+
+#### A. Account and keys
+
+| ID   | Severity | What was wrong                                                                           | What happened                                                                                                                                  |
+| ---- | -------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| 4A-1 | Low      | An app connected to a different account still moved the first account's old copies there | Fixed ([#89](https://github.com/shkriuss/shkriuss.app/pull/89))                                                                                |
+| 4A-2 | Info     | The check on adding a passkey's lock can't tell who made the lock                        | Explained ([ADR 0018](../adr/0018-passkey-signatures.md)): what the signature proves ([#89](https://github.com/shkriuss/shkriuss.app/pull/89)) |
+
+#### B. Servers
+
+| ID   | Severity | What was wrong                                                                | What happened                                                                                                                            |
+| ---- | -------- | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| 4B-1 | Info     | Device links weren't counted by any storage meter, and ADR 0017 didn't say so | Explained ([ADR 0017](../adr/0017-storage-limits.md)): why they don't need one ([#89](https://github.com/shkriuss/shkriuss.app/pull/89)) |
+
+#### C. Browser security
+
+| ID   | Severity | What was wrong                                                                            | What happened                                                                                                                                  |
+| ---- | -------- | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| 4C-1 | Low      | Before a page's script ran, its form sent what was typed to the server, in the address    | Fixed: forms can't be sent anywhere ([#90](https://github.com/shkriuss/shkriuss.app/pull/90))                                                  |
+| 4C-2 | Low      | One photo whose type is "constructor" emptied the Photos grid on every device that got it | Fixed ([#90](https://github.com/shkriuss/shkriuss.app/pull/90))                                                                                |
+| 4C-3 | Low      | Calendar's import froze the page: 17 seconds for a crafted file, about 2 for a big one    | Fixed: read in a worker, at most 5,000 events ([#91](https://github.com/shkriuss/shkriuss.app/pull/91))                                        |
+| 4C-4 | Low      | A change to the security headers didn't reach saved worker scripts                        | Fixed ([#90](https://github.com/shkriuss/shkriuss.app/pull/90), [#93](https://github.com/shkriuss/shkriuss.app/pull/93))                       |
+| 4C-5 | Low      | The service worker showed a 4xx error instead of the saved copy of a page                 | Fixed ([#90](https://github.com/shkriuss/shkriuss.app/pull/90); its test made real in [#93](https://github.com/shkriuss/shkriuss.app/pull/93)) |
+| 4C-6 | Low      | "Add this device" might be clickable through a double-click trick                         | Fixed: it works only half a second after it shows ([#89](https://github.com/shkriuss/shkriuss.app/pull/89))                                    |
+| 4C-7 | Info     | In Firefox, all the apps share one storage limit                                          | Explained in Photos' README ([#90](https://github.com/shkriuss/shkriuss.app/pull/90))                                                          |
+
+#### D. Privacy
+
+| ID   | Severity | What was wrong                                                                                  | What happened                                                                                                    |
+| ---- | -------- | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| 4D-1 | Low      | A deleted Photos library was filled again by another device still uploading                     | Fixed ([#89](https://github.com/shkriuss/shkriuss.app/pull/89))                                                  |
+| 4D-2 | Low      | "Delete the online copy" before a device's first sync had finished left the online library      | Fixed ([#89](https://github.com/shkriuss/shkriuss.app/pull/89))                                                  |
+| 4D-3 | Low      | The privacy page left Microsoft out of the push services that carry reminders                   | Fixed ([#89](https://github.com/shkriuss/shkriuss.app/pull/89))                                                  |
+| 4D-4 | Low      | Photos' "Delete all data?" said to back up first, but Photos has no backup                      | Fixed ([#89](https://github.com/shkriuss/shkriuss.app/pull/89))                                                  |
+| 4D-5 | Low      | A passkey deleted in the password manager leaves its lock on the server, which wasn't said      | Fixed: the privacy page says so, and how to remove one ([#89](https://github.com/shkriuss/shkriuss.app/pull/89)) |
+| 4D-6 | Low      | On an iPhone, turning notifications off in Settings might not delete anything on the server     | Fixed ([#89](https://github.com/shkriuss/shkriuss.app/pull/89))                                                  |
+| 4D-7 | Info     | A few things the servers keep weren't in the privacy page's lists                               | Fixed ([#89](https://github.com/shkriuss/shkriuss.app/pull/89))                                                  |
+| 4D-8 | Info     | Words removed from Grammar's dictionary, and imported events' file ids, stay 180 days with sync | Fixed: the privacy page says so ([#89](https://github.com/shkriuss/shkriuss.app/pull/89))                        |
+
+#### E. Data safety
+
+| ID   | Severity | What was wrong                                                                         | What happened                                                   |
+| ---- | -------- | -------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| 4E-1 | Medium   | After "Delete the online copy", sync could never be turned on again for that app       | Fixed ([#89](https://github.com/shkriuss/shkriuss.app/pull/89)) |
+| 4E-2 | Low      | A refused restore said "Nothing was changed", but had erased the device's sync history | Fixed ([#89](https://github.com/shkriuss/shkriuss.app/pull/89)) |
+
+#### F1. Time and reminders
+
+| ID     | Severity | What was wrong                                                                                                  | What happened                                                                                                       |
+| ------ | -------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| 4F1-1  | Medium   | After the clock went back by hours (flying west), open apps showed no reminders until it caught up              | Fixed ([#91](https://github.com/shkriuss/shkriuss.app/pull/91))                                                     |
+| 4F1-2  | Low      | The notification server could stop sending a device's reminders while the app believed it had them              | Fixed: the app asks the server daily ([#91](https://github.com/shkriuss/shkriuss.app/pull/91))                      |
+| 4F1-3  | Low      | Calendar and Tasks: in an editor whose item was deleted elsewhere, Delete did nothing, and Save brought it back | Fixed ([#91](https://github.com/shkriuss/shkriuss.app/pull/91))                                                     |
+| 4F1-4  | Low      | "N minutes before" reminders in the hour clocks skip went off after the event had started                       | Fixed ([#91](https://github.com/shkriuss/shkriuss.app/pull/91))                                                     |
+| 4F1-5  | Low      | Habits and Water: a reminder at midnight came twice with reminders while closed on                              | Fixed ([#91](https://github.com/shkriuss/shkriuss.app/pull/91))                                                     |
+| 4F1-6  | Low      | Habits, Tasks, Reminders and Water open in two tabs rang twice for each reminder                                | Fixed ([#91](https://github.com/shkriuss/shkriuss.app/pull/91))                                                     |
+| 4F1-7  | Low      | A one-off reminder set during the hour that repeats, for later in that hour, never goes off                     | Explained ([above](#whats-left-for-you-1)): a known limit ([#91](https://github.com/shkriuss/shkriuss.app/pull/91)) |
+| 4F1-8  | Low      | Reminders: an overdue reminder's text couldn't be corrected without moving its time                             | Fixed ([#91](https://github.com/shkriuss/shkriuss.app/pull/91))                                                     |
+| 4F1-9  | Low      | Water: switching units could turn days that reached the goal into "not reached"                                 | Fixed ([#91](https://github.com/shkriuss/shkriuss.app/pull/91))                                                     |
+| 4F1-10 | Low      | Calendar's import cut long titles and notes in the middle of an emoji                                           | Fixed ([#91](https://github.com/shkriuss/shkriuss.app/pull/91))                                                     |
+| 4F1-11 | Info     | Habits, Water and Budget skipped a reminder from just before midnight when the page woke just after             | Fixed ([#91](https://github.com/shkriuss/shkriuss.app/pull/91))                                                     |
+| 4F1-12 | Info     | A calendar file cut off in the middle of an event dropped that event without a word                             | Fixed ([#91](https://github.com/shkriuss/shkriuss.app/pull/91))                                                     |
+| 4F1-13 | Info     | The behaviour behind 4F1-1 to 4F1-7 had no test                                                                 | Fixed ([#91](https://github.com/shkriuss/shkriuss.app/pull/91))                                                     |
+
+#### F2. Money apps, Tally, Meals and Repairs
+
+| ID     | Severity | What was wrong                                                                                    | What happened                                                                                                                           |
+| ------ | -------- | ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| 4F2-1  | Medium   | "Delete a year…" deleted a different year if the chosen one was deleted elsewhere meanwhile       | Fixed ([#92](https://github.com/shkriuss/shkriuss.app/pull/92))                                                                         |
+| 4F2-2  | Medium   | Repairs froze about a second at every redraw near its limit                                       | Fixed ([#92](https://github.com/shkriuss/shkriuss.app/pull/92))                                                                         |
+| 4F2-3  | Low      | Tally lost a count when two devices counted the same number of times before they synced           | Fixed ([#92](https://github.com/shkriuss/shkriuss.app/pull/92))                                                                         |
+| 4F2-4  | Low      | Meals: changing a planned meal removed elsewhere saved nothing, and still said "Changed …"        | Fixed ([#92](https://github.com/shkriuss/shkriuss.app/pull/92))                                                                         |
+| 4F2-5  | Low      | Budget: after switching to yen, amounts didn't add up to what's shown                             | Fixed ([#92](https://github.com/shkriuss/shkriuss.app/pull/92))                                                                         |
+| 4F2-6  | Low      | Trades: "Delete a year" could put closed shares back as open                                      | Fixed ([#92](https://github.com/shkriuss/shkriuss.app/pull/92))                                                                         |
+| 4F2-7  | Low      | Long pastes into notes were cut without a word                                                    | Partly fixed: every box says so but Repairs' part rows, whose boxes are short ([#92](https://github.com/shkriuss/shkriuss.app/pull/92)) |
+| 4F2-8  | Low      | Repairs: a photo taken off a repair was deleted before the repair was saved                       | Fixed ([#92](https://github.com/shkriuss/shkriuss.app/pull/92))                                                                         |
+| 4F2-9  | Low      | Spreadsheets in a language that writes decimals with a comma: one column, and a formula could run | Fixed ([#92](https://github.com/shkriuss/shkriuss.app/pull/92))                                                                         |
+| 4F2-10 | Low      | Trades on an iPhone whose keypad offers only a comma                                              | Fixed ([#92](https://github.com/shkriuss/shkriuss.app/pull/92))                                                                         |
+| 4F2-11 | Low      | Repairs said "1 hours"                                                                            | Fixed ([#92](https://github.com/shkriuss/shkriuss.app/pull/92))                                                                         |
+| 4F2-12 | Info     | Trades' fees weren't asked about for "1.500", as Budget and Repairs do                            | Fixed ([#92](https://github.com/shkriuss/shkriuss.app/pull/92))                                                                         |
+| 4F2-13 | Info     | Meals' limits weren't measured against the room on the device                                     | Fixed: measured, and two limits lowered ([above](#whats-left-for-you-1)) ([#92](https://github.com/shkriuss/shkriuss.app/pull/92))      |
+
+#### F3. Notes, Shelf, Photos and Grammar
+
+| ID    | Severity | What was wrong                                                                        | What happened                                                                                                                                        |
+| ----- | -------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 4F3-1 | Medium   | Notes (and Shelf): with storage full, a change saved elsewhere wiped what was typed   | Fixed ([#93](https://github.com/shkriuss/shkriuss.app/pull/93))                                                                                      |
+| 4F3-2 | Medium   | Grammar's Deep check garbled sentences with "constructor" or "toString"               | Fixed ([#90](https://github.com/shkriuss/shkriuss.app/pull/90))                                                                                      |
+| 4F3-3 | Medium   | Photos dated HEIC (and every non-JPEG) photo by the file's date                       | Fixed ([#90](https://github.com/shkriuss/shkriuss.app/pull/90); quick with crafted files in [#93](https://github.com/shkriuss/shkriuss.app/pull/93)) |
+| 4F3-4 | Low      | On iPhones, Notes and Shelf cut text that Safari's boxes let in                       | Fixed, in Tasks and notifications too ([#93](https://github.com/shkriuss/shkriuss.app/pull/93))                                                      |
+| 4F3-5 | Low      | Shelf: category forms did nothing, or the wrong thing, after a deletion elsewhere     | Fixed ([#93](https://github.com/shkriuss/shkriuss.app/pull/93))                                                                                      |
+| 4F3-6 | Info     | Search didn't find full-width or half-width letters                                   | Fixed ([#93](https://github.com/shkriuss/shkriuss.app/pull/93))                                                                                      |
+| 4F3-7 | Info     | Grammar: a suggestion's surrounding text could start or end in the middle of an emoji | Fixed ([#90](https://github.com/shkriuss/shkriuss.app/pull/90))                                                                                      |
+
+#### G. Accessibility and wording
+
+| ID    | Severity | What was wrong                                                                                                              | What happened                                                                                          |
+| ----- | -------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| 4G-1  | Low      | Water's amount fields dropped a comma: "8,5" fl oz was saved as 85                                                          | Fixed ([#92](https://github.com/shkriuss/shkriuss.app/pull/92))                                        |
+| 4G-2  | Low      | Anything read out while a dialog was open was never heard, such as a reminder                                               | Fixed: every dialog has its own message area ([#91](https://github.com/shkriuss/shkriuss.app/pull/91)) |
+| 4G-3  | Low      | Calendar: a repeating event listed several times in "Next 7 days" lost its place                                            | Fixed ([#91](https://github.com/shkriuss/shkriuss.app/pull/91))                                        |
+| 4G-4  | Low      | Account page: signing out or in from another tab changed this tab silently                                                  | Fixed ([#89](https://github.com/shkriuss/shkriuss.app/pull/89))                                        |
+| 4G-5  | Low      | Repairs: over 30 parts, the problem wasn't read out                                                                         | Fixed ([#92](https://github.com/shkriuss/shkriuss.app/pull/92))                                        |
+| 4G-6  | Low      | Photos' "Unlock online storage", the Account page's "Sign in" and "Send a test notification" said nothing while they waited | Fixed ([#90](https://github.com/shkriuss/shkriuss.app/pull/90))                                        |
+| 4G-7  | Low      | "Also remind me when … is closed" could wait for ever on "Turning on…"                                                      | Fixed ([#91](https://github.com/shkriuss/shkriuss.app/pull/91))                                        |
+| 4G-8  | Low      | The status line for reminders while closed was written again with the same words                                            | Fixed ([#91](https://github.com/shkriuss/shkriuss.app/pull/91))                                        |
+| 4G-9  | Info     | Trades: another period in "Results for" changed every result without a word                                                 | Fixed ([#92](https://github.com/shkriuss/shkriuss.app/pull/92))                                        |
+| 4G-10 | Info     | In Windows contrast themes, Calendar's "today" was only bold                                                                | Fixed ([#91](https://github.com/shkriuss/shkriuss.app/pull/91))                                        |
+| 4G-11 | Info     | Tally's − and + buttons didn't fit the counter card with text at 200%                                                       | Fixed ([#92](https://github.com/shkriuss/shkriuss.app/pull/92))                                        |
+| 4G-12 | Info     | The same action had different words, and "can't be undone" was in some delete dialogs only                                  | Fixed ([#93](https://github.com/shkriuss/shkriuss.app/pull/93))                                        |
+
+#### H. CI, deploys and supply chain
+
+| ID   | Severity | What was wrong                                                              | What happened                                                                |
+| ---- | -------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| 4H-1 | Info     | The lockfile age check took its exceptions from the pull request it checked | Fixed: from `main` ([#89](https://github.com/shkriuss/shkriuss.app/pull/89)) |
+
+#### J. Architecture and tests
+
+| ID    | Severity | What was wrong                                                                      | What happened                                                                                                                                                 |
+| ----- | -------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 4J-1  | Medium   | Photos sorted the whole library again for every change, including after each upload | Fixed ([#90](https://github.com/shkriuss/shkriuss.app/pull/90); adding one photo too in [#93](https://github.com/shkriuss/shkriuss.app/pull/93))              |
+| 4J-2  | Low      | Shared browser tests skipped instead of failing, and nothing required "Your data"   | Fixed ([#93](https://github.com/shkriuss/shkriuss.app/pull/93))                                                                                               |
+| 4J-3  | Low      | Nothing automated held the Safari 16.4 floor                                        | Fixed: the type check and `check:dist` hold the code to what Safari 16.4 runs ([#93](https://github.com/shkriuss/shkriuss.app/pull/93))                       |
+| 4J-4  | Low      | The privacy page's "Last updated" check didn't see most of what the page says       | Fixed ([#89](https://github.com/shkriuss/shkriuss.app/pull/89))                                                                                               |
+| 4J-5  | Low      | No test covered a photo that can't be saved because the device is full              | Fixed ([#90](https://github.com/shkriuss/shkriuss.app/pull/90))                                                                                               |
+| 4J-6  | Low      | The JavaScript budget was nearly used up, and ADR 0007 named the wrong biggest page | Fixed ([#92](https://github.com/shkriuss/shkriuss.app/pull/92))                                                                                               |
+| 4J-7  | Info     | adding-an-app.md's "What the generator does" was out of date                        | Fixed ([#93](https://github.com/shkriuss/shkriuss.app/pull/93))                                                                                               |
+| 4J-8  | Info     | The sync browser tests' "never reaches the server readable" checks couldn't fail    | Fixed ([#93](https://github.com/shkriuss/shkriuss.app/pull/93))                                                                                               |
+| 4J-9  | Info     | What a newcomer (or an AI session) needs that no doc said                           | Fixed ([#93](https://github.com/shkriuss/shkriuss.app/pull/93))                                                                                               |
+| 4J-10 | Info     | What will be hard to change later                                                   | Fixed: "Reload the page" after an update ([#93](https://github.com/shkriuss/shkriuss.app/pull/93)); the rest is planned ([above](#whats-left-for-you-1))      |
+| 4J-11 | Info     | Small helpers still copied between apps                                             | Fixed ([#93](https://github.com/shkriuss/shkriuss.app/pull/93)); the iPhone check stays in two places, as the notification code can't use the design system's |
+
+#### Z. Anything else
+
+| ID   | Severity | What was wrong                                                          | What happened                                                                                                |
+| ---- | -------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| 4Z-1 | Info     | The brief's security goals 4 and 8 promised what the free plan can't do | Fixed: the brief names it as an accepted exception ([#89](https://github.com/shkriuss/shkriuss.app/pull/89)) |
