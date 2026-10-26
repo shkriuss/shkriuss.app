@@ -65,6 +65,9 @@ const STAT_TILES = [
           </div>
         ))}
       </dl>
+      <p class="muted parts-note" data-parts-note hidden>
+        A trade closed in parts counts as a closed trade for each part, here and below.
+      </p>
     </section>
 
     <section class="stack" aria-labelledby="open-heading" data-open-section hidden>
@@ -459,6 +462,10 @@ const STAT_TILES = [
 
   .tile__note:empty {
     display: none;
+  }
+
+  .parts-note {
+    font-size: var(--text-sm);
   }
 
   .win {

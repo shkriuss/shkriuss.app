@@ -447,6 +447,35 @@ describe('closing part of a trade', () => {
     );
   });
 
+  // Audit 3 F2-10: each part keeps the trade's entry price, side and setup as
+  // they were when it was closed, so a typo put right later left its results wrong.
+  it('changes the parts closed already with the trade’s entry price, side or setup', () => {
+    const after = split();
+    const part = after.trades.find((entry) => entry.id === 'b') as Trade;
+    const ids = { id: 'a', newId: 'n' };
+    const change = (fields: Partial<TradeForm>, from = after) =>
+      readChange({ ...toForm(open, 'en-US'), ...fields }, from, ids, 'en-US');
+    const fixed = change({ entryPrice: '101', setup: 'Breakout' });
+    expect(fixed.trade).toMatchObject({ id: 'a', entryPrice: 101, setup: 'Breakout' });
+    expect(fixed.parts).toEqual([{ ...part, entryPrice: 101, setup: 'Breakout' }]);
+    expect(profit(fixed.parts?.[0] as Trade)).toBe(358);
+    // The trade's own: a stop loss moved, its notes, what's still open.
+    expect(change({ stop: '96', notes: 'Earnings next week' }).parts).toBeUndefined();
+    // A part given its own setup keeps it.
+    const own = saveTrade(after, { ...part, setup: 'Scalp' });
+    expect(change({ entryPrice: '101', setup: 'Breakout' }, own).parts).toEqual([
+      { ...part, entryPrice: 101, setup: 'Scalp' },
+    ]);
+    // Closing more of it, with the entry price put right: the new part has it too.
+    const closing = close({ ...closeForm, entryPrice: '101' }, '10', after, 'c');
+    expect(closing.trade).toMatchObject({ id: 'c', entryPrice: 101, parent: 'a' });
+    expect(closing.rest).toMatchObject({ id: 'a', entryPrice: 101 });
+    expect(closing.parts).toEqual([{ ...part, entryPrice: 101 }]);
+    // Changing a part itself changes nothing else.
+    const partForm = { ...toForm(part, 'en-US'), entryPrice: '99' };
+    expect(readChange(partForm, after, { id: 'b', newId: 'n' }, 'en-US').parts).toBeUndefined();
+  });
+
   it('says when more was closed than bought, on the trade and its parts', () => {
     // Two devices each closed what they saw still open (60).
     const twice = saveTrade(
@@ -1103,6 +1132,32 @@ describe('closing part of a trade on one device, while another changes it', () =
       expect(open).toEqual([30]);
       expect(trades.map((entry) => entry.id).sort()).toEqual(['lot', 'p1', 'p2']);
       expect(trades.find((entry) => entry.id === 'lot')?.stop).toBe(99);
+    }
+  });
+
+  // Audit 3 F2-10: the parts change with their trade, in one save, on both devices.
+  it('changes the parts with their trade’s entry price, on both devices', async () => {
+    const { phone, tablet } = await twoDevices();
+    closeOn(phone, '40', 'part');
+    await phone.syncNow();
+    await tablet.syncNow();
+    // On the tablet: the entry price put right.
+    vi.setSystemTime(Date.now() + 60_000);
+    const fixed = { ...toForm(aapl, 'en-US'), entryPrice: '100.5' };
+    const read = readChange(fixed, tablet.value, { id: 'aapl', newId: 'n' }, 'en-US');
+    if (!read.trade) throw new Error('Not saved');
+    const changed = [read.trade, ...(read.parts ?? [])];
+    tablet.save(changed.reduce((all, trade) => saveTrade(all, trade), tablet.value));
+    await tablet.syncNow();
+    await phone.syncNow();
+    for (const device of [phone, tablet]) {
+      const prices = device.value.trades.map((entry) => [entry.id, entry.entryPrice]);
+      expect(prices).toEqual([
+        ['aapl', 100.5],
+        ['part', 100.5],
+      ]);
+      expect(shown(device)).toEqual({ closed: [40], open: [60], problem: null });
+      expect(profit(device.value.trades[1] as Trade)).toBe(380);
     }
   });
 

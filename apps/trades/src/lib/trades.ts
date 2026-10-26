@@ -329,15 +329,52 @@ export type CloseProblems = Problems & { closeQuantity?: string };
 /**
  * The trade form read: the trade to save and, when it's a part closed off
  * another trade, that trade too (`rest`, unchanged unless the form changed
- * it); or what's wrong.
+ * it), and the trade's parts closed already that change with it (`parts`,
+ * only if any do: followingParts); or what's wrong.
  */
 export type ReadTrades =
-  | { trade: Trade; rest: Trade | null; problems?: undefined }
-  | { trade?: undefined; rest?: undefined; problems: CloseProblems };
+  | { trade: Trade; rest: Trade | null; parts?: Trade[]; problems?: undefined }
+  | { trade?: undefined; rest?: undefined; parts?: undefined; problems: CloseProblems };
 
 /** Whether two trades are the same in every way. */
 const sameTrade = (a: Trade, b: Trade): boolean =>
   (Object.keys({ ...a, ...b }) as (keyof Trade)[]).every((key) => a[key] === b[key]);
+
+/** What a trade's parts closed already take from it when it's changed (followingParts). */
+const FOLLOWED = ['entryPrice', 'side', 'setup'] as const;
+
+/**
+ * A trade's parts closed already, changed with it: its entry price, side or
+ * setup put right (a typo, say) is theirs too, as they're the same trade,
+ * so their results follow (audit 3 F2-10). A part whose own value was
+ * different (changed on its own) keeps it. `before` is the trade as saved.
+ */
+function followingParts(state: TradesState, before: Trade | undefined, after: Trade): Trade[] {
+  if (!before || FOLLOWED.every((key) => before[key] === after[key])) return [];
+  return state.trades.flatMap((part) => {
+    const take = (key: (typeof FOLLOWED)[number]) =>
+      part[key] === before[key] && part[key] !== after[key];
+    if (part.parent !== after.id || !FOLLOWED.some(take)) return [];
+    return [
+      {
+        ...part,
+        entryPrice: take('entryPrice') ? after.entryPrice : part.entryPrice,
+        side: take('side') ? after.side : part.side,
+        setup: take('setup') ? after.setup : part.setup,
+      },
+    ];
+  });
+}
+
+/** `read`, with the parts that change with its trade, if any (followingParts). */
+function withParts(
+  read: { trade: Trade; rest: Trade | null },
+  state: TradesState,
+  before: Trade | undefined,
+): ReadTrades {
+  const parts = followingParts(state, before, read.rest ?? read.trade);
+  return parts.length === 0 ? read : { ...read, parts };
+}
 
 /**
  * Reads the close form of a trade in `state` (`ids.id`): the trade form, and
@@ -400,10 +437,15 @@ export function readClose(
     exitPrice: null,
     fees: saved?.fees ?? 0,
   };
-  return {
-    trade: { ...read.trade, id: ids.newId, quantity: closed as number, parent: ids.id },
-    rest: saved && sameTrade(kept, saved) ? saved : kept,
-  };
+  const rest = saved && sameTrade(kept, saved) ? saved : kept;
+  return withParts(
+    {
+      trade: { ...read.trade, id: ids.newId, quantity: closed as number, parent: ids.id },
+      rest,
+    },
+    state,
+    saved,
+  );
 }
 
 /**
@@ -438,10 +480,14 @@ export function readChange(
       },
     };
   }
-  return {
-    trade: saved?.parent === undefined ? read.trade : { ...read.trade, parent: saved.parent },
-    rest: null,
-  };
+  return withParts(
+    {
+      trade: saved?.parent === undefined ? read.trade : { ...read.trade, parent: saved.parent },
+      rest: null,
+    },
+    state,
+    saved,
+  );
 }
 
 /**

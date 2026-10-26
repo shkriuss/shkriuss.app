@@ -134,6 +134,7 @@ export function mountTrades(root: Document): void {
   const periodSelect = required<HTMLSelectElement>(root, '[data-period]');
   const noResults = required<HTMLElement>(root, '[data-no-results]');
   const tiles = required<HTMLElement>(root, '[data-tiles]');
+  const partsNote = required<HTMLElement>(root, '[data-parts-note]');
   const openSection = required<HTMLElement>(root, '[data-open-section]');
   const openList = required<HTMLUListElement>(root, '[data-open-list]');
   const searchInput = required<HTMLInputElement>(root, '[data-search]');
@@ -220,6 +221,8 @@ export function mountTrades(root: Document): void {
     const found = stats(closed);
     noResults.hidden = found.count > 0;
     tiles.hidden = found.count === 0;
+    // Each part of a trade closed in parts is a closed trade (audit 3 F2-10).
+    partsNote.hidden = found.count === 0 || !closed.some((trade) => trade.parent !== undefined);
     if (found.count === 0) return;
     tile('total', money(found.total, true), '', found.total);
     tile(
@@ -436,32 +439,49 @@ export function mountTrades(root: Document): void {
     (button ?? newButton).focus();
   }
 
+  /**
+   * `next`, with the trade's parts closed already that change with it (its
+   * entry price put right, say), saved at once; and what to say of them.
+   */
+  function withParts(next: TradesState, parts: readonly Trade[]): [TradesState, string] {
+    const saved = parts.reduce((all, part) => saveTrade(all, part), next);
+    const count = parts.length;
+    const words =
+      count === 0
+        ? ''
+        : count === 1
+          ? ' Its closed part changed with it.'
+          : ` Its ${formatCount(count)} closed parts changed with it.`;
+    return [saved, words];
+  }
+
   /** Saves part of a trade closed, with the trade it was closed off, and says what's still open. */
-  function saveClosedPart(part: Trade, rest: Trade): void {
+  function saveClosedPart(part: Trade, rest: Trade, parts: readonly Trade[]): void {
     dialog.close();
-    const next = closePart(state, part, rest);
+    const [next, more] = withParts(closePart(state, part, rest), parts);
     const open = openQuantity(rest, partsOf(next.trades));
     const result = money(profit(part) ?? 0, true);
     reveal = part.id;
     save(
       { trades: next },
-      open > 0
+      (open > 0
         ? `Closed ${formatNumber(part.quantity)} of the ${part.symbol} trade: ${result}. ${formatNumber(open)} still open.`
-        : `Closed the rest of the ${part.symbol} trade: ${result}.`,
+        : `Closed the rest of the ${part.symbol} trade: ${result}.`) + more,
     );
     focusTrade(part.id);
   }
 
   /** Saves the trade read from the form, and says how it stands. */
-  function saveFromForm(trade: Trade): void {
+  function saveFromForm(trade: Trade, parts: readonly Trade[]): void {
     dialog.close();
+    const [next, more] = withParts(saveTrade(state, trade), parts);
     const result = profit(trade);
     reveal = trade.id;
     save(
-      { trades: saveTrade(state, trade) },
-      result === null
+      { trades: next },
+      (result === null
         ? `Saved the ${trade.symbol} trade, still open.`
-        : `Saved the ${trade.symbol} trade: ${money(result, true)}.`,
+        : `Saved the ${trade.symbol} trade: ${money(result, true)}.`) + more,
     );
     focusTrade(trade.id);
   }
@@ -481,8 +501,8 @@ export function mountTrades(root: Document): void {
       showProblems(read.problems);
       return;
     }
-    if (read.rest) saveClosedPart(read.trade, read.rest);
-    else saveFromForm(read.trade);
+    if (read.rest) saveClosedPart(read.trade, read.rest, read.parts ?? []);
+    else saveFromForm(read.trade, read.parts ?? []);
   });
 
   form.addEventListener('click', (event) => {

@@ -36,6 +36,15 @@ Your trading journal: log your trades and see what works. Lives at
     the trade and its parts say so (`overClosed`), until the close that's
     wrong is deleted. Deleting a part counts what it closed as open again;
     deleting a trade leaves its parts as trades of their own.
+  - Each part counts as a closed trade of its own in the results (the
+    number of closed trades, the win rate, the averages, by setup and by
+    month), as it has its own exit and result: one position closed in three
+    parts is three closed trades. The page says so under the results when
+    the trades shown have parts. A part takes the trade's entry price, side
+    and setup as they were when it was closed; putting one of those right
+    on the trade later changes its parts too, in the same save, unless a
+    part was given its own (`followingParts`), so their results follow. A
+    stop loss moved later, or the trade's notes, stay the trade's own.
   - Parts came in data version 2 (`TRADES_VERSION`). What version 1 saved
     reads the same (`migrateTrades`): its parts were trades of their own,
     next to the rest, made smaller. A device still on version 1 waits for

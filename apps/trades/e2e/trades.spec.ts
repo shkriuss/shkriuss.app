@@ -262,6 +262,30 @@ test('closes part of a trade, then the rest', async ({ page }) => {
   await expect(page.locator('[data-open-list] [data-meta]')).toHaveText(/^\d+ at 150, since/);
 });
 
+// Audit 3 F2-10: a part kept the trade's entry price as it was when it was
+// closed, so putting a typo right left its result wrong.
+test('a trade’s entry price put right changes its parts closed already', async ({ page }) => {
+  const lot = trade({ id: 'lot', entryPrice: 15, quantity: 100, exitDate: null, exitPrice: null });
+  await seed(page, [
+    lot,
+    { ...lot, id: 'part', quantity: 40, exitDate: '2026-10-05', exitPrice: 160, parent: 'lot' },
+  ]);
+  // Parts count as closed trades: the page says so.
+  await expect(page.locator('[data-parts-note]')).toHaveText(
+    'A trade closed in parts counts as a closed trade for each part, here and below.',
+  );
+  const closed = page.locator('[data-closed-list]');
+  await expect(closed.locator('[data-profit]')).toHaveText('+$5,800.00');
+  await page.locator('[data-open-list]').getByRole('button', { name: 'AAPL Long' }).click();
+  await fillTrade(page, { entryPrice: '150' });
+  await expect(
+    status(page, 'Saved the AAPL trade, still open. Its closed part changed with it.'),
+  ).toBeAttached();
+  await expect(closed.locator('[data-meta]')).toHaveText('40 · 150 → 160 · Oct 5, 2026');
+  await expect(closed.locator('[data-profit]')).toHaveText('+$400.00');
+  await expect(tile(page, 'Net result')).toHaveText('+$400.00');
+});
+
 // Audit F2-4: what two devices closed at once, before they synced, is never
 // counted twice without a word.
 test('says when more of a trade was closed than bought', async ({ page }) => {
