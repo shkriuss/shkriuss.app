@@ -449,6 +449,11 @@ import { CURRENCIES, LIMITS, UNIT_LABELS, UNITS } from '../lib/repairs.ts';
         <legend class="field__label">Photos</legend>
         <ul role="list" class="photos" data-form-photos></ul>
         <p class="field__hint" data-form-photos-elsewhere hidden></p>
+        <div data-form-photos-missing hidden>
+          <Button variant="ghost" data-action="remove-missing-photos">
+            Take them off this repair
+          </Button>
+        </div>
         <p class="field__hint" data-photos-sync-hint>
           Kept on this device, and not in backups. Turn on sync to have them on your other devices
           too.

@@ -30,6 +30,7 @@ import {
   type VehiclesState,
 } from '../lib/repairs.ts';
 import { mountFormPhotos } from './form-photos.ts';
+import { deletePhotos } from './photos.ts';
 
 const EMPTY_PART: PartForm = { name: '', number: '', quantity: '1', price: '' };
 const PART_FIELDS = ['name', 'number', 'quantity', 'price'] as const;
@@ -51,8 +52,8 @@ export interface RepairFormPage {
   data(): { vehicles: VehiclesState; repairs: RepairsState; settings: SettingsState };
   /** The vehicle the list is showing only, if one: a new repair is on it. */
   shownVehicle(): Vehicle | undefined;
-  /** Saves, shows the change, and tells other devices. */
-  save(next: { vehicles?: VehiclesState; repairs?: RepairsState }, message: string): void;
+  /** Saves, shows the change, and tells other devices. False if it couldn't be saved. */
+  save(next: { vehicles?: VehiclesState; repairs?: RepairsState }, message: string): boolean;
   /** The repair just saved is never hidden behind "Show more" (shownCount). */
   keepShown(id: string): void;
   /** After saving: focus the repair in the list, or "New repair" if it isn't shown. */
@@ -286,13 +287,12 @@ export function mountRepairForm(root: ParentNode, page: RepairFormPage): RepairF
     const photos = await formPhotos.save();
     if (!photos) return;
     page.filesAdded(photoFiles(photos.added));
-    page.filesRemoved(photoFiles(photos.removed));
     repairDialog.close();
     // As they are now: a sync may have come while the photos were saved.
     const { vehicles, repairs } = page.data();
     const name = newVehicle?.name ?? vehicleName(vehicles, repair.vehicle);
     page.keepShown(repair.id);
-    page.save(
+    const saved = page.save(
       {
         repairs: saveRepair(repairs, repair),
         ...(newVehicle ? { vehicles: saveVehicle(vehicles, newVehicle) } : {}),
@@ -301,6 +301,12 @@ export function mountRepairForm(root: ParentNode, page: RepairFormPage): RepairF
         ? `Saved the repair on ${name}, and added ${name} to your vehicles.`
         : `Saved the repair on ${name}.`,
     );
+    // Photos taken off it go once it's saved without them. If it couldn't
+    // be, the repair as saved still has them: they stay (audit 4 F2-8).
+    if (saved) {
+      void deletePhotos(photos.removed);
+      page.filesRemoved(photoFiles(photos.removed));
+    }
     page.focusRepair(repair.id);
   }
 

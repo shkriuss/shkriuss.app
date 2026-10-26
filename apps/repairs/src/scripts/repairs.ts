@@ -219,10 +219,11 @@ export function mountRepairs(root: Document): void {
   const filterVehicle = (): string | null => vehicleFilter.value || null;
 
   /** Saves, shows the change, and tells other devices. */
+  /** Saves, shows the change, and tells other devices. False if it couldn't be saved. */
   function save(
     next: { vehicles?: VehiclesState; repairs?: RepairsState; settings?: SettingsState },
     message: string,
-  ): void {
+  ): boolean {
     let ok = true;
     if (next.vehicles) {
       vehicles = next.vehicles;
@@ -239,6 +240,7 @@ export function mountRepairs(root: Document): void {
     if (reportSave(ok)) announce(message);
     render();
     sync.changed();
+    return ok;
   }
 
   // ---------- Showing it ----------
@@ -521,9 +523,11 @@ export function mountRepairs(root: Document): void {
       repairDialog.close();
       const repair = findRepair(target.id);
       if (!repair) return;
-      save({ repairs: removeRepair(repairs, repair.id) }, 'Deleted the repair.');
-      void deletePhotos(repair.photos);
-      sync.filesRemoved(photoFiles(repair.photos));
+      // Its photos go once it's deleted for good, not before (audit 4 F2-8).
+      if (save({ repairs: removeRepair(repairs, repair.id) }, 'Deleted the repair.')) {
+        void deletePhotos(repair.photos);
+        sync.filesRemoved(photoFiles(repair.photos));
+      }
       newRepairButton.focus();
     } else {
       const vehicle = findVehicle(target.id);
@@ -531,14 +535,17 @@ export function mountRepairs(root: Document): void {
       if (!vehicle) return;
       const own = repairsOf(vehicle.id);
       const count = own.length;
-      void deletePhotos(photosOf(own));
-      sync.filesRemoved(photoFiles(photosOf(own)));
-      save(
+      const saved = save(
         removeVehicle(vehicles, repairs, vehicle.id),
         count === 0
           ? `Deleted ${vehicle.name}.`
           : `Deleted ${vehicle.name} and its ${countLabel(count, 'repair', 'repairs')}.`,
       );
+      // Their photos go once they're deleted for good, not before (audit 4 F2-8).
+      if (saved) {
+        void deletePhotos(photosOf(own));
+        sync.filesRemoved(photoFiles(photosOf(own)));
+      }
       newVehicleButton.focus();
     }
   });

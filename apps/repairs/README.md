@@ -83,7 +83,12 @@ private car's service history. Lives at <https://repairs.shkriuss.app>.
   "Save a copy" saves one as a file. Deleting a repair, a vehicle or a year
   deletes their photos (online too, with sync on); "Delete all data"
   deletes them on this device only (sync is turned off first). A photo
-  taken off a repair on another device is deleted here at the next sync.
+  taken off a repair in its form, or deleted with it, goes only once the
+  change is saved: if it can't be (a full device), the repair as saved
+  still has its photos. With sync off, photos a repair lists that aren't on
+  this device (a backup restored on a new phone, say) can be taken off it
+  in its form ("Take them off this repair"). A photo taken off a repair on
+  another device is deleted here at the next sync.
   Any other photo no repair uses (left by an older backup restored, say) is
   deleted when Repairs opens and after each sync, unless it was saved in
   the last minute (`deleteUnusedPhotos`).
@@ -95,6 +100,8 @@ private car's service history. Lives at <https://repairs.shkriuss.app>.
   tabs. The repair form is in `repair-form.ts` (its photos in
   `form-photos.ts`), the vehicle form in `vehicle-form.ts`, "Delete a
   year" in `delete-year.ts`, and the photo viewer in `photo-viewer.ts`.
+  Each loads the first time it opens (`later`), so the page stays within
+  its size budget.
 - `src/pages/index.astro`: the page, built from `@shkriuss/ui` components.
   `<template>`s hold the markup for a day, a repair, a vehicle and a part row;
   the forms and "Delete a year" are dialogs.

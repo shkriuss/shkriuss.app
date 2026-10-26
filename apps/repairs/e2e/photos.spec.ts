@@ -2,7 +2,7 @@
 // docs/adr/0013-photos-on-the-device.md), shown, looked at, saved as a copy,
 // removed, and deleted with their repair or with all data.
 import type { Page } from '@playwright/test';
-import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
+import { checkA11y, expect, failSaving, test } from '../../../tests/e2e/fixtures.ts';
 import { readStore } from '../../../tests/e2e/storage.ts';
 import {
   addPhotos,
@@ -143,6 +143,63 @@ test('a full device: says the photos couldn’t be saved, and saves nothing half
   await dialog.getByRole('button', { name: 'Save' }).click();
   await expect(status(page, 'Saved the repair on Bus 105')).toBeAttached();
   expect(await storedPhotos(page)).toBe(1);
+});
+
+// Audit 4 F2-8: a photo taken off a repair was deleted before the repair was
+// saved. When that didn't work, the repair kept a photo that was gone.
+test('a photo taken off a repair stays until the repair is saved without it', async ({ page }) => {
+  await page.getByRole('button', { name: 'New repair' }).click();
+  const dialog = repairDialog(page);
+  await dialog.getByLabel('Vehicle').fill('Bus 105');
+  await dialog.getByLabel('Damage found').fill('Cracked door glass');
+  await addPhotos(page, [jpeg('door.jpg', await picture(page, { width: 800, height: 600 }))]);
+  await expect(dialog.locator('[data-form-photos] img')).toHaveCount(1);
+  await fillRepair(page, {});
+  await expect.poll(() => storedPhotos(page)).toBe(1);
+
+  // The device is full: taking the photo off can't be saved.
+  await failSaving(page);
+  const item = repairItems(page).first();
+  await item.locator('[data-action="edit-repair"]').click();
+  await dialog.getByRole('button', { name: 'Remove photo 1' }).click();
+  await fillRepair(page, { work: 'Replaced the door glass' });
+  await expect(page.locator('[data-problem-text]')).toHaveText(/^Couldn’t save/);
+  // Nothing is deleted (a short wait: it would be by now).
+  await page.waitForTimeout(500);
+  expect(await storedPhotos(page)).toBe(1);
+  await page.reload();
+  await expect(item.locator('[data-photos] img')).toHaveCount(1);
+  await expect(item.locator('[data-photos-elsewhere]')).toBeHidden();
+
+  // With room, taking it off deletes it.
+  await item.locator('[data-action="edit-repair"]').click();
+  await dialog.getByRole('button', { name: 'Remove photo 1' }).click();
+  await fillRepair(page, {});
+  await expect(status(page, 'Saved the repair on Bus 105')).toBeAttached();
+  await expect.poll(() => storedPhotos(page)).toBe(0);
+});
+
+// Audit 4 F2-8: a photo the repair lists that isn't on this device (a backup
+// restored on a new phone, say) counted towards the 10 for good.
+test('without sync, photos that aren’t on this device can be taken off a repair', async ({
+  page,
+}) => {
+  await seed(page, {
+    vehicles: [vehicle({ id: 'b105', name: 'Bus 105' })],
+    repairs: [repair({ id: 'r', photos: ['gone-1', 'gone-2'] })],
+  });
+  await repairItems(page).first().locator('[data-action="edit-repair"]').click();
+  const dialog = repairDialog(page);
+  await expect(dialog.locator('[data-form-photos-elsewhere]')).toHaveText(
+    '2 photos are on another device. They stay with this repair.',
+  );
+  await dialog.getByRole('button', { name: 'Take them off this repair' }).click();
+  await expect(dialog.locator('[data-form-photos-elsewhere]')).toBeHidden();
+  await expect(dialog.getByRole('button', { name: 'Add photos' })).toBeFocused();
+  await fillRepair(page, {});
+  await expect(status(page, 'Saved the repair on Bus 105')).toBeAttached();
+  const saved = await readStore<{ repairs: { photos: string[] }[] }>(page, 'repairs');
+  expect(saved?.data.repairs[0]?.photos).toEqual([]);
 });
 
 test('deleting a year deletes its repairs’ photos', async ({ page }) => {

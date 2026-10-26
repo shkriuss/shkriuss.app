@@ -19,8 +19,8 @@ import { deletePhotos } from './photos.ts';
 export interface DeleteYearPage {
   /** The repairs as they are now. */
   repairs(): RepairsState;
-  /** Saves, shows the change, and tells other devices. */
-  save(next: { repairs: RepairsState }, message: string): void;
+  /** Saves, shows the change, and tells other devices. False if it couldn't be saved. */
+  save(next: { repairs: RepairsState }, message: string): boolean;
   /** Tells sync about photo files removed. */
   filesRemoved(files: readonly string[]): void;
 }
@@ -96,11 +96,13 @@ export function mountDeleteYear(root: ParentNode, page: DeleteYearPage): DeleteY
     yearDialog.close();
     deleteYearButton.focus();
     if (gone.length === 0) return;
-    // Like deleting repairs one by one: other devices delete them too, and their photos go.
-    page.save(
+    // Like deleting repairs one by one: other devices delete them too, and
+    // their photos go, once the repairs are deleted for good (audit 4 F2-8).
+    const saved = page.save(
       { repairs: removeYear(repairs, year) },
       `Deleted ${repairsCount(gone.length)} from ${year}.`,
     );
+    if (!saved) return;
     void deletePhotos(photosOf(gone));
     page.filesRemoved(photoFiles(photosOf(gone)));
   });
