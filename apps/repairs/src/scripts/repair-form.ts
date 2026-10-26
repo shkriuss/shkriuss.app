@@ -7,6 +7,7 @@ import { today } from '@shkriuss/dates';
 import { required } from '@shkriuss/ui/dom';
 import { decimalText } from '@shkriuss/ui/numbers';
 import { focusProblem } from '@shkriuss/ui/problem';
+import { watchTextLimits } from '@shkriuss/ui/text-limit';
 import {
   dateLabel,
   findVehicleByName,
@@ -97,6 +98,10 @@ export function mountRepairForm(root: ParentNode, page: RepairFormPage): RepairF
   let openedRepair: RepairForm | null = null;
   let saving = false;
   const formPhotos = mountFormPhotos(root, repairForm, { syncOn: () => page.syncOn() });
+  // A paste longer than a box takes is cut by the browser: say so (audit 4
+  // F2-7). Not the parts' short boxes, drawn later inside their labels,
+  // where the message would become part of the box's name.
+  const limits = watchTextLimits(repairForm);
 
   const mileage = (value: number) => formatMileage(value, unitOf(page.data().settings));
 
@@ -180,6 +185,7 @@ export function mountRepairForm(root: ParentNode, page: RepairFormPage): RepairF
   function openRepair(repair: Repair | undefined): void {
     editingRepair = repair?.id ?? null;
     openedRepair = repair ? toRepairForm(repair, page.data().vehicles) : null;
+    limits.clear();
     repairTitle.textContent = repair ? 'Change repair' : 'New repair';
     const only = page.shownVehicle();
     const values = openedRepair ?? {

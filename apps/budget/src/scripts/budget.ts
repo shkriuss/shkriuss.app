@@ -11,6 +11,7 @@ import { withEdits } from '@shkriuss/sync/edits';
 import { keepFocus } from '@shkriuss/ui/keep-focus';
 import { focusProblem, reportSave, showProblem } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
+import { watchTextLimits } from '@shkriuss/ui/text-limit';
 import { typedText } from '@shkriuss/ui/typed-text';
 import { site } from 'virtual:shkriuss/site';
 import {
@@ -325,8 +326,13 @@ export function mountBudget(root: Document): void {
     categoryField.hidden = !hasCategory(kindOf());
   }
 
+  // A paste longer than a box takes is cut by the browser: say so (audit 4 F2-7).
+  const entryLimits = watchTextLimits(entryForm);
+  const categoryLimits = watchTextLimits(categoryForm);
+
   function openEntry(entry: Entry | undefined, kind: Kind = 'expense'): void {
     editingEntry = entry?.id ?? null;
+    entryLimits.clear();
     openedEntry = entry ? toEntryForm(entry) : null;
     const values = openedEntry ?? {
       kind,
@@ -403,6 +409,7 @@ export function mountBudget(root: Document): void {
 
   function openCategory(category: Category | undefined): void {
     editingCategory = category?.id ?? null;
+    categoryLimits.clear();
     openedCategory = category ? toCategoryForm(category) : null;
     categoryTitle.textContent = category ? 'Change category' : 'New category';
     const values = openedCategory ?? { name: '', limit: '' };

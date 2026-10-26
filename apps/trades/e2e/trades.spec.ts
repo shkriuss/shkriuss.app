@@ -2,6 +2,7 @@
 // support, privacy, sync) already run for every app from tests/e2e/.
 import { readFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
+import { paste } from '../../../tests/e2e/clipboard.ts';
 import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
 import { LIMITS } from '../src/lib/trades.ts';
 import {
@@ -479,4 +480,25 @@ test('says when Trades is nearly full, and how to make room', async ({ page }) =
     .click();
   await expect(status(page, /^Deleted \d+ closed trades from \d{4}\.$/)).toBeAttached();
   await expect(note).toBeHidden();
+});
+
+// Audit 4 F2-7: the browser kept the start of a long paste without a word.
+test('says when pasted notes don’t all fit', async ({ page }) => {
+  await page.getByRole('button', { name: 'New trade' }).click();
+  const dialog = tradeDialog(page);
+  const notes = dialog.getByLabel('Notes (optional)');
+  await expect(notes).toHaveAccessibleDescription('Up to 1,000 characters.');
+  const text = `${'Entered on the retest of the range high. '.repeat(30)}LESSON: wait for the close.`;
+  await paste(notes, text);
+  await expect(notes).toHaveValue(text.slice(0, 1000));
+  const cut =
+    'Only part of that fit. This box takes up to 1,000 characters, so the rest wasn’t added.';
+  await expect(dialog.getByText(cut, { exact: true })).toBeVisible();
+  await expect(
+    dialog.getByRole('alert').filter({ hasText: `Notes (optional): ${cut}` }),
+  ).toBeAttached();
+  // Gone when the form opens again.
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'New trade' }).click();
+  await expect(dialog.getByText(cut, { exact: true })).toBeHidden();
 });

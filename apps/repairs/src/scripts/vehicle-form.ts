@@ -5,6 +5,7 @@
 import { withEdits } from '@shkriuss/sync/edits';
 import { required } from '@shkriuss/ui/dom';
 import { focusProblem } from '@shkriuss/ui/problem';
+import { watchTextLimits } from '@shkriuss/ui/text-limit';
 import {
   readVehicle,
   saveVehicle,
@@ -39,6 +40,9 @@ export function mountVehicleForm(root: ParentNode, page: VehicleFormPage): Vehic
   const vehicleForm = required<HTMLFormElement>(vehicleDialog, '[data-vehicle-form]');
   const vehicleTitle = required<HTMLElement>(vehicleDialog, '[data-vehicle-title]');
 
+  // A paste longer than a box takes is cut by the browser: say so (audit 4 F2-7).
+  const limits = watchTextLimits(vehicleForm);
+
   /** The vehicle being changed (null: a new one). */
   let editingVehicle: string | null = null;
   /** The form as it opened, to tell what the person changed (see withEdits). */
@@ -59,6 +63,7 @@ export function mountVehicleForm(root: ParentNode, page: VehicleFormPage): Vehic
   function openVehicle(vehicle: Vehicle | undefined): void {
     editingVehicle = vehicle?.id ?? null;
     openedVehicle = vehicle ? toVehicleForm(vehicle) : null;
+    limits.clear();
     vehicleTitle.textContent = vehicle ? 'Change vehicle' : 'Add vehicle';
     for (const name of VEHICLE_FIELDS) {
       (vehicleForm.elements.namedItem(name) as HTMLInputElement).value =

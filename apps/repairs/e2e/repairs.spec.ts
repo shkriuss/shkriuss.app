@@ -2,6 +2,7 @@
 // support, privacy, sync) already run for every app from tests/e2e/.
 import { readFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
+import { paste } from '../../../tests/e2e/clipboard.ts';
 import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
 import { readStore } from '../../../tests/e2e/storage.ts';
 import { LIMITS, REPAIRS_VERSION, type VehiclesState } from '../src/lib/repairs.ts';
@@ -487,6 +488,43 @@ test('says when Repairs is nearly full, and how to make room', async ({ page }) 
     .click();
   await expect(status(page, /^Deleted \d+ repairs from \d{4}\.$/)).toBeAttached();
   await expect(note).toBeHidden();
+});
+
+// Audit 4 F2-7: the browser kept the start of a long paste without a word.
+test('says when pasted text doesn’t all fit', async ({ page }) => {
+  await page.getByRole('button', { name: 'New repair' }).click();
+  const dialog = repairDialog(page);
+  const damage = dialog.getByLabel('Damage found');
+  await expect(damage).toHaveAccessibleDescription('Up to 2,000 characters.');
+  await expect(dialog.getByLabel('Work done')).toHaveAccessibleDescription(
+    'Up to 2,000 characters.',
+  );
+  const text = 'Front left brake caliper sticking, pads worn unevenly. '.repeat(40);
+  await paste(damage, text);
+  await expect(damage).toHaveValue(text.slice(0, 2000));
+  const cut =
+    'Only part of that fit. This box takes up to 2,000 characters, so the rest wasn’t added.';
+  await expect(dialog.getByText(cut, { exact: true })).toBeVisible();
+  await expect(
+    dialog.getByRole('alert').filter({ hasText: `Damage found: ${cut}` }),
+  ).toBeAttached();
+  // Gone when the form opens again.
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'New repair' }).click();
+  await expect(dialog.getByText(cut, { exact: true })).toBeHidden();
+  await page.keyboard.press('Escape');
+
+  // A vehicle's notes too.
+  await page.getByRole('button', { name: 'Add vehicle' }).click();
+  const notes = vehicleDialog(page).getByLabel('Notes (optional)');
+  await expect(notes).toHaveAccessibleDescription('Up to 500 characters.');
+  await paste(notes, text);
+  await expect(
+    vehicleDialog(page).getByText(
+      'Only part of that fit. This box takes up to 500 characters, so the rest wasn’t added.',
+      { exact: true },
+    ),
+  ).toBeVisible();
 });
 
 test.describe('offline', () => {

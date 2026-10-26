@@ -335,8 +335,11 @@ const STAT_TILES = [
           rows="3"
           maxlength={LIMITS.notes}
           placeholder="Why you took it, how it went, what you learned"
-          aria-describedby="trade-notes-error"
+          aria-describedby="trade-notes-hint trade-notes-error"
         ></textarea>
+        <p class="field__hint" id="trade-notes-hint">
+          Up to {LIMITS.notes.toLocaleString('en')} characters.
+        </p>
         <p class="field__error" id="trade-notes-error" data-error-for="notes"></p>
       </div>
       <div class="cluster dialog__actions">

@@ -1,6 +1,7 @@
 // Meals' own tests. Shared checks (accessibility, security headers, offline
 // support, privacy, sync) already run for every app from tests/e2e/.
 // The locale is en-US, so weeks start on Sunday: "this week" is 18–24 October.
+import { paste } from '../../../tests/e2e/clipboard.ts';
 import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
 import { readStore } from '../../../tests/e2e/storage.ts';
 import {
@@ -375,4 +376,27 @@ test('your meals’ ingredients make the shopping list', async ({ page, context 
   await expect(dayMeals(page, '2026-10-22')).toHaveText([/Lunch\s*lentil soup/]);
   await expect(shoppingNames(page)).toHaveText(['Minced beef', 'Spaghetti', 'Onions']);
   await expect(page.getByRole('button', { name: 'New meal' })).toBeFocused();
+});
+
+// Audit 4 F2-7: the browser kept the start of a long paste without a word.
+test('says when a pasted recipe doesn’t all fit', async ({ page }) => {
+  await page.getByRole('button', { name: 'New meal' }).click();
+  const dialog = mealDialog(page);
+  const notes = dialog.getByLabel('Notes (optional)');
+  await expect(notes).toHaveAccessibleDescription(
+    'How to make it, or where the recipe is. Up to 5,000 characters.',
+  );
+  const text = 'Fry the onions slowly until golden, then add the lentils. '.repeat(90);
+  await paste(notes, text);
+  await expect(notes).toHaveValue(text.slice(0, 5000));
+  const cut =
+    'Only part of that fit. This box takes up to 5,000 characters, so the rest wasn’t added.';
+  await expect(dialog.getByText(cut, { exact: true })).toBeVisible();
+  await expect(
+    dialog.getByRole('alert').filter({ hasText: `Notes (optional): ${cut}` }),
+  ).toBeAttached();
+  // Gone when the form opens again.
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'New meal' }).click();
+  await expect(dialog.getByText(cut, { exact: true })).toBeHidden();
 });

@@ -2,6 +2,7 @@
 // support, privacy, sync) already run for every app from tests/e2e/.
 import { readFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
+import { paste } from '../../../tests/e2e/clipboard.ts';
 import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
 import { LIMITS } from '../src/lib/budget.ts';
 import {
@@ -470,4 +471,25 @@ test('shows a note in Hebrew or Arabic the right way round', async ({ page }) =>
       .getByLabel('Note (optional)')
       .evaluate((element) => element.matches(':dir(rtl)')),
   ).toBe(true);
+});
+
+// Audit 4 F2-7: the browser kept the start of a long paste without a word.
+test('says when a pasted note doesn’t all fit', async ({ page }) => {
+  await page.getByRole('button', { name: 'Add expense' }).click();
+  const dialog = entryDialog(page);
+  const note = dialog.getByLabel('Note (optional)');
+  await expect(note).toHaveAccessibleDescription('Up to 100 characters.');
+  const text = 'Dinner with the team after the move, split four ways. '.repeat(3);
+  await paste(note, text);
+  await expect(note).toHaveValue(text.slice(0, 100));
+  const cut =
+    'Only part of that fit. This box takes up to 100 characters, so the rest wasn’t added.';
+  await expect(dialog.getByText(cut, { exact: true })).toBeVisible();
+  await expect(
+    dialog.getByRole('alert').filter({ hasText: `Note (optional): ${cut}` }),
+  ).toBeAttached();
+  // Gone when the form opens again.
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await page.getByRole('button', { name: 'Add expense' }).click();
+  await expect(dialog.getByText(cut, { exact: true })).toBeHidden();
 });

@@ -11,6 +11,7 @@ import { keepFocus } from '@shkriuss/ui/keep-focus';
 import { PAGE_SIZE, shownCount, waitForTyping } from '@shkriuss/ui/long-lists';
 import { reportSave, showProblem } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
+import { watchTextLimits } from '@shkriuss/ui/text-limit';
 import { typedText } from '@shkriuss/ui/typed-text';
 import { site } from 'virtual:shkriuss/site';
 import {
@@ -398,8 +399,12 @@ export function mountTrades(root: Document): void {
   const showProblems = (problems: CloseProblems): boolean =>
     showFieldProblems(form, ALL_FIELDS, problems, { focusFirst: true });
 
+  // A paste longer than a box takes is cut by the browser: say so (audit 4 F2-7).
+  const limits = watchTextLimits(form);
+
   function openForm(trade: Trade | undefined, close = false): void {
     editing = trade?.id ?? null;
+    limits.clear();
     closing = close && trade !== undefined && isOpen(trade);
     dialogTitle.textContent = !trade ? 'New trade' : closing ? 'Close trade' : 'Change trade';
     deleteButton.hidden = !trade;

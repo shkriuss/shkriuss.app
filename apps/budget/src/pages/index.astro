@@ -309,8 +309,11 @@ import {
           type="text"
           autocomplete="off"
           maxlength={LIMITS.note}
-          aria-describedby="entry-note-error"
+          aria-describedby="entry-note-hint entry-note-error"
         />
+        <p class="field__hint" id="entry-note-hint">
+          Up to {LIMITS.note.toLocaleString('en')} characters.
+        </p>
         <p class="field__error" id="entry-note-error" data-error-for="note"></p>
       </div>
       <p class="field__error" data-error-for="kind"></p>
