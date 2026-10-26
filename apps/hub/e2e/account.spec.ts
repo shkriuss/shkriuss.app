@@ -151,8 +151,15 @@ test('adds another device with a one-time code', async ({ page, browser, baseURL
   await expect(second.locator('[data-link-code]')).toHaveText(code);
   expect(second.url(), 'the key is taken out of the address bar').not.toContain('#');
   for (const address of sent) expect(address).not.toContain(linkKey);
+  // "Add this device" works a moment after the question shows (audit 4 C-6):
+  // checked once it does, and its colours have finished changing.
+  const add = second.getByRole('button', { name: 'Add this device' });
+  await expect(add).toBeEnabled();
+  await add.evaluate((button) =>
+    Promise.all(button.getAnimations().map((animation) => animation.finished)),
+  );
   await checkA11y(second, 'account: confirm a linked device');
-  await second.getByRole('button', { name: 'Add this device' }).click();
+  await add.click();
   await expect(view(second, 'signed-in')).toBeVisible();
   await expect(accountCode(second)).toHaveText(code);
 
@@ -184,7 +191,9 @@ test('“Add this device” works only a moment after its question is on screen'
   const url = (await page.locator('[data-link-url]').textContent()) ?? '';
   const other = await otherDevice(browser, baseURL);
   const second = await other.newPage();
-  await second.clock.install();
+  // Paused: no timer fires but those the test runs.
+  await second.clock.install({ time: new Date('2026-10-26T12:00:00') });
+  await second.clock.pauseAt(new Date('2026-10-26T12:00:01'));
   await second.goto(url);
   await expect(view(second, 'link-confirm')).toBeVisible();
   const add = second.getByRole('button', { name: 'Add this device' });
@@ -471,7 +480,7 @@ test.describe('passkeys', () => {
         : route.fallback(),
     );
     await page.getByRole('button', { name: 'Add a passkey' }).click();
-    await expect(page.locator('[data-passkey-status]')).toHaveText('Couldn’t save the passkey.');
+    await expect(page.locator('[data-passkey-status]')).toHaveText(/^Couldn’t reach shkriuss\.app/);
     const signals = await page.evaluate(
       () => (window as unknown as { signals: unknown[] }).signals,
     );
