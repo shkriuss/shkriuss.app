@@ -20,6 +20,13 @@ Your trading journal: log your trades and see what works. Lives at
     and quantities up to a trillion (`LIMITS.number`); a trade restored from
     a backup or synced can be bigger (older data must stay readable), and a
     result too big to work out shows as "—" (`formatResult`).
+  - Numbers are read the way the person's language writes them
+    (`parseDecimal`), but one comma or point before exactly three digits
+    ("149,853", "1.500") could be either sign: the form asks which number
+    is meant. An iPhone's number keypad offers the decimal sign of the
+    phone's region, which may not be the browser language's, and a price
+    can have three decimals (audit 4 F2-10). Fees are asked about the same
+    way, as Budget's amounts are (F2-12).
   - Closing part of a trade (`readClose`): the close form's "Quantity
     closed" is all that's still open unless it's changed. Less than all of
     it adds the part closed as a trade of its own (a new id, that quantity,
@@ -53,7 +60,9 @@ Your trading journal: log your trades and see what works. Lives at
     (each part of a trade, and what's still open of it). Text that a
     spreadsheet could read as a formula starts with `'`. The file starts
     with a byte-order mark, so Excel shows text beyond plain English
-    letters (Georgian, "’") as typed.
+    letters (Georgian, "’") as typed. In a language that writes decimals
+    with a comma, cells are split by ";" and numbers written "1,085", as
+    spreadsheets there read them (audit 4 F2-9).
   - Trades keeps up to 3,500 trades, open and closed (`LIMITS.trades`).
     Why not more: each trade is saved on the device, where a browser keeps
     about 5 MB for each site, and with sync on, sync keeps records of its

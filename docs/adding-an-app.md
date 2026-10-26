@@ -71,9 +71,10 @@ alphabetical order, so where an entry sits in `apps.json` doesn't matter.
   instead.
 - For a spreadsheet to download (like Budget's), make the file with
   `csvFile` from `@shkriuss/storage/csv`, which keeps text like "=SUM(…)"
-  from running as a formula and starts the file with a byte-order mark (so
-  Excel shows letters beyond English as typed), and save it with
-  `downloadFile`.
+  from running as a formula, starts the file with a byte-order mark (so
+  Excel shows letters beyond English as typed), and splits cells by ";"
+  where decimals are written with a comma (as spreadsheets there read
+  files), and save it with `downloadFile`.
 - Saving can fail (storage full, or blocked). Pass what `save()` gives to
   `reportSave()` from `@shkriuss/ui/problem`: it tells the person, in the
   same words as every app, and gives back whether it saved, so the app only

@@ -80,7 +80,10 @@ point or a comma, read the way the person's language writes thousands, so
 space between digits groups thousands and is checked like a comma, so
 "12 50" isn't a number; with `{ cents: true }`, for amounts kept to the
 cent, a point or comma that could be either before three digits ("1.500"
-in French) isn't read, and `whichAmount` says what to ask;
+in French) isn't read, and `whichAmount` says what to ask; with
+`{ groupsToo: true }`, as in Trades, where prices can have three decimals
+and an iPhone keypad may offer only its region's decimal sign, neither is
+the locale's own thousands sign before three digits ("1,500" in English);
 `parseWhole`, for whole numbers like a mileage; `decimalText`, to fill a
 field with a number so it reads back the same; `roundDecimal`; and
 `formatMoney` with `CURRENCIES` and `currencyDigits`: number fields are

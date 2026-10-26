@@ -47,6 +47,7 @@ import {
   roomNote,
   setCurrency,
   setUnit,
+  sortedVehicles,
   systemNames,
   toCsv,
   totals,
@@ -385,9 +386,10 @@ export function mountRepairs(root: Document): void {
     currencySelect.value = currencyOf(settings);
     mileageLabel.textContent = `Mileage (${unitOf(settings)})`;
     labourHint.textContent = `In ${currencyOf(settings)}. Each part’s price goes with the part.`;
+    // Only the names: no summaries to work out again (audit 4 F2-2).
     fillList(
       suggestions.vehicles,
-      vehicleSummaries(vehicles, repairs).map((summary) => summary.vehicle.name),
+      sortedVehicles(vehicles).map((vehicle) => vehicle.name),
     );
     fillList(suggestions.systems, systemNames(repairs));
     fillList(

@@ -40,7 +40,9 @@ See where your money goes, month by month. Lives at
 - "Download as a spreadsheet (CSV)" saves every entry (expenses negative;
   income and refunds positive). Text that a spreadsheet could read as a
   formula starts with `'`. The file starts with a byte-order mark, so Excel
-  shows text beyond plain English letters (Georgian, "’") as typed.
+  shows text beyond plain English letters (Georgian, "’") as typed. In a
+  language that writes decimals with a comma, cells are split by ";" and
+  amounts written "12,5", as spreadsheets there read them (audit 4 F2-9).
 - Budget keeps up to 6,000 entries (`LIMITS.entries`). Why not more: each
   entry is saved on the device, where a browser keeps about 5 MB for each
   site, and with sync on, sync keeps about as much again to know what

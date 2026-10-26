@@ -587,6 +587,7 @@ describe('spreadsheet', () => {
           entry({ id: 'c', date: '2026-10-04', kind: 'refund', amount: 4.5, note: 'Sour milk' }),
         ),
         categories,
+        'en-US',
       ).split('\r\n'),
     ).toEqual([
       // A byte-order mark first, for Excel (audit 3 F2-6).
@@ -594,6 +595,23 @@ describe('spreadsheet', () => {
       '2026-10-04,Refund,4.5,Groceries,Sour milk',
       "2026-10-03,Income,2000,,'=pay",
       '2026-10-02,Expense,-10,Groceries,"Milk, ""fresh"""',
+      '',
+    ]);
+  });
+
+  // Audit 4 F2-9: Excel splits a CSV file's cells at ";" where decimals are
+  // written with a comma: every row was one cell, and a ";" in a note
+  // started a new one, which could be a formula.
+  it('is written as a spreadsheet in the person’s language reads it', () => {
+    expect(
+      toCsv(
+        entries(entry({ id: 'a', date: '2026-10-02', amount: 4.5, note: 'Lunch;=1+1' })),
+        categories,
+        'de-DE',
+      ).split('\r\n'),
+    ).toEqual([
+      '\uFEFFDate;Type;Amount;Category;Note',
+      `2026-10-02;Expense;-4,5;Groceries;"Lunch;'=1+1"`,
       '',
     ]);
   });

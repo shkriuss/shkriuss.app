@@ -556,8 +556,12 @@ export const KIND_LABELS: Record<Kind, string> = {
   refund: 'Refund',
 };
 
-/** Every entry as a CSV file, the latest first. Expenses are negative; income and refunds positive. */
-export function toCsv(entries: EntriesState, categories: CategoriesState): string {
+/**
+ * Every entry as a CSV file, the latest first, as a spreadsheet in the
+ * language of `locale` (the browser's own when left out) reads it (csvFile).
+ * Expenses are negative; income and refunds positive.
+ */
+export function toCsv(entries: EntriesState, categories: CategoriesState, locale?: string): string {
   const names = new Map(categories.categories.map((category) => [category.id, category.name]));
   const rows = [...entries.entries]
     .sort((a, b) => b.date.localeCompare(a.date))
@@ -568,7 +572,7 @@ export function toCsv(entries: EntriesState, categories: CategoriesState): strin
       hasCategory(entry.kind) ? (names.get(entry.category ?? '') ?? '') : '',
       entry.note,
     ]);
-  return csvFile([['Date', 'Type', 'Amount', 'Category', 'Note'], ...rows]);
+  return csvFile([['Date', 'Type', 'Amount', 'Category', 'Note'], ...rows], locale);
 }
 
 // ---------- Settings ----------

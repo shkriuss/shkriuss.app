@@ -140,10 +140,11 @@ describe('reading the form', () => {
   it('reads numbers the way the person’s language writes them', () => {
     const price = (text: string, locale: string) =>
       readTrade({ ...form, entryPrice: text, stop: '' }, 'a', 0, locale).trade?.entryPrice;
-    expect(price('1,234', 'en-US')).toBe(1234);
     expect(price('1,234.5', 'en-US')).toBe(1234.5);
-    expect(price('1.234', 'de-DE')).toBe(1234);
+    expect(price('1,234,567', 'en-US')).toBe(1_234_567);
+    expect(price('1.234', 'en-US')).toBe(1.234);
     expect(price('1,234', 'de-DE')).toBe(1.234);
+    expect(price('1.234,5', 'de-DE')).toBe(1234.5);
     // A price with three decimals, shown in the form in German and saved unchanged.
     const forex = trade({ symbol: 'EURUSD', entryPrice: 1.085, exitPrice: 1.092, stop: 1.081 });
     expect(toForm(forex, 'de-DE')).toMatchObject({ entryPrice: '1,085', exitPrice: '1,092' });
@@ -213,6 +214,29 @@ describe('reading the form', () => {
     expect(readTrade({ ...form, stop: '151' }, 'a', 0).problems).toEqual({
       stop: 'For a long trade, the stop loss is below the entry price.',
     });
+    // One sign before three digits could be either: the person is asked
+    // which. An iPhone keypad offers its region's decimal sign, so "149,853"
+    // in English may be a price of 149.853 (audit 4 F2-10); fees are asked
+    // about as Budget's amounts are (audit 4 F2-12).
+    expect(
+      readTrade(
+        { ...form, entryPrice: '149,853', quantity: '1,500', stop: '', fees: '1,000' },
+        'a',
+        0,
+        'en-US',
+      ).problems,
+    ).toEqual({
+      entryPrice: 'Enter 149853 or 149.853 to show which you mean.',
+      quantity: 'Enter 1500 or 1.5 to show which you mean.',
+      fees: 'Enter 1000 or 1 to show which you mean.',
+    });
+    expect(
+      readTrade({ ...form, entryPrice: '1.500', fees: '1.500' }, 'a', 0, 'fr-FR').problems,
+    ).toEqual({
+      entryPrice: 'Enter 1500 or 1,5 to show which you mean.',
+      fees: 'Enter 1500 or 1,5 to show which you mean.',
+    });
+    expect(readTrade({ ...form, fees: '1,5' }, 'a', 0, 'fr-FR').trade?.fees).toBe(1.5);
     expect(readTrade({ ...form, side: 'short' }, 'a', 0).problems).toEqual({
       stop: 'For a short trade, the stop loss is above the entry price.',
     });
@@ -301,6 +325,12 @@ describe('closing part of a trade', () => {
     expect(close(closeForm, '100')).toEqual({
       trade: { ...open, exitDate: '2026-10-05', exitPrice: 110, fees: 2 },
       rest: null,
+    });
+  });
+
+  it('asks which number is meant when the quantity closed could be two (audit 4 F2-10)', () => {
+    expect(close(closeForm, '1,500').problems).toEqual({
+      closeQuantity: 'Enter 1500 or 1.5 to show which you mean.',
     });
   });
 
@@ -962,6 +992,7 @@ describe('spreadsheet', () => {
           notes: '=SUM(A1)',
         }),
       ),
+      'en-US',
     );
     expect(csv.split('\r\n')).toEqual([
       // A byte-order mark first, for Excel (audit 3 F2-6).
@@ -975,17 +1006,24 @@ describe('spreadsheet', () => {
   it('has a row for each part of a trade, and for what’s still open of it', () => {
     const lot = trade({ id: 'a', quantity: 100, fees: 1, exitDate: null, exitPrice: null });
     const part = trade({ id: 'b', quantity: 40, fees: 2, parent: 'a' });
-    expect(toCsv(state(lot, part)).split('\r\n').slice(1)).toEqual([
+    expect(toCsv(state(lot, part), 'en-US').split('\r\n').slice(1)).toEqual([
       'AAPL,Long,2026-10-01,100,60,,,,0,,,,,',
       'AAPL,Long,2026-10-01,100,40,,2026-10-05,110,2,398,9.95,,,',
       '',
     ]);
     // All of it closed in parts: only the parts.
     const all = trade({ id: 'b', quantity: 100, parent: 'a' });
-    expect(toCsv(state(lot, all)).split('\r\n').slice(1)).toEqual([
+    expect(toCsv(state(lot, all), 'en-US').split('\r\n').slice(1)).toEqual([
       'AAPL,Long,2026-10-01,100,100,,2026-10-05,110,0,1000,10,,,',
       '',
     ]);
+  });
+
+  it('is written as a spreadsheet in the person’s language reads it (audit 4 F2-9)', () => {
+    const forex = trade({ symbol: 'EURUSD', entryPrice: 1.085, exitPrice: 1.092, quantity: 1000 });
+    expect(toCsv(state(forex), 'fr-FR').split('\r\n')[1]).toBe(
+      'EURUSD;Long;2026-10-01;1,085;1000;;2026-10-05;1,092;0;7;0,64516129;;;',
+    );
   });
 });
 

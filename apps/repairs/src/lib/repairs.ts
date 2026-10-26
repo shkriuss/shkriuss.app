@@ -814,23 +814,38 @@ export interface VehicleSummary {
   cost: number | null;
 }
 
-/** Each vehicle with how many repairs it had, when, and what they cost (in `currency`), in name order. */
+/**
+ * Each vehicle with how many repairs it had, when, and what they cost (in
+ * `currency`), in name order. The repairs are grouped by vehicle first:
+ * looking through all of them for each vehicle took most of a second at
+ * every change near the limits (audit 4 F2-2).
+ */
 export function vehicleSummaries(
   vehicles: VehiclesState,
   repairs: RepairsState,
   currency: Currency = 'USD',
 ): VehicleSummary[] {
+  const byVehicle = new Map<string, Repair[]>();
+  for (const repair of repairs.repairs) {
+    const own = byVehicle.get(repair.vehicle);
+    if (own) own.push(repair);
+    else byVehicle.set(repair.vehicle, [repair]);
+  }
   return sortedVehicles(vehicles).map((vehicle) => {
-    const own = repairs.repairs.filter((repair) => repair.vehicle === vehicle.id);
-    const lastDate = own.reduce<IsoDate | null>(
-      (latest, repair) => (latest === null || repair.date > latest ? repair.date : latest),
-      null,
-    );
+    const own = byVehicle.get(vehicle.id) ?? [];
+    let lastDate: IsoDate | null = null;
+    let highest: number | null = null;
+    for (const repair of own) {
+      if (lastDate === null || repair.date > lastDate) lastDate = repair.date;
+      if (repair.mileage !== null && (highest === null || repair.mileage > highest)) {
+        highest = repair.mileage;
+      }
+    }
     return {
       vehicle,
       repairs: own.length,
       lastDate,
-      lastMileage: lastMileage(repairs, vehicle.id)?.mileage ?? null,
+      lastMileage: highest,
       cost: totals(own, currency).cost,
     };
   });
@@ -934,9 +949,12 @@ export const formatMileage = (mileage: number, unit: Unit, locale?: string): str
 const formatQuantity = (quantity: number, locale?: string): string =>
   new Intl.NumberFormat(locale, { maximumFractionDigits: 3 }).format(quantity);
 
-/** "1 hour", "2.5 hours" */
+/** Whether an hours number, rounded as it's shown, is "1" (then "hour"): 0.999 shows as 1 too. */
+const hoursPlural = new Intl.PluralRules('en-US', { maximumFractionDigits: 2 });
+
+/** "1 hour", "2.5 hours": the word goes with the number as it's shown (audit 4 F2-11). */
 export const formatHours = (hours: number, locale?: string): string =>
-  `${new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(hours)} ${hours === 1 ? 'hour' : 'hours'}`;
+  `${new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(hours)} ${hoursPlural.select(hours) === 'one' ? 'hour' : 'hours'}`;
 
 // The currencies and formatMoney are shared with Budget and Trades.
 export { CURRENCIES, formatMoney, type Currency };
@@ -969,11 +987,16 @@ export const countLabel = (count: number, one: string, many: string): string =>
 
 // ---------- Spreadsheet ----------
 
-/** Every repair as a CSV file (one row each, the latest first). */
+/**
+ * Every repair as a CSV file (one row each, the latest first), as a
+ * spreadsheet in the language of `locale` (the browser's own when left out)
+ * reads it (csvFile).
+ */
 export function toCsv(
   repairs: RepairsState,
   vehicles: VehiclesState,
   settings: SettingsState,
+  locale?: string,
 ): string {
   const unit = unitOf(settings);
   const currency = currencyOf(settings);
@@ -1005,14 +1028,14 @@ export function toCsv(
       repair.system,
       repair.problem,
       repair.work,
-      repair.parts.map((part) => partLabel(part, 'en-US')).join('; '),
+      repair.parts.map((part) => partLabel(part, locale)).join('; '),
       repair.hours,
       cost?.parts ?? null,
       cost?.labour ?? null,
       cost?.total ?? null,
     ];
   });
-  return csvFile([header, ...rows]);
+  return csvFile([header, ...rows], locale);
 }
 
 // ---------- Settings ----------

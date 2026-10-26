@@ -46,7 +46,9 @@ private car's service history. Lives at <https://repairs.shkriuss.app>.
   the hours and the parts, labour and total cost. Text a spreadsheet could
   read as a formula starts with `'`. The file starts with a byte-order mark,
   so Excel shows text beyond plain English letters (Georgian, "’", the "×"
-  of a part's quantity) as typed.
+  of a part's quantity) as typed. In a language that writes decimals with a
+  comma, cells are split by ";" and numbers written "12,5", as spreadsheets
+  there read them (audit 4 F2-9).
 - Repairs keeps up to 3,000 repairs (`LIMITS.repairs`). Why not more: each
   repair is saved on the device, where a browser keeps about 5 MB for each
   site, and with sync on, sync keeps records of its own there too. The test
