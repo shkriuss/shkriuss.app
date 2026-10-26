@@ -85,7 +85,11 @@ private car's service history. Lives at <https://repairs.shkriuss.app>.
   `src/scripts/photos.ts` does the photo work; `make-photo.worker.ts` makes
   picked photos smaller in a web worker (with `@shkriuss/ui/photos`), so a
   big photo doesn't freeze the page.
-- `src/scripts/repairs.ts`: connects the page to those rules.
+- `src/scripts/repairs.ts`: connects the page to those rules: the lists,
+  search, settings and deleting, and keeping up with other devices and
+  tabs. The repair form is in `repair-form.ts` (its photos in
+  `form-photos.ts`), the vehicle form in `vehicle-form.ts`, "Delete a
+  year" in `delete-year.ts`, and the photo viewer in `photo-viewer.ts`.
 - `src/pages/index.astro`: the page, built from `@shkriuss/ui` components.
   `<template>`s hold the markup for a day, a repair, a vehicle and a part row;
   the forms and "Delete a year" are dialogs.

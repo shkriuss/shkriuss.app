@@ -1,0 +1,108 @@
+/**
+ * Repairs: "Delete a year…", which deletes every repair of one year and
+ * their photos, to make room. Split from repairs.ts (audit 3 J-9).
+ */
+import { required } from '@shkriuss/ui/dom';
+import {
+  countLabel,
+  photoFiles,
+  photosOf,
+  removeYear,
+  repairsIn,
+  repairYears,
+  type RepairsState,
+} from '../lib/repairs.ts';
+import { deletePhotos } from './photos.ts';
+
+/** What "Delete a year…" needs from the page. */
+export interface DeleteYearPage {
+  /** The repairs as they are now. */
+  repairs(): RepairsState;
+  /** Saves, shows the change, and tells other devices. */
+  save(next: { repairs: RepairsState }, message: string): void;
+  /** Tells sync about photo files removed. */
+  filesRemoved(files: readonly string[]): void;
+}
+
+export interface DeleteYear {
+  /** "Delete a year…": opens its dialog, or says there's nothing to delete. */
+  open(): void;
+  /** After changes from another device or tab: the dialog shows the years there are now. */
+  refresh(): void;
+}
+
+export function mountDeleteYear(root: ParentNode, page: DeleteYearPage): DeleteYear {
+  const csvStatus = required<HTMLElement>(root, '[data-csv-status]');
+  const deleteYearButton = required<HTMLButtonElement>(root, '[data-action="delete-year"]');
+  const yearDialog = required<HTMLDialogElement>(root, '[data-year-dialog]');
+  const yearForm = required<HTMLFormElement>(yearDialog, '[data-year-form]');
+  const yearSelect = required<HTMLSelectElement>(yearForm, '[data-year-select]');
+  const yearText = required<HTMLElement>(yearForm, '[data-year-text]');
+  const yearConfirm = required<HTMLElement>(yearForm, '[data-year-confirm]');
+
+  const repairsCount = (count: number) => countLabel(count, 'repair', 'repairs');
+
+  /** How many repairs the year chosen has (0 if it has none now). */
+  const yearCount = (year: string) =>
+    repairYears(page.repairs()).find((entry) => entry.year === year)?.count ?? 0;
+
+  /** Says what deleting the year chosen removes. */
+  function showYear(): void {
+    const year = yearSelect.value;
+    const count = repairsCount(yearCount(year));
+    yearText.textContent = `The ${count} from ${year} will be deleted, with their photos. With sync on, they’re deleted on your other devices too. This can’t be undone.`;
+    yearConfirm.textContent = `Delete ${count}`;
+  }
+
+  /** The years with repairs to choose from (the year chosen stays chosen while it has any). */
+  function fillYears(): void {
+    const chosen = yearSelect.value;
+    const years = repairYears(page.repairs());
+    yearSelect.replaceChildren(
+      ...years.map(({ year, count }) => new Option(`${year} (${repairsCount(count)})`, year)),
+    );
+    // Else the first, the earliest year: the oldest repairs are the likeliest to go.
+    if (years.some(({ year }) => year === chosen)) yearSelect.value = chosen;
+    showYear();
+  }
+
+  function openYears(): void {
+    if (page.repairs().repairs.length === 0) {
+      csvStatus.textContent = 'There are no repairs to delete.';
+      return;
+    }
+    yearSelect.replaceChildren();
+    fillYears();
+    required<HTMLElement>(yearForm, '[data-csv-status]').textContent = '';
+    yearDialog.showModal();
+    yearSelect.focus();
+  }
+
+  yearSelect.addEventListener('change', showYear);
+
+  yearForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const year = yearSelect.value;
+    const repairs = page.repairs();
+    const gone = repairsIn(repairs, year);
+    yearDialog.close();
+    deleteYearButton.focus();
+    if (gone.length === 0) return;
+    // Like deleting repairs one by one: other devices delete them too, and their photos go.
+    page.save(
+      { repairs: removeYear(repairs, year) },
+      `Deleted ${repairsCount(gone.length)} from ${year}.`,
+    );
+    void deletePhotos(photosOf(gone));
+    page.filesRemoved(photoFiles(photosOf(gone)));
+  });
+
+  return {
+    open: openYears,
+    refresh() {
+      if (!yearDialog.open) return;
+      if (page.repairs().repairs.length === 0) yearDialog.close();
+      else fillYears();
+    },
+  };
+}
