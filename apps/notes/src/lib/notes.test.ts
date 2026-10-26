@@ -20,6 +20,7 @@ import {
   setPinned,
   titleOf,
   visibleNotes,
+  withSavedNote,
   type Note,
   type NotesState,
 } from './notes.ts';
@@ -93,6 +94,20 @@ describe('writing notes', () => {
     expect(dropIfEmpty(state, 'b')).toBe(state);
     expect(dropIfEmpty(state, 'c')).toBe(state);
     expect(dropIfEmpty(state, 'missing')).toBe(state);
+  });
+
+  it('puts back a note as the device has it, for typing that couldn’t be saved (audit 4 F3-1)', () => {
+    const saved: NotesState = { notes: [note('a', 'Diary', 'Start'), note('b', 'Keep')] };
+    const typed: NotesState = {
+      notes: [note('a', 'Diary', 'Start more', 2000), note('b', 'Keep'), note('c', 'New', 'Hi')],
+    };
+    expect(withSavedNote(typed, saved, 'a').notes).toEqual([
+      note('a', 'Diary', 'Start'),
+      note('b', 'Keep'),
+      note('c', 'New', 'Hi'),
+    ]);
+    // Never saved: it goes.
+    expect(withSavedNote(typed, saved, 'c').notes.map((entry) => entry.id)).toEqual(['a', 'b']);
   });
 
   it('keeps the other device’s version as a second note while typing goes on here', () => {

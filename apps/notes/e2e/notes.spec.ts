@@ -454,4 +454,35 @@ test.describe('with the device full (audit 4 F3-1)', () => {
     await expect.poll(() => savedNotes(page)).toEqual(['Diary | Start first part second part']);
     await expect(page.locator('[data-announcer]')).not.toHaveText(/changed on another device/);
   });
+
+  test('typing that still can’t be saved when its note is left is said to be gone', async ({
+    page,
+  }) => {
+    // Before, it stayed in memory only: the note opened again showed it as if
+    // saved, typing on took it for the saved note (a false second version
+    // came next), and a change from elsewhere put the saved text back.
+    await writeNote(page, 'Old', 'x'.repeat(2000));
+    await writeNote(page, 'Diary', 'Start');
+    await fillStorage(page, 10);
+    await page.getByRole('link', { name: 'Diary', exact: true }).click();
+    await bodyBox(page).press('End');
+    await bodyBox(page).pressSequentially(' — what I wrote today.');
+    await expect(edited(page)).toHaveText('Not saved');
+    await page.getByRole('button', { name: 'All notes' }).click();
+    await expect(page.locator('[data-problem]')).toContainText(
+      'Your last changes to “Diary” are gone. Couldn’t save: there’s no room left',
+    );
+
+    // Opened again: as the device has it.
+    await page.getByRole('link', { name: 'Diary', exact: true }).click();
+    await expect(bodyBox(page)).toHaveValue('Start');
+    await bodyBox(page).press('End');
+    await bodyBox(page).pressSequentially(' — and some more.');
+    await expect(edited(page)).toHaveText('Not saved');
+    // Room again: the typing is saved, and no second version is made.
+    await deleteElsewhere(page, 'Old');
+    await expect(edited(page)).toHaveText(/^Edited /);
+    expect(await savedNotes(page)).toEqual(['Diary | Start — and some more.']);
+    await expect(page.locator('[data-announcer]')).not.toHaveText(/changed on another device/);
+  });
 });

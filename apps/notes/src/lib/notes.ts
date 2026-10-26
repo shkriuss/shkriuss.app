@@ -133,6 +133,17 @@ export function removeNote(state: NotesState, id: string): NotesState {
   return { notes: state.notes.filter((note) => note.id !== id) };
 }
 
+/**
+ * `state` with the note `id` as `saved` (what the device has) has it, or
+ * without it if it was never saved: for typing that couldn't be saved, once
+ * its note is left (audit 4 F3-1).
+ */
+export function withSavedNote(state: NotesState, saved: NotesState, id: string): NotesState {
+  const kept = saved.notes.find((note) => note.id === id);
+  if (!kept) return removeNote(state, id);
+  return { notes: state.notes.map((note) => (note.id === id ? kept : note)) };
+}
+
 export const isEmpty = (note: Note): boolean => note.title.trim() === '' && note.body.trim() === '';
 
 /** Removes a note if nothing was written in it (when leaving it). */

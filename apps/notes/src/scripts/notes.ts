@@ -17,6 +17,7 @@ import { PAGE_SIZE, shownCount, waitForTyping } from '@shkriuss/ui/long-lists';
 import {
   clearProblem,
   reportSave,
+  saveProblem,
   showProblem,
   type ReportSaveOptions,
 } from '@shkriuss/ui/problem';
@@ -43,6 +44,7 @@ import {
   setPinned,
   titleOf,
   visibleNotes,
+  withSavedNote,
   type Note,
   type NotesState,
 } from '../lib/notes.ts';
@@ -259,15 +261,29 @@ export function mountNotes(root: Document): void {
     saveText();
   }
 
-  /** Leaves the note in the editor (saving it), and drops it if nothing was written. */
-  function leaveNote(): void {
-    if (current === null) return;
+  /**
+   * Leaves the note in the editor (saving it), and drops it if nothing was
+   * written. Typing that still can't be saved goes then: the note goes back
+   * to what the device has, so the list, the note opened again and changes
+   * from elsewhere show that, and the person is told. Kept in memory, it
+   * was lost later without a word, or taken for the saved note (audit 4
+   * F3-1). Gives what to tell them, or null.
+   */
+  function leaveNote(): string | null {
+    if (current === null) return null;
     flush();
     left = current;
     current = null;
-    unsaved = false;
+    let lost: string | null = null;
+    if (unsaved) {
+      unsaved = false;
+      const note = find(left);
+      if (note) lost = `Your last changes to “${titleText(note)}” are gone. ${saveProblem()}`;
+      state = withSavedNote(state, store.load(), left);
+    }
     const next = dropIfEmpty(state, left);
     if (next !== state) save(next);
+    return lost;
   }
 
   /** "All notes": back in history if the list came first, else straight to the list. */
@@ -291,10 +307,11 @@ export function mountNotes(root: Document): void {
     }
     if (id !== null && id === current) return;
     const wasEditing = !editorView.hidden;
-    leaveNote();
+    const lost = leaveNote();
     const note = id === null ? undefined : find(id);
     if (note) {
       openNote(note);
+      if (lost !== null) say(lost);
       return;
     }
     if (id !== null) {
@@ -302,6 +319,7 @@ export function mountNotes(root: Document): void {
       if (!wasDropped(id)) say('That note isn’t on this device. It may have been deleted.');
     }
     showList(wasEditing);
+    if (lost !== null) say(lost);
   }
 
   /** Puts a changed value into a field, keeping the cursor where it was. */
