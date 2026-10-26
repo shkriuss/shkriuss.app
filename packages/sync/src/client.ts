@@ -104,9 +104,9 @@ export type { SyncProblem } from './requests.ts';
 
 const PENDING_KEY = 'shkriuss-device:connect';
 /** After a change, wait this long so quick edits go up together. */
-const CHANGE_DELAY_MS = 1500;
+export const CHANGE_DELAY_MS = 1500;
 /** While the app is open and visible, look for changes from other devices this often. */
-const POLL_MS = 60 * 1000;
+export const POLL_MS = 60 * 1000;
 /** Merge again at most this many times in a row when another device writes first. */
 const MAX_ROUNDS = 3;
 

@@ -446,3 +446,10 @@ describe('prune', () => {
     expect(Object.keys(prune(snapshot, now).items).sort()).toEqual(['live', 'recent']);
   });
 });
+
+describe('the numbers the docs promise (audit 3 J-4)', () => {
+  it('keep deletion markers for 180 days', () => {
+    // docs/adr/0010-account-and-sync.md: markers are "dropped after 180 days".
+    expect(TOMBSTONE_DAYS).toBe(180);
+  });
+});

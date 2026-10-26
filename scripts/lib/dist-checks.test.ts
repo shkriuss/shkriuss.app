@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   budgetProblems,
+  DEFAULT_BUDGET,
   cspProblems,
   fileSizeProblems,
   gzipSize,
@@ -132,5 +133,12 @@ describe('spacingProblems', () => {
         '<p>run by <a href="/x">ONNX</a>. (<a href="/y">More</a>)</p><li><a href="/">Home</a></li>',
       ),
     ).toEqual([]);
+  });
+});
+
+describe('the size budgets (audit 3 J-4)', () => {
+  it('are the ones docs/quality.md gives: 20/15/35 KB gzipped', () => {
+    // Raise one only with a reason in an ADR (docs/adr/0007), and change quality.md too.
+    expect(DEFAULT_BUDGET).toEqual({ html: 20_000, css: 15_000, js: 35_000 });
   });
 });

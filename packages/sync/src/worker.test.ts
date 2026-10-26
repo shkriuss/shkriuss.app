@@ -234,6 +234,42 @@ describe('two devices writing the same copy (audit 3 J-1)', () => {
   });
 });
 
+describe('the numbers the docs promise (audit 3 J-4)', () => {
+  it('delete a copy nobody uses after 396 days', () => {
+    // "13 months": the privacy page, docs/adr/0017-storage-limits.md.
+    expect(UNUSED_MS).toBe(396 * DAY_MS);
+  });
+
+  it('allow 120 changes to a copy in 10 minutes, and no more', async () => {
+    // docs/adr/0010-account-and-sync.md: "120 changes per 10 minutes per account".
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const server = memorySync();
+    const token = madeUpToken();
+    let version: number | null = null;
+    for (let change = 0; change < 120; change += 1) {
+      const response = await server.fetch(put(SITE, token, version, sealed(100)));
+      expect(response.status).toBe(200);
+      version = ((await response.json()) as { version: number }).version;
+    }
+    expect((await server.fetch(put(SITE, token, version, sealed(100)))).status).toBe(429);
+    vi.setSystemTime(Date.now() + 10 * 60 * 1000);
+    expect((await server.fetch(put(SITE, token, version, sealed(100)))).status).toBe(200);
+  });
+
+  it('allow 300 changes to a copy’s files in 10 minutes, and no more', async () => {
+    // docs/adr/0014-syncing-photos.md: "at most 300 changes in 10 minutes".
+    const server = memorySync();
+    const token = madeUpToken();
+    expect((await server.fetchWithFiles(put(SITE, token, null, sealed(100)))).status).toBe(200);
+    const file = (id: number) =>
+      request(SITE, `files/f${id}`, token, { method: 'PUT', body: randomBytes(64) });
+    for (let change = 0; change < 300; change += 1) {
+      expect((await server.fetchWithFiles(file(change))).status).toBe(204);
+    }
+    expect((await server.fetchWithFiles(file(300))).status).toBe(429);
+  });
+});
+
 describe('a token that only asks', () => {
   it('leaves nothing behind', async () => {
     const server = memorySync();

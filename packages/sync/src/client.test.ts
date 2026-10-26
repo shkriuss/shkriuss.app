@@ -7,7 +7,9 @@ import { equalBytes, randomBytes, seal, toBase64Url, utf8 } from '@shkriuss/cryp
 import { createStore, deleteAll, type StorageLike, type Store } from '@shkriuss/storage';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  CHANGE_DELAY_MS,
   createSync,
+  POLL_MS,
   saveConnection,
   stopSync,
   syncedStore,
@@ -2029,5 +2031,13 @@ describe('what a device knew can’t be saved right after the data was (audit 3 
     expect(tablet.counters).toEqual([counter('water', 5)]);
     expect(phone.counters).toEqual([counter('water', 5)]);
     vi.useRealTimers();
+  });
+});
+
+describe('the numbers the docs promise (audit 3 J-4)', () => {
+  it('sync 1.5 seconds after a change, and every minute while the app is open', () => {
+    // docs/adr/0010-account-and-sync.md: "1.5 seconds after each change, every minute while it's open".
+    expect(CHANGE_DELAY_MS).toBe(1500);
+    expect(POLL_MS).toBe(60_000);
   });
 });
