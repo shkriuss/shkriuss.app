@@ -164,6 +164,8 @@ export function mountPushControls(block: HTMLElement, options: PushControlsOptio
 
   testButton.addEventListener('click', () => {
     setBusy(testButton, true);
+    // Said while it waits for the server (audit 4 G-6).
+    render('Sending a test notification…');
     sendTestPush(app, 'Notifications are working.')
       .then(
         () => {

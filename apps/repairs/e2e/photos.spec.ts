@@ -106,6 +106,45 @@ test('adds photos to a repair, made smaller, and keeps them on the device', asyn
   await expect.poll(() => storedPhotos(page)).toBe(0);
 });
 
+test('a full device: says the photos couldn’t be saved, and saves nothing half-way', async ({
+  page,
+}) => {
+  // The likeliest failure for an app that keeps photos: the browser runs out
+  // of room for them (audit 4 J-5). The repair waits in its form, with its
+  // photos, until they can be saved.
+  await page.getByRole('button', { name: 'New repair' }).click();
+  const dialog = repairDialog(page);
+  await dialog.getByLabel('Vehicle').fill('Bus 105');
+  await addPhotos(page, [jpeg('door.jpg', await picture(page, { width: 800, height: 600 }))]);
+  await expect(dialog.locator('[data-form-photos] img')).toHaveCount(1);
+  await page.evaluate(() => {
+    Object.assign(window, { realPut: IDBObjectStore.prototype.put });
+    IDBObjectStore.prototype.put = () => {
+      throw new DOMException('The quota has been exceeded.', 'QuotaExceededError');
+    };
+  });
+  await fillRepair(page, {});
+  // Read out at once (an alert), with focus where the photos are.
+  await expect(dialog.getByRole('alert').filter({ hasText: 'Couldn’t save' })).toHaveText(
+    'Couldn’t save the photos. Your device may be out of space.',
+  );
+  await expect(dialog.getByRole('button', { name: 'Add photos' })).toBeFocused();
+  await expect(dialog).toBeVisible();
+  expect(await storedPhotos(page)).toBe(0);
+  const saved = await readStore<{ repairs: unknown[] }>(page, 'repairs');
+  expect(saved?.data.repairs ?? []).toEqual([]);
+
+  // With room again, the same form saves, photo and all.
+  await page.evaluate(() => {
+    IDBObjectStore.prototype.put = (
+      window as unknown as { realPut: IDBObjectStore['put'] }
+    ).realPut;
+  });
+  await dialog.getByRole('button', { name: 'Save' }).click();
+  await expect(status(page, 'Saved the repair on Bus 105')).toBeAttached();
+  expect(await storedPhotos(page)).toBe(1);
+});
+
 test('deleting a year deletes its repairs’ photos', async ({ page }) => {
   await page.getByRole('button', { name: 'New repair' }).click();
   const dialog = repairDialog(page);
