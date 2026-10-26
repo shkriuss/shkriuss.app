@@ -24,9 +24,12 @@ See where your money goes, month by month. Lives at
     amounts (nothing is converted; an amount typed is kept to the
     currency's own decimals: to the cent, or to the yen, so one that could
     be read two ways, like "1.500" typed in French, 1500 or 1.5, is asked
-    again), and the monthly reminder. Each is saved only once changed (US dollars and no reminder
-    until then), so a new device has nothing to win over another's when
-    they first sync.
+    again), and the monthly reminder. Each is saved only once changed (US
+    dollars and no reminder until then), so a new device has nothing to
+    win over another's when they first sync. After a change of currency,
+    totals add up each amount as it's shown (three $0.50 coffees are ¥1
+    each, and ¥3 spent), and an amount saved with cents stays as it is
+    until it's changed in its form (audit 4 F2-5).
 - A month shows what was spent, earned and is left (`summary`), each
   category's spending against its limit (`byCategory`; over the limit, its
   bar turns red), and the month's entries, the latest first. Once a

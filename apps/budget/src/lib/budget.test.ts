@@ -568,6 +568,38 @@ describe('words and money', () => {
     expect(monthLabel('2026-10', 'en-US')).toBe('October 2026');
     expect(dayLabel('2026-10-21', 'en-US')).toBe('Wed, Oct 21');
   });
+
+  // Audit 4 F2-5: after switching dollars to yen, three $0.50 coffees showed
+  // as ¥1, ¥1, ¥1, but "Spent" said ¥2; and saving one's form with only its
+  // note changed saved its amount as 1.
+  it('adds up amounts as they’re shown, and keeps one that wasn’t changed', () => {
+    const coffees = ['a', 'b', 'c'].map((id) => entry({ id, amount: 0.5 }));
+    const limits: CategoriesState = {
+      categories: [{ id: 'food', name: 'Groceries', limit: 10.5 }],
+    };
+    const yen = summary(coffees, limits, 'JPY');
+    expect(yen).toMatchObject({ spent: 3, budgeted: 11, spentWithLimit: 3 });
+    expect(byCategory(coffees, limits, 'JPY')[0]).toMatchObject({ spent: 3, left: 8 });
+    // In dollars, as before.
+    expect(summary(coffees, limits)).toMatchObject({ spent: 1.5, budgeted: 10.5 });
+
+    const options = { currency: 'JPY', locale: 'en-US' } as const;
+    const coffee = coffees[0] as Entry;
+    const form = { ...toEntryForm(coffee, 'en-US'), note: 'With Ana' };
+    expect(readEntry(form, 'a', null, limits, { ...options, saved: coffee }).entry).toEqual({
+      ...coffee,
+      note: 'With Ana',
+    });
+    // Changed, it's kept as yen have it.
+    expect(
+      readEntry({ ...form, amount: '2.4' }, 'a', null, limits, { ...options, saved: coffee }).entry
+        ?.amount,
+    ).toBe(2);
+    // So is a limit left as it was.
+    expect(readCategory({ name: 'Food', limit: '10.5' }, 'food', limits, options).category).toEqual(
+      { id: 'food', name: 'Food', limit: 10.5 },
+    );
+  });
 });
 
 describe('spreadsheet', () => {

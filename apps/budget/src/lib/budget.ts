@@ -246,9 +246,15 @@ export function readCategory(
   } else if (!editing && state.categories.length >= LIMITS.categories) {
     problems.name = `You can have up to ${LIMITS.categories} categories.`;
   }
-  const limitProblem = amountProblem(form.limit, true, options);
+  // A limit left as the form showed it is kept as it is, as entries' amounts are.
+  const sameLimit =
+    own !== undefined &&
+    own.limit !== null &&
+    form.limit === decimalText(own.limit, options.locale);
+  const limitProblem = sameLimit ? undefined : amountProblem(form.limit, true, options);
   if (limitProblem) problems.limit = limitProblem;
   if (Object.keys(problems).length > 0) return { problems };
+  if (sameLimit) return { category: { id, name, limit: own.limit } };
   const limit = parseAmount(form.limit, options);
   return { category: { id, name, limit: limit === null ? null : keep(limit, options) } };
 }
@@ -300,19 +306,24 @@ export type EntryProblems = Partial<Record<keyof EntryForm, string>>;
  * there are, for a new one; null for a change to one kept already, which
  * adds none, so it's never refused for the limit: with more than that,
  * after two devices' entries were put together, any change was (audit 3
- * F2-5).
+ * F2-5). `saved`: the entry being changed. Its amount, left as the form
+ * showed it, is kept as it is: saved in dollars with cents and shown in yen
+ * now, it was rounded when only its note changed (audit 4 F2-5).
  */
 export function readEntry(
   form: EntryForm,
   id: string,
   count: number | null,
   categories: CategoriesState,
-  options: ReadOptions = {},
+  options: ReadOptions & { saved?: Entry | undefined } = {},
 ): { entry: Entry; problems?: undefined } | { entry?: undefined; problems: EntryProblems } {
   const problems: EntryProblems = {};
   const kind = KINDS.find((entry) => entry === form.kind);
   if (!kind) problems.kind = 'Choose expense, income or refund.';
-  const amountText = amountProblem(form.amount, false, options);
+  const { saved } = options;
+  const sameAmount =
+    saved !== undefined && form.amount === decimalText(saved.amount, options.locale);
+  const amountText = sameAmount ? undefined : amountProblem(form.amount, false, options);
   if (amountText) problems.amount = amountText;
   else if (count !== null && count >= LIMITS.entries) {
     problems.amount = `You can keep up to ${new Intl.NumberFormat().format(LIMITS.entries)} entries. To make room, delete a year (under Currency and spreadsheet).`;
@@ -329,7 +340,8 @@ export function readEntry(
     entry: {
       id,
       kind,
-      amount: keep(parseAmount(form.amount, options) ?? 0, options),
+      amount:
+        sameAmount && saved ? saved.amount : keep(parseAmount(form.amount, options) ?? 0, options),
       date: form.date,
       category,
       note,
@@ -439,17 +451,32 @@ export interface Summary {
   spentWithLimit: number;
 }
 
-/** What an entry adds to the spending: an expense its amount, a refund takes its amount off. */
-const spending = (entry: Entry): number =>
-  entry.kind === 'expense' ? entry.amount : entry.kind === 'refund' ? -entry.amount : 0;
+/**
+ * What an entry adds to the spending in `currency`: an expense its amount, a
+ * refund takes its amount off, as the amount is shown (to the cent, or to
+ * the yen). Amounts saved with cents before the currency was changed to
+ * one without added up to more or less than the rows showed (audit 4 F2-5).
+ */
+const spending = (entry: Entry, currency: Currency): number =>
+  entry.kind === 'income'
+    ? 0
+    : (entry.kind === 'refund' ? -1 : 1) * keep(entry.amount, { currency });
 
-export function summary(entries: readonly Entry[], categories: CategoriesState): Summary {
+/** The totals of `entries`, each amount and limit as it's shown in `currency` (see spending). */
+export function summary(
+  entries: readonly Entry[],
+  categories: CategoriesState,
+  currency: Currency = 'USD',
+): Summary {
   const limited = categories.categories.filter((category) => category.limit !== null);
   const withLimit = new Set(limited.map((category) => category.id));
   const income = tidy(
-    entries.reduce((sum, entry) => (entry.kind === 'income' ? sum + entry.amount : sum), 0),
+    entries.reduce(
+      (sum, entry) => (entry.kind === 'income' ? sum + keep(entry.amount, { currency }) : sum),
+      0,
+    ),
   );
-  const spent = tidy(entries.reduce((sum, entry) => sum + spending(entry), 0));
+  const spent = tidy(entries.reduce((sum, entry) => sum + spending(entry, currency), 0));
   return {
     income,
     spent,
@@ -457,11 +484,13 @@ export function summary(entries: readonly Entry[], categories: CategoriesState):
     budgeted:
       limited.length === 0
         ? null
-        : tidy(limited.reduce((sum, category) => sum + (category.limit ?? 0), 0)),
+        : tidy(limited.reduce((sum, category) => sum + keep(category.limit ?? 0, { currency }), 0)),
     spentWithLimit: tidy(
       entries.reduce(
         (sum, entry) =>
-          entry.category !== null && withLimit.has(entry.category) ? sum + spending(entry) : sum,
+          entry.category !== null && withLimit.has(entry.category)
+            ? sum + spending(entry, currency)
+            : sum,
         0,
       ),
     ),
@@ -505,25 +534,27 @@ export interface CategoryTotal {
 
 /**
  * Spending in each category (refunds taken off), in the categories' order,
- * then "No category" if anything was spent or refunded without one.
+ * then "No category" if anything was spent or refunded without one; each
+ * amount and limit as it's shown in `currency` (see spending).
  */
 export function byCategory(
   entries: readonly Entry[],
   categories: CategoriesState,
+  currency: Currency = 'USD',
 ): CategoryTotal[] {
   const spent = new Map<string | null, number>();
   const known = new Set(categories.categories.map((category) => category.id));
   for (const entry of entries) {
     if (!hasCategory(entry.kind)) continue;
     const key = entry.category !== null && known.has(entry.category) ? entry.category : null;
-    spent.set(key, tidy((spent.get(key) ?? 0) + spending(entry)));
+    spent.set(key, tidy((spent.get(key) ?? 0) + spending(entry, currency)));
   }
   const totals: CategoryTotal[] = categories.categories.map((category) => {
     const amount = spent.get(category.id) ?? 0;
     return {
       category,
       spent: amount,
-      left: category.limit === null ? null : tidy(category.limit - amount),
+      left: category.limit === null ? null : tidy(keep(category.limit, { currency }) - amount),
     };
   });
   const none = spent.get(null);

@@ -264,7 +264,7 @@ export function mountBudget(root: Document): void {
     roomText.textContent = room ?? '';
 
     const monthEntries = entriesIn(entries, month);
-    const totals = summary(monthEntries, categories);
+    const totals = summary(monthEntries, categories, currencyOf(settings));
     spentText.textContent = money(totals.spent);
     incomeText.textContent = money(totals.income);
     leftText.textContent = money(totals.left, true);
@@ -280,7 +280,9 @@ export function mountBudget(root: Document): void {
     }
 
     noCategories.hidden = categories.categories.length > 0;
-    categoryList.replaceChildren(...byCategory(monthEntries, categories).map(renderCategory));
+    categoryList.replaceChildren(
+      ...byCategory(monthEntries, categories, currencyOf(settings)).map(renderCategory),
+    );
     noEntries.hidden = monthEntries.length > 0;
     entryList.replaceChildren(...monthEntries.map(renderEntry));
     currencySelect.value = currencyOf(settings);
@@ -373,7 +375,7 @@ export function mountBudget(root: Document): void {
       editingEntry ?? crypto.randomUUID(),
       current ? null : entries.entries.length,
       categories,
-      { currency: currencyOf(settings) },
+      { currency: currencyOf(settings), saved: current },
     );
     if (!read.entry) {
       showProblems(entryForm, ['kind', 'amount', 'date', 'note'], read.problems);
