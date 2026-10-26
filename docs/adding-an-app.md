@@ -141,6 +141,27 @@ The first `pnpm build` (and `pnpm verify`) downloads Grammar's 361 MB model.
 To build everything else without it:
 `pnpm -r --filter "./apps/*" --filter "!grammar" build`.
 
+`pnpm --filter <slug> dev` shows the page only: it has no `/api`, so "Turn
+on sync", notifications while closed and the online library don't work
+there. To try those, build the hub and the app, and run each in
+Cloudflare's local runtime the way the browser tests do: the `webServer`
+command in `playwright.config.ts`, from each site's folder, on a port of its
+own, with its `--var` settings (`HUB_ORIGIN` tells an app where the hub is,
+which a local address can't tell; `ACCOUNT_ORIGIN` tells the hub where its
+Account page is, for passkeys; `LIBRARY_STORAGE_CODE` unlocks an online
+library). The easiest way to see them working is a browser test:
+`E2E_SITES=<slug> pnpm test:e2e apps/<slug>/e2e/sync.spec.ts --headed`.
+
+### Names that are part of the saved data
+
+Some names can't be changed once an app is live, because data saved under
+them would no longer be read: the app's slug, a store's `key` (and
+`version`, which only goes up), the labels used to derive and seal keys in
+`packages/sync` and `packages/crypto` (like `shkriuss sync v1 <app>`), and
+the files database's name (`shkriuss-files`). Renaming one is a migration:
+read the old name, save under the new one, and test both
+(`seedStores()`).
+
 ## Notifications while the app is closed (optional)
 
 Apps can send reminders even when they're closed, through the shared
@@ -238,6 +259,18 @@ or:
    then `mountSyncControls(…)`, and `sync.changed()` after every save. See
    `apps/tally/src/scripts/tally.ts`.
 
+**An online library** like Photos' (big files in R2, [ADR 0016](adr/0016-online-photo-library.md))
+needs more: `"library": true` in `apps.json`; an R2 bucket named
+`shkriuss-<slug>` (`scripts/buckets.ts` makes it at the next deploy); the
+app's `deploy:production` script set to `node ../../scripts/deploy.ts`, as
+in `apps/photos/package.json`; and a storage code secret
+`<SLUG>_STORAGE_CODE` in the `production` environment, which must also be
+added to the deploy step's `env:` in `.github/workflows/ci.yml` (only
+`PHOTOS_STORAGE_CODE` is there now). If one is missing, the deploy only
+warns, and the library stays locked. The 1 TB limit is per app, so each
+library adds up to about $15 a month to the bill's ceiling
+([deployment](deployment.md)).
+
 The privacy page and the Account page's list of apps that sync include the
 app automatically. When an item is changed on two devices before they sync,
 the newest change wins, unless the store passes `conflictCopy` to keep both
@@ -275,7 +308,7 @@ online. So remove an app in steps (ask Claude for each):
    pull request. After merging, delete the Worker in the Cloudflare
    dashboard (**Workers & Pages** → the app → **Settings** → **Delete**).
    That removes its address too.
-4. **An app with an online library** also has an R2 bucket,
+4. **An app with an online library** (see below) also has an R2 bucket,
    `shkriuss-<slug>`, and a storage code secret in GitHub
    (`<SLUG>_STORAGE_CODE`). Delete the bucket in the dashboard (**R2** → the
    bucket → **Settings**; R2 asks you to empty it first) and the secret in
