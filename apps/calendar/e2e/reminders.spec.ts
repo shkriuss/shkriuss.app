@@ -103,6 +103,42 @@ test.describe('after flying west', () => {
   });
 });
 
+test.describe('after flying west by less than summer time moves clocks', () => {
+  test.use({ timezoneId: 'America/New_York' });
+
+  test('reminds again at once, counting the time the flight took', async ({ page }) => {
+    // Last checked at 14:00 in London; 3½ hours later it's 12:30 in New York.
+    // The clock went back only 1½ hours, as summer time ending could, so it
+    // waited until 14:00 there, though 3½ hours had passed (audit 4 F1-1).
+    await fakeNotifications(page, 'granted');
+    await page.clock.install({ time: new Date('2027-01-15T17:30:00Z') });
+    await page.goto('/');
+    await seed(
+      page,
+      [
+        {
+          title: 'Taxi',
+          startDate: '2027-01-15',
+          endDate: '2027-01-15',
+          startTime: '13:00',
+          endTime: '13:30',
+          reminder: 15,
+        },
+      ],
+      {
+        'calendar-reminders': {
+          version: 1,
+          data: { checkedUntil: '2027-01-15T14:00', at: Date.parse('2027-01-15T14:00:00Z') },
+        },
+      },
+    );
+    // 12:46 there, a minute after the reminder's 12:45.
+    await page.clock.fastForward('16:00');
+    await expect(reminders(page).getByRole('button', { name: /Taxi/ })).toBeVisible();
+    expect(await shownNotifications(page)).toHaveLength(1);
+  });
+});
+
 test('asks to show notifications after saving an event with a reminder', async ({ page }) => {
   await fakeNotifications(page, 'default');
   await page.clock.setFixedTime(new Date('2026-10-17T10:00:00'));

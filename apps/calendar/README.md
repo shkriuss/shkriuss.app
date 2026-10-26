@@ -47,8 +47,10 @@ colour are in [`packages/registry/apps.json`](../../packages/registry/apps.json)
   phone's language and region settings.
 
 Everything is saved in the browser on this device (`shkriuss:calendar` for
-events, `shkriuss:calendar-reminders` for when reminders were last checked,
-`shkriuss:calendar-holidays` for which holidays and fasts to show).
+events, `shkriuss:calendar-reminders` for when reminders were last checked:
+the time on the clock and the moment it was, so a clock put back by flying
+west isn't taken for summer time ending, `shkriuss:calendar-holidays` for
+which holidays and fasts to show).
 Imported files are read on the device. Nothing else leaves it, unless the
 person turns on sync (a sealed copy on Calendar's server, docs/adr/0010) or
 reminders while Calendar is closed (each reminder's time and sealed text on

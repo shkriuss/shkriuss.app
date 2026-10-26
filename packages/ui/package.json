@@ -22,6 +22,7 @@
     "./local-reminders": "./src/scripts/local-reminders.ts",
     "./long-lists": "./src/lib/long-lists.ts",
     "./push-controls": "./src/scripts/push-controls.ts",
+    "./reminder-window": "./src/lib/reminder-window.ts",
     "./numbers": "./src/lib/numbers.ts",
     "./photos": "./src/lib/photos.ts",
     "./problem": "./src/scripts/problem.ts",

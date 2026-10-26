@@ -108,7 +108,9 @@ change; after the clock goes back more than 2 hours (flying west), it
 checks from then on, and with the app open in two tabs, they share one
 check, so each reminder rings once; Calendar, which lists reminders on its page and shows the ones
 missed while it was closed, uses its parts, `mountNotificationStatus` and
-`showNotifications`, with its own words),
+`showNotifications`, with its own words, and `wentBackFar` from
+`@shkriuss/ui/reminder-window`, which tells flying west from summer time
+ending by the time that passed),
 `@shkriuss/ui/long-lists` (for lists that
 can grow to thousands: `shownCount` draws `PAGE_SIZE` (100) at a time behind
 a "Show more" button, always keeping what has focus or was just saved, and
