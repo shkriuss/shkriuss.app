@@ -41,6 +41,7 @@ import {
   type Currency,
 } from '@shkriuss/ui/numbers';
 import { DATE_LOCALE } from '@shkriuss/ui/locale';
+import { foldText } from '@shkriuss/ui/text';
 
 export type Kind = 'expense' | 'income' | 'refund';
 export const KINDS: readonly Kind[] = ['expense', 'income', 'refund'];
@@ -229,14 +230,16 @@ export function readCategory(
   const own = state.categories.find((category) => category.id === id);
   const editing = own !== undefined;
   // Its own name, unchanged, is fine even if another category has it too:
-  // two devices that each added "Groceries" before they first synced.
-  const unchanged = own?.name.toLowerCase() === name.toLowerCase();
+  // two devices that each added "Groceries" before they first synced. Names
+  // are the same without minding case or accents, as in the other apps:
+  // "Café" is "Cafe" (foldText, audit 3 J-12).
+  const unchanged = own !== undefined && foldText(own.name) === foldText(name);
   if (name === '') problems.name = 'Enter a name for the category.';
   else if (name.length > LIMITS.name) problems.name = `Use ${LIMITS.name} characters or fewer.`;
   else if (
     !unchanged &&
     state.categories.some(
-      (category) => category.id !== id && category.name.toLowerCase() === name.toLowerCase(),
+      (category) => category.id !== id && foldText(category.name) === foldText(name),
     )
   ) {
     problems.name = 'You already have a category with that name.';
@@ -273,8 +276,8 @@ export const removeCategory = (state: CategoriesState, id: string): CategoriesSt
 
 /** Adds the suggested categories that aren't there yet (by name), with new ids. */
 export function addSuggested(state: CategoriesState, newId: () => string): CategoriesState {
-  const taken = new Set(state.categories.map((category) => category.name.toLowerCase()));
-  const added = SUGGESTED.filter((name) => !taken.has(name.toLowerCase()))
+  const taken = new Set(state.categories.map((category) => foldText(category.name)));
+  const added = SUGGESTED.filter((name) => !taken.has(foldText(name)))
     .slice(0, Math.max(0, LIMITS.categories - state.categories.length))
     .map((name) => ({ id: newId(), name, limit: null }));
   return { categories: [...state.categories, ...added] };

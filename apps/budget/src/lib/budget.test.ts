@@ -95,6 +95,12 @@ describe('categories', () => {
     expect(readCategory({ name: 'groceries', limit: '' }, 'p', categories).problems).toEqual({
       name: 'You already have a category with that name.',
     });
+    // Accents and spaces aside too, as in the other apps (audit 3 J-12).
+    const cafe = { categories: [{ id: 'c', name: 'Café', limit: null }] };
+    expect(readCategory({ name: ' cafe ', limit: '' }, 'p', cafe).problems).toEqual({
+      name: 'You already have a category with that name.',
+    });
+    expect(readCategory({ name: 'CAFE', limit: '' }, 'c', cafe).category?.name).toBe('CAFE');
     // Its own name is fine when changing it.
     expect(readCategory({ name: 'Groceries', limit: '500' }, 'food', categories).category).toEqual({
       id: 'food',

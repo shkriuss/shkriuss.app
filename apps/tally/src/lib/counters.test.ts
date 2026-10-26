@@ -25,8 +25,11 @@ describe('nameError', () => {
     expect(nameError('x'.repeat(MAX_NAME_LENGTH + 1), emptyState())).toMatch(/characters or fewer/);
   });
 
-  it('rejects duplicate names, ignoring case', () => {
+  it('rejects duplicate names, ignoring case, accents and extra spaces', () => {
     expect(nameError('WATER', withWater())).toMatch(/already have/);
+    const coffee = addCounter(emptyState(), 'Café  latte', 'c');
+    expect(nameError('cafe latte', coffee)).toMatch(/already have/);
+    expect(nameError('Café', coffee)).toBeUndefined();
   });
 
   it('limits the number of counters', () => {

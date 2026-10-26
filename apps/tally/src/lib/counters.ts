@@ -3,6 +3,7 @@
  * Every function returns a new state instead of changing the old one.
  */
 import { secondVersionName } from '@shkriuss/sync';
+import { foldText } from '@shkriuss/ui/text';
 
 export interface Counter {
   id: string;
@@ -46,7 +47,9 @@ export function nameError(name: string, state: TallyState): string | undefined {
   if (trimmed.length > MAX_NAME_LENGTH) {
     return `Use ${MAX_NAME_LENGTH} characters or fewer.`;
   }
-  if (state.counters.some((counter) => counter.name.toLowerCase() === trimmed.toLowerCase())) {
+  // The same name without minding case or accents ("Café" is "Cafe"), as in
+  // the other apps (foldText, audit 3 J-12).
+  if (state.counters.some((counter) => foldText(counter.name) === foldText(trimmed))) {
     return 'You already have a counter with that name.';
   }
   if (state.counters.length >= MAX_COUNTERS) {
