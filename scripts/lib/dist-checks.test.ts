@@ -32,6 +32,27 @@ describe('cspProblems', () => {
 
   it('does not confuse data-style or text with real problems', () => {
     expect(cspProblems('<p data-style="x">Write style="..." in CSS</p>')).toEqual([]);
+    expect(
+      cspProblems('<p title="a onclick=go() style=x">x</p><!-- <script>x</script> -->'),
+    ).toEqual([]);
+  });
+
+  it('reads attributes as browsers do, so the usual tricks are caught (audit 3 C-5)', () => {
+    const tricks = [
+      '<script data-src="x">alert(1)</script>',
+      '<script data-type="application/json">alert(1)</script>',
+      '<p style=color:red>x</p>',
+      '<img src="/a.png" onerror ="alert(1)">',
+      '<img src="/a.png" / onerror=alert(1)>',
+      '<form action="javascript:alert(1)"></form>',
+      '<iframe src=" java\tscript:alert(1)"></iframe>',
+      '<a href="&#106;avascript:alert(1)">x</a>',
+      '<button formaction="JavaScript&colon;alert(1)">x</button>',
+      '<SCRIPT>alert(1)</SCRIPT>',
+    ];
+    for (const html of tricks) expect(cspProblems(html), html).toHaveLength(1);
+    // A script's own text isn't read as tags.
+    expect(cspProblems('<script src="/a.js">"<a href=javascript:x>"</script>')).toEqual([]);
   });
 });
 
