@@ -234,6 +234,21 @@ const EXTENSIONS: Record<string, string> = {
   'image/avif': 'avif',
 };
 
+/**
+ * A guess, from what the browser says about itself, that it's on an iPhone
+ * or iPad (audit 3 F3-3). There, the photo picker likely gives JPEG copies
+ * of HEIC photos instead of the originals (every browser on them uses
+ * Safari's), which the app can't change, so the page says so. iPads say
+ * they're Macs, but only they have a touch screen. Browsers can say
+ * anything, so it's only a guess: the hint names the devices it's about.
+ */
+export function isIPhoneOrIPad(userAgent: string, touchPoints: number): boolean {
+  return (
+    /\b(?:iPhone|iPad|iPod)\b/.test(userAgent) ||
+    (/\bMacintosh\b/.test(userAgent) && touchPoints > 1)
+  );
+}
+
 /** The kind of file, for people: "JPG", "HEIC"… */
 export function formatLabel(photo: Pick<Photo, 'name' | 'type'>): string {
   const fromName = /\.([A-Za-z0-9]{1,5})$/.exec(photo.name)?.[1];

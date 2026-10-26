@@ -7,6 +7,7 @@ import {
   detailsOf,
   formatBytes,
   formatLabel,
+  isIPhoneOrIPad,
   isPhotoDetails,
   librarySummary,
   localDateTime,
@@ -141,6 +142,31 @@ describe('for people', () => {
     expect(shownLabel(photo({}), 1233, 20_000, EN)).toBe(
       'Photo 1,234 of 20,000, taken Oct 21, 2026, 2:03:22 PM',
     );
+  });
+
+  it('guesses when it’s on an iPhone or iPad, where picked photos may be JPEG copies (audit 3 F3-3)', () => {
+    const safari = (device: string) =>
+      `Mozilla/5.0 (${device}) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1`;
+    expect(isIPhoneOrIPad(safari('iPhone; CPU iPhone OS 17_5 like Mac OS X'), 5)).toBe(true);
+    expect(isIPhoneOrIPad(safari('iPad; CPU OS 17_5 like Mac OS X'), 5)).toBe(true);
+    // Chrome and other browsers there use the same photo picker.
+    expect(
+      isIPhoneOrIPad(
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/126.0.6478.54 Mobile/15E148 Safari/604.1',
+        5,
+      ),
+    ).toBe(true);
+    // An iPad says it's a Mac, but Macs have no touch screen.
+    const mac =
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15';
+    expect(isIPhoneOrIPad(mac, 5)).toBe(true);
+    expect(isIPhoneOrIPad(mac, 0)).toBe(false);
+    expect(
+      isIPhoneOrIPad(
+        'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36',
+        5,
+      ),
+    ).toBe(false);
   });
 
   it('says what kind of file it is', () => {

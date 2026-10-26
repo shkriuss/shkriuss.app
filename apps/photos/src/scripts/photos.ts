@@ -18,6 +18,7 @@ import {
   downloadName,
   formatBytes,
   formatLabel,
+  isIPhoneOrIPad,
   librarySummary,
   localDateTime,
   monthLabel,
@@ -280,6 +281,13 @@ export function mountPhotos(root: Document): void {
   });
 
   // ---------- Adding photos ----------
+
+  // On iPhone and iPad, picked photos may be JPEG copies: the page says so,
+  // and how to keep the originals (audit 3 F3-3).
+  required<HTMLElement>(root, '[data-apple-hint]').hidden = !isIPhoneOrIPad(
+    navigator.userAgent,
+    navigator.maxTouchPoints,
+  );
 
   addButton.addEventListener('click', () => photoInput.click());
 

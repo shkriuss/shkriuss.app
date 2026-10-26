@@ -48,6 +48,15 @@ reasons: [ADR 0015](../../docs/adr/0015-photos-app.md) (on the device) and
   `<template>`s hold the markup for a month and a photo.
 - Photos a browser can't show (like HEIC outside Safari) are kept anyway: the
   grid shows their kind, and "Save original" works.
+- On iPhone and iPad, photos picked from the Photo Library likely arrive as
+  JPEG copies made by iOS, not the HEIC originals: Safari's photo picker
+  (which every browser there uses) asks for the "compatible" version, and
+  the app can't change that (audit 3 F3-3; seen in WebKit's code, not yet
+  tried on a device). So on those devices (a guess from the browser's user
+  agent: `isIPhoneOrIPad` in `src/lib/photos.ts`), the page says so under
+  "Add photos", and how to keep originals: save them to Files and pick them
+  with "Choose File", or set Settings → Camera → Formats to "Most
+  Compatible".
 - No backup files: photos are too big for them (`<DataControls backup={false}>`).
   "Delete all data" deletes the photos.
 - `e2e/`: browser tests (`helpers.ts` makes photos, with the date a camera

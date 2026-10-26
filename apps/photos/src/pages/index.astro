@@ -26,6 +26,13 @@ import { AppShell, Button, DataControls, Icon, SyncControls } from '@shkriuss/ui
         Select
       </Button>
     </div>
+    <!-- Shown on iPhone and iPad only, where Safari's photo picker likely hands over copies (audit 3 F3-3). -->
+    <p class="muted" data-apple-hint hidden>
+      On iPhone and iPad, photos picked from the Photo Library may be added as JPEG copies, not as
+      the original files. To keep the originals, save them to Files first (Share → Save to Files),
+      then add them here with “Choose File”. Or set Settings → Camera → Formats to “Most
+      Compatible”, so new photos are taken as JPEG.
+    </p>
     <input type="file" accept="image/*" multiple hidden data-photo-input />
 
     <section class="stack" aria-labelledby="library-heading">
