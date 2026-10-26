@@ -186,18 +186,27 @@ export const photoAlt = (photo: Photo, locale = DATE_LOCALE): string =>
 export const countLabel = (count: number, one: string, many: string, locale?: string): string =>
   `${count.toLocaleString(locale)} ${count === 1 ? one : many}`;
 
+/** A size as it's shown: to one decimal below 10, else whole ("4.2", "48"). */
+function rounded(value: number): number {
+  const tenths = Math.round(value * 10) / 10;
+  return tenths < 10 ? tenths : Math.round(value);
+}
+
 /** Bytes as people read them on phones (1 KB = 1,000 bytes): "820 KB", "4.2 MB", "1.3 GB". */
 export function formatBytes(bytes: number, locale?: string): string {
   if (bytes < 1000) return countLabel(bytes, 'byte', 'bytes', locale);
   const units = ['KB', 'MB', 'GB', 'TB'];
   let value = bytes / 1000;
   let unit = 0;
-  while (value >= 1000 && unit < units.length - 1) {
+  // Rounded as it's shown before the unit is chosen, so 999,999 bytes is
+  // "1.0 MB", not "1,000 KB" (audit 3 F3-9).
+  while (rounded(value) >= 1000 && unit < units.length - 1) {
     value /= 1000;
     unit += 1;
   }
-  const digits = value < 10 ? 1 : 0;
-  return `${value.toLocaleString(locale, { maximumFractionDigits: digits, minimumFractionDigits: digits })} ${units[unit]}`;
+  const shown = rounded(value);
+  const digits = shown < 10 ? 1 : 0;
+  return `${shown.toLocaleString(locale, { maximumFractionDigits: digits, minimumFractionDigits: digits })} ${units[unit]}`;
 }
 
 /** "12 photos · 48 MB" */

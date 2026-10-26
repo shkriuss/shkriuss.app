@@ -99,6 +99,18 @@ describe('the library', () => {
     expect(formatBytes(2_500_000_000_000, EN)).toBe('2.5 TB');
   });
 
+  it('rounds sizes before choosing the unit, so they never read “1,000 KB” (audit 3 F3-9)', () => {
+    expect(formatBytes(999_999, EN)).toBe('1.0 MB');
+    expect(formatBytes(999_499, EN)).toBe('999 KB');
+    expect(formatBytes(999_999_999, EN)).toBe('1.0 GB');
+    expect(formatBytes(1_000, EN)).toBe('1.0 KB');
+    // Just under 10 rounds to 10, shown without a decimal like other sizes from 10 up.
+    expect(formatBytes(9_960, EN)).toBe('10 KB');
+    expect(formatBytes(9_940, EN)).toBe('9.9 KB');
+    // Terabytes are the biggest unit.
+    expect(formatBytes(1_234_000_000_000_000, EN)).toBe('1,234 TB');
+  });
+
   it('writes numbers in the language it’s given (the browser’s own when it isn’t)', () => {
     expect(librarySummary([photo({ size: 1_234_000 })], 'de-DE')).toBe('1 photo · 1,2 MB');
     expect(formatBytes(1_234, 'de-DE')).toBe('1,2 KB');
