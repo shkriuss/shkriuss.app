@@ -3,7 +3,8 @@
 import { readFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
 import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
-import { LIMITS, REPAIRS_VERSION } from '../src/lib/repairs.ts';
+import { readStore } from '../../../tests/e2e/storage.ts';
+import { LIMITS, REPAIRS_VERSION, type VehiclesState } from '../src/lib/repairs.ts';
 import {
   fillRepair,
   NOW,
@@ -286,6 +287,29 @@ test('a repair’s vehicle fills its line, a big target however short', async ({
   const line = await repairItems(page).first().locator('.repair__top').boundingBox();
   expect(title?.width).toBeGreaterThanOrEqual(44);
   expect(title?.width).toBeGreaterThan((line?.width ?? 0) / 2);
+});
+
+// Audit 3 F2-1: the vehicle's form saved every field as it was when it opened.
+test('a change made in another tab survives a vehicle form open here', async ({ page }) => {
+  await seed(page, { vehicles: fleet });
+  const other = await page.context().newPage();
+  await other.clock.setFixedTime(NOW);
+  await other.goto('/');
+  await page.getByRole('button', { name: 'Edit Bus 105' }).click();
+  // In the other tab: the number plate added.
+  await other.getByRole('button', { name: 'Edit Bus 105' }).click();
+  await vehicleDialog(other).getByLabel('Number plate (optional)').fill('tb-105-aa');
+  await vehicleDialog(other).getByRole('button', { name: 'Save' }).click();
+  await expect(vehicleItem(page, 'Bus 105')).toContainText('TB-105-AA');
+  // Here, a note: the plate stays.
+  await vehicleDialog(page).getByLabel('Notes (optional)').fill('The rear door sticks');
+  await vehicleDialog(page).getByRole('button', { name: 'Save' }).click();
+  await expect(vehicleItem(page, 'Bus 105')).toContainText('TB-105-AA');
+  const saved = await readStore<VehiclesState>(page, 'repairs-vehicles');
+  expect(saved?.data.vehicles.find((entry) => entry.name === 'Bus 105')).toMatchObject({
+    plate: 'TB-105-AA',
+    notes: 'The rear door sticks',
+  });
 });
 
 test('miles, and a spreadsheet of every repair', async ({ page }) => {

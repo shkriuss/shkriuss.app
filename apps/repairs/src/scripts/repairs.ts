@@ -8,6 +8,7 @@
 import { today } from '@shkriuss/dates';
 import { createStore, downloadFile } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
+import { withEdits } from '@shkriuss/sync/edits';
 import { keepFocus } from '@shkriuss/ui/keep-focus';
 import { PAGE_SIZE, shownCount, waitForTyping } from '@shkriuss/ui/long-lists';
 import { decimalText } from '@shkriuss/ui/numbers';
@@ -59,6 +60,7 @@ import {
   toCsv,
   toRepairForm,
   totals,
+  toVehicleForm,
   unitOf,
   UNITS,
   vehicleName,
@@ -71,6 +73,7 @@ import {
   type SettingsState,
   type Totals,
   type Vehicle,
+  type VehicleForm,
   type VehiclesState,
   type VehicleSummary,
   REPAIRS_VERSION,
@@ -182,8 +185,9 @@ export function mountRepairs(root: Document): void {
   /** What's in the forms: the repair or vehicle being changed (null: a new one). */
   let editingRepair: string | null = null;
   let editingVehicle: string | null = null;
-  /** The repair form as it opened, to tell what the person changed (see withEdits). */
+  /** The forms as they opened, to tell what the person changed (see withEdits). */
   let openedRepair: RepairForm | null = null;
+  let openedVehicle: VehicleForm | null = null;
   let deleting: { type: 'repair' | 'vehicle'; id: string } | null = null;
   let saving = false;
   let syncWasOn = false;
@@ -659,9 +663,11 @@ export function mountRepairs(root: Document): void {
 
   function openVehicle(vehicle: Vehicle | undefined): void {
     editingVehicle = vehicle?.id ?? null;
+    openedVehicle = vehicle ? toVehicleForm(vehicle) : null;
     vehicleTitle.textContent = vehicle ? 'Change vehicle' : 'Add vehicle';
     for (const name of VEHICLE_FIELDS) {
-      (vehicleForm.elements.namedItem(name) as HTMLInputElement).value = vehicle?.[name] ?? '';
+      (vehicleForm.elements.namedItem(name) as HTMLInputElement).value =
+        openedVehicle?.[name] ?? '';
     }
     required<HTMLElement>(vehicleForm, '[data-action="delete-vehicle"]').hidden = !vehicle;
     showVehicleProblems({});
@@ -672,8 +678,17 @@ export function mountRepairs(root: Document): void {
     event.preventDefault();
     const value = (name: string) =>
       (vehicleForm.elements.namedItem(name) as HTMLInputElement).value;
+    const edited = {
+      name: value('name'),
+      model: value('model'),
+      plate: value('plate'),
+      notes: value('notes'),
+    };
+    // Changed meanwhile on another device or tab: only what was changed here
+    // goes on it (audit 3 F2-1).
+    const current = findVehicle(editingVehicle);
     const read = readVehicle(
-      { name: value('name'), model: value('model'), plate: value('plate'), notes: value('notes') },
+      current && openedVehicle ? withEdits(openedVehicle, edited, toVehicleForm(current)) : edited,
       editingVehicle ?? crypto.randomUUID(),
       vehicles,
     );

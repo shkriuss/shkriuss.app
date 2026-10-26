@@ -96,7 +96,8 @@ private car's service history. Lives at <https://repairs.shkriuss.app>.
   a sync (or another tab) changes the repair saves only what was changed in
   it (`readEditedRepair`), and its photos follow the repair's while it's
   open (`mergePhotos`): a photo added on another device meanwhile stays,
-  and one taken off in the form stays off. Vehicles and repairs reach
+  and one taken off in the form stays off. The vehicle form saves only
+  what was changed in it too. Vehicles and repairs reach
   `withItems` unchecked, so ones from an older version can be upgraded first;
   they're checked after.
 - `e2e/`: browser tests (`helpers.ts` is shared by them). The shared

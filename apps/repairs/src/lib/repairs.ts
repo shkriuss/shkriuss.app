@@ -318,6 +318,14 @@ export function readVehicle(
   return { vehicle: { id, name, model, plate, notes } };
 }
 
+/** A vehicle as its form shows it. */
+export const toVehicleForm = ({ name, model, plate, notes }: Vehicle): VehicleForm => ({
+  name,
+  model,
+  plate,
+  notes,
+});
+
 export function saveVehicle(state: VehiclesState, vehicle: Vehicle): VehiclesState {
   const exists = state.vehicles.some((item) => item.id === vehicle.id);
   return {
