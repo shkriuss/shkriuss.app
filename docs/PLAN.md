@@ -1,6 +1,6 @@
 # shkriuss.app: project plan
 
-_Last updated: 2026-10-24. Versions were checked against the npm registry and
+_Last updated: 2026-10-26. Versions were checked against the npm registry and
 official docs on 2026-10-16._
 
 This is the plan for a hub at **shkriuss.app** that lists small personal web
@@ -127,8 +127,9 @@ third-party version once for the whole repo.
   `workers.dev` and Cloudflare's addresses for single versions are off.
 - **How it scales.** The Free plan allows 100 Workers and 100 custom domains
   per zone, so about 99 apps plus the hub. Apps with sync or notifications
-  also share 5 GB of server storage: a few more of them need smaller limits
-  each ([ADR 0017](adr/0017-storage-limits.md), checked by a unit test). A new app needs no Cloudflare
+  also share 5 GB of server storage: about eight more of them fit before the
+  limits need lowering ([ADR 0017](adr/0017-storage-limits.md), checked by a
+  unit test). A new app needs no Cloudflare
   dashboard work. If CI time grows, deploys can be limited to apps that
   changed.
 - **Account settings already checked (read-only):** the `shkriuss.app` zone
@@ -319,8 +320,9 @@ they ran out.)
 - Manual accessibility pass on a phone (VoiceOver or TalkBack).
 - `www.shkriuss.app` → `shkriuss.app` redirect (a free Cloudflare Redirect
   Rule), if you want it.
-- [x] `security.txt` (at `shkriuss.app/.well-known/security.txt`): it points
-      to GitHub's private security reports.
+- [x] `security.txt` (at `/.well-known/security.txt` on every site, written
+      by the build from `packages/astro-config/src/security-txt.ts`): it
+      points to GitHub's private security reports.
 - [x] Email anti-spoofing DNS records (SPF `-all`, DMARC `reject`, null MX),
       since the domain sends no email.
 - [x] Import-from-file for app data: **Back up** (locked with a passphrase)

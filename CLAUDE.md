@@ -38,7 +38,7 @@ scripts/             new-app, check-dist, deploy, buckets, smoke-test, lockfile-
 
 ```sh
 pnpm install
-pnpm --filter tally dev          # dev server for one site
+pnpm --filter tally dev          # dev server for one site (the page only: no /api, see docs/adding-an-app.md)
 pnpm verify                      # CI's Checks job, in order (secret scan, zizmor, audit and package age run in CI only):
 pnpm format:check && pnpm lint && pnpm typecheck && pnpm test
 pnpm build && pnpm check:dist && pnpm test:e2e

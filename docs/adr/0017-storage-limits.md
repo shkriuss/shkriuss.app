@@ -6,7 +6,10 @@ Status: Accepted (2026-10-23). Changes [ADR 0009](0009-push-notifications.md)
 [ADR 0016](0016-online-photo-library.md) (the online library). Audit
 finding B-1. Changed by [ADR 0019](0019-no-pull-request-previews.md): there
 are no pull request previews, so each namespace has one limit, the real
-site's, and the 4.5 GB is for the real sites alone.
+site's, and the 4.5 GB is for the real sites alone. Without previews the
+limits add up to about 3.1 GB, so about eight more apps with sync and
+notifications fit (160 MB each) before the limits need lowering, not two
+(audit 3 J-6).
 
 ## Context
 
@@ -76,7 +79,11 @@ app need lowering first.
   fails (R2 or the meter not answering for a while) runs again a minute
   later, then later each time, up to a day apart, so a clean-up or a
   deletion never stops for good (`runAlarm` in `@shkriuss/server`, audit
-  B-2).
+  B-2). If Cloudflare itself doesn't run an alarm (when the day's free
+  requests are used up, it may give up after its own few retries; its
+  documentation doesn't say), the object's next request sets it again: a
+  copy's at its next sync a day or more after the last, a notification
+  schedule's at its next upload (audit 3 B-4).
 - A device that comes back later finds no copy, as on a first sync, and
   puts its own data online again. So only copies nobody uses go for good.
 - **A note that a key was replaced** is deleted the same way, 13 months

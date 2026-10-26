@@ -184,7 +184,7 @@ I-1 to I-10).
    blocked, and is more than the 100,000 a day by the end of the day. So
    the servers keep what a stranger can make them do cheap, and a day of
    free requests used up only pauses the online features until 00:00 UTC
-   (audit I-1).
+   (audit I-8).
 6. **Account safety:** **Manage Account → Members → Enforce two-factor
    authentication: On.** And **Notifications → Add → Usage Based Billing →
    R2**: an alert when storage passes 20 GB, so unusual uploads show up before

@@ -34,6 +34,17 @@ for (const path of ['/', '/404', '/manifest.webmanifest', '/sw.js']) {
   });
 }
 
+test('says where to report a security problem, for this site (audit 3 I-3)', async ({
+  request,
+}, testInfo) => {
+  // RFC 9116: a security.txt covers only the host it's on, so every site has one.
+  const response = await request.get('/.well-known/security.txt');
+  expect(response.status()).toBe(200);
+  expect(response.headers()['content-type']).toMatch(/^text\/plain/);
+  const { origin } = getSite(testInfo.project.name);
+  expect(await response.text()).toContain(`Canonical: ${origin}/.well-known/security.txt`);
+});
+
 test('the CSP blocks inline scripts and only allows our own files', () => {
   const csp = contentSecurityPolicy();
   expect(csp).toContain("default-src 'none'");
