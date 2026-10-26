@@ -359,6 +359,17 @@ export function mountWater(root: Document): void {
     showProblem(input, amountError(name), problem);
     if (problem) {
       if (entered) focusProblem(input, problem);
+      // Read out too once focus has settled: by the field if it's still there
+      // (Enter, which can't send this form of number fields), or on the page
+      // if it has gone on (Tab). Else nothing told a screen reader user it
+      // wasn't saved (audit 3 G-5).
+      else {
+        window.setTimeout(() => {
+          if (input.getAttribute('aria-invalid') !== 'true') return;
+          if (root.activeElement === input) focusProblem(input, problem);
+          else announce(`${AMOUNT_LABELS[name]}: ${problem}`);
+        });
+      }
       return;
     }
     const ml = typedMl(input.value, unit());
