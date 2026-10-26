@@ -58,7 +58,6 @@ export function mountPushReminders(
 ): PushReminders {
   return mountPushControls(required<HTMLElement>(root, '[data-push-controls]'), {
     notices: () => noticesOf(page.state().events),
-    announce: page.announce,
     onChange,
   });
 }
