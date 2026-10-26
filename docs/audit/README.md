@@ -6,7 +6,7 @@ repository and the live sites. Every auditor reads the same brief, checks one
 reports from different tools can be compared and every finding can be checked.
 
 The prompts to give each AI tool are in [prompts.md](prompts.md), and what
-the first audit found, and what happened to each finding, is in
+each audit found, and what happened to each finding, is in
 [results.md](results.md).
 
 ## Rules for auditors
@@ -582,5 +582,9 @@ serious first.
 3. When tools disagree about a serious finding, another tool is asked to
    prove or disprove it, and a test decides.
 4. Fixes come as small pull requests, each with a test where possible.
-5. Once everything is fixed, a public summary is added to this folder: what
-   was checked, by which tools, and what was found and fixed.
+5. Once everything is fixed, a public summary is added to
+   [results.md](results.md): what was checked, by which tools, and what was
+   found and fixed.
+6. Each audit's numbers start again from 1, so the fixes name the audit too:
+   the fourth audit's B-2 is "(audit 4 B-2)" in code comments and commits,
+   and "4B-2" in results.md, which also says what the older numbers mean.

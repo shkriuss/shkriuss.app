@@ -1,6 +1,6 @@
 # Audit results, October 2026
 
-This is what the first full audit found, and what happened to each finding.
+This is what each full audit found, and what happened to each finding.
 The brief every auditor followed is in [README.md](README.md), and the
 prompts for each AI tool are in [prompts.md](prompts.md).
 
@@ -8,7 +8,27 @@ The repository is public, so anything still open that could be used against
 anyone is listed here without its details until it's fixed (see
 [SECURITY.md](../../SECURITY.md)).
 
-## How it was done
+## Three audits, three sets of numbers
+
+Each audit numbered its findings by area from 1, so "B-2" means a different
+finding in each. Here, the second audit's numbers start with 2 ("2B-2") and
+the third's with 3 ("3B-2"). Code comments, commits and docs name the finding
+they fix like this:
+
+| Audit                                | Fixed in                                                                                                                              | Written there as                      | Here |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- | ---- |
+| [First](#first-audit), 162 findings  | [#50](https://github.com/shkriuss/shkriuss.app/pull/50) to [#62](https://github.com/shkriuss/shkriuss.app/pull/62), 23 and 24 October | "(audit B-2)", in a change before #70 | B-2  |
+| [Second](#second-audit), 79 findings | [#70](https://github.com/shkriuss/shkriuss.app/pull/70) to [#77](https://github.com/shkriuss/shkriuss.app/pull/77), 25 October        | "(audit B-2)", in #70 to #77          | 2B-2 |
+| [Third](#third-audit), 77 findings   | [#79](https://github.com/shkriuss/shkriuss.app/pull/79) onwards, from 26 October                                                      | "(audit 3 B-2)"                       | 3B-2 |
+
+So an "(audit B-2)" without an audit number means the first or the second
+audit: the history of its line (`git blame`, or **Blame** on GitHub) shows
+which pull request wrote it. The next audit writes its own number the same
+way: "(audit 4 B-2)" in code, "4B-2" here (the brief says so too).
+
+## First audit
+
+### How it was done
 
 - **Who:** Claude Code checked every area in the brief, one at a time, with a
   separate review for each area. Other AI tools can repeat the audit with the
@@ -29,7 +49,7 @@ anyone is listed here without its details until it's fixed (see
   [#60](https://github.com/shkriuss/shkriuss.app/pull/60) and
   [#61](https://github.com/shkriuss/shkriuss.app/pull/61).
 
-## Totals
+### Totals
 
 | Severity | Found | Fixed | Partly fixed | Your setting | Your choice | Later | Explained or accepted |
 | -------- | ----- | ----- | ------------ | ------------ | ----------- | ----- | --------------------- |
@@ -43,9 +63,10 @@ anyone is listed here without its details until it's fixed (see
 make, listed in [deployment.md](../deployment.md). "Later" means a real but
 small problem, or a bigger change, that's planned rather than done now.
 
-## What the owner decided
+### What the owner decided
 
-Nothing is left for the owner.
+Nothing was left for the owner then. The third audit found two settings not
+quite finished (3I-1 and 3I-2, in [What's left for you](#whats-left-for-you)).
 
 **Settings:** all done (23 October 2026), step by step in
 [deployment.md](../deployment.md). The ones that can be seen from outside
@@ -67,11 +88,11 @@ rewrites.
 - **Z-11:** the repository has no licence file, so anyone may read the code
   but not reuse it.
 
-## Every finding
+### Every finding
 
 Severity is the auditor’s: **High** could lose or leak data or cost money; **Medium** breaks something people rely on; **Low** is a smaller bug; **Info** is a note.
 
-### A. Account and keys
+#### A. Account and keys
 
 | ID  | Severity | What was wrong                                                                                                                                        | What happened                                                                            |
 | --- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
@@ -84,7 +105,7 @@ Severity is the auditor’s: **High** could lose or leak data or cost money; **M
 | A-7 | Info     | Bearer tokens can be replayed by anyone who sees Worker requests; the status token alone can lock an account out for good                             | Accepted: only Cloudflare, which runs the servers, sees requests                         |
 | A-8 | Info     | The ADRs don't say what the servers can roll back, withhold or drop                                                                                   | Fixed: written down (ADRs 0010, 0016); old copies and false notes delete nothing         |
 
-### B. Servers and the bill
+#### B. Servers and the bill
 
 | ID   | Severity | What was wrong                                                                                                    | What happened                                                                                 |
 | ---- | -------- | ----------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
@@ -105,7 +126,7 @@ Severity is the auditor’s: **High** could lose or leak data or cost money; **M
 | B-15 | Low      | PushDevice handles requests without `blockConcurrencyWhile`, unlike the other objects                             | Fixed                                                                                         |
 | B-16 | Info     | Until the person's device moves the library, a lost device can move it to a token of its own                      | Fixed (with A-3)                                                                              |
 
-### C. Pages and the browser
+#### C. Pages and the browser
 
 | ID  | Severity | What was wrong                                                                                          | What happened |
 | --- | -------- | ------------------------------------------------------------------------------------------------------- | ------------- |
@@ -118,7 +139,7 @@ Severity is the auditor’s: **High** could lose or leak data or cost money; **M
 | C-7 | Low      | The notification click check lets `/\host` through, which opens another website                         | Fixed         |
 | C-8 | Low      | "Save original" keeps invisible direction marks in file names                                           | Fixed         |
 
-### D. Privacy and what the pages promise
+#### D. Privacy and what the pages promise
 
 | ID   | Severity | What was wrong                                                                                                                 | What happened |
 | ---- | -------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------- |
@@ -141,7 +162,7 @@ Severity is the auditor’s: **High** could lose or leak data or cost money; **M
 | D-17 | Low      | SECURITY.md is out of date or wrong in three places                                                                            | Fixed         |
 | D-18 | Info     | Nothing on a server is ever deleted for a device or account that stops being used                                              | Fixed         |
 
-### E. Saving and syncing data
+#### E. Saving and syncing data
 
 | ID   | Severity | What was wrong                                                                                                                                                                                   | What happened                           |
 | ---- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------- |
@@ -158,7 +179,7 @@ Severity is the auditor’s: **High** could lose or leak data or cost money; **M
 | E-11 | Low      | A calendar file with `UID:__proto__` stops sync on that device for good                                                                                                                          | Fixed                                   |
 | E-12 | Low      | The list's order is one value for the whole list, so adding or deleting an item on one device undoes a reorder made on another                                                                   | Fixed: only a move changes the order    |
 
-### F1. Calendar, Tasks, Reminders, Habits, Water
+#### F1. Calendar, Tasks, Reminders, Habits, Water
 
 | ID    | Severity | What was wrong                                                                                               | What happened                                        |
 | ----- | -------- | ------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------- |
@@ -173,7 +194,7 @@ Severity is the auditor’s: **High** could lose or leak data or cost money; **M
 | F1-9  | Low      | Calendar's README says nothing is ever sent and there's no push server                                       | Fixed (as D-15)                                      |
 | F1-10 | Info     | A task due today at a time isn't "Overdue" once that time has passed                                         | Kept as is (your choice): overdue from the next day  |
 
-### F2. Budget, Trades, Repairs, Meals, Tally
+#### F2. Budget, Trades, Repairs, Meals, Tally
 
 | ID    | Severity | What was wrong                                                                                            | What happened                                            |
 | ----- | -------- | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
@@ -189,7 +210,7 @@ Severity is the auditor’s: **High** could lose or leak data or cost money; **M
 | F2-10 | Info     | Refunds in a category and partial closes can't be recorded                                                | Fixed: refunds in Budget, partial closes in Trades       |
 | F2-11 | Info     | Tests: gaps that let F2-1 to F2-3 through                                                                 | Fixed (tests added with each fix)                        |
 
-### F3. Notes, Shelf, Grammar, Photos
+#### F3. Notes, Shelf, Grammar, Photos
 
 | ID    | Severity | What was wrong                                                                                                                                                   | What happened |
 | ----- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
@@ -205,7 +226,7 @@ Severity is the auditor’s: **High** could lose or leak data or cost money; **M
 | F3-10 | Low      | Shelf: a link with a port, typed without "https://", is refused                                                                                                  | Fixed         |
 | F3-11 | Info     | Photos: adding a photo again after "Free up space" says it's "already here", and can't put the original back                                                     | Fixed         |
 
-### G. Accessibility
+#### G. Accessibility
 
 | ID   | Severity | What was wrong                                                                                        | What happened                                                              |
 | ---- | -------- | ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
@@ -224,7 +245,7 @@ Severity is the auditor’s: **High** could lose or leak data or cost money; **M
 | G-13 | Low      | text-size-adjust: none may turn off Android’s own text-size setting                                   | Fixed: changed to the safer 100% (not tried on an Android phone)           |
 | G-14 | Info     | Smaller points: Grammar’s fixes clear undo, double announcements, three wordings for "Couldn’t save"  | Fixed                                                                      |
 
-### H. CI and deploys
+#### H. CI and deploys
 
 | ID   | Severity | What was wrong                                                                                                                           | What happened                                                               |
 | ---- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
@@ -242,23 +263,23 @@ Severity is the auditor’s: **High** could lose or leak data or cost money; **M
 | H-12 | Info     | Production doesn't run exactly the files that were tested                                                                                | Accepted: the deploy uses the tested build, plus checksum-checked downloads |
 | H-13 | Info     | Some CI tools are pinned by hand and Dependabot never updates them                                                                       | Fixed: Dependabot updates zizmor; quality.md lists gitleaks and pnpm        |
 
-### I. Domain and Cloudflare
+#### I. Domain and Cloudflare
 
-| ID   | Severity | What was wrong                                                                                                        | What happened                                                         |
-| ---- | -------- | --------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| I-1  | High     | Auto-renew is off, so the domain won't renew itself                                                                   | Fixed (your setting)                                                  |
-| I-2  | Low      | No SPF, DMARC or null MX records say the domain sends no email, and two email forwarding rules sit unused             | Fixed (your setting; checked on 23 October)                           |
-| I-3  | Low      | Cloudflare features can rewrite live pages, and nothing checks the live HTML                                          | Fixed (the features are off, and the live check spots a changed page) |
-| I-4  | Low      | The privacy page says Cloudflare data "is not collected", but Cloudflare keeps security events and traffic statistics | Fixed                                                                 |
-| I-5  | Low      | No CAA record, so any public CA may issue certificates for the domain                                                 | Fixed (your setting; checked on 23 October)                           |
-| I-6  | Low      | 36 old builds stay public indefinitely at "version preview" addresses                                                 | Kept at first (your choice); turned off later (ADR 0019)              |
-| I-7  | Low      | No `security.txt` on any site                                                                                         | Fixed                                                                 |
-| I-8  | Info     | Nothing at the edge limits requests to `/api/*`, and all apps share the free daily limits                             | Fixed (your setting; checked on 23 October)                           |
-| I-9  | Info     | GitHub repository settings to tidy                                                                                    | Fixed (your setting)                                                  |
-| I-10 | Info     | Small Cloudflare account settings to add                                                                              | Fixed (your setting)                                                  |
-| I-11 | Info     | Previews get the production storage code                                                                              | Fixed                                                                 |
+| ID   | Severity | What was wrong                                                                                                        | What happened                                                                                  |
+| ---- | -------- | --------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| I-1  | High     | Auto-renew is off, so the domain won't renew itself                                                                   | Fixed (your setting)                                                                           |
+| I-2  | Low      | No SPF, DMARC or null MX records say the domain sends no email, and two email forwarding rules sit unused             | Fixed (your setting; checked on 23 October), apart from the two forwarding rules: see 3I-1     |
+| I-3  | Low      | Cloudflare features can rewrite live pages, and nothing checks the live HTML                                          | Fixed (the features are off, and the live check spots a changed page); two leftovers: see 3I-2 |
+| I-4  | Low      | The privacy page says Cloudflare data "is not collected", but Cloudflare keeps security events and traffic statistics | Fixed                                                                                          |
+| I-5  | Low      | No CAA record, so any public CA may issue certificates for the domain                                                 | Fixed (your setting; checked on 23 October)                                                    |
+| I-6  | Low      | 36 old builds stay public indefinitely at "version preview" addresses                                                 | Kept at first (your choice); turned off later (ADR 0019)                                       |
+| I-7  | Low      | No `security.txt` on any site                                                                                         | Fixed                                                                                          |
+| I-8  | Info     | Nothing at the edge limits requests to `/api/*`, and all apps share the free daily limits                             | Fixed (your setting; checked on 23 October)                                                    |
+| I-9  | Info     | GitHub repository settings to tidy                                                                                    | Fixed (your setting)                                                                           |
+| I-10 | Info     | Small Cloudflare account settings to add                                                                              | Fixed (your setting)                                                                           |
+| I-11 | Info     | Previews get the production storage code                                                                              | Fixed                                                                                          |
 
-### J. Architecture and tests
+#### J. Architecture and tests
 
 | ID   | Severity | What was wrong                                                                                                               | What happened                                                         |
 | ---- | -------- | ---------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
@@ -281,7 +302,7 @@ Severity is the auditor’s: **High** could lose or leak data or cost money; **M
 | J-17 | Info     | Flaky browser tests are retried in CI and never reported                                                                     | Explained: Playwright already lists flaky tests in each run’s summary |
 | J-18 | Info     | The cache test for pages would pass for a page cached for a year                                                             | Fixed                                                                 |
 
-### Z. Anything else
+#### Z. Anything else
 
 | ID   | Severity | What was wrong                                                                                                   | What happened                                           |
 | ---- | -------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
@@ -297,3 +318,277 @@ Severity is the auditor’s: **High** could lose or leak data or cost money; **M
 | Z-10 | Low      | Right-to-left text shows its full stop or "!" at the wrong end                                                   | Fixed                                                   |
 | Z-11 | Info     | Smaller points                                                                                                   | Fixed (the licence link); no LICENSE file (your choice) |
 | Z-12 | Info     | The threat model has no goal for keeping things working                                                          | Fixed                                                   |
+
+## Second audit
+
+The second audit (25 October 2026) followed the same brief. Its findings were
+fixed the same day, in
+[#70](https://github.com/shkriuss/shkriuss.app/pull/70) to
+[#77](https://github.com/shkriuss/shkriuss.app/pull/77). Its report isn't in
+the repository, so this list is rebuilt from those pull requests: each fix
+named its finding. That's why it has no severities, and why four numbers
+(2E-2, 2G-2, 2I-2 and 2J-1) are missing: no fix named them.
+
+### Left for you to decide
+
+The defaults below stay until you say otherwise. Nothing breaks either way.
+
+- **Undo after one-tap removals:** removing a drink in Water, a shopping list
+  item or a planned meal in Meals, or a word from Grammar's dictionary
+  happens at once, with no Undo. An Undo needs a new shared piece of the
+  design system (a notice with a button). Left open in
+  [#76](https://github.com/shkriuss/shkriuss.app/pull/76): say if you want it.
+- **Shelf** shows web addresses in their own letters only for Georgian,
+  Chinese, Japanese and Korean; others stay as punycode ("xn--…"), so a
+  look-alike address can't pass for a real one. The list can be widened
+  ([#74](https://github.com/shkriuss/shkriuss.app/pull/74)).
+- **Notes** drops an empty new note once it has been left for 10 minutes
+  ([#74](https://github.com/shkriuss/shkriuss.app/pull/74)).
+
+### Every finding
+
+| ID                          | What was wrong                                                                                                                            | Fixed in      |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| 2A-1                        | A lost device's old copy could stop the move to the new key, and every sync after it                                                      | #70           |
+| 2A-2                        | "Done" left a device code working for its 10 minutes                                                                                      | #70           |
+| 2A-3                        | A device signed in to someone else's account could move its old data there (Photos too)                                                   | #70           |
+| 2A-4, 2C-1                  | Harmful code on any app page could use the account's passkey in Safari and Firefox (ADR 0018)                                             | #70           |
+| 2B-1                        | A push address that never answers could use up the free daily server time of every app                                                    | #71           |
+| 2B-2                        | A clean-up or deletion stopped for good after an error                                                                                    | #71           |
+| 2D-1                        | So "forgotten after two days" and a deleted online library didn't always happen (fixed by 2B-2)                                           | #71           |
+| 2D-2                        | Pull request previews looked exactly like the real site (previews were removed later: ADR 0019)                                           | #76           |
+| 2E-1                        | A copy that unpacks to gigabytes crashed the app on every device                                                                          | #70           |
+| 2E-3                        | A full browser was called "private mode or blocked"                                                                                       | #70           |
+| 2F1-1                       | Water: drinking exactly the goal in fl oz didn't reach it                                                                                 | #75           |
+| 2F1-2                       | Tasks, Calendar, Reminders, Habits: saving a form undid what had synced while it was open                                                 | #75           |
+| 2F1-3                       | Calendar: saving an event deleted elsewhere meanwhile lost the edit                                                                       | #75           |
+| 2F1-4                       | Water, Meals: a device with its clock far ahead deleted other devices' data                                                               | #75           |
+| 2F1-5                       | Habits: check marks had no limit, and nothing but deleting a habit made room                                                              | #75           |
+| 2F1-6                       | A reminder in the hour the clocks skip never went off in an open app                                                                      | #75           |
+| 2F1-7                       | An open app didn't show a reminder the notification server didn't have yet                                                                | #75           |
+| 2F1-8 to 2F1-11             | Calendar import: a huge DURATION, a crafted slow file, an all-day repeat's end, copies on re-import                                       | #75           |
+| 2F1-12, 2F1-13              | Calendar: a new day went unnoticed on screen; saving worked out every event's days                                                        | #75           |
+| 2F1-14                      | Tasks: ticking off a task with a huge "every" failed                                                                                      | #75           |
+| 2F2-1, 2F2-5, 2F2-10        | Numbers weren't read the way the person's language writes them ("2,000" was saved as 2)                                                   | #72           |
+| 2F2-2                       | Words in Hindi, Thai and other scripts counted as the same when a vowel sign differed                                                     | #72           |
+| 2F2-3                       | Repairs allowed more repairs than fit on the device                                                                                       | #72           |
+| 2F2-4                       | Trades: closing part of a trade on two devices counted shares twice                                                                       | #72           |
+| 2F2-6                       | Names made twice by the first sync couldn't be changed                                                                                    | #72           |
+| 2F2-7                       | Budget's month line counted spending in categories without a limit                                                                        | #72           |
+| 2F2-8                       | A device on an older version deleted settings a newer version added                                                                       | #70, #73      |
+| 2F2-9                       | Repairs kept photos no repair used                                                                                                        | #72           |
+| 2F2-11 to 2F2-13            | "Spent -$0.00", 1.005 not rounding to 1.01, ∞ or NaN in Trades, decimals and part costs                                                   | #72           |
+| 2F3-1, 2F3-2                | Photos: "Free up space" stopped half-way, or sync turned off mid-check, could lose photos                                                 | #74           |
+| 2F3-3                       | Grammar, Notes, Shelf: a long paste was cut without a word                                                                                | #74           |
+| 2F3-4, 2F3-5, 2F3-8, 2F3-11 | Grammar: the checker broke, Deep check downloaded twice, "Added" to a full dictionary, slow splitting                                     | #74           |
+| 2F3-6, 2F3-9                | Notes: a sync kept both versions silently; cut emoji, the Pin button, empty notes left behind                                             | #74           |
+| 2F3-7                       | Hub: "Replace your account key?" said a lost device's apps stop syncing                                                                   | #74           |
+| 2F3-10                      | Shelf showed Georgian web addresses as punycode                                                                                           | #74           |
+| 2G-1, 2G-12                 | Photos: no focus ring on a chosen photo; the selection bar went out of sight                                                              | #76           |
+| 2G-3, 2G-5                  | Keyboard focus jumped to the top when a list was drawn again, or after some buttons                                                       | #76           |
+| 2G-4, 2G-10                 | Large text didn't fit in several apps; Water's buttons broke words                                                                        | #76           |
+| 2G-6, 2G-8, 2G-9            | Screen readers: searches not read out, Reminders read again every minute, dialogs said nothing                                            | #76           |
+| 2G-7, 2G-13, 2G-14          | Contrast themes, a small "What sync sends" link, Water's day error, photo viewers                                                         | #76           |
+| 2G-11                       | Account and Photos' library requests waited for ever on a network that hangs                                                              | #70           |
+| 2H-1                        | The package-age check didn't refuse packages from outside npm (changed again by 3H-1)                                                     | #73           |
+| 2H-2                        | Every check needed Playwright's download server                                                                                           | #73           |
+| 2I-1, 2I-3                  | The docs didn't say what the rate limit can't stop, or about Cloudflare's own CAA entries                                                 | #73           |
+| 2J-2                        | Nothing added up every app's server limits against the free plan                                                                          | #71           |
+| 2J-3                        | No unit test pinned the security headers                                                                                                  | #73           |
+| 2J-4                        | Renaming a live server migration failed only in the deploy                                                                                | #71           |
+| 2J-5 to 2J-11, 2J-13        | Docs, and a registry check: CI's 30 minutes, "storage": "none", deploy times, removing an app, what to keep true, newcomers, old browsers | #70, #71, #73 |
+| 2J-12                       | Code copied between apps (spreadsheets, paging, settings, photos, notifications)                                                          | #77           |
+| 2J-14                       | Two tests could pass without checking anything                                                                                            | #73           |
+
+## Third audit
+
+### How it was done
+
+- **Who:** Claude Code (25 October 2026), at commit `4b7d0c7`. It did areas
+  A, B, E, H, I and Z itself, and separate reviews did C, D, F1, F2, F3, G
+  and J; every finding they made was checked against the code again, the
+  serious ones by running a test.
+- **What:** as before: the code, the workflows, and the live sites and
+  settings (read-only).
+- **Evidence:** each finding came with a test or a command that shows it.
+  Each fix comes with a test that fails without it, where one can be
+  written.
+- **Fixes:** in pull requests
+  [#79](https://github.com/shkriuss/shkriuss.app/pull/79),
+  [#80](https://github.com/shkriuss/shkriuss.app/pull/80),
+  [#81](https://github.com/shkriuss/shkriuss.app/pull/81),
+  [#82](https://github.com/shkriuss/shkriuss.app/pull/82),
+  [#83](https://github.com/shkriuss/shkriuss.app/pull/83),
+  [#84](https://github.com/shkriuss/shkriuss.app/pull/84),
+  [#85](https://github.com/shkriuss/shkriuss.app/pull/85),
+  [#86](https://github.com/shkriuss/shkriuss.app/pull/86) and
+  [#87](https://github.com/shkriuss/shkriuss.app/pull/87).
+
+### Totals
+
+| Severity | Found | Fixed | Your setting | Explained |
+| -------- | ----- | ----- | ------------ | --------- |
+| High     | 1     | 1     | –            | –         |
+| Medium   | 10    | 10    | –            | –         |
+| Low      | 48    | 47    | 1            | –         |
+| Info     | 18    | 13    | 1            | 4         |
+| **All**  | 77    | 71    | 2            | 4         |
+
+### What's left for you
+
+**Settings** (in Cloudflare; my token can only read). Both were already in
+[deployment.md](../deployment.md), just not quite finished:
+
+- **3I-1:** **Email → Email Routing → Routing rules:** delete the `security@`
+  and `support@` rules. No mail arrives today (Email Routing is off), but
+  turning Email Routing on again would bring them back.
+- **3I-2:** **Analytics & Logs → Web Analytics:** delete the shkriuss.app
+  site; and **Scrape Shield → Server-side Excludes:** turn it off, if it's
+  still shown. Neither changes any page today.
+- **3I-3, if you want:** the extra email records for each app's address,
+  and a Cloudflare account of its own for shkriuss.app, both in
+  [deployment.md](../deployment.md).
+
+**Choices:** the second audit's Undo after one-tap removals is still open
+([above](#left-for-you-to-decide)).
+
+### Every finding
+
+Severity is the auditor's, as in the first audit.
+
+#### A. Account and keys
+
+| ID   | Severity | What was wrong                                                                                       | What happened                                                                             |
+| ---- | -------- | ---------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| 3A-1 | Low      | "Replace the account key" didn't stop reminders while closed on the lost device, and nothing said so | Fixed: the Account page, the privacy page and ADR 0010 say so, and how to stop them (#82) |
+| 3A-2 | Info     | A server's answer alone made the browser forget a passkey                                            | Explained (ADR 0018): the recovery key still signs in (#80)                               |
+
+#### B. Servers
+
+| ID   | Severity | What was wrong                                                                                | What happened                                                                                 |
+| ---- | -------- | --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| 3B-1 | Medium   | Repairs: deleting or moving a copy with photos could be undone by one failed internal request | Fixed (#79)                                                                                   |
+| 3B-2 | Medium   | Four made-up devices could stop everyone's reminders while closed in an app, every day        | Fixed: 100 messages a device a day, and the big push services have a share of their own (#83) |
+| 3B-3 | Low      | An old copy could be sent again as newer, and devices then deleted items                      | Fixed (#79)                                                                                   |
+| 3B-4 | Low      | An alarm might stop for good when the free daily requests run out (suspicion)                 | Fixed: uploads and test messages set it again; ADR 0017 says what brings one back (#80, #83)  |
+| 3B-5 | Info     | The online library's notes about deleted photos are never removed                             | Explained (ADR 0016): they have to stay (#81)                                                 |
+
+#### C. Pages and the browser
+
+| ID   | Severity | What was wrong                                                                  | What happened                                               |
+| ---- | -------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| 3C-1 | Low      | A backup with very deeply nested data stopped sync on that device for good      | Fixed (#79)                                                 |
+| 3C-2 | Low      | A crafted calendar file far under 5 MB froze Calendar for minutes               | Fixed (#86)                                                 |
+| 3C-3 | Low      | A change to the security headers alone didn't reach saved copies                | Fixed (#79)                                                 |
+| 3C-4 | Low      | The header that turns passkeys off on app pages isn't a barrier, even in Chrome | Fixed: ADR 0018 says what really protects the account (#80) |
+| 3C-5 | Low      | The build's CSP check missed a few unsafe forms                                 | Fixed (#79)                                                 |
+| 3C-6 | Info     | "Save original" could cut an emoji in half in a long file name                  | Fixed (#81)                                                 |
+
+#### D. Privacy and what the pages promise
+
+| ID   | Severity | What was wrong                                                                                        | What happened                                                                                      |
+| ---- | -------- | ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| 3D-1 | Medium   | An upload on its way turned reminders while closed back on after "Turn off" or "Delete all data"      | Fixed (#83)                                                                                        |
+| 3D-2 | Low      | Photos' online library wasn't deleted when unused, though the privacy page said so                    | Fixed: the page says what happens, and a deleted library's leftovers go after 13 months (#81, #82) |
+| 3D-3 | Low      | With storage full, "Turn off" never asked the server to delete the reminders                          | Fixed (#83)                                                                                        |
+| 3D-4 | Low      | "Forgotten after two days of failures" happened only at the next reminder                             | Fixed (#83)                                                                                        |
+| 3D-5 | Low      | The short texts of the 7 apps with reminders while closed left them out                               | Fixed (#82)                                                                                        |
+| 3D-6 | Low      | The privacy page understated what the notification server keeps                                       | Fixed: the page lists it, and messages are padded (#82, #83)                                       |
+| 3D-7 | Low      | The privacy page's "Last updated" date was old                                                        | Fixed: a test keeps it with the text (#82)                                                         |
+| 3D-8 | Info     | Smaller privacy points (old passkey locks, the signing key, a scrambled address, a signed-out device) | Fixed (#81, #82, #83)                                                                              |
+
+#### E. Saving and syncing data
+
+| ID   | Severity | What was wrong                                                                                | What happened |
+| ---- | -------- | --------------------------------------------------------------------------------------------- | ------------- |
+| 3E-1 | Low      | When the sync state couldn't be saved after the data was, the next sync overwrote newer edits | Fixed (#79)   |
+
+#### F1. Calendar, Tasks, Reminders, Habits, Water
+
+| ID    | Severity | What was wrong                                                                               | What happened                                                        |
+| ----- | -------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| 3F1-1 | Medium   | Each repeat of a reminder reused its notification's name, so later ones likely came silently | Fixed (#83; not yet tried on a phone)                                |
+| 3F1-2 | Low      | Calendar import's "may be an hour off" note missed repeats starting on a clock-change day    | Fixed, and times the clocks skip are read as the standard says (#86) |
+| 3F1-3 | Low      | In the hour that repeats when clocks go back, the server picked another time than the page   | Fixed (#83)                                                          |
+| 3F1-4 | Low      | "On" was shown when nothing could be saved or uploaded                                       | Fixed (#83)                                                          |
+| 3F1-5 | Low      | Over 500 upcoming reminders, the rest were sent by nobody                                    | Fixed: the open app shows them, and says so (#83)                    |
+| 3F1-6 | Low      | Calendar could show a reminder twice; Habits too after midnight                              | Fixed (#86)                                                          |
+| 3F1-7 | Info     | The week might start on Monday in some browsers (suspicion)                                  | Explained (Calendar's README): where the browser can't tell (#86)    |
+
+#### F2. Budget, Trades, Repairs, Meals, Tally
+
+| ID     | Severity | What was wrong                                                                                   | What happened                                   |
+| ------ | -------- | ------------------------------------------------------------------------------------------------ | ----------------------------------------------- |
+| 3F2-1  | Medium   | A form open while another device changed the item saved the old values back; Repairs lost photos | Fixed (#84)                                     |
+| 3F2-2  | Low      | Trades: "Delete a year" changed the open trade, and a later edit brought parts back              | Fixed (#84)                                     |
+| 3F2-3  | Low      | "1.500" was saved as 1.50 where thousands are grouped with a space                               | Fixed: the app asks which (#84)                 |
+| 3F2-4  | Low      | "12 50" was saved as 1,250                                                                       | Fixed, in Shelf too (#84)                       |
+| 3F2-5  | Low      | Over the item limit, Budget and Trades refused every change                                      | Fixed (#84)                                     |
+| 3F2-6  | Low      | Spreadsheets showed garbled letters in Excel                                                     | Fixed (#84)                                     |
+| 3F2-7  | Low      | Meals cut long ingredient lines without a word                                                   | Fixed (#84)                                     |
+| 3F2-8  | Low      | Repairs' messages for numbers over the most allowed were about something else                    | Fixed (#84)                                     |
+| 3F2-9  | Info     | Meals' "shopping list is full" advice couldn't make room                                         | Fixed (#84)                                     |
+| 3F2-10 | Info     | Trades counted a trade closed in parts as several                                                | Fixed: it says so, and parts follow fixes (#84) |
+| 3F2-11 | Info     | A fix without a test, a loose check, a comment that overstated                                   | Fixed (#84)                                     |
+
+#### F3. Notes, Shelf, Grammar, Photos
+
+| ID    | Severity | What was wrong                                                                   | What happened                                                                            |
+| ----- | -------- | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| 3F3-1 | High     | Photos deleted everywhere a photo deleted while sync was off                     | Fixed: with sync off, a photo is deleted only on that device (#81)                       |
+| 3F3-2 | Medium   | Grammar's Deep check turned "I dont know" into "I do know"                       | Fixed (#85)                                                                              |
+| 3F3-3 | Medium   | Photos picked on an iPhone likely arrive as JPEG copies, not the originals       | Fixed: the app says so there, and how to keep originals (#81; not yet tried on a device) |
+| 3F3-4 | Low      | Notes kept two "(second version)" notes after a sync while typing                | Fixed (#82)                                                                              |
+| 3F3-5 | Low      | Deep check wrote "it ’s" with curly apostrophes                                  | Fixed (#85)                                                                              |
+| 3F3-6 | Low      | Grammar's dictionary kept uploading again between devices set to other languages | Fixed (#85)                                                                              |
+| 3F3-7 | Low      | Shelf's price sort ordered items without a price by a hidden currency            | Fixed (#82)                                                                              |
+| 3F3-8 | Low      | Photos said "No photos yet" while a big library loaded                           | Fixed, with a race behind it (#81)                                                       |
+| 3F3-9 | Info     | Smaller points in Shelf, Grammar and Photos                                      | Fixed (#81, #82, #85)                                                                    |
+
+#### G. Accessibility
+
+| ID    | Severity | What was wrong                                                                 | What happened                                                      |
+| ----- | -------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------ |
+| 3G-1  | Medium   | Photos and Grammar sent keyboard focus to the top when a list was drawn again  | Fixed (#81, #85)                                                   |
+| 3G-2  | Low      | Tasks' "My order" didn't fit large text                                        | Fixed (#86)                                                        |
+| 3G-3  | Low      | Other redraws still lost focus or sent it to the wrong place                   | Fixed (#82, #84, #86)                                              |
+| 3G-4  | Low      | The Restore dialog's passphrase error wasn't read out after Enter              | Fixed (#83)                                                        |
+| 3G-5  | Low      | Water's goal and sizes refused a value without a word                          | Fixed (#86)                                                        |
+| 3G-6  | Low      | An edit form closed without a word when its item was deleted elsewhere         | Fixed (#84, #86)                                                   |
+| 3G-7  | Low      | "Download Deep check" went silent for good while the network hung              | Fixed (#85)                                                        |
+| 3G-8  | Low      | Photos from the same minute shared one name; Next and Previous said nothing    | Fixed (#81, #84)                                                   |
+| 3G-9  | Low      | Name buttons as narrow as 9 px                                                 | Fixed (#82, #84)                                                   |
+| 3G-10 | Low      | Calendar's month heading was read out on every redraw (suspicion)              | Fixed (#86)                                                        |
+| 3G-11 | Info     | Things said twice, an open decision not recorded, overdue shown by colour only | Fixed (#83, #86; the decision is [above](#left-for-you-to-decide)) |
+
+#### H. CI and deploys
+
+| ID   | Severity | What was wrong                                                                      | What happened                  |
+| ---- | -------- | ----------------------------------------------------------------------------------- | ------------------------------ |
+| 3H-1 | Medium   | The lockfile check let a pull request swap any package for a download from anywhere | Fixed (#79)                    |
+| 3H-2 | Info     | Any code that runs in a CI job can read that job's secrets                          | Explained (`SECURITY.md`, #79) |
+
+#### I. Domain and Cloudflare
+
+| ID   | Severity | What was wrong                                                  | What happened                                                                       |
+| ---- | -------- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| 3I-1 | Low      | The two email forwarding rules were still there                 | Your setting ([above](#whats-left-for-you))                                         |
+| 3I-2 | Info     | A Web Analytics site and Server-side Excludes were still set up | Your setting ([above](#whats-left-for-you))                                         |
+| 3I-3 | Info     | Smaller hardening steps                                         | Fixed: `security.txt` on every site (#80); the rest is optional, your setting (#87) |
+
+#### J. Architecture and tests
+
+| ID    | Severity | What was wrong                                                              | What happened                                                                                                         |
+| ----- | -------- | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| 3J-1  | Medium   | No test covered the sync rule that stops two devices overwriting each other | Fixed (#79)                                                                                                           |
+| 3J-2  | Low      | The second audit wasn't recorded, and its numbers clashed with the first's  | Fixed: this page (#87)                                                                                                |
+| 3J-3  | Low      | No test checked that the servers refuse our own other subdomains            | Fixed (#79, #82)                                                                                                      |
+| 3J-4  | Low      | Numbers the docs promise could change without any test failing              | Fixed (#79, #81, #82, #83)                                                                                            |
+| 3J-5  | Low      | Some unit tests passed only on a computer set to English                    | Fixed, and CI runs them in German too (#81, #84, #87)                                                                 |
+| 3J-6  | Low      | ADR 0017 and PLAN.md said only two more apps fit; it's about eight          | Fixed (#80)                                                                                                           |
+| 3J-7  | Low      | Nothing checked that Deep check's files reach the live site                 | Fixed (#79)                                                                                                           |
+| 3J-8  | Info     | Small doc slips                                                             | Fixed (#80, #83, #85)                                                                                                 |
+| 3J-9  | Info     | Repairs' page script had grown back to one 910-line function                | Fixed (#84)                                                                                                           |
+| 3J-10 | Info     | What a newcomer needs that no doc said                                      | Fixed (#80)                                                                                                           |
+| 3J-11 | Info     | What will be hard to change later                                           | Fixed: Calendar has room again (#83, #86), Harper's size is planned for (#85), the shared tests name every site (#87) |
+| 3J-12 | Info     | Small helpers copied between apps, and "same name" checks that differ       | Fixed (#84, #86, #87)                                                                                                 |
