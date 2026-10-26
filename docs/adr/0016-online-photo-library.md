@@ -153,14 +153,23 @@ every device. That's far beyond what sync can hold:
   first, since that may have been the lost one.
 - **"Delete the online copy"** deletes the account's libraries first: each
   list is cleared at once, then the files are deleted in batches of 1,000
-  (a Durable Object alarm, which keeps trying while R2 fails: audit B-2). Photos on each device stay; those only online
-  are gone. A library known to be taken is left alone; if one refuses
+  (a Durable Object alarm, which keeps trying while R2 fails: audit B-2).
+  Photos on each device stay; those only online are gone. A library known to be taken is left alone; if one refuses
   (another device took it), the copy stays, and the device says it
   couldn't delete the online copy instead of saying it's done.
   `packages/sync` gains a `linked` option for this: data an app keeps
   online beside its copy, deleted and moved with it.
   A photo still on its way up while its library is deleted isn't added to
   the new one: its file is deleted instead (audit finding B-7).
+  What's left of a deleted library (its empty list, with the hashes of its
+  token and of any replaced ones, a hash of the storage code it was
+  unlocked with, how many changes it had, and the day and number of its
+  last uploads) was kept for good. Now it's deleted too, with any file
+  an upload left in R2 since, once nobody has used it for 13 months, and
+  its room is given back (audit 3 D-2). A device that uses it in that time
+  keeps it 13 months more; one that adds photos to it again makes it an
+  ordinary library, which stays ([ADR 0017](0017-storage-limits.md)). A
+  library deleted before this change keeps its record, as before.
 - **Files left outside the list.** A photo's file reaches R2 before the
   list has it. If adding it to the list then fails (say the day's free
   writes are used up), the file would stay in R2 for good, counted nowhere.
