@@ -117,6 +117,50 @@ test('a reminder that comes due while a form is open is read out in it', async (
   await page.clock.runFor('03:00');
   await expect(editor(page).locator('[data-dialog-messages]')).toHaveText('Reminder: Read.');
   await checkA11y(page, 'edit dialog after a reminder');
+
+  // Not left there for the next time the form opens: it was never emptied.
+  await editor(page).getByRole('button', { name: 'Cancel' }).click();
+  await expect(editor(page)).toBeHidden();
+  await page.getByRole('button', { name: 'Edit Read' }).click();
+  await expect(editor(page)).toBeVisible();
+  await expect(editor(page).locator('[data-dialog-messages]')).toHaveText('');
+});
+
+test('with “Delete this habit?” open over the form, a reminder is read out in it', async ({
+  page,
+}) => {
+  // Both are open, and it went to the form, behind the question (audit 4 G-2).
+  await fakeNotifications(page, 'granted');
+  await page.clock.install({ time: new Date('2026-10-19T19:58:00+02:00') });
+  await page.goto('/');
+  await addHabit(page, 'Read');
+  await setReminder(page, 'Read', '20:00');
+  await page.getByRole('button', { name: 'Edit Read' }).click();
+  await editor(page).getByRole('button', { name: 'Delete' }).click();
+  const question = page.getByRole('dialog', { name: 'Delete this habit?' });
+  await expect(question).toBeVisible();
+  await page.clock.runFor('03:00');
+  await expect(question.locator('[data-dialog-messages]')).toHaveText('Reminder: Read.');
+});
+
+test('a problem shown while a form is open is read out in it', async ({ page }) => {
+  // The page's problem notice is put there after the page loads, so it
+  // wasn't watched (audit 4 G-2).
+  await page.goto('/');
+  await addHabit(page, 'Read');
+  await page.getByRole('button', { name: 'Edit Read' }).click();
+  await expect(editor(page)).toBeVisible();
+  // What showProblem() does, as when a sync's changes can't be saved while the form is open.
+  const problem = 'Couldn’t save: there’s no room left for this app’s data in this browser.';
+  await page.evaluate((text) => {
+    const template = document.querySelector<HTMLTemplateElement>('[data-problem-template]');
+    const notice = template?.content.firstElementChild?.cloneNode(true);
+    if (!(notice instanceof HTMLElement)) throw new Error('No problem notice');
+    const words = notice.querySelector('[data-problem-text]');
+    if (words) words.textContent = text;
+    document.querySelector('[data-problem]')?.replaceChildren(notice);
+  }, problem);
+  await expect(editor(page).locator('[data-dialog-messages]')).toHaveText(problem);
 });
 
 test('asks to show notifications when a reminder is set', async ({ page }) => {

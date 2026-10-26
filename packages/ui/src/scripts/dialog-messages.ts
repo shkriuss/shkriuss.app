@@ -7,13 +7,20 @@
  *
  * Once per page (AppShell does it): each dialog gets a hidden live region of
  * its own, from the start (one added just before a message isn't read), and
- * what the page's live regions say while a dialog is open is said in the
- * dialog's too. It's a polite live region, as `role="status"` is, without
- * that role: a dialog's own status line stays the only one there is.
+ * what the page's live regions and its problem notice (showProblem in
+ * ./problem.ts) say while a dialog is open is said in the dialog's too: in
+ * the one with focus, when one is open over another (a "Delete?" over a
+ * form). It's emptied when its dialog closes, so a screen reader doesn't
+ * find an old message there later. It's a polite live region, as
+ * `role="status"` is, without that role: a dialog's own status line stays
+ * the only one there is.
  */
 
-/** Live regions: what's written in them is read out. */
-const LIVE = '[role="status"], [role="alert"], [aria-live]:not([aria-live="off"])';
+/**
+ * Live regions, and the page's problem notice (./problem.ts), where each
+ * problem is a new notice: what's written in them is read out.
+ */
+const LIVE = '[role="status"], [role="alert"], [aria-live]:not([aria-live="off"]), [data-problem]';
 
 let watching = false;
 
@@ -29,10 +36,16 @@ export function sayInOpenDialogs(root: Document = document): void {
     region.dataset['dialogMessages'] = '';
     dialog.append(region);
     said.set(dialog, region);
+    dialog.addEventListener('close', () => {
+      region.textContent = '';
+    });
   }
   const observer = new MutationObserver((records) => {
-    const open = [...said.keys()].find((dialog) => dialog.matches(':modal'));
-    const region = open && said.get(open);
+    // The open one with focus, when one is open over another; else the last.
+    const open = [...said.keys()].filter((dialog) => dialog.matches(':modal'));
+    const focused = root.activeElement?.closest('dialog');
+    const dialog = focused && open.includes(focused) ? focused : open.at(-1);
+    const region = dialog && said.get(dialog);
     if (!region) return;
     const changed = new Set<Element>();
     for (const { target } of records) {

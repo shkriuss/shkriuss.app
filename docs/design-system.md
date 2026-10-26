@@ -170,9 +170,11 @@ that opened it, AppShell puts focus on its new copy. An app whose close
 handler moves focus itself (Shelf's forms) records `focusSpot()` when the
 dialog opens and calls `returnFocus(spot, fallback)` when it closes. And
 while a dialog is open, a screen reader can't hear the page behind it, its
-messages (`role="status"`) included, so AppShell gives each dialog a hidden
-message area of its own and says there what the page's say meanwhile, like
-a reminder that comes due (`sayInOpenDialogs`, audit 4 G-2).
+messages (`role="status"`) and problem notice included, so AppShell gives
+each dialog a hidden message area of its own and says there what they say
+meanwhile, like a reminder that comes due: in the dialog with focus, when one
+is open over another, and emptied when the dialog closes
+(`sayInOpenDialogs`, audit 4 G-2).
 
 QR codes (for example to open a link on another device) are drawn by a
 script, since their content is usually made on the page:
