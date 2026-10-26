@@ -58,7 +58,9 @@ its notification server, docs/adr/0009).
 
 - Page: `src/pages/index.astro`
 - Page behaviour: `src/scripts/`
-  - `calendar.ts`: the month, the lists and the event editor
+  - `calendar.ts`: the month and the lists
+  - `event-editor.ts`: the event editor (new, change, delete); it loads the
+    first time it opens, so the page starts with less to load
   - `reminder-alerts.ts`: due reminders on the page, and as notifications
     (with the shared parts of `@shkriuss/ui/local-reminders`)
   - `import-dialog.ts`: choosing a file to import; the dialog that reads it
@@ -68,7 +70,11 @@ its notification server, docs/adr/0009).
 - Rules, as plain functions with unit tests next to them:
   - `src/lib/dates.ts`: date maths without time zones ("2026-10-17", "14:30")
   - `src/lib/events.ts`: checking, saving and repeating events
-  - `src/lib/reminders.ts`: when reminders go off and what they're called
+  - `src/lib/editing.ts`: adding, changing and deleting events, and adding
+    them from a file (loaded with the editor and the import)
+  - `src/lib/reminders.ts`: when reminders go off
+  - `src/lib/reminder-choices.ts`: the reminders the editor offers, and what
+    they're called
   - `src/lib/ics.ts`: writing .ics files
   - `src/lib/ics-import.ts`: reading .ics files
   - `src/lib/holidays.ts`: days off, Orthodox holidays and fasts in Georgia

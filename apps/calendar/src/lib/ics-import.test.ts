@@ -9,13 +9,8 @@ import {
   toDayNumber,
   type IsoDate,
 } from './dates.ts';
-import {
-  importEvents,
-  occurrencesBetween,
-  type CalendarEvent,
-  type EventDraft,
-  type Repeat,
-} from './events.ts';
+import { importEvents } from './editing.ts';
+import { occurrencesBetween, type CalendarEvent, type EventDraft, type Repeat } from './events.ts';
 import {
   lastStart,
   parseDuration,

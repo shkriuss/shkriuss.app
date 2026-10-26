@@ -3,7 +3,8 @@
  * the file on the device (lib/ics-import.ts), shows what will be added (and
  * what can't be, and why), then adds the events when the person confirms.
  */
-import { importEvents, MAX_EVENTS } from '../lib/events.ts';
+import { importEvents } from '../lib/editing.ts';
+import { MAX_EVENTS } from '../lib/events.ts';
 import { parseIcs, type ParseResult } from '../lib/ics-import.ts';
 import { plural, required, type CalendarPage } from './shared.ts';
 

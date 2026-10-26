@@ -87,6 +87,23 @@ test('adds an event and remembers it after a reload', async ({ page }) => {
   await expect(editor(page).getByLabel('Notes (optional)')).toHaveValue('Bring the card');
 });
 
+test('loads the event editor only when it first opens', async ({ page }) => {
+  // So the page starts with less to load (audit 3 J-11).
+  const loaded: string[] = [];
+  page.on('request', (request) => {
+    if (request.url().includes('/_astro/event-editor.')) loaded.push(request.url());
+  });
+  await page.reload();
+  await expect(monthHeading(page)).toHaveText('October 2026');
+  await expect(page.locator('[data-weeks] button').first()).toBeVisible();
+  expect(loaded).toEqual([]);
+
+  await newEvent(page, 'Dentist');
+  expect(loaded).toHaveLength(1);
+  await save(page);
+  await expect(dayList(page).getByRole('button', { name: /Dentist/ })).toBeFocused();
+});
+
 test('edits and deletes an event, with a confirmation', async ({ page }) => {
   await seed(page, [{ title: 'Dentist' }]);
   await dayList(page)
