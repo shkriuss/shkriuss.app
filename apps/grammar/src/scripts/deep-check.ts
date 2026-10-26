@@ -210,7 +210,8 @@ export function mountDeepCheck(root: Document, host: DeepCheckHost): { textChang
       received(-bytes);
       throw new Error(`${file.path} arrived damaged`);
     }
-    // Saved with the site's headers (its security policy too), as if just downloaded.
+    // Saved with the site's headers, as if just downloaded. The service worker
+    // serves it with the site's security policy at the time (audit 4 C-4).
     const headers = new Headers(response.headers);
     for (const name of TRANSFER_HEADERS) headers.delete(name);
     await cache.put(file.path, new Response(blob, { headers }));

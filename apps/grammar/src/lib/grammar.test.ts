@@ -117,6 +117,15 @@ describe('what the page shows', () => {
     });
   });
 
+  it('never starts or ends the text around a problem with half an emoji (audit 4 F3-7)', () => {
+    for (let pad = 0; pad < 4; pad += 1) {
+      const text = `${'x'.repeat(pad)}${'😀'.repeat(20)} I has ${'😀'.repeat(20)}`;
+      const context = contextOf(text, issueIn(text, 'has'));
+      expect(context.before + context.after).not.toMatch(/\p{Cs}/u);
+      expect(context.problem).toBe('has');
+    }
+  });
+
   it('counts suggestions in words', () => {
     expect(summary(0)).toBe('No problems found.');
     expect(summary(1)).toBe('1 suggestion.');
