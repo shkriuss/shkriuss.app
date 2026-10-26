@@ -209,6 +209,16 @@ is the simplest example to copy. Ask Claude, or:
 The privacy page lists the app automatically, and "Delete all data" already
 removes the device from the server.
 
+## Keeping the page small
+
+Each page's JavaScript must stay under 35 KB gzipped, counting every file
+its scripts import before they run (`pnpm check:dist`). A part that's used
+now and then, like a form or a dialog, can load the first time it opens,
+with `import('./form.ts')`: what loads later isn't counted, and it's in the
+offline copy too. Calendar's event editor (`openEditor` in
+`apps/calendar/src/scripts/calendar.ts`) and Repairs' forms (`later` in
+`apps/repairs/src/scripts/repairs.ts`) show how (audit 4 J-6).
+
 ## Heavy work and WebAssembly (optional)
 
 Work that takes more than a moment (like Grammar's checker) belongs in a web

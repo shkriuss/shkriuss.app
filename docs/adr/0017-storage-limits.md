@@ -105,8 +105,8 @@ app need lowering first.
 ### What people see
 
 - Sync: "Couldn't sync just now. It will try again later." The changes
-  stay on the device. (A message of its own would put Calendar's page over
-  its size budget, for something that should never happen.)
+  stay on the device. (It has no message of its own: with the limits
+  above, it should never happen.)
 - Photos in Repairs: the message that was already there for no room.
 - Replacing the account key when there's no room to note the old one: the
   key is replaced all the same (the apps move their copies to the new key

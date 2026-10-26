@@ -488,3 +488,30 @@ test('says when Repairs is nearly full, and how to make room', async ({ page }) 
   await expect(status(page, /^Deleted \d+ repairs from \d{4}\.$/)).toBeAttached();
   await expect(note).toBeHidden();
 });
+
+test.describe('offline', () => {
+  test.use({ serviceWorkers: 'allow' });
+
+  // Audit 4 J-6: the forms, "Delete a year…" and the photo viewer load the
+  // first time they open, so the page loads less; offline, from the saved copy.
+  test('the forms open offline, loaded the first time they’re used', async ({ page, context }) => {
+    await page.evaluate(async () => {
+      await navigator.serviceWorker.ready;
+    });
+    await page.reload();
+    await expect
+      .poll(() => page.evaluate(() => Boolean(navigator.serviceWorker.controller)))
+      .toBe(true);
+    await context.setOffline(true);
+    await page.reload();
+    await page.getByRole('button', { name: 'New repair' }).click();
+    await expect(repairDialog(page).getByRole('heading', { name: 'New repair' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Add vehicle' }).click();
+    await expect(vehicleDialog(page).getByRole('heading', { name: 'Add vehicle' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Delete a year…' }).click();
+    await expect(status(page, 'There are no repairs to delete.')).toBeVisible();
+    await context.setOffline(false);
+  });
+});
