@@ -65,7 +65,8 @@ The requirements:
      any subdomain ask for a passkey of its parent domain. Every app's pages
      refuse passkeys (their `Permissions-Policy` header), and
      `defineAppConfig` won't build an app that asks, but only Chromium-based
-     browsers honour that header. So the account service also keeps each
+     browsers honour that header, and a page's new blank window gets around
+     it even there (audit 3 C-4). So the account service also keeps each
      passkey's public key, and hands out or removes a lock only for the
      passkey's signature made on the Account page itself
      ([ADR 0018](0018-passkey-signatures.md)).

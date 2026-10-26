@@ -50,9 +50,16 @@ Status: Accepted (2026-10-25). Changes [ADR 0010](0010-account-and-sync.md)
   the recovery key (or a device link) and add the passkey again. They can
   still be removed.
 - **The browser forgets a passkey only when the service says no lock uses
-  it** (`{ unknown: true }`), not on any 404 (audit A-4).
-- The `Permissions-Policy` header stays, as a first barrier where browsers
-  honour it.
+  it** (`{ unknown: true }`), not on any 404 (audit A-4). That answer isn't
+  signed, so a server gone wrong could make password managers forget real
+  passkeys; the recovery key still works, so nothing is lost for good
+  (audit 3 A-2).
+- The `Permissions-Policy` header stays, but it isn't a barrier, even in
+  Chromium: an app's page can open a blank window of its own (`about:blank`,
+  which has none of its headers) and ask for the passkey there, and
+  `PublicKeyCredential.signalUnknownCredential()` isn't covered by it at all.
+  What keeps the account safe is the service's check of each signature's
+  origin, above (audit 3 C-4).
 
 ## Consequences
 
@@ -78,4 +85,5 @@ Status: Accepted (2026-10-25). Changes [ADR 0010](0010-account-and-sync.md)
   adding again too, every signed-in device would need to sign in again
   (its storage is per address), and every link to the Account page would
   change.
-- **Leaving it to `Permissions-Policy`.** Not supported in Safari or Firefox.
+- **Leaving it to `Permissions-Policy`.** Not supported in Safari or Firefox,
+  and a new window gets around it in Chromium too (audit 3 C-4).
