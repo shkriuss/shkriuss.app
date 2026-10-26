@@ -273,9 +273,11 @@ export function mountDataControls(section: HTMLElement): void {
       if (!data) return;
       try {
         // Sync is off: forget what was synced before, so turning it on again
-        // doesn't treat the restored (older) data as new edits.
-        if (!isSyncOn()) stopSync();
+        // doesn't treat the restored (older) data as new edits. Only once the
+        // backup is in: one that's refused changes nothing (audit 4 E-2).
+        const syncWasOff = !isSyncOn();
         restoreAll(data);
+        if (syncWasOff) stopSync();
       } catch (error) {
         busy(restoreDialog, '');
         find<HTMLElement>(restoreDialog, '[data-dialog-status]').textContent =

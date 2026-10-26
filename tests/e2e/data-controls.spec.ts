@@ -173,6 +173,41 @@ test('keeps focus on “Download backup” while it locks, and after a problem',
   await checkA11y(page, 'backup dialog after a problem');
 });
 
+test('a backup that can’t be restored changes nothing, sync history included', async ({ page }) => {
+  // What this device knew at its last sync, kept while sync is off: a refused
+  // restore keeps it too, as it says (audit 4 E-2).
+  const syncState = JSON.stringify({
+    secret: null,
+    code: null,
+    remote: null,
+    known: {},
+    dirty: false,
+    base: null,
+    last: 1_700_000_000_000,
+    serverTime: null,
+    connected: null,
+    previous: [],
+    waiting: {},
+  });
+  await page.evaluate((state) => localStorage.setItem('shkriuss-device:sync', state), syncState);
+  await page.getByRole('button', { name: 'Back up' }).click();
+  const download = page.waitForEvent('download');
+  await backupDialog(page).getByRole('button', { name: 'Download without a passphrase' }).click();
+  const backup = JSON.parse(await readFile(await (await download).path(), 'utf8')) as {
+    data: Record<string, unknown>;
+  };
+  // Nested deeper than any app's data: refused as unreadable (audit 3 C-1).
+  let deep: unknown = 'deep';
+  for (let level = 0; level < 100; level += 1) deep = { deeper: deep };
+  backup.data['shkriuss:e2e-sample'] = deep;
+
+  await chooseBackup(page, { name: 'backup.json', buffer: Buffer.from(JSON.stringify(backup)) });
+  await restoreDialog(page).getByRole('button', { name: 'Restore' }).click();
+  await expect(restoreDialog(page)).toContainText('Nothing was changed.');
+  expect(await page.evaluate(() => localStorage.getItem('shkriuss-device:sync'))).toBe(syncState);
+  expect((await saved(page)).sample).toBe(JSON.stringify(SAMPLE));
+});
+
 test('turns down files that aren’t this app’s backups', async ({ page }) => {
   const other = { app: 'some-other-app', exportedAt: new Date().toISOString(), data: {} };
   await chooseBackup(page, { name: 'other.json', buffer: Buffer.from(JSON.stringify(other)) });
