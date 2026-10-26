@@ -11,7 +11,7 @@ import { createSync, syncedStore } from '@shkriuss/sync';
 import { keepFocus } from '@shkriuss/ui/keep-focus';
 import { PAGE_SIZE, shownCount, waitForTyping } from '@shkriuss/ui/long-lists';
 import { decimalText } from '@shkriuss/ui/numbers';
-import { focusProblem, reportSave } from '@shkriuss/ui/problem';
+import { focusProblem, reportSave, showProblem } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { typedText } from '@shkriuss/ui/typed-text';
 import { site } from 'virtual:shkriuss/site';
@@ -959,12 +959,18 @@ export function mountRepairs(root: Document): void {
     vehicles = vehiclesStore.load();
     repairs = repairsStore.load();
     settings = settingsStore.load();
-    // What's being changed was deleted on another device or tab; or changed
-    // there, and the form's photos follow (audit 3 F2-1).
+    // What's being changed was deleted on another device or tab: the form
+    // closes, and says why (audit 3 G-6). Changed there, the form's photos
+    // follow (audit 3 F2-1).
     const current = findRepair(editingRepair);
-    if (editingRepair !== null && !current) repairDialog.close();
-    else if (current) formPhotos.follow(current.photos);
-    if (editingVehicle !== null && !findVehicle(editingVehicle)) vehicleDialog.close();
+    if (editingRepair !== null && !current) {
+      repairDialog.close();
+      showProblem('That repair was deleted on another device.');
+    } else if (current) formPhotos.follow(current.photos);
+    if (editingVehicle !== null && !findVehicle(editingVehicle)) {
+      vehicleDialog.close();
+      showProblem('That vehicle was deleted on another device.');
+    }
     if (yearDialog.open) {
       if (repairs.repairs.length === 0) yearDialog.close();
       else fillYears();

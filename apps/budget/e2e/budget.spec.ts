@@ -184,6 +184,26 @@ test('a change made in another tab survives a form that was open here', async ({
   await expect(categoryItem(page, 'Food')).toContainText('of $300.00');
 });
 
+// Audit 3 G-6: the form closed by itself, and what was typed was gone, without a word.
+test('says so when the entry being changed is deleted in another tab', async ({ page }) => {
+  await seed(page, { entries: [entry({ id: 'a', amount: 20, note: 'Bread' })] });
+  const other = await page.context().newPage();
+  await other.clock.setFixedTime(NOW);
+  await other.goto('/');
+  await entryItems(page).first().getByRole('button').click();
+  await entryDialog(page).getByLabel('Note (optional)').fill('Bread and milk');
+
+  await entryItems(other).first().getByRole('button').click();
+  await entryDialog(other).getByRole('button', { name: 'Delete' }).click();
+  await other
+    .getByRole('dialog', { name: 'Delete this entry?' })
+    .getByRole('button', { name: 'Delete' })
+    .click();
+  await expect(entryDialog(page)).toBeHidden();
+  await expect(page.getByRole('alert')).toHaveText('That entry was deleted on another device.');
+  await expect(entryItems(page)).toHaveCount(0);
+});
+
 test('moves between months', async ({ page }) => {
   await seed(page, {
     entries: [

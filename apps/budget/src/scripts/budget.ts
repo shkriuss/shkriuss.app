@@ -9,7 +9,7 @@ import { createStore, downloadFile } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
 import { withEdits } from '@shkriuss/sync/edits';
 import { keepFocus } from '@shkriuss/ui/keep-focus';
-import { focusProblem, reportSave } from '@shkriuss/ui/problem';
+import { focusProblem, reportSave, showProblem } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { typedText } from '@shkriuss/ui/typed-text';
 import { site } from 'virtual:shkriuss/site';
@@ -640,9 +640,16 @@ export function mountBudget(root: Document): void {
     categories = categoriesStore.load();
     entries = entriesStore.load();
     settings = settingsStore.load();
-    // What's being changed was deleted on another device or tab.
-    if (editingEntry !== null && !findEntry(editingEntry)) entryDialog.close();
-    if (editingCategory !== null && !findCategory(editingCategory)) categoryDialog.close();
+    // What's being changed was deleted on another device or tab: what was
+    // typed is gone with the form, so it says why (audit 3 G-6).
+    if (editingEntry !== null && !findEntry(editingEntry)) {
+      entryDialog.close();
+      showProblem('That entry was deleted on another device.');
+    }
+    if (editingCategory !== null && !findCategory(editingCategory)) {
+      categoryDialog.close();
+      showProblem('That category was deleted on another device.');
+    }
     if (yearDialog.open) {
       if (entries.entries.length === 0) yearDialog.close();
       else fillYears();

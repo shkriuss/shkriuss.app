@@ -9,7 +9,7 @@ import { createStore, downloadFile } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
 import { keepFocus } from '@shkriuss/ui/keep-focus';
 import { PAGE_SIZE, shownCount, waitForTyping } from '@shkriuss/ui/long-lists';
-import { reportSave } from '@shkriuss/ui/problem';
+import { reportSave, showProblem } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { typedText } from '@shkriuss/ui/typed-text';
 import { site } from 'virtual:shkriuss/site';
@@ -661,10 +661,15 @@ export function mountTrades(root: Document): void {
     state = tradesStore.load();
     settings = settingsStore.load();
     // The trade being changed was deleted on another device or tab, or the
-    // one being closed was closed there.
+    // one being closed was closed there: the form closes, and says why (audit 3 G-6).
     const trade = find(editing);
-    if (editing !== null && !trade) dialog.close();
-    else if (closing && trade && openQuantity(trade, partsOf(state.trades)) <= 0) dialog.close();
+    if (editing !== null && !trade) {
+      dialog.close();
+      showProblem('That trade was deleted on another device.');
+    } else if (closing && trade && openQuantity(trade, partsOf(state.trades)) <= 0) {
+      dialog.close();
+      showProblem('That trade was closed on another device.');
+    }
     if (yearDialog.open) {
       if (closedYears(state).length === 0) yearDialog.close();
       else fillYears();
