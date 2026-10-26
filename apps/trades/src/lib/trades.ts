@@ -497,6 +497,23 @@ export function readChange(
     const { closeQuantity, ...problems } = read.problems;
     return { problems: { quantity: closeQuantity, ...problems } };
   }
+  // A part closed off a trade stays closed: opened again and closed in parts
+  // of its own, "Delete a year" had to choose between counting what they
+  // closed as open again, here or in its trade (audit 4 F2-6). Deleting it
+  // opens its quantity in its trade again.
+  if (
+    saved?.parent !== undefined &&
+    !isOpen(saved) &&
+    form.exitDate.trim() === '' &&
+    form.exitPrice.trim() === ''
+  ) {
+    return {
+      problems: {
+        exitDate:
+          'This part was closed off a trade, so it stays closed. To open it again, delete it: its quantity is then open in its trade.',
+      },
+    };
+  }
   const read = readTrade(form, ids.id, saved ? null : state.trades.length, locale);
   if (!read.trade) return { problems: read.problems };
   if (read.trade.quantity < split.quantity) {
@@ -653,7 +670,10 @@ const closedYear = (trade: Trade): string | null => trade.exitDate?.slice(0, 4) 
 /**
  * Whether "Delete a year" keeps a trade closed in that year: part of a trade
  * still open, which needs its parts to know how much of it is (audit 3
- * F2-2). It goes with a later year, once nothing of the trade is open.
+ * F2-2). It goes with a later year, once nothing of the trade is open. And
+ * part of a part, made when a part could still be opened again: its trade,
+ * once emptied, would go with it, and its own trade would count it as open
+ * again (audit 4 F2-6).
  */
 function keptPart(
   trade: Trade,
@@ -661,7 +681,9 @@ function keptPart(
   parts: ReadonlyMap<string, Parts>,
 ): boolean {
   const whole = trade.parent === undefined ? undefined : byId.get(trade.parent);
-  return whole !== undefined && openQuantity(whole, parts) > 0;
+  if (whole === undefined) return false;
+  const partOfPart = whole.parent !== undefined && byId.has(whole.parent);
+  return openQuantity(whole, parts) > 0 || partOfPart;
 }
 
 /**

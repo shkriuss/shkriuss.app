@@ -34,8 +34,13 @@ Your trading journal: log your trades and see what works. Lives at
     (`parent`). That trade keeps its quantity (what was bought) and its
     fees: what's still open of it is its quantity less its parts'
     (`openQuantity`), and its fees count with its first part (`openFees`),
-    so none are counted twice. Closing the rest adds a last part; the trade
-    then isn't open, and isn't listed (its parts are the closed trades).
+    so none are counted twice. A part stays closed: to open it again,
+    delete it, and its quantity is open in its trade again. (One opened
+    again and closed in parts of its own made "Delete a year" count what
+    they closed as open again, audit 4 F2-6; parts of parts made before
+    that are kept by "Delete a year".) Closing the rest adds a last part;
+    the trade then isn't open, and isn't listed (its parts are the closed
+    trades).
     Since closing part never changes the trade itself, a change made to it
     on another device at the same time (a new stop loss, say) can't bring
     back what was closed, and parts closed on two devices both count. If

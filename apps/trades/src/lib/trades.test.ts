@@ -705,6 +705,55 @@ describe('making room', () => {
     expect(removeClosedYear(orphan, '2024').trades).toEqual([]);
   });
 
+  // Audit 4 F2-6: 100 bought; 40 closed by mistake as part P, opened again,
+  // then closed in two parts of its own, 10 in 2024 and 30 in 2025. Deleting
+  // 2024 took P with its part, and the 100 showed as open.
+  it('keeps the parts of a part, and no longer lets a part be opened again', () => {
+    const lot = trade({ id: 'a', quantity: 100, exitDate: null, exitPrice: null });
+    const nested = state(
+      lot,
+      trade({ id: 'p', quantity: 40, exitDate: null, exitPrice: null, parent: 'a' }),
+      trade({ id: 'q', quantity: 10, exitDate: '2024-06-01', parent: 'p' }),
+      trade({ id: 'r', quantity: 30, exitDate: '2025-02-01', parent: 'p' }),
+    );
+    expect(openQuantity(lot, partsOf(nested.trades))).toBe(60);
+    // Nothing to delete in either year: each is part of a part.
+    expect(closedYears(nested)).toEqual([]);
+    const after = removeClosedYear(nested, '2024');
+    expect(after).toEqual(nested);
+    expect(openQuantity(lot, partsOf(after.trades))).toBe(60);
+
+    // A part closed off a trade can't be opened again in its form: deleting it does that.
+    const part = trade({
+      id: 'p',
+      quantity: 40,
+      entryDate: '2024-01-02',
+      exitDate: '2024-03-01',
+      parent: 'a',
+    });
+    const kept = state(lot, part);
+    expect(
+      readChange(
+        { ...toForm(part, 'en-US'), exitDate: '', exitPrice: '' },
+        kept,
+        { id: 'p', newId: 'x' },
+        'en-US',
+      ).problems,
+    ).toEqual({
+      exitDate:
+        'This part was closed off a trade, so it stays closed. To open it again, delete it: its quantity is then open in its trade.',
+    });
+    // Its other details still change.
+    expect(
+      readChange(
+        { ...toForm(part, 'en-US'), notes: 'Sold early' },
+        kept,
+        { id: 'p', newId: 'x' },
+        'en-US',
+      ).trade,
+    ).toMatchObject({ id: 'p', parent: 'a', notes: 'Sold early', exitDate: '2024-03-01' });
+  });
+
   it('says so once Trades is nearly full', () => {
     const number = (value: number) => new Intl.NumberFormat('en-US').format(value);
     const nearly = LIMITS.trades * 0.9;
