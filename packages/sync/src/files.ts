@@ -133,6 +133,10 @@ export function createFileSync(app: string) {
         dequeue('uploads', id);
       }
     } catch (error) {
+      // Not synced since sync was turned on, and the copy was deleted: the
+      // round decides whether to start a new one (audit 4 E-1). The files
+      // stay queued, and the daily check after that round puts them up.
+      if (isGone(error) && !work.state.remote) return;
       pauseOn(error);
     }
   }

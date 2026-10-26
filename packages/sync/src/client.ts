@@ -79,6 +79,7 @@ import {
 import {
   api,
   failed,
+  GoneError,
   goneError,
   isGone,
   problemOf,
@@ -143,8 +144,13 @@ export interface SyncedStore<T = unknown, I extends Identified = Identified> {
  * it needs.
  */
 export interface LinkedData {
-  /** Before "Delete the online copy" deletes the copy. If it throws, nothing is deleted. */
-  delete(secret: Uint8Array<ArrayBuffer>): Promise<void>;
+  /**
+   * Before "Delete the online copy" deletes the copy. `online` is every item
+   * in that copy (of every store), so data a device that hasn't synced yet
+   * knows nothing of is deleted too (audit 4 D-2). If it throws, nothing is
+   * deleted.
+   */
+  delete(secret: Uint8Array<ArrayBuffer>, online: readonly unknown[]): Promise<void>;
   /**
    * After the account key was replaced: the old copy is in the new one, and
    * is deleted next. Also when another device moved the old copy first: if
@@ -259,11 +265,21 @@ function knownNow(stores: readonly SyncedStore[], known: Record<string, Known>) 
   return result;
 }
 
-/** The online copy, or why there isn't one. */
+/**
+ * The online copy, or why there isn't one. `ended`: the copies deleted
+ * before this one was started again (their epochs), see fetchCopy.
+ */
 type Remote =
   | { kind: 'same' }
   | { kind: 'none' }
-  | { kind: 'copy'; version: number; epoch: string; stores: Stores; written: number | null };
+  | {
+      kind: 'copy';
+      version: number;
+      epoch: string;
+      stores: Stores;
+      written: number | null;
+      ended: string[];
+    };
 
 // ---------- The client ----------
 
@@ -312,7 +328,12 @@ export function createSync(options: {
     if (response.status === 204) return { kind: 'same' } as Remote;
     if (response.status === 410) throw await goneError(response);
     if (!response.ok) throw failed(response);
-    const copy = (await response.json()) as { version: number; epoch?: string; data?: string };
+    const copy = (await response.json()) as {
+      version: number;
+      epoch?: string;
+      data?: string;
+      ended?: unknown;
+    };
     if (copy.data === undefined || copy.epoch === undefined) return { kind: 'none' } as Remote;
     let opened: OpenedCopy;
     try {
@@ -321,8 +342,70 @@ export function createSync(options: {
       throw new UnopenedCopyError(error instanceof RangeError ? 'update-needed' : 'server');
     }
     const { version, epoch } = copy;
-    return { kind: 'copy', version, epoch, ...opened } as Remote;
+    const ended = Array.isArray(copy.ended)
+      ? copy.ended.filter((item): item is string => typeof item === 'string')
+      : [];
+    return { kind: 'copy', version, epoch, ended, ...opened } as Remote;
   }
+
+  /**
+   * The online copy, for a round. "Delete the online copy" turns sync off on
+   * the devices that were syncing it, but a device where sync was turned on
+   * after the deletion starts a new copy: turning sync on again works (audit
+   * 4 E-1). A device still on the deleted copy stops even once another device
+   * has started a new one, as it would have at the deletion: the new copy
+   * lists the deleted ones.
+   */
+  async function fetchCopy(
+    state: DeviceState,
+    token: string,
+    key: Uint8Array<ArrayBuffer>,
+  ): Promise<Remote> {
+    let remote: Remote;
+    try {
+      remote = await fetchRemote(state.remote?.version ?? null, token, key);
+    } catch (error) {
+      if (
+        error instanceof GoneError &&
+        error.problem === 'deleted' &&
+        connectedSince(state, error)
+      ) {
+        return { kind: 'none' };
+      }
+      throw error;
+    }
+    const seen = state.remote?.epoch;
+    if (remote.kind === 'copy' && seen && remote.epoch !== seen && remote.ended.includes(seen)) {
+      throw new GoneError('deleted', null);
+    }
+    return remote;
+  }
+
+  /**
+   * Every item in an online copy, for deleting the data linked to it: a device
+   * that hasn't synced yet has none of them, and would leave that data online
+   * (audit 4 D-2). None if the copy is gone or damaged. One that needs a
+   * newer version of the app can't be read, so the deletion waits for it.
+   */
+  async function onlineItems({ token, key }: Keys): Promise<unknown[]> {
+    let remote: Remote;
+    try {
+      remote = await fetchRemote(null, token, key);
+    } catch (error) {
+      if (isGone(error)) return [];
+      if (error instanceof UnopenedCopyError && error.problem !== 'update-needed') return [];
+      throw error;
+    }
+    if (remote.kind !== 'copy') return [];
+    return Object.values(remote.stores).flatMap((snapshot) => valuesOf(snapshot));
+  }
+
+  /** Whether sync was turned on here after the copy was deleted (each side timed by its own clock). */
+  const connectedSince = (state: DeviceState, gone: GoneError): boolean =>
+    state.remote === null &&
+    state.connected !== null &&
+    gone.deletedAgo !== null &&
+    gone.deletedAgo > Date.now() - state.connected;
 
   /** The other device's items for one store, in this app's current data version. */
   function upgrade(synced: SyncedStore, remote: StoreSnapshot): StoreSnapshot {
@@ -447,7 +530,7 @@ export function createSync(options: {
     const { before, local, changed: localChanged } = observeAll(state, now);
 
     // 2. The online copy, and any old copies to bring along.
-    const remote = await fetchRemote(state.remote?.version ?? null, token, key);
+    const remote = await fetchCopy(state, token, key);
     const {
       copies: moving,
       movedAway,
@@ -788,12 +871,15 @@ export function createSync(options: {
       // data: the lost device that has the old key could still read them.
       for (const encoded of state.previous) {
         const old = fromBase64Url(encoded);
-        if (linked) await linked.delete(old);
-        const response = await api('/copy', { method: 'DELETE' }, (await syncKeys(old)).token);
+        const keys = await syncKeys(old);
+        if (linked) await linked.delete(old, await onlineItems(keys));
+        const response = await api('/copy', { method: 'DELETE' }, keys.token);
         if (!response.ok) throw failed(response);
       }
-      if (linked) await linked.delete(fromBase64Url(state.secret));
-      const { token } = await syncKeys(fromBase64Url(state.secret));
+      const secret = fromBase64Url(state.secret);
+      const keys = await syncKeys(secret);
+      if (linked) await linked.delete(secret, await onlineItems(keys));
+      const { token } = keys;
       const response = await api('/copy', { method: 'DELETE' }, token);
       if (!response.ok) throw failed(response);
       saveState(offState(state));

@@ -469,7 +469,10 @@ interface Meta {
   prefix: string;
   /** The storage code was given once (files may exist). */
   unlocked: boolean;
-  /** Which storage code it was (codeId): items can be added while it's still the code. */
+  /**
+   * Which storage code it was (codeId): items can be added while it's still
+   * the code. WIPED_LOCK once it was deleted: the code must be given again.
+   */
   unlockedWith?: string;
   /** The newest change's number. */
   seq: number;
@@ -546,6 +549,9 @@ const newMeta = (prefix: string): Meta => ({
   uploads: 0,
   wiping: false,
 });
+
+/** `unlockedWith` of a deleted library: no code matches it until one is given again (audit 4 D-1). */
+const WIPED_LOCK = '';
 
 /** Items can be added: unlocked with the storage code that's set now. */
 const canAdd = (meta: Meta, code: string): boolean => code !== '' && meta.unlockedWith === code;
@@ -677,6 +683,9 @@ export class Library {
       // what's left goes too (audit 3 D-2).
       await this.#deleteAllBut([GRANTED_KEY]);
       // Change numbers keep growing; the new epoch tells devices to start again.
+      // Locked until the storage code is given again: another device still
+      // putting photos online, which hasn't heard of the deletion yet, would
+      // otherwise fill it again, to be kept for good (audit 4 D-1).
       await this.#save({
         ...meta,
         epoch: crypto.randomUUID(),
@@ -684,6 +693,7 @@ export class Library {
         bytes: 0,
         wiping: false,
         wiped: true,
+        unlockedWith: WIPED_LOCK,
       });
       await this.#touch(Date.now(), WIPED_UNUSED_MS);
     });

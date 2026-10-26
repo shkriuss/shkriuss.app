@@ -1420,18 +1420,149 @@ describe('deletions older than the markers (180 days)', () => {
     await phone.syncNow();
     await tablet.syncNow();
 
-    // "Delete the online copy" on the phone, then sync on again: a new copy without b.
+    // "Delete the online copy" on the phone. A day later a new laptop, which
+    // never had b, starts a new copy: without b, and with no note that b was
+    // deleted.
+    phone.use();
+    await phone.sync.deleteOnline();
+    vi.setSystemTime(T0 + DAY);
+    const laptop = new Device(null);
+    laptop.counters = [counter('a')];
+    laptop.connect(secret);
+    const status = await laptop.syncNow();
+    // Sync really is on there, with a new copy (audit 4 E-1).
+    expect(status.on).toBe(true);
+    expect(status.problem).toBeNull();
+    // The tablet was syncing the deleted copy: it stops, though the laptop
+    // started a new one meanwhile. Turned on again, it brings its data into
+    // the new copy: b isn't taken for deleted long ago, as it would be in the
+    // copy it last saw.
+    vi.setSystemTime(T0 + 200 * DAY);
+    expect((await tablet.syncNow()).problem).toBe('deleted');
+    expect(tablet.sync.status().on).toBe(false);
+    tablet.connect(secret);
+    await tablet.syncNow();
+    expect(tablet.counters).toEqual([counter('a'), counter('b')]);
+    await laptop.syncNow();
+    expect(laptop.counters).toEqual([counter('a'), counter('b')]);
+  });
+
+  it('a deletion made while sync was off reaches a copy started again', async () => {
+    const secret = randomBytes(32);
+    const phone = new Device(secret);
+    const tablet = new Device(secret);
+    vi.setSystemTime(T0);
+    phone.counters = [counter('a'), counter('b')];
+    await phone.syncNow();
+    await tablet.syncNow();
+
+    // "Delete the online copy" on the phone, b deleted there while sync is
+    // off, then sync on again: the new copy says b was deleted.
     phone.use();
     await phone.sync.deleteOnline();
     vi.setSystemTime(T0 + DAY);
     phone.counters = [counter('a')];
     phone.connect(secret);
-    await phone.syncNow();
-    // The tablet stops; turned on again, it brings its data into the new copy.
+    expect((await phone.syncNow()).on).toBe(true);
     expect((await tablet.syncNow()).problem).toBe('deleted');
     tablet.connect(secret);
     await tablet.syncNow();
-    expect(tablet.counters).toEqual([counter('a'), counter('b')]);
+    expect(tablet.counters).toEqual([counter('a')]);
+  });
+});
+
+describe('turning sync on again after "Delete the online copy" (audit 4 E-1)', () => {
+  const T0 = Date.UTC(2026, 9, 26, 12);
+  const DAY = 24 * HOUR;
+
+  it('works on the device that deleted it, and on a new device', async () => {
+    const secret = randomBytes(32);
+    const phone = new Device(secret);
+    vi.setSystemTime(T0);
+    phone.counters = [counter('a')];
+    await phone.syncNow();
+    phone.use();
+    await phone.sync.deleteOnline();
+    expect(phone.sync.status().on).toBe(false);
+
+    vi.setSystemTime(T0 + 5 * DAY);
+    phone.connect(secret);
+    const again = await phone.syncNow();
+    expect(again.on).toBe(true);
+    expect(again.problem).toBeNull();
+    expect(phone.events).not.toContain('deleted');
+
+    // A new device of the same account, later: it finds the new copy.
+    vi.setSystemTime(T0 + 6 * DAY);
+    const laptop = new Device(null);
+    laptop.connect(secret);
+    const status = await laptop.syncNow();
+    expect(status.on).toBe(true);
+    expect(laptop.counters).toEqual([counter('a')]);
+  });
+
+  it('works when nothing was ever started again before the new device connects', async () => {
+    const secret = randomBytes(32);
+    const phone = new Device(secret);
+    vi.setSystemTime(T0);
+    phone.counters = [counter('a')];
+    await phone.syncNow();
+    phone.use();
+    await phone.sync.deleteOnline();
+
+    vi.setSystemTime(T0 + 30 * DAY);
+    const laptop = new Device(null);
+    laptop.counters = [counter('fresh')];
+    laptop.connect(secret);
+    const status = await laptop.syncNow();
+    expect(status.on).toBe(true);
+    expect(status.problem).toBeNull();
+    // The phone, turned on again, brings its data into the laptop's copy.
+    phone.connect(secret);
+    await phone.syncNow();
+    expect(phone.counters).toEqual([counter('fresh'), counter('a')]);
+  });
+
+  it('still turns off a device where sync was turned on before the deletion', async () => {
+    const secret = randomBytes(32);
+    const phone = new Device(secret);
+    vi.setSystemTime(T0);
+    phone.counters = [counter('a')];
+    await phone.syncNow();
+
+    // Turned on on the tablet, which was offline, so it never synced.
+    const tablet = new Device(null);
+    tablet.counters = [counter('old')];
+    tablet.connect(secret);
+    vi.setSystemTime(T0 + HOUR);
+    phone.use();
+    await phone.sync.deleteOnline();
+
+    vi.setSystemTime(T0 + 2 * HOUR);
+    const status = await tablet.syncNow();
+    expect(status.on).toBe(false);
+    expect(status.problem).toBe('deleted');
+    // Nothing went online.
+    const laptop = new Device(null);
+    laptop.connect(secret);
+    await laptop.syncNow();
+    expect(laptop.counters).toEqual([]);
+  });
+
+  it('still turns off devices whose state is from before the turn-on time was kept', async () => {
+    const secret = randomBytes(32);
+    const phone = new Device(secret);
+    const tablet = new Device(secret);
+    vi.setSystemTime(T0);
+    phone.counters = [counter('a')];
+    await phone.syncNow();
+    phone.use();
+    await phone.sync.deleteOnline();
+    // The tablet's state says sync is on, but not since when (an older version saved it).
+    vi.setSystemTime(T0 + DAY);
+    const status = await tablet.syncNow();
+    expect(status.on).toBe(false);
+    expect(status.problem).toBe('deleted');
   });
 });
 
@@ -1600,6 +1731,31 @@ describe('data linked to the copy', () => {
       `delete ${toBase64Url(secret)}`,
     ]);
     expect(await tablet.syncNow()).toMatchObject({ on: false, problem: 'deleted' });
+  });
+
+  it('is given what the online copy holds, for a device that hasn’t synced yet', async () => {
+    // Its own data doesn't name what's online yet (audit 4 D-2).
+    const secret = randomBytes(32);
+    const phone = new Device(secret);
+    phone.counters = [counter('water'), counter('steps')];
+    await phone.syncNow();
+
+    let given: readonly unknown[] = [];
+    const linked: LinkedData = {
+      delete: async (_secret, online) => {
+        given = online;
+      },
+      move: async () => undefined,
+    };
+    const tablet = new Device(secret, 1, false, false, linked);
+    tablet.use();
+    await tablet.sync.deleteOnline();
+    expect(given).toEqual([counter('water'), counter('steps')]);
+    // Already deleted: there's nothing more to give.
+    const laptop = new Device(secret, 1, false, false, linked);
+    laptop.use();
+    await laptop.sync.deleteOnline();
+    expect(given).toEqual([]);
   });
 
   it('moves to a new account key before the old copy is deleted, and only once', async () => {

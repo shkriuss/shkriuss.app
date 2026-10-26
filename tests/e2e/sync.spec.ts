@@ -142,6 +142,13 @@ test('deleting the online copy stops sync on every device, keeping their data', 
   await tablet.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
   await expect(status(tablet)).toHaveText(/^The online copy was deleted on another device/);
   await expect(tablet.getByRole('button', { name: 'Turn on sync' })).toBeVisible();
+
+  // Turned on again, sync starts a new copy, and stays on (audit 4 E-1); the
+  // tablet joins it when it's turned on again there too.
+  await turnOnSync(page, name);
+  await expect(page.locator('[data-sync-on]')).toBeVisible();
+  await turnOnSync(tablet, name);
+  await expect(tablet.locator('[data-sync-on]')).toBeVisible();
   await tablet.context().close();
 });
 

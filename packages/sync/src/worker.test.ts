@@ -234,6 +234,64 @@ describe('two devices writing the same copy (audit 3 J-1)', () => {
   });
 });
 
+describe('a deleted copy (audit 4 E-1)', () => {
+  const get = (token: string) => request(SITE, 'copy', token);
+  const remove = (token: string) => request(SITE, 'copy', token, { method: 'DELETE' });
+
+  it('says how long ago it was deleted', async () => {
+    vi.useFakeTimers();
+    const server = memorySync();
+    const token = madeUpToken();
+    await server.fetch(put(SITE, token, null, sealed(100)));
+    await server.fetch(remove(token));
+    vi.setSystemTime(Date.now() + 3 * DAY_MS);
+    const answer = await server.fetch(get(token));
+    expect(answer.status).toBe(410);
+    expect(await answer.json()).toEqual({
+      error: 'The online copy was deleted.',
+      deletedAgo: 3 * DAY_MS,
+    });
+  });
+
+  it('starts again, listing the copies deleted before it, at most 20', async () => {
+    const server = memorySync();
+    const token = madeUpToken();
+    const epochs: string[] = [];
+    for (let time = 0; time < 22; time += 1) {
+      const started = await server.fetch(put(SITE, token, null, sealed(100)));
+      expect(started.status).toBe(200);
+      epochs.push(((await started.json()) as { epoch: string }).epoch);
+      const copy = (await (await server.fetch(get(token))).json()) as { ended?: string[] };
+      expect(copy.ended).toEqual(time === 0 ? undefined : epochs.slice(0, -1).slice(-20));
+      await server.fetch(remove(token));
+    }
+  });
+
+  it('keeps the list through changes, and through being deleted again', async () => {
+    const server = memorySync();
+    const token = madeUpToken();
+    const first = (await (await server.fetch(put(SITE, token, null, sealed(100)))).json()) as {
+      epoch: string;
+    };
+    await server.fetch(remove(token));
+    const second = (await (await server.fetch(put(SITE, token, null, sealed(100)))).json()) as {
+      version: number;
+    };
+    expect((await server.fetch(put(SITE, token, second.version, sealed(200)))).status).toBe(200);
+    expect(await (await server.fetch(get(token))).json()).toMatchObject({ ended: [first.epoch] });
+  });
+
+  it('can’t be started again once moved to a new account key', async () => {
+    const server = memorySync();
+    const token = madeUpToken();
+    await server.fetch(put(SITE, token, null, sealed(100)));
+    await server.fetch(request(SITE, 'copy?moved', token, { method: 'DELETE' }));
+    const again = await server.fetch(put(SITE, token, null, sealed(100)));
+    expect(again.status).toBe(410);
+    expect(await again.json()).toMatchObject({ moved: true });
+  });
+});
+
 describe('the numbers the docs promise (audit 3 J-4)', () => {
   it('delete a copy nobody uses after 396 days', () => {
     // "13 months": the privacy page, docs/adr/0017-storage-limits.md.

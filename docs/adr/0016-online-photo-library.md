@@ -173,6 +173,13 @@ every device. That's far beyond what sync can hold:
   keeps it 13 months more; one that adds photos to it again makes it an
   ordinary library, which stays ([ADR 0017](0017-storage-limits.md)). A
   library deleted before this change keeps its record, as before.
+  - A deleted library is locked until the storage code is given again.
+    Another device that was putting photos online learns of the deletion
+    only at its next sync, and its upload rounds would otherwise fill the
+    library again, to be kept for good (audit 4 D-1).
+  - The device deleting reads the online copy's library records first, so
+    one whose first sync hadn't finished (with no records of its own)
+    deletes the libraries too (audit 4 D-2).
 - **Files left outside the list.** A photo's file reaches R2 before the
   list has it. If adding it to the list then fails (say the day's free
   writes are used up), the file would stay in R2 for good, counted nowhere.

@@ -218,6 +218,14 @@ in with `sync: true` in `apps.json`.
   - "Delete the online copy" deletes the data and leaves a small note, so
     other devices learn it was deleted and turn sync off (keeping their data).
     Moving to a new account key does the same, with a note that it moved.
+  - Turning sync on again after a deletion starts a new copy (a moved one
+    can't be started again). The note says how long ago the copy was
+    deleted, and each device notes when sync was turned on there, each by
+    its own clock: a device where sync was turned on after the deletion
+    starts the new copy, one turned on before it turns off. The new copy
+    lists the copies deleted before it (their epochs, the last 20), so a
+    device still on a deleted copy turns off even once another device has
+    started a new one (audit 4 E-1).
     The copy asks the storage meter (another object) before it deletes
     anything, so a request that fails half-way deletes nothing and can be
     tried again (audit 3 B-1).

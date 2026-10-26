@@ -309,7 +309,7 @@ describe('a replaced account key', () => {
     expect(next.records).toEqual([...saved, next.record]);
     const fresh = await device(newKey, next.record);
     const { epoch } = await fresh.api.changes(0);
-    await linkedLibrary(() => next.records).delete(newKey);
+    await linkedLibrary(() => next.records).delete(newKey, []);
     expect((await fresh.api.changes(0)).epoch).not.toBe(epoch);
   });
 });
@@ -320,16 +320,27 @@ describe('deleting with the online copy', () => {
     const phone = await device(secret);
     await phone.api.unlock(CODE);
     await phone.api.upload('photo-0001', photo, parts());
-    await linkedLibrary(() => [phone.record]).delete(secret);
+    await linkedLibrary(() => [phone.record]).delete(secret, []);
+    expect(await phone.api.changes(0)).toMatchObject({ wiping: true, changes: [] });
+  });
+
+  it('deletes the libraries in the online copy too, for a device that hasn’t synced yet', async () => {
+    // Its own records are empty: only the online copy knows the library (audit 4 D-2).
+    const secret = randomBytes(32);
+    const phone = await device(secret);
+    await phone.api.unlock(CODE);
+    await phone.api.upload('photo-0001', photo, parts());
+    const online = [{ id: 'not-a-record' }, phone.record, 'nonsense'];
+    await linkedLibrary(() => []).delete(secret, online);
     expect(await phone.api.changes(0)).toMatchObject({ wiping: true, changes: [] });
   });
 
   it('does nothing without a library, or for one that isn’t this key’s', async () => {
     const secret = randomBytes(32);
-    await linkedLibrary(() => []).delete(secret);
+    await linkedLibrary(() => []).delete(secret, []);
     const phone = await device(randomBytes(32));
     await phone.api.changes(0);
-    await linkedLibrary(() => [phone.record]).delete(secret);
+    await linkedLibrary(() => [phone.record]).delete(secret, []);
     expect((await phone.api.changes(0)).wiping).toBe(false);
   });
 
@@ -343,7 +354,7 @@ describe('deleting with the online copy', () => {
     // with the old key took the library before it was moved.
     const record = await libraryRecord(newKey, phone.record);
     await linkedLibrary(() => [phone.record]).move(oldKey, randomBytes(32));
-    const error = await failure(linkedLibrary(() => [record]).delete(newKey));
+    const error = await failure(linkedLibrary(() => [record]).delete(newKey, []));
     expect(error.status).toBe(403);
   });
 });

@@ -40,6 +40,12 @@ export interface DeviceState {
    * then, and in state saved before it was kept.
    */
   serverTime: number | null;
+  /**
+   * When sync was turned on here with this key (this device's clock, ms):
+   * an online copy deleted before that is started again, not a reason to
+   * turn sync off (audit 4 E-1). Null in state saved before it was kept.
+   */
+  connected: number | null;
   /** The app's keys from replaced account keys: their online copies are moved here, then deleted. */
   previous: string[];
   /**
@@ -82,6 +88,7 @@ export function loadState(): DeviceState | null {
           : null,
       last: typeof state.last === 'number' ? state.last : null,
       serverTime: typeof state.serverTime === 'number' ? state.serverTime : null,
+      connected: typeof state.connected === 'number' ? state.connected : null,
       previous: strings(state.previous),
       waiting: stringRecord(state.waiting),
     };
@@ -175,6 +182,7 @@ export const offState = (state: DeviceState): DeviceState => ({
   secret: null,
   code: null,
   remote: null,
+  connected: null,
   previous: [],
   waiting: {},
 });
@@ -189,12 +197,20 @@ export const offState = (state: DeviceState): DeviceState => ({
 export function saveConnection(connection: Connection): boolean {
   const existing = loadState();
   const secret = toBase64Url(connection.secret);
-  const previous = [
-    ...new Set([...(existing?.previous ?? []), ...connection.replaces.map(toBase64Url)]),
-  ].filter((key) => key !== secret);
+  const replaces = connection.replaces.map(toBase64Url);
   if (existing?.secret === secret) {
+    const previous = [...new Set([...existing.previous, ...replaces])].filter(
+      (key) => key !== secret,
+    );
     return saveState({ ...existing, code: connection.code, previous });
   }
+  // Another key: only the keys it replaced move into it. Old keys the last
+  // one was still moving belong to that key's account, which may not be
+  // this one: its copies must not move into someone else's (audit 4 A-1).
+  const previous = [...new Set(replaces)].filter((key) => key !== secret);
+  const waiting = Object.fromEntries(
+    Object.entries(existing?.waiting ?? {}).filter(([key]) => previous.includes(key)),
+  );
   forgetFiles();
   return saveState({
     secret,
@@ -205,8 +221,9 @@ export function saveConnection(connection: Connection): boolean {
     base: existing?.base ?? null,
     last: null,
     serverTime: existing?.serverTime ?? null,
+    connected: Date.now(),
     previous,
-    waiting: existing?.waiting ?? {},
+    waiting,
   });
 }
 

@@ -182,9 +182,25 @@ export default createWorker<SyncEnv>({ '/api/sync': handleSync });
 
 // ---------- One account's copy of one app's data, and its files ----------
 
+/**
+ * The copy, or the note that it was deleted. `ended` lists the copies deleted
+ * before this one was started again (their epochs, newest last): a device
+ * still syncing one of them stops when it sees the new copy, as it would
+ * have at the deletion (audit 4 E-1).
+ */
 type Saved =
-  | { version: number; epoch: string; data: string; at: number }
-  | { version: number; epoch: string; deleted: true; moved?: true; at: number };
+  | { version: number; epoch: string; data: string; at: number; ended?: string[] }
+  | {
+      version: number;
+      epoch: string;
+      deleted: true;
+      moved?: true;
+      at: number;
+      ended?: string[];
+    };
+
+/** How many deleted copies a copy remembers (see Saved). */
+const MAX_ENDED = 20;
 
 /** Changes counted since `start` (ms). */
 interface WriteWindow {
@@ -196,11 +212,28 @@ const isDeleted = (saved: Saved): saved is Extract<Saved, { deleted: true }> => 
 const isMoved = (saved: Saved | undefined): boolean =>
   saved !== undefined && isDeleted(saved) && saved.moved === true;
 
-/** 410 Gone, saying whether the copy was deleted or moved to a new account key. */
-const gone = (saved: Saved | undefined): Response =>
+/**
+ * 410 Gone, saying whether the copy was deleted or moved to a new account key.
+ * A deleted one says how long ago (ms), so a device that turned sync on after
+ * that starts a new copy instead of turning off (audit 4 E-1).
+ */
+const gone = (saved: Saved | undefined, now: number): Response =>
   saved && isDeleted(saved) && saved.moved
     ? json({ error: 'The online copy was moved to a new account key.', moved: true }, 410)
-    : problem(410, 'The online copy was deleted.');
+    : json(
+        {
+          error: 'The online copy was deleted.',
+          deletedAgo: saved ? Math.max(0, now - saved.at) : 0,
+        },
+        410,
+      );
+
+/** The copies deleted before a new one is started after `saved` (see Saved). */
+function endedBefore(saved: Saved | undefined): { ended?: string[] } {
+  if (!saved || !isDeleted(saved)) return {};
+  const ended = [...(saved.ended ?? []), ...(saved.epoch ? [saved.epoch] : [])].slice(-MAX_ENDED);
+  return ended.length > 0 ? { ended } : {};
+}
 
 const fileKey = (id: string) => `file:${id}`;
 
@@ -245,10 +278,11 @@ export class SyncCopy {
         // Nothing synced yet is normal (a first sync), so it isn't an error.
         if (!saved) return json({ version: 0 });
         await this.#touch(now);
-        if (isDeleted(saved)) return gone(saved);
+        if (isDeleted(saved)) return gone(saved, now);
         const since = url.searchParams.get('since');
         if (since === String(saved.version)) return noContent();
-        return json({ version: saved.version, epoch: saved.epoch, data: saved.data });
+        const { version, epoch, data, ended } = saved;
+        return json({ version, epoch, data, ...(ended ? { ended } : {}) });
       }
 
       if (request.method === 'DELETE') {
@@ -272,6 +306,7 @@ export class SyncCopy {
           deleted: true,
           ...(moved ? { moved: true as const } : {}),
           at: now,
+          ...(saved?.ended ? { ended: saved.ended } : {}),
         } satisfies Saved);
         await this.#touch(now);
         return noContent();
@@ -288,13 +323,13 @@ export class SyncCopy {
         // Starting a copy: only when there isn't one. A deleted one can be started
         // again, but not one moved to a new account key: the old key may be a lost
         // device's, and starting it again would let it read the other devices' edits.
-        if (isMoved(saved)) return gone(saved);
+        if (isMoved(saved)) return gone(saved, now);
         if (live) {
           return json({ error: 'There is already a copy.', ...this.#current(live) }, 409);
         }
       } else {
         if (!saved) return problem(404, 'Nothing synced yet.');
-        if (!live) return gone(saved);
+        if (!live) return gone(saved, now);
         if (base !== live.version) {
           return json({ error: 'Someone else changed it first.', ...this.#current(live) }, 409);
         }
@@ -305,12 +340,19 @@ export class SyncCopy {
       const bytes = data.length + storedBytes(undefined, files);
       if (!(await reserve(this.state, this.env.SYNC_COPIES, bytes, limit))) return full();
       const next: Saved = live
-        ? { version: live.version + 1, epoch: live.epoch, data, at: now }
+        ? {
+            version: live.version + 1,
+            epoch: live.epoch,
+            data,
+            at: now,
+            ...(live.ended ? { ended: live.ended } : {}),
+          }
         : {
             version: saved ? saved.version + 1 : firstVersion(now),
             epoch: crypto.randomUUID(),
             data,
             at: now,
+            ...endedBefore(saved),
           };
       await storage.put('writes', writes);
       await storage.put('copy', next);
@@ -377,7 +419,7 @@ export class SyncCopy {
     const files = (await storage.get<FileIndex>('files')) ?? {};
     // Only a copy, or files, that are kept here are kept longer.
     if (saved || Object.keys(files).length > 0) await this.#touch(now);
-    if (saved && isDeleted(saved)) return gone(saved);
+    if (saved && isDeleted(saved)) return gone(saved, now);
 
     if (id === undefined) {
       return json({ version: saved?.version ?? 0, now, files } satisfies FileList);

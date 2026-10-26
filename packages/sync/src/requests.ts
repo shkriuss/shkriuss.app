@@ -67,10 +67,31 @@ export async function api(path: string, init: RequestInit = {}, token?: string):
 export const problemOf = (error: unknown): SyncProblem =>
   error instanceof SyncError ? error.problem : isTimeout(error) ? 'offline' : 'server';
 
+/**
+ * The copy was deleted, or moved to a new account key. A deleted one says how
+ * long ago (ms; null from a server that doesn't say), for a device that turned
+ * sync on after that (audit 4 E-1).
+ */
+export class GoneError extends SyncError {
+  readonly deletedAgo: number | null;
+  constructor(problem: 'deleted' | 'moved', deletedAgo: number | null) {
+    super(problem);
+    this.deletedAgo = deletedAgo;
+  }
+}
+
 /** A 410 from the server: the copy was deleted, or moved to a new account key. */
-export async function goneError(response: Response): Promise<SyncError> {
-  const body = (await response.json().catch(() => null)) as { moved?: unknown } | null;
-  return new SyncError(body?.moved === true ? 'moved' : 'deleted');
+export async function goneError(response: Response): Promise<GoneError> {
+  const body = (await response.json().catch(() => null)) as {
+    moved?: unknown;
+    deletedAgo?: unknown;
+  } | null;
+  if (body?.moved === true) return new GoneError('moved', null);
+  const ago = body?.deletedAgo;
+  return new GoneError(
+    'deleted',
+    typeof ago === 'number' && Number.isFinite(ago) && ago >= 0 ? ago : null,
+  );
 }
 
 export const isGone = (error: unknown): boolean =>

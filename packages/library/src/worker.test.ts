@@ -478,10 +478,34 @@ describe('deleting a library', () => {
     // Only this library's files are gone.
     expect([...server.bucket.files.keys()]).toEqual([other]);
     const after = await device.changes();
-    expect(after).toMatchObject({ wiping: false, rows: [], unlocked: true });
+    // Locked until the storage code is given again (audit 4 D-1).
+    expect(after).toMatchObject({ wiping: false, rows: [], unlocked: false });
     expect(after.usage).toMatchObject({ items: 0, bytes: 0 });
     expect(after.epoch).not.toBe(epoch);
+    expect((await device.unlock()).status).toBe(204);
     expect((await device.put(ITEM, [100])).status).toBe(200);
+  });
+
+  it('a device still putting photos online can’t fill it again (audit 4 D-1)', async () => {
+    // The tablet uploads; the phone deletes the online copy. Until the tablet's
+    // own sync hears of it, its upload rounds would start the library again.
+    const library = libraryId();
+    const access = token();
+    const phone = client(library, access);
+    const tablet = client(library, access);
+    await phone.unlock();
+    expect((await tablet.put(ITEM, [100])).status).toBe(200);
+    expect((await phone.call('', { method: 'DELETE' })).status).toBe(202);
+    const { library: object, storage } = [...server.objects.values()][0] ?? {};
+    while (storage?.alarm !== null && storage?.alarm !== undefined && storage.alarm <= Date.now()) {
+      storage.alarm = null;
+      await object?.alarm();
+    }
+    const refused = await tablet.put('photo-0002', [100]);
+    expect(refused.status).toBe(423);
+    expect(await refused.json()).toMatchObject({ locked: true });
+    expect(server.bucket.files.size).toBe(0);
+    expect((await tablet.changes()).rows).toEqual([]);
   });
 });
 
@@ -784,6 +808,10 @@ describe('what’s left after “Delete the online copy” (audit 3 D-2)', () =>
   it('with photos again, it’s kept like any unlocked library, with its weekly clean-up', async () => {
     const { device, object } = await deleted();
     await until(object, START + DAY);
+    // Only once the storage code is given again (audit 4 D-1).
+    expect((await device.put('photo-0002', [100])).status).toBe(423);
+    expect((await device.unlock()).status).toBe(204);
+    expect(object.storage.alarm).toBe(START + DAY + WIPED_UNUSED_MS);
     expect((await device.put('photo-0002', [100])).status).toBe(200);
     expect(object.storage.map.has('active')).toBe(false);
     expect(object.storage.alarm).toBe(START + DAY + SWEEP_MS);
