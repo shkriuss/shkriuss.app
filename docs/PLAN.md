@@ -1,6 +1,6 @@
 # shkriuss.app: project plan
 
-_Last updated: 2026-10-24. Versions were checked against the npm registry and
+_Last updated: 2026-10-26. Versions were checked against the npm registry and
 official docs on 2026-10-16._
 
 This is the plan for a hub at **shkriuss.app** that lists small personal web

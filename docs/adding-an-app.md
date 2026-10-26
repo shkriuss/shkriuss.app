@@ -121,9 +121,9 @@ values like a unit or a goal) sync the same way: save each one as its own
 item, like `{ id: 'unit', unit: 'ml' }`, and only the settings someone
 changed are saved. Then two devices changing different settings don't undo
 each other. `defineSettings` from `@shkriuss/storage/settings` does the work:
-give it the settings' ids and a check for one setting, and it gives the
-store's `fallback` and `validate`, the list for sync (`fromItems`), and
-`get` and `set`. Water is the example (`apps/water/src/lib/water.ts`);
+give it the settings' ids and a check for one setting, and it gives
+`empty` and `isState` (the store's `fallback` and `validate`), the list for
+sync (`fromItems`), and `get` and `set`. Water is the example (`apps/water/src/lib/water.ts`);
 Budget, Repairs and Trades use it too.
 
 ### Data that belongs to one device
@@ -278,5 +278,6 @@ online. So remove an app in steps (ask Claude for each):
 4. **An app with an online library** also has an R2 bucket,
    `shkriuss-<slug>`, and a storage code secret in GitHub
    (`<SLUG>_STORAGE_CODE`). Delete the bucket in the dashboard (**R2** → the
-   bucket → **Settings**; R2 asks you to empty it first) and the secret in GitHub (**Settings** → **Secrets and variables**
-   → **Actions**).
+   bucket → **Settings**; R2 asks you to empty it first) and the secret in
+   GitHub (**Settings** → **Environments** → `production`: it's a secret of
+   that environment, not of the repository).

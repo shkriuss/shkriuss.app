@@ -37,6 +37,16 @@ function anchors(doc: string): Set<string> {
   return found;
 }
 
+/** Whether git leaves a path out on purpose (the build makes it), so a doc may name it. */
+function madeByBuild(path: string): boolean {
+  try {
+    execFileSync('git', ['check-ignore', '-q', path], { cwd: repoRoot });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Where a path in a doc may be from: the repository, or the doc's own app or package. */
 function bases(doc: string): string[] {
   const own = /^(apps|packages)\/[^/]+\//.exec(doc)?.[0];
@@ -67,13 +77,18 @@ describe('the docs', () => {
   it('name only files that exist', () => {
     const missing: string[] = [];
     for (const doc of docs) {
-      for (const [, path = ''] of prose(doc).matchAll(
-        /`((?:apps|packages|scripts|tests|docs|templates|\.github)\/[\w./@-]+)`/g,
-      )) {
+      // An app's or package's own docs also name its files from its folder,
+      // like `src/lib/photos.ts` (audit 3 J-8).
+      const own = bases(doc).length > 1 ? '|src|e2e|public' : '';
+      const named = new RegExp(
+        `\`((?:apps|packages|scripts|tests|docs|templates|\\.github${own})\\/[\\w./@-]+)\``,
+        'g',
+      );
+      for (const [, path = ''] of prose(doc).matchAll(named)) {
         const clean = path.replace(/[/.]+$/, '');
-        if (!bases(doc).some((base) => existsSync(join(repoRoot, base, clean)))) {
-          missing.push(`${doc}: ${path}`);
-        }
+        const exists = (base: string) =>
+          existsSync(join(repoRoot, base, clean)) || madeByBuild(join(base, clean));
+        if (!bases(doc).some(exists)) missing.push(`${doc}: ${path}`);
       }
     }
     expect(missing).toEqual([]);
