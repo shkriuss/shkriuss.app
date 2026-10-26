@@ -79,15 +79,18 @@ async function hashOf(value: unknown): Promise<string> {
 async function current(): Promise<DeviceState | null> {
   const state = load();
   if (!state) return null;
+  // Turned off in the browser's or the phone's settings: forget it here and
+  // on the server. Checked first, whatever the subscription: a browser may
+  // keep it while notifications are blocked (perhaps Safari on an iPhone),
+  // and the schedule would go up again instead (audit 4 D-6).
+  if (Notification.permission !== 'granted') {
+    await disablePush();
+    return null;
+  }
   const subscription = await (await registration()).pushManager.getSubscription();
   if (subscription?.endpoint === state.endpoint) return state;
   // Turned off meanwhile (here or in another tab): it stays off (audit 3 D-1).
   if (load()?.deviceKey !== state.deviceKey) return null;
-  if (Notification.permission !== 'granted') {
-    // Turned off in the browser's settings: forget it here and on the server.
-    await disablePush();
-    return null;
-  }
   await subscribe(state.deviceKey);
   return load();
 }

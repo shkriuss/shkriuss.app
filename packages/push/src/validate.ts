@@ -45,7 +45,7 @@ const isIpAddress = (host: string) => /^\d+(\.\d+){3}$/.test(host) || host.inclu
 
 /**
  * A reason this push address can't be used, or undefined. Push services
- * (Google, Apple, Mozilla, UnifiedPush servers) all use https on port 443
+ * (Google, Apple, Mozilla, Microsoft, UnifiedPush servers) all use https on port 443
  * with a domain name. `allowLocal` lets local tests use http://127.0.0.1.
  */
 export function endpointProblem(endpoint: unknown, allowLocal = false): string | undefined {

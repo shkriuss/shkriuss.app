@@ -1,6 +1,6 @@
 /**
  * VAPID (RFC 8292): how our server proves to a push service (Google, Apple,
- * Mozilla or a UnifiedPush server) that a message comes from the same server
+ * Mozilla, Microsoft or a UnifiedPush server) that a message comes from the same server
  * the browser subscribed with. Each app has its own key pair, made by the
  * server itself on first use, kept only in its own storage and never sent
  * anywhere (see worker.ts).

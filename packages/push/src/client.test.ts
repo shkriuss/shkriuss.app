@@ -207,6 +207,20 @@ const storedIds = () =>
     return record?.entries.map((entry) => entry.id) ?? [];
   });
 
+describe('notifications turned off in the browser’s or phone’s settings', () => {
+  it('deletes everything on the server, even while the browser keeps the subscription', async () => {
+    // As an iPhone might when notifications are turned off in its Settings (audit 4 D-6).
+    expect(await syncPush([notice()])).toEqual({ scheduled: 1, left: 0 });
+    expect(storedIds()).toEqual(['1']);
+    vi.stubGlobal('Notification', { permission: 'denied' });
+    expect(await subscription()).not.toBeNull();
+    expect(await syncPush([notice(), notice({ id: 'event-2' })])).toEqual(NONE);
+    expect(stored().flat()).toEqual([]);
+    expect(isPushEnabled()).toBe(false);
+    expect(await subscription()).toBeNull();
+  });
+});
+
 describe('syncPush', () => {
   it('sends numbers, never the app’s own ids', async () => {
     // Imported events keep their calendar file's ids: Google's, or Outlook's 112 characters.
