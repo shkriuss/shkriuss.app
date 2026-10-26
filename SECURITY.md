@@ -118,7 +118,11 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
   including the dependency audit, and only for `main`'s newest commit (so
   re-running an older run can't put older code back). Only the deploy steps
   see the token, and the deploy job installs without the shared package
-  cache.
+  cache. That stops mistakes, not a bad dependency: any code that runs in a
+  job (an install script, a build step) can read every secret of that job
+  from the runner's memory, as the 2025 tj-actions attack did. So what can
+  reach the deploy job is limited where it enters: the lockfile checks
+  above, the 7-day wait and the install-script allow-list (audit 3 H-2).
 
 ## Known limits
 
