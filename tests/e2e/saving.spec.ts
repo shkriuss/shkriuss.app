@@ -4,6 +4,7 @@
  * G-1). Each app makes one change here, after saving starts failing.
  */
 import type { Page } from '@playwright/test';
+import { forThisSite, type EverySite } from './every-site.ts';
 import { checkA11y, expect, failSaving, test } from './fixtures.ts';
 
 /** Types into a text field and presses Enter (which adds it, in these apps). */
@@ -23,8 +24,8 @@ async function otherCurrency(page: Page): Promise<void> {
   await select.selectOption(other);
 }
 
-/** One change per app (apps that keep nothing in this storage aren't here). */
-const changes: Record<string, (page: Page) => Promise<void>> = {
+/** Every site, and one change there that saves (null: nothing it keeps is in this storage). */
+const changes: EverySite<(page: Page) => Promise<void>> = {
   budget: otherCurrency,
   calendar: async (page) => {
     await page.getByRole('button', { name: 'New event' }).click();
@@ -32,8 +33,12 @@ const changes: Record<string, (page: Page) => Promise<void>> = {
   },
   grammar: (page) => page.getByLabel('British (UK)').check(),
   habits: (page) => enter(page, 'New habit', 'Read'),
+  // It keeps no app data: only the account key and the theme.
+  hub: null,
   meals: (page) => enter(page, 'Add to the list', 'Milk'),
   notes: (page) => page.getByRole('button', { name: 'New note' }).click(),
+  // Its photos are saved in the files database (IndexedDB), not in this storage.
+  photos: null,
   reminders: (page) => enter(page, 'Remind me to', 'Call the dentist'),
   repairs: otherCurrency,
   shelf: async (page) => {
@@ -47,7 +52,7 @@ const changes: Record<string, (page: Page) => Promise<void>> = {
 };
 
 test('says so, on screen and out loud, when a change can’t be saved', async ({ page }) => {
-  const change = changes[test.info().project.name];
+  const change = forThisSite(changes);
   test.skip(!change, 'This site keeps nothing that a change here would save.');
   await page.goto('/');
   await failSaving(page);

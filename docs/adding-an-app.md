@@ -91,9 +91,14 @@ alphabetical order, so where an entry sits in `apps.json` doesn't matter.
   `seedStores()` from `tests/e2e/storage.ts` with the app's own version
   constant (like `TASKS_VERSION`), and `readStore()` to check what was
   saved. Test photos come from `tests/e2e/photos.ts`.
-- Once the app saves something, add one line for it to `changes` in
-  `tests/e2e/saving.spec.ts`: one tap or entry that saves. Otherwise the
-  shared "can't save" test skips the app.
+- Fill in the app's lines in the shared browser tests' tables. Every site
+  needs one in each, or the test fails for it (audit 3 J-11), and
+  `pnpm new-app` adds them as `null` ("New: nothing for this test yet"):
+  `changes` in `tests/e2e/saving.spec.ts` (one tap or entry that saves),
+  `cases` in `tests/e2e/keep-focus.spec.ts` (a list that a change in
+  another tab draws again) and `cases` in `tests/e2e/large-text.spec.ts`
+  (things to put on the page). Leave `null` only where a test can't apply,
+  with a comment saying why.
 - If the app needs a browser feature (for example keeping the screen on),
   allow it in `astro.config.ts`:
   `defineAppConfig({ slug: 'notes', allowFeatures: ['screen-wake-lock'] })`.

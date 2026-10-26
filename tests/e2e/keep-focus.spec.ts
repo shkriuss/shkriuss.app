@@ -6,6 +6,7 @@
  * tab changes something.
  */
 import type { Locator, Page } from '@playwright/test';
+import { forThisSite, type EverySite } from './every-site.ts';
 import { expect, test } from './fixtures.ts';
 import { jpeg, picture, withExif } from './photos.ts';
 
@@ -94,7 +95,8 @@ interface Case {
   shown: (page: Page) => Locator;
 }
 
-const cases: Record<string, Case> = {
+/** Every site, and how its list is drawn again by a change in another tab (null: none is). */
+const cases: EverySite<Case> = {
   budget: {
     setup: async (page) => {
       await addExpense(page, '5', 'Lunch');
@@ -147,6 +149,8 @@ const cases: Record<string, Case> = {
     change: (other) => enter(other, 'New habit', 'Walk'),
     shown: (page) => button(page, 'Walk: done today'),
   },
+  // The account and privacy pages have no list that another tab changes.
+  hub: null,
   meals: {
     setup: async (page) => {
       await enter(page, 'Add to the list', 'Milk');
@@ -257,7 +261,7 @@ async function secondTab(page: Page): Promise<Page> {
 }
 
 test('a list drawn again after a change in another tab keeps keyboard focus', async ({ page }) => {
-  const app = cases[test.info().project.name];
+  const app = forThisSite(cases);
   test.skip(!app, 'This site has no list that changes in the background.');
   if (!app) return;
   await page.goto('/');
@@ -405,7 +409,7 @@ test('when the focused item is taken away in another tab, focus goes to the next
 });
 
 /** Apps with a dialog opened from a list (their own close handlers, if any, use returnFocus). */
-const dialogCases: Record<string, Case | undefined> = {
+const dialogCases: Record<string, Case | null | undefined> = {
   budget: cases['budget'],
   meals: {
     // A day's "Add a meal".

@@ -55,6 +55,11 @@ package age check and the unit tests in German run only in GitHub Actions.
   works, including when notifications are blocked, on an iPhone, and after
   the account key is replaced.
 
+The tests that need something from each app (the large-text, focus and
+saving ones) have a table with a line for every site, `null` where a test
+can't apply; a site missing from a table fails the test, so no app is
+skipped without a word (`tests/e2e/every-site.ts`, audit 3 J-11).
+
 ## Tools Dependabot can't update
 
 Dependabot keeps the npm packages, the GitHub Actions and zizmor
