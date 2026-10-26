@@ -35,12 +35,13 @@ reasons: [ADR 0015](../../docs/adr/0015-photos-app.md) (on the device) and
   - Adding photos online needs the storage code once per account (the
     GitHub secret `PHOTOS_STORAGE_CODE`; see docs/deployment.md).
 - `src/scripts/photos.ts`: connects the page to all that: the grid by month
-  (120 at a time, "Show more"), adding photos, the viewer (Previous/Next and
-  the arrow keys, its details, "Save original", Delete), "Select" to save
-  or delete several (its bar stays at the top of the screen while choosing,
-  unless large text makes it too tall), and the online library's part of
-  "Sync between your devices" (storage code, status, "Free up space on this
-  device").
+  (120 at a time, "Show more"; each photo is named by when it was taken, to
+  the second), adding photos, the viewer (Previous/Next and the arrow keys,
+  which read out the photo shown; its details, "Save original", Delete),
+  "Select" to save or delete several (its bar stays at the top of the screen
+  while choosing, unless large text makes it too tall), and the online
+  library's part of "Sync between your devices" (storage code, status, "Free
+  up space on this device").
 - `src/pages/index.astro`: the page, built from `@shkriuss/ui` components.
   `<template>`s hold the markup for a month and a photo.
 - Photos a browser can't show (like HEIC outside Safari) are kept anyway: the

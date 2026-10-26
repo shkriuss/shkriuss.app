@@ -164,7 +164,8 @@ function dateFormat(options: Intl.DateTimeFormatOptions): (locale: string) => In
 }
 
 const monthFormat = dateFormat({ month: 'long', year: 'numeric', timeZone: 'UTC' });
-const takenFormat = dateFormat({ dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' });
+// To the second: photos taken in the same minute have names of their own (audit 3 G-8).
+const takenFormat = dateFormat({ dateStyle: 'medium', timeStyle: 'medium', timeZone: 'UTC' });
 
 // Each label below takes a `locale` too, which tests give, so they pass on a
 // computer set to any language (audit 3 J-5). Left out, dates are in
@@ -174,13 +175,21 @@ const takenFormat = dateFormat({ dateStyle: 'medium', timeStyle: 'short', timeZo
 export const monthLabel = (month: string, locale = DATE_LOCALE): string =>
   monthFormat(locale).format(asWritten(`${month}-01T00:00:00`));
 
-/** "2026-10-21T14:03:22" → "Oct 21, 2026, 2:03 PM" */
+/** "2026-10-21T14:03:22" → "Oct 21, 2026, 2:03:22 PM" */
 export const takenLabel = (taken: string, locale = DATE_LOCALE): string =>
   takenFormat(locale).format(asWritten(taken));
 
 /** A photo's text alternative: what we know is when it was taken. */
 export const photoAlt = (photo: Photo, locale = DATE_LOCALE): string =>
   `Photo taken ${takenLabel(photo.taken, locale)}`;
+
+/**
+ * Which photo the viewer shows (`index` from 0), read out when Next or
+ * Previous shows another (audit 3 G-8): "Photo 2 of 3, taken Oct 20, 2026,
+ * 2:05:03 PM".
+ */
+export const shownLabel = (photo: Photo, index: number, count: number, locale?: string): string =>
+  `Photo ${(index + 1).toLocaleString(locale)} of ${count.toLocaleString(locale)}, taken ${takenLabel(photo.taken, locale)}`;
 
 /** "1 photo", "2 photos" */
 export const countLabel = (count: number, one: string, many: string, locale?: string): string =>

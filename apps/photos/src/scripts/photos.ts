@@ -22,6 +22,7 @@ import {
   monthLabel,
   PAGE_SIZE,
   photoAlt,
+  shownLabel,
   takenLabel,
   type Added,
   type Photo,
@@ -76,6 +77,7 @@ export function mountPhotos(root: Document): void {
   const viewerImage = required<HTMLImageElement>(viewer, '[data-viewer-image]');
   const viewerNone = required<HTMLElement>(viewer, '[data-viewer-none]');
   const viewerStatus = required<HTMLElement>(viewer, '[data-viewer-status]');
+  const viewerAnnouncer = required<HTMLElement>(viewer, '[data-viewer-announcer]');
   const saveOriginalButton = required<HTMLButtonElement>(viewer, '[data-action="save-original"]');
   const deleteDialog = required<HTMLDialogElement>(root, '[data-delete-dialog]');
   const deleteTitle = required<HTMLElement>(deleteDialog, '[data-delete-title]');
@@ -104,7 +106,8 @@ export function mountPhotos(root: Document): void {
   let renderTimer: number | undefined;
 
   const announce = (message: string): void => {
-    announcer.textContent = message;
+    // In the photo viewer while it's open: the page behind it can't be heard (audit 3 G-8).
+    (viewer.open ? viewerAnnouncer : announcer).textContent = message;
   };
   /**
    * Tells the person something that went wrong, where they are: in the photo
@@ -443,8 +446,12 @@ export function mountPhotos(root: Document): void {
   function stepPhoto(by: number): void {
     if (!viewing || photos.length === 0) return;
     const index = photos.findIndex((photo) => photo.id === viewing?.id);
-    const next = photos[(index + by + photos.length) % photos.length];
-    if (next) void showPhoto(next.id);
+    const at = (index + by + photos.length) % photos.length;
+    const next = photos[at];
+    if (!next) return;
+    void showPhoto(next.id);
+    // Focus stays on Next or Previous: say which photo is shown now (audit 3 G-8).
+    announce(shownLabel(next, at, photos.length));
   }
 
   viewer.addEventListener('keydown', (event) => {
@@ -457,6 +464,7 @@ export function mountPhotos(root: Document): void {
     if (viewing?.url) URL.revokeObjectURL(viewing.url);
     viewing = null;
     tellInViewer('');
+    viewerAnnouncer.textContent = '';
     viewerImage.removeAttribute('src');
     // Back to the photo in the grid (showing it, if it's further down).
     const at = photos.findIndex((photo) => photo.id === id);
@@ -553,18 +561,26 @@ export function mountPhotos(root: Document): void {
     for (const id of ids) chosen.delete(id);
     if (choosing && photos.length === 0) choosing = false;
     render();
-    announce(
+    const deleted =
       ids.length === 1
         ? 'Deleted the photo.'
-        : `Deleted ${countLabel(ids.length, 'photo', 'photos')}.`,
-    );
+        : `Deleted ${countLabel(ids.length, 'photo', 'photos')}.`;
     if (viewer.open) {
-      const next = photos[Math.min(at, photos.length - 1)];
+      const index = Math.min(at, photos.length - 1);
+      const next = photos[index];
       if (next) {
+        // Said in the viewer, with the photo it shows now (audit 3 G-8).
+        announce(`${deleted} ${shownLabel(next, index, photos.length)}.`);
         await showPhoto(next.id);
         required<HTMLElement>(viewer, '[data-action="delete-photo"]').focus();
-      } else viewer.close();
-    } else if (choosing) {
+      } else {
+        viewer.close();
+        announce(deleted);
+      }
+      return;
+    }
+    announce(deleted);
+    if (choosing) {
       required<HTMLElement>(selection, '[data-action="done-selecting"]').focus();
     } else {
       (photos.length > 0 ? selectButton : addButton).focus();

@@ -124,7 +124,7 @@ test('puts photos online, and shows them on the other devices', async ({
   await expect(tiles(tablet)).toHaveCount(2, ONLINE);
   await expect(onlineStatus(tablet)).toHaveText(/^Online: 2 photos · /, ONLINE);
   await expect(tablet.getByLabel('Storage code')).toBeHidden();
-  const julyTile = tablet.getByRole('button', { name: 'Photo taken Jul 4, 2019, 6:30 PM' });
+  const julyTile = tablet.getByRole('button', { name: 'Photo taken Jul 4, 2019, 6:30:05 PM' });
   await expect.poll(() => naturalWidth(julyTile.locator('img')), ONLINE).toBe(512);
   expect(await originalsHere(tablet)).toBe(0);
 
@@ -302,7 +302,7 @@ test('frees up space on this device, and the photos still show', async ({ page }
   await expect(freeUp).toBeHidden();
 
   // It still shows, and its original comes back from online.
-  const tile = page.getByRole('button', { name: 'Photo taken Oct 21, 2026, 2:03 PM' });
+  const tile = page.getByRole('button', { name: 'Photo taken Oct 21, 2026, 2:03:22 PM' });
   await expect.poll(() => naturalWidth(tile.locator('img')), ONLINE).toBe(512);
   await tile.click();
   const dialog = page.locator('[data-viewer]');
@@ -323,7 +323,7 @@ test('frees up space on this device, and the photos still show', async ({ page }
   const download = page.waitForEvent('download');
   const saveOriginal = dialog.getByRole('button', { name: 'Save original' });
   await saveOriginal.click();
-  const viewerStatus = dialog.getByRole('status');
+  const viewerStatus = dialog.getByRole('status').and(dialog.locator('[data-viewer-status]'));
   await expect(viewerStatus).toHaveText('Downloading the original…');
   await expect(saveOriginal).toHaveAttribute('aria-disabled', 'true');
   await expect(saveOriginal).toBeFocused();
@@ -459,7 +459,7 @@ test('a photo is never marked as on this device without its original, even if fr
   await expect(onlineStatus(page)).toHaveText(/^Online: 2 photos · /, ONLINE);
   expect(await hereWithoutOriginal(page)).toBe(0);
   expect(await originalsHere(page)).toBe(1);
-  await page.getByRole('button', { name: 'Photo taken Oct 21, 2026, 2:03 PM' }).click();
+  await page.getByRole('button', { name: 'Photo taken Oct 21, 2026, 2:03:22 PM' }).click();
   const dialog = page.locator('[data-viewer]');
   await expect(dialog.locator('[data-detail="where"]')).toHaveText(
     'Online (the original isn’t on this device)',

@@ -12,6 +12,7 @@ import {
   localDateTime,
   monthLabel,
   photoAlt,
+  shownLabel,
   takenLabel,
   toPhoto,
   type Photo,
@@ -123,10 +124,23 @@ describe('the library', () => {
 describe('for people', () => {
   it('names months and moments as written, whatever the time zone', () => {
     expect(monthLabel('2026-10', EN)).toBe('October 2026');
-    expect(takenLabel('2026-10-21T14:03:22', EN)).toBe('Oct 21, 2026, 2:03 PM');
-    expect(photoAlt(photo({}), EN)).toBe('Photo taken Oct 21, 2026, 2:03 PM');
+    expect(takenLabel('2026-10-21T14:03:22', EN)).toBe('Oct 21, 2026, 2:03:22 PM');
+    expect(photoAlt(photo({}), EN)).toBe('Photo taken Oct 21, 2026, 2:03:22 PM');
     // Months and moments are in English, in the person's own kind (a British one here).
-    expect(takenLabel('2026-10-21T14:03:22', 'en-GB')).toBe('21 Oct 2026, 14:03');
+    expect(takenLabel('2026-10-21T14:03:22', 'en-GB')).toBe('21 Oct 2026, 14:03:22');
+  });
+
+  it('names photos taken in the same minute apart, and says which one the viewer shows (audit 3 G-8)', () => {
+    const burst = ['2026-10-20T14:05:01', '2026-10-20T14:05:03', '2026-10-20T14:05:07'].map(
+      (taken) => photoAlt(photo({ taken }), EN),
+    );
+    expect(new Set(burst).size).toBe(3);
+    expect(shownLabel(photo({ taken: '2026-10-20T14:05:03' }), 1, 3, EN)).toBe(
+      'Photo 2 of 3, taken Oct 20, 2026, 2:05:03 PM',
+    );
+    expect(shownLabel(photo({}), 1233, 20_000, EN)).toBe(
+      'Photo 1,234 of 20,000, taken Oct 21, 2026, 2:03:22 PM',
+    );
   });
 
   it('says what kind of file it is', () => {

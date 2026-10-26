@@ -37,7 +37,7 @@ test('adds photos, keeps the originals exactly, and shows them by month', async 
   await expect(monthHeadings(page).filter({ hasText: 'July 2019' })).toHaveText(/1 photo$/);
   await expect(monthHeadings(page).last()).toContainText('July 2019');
   await expect(
-    page.getByRole('button', { name: 'Photo taken Oct 21, 2026, 2:03 PM' }),
+    page.getByRole('button', { name: 'Photo taken Oct 21, 2026, 2:03:22 PM' }),
   ).toBeVisible();
   // The one this browser can't show says what kind it is.
   await expect(tiles(page).filter({ hasText: 'HEIC' })).toHaveCount(1);
@@ -46,13 +46,13 @@ test('adds photos, keeps the originals exactly, and shows them by month', async 
 
   // Kept after a reload.
   await page.reload();
-  const julyTile = page.getByRole('button', { name: 'Photo taken Jul 4, 2019, 6:30 PM' });
+  const julyTile = page.getByRole('button', { name: 'Photo taken Jul 4, 2019, 6:30:05 PM' });
   await expect.poll(() => naturalWidth(julyTile.locator('img'))).toBe(512);
 
   // Looking at it: a screen-sized copy, its details, and the original saved exactly.
   await julyTile.click();
   const dialog = viewer(page);
-  await expect(dialog.getByRole('heading')).toHaveText('Jul 4, 2019, 6:30 PM');
+  await expect(dialog.getByRole('heading')).toHaveText('Jul 4, 2019, 6:30:05 PM');
   await expect.poll(() => naturalWidth(dialog.getByRole('img'))).toBe(2048);
   await expect(dialog.locator('[data-detail="name"]')).toHaveText('IMG_0001.JPG');
   await expect(dialog.locator('[data-detail="size"]')).toHaveText(/ · 4,000 × 3,000$/);
