@@ -519,16 +519,23 @@ export function mountTrades(root: Document): void {
 
   // ---------- Deleting a year ----------
 
-  /** How many trades were closed in the year chosen (0 if none are now). */
+  /** The year chosen: how many trades closed in it are deleted, and kept (none if it has none now). */
   const yearCount = (year: string) =>
-    closedYears(state).find((entry) => entry.year === year)?.count ?? 0;
+    closedYears(state).find((entry) => entry.year === year) ?? { year, count: 0, kept: 0 };
 
-  /** Says what deleting the year chosen removes. */
+  /** Says what deleting the year chosen removes, and what stays. */
   function showYear(): void {
     const year = yearSelect.value;
-    const count = closedCount(yearCount(year));
-    yearText.textContent = `The ${count} from ${year} will be deleted. Open trades stay. With sync on, they’re deleted on your other devices too. This can’t be undone.`;
-    yearConfirm.textContent = `Delete ${count}`;
+    const { count, kept } = yearCount(year);
+    // Parts of a trade still open stay with it (audit 3 F2-2).
+    const parts =
+      kept === 0
+        ? 'Open trades stay.'
+        : kept === 1
+          ? `Open trades stay, and so does 1 closed trade from ${year} that’s part of one still open, until all of it is closed.`
+          : `Open trades stay, and so do ${closedCount(kept)} from ${year} that are parts of ones still open, until all of each is closed.`;
+    yearText.textContent = `The ${closedCount(count)} from ${year} will be deleted. ${parts} With sync on, they’re deleted on your other devices too. This can’t be undone.`;
+    yearConfirm.textContent = `Delete ${closedCount(count)}`;
   }
 
   /** The years trades were closed in, to choose from (the year chosen stays chosen while it has any). */
@@ -560,7 +567,7 @@ export function mountTrades(root: Document): void {
   yearForm.addEventListener('submit', (event) => {
     event.preventDefault();
     const year = yearSelect.value;
-    const count = yearCount(year);
+    const { count } = yearCount(year);
     yearDialog.close();
     deleteYearButton.focus();
     if (count === 0) return;

@@ -566,43 +566,71 @@ export const closePart = (state: TradesState, closed: Trade, rest: Trade): Trade
 export interface YearCount {
   /** "2024". */
   year: string;
+  /** How many closed trades "Delete a year" deletes. */
   count: number;
+  /** How many it keeps: parts of trades still open (keptPart). */
+  kept: number;
 }
 
 /** The year a trade was closed in, or null while it's open. */
 const closedYear = (trade: Trade): string | null => trade.exitDate?.slice(0, 4) ?? null;
 
 /**
+ * Whether "Delete a year" keeps a trade closed in that year: part of a trade
+ * still open, which needs its parts to know how much of it is (audit 3
+ * F2-2). It goes with a later year, once nothing of the trade is open.
+ */
+function keptPart(
+  trade: Trade,
+  byId: ReadonlyMap<string, Trade>,
+  parts: ReadonlyMap<string, Parts>,
+): boolean {
+  const whole = trade.parent === undefined ? undefined : byId.get(trade.parent);
+  return whole !== undefined && openQuantity(whole, parts) > 0;
+}
+
+/**
  * The years trades were closed in (by the day they were exited, like the
- * results), the earliest first, with how many each (for "Delete a year").
+ * results), the earliest first, with how many each has to delete and to
+ * keep (for "Delete a year"). A year whose trades are all kept isn't one.
  */
 export function closedYears(state: TradesState): YearCount[] {
-  const counts = new Map<string, number>();
+  const parts = partsOf(state.trades);
+  const byId = new Map(state.trades.map((trade) => [trade.id, trade]));
+  const counts = new Map<string, YearCount>();
   for (const trade of state.trades) {
     const year = closedYear(trade);
-    if (year !== null) counts.set(year, (counts.get(year) ?? 0) + 1);
+    if (year === null) continue;
+    const counted = counts.get(year) ?? { year, count: 0, kept: 0 };
+    if (keptPart(trade, byId, parts)) counted.kept += 1;
+    else counted.count += 1;
+    counts.set(year, counted);
   }
-  return [...counts]
-    .map(([year, count]) => ({ year, count }))
+  return [...counts.values()]
+    .filter((counted) => counted.count > 0)
     .sort((a, b) => a.year.localeCompare(b.year));
 }
 
 /**
- * Removes the trades closed in a year ("2024"). Open trades always stay,
- * with as much still open as before: one whose parts go keeps less of its
- * quantity and fees (theirs), and goes too if they closed all of it.
+ * Removes the trades closed in a year ("2024"). It never changes a trade,
+ * so a change to one on a device that hadn't synced can't bring back what
+ * was deleted (audit 3 F2-2). Open trades stay, and so do the parts of
+ * them still open (keptPart). A trade closed in parts, all of it, goes
+ * with its parts of that year, as it would count them as open again; its
+ * other parts stay, as trades of their own.
  */
 export function removeClosedYear(state: TradesState, year: string): TradesState {
-  const gone = partsOf(state.trades.filter((trade) => closedYear(trade) === year));
+  const parts = partsOf(state.trades);
+  const byId = new Map(state.trades.map((trade) => [trade.id, trade]));
+  const gone = state.trades.filter(
+    (trade) => closedYear(trade) === year && !keptPart(trade, byId, parts),
+  );
+  const ids = new Set(gone.map((trade) => trade.id));
+  const emptied = new Set(gone.map((trade) => trade.parent));
   return {
-    trades: state.trades.flatMap((trade) => {
-      if (closedYear(trade) === year) return [];
-      const parts = gone.get(trade.id);
-      if (!parts || !isOpen(trade)) return [trade];
-      const quantity = tidy(trade.quantity - parts.quantity);
-      if (quantity <= 0) return [];
-      return [{ ...trade, quantity, fees: Math.max(0, tidy(trade.fees - parts.fees)) }];
-    }),
+    trades: state.trades.filter(
+      (trade) => !ids.has(trade.id) && !(isOpen(trade) && emptied.has(trade.id)),
+    ),
   };
 }
 

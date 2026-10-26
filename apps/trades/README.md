@@ -54,10 +54,13 @@ Your trading journal: log your trades and see what works. Lives at
     makes trades bigger, that test fails, and the limit has to come down.
   - To make room, "Delete a year…" (next to the spreadsheet download)
     deletes the trades closed in one year, by the day they were closed
-    (`closedYears`, `removeClosedYear`). Open trades always stay, with as
-    much still open as before (a trade whose parts go keeps less of its
-    quantity, and goes too once nothing is left of it). It says how many
-    that is, and offers the spreadsheet first. With sync on, they're
+    (`closedYears`, `removeClosedYear`). It never changes a trade, so a
+    change to one on a device that hadn't synced can't bring back what was
+    deleted. Open trades always stay, and so do the parts of them closed
+    that year, which say how much is still open: they go once all of their
+    trade is closed (and then the trade goes with them; its parts from other
+    years stay, as trades of their own). It says how many that is, and what
+    stays, and offers the spreadsheet first. With sync on, they're
     deleted on the other devices too. Once more than 90% of the 3,500 are
     used, a note at the top says how many are left and points to it
     (`roomNote`).

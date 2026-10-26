@@ -348,6 +348,39 @@ test('deletes a year of closed trades, never open ones', async ({ page }) => {
   await expect(page.locator('[data-closed-list] [data-symbol]')).toHaveText(['NVDA']);
 });
 
+// Audit 3 F2-2: deleting a year made the open trade smaller, so a change to it
+// on a device that hadn't synced brought back what was deleted, as open.
+test('deleting a year keeps what was closed of a trade still open', async ({ page }) => {
+  const lot = trade({
+    id: 'lot',
+    symbol: 'AMD',
+    entryDate: '2024-04-01',
+    quantity: 100,
+    exitDate: null,
+    exitPrice: null,
+  });
+  await seed(page, [
+    lot,
+    { ...lot, id: 'part', quantity: 40, exitDate: '2024-06-03', exitPrice: 110, parent: 'lot' },
+    trade({ symbol: 'AAPL', entryDate: '2024-02-01', exitDate: '2024-03-02' }),
+  ]);
+  await page.getByRole('button', { name: 'Delete a year…' }).click();
+  const dialog = yearDialog(page);
+  await expect(dialog.getByLabel('Year').locator('option')).toHaveText(['2024 (1 closed trade)']);
+  await expect(dialog.locator('[data-year-text]')).toHaveText(
+    'The 1 closed trade from 2024 will be deleted. Open trades stay, and so does 1 closed trade from 2024 that’s part of one still open, until all of it is closed. With sync on, they’re deleted on your other devices too. This can’t be undone.',
+  );
+  await dialog.getByRole('button', { name: 'Delete 1 closed trade' }).click();
+  await expect(status(page, 'Deleted 1 closed trade from 2024.')).toBeAttached();
+  await expect(page.locator('[data-closed-list] [data-symbol]')).toHaveText(['AMD']);
+  await expect(page.locator('[data-open-list] [data-meta]')).toHaveText(
+    '60 at 100, since Apr 1, 2024',
+  );
+  // Nothing else from 2024 to delete now.
+  await page.getByRole('button', { name: 'Delete a year…' }).click();
+  await expect(status(page, 'There are no closed trades to delete.')).toBeVisible();
+});
+
 test('says when Trades is nearly full, and how to make room', async ({ page }) => {
   // Just over 90% of the trades Trades keeps: one closed a day, back from 2026.
   const count = LIMITS.trades * 0.9 + 1;

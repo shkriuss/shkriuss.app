@@ -553,8 +553,8 @@ describe('making room', () => {
 
   it('lists the years trades were closed in, and deletes one (open trades stay)', () => {
     expect(closedYears(trades)).toEqual([
-      { year: '2024', count: 2 },
-      { year: '2025', count: 1 },
+      { year: '2024', count: 2, kept: 0 },
+      { year: '2025', count: 1, kept: 0 },
     ]);
     expect(removeClosedYear(trades, '2024').trades.map((entry) => entry.id)).toEqual(['b', 'c']);
     // By the day it was closed, not entered.
@@ -568,27 +568,50 @@ describe('making room', () => {
     expect(closedCount(1234, 'en-US')).toBe('1,234 closed trades');
   });
 
-  it('keeps what’s still open of a trade whose parts are deleted with their year', () => {
+  // Audit 3 F2-2: it made the open trade smaller, so a change to the trade on a
+  // device that hadn't synced brought the deleted parts back as open.
+  it('never changes a trade: the parts of one still open stay with it', () => {
     // Bought 100: 40 closed in 2024 (with the fees), 30 in 2025, 30 still open.
     const lot = trade({ id: 'a', quantity: 100, fees: 1, exitDate: null, exitPrice: null });
     const parts = state(
       lot,
       trade({ id: 'b', quantity: 40, fees: 2, exitDate: '2024-06-01', parent: 'a' }),
       trade({ id: 'c', quantity: 30, exitDate: '2025-06-01', parent: 'a' }),
+      trade({ id: 'x', exitDate: '2024-03-02' }),
     );
+    // 2025 has nothing to delete: its one trade is part of one still open.
+    expect(closedYears(parts)).toEqual([{ year: '2024', count: 1, kept: 1 }]);
     const after = removeClosedYear(parts, '2024');
-    expect(after.trades.map((entry) => `${entry.id}:${entry.quantity}`)).toEqual(['a:60', 'c:30']);
-    expect(openQuantity(after.trades[0] as Trade, partsOf(after.trades))).toBe(30);
-    expect(openFees(after.trades[0] as Trade, partsOf(after.trades))).toBe(0);
-    // A trade whose parts closed all of it goes with the last of them.
-    const gone = removeClosedYear(
-      removeClosedYear(
-        saveTrade(parts, trade({ id: 'd', quantity: 30, exitDate: '2025-07-01', parent: 'a' })),
-        '2024',
-      ),
-      '2025',
+    expect(after.trades.map((entry) => `${entry.id}:${entry.quantity}`)).toEqual([
+      'a:100',
+      'b:40',
+      'c:30',
+    ]);
+    expect(after.trades[0]).toBe(lot);
+    expect(openQuantity(lot, partsOf(after.trades))).toBe(30);
+    // Once all of it is closed, they go: with the trade, whose other parts
+    // stay as trades of their own (it would count what went as open again).
+    const all = saveTrade(
+      parts,
+      trade({ id: 'd', quantity: 30, exitDate: '2025-07-01', parent: 'a' }),
     );
-    expect(gone.trades).toEqual([]);
+    expect(closedYears(all)).toEqual([
+      { year: '2024', count: 2, kept: 0 },
+      { year: '2025', count: 2, kept: 0 },
+    ]);
+    const first = removeClosedYear(all, '2024');
+    expect(first.trades.map((entry) => entry.id)).toEqual(['c', 'd']);
+    expect(openTrades(first)).toEqual([]);
+    expect(stats(closedTrades(first.trades)).count).toBe(2);
+    expect(removeClosedYear(first, '2025').trades).toEqual([]);
+    // A part of a trade closed itself, or of one deleted, isn't needed to keep anything open.
+    const closed = state(
+      trade({ id: 'a', quantity: 100 }),
+      trade({ id: 'b', quantity: 40, exitDate: '2024-06-01', parent: 'a' }),
+    );
+    expect(removeClosedYear(closed, '2024').trades.map((entry) => entry.id)).toEqual(['a']);
+    const orphan = state(trade({ id: 'b', quantity: 40, exitDate: '2024-06-01', parent: 'gone' }));
+    expect(removeClosedYear(orphan, '2024').trades).toEqual([]);
   });
 
   it('says so once Trades is nearly full', () => {
@@ -998,6 +1021,56 @@ describe('closing part of a trade on one device, while another changes it', () =
         problem:
           '130 closed of the 100 bought: two devices may have closed it at the same time. Delete the close that’s wrong.',
       });
+    }
+  });
+
+  // Audit 3 F2-2: deleting 2024 on the phone made the trade 60 bought, so the
+  // tablet's later change brought back all 100, and 70 showed as open.
+  it('keeps what’s still open when a year is deleted on one device, and the trade changed on the other', async () => {
+    const secret = appSecret();
+    const phone = new Device('trades', secret, setup);
+    const tablet = new Device('trades', secret, setup);
+    // Bought 100 in 2024: 40 closed in 2024, 30 in 2025, 30 still open. And MSFT, closed in 2024.
+    const lot = trade({
+      id: 'lot',
+      entryDate: '2024-03-01',
+      quantity: 100,
+      stop: 95,
+      exitDate: null,
+      exitPrice: null,
+    });
+    const part = (id: string, quantity: number, exitDate: string): Trade => ({
+      ...lot,
+      id,
+      quantity,
+      exitDate,
+      exitPrice: 110,
+      parent: 'lot',
+    });
+    const msft = trade({
+      id: 'msft',
+      symbol: 'MSFT',
+      entryDate: '2024-02-01',
+      exitDate: '2024-03-02',
+    });
+    phone.save(state(lot, part('p1', 40, '2024-06-01'), part('p2', 30, '2025-06-01'), msft));
+    await phone.syncNow();
+    await tablet.syncNow();
+    // On the phone: "Delete a year…" 2024, to make room. It syncs.
+    vi.setSystemTime(Date.now() + 60_000);
+    phone.save(removeClosedYear(phone.value, '2024'));
+    await phone.syncNow();
+    // Later the tablet, which hadn't synced since, moves the stop loss up.
+    vi.setSystemTime(Date.now() + 60_000);
+    tablet.save(saveTrade(tablet.value, { ...lot, stop: 99 }));
+    await tablet.syncNow();
+    await phone.syncNow();
+    for (const device of [phone, tablet]) {
+      const { trades } = device.value;
+      const open = openTrades(device.value).map((entry) => openQuantity(entry, partsOf(trades)));
+      expect(open).toEqual([30]);
+      expect(trades.map((entry) => entry.id).sort()).toEqual(['lot', 'p1', 'p2']);
+      expect(trades.find((entry) => entry.id === 'lot')?.stop).toBe(99);
     }
   });
 
