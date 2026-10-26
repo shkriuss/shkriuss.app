@@ -176,20 +176,30 @@ export const canFreeUp = (state: OnlineState): boolean =>
   state.checked && (state.problem === null || UPLOADS_ONLY.has(state.problem));
 
 const timeFormat = new Intl.DateTimeFormat(DATE_LOCALE, { hour: 'numeric', minute: '2-digit' });
+const timeLabel = (time: number, locale?: string): string =>
+  (locale === undefined
+    ? timeFormat
+    : new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' })
+  ).format(time);
 
 const TAKEN =
   'Your online library was taken by a device that still had your old account key, perhaps the lost one, so it can’t be used any more. Photos that were only in it can’t be brought back. Photos on this device go into a new online library.';
 
-/** The status line: what happened to the library this device used, if it was taken, then how it's going. */
-export const onlineMessage = (state: OnlineState): string =>
-  state.taken ? `${TAKEN} ${statusOf(state)}` : statusOf(state);
+/**
+ * The status line: what happened to the library this device used, if it was
+ * taken, then how it's going. Numbers and times are in `locale` when it's
+ * given (tests: audit 3 J-5); else numbers in the browser's own language,
+ * and times in English (DATE_LOCALE).
+ */
+export const onlineMessage = (state: OnlineState, locale?: string): string =>
+  state.taken ? `${TAKEN} ${statusOf(state, locale)}` : statusOf(state, locale);
 
-function statusOf(state: OnlineState): string {
+function statusOf(state: OnlineState, locale: string | undefined): string {
   const tooBig =
     state.tooBig > 0
-      ? ` ${countLabel(state.tooBig, 'photo is', 'photos are')} too big to keep online (over 95 MB), so ${state.tooBig === 1 ? 'it stays' : 'they stay'} on this device.`
+      ? ` ${countLabel(state.tooBig, 'photo is', 'photos are', locale)} too big to keep online (over 95 MB), so ${state.tooBig === 1 ? 'it stays' : 'they stay'} on this device.`
       : '';
-  const waiting = countLabel(state.waiting, 'photo', 'photos');
+  const waiting = countLabel(state.waiting, 'photo', 'photos', locale);
   switch (state.problem) {
     case 'not-set-up':
       return 'Online storage isn’t set up yet, so photos can’t go online. Everything still works on this device.';
@@ -198,7 +208,7 @@ function statusOf(state: OnlineState): string {
     case 'full':
       return `The online library is full, so ${waiting} stay on this device.`;
     case 'daily-limit':
-      return `That’s all the uploads for today. The other ${waiting} go online after ${timeFormat.format(state.retryAt ?? Date.now())}.`;
+      return `That’s all the uploads for today. The other ${waiting} go online after ${timeLabel(state.retryAt ?? Date.now(), locale)}.`;
     case 'wiping':
       return 'The online library is being deleted. Try again in a few minutes.';
     case 'offline':
@@ -217,5 +227,5 @@ function statusOf(state: OnlineState): string {
     return `Putting photos online: ${waiting} to go. Keep Photos open until it’s done.${tooBig}`;
   }
   const usage = state.usage ?? { items: 0, bytes: 0 };
-  return `Online: ${countLabel(usage.items, 'photo', 'photos')} · ${formatBytes(usage.bytes)}.${tooBig}`;
+  return `Online: ${countLabel(usage.items, 'photo', 'photos', locale)} · ${formatBytes(usage.bytes, locale)}.${tooBig}`;
 }

@@ -192,35 +192,44 @@ describe('the status line', () => {
     ...overrides,
   });
 
+  // Numbers and times in tests: the same on a computer set to any language (audit 3 J-5).
+  const EN = 'en-US';
+
   it('says what’s online, and what’s still going up', () => {
-    expect(onlineMessage(state())).toBe('Online: 1,234 photos · 12 GB.');
-    expect(onlineMessage(state({ waiting: 5 }))).toBe(
+    expect(onlineMessage(state(), EN)).toBe('Online: 1,234 photos · 12 GB.');
+    expect(onlineMessage(state(), 'de-DE')).toBe('Online: 1.234 photos · 12 GB.');
+    expect(onlineMessage(state({ waiting: 5 }), EN)).toBe(
       'Putting photos online: 5 photos to go. Keep Photos open until it’s done.',
     );
-    expect(onlineMessage(state({ tooBig: 1 }))).toBe(
+    expect(onlineMessage(state({ tooBig: 1 }), EN)).toBe(
       'Online: 1,234 photos · 12 GB. 1 photo is too big to keep online (over 95 MB), so it stays on this device.',
     );
-    expect(onlineMessage(state({ checked: false }))).toBe('Checking the online library…');
+    expect(onlineMessage(state({ checked: false }), EN)).toBe('Checking the online library…');
   });
 
   it('says what stops photos going online', () => {
-    expect(onlineMessage(state({ unlocked: false }))).toBe(
+    expect(onlineMessage(state({ unlocked: false }), EN)).toBe(
       'To keep photos online, enter the storage code.',
     );
-    expect(onlineMessage(state({ problem: 'full', waiting: 3 }))).toBe(
+    expect(onlineMessage(state({ problem: 'full', waiting: 3 }), EN)).toBe(
       'The online library is full, so 3 photos stay on this device.',
     );
-    expect(onlineMessage(state({ problem: 'daily-limit', waiting: 2 }))).toMatch(
-      /^That’s all the uploads for today\. The other 2 photos go online after /,
+    const midnight = Date.UTC(2026, 9, 27);
+    expect(
+      onlineMessage(state({ problem: 'daily-limit', waiting: 2, retryAt: midnight }), EN),
+    ).toBe(
+      `That’s all the uploads for today. The other 2 photos go online after ${new Date(midnight).toLocaleTimeString(EN, { hour: 'numeric', minute: '2-digit' })}.`,
     );
-    expect(onlineMessage(state({ problem: 'offline' }))).toBe(
+    expect(onlineMessage(state({ problem: 'offline' }), EN)).toBe(
       'Couldn’t reach the online library: no connection. It will try again.',
     );
-    expect(onlineMessage(state({ problem: 'not-set-up' }))).toMatch(/^Online storage isn’t set up/);
+    expect(onlineMessage(state({ problem: 'not-set-up' }), EN)).toMatch(
+      /^Online storage isn’t set up/,
+    );
   });
 
   it('says plainly when a device with the old account key took the library', () => {
-    expect(onlineMessage(state({ taken: true, unlocked: false, usage: null }))).toBe(
+    expect(onlineMessage(state({ taken: true, unlocked: false, usage: null }), EN)).toBe(
       'Your online library was taken by a device that still had your old account key, perhaps the lost one, so it can’t be used any more. Photos that were only in it can’t be brought back. Photos on this device go into a new online library. To keep photos online, enter the storage code.',
     );
   });

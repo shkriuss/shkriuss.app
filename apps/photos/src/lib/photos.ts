@@ -147,34 +147,48 @@ function asWritten(taken: string): Date {
   return new Date(Date.UTC(year ?? 1970, (month ?? 1) - 1, day ?? 1, hour, minute, second));
 }
 
-const monthFormat = new Intl.DateTimeFormat(DATE_LOCALE, {
-  month: 'long',
-  year: 'numeric',
-  timeZone: 'UTC',
-});
-const takenFormat = new Intl.DateTimeFormat(DATE_LOCALE, {
-  dateStyle: 'medium',
-  timeStyle: 'short',
-  timeZone: 'UTC',
-});
+/**
+ * A date format for each locale, made once: making one takes a while, and
+ * the grid names every photo it shows.
+ */
+function dateFormat(options: Intl.DateTimeFormatOptions): (locale: string) => Intl.DateTimeFormat {
+  const made = new Map<string, Intl.DateTimeFormat>();
+  return (locale) => {
+    let format = made.get(locale);
+    if (!format) {
+      format = new Intl.DateTimeFormat(locale, options);
+      made.set(locale, format);
+    }
+    return format;
+  };
+}
+
+const monthFormat = dateFormat({ month: 'long', year: 'numeric', timeZone: 'UTC' });
+const takenFormat = dateFormat({ dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' });
+
+// Each label below takes a `locale` too, which tests give, so they pass on a
+// computer set to any language (audit 3 J-5). Left out, dates are in
+// English (DATE_LOCALE) and numbers in the browser's own language.
 
 /** "2026-10" → "October 2026" */
-export const monthLabel = (month: string): string =>
-  monthFormat.format(asWritten(`${month}-01T00:00:00`));
+export const monthLabel = (month: string, locale = DATE_LOCALE): string =>
+  monthFormat(locale).format(asWritten(`${month}-01T00:00:00`));
 
 /** "2026-10-21T14:03:22" → "Oct 21, 2026, 2:03 PM" */
-export const takenLabel = (taken: string): string => takenFormat.format(asWritten(taken));
+export const takenLabel = (taken: string, locale = DATE_LOCALE): string =>
+  takenFormat(locale).format(asWritten(taken));
 
 /** A photo's text alternative: what we know is when it was taken. */
-export const photoAlt = (photo: Photo): string => `Photo taken ${takenLabel(photo.taken)}`;
+export const photoAlt = (photo: Photo, locale = DATE_LOCALE): string =>
+  `Photo taken ${takenLabel(photo.taken, locale)}`;
 
 /** "1 photo", "2 photos" */
-export const countLabel = (count: number, one: string, many: string): string =>
-  `${count.toLocaleString()} ${count === 1 ? one : many}`;
+export const countLabel = (count: number, one: string, many: string, locale?: string): string =>
+  `${count.toLocaleString(locale)} ${count === 1 ? one : many}`;
 
 /** Bytes as people read them on phones (1 KB = 1,000 bytes): "820 KB", "4.2 MB", "1.3 GB". */
-export function formatBytes(bytes: number): string {
-  if (bytes < 1000) return countLabel(bytes, 'byte', 'bytes');
+export function formatBytes(bytes: number, locale?: string): string {
+  if (bytes < 1000) return countLabel(bytes, 'byte', 'bytes', locale);
   const units = ['KB', 'MB', 'GB', 'TB'];
   let value = bytes / 1000;
   let unit = 0;
@@ -183,13 +197,13 @@ export function formatBytes(bytes: number): string {
     unit += 1;
   }
   const digits = value < 10 ? 1 : 0;
-  return `${value.toLocaleString(undefined, { maximumFractionDigits: digits, minimumFractionDigits: digits })} ${units[unit]}`;
+  return `${value.toLocaleString(locale, { maximumFractionDigits: digits, minimumFractionDigits: digits })} ${units[unit]}`;
 }
 
 /** "12 photos · 48 MB" */
-export function librarySummary(photos: readonly Photo[]): string {
+export function librarySummary(photos: readonly Photo[], locale?: string): string {
   const bytes = photos.reduce((sum, photo) => sum + photo.size, 0);
-  return `${countLabel(photos.length, 'photo', 'photos')} · ${formatBytes(bytes)}`;
+  return `${countLabel(photos.length, 'photo', 'photos', locale)} · ${formatBytes(bytes, locale)}`;
 }
 
 const EXTENSIONS: Record<string, string> = {
@@ -240,22 +254,18 @@ export interface Added {
   failed: number;
 }
 
-export function addedMessage({
-  added,
-  restored = 0,
-  duplicates,
-  notPhotos,
-  failed,
-}: Added): string {
+export function addedMessage(
+  { added, restored = 0, duplicates, notPhotos, failed }: Added,
+  locale?: string,
+): string {
+  const count = (value: number, one: string, many: string) => countLabel(value, one, many, locale);
   const parts = [
     added > 0 || restored > 0 ? '' : 'No photos were added.',
-    added > 0 ? `Added ${countLabel(added, 'photo', 'photos')}.` : '',
-    restored > 0
-      ? `${countLabel(restored, 'original is', 'originals are')} back on this device.`
-      : '',
-    duplicates > 0 ? `${countLabel(duplicates, 'photo was', 'photos were')} already here.` : '',
-    notPhotos > 0 ? `${countLabel(notPhotos, 'file isn’t a photo', 'files aren’t photos')}.` : '',
-    failed > 0 ? `${countLabel(failed, 'photo couldn’t', 'photos couldn’t')} be saved.` : '',
+    added > 0 ? `Added ${count(added, 'photo', 'photos')}.` : '',
+    restored > 0 ? `${count(restored, 'original is', 'originals are')} back on this device.` : '',
+    duplicates > 0 ? `${count(duplicates, 'photo was', 'photos were')} already here.` : '',
+    notPhotos > 0 ? `${count(notPhotos, 'file isn’t a photo', 'files aren’t photos')}.` : '',
+    failed > 0 ? `${count(failed, 'photo couldn’t', 'photos couldn’t')} be saved.` : '',
   ];
   return parts.filter(Boolean).join(' ');
 }
