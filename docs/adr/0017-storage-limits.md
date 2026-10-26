@@ -9,7 +9,9 @@ are no pull request previews, so each namespace has one limit, the real
 site's, and the 4.5 GB is for the real sites alone. Without previews the
 limits add up to about 3.1 GB, so about eight more apps with sync and
 notifications fit (160 MB each) before the limits need lowering, not two
-(audit 3 J-6).
+(audit 3 J-6). Changed by audit 4 (J-6): sync's message when a copy is
+refused stays plain, but no longer because of Calendar's size budget, which
+no longer applies (see "What people see").
 
 ## Context
 
