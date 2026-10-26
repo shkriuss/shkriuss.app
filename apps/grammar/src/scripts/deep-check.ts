@@ -7,6 +7,7 @@
  * edit only the changed sentences are checked again.
  */
 import { setBusy } from '@shkriuss/ui/busy';
+import { keepFocus } from '@shkriuss/ui/keep-focus';
 import { startWorker } from '@shkriuss/ui/worker';
 import {
   applyAll,
@@ -472,7 +473,14 @@ export function mountDeepCheck(root: Document, host: DeepCheckHost): { textChang
 
   function render(): void {
     const changes = results?.changes ?? [];
-    list.replaceChildren(...changes.map(renderChange));
+    const draw = (): void => {
+      list.replaceChildren(...changes.map(renderChange));
+    };
+    // After Accept or Skip, focus goes to the next change (below). Otherwise
+    // the text may have been checked again after a change in another tab:
+    // focus stays on the same change, or one near it (audit 3 G-1).
+    if (focusAfter === null) keepFocus(draw, heading);
+    else draw();
     acceptAll.hidden = changes.length < 2;
     acceptAll.textContent = `Accept all ${changes.length} changes`;
     if (!pending) status.textContent = results ? changesSummary(changes.length) : '';

@@ -8,6 +8,7 @@
  */
 import { createStore } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
+import { keepFocus } from '@shkriuss/ui/keep-focus';
 import {
   clearProblem,
   reportSave,
@@ -76,6 +77,7 @@ export function mountGrammar(root: Document): void {
   const fixTemplate = required<HTMLTemplateElement>(root, '[data-fix-template]');
   const wordTemplate = required<HTMLTemplateElement>(root, '[data-word-template]');
   const wordList = required<HTMLUListElement>(root, '[data-words]');
+  const dictionaryHeading = required<HTMLElement>(root, '[data-dictionary-heading]');
   const noWords = required<HTMLElement>(root, '[data-no-words]');
   const actionStatus = required<HTMLElement>(root, '[data-action-status]');
   const clearDialog = required<HTMLDialogElement>(root, '[data-clear-dialog]');
@@ -226,7 +228,9 @@ export function mountGrammar(root: Document): void {
           'button',
         );
         button.textContent = fixLabel(issue, fix);
-        button.dataset['fix'] = String(fixIndex);
+        // Which fix it is goes in its value, not a data attribute, so that
+        // keepFocus (in render) finds the button through its suggestion.
+        button.value = String(fixIndex);
         return button;
       }),
     );
@@ -248,7 +252,14 @@ export function mountGrammar(root: Document): void {
   function render(): void {
     if (phase !== 'ready') return;
     const shown = issues.slice(0, MAX_SHOWN);
-    list.replaceChildren(...shown.map(renderIssue));
+    const draw = (): void => {
+      list.replaceChildren(...shown.map(renderIssue));
+    };
+    // After a fix, focus goes to the next suggestion (below). Otherwise the
+    // text may have been checked again after a change in another tab or
+    // device: focus stays on the same suggestion, or one near it (audit 3 G-1).
+    if (focusAfterCheck === null) keepFocus(draw, heading);
+    else draw();
     setStatus(textarea.value.trim() === '' ? EMPTY : summary(issues.length));
 
     if (focusAfterCheck !== null) {
@@ -260,21 +271,25 @@ export function mountGrammar(root: Document): void {
   }
 
   function renderWords(): void {
-    wordList.replaceChildren(
-      ...state.words.map((word) => {
-        const item = required<HTMLLIElement>(
-          wordTemplate.content.cloneNode(true) as DocumentFragment,
-          'li',
-        );
-        item.dataset['word'] = word;
-        required<HTMLElement>(item, '[data-word]').textContent = word;
-        required<HTMLElement>(item, '[data-action="remove-word"]').setAttribute(
-          'aria-label',
-          `Remove “${word}” from my dictionary`,
-        );
-        return item;
-      }),
-    );
+    // Also drawn after a change in another tab or device: focus stays on the
+    // same word, or the next one (audit 3 G-1).
+    keepFocus(() => {
+      wordList.replaceChildren(
+        ...state.words.map((word) => {
+          const item = required<HTMLLIElement>(
+            wordTemplate.content.cloneNode(true) as DocumentFragment,
+            'li',
+          );
+          item.dataset['word'] = word;
+          required<HTMLElement>(item, '[data-word]').textContent = word;
+          required<HTMLElement>(item, '[data-action="remove-word"]').setAttribute(
+            'aria-label',
+            `Remove “${word}” from my dictionary`,
+          );
+          return item;
+        }),
+      );
+    }, dictionaryHeading);
     noWords.hidden = state.words.length > 0;
   }
 
@@ -380,7 +395,7 @@ export function mountGrammar(root: Document): void {
       if (setWords(words)) announce(`Added “${word}” to your dictionary.`);
       return;
     }
-    const fix = fixesToShow(issue)[Number(button.dataset['fix'])];
+    const fix = fixesToShow(issue)[Number(button.value)];
     if (!fix) return;
     fixText(applyFix(textarea.value, issue, fix));
     saveText();

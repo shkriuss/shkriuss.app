@@ -103,6 +103,21 @@ test('downloads only when asked, then checks the text and makes its changes', as
   await button(page, 'Change “its” to “it’s”').click();
   await expect(text(page)).toHaveValue('It’s late and it’s raining.');
 
+  // The text changed in another tab: checked again and drawn again, the
+  // changes keep keyboard focus where it was (audit 3 G-1).
+  await text(page).fill('She go to school.');
+  const goes = button(page, 'Change “go” to “goes”');
+  await goes.focus();
+  await page.evaluate(() => {
+    const key = 'shkriuss:grammar';
+    const saved = JSON.parse(localStorage.getItem(key) ?? '{}') as { data?: object };
+    const data = { ...saved.data, text: 'She go to school. We has fun.' };
+    localStorage.setItem(key, JSON.stringify({ v: 1, data }));
+    window.dispatchEvent(new StorageEvent('storage', { key, storageArea: localStorage }));
+  });
+  await expect(button(page, 'Change “has” to “have”')).toBeVisible({ timeout: 60_000 });
+  await expect(goes).toBeFocused();
+
   // The text never left the device: only files were downloaded.
   expect(requests.filter((line) => !line.startsWith('GET '))).toEqual([]);
   expect(requests.join('\n')).not.toContain('apple');

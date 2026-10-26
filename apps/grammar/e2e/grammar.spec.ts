@@ -22,6 +22,25 @@ async function open(page: Page): Promise<void> {
   await expect(status(page)).toHaveText(READY, { timeout: 30_000 });
 }
 
+/** Opens a second tab once the text is saved (half a second after typing stops), as another device. */
+async function secondTab(page: Page): Promise<Page> {
+  const typed = await text(page).inputValue();
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const saved = JSON.parse(localStorage.getItem('shkriuss:grammar') ?? '{}') as {
+          data?: { text?: string };
+        };
+        return saved.data?.text;
+      }),
+    )
+    .toBe(typed);
+  const other = await page.context().newPage();
+  await other.goto('/');
+  await page.bringToFront();
+  return other;
+}
+
 test('checks as you type, and fixes problems with a tap', async ({ page }) => {
   await open(page);
   await page.getByLabel('American (US)').check();
@@ -189,6 +208,48 @@ test('says how many words to remove when the dictionary has more than it keeps',
     window.dispatchEvent(new StorageEvent('storage', { key, storageArea: localStorage }));
   }, words.slice(101));
   await expect(full).toHaveCount(0);
+});
+
+test('keeps keyboard focus on a suggestion when another tab changes the English', async ({
+  page,
+}) => {
+  // Another tab (or another device, through sync) chose British English:
+  // the text was checked again, the suggestions were drawn again, and
+  // keyboard focus fell to the top of the page (audit 3 G-1).
+  await open(page);
+  await page.getByLabel('American (US)').check();
+  await text(page).fill('I has a apple. She go home.');
+  await expect(status(page)).toHaveText(/suggestions/);
+  const other = await secondTab(page);
+  const show = page.getByRole('button', { name: 'Show in text: “go”' });
+  await show.focus();
+  await page.evaluate(() => {
+    Object.assign(window, { focusedBefore: document.activeElement });
+  });
+
+  await other.getByLabel('British (UK)').check();
+  await expect(page.getByLabel('British (UK)')).toBeChecked();
+  // Drawn again: focus is on the new copy of the same button.
+  await expect
+    .poll(() => page.evaluate(() => (Reflect.get(window, 'focusedBefore') as Element).isConnected))
+    .toBe(false);
+  await expect(show).toBeFocused();
+});
+
+test('when the suggestion with focus goes, and none is left, focus goes to the heading', async ({
+  page,
+}) => {
+  await open(page);
+  await page.getByLabel('American (US)').check();
+  await text(page).fill('The colour is nice.');
+  await expect(status(page)).toHaveText('1 suggestion.');
+  const other = await secondTab(page);
+  await page.getByRole('button', { name: 'Show in text: “colour”' }).focus();
+
+  // British English, chosen in the other tab: nothing to suggest any more.
+  await other.getByLabel('British (UK)').check();
+  await expect(status(page)).toHaveText('No problems found.');
+  await expect(page.getByRole('heading', { name: 'Suggestions' })).toBeFocused();
 });
 
 test('shows a problem in the text', async ({ page }) => {
