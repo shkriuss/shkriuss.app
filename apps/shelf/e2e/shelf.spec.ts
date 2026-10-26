@@ -171,6 +171,42 @@ test('changes and deletes an item, with a confirmation', async ({ page }) => {
   await expect(page.getByText('Nothing here yet.')).toBeVisible();
 });
 
+test('an item’s name fills its row, so a short one is as easy to tap', async ({ page }) => {
+  // "Tea" was a 32 × 44 px target (audit 3 G-9).
+  await seed(page, [{ name: 'Tea' }]);
+  const name = await page.getByRole('button', { name: 'Edit Tea' }).boundingBox();
+  const row = await card(page, 'Tea').getByRole('heading').boundingBox();
+  expect(name?.width ?? 0).toBeGreaterThanOrEqual(44);
+  expect(name?.height ?? 0).toBeGreaterThanOrEqual(44);
+  expect(name?.width).toBe(row?.width);
+});
+
+test('says so when the open item was already deleted on another device', async ({ page }) => {
+  // "Delete" in its form did nothing, and said nothing (audit 3 F3-9).
+  await seed(page, [{ name: 'Running shoes' }]);
+  await page.getByRole('button', { name: 'Edit Running shoes' }).click();
+  // Meanwhile, another tab (or a sync from another device) deletes it.
+  const other = await page.context().newPage();
+  await other.goto('/');
+  await other.getByRole('button', { name: 'Edit Running shoes' }).click();
+  await form(other).getByRole('button', { name: 'Delete' }).click();
+  await other
+    .getByRole('dialog', { name: 'Delete this item?' })
+    .getByRole('button', { name: 'Delete' })
+    .click();
+  await expect(names(other)).toHaveCount(0);
+  await other.close();
+  await expect(names(page)).toHaveCount(0);
+
+  await form(page).getByRole('button', { name: 'Delete' }).click();
+  await expect(form(page)).toBeHidden();
+  await expect(
+    page.getByRole('alert').filter({ hasText: 'That item was already deleted on another device.' }),
+  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Add item' })).toBeFocused();
+  await expect(names(page)).toHaveCount(0);
+});
+
 test('finds items by search, category, how you like them, and brand', async ({ page }) => {
   await seed(page, [
     { name: 'Greek yogurt', brand: 'Fage', opinion: 'love', price: 4.5 },

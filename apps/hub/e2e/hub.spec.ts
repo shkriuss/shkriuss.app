@@ -26,6 +26,10 @@ test('the privacy page lists what every app stores', async ({ page }) => {
     await expect(row).toBeVisible();
     for (const item of app.dataStored) await expect(row).toContainText(item);
   }
+
+  // Sentences shown only when some app needs them keep their space before
+  // them: Astro drops it next to {…} on a line of its own.
+  expect(await page.locator('main').innerText()).not.toMatch(/[a-z)’”]\.[A-Z“]/);
 });
 
 test('says where to report a security problem (security.txt)', async ({ request }) => {

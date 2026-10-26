@@ -102,8 +102,10 @@ HKDF), like `K7Q2-M9XD`.
 
 - **On the device:** the account secret, in `localStorage` for the hub only,
   under `shkriuss-device:account`. It's never in backups, and signing out
-  deletes it. After the key is replaced, the old keys this device knows are
-  kept there too (at most 5), so apps can move their old copies.
+  deletes it. On the device that replaced the key, the old keys are kept
+  there too (at most 5), so apps can move their old copies. A device signed
+  out because its key was replaced elsewhere keeps nothing of it, as when
+  signing out (audit 3 D-8).
 - **On the hub's server.** The hub's Worker runs only for `/api/account/*`,
   with one Durable Object per link, passkey lock or replaced key. It stores:
   - sealed passkey locks;
@@ -141,7 +143,13 @@ Then:
   the Account page, and signs out if the key was replaced. The old recovery
   key, links made with it, and passkeys that unlock it can't sign in any more.
   If the service can't be reached, the device carries on and checks next time.
-  It remembers the old key, with the note's tag, until it signs in again.
+  Signed out this way, it forgets the key and which apps synced there, as
+  signing out does; the Account page names those apps, which keep syncing
+  with the old key until sync is turned on in them again (audit 3 D-8). So
+  only the device that replaced the key moves the apps' old copies; one that
+  nobody moves is deleted once no device has used it for 13 months. The
+  note's tag stays on the server for devices still on an older version of
+  the hub, which check it when they sign in again.
 - **A device keeps old keys only for the account that replaced them.** When
   it signs in, it keeps a replaced key only if the tag says the new account
   replaced it (or replaced a key that did). Signed in to another account (a
@@ -328,6 +336,15 @@ in with `sync: true` in `apps.json`.
   - If the lost device also has the person's password manager, a new passkey
     would reach it too. The Account page says to remove the device from the
     password manager first.
+  - Notifications while an app is closed ([ADR 0009](0009-push-notifications.md))
+    aren't tied to the account: each device has its own random key for
+    them, which only it knows. So replacing the key doesn't stop them on the
+    lost device: its repeating reminders keep arriving there (an Android
+    lock screen shows their titles by default) until it's erased, its
+    browser stops allowing the app's notifications, or the app hasn't been
+    opened on it for 13 months. Nothing the person's other devices do can
+    stop them. The Account page and the privacy page say so, and to erase or
+    lock the lost device remotely (Find My, Find My Device) (audit 3 A-1).
 - **Passkey support varies.** Where a password manager can't do PRF, the
   recovery key and QR codes still work.
 - **Device clocks decide "newest".** A device whose clock is far off can win

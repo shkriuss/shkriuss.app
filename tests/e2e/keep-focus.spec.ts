@@ -316,7 +316,7 @@ test('when the focused item is taken away in another tab, focus goes to the next
   await expect(app.next(page)).toBeFocused();
 });
 
-/** Apps with a dialog opened from a list (and nothing of their own to put focus back). */
+/** Apps with a dialog opened from a list (their own close handlers, if any, use returnFocus). */
 const dialogCases: Record<string, Case | undefined> = {
   budget: cases['budget'],
   meals: {
@@ -326,6 +326,8 @@ const dialogCases: Record<string, Case | undefined> = {
     shown: (page) => page.getByRole('checkbox', { name: 'Bread', exact: true }),
   },
   repairs: cases['repairs'],
+  // Its own close handler sent focus to "Add item" after a redraw (audit 3 G-3).
+  shelf: cases['shelf'],
   trades: cases['trades'],
 };
 

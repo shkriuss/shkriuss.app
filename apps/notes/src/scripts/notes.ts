@@ -314,7 +314,8 @@ export function mountNotes(root: Document): void {
       return;
     }
     // Typing here is newer than what came in: keep it. If the note changed
-    // on another device meanwhile, that version is kept as a second note.
+    // on another device meanwhile, that version is kept as a second note
+    // (the one a sync made, if it did: audit 3 F3-4).
     if (saveTimer !== undefined) {
       const stored = find(current);
       if (
@@ -322,7 +323,7 @@ export function mountNotes(root: Document): void {
         typingFrom &&
         (stored.title !== typingFrom.title || stored.body !== typingFrom.body)
       ) {
-        state = keepOtherVersion(state, current, crypto.randomUUID());
+        state = keepOtherVersion(before, state, current, typingFrom, crypto.randomUUID());
         announce('This note was changed on another device: that version is kept as a second note.');
       }
       flush();

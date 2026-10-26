@@ -307,12 +307,14 @@ export function visibleItems(
       Number(a.brand === '') - Number(b.brand === '') ||
       byText(a.brand, b.brand) ||
       byText(a.name, b.name),
-    // Without a price: last. Prices in different currencies can't be compared
-    // (no exchange rates), so each currency's come together.
+    // Without a price: last, by name (their currency isn't shown, so it
+    // doesn't count: audit 3 F3-7). Prices in different currencies can't be
+    // compared (no exchange rates), so each currency's come together.
     price: (a, b) =>
       Number(a.price === null) - Number(b.price === null) ||
-      byText(a.currency, b.currency) ||
-      (a.price ?? 0) - (b.price ?? 0) ||
+      (a.price === null || b.price === null
+        ? 0
+        : byText(a.currency, b.currency) || a.price - b.price) ||
       byText(a.name, b.name),
   };
   return state.items

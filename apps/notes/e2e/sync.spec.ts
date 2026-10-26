@@ -20,6 +20,14 @@ const uploaded = (page: Page) =>
     (response) =>
       response.url().endsWith('/api/sync/copy') && response.request().method() === 'PUT',
   );
+/** The notes saved on this device, as "title | text", sorted. */
+const savedNotes = (page: Page) =>
+  page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem('shkriuss:notes') ?? 'null') as {
+      data: { notes: { title: string; body: string }[] };
+    } | null;
+    return (saved?.data.notes ?? []).map((note) => `${note.title} | ${note.body}`).sort();
+  });
 
 /** Two devices on one account, both syncing Notes. */
 async function twoDevices(page: Page, browser: Parameters<typeof otherDevice>[0]) {
@@ -164,5 +172,62 @@ test('says so in the open note when a sync keeps both versions of it', async ({
   await expect(bodyBox(page)).toHaveValue('Milk');
   // Gone once another note is open.
   await expect(page.getByRole('alert')).toHaveCount(0);
+  await tablet.context().close();
+});
+
+test('typing while a sync keeps both versions leaves one second version: the other device’s', async ({
+  page,
+  browser,
+  guard,
+}) => {
+  // The sync kept the phone's saved text as a second note, then the typing
+  // waiting to be saved kept the tablet's as another one (audit 3 F3-4).
+  test.slow();
+  guard.allowOrigin(hubURL);
+  guard.allowConsole('ERR_INTERNET_DISCONNECTED');
+  const tablet = await twoDevices(page, browser);
+  let upload = uploaded(page);
+  await page.getByRole('button', { name: 'New note' }).click();
+  await titleBox(page).fill('Trip');
+  await bodyBox(page).fill('Pack bags');
+  await page.getByRole('button', { name: 'All notes' }).click();
+  await upload;
+  await tablet.getByRole('button', { name: 'Sync now' }).click();
+  await expect(link(tablet, 'Trip')).toBeVisible();
+
+  // The phone's timers run on a clock the test moves; the phone goes offline.
+  await page.clock.install();
+  await page.reload();
+  await expect(link(page, 'Trip')).toBeVisible();
+  await page.context().setOffline(true);
+
+  // The tablet changes the note.
+  upload = uploaded(tablet);
+  await link(tablet, 'Trip').click();
+  await bodyBox(tablet).fill('Pack bags and passports');
+  await tablet.getByRole('button', { name: 'All notes' }).click();
+  await upload;
+
+  // The phone changes it too (saved once the typing pauses)…
+  await link(page, 'Trip').click();
+  await page.clock.pauseAt((await page.evaluate(() => Date.now())) + 1000);
+  await bodyBox(page).press('End');
+  await bodyBox(page).pressSequentially(' and tickets');
+  await page.clock.runFor(500);
+  await expect.poll(() => savedNotes(page)).toEqual(['Trip | Pack bags and tickets']);
+  // …and goes on typing, which isn't saved yet when the sync below ends.
+  await page.clock.runFor(1_000);
+  await bodyBox(page).pressSequentially('!');
+
+  // Back online: the sync starts at once, and ends while the typing waits.
+  await page.context().setOffline(false);
+  await page.clock.runFor(10);
+  await expect
+    .poll(() => savedNotes(page), { timeout: 15_000 })
+    .toContain('Trip | Pack bags and tickets!');
+  expect(await savedNotes(page)).toEqual([
+    'Trip (second version) | Pack bags and passports',
+    'Trip | Pack bags and tickets!',
+  ]);
   await tablet.context().close();
 });

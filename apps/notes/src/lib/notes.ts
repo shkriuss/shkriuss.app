@@ -206,13 +206,29 @@ export function keptVersion(
 }
 
 /**
- * A note changed on another device while it was being typed here: that
- * version is kept as a second note (with id `copyId`), so the typing can go
- * on in this one without losing it.
+ * Note `id` changed on another device while it was being typed here, from
+ * `typedFrom` (its text when the typing began): the other device's version,
+ * in `after`, is kept as a second note, so the typing can go on in this one
+ * without losing it. A sync may have kept a second note already (`before`
+ * didn't have it), with this device's text from before the typing: that
+ * one gets the other device's version instead, so there's one second
+ * version, not two, and not an old copy of this text (audit 3 F3-4).
+ * Otherwise it's a new note, with id `copyId`.
  */
-export function keepOtherVersion(state: NotesState, id: string, copyId: string): NotesState {
-  const note = state.notes.find((entry) => entry.id === id);
-  return note ? { notes: [...state.notes, secondVersion(note, copyId)] } : state;
+export function keepOtherVersion(
+  before: NotesState,
+  after: NotesState,
+  id: string,
+  typedFrom: { title: string; body: string },
+  copyId: string,
+): NotesState {
+  const note = after.notes.find((entry) => entry.id === id);
+  if (!note) return after;
+  const kept = keptVersion(before, after, id, typedFrom);
+  if (!kept) return { notes: [...after.notes, secondVersion(note, copyId)] };
+  return {
+    notes: after.notes.map((entry) => (entry === kept ? secondVersion(note, kept.id) : entry)),
+  };
 }
 
 /**

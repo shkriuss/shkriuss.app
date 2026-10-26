@@ -272,8 +272,10 @@ export function getSite(slug: string): SiteInfo {
       color: hub.color,
       origin: hubOrigin,
       storage: 'device',
+      // Where they are is in the privacy page's other column: with a passkey,
+      // the key is on the account's server too (audit 3 D-8).
       dataStored: [
-        'If you use a shkriuss account: its key, on this device only (never in backups)',
+        'If you use a shkriuss account: its key, and which apps you turned on sync for on this device (never in backups)',
         'Your light or dark theme choice',
       ],
       pushNotifications: false,

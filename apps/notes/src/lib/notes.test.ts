@@ -82,14 +82,40 @@ describe('writing notes', () => {
   });
 
   it('keeps the other device’s version as a second note while typing goes on here', () => {
+    const before = { notes: [note('a', 'Trip', 'Mine')] };
+    const typedFrom = { title: 'Trip', body: 'Mine' };
+    // Changed in another tab: nothing kept a second version yet.
     const state = { notes: [note('a', 'Trip', 'Theirs', 5, false)] };
-    expect(keepOtherVersion(state, 'a', 'b')).toEqual({
+    expect(keepOtherVersion(before, state, 'a', typedFrom, 'b')).toEqual({
       notes: [
         note('a', 'Trip', 'Theirs', 5, false),
         note('b', 'Trip (second version)', 'Theirs', 5, false),
       ],
     });
-    expect(keepOtherVersion(state, 'gone', 'b')).toBe(state);
+    expect(keepOtherVersion(before, state, 'gone', typedFrom, 'b')).toBe(state);
+  });
+
+  it('puts the other device’s version in the second note a sync just kept (audit 3 F3-4)', () => {
+    // The sync kept this device's saved text as a second note, and the note
+    // has the other device's text now: the typing goes on from this
+    // device's text, so that second note gets the other device's instead.
+    const before = { notes: [note('a', 'Trip', 'Pack bags and tickets')] };
+    const typedFrom = { title: 'Trip', body: 'Pack bags and tickets' };
+    const synced = {
+      notes: [
+        note('a', 'Trip', 'Pack bags and passports', 5),
+        note('s', 'Trip (second version)', 'Pack bags and tickets'),
+      ],
+    };
+    expect(keepOtherVersion(before, synced, 'a', typedFrom, 'b')).toEqual({
+      notes: [
+        note('a', 'Trip', 'Pack bags and passports', 5),
+        note('s', 'Trip (second version)', 'Pack bags and passports', 5),
+      ],
+    });
+    // A second version that was there before isn't the sync's: a new one is added.
+    const older = { notes: [...before.notes, note('s', 'Trip (second version)', typedFrom.body)] };
+    expect(keepOtherVersion(older, synced, 'a', typedFrom, 'b').notes).toHaveLength(3);
   });
 
   it('makes a second version of a note changed on two devices', () => {

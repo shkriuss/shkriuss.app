@@ -10,13 +10,15 @@ import {
   currentAccount,
   forgetAccount,
   noteReplaced,
+  noteSyncOn,
   replacedSecrets,
   saveAccount,
+  syncedApps,
 } from './device.ts';
 import { sha256Text } from '@shkriuss/server';
 import { successorTag } from './secret.ts';
 import { HUB, testPasskey } from './testing.ts';
-import { isReplaced, replaceAccountKey, replacedNote } from './status.ts';
+import { isReplaced, replaceAccountKey, replacedNote, signOutIfReplaced } from './status.ts';
 import worker, {
   AccountPasskey,
   AccountStatus,
@@ -148,23 +150,64 @@ describe('replacing the account key', () => {
   });
 });
 
-describe('replaced keys and other accounts (audit A-3)', () => {
-  it('a device signed out elsewhere keeps its old key for the account that replaced it', async () => {
-    const [old, next] = [randomBytes(32), randomBytes(32)];
-    // The tablet replaces the key; the phone, still on the old one, learns of it.
+describe('a device whose key was replaced elsewhere (audit 3 D-8)', () => {
+  const NOTES = 'https://notes.shkriuss.app';
+
+  /** The phone, still on `old`, with Notes syncing; the tablet replaced `old` with `next`. */
+  async function phoneAfterReplacing(old: Uint8Array<ArrayBuffer>, next: Uint8Array<ArrayBuffer>) {
     await saveAccount(old);
     await replaceAccountKey(old, next);
     vi.stubGlobal('localStorage', new MemoryStorage());
     await saveAccount(old);
-    const note = await replacedNote(old);
-    expect(note).toEqual({ replaced: true, successor: await successorTag(old, next) });
-    noteReplaced(old, note.successor);
+    const phone = await currentAccount();
+    if (!phone) throw new Error('Not signed in');
+    noteSyncOn('notes', phone.code, NOTES);
+    noteSyncOn('tasks', 'SOME-ONE8', 'https://tasks.shkriuss.app');
+    return phone;
+  }
 
-    // Signed in with the new key, its apps can still move their old copies.
+  it('signs out forgetting the key and its apps, as signing out does', async () => {
+    const [old, next] = [randomBytes(32), randomBytes(32)];
+    const phone = await phoneAfterReplacing(old, next);
+    // Notes synced here with that key: it still may (it has its own key).
+    expect(await signOutIfReplaced(phone)).toEqual(['notes']);
+    expect(await currentAccount()).toBeNull();
+    expect(replacedSecrets()).toEqual([]);
+    expect(localStorage.getItem('shkriuss-device:account')).toBeNull();
+    expect(localStorage.getItem('shkriuss-device:synced-apps')).toBeNull();
+    // Signed in with the new key, nothing of the old one is back.
     await saveAccount(next);
-    expect(replacedSecrets()).toEqual([old]);
+    expect(replacedSecrets()).toEqual([]);
+    expect(syncedApps(phone.code)).toEqual(new Map());
   });
 
+  it('changes nothing if the key wasn’t replaced, or that can’t be checked now', async () => {
+    const key = randomBytes(32);
+    await saveAccount(key);
+    const account = await currentAccount();
+    if (!account) throw new Error('Not signed in');
+    noteSyncOn('notes', account.code, NOTES);
+    expect(await signOutIfReplaced(account)).toBeNull();
+
+    // Replaced, but the account service can't be reached: checked again next time.
+    await replaceAccountKey(key, randomBytes(32));
+    await saveAccount(key);
+    vi.stubGlobal('fetch', () => Promise.reject(new TypeError('offline')));
+    expect(await signOutIfReplaced(account)).toBeNull();
+    expect((await currentAccount())?.secret).toEqual(key);
+    expect([...syncedApps(account.code).keys()]).toEqual(['notes']);
+  });
+
+  it('keeps another key signed in meanwhile (in another tab)', async () => {
+    const [old, next] = [randomBytes(32), randomBytes(32)];
+    const phone = await phoneAfterReplacing(old, next);
+    await saveAccount(next);
+    expect(await signOutIfReplaced(phone)).toBeNull();
+    expect((await currentAccount())?.secret).toEqual(next);
+  });
+});
+
+describe('replaced keys and other accounts (audit A-3)', () => {
   it('forgets them when signing in to another account, so that account doesn’t get their data', async () => {
     const [old, next, someoneElse] = [randomBytes(32), randomBytes(32), randomBytes(32)];
     await saveAccount(old);
@@ -340,6 +383,13 @@ describe('the account service’s room', () => {
     expect((await currentAccount())?.secret).toEqual(next);
     expect(replacedSecrets()).toEqual([old]);
     expect(await isReplaced(old)).toBe(false);
+  });
+
+  it('keeps a replaced-key note 13 months after a device last asked, as the docs say (audit 3 J-4)', () => {
+    // The privacy page ("deleted once no device has asked about it for 13
+    // months") and ADR 0017 ("13 months after a device last asked about
+    // it"): 396 days. Change them with it.
+    expect(UNUSED_MS).toBe(396 * 24 * 60 * 60 * 1000);
   });
 
   it('deletes a note nobody has asked about for 13 months, and keeps one that’s asked about', async () => {

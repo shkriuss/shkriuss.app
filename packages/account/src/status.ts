@@ -5,7 +5,7 @@
  * in again.
  */
 import { hkdf, toBase64Url } from '@shkriuss/crypto';
-import { noteReplaced, saveAccount } from './device.ts';
+import { forgetReplaced, noteReplaced, saveAccount, type Account } from './device.ts';
 import { AccountError, api } from './errors.ts';
 import { successorTag } from './secret.ts';
 import { SUCCESSOR_PATTERN } from './validate.ts';
@@ -44,6 +44,19 @@ export async function replacedNote(
 /** Whether this account key was replaced on another device. Throws AccountError("server") if it can't tell. */
 export async function isReplaced(secret: Uint8Array<ArrayBuffer>): Promise<boolean> {
   return (await replacedNote(secret)).replaced;
+}
+
+/**
+ * Signs this device out if its account key was replaced on another device,
+ * forgetting it there as signing out does (forgetReplaced, audit 3 D-8).
+ * Returns the apps that synced here with it (they keep syncing with the old
+ * key until sync is turned on in them again), or null if it wasn't
+ * replaced, that can't be checked now, or this device has another key by
+ * then: it stays as it is.
+ */
+export async function signOutIfReplaced(account: Account): Promise<string[] | null> {
+  const replaced = await isReplaced(account.secret).catch(() => false);
+  return replaced ? forgetReplaced(account) : null;
 }
 
 /**

@@ -155,7 +155,9 @@ window.addEventListener('storage', () => keepFocus(reload, addButton));
 ```
 
 Dialogs need nothing: when one closes after a redraw replaced the control
-that opened it, AppShell puts focus on its new copy.
+that opened it, AppShell puts focus on its new copy. An app whose close
+handler moves focus itself (Shelf's forms) records `focusSpot()` when the
+dialog opens and calls `returnFocus(spot, fallback)` when it closes.
 
 QR codes (for example to open a link on another device) are drawn by a
 script, since their content is usually made on the page:

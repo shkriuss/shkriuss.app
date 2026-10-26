@@ -1,7 +1,16 @@
 import { toBase64Url } from '@shkriuss/crypto';
 import { describe, expect, it } from 'vitest';
 import { parseLinkFragment } from './link.ts';
-import { checkSealedBody, MAX_SEALED_CHARS } from './validate.ts';
+import { checkSealedBody, LINK_LIFETIME_MS, MAX_SEALED_CHARS } from './validate.ts';
+
+describe('what the docs promise (audit 3 J-4)', () => {
+  it('a device link lasts at most 10 minutes', () => {
+    // SECURITY.md ("one-time device links that expire after 10 minutes"), the
+    // privacy page ("for at most 10 minutes, the server keeps your account
+    // key locked") and ADR 0010 ("for 10 minutes"): change them with it.
+    expect(LINK_LIFETIME_MS).toBe(10 * 60 * 1000);
+  });
+});
 
 const id = toBase64Url(new Uint8Array(16).fill(7));
 const key = new Uint8Array(32).fill(9);

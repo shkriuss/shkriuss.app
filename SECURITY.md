@@ -48,8 +48,9 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
 - Apps that can **sync** (`"sync": true` in `apps.json`) run `/api/sync/*` in their own
   Worker, with one Durable Object per account holding one copy of the app's
   data, sealed on the device (AES-256-GCM, compressed first). The account is
-  found by the SHA-256 hash of a token derived for that app, so copies in
-  different apps can't be linked. Uploads must name the version they were
+  found by the SHA-256 hash of a token derived for that app, so nothing
+  stored links copies in different apps (only the times they were made and
+  used could pair them up). Uploads must name the version they were
   based on, so a stale device can't overwrite newer data; changes are
   rate-limited and size-limited. After the account key is replaced, an app
   moves its copy to the new key and deletes the old one, so devices still

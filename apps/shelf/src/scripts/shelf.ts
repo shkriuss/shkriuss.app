@@ -14,7 +14,7 @@
 import { createStore } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
 import { withEdits } from '@shkriuss/sync/edits';
-import { keepFocus } from '@shkriuss/ui/keep-focus';
+import { focusSpot, keepFocus, returnFocus, type FocusSpot } from '@shkriuss/ui/keep-focus';
 import { PAGE_SIZE, shownCount, waitForTyping } from '@shkriuss/ui/long-lists';
 import { clearProblem, focusProblem, reportSave, showProblem } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
@@ -170,13 +170,16 @@ export function mountShelf(root: Document): void {
   let editingId: string | null = null;
   /** The form as it opened, to tell what the person changed (see withEdits). */
   let openedDraft: ItemDraft | null = null;
-  /** Where keyboard focus goes back to when the form closes. */
-  let opener: HTMLElement | null = null;
+  /**
+   * Where keyboard focus goes back to when the form closes: what opened it,
+   * found again if a list drawn meanwhile replaced it (audit 3 G-3).
+   */
+  let opener: FocusSpot | null = null;
   /** The item just saved, so focus can go to it in the list. */
   let savedId: string | null = null;
   /** The same for the category form. */
   let editingCategoryId: string | null = null;
-  let categoryOpener: HTMLElement | null = null;
+  let categoryOpener: FocusSpot | null = null;
   let savedCategoryId: string | null = null;
   let announceTimer: number | undefined;
   /** Items shown so far ("Show more" adds a page: audit J-1). */
@@ -202,6 +205,21 @@ export function mountShelf(root: Document): void {
     return saved;
   };
   const find = (id: string | null): Item | undefined => state.items.find((item) => item.id === id);
+
+  /**
+   * After `dialog` closes: focus on what opened it (`spot`), or its new copy
+   * when a list drawn again meanwhile replaced it, or else `fallback` (audit
+   * 3 G-3). Focus left in the closed dialog would be lost a moment later.
+   */
+  function focusBack(
+    dialog: HTMLDialogElement,
+    spot: FocusSpot | null,
+    fallback: HTMLElement,
+  ): void {
+    const active = root.activeElement;
+    if (active instanceof HTMLElement && dialog.contains(active)) active.blur();
+    returnFocus(spot, fallback);
+  }
 
   function save(next: ShelfState): boolean {
     state = next;
@@ -412,7 +430,8 @@ export function mountShelf(root: Document): void {
   function openEditor(item: Item | null): void {
     editingId = item?.id ?? null;
     openedDraft = item ? draftOf(item) : null;
-    opener = root.activeElement instanceof HTMLElement ? root.activeElement : null;
+    // Opened with nothing focused (a tap, in Safari): back to "Add item".
+    opener = focusSpot() ?? focusSpot(addButton);
     showProblems({});
     editorTitle.textContent = item ? 'Edit item' : 'New item';
     deleteButton.hidden = item === null;
@@ -443,7 +462,8 @@ export function mountShelf(root: Document): void {
     const saved = savedId
       ? list.querySelector<HTMLElement>(`[data-id="${CSS.escape(savedId)}"] [data-action="edit"]`)
       : null;
-    (saved ?? (opener?.isConnected ? opener : addButton)).focus();
+    if (saved) saved.focus();
+    else focusBack(editor, opener, addButton);
     savedId = null;
     opener = null;
   });
@@ -492,7 +512,15 @@ export function mountShelf(root: Document): void {
 
   deleteButton.addEventListener('click', () => {
     const item = find(editingId);
-    if (!item) return;
+    if (!item) {
+      // Deleted on another device while the form was open: there's nothing
+      // to delete. Say so, rather than doing nothing (audit 3 F3-9).
+      editingId = null;
+      opener = focusSpot(addButton);
+      editor.close();
+      say('That item was already deleted on another device.');
+      return;
+    }
     deleteName.textContent = item.name;
     deleteDialog.returnValue = '';
     // Opens on top of the form; "Cancel" goes back to it.
@@ -503,7 +531,7 @@ export function mountShelf(root: Document): void {
     const item = find(editingId);
     if (deleteDialog.returnValue !== 'confirm' || !item) return;
     editingId = null;
-    opener = addButton;
+    opener = focusSpot(addButton);
     if (save(removeItem(state, item.id))) announce(`Deleted ${item.name}.`);
     editor.close();
   });
@@ -590,7 +618,7 @@ export function mountShelf(root: Document): void {
 
   function openCategoryEditor(category: Category | null): void {
     editingCategoryId = category?.id ?? null;
-    categoryOpener = root.activeElement instanceof HTMLElement ? root.activeElement : null;
+    categoryOpener = focusSpot() ?? focusSpot(addCategoryButton);
     showCategoryProblem(null);
     categoryTitle.textContent = category ? 'Edit category' : 'New category';
     deleteCategoryButton.hidden = category === null;
@@ -605,7 +633,8 @@ export function mountShelf(root: Document): void {
           `[data-category-id="${CSS.escape(savedCategoryId)}"]`,
         )
       : null;
-    (saved ?? (categoryOpener?.isConnected ? categoryOpener : addCategoryButton)).focus();
+    if (saved) saved.focus();
+    else focusBack(categoryEditor, categoryOpener, addCategoryButton);
     savedCategoryId = null;
     categoryOpener = null;
   });
@@ -675,7 +704,7 @@ export function mountShelf(root: Document): void {
       );
     }
     editingCategoryId = null;
-    categoryOpener = addCategoryButton;
+    categoryOpener = focusSpot(addCategoryButton);
     categoryEditor.close();
   });
 

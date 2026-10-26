@@ -75,6 +75,8 @@ test('creates an account once the recovery key is saved', async ({ page }) => {
   expect(code).toMatch(ACCOUNT_CODE);
   expect(text).toContain(`Account code: ${code}`);
   await checkA11y(page, 'account: signed in');
+  // A sentence shown only when some app needs it keeps its space before it.
+  expect(await view(page, 'signed-in').innerText()).not.toMatch(/[a-z)’”]\.[A-Z“]/);
 
   // Still signed in after a reload, and the key can be seen again.
   await page.reload();
@@ -249,6 +251,17 @@ test('replacing the key signs out every device that has the old one', async ({
   await tablet.goto('/account/');
   await signInWithKey(tablet, old.key);
   await expect(accountCode(tablet)).toHaveText(old.code);
+  // An app turned sync on there (what the Account page remembers when it does).
+  const [synced] = syncApps;
+  if (!synced) throw new Error('No app syncs');
+  await tablet.evaluate(
+    ({ app, code }) =>
+      localStorage.setItem(
+        'shkriuss-device:synced-apps',
+        JSON.stringify([{ app, code, origin: `https://${app}.shkriuss.app` }]),
+      ),
+    { app: synced.slug, code: old.code },
+  );
 
   // On the phone: replace the key. Nothing changes until the new key is saved.
   await page.getByRole('button', { name: 'Replace the account key' }).click();
@@ -279,6 +292,18 @@ test('replacing the key signs out every device that has the old one', async ({
   await tablet.reload();
   await expect(view(tablet, 'signed-out')).toBeVisible();
   await expect(message(tablet)).toHaveText(/^Your account key was replaced on another device/);
+  // As signing out does, it keeps neither the key nor its apps, and says
+  // which app may still sync there with the old key (audit 3 D-8).
+  await expect(message(tablet)).toContainText(
+    `${synced.name} may still sync here with the old key: once you’re signed in, turn on sync in it again.`,
+  );
+  expect(
+    await tablet.evaluate(() =>
+      ['shkriuss-device:account', 'shkriuss-device:synced-apps'].map((key) =>
+        localStorage.getItem(key),
+      ),
+    ),
+  ).toEqual([null, null]);
   await checkA11y(tablet, 'account: signed out after the key was replaced');
   await signInWithKey(tablet, old.key);
   await expect(message(tablet)).toHaveText(/^This key was replaced on another device/);
@@ -398,6 +423,8 @@ test.describe('the account service', () => {
     expect((await put({ data: sealed, extra: true })).status()).toBe(400);
     expect((await put({ data: 'A'.repeat(5000) })).status()).toBe(413);
     expect((await put({ data: sealed }, { 'Sec-Fetch-Site': 'cross-site' })).status()).toBe(403);
+    // Nor from a page on another of our own subdomains, like an app's (audit 3 J-3).
+    expect((await put({ data: sealed }, { 'Sec-Fetch-Site': 'same-site' })).status()).toBe(403);
     expect((await request.get('/api/account/link/not-an-id')).status()).toBe(404);
     expect((await request.get('/api/account/passkey')).status()).toBe(401);
     expect((await request.get('/api/account/status')).status()).toBe(401);

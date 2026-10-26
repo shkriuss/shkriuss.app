@@ -4,6 +4,7 @@ import {
   appOrigin,
   getApp,
   getSite,
+  hub,
   hubOrigin,
   listedApps,
   slugProblems,
@@ -170,5 +171,20 @@ describe('the real apps.json', () => {
 
   it('throws a helpful error for unknown apps', () => {
     expect(() => getApp('does-not-exist')).toThrow(/No app with slug "does-not-exist"/);
+  });
+
+  it('keeps each description to 160 characters (docs/adding-an-app.md)', () => {
+    for (const { description } of [hub, ...apps]) {
+      expect(description.length, description).toBeLessThanOrEqual(160);
+    }
+  });
+
+  it('says in an app’s description that reminders while it’s closed leave the device (audit 3 D-5)', () => {
+    // They need neither sync nor an account, so "unless you turn on sync" isn't enough.
+    for (const app of apps.filter((entry) => entry.pushNotifications === true)) {
+      const optIns = [...(app.sync ? ['sync'] : []), "reminders while it's closed"];
+      expect(app.description, app.slug).toContain(`unless you turn on ${optIns.join(' or ')}`);
+    }
+    expect(hub.description).toContain('reminders while an app is closed');
   });
 });

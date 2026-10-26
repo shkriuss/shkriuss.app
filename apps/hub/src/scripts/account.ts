@@ -15,7 +15,6 @@ import {
   generateSecret,
   isReplaced,
   linkState,
-  noteReplaced,
   noteSyncOff,
   noteSyncOn,
   parseLinkFragment,
@@ -24,11 +23,11 @@ import {
   recoveryKeyOf,
   removePasskey,
   replaceAccountKey,
-  replacedNote,
   replacedSecrets,
   sameSecret,
   saveAccount,
   signInWithPasskey,
+  signOutIfReplaced,
   syncedApps,
   type Account,
   type AccountErrorCode,
@@ -99,14 +98,40 @@ const problemOf = (error: unknown): string =>
 
 const SIGN_IN_AGAIN =
   'Sign in with your new recovery key, or add this device with a code from one of your signed-in devices.';
+/**
+ * What to do next, after replacing the key. Reminders while an app is
+ * closed aren't tied to the account: replacing it doesn't stop them on a
+ * lost device (audit 3 A-1). Old passkeys can still unlock the old key
+ * (audit 3 D-8).
+ */
+const AFTER_REPLACING = [
+  'Now turn on sync again in each app (below), on each of your devices: until then, a lost device can still see that app’s changes.',
+  ...(apps.some((app) => app.pushNotifications === true)
+    ? [
+        'Reminders while an app is closed still reach a lost device until you erase it (Find My, Find My Device).',
+      ]
+    : []),
+  'If you use passkeys, remove the old ones and add a new one.',
+].join(' ');
 const REPLACED = {
   here: `Your account key was replaced on another device, so this device is signed out. ${SIGN_IN_AGAIN}`,
   key: `This key was replaced on another device, so it can’t sign in any more. ${SIGN_IN_AGAIN}`,
   passkey: `This passkey is for an account key that was replaced on another device, so it can’t sign in any more. ${SIGN_IN_AGAIN} Then you can add a new passkey.`,
-  done: 'Your account key is replaced. Devices with the old key are signed out when they next open this page. Now turn on sync again in each app (below), on each of your devices: until then, a lost device can still see that app’s changes. Add a new passkey if you use one.',
-  unnoted:
-    'Your account key is replaced, but the account service had no room to note the old one just now, so devices that still have it won’t sign out by themselves. Now turn on sync again in each app (below), on each of your devices: until then, a lost device can still see that app’s changes. Add a new passkey if you use one.',
+  done: `Your account key is replaced. Devices with the old key are signed out when they next open this page. ${AFTER_REPLACING}`,
+  unnoted: `Your account key is replaced, but the account service had no room to note the old one just now, so devices that still have it won’t sign out by themselves. ${AFTER_REPLACING}`,
 };
+
+const listFormat = new Intl.ListFormat('en-GB', { type: 'conjunction' });
+
+/**
+ * REPLACED.here, naming the apps that synced on this device with the
+ * replaced key: they still may, and this device no longer lists them
+ * (audit 3 D-8).
+ */
+const replacedHere = (names: readonly string[]): string =>
+  names.length === 0
+    ? REPLACED.here
+    : `${REPLACED.here} ${listFormat.format(names)} may still sync here with the old key: once you’re signed in, turn on sync in ${names.length === 1 ? 'it' : 'each'} again.`;
 
 /** True if this key was replaced on another device (false if that can't be checked now). */
 /** Someone used the device code: maybe not the person (audit A-5). */
@@ -719,12 +744,14 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
 
   window.addEventListener('hashchange', () => void openLink(location.hash));
 
-  // Replaced on another device (a lost device): sign out here.
-  const note = account ? await replacedNote(account.secret).catch(() => null) : null;
-  if (account && note?.replaced) {
-    noteReplaced(account.secret, note.successor);
+  // Replaced on another device (a lost device): signed out here, keeping
+  // nothing of it, as "Sign out" does (audit 3 D-8). Its apps here keep
+  // their own keys: the message names them, now that the list is gone.
+  const stillSyncing = account ? await signOutIfReplaced(account) : null;
+  if (stillSyncing) {
     account = null;
-    say(REPLACED.here, true);
+    const names = syncLinks.filter(({ slug }) => stillSyncing.includes(slug));
+    say(replacedHere(names.map(({ name }) => name)), true);
   }
 
   if (!(await openLink(location.hash))) home(false);

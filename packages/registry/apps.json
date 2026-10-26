@@ -2,7 +2,7 @@
   "site": {
     "name": "shkriuss",
     "domain": "shkriuss.app",
-    "description": "Small, private web apps. Your data stays on your device unless you choose to sync it.",
+    "description": "Small, private web apps. Your data stays on your device unless you choose to sync it, or to get reminders while an app is closed.",
     "icon": "grid",
     "color": "teal"
   },
@@ -25,7 +25,7 @@
     {
       "slug": "calendar",
       "name": "Calendar",
-      "description": "Plan your days. Your events stay on your device unless you turn on sync.",
+      "description": "Plan your days. Your events stay on your device unless you turn on sync or reminders while it's closed.",
       "icon": "calendar",
       "color": "blue",
       "status": "live",
@@ -59,7 +59,7 @@
     {
       "slug": "habits",
       "name": "Habits",
-      "description": "Build habits one day at a time. Your progress stays on your device unless you turn on sync.",
+      "description": "Build habits one day at a time. Your progress stays on your device unless you turn on sync or reminders while it's closed.",
       "icon": "check",
       "color": "green",
       "status": "live",
@@ -112,7 +112,7 @@
     {
       "slug": "tasks",
       "name": "Tasks",
-      "description": "Your to-do list, with due dates, lists and reminders. It stays on your device unless you turn on sync.",
+      "description": "Your to-do list, with due dates, lists and reminders. It stays on your device unless you turn on sync or reminders while it's closed.",
       "icon": "checklist",
       "color": "teal",
       "status": "live",
@@ -131,7 +131,7 @@
     {
       "slug": "meals",
       "name": "Meals",
-      "description": "Plan your meals for the week, and what to buy for them. Your plan stays on your device unless you turn on sync.",
+      "description": "Plan your meals for the week, and what to buy for them. Your plan stays on your device unless you turn on sync or reminders while it's closed.",
       "icon": "utensils",
       "color": "red",
       "status": "live",
@@ -151,7 +151,7 @@
     {
       "slug": "water",
       "name": "Water",
-      "description": "Drink enough water each day. Your log stays on your device unless you turn on sync.",
+      "description": "Drink enough water each day. Your log stays on your device unless you turn on sync or reminders while it's closed.",
       "icon": "droplet",
       "color": "blue",
       "status": "live",
@@ -170,7 +170,7 @@
     {
       "slug": "reminders",
       "name": "Reminders",
-      "description": "Get reminded at the right time, once or again and again. Your reminders stay on your device unless you turn on sync.",
+      "description": "Get reminded at the right time, once or again and again. Your reminders stay on your device unless you turn on sync or reminders while it's closed.",
       "icon": "bell",
       "color": "orange",
       "status": "live",
@@ -203,7 +203,7 @@
     {
       "slug": "budget",
       "name": "Budget",
-      "description": "See where your money goes, month by month. Your budget stays on your device unless you turn on sync.",
+      "description": "See where your money goes, month by month. Your budget stays on your device unless you turn on sync or reminders while it's closed.",
       "icon": "wallet",
       "color": "indigo",
       "status": "live",
