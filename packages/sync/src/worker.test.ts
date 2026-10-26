@@ -203,6 +203,37 @@ describe('a copy sent to the Worker', () => {
   });
 });
 
+describe('two devices writing the same copy (audit 3 J-1)', () => {
+  // ADR 0010: an upload names the version it was based on; if another device
+  // wrote first, the server says so (409) and nothing is overwritten unseen.
+  const get = (token: string) => request(SITE, 'copy', token);
+
+  it('refuses an upload based on a version that isn’t the latest', async () => {
+    const server = memorySync();
+    const token = madeUpToken();
+    const first = await server.fetch(put(SITE, token, null, sealed(100)));
+    const { version } = (await first.json()) as { version: number };
+    const tablet = sealed(200);
+    expect((await server.fetch(put(SITE, token, version, tablet))).status).toBe(200);
+    // The phone, still on the first version, uploads its own change.
+    const stale = await server.fetch(put(SITE, token, version, sealed(300)));
+    expect(stale.status).toBe(409);
+    expect(await stale.json()).toMatchObject({ version: version + 1 });
+    expect(((await (await server.fetch(get(token))).json()) as { data: string }).data).toBe(tablet);
+  });
+
+  it('refuses a first copy when there is one already', async () => {
+    const server = memorySync();
+    const token = madeUpToken();
+    const phone = sealed(100);
+    expect((await server.fetch(put(SITE, token, null, phone))).status).toBe(200);
+    // Two devices' first syncs at once: the second must merge, not replace.
+    const second = await server.fetch(put(SITE, token, null, sealed(200)));
+    expect(second.status).toBe(409);
+    expect(((await (await server.fetch(get(token))).json()) as { data: string }).data).toBe(phone);
+  });
+});
+
 describe('a token that only asks', () => {
   it('leaves nothing behind', async () => {
     const server = memorySync();

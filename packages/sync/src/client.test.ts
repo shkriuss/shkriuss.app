@@ -812,6 +812,47 @@ describe('syncing between devices', () => {
   });
 });
 
+describe('two devices uploading at once (audit 3 J-1)', () => {
+  it('the later upload is refused, merged again, and both edits are kept', async () => {
+    const secret = randomBytes(32);
+    const phone = new Device(secret);
+    const tablet = new Device(secret);
+    phone.counters = [counter('water')];
+    await phone.syncNow();
+    await tablet.syncNow();
+    vi.setSystemTime(Date.now() + 1000);
+    tablet.counters = [counter('water'), counter('steps')];
+    phone.counters = [counter('water', 3)];
+
+    // Just as the phone uploads, the tablet uploads first (after the phone read the copy).
+    const realFetch = globalThis.fetch;
+    const uploads: number[] = [];
+    let tabletFirst = true;
+    const between = async (input: string, init?: RequestInit): Promise<Response> => {
+      const upload = init?.method === 'PUT' && input.endsWith('/api/sync/copy');
+      if (upload && tabletFirst) {
+        tabletFirst = false;
+        vi.stubGlobal('fetch', realFetch);
+        expect((await tablet.syncNow()).problem).toBeNull();
+        phone.use();
+        vi.stubGlobal('fetch', between);
+      }
+      const response = await realFetch(input, init);
+      if (upload) uploads.push(response.status);
+      return response;
+    };
+    vi.stubGlobal('fetch', between);
+    expect((await phone.syncNow()).problem).toBeNull();
+    vi.stubGlobal('fetch', realFetch);
+
+    expect(uploads).toEqual([409, 200]);
+    await tablet.syncNow();
+    expect(phone.counters).toEqual([counter('water', 3), counter('steps')]);
+    expect(tablet.counters).toEqual([counter('water', 3), counter('steps')]);
+    vi.useRealTimers();
+  });
+});
+
 describe('turning sync off while a sync is under way', () => {
   it('“Delete all data” stays done, and the other devices keep their data', async () => {
     const secret = randomBytes(32);

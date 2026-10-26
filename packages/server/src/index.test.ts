@@ -1,5 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { bytesBody, json, jsonBody, noContent, problem, readJson, runAlarm } from './index.ts';
+import {
+  bytesBody,
+  createWorker,
+  json,
+  jsonBody,
+  noContent,
+  problem,
+  readJson,
+  runAlarm,
+} from './index.ts';
 import { MemoryStorage, memoryState } from './testing.ts';
 
 afterEach(() => {
@@ -70,6 +79,32 @@ describe('request bodies', () => {
     const garbled = streamed(1, 10).request;
     garbled.headers.set('Content-Length', 'ten');
     expect((await bytesBody(garbled, 2048)).ok).toBe(false);
+  });
+});
+
+describe('requests a browser made from another page (audit 3 J-3)', () => {
+  const worker = createWorker({ '/api/thing': async () => json({ ok: true }) });
+  const env = { ASSETS: { fetch: async () => new Response('page') } };
+  const ask = (site: string | null) =>
+    worker.fetch(
+      new Request('https://shkriuss.app/api/thing', {
+        method: 'POST',
+        headers: site === null ? {} : { 'Sec-Fetch-Site': site },
+      }),
+      env,
+    );
+
+  it('are refused from another website, and from another of our subdomains', async () => {
+    // A page on calendar.shkriuss.app calling shkriuss.app is "same-site": a
+    // taken-over app page must not reach the account service (SECURITY.md).
+    expect((await ask('cross-site')).status).toBe(403);
+    expect((await ask('same-site')).status).toBe(403);
+  });
+
+  it('are answered from the site’s own pages, and from clients that send no such header', async () => {
+    expect((await ask('same-origin')).status).toBe(200);
+    expect((await ask('none')).status).toBe(200);
+    expect((await ask(null)).status).toBe(200);
   });
 });
 
