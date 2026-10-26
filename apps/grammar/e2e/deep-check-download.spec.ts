@@ -22,13 +22,20 @@ const manifest = {
   model: [file('model-1'), file('model-2')],
 };
 
-/** Serves the stand-in files, each after `delay` ms; returns how often each was asked for. */
-async function standIns(page: Page, delay: number): Promise<Map<string, number>> {
+/**
+ * Serves the stand-in files, each after `delay` ms (the list of files after
+ * 300 ms, and not before `listed`); returns how often each was asked for.
+ */
+async function standIns(
+  page: Page,
+  delay: number,
+  listed: Promise<void> = Promise.resolve(),
+): Promise<Map<string, number>> {
   const fetched = new Map<string, number>();
   await page.route(`**${DIR}**`, async (route) => {
     const path = new URL(route.request().url()).pathname;
     if (path === `${DIR}manifest.json`) {
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      await Promise.all([new Promise((resolve) => setTimeout(resolve, 300)), listed]);
       await route.fulfill({ json: manifest });
       return;
     }
@@ -47,7 +54,13 @@ const downloadButton = (page: Page) =>
   deep(page).getByRole('button', { name: 'Download Deep check' });
 
 test('a double tap on “Download Deep check” downloads each file once', async ({ page }) => {
-  const fetched = await standIns(page, 200);
+  // The list comes once the second tap is made: on a busy machine, the
+  // checks below could take longer than the list's 300 ms.
+  let list = (): void => undefined;
+  const listed = new Promise<void>((resolve) => {
+    list = resolve;
+  });
+  const fetched = await standIns(page, 200, listed);
   await page.goto('/');
   await expect(downloadButton(page)).toBeVisible();
   await downloadButton(page).click();
@@ -55,6 +68,7 @@ test('a double tap on “Download Deep check” downloads each file once', async
   await expect(downloadButton(page)).toHaveAttribute('aria-disabled', 'true');
   await expect(downloadButton(page)).toBeFocused();
   await downloadButton(page).dispatchEvent('click');
+  list();
   await expect(deep(page).getByRole('button', { name: 'Check my text' })).toBeVisible({
     timeout: 15_000,
   });
