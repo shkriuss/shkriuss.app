@@ -1,4 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  knownFrom,
+  merge,
+  observe,
+  valuesOf,
+  type StoreSnapshot,
+} from '../../../../packages/sync/src/merge.ts';
 import {
   addWord,
   DICTIONARY_FULL,
@@ -18,6 +25,7 @@ import {
   syncedSettings,
   withSyncedSettings,
   wordToAdd,
+  type GrammarState,
   type Issue,
   type SyncedSetting,
 } from './grammar.ts';
@@ -203,5 +211,84 @@ describe('sync', () => {
       { id: 'word:x', word: 1 },
     ] as unknown as SyncedSetting[];
     expect(withSyncedSettings(phone, odd)).toEqual({ ...phone, words: [] });
+  });
+});
+
+describe('the dictionary’s order on devices in different languages', () => {
+  // Sorted in each device's own language, the order differed: Swedish puts
+  // "Östersund" after "Zürich", English before it; Georgian puts Georgian
+  // words first. Two devices with sync then re-sorted each other's order at
+  // every round, which counts as a move, and kept uploading (audit 3 F3-6).
+  const words = ['Zürich', 'ბათუმი', 'Östersund', 'Tbilisi'];
+  const english = ['Östersund', 'Tbilisi', 'Zürich', 'ბათუმი'];
+  const empty: GrammarState = { text: '', english: 'british', words: [] };
+  const added = (list: readonly string[]) =>
+    list.reduce<string[]>((dictionary, word) => addWord(dictionary, word) ?? dictionary, []);
+
+  /** From now on, comparing text without saying the language compares as on a device set to `language`. */
+  function deviceIn(language: string): void {
+    const localeCompare = String.prototype.localeCompare;
+    vi.spyOn(String.prototype, 'localeCompare').mockImplementation(function (
+      this: string,
+      that: string,
+      locales?: Intl.LocalesArgument,
+      options?: Intl.CollatorOptions,
+    ) {
+      return localeCompare.call(this, that, locales ?? language, options);
+    });
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('sorts the same in every language', () => {
+    expect([...words].sort((a, b) => a.localeCompare(b, 'sv'))).not.toEqual(english);
+    for (const language of ['en', 'sv', 'ka']) {
+      deviceIn(language);
+      const settings = words.map((word): SyncedSetting => ({ id: `word:${word}`, word }));
+      expect(withSyncedSettings(empty, settings).words, language).toEqual(english);
+      expect(added(words), language).toEqual(english);
+      vi.restoreAllMocks();
+    }
+    // Words that sort the same (é as one character, or as e and an accent) get one order too.
+    const accents = ['Caf\u00e9', 'Cafe\u0301'];
+    const settings = accents.map((word): SyncedSetting => ({ id: `word:${word}`, word }));
+    for (const order of [settings, [...settings].reverse()]) {
+      expect(withSyncedSettings(empty, order).words).toEqual(['Cafe\u0301', 'Caf\u00e9']);
+    }
+    expect(added([...accents].reverse())).toEqual(added(accents));
+  });
+
+  it('two devices in different languages stop uploading once they agree', () => {
+    // The client's steps for each sync round (observe → merge → save →
+    // knownFrom), with the real merge code; the devices take turns.
+    const devices = ['en', 'sv'].map((language) => {
+      deviceIn(language);
+      const state = { ...empty, words: added(words) };
+      vi.restoreAllMocks();
+      return { language, state, known: undefined as ReturnType<typeof knownFrom> | undefined };
+    });
+    let online: StoreSnapshot | undefined;
+    let now = Date.UTC(2026, 9, 25);
+    const uploads: number[] = [];
+    for (let round = 0; round < 30; round += 1) {
+      const device = devices[round % 2];
+      if (!device) continue;
+      deviceIn(device.language);
+      now += 60_000;
+      const local = observe(device.known, syncedSettings(device.state), 1, now);
+      const merged = online ? merge(local.snapshot, online) : local.snapshot;
+      device.state = withSyncedSettings(device.state, valuesOf(merged) as SyncedSetting[]);
+      if (local.changed || !online) {
+        online = merged;
+        uploads.push(round);
+      }
+      device.known = knownFrom(merged);
+      vi.restoreAllMocks();
+    }
+    // Each uploads once, at its first round; before, uploads went on for ever.
+    expect(uploads).toEqual([0, 1]);
+    expect(devices.map((device) => device.state.words)).toEqual([english, english]);
   });
 });
