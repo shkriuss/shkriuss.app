@@ -9,6 +9,7 @@
     "./backup": "./src/backup.ts",
     "./csv": "./src/csv.ts",
     "./files": "./src/files.ts",
+    "./nesting": "./src/nesting.ts",
     "./settings": "./src/settings.ts"
   },
   "scripts": {

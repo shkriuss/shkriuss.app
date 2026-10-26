@@ -113,6 +113,18 @@ describe('sealed copies', () => {
     await expect(openStores(key, 'tally', sealed)).rejects.toThrow('too much data');
   });
 
+  it('aren’t opened if they nest deeper than any app’s data (audit 3 C-1)', async () => {
+    const { key } = await syncKeys(randomBytes(32));
+    // Written out, as a device's own JSON.stringify can't go this deep.
+    const deep = '['.repeat(5000) + ']'.repeat(5000);
+    const file = `{"format":"shkriuss-sync","version":1,"app":"tally","stores":{"x":${deep}}}`;
+    const packed = await new Response(
+      new Blob([file]).stream().pipeThrough(new CompressionStream('gzip')),
+    ).arrayBuffer();
+    const sealed = await seal(key, new Uint8Array(packed), 'shkriuss sync v1 tally');
+    await expect(openStores(key, 'tally', sealed)).rejects.toThrow('Not this app’s sync data');
+  });
+
   it('derive a different token and key for each app key', async () => {
     const a = await syncKeys(randomBytes(32));
     const b = await syncKeys(randomBytes(32));

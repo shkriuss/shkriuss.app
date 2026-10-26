@@ -19,6 +19,7 @@ import {
   type StorageLike,
   type Store,
 } from './index.ts';
+import { nestedTooDeep } from './nesting.ts';
 
 export const BACKUP_FORMAT = 'shkriuss-backup';
 export const BACKUP_VERSION = 1;
@@ -280,6 +281,13 @@ export function restoreAll(
     throw new BackupError(
       'storage-unavailable',
       'This browser isn’t letting the app save data, so the backup can’t be restored.',
+    );
+  }
+  // Data nested deeper than any app's would stop sync for good (audit 3 C-1).
+  if (nestedTooDeep(file.data)) {
+    throw new BackupError(
+      'not-a-backup',
+      'Part of this backup can’t be read, so it wasn’t restored. Nothing was changed.',
     );
   }
   for (const [key, value] of Object.entries(file.data)) {
