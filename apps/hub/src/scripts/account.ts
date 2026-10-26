@@ -135,11 +135,11 @@ const replacedHere = (names: readonly string[]): string =>
     ? REPLACED.here
     : `${REPLACED.here} ${listFormat.format(names)} may still sync here with the old key: once you’re signed in, turn on sync in ${names.length === 1 ? 'it' : 'each'} again.`;
 
-/** True if this key was replaced on another device (false if that can't be checked now). */
 /** Someone used the device code: maybe not the person (audit A-5). */
 const LINK_USED =
   'A device used this code and is now signed in. If it wasn’t the one you meant, replace your account key now (below).';
 
+/** True if this key was replaced on another device (false if that can't be checked now). */
 const wasReplaced = (secret: Uint8Array<ArrayBuffer>): Promise<boolean> =>
   isReplaced(secret).catch(() => false);
 
@@ -179,6 +179,7 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
   const recoveryForm = required<HTMLFormElement>(root, '[data-recovery-form]');
   const recoveryInput = required<HTMLTextAreaElement>(recoveryForm, '[name="key"]');
   const recoveryError = required<HTMLElement>(recoveryForm, '[data-error-for="key"]');
+  const recoverySubmit = required<HTMLButtonElement>(recoveryForm, 'button[type="submit"]');
 
   const newTitle = required<HTMLElement>(root, '[data-new-title]');
   const newKey = required<HTMLElement>(root, '[data-new-key]');
@@ -719,7 +720,10 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
 
   recoveryForm.addEventListener('submit', (event) => {
     event.preventDefault();
-    void (async () => {
+    // Busy while the account service is asked whether the key was replaced,
+    // saying so: a second press meanwhile does nothing (audit 4 G-6).
+    if (recoverySubmit.ariaDisabled === 'true') return;
+    void withButton(recoverySubmit, async () => {
       const result = await parseRecoveryKey(recoveryInput.value);
       if (!result.ok) {
         recoveryError.textContent =
@@ -730,12 +734,13 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
         focusProblem(recoveryInput, recoveryError.textContent ?? '');
         return;
       }
+      say('Signing in…');
       if (await signIn(result.secret, 'Signed in with your recovery key.')) {
         recoveryInput.value = '';
       } else {
         recoveryInput.focus();
       }
-    })();
+    });
   });
 
   keyDialog.addEventListener('close', () => {

@@ -10,8 +10,11 @@ reasons: [ADR 0015](../../docs/adr/0015-photos-app.md) (on the device) and
   (`byNewest`), grouped by month (`byMonth`), and how things are shown (month
   names, when it was taken, sizes, the name to save the original as, what
   happened when photos were picked).
-- `src/lib/exif.ts`: when a JPEG was taken, from what the camera wrote in it
-  (Exif `DateTimeOriginal`, else `DateTime`), as the camera's local time.
+- `src/lib/exif.ts`: when a photo was taken, from what the camera wrote in
+  it (Exif `DateTimeOriginal`, else `DateTime`), as the camera's local time:
+  in a JPEG, a HEIC or other HEIF file (as iPhones keep photos), a PNG or a
+  WebP (audit 4 F3-3). `src/lib/fixtures/` has pictures made by real
+  encoders for its tests.
 - `src/scripts/process.worker.ts`: reads each picked photo in a web worker
   (asked by `process.ts`): its SHA-256 (so the same photo isn't added twice),
   when it was taken, a 512-pixel JPEG thumbnail and a 2,048-pixel JPEG for
@@ -58,7 +61,13 @@ reasons: [ADR 0015](../../docs/adr/0015-photos-app.md) (on the device) and
   with "Choose File", or set Settings → Camera → Formats to "Most
   Compatible".
 - No backup files: photos are too big for them (`<DataControls backup={false}>`).
-  "Delete all data" deletes the photos.
+  "Delete all data" deletes the photos, and its dialog says how to keep them
+  first instead of "Back up first" (audit 4 D-4).
+- In Firefox, all of shkriuss.app's apps share one storage limit, 10 GiB,
+  unless a site has persistent storage (which Photos asks for, and Firefox
+  asks the person about): a big library there can leave the other apps
+  without room. Chrome and Safari give each app's address its own limit
+  (audit 4 C-7).
 - `e2e/`: browser tests (`helpers.ts` makes photos, with the date a camera
   writes in them; `online.spec.ts` uses two devices). The shared
   accessibility, security, offline and sync checks run too.

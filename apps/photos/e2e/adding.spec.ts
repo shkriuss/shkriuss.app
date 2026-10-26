@@ -2,7 +2,7 @@
 // added (it reads as unavailable and ignores presses), but keeps focus. On
 // iPhone and iPad, the page says that picked photos may be JPEG copies.
 import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
-import { jpeg, picture } from './helpers.ts';
+import { addPhotos, jpeg, picture, stored } from './helpers.ts';
 
 const IPHONE_HINT =
   'On iPhone and iPad, photos picked from the Photo Library may be added as JPEG copies, not as the original files.';
@@ -68,4 +68,36 @@ test('“Add photos” keeps focus while the photos are added', async ({ page })
     busy: true,
     left: 0,
   });
+});
+
+test('a full device: says the photo couldn’t be saved, and keeps nothing of it', async ({
+  page,
+}) => {
+  // The likeliest failure for an app that keeps originals: the browser runs
+  // out of room for them (audit 4 J-5). A photo's files are saved first, then
+  // its details; if those fail, its files go again.
+  await page.goto('/');
+  for (const kind of ['photo-files:', 'photo:']) {
+    await page.evaluate((kind) => {
+      const put = IDBObjectStore.prototype.put;
+      IDBObjectStore.prototype.put = function (this: IDBObjectStore, value, key) {
+        if (typeof key === 'string' && key.startsWith(kind)) {
+          throw new DOMException('The quota has been exceeded.', 'QuotaExceededError');
+        }
+        return put.call(this, value, key);
+      };
+    }, kind);
+    await addPhotos(page, [jpeg('IMG_0001.JPG', await picture(page))]);
+    // In the notice at the top, read out at once.
+    await expect(page.getByRole('alert').filter({ hasText: 'couldn’t be saved' })).toHaveText(
+      'No photos were added. 1 photo couldn’t be saved. This device may be out of space.',
+    );
+    expect(await stored(page), kind).toEqual({ photos: 0, files: 0 });
+    await expect(page.locator('[data-months] .tile')).toHaveCount(0);
+    await page.reload();
+  }
+  // With room again, it's added.
+  await addPhotos(page, [jpeg('IMG_0001.JPG', await picture(page))]);
+  await expect(page.locator('[data-months] .tile')).toHaveCount(1);
+  expect(await stored(page)).toEqual({ photos: 1, files: 1 });
 });

@@ -5,7 +5,8 @@ and [ADR 0010](0010-account-and-sync.md): answers from the servers get
 headers of their own; by [ADR 0010](0010-account-and-sync.md): only the hub
 may use passkeys; and by [ADR 0011](0011-on-device-grammar-checking.md) and
 [ADR 0012](0012-deep-check-ai-model.md): apps that run WebAssembly may
-compile it and start its threads.
+compile it and start its threads. Updated in October 2026 (audit 4 C-1):
+`form-action 'none'`.
 
 ## Context
 
@@ -22,7 +23,10 @@ writes them to every site's `_headers` file:
   scripts, styles, images, fonts, connections, the manifest and workers
   (images may also be `data:` and `blob:` addresses, which only the page
   itself can make, for example photos shown from the device);
-  `base-uri 'none'`, `frame-ancestors 'none'`, `form-action 'self'`, and
+  `base-uri 'none'`, `frame-ancestors 'none'`, `form-action 'none'` (no
+  form is sent the browser's own way: each page's script handles its forms,
+  and `method="dialog"` forms only close a dialog; before the script runs,
+  a form would put what was typed in the address, audit 4 C-1), and
   **Trusted Types** (`require-trusted-types-for 'script'`) with two named
   policies: `shkriuss-sw`, used only to register `/sw.js`, and
   `shkriuss-worker`, used only to start workers from the site's own build

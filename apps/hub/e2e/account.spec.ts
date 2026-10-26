@@ -110,10 +110,28 @@ test('signs in with the recovery key, forgiving spaces and case, catching typos'
   await expect(error).toHaveText(/There’s a mistake/);
   await checkA11y(page, 'account: recovery key with a mistake');
 
+  // While the account service is asked whether the key was replaced, the
+  // page says so, and a second press does nothing (audit 4 G-6).
+  let answer: () => void = () => undefined;
+  const answered = new Promise<void>((resolve) => {
+    answer = resolve;
+  });
+  const asked: string[] = [];
+  await page.route('**/api/account/status', async (route) => {
+    asked.push(route.request().method());
+    await answered;
+    await route.fallback();
+  });
   await input.fill(` ${key.toLowerCase().replace(/-/g, ' ')} `);
   await signIn.click();
+  await expect(message(page)).toHaveText('Signing in…');
+  await expect(signIn).toHaveAttribute('aria-disabled', 'true');
+  await signIn.click({ force: true });
+  answer();
   await expect(view(page, 'signed-in')).toBeVisible();
   await expect(accountCode(page)).toHaveText(code);
+  await expect(message(page)).toHaveText('Signed in with your recovery key.');
+  expect(asked).toEqual(['GET']);
 });
 
 test('adds another device with a one-time code', async ({ page, browser, baseURL, guard }) => {

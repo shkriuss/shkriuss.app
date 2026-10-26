@@ -120,7 +120,15 @@ export function transform(
   return word;
 }
 
-const MERGES: Record<string, string> = { $MERGE_SPACE: '', $MERGE_HYPHEN: '-' };
+/**
+ * What each merge mark joins words with. A Map: words are checked against it,
+ * and in a plain object "constructor" or "toString" would count as marks,
+ * garbling sentences with those words (audit 4 F3-2).
+ */
+const MERGES = new Map([
+  ['$MERGE_SPACE', ''],
+  ['$MERGE_HYPHEN', '-'],
+]);
 
 /** The words with the edits made (edits in word order, as chooseEdits gives them). */
 export function applyEdits(
@@ -143,7 +151,7 @@ export function applyEdits(
     } else if (label.startsWith('$TRANSFORM_')) {
       const changed = transform(out[at] ?? '', label, verbs);
       if (changed) out[at] = changed;
-    } else if (label in MERGES) {
+    } else if (MERGES.has(label)) {
       out.splice(at + 1, 0, label);
       shift += 1;
     }
@@ -152,15 +160,15 @@ export function applyEdits(
   const merged: string[] = [];
   for (const word of out) {
     const last = merged.at(-1);
-    if (last !== undefined && last in MERGES && merged.length >= 2) {
+    if (last !== undefined && MERGES.has(last) && merged.length >= 2) {
       merged.pop();
-      merged[merged.length - 1] += `${MERGES[last] ?? ''}${word}`;
+      merged[merged.length - 1] += `${MERGES.get(last) ?? ''}${word}`;
     } else {
       merged.push(word);
     }
   }
   // A split ("well known") becomes two words.
-  return merged.filter((word) => !(word in MERGES)).flatMap((word) => word.split(' '));
+  return merged.filter((word) => !MERGES.has(word)).flatMap((word) => word.split(' '));
 }
 
 const same = (a: readonly string[], b: readonly string[]) =>

@@ -53,6 +53,8 @@ export const QUALITY = { thumb: 0.8, view: 0.85 } as const;
 export const PAGE_SIZE = 120;
 
 const TAKEN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/;
+/** Longer than any file type a browser gives ("image/heic-sequence"…). */
+const MAX_TYPE_LENGTH = 100;
 const isSize = (value: unknown) =>
   value === null || (Number.isSafeInteger(value) && (value as number) > 0);
 
@@ -68,6 +70,7 @@ export function isPhotoDetails(value: unknown): value is PhotoDetails {
     Number.isFinite(photo['added']) &&
     typeof photo['name'] === 'string' &&
     typeof photo['type'] === 'string' &&
+    photo['type'].length <= MAX_TYPE_LENGTH &&
     Number.isSafeInteger(photo['size']) &&
     (photo['size'] as number) >= 0 &&
     isSize(photo['width']) &&
@@ -120,6 +123,82 @@ export function localDateTime(date: Date): string {
 /** Newest taken first; photos taken at the same moment, the last added first. */
 export const byNewest = (a: Photo, b: Photo): number =>
   b.taken.localeCompare(a.taken) || b.added - a.added || a.id.localeCompare(b.id);
+
+/** Changes at most this many photos one by one; more, in one pass over the list. */
+const FEW_CHANGES = 16;
+
+/** Where `photo` goes in `photos` (in `compare`'s order): after every one before it. */
+function placeOf(
+  photos: readonly Photo[],
+  photo: Photo,
+  compare: (a: Photo, b: Photo) => number,
+): number {
+  let low = 0;
+  let high = photos.length;
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    if (compare(photos[middle] as Photo, photo) <= 0) low = middle + 1;
+    else high = middle;
+  }
+  return low;
+}
+
+/**
+ * `photos` (newest first) with the photos in `save` and the ids in `remove`
+ * taken out, and those in `save` put in their places: a new list, still in
+ * order. Each change used to sort the whole library again, which froze a
+ * big library's page for each photo added or uploaded, up to a second and
+ * more with 100,000 of them on a phone (audit 4 J-1). Now a few changes
+ * cost a search each, and many one pass over the list. A photo in both
+ * `save` and `remove` is kept, as saved.
+ */
+export function withChanges(
+  photos: readonly Photo[],
+  save: readonly Photo[],
+  remove: readonly string[] = [],
+  compare: (a: Photo, b: Photo) => number = byNewest,
+): Photo[] {
+  let next = photos.slice();
+  // The last change to each photo.
+  const saving = new Map(save.map((photo) => [photo.id, photo]));
+  // Most changes leave a photo where it was in the order (uploading it, say):
+  // found there in a search, without reading the whole list.
+  const moved: Photo[] = [];
+  for (const photo of saving.values()) {
+    const at = placeOf(next, photo, compare) - 1;
+    if (next[at]?.id === photo.id) next[at] = photo;
+    else moved.push(photo);
+  }
+  const gone = new Set([
+    ...remove.filter((id) => !saving.has(id)),
+    ...moved.map((photo) => photo.id),
+  ]);
+  if (gone.size <= FEW_CHANGES) {
+    for (const id of gone) {
+      const at = next.findIndex((photo) => photo.id === id);
+      if (at !== -1) next.splice(at, 1);
+    }
+  } else {
+    next = next.filter((photo) => !gone.has(photo.id));
+  }
+  if (moved.length <= FEW_CHANGES) {
+    for (const photo of moved) next.splice(placeOf(next, photo, compare), 0, photo);
+    return next;
+  }
+  // Many: merge the two lists, each in order.
+  const added = moved.sort(compare);
+  const merged: Photo[] = [];
+  let kept = 0;
+  for (const photo of added) {
+    while (kept < next.length && compare(next[kept] as Photo, photo) <= 0) {
+      merged.push(next[kept] as Photo);
+      kept += 1;
+    }
+    merged.push(photo);
+  }
+  for (; kept < next.length; kept += 1) merged.push(next[kept] as Photo);
+  return merged;
+}
 
 export interface Month {
   /** "YYYY-MM" */
@@ -224,15 +303,20 @@ export function librarySummary(photos: readonly Photo[], locale?: string): strin
   return `${countLabel(photos.length, 'photo', 'photos', locale)} · ${formatBytes(bytes, locale)}`;
 }
 
-const EXTENSIONS: Record<string, string> = {
-  'image/jpeg': 'jpg',
-  'image/png': 'png',
-  'image/heic': 'heic',
-  'image/heif': 'heif',
-  'image/webp': 'webp',
-  'image/gif': 'gif',
-  'image/avif': 'avif',
-};
+/**
+ * File extensions by type. A Map: a type comes from another device, and
+ * looked up in a plain object, "constructor" or "toString" would find the
+ * object's own functions, breaking the whole grid (audit 4 C-2).
+ */
+const EXTENSIONS = new Map([
+  ['image/jpeg', 'jpg'],
+  ['image/png', 'png'],
+  ['image/heic', 'heic'],
+  ['image/heif', 'heif'],
+  ['image/webp', 'webp'],
+  ['image/gif', 'gif'],
+  ['image/avif', 'avif'],
+]);
 
 /**
  * A guess, from what the browser says about itself, that it's on an iPhone
@@ -252,7 +336,11 @@ export function isIPhoneOrIPad(userAgent: string, touchPoints: number): boolean 
 /** The kind of file, for people: "JPG", "HEIC"… */
 export function formatLabel(photo: Pick<Photo, 'name' | 'type'>): string {
   const fromName = /\.([A-Za-z0-9]{1,5})$/.exec(photo.name)?.[1];
-  return (fromName ?? EXTENSIONS[photo.type] ?? (photo.type.split('/')[1] || 'file')).toUpperCase();
+  return (
+    fromName ??
+    EXTENSIONS.get(photo.type) ??
+    (photo.type.split('/')[1] || 'file')
+  ).toUpperCase();
 }
 
 /** The name to save the original as: its own name, made safe, with an extension. */
@@ -271,7 +359,7 @@ export function downloadName(photo: Pick<Photo, 'name' | 'type' | 'taken'>): str
   const safe = [...cleaned].slice(0, 120).join('').trimEnd();
   const fallback = `photo-${photo.taken.replace(/[:T]/g, '-')}`;
   const name = safe || fallback;
-  const extension = EXTENSIONS[photo.type];
+  const extension = EXTENSIONS.get(photo.type);
   return /\.[A-Za-z0-9]{1,5}$/.test(name) || !extension ? name : `${name}.${extension}`;
 }
 

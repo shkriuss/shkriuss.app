@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { precacheUrls, serviceWorkerSource } from './service-worker.ts';
 
+/** The sites' policy now, and before a change that tightened it. */
+const CSP_NOW = "default-src 'none'; script-src 'self'";
+const CSP_BEFORE = "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'";
+
 describe('precacheUrls', () => {
   it('turns built files into the URLs they are served at', () => {
     expect(precacheUrls(['index.html', 'privacy/index.html', '404.html', '_astro/a.js'])).toEqual([
@@ -25,7 +29,7 @@ describe('precacheUrls', () => {
 });
 
 describe('serviceWorkerSource', () => {
-  const source = serviceWorkerSource({ files: ['/'], version: 'abc123' });
+  const source = serviceWorkerSource({ files: ['/'], version: 'abc123', csp: CSP_NOW });
 
   it('only deletes its own old caches, never one an app manages', () => {
     expect(source).toContain("const CACHE = 'shkriuss-abc123';");
@@ -33,7 +37,9 @@ describe('serviceWorkerSource', () => {
   });
 
   it('serves any saved file, from any cache, before the network', () => {
-    expect(source).toContain('caches.match(request).then((cached) => cached || fetch(request))');
+    expect(source).toContain(
+      'caches.match(request).then((cached) => (cached ? withPolicy(cached) : fetch(request)))',
+    );
   });
 });
 
@@ -50,7 +56,7 @@ type Stores = Map<string, Map<string, Response>>;
  */
 function running(
   network: (url: string) => Response,
-  { version = 'v1', files = ['/'], stores = new Map() as Stores } = {},
+  { version = 'v1', files = ['/'], stores = new Map() as Stores, csp = CSP_NOW } = {},
 ) {
   const listeners = new Map<string, Listener>();
   const keyOf = (request: string | { url: string }) =>
@@ -111,7 +117,7 @@ function running(
     clients: { claim: async () => undefined },
   };
   const fetch = async (request: { url: string }) => network(request.url);
-  new Function('self', 'caches', 'fetch', serviceWorkerSource({ files, version }))(
+  new Function('self', 'caches', 'fetch', serviceWorkerSource({ files, version, csp }))(
     self,
     caches,
     fetch,
@@ -179,6 +185,51 @@ describe('the service worker', () => {
     expect(await (await worker.open('/?utm=2')).text()).toBe('saved');
     // With nothing saved, the error is shown as it is.
     expect((await worker.open('/other/')).status).toBe(503);
+  });
+
+  it('shows the saved copy of a page instead of a 4xx too, which a saved page can’t be', async () => {
+    // Such as Cloudflare refusing requests with too many cookies (audit 4 C-5).
+    let answer = page('saved');
+    const worker = running(() => answer);
+    await worker.start();
+    answer = page('Request Header Or Cookie Too Large', 400);
+    expect(await (await worker.open('/')).text()).toBe('saved');
+    answer = page('Not found', 404);
+    expect((await worker.open('/missing/')).status).toBe(404);
+    // A redirect is passed on as it is.
+    answer = Object.defineProperty(new Response(null, { status: 200 }), 'type', {
+      value: 'opaqueredirect',
+    });
+    expect((await worker.open('/')).type).toBe('opaqueredirect');
+  });
+
+  it('serves saved files with the site’s security policy now (audit 4 C-4)', async () => {
+    // A worker's script saved under an older, looser policy, by the version before.
+    const network = (csp: string) => (url: string) =>
+      new Response(url, { headers: { 'Content-Security-Policy': csp } });
+    const first = running(network(CSP_BEFORE), {
+      version: 'v1',
+      files: ['/', '/_astro/worker.js'],
+      csp: CSP_BEFORE,
+    });
+    await first.start();
+    const { stores } = first;
+    // Only the headers change: the file isn't downloaded again, but served with the new policy.
+    const second = running(network(CSP_NOW), {
+      version: 'v2',
+      files: ['/', '/_astro/worker.js'],
+      stores,
+    });
+    await second.start();
+    const saved = await second.file('/_astro/worker.js');
+    expect(saved.headers.get('Content-Security-Policy')).toBe(CSP_NOW);
+    expect(await saved.text()).toBe(`${ORIGIN}/_astro/worker.js`);
+    // So are files an app saved itself, like Grammar's Deep check model.
+    const own = await second.caches.open('deep-check');
+    await own.put(`${ORIGIN}/on-demand/model.bin`, network(CSP_BEFORE)('model'));
+    const model = await second.file('/on-demand/model.bin');
+    expect(model.headers.get('Content-Security-Policy')).toBe(CSP_NOW);
+    expect(await model.text()).toBe('model');
   });
 
   it('saves pages only with their own version’s files, never from the network', async () => {

@@ -130,11 +130,21 @@ export interface Context {
   after: string;
 }
 
+/** Whether `index` falls between the two halves of one character (an emoji, say). */
+const splitsCharacter = (text: string, index: number): boolean =>
+  index > 0 &&
+  index < text.length &&
+  /[\uD800-\uDBFF]/.test(text.charAt(index - 1)) &&
+  /[\uDC00-\uDFFF]/.test(text.charAt(index));
+
 /** The problem with a little text either side, on one line ("…I has a apple…"). */
 export function contextOf(text: string, issue: Pick<Issue, 'start' | 'end'>): Context {
   const oneLine = (part: string) => part.replace(/\s+/g, ' ');
-  const from = Math.max(0, issue.start - CONTEXT_LENGTH);
-  const to = Math.min(text.length, issue.end + CONTEXT_LENGTH);
+  let from = Math.max(0, issue.start - CONTEXT_LENGTH);
+  let to = Math.min(text.length, issue.end + CONTEXT_LENGTH);
+  // Never half an emoji at either end, which shows as "�" (audit 4 F3-7).
+  if (splitsCharacter(text, from)) from += 1;
+  if (splitsCharacter(text, to)) to -= 1;
   return {
     before: (from > 0 ? '…' : '') + oneLine(text.slice(from, issue.start)).trimStart(),
     problem: text.slice(issue.start, issue.end),

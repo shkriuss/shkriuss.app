@@ -64,8 +64,22 @@ test('sends a test notification that only this device can read', async ({ page }
   await expect(page.locator('[data-announcer]')).not.toHaveText(/arrive even when/);
   await checkA11y(page, 'reminders while closed: on');
 
-  await page.getByRole('button', { name: 'Send a test notification' }).click();
+  // While the server is asked, it says so, and the button is busy (audit 4 G-6).
+  let answer: () => void = () => undefined;
+  const answered = new Promise<void>((resolve) => {
+    answer = resolve;
+  });
+  await page.route('**/api/push/test', async (route) => {
+    await answered;
+    await route.fallback();
+  });
+  const testButton = page.getByRole('button', { name: 'Send a test notification' });
+  await testButton.click();
+  await expect(closedStatus(page)).toHaveText('Sending a test notification…');
+  await expect(testButton).toHaveAttribute('aria-disabled', 'true');
+  answer();
   await expect(closedStatus(page)).toHaveText('Test sent. It should appear in a few seconds.');
+  await expect(testButton).not.toHaveAttribute('aria-disabled');
   await expect.poll(() => rig.received.length).toBe(1);
   const [push] = rig.received;
   if (!push) throw new Error('No push received');

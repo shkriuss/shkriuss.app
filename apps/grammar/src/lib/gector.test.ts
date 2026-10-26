@@ -70,6 +70,26 @@ describe('chooseEdits and applyEdits', () => {
     }
   });
 
+  it('leaves words that are names of an object’s own functions alone (audit 4 F3-2)', () => {
+    // "constructor" and "toString" were taken for merge marks: joined to their
+    // neighbours with "function Object() { [native code] }", or dropped.
+    for (const word of ['constructor', 'toString', 'valueOf', '__proto__', 'hasOwnProperty']) {
+      const words = ['The', word, 'have', 'finished', '.'];
+      const edits = [{ index: 2, label: '$REPLACE_has' }];
+      expect(applyEdits(words, edits, verbs)).toEqual(['The', word, 'has', 'finished', '.']);
+      expect(
+        applyEdits(['My', 'uncle', 'is', 'a', word], [{ index: 2, label: '$REPLACE_is' }], verbs),
+      ).toEqual(['My', 'uncle', 'is', 'a', word]);
+    }
+    // Real merge marks still merge.
+    expect(
+      applyEdits(['every', 'one', 'came'], [{ index: 0, label: '$MERGE_SPACE' }], verbs),
+    ).toEqual(['everyone', 'came']);
+    expect(
+      applyEdits(['well', 'known', 'fact'], [{ index: 0, label: '$MERGE_HYPHEN' }], verbs),
+    ).toEqual(['well-known', 'fact']);
+  });
+
   it('only acts when the model is sure enough', () => {
     const found: Prediction[] = [
       { label: label('$KEEP'), probability: 0.99 },

@@ -13,7 +13,6 @@ import { canFreeUp, deleteMessage, freeable, onlineMessage, onlyOnline } from '.
 import {
   addedMessage,
   byMonth,
-  byNewest,
   countLabel,
   downloadName,
   formatBytes,
@@ -26,6 +25,7 @@ import {
   photoAlt,
   shownLabel,
   takenLabel,
+  withChanges,
   type Added,
   type Photo,
 } from '../lib/photos.ts';
@@ -91,6 +91,8 @@ export function mountPhotos(root: Document): void {
   const unlockForm = required<HTMLFormElement>(root, '[data-unlock-form]');
   const storageCode = required<HTMLInputElement>(unlockForm, '[data-storage-code]');
   const unlockError = required<HTMLElement>(unlockForm, '[data-unlock-error]');
+  const unlockButton = required<HTMLButtonElement>(unlockForm, 'button[type="submit"]');
+  const unlockStatus = required<HTMLElement>(unlockForm, '[data-unlock-status]');
   const freeUp = required<HTMLElement>(root, '[data-free-up]');
   const freeUpDialog = required<HTMLDialogElement>(root, '[data-free-up-dialog]');
   const freeUpText = required<HTMLElement>(freeUpDialog, '[data-free-up-text]');
@@ -147,8 +149,7 @@ export function mountPhotos(root: Document): void {
     get: find,
     changed({ save = [], remove = [] }) {
       if (save.length === 0 && remove.length === 0) return;
-      const gone = new Set([...remove, ...save.map((photo) => photo.id)]);
-      photos = [...photos.filter((photo) => !gone.has(photo.id)), ...save].sort(byNewest);
+      photos = withChanges(photos, save, remove);
       for (const id of remove) chosen.delete(id);
       if (viewing && remove.includes(viewing.id) && viewer.open) viewer.close();
       // Many changes can come in a row: show them together. Drawn in the
@@ -172,28 +173,50 @@ export function mountPhotos(root: Document): void {
     freeUp.hidden = !canFreeUp(state) || freeable(photos).photos.length === 0;
   }
 
+  function codeProblem(message: string): void {
+    unlockError.textContent = message;
+    storageCode.setAttribute('aria-invalid', 'true');
+    focusProblem(storageCode, message);
+  }
+
+  // Says it's checking, and a second press meanwhile isn't a second try:
+  // wrong ones count against those allowed an hour (audit 4 G-6).
+  let unlocking = false;
   unlockForm.addEventListener('submit', (event) => {
     event.preventDefault();
+    if (unlocking) return;
     const code = storageCode.value;
-    if (!code) return;
+    if (!code) {
+      codeProblem('Enter the storage code.');
+      return;
+    }
     unlockError.textContent = '';
     storageCode.removeAttribute('aria-invalid');
-    void online.unlock(code).then((result) => {
-      if (result === 'ok') {
-        storageCode.value = '';
-        announce('Online storage is unlocked. Your photos are going online.');
-        onlineStatus.focus();
-        return;
-      }
-      unlockError.textContent = {
-        wrong: 'That isn’t the storage code. Check it and try again.',
-        'too-many': 'Too many wrong tries. Try again in an hour.',
-        'not-set-up': 'Online storage isn’t set up yet.',
-        offline: 'Couldn’t reach the online library. Check your connection and try again.',
-      }[result];
-      storageCode.setAttribute('aria-invalid', 'true');
-      focusProblem(storageCode, unlockError.textContent ?? '');
-    });
+    unlocking = true;
+    setBusy(unlockButton, true);
+    unlockStatus.textContent = 'Checking the storage code…';
+    void online
+      .unlock(code)
+      .catch(() => 'offline' as const)
+      .then((result) => {
+        unlocking = false;
+        setBusy(unlockButton, false);
+        unlockStatus.textContent = '';
+        if (result === 'ok') {
+          storageCode.value = '';
+          announce('Online storage is unlocked. Your photos are going online.');
+          onlineStatus.focus();
+          return;
+        }
+        codeProblem(
+          {
+            wrong: 'That isn’t the storage code. Check it and try again.',
+            'too-many': 'Too many wrong tries. Try again in an hour.',
+            'not-set-up': 'Online storage isn’t set up yet.',
+            offline: 'Couldn’t reach the online library. Check your connection and try again.',
+          }[result],
+        );
+      });
   });
 
   // ---------- Showing the library ----------
@@ -348,7 +371,7 @@ export function mountPhotos(root: Document): void {
             thumb: read.thumb,
           });
           byHash.set(photo.hash, photo);
-          photos = [...photos.filter((one) => one.id !== photo.id), photo].sort(byNewest);
+          photos = withChanges(photos, [photo]);
           if (known) result.restored += 1;
           else result.added += 1;
           render();
