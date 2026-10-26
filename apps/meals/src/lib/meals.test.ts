@@ -456,6 +456,38 @@ describe('shopping', () => {
     ]);
   });
 
+  // Audit 4 F3-6: wide and narrow letters are folded to ordinary ones now,
+  // and a tick is saved under its ingredient as it was folded then.
+  it('keeps ticks saved before wide and narrow letters were folded', () => {
+    const cake = { meals: [meal('Cake', ['½ cup sugar', '牛乳 １Ｌ', 'ｺｰﾋｰ豆'])] };
+    const week = { planned: [planned('Cake', MONDAY)] };
+    const tick = (key: string, name: string): ShoppingItem => ({
+      id: `${MONDAY}:${key}`,
+      week: MONDAY,
+      name,
+      extra: false,
+      done: true,
+    });
+    // As the version before saved them: "½", "１ｌ" and "ｺｰﾋｰ" as they were.
+    const before = {
+      items: [
+        tick('½ cup sugar', '½ cup sugar'),
+        tick('牛乳 １ｌ', '牛乳 １Ｌ'),
+        tick('ｺｰﾋｰ豆', 'ｺｰﾋｰ豆'),
+      ],
+    };
+    const rows = shoppingList(week, cake, before, MONDAY);
+    expect(rows).toHaveLength(3);
+    expect(rows.filter((row) => !row.done).map((row) => row.name)).toEqual([]);
+    // Taken back, the tick from before goes; ticked again, it's saved as now.
+    const sugar = rows.find((row) => row.name === '½ cup sugar');
+    if (!sugar) throw new Error('No sugar');
+    expect(sugar.key).not.toBe('½ cup sugar');
+    const back = setDone(before, MONDAY, sugar, false);
+    expect(back.items.map((item) => item.name)).toEqual(['牛乳 １Ｌ', 'ｺｰﾋｰ豆']);
+    expect(setDone(back, MONDAY, sugar, true).items.at(-1)?.id).toBe(`${MONDAY}:${sugar.key}`);
+  });
+
   it('ticks things off, adds others by hand, and remembers each week apart', () => {
     let shopping = emptyShopping();
     let rows = shoppingList(plan, meals, shopping, MONDAY);
