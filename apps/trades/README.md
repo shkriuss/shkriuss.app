@@ -88,9 +88,11 @@ Your trading journal: log your trades and see what works. Lives at
     trade is closed (and then the trade goes with them; its parts from other
     years stay, as trades of their own). It says how many that is, and what
     stays, and offers the spreadsheet first. With sync on, they're
-    deleted on the other devices too. Once more than 90% of the 3,500 are
-    used, a note at the top says how many are left and points to it
-    (`roomNote`).
+    deleted on the other devices too. If that year changes on another
+    device or tab while the dialog is open, it closes and says so, rather
+    than deleting another year or more than it said. Once more than 90% of
+    the 3,500 are used, a note at the top says how many are left and points
+    to it (`roomNote`).
   - The currency (`shkriuss:trades-settings`) is only for showing amounts:
     nothing is converted. It's saved only once changed (US dollars until
     then), so a new device has nothing to win over another's when they

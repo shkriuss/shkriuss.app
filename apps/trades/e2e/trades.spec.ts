@@ -408,6 +408,54 @@ test('deleting a year keeps what was closed of a trade still open', async ({ pag
   await expect(status(page, 'There are no closed trades to delete.')).toBeVisible();
 });
 
+// Audit 4 F2-1: the dialog quietly moved to another year, and its red
+// button then deleted that one, on every device.
+test('“Delete a year…” closes, and says why, when its year changes in another tab', async ({
+  page,
+}) => {
+  await seed(page, [
+    trade({ symbol: 'AAPL', entryDate: '2024-02-01', exitDate: '2024-03-02' }),
+    trade({ symbol: 'MSFT', entryDate: '2024-11-01', exitDate: '2024-12-31' }),
+    trade({ symbol: 'NVDA', entryDate: '2026-01-02', exitDate: '2026-02-02' }),
+    trade({ symbol: 'AMD', entryDate: '2026-03-02', exitDate: '2026-04-01' }),
+  ]);
+  const other = await page.context().newPage();
+  await other.clock.setFixedTime(NOW);
+  await other.goto('/');
+  const deleteYear = page.getByRole('button', { name: 'Delete a year…' });
+  const dialog = yearDialog(page);
+
+  // The year chosen is deleted there.
+  await deleteYear.click();
+  await expect(dialog.getByRole('button', { name: 'Delete 2 closed trades' })).toBeVisible();
+  await other.getByRole('button', { name: 'Delete a year…' }).click();
+  await yearDialog(other).getByRole('button', { name: 'Delete 2 closed trades' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole('alert')).toHaveText(
+    'The closed trades from 2024 were deleted on another device.',
+  );
+  await expect(deleteYear).toBeFocused();
+  await expect(page.locator('[data-closed-list] [data-symbol]')).toHaveText(['AMD', 'NVDA']);
+
+  // A trade is closed in the year chosen there: it would delete more than it said.
+  await deleteYear.click();
+  await expect(dialog.getByRole('button', { name: 'Delete 2 closed trades' })).toBeVisible();
+  await other.getByRole('button', { name: 'New trade' }).click();
+  await fillTrade(other, {
+    symbol: 'TSLA',
+    entryPrice: '200',
+    quantity: '10',
+    exitDate: '2026-10-21',
+    exitPrice: '210',
+  });
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole('alert')).toHaveText(
+    '2026 has 3 closed trades now, after changes on another device. Nothing was deleted.',
+  );
+  await expect(page.locator('[data-closed-list] [data-symbol]')).toHaveCount(3);
+  await other.close();
+});
+
 test('says when Trades is nearly full, and how to make room', async ({ page }) => {
   // Just over 90% of the trades Trades keeps: one closed a day, back from 2026.
   const count = LIMITS.trades * 0.9 + 1;

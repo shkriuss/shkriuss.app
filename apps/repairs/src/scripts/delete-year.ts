@@ -3,6 +3,7 @@
  * their photos, to make room. Split from repairs.ts (audit 3 J-9).
  */
 import { required } from '@shkriuss/ui/dom';
+import { showProblem } from '@shkriuss/ui/problem';
 import {
   countLabel,
   photoFiles,
@@ -27,7 +28,10 @@ export interface DeleteYearPage {
 export interface DeleteYear {
   /** "Delete a year…": opens its dialog, or says there's nothing to delete. */
   open(): void;
-  /** After changes from another device or tab: the dialog shows the years there are now. */
+  /**
+   * After changes from another device or tab: the dialog shows the years
+   * there are now, or closes, and says why, when the year chosen changed.
+   */
   refresh(): void;
 }
 
@@ -46,10 +50,14 @@ export function mountDeleteYear(root: ParentNode, page: DeleteYearPage): DeleteY
   const yearCount = (year: string) =>
     repairYears(page.repairs()).find((entry) => entry.year === year)?.count ?? 0;
 
+  /** The year the dialog shows, and how many repairs it says go. */
+  let shownYear = { year: '', count: 0 };
+
   /** Says what deleting the year chosen removes. */
   function showYear(): void {
     const year = yearSelect.value;
-    const count = repairsCount(yearCount(year));
+    shownYear = { year, count: yearCount(year) };
+    const count = repairsCount(shownYear.count);
     yearText.textContent = `The ${count} from ${year} will be deleted, with their photos. With sync on, they’re deleted on your other devices too. This can’t be undone.`;
     yearConfirm.textContent = `Delete ${count}`;
   }
@@ -101,8 +109,21 @@ export function mountDeleteYear(root: ParentNode, page: DeleteYearPage): DeleteY
     open: openYears,
     refresh() {
       if (!yearDialog.open) return;
-      if (page.repairs().repairs.length === 0) yearDialog.close();
-      else fillYears();
+      // The year chosen changed: the dialog closes, and says why, so its
+      // button doesn't delete another year, or more than it said (audit 4 F2-1).
+      const { year, count } = shownYear;
+      const now = yearCount(year);
+      if (now === count) {
+        fillYears();
+        return;
+      }
+      yearDialog.close();
+      deleteYearButton.focus();
+      showProblem(
+        now === 0
+          ? `The repairs from ${year} were deleted on another device.`
+          : `${year} has ${repairsCount(now)} now, after changes on another device. Nothing was deleted.`,
+      );
     },
   };
 }

@@ -147,7 +147,8 @@ export function mountRepairs(root: Document): void {
   let shown = PAGE_SIZE;
   /** A repair just saved: never hidden behind "Show more" (shownCount). */
   let reveal: string | null = null;
-  let deleting: { type: 'repair' | 'vehicle'; id: string } | null = null;
+  /** What the delete dialog would delete (for a vehicle, with how many repairs it said go too). */
+  let deleting: { type: 'repair' | 'vehicle'; id: string; count?: number } | null = null;
   let syncWasOn = false;
   let announceTimer: number | undefined;
   const photoViewer = mountPhotoViewer(root, () => vehicles);
@@ -430,6 +431,9 @@ export function mountRepairs(root: Document): void {
 
   // ---------- Deleting ----------
 
+  const repairsOf = (vehicle: string) =>
+    repairs.repairs.filter((repair) => repair.vehicle === vehicle);
+
   function askToDelete(type: 'repair' | 'vehicle'): void {
     if (type === 'repair') {
       const repair = findRepair(repairEditor.editing());
@@ -440,8 +444,8 @@ export function mountRepairs(root: Document): void {
     } else {
       const vehicle = findVehicle(vehicleEditor.editing());
       if (!vehicle) return;
-      deleting = { type, id: vehicle.id };
-      const count = repairs.repairs.filter((repair) => repair.vehicle === vehicle.id).length;
+      const count = repairsOf(vehicle.id).length;
+      deleting = { type, id: vehicle.id, count };
       deleteTitle.textContent = `Delete ${vehicle.name}?`;
       deleteText.textContent =
         count === 0
@@ -468,7 +472,7 @@ export function mountRepairs(root: Document): void {
       const vehicle = findVehicle(target.id);
       vehicleDialog.close();
       if (!vehicle) return;
-      const own = repairs.repairs.filter((repair) => repair.vehicle === vehicle.id);
+      const own = repairsOf(vehicle.id);
       const count = own.length;
       void deletePhotos(photosOf(own));
       sync.filesRemoved(photoFiles(photosOf(own)));
@@ -636,6 +640,24 @@ export function mountRepairs(root: Document): void {
     vehicles = vehiclesStore.load();
     repairs = repairsStore.load();
     settings = settingsStore.load();
+    // "Delete Bus 105?" says how many repairs go with the bus. When that
+    // changed on another device or tab, it closes, and says why, so it
+    // doesn't delete more than it said (audit 4 F2-1). When what it would
+    // delete is gone, it closes, and the form under it says why.
+    const target = deleteDialog.open ? deleting : null;
+    if (target?.type === 'repair' && !findRepair(target.id)) deleteDialog.close();
+    if (target?.type === 'vehicle') {
+      const vehicle = findVehicle(target.id);
+      const now = repairsOf(target.id).length;
+      if (!vehicle) deleteDialog.close();
+      else if (now !== target.count) {
+        deleteDialog.close();
+        vehicleDialog.close();
+        showProblem(
+          `${vehicle.name} has ${countLabel(now, 'repair', 'repairs')} now, after changes on another device. Nothing was deleted.`,
+        );
+      }
+    }
     // What's being changed was deleted on another device or tab: the form
     // closes, and says why (audit 3 G-6). Changed there, the form's photos
     // follow (audit 3 F2-1).

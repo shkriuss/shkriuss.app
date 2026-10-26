@@ -59,8 +59,10 @@ See where your money goes, month by month. Lives at
 - To make room, "Delete a year…" (next to the spreadsheet download) deletes
   every entry of one year (`entryYears`, `removeYear`). It says how many
   that is, and offers the spreadsheet first. With sync on, the entries are
-  deleted on the other devices too. Once more than 90% of the 6,000 are
-  used, a note at the top says how many are left and points to it
+  deleted on the other devices too. If that year changes on another device
+  or tab while the dialog is open, it closes and says so, rather than
+  deleting another year or more than it said. Once more than 90% of the
+  6,000 are used, a note at the top says how many are left and points to it
   (`roomNote`).
 - The monthly reminder ("Check your budget") comes on a chosen day, the 1st
   to the 28th or the last day, at a chosen time. The last day is sent as "a

@@ -365,6 +365,60 @@ test('deletes a year, after saying what it deletes', async ({ page }) => {
   await expect(year.locator('option')).toHaveText(['2025 (1 entry)', '2026 (1 entry)']);
 });
 
+// Audit 4 F2-1: the dialog quietly moved to another year, and its red
+// button then deleted that one, on every device.
+test('“Delete a year…” closes, and says why, when its year changes in another tab', async ({
+  page,
+}) => {
+  await seed(page, {
+    entries: [
+      entry({ date: '2024-03-02' }),
+      entry({ date: '2024-12-31' }),
+      entry({ date: '2025-06-01' }),
+      entry({ note: 'This month' }),
+      entry({ note: 'Also this month' }),
+    ],
+  });
+  const other = await page.context().newPage();
+  await other.clock.setFixedTime(NOW);
+  await other.goto('/');
+  const deleteYear = page.getByRole('button', { name: 'Delete a year…' });
+  const dialog = yearDialog(page);
+
+  // Another year changes: the dialog stays on the year chosen.
+  await deleteYear.click();
+  await expect(dialog.getByRole('button', { name: 'Delete 2 entries' })).toBeVisible();
+  await other.getByRole('button', { name: 'Delete a year…' }).click();
+  await yearDialog(other).getByLabel('Year').selectOption('2025');
+  await yearDialog(other).getByRole('button', { name: 'Delete 1 entry' }).click();
+  await expect(dialog.getByLabel('Year').locator('option')).toHaveText([
+    '2024 (2 entries)',
+    '2026 (2 entries)',
+  ]);
+  await expect(dialog.getByLabel('Year')).toHaveValue('2024');
+
+  // The year chosen is deleted there.
+  await other.getByRole('button', { name: 'Delete a year…' }).click();
+  await yearDialog(other).getByRole('button', { name: 'Delete 2 entries' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole('alert')).toHaveText(
+    'The entries from 2024 were deleted on another device.',
+  );
+  await expect(deleteYear).toBeFocused();
+  expect((await savedEntries(page)).count).toBe(2);
+
+  // An entry is added to the year chosen there: it would delete more than it said.
+  await deleteYear.click();
+  await expect(dialog.getByRole('button', { name: 'Delete 2 entries' })).toBeVisible();
+  await addEntry(other, { amount: '5', note: 'Bread' });
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole('alert')).toHaveText(
+    '2026 has 3 entries now, after changes on another device. Nothing was deleted.',
+  );
+  expect((await savedEntries(page)).count).toBe(3);
+  await other.close();
+});
+
 test('says when Budget is nearly full, and how to make room', async ({ page }) => {
   // Just over 90% of the entries Budget keeps: one a day, back from 2026.
   const count = LIMITS.entries * 0.9 + 1;

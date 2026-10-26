@@ -61,9 +61,12 @@ private car's service history. Lives at <https://repairs.shkriuss.app>.
 - To make room, "Delete a year…" (next to the spreadsheet download) deletes
   every repair of one year, with its photos (`repairYears`, `removeYear`).
   It says how many that is, and offers the spreadsheet first. With sync on,
-  the repairs and their photos are deleted on the other devices too. Once
-  more than 90% of the 3,000 are used, a note at the top says how many are
-  left and points to it (`roomNote`).
+  the repairs and their photos are deleted on the other devices too. If
+  that year changes on another device or tab while the dialog is open, it
+  closes and says so, rather than deleting another year or more than it
+  said; so does "Delete Bus 105?" when the bus's repairs change. Once more
+  than 90% of the 3,000 are used, a note at the top says how many are left
+  and points to it (`roomNote`).
 - Photos (up to 10 a repair): picked with "Add photos" (the phone offers its
   camera or its photo library), made smaller on the device (1,600 pixels on
   the longest side, plus a 320-pixel thumbnail, saved again as JPEG, which

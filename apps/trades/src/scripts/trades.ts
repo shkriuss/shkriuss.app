@@ -543,10 +543,14 @@ export function mountTrades(root: Document): void {
   const yearCount = (year: string) =>
     closedYears(state).find((entry) => entry.year === year) ?? { year, count: 0, kept: 0 };
 
+  /** The year the dialog shows, and how many trades it says go. */
+  let shownYear = { year: '', count: 0 };
+
   /** Says what deleting the year chosen removes, and what stays. */
   function showYear(): void {
     const year = yearSelect.value;
     const { count, kept } = yearCount(year);
+    shownYear = { year, count };
     // Parts of a trade still open stay with it (audit 3 F2-2).
     const parts =
       kept === 0
@@ -670,9 +674,22 @@ export function mountTrades(root: Document): void {
       dialog.close();
       showProblem('That trade was closed on another device.');
     }
+    // The year chosen changed on another device or tab: the dialog closes,
+    // and says why, so its button doesn't delete another year, or more than
+    // it said (audit 4 F2-1).
     if (yearDialog.open) {
-      if (closedYears(state).length === 0) yearDialog.close();
-      else fillYears();
+      const { year, count } = shownYear;
+      const now = yearCount(year).count;
+      if (now === count) fillYears();
+      else {
+        yearDialog.close();
+        deleteYearButton.focus();
+        showProblem(
+          now === 0
+            ? `The closed trades from ${year} were deleted on another device.`
+            : `${year} has ${closedCount(now)} now, after changes on another device. Nothing was deleted.`,
+        );
+      }
     }
     keepFocus(render, newButton);
   }

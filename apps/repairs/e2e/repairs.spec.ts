@@ -394,6 +394,61 @@ test('deletes a year, after saying what it deletes', async ({ page }) => {
   await expect(vehicleItem(page, 'Bus 12')).toHaveCount(1);
 });
 
+// Audit 4 F2-1: "Delete a year…" quietly moved to another year, and its red
+// button then deleted that one; "Delete Bus 105?" deleted repairs added after
+// it said how many go.
+test('deleting a year or a vehicle stops, and says why, when it changes in another tab', async ({
+  page,
+}) => {
+  await seed(page, {
+    vehicles: fleet,
+    repairs: [
+      repair({ date: '2024-03-02' }),
+      repair({ date: '2024-12-31', vehicle: 'b12' }),
+      repair({ work: 'Checked the doors' }),
+      repair({ work: 'New wipers', vehicle: 'b12' }),
+    ],
+  });
+  const other = await page.context().newPage();
+  await other.clock.setFixedTime(NOW);
+  await other.goto('/');
+
+  // The year chosen is deleted there.
+  const deleteYear = page.getByRole('button', { name: 'Delete a year…' });
+  const dialog = yearDialog(page);
+  await deleteYear.click();
+  await expect(dialog.getByRole('button', { name: 'Delete 2 repairs' })).toBeVisible();
+  await other.getByRole('button', { name: 'Delete a year…' }).click();
+  await yearDialog(other).getByRole('button', { name: 'Delete 2 repairs' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole('alert')).toHaveText(
+    'The repairs from 2024 were deleted on another device.',
+  );
+  await expect(deleteYear).toBeFocused();
+  await expect(repairItems(page)).toHaveCount(2);
+
+  // A repair on Bus 105 is added there while "Delete Bus 105?" is open.
+  await vehicleItem(page, 'Bus 105').getByRole('button', { name: 'Edit Bus 105' }).click();
+  await vehicleDialog(page).getByRole('button', { name: 'Delete' }).click();
+  const confirm = page.getByRole('dialog', { name: 'Delete Bus 105?' });
+  await expect(confirm).toContainText('Bus 105 and its 1 repair will be removed.');
+  await other.getByRole('button', { name: 'New repair' }).click();
+  await fillRepair(other, {
+    vehicle: 'Bus 105',
+    mileage: '121000',
+    problem: 'Brake noise',
+    work: 'Replaced the rear pads',
+  });
+  await expect(confirm).toBeHidden();
+  await expect(vehicleDialog(page)).toBeHidden();
+  await expect(page.getByRole('alert')).toHaveText(
+    'Bus 105 has 2 repairs now, after changes on another device. Nothing was deleted.',
+  );
+  await expect(vehicleItem(page, 'Bus 105')).toHaveCount(1);
+  await expect(repairItems(page)).toHaveCount(3);
+  await other.close();
+});
+
 // Audit F2-3: Repairs kept more than fit, and there was no way to make room.
 test('says when Repairs is nearly full, and how to make room', async ({ page }) => {
   // Just over 90% of the repairs Repairs keeps: one a day, back from 2026.
