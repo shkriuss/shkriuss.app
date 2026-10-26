@@ -628,7 +628,8 @@ describe('for people', () => {
       setCurrency(emptySettings(), 'GEL'),
     );
     expect(csv.split('\r\n')).toEqual([
-      'Date,Vehicle,Model,Plate,Mileage (km),System,Damage found,Work done,Parts replaced,Hours worked,Parts cost (GEL),Labour cost (GEL),Total cost (GEL)',
+      // A byte-order mark first, for Excel (audit 3 F2-6).
+      '\uFEFFDate,Vehicle,Model,Plate,Mileage (km),System,Damage found,Work done,Parts replaced,Hours worked,Parts cost (GEL),Labour cost (GEL),Total cost (GEL)',
       '2026-10-21,Bus 12,Isuzu Novociti Life,TB-012-BB,,,,Pads,Brake pads × 2 (BP-1); Clip,1.5,90,20,110',
       `2026-10-20,Bus 105,Isuzu Novociti Life,,120000,Brakes,'=cmd,"Fixed, ""properly""",,,,,`,
       '',

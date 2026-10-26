@@ -28,7 +28,27 @@ describe('spreadsheet files', () => {
         ['2026-10-03', 2000, '=pay'],
         ['2026-10-04', null, 'a, b'],
       ]),
-    ).toBe('Date,Amount,Note\r\n2026-10-03,2000,\'=pay\r\n2026-10-04,,"a, b"\r\n');
-    expect(csvFile([['Only a header']])).toBe('Only a header\r\n');
+    ).toBe('\uFEFFDate,Amount,Note\r\n2026-10-03,2000,\'=pay\r\n2026-10-04,,"a, b"\r\n');
+    expect(csvFile([['Only a header']])).toBe('\uFEFFOnly a header\r\n');
+  });
+
+  // Audit 3 F2-6: without it, Excel showed "Mike’s bus" as "Mikeâ€™s bus".
+  it('starts with a byte-order mark, once, so Excel reads it as UTF-8', async () => {
+    const file = csvFile([
+      ['Vehicle', 'Parts'],
+      ['Mike’s bus', 'Brake pads × 2'],
+      ['ავტობუსი', ''],
+    ]);
+    // What the browser writes: the Blob's bytes.
+    const bytes = new Uint8Array(await new Blob([file], { type: 'text/csv' }).arrayBuffer());
+    expect([...bytes.slice(0, 4)]).toEqual([0xef, 0xbb, 0xbf, 'V'.charCodeAt(0)]);
+    expect(file.match(/\uFEFF/g)).toHaveLength(1);
+    // Read back as UTF-8 (the mark is dropped), the text is as it was.
+    expect(new TextDecoder().decode(bytes).split('\r\n')).toEqual([
+      'Vehicle,Parts',
+      'Mike’s bus,Brake pads × 2',
+      'ავტობუსი,',
+      '',
+    ]);
   });
 });

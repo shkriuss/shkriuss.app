@@ -190,7 +190,8 @@ test('the currency, and a spreadsheet of the trades', async ({ page }) => {
   expect(file.suggestedFilename()).toBe('trades-2026-10-21.csv');
   const text = await readFile((await file.path()) ?? '', 'utf8');
   expect(text.split('\r\n').slice(0, 2)).toEqual([
-    'Symbol,Side,Entry date,Entry price,Quantity,Stop loss,Exit date,Exit price,Fees,Net result,Return %,R,Setup,Notes',
+    // A byte-order mark first, for Excel (audit 3 F2-6).
+    '\uFEFFSymbol,Side,Entry date,Entry price,Quantity,Stop loss,Exit date,Exit price,Fees,Net result,Return %,R,Setup,Notes',
     'AAPL,Long,2026-10-01,100,10,,2026-10-05,110,0,100,10,,,"Good, ""clean"" entry"',
   ]);
 });

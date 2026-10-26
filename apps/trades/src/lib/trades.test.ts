@@ -825,7 +825,8 @@ describe('spreadsheet', () => {
       ),
     );
     expect(csv.split('\r\n')).toEqual([
-      'Symbol,Side,Entry date,Entry price,Quantity,Stop loss,Exit date,Exit price,Fees,Net result,Return %,R,Setup,Notes',
+      // A byte-order mark first, for Excel (audit 3 F2-6).
+      '\uFEFFSymbol,Side,Entry date,Entry price,Quantity,Stop loss,Exit date,Exit price,Fees,Net result,Return %,R,Setup,Notes',
       "AAPL,Long,2026-10-10,100,10,,,,0,,,,,'=SUM(A1)",
       'AAPL,Long,2026-10-01,100,10,95,2026-10-05,110,2,98,9.8,1.96,Breakout,"Good, ""clean"" entry"',
       '',

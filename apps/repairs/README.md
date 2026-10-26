@@ -44,7 +44,9 @@ private car's service history. Lives at <https://repairs.shkriuss.app>.
   "1.500" in French (1500 or 1.5), is asked again.
 - "Download as a spreadsheet (CSV)" saves every repair, one row each, with
   the hours and the parts, labour and total cost. Text a spreadsheet could
-  read as a formula starts with `'`.
+  read as a formula starts with `'`. The file starts with a byte-order mark,
+  so Excel shows text beyond plain English letters (Georgian, "’", the "×"
+  of a part's quantity) as typed.
 - Repairs keeps up to 3,000 repairs (`LIMITS.repairs`). Why not more: each
   repair is saved on the device, where a browser keeps about 5 MB for each
   site, and with sync on, sync keeps records of its own there too. The test

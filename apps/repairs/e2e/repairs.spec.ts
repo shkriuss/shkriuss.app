@@ -294,7 +294,8 @@ test('miles, and a spreadsheet of every repair', async ({ page }) => {
   expect(file.suggestedFilename()).toBe('repairs-2026-10-21.csv');
   const text = await readFile((await file.path()) ?? '', 'utf8');
   expect(text.split('\r\n')).toEqual([
-    'Date,Vehicle,Model,Plate,Mileage (mi),System,Damage found,Work done,Parts replaced,Hours worked,Parts cost (USD),Labour cost (USD),Total cost (USD)',
+    // A byte-order mark first, for Excel (audit 3 F2-6).
+    '\uFEFFDate,Vehicle,Model,Plate,Mileage (mi),System,Damage found,Work done,Parts replaced,Hours worked,Parts cost (USD),Labour cost (USD),Total cost (USD)',
     '2026-10-21,Bus 105,Isuzu Novociti Life,,120000,Brakes,"Door sensor fault, ""intermittent""",Replaced the front pads,Door sensor (DS-4),,,,',
     '',
   ]);

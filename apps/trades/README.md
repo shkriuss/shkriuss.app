@@ -42,7 +42,9 @@ Your trading journal: log your trades and see what works. Lives at
     its update before it syncs, instead of counting parts twice.
   - "Download as a spreadsheet (CSV)" saves every trade with its result
     (each part of a trade, and what's still open of it). Text that a
-    spreadsheet could read as a formula starts with `'`.
+    spreadsheet could read as a formula starts with `'`. The file starts
+    with a byte-order mark, so Excel shows text beyond plain English
+    letters (Georgian, "’") as typed.
   - Trades keeps up to 3,500 trades, open and closed (`LIMITS.trades`).
     Why not more: each trade is saved on the device, where a browser keeps
     about 5 MB for each site, and with sync on, sync keeps records of its

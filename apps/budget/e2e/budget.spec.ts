@@ -193,7 +193,8 @@ test('the currency, and a spreadsheet of the entries', async ({ page }) => {
   expect(file.suggestedFilename()).toBe('budget-2026-10-21.csv');
   const text = await readFile((await file.path()) ?? '', 'utf8');
   expect(text.split('\r\n')).toEqual([
-    'Date,Type,Amount,Category,Note',
+    // A byte-order mark first, for Excel (audit 3 F2-6).
+    '\uFEFFDate,Type,Amount,Category,Note',
     '2026-10-23,Refund,2.5,Groceries,',
     '2026-10-22,Income,100,,Gift',
     '2026-10-21,Expense,-12.5,Groceries,"Milk, ""fresh"""',

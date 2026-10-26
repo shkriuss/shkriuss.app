@@ -574,7 +574,8 @@ describe('spreadsheet', () => {
         categories,
       ).split('\r\n'),
     ).toEqual([
-      'Date,Type,Amount,Category,Note',
+      // A byte-order mark first, for Excel (audit 3 F2-6).
+      '\uFEFFDate,Type,Amount,Category,Note',
       '2026-10-04,Refund,4.5,Groceries,Sour milk',
       "2026-10-03,Income,2000,,'=pay",
       '2026-10-02,Expense,-10,Groceries,"Milk, ""fresh"""',
