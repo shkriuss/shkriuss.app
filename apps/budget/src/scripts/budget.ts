@@ -371,7 +371,7 @@ export function mountBudget(root: Document): void {
     const read = readEntry(
       current && openedEntry ? withEdits(openedEntry, edited, toEntryForm(current)) : edited,
       editingEntry ?? crypto.randomUUID(),
-      entries.entries.length - (editingEntry ? 1 : 0),
+      current ? null : entries.entries.length,
       categories,
       { currency: currencyOf(settings) },
     );

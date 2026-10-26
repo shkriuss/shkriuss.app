@@ -47,7 +47,10 @@ See where your money goes, month by month. Lives at
   changed. The test "has room for every entry" fills Budget up with
   realistic entries and checks that it all still fits, on an iPhone too, and
   in the copy that syncs. If a change makes entries bigger, that test fails,
-  and the limit has to come down (or the change be made smaller).
+  and the limit has to come down (or the change be made smaller). Only a
+  new entry is refused once Budget is full: with more than that (two
+  devices' entries put together when sync is turned on), entries can still
+  be changed.
 - To make room, "Delete a year…" (next to the spreadsheet download) deletes
   every entry of one year (`entryYears`, `removeYear`). It says how many
   that is, and offers the spreadsheet first. With sync on, the entries are

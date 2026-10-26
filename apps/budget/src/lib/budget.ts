@@ -292,11 +292,17 @@ export interface EntryForm {
 
 export type EntryProblems = Partial<Record<keyof EntryForm, string>>;
 
-/** Reads the entry form, or says what's wrong. `count` is how many other entries there are. */
+/**
+ * Reads the entry form, or says what's wrong. `count` is how many entries
+ * there are, for a new one; null for a change to one kept already, which
+ * adds none, so it's never refused for the limit: with more than that,
+ * after two devices' entries were put together, any change was (audit 3
+ * F2-5).
+ */
 export function readEntry(
   form: EntryForm,
   id: string,
-  count: number,
+  count: number | null,
   categories: CategoriesState,
   options: ReadOptions = {},
 ): { entry: Entry; problems?: undefined } | { entry?: undefined; problems: EntryProblems } {
@@ -305,7 +311,7 @@ export function readEntry(
   if (!kind) problems.kind = 'Choose expense, income or refund.';
   const amountText = amountProblem(form.amount, false, options);
   if (amountText) problems.amount = amountText;
-  else if (count >= LIMITS.entries) {
+  else if (count !== null && count >= LIMITS.entries) {
     problems.amount = `You can keep up to ${new Intl.NumberFormat().format(LIMITS.entries)} entries. To make room, delete a year (under Currency and spreadsheet).`;
   }
   if (!isIsoDate(form.date)) problems.date = 'Choose a day.';

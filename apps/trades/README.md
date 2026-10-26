@@ -52,6 +52,10 @@ Your trading journal: log your trades and see what works. Lives at
     with realistic trades (notes of a few sentences) and checks that it all
     still fits, on an iPhone too, and in the copy that syncs. If a change
     makes trades bigger, that test fails, and the limit has to come down.
+    Only a new trade, or closing part of one (a trade of its own), is
+    refused once Trades is full: with more than that (two devices' trades
+    put together when sync is turned on), trades can still be changed and
+    closed.
   - To make room, "Delete a year…" (next to the spreadsheet download)
     deletes the trades closed in one year, by the day they were closed
     (`closedYears`, `removeClosedYear`). It never changes a trade, so a

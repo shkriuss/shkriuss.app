@@ -543,6 +543,38 @@ describe('closing part of a trade', () => {
   });
 });
 
+// Audit 3 F2-5: with more trades than the limit (two devices' trades put
+// together by sync), closing or changing any trade was refused.
+describe('over the limit', () => {
+  const open = trade({ id: 'open', exitDate: null, exitPrice: null });
+  const closed = Array.from({ length: LIMITS.trades }, (_, index) => trade({ id: `c${index}` }));
+  const over = state(open, ...closed);
+  const { form: closeForm, closeQuantity } = toCloseForm(open, new Map(), 'en-US');
+  const exit = { ...closeForm, exitDate: '2026-10-21', exitPrice: '120' };
+  const ids = (id: string) => ({ id, newId: 'n' });
+
+  it('closes or changes a trade, which adds none', () => {
+    expect(readClose(exit, closeQuantity, over, ids('open'), 'en-US')).toMatchObject({
+      trade: { id: 'open', exitPrice: 120 },
+      rest: null,
+    });
+    const typo = { ...toForm(closed[0] as Trade, 'en-US'), notes: 'Fixed a typo' };
+    expect(readChange(typo, over, ids('c0'), 'en-US').trade).toMatchObject({
+      id: 'c0',
+      notes: 'Fixed a typo',
+    });
+  });
+
+  it('refuses a new trade, and closing part of one, which is a trade of its own', () => {
+    expect(readChange(form, over, ids('new'), 'en-US').problems?.symbol).toMatch(
+      /^You can keep up to /,
+    );
+    expect(readClose(exit, '5', over, ids('open'), 'en-US').problems).toEqual({
+      closeQuantity: `You can keep up to ${new Intl.NumberFormat('en-US').format(LIMITS.trades)} trades, so close all of it, or make room first.`,
+    });
+  });
+});
+
 describe('making room', () => {
   const trades = state(
     trade({ id: 'a', exitDate: '2024-03-02' }),

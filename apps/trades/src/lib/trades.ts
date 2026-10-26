@@ -218,14 +218,17 @@ export type Problems = Partial<Record<keyof TradeForm, string>>;
 
 /**
  * Reads the form into a trade (with the given id), or says what's wrong,
- * field by field. `count` is how many other trades there are. Numbers are
- * read as typed in `locale` (the browser's own when left out): "1,25" is
- * 1.25, and "1,250" is 1250 in English (parseDecimal).
+ * field by field. `count` is how many trades there are, for a new one; null
+ * for a change to one kept already, which adds none, so it's never refused
+ * for the limit: with more than that, after two devices' trades were put
+ * together, any change was, and closing any trade (audit 3 F2-5). Numbers
+ * are read as typed in `locale` (the browser's own when left out): "1,25"
+ * is 1.25, and "1,250" is 1250 in English (parseDecimal).
  */
 export function readTrade(
   form: TradeForm,
   id: string,
-  count: number,
+  count: number | null,
   locale?: string,
 ): { trade: Trade; problems?: undefined } | { trade?: undefined; problems: Problems } {
   const parseNumber = (text: string) => parseDecimal(text, locale);
@@ -234,7 +237,7 @@ export function readTrade(
   if (symbol === '') problems.symbol = 'Enter the symbol, like AAPL.';
   else if (symbol.length > LIMITS.symbol) {
     problems.symbol = `Use ${LIMITS.symbol} characters or fewer.`;
-  } else if (count >= LIMITS.trades) {
+  } else if (count !== null && count >= LIMITS.trades) {
     problems.symbol = `You can keep up to ${new Intl.NumberFormat().format(LIMITS.trades)} trades. To make room, delete a year (under Currency and spreadsheet).`;
   }
   const side = SIDES.find((entry) => entry === form.side);
@@ -356,9 +359,8 @@ export function readClose(
   locale?: string,
 ): ReadTrades {
   const saved = state.trades.find((trade) => trade.id === ids.id);
-  const others = state.trades.length - (saved ? 1 : 0);
   const split = partsOf(state.trades).get(ids.id) ?? NO_PARTS;
-  const read = readTrade(form, ids.id, others, locale);
+  const read = readTrade(form, ids.id, saved ? null : state.trades.length, locale);
   const problems: CloseProblems = { ...read.problems };
   const bought = parseDecimal(form.quantity, locale);
   const open = isPrice(bought) ? tidy(bought - split.quantity) : null;
@@ -379,7 +381,8 @@ export function readClose(
   if (part && !problems.closeQuantity) {
     if (form.exitDate.trim() === '' && form.exitPrice.trim() === '') {
       problems.exitPrice = 'Enter the exit price, to close part of the trade.';
-    } else if (others + 1 >= LIMITS.trades) {
+    } else if (state.trades.length >= LIMITS.trades) {
+      // The part closed is a trade of its own: one more.
       const most = `You can keep up to ${new Intl.NumberFormat(locale).format(LIMITS.trades)} trades`;
       problems.closeQuantity =
         split.quantity > 0
@@ -426,7 +429,7 @@ export function readChange(
     const { closeQuantity, ...problems } = read.problems;
     return { problems: { quantity: closeQuantity, ...problems } };
   }
-  const read = readTrade(form, ids.id, state.trades.length - (saved ? 1 : 0), locale);
+  const read = readTrade(form, ids.id, saved ? null : state.trades.length, locale);
   if (!read.trade) return { problems: read.problems };
   if (read.trade.quantity < split.quantity) {
     return {

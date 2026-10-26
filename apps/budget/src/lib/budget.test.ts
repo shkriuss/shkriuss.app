@@ -263,6 +263,9 @@ describe('entries', () => {
     expect(readEntry(form, 'x', LIMITS.entries, categories).problems).toEqual({
       amount: `You can keep up to ${new Intl.NumberFormat().format(LIMITS.entries)} entries. To make room, delete a year (under Currency and spreadsheet).`,
     });
+    // Audit 3 F2-5: with more than that (two devices' entries put together by
+    // sync), every change was refused. A change adds none, so it's fine.
+    expect(readEntry(form, 'x', null, categories).entry?.amount).toBe(12.5);
   });
 
   // Audit F2-13: yen kept cents, so 0.01 yen was saved and shown as "¥0",
