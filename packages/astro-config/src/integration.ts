@@ -19,6 +19,7 @@ import { appIconSvg, ICON_VARIANTS, renderPng, type IconVariant } from './app-ic
 import { headersFile, type HeaderOptions } from './headers.ts';
 import { webManifest } from './manifest.ts';
 import { ON_DEMAND_DIR, precacheUrls, serviceWorkerSource } from './service-worker.ts';
+import { workerVersion } from './worker-version.ts';
 
 const VIRTUAL_ID = 'virtual:shkriuss/site';
 const RESOLVED_VIRTUAL_ID = `\0${VIRTUAL_ID}`;
@@ -102,13 +103,13 @@ export function shkriussIntegration(options: IntegrationOptions): AstroIntegrati
             (file) => file !== '_headers' && !file.startsWith(ON_DEMAND_DIR),
           );
           const urls = precacheUrls(files);
-          // The version covers the saved files and the worker's own code, so
-          // changing either one gives visitors a fresh saved copy.
-          const version = createHash('sha256')
-            .update(await hashFiles(distDir, files))
-            .update(serviceWorkerSource({ files: urls, version: '' }))
-            .digest('hex')
-            .slice(0, 12);
+          // The version covers the saved files, the worker's own code and
+          // the headers, so changing any one gives visitors a fresh saved copy.
+          const version = workerVersion({
+            files: await hashFiles(distDir, files),
+            worker: serviceWorkerSource({ files: urls, version: '' }),
+            headers: headersFile(options),
+          });
           await write('sw.js', serviceWorkerSource({ files: urls, version }));
           logger.info(`Wrote sw.js (offline support, version ${version}).`);
         }
