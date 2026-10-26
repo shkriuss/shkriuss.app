@@ -304,8 +304,29 @@ test('frees up space on this device, and the photos still show', async ({ page }
   // It still shows, and its original comes back from online.
   const tile = page.getByRole('button', { name: 'Photo taken Oct 21, 2026, 2:03:22 PM' });
   await expect.poll(() => naturalWidth(tile.locator('img')), ONLINE).toBe(512);
-  await tile.click();
   const dialog = page.locator('[data-viewer]');
+
+  // Closed while its screen-sized copy is still downloading: nothing goes
+  // wrong when it arrives (any error on the page fails the test).
+  let arrive = (): void => undefined;
+  const arriving = new Promise<void>((resolve) => {
+    arrive = resolve;
+  });
+  await page.route('**/api/library/items/**', async (route) => {
+    await arriving;
+    await route.continue();
+  });
+  const downloaded = page.waitForResponse((response) =>
+    response.url().includes('/api/library/items/'),
+  );
+  await tile.click();
+  await dialog.getByRole('button', { name: 'Close' }).click();
+  await expect(dialog).toBeHidden();
+  arrive();
+  await downloaded;
+  await page.unroute('**/api/library/items/**');
+
+  await tile.click();
   await expect.poll(() => naturalWidth(dialog.getByRole('img')), ONLINE).toBe(2048);
 
   // While it downloads, the viewer says so, and another tap doesn't start a

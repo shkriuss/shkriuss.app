@@ -424,7 +424,8 @@ export function mountPhotos(root: Document): void {
     // The screen-sized copy: from this device, or downloaded (photos only online).
     const view =
       (await getFiles(id))?.view ?? (photo.online ? await online.download(photo, 'view') : null);
-    if (viewing.id !== id) return;
+    // Another photo is shown now, or the viewer was closed while this one downloaded.
+    if (viewing?.id !== id) return;
     viewing.url = view ? URL.createObjectURL(view) : null;
     if (viewing.url) viewerImage.src = viewing.url;
     viewerNone.textContent =
