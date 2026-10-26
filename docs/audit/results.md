@@ -421,8 +421,9 @@ The defaults below stay until you say otherwise. Nothing breaks either way.
   [#83](https://github.com/shkriuss/shkriuss.app/pull/83),
   [#84](https://github.com/shkriuss/shkriuss.app/pull/84),
   [#85](https://github.com/shkriuss/shkriuss.app/pull/85),
-  [#86](https://github.com/shkriuss/shkriuss.app/pull/86) and
-  [#87](https://github.com/shkriuss/shkriuss.app/pull/87).
+  [#86](https://github.com/shkriuss/shkriuss.app/pull/86),
+  [#87](https://github.com/shkriuss/shkriuss.app/pull/87) and
+  [#88](https://github.com/shkriuss/shkriuss.app/pull/88).
 
 ### Totals
 
@@ -430,24 +431,22 @@ The defaults below stay until you say otherwise. Nothing breaks either way.
 | -------- | ----- | ----- | ------------ | --------- |
 | High     | 1     | 1     | –            | –         |
 | Medium   | 10    | 10    | –            | –         |
-| Low      | 48    | 47    | 1            | –         |
-| Info     | 18    | 13    | 1            | 4         |
-| **All**  | 77    | 71    | 2            | 4         |
+| Low      | 48    | 47    | –            | 1         |
+| Info     | 18    | 14    | –            | 4         |
+| **All**  | 77    | 72    | –            | 5         |
 
 ### What's left for you
 
-**Settings** (in Cloudflare; my token can only read). Both were already in
-[deployment.md](../deployment.md), just not quite finished:
+**Settings:** nothing that has to be done. 3I-2 is done (26 October): the
+Web Analytics site is deleted, and Server-side Excludes needs nothing, as
+Cloudflare retired it in June 2024. The two forwarding rules of 3I-1 can't
+be deleted while Email Routing is off, and they do nothing then: leave it
+off, and if it's ever turned on, delete them first
+([deployment.md](../deployment.md)).
 
-- **3I-1:** **Email → Email Routing → Routing rules:** delete the `security@`
-  and `support@` rules. No mail arrives today (Email Routing is off), but
-  turning Email Routing on again would bring them back.
-- **3I-2:** **Analytics & Logs → Web Analytics:** delete the shkriuss.app
-  site; and **Scrape Shield → Server-side Excludes:** turn it off, if it's
-  still shown. Neither changes any page today.
-- **3I-3, if you want:** the extra email records for each app's address,
-  and a Cloudflare account of its own for shkriuss.app, both in
-  [deployment.md](../deployment.md).
+**If you want** (3I-3): the extra email records for each app's address, and
+a Cloudflare account of its own for shkriuss.app, both in
+[deployment.md](../deployment.md).
 
 **Choices:** the second audit's Undo after one-tap removals is still open
 ([above](#left-for-you-to-decide)).
@@ -570,11 +569,11 @@ Severity is the auditor's, as in the first audit.
 
 #### I. Domain and Cloudflare
 
-| ID   | Severity | What was wrong                                                  | What happened                                                                       |
-| ---- | -------- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| 3I-1 | Low      | The two email forwarding rules were still there                 | Your setting ([above](#whats-left-for-you))                                         |
-| 3I-2 | Info     | A Web Analytics site and Server-side Excludes were still set up | Your setting ([above](#whats-left-for-you))                                         |
-| 3I-3 | Info     | Smaller hardening steps                                         | Fixed: `security.txt` on every site (#80); the rest is optional, your setting (#87) |
+| ID   | Severity | What was wrong                                                  | What happened                                                                                                         |
+| ---- | -------- | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| 3I-1 | Low      | The two email forwarding rules were still there                 | Explained ([above](#whats-left-for-you)): they can't be deleted while Email Routing is off, and do nothing then (#88) |
+| 3I-2 | Info     | A Web Analytics site and Server-side Excludes were still set up | Fixed (your setting, 26 October); Cloudflare retired Server-side Excludes in 2024 (#88)                               |
+| 3I-3 | Info     | Smaller hardening steps                                         | Fixed: `security.txt` on every site (#80); the rest is optional, your setting (#87)                                   |
 
 #### J. Architecture and tests
 
