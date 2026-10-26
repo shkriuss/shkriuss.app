@@ -323,6 +323,34 @@ test('moves between days with the keyboard', async ({ page }) => {
   await expect(monthHeading(page)).toHaveText('November 2025');
 });
 
+test('says the month again only when it changes', async ({ page }) => {
+  // The heading is a live region: its text was set again at every arrow key,
+  // save and sync, so screen readers could repeat "October 2026" (audit 3 G-10).
+  await page.evaluate(() => {
+    const said: string[] = [];
+    (window as unknown as { said: string[] }).said = said;
+    const heading = document.querySelector('[data-month-title]');
+    if (!heading) return;
+    new MutationObserver(() => said.push(heading.textContent ?? '')).observe(heading, {
+      childList: true,
+      characterData: true,
+      subtree: true,
+    });
+  });
+  const said = () => page.evaluate(() => (window as unknown as { said: string[] }).said);
+  await day(page, /^Saturday, October 17, 2026/).focus();
+  for (const key of ['ArrowRight', 'ArrowDown', 'ArrowLeft']) await page.keyboard.press(key);
+  await newEvent(page, 'Dentist');
+  await save(page);
+  await expect(dayList(page).getByRole('button', { name: /Dentist/ })).toBeVisible();
+  expect(await said()).toEqual([]);
+
+  await day(page, /^Saturday, October 24, 2026/).focus();
+  await page.keyboard.press('PageDown');
+  await expect(monthHeading(page)).toHaveText('November 2026');
+  expect(await said()).toEqual(['November 2026']);
+});
+
 test('reads out a missing title after Enter in the title box', async ({ page }) => {
   await newEvent(page, '');
   const title = editor(page).getByLabel('Title');

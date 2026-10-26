@@ -252,7 +252,10 @@ export function mountCalendar(root: Document): void {
     // One day in the grid is reachable with Tab; arrow keys move between days.
     const tabbable = selected.startsWith(viewMonth.slice(0, 8)) ? selected : viewMonth;
 
-    monthTitle.textContent = monthFormat.format(utc(viewMonth));
+    // A live region, read out each time its text is set: so only when the
+    // month changes, not at every arrow key, save or sync (audit 3 G-10).
+    const title = monthFormat.format(utc(viewMonth));
+    if (monthTitle.textContent !== title) monthTitle.textContent = title;
     const rows = monthGrid(viewMonth, weekStart).map((week) => {
       const row = document.createElement('tr');
       for (const date of week) {
