@@ -49,7 +49,10 @@ private car's service history. Lives at <https://repairs.shkriuss.app>.
 - Text limits (a vehicle's name, the work done…) count characters as
   people see them, as an iPhone's text boxes count what fits in them: a
   flag or a family emoji is one, so what a full box holds is never refused,
-  on saving or when it's loaded or synced (`cutToLength`, audit 5 F2-3).
+  on saving or when it's loaded or synced (`cutToLength`, audit 5 F2-3). A
+  device still on the version before this one can't read a text that only
+  this counting lets in, and shows a sync problem until it's updated
+  (reload the page there).
 - "Download as a spreadsheet (CSV)" saves every repair, one row each, with
   the hours and the parts, labour and total cost. Text a spreadsheet could
   read as a formula starts with `'`. The file starts with a byte-order mark,

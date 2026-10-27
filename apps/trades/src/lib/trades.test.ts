@@ -450,6 +450,47 @@ describe('closing part of a trade', () => {
   // kept a crumb (0.00001526) "still open" for good: it stayed under "Open
   // trades", "Delete a year" kept its parts for ever, and the spreadsheet had
   // a row for the crumb.
+  it('closes a trade of a hundred million tokens with decimals in parts, as the form shows them', () => {
+    // A number can't hold 8 decimals at that size: "the rest", as the form
+    // showed it, summed to a digit more than was bought, and the trade stayed
+    // open, or warned of a second device, for good (audit 5 F2-1).
+    const coin = trade({
+      id: 'coin',
+      symbol: 'PEPE',
+      entryDate: '2024-01-05',
+      entryPrice: 0.0000012,
+      quantity: 100_015_838.00209475,
+      exitDate: null,
+      exitPrice: null,
+    });
+    const close = (from: TradesState, quantity: string | null, newId: string): TradesState => {
+      const { form, closeQuantity } = toCloseForm(coin, partsOf(from.trades), 'en-US');
+      const read = readClose(
+        { ...form, exitDate: '2024-02-01', exitPrice: '0.0000015' },
+        quantity ?? closeQuantity,
+        from,
+        { id: coin.id, newId },
+        'en-US',
+      );
+      expect(read.problems).toBeUndefined();
+      return closePart(from, read.trade as Trade, read.rest as Trade);
+    };
+    const half = close(state(coin), '0.5', 'c1');
+    const rest = close(half, null, 'c2');
+    expect(openQuantity(coin, partsOf(rest.trades))).toBe(0);
+    expect(overClosed(coin, partsOf(rest.trades))).toBe(0);
+    expect(openTrades(rest)).toEqual([]);
+    expect(closedYears(rest)).toEqual([{ year: '2024', count: 2, kept: 0 }]);
+    // Its setup can still be changed: it holds what its parts closed.
+    const changed = readChange(
+      { ...toForm(coin, 'en-US'), setup: 'Meme' },
+      rest,
+      { id: 'coin', newId: 'n' },
+      'en-US',
+    );
+    expect(changed.trade?.setup).toBe('Meme');
+  });
+
   it('closes a trade of billions of tokens in parts, leaving nothing open', () => {
     const lot = trade({
       id: 'lot',

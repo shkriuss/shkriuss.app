@@ -753,8 +753,9 @@ export function byDay(repairs: readonly Repair[]): Day[] {
  * well within a number's 53 bits (below a billion here, with room to
  * spare): Trades' version of it left crumbs that could never be closed
  * (audit 5 F2-1). Bigger sums, like a fleet's costs, are rounded by their
- * digits instead (roundDecimal), exact at any size but slower, and every
- * repair's costs are added up at every change.
+ * digits instead (roundDecimal), as exact as a number of that size can be
+ * but slower, and every repair's costs are added up at every change; what's
+ * shown is rounded to the cent after (`shown`).
  */
 const tidy = (value: number): number =>
   Math.abs(value) < 1e9 ? Math.round(value * 1e6) / 1e6 : roundDecimal(value, 6);

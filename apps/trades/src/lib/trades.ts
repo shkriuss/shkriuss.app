@@ -190,7 +190,9 @@ export function partsOf(trades: readonly Trade[]): Map<string, Parts> {
  * (0 once it's closed itself). Below 0 when more was closed than bought.
  */
 export const openQuantity = (trade: Trade, parts: ReadonlyMap<string, Parts>): number =>
-  trade.exitPrice === null ? tidy(trade.quantity - (parts.get(trade.id)?.quantity ?? 0)) : 0;
+  trade.exitPrice === null
+    ? nearly(trade.quantity, tidy(trade.quantity - (parts.get(trade.id)?.quantity ?? 0)))
+    : 0;
 
 /**
  * The trade's own fees not yet counted with a part: each part closed takes
@@ -209,7 +211,7 @@ export function overClosed(trade: Trade, parts: ReadonlyMap<string, Parts>): num
   const split = parts.get(trade.id)?.quantity ?? 0;
   if (split === 0) return 0;
   const closed = tidy((trade.exitPrice === null ? 0 : trade.quantity) + split);
-  return Math.max(0, tidy(closed - trade.quantity));
+  return Math.max(0, nearly(trade.quantity, tidy(closed - trade.quantity)));
 }
 
 /**
@@ -439,7 +441,7 @@ export function readClose(
   const read = readTrade(form, ids.id, saved ? null : state.trades.length, locale);
   const problems: CloseProblems = { ...read.problems };
   const bought = readNumber(form.quantity, locale);
-  const open = isPrice(bought) ? tidy(bought - split.quantity) : null;
+  const open = isPrice(bought) ? nearly(bought, tidy(bought - split.quantity)) : null;
   const closed = readNumber(closeQuantity, locale);
   if (open !== null && open <= 0) {
     problems.quantity ??= `Enter more than the ${formatNumber(split.quantity, locale)} closed already.`;
@@ -533,7 +535,7 @@ export function readChange(
   }
   const read = readTrade(form, ids.id, saved ? null : state.trades.length, locale);
   if (!read.trade) return { problems: read.problems };
-  if (read.trade.quantity < split.quantity) {
+  if (nearly(read.trade.quantity, read.trade.quantity - split.quantity) < 0) {
     return {
       problems: {
         quantity: `Enter at least the ${formatNumber(split.quantity, locale)} closed already.`,
@@ -779,12 +781,23 @@ export const roomNote = (count: number, locale?: string): string | null =>
  * spare). Above that it left crumbs: 123,456,789,012 tokens closed in two
  * parts kept 0.00001526 "still open" for good, and "Delete a year" then kept
  * its parts for ever (audit 5 F2-1). Bigger numbers are rounded by their
- * digits instead (roundDecimal), exact at any size but twenty times slower,
- * and the results of thousands of trades are worked out at every change.
- * Never -0 either way.
+ * digits instead (roundDecimal), as exact as a number of that size can be
+ * (see `nearly`) but twenty times slower, and the results of thousands of
+ * trades are worked out at every change. Never -0 either way.
  */
 const tidy = (value: number): number =>
   Math.abs(value) < 1e7 ? Math.round(value * 1e8) / 1e8 || 0 : roundDecimal(value, 8);
+
+/**
+ * A difference between two quantities that a number of their size can't
+ * tell apart (its last binary digits: above a hundred million, that's
+ * coarser than 8 decimals) counts as none. Closing "the rest" of
+ * 100,015,838.00209475 tokens, as the form showed it, summed to a digit
+ * more than was bought, and the trade stayed open, or warned of a second
+ * device, for good (audit 5 F2-1).
+ */
+const nearly = (size: number, diff: number): number =>
+  Math.abs(diff) <= Math.abs(size) * 2 ** -50 ? 0 : diff;
 
 export const isOpen = (trade: Trade): boolean => trade.exitPrice === null;
 
