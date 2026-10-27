@@ -38,12 +38,12 @@ import { isStorageFull, lastSaveProblem, type Store } from '@shkriuss/storage';
 import {
   CONNECT_LIFETIME_MS,
   connectUrl,
+  isTurnOffProof,
   newConnectRequest,
   openConnection,
   parseConnectResult,
   parseTurnOff,
   type PendingConnect,
-  turnOffProof,
 } from './connect.ts';
 import {
   checkStillOn,
@@ -975,11 +975,14 @@ export function createSync(options: {
 
   /**
    * From the hub's list of apps: "Turn off sync in …". Only the account this
-   * app syncs with can make the proof, so a link from anyone else can't.
+   * app syncs with can make the proof, and only for the day (audit 5 A-5),
+   * so a link from anyone else can't. Any website can open such a link: with
+   * sync already off it changes nothing, and says nothing (audit 5 C-4).
    */
   async function turnOffFromHub(proof: string): Promise<void> {
     const state = loadState();
-    if (state?.secret && proof !== (await turnOffProof(fromBase64Url(state.secret)))) {
+    if (!state?.secret) return;
+    if (!(await isTurnOffProof(fromBase64Url(state.secret), proof))) {
       emit('kept-on');
       schedule(0);
       return;

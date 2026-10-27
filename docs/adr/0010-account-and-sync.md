@@ -205,9 +205,14 @@ in with `sync: true` in `apps.json`.
   - It makes a one-time ECDH P-256 key pair, keeps the private half in this
     tab, and opens `/account/?connect=<app>&from=<its address>&key=…&state=…`.
   - The hub only continues if `from` is that app's real address (on the real
-    site, `https://<app>.shkriuss.app`; in a preview, the same preview's app).
+    site, `https://<app>.shkriuss.app`; in a preview, the same preview's app)
+    and the one-time key is a real P-256 key (a link with 65 bytes that
+    aren't one used to leave the confirm button busy for good: audit 5 A-3).
     After the person confirms, it derives the app's own key, seals it to the
     one-time public key, and goes back to the app with the result after `#`.
+    Any website can open an app with `#sync=connect`: that only starts this
+    request, which the person confirms on the hub with the account code in
+    view, and cancelling changes nothing (audit 5 C-4).
   - The app opens it, removes it from the address bar, and forgets the
     one-time key. The app and the hub never call each other's servers, and
     the CSP stays `'self'`.
@@ -220,9 +225,15 @@ in with `sync: true` in `apps.json`.
   - For those apps, the list of apps says "Turn off sync in …". The link opens
     the app with `#sync=off&proof=…`. The proof comes from the app's own key
     (HKDF, `turnOffProof`), so only the account the app syncs with can make
-    it: a link from anyone else leaves sync on, and the app says so.
+    it: a link from anyone else leaves sync on, and the app says so. It's
+    made for the day, and the app takes today's and yesterday's, so a link
+    that lands in the browser's history (which browsers sync to their own
+    servers) can't turn sync off for good; the page makes fresh links each
+    time it comes back on screen (audit 5 A-5).
   - Sync turned off inside the app isn't seen by the hub. Its link still says
-    "Turn off" until it's tapped, which then finds sync already off.
+    "Turn off" until it's tapped, which then finds sync already off, and
+    changes nothing and says nothing: any website can open the link too
+    (audit 5 C-4).
 - **Storage.**
   - The app's own key gives two more keys: a token for its server, and a key
     for the data.

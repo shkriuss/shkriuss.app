@@ -100,6 +100,21 @@ export function parseConnectRequest(search: string): ConnectRequest | null {
   return { app, from, key, state };
 }
 
+/**
+ * Step 2 (hub): whether a request's one-time key is a real P-256 public key.
+ * A link with 65 bytes that aren't a point on the curve fits the pattern,
+ * and sealing for it threw on the hub's confirm button, which stayed busy
+ * for good (audit 5 A-3): the hub checks this first, like the address.
+ */
+export async function isConnectKey(key: string): Promise<boolean> {
+  try {
+    await crypto.subtle.importKey('raw', fromBase64Url(key), ECDH, false, []);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Step 2 (hub): seals the app's connection for the request's one-time key. */
 export async function sealForApp(request: ConnectRequest, connection: Connection): Promise<string> {
   const pair = (await crypto.subtle.generateKey(ECDH, true, ['deriveBits'])) as CryptoKeyPair;
@@ -160,13 +175,36 @@ export async function openConnection(
 
 // ---------- Turning sync off from the hub ----------
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+/** The UTC day of a moment, "YYYY-MM-DD". */
+const dayOf = (time: number) => new Date(time).toISOString().slice(0, 10);
+
 /**
  * The hub's list of apps also turns sync off in an app ("#sync=off&proof=…").
  * The proof comes from the app's own key, so only the account the app syncs
- * with can make it: a link from anyone else leaves sync on.
+ * with can make it: a link from anyone else leaves sync on. It's made for
+ * the day (UTC), so a link that lands in the browser's history (which
+ * browsers sync to their own servers) can't turn sync off for good: the app
+ * takes today's and yesterday's (isTurnOffProof), as the Account page may
+ * have been open since before midnight (audit 5 A-5).
  */
-export async function turnOffProof(appSecret: Uint8Array<ArrayBuffer>): Promise<string> {
-  return toBase64Url(await hkdf(appSecret, 'shkriuss sync turn off v1'));
+export async function turnOffProof(
+  appSecret: Uint8Array<ArrayBuffer>,
+  now = Date.now(),
+): Promise<string> {
+  return toBase64Url(await hkdf(appSecret, `shkriuss sync turn off v2 ${dayOf(now)}`));
+}
+
+/** Whether `proof` is this account's, made today or yesterday. */
+export async function isTurnOffProof(
+  appSecret: Uint8Array<ArrayBuffer>,
+  proof: string,
+  now = Date.now(),
+): Promise<boolean> {
+  for (const time of [now, now - DAY_MS]) {
+    if (proof === (await turnOffProof(appSecret, time))) return true;
+  }
+  return false;
 }
 
 /** The app's address that turns sync off there. */

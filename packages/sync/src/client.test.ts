@@ -555,6 +555,24 @@ describe('syncing between devices', () => {
     const fromThisAccount = opened(await turnOffProof(secret));
     await vi.waitFor(() => expect(fromThisAccount.events).toEqual(['turned-off']));
     expect(fromThisAccount.sync.status().on).toBe(false);
+
+    // Yesterday's link still works (the Account page may have been open
+    // since before midnight); an older one, from the browser's history
+    // say, doesn't (audit 5 A-5).
+    const DAY = 24 * HOUR;
+    const yesterday = opened(await turnOffProof(secret, Date.now() - DAY));
+    await vi.waitFor(() => expect(yesterday.events).toEqual(['turned-off']));
+    const older = opened(await turnOffProof(secret, Date.now() - 2 * DAY));
+    await vi.waitFor(() => expect(older.events).toContain('kept-on'));
+    expect(older.sync.status().on).toBe(true);
+
+    // Opened with sync already off (any website can open such a link):
+    // nothing happens, and nothing is said (audit 5 C-4).
+    const stateOff = fromThisAccount.storage.getItem('shkriuss-device:sync');
+    const again = fromThisAccount.reopen(1);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(again.events).toEqual([]);
+    expect(fromThisAccount.storage.getItem('shkriuss-device:sync')).toBe(stateOff);
   });
 
   it('moves everything to a new account key, and stops the old copy', async () => {

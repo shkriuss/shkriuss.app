@@ -39,6 +39,7 @@ import { apps, type AppEntry } from '@shkriuss/registry';
 import { downloadFile } from '@shkriuss/storage';
 import {
   connectResultUrl,
+  isConnectKey,
   parseConnectRequest,
   sealForApp,
   turnOffProof,
@@ -63,15 +64,20 @@ type View =
   | 'connect';
 
 /** An app asking to connect (from its "Turn on sync"), if the request is real. */
-function connectRequestOf(
+async function connectRequestOf(
   search: string,
-): { request: ConnectRequest; app: AppEntry } | 'invalid' | null {
+): Promise<{ request: ConnectRequest; app: AppEntry } | 'invalid' | null> {
   const request = parseConnectRequest(search);
   if (!request) return new URLSearchParams(search).has('connect') ? 'invalid' : null;
   const app = apps.find((entry) => entry.slug === request.app && entry.sync === true);
   if (!app || !isAppOrigin(request.from, app.slug, new URL(location.href))) return 'invalid';
+  // A key that isn't one would only fail on the confirm button, leaving it busy for good (audit 5 A-3).
+  if (!(await isConnectKey(request.key))) return 'invalid';
   return { request, app };
 }
+
+const CONNECT_BROKEN =
+  'This link to connect an app doesn’t work. Open the app and tap “Turn on sync” again.';
 
 /** How often a shown code checks whether the other device has used it. */
 const LINK_POLL_MS = 2000;
@@ -206,12 +212,11 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
 
   const connectNote = required<HTMLElement>(root, '[data-connect-note]');
   const connectCode = required<HTMLElement>(root, '[data-connect-code]');
-  const connecting = connectRequestOf(location.search);
+  const connecting = await connectRequestOf(location.search);
   if (connecting === 'invalid') {
     message.hidden = false;
     message.classList.add('notice--danger');
-    message.textContent =
-      'This link to connect an app doesn’t work. Open the app and tap “Turn on sync” again.';
+    message.textContent = CONNECT_BROKEN;
   } else if (connecting) {
     for (const name of root.querySelectorAll('[data-connect-app]')) {
       name.textContent = connecting.app.name;
@@ -621,14 +626,20 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
       // Stays busy: the page goes back to the app.
       setBusy(button, true);
       const { request, app } = connecting;
-      const secret = await appSecretOf(account.secret, app.slug);
-      // Apps also get their keys from replaced account keys, to move their old copies.
-      const replaces = await Promise.all(
-        replacedSecrets().map((old) => appSecretOf(old, app.slug)),
-      );
-      const result = await sealForApp(request, { secret, code: account.code, replaces });
-      noteSyncOn(app.slug, account.code, request.from);
-      location.replace(connectResultUrl(request.from, result));
+      try {
+        const secret = await appSecretOf(account.secret, app.slug);
+        // Apps also get their keys from replaced account keys, to move their old copies.
+        const replaces = await Promise.all(
+          replacedSecrets().map((old) => appSecretOf(old, app.slug)),
+        );
+        const result = await sealForApp(request, { secret, code: account.code, replaces });
+        noteSyncOn(app.slug, account.code, request.from);
+        location.replace(connectResultUrl(request.from, result));
+      } catch {
+        // Not expected (the request was checked), but never a button stuck busy (audit 5 A-3).
+        setBusy(button, false);
+        say(CONNECT_BROKEN, true);
+      }
     },
     'cancel-connect': () => {
       if (!connecting || connecting === 'invalid') return;
@@ -707,6 +718,11 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
   // Back from an app to this page as it was left: show what changed there.
   window.addEventListener('pageshow', (event) => {
     if (event.persisted) void showSyncApps();
+  });
+  // Back on screen: the "Turn off sync in …" links are made for the day, so
+  // a page left open gets fresh ones (audit 5 A-5).
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') void showSyncApps();
   });
 
   savedCheck.addEventListener('change', () => {
