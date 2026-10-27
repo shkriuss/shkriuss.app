@@ -500,10 +500,14 @@ subdomain.
 **Check:**
 
 - Is logic copied between apps that should be in a shared package? Are there
-  files too large to work with? The largest page script is
-  `apps/tasks/src/scripts/tasks.ts` (Repairs' was split: audit 3 J-9); the
-  largest files are Trades' and Repairs' rules
-  (`apps/trades/src/lib/trades.ts`, `apps/repairs/src/lib/repairs.ts`).
+  files too large to work with? The largest files are Trades' rules
+  (`apps/trades/src/lib/trades.ts`), the sync client
+  (`packages/sync/src/client.ts`), Repairs' rules
+  (`apps/repairs/src/lib/repairs.ts`), the online library's Worker
+  (`packages/library/src/worker.ts`) and Tasks' page script
+  (`apps/tasks/src/scripts/tasks.ts`), each about 1,000 to 1,100 lines;
+  the largest test file is the sync client's (`client.test.ts`, about
+  2,500 lines) (audit 5 J-7).
 - Do the docs still match the code? Every AI session reads them before it
   works, so a wrong step there becomes a wrong change. Check each concrete
   claim (paths and names, commands, limits and numbers, steps, what a
@@ -592,5 +596,5 @@ serious first.
    [results.md](results.md): what was checked, by which tools, and what was
    found and fixed.
 6. Each audit's numbers start again from 1, so the fixes name the audit too:
-   the fifth audit's B-2 is "(audit 5 B-2)" in code comments and commits,
-   and "5B-2" in results.md, which also says what the older numbers mean.
+   the sixth audit's B-2 is "(audit 6 B-2)" in code comments and commits,
+   and "6B-2" in results.md, which also says what the older numbers mean.
