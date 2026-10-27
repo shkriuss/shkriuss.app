@@ -451,6 +451,44 @@ describe('months', () => {
     expect(Object.is(byCategory(evened, categories)[0]?.spent, 0)).toBe(true);
   });
 
+  // Audit 5 F2-2: "Spent" added the amounts as decimals and rounded once at
+  // the end, the categories after each amount, so with thousands of
+  // billion-dollar entries they disagreed by cents (3,000,000,000,029.30
+  // against the right 3,000,000,000,030.00), and the budget line was off too.
+  it('adds up thousands of the biggest amounts to the cent, the month and its categories alike', () => {
+    const big: CategoriesState = { categories: [{ id: 'c', name: 'Big', limit: 1e9 }] };
+    const many = (count: number, amount: number, kind: Entry['kind'] = 'expense') =>
+      Array.from({ length: count }, (_, index) =>
+        entry({ id: `${kind}-${amount}-${index}`, kind, amount, category: 'c' }),
+      );
+    const month = [...many(3000, LIMITS.amount), ...many(3000, 0.01)];
+    const totals = summary(month, big);
+    expect(totals.spent).toBe(3_000_000_000_030);
+    expect(totals.spentWithLimit).toBe(3_000_000_000_030);
+    expect(byCategory(month, big)[0]?.spent).toBe(3_000_000_000_030);
+    expect(budgetLine(totals, 'USD', 'en-US')).toEqual({
+      text: '$2,999,000,000,030.00 over the $1,000,000,000.00 budgeted',
+      over: true,
+    });
+    // 2,000 of $999,999,999.99 and 4,000 of $0.01: $2,000,000,000,020.00.
+    const milder = [...many(2000, LIMITS.amount - 0.01), ...many(4000, 0.01)];
+    expect(summary(milder, big).spent).toBe(2_000_000_000_020);
+    expect(byCategory(milder, big)[0]?.spent).toBe(2_000_000_000_020);
+    // Income and refunds add up the same way, and "Left" follows.
+    const mixed = [
+      ...many(2000, LIMITS.amount, 'income'),
+      ...many(2000, 0.01, 'income'),
+      ...many(1000, 0.01, 'refund'),
+      ...many(1000, LIMITS.amount),
+    ];
+    expect(summary(mixed, big)).toMatchObject({
+      income: 2_000_000_000_020,
+      spent: 999_999_999_990,
+      left: 1_000_000_000_030,
+    });
+    expect(byCategory(mixed, big)[0]?.spent).toBe(999_999_999_990);
+  });
+
   it('takes refunds off their category’s spending, and off what was spent', () => {
     const withRefunds = saveEntry(
       saveEntry(october, entry({ id: 'r', kind: 'refund', amount: 40, category: 'fun' })),

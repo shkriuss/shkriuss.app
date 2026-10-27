@@ -452,17 +452,30 @@ export interface Summary {
 }
 
 /**
- * What an entry adds to the spending in `currency`: an expense its amount, a
- * refund takes its amount off, as the amount is shown (to the cent, or to
- * the yen). Amounts saved with cents before the currency was changed to
- * one without added up to more or less than the rows showed (audit 4 F2-5).
+ * What an entry adds to the spending: an expense its amount, a refund takes
+ * its amount off, income nothing (addShown shows it in the currency).
  */
-const spending = (entry: Entry, currency: Currency): number =>
-  entry.kind === 'income'
-    ? 0
-    : (entry.kind === 'refund' ? -1 : 1) * keep(entry.amount, { currency });
+const spending = (entry: Entry): number =>
+  entry.kind === 'income' ? 0 : entry.kind === 'refund' ? -entry.amount : entry.amount;
 
-/** The totals of `entries`, each amount and limit as it's shown in `currency` (see spending). */
+/**
+ * Amounts added up, each as it's shown in `currency` (to the cent, or to the
+ * yen: amounts saved with cents before the currency was changed to one
+ * without added up to more or less than the rows showed, audit 4 F2-5), in
+ * whole cents, divided once at the end. Added as decimals, each $0.01 put on
+ * three trillion dollars loses a fraction of a cent, and "Spent", rounded
+ * once at the end, came out a few cents from the categories' spending, which
+ * was rounded after each amount (audit 5 F2-2). The month and its categories
+ * are added up the same way now, so they always agree.
+ */
+function addShown(amounts: readonly number[], currency: Currency): number {
+  const unit = 10 ** currencyDigits(currency);
+  let total = 0;
+  for (const amount of amounts) total += Math.round(keep(amount, { currency }) * unit);
+  return tidy(total / unit);
+}
+
+/** The totals of `entries`, each amount and limit as it's shown in `currency` (see addShown). */
 export function summary(
   entries: readonly Entry[],
   categories: CategoriesState,
@@ -470,13 +483,11 @@ export function summary(
 ): Summary {
   const limited = categories.categories.filter((category) => category.limit !== null);
   const withLimit = new Set(limited.map((category) => category.id));
-  const income = tidy(
-    entries.reduce(
-      (sum, entry) => (entry.kind === 'income' ? sum + keep(entry.amount, { currency }) : sum),
-      0,
-    ),
+  const income = addShown(
+    entries.filter((entry) => entry.kind === 'income').map((entry) => entry.amount),
+    currency,
   );
-  const spent = tidy(entries.reduce((sum, entry) => sum + spending(entry, currency), 0));
+  const spent = addShown(entries.map(spending), currency);
   return {
     income,
     spent,
@@ -484,15 +495,15 @@ export function summary(
     budgeted:
       limited.length === 0
         ? null
-        : tidy(limited.reduce((sum, category) => sum + keep(category.limit ?? 0, { currency }), 0)),
-    spentWithLimit: tidy(
-      entries.reduce(
-        (sum, entry) =>
-          entry.category !== null && withLimit.has(entry.category)
-            ? sum + spending(entry, currency)
-            : sum,
-        0,
-      ),
+        : addShown(
+            limited.map((category) => category.limit ?? 0),
+            currency,
+          ),
+    spentWithLimit: addShown(
+      entries
+        .filter((entry) => entry.category !== null && withLimit.has(entry.category))
+        .map(spending),
+      currency,
     ),
   };
 }
@@ -535,30 +546,35 @@ export interface CategoryTotal {
 /**
  * Spending in each category (refunds taken off), in the categories' order,
  * then "No category" if anything was spent or refunded without one; each
- * amount and limit as it's shown in `currency` (see spending).
+ * amount and limit as it's shown in `currency`, added up as the month's
+ * totals are (see addShown).
  */
 export function byCategory(
   entries: readonly Entry[],
   categories: CategoriesState,
   currency: Currency = 'USD',
 ): CategoryTotal[] {
-  const spent = new Map<string | null, number>();
+  const amounts = new Map<string | null, number[]>();
   const known = new Set(categories.categories.map((category) => category.id));
   for (const entry of entries) {
     if (!hasCategory(entry.kind)) continue;
     const key = entry.category !== null && known.has(entry.category) ? entry.category : null;
-    spent.set(key, tidy((spent.get(key) ?? 0) + spending(entry, currency)));
+    const own = amounts.get(key);
+    if (own) own.push(spending(entry));
+    else amounts.set(key, [spending(entry)]);
   }
   const totals: CategoryTotal[] = categories.categories.map((category) => {
-    const amount = spent.get(category.id) ?? 0;
+    const amount = addShown(amounts.get(category.id) ?? [], currency);
     return {
       category,
       spent: amount,
       left: category.limit === null ? null : tidy(keep(category.limit, { currency }) - amount),
     };
   });
-  const none = spent.get(null);
-  if (none !== undefined) totals.push({ category: null, spent: none, left: null });
+  const none = amounts.get(null);
+  if (none !== undefined) {
+    totals.push({ category: null, spent: addShown(none, currency), left: null });
+  }
   return totals;
 }
 

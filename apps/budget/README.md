@@ -29,7 +29,10 @@ See where your money goes, month by month. Lives at
     win over another's when they first sync. After a change of currency,
     totals add up each amount as it's shown (three $0.50 coffees are ¥1
     each, and ¥3 spent), and an amount saved with cents stays as it is
-    until it's changed in its form (audit 4 F2-5).
+    until it's changed in its form (audit 4 F2-5). They're added up in
+    whole cents (`addShown`), so thousands of the biggest amounts add up
+    to the cent, and a month's "Spent" always matches its categories'
+    spending (audit 5 F2-2).
 - A month shows what was spent, earned and is left (`summary`), each
   category's spending against its limit (`byCategory`; over the limit, its
   bar turns red), and the month's entries, the latest first. Once a
