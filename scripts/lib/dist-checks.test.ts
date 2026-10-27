@@ -6,7 +6,10 @@ import {
   fileSizeProblems,
   gzipSize,
   MAX_FILE_BYTES,
+  MAX_PRECACHE_BYTES,
   pageAssets,
+  precacheBytes,
+  precacheProblems,
   scriptsLoaded,
   spacingProblems,
   staticImports,
@@ -55,6 +58,67 @@ describe('cspProblems', () => {
     for (const html of tricks) expect(cspProblems(html), html).toHaveLength(1);
     // A script's own text isn't read as tags.
     expect(cspProblems('<script src="/a.js">"<a href=javascript:x>"</script>')).toEqual([]);
+  });
+
+  it('refuses anything a page loads from another website, hints included (audit 5 Z-4)', () => {
+    const loads = [
+      '<link rel="preconnect" href="https://fonts.example">',
+      '<link rel="dns-prefetch" href="//cdn.example">',
+      '<link rel="preload" as="script" href="https://cdn.example/x.js">',
+      '<link rel="stylesheet" href="HTTPS://cdn.example/x.css">',
+      '<link rel="icon" href=" https://cdn.example/i.png">',
+      '<link rel="alternate stylesheet" href="https://cdn.example/alt.css">',
+      '<link href="https://cdn.example/x.css">',
+      '<script src="https://cdn.example/x.js"></script>',
+      '<img src="/a.png" srcset="https://cdn.example/a.png 2x">',
+      '<img src="//cdn.example/a.png">',
+      '<iframe src="https://other.example"></iframe>',
+      '<source srcset="/a.webp 1x, https://cdn.example/a.webp 2x">',
+      '<video poster="https://cdn.example/p.jpg"></video>',
+      '<audio src="https://cdn.example/a.mp3"></audio>',
+      '<object data="https://other.example/x.pdf"></object>',
+      '<embed src="http://other.example/x.swf">',
+    ];
+    for (const html of loads) expect(cspProblems(html), html).toHaveLength(1);
+    expect(cspProblems(loads[0] ?? '')).toEqual([
+      '<link rel="preconnect"> loads from another website: https://fonts.example',
+    ]);
+    expect(cspProblems(loads[7] ?? '')).toEqual([
+      '<script> loads from another website: https://cdn.example/x.js',
+    ]);
+  });
+
+  it('allows plain links, canonical links and the site’s own files', () => {
+    const fine = [
+      '<a href="https://github.com/shkriuss/shkriuss.app">GitHub</a>',
+      '<link rel="canonical" href="https://tally.shkriuss.app/">',
+      '<link rel="stylesheet" href="/_astro/a.css">',
+      '<link rel="icon" href="/favicon.svg">',
+      '<link rel="manifest" href="/manifest.webmanifest">',
+      '<img src="data:image/png;base64,AAAA" alt="">',
+      '<img src="/a.png" srcset="/a.png 1x, /a@2x.png 2x" alt="">',
+      '<script type="module" src="/_astro/b.js"></script>',
+      '<form action="/api/x"></form>',
+      '<p data-src="https://example.com">https://example.com</p>',
+    ];
+    for (const html of fine) expect(cspProblems(html), html).toEqual([]);
+  });
+});
+
+describe('the offline copy (audit 5 Z-4)', () => {
+  it('counts every file outside on-demand/, against 30 MB', () => {
+    const files = [
+      { path: 'index.html', bytes: 10 },
+      { path: '_astro/a.js', bytes: 20 },
+      { path: 'on-demand/deep-check/model-01.bin', bytes: MAX_FILE_BYTES },
+    ];
+    expect(precacheBytes(files)).toBe(30);
+    expect(precacheProblems(files)).toEqual([]);
+    expect(precacheProblems(files, 29)).toEqual([
+      'the offline copy is 30 bytes (budget 29): every file outside on-demand/ is saved on the first visit',
+    ]);
+    // Grammar's is about 21 MB; change docs/quality.md too.
+    expect(MAX_PRECACHE_BYTES).toBe(30_000_000);
   });
 });
 

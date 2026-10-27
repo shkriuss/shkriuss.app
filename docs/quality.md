@@ -28,7 +28,14 @@ way, or leave out the package that brings it. It checks only the syntax:
 a package that calls a function Safari 16.4 doesn't have (like
 `Object.groupBy`) passes, so check that in the support tables. The type
 check holds the code here to ES2022, functions included
-(`tsconfig.base.json`).
+(`tsconfig.base.json`). It also refuses a page that loads anything from
+another website: a `link` (a `preconnect` or `dns-prefetch` hint too, which
+the browser tests can't see), `script`, `img`, `iframe`, `source`, `video`
+or `audio` whose address starts with `http://`, `https://` or `//`; plain
+links (`<a href>`) and `canonical` links stay allowed. And it keeps each
+site's offline copy, every file in `dist/` outside `on-demand/`, which the
+service worker saves on the first visit, under 30 MB (Grammar's is about
+21 MB, the others under 1 MB; audit 5 Z-4).
 
 The package age check reads the lockfile as YAML, as pnpm reads it, so an
 entry counts however it's written (audit 5 H-1). It also fails when a pull
