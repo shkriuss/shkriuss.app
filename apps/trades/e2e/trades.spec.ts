@@ -176,6 +176,10 @@ test('changes and deletes a trade', async ({ page }) => {
   await expect(confirm).toContainText(
     'The AAPL long trade will be removed from your journal. This can’t be undone.',
   );
+  // Read out with the title, before "Cancel" (audit 5 G-3).
+  await expect(confirm).toHaveAccessibleDescription(
+    /^The AAPL long trade will be removed from your journal\. This\s+can’t be undone\.\s*$/,
+  );
   await confirm.getByRole('button', { name: 'Delete' }).click();
   await expect(status(page, 'Deleted the AAPL trade.')).toBeAttached();
   await expect(page.getByText('No closed trades yet.')).toBeVisible();
@@ -200,6 +204,17 @@ test('the currency, and a spreadsheet of the trades', async ({ page }) => {
     '\uFEFFSymbol,Side,Entry date,Entry price,Quantity,Stop loss,Exit date,Exit price,Fees,Net result,Return %,R,Setup,Notes',
     'AAPL,Long,2026-10-01,100,10,,2026-10-05,110,0,100,10,,,"Good, ""clean"" entry"',
   ]);
+
+  // Downloaded again: read out again, as the same words with a no-break
+  // space, which can't be heard, on the end (audit 5 G-8).
+  const said = page
+    .getByRole('status')
+    .filter({ hasText: 'Downloaded your trades as a spreadsheet.' });
+  expect(await said.textContent()).toBe('Downloaded your trades as a spreadsheet.');
+  const again = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download as a spreadsheet (CSV)' }).click();
+  await again;
+  await expect.poll(() => said.textContent()).toBe('Downloaded your trades as a spreadsheet. ');
 });
 
 test('closes part of a trade, then the rest', async ({ page }) => {
@@ -264,6 +279,10 @@ test('closes part of a trade, then the rest', async ({ page }) => {
   await dialog.getByRole('button', { name: 'Delete' }).click();
   const confirm = page.getByRole('dialog', { name: 'Delete this trade?' });
   await expect(confirm).toContainText('count as open again, in the AAPL trade.');
+  // What becomes of the trade is read out with the title too (audit 5 G-3).
+  await expect(confirm).toHaveAccessibleDescription(
+    /can’t be undone\.\s+The 40 it closed count as open again, in the AAPL trade\.$/,
+  );
   await confirm.getByRole('button', { name: 'Delete' }).click();
   // The 40 of the first part (audit 3 F2-11: any number passed).
   await expect(page.locator('[data-open-list] [data-meta]')).toHaveText(
@@ -357,6 +376,8 @@ test('deletes a year of closed trades, never open ones', async ({ page }) => {
   await expect(dialog.locator('[data-year-text]')).toHaveText(
     'The 2 closed trades from 2024 will be deleted. Open trades stay. With sync on, they’re deleted on your other devices too. This can’t be undone.',
   );
+  // Read out with the title (audit 5 G-3).
+  await expect(dialog).toHaveAccessibleDescription(/^The 2 closed trades from 2024 will be deleted/);
   await checkA11y(page, 'delete a year');
   await page.emulateMedia({ colorScheme: 'dark' });
   await checkA11y(page, 'delete a year (dark)');

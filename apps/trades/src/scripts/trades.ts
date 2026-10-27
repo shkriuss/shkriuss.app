@@ -186,9 +186,16 @@ export function mountTrades(root: Document): void {
   let parts = new Map<string, Parts>();
   let byId = new Map<string, Trade>();
 
-  const announce = (message: string): void => {
-    announcer.textContent = message;
+  /**
+   * Puts a message in a status line, the same message again too (a second
+   * "Downloaded…"): a screen reader reads a status line only when it
+   * changes, so then a no-break space, which can't be heard, goes on the
+   * end (audit 5 G-8).
+   */
+  const say = (line: HTMLElement, message: string): void => {
+    line.textContent = line.textContent === message ? `${message} ` : message;
   };
+  const announce = (message: string): void => say(announcer, message);
   const find = (id: string | null | undefined) => state.trades.find((trade) => trade.id === id);
   const money = (amount: number, signed = false) =>
     formatResult(amount, currencyOf(settings), { signed });
@@ -582,7 +589,7 @@ export function mountTrades(root: Document): void {
 
   function openYears(): void {
     if (closedYears(state).length === 0) {
-      csvStatus.textContent = 'There are no closed trades to delete.';
+      say(csvStatus, 'There are no closed trades to delete.');
       return;
     }
     yearSelect.replaceChildren();
@@ -628,11 +635,11 @@ export function mountTrades(root: Document): void {
         button?.closest('dialog, section')?.querySelector<HTMLElement>('[data-csv-status]') ??
         csvStatus;
       if (state.trades.length === 0) {
-        status.textContent = 'There are no trades to download yet.';
+        say(status, 'There are no trades to download yet.');
         return;
       }
       downloadFile(`trades-${today()}.csv`, toCsv(state), 'text/csv');
-      status.textContent = 'Downloaded your trades as a spreadsheet.';
+      say(status, 'Downloaded your trades as a spreadsheet.');
     }
   });
 

@@ -165,9 +165,16 @@ export function mountBudget(root: Document): void {
   let openedCategory: CategoryForm | null = null;
   let deleting: { type: 'entry' | 'category'; id: string } | null = null;
 
-  const announce = (message: string): void => {
-    announcer.textContent = message;
+  /**
+   * Puts a message in a status line, the same message again too (a second
+   * "Downloaded…"): a screen reader reads a status line only when it
+   * changes, so then a no-break space, which can't be heard, goes on the
+   * end (audit 5 G-8).
+   */
+  const say = (line: HTMLElement, message: string): void => {
+    line.textContent = line.textContent === message ? `${message} ` : message;
   };
+  const announce = (message: string): void => say(announcer, message);
   const money = (amount: number, signed = false) =>
     formatMoney(amount, currencyOf(settings), { signed });
   const findEntry = (id: string | null | undefined) =>
@@ -517,7 +524,7 @@ export function mountBudget(root: Document): void {
 
   function openYears(): void {
     if (entries.entries.length === 0) {
-      csvStatus.textContent = 'There are no entries to delete.';
+      say(csvStatus, 'There are no entries to delete.');
       return;
     }
     yearSelect.replaceChildren();
@@ -596,11 +603,11 @@ export function mountBudget(root: Document): void {
           button?.closest('dialog, section')?.querySelector<HTMLElement>('[data-csv-status]') ??
           csvStatus;
         if (entries.entries.length === 0) {
-          status.textContent = 'There’s nothing to download yet.';
+          say(status, 'There’s nothing to download yet.');
           break;
         }
         downloadFile(`budget-${today()}.csv`, toCsv(entries, categories), 'text/csv');
-        status.textContent = 'Downloaded your budget as a spreadsheet.';
+        say(status, 'Downloaded your budget as a spreadsheet.');
         break;
       }
     }

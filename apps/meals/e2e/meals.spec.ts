@@ -389,10 +389,12 @@ test('your meals’ ingredients make the shopping list', async ({ page, context 
   // Deleted: still planned, without its ingredients.
   await page.locator('[data-meals]').getByRole('button', { name: 'Lentil soup' }).click();
   await mealDialog(page).getByRole('button', { name: 'Delete' }).click();
-  await page
-    .getByRole('dialog', { name: 'Delete this meal?' })
-    .getByRole('button', { name: 'Delete' })
-    .click();
+  const confirm = page.getByRole('dialog', { name: 'Delete this meal?' });
+  // Read out with the title, before "Cancel" (audit 5 G-3).
+  await expect(confirm).toHaveAccessibleDescription(
+    /^“Lentil soup” will be removed from your meals\. If it’s in your\s+plan, it stays there, without its ingredients\. This can’t be undone\.$/,
+  );
+  await confirm.getByRole('button', { name: 'Delete' }).click();
   await expect(page.locator('[data-meals] li')).toHaveText([/Bolognese/]);
   await expect(dayMeals(page, '2026-10-22')).toHaveText([/Lunch\s*lentil soup/]);
   await expect(shoppingNames(page)).toHaveText(['Minced beef', 'Spaghetti', 'Onions']);

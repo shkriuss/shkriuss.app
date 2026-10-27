@@ -133,6 +133,8 @@ test('asks before resetting a count to 0', async ({ page }) => {
   const dialog = page.getByRole('dialog', { name: 'Reset “Cups” to 0?' });
   await expect(dialog).toBeVisible();
   await expect(dialog).toContainText('It’s at 3 now.');
+  // Read out with the title, before "Cancel" (audit 5 G-3).
+  await expect(dialog).toHaveAccessibleDescription('It’s at 3 now. This can’t be undone.');
   await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused();
   await checkA11y(page, 'reset dialog');
 
@@ -180,9 +182,12 @@ test('resets and deletes counters (with confirmation)', async ({ page }) => {
 
   await books.getByRole('button', { name: 'Delete Books' }).click();
   const dialog = page.getByRole('dialog', { name: 'Delete this counter?' });
-  // Every delete dialog says so (audit 4 G-12).
+  // Every delete dialog says so (audit 4 G-12), read out with its title (audit 5 G-3).
   await expect(dialog).toContainText(
     '“Books” and its count will be removed. This can’t be undone.',
+  );
+  await expect(dialog).toHaveAccessibleDescription(
+    /^“Books” and its count will be removed\. This\s+can’t be undone\.$/,
   );
   await checkA11y(page, 'delete dialog');
   await dialog.getByRole('button', { name: 'Cancel' }).click();

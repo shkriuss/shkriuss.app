@@ -133,6 +133,10 @@ test('changes and deletes entries and categories', async ({ page }) => {
   await expect(confirm).toContainText(
     '$22.50 (Fun, Wed, Oct 21) will be removed. This can’t be undone.',
   );
+  // Read out with the title, before "Cancel" (audit 5 G-3).
+  await expect(confirm).toHaveAccessibleDescription(
+    '$22.50 (Fun, Wed, Oct 21) will be removed. This can’t be undone.',
+  );
   await confirm.getByRole('button', { name: 'Delete' }).click();
   await expect(entryItems(page)).toHaveCount(1);
 
@@ -141,6 +145,9 @@ test('changes and deletes entries and categories', async ({ page }) => {
   await categoryDialog(page).getByRole('button', { name: 'Delete' }).click();
   const confirmCategory = page.getByRole('dialog', { name: 'Delete this category?' });
   await expect(confirmCategory).toContainText('Its expenses stay, under “No category”.');
+  await expect(confirmCategory).toHaveAccessibleDescription(
+    '“Fun” will be removed. Its expenses stay, under “No category”. This can’t be undone.',
+  );
   await confirmCategory.getByRole('button', { name: 'Delete' }).click();
   await expect(status(page, 'Deleted Fun.')).toBeAttached();
   await expect(page.locator('[data-categories] .category__name')).toHaveText([
@@ -269,6 +276,17 @@ test('the currency, and a spreadsheet of the entries', async ({ page }) => {
     '2026-10-21,Expense,-12.5,Groceries,"Milk, ""fresh"""',
     '',
   ]);
+
+  // Downloaded again: read out again, as the same words with a no-break
+  // space, which can't be heard, on the end (audit 5 G-8).
+  const said = page
+    .getByRole('status')
+    .filter({ hasText: 'Downloaded your budget as a spreadsheet.' });
+  expect(await said.textContent()).toBe('Downloaded your budget as a spreadsheet.');
+  const again = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download as a spreadsheet (CSV)' }).click();
+  await again;
+  await expect.poll(() => said.textContent()).toBe('Downloaded your budget as a spreadsheet. ');
 });
 
 test('a refund comes off its category’s spending', async ({ page }) => {
@@ -340,6 +358,8 @@ test('deletes a year, after saying what it deletes', async ({ page }) => {
     'The 2 entries from 2024 will be deleted: expenses, income and refunds. With sync on, they’re deleted on your other devices too. This can’t be undone.',
   );
   await expect(dialog.getByRole('button', { name: 'Delete 2 entries' })).toBeVisible();
+  // Read out with the title (audit 5 G-3).
+  await expect(dialog).toHaveAccessibleDescription(/^The 2 entries from 2024 will be deleted/);
   await checkA11y(page, 'delete a year');
   await page.emulateMedia({ colorScheme: 'dark' });
   await checkA11y(page, 'delete a year (dark)');

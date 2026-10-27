@@ -76,7 +76,11 @@ export function mountDeleteYear(root: ParentNode, page: DeleteYearPage): DeleteY
 
   function openYears(): void {
     if (page.repairs().repairs.length === 0) {
-      csvStatus.textContent = 'There are no repairs to delete.';
+      // Read out again when it's the same message as last time: a screen
+      // reader reads a status line only when it changes, so then a no-break
+      // space, which can't be heard, goes on the end (audit 5 G-8).
+      const message = 'There are no repairs to delete.';
+      csvStatus.textContent = csvStatus.textContent === message ? `${message} ` : message;
       return;
     }
     yearSelect.replaceChildren();
