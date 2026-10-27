@@ -259,6 +259,39 @@ describe('reading the form', () => {
     });
   });
 
+  // Audit 5 F2-3: an iPhone's text boxes count a flag or a family emoji as
+  // one character, so a full box was refused on saving: a setup of 6 family
+  // emoji counted 48, and was "Use 40 characters or fewer."
+  it('counts characters as people see them, as an iPhone’s text boxes do', () => {
+    const family = '👨‍👩‍👧';
+    const flag = '🇬🇪';
+    const read = (fields: Partial<TradeForm>) => readTrade({ ...form, ...fields }, 'a', 0);
+    expect(read({ setup: family.repeat(6) }).trade?.setup).toBe(family.repeat(6));
+    const full = read({
+      symbol: flag.repeat(LIMITS.symbol),
+      setup: flag.repeat(LIMITS.setup),
+      notes: family.repeat(LIMITS.notes),
+    });
+    expect(full.problems).toBeUndefined();
+    expect(full.trade?.symbol).toBe(flag.repeat(LIMITS.symbol));
+    expect(
+      read({
+        symbol: flag.repeat(LIMITS.symbol + 1),
+        setup: flag.repeat(LIMITS.setup + 1),
+        notes: flag.repeat(LIMITS.notes + 1),
+      }).problems,
+    ).toEqual({
+      symbol: `Use ${LIMITS.symbol} characters or fewer.`,
+      setup: `Use ${LIMITS.setup} characters or fewer.`,
+      notes: `Use ${LIMITS.notes} characters or fewer.`,
+    });
+    // One letter under thousands of accents is one character, but not without a limit.
+    const zalgo = `Z${'̶'.repeat(2000)}`;
+    expect(read({ setup: zalgo }).problems).toEqual({
+      setup: `Use ${LIMITS.setup} characters or fewer.`,
+    });
+  });
+
   it('checks saved trades', () => {
     expect(isTradesState(state(trade({})))).toBe(true);
     expect(isTradesState(state(trade({ exitDate: null, exitPrice: null })))).toBe(true);

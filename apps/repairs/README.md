@@ -46,6 +46,10 @@ private car's service history. Lives at <https://repairs.shkriuss.app>.
   price too.
   A price or labour cost typed in a way that could be read two ways, like
   "1.500" in French (1500 or 1.5), is asked again.
+- Text limits (a vehicle's name, the work done…) count characters as
+  people see them, as an iPhone's text boxes count what fits in them: a
+  flag or a family emoji is one, so what a full box holds is never refused,
+  on saving or when it's loaded or synced (`cutToLength`, audit 5 F2-3).
 - "Download as a spreadsheet (CSV)" saves every repair, one row each, with
   the hours and the parts, labour and total cost. Text a spreadsheet could
   read as a formula starts with `'`. The file starts with a byte-order mark,

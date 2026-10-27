@@ -48,6 +48,12 @@ Plan your meals for the week, and what to buy for them. Lives at
   fails, and a limit has to come down (audit 4 F2-13: the plan held 5,000
   and the lists 2,000 things added by hand, and 500 meals each at every
   limit of their own were 5.5 million characters: more than fits).
+  Each field's own limit (a name, an ingredient line, the notes, something
+  added to the list by hand) counts characters as people see them, as an
+  iPhone's text boxes count what fits in them: a flag or a family emoji is
+  one, so what a full box holds is never refused (`cutToLength`, audit 5
+  F2-3); only the meals' text together is counted as it's saved, an emoji
+  as two.
 
 - `src/scripts/reminders.ts`: reminders while Meals is open, and, if "Also
   remind me when Meals is closed" is on, through the shared notification

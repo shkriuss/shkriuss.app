@@ -34,7 +34,7 @@ import {
   type ParseOptions,
 } from '@shkriuss/ui/numbers';
 import { DATE_LOCALE } from '@shkriuss/ui/locale';
-import { foldText } from '@shkriuss/ui/text';
+import { cutToLength, foldText } from '@shkriuss/ui/text';
 import { roomNote as sharedRoomNote } from '@shkriuss/ui/room-note';
 
 /**
@@ -111,6 +111,15 @@ export const LIMITS = {
 };
 
 export const emptyTrades = (): TradesState => ({ trades: [] });
+
+/**
+ * Whether text fits a limit, counted as text boxes count their maxlength on
+ * an iPhone: a flag, a family emoji or a letter with its accent is one
+ * character, so what a full box holds is never refused on saving
+ * (cutToLength). Before, each half of an emoji counted, and a setup of 6
+ * family emoji was "Use 40 characters or fewer." (audit 5 F2-3).
+ */
+const fits = (text: string, max: number): boolean => cutToLength(text, max) === text;
 
 // ---------- Checking ----------
 
@@ -258,7 +267,7 @@ export function readTrade(
   const problems: Problems = {};
   const symbol = form.symbol.trim().toUpperCase();
   if (symbol === '') problems.symbol = 'Enter the symbol, like AAPL.';
-  else if (symbol.length > LIMITS.symbol) {
+  else if (!fits(symbol, LIMITS.symbol)) {
     problems.symbol = `Use ${LIMITS.symbol} characters or fewer.`;
   } else if (count !== null && count >= LIMITS.trades) {
     problems.symbol = `You can keep up to ${new Intl.NumberFormat().format(LIMITS.trades)} trades. To make room, delete a year (under Currency and spreadsheet).`;
@@ -328,9 +337,9 @@ export function readTrade(
 
   // One setup however it's typed: "Breakout  retest" is "Breakout retest".
   const setup = form.setup.replace(/\s+/g, ' ').trim();
-  if (setup.length > LIMITS.setup) problems.setup = `Use ${LIMITS.setup} characters or fewer.`;
+  if (!fits(setup, LIMITS.setup)) problems.setup = `Use ${LIMITS.setup} characters or fewer.`;
   const notes = form.notes.trim();
-  if (notes.length > LIMITS.notes) problems.notes = `Use ${LIMITS.notes} characters or fewer.`;
+  if (!fits(notes, LIMITS.notes)) problems.notes = `Use ${LIMITS.notes} characters or fewer.`;
 
   if (Object.keys(problems).length > 0 || !side || entryPrice === null || quantity === null) {
     return { problems };

@@ -71,6 +71,10 @@ See where your money goes, month by month. Lives at
   to the 28th or the last day, at a chosen time. The last day is sent as "a
   day before the 1st", so it's right in every month, however long
   (`reminderNotices`).
+- Text limits (a category's name, an entry's note) count characters as
+  people see them, as an iPhone's text boxes count what fits in them: a
+  flag or a family emoji is one, so what a full box holds is never refused
+  on saving (`cutToLength`, audit 5 F2-3).
 - `src/scripts/budget.ts`: connects the page to those rules.
   `src/scripts/reminders.ts`: shows the reminder while Budget is open, and
   sends its schedule to the notification service for "Also remind me when

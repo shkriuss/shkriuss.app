@@ -43,7 +43,7 @@ import {
   type Currency,
 } from '@shkriuss/ui/numbers';
 import { DATE_LOCALE, monthLabel, ordinal, timeLabel } from '@shkriuss/ui/locale';
-import { foldText } from '@shkriuss/ui/text';
+import { cutToLength, foldText } from '@shkriuss/ui/text';
 import { roomNote as sharedRoomNote } from '@shkriuss/ui/room-note';
 
 export type Kind = 'expense' | 'income' | 'refund';
@@ -115,6 +115,15 @@ export const SUGGESTED = [
  * would show as "-$0.00" (roundDecimal).
  */
 const tidy = (value: number): number => roundDecimal(value, 2);
+
+/**
+ * Whether text fits a limit, counted as text boxes count their maxlength on
+ * an iPhone: a flag, a family emoji or a letter with its accent is one
+ * character, so what a full box holds is never refused on saving
+ * (cutToLength). Before, each half of an emoji counted, and a note of 20
+ * family emoji was "Use 100 characters or fewer." (audit 5 F2-3).
+ */
+const fits = (text: string, max: number): boolean => cutToLength(text, max) === text;
 
 // ---------- Checking ----------
 
@@ -239,7 +248,7 @@ export function readCategory(
   // "Café" is "Cafe" (foldText, audit 3 J-12).
   const unchanged = own !== undefined && foldText(own.name) === foldText(name);
   if (name === '') problems.name = 'Enter a name for the category.';
-  else if (name.length > LIMITS.name) problems.name = `Use ${LIMITS.name} characters or fewer.`;
+  else if (!fits(name, LIMITS.name)) problems.name = `Use ${LIMITS.name} characters or fewer.`;
   else if (
     !unchanged &&
     state.categories.some(
@@ -338,7 +347,7 @@ export function readEntry(
       ? form.category
       : null;
   const note = form.note.trim();
-  if (note.length > LIMITS.note) problems.note = `Use ${LIMITS.note} characters or fewer.`;
+  if (!fits(note, LIMITS.note)) problems.note = `Use ${LIMITS.note} characters or fewer.`;
   if (Object.keys(problems).length > 0 || !kind) return { problems };
   return {
     entry: {

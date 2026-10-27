@@ -317,6 +317,62 @@ describe('repairs', () => {
     ).toHaveLength(1);
   });
 
+  // Audit 5 F2-3: an iPhone's text boxes count a flag or a family emoji as
+  // one character, so a full box was refused on saving: "Work done" of 300
+  // family emoji counted 2,400, and was "Use 2000 characters or fewer."; and
+  // had it been saved, the check on loading would have refused it too.
+  it('counts characters as people see them, as an iPhone’s text boxes do, saved or synced too', () => {
+    const family = '👨‍👩‍👧';
+    const flag = '🇬🇪';
+    const read = (fields: Partial<RepairForm>) =>
+      readRepair(form(fields), 'r', emptyRepairs(), vehicles, newId, 'en-US');
+    const part = (name: string, number: string) => ({ name, number, quantity: '1', price: '' });
+    const full = read({
+      work: family.repeat(LIMITS.text),
+      problem: flag.repeat(LIMITS.text),
+      system: flag.repeat(LIMITS.system),
+      parts: [part(flag.repeat(LIMITS.partName), flag.repeat(LIMITS.partNumber))],
+    });
+    expect(full.problems).toBeUndefined();
+    // What was saved reads, here and on another device.
+    expect(isRepairsState(repairs(full.repair as Repair))).toBe(true);
+    expect(
+      read({
+        work: flag.repeat(LIMITS.text + 1),
+        problem: family.repeat(LIMITS.text + 1),
+        system: flag.repeat(LIMITS.system + 1),
+        parts: [part(flag.repeat(LIMITS.partName + 1), flag.repeat(LIMITS.partNumber + 1))],
+      }).problems,
+    ).toEqual({
+      work: 'Use 2000 characters or fewer.',
+      problem: 'Use 2000 characters or fewer.',
+      system: 'Use 40 characters or fewer.',
+      'part-name-0': 'Use 60 characters or fewer.',
+      'part-number-0': 'Use 40 characters or fewer.',
+    });
+    const bus = readVehicle(
+      {
+        name: flag.repeat(LIMITS.vehicle),
+        model: family.repeat(LIMITS.model),
+        plate: flag.repeat(LIMITS.plate),
+        notes: family.repeat(LIMITS.notes),
+      },
+      'x',
+      vehicles,
+    );
+    expect(bus.problems).toBeUndefined();
+    expect(isVehiclesState({ vehicles: [bus.vehicle as Vehicle] })).toBe(true);
+    expect(
+      readVehicle({ name: flag.repeat(LIMITS.vehicle + 1), model: '', plate: '', notes: '' }, 'x', {
+        vehicles: [],
+      }).problems,
+    ).toEqual({ name: 'Use 40 characters or fewer.' });
+    // One letter under thousands of accents is one character, but not without a limit.
+    const zalgo = `Z${'̶'.repeat(2000)}`;
+    expect(read({ system: zalgo }).problems).toEqual({ system: 'Use 40 characters or fewer.' });
+    expect(isRepairsState(repairs(repair({ system: zalgo })))).toBe(false);
+  });
+
   it('shows a saved repair in the form again', () => {
     const saved = repair({
       mileage: null,

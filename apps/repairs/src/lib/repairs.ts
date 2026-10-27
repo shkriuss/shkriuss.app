@@ -36,7 +36,7 @@ import {
   whichAmount,
   type Currency,
 } from '@shkriuss/ui/numbers';
-import { compareText, foldText } from '@shkriuss/ui/text';
+import { compareText, cutToLength, foldText } from '@shkriuss/ui/text';
 import { roomNote as sharedRoomNote } from '@shkriuss/ui/room-note';
 import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
@@ -152,8 +152,18 @@ export const emptyRepairs = (): RepairsState => ({ repairs: [] });
 
 // ---------- Checking saved data ----------
 
+/**
+ * Whether text fits a limit, counted as text boxes count their maxlength on
+ * an iPhone: a flag, a family emoji or a letter with its accent is one
+ * character, so what a full box holds is never refused, on saving or when
+ * it's loaded or synced (cutToLength). Before, each half of an emoji
+ * counted, and "Work done" of 300 family emoji was "Use 2000 characters or
+ * fewer." (audit 5 F2-3).
+ */
+const fits = (text: string, max: number): boolean => cutToLength(text, max) === text;
+
 const isText = (value: unknown, max: number): value is string =>
-  typeof value === 'string' && value.length <= max;
+  typeof value === 'string' && fits(value, max);
 
 const isMileage = (value: unknown): value is number =>
   typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= LIMITS.mileage;
@@ -299,7 +309,7 @@ export function readVehicle(
   // two devices that each added "Bus 105" before they first synced.
   const unchanged = own !== undefined && fold(own.name) === fold(name);
   if (name === '') problems.name = 'Enter a name or number, like a bus number.';
-  else if (name.length > LIMITS.vehicle)
+  else if (!fits(name, LIMITS.vehicle))
     problems.name = `Use ${LIMITS.vehicle} characters or fewer.`;
   else if (
     !unchanged &&
@@ -310,11 +320,11 @@ export function readVehicle(
     problems.name = `You can keep up to ${LIMITS.vehicles} vehicles.`;
   }
   const model = oneLine(form.model);
-  if (model.length > LIMITS.model) problems.model = `Use ${LIMITS.model} characters or fewer.`;
+  if (!fits(model, LIMITS.model)) problems.model = `Use ${LIMITS.model} characters or fewer.`;
   const plate = oneLine(form.plate).toUpperCase();
-  if (plate.length > LIMITS.plate) problems.plate = `Use ${LIMITS.plate} characters or fewer.`;
+  if (!fits(plate, LIMITS.plate)) problems.plate = `Use ${LIMITS.plate} characters or fewer.`;
   const notes = form.notes.trim();
-  if (notes.length > LIMITS.notes) problems.notes = `Use ${LIMITS.notes} characters or fewer.`;
+  if (!fits(notes, LIMITS.notes)) problems.notes = `Use ${LIMITS.notes} characters or fewer.`;
   if (Object.keys(problems).length > 0) return { problems };
   return { vehicle: { id, name, model, plate, notes } };
 }
@@ -419,7 +429,7 @@ export function readRepair(
   let newVehicle: Vehicle | null = null;
   if (name === '') problems['vehicle'] = 'Enter the vehicle, like a bus number.';
   else if (!vehicle) {
-    if (name.length > LIMITS.vehicle) {
+    if (!fits(name, LIMITS.vehicle)) {
       problems['vehicle'] = `Use ${LIMITS.vehicle} characters or fewer.`;
     } else if (vehicles.vehicles.length >= LIMITS.vehicles) {
       problems['vehicle'] = `You can keep up to ${LIMITS.vehicles} vehicles.`;
@@ -438,12 +448,12 @@ export function readRepair(
   }
 
   const system = oneLine(form.system);
-  if (system.length > LIMITS.system)
+  if (!fits(system, LIMITS.system))
     problems['system'] = `Use ${LIMITS.system} characters or fewer.`;
   const problem = form.problem.trim();
-  if (problem.length > LIMITS.text) problems['problem'] = `Use ${LIMITS.text} characters or fewer.`;
+  if (!fits(problem, LIMITS.text)) problems['problem'] = `Use ${LIMITS.text} characters or fewer.`;
   const work = form.work.trim();
-  if (work.length > LIMITS.text) problems['work'] = `Use ${LIMITS.text} characters or fewer.`;
+  if (!fits(work, LIMITS.text)) problems['work'] = `Use ${LIMITS.text} characters or fewer.`;
 
   const parts: Part[] = [];
   form.parts.forEach((row, index) => {
@@ -461,10 +471,10 @@ export function readRepair(
       return;
     }
     if (partName === '') problems[`part-name-${index}`] = 'Enter the part’s name.';
-    else if (partName.length > LIMITS.partName) {
+    else if (!fits(partName, LIMITS.partName)) {
       problems[`part-name-${index}`] = `Use ${LIMITS.partName} characters or fewer.`;
     }
-    if (number.length > LIMITS.partNumber) {
+    if (!fits(number, LIMITS.partNumber)) {
       problems[`part-number-${index}`] = `Use ${LIMITS.partNumber} characters or fewer.`;
     }
     const quantity = typedQuantity ?? 1;

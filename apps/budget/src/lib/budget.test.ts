@@ -292,6 +292,28 @@ describe('entries', () => {
     expect(readEntry(form, 'x', null, categories).entry?.amount).toBe(12.5);
   });
 
+  // Audit 5 F2-3: an iPhone's text boxes count a flag or a family emoji as
+  // one character, so a full box was refused on saving: a note of 20 family
+  // emoji counted 160, and was "Use 100 characters or fewer."
+  it('counts characters as people see them, as an iPhone’s text boxes do', () => {
+    const family = '👨‍👩‍👧';
+    const flag = '🇬🇪';
+    const note = (text: string) => readEntry({ ...form, note: text }, 'x', 0, categories);
+    expect(note(family.repeat(20)).entry?.note).toBe(family.repeat(20));
+    expect(note(flag.repeat(LIMITS.note)).entry?.note).toBe(flag.repeat(LIMITS.note));
+    expect(note(flag.repeat(LIMITS.note + 1)).problems).toEqual({
+      note: `Use ${LIMITS.note} characters or fewer.`,
+    });
+    const name = (text: string) => readCategory({ name: text, limit: '' }, 'p', categories);
+    expect(name(flag.repeat(LIMITS.name)).category?.name).toBe(flag.repeat(LIMITS.name));
+    expect(name(family.repeat(LIMITS.name + 1)).problems).toEqual({
+      name: `Use ${LIMITS.name} characters or fewer.`,
+    });
+    // One letter under thousands of accents is one character, but not without a limit.
+    const zalgo = `Z${'̶'.repeat(2000)}`;
+    expect(name(zalgo).problems).toEqual({ name: `Use ${LIMITS.name} characters or fewer.` });
+  });
+
   // Audit F2-13: yen kept cents, so 0.01 yen was saved and shown as "¥0",
   // and two entries of 0.5 showed as ¥1 and ¥1, adding up to ¥1.
   it('keeps amounts to their currency’s own decimals', () => {

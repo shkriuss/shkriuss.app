@@ -104,6 +104,10 @@ Your trading journal: log your trades and see what works. Lives at
     nothing is converted. It's saved only once changed (US dollars until
     then), so a new device has nothing to win over another's when they
     first sync.
+  - Text limits (the symbol, setup and notes) count characters as people
+    see them, as an iPhone's text boxes count what fits in them: a flag or
+    a family emoji is one, so what a full box holds is never refused on
+    saving (`cutToLength`, audit 5 F2-3).
 - `src/scripts/trades.ts`: connects the page to those rules. Open trades are
   listed first, with "Close" to fill in the exit (all of the trade, or part
   of it). Closed trades can be searched by symbol, setup or notes, and show
