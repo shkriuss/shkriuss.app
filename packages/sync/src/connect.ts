@@ -12,12 +12,21 @@
  * 3. The app opens it with its private half, which is then thrown away.
  *
  * The hub only sends it back to the app's real address (./origins.ts).
+ *
+ * An app loads this file only when it's needed: "Turn on sync", or a link
+ * from the hub (./links.ts reads those as the app starts). It keeps every
+ * page smaller, as nearly all of them never need it (audit 5 J-2).
  */
 import { fromBase64Url, hkdf, open, randomBytes, seal, toBase64Url, utf8 } from '@shkriuss/crypto';
 
+export {
+  CONNECT_LIFETIME_MS,
+  parseConnectResult,
+  parseTurnOff,
+  type ConnectResult,
+} from './links.ts';
+
 const ECDH = { name: 'ECDH', namedCurve: 'P-256' } as const;
-/** A connect request is good for this long. */
-export const CONNECT_LIFETIME_MS = 15 * 60 * 1000;
 
 /** What the app keeps in this tab while the person is on the hub. */
 export interface PendingConnect {
@@ -130,19 +139,9 @@ export async function sealForApp(request: ConnectRequest, connection: Connection
   return `${hubKey}.${await seal(key, payload, label(request.app, request.state))}`;
 }
 
-/** Where the hub sends the person back to: the app, with the result after "#". */
+/** Where the hub sends the person back to: the app, with the result after "#" (./links.ts reads it). */
 export const connectResultUrl = (from: string, result: string | 'cancelled'): string =>
   `${from}/#connect=${result}`;
-
-export type ConnectResult =
-  { kind: 'cancelled' } | { kind: 'sealed'; hubKey: string; sealed: string };
-
-/** Step 3 (app): reads "#connect=…" from the address, or null if it isn't one. */
-export function parseConnectResult(hash: string): ConnectResult | null {
-  if (hash === '#connect=cancelled') return { kind: 'cancelled' };
-  const match = /^#connect=([A-Za-z0-9_-]{87})\.([A-Za-z0-9_-]+)$/.exec(hash);
-  return match ? { kind: 'sealed', hubKey: match[1] ?? '', sealed: match[2] ?? '' } : null;
-}
 
 /** Step 3 (app): opens the result with the kept private key. Throws if it doesn't open. */
 export async function openConnection(
@@ -207,11 +206,6 @@ export async function isTurnOffProof(
   return false;
 }
 
-/** The app's address that turns sync off there. */
+/** The app's address that turns sync off there (./links.ts reads it). */
 export const turnOffUrl = (appOrigin: string, proof: string): string =>
   `${appOrigin}/#sync=off&proof=${proof}`;
-
-/** Reads the proof from "#sync=off&proof=…", or null if the address isn't one. */
-export function parseTurnOff(hash: string): string | null {
-  return /^#sync=off&proof=([A-Za-z0-9_-]{43})$/.exec(hash)?.[1] ?? null;
-}

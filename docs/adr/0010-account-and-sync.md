@@ -19,7 +19,9 @@ time (see "keep both" below). Changed by audit 5: an edit made with no
 connection keeps its time (E-1); "Turn off" works when the browser is full
 (E-2); replaced keys are kept for 13 months and apps are done with old keys
 for good (A-1); the "turn off" links are for the day (A-5) and say nothing
-when sync is already off (C-4); all device links share one object (B-2).
+when sync is already off (C-4); all device links share one object (B-2);
+an app loads the code that connects it to the account only when that's
+needed, so every page stays within its JavaScript budget (J-2).
 
 ## Context
 

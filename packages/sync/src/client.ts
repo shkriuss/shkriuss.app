@@ -31,20 +31,14 @@
  * it (download()).
  *
  * In other files: this device's state (./device.ts), requests to the server
- * (./requests.ts) and files (./files.ts).
+ * (./requests.ts), files (./files.ts), the links the hub opens the app with
+ * (./links.ts) and connecting to the account (./connect.ts, loaded only when
+ * sync is turned on or such a link opens the app: audit 5 J-2).
  */
 import { fromBase64Url } from '@shkriuss/crypto';
 import { isStorageFull, lastSaveProblem, type Store } from '@shkriuss/storage';
-import {
-  CONNECT_LIFETIME_MS,
-  connectUrl,
-  isTurnOffProof,
-  newConnectRequest,
-  openConnection,
-  parseConnectResult,
-  parseTurnOff,
-  type PendingConnect,
-} from './connect.ts';
+import type { PendingConnect } from './connect.ts';
+import { CONNECT_LIFETIME_MS, parseConnectResult, parseTurnOff } from './links.ts';
 import {
   checkStillOn,
   forgetFiles,
@@ -943,6 +937,12 @@ export function createSync(options: {
     timer = window.setTimeout(() => void run(), delay);
   }
 
+  /**
+   * The code for connecting to the account, loaded only when it's needed
+   * (below, and in connect()): nearly every page never needs it (audit 5 J-2).
+   */
+  const connectCode = () => import('./connect.ts');
+
   /** Coming back from the hub with "#connect=…". */
   async function finishConnect(): Promise<void> {
     const result = parseConnectResult(location.hash);
@@ -961,6 +961,7 @@ export function createSync(options: {
     }
     try {
       if (!pending || Date.now() - pending.at > CONNECT_LIFETIME_MS) throw new Error('No request');
+      const { openConnection } = await connectCode();
       const connection = await openConnection(options.app, pending, result);
       const turnedOn = timeOf(pending.turnedOn) ?? Date.now();
       if (!saveConnection(connection, turnedOn)) throw new SyncError(stateProblem());
@@ -982,7 +983,15 @@ export function createSync(options: {
   async function turnOffFromHub(proof: string): Promise<void> {
     const state = loadState();
     if (!state?.secret) return;
-    if (!(await isTurnOffProof(fromBase64Url(state.secret), proof))) {
+    let proven = false;
+    try {
+      const { isTurnOffProof } = await connectCode();
+      proven = await isTurnOffProof(fromBase64Url(state.secret), proof);
+    } catch {
+      // The code that checks the proof couldn't be loaded (no connection,
+      // after an update): sync stays on, as for a proof that isn't this account's.
+    }
+    if (!proven) {
       emit('kept-on');
       schedule(0);
       return;
@@ -1023,6 +1032,7 @@ export function createSync(options: {
       const { origin, now } = (await response.json()) as { origin: string; now?: unknown };
       // Pressed now, by the server's clock (see DeviceState.connected).
       const turnedOn = timeOf(now) ?? serverClock() ?? Date.now();
+      const { connectUrl, newConnectRequest } = await connectCode();
       const { request, pending } = await newConnectRequest(options.app, location.origin);
       try {
         sessionStorage.setItem(PENDING_KEY, JSON.stringify({ ...pending, turnedOn } as Pending));
