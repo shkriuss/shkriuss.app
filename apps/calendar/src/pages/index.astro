@@ -360,10 +360,18 @@ import { MAX_NOTES_LENGTH, MAX_TITLE_LENGTH, REPEAT_LABELS, REPEATS } from '../l
     </form>
   </dialog>
 
-  <dialog class="dialog" aria-labelledby="delete-event-title" data-delete-dialog>
+  <!-- Read out with its title: which event goes, and that it can't be undone (audit 5 G-3). -->
+  <dialog
+    class="dialog"
+    aria-labelledby="delete-event-title"
+    aria-describedby="delete-event-message"
+    data-delete-dialog
+  >
     <form method="dialog" class="stack">
       <h2 id="delete-event-title">Delete this event?</h2>
-      <p data-delete-message>This event will be removed. This can’t be undone.</p>
+      <p id="delete-event-message" data-delete-message>
+        This event will be removed. This can’t be undone.
+      </p>
       <div class="cluster">
         <Button type="submit" value="cancel">
           Cancel

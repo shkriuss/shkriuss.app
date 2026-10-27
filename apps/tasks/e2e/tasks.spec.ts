@@ -314,6 +314,10 @@ test('deletes a task, and done ones, with a confirmation', async ({ page }) => {
   await editor(page).getByRole('button', { name: 'Delete' }).click();
   const confirm = page.getByRole('dialog', { name: 'Delete this task?' });
   await expect(confirm).toContainText('“Wrong task” will be removed.');
+  // Read out with the title, before "Cancel" (audit 5 G-3).
+  await expect(confirm).toHaveAccessibleDescription(
+    /“Wrong task” will be removed\. This can’t be undone\./,
+  );
   await confirm.getByRole('button', { name: 'Cancel' }).click();
   await expect(editor(page)).toBeVisible();
   await editor(page).getByRole('button', { name: 'Delete' }).click();
@@ -326,6 +330,9 @@ test('deletes a task, and done ones, with a confirmation', async ({ page }) => {
   await page.getByRole('button', { name: 'Delete done tasks' }).click();
   const clear = page.getByRole('dialog', { name: 'Delete done tasks?' });
   await expect(clear).toContainText('The 2 done tasks shown here will be removed.');
+  await expect(clear).toHaveAccessibleDescription(
+    'The 2 done tasks shown here will be removed. This can’t be undone.',
+  );
   await clear.getByRole('button', { name: 'Delete' }).click();
   await expect(page.locator('[data-done-section]')).toBeHidden();
   await expect(titles(page)).toHaveText(['Keep me']);

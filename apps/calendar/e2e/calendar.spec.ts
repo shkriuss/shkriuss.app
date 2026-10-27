@@ -172,6 +172,10 @@ test('edits and deletes an event, with a confirmation', async ({ page }) => {
   await editor(page).getByRole('button', { name: 'Delete' }).click();
   const confirm = page.getByRole('dialog', { name: 'Delete this event?' });
   await expect(confirm).toContainText('“Dentist check-up” will be removed. This can’t be undone.');
+  // Read out with the title, before "Cancel" (audit 5 G-3).
+  await expect(confirm).toHaveAccessibleDescription(
+    '“Dentist check-up” will be removed. This can’t be undone.',
+  );
   await checkA11y(page, 'delete dialog');
 
   // Cancel goes back to editing.

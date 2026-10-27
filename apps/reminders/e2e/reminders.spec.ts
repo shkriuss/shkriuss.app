@@ -134,6 +134,10 @@ test('ticks reminders done, puts off overdue ones, and clears done ones', async 
   await clearDone.click();
   const ask = page.getByRole('dialog', { name: 'Delete done reminders?' });
   await expect(ask).toContainText('The done reminder will be removed. This can’t be undone.');
+  // Read out with the title, before "Cancel" (audit 5 G-3).
+  await expect(ask).toHaveAccessibleDescription(
+    'The done reminder will be removed. This can’t be undone.',
+  );
   await expect(ask.getByRole('button', { name: 'Cancel' })).toBeFocused();
   await checkA11y(page, 'clear done dialog');
   await ask.getByRole('button', { name: 'Cancel' }).click();
@@ -240,6 +244,9 @@ test('changes and deletes a reminder', async ({ page }) => {
   await dialog.getByRole('button', { name: 'Delete' }).click();
   const confirm = page.getByRole('dialog', { name: 'Delete this reminder?' });
   await expect(confirm).toContainText('“Water the garden” will be removed. This can’t be undone.');
+  await expect(confirm).toHaveAccessibleDescription(
+    /“Water the garden” will be removed\. This can’t be undone\./,
+  );
   await confirm.getByRole('button', { name: 'Cancel' }).click();
   await expect(dialog).toBeVisible();
   await dialog.getByRole('button', { name: 'Delete' }).click();

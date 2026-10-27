@@ -153,6 +153,12 @@ export function mountListEditor(root: Document, page: ListsPage): void {
     listDeleteName.textContent = name;
     // Its tasks can stay (without a list), move to another list, or go too.
     listTasksField.hidden = count === 0;
+    // Read out as the dialog opens: the message, and that there are tasks to
+    // choose about (a hidden field's label would still be read: audit 5 G-3).
+    listDeleteDialog.setAttribute(
+      'aria-describedby',
+      count === 0 ? 'list-delete-message' : 'list-delete-message list-tasks-label',
+    );
     listTasksCount.textContent = tasksCount(count);
     listTasks.replaceChildren(
       new Option('Keep them, without a list', NO_LIST),

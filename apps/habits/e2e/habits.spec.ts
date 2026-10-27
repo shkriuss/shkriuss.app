@@ -204,6 +204,11 @@ test('deletes a habit after asking', async ({ page }) => {
   await expect(confirm).toContainText(
     '“Remove me” and all its check marks will be removed. This can’t be undone.',
   );
+  // Read out with the title, before "Cancel" (audit 5 G-3).
+  await expect(confirm).toHaveAccessibleDescription(
+    /“Remove me” and all its check marks will be removed\. This\s+can’t be undone\./,
+  );
+  await expect(confirm.getByRole('button', { name: 'Cancel' })).toBeFocused();
   await confirm.getByRole('button', { name: 'Delete' }).click();
   await expect(card(page, 'Remove me')).toHaveCount(0);
   await expect(card(page, 'Keep')).toBeVisible();

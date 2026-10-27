@@ -452,10 +452,16 @@ import {
     </form>
   </dialog>
 
-  <dialog class="dialog" aria-labelledby="delete-title" data-delete-dialog>
+  <!-- Each confirmation is read out with what it deletes (audit 5 G-3). -->
+  <dialog
+    class="dialog"
+    aria-labelledby="delete-title"
+    aria-describedby="delete-message"
+    data-delete-dialog
+  >
     <form method="dialog" class="stack">
       <h2 id="delete-title">Delete this task?</h2>
-      <p>
+      <p id="delete-message">
         “<span dir="auto" data-delete-name></span>” will be removed. This can’t be undone.
       </p>
       <div class="cluster">
@@ -504,14 +510,20 @@ import {
     </form>
   </dialog>
 
-  <dialog class="dialog" aria-labelledby="list-delete-title" data-list-delete-dialog>
+  <!-- Described by its message and, when the list has tasks, their field's label (list-editor.ts). -->
+  <dialog
+    class="dialog"
+    aria-labelledby="list-delete-title"
+    aria-describedby="list-delete-message list-tasks-label"
+    data-list-delete-dialog
+  >
     <form method="dialog" class="stack">
       <h2 id="list-delete-title">Delete this list?</h2>
-      <p>
+      <p id="list-delete-message">
         “<span dir="auto" data-list-delete-name></span>” will be removed. This can’t be undone.
       </p>
       <div class="field" data-list-tasks-field>
-        <label class="field__label" for="list-tasks">
+        <label class="field__label" for="list-tasks" id="list-tasks-label">
           Its <span data-list-tasks-count>tasks</span>
         </label>
         <select class="input" id="list-tasks" data-list-tasks></select>
@@ -527,10 +539,17 @@ import {
     </form>
   </dialog>
 
-  <dialog class="dialog" aria-labelledby="clear-title" data-clear-dialog>
+  <dialog
+    class="dialog"
+    aria-labelledby="clear-title"
+    aria-describedby="clear-text"
+    data-clear-dialog
+  >
     <form method="dialog" class="stack">
       <h2 id="clear-title">Delete done tasks?</h2>
-      <p data-clear-text>The done tasks shown here will be removed. This can’t be undone.</p>
+      <p id="clear-text" data-clear-text>
+        The done tasks shown here will be removed. This can’t be undone.
+      </p>
       <div class="cluster">
         <Button type="submit" value="cancel">
           Cancel
