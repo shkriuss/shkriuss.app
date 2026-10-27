@@ -437,7 +437,21 @@ in with `sync: true` in `apps.json`.
   determined could use up the daily free quota. Things would pause until the
   next day; nothing is exposed and nothing costs money. Someone could also
   fill one app's room for online copies, which doesn't reset daily
-  ([ADR 0017](0017-storage-limits.md)).
+  ([ADR 0017](0017-storage-limits.md)). Besides the 100,000 requests a day,
+  the free plan allows 100,000 row writes a day for every app's objects
+  together (each `setAlarm()` is one), and those run out first: a device
+  link writes 2 or 3 rows, a stranger's first sync copy about 7, so some
+  14,000 to 50,000 such requests pause the online features until 00:00
+  UTC, far fewer than the requests allowed (`tests/unit/free-plan.test.ts`
+  pins those counts: audit 5 B-4).
+- **Two tabs of an app, one of them syncing.** Only one tab syncs at a
+  time, but the other saves as usual, and the browser passes writes between
+  tabs with a delay: a save in the other tab that lands in the few
+  milliseconds between a sync's reading of a store and its saving of the
+  merge is overwritten by the merge. It needs an edit at that very moment
+  (a few milliseconds a minute in the biggest apps); closing it would take
+  a lock around every save in every app, so it stays as it is (audit 5
+  E-9, a suspicion: it can't be shown in the tests' shared storage).
 - **The hub now runs a small Worker for `/api/account/*`.** Every other request
   is still a static file.
 - **QR codes are made by our own encoder** (`packages/ui/src/lib/qr.ts`), not a

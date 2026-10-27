@@ -20,7 +20,7 @@ const whereLabel: Record<StorageKind, string> = {
 // The day this page's text last changed (people rely on it), and a
 // fingerprint of that text: ../privacy.test.ts fails when the text changes
 // but they don't, and says what to set (audit 3 D-7).
-const LAST_UPDATED = '26 October 2026'; // text 2c106c768145eb64
+const LAST_UPDATED = '27 October 2026'; // text ddc98eb9b7d248b1
 ---
 
 <AppShell
@@ -165,14 +165,14 @@ const LAST_UPDATED = '26 October 2026'; // text 2c106c768145eb64
       </li>
       <li>
         <strong>If you replace your account key</strong> (after losing a device): the server keeps a
-        note that the old key was replaced, with a tag that only a device with both the old and the
-        new key can check, so devices that still have it sign out and forget it. The note is deleted
-        once no device has asked about it for 13 months. The device you replace it on keeps the old
-        key until you sign out (or sign in to another account), so your apps can move their synced
-        data to the new one. Passkeys you added before can't sign in any more, but the old key stays
-        on the server, locked for each of them, until you remove that passkey (“Remove a passkey” on
-        the Account page; one already deleted from your password manager can't be removed, so it
-        stays, locked).{' '}
+        note that the old key was replaced (when, and when a device last asked about it), with a tag
+        that only a device with both the old and the new key can check, so devices that still have
+        it sign out and forget it. The note is deleted once no device has asked about it for 13
+        months. The device you replace it on keeps the old key for 13 months, or until you sign out
+        (or sign in to another account), so your apps can move their synced data to the new one.
+        Passkeys you added before can't sign in any more, but the old key stays on the server,
+        locked for each of them, until you remove that passkey (“Remove a passkey” on the Account
+        page; one already deleted from your password manager can't be removed, so it stays, locked).{' '}
         {pushSites.length > 0 && (
           <>
             Reminders while an app is closed aren't part of the account, so the lost device keeps
@@ -215,7 +215,7 @@ const LAST_UPDATED = '26 October 2026'; // text 2c106c768145eb64
             with it. Your devices keep their data, and the next sync from one of them puts it online
             again.{' '}
             {librarySites.length > 0 &&
-              'An online library isn’t deleted that way, even unused: it stays until you tap “Delete the online copy” (below). '}
+              'An online library that was unlocked with the storage code isn’t deleted that way, even unused: it stays until you tap “Delete the online copy” (below). One never unlocked holds no photos, and is deleted after 30 days unused. '}
             So that the storage all the apps share can't fill up, the server also keeps how much
             room each copy takes.
           </li>
@@ -251,12 +251,11 @@ const LAST_UPDATED = '26 October 2026'; // text 2c106c768145eb64
             deleted: when the copy was made and when it was deleted, how many times it was changed,
             and when a device last asked about it, never what was in it. It's deleted too once no
             device has asked about it for 13 months, and so is what's left of an online library
-            (scrambled codes only your devices can match, a scrambled form of the storage code it
-            was unlocked with, how many changes and uploads it had, the day of its last uploads, and
-            when it was last used). Turning on sync again later starts a new copy, which replaces
-            the note and keeps when the copy before it was deleted, so devices where sync was on
-            before then still learn it was deleted. An online library has to be unlocked with the
-            storage code again.
+            (scrambled codes only your devices can match, how many changes and uploads it had, the
+            day of its last uploads, and when it was last used). Turning on sync again later starts
+            a new copy, which replaces the note and keeps when the copy before it was deleted, so
+            devices where sync was on before then still learn it was deleted. An online library has
+            to be unlocked with the storage code again.
           </li>
           <li>
             If you replace your account key, turning on sync again moves the app's copy to the new

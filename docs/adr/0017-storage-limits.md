@@ -22,7 +22,9 @@ no longer applies (see "What people see").
   servers from knowing who anyone is, but it also means **the server can't
   tell a real token from a made-up one**. Each limit was per token, so
   nothing limited the total.
-- Unlike the daily request allowance, **storage doesn't reset at midnight**.
+- Unlike the daily request allowance (and the daily row writes, which run
+  out first: [ADR 0010](0010-account-and-sync.md), "Free quota"),
+  **storage doesn't reset at midnight**.
   Once it's full, every write fails in every app (sync, notifications,
   linking a device), and the owner can't tell junk from real data: it's all
   named by hashes, on purpose.
