@@ -591,8 +591,9 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
         recoveryFile(source.key, source.code),
         'text/plain',
       );
+      // The page can't tell when the browser has saved it (audit 5 Z-2).
       (pending ? newStatus : dialogStatus).textContent =
-        'Downloaded. Keep the file somewhere safe.';
+        'Download started. Keep the file somewhere safe.';
     },
     'copy-key': async () => {
       if (pending) await copy(pending.key, newStatus);
@@ -700,6 +701,12 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
       const names = syncLinks.filter(({ slug }) => synced.has(slug)).map(({ name }) => name);
       signOutApps.hidden = names.length === 0;
       signOutAppNames.textContent = names.join(', ');
+      // Read out with the question, only while it's shown (a hidden paragraph
+      // named this way would be read out too: audit 5 G-3).
+      signOutDialog.setAttribute(
+        'aria-describedby',
+        names.length === 0 ? 'sign-out-description' : 'sign-out-description sign-out-apps',
+      );
       signOutDialog.returnValue = '';
       signOutDialog.showModal();
     },
