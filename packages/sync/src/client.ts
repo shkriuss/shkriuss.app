@@ -216,8 +216,12 @@ export interface SyncClient {
   syncNow(): Promise<void>;
   /** Goes to the hub to connect this app (the page navigates away). */
   connect(): Promise<void>;
-  /** Stops syncing on this device; the online copy stays for other devices. */
-  turnOff(): void;
+  /**
+   * Stops syncing on this device; the online copy stays for other devices.
+   * False if sync couldn't be turned off (the browser won't save anything):
+   * then status() says what's wrong.
+   */
+  turnOff(): boolean;
   /** Deletes the online copy (and its files) and stops syncing on this device. Data here stays. */
   deleteOnline(): Promise<void>;
   /** After saving files here that the data uses: they go online at the next sync. */
@@ -333,6 +337,10 @@ export function createSync(options: {
    * say) is no news.
    */
   let stops = 0;
+  /** Something was edited here (sync on) that no round has noted yet (see rememberEdits). */
+  let edited = false;
+  /** In the round under way: what this device knew says the merge now (see round()). */
+  let knownSaved = false;
   const fileSync = createFileSync(options.app);
 
   const status = (): SyncStatus => {
@@ -572,7 +580,41 @@ export function createSync(options: {
 
     // 1. This device.
     const { before, local, changed: localChanged } = observeAll(state, now);
+    edited = false;
+    knownSaved = false;
+    const upgraded = state.known !== stored.known;
+    try {
+      return await mergeRound(state, secret, { token, key }, now, {
+        before,
+        local,
+        localChanged,
+        upgraded,
+      });
+    } catch (error) {
+      // The round failed before what this device knew said the merge (no
+      // connection, say): what was edited here is noted now, with this
+      // time, instead of at the next round that reaches the copy, which
+      // may be weeks away (audit 5 E-1).
+      if (!knownSaved && localChanged && !(error instanceof StoppedError)) rememberEdits(now);
+      throw error;
+    }
+  }
 
+  /** Steps 2 to 7 of a round (see round()), given what step 1 saw of this device. */
+  async function mergeRound(
+    state: DeviceState,
+    secret: string,
+    { token, key }: Keys,
+    now: number,
+    device: {
+      before: Record<string, string>;
+      local: Stores;
+      localChanged: boolean;
+      /** What this device knew was brought to a new data version (knownNow). */
+      upgraded: boolean;
+    },
+  ): Promise<boolean> {
+    const { before, local, localChanged, upgraded } = device;
     // 2. The online copy, and any old copies to bring along. Files saved here
     // go online now, before the data that uses them, so other devices find
     // them as soon as it arrives; only now, so a device that may not sync the
@@ -591,7 +633,6 @@ export function createSync(options: {
       !state.dirty &&
       state.previous.length === stillWaiting.length
     ) {
-      const upgraded = state.known !== stored.known;
       updateState(secret, {
         last: now,
         waiting,
@@ -748,8 +789,10 @@ export function createSync(options: {
       if (!updateState(secret, { known: knowns, dirty: true, base: seenOnline })) {
         throw stateNotSaved();
       }
-      // What this device knew says the merge now: nothing to undo.
+      // What this device knew says the merge now: nothing to undo, and
+      // nothing to note if the upload fails (round()).
       changed.length = 0;
+      knownSaved = true;
       const data = await sealStores(key, options.app, merged, written + 1);
       if (data.length > MAX_SEALED_CHARS) throw new SyncError('too-big');
       const base = remote.kind === 'none' ? null : (online?.version ?? null);
@@ -771,6 +814,7 @@ export function createSync(options: {
     const base = online ? { epoch: online.epoch, stores: knowns } : null;
     const saved = { remote: online, known: knowns, dirty: false, base, last: now, ...answered() };
     if (!updateState(secret, saved)) throw stateNotSaved();
+    knownSaved = true;
 
     // 7. The old copies are in the new one now (and their files, re-sealed with
     // the new key, and the app's linked data): delete them, so devices still
@@ -883,10 +927,7 @@ export function createSync(options: {
       const replaced = Boolean(state?.secret) && state?.secret !== secretBefore;
       const stale = error instanceof StoppedError || stops !== stopsBefore || replaced;
       problem = stale ? null : problemOf(error);
-      if (!stale && state && isGone(error)) {
-        saveState(offState(state));
-        forgetFiles();
-      }
+      if (!stale && state && isGone(error) && !switchOff(state)) problem = stateProblem();
     } finally {
       busy = false;
     }
@@ -946,6 +987,19 @@ export function createSync(options: {
     client.turnOff();
   }
 
+  /**
+   * Sync off on this device, keeping what it knew (for turning it on again
+   * later) if the browser has room for that; otherwise the key alone goes,
+   * and a later "Turn on sync" starts like the first time. Before, a "Turn
+   * off" the browser had no room to save left sync on, while the page said
+   * it was off (audit 5 E-2). False if not even the key could go.
+   */
+  function switchOff(state: DeviceState, retired = state.retired): boolean {
+    const off = saveState({ ...offState(state), retired }) || saveState(null);
+    forgetFiles();
+    return off;
+  }
+
   const client: SyncClient = {
     status,
     subscribe(listener) {
@@ -954,8 +1008,10 @@ export function createSync(options: {
     },
     changed() {
       const state = loadState();
-      if (state?.secret) schedule(CHANGE_DELAY_MS);
-      else if (state) rememberWhileOff(state);
+      if (state?.secret) {
+        edited = true;
+        schedule(CHANGE_DELAY_MS);
+      } else if (state) rememberWhileOff(state);
     },
     syncNow: () => run(),
     async connect() {
@@ -973,12 +1029,13 @@ export function createSync(options: {
       location.assign(connectUrl(origin, request));
     },
     turnOff() {
-      stops += 1;
       const state = loadState();
-      if (state) saveState(offState(state));
-      forgetFiles();
-      problem = null;
-      emit('turned-off');
+      if (!state?.secret) return true;
+      stops += 1;
+      const off = switchOff(state);
+      problem = off ? null : stateProblem();
+      emit(off ? 'turned-off' : undefined);
+      return off;
     },
     async deleteOnline() {
       const state = loadState();
@@ -1004,10 +1061,9 @@ export function createSync(options: {
       // Only once it's deleted: a sync under way when deleting fails still
       // says what went wrong with it.
       stops += 1;
-      saveState({ ...offState(state), retired: withRetired(state.retired, state.previous) });
-      forgetFiles();
-      problem = null;
-      emit('deleted-online');
+      const off = switchOff(state, withRetired(state.retired, state.previous));
+      problem = off ? null : stateProblem();
+      emit(off ? 'deleted-online' : undefined);
     },
     filesAdded(ids) {
       if (files && isSyncOn() && ids.length > 0) {
@@ -1046,11 +1102,12 @@ export function createSync(options: {
   };
 
   /**
-   * Sync is off but was on before: keep track of when items are edited or
-   * deleted here, so turning it on again merges them properly.
+   * What this device knew, with the items edited or deleted here since,
+   * noted at `now`: the time they were made, as far as this device knows.
+   * Null if nothing changed. (A store never synced is left alone: its first
+   * sync counts its items as older than what's online.)
    */
-  function rememberWhileOff(state: DeviceState): void {
-    const now = Date.now();
+  function editsSince(state: DeviceState, now: number): Record<string, Known> | null {
     const known = { ...state.known };
     let changed = false;
     for (const synced of stores) {
@@ -1061,7 +1118,37 @@ export function createSync(options: {
       known[synced.store.key] = knownFrom(prune(seen.snapshot, now));
       changed = true;
     }
-    if (changed) saveState({ ...state, known });
+    return changed ? known : null;
+  }
+
+  /**
+   * Sync is off but was on before: keep track of when items are edited or
+   * deleted here, so turning it on again merges them properly.
+   */
+  function rememberWhileOff(state: DeviceState): void {
+    const known = editsSince(state, Date.now());
+    if (known) saveState({ ...state, known });
+  }
+
+  /**
+   * Sync is on, but no round has noted an edit made here yet (none reached
+   * the copy, or the page is being put away before the next one): it's noted
+   * now, with its time, as `dirty` for the next round to upload. An edit
+   * made on day 1 was otherwise dated by the first round that reached the
+   * copy, day 21 say, and won over a newer edit made elsewhere on day 10
+   * (audit 5 E-1). Stopped meanwhile, or data this version can't read: the
+   * next round says so.
+   */
+  function rememberEdits(now = Date.now()): void {
+    const state = loadState();
+    if (!state?.secret) return;
+    try {
+      const known = editsSince(state, now);
+      if (known) updateState(state.secret, { known, dirty: true });
+      edited = false;
+    } catch {
+      // Nothing noted: the next round notes it, or says what's wrong.
+    }
   }
 
   // After an update that changed a data version: bring what this device knew
@@ -1073,9 +1160,12 @@ export function createSync(options: {
     if (known !== start.known) saveState({ ...start, known });
   }
 
-  // Keep up with other devices while the app is open.
+  // Keep up with other devices while the app is open. Put away (the phone
+  // locked, another app): an edit no round has noted yet is noted now, with
+  // its time, as the page may not run again before it's closed (audit 5 E-1).
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') schedule(0);
+    else if (edited) rememberEdits();
   });
   window.addEventListener('online', () => schedule(0));
   window.addEventListener('storage', (event) => {

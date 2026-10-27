@@ -186,7 +186,11 @@ Then:
   data" forgets it, and so does restoring a backup while sync is off, so older
   data never counts as new. Restoring while sync is on replaces the data on
   every device, on purpose: the restored data syncs as new edits, as the
-  Restore dialog warns.
+  Restore dialog warns. When the browser has no room to keep that history
+  as sync turns off, the key alone goes, and sync is off all the same: a
+  later "Turn on sync" starts like the first time. Before, "Turn off" that
+  couldn't be saved left sync on, while the page said it was off (audit 5
+  E-2); if not even the key can go, the page says what's wrong instead.
 
 ### Syncing apps through the account
 
@@ -267,7 +271,12 @@ in with `sync: true` in `apps.json`.
   - Each item carries the time it last changed, inside the encrypted copy.
     When two devices both changed an item, the newest change wins. A change
     always gets a time after the version it was made from, so a device
-    whose clock is behind doesn't lose its own edits.
+    whose clock is behind doesn't lose its own edits. The time is that of
+    the sync a moment after the change, or, when that sync can't reach the
+    copy (no connection) or the app is put away first, the time it noted
+    the change then: before, a change made on day 1 with no connection
+    got the time of the first sync that reached the copy, day 21 say, and
+    beat a newer change made elsewhere on day 10 (audit 5 E-1).
   - Deleting leaves a marker with the time, so deletions sync. Markers are
     dropped after 180 days. A device away longer still deletes an item it
     saw in the copy that the same copy no longer has, unless it changed the
