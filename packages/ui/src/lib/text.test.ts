@@ -93,6 +93,20 @@ describe('cutToLength (audit 4 F3-4)', () => {
     );
   });
 
+  it('never keeps much more than the limit, whatever the characters', () => {
+    // One letter with 10,000 accents is one character as people see it: it
+    // was kept whole, so a note could take megabytes (review).
+    const zalgo = `${'a'}${'\u0301'.repeat(10_000)}${'b'.repeat(10)}`;
+    expect(cutToLength(zalgo, 5).length).toBeLessThanOrEqual(80);
+    expect(cutToLength(zalgo, 5000).length).toBeLessThanOrEqual(80_000);
+    // Real emoji, however long, still fit: 200 families (of 11 each), and
+    // 200 flags of Scotland (of 14).
+    const families = '👨‍👩‍👧‍👦'.repeat(200);
+    expect(cutToLength(`${families}!`, 200)).toBe(families);
+    const scotland = '🏴󠁧󠁢󠁳󠁣󠁴󠁿'.repeat(200);
+    expect(cutToLength(`${scotland}!`, 200)).toBe(scotland);
+  });
+
   it('still loads, and keeps emoji whole, where the browser can’t tell characters apart', async () => {
     // Firefox before 125 has no Intl.Segmenter. Most apps load this file only
     // to compare text: it mustn't stop their page there.

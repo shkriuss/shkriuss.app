@@ -44,18 +44,33 @@ const characters =
     : null;
 
 /**
+ * At most this many JavaScript characters for each character as people see
+ * them, on average. The longest emoji are about 14 (a family is 11, the flag
+ * of Scotland 14), but one letter can carry thousands of accents (pasted
+ * "Zalgo" text), and text with a limit mustn't grow without one.
+ */
+const MOST_PER_CHARACTER = 16;
+
+/**
  * The start of `text`, at most `max` characters as people see them: an
  * emoji (a family, a flag or a skin tone too) or a letter with its accents
  * counts once, and is never cut in half. That's how Safari and every iPhone
  * browser count a text box's maxlength, the most any box lets in (others
  * count each JavaScript character, so they let in less). Text cut this way
- * on saving loses nothing a box let in (audit 4 F3-4).
+ * on saving loses nothing a box let in (audit 4 F3-4), unless it's made of
+ * characters far longer than any typed (MOST_PER_CHARACTER).
  */
 export function cutToLength(text: string, max: number): string {
   // Never more characters than JavaScript counts: nothing to cut.
   if (text.length <= max) return text;
-  const parts = characters
-    ? Array.from(characters.segment(text), ({ segment }) => segment)
-    : [...text];
-  return parts.slice(0, max).join('');
+  const most = max * MOST_PER_CHARACTER;
+  const parts = characters ? characters.segment(text) : [...text].map((segment) => ({ segment }));
+  let end = 0;
+  let count = 0;
+  for (const { segment } of parts) {
+    if (count === max || end + segment.length > most) break;
+    end += segment.length;
+    count += 1;
+  }
+  return text.slice(0, end);
 }
