@@ -26,7 +26,9 @@ Your to-do list, with dates, lists and reminders. Lives at
   Important). Search finds tasks in what's shown by every word typed, in
   their titles, notes and steps (`matchesSearch`; capitals and accents don't
   matter). In the list, a task's steps fold out under it and can be ticked
-  there straight away. The rest has files of their own next to it:
+  there straight away. Whether the list is by date or in your order is a
+  setting for this device only (`shkriuss:task-view`, not synced). The
+  rest has files of their own next to it:
   - `views.ts`: what's shown, chosen with the chips (All, Important, or a
     list);
   - `task-form.ts`: the form that opens from a task's title, where steps
@@ -35,8 +37,7 @@ Your to-do list, with dates, lists and reminders. Lives at
   - `order.ts`: "My order", where a task is moved by dragging its handle
     (pointer events, so it works with a finger, a mouse or a pen), by
     tapping the handle for "Move up" and "Move down", or with the arrow
-    keys on the handle. Whether the list is by date or in your order is a
-    setting for this device only (`shkriuss:task-view`, not synced);
+    keys on the handle;
   - `list-editor.ts`: adding, renaming and deleting lists.
 
   The task form and the list editor load after the page itself

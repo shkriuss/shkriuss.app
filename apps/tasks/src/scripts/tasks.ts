@@ -491,7 +491,14 @@ export function mountTasks(root: Document): void {
         .closest('[data-action="edit"]')
         ?.closest<HTMLElement>('[data-id]')?.dataset['id'];
       const task = find(id ?? null);
-      if (task) taskForm.use((form) => form.open(task));
+      // The form may load first (the first tap after the page opened): by
+      // then the task may have changed, or gone, on another device or tab.
+      if (task) {
+        taskForm.use((form) => {
+          form.open(find(task.id) ?? task);
+          form.refresh();
+        });
+      }
     });
   }
 

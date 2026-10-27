@@ -333,9 +333,11 @@ function editedSteps(opened: Step[], edited: Step[], current: Step[]): Step[] {
  * on the task as it is now, so the other change stays (withEdits, audit
  * F1-2; its steps one by one, editedSteps). If the two don't fit together
  * (say, a reminder set here on a task whose date was cleared there), the
- * form wins, as it was checked. `opened` is the form as it opened and
- * `edited` as it is now; `current` is the task now, if it's still there (one
- * deleted meanwhile comes back with the change).
+ * form wins, as it was checked, with the merged steps still: they can't be
+ * what doesn't fit, and a step ticked there would be lost otherwise (audit 5
+ * F1-1). `opened` is the form as it opened and `edited` as it is now;
+ * `current` is the task now, if it's still there (one deleted meanwhile comes
+ * back with the change).
  */
 export function editedTask(
   opened: TaskDraft,
@@ -350,7 +352,8 @@ export function editedTask(
         steps: editedSteps(opened.steps, edited.steps, current.steps),
       }
     : edited;
-  const draft = Object.keys(draftProblems(merged)).length === 0 ? merged : edited;
+  const draft =
+    Object.keys(draftProblems(merged)).length === 0 ? merged : { ...edited, steps: merged.steps };
   return taskFromDraft(draft, id, now, current);
 }
 

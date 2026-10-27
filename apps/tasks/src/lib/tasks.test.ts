@@ -406,6 +406,30 @@ describe('changes', () => {
         expect(stepsOf(edited, ticked).map((step) => step.id)).toEqual(['hotel', 'pack', 'visa']);
       });
 
+      it('keeps the merged steps when the form wins over a change that doesn’t fit it', () => {
+        // The phone cleared the date and ticked "Book the hotel"; here, a
+        // reminder was set, which needs a date: the form's date and reminder
+        // win, as they were checked, and the tick stays all the same.
+        const dated = task({
+          title: 'Trip',
+          date: '2026-10-20',
+          steps: trip.steps.map((step) => ({ ...step })),
+        });
+        const opened = draftOf(dated);
+        const cleared = { ...dated, date: null, time: null, reminder: null, steps: [] };
+        const there = tickStep(
+          stateOf({ ...cleared, steps: dated.steps }),
+          dated.id,
+          'hotel',
+          true,
+          5000,
+        ).tasks[0];
+        const saved = editedTask(opened, { ...opened, reminder: '10' }, dated.id, 9000, there);
+        expect(saved.date).toBe('2026-10-20');
+        expect(saved.reminder).toBe(10);
+        expect(saved.steps[0]).toEqual({ id: 'hotel', title: 'Book the hotel', done: true });
+      });
+
       it('lets a step removed elsewhere stay only if it was changed here', () => {
         const there: Task = { ...trip, steps: trip.steps.filter((step) => step.id !== 'pack') };
         expect(stepsOf(before, there).map((step) => step.id)).toEqual(['hotel', 'tickets']);
