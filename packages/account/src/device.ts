@@ -179,10 +179,10 @@ export function noteReplaced(
     replacedAt: { ...saved.replacedAt, [text]: now },
   };
   const keys = [text, ...saved.replaced.filter((key) => key !== text)].slice(0, MAX_REPLACED);
-  const { secret: signedIn, since, ...rest } = withFreshReplaced(noted, keys, now);
+  const fresh = withFreshReplaced(noted, keys, now);
+  const { replaced, successors, replacedAt } = fresh;
   // Signed in with the replaced key: signed out.
-  const stillSignedIn = signedIn !== undefined && since !== undefined && signedIn !== text;
-  write(stillSignedIn ? { ...rest, secret: signedIn, since } : rest);
+  write(saved.secret === text ? { replaced, successors, replacedAt } : fresh);
 }
 
 /** Account keys this device knows were replaced, newest first (for 13 months each). */
