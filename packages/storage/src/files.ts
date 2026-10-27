@@ -98,7 +98,12 @@ function open(): Promise<IDBDatabase> {
   return opening;
 }
 
-/** Runs `work` in one transaction; resolves once it's all saved. */
+/**
+ * Runs `work` in one transaction; resolves once it's all saved. If a
+ * request can't even be made (the browser refuses one of a batch, say for
+ * lack of room), the transaction is abandoned, so nothing of the batch is
+ * kept: all or none (audit 5 E-4).
+ */
 async function transact<R>(
   mode: IDBTransactionMode,
   work: (table: IDBObjectStore) => IDBRequest<R> | undefined,
@@ -106,10 +111,16 @@ async function transact<R>(
   const database = await open();
   return new Promise<R | undefined>((resolve, reject) => {
     const transaction = database.transaction(TABLE, mode);
-    const request = work(transaction.objectStore(TABLE));
+    let request: IDBRequest<R> | undefined;
     transaction.oncomplete = () => resolve(request ? request.result : undefined);
     transaction.onerror = () => reject(transaction.error ?? new Error('Couldn’t save the files.'));
     transaction.onabort = () => reject(transaction.error ?? new Error('Couldn’t save the files.'));
+    try {
+      request = work(transaction.objectStore(TABLE));
+    } catch (error) {
+      reject(error);
+      transaction.abort();
+    }
   });
 }
 
