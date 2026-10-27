@@ -14,7 +14,8 @@ refused stays plain, but no longer because of Calendar's size budget, which
 no longer applies (see "What people see"). Changed by audit 5: device links
 are rows in one object (B-2), a library made up through a move is cleaned up
 too (B-1), files count their rows (B-3), what the 13-month clean-up undoes
-for a replaced key (A-1), and the daily row writes (B-4).
+for a replaced key (A-1), and the daily row writes (B-4); and its body no
+longer describes pull request previews (J-4).
 
 ## Context
 
@@ -34,8 +35,7 @@ for a replaced key (A-1), and the daily row writes (B-4).
 - Cloudflare keeps even a tiny object in at least 12 KB (measured on the
   live account), so many tiny objects add up too.
 - The rate limit at Cloudflare (deployment.md, 30 requests per 10 seconds
-  for `/api/`) slows things down, but doesn't cover PR previews
-  (`*.workers.dev`) and can't stop a patient script.
+  for `/api/`) slows things down, but can't stop a patient script.
 
 ## Decision
 
@@ -52,23 +52,23 @@ for a replaced key (A-1), and the daily row writes (B-4).
 - When there's no room, the request gets **507** and nothing is kept. Copies
   already online keep syncing as long as they stay about the same size.
 - The meter keeps only a hash of each object's id and how much room it has.
-- The Worker tells each object its limit for that site: the real sites get
-  the full limit, PR previews a small one, as each preview has its own
-  storage, which counts against the same 5 GB.
+- The Worker tells each object its limit (the table below). Pull request
+  previews, which had a small limit of their own against the same 5 GB,
+  are gone (ADR 0019).
 
 ### The limits
 
-| What                                        | Real site, each     | Preview, each | Where              |
-| ------------------------------------------- | ------------------- | ------------- | ------------------ |
-| An app's online copies (each app with sync) | 120 MB              | 20 MB         | `packages/sync`    |
-| Repairs' copies with their photos           | 1 GB                | 80 MB         | `packages/sync`    |
-| An app's notification schedules (each app)  | 40 MB               | 8 MB          | `packages/push`    |
-| Passkey locks; replaced-key notes           | 40 MB each          | 4 MB each     | `packages/account` |
-| Online libraries (Photos)                   | 32 MB (about 2,000) | 4 MB          | `packages/library` |
+| What                                        | Each site           | Where              |
+| ------------------------------------------- | ------------------- | ------------------ |
+| An app's online copies (each app with sync) | 120 MB              | `packages/sync`    |
+| Repairs' copies with their photos           | 1 GB                | `packages/sync`    |
+| An app's notification schedules (each app)  | 40 MB               | `packages/push`    |
+| Passkey locks; replaced-key notes           | 40 MB each          | `packages/account` |
+| Online libraries (Photos)                   | 32 MB (about 2,000) | `packages/library` |
 
-All together that's about 3 GB on the real sites, so a full namespace never
-stops the others, and there's room left for the owner's online library list
-and a couple of open previews. The per-account limits stay as they were
+All together that's about 3 GB, so a full namespace never stops the others,
+and there's room left for the owner's online library list. The per-account
+limits stay as they were
 (a copy is at most about 1.4 MB, an account's photos at most 800 MB).
 
 **Device links** (the hub's "Show a code") are the one thing a stranger can
@@ -88,10 +88,10 @@ in the index of files. Without that, the smallest files the checks allow
 (audit 5 B-3). The limits in the table are unchanged; fewer tiny files fit.
 
 Each new app with sync or notifications adds its own limits, so a unit test
-(`tests/unit/free-plan.test.ts`) adds them all up from `apps.json`, with two
-open previews and the library list, and fails above 4.5 GB (audit J-2).
-There's room for about two more apps with both; past that, the limits per
-app need lowering first.
+(`tests/unit/free-plan.test.ts`) adds them all up from `apps.json`, with the
+library list, and fails above 4.5 GB (audit J-2). There's room for about
+eight more apps with both (the status note above says how that changed);
+past that, the limits per app need lowering first.
 
 ### Unused copies are deleted
 
@@ -193,8 +193,8 @@ app need lowering first.
 
 ## Alternatives
 
-- **Only the rate limit at Cloudflare.** It doesn't cover previews, and a
-  slow script still fills 5 GB in time.
+- **Only the rate limit at Cloudflare.** A slow script still fills 5 GB in
+  time.
 - **Accounts the server knows about, or an invite code for online
   features** (like Photos' storage code). That would tell real users from
   strangers, but it means a list of accounts, or that nobody but the owner's
