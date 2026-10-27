@@ -2,7 +2,11 @@
 
 Status: Accepted (2026-10-17). Changed by [ADR 0013](0013-photos-on-the-device.md)
 and [ADR 0015](0015-photos-app.md): backups hold `localStorage` only, so photos
-aren't in them, and the Photos app has no Back up or Restore.
+aren't in them, and the Photos app has no Back up or Restore. Changed by
+audit 5: a locked file whose salt, nonce or data isn't the right size is
+turned down as damaged (E-6, A-4); a restore replaces each key in its place
+and says so if the old data couldn't all be put back (E-7); a plain copy
+keeps every saved text exactly (E-8).
 
 ## Context
 
@@ -40,8 +44,10 @@ format.)
   Before anything is replaced, each part is checked by the app's own store:
   a backup from a newer version of the app, or one it can't read, is refused
   and nothing changes. Then it replaces the app's data on the device (after a
-  clear warning), puts the old data back if the browser runs out of room
-  part-way, and reloads the app.
+  clear warning), each key in its place; if the browser runs out of room
+  part-way it puts the old data back, in an order that fits, and says so if
+  another tab took the room meanwhile (then the backup, still at hand, is
+  restored again, audit 5 E-7); and reloads the app.
 
 ## Consequences
 

@@ -274,7 +274,24 @@ export interface ExportFile {
   data: Record<string, unknown>;
 }
 
-/** Collects everything this app has saved into one JSON-ready object. */
+/** What JSON.parse makes of `text` when that's an object or a list; otherwise nothing. */
+function parsedObject(text: string): object | undefined {
+  try {
+    const value: unknown = JSON.parse(text);
+    return typeof value === 'object' && value !== null ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Collects everything this app has saved into one JSON-ready object. A saved
+ * text that is a JSON object or list (a store's envelope) goes in as that
+ * value, so the file is readable and a restore can check it with the app's
+ * stores; any other saved text goes in as it is (the theme, "dark"), quotes
+ * and all if it has them, so that restoring (restoreAll in ./backup.ts)
+ * writes back exactly what was saved (audit 5 E-8).
+ */
 export function exportAll(
   app: string,
   storage: StorageLike | undefined = getLocalStorage(),
@@ -284,11 +301,7 @@ export function exportAll(
   for (const key of ownKeys(storage)) {
     const raw = storage?.getItem(key);
     if (raw == null) continue;
-    try {
-      data[key] = JSON.parse(raw);
-    } catch {
-      data[key] = raw;
-    }
+    data[key] = parsedObject(raw) ?? raw;
   }
   return { app, exportedAt: now.toISOString(), data };
 }
@@ -300,6 +313,16 @@ export function deleteAll(storage: StorageLike | undefined = getLocalStorage()):
   return keys.length;
 }
 
+/**
+ * How long a download keeps its address (ms). The file exists only as long
+ * as the address does, and Safari on an iPhone or iPad asks "Do you want to
+ * download …?" and fetches the file only once the person taps Download,
+ * which can take a while: freed after a second, as it was, that gave "Safari
+ * cannot download this file" while the page said the backup was downloaded
+ * (audit 5 Z-2). A minute, as Photos' "Save original" gives.
+ */
+export const DOWNLOAD_URL_MS = 60_000;
+
 /** Starts a download of `content` as a file. Browser only. */
 export function downloadFile(filename: string, content: string, type = 'application/json'): void {
   const url = URL.createObjectURL(new Blob([content], { type }));
@@ -310,6 +333,13 @@ export function downloadFile(filename: string, content: string, type = 'applicat
   document.body.append(link);
   link.click();
   link.remove();
-  // Give the browser a moment to start the download before freeing the URL.
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  // Freed after a minute, or when the page goes away.
+  let timer = 0;
+  const revoke = (): void => {
+    window.clearTimeout(timer);
+    window.removeEventListener('pagehide', revoke);
+    URL.revokeObjectURL(url);
+  };
+  timer = window.setTimeout(revoke, DOWNLOAD_URL_MS);
+  window.addEventListener('pagehide', revoke);
 }
