@@ -53,15 +53,17 @@ test('reminds of what’s planned while Meals is open', async ({ page }) => {
   await expect(
     page.getByRole('status').filter({ hasText: 'Reminder: Dinner: Lentil soup, Salad.' }),
   ).toBeAttached();
-  expect(await shownNotifications(page)).toEqual([
-    {
-      title: 'Dinner: Lentil soup, Salad',
-      body: REMINDER_BODY,
-      tag: '2026-10-21~dinner',
-      icon: '/icon-192.png',
-      renotify: true,
-    },
-  ]);
+  await expect
+    .poll(() => shownNotifications(page))
+    .toEqual([
+      {
+        title: 'Dinner: Lentil soup, Salad',
+        body: REMINDER_BODY,
+        tag: '2026-10-21~dinner',
+        icon: '/icon-192.png',
+        renotify: true,
+      },
+    ]);
   // Once only.
   await page.clock.fastForward('02:00');
   expect(await shownNotifications(page)).toHaveLength(1);

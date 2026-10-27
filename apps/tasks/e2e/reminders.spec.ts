@@ -39,15 +39,17 @@ test('reminds while Tasks is open, unless it’s done', async ({ page }) => {
   await expect(
     page.getByRole('status').filter({ hasText: 'Reminder: Call the bank.' }),
   ).toBeAttached();
-  expect(await shownNotifications(page)).toEqual([
-    {
-      title: 'Call the bank',
-      body: REMINDER_BODY,
-      tag: expect.any(String),
-      renotify: true,
-      icon: '/icon-192.png',
-    },
-  ]);
+  await expect
+    .poll(() => shownNotifications(page))
+    .toEqual([
+      {
+        title: 'Call the bank',
+        body: REMINDER_BODY,
+        tag: expect.any(String),
+        renotify: true,
+        icon: '/icon-192.png',
+      },
+    ]);
   // Once only.
   await page.clock.fastForward('02:00');
   expect(await shownNotifications(page)).toHaveLength(1);

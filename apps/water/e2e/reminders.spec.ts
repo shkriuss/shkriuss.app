@@ -50,16 +50,18 @@ test('reminds to drink while Water is open, until the goal is reached', async ({
   await expect(
     page.getByRole('status').filter({ hasText: 'Reminder: time for some water.' }),
   ).toBeAttached();
-  expect(await shownNotifications(page)).toEqual([
-    // Each one rings again, though it replaces the last (audit 3 F1-1).
-    {
-      title: REMINDER_TITLE,
-      body: REMINDER_BODY,
-      tag: 'drink',
-      renotify: true,
-      icon: '/icon-192.png',
-    },
-  ]);
+  await expect
+    .poll(() => shownNotifications(page))
+    .toEqual([
+      // Each one rings again, though it replaces the last (audit 3 F1-1).
+      {
+        title: REMINDER_TITLE,
+        body: REMINDER_BODY,
+        tag: 'drink',
+        renotify: true,
+        icon: '/icon-192.png',
+      },
+    ]);
 
   // Goal reached: no more today.
   await addOther(page, '2000');
