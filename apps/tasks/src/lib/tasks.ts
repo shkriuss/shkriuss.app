@@ -288,13 +288,54 @@ export function taskFromDraft(draft: TaskDraft, id: string, now: number, existin
 }
 
 /**
+ * The steps a saved form makes, when the task's steps may have changed
+ * elsewhere while the form was open: step by step, as withEdits does field
+ * by field (audit 5 F1-1). For each step the form had, its title and its
+ * tick are taken from the form only where the form changed them, else from
+ * the task as it is now (a step ticked on another device stays ticked while
+ * another step is renamed here). A step removed here goes; one removed there
+ * stays only if it was changed here, as a change wins over a deletion. Steps
+ * added here or there are both kept.
+ */
+function editedSteps(opened: Step[], edited: Step[], current: Step[]): Step[] {
+  const was = new Map(opened.map((step) => [step.id, step]));
+  const now = new Map(current.map((step) => [step.id, step]));
+  const steps: Step[] = [];
+  for (const step of edited) {
+    const before = was.get(step.id);
+    const there = now.get(step.id);
+    if (!before) {
+      steps.push(step);
+      continue;
+    }
+    const titleChanged = step.title !== before.title;
+    const doneChanged = step.done !== before.done;
+    if (!there) {
+      if (titleChanged || doneChanged) steps.push(step);
+      continue;
+    }
+    steps.push({
+      id: step.id,
+      title: titleChanged ? step.title : there.title,
+      done: doneChanged ? step.done : there.done,
+    });
+  }
+  const here = new Set(edited.map((step) => step.id));
+  for (const step of current) {
+    if (!was.has(step.id) && !here.has(step.id)) steps.push(step);
+  }
+  return steps;
+}
+
+/**
  * The task a saved form makes, when the task may have changed while the form
  * was open (a sync, or another tab): only what was changed in the form goes
  * on the task as it is now, so the other change stays (withEdits, audit
- * F1-2). If the two don't fit together (say, a reminder set here on a task
- * whose date was cleared there), the form wins, as it was checked. `opened`
- * is the form as it opened and `edited` as it is now; `current` is the task
- * now, if it's still there (one deleted meanwhile comes back with the change).
+ * F1-2; its steps one by one, editedSteps). If the two don't fit together
+ * (say, a reminder set here on a task whose date was cleared there), the
+ * form wins, as it was checked. `opened` is the form as it opened and
+ * `edited` as it is now; `current` is the task now, if it's still there (one
+ * deleted meanwhile comes back with the change).
  */
 export function editedTask(
   opened: TaskDraft,
@@ -303,7 +344,12 @@ export function editedTask(
   now: number,
   current?: Task,
 ): Task {
-  const merged = current ? withEdits(opened, edited, draftOf(current)) : edited;
+  const merged = current
+    ? {
+        ...withEdits(opened, edited, draftOf(current)),
+        steps: editedSteps(opened.steps, edited.steps, current.steps),
+      }
+    : edited;
   const draft = Object.keys(draftProblems(merged)).length === 0 ? merged : edited;
   return taskFromDraft(draft, id, now, current);
 }
