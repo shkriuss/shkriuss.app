@@ -40,6 +40,13 @@ folder outside the checkout, so a pull request can't change the check it's
 checked by (audit 5 H-3); the rules it applies (`minimumReleaseAge` and its
 exceptions) are `main`'s too (audit 4 H-1).
 
+The unit test that checks the workflows' pins (`tests/unit/workflows.test.ts`)
+reads them as YAML, as GitHub does, so a step written any way GitHub accepts
+is seen (audit 5 H-4). It only checks that each `uses:` names a 40-character
+commit; whether that commit really belongs to the action is zizmor's online
+check in CI, so a commit from someone's copy of an action passes the unit
+test and fails only there.
+
 ## What the shared browser tests cover (every site, automatically)
 
 - **Accessibility:** axe-core with WCAG 2.0/2.1/2.2 A and AA rules plus best
