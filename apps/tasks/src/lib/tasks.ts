@@ -25,7 +25,7 @@ import {
 } from '@shkriuss/dates';
 import type { Notice } from '@shkriuss/push';
 import { withEdits } from '@shkriuss/sync/edits';
-import { compareText, foldText } from '@shkriuss/ui/text';
+import { compareText, cutToLength, foldText } from '@shkriuss/ui/text';
 import { DATE_LOCALE, timeLabel } from '@shkriuss/ui/locale';
 
 export const REPEATS = ['none', 'daily', 'weekdays', 'weekly', 'monthly', 'yearly'] as const;
@@ -249,7 +249,8 @@ export function draftProblems(draft: TaskDraft): Partial<Record<DraftField, stri
   return problems;
 }
 
-const cut = (text: string, max: number): string => text.trim().slice(0, max);
+/** Cut by whole characters, as Shelf and Notes do: never half an emoji (audit 4 J-11). */
+const cut = (text: string, max: number): string => cutToLength(text.trim(), max);
 
 /** The task a (checked) draft describes. Keeps `created` and `done` from the task it changes. */
 export function taskFromDraft(draft: TaskDraft, id: string, now: number, existing?: Task): Task {
@@ -267,7 +268,7 @@ export function taskFromDraft(draft: TaskDraft, id: string, now: number, existin
   return {
     id,
     title: cut(draft.title, LIMITS.title),
-    notes: draft.notes.trim().slice(0, LIMITS.notes),
+    notes: cut(draft.notes, LIMITS.notes),
     steps: draft.steps
       .map((step) => ({ ...step, title: cut(step.title, LIMITS.step) }))
       .filter((step) => step.title !== '')

@@ -34,6 +34,7 @@ import {
   type DeviceLink,
   type LinkState,
 } from '@shkriuss/account';
+import { today } from '@shkriuss/dates';
 import { apps, type AppEntry } from '@shkriuss/registry';
 import { downloadFile } from '@shkriuss/storage';
 import {
@@ -144,12 +145,6 @@ const wasReplaced = (secret: Uint8Array<ArrayBuffer>): Promise<boolean> =>
   isReplaced(secret).catch(() => false);
 
 const timeFormat = new Intl.DateTimeFormat(DATE_LOCALE, { hour: 'numeric', minute: '2-digit' });
-
-function today(): string {
-  const now = new Date();
-  const pad = (value: number) => String(value).padStart(2, '0');
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-}
 
 /** The text of the downloaded recovery key file. */
 function recoveryFile(key: string, code: string): string {

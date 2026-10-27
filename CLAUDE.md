@@ -88,8 +88,16 @@ a quicker run while working on a few apps; CI always tests every site.
   current Chrome, Edge and Firefox. Use anything newer only with a fallback
   or a feature check, like the colours for browsers without `light-dark()`
   in `tokens.css`. Tests run in Chromium only, so check the support tables.
-  The build won't help: Astro ships the JavaScript and CSS as written (its
-  target is "esnext"), so newer syntax or functions reach Safari 16.4 as is.
+  The build won't help: Astro ships the JavaScript as written (its target
+  is "esnext"), so newer syntax or functions reach Safari 16.4 as is, and
+  its CSS minifier may write some CSS in newer syntax (like media query
+  ranges, `(width>=60rem)`, which Safari 16.4 reads, but nothing older).
+  What holds JavaScript to Safari 16.4's: the type check (ES2022, plus
+  ES2023's array methods, in `tsconfig.base.json`) for the code here, and
+  `pnpm check:dist`, which reads every built script, packages' code
+  included, as ES2022, but only its syntax: a package that calls a newer
+  function (like `Object.groupBy`) passes. Check packages' functions, and
+  browser features (DOM, CSS), in the tables.
 - **Registry is the source of truth.** Never hard-code app names, domains or
   lists; read `@shkriuss/registry`.
 - **Security headers live in one place:** `packages/astro-config/src/headers.ts`.

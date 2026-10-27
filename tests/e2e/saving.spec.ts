@@ -58,7 +58,12 @@ test('says so, on screen and out loud, when a change can’t be saved', async ({
   await failSaving(page);
   await change?.(page);
 
-  const problem = page.getByRole('alert').filter({ hasText: 'Couldn’t save' });
+  // The page's notice. A form left open to try again may say so too, as a
+  // screen reader doesn't hear the notice behind it (Shelf's, audit 4 F3-1).
+  const problem = page
+    .locator('[data-problem]')
+    .getByRole('alert')
+    .filter({ hasText: 'Couldn’t save' });
   await expect(problem).toBeVisible();
   await expect(problem).toHaveText(
     'Couldn’t save: there’s no room left for this app’s data in this browser. Delete something you don’t need, then try again.',

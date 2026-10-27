@@ -6,7 +6,7 @@
  */
 import { secondVersionName } from '@shkriuss/sync';
 import { DATE_LOCALE } from '@shkriuss/ui/locale';
-import { foldText } from '@shkriuss/ui/text';
+import { cutToLength, foldText } from '@shkriuss/ui/text';
 
 export interface Note {
   id: string;
@@ -25,6 +25,11 @@ export interface NotesState {
 
 /** The data version saved with notes (version 1 had one text, its first line the title). */
 export const NOTES_VERSION = 2;
+/**
+ * The most a title and a note's text keep, in characters as people see them
+ * (as Safari's text boxes count): what a box lets in is never cut on saving
+ * (audit 4 F3-4).
+ */
 export const MAX_TITLE_LENGTH = 200;
 /** About 50 pages of text. */
 export const MAX_BODY_LENGTH = 100_000;
@@ -109,8 +114,8 @@ export function editNote(
   return {
     notes: state.notes.map((note) => {
       if (note.id !== id) return note;
-      const title = (changes.title ?? note.title).slice(0, MAX_TITLE_LENGTH);
-      const body = (changes.body ?? note.body).slice(0, MAX_BODY_LENGTH);
+      const title = cutToLength(changes.title ?? note.title, MAX_TITLE_LENGTH);
+      const body = cutToLength(changes.body ?? note.body, MAX_BODY_LENGTH);
       return title === note.title && body === note.body
         ? note
         : { ...note, title, body, updated: now };
@@ -126,6 +131,17 @@ export function setPinned(state: NotesState, id: string, pinned: boolean): Notes
 
 export function removeNote(state: NotesState, id: string): NotesState {
   return { notes: state.notes.filter((note) => note.id !== id) };
+}
+
+/**
+ * `state` with the note `id` as `saved` (what the device has) has it, or
+ * without it if it was never saved: for typing that couldn't be saved, once
+ * its note is left (audit 4 F3-1).
+ */
+export function withSavedNote(state: NotesState, saved: NotesState, id: string): NotesState {
+  const kept = saved.notes.find((note) => note.id === id);
+  if (!kept) return removeNote(state, id);
+  return { notes: state.notes.map((note) => (note.id === id ? kept : note)) };
 }
 
 export const isEmpty = (note: Note): boolean => note.title.trim() === '' && note.body.trim() === '';

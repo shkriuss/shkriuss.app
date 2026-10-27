@@ -544,10 +544,13 @@ export interface ShoppingRow {
 const tickId = (week: IsoDate, key: string): string => `${week}:${key}`;
 
 /**
- * The ingredient a tick is for. Ticks saved before lists went by their
- * Monday keep the day they had then in their id, so it isn't compared.
+ * The ingredient a tick is for, folded as it's folded now. Ticks saved
+ * before lists went by their Monday keep the day they had then in their
+ * id, so it isn't compared. Ticks saved before wide and narrow letters
+ * were folded keep the ingredient as it was folded then ("½", "１Ｌ"):
+ * folded again, it's as now (audit 4 F3-6).
  */
-const tickKey = (item: ShoppingItem): string => item.id.slice(item.id.indexOf(':') + 1);
+const tickKey = (item: ShoppingItem): string => foldText(item.id.slice(item.id.indexOf(':') + 1));
 
 /** Whether `item` is the tick for ingredient `key` on the list saved under `week`. */
 const isTick = (item: ShoppingItem, week: IsoDate, key: string): boolean =>

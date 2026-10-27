@@ -7,7 +7,7 @@
  */
 import { isIsoDate, parts, type IsoDate } from '@shkriuss/dates';
 import { secondVersionName } from '@shkriuss/sync';
-import { compareText, foldText } from '@shkriuss/ui/text';
+import { compareText, cutToLength, foldText } from '@shkriuss/ui/text';
 import { formatMoney } from '@shkriuss/ui/numbers';
 import { DATE_LOCALE } from '@shkriuss/ui/locale';
 import { readableHost } from './hosts.ts';
@@ -180,7 +180,12 @@ export function draftProblems(draft: ItemDraft): Partial<Record<DraftField, stri
   return problems;
 }
 
-const cut = (text: string, max: number): string => text.trim().slice(0, max);
+/**
+ * Text cut to `max` characters as people see them (as Safari's text boxes
+ * count): what a box lets in is never cut on saving, nor an emoji in half
+ * (audit 4 F3-4).
+ */
+const cut = (text: string, max: number): string => cutToLength(text.trim(), max);
 
 /** The item a (checked) draft describes. Keeps `created` from the item it changes. */
 export function itemFromDraft(draft: ItemDraft, id: string, now: number, existing?: Item): Item {
@@ -196,7 +201,7 @@ export function itemFromDraft(draft: ItemDraft, id: string, now: number, existin
     link: normalizeLink(draft.link) ?? '',
     variant: cut(draft.variant, LIMITS.variant),
     bought: isIsoDate(draft.bought) ? draft.bought : null,
-    notes: draft.notes.trim().slice(0, LIMITS.notes),
+    notes: cut(draft.notes, LIMITS.notes),
     created: existing?.created ?? now,
     updated: now,
   };

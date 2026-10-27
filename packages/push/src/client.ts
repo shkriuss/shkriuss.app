@@ -13,7 +13,7 @@
  * loads the first time it's needed, so pages start with less to load
  * (Calendar is near its start-up budget).
  */
-import { load } from './device.ts';
+import { load, PushError } from './device.ts';
 import type * as Upload from './upload.ts';
 
 export {
@@ -30,7 +30,12 @@ export {
 } from './device.ts';
 export type { Notice, PushSynced } from './upload.ts';
 
-const upload = (): Promise<typeof Upload> => import('./upload.ts');
+// One that can't be loaded says so: a page from an older version, say,
+// whose files are gone (audit 4 J-10).
+const upload = (): Promise<typeof Upload> =>
+  import('./upload.ts').catch(() => {
+    throw new PushError('outdated', 'This part of the app couldn’t be loaded.');
+  });
 
 export const syncPush: typeof Upload.syncPush = async (...args) =>
   (await upload()).syncPush(...args);

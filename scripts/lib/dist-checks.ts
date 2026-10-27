@@ -11,8 +11,12 @@
  * 4. Spacing: a word running into a link ("run by<a"), which happens when a
  *    line of text in an .astro file ends just before a link on the next
  *    line. Write `{' '}` at the end of that line.
+ * 5. JavaScript syntax the oldest browser supported reads: every built
+ *    script must read as ES2022, all that Safari 16.4 has (audit 4 J-3).
+ *    Only the syntax: a newer function called in it isn't seen.
  */
 import { gzipSync } from 'node:zlib';
+import { parse } from 'acorn';
 
 export interface Budget {
   /** Gzipped bytes. */
@@ -231,4 +235,31 @@ export function spacingProblems(html: string): string[] {
       (match) => `no space after a link: …${shown(match.index + 4)}…`,
     ),
   ];
+}
+
+/**
+ * The newest JavaScript every supported browser runs: Safari 16.4 has all of
+ * ES2022, and not ES2024's regular expression "v" flag (CLAUDE.md,
+ * "Browsers"). Astro ships scripts as they're written, its own and the
+ * packages' they use, so newer syntax anywhere stops the whole script there.
+ * The type check holds the apps' own code to ES2022 (tsconfig.base.json),
+ * functions included; this sees what the build put out, packages' code
+ * included, but only its syntax: `Object.groupBy(…)` reads as ES2022.
+ */
+export const NEWEST_JAVASCRIPT = 2022;
+
+/** Why a built script's syntax is too new for the oldest browser supported, or null if it isn't. */
+export function syntaxProblem(code: string): string | null {
+  let problem: unknown = null;
+  // A module, or else a classic script (like a service worker can be).
+  for (const sourceType of ['module', 'script'] as const) {
+    try {
+      parse(code, { ecmaVersion: NEWEST_JAVASCRIPT, sourceType });
+      return null;
+    } catch (error) {
+      problem ??= error;
+    }
+  }
+  const reason = problem instanceof Error ? problem.message : String(problem);
+  return `isn't ES${NEWEST_JAVASCRIPT}, so Safari 16.4 can't run it (${reason})`;
 }

@@ -52,7 +52,7 @@ const stays = `Everything ${site.name} saves stays in this browser on this devic
         : `${stays} Back up to keep a copy, or to move your data to another device.`}
   </p>
   <p class="muted">
-    {`Safari deletes a website's data when it isn't opened for 7 days, unless it's on your Home Screen. Add ${site.name} to your Home Screen${site.sync ? ', or turn on sync' : ''}${backup ? ', and back up now and then' : ''} to keep it safe.`}
+    {`Safari deletes a website’s data when it isn’t opened for 7 days, unless it’s on your Home Screen. Add ${site.name} to your Home Screen${site.sync ? ', or turn on sync' : ''}${backup ? ', and back up now and then' : ''} to keep it safe.`}
   </p>
   <slot />
   <div class="cluster">
@@ -169,7 +169,7 @@ const stays = `Everything ${site.name} saves stays in this browser on this devic
         Restoring replaces everything {site.name} has saved on this device now.
       </p>
       <p class="notice notice--danger" id="restore-sync-warning" data-restore-sync-warning hidden>
-        Sync is on, so this also replaces {site.name}'s data on your other devices.
+        Sync is on, so this also replaces {site.name}’s data on your other devices.
       </p>
       <p class="muted" role="status" data-dialog-status></p>
       {/* "Cancel" first, as in the delete dialogs: it has focus when there's no passphrase to type. */}
@@ -186,11 +186,11 @@ const stays = `Everything ${site.name} saves stays in this browser on this devic
     <form method="dialog" class="stack">
       <h2 id="data-delete-title">Delete all data?</h2>
       <p>
-        This removes everything {site.name} has saved on this device. It can't be undone. {keep}
+        This removes everything {site.name} has saved on this device. It can’t be undone. {keep}
       </p>
       {site.sync && (
         <p>
-          If sync is on, it's turned off on this device first, so your other devices and the online
+          If sync is on, it’s turned off on this device first, so your other devices and the online
           copy keep their data.
         </p>
       )}

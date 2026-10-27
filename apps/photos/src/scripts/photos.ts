@@ -25,6 +25,7 @@ import {
   photoAlt,
   shownLabel,
   takenLabel,
+  withAdded,
   withChanges,
   type Added,
   type Photo,
@@ -371,7 +372,7 @@ export function mountPhotos(root: Document): void {
             thumb: read.thumb,
           });
           byHash.set(photo.hash, photo);
-          photos = withChanges(photos, [photo]);
+          photos = known ? withChanges(photos, [photo]) : withAdded(photos, photo);
           if (known) result.restored += 1;
           else result.added += 1;
           render();

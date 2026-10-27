@@ -4,6 +4,7 @@
 import type { Page } from '@playwright/test';
 import {
   createAccount,
+  expectSealed,
   hubURL,
   otherDevice,
   signInWithKey,
@@ -79,7 +80,7 @@ test('items, changes and deletions reach the other device', async ({ page, brows
   // Nothing reaches the server readable.
   upload = uploaded(page);
   await addItem(page, 'Secret gift', '99');
-  expect((await upload).request().postData() ?? '').not.toContain('Secret gift');
+  await expectSealed(page, 'shelf', await upload, 'Secret gift');
   await tablet.context().close();
 });
 

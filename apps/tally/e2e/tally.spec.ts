@@ -180,7 +180,10 @@ test('resets and deletes counters (with confirmation)', async ({ page }) => {
 
   await books.getByRole('button', { name: 'Delete Books' }).click();
   const dialog = page.getByRole('dialog', { name: 'Delete this counter?' });
-  await expect(dialog).toBeVisible();
+  // Every delete dialog says so (audit 4 G-12).
+  await expect(dialog).toContainText(
+    '“Books” and its count will be removed. This can’t be undone.',
+  );
   await checkA11y(page, 'delete dialog');
   await dialog.getByRole('button', { name: 'Cancel' }).click();
   await expect(books).toBeVisible();

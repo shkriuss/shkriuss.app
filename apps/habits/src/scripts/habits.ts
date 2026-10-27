@@ -8,6 +8,7 @@ import { addDays, firstDayOfWeek, isIsoTime, today, weekday, type IsoDate } from
 import { createStore } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
 import { keepFocus } from '@shkriuss/ui/keep-focus';
+import { onNewDay } from '@shkriuss/ui/new-day';
 import { clearProblem, focusProblem, reportSave, showProblem } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { site } from 'virtual:shkriuss/site';
@@ -65,8 +66,6 @@ const checksStore = createStore<ChecksState>({
 
 /** A new reminder starts at this time (it can be changed straight away). */
 const DEFAULT_REMINDER = '20:00';
-/** How often to check whether the day has changed while Habits is open. */
-const NEW_DAY_CHECK_MS = 60 * 1000;
 
 const dateFormat = new Intl.DateTimeFormat(DATE_LOCALE, {
   weekday: 'long',
@@ -338,7 +337,7 @@ export function mountHabits(root: Document): void {
     }
     const edited = formDraft();
     const { name, days, reminder } = edited;
-    const nameProblem = nameError(name, habits, habit.id);
+    const nameProblem = nameError(name, habits, habit.id, opened?.name);
     nameErrorText.textContent = nameProblem ?? '';
     editName.toggleAttribute('aria-invalid', nameProblem !== undefined);
     daysErrorText.textContent = days.length === 0 ? 'Choose at least one day.' : '';
@@ -491,18 +490,13 @@ export function mountHabits(root: Document): void {
   }
 
   // A new day while Habits is open (or when it comes back on screen).
-  const checkDay = (): void => {
-    if (today() === day) return;
-    day = today();
+  onNewDay((now) => {
+    day = now;
     render();
     // The reminders are worked out from today, so they're uploaded again, as
     // in Water. Else the open page takes the notification service's copy for
     // an old one, and both send them (audit 3 F1-6).
     reminders.changed();
-  };
-  window.setInterval(checkDay, NEW_DAY_CHECK_MS);
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') checkDay();
   });
 
   // If Habits is open in two tabs, keep them the same.

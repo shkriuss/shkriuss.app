@@ -31,3 +31,30 @@ export const readStore = <T>(page: Page, key: string): Promise<{ v: number; data
     (name) => JSON.parse(localStorage.getItem(`shkriuss:${name}`) ?? 'null') as never,
     key,
   );
+
+/**
+ * Fills this site's storage for real, as on a phone that's nearly full: with
+ * a key no app reads, until only about `room` more characters fit. A change
+ * that makes the data bigger then can't be saved, and one that makes it
+ * smaller (in another tab, say) still can (audit 4 F3-1).
+ */
+export async function fillStorage(page: Page, room: number): Promise<void> {
+  await page.evaluate((room) => {
+    const fits = (length: number): boolean => {
+      try {
+        localStorage.setItem('e2e-filler', 'x'.repeat(length));
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    let low = 0;
+    let high = 20_000_000;
+    while (low < high) {
+      const middle = Math.ceil((low + high) / 2);
+      if (fits(middle)) low = middle;
+      else high = middle - 1;
+    }
+    localStorage.setItem('e2e-filler', 'x'.repeat(Math.max(0, low - room)));
+  }, room);
+}

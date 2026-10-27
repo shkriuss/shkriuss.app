@@ -34,6 +34,7 @@ import {
 } from '@shkriuss/ui/numbers';
 import { DATE_LOCALE } from '@shkriuss/ui/locale';
 import { foldText } from '@shkriuss/ui/text';
+import { roomNote as sharedRoomNote } from '@shkriuss/ui/room-note';
 
 /**
  * How typed numbers are read: one comma or point before exactly three
@@ -743,16 +744,18 @@ export const closedCount = (count: number, locale?: string): string =>
  * keeps, open and closed): how many more fit, and how to make room. Null
  * until then.
  */
-export function roomNote(count: number, locale?: string): string | null {
-  if (count <= LIMITS.trades * 0.9) return null;
-  const left = LIMITS.trades - count;
-  const most = new Intl.NumberFormat(locale).format(LIMITS.trades);
-  const start =
-    left > 0
-      ? `Trades is nearly full: there’s room for ${new Intl.NumberFormat(locale).format(left)} more ${left === 1 ? 'trade' : 'trades'} (it keeps up to ${most}, open and closed).`
-      : `Trades is full: it keeps up to ${most} trades, open and closed.`;
-  return `${start} To make room, download the spreadsheet, then use “Delete a year…” under Currency and spreadsheet, below.`;
-}
+export const roomNote = (count: number, locale?: string): string | null =>
+  sharedRoomNote({
+    app: 'Trades',
+    count,
+    most: LIMITS.trades,
+    one: 'trade',
+    many: 'trades',
+    also: ', open and closed',
+    makeRoom:
+      'To make room, download the spreadsheet, then use “Delete a year…” under Currency and spreadsheet, below.',
+    locale,
+  });
 
 // ---------- Results ----------
 

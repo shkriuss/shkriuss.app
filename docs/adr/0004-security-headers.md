@@ -6,7 +6,8 @@ headers of their own; by [ADR 0010](0010-account-and-sync.md): only the hub
 may use passkeys; and by [ADR 0011](0011-on-device-grammar-checking.md) and
 [ADR 0012](0012-deep-check-ai-model.md): apps that run WebAssembly may
 compile it and start its threads. Updated in October 2026 (audit 4 C-1):
-`form-action 'none'`.
+`form-action 'none'`; and (audit 4 C-4): files saved for offline use get
+the policy of the version now installed.
 
 ## Context
 
@@ -46,6 +47,12 @@ writes them to every site's `_headers` file:
   (`inlineStylesheets: 'never'`, `assetsInlineLimit: 0`). The theme script
   that must run before paint is a tiny external file.
 - `/_astro/*` files (content-hashed) are cached for a year; pages revalidate.
+- The service worker (`packages/astro-config/src/service-worker.ts`) serves
+  saved files with the policy of the version now installed, not the one they
+  were saved under, so a file saved under an older, looser policy can't keep
+  it (audit 4 C-4). That includes an app's own saved files, like Grammar's
+  Deep check model. Build files copied from the version before get the new
+  policy once, as they're copied.
 
 ## Consequences
 

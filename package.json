@@ -24,6 +24,7 @@
     "@eslint/js": "catalog:",
     "@playwright/test": "catalog:",
     "@types/node": "catalog:",
+    "acorn": "catalog:",
     "eslint": "catalog:",
     "eslint-plugin-astro": "catalog:",
     "eslint-plugin-jsx-a11y-x": "catalog:",

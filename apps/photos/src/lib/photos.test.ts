@@ -16,6 +16,7 @@ import {
   shownLabel,
   takenLabel,
   toPhoto,
+  withAdded,
   withChanges,
   type Photo,
 } from './photos.ts';
@@ -216,6 +217,20 @@ describe('changes to the list (audit 4 J-1)', () => {
     expect(next[54_321]).toBe(uploaded);
     expect(next).toHaveLength(100_000);
     expect(looks).toBeLessThan(100);
+
+    // A new photo: withChanges looked through every photo for an old copy
+    // (review of audit 4 J-1); withAdded only searches.
+    const added = photo({ id: 'new', taken: '2020-02-02T12:00:00' });
+    looks = 0;
+    const withNew = withAdded(big, added);
+    expect(withNew).toHaveLength(100_001);
+    expect(looks).toBeLessThan(100);
+    const at = withNew.indexOf(added);
+    expect(byNewest(withNew[at - 1] as Photo, added)).toBeLessThanOrEqual(0);
+    expect(byNewest(added, withNew[at + 1] as Photo)).toBeLessThanOrEqual(0);
+    looks = 0;
+    withChanges(big, [added]);
+    expect(looks).toBeGreaterThan(50_000);
   });
 });
 

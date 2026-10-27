@@ -16,6 +16,7 @@ import {
   isIsoTime,
   toStamp,
   weekday,
+  yearOf,
   type IsoDate,
   type IsoTime,
   type Stamp,
@@ -24,6 +25,7 @@ import type { Notice } from '@shkriuss/push';
 import { withEdits } from '@shkriuss/sync/edits';
 import { DATE_LOCALE } from '@shkriuss/ui/locale';
 import { foldText } from '@shkriuss/ui/text';
+import { roomNote as sharedRoomNote } from '@shkriuss/ui/room-note';
 
 export interface Habit {
   id: string;
@@ -114,18 +116,32 @@ export function isChecksState(value: unknown): value is ChecksState {
 
 /**
  * An error message for a habit's name, or undefined when it's fine.
- * `editing` is the habit being renamed (its own name doesn't count as taken).
+ * `editing` is the habit being renamed (its own name doesn't count as
+ * taken), and `was` the name it had when its form opened (if not given, its
+ * name now).
  */
-export function nameError(name: string, state: HabitsState, editing?: string): string | undefined {
+export function nameError(
+  name: string,
+  state: HabitsState,
+  editing?: string,
+  was?: string,
+): string | undefined {
   const trimmed = name.trim();
   if (trimmed.length === 0) return 'Enter a name for the habit.';
   if (trimmed.length > MAX_NAME_LENGTH) return `Use ${MAX_NAME_LENGTH} characters or fewer.`;
   // Capitals, accents and extra spaces don't make another name, as in the
   // other apps: "Café" is "cafe" (audit 3 J-12).
   const wanted = foldText(trimmed);
-  const taken = state.habits.some(
-    (habit) => habit.id !== editing && foldText(habit.name) === wanted,
-  );
+  // Its name, unchanged, is fine even if another habit has it too, as in
+  // Budget, Meals and Repairs: "Run 5km" and "Run ５km" were two names until
+  // wide and narrow letters were folded, so saved before, they're one now
+  // (audit 4 F3-6); so are two devices' "Run", each added before they first
+  // synced.
+  const own = was ?? state.habits.find((habit) => habit.id === editing)?.name;
+  const unchanged = editing !== undefined && own !== undefined && foldText(own) === wanted;
+  const taken =
+    !unchanged &&
+    state.habits.some((habit) => habit.id !== editing && foldText(habit.name) === wanted);
   if (taken) return 'You already have a habit with that name.';
   if (editing === undefined && state.habits.length >= MAX_HABITS) {
     return `You can have up to ${MAX_HABITS} habits.`;
@@ -141,16 +157,18 @@ export function addHabit(state: HabitsState, name: string, id: string): HabitsSt
 
 /**
  * Renames a habit, changes its days and/or its reminder (null = no reminder,
- * left out = as it was). Returns the same state if they aren't valid.
+ * left out = as it was). Returns the same state if they aren't valid. `was`
+ * is its name when its form opened (see nameError).
  */
 export function updateHabit(
   state: HabitsState,
   id: string,
   changes: { name: string; days: readonly number[]; reminder?: IsoTime | null },
+  was?: string,
 ): HabitsState {
   const days = [...new Set(changes.days)].sort((a, b) => a - b);
   const { reminder } = changes;
-  if (nameError(changes.name, state, id) || !isDays(days)) return state;
+  if (nameError(changes.name, state, id, was) || !isDays(days)) return state;
   if (reminder !== undefined && reminder !== null && !isIsoTime(reminder)) return state;
   return {
     habits: state.habits.map((habit) => {
@@ -192,8 +210,8 @@ export function editHabit(
 ): HabitsState {
   const habit = state.habits.find((entry) => entry.id === id);
   if (!habit) return state;
-  const merged = updateHabit(state, id, withEdits(opened, edited, draftOf(habit)));
-  return merged === state ? updateHabit(state, id, edited) : merged;
+  const merged = updateHabit(state, id, withEdits(opened, edited, draftOf(habit)), opened.name);
+  return merged === state ? updateHabit(state, id, edited, opened.name) : merged;
 }
 
 /** Removes a habit and its check marks. */
@@ -247,23 +265,22 @@ export const checksProblem = (
  * What the page says once Habits is nearly full (over 90% of the check marks
  * it keeps): how many more fit, and how to make room. Null until then.
  */
-export function roomNote(count: number, locale?: string): string | null {
-  if (count <= MAX_CHECKS * 0.9) return null;
-  const left = MAX_CHECKS - count;
-  const start =
-    left > 0
-      ? `Habits is nearly full: there’s room for ${number(left, locale)} more check ${left === 1 ? 'mark' : 'marks'} (it keeps up to ${number(MAX_CHECKS, locale)}).`
-      : `Habits is full: it keeps up to ${checksCount(MAX_CHECKS, locale)}.`;
-  return `${start} To make room, use “Delete check marks from a year…” under Check marks, below.`;
-}
+export const roomNote = (count: number, locale?: string): string | null =>
+  sharedRoomNote({
+    app: 'Habits',
+    count,
+    most: MAX_CHECKS,
+    one: 'check mark',
+    many: 'check marks',
+    makeRoom: 'To make room, use “Delete check marks from a year…” under Check marks, below.',
+    locale,
+  });
 
 export interface YearCount {
   /** "2025". */
   year: string;
   count: number;
 }
-
-const yearOf = (date: IsoDate): string => date.slice(0, 4);
 
 /** The years with check marks, the earliest first, with how many each has. */
 export function checkYears(checks: ChecksState): YearCount[] {

@@ -46,9 +46,11 @@ export function defineAppConfig(options: AppConfigOptions): AstroUserConfig {
     vite: {
       // No build target: Astro builds the browser code for "esnext" whatever
       // this says, and giving Vite one rewrites the CSS (light-dark(), which
-      // tokens.css already has its own fallback for). So code is shipped as
-      // written, and the oldest browsers are kept working by the rule in
-      // CLAUDE.md ("Browsers"), not by the build (audit J-13).
+      // tokens.css already has its own fallback for). So JavaScript is
+      // shipped as written (the CSS minifier may still write media queries
+      // as ranges, which Safari 16.4 reads), and the oldest browsers are kept
+      // working by the rule in CLAUDE.md ("Browsers"), held by the type
+      // check and check:dist, not by the build (audit J-13, audit 4 J-3).
       build: {
         // Never inline small scripts or assets into the HTML (CSP again).
         assetsInlineLimit: 0,

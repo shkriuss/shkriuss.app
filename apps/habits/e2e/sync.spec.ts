@@ -4,6 +4,7 @@
 import type { Page } from '@playwright/test';
 import {
   createAccount,
+  expectSealed,
   hubURL,
   otherDevice,
   signInWithKey,
@@ -70,7 +71,7 @@ test('habits and check marks sync, and the same day ticked twice stays one', asy
   upload = uploaded(page);
   await page.getByLabel('New habit').fill('Secret habit');
   await page.getByRole('button', { name: 'Add', exact: true }).click();
-  expect((await upload).request().postData() ?? '').not.toContain('Secret habit');
+  await expectSealed(page, 'habits', await upload, 'Secret habit');
   await tablet.context().close();
 });
 

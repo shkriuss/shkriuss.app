@@ -4,6 +4,7 @@
 import type { Page } from '@playwright/test';
 import {
   createAccount,
+  expectSealed,
   hubURL,
   oldCopyMoved,
   otherDevice,
@@ -70,7 +71,7 @@ test('counters from both devices are kept, and counts follow the latest change',
   // Names never reach the server readable.
   upload = uploaded(page);
   await addCounter(page, 'Secret habit');
-  expect((await upload).request().postData() ?? '').not.toContain('Secret habit');
+  await expectSealed(page, 'tally', await upload, 'Secret habit');
   await tablet.context().close();
 });
 

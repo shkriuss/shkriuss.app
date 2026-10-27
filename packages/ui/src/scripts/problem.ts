@@ -19,11 +19,23 @@
  *   error. When focus is in that field already (the person pressed Enter or
  *   Done in it), focusing it reads nothing, so the error is read out instead,
  *   with the field's name: "New counter: Enter a name for the counter."
+ * - RELOAD_TO_UPDATE: what to say when a part of the page that loads later
+ *   (a form, a dialog) can't be loaded:
+ *
+ *     showProblem(`Calendar couldn’t open the event. ${RELOAD_TO_UPDATE}`);
  */
 import { allSaved, lastSaveProblem } from '@shkriuss/storage';
 import { SAVE_PROBLEM_TEXTS, saveProblemText, spokenFieldProblem } from '../lib/problems.ts';
 
 const noticeArea = (): HTMLElement | null => document.querySelector('[data-problem]');
+
+/**
+ * A part of the page that loads later couldn't be loaded. Mostly that's
+ * after an update while the page stayed open: the page asks for files of the
+ * version before, which aren't there any more, so "try again" can't help,
+ * but reloading gets the new version (audit 4 J-10).
+ */
+export const RELOAD_TO_UPDATE = 'Reload the page to get the latest version, then try again.';
 
 /** The problem the notice shows now, if any. */
 export function shownProblem(): string | null {
@@ -103,6 +115,13 @@ export function reportSave(saved: boolean, { repeat = true }: ReportSaveOptions 
   if (repeat || shown !== text) showProblem(text);
   return false;
 }
+
+/**
+ * What reportSave says about the last save that didn't work: for a form
+ * that stays open after it, to say it there too. The page's notice is
+ * behind a dialog, where a screen reader doesn't hear it.
+ */
+export const saveProblem = (): string => saveProblemText(lastSaveProblem());
 
 // ---------- Errors in forms ----------
 

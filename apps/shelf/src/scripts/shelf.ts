@@ -16,7 +16,13 @@ import { createSync, syncedStore } from '@shkriuss/sync';
 import { withEdits } from '@shkriuss/sync/edits';
 import { focusSpot, keepFocus, returnFocus, type FocusSpot } from '@shkriuss/ui/keep-focus';
 import { PAGE_SIZE, shownCount, waitForTyping } from '@shkriuss/ui/long-lists';
-import { clearProblem, focusProblem, reportSave, showProblem } from '@shkriuss/ui/problem';
+import {
+  clearProblem,
+  focusProblem,
+  reportSave,
+  saveProblem,
+  showProblem,
+} from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { watchTextLimit } from '@shkriuss/ui/text-limit';
 import { site } from 'virtual:shkriuss/site';
@@ -150,6 +156,7 @@ export function mountShelf(root: Document): void {
   const categoryTitle = required<HTMLElement>(categoryEditor, '[data-category-title]');
   const categoryInput = required<HTMLInputElement>(categoryForm, '[data-category-name]');
   const categoryError = required<HTMLElement>(categoryForm, '[data-category-error]');
+  const categoryFormError = required<HTMLElement>(categoryForm, '[data-category-form-error]');
   const deleteCategoryButton = required<HTMLButtonElement>(
     categoryEditor,
     '[data-action="delete-category"]',
@@ -162,6 +169,7 @@ export function mountShelf(root: Document): void {
   const moveField = required<HTMLElement>(categoryDeleteDialog, '[data-move-field]');
   const moveCount = required<HTMLElement>(categoryDeleteDialog, '[data-move-count]');
   const moveTo = required<HTMLSelectElement>(categoryDeleteDialog, '[data-move-to]');
+  const moveError = required<HTMLElement>(categoryDeleteDialog, '[data-move-error]');
 
   let state = store.load();
   let categoriesState = categoriesStore.load();
@@ -499,26 +507,50 @@ export function mountShelf(root: Document): void {
       categoryFilter.value = 'all';
       opinionFilter.value = 'all';
     }
-    if (save(existing ? updateItem(state, item) : addItem(state, item))) {
-      announce(`Saved ${item.name}.`);
+    const before = state;
+    if (!save(existing ? updateItem(state, item) : addItem(state, item))) {
+      notSaved(before);
+      return;
     }
+    announce(`Saved ${item.name}.`);
     savedId = item.id;
     editor.close();
   });
+
+  /**
+   * Saving from the form didn't work (the device is full, say): the list
+   * goes back to what's saved, and the form stays open with what was typed,
+   * saying why where it's read out. Closed, the item would show from memory
+   * and vanish, with everything typed, at the next change from elsewhere
+   * (audit 4 F3-1).
+   */
+  function notSaved(before: ShelfState): void {
+    state = before;
+    render();
+    showProblems({ form: saveProblem() });
+  }
 
   required<HTMLButtonElement>(editor, '[data-action="cancel"]').addEventListener('click', () => {
     editor.close();
   });
 
+  /**
+   * The item in the form was deleted on another device meanwhile: there's
+   * nothing to delete. Says so, rather than doing nothing (audit 3 F3-9),
+   * also when that happened while "Delete this item?" was open, where the
+   * form stayed open and "Save" brought the item back (audit 4 F3-5).
+   */
+  function itemGone(): void {
+    editingId = null;
+    opener = focusSpot(addButton);
+    editor.close();
+    say('That item was already deleted on another device.');
+  }
+
   deleteButton.addEventListener('click', () => {
     const item = find(editingId);
     if (!item) {
-      // Deleted on another device while the form was open: there's nothing
-      // to delete. Say so, rather than doing nothing (audit 3 F3-9).
-      editingId = null;
-      opener = focusSpot(addButton);
-      editor.close();
-      say('That item was already deleted on another device.');
+      itemGone();
       return;
     }
     deleteName.textContent = item.name;
@@ -528,11 +560,20 @@ export function mountShelf(root: Document): void {
   });
 
   deleteDialog.addEventListener('close', () => {
+    if (deleteDialog.returnValue !== 'confirm') return;
     const item = find(editingId);
-    if (deleteDialog.returnValue !== 'confirm' || !item) return;
+    if (!item) {
+      itemGone();
+      return;
+    }
+    const before = state;
+    if (!save(removeItem(state, item.id))) {
+      notSaved(before);
+      return;
+    }
     editingId = null;
     opener = focusSpot(addButton);
-    if (save(removeItem(state, item.id))) announce(`Deleted ${item.name}.`);
+    announce(`Deleted ${item.name}.`);
     editor.close();
   });
 
@@ -620,6 +661,7 @@ export function mountShelf(root: Document): void {
     editingCategoryId = category?.id ?? null;
     categoryOpener = focusSpot() ?? focusSpot(addCategoryButton);
     showCategoryProblem(null);
+    categoryFormError.textContent = '';
     categoryTitle.textContent = category ? 'Edit category' : 'New category';
     deleteCategoryButton.hidden = category === null;
     categoryInput.value = category?.name ?? '';
@@ -658,10 +700,38 @@ export function mountShelf(root: Document): void {
       editingCategoryId === null
         ? addCategory(categoriesState, id, categoryInput.value)
         : renameCategory(categoriesState, id, categoryInput.value);
-    if (saveCategories(next)) announce(`Saved category ${categoryName(categoriesOf(next), id)}.`);
+    const before = categoriesState;
+    if (!saveCategories(next)) {
+      categoryNotSaved(before);
+      return;
+    }
+    announce(`Saved category ${categoryName(categoriesOf(next), id)}.`);
     savedCategoryId = id;
     categoryEditor.close();
   });
+
+  /**
+   * Saving from the category form didn't work (the device is full, say):
+   * the categories go back to what's saved, and the form stays open saying
+   * why, as the item form does (audit 4 F3-1).
+   */
+  function categoryNotSaved(before: CategoriesState): void {
+    categoriesState = before;
+    render();
+    categoryFormError.textContent = saveProblem();
+  }
+
+  /**
+   * The category in the form was deleted on another device meanwhile: there's
+   * nothing to delete. Says so, rather than doing nothing, as for items
+   * (audit 4 F3-5).
+   */
+  function categoryGone(): void {
+    editingCategoryId = null;
+    categoryOpener = focusSpot(addCategoryButton);
+    categoryEditor.close();
+    say('That category was already deleted on another device.');
+  }
 
   required<HTMLButtonElement>(categoryEditor, '[data-action="cancel-category"]').addEventListener(
     'click',
@@ -670,9 +740,8 @@ export function mountShelf(root: Document): void {
     },
   );
 
-  deleteCategoryButton.addEventListener('click', () => {
-    const category = findCategory(editingCategoryId);
-    if (!category) return;
+  /** The delete dialog's question for `category`, with the categories there are now. */
+  function askDelete(category: Category): void {
     const categories = categoriesOf(categoriesState);
     const items = itemsPerCategory(state, categories).get(category.id) ?? 0;
     categoryDeleteName.textContent = category.name;
@@ -682,27 +751,81 @@ export function mountShelf(root: Document): void {
     const others = categories.filter((entry) => entry.id !== category.id);
     setOptions(moveTo, [[NO_CATEGORY, 'No category'], ...choicesOf(others)], NO_CATEGORY);
     moveTo.value = NO_CATEGORY;
+    moveError.textContent = '';
+  }
+
+  deleteCategoryButton.addEventListener('click', () => {
+    const category = findCategory(editingCategoryId);
+    if (!category) {
+      categoryGone();
+      return;
+    }
+    askDelete(category);
     categoryDeleteDialog.returnValue = '';
     // Opens on top of the form; "Cancel" goes back to it.
     categoryDeleteDialog.showModal();
   });
 
-  categoryDeleteDialog.addEventListener('close', () => {
+  /**
+   * The category chosen for the items was deleted on another device while
+   * the question was open: the items would lose their category without a
+   * word. Asks again, with the categories there are now (audit 4 F3-5).
+   */
+  function moveTargetGone(category: Category): boolean {
+    const chosen = moveTo.value;
+    if (moveField.hidden || chosen === NO_CATEGORY || findCategory(chosen)) return false;
+    const name = moveTo.selectedOptions[0]?.textContent ?? '';
+    askDelete(category);
+    moveError.textContent = `“${name}” was deleted on another device. Choose where the items go.`;
+    return true;
+  }
+
+  // Asked again in the same question, if it can still be stopped from closing.
+  required<HTMLFormElement>(categoryDeleteDialog, 'form').addEventListener('submit', (event) => {
     const category = findCategory(editingCategoryId);
-    if (categoryDeleteDialog.returnValue !== 'confirm' || !category) return;
+    if (event.submitter?.getAttribute('value') !== 'confirm' || !category) return;
+    if (!moveTargetGone(category)) return;
+    event.preventDefault();
+    moveTo.focus();
+  });
+
+  categoryDeleteDialog.addEventListener('close', () => {
+    if (categoryDeleteDialog.returnValue !== 'confirm') return;
+    const category = findCategory(editingCategoryId);
+    if (!category) {
+      categoryGone();
+      return;
+    }
+    // Deleted between the answer and now: asked again.
+    if (moveTargetGone(category)) {
+      categoryDeleteDialog.returnValue = '';
+      categoryDeleteDialog.showModal();
+      moveTo.focus();
+      return;
+    }
     const to = findCategory(moveTo.value);
-    let saved = true;
-    if (state.items.some((item) => item.category === category.id)) {
-      saved = save(moveItems(state, category.id, to?.id ?? NO_CATEGORY));
+    // Its items first: if that can't be saved, nothing changed; if they
+    // were but the category can't be deleted, it stays, empty, to delete
+    // again. Either way the form stays open, saying why (audit 4 F3-1).
+    const items = state;
+    if (
+      state.items.some((item) => item.category === category.id) &&
+      !save(moveItems(state, category.id, to?.id ?? NO_CATEGORY))
+    ) {
+      state = items;
+      categoryNotSaved(categoriesState);
+      return;
     }
-    saved = saveCategories(removeCategory(categoriesState, category.id)) && saved;
-    if (saved) {
-      announce(
-        to
-          ? `Deleted category ${category.name}. Its items are in ${to.name} now.`
-          : `Deleted category ${category.name}.`,
-      );
+    const before = categoriesState;
+    if (!saveCategories(removeCategory(categoriesState, category.id))) {
+      categoryNotSaved(before);
+      return;
     }
+    announce(
+      to
+        ? `Deleted category ${category.name}. Its items are in ${to.name} now.`
+        : `Deleted category ${category.name}.`,
+    );
     editingCategoryId = null;
     categoryOpener = focusSpot(addCategoryButton);
     categoryEditor.close();

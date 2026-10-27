@@ -4,6 +4,7 @@
 import type { Page } from '@playwright/test';
 import {
   createAccount,
+  expectSealed,
   hubURL,
   otherDevice,
   signInWithKey,
@@ -84,11 +85,15 @@ test('notes, edits and deletions reach the other device', async ({ page, browser
   await expect(link(tablet, 'Trip plan')).toBeHidden();
   await expect(tablet.getByText('No notes yet')).toBeVisible();
 
-  // The text never reaches the server readable.
+  // The text never reaches the server readable. The new note goes up empty
+  // first: on a slow machine, that upload went before the title was typed,
+  // and the test looked for the title in it.
   upload = uploaded(page);
   await page.getByRole('button', { name: 'New note' }).click();
+  await upload;
+  upload = uploaded(page);
   await titleBox(page).fill('Secret diary');
-  expect((await upload).request().postData() ?? '').not.toContain('Secret diary');
+  await expectSealed(page, 'notes', await upload, 'Secret diary');
   await tablet.context().close();
 });
 

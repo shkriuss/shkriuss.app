@@ -13,6 +13,7 @@ import {
   formatDay,
   isTasksState,
   isViewSettings,
+  LIMITS,
   matchesSearch,
   MAX_STEPS,
   MAX_TASKS,
@@ -175,6 +176,22 @@ describe('the form', () => {
       done: false,
     }));
     expect(taskFromDraft(draft({ steps: many }), 'm', 1).steps).toHaveLength(MAX_STEPS);
+  });
+
+  it('cuts a long title, step or note by whole characters, never half an emoji', () => {
+    // .slice() cut in the middle of an emoji, which showed as "�" (audit 4 J-11).
+    const title = `${'a'.repeat(LIMITS.title - 1)}🎉🎉`;
+    const step = { id: 's1', title: `${'b'.repeat(LIMITS.step - 1)}🎉🎉`, done: false };
+    const made = taskFromDraft(draft({ title, steps: [step] }), 'e', 1);
+    expect(made.title).toBe(`${'a'.repeat(LIMITS.title - 1)}🎉`);
+    expect(made.steps[0]?.title).toBe(`${'b'.repeat(LIMITS.step - 1)}🎉`);
+    // A note as long as its box lets in on an iPhone, which counts each emoji
+    // once: all of it is kept, where half was cut off (audit 4 F3-4).
+    const notes = '🌱'.repeat(LIMITS.notes);
+    expect(taskFromDraft(draft({ title: 'Plants', notes }), 'n', 1).notes).toBe(notes);
+    expect(taskFromDraft(draft({ title: 'Plants', notes: `${notes}🌱` }), 'n', 1).notes).toBe(
+      notes,
+    );
   });
 
   it('adds a task with just a title', () => {

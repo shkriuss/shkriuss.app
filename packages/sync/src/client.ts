@@ -326,6 +326,12 @@ export function createSync(options: {
   let again = false;
   let problem: SyncProblem | null = null;
   let timer: number | undefined;
+  /**
+   * Times sync was turned off, or the online copy deleted, in this tab,
+   * which say so themselves: what a sync under way then finds (the copy gone,
+   * say) is no news.
+   */
+  let stops = 0;
   const fileSync = createFileSync(options.app);
 
   const status = (): SyncStatus => {
@@ -836,6 +842,8 @@ export function createSync(options: {
   /** Merges with the copy online, round after round, until they agree. */
   async function rounds(): Promise<void> {
     keptBoth = 0;
+    const stopsBefore = stops;
+    const secretBefore = loadState()?.secret ?? null;
     emit();
     let event: SyncEvent | undefined;
     try {
@@ -847,11 +855,16 @@ export function createSync(options: {
       problem = fileSync.noRoom() ? 'files-full' : null;
       event = keptBoth > 0 ? 'kept-both' : 'synced';
     } catch (error) {
-      // Stopped: sync was turned off meanwhile, which says so itself.
-      if (error instanceof StoppedError) problem = null;
-      else problem = problemOf(error);
       const state = loadState();
-      if (state && isGone(error)) {
+      // Stopped: sync was turned off meanwhile, which says so itself. Or the
+      // online copy was deleted in this tab meanwhile, and the sync found it
+      // gone: that isn't "deleted on another device". Or sync was turned on
+      // again with another key meanwhile (in another tab, say): what this
+      // sync found is about the copy before, and mustn't turn that one off.
+      const replaced = Boolean(state?.secret) && state?.secret !== secretBefore;
+      const stale = error instanceof StoppedError || stops !== stopsBefore || replaced;
+      problem = stale ? null : problemOf(error);
+      if (!stale && state && isGone(error)) {
         saveState(offState(state));
         forgetFiles();
       }
@@ -941,6 +954,7 @@ export function createSync(options: {
       location.assign(connectUrl(origin, request));
     },
     turnOff() {
+      stops += 1;
       const state = loadState();
       if (state) saveState(offState(state));
       forgetFiles();
@@ -965,6 +979,9 @@ export function createSync(options: {
       const { token } = keys;
       const response = await api('/copy', { method: 'DELETE' }, token);
       if (!response.ok) throw failed(response);
+      // Only once it's deleted: a sync under way when deleting fails still
+      // says what went wrong with it.
+      stops += 1;
       saveState(offState(state));
       forgetFiles();
       problem = null;

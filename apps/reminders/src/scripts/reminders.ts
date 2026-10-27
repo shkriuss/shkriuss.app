@@ -360,7 +360,9 @@ export function mountReminders(root: Document): void {
 
   clearDialog.addEventListener('close', () => {
     if (clearDialog.returnValue !== 'confirm') return;
-    save(clearDone(state), 'Cleared the done reminders.');
+    const count = state.reminders.filter((entry) => entry.done !== null).length;
+    // The same words as Tasks' "Delete done tasks" (audit 4 G-12).
+    save(clearDone(state), `Deleted ${count} done ${count === 1 ? 'reminder' : 'reminders'}.`);
     add.text.focus();
   });
 

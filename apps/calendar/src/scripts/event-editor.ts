@@ -320,8 +320,8 @@ export function mountEventEditor(root: Document, page: EditorPage): EventEditor 
     }
     deleteMessage.textContent =
       event.repeat === 'none'
-        ? `“${event.title}” will be removed.`
-        : `“${event.title}” will be removed, including every time it repeats.`;
+        ? `“${event.title}” will be removed. This can’t be undone.`
+        : `“${event.title}” will be removed, including every time it repeats. This can’t be undone.`;
     deleteDialog.returnValue = '';
     // Opens on top of the editor; "Cancel" goes back to editing.
     deleteDialog.showModal();

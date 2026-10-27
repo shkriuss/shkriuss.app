@@ -21,6 +21,15 @@ package age check and the unit tests in German run only in GitHub Actions.
 | Package age          | `node scripts/lockfile-age.ts origin/main` (pull requests only)      | A pull request adds a package version published less than 7 days ago, a package from a web address or a git repository instead of the npm registry (or a registry version with a download address of its own), or a hash that isn't the npm registry's for that version                                                  | Wait until it's 7 days old, then re-run. For an urgent security fix, list the package under `minimumReleaseAgeExclude` in `pnpm-workspace.yaml`, in a pull request of its own merged first (the check reads the list from `main`). For a package not from the registry: use a version from the npm registry instead. For a wrong hash: let pnpm write the lockfile (`pnpm install`) |
 | Time limit           | The **Checks** job (`timeout-minutes` in `.github/workflows/ci.yml`) | The job runs longer than 30 minutes and is stopped: every check fails. Each new app adds about a minute of browser tests                                                                                                                                                                                                 | Never skip or remove tests to fit. Ask Claude to split the browser tests into groups of sites that run side by side (a matrix job, keeping one check that branch protection asks for), or, for now, raise `timeout-minutes` a little                                                                                                                                                |
 
+`pnpm check:dist` also reads every built script, the packages' code in it
+too, as ES2022: the newest JavaScript syntax Safari 16.4 reads. A script
+written in newer syntax fails it (audit 4 J-3). Write that code the ES2022
+way, or leave out the package that brings it. It checks only the syntax:
+a package that calls a function Safari 16.4 doesn't have (like
+`Object.groupBy`) passes, so check that in the support tables. The type
+check holds the code here to ES2022, functions included
+(`tsconfig.base.json`).
+
 ## What the shared browser tests cover (every site, automatically)
 
 - **Accessibility:** axe-core with WCAG 2.0/2.1/2.2 A and AA rules plus best

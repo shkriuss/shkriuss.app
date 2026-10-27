@@ -340,7 +340,7 @@ test.describe('turned off with the browser’s storage full (audit 3 D-3)', () =
     );
     await closedSwitch(page).uncheck();
     await expect(closedStatus(page)).toHaveText(
-      "Off, but your reminders couldn’t be removed from Calendar's server yet.",
+      'Off, but your reminders couldn’t be removed from Calendar’s server yet.',
     );
     await expect(closedSwitch(page)).not.toBeChecked();
   });
@@ -363,7 +363,7 @@ test('says so when turning it off can’t reach the server, and finishes later',
   );
   await closedSwitch(page).uncheck();
   await expect(closedStatus(page)).toHaveText(
-    "Off, but your reminders couldn’t be removed from Calendar's server yet. Calendar will try again when it’s open and online.",
+    'Off, but your reminders couldn’t be removed from Calendar’s server yet. Calendar will try again when it’s open and online.',
   );
   await checkA11y(page, 'reminders while closed: deletion pending');
 
@@ -458,7 +458,7 @@ test('turning it off while the network hangs gives up after a while', async ({ p
   await expect(closedSwitch(page)).not.toBeChecked();
   await page.clock.runFor('00:21');
   await expect(closedStatus(page)).toHaveText(
-    "Off, but your reminders couldn’t be removed from Calendar's server yet. Calendar will try again when it’s open and online.",
+    'Off, but your reminders couldn’t be removed from Calendar’s server yet. Calendar will try again when it’s open and online.',
   );
   await expect(closedSwitch(page)).toBeEnabled();
   await expect(closedSwitch(page)).toBeFocused();
@@ -568,7 +568,7 @@ test('says when not all the reminders fit on the server', async ({ page }) => {
   const sent = JSON.parse((await upload).postData() ?? '{}') as { entries: unknown[] };
   expect(sent.entries).toHaveLength(500);
   await expect(closedStatus(page)).toHaveText(
-    "On, but only for your next 500 reminders: Calendar's server can’t keep more. The other 20 arrive only while Calendar is open.",
+    'On, but only for your next 500 reminders: Calendar’s server can’t keep more. The other 20 arrive only while Calendar is open.',
   );
   await checkA11y(page, 'reminders while closed: not all fit');
 });

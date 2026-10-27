@@ -90,6 +90,37 @@ describe('habits', () => {
     expect(nameError('चना', { habits: [{ ...daily, name: 'चीनी' }] })).toBeUndefined();
   });
 
+  it('keeps a habit’s own name, even when another has the same one (audit 4 F3-6)', () => {
+    // Saved before wide and narrow letters were folded, "Run 5km" and
+    // "Run ５km" were two names; now they're one. Changing either one's
+    // days said "You already have a habit with that name."
+    const state = {
+      habits: [
+        { ...daily, id: 'a', name: 'Run 5km' },
+        { ...daily, id: 'b', name: 'Run ５km' },
+      ],
+    };
+    expect(nameError('Run ５km', state, 'b')).toBeUndefined();
+    expect(nameError(' run 5KM ', state, 'a')).toBeUndefined();
+    expect(updateHabit(state, 'b', { name: 'Run ５km', days: [1, 3] }).habits[1]?.days).toEqual([
+      1, 3,
+    ]);
+    // Saved from its form, as the page does.
+    const opened = draftOf({ ...daily, id: 'b', name: 'Run ５km' });
+    expect(nameError(opened.name, state, 'b', opened.name)).toBeUndefined();
+    expect(editHabit(state, 'b', opened, { ...opened, days: [6, 7] }).habits[1]).toEqual({
+      id: 'b',
+      name: 'Run ５km',
+      days: [6, 7],
+    });
+    // Another habit's name is still taken.
+    const two = { habits: [daily, weekdaysOnly] };
+    expect(nameError('RUN', two, 'water')).toBe('You already have a habit with that name.');
+    expect(nameError('RUN', two, 'water', 'Water')).toBe(
+      'You already have a habit with that name.',
+    );
+  });
+
   it('sets, keeps and removes a reminder', () => {
     const state = { habits: [daily] };
     const withReminder = updateHabit(state, 'water', {

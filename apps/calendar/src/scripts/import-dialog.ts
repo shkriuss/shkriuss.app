@@ -6,6 +6,7 @@
  * file is chosen, as most visits never import one.
  */
 import { setBusy } from '@shkriuss/ui/busy';
+import { RELOAD_TO_UPDATE } from '@shkriuss/ui/problem';
 import { required, type CalendarPage } from './shared.ts';
 
 export function mountImportDialog(root: Document, page: CalendarPage): void {
@@ -33,7 +34,7 @@ export function mountImportDialog(root: Document, page: CalendarPage): void {
           status.textContent = '';
         },
         () => {
-          status.textContent = 'Calendar couldn’t read this file. Please try again.';
+          status.textContent = `Calendar couldn’t read this file. ${RELOAD_TO_UPDATE}`;
         },
       )
       .finally(() => {

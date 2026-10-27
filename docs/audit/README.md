@@ -44,7 +44,10 @@ each audit found, and what happened to each finding, is in
    `pnpm test:e2e` needs `pnpm build` first and Playwright's Chromium. The
    first `pnpm build` downloads Grammar's 361 MB model from Hugging Face;
    without it, build the rest with
-   `pnpm -r --filter "./apps/*" --filter "!grammar" build`.
+   `pnpm -r --filter "./apps/*" --filter "!grammar" build`, and give
+   `pnpm test:e2e` the other sites in `E2E_SITES`. More, like starting the
+   local servers' data afresh: "Working on a computer" in
+   [adding-an-app.md](../adding-an-app.md).
 
 ## What this is
 
@@ -589,5 +592,5 @@ serious first.
    [results.md](results.md): what was checked, by which tools, and what was
    found and fixed.
 6. Each audit's numbers start again from 1, so the fixes name the audit too:
-   the fourth audit's B-2 is "(audit 4 B-2)" in code comments and commits,
-   and "4B-2" in results.md, which also says what the older numbers mean.
+   the fifth audit's B-2 is "(audit 5 B-2)" in code comments and commits,
+   and "5B-2" in results.md, which also says what the older numbers mean.

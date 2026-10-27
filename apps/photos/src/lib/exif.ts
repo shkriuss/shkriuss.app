@@ -25,19 +25,36 @@ const DATE_TIME = 0x0132;
 const DATE_TIME_ORIGINAL = 0x9003;
 const ASCII = 2;
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+/**
+ * A real HEIF file has a handful of boxes at each level, and up to a few
+ * hundred items (one for each tile of a big picture). A file with more is
+ * made up, and isn't read past these: thousands of tiny boxes took seconds
+ * and hundreds of MB to read (review of audit 4 F3-3).
+ */
+const MAX_BOXES = 64;
+const MAX_ITEMS = 4096;
 
 /** The date and time a photo was taken, as "YYYY-MM-DDTHH:MM:SS", or null. */
 export function takenFromExif(bytes: Uint8Array): string | null {
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   try {
-    if (bytes.length >= 4 && view.getUint16(0) === SOI) return fromJpeg(bytes, view);
-    if (bytes.length >= 12 && fourCC(view, 4) === 'ftyp') return fromHeif(bytes, view);
-    if (PNG_SIGNATURE.every((byte, index) => bytes[index] === byte)) return fromPng(bytes, view);
-    if (bytes.length >= 12 && fourCC(view, 0) === 'RIFF' && fourCC(view, 8) === 'WEBP') {
-      return fromWebp(bytes, view);
-    }
+    return readTaken(bytes);
   } catch {
     // Every read is checked first; this is only a safety net for a file nobody expected.
+  }
+  return null;
+}
+
+/**
+ * takenFromExif without its safety net: a read past the end throws. Only for
+ * tests, which show that none does.
+ */
+export function readTaken(bytes: Uint8Array): string | null {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (bytes.length >= 4 && view.getUint16(0) === SOI) return fromJpeg(bytes, view);
+  if (bytes.length >= 12 && fourCC(view, 4) === 'ftyp') return fromHeif(bytes, view);
+  if (PNG_SIGNATURE.every((byte, index) => bytes[index] === byte)) return fromPng(bytes, view);
+  if (bytes.length >= 12 && fourCC(view, 0) === 'RIFF' && fourCC(view, 8) === 'WEBP') {
+    return fromWebp(bytes, view);
   }
   return null;
 }
@@ -110,21 +127,31 @@ function* eachBox(view: DataView, start: number, end: number): Generator<Box> {
   }
 }
 
-function fromHeif(bytes: Uint8Array, view: DataView): string | null {
-  let meta: Box | undefined;
-  for (const box of eachBox(view, 0, bytes.length)) {
-    if (box.type === 'meta') {
-      meta = box;
-      break;
-    }
+/** The first box of each of `types` in [start, end), among the first MAX_BOXES. */
+function firstBoxes(
+  view: DataView,
+  start: number,
+  end: number,
+  types: readonly string[],
+): Map<string, Box> {
+  const found = new Map<string, Box>();
+  let seen = 0;
+  for (const box of eachBox(view, start, end)) {
+    if (types.includes(box.type) && !found.has(box.type)) found.set(box.type, box);
+    seen += 1;
+    if (found.size === types.length || seen === MAX_BOXES) break;
   }
+  return found;
+}
+
+function fromHeif(bytes: Uint8Array, view: DataView): string | null {
+  const meta = firstBoxes(view, 0, bytes.length, ['meta']).get('meta');
   // A "full box": its version and flags come first.
   if (!meta || meta.start + 4 > meta.end) return null;
-  const inside = [...eachBox(view, meta.start + 4, meta.end)];
-  const box = (type: string) => inside.find((found) => found.type === type);
-  const id = exifItem(view, box('iinf'));
+  const inside = firstBoxes(view, meta.start + 4, meta.end, ['iinf', 'iloc', 'idat']);
+  const id = exifItem(view, inside.get('iinf'));
   if (id === null) return null;
-  const place = itemPlace(view, box('iloc'), id, box('idat'));
+  const place = itemPlace(view, inside.get('iloc'), id, inside.get('idat'));
   if (!place) return null;
   const [start, length] = place;
   if (length < 4 || start + length > bytes.length) return null;
@@ -140,7 +167,15 @@ function fromHeif(bytes: Uint8Array, view: DataView): string | null {
 function exifItem(view: DataView, iinf: Box | undefined): number | null {
   if (!iinf || iinf.start + 4 > iinf.end) return null;
   const countSize = view.getUint8(iinf.start) === 0 ? 2 : 4;
+  if (iinf.start + 4 + countSize > iinf.end) return null;
+  const count = Math.min(
+    countSize === 2 ? view.getUint16(iinf.start + 4) : view.getUint32(iinf.start + 4),
+    MAX_ITEMS,
+  );
+  let seen = 0;
   for (const infe of eachBox(view, iinf.start + 4 + countSize, iinf.end)) {
+    if (seen === count) break;
+    seen += 1;
     if (infe.type !== 'infe' || infe.start + 4 > infe.end) continue;
     // Versions 2 and 3 have an item type; older ones don't name Exif.
     const version = view.getUint8(infe.start);
@@ -185,9 +220,15 @@ function itemPlace(
     at += size;
     return value;
   };
+  // Each piece (extent) of an item is an index, an offset and a length. One
+  // of no bytes at all can't say where anything is, and let a crafted file
+  // make the reader go round 65,535 times an item, reading nothing: minutes
+  // for a small file. Other items' pieces are stepped over, not read.
+  const extentSize = indexSize + offsetSize + lengthSize;
+  if (extentSize === 0) return null;
   const count = read(version < 2 ? 2 : 4);
   if (count === null) return null;
-  for (let item = 0; item < count; item += 1) {
+  for (let item = 0; item < Math.min(count, MAX_ITEMS); item += 1) {
     const itemId = read(version < 2 ? 2 : 4);
     const method = version === 0 ? 0 : read(2);
     const reference = read(2);
@@ -195,16 +236,17 @@ function itemPlace(
     const extents = read(2);
     if (itemId === null || method === null || reference === null) return null;
     if (base === null || extents === null) return null;
-    let first: [number, number] | null = null;
-    for (let extent = 0; extent < extents; extent += 1) {
-      if (indexSize > 0 && read(indexSize) === null) return null;
-      const offset = read(offsetSize);
-      const length = read(lengthSize);
-      if (offset === null || length === null) return null;
-      if (extent === 0) first = [base + offset, length];
+    if (itemId !== id) {
+      // Past the box, the next read gives up.
+      at += extents * extentSize;
+      continue;
     }
-    if (itemId !== id) continue;
-    if (!first || extents !== 1 || reference !== 0) return null;
+    if (extents !== 1 || reference !== 0) return null;
+    if (indexSize > 0 && read(indexSize) === null) return null;
+    const offset = read(offsetSize);
+    const length = read(lengthSize);
+    if (offset === null || length === null) return null;
+    const first: [number, number] = [base + offset, length];
     const construction = method & 0xf;
     if (construction === 0) return first;
     // In the meta box's own data.

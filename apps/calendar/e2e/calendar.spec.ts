@@ -51,6 +51,35 @@ test('moves “today” along at midnight while it stays open', async ({ page })
   await expect(upcoming(page).getByRole('button')).toHaveText([/Next week’s run/]);
 });
 
+test('moves the chosen day along at midnight, also after a redraw that came first', async ({
+  page,
+}) => {
+  // A change from another tab just after midnight drew the page again with
+  // the new "today", and the check that moves the chosen day along then took
+  // the day for unchanged: yesterday stayed chosen (audit 4 J-11).
+  await page.clock.setFixedTime(new Date('2026-10-18T00:00:05'));
+  const other = await page.context().newPage();
+  await other.goto('/');
+  await newEvent(other, 'Breakfast');
+  await save(other);
+  await expect(editor(other)).toBeHidden();
+  await other.close();
+  // Drawn again here: Sunday is today, and Saturday still chosen.
+  await expect(day(page, /^Sunday, October 18, 2026, today/)).toHaveAttribute(
+    'aria-current',
+    'date',
+  );
+  await expect(day(page, /^Saturday, October 17, 2026/)).toHaveAttribute('aria-pressed', 'true');
+
+  await page.clock.runFor('01:00');
+  await expect(page.locator('[data-day-heading]')).toHaveText('Today, Sunday, October 18');
+  await expect(day(page, /^Sunday, October 18, 2026, today/)).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await expect(dayList(page).getByRole('button')).toHaveText([/Breakfast/]);
+});
+
 test('in a Windows contrast theme, the chosen day and event dots still show', async ({ page }) => {
   // Contrast themes replace backgrounds with the theme's own colours (audit G-6).
   await seed(page, [{ startDate: '2026-10-20', endDate: '2026-10-20' }]);
@@ -142,7 +171,7 @@ test('edits and deletes an event, with a confirmation', async ({ page }) => {
     .click();
   await editor(page).getByRole('button', { name: 'Delete' }).click();
   const confirm = page.getByRole('dialog', { name: 'Delete this event?' });
-  await expect(confirm).toContainText('“Dentist check-up” will be removed.');
+  await expect(confirm).toContainText('“Dentist check-up” will be removed. This can’t be undone.');
   await checkA11y(page, 'delete dialog');
 
   // Cancel goes back to editing.
@@ -263,6 +292,18 @@ test('an event deleted elsewhere stays deleted after Save with no change, or Del
     page.getByRole('status').filter({ hasText: 'Dentist was already deleted.' }),
   ).toBeAttached();
   await expect(page.getByText('Nothing planned on this day.')).toBeVisible();
+});
+
+test('an editor that can’t load asks for a reload', async ({ page, guard }) => {
+  // It loads the first time it opens. After an update while the page was
+  // open, its old file is gone: "Please try again" couldn't help (audit 4 J-10).
+  guard.allowConsole('net::ERR_FAILED');
+  await page.route('**/_astro/event-editor.*.js', (route) => route.abort());
+  await page.getByRole('button', { name: 'New event' }).click();
+  await expect(page.getByRole('alert')).toHaveText(
+    'Calendar couldn’t open the event. Reload the page to get the latest version, then try again.',
+  );
+  await expect(editor(page)).toBeHidden();
 });
 
 test('closing the editor without saving changes nothing', async ({ page }) => {
@@ -487,15 +528,18 @@ test('downloads events as an .ics file', async ({ page }) => {
 });
 
 test('says so when the file can’t be made', async ({ page, guard }) => {
-  // What writes the file loads only when it's needed; here it can't.
+  // What writes the file loads only when it's needed; here it can't. After
+  // an update while the page was open, its old file is gone: "Please try
+  // again" couldn't help (audit 4 J-10).
   guard.allowConsole('net::ERR_FAILED');
   await seed(page, [{ title: 'Dentist' }]);
   await page.route('**/_astro/ics.*.js', (route) => route.abort());
   await page.getByRole('button', { name: 'Download .ics file' }).click();
   await expect(
-    page
-      .getByRole('status')
-      .filter({ hasText: 'Calendar couldn’t make the file. Please try again.' }),
+    page.getByRole('status').filter({
+      hasText:
+        'Calendar couldn’t make the file. Reload the page to get the latest version, then try again.',
+    }),
   ).toBeVisible();
 });
 

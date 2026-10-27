@@ -1,7 +1,8 @@
 /**
  * Checks every built site in apps/<slug>/dist (run `pnpm build` first):
  * CSP safety (nothing inline), per-page size budgets, words running into
- * links, and that every file is small enough for Cloudflare to serve.
+ * links, that every file is small enough for Cloudflare to serve, and that
+ * every script is written in JavaScript Safari 16.4 reads (ES2022).
  *
  *   pnpm check:dist
  */
@@ -15,6 +16,7 @@ import {
   pageAssets,
   scriptsLoaded,
   spacingProblems,
+  syntaxProblem,
 } from './lib/dist-checks.ts';
 
 const repoRoot = new URL('..', import.meta.url).pathname;
@@ -66,6 +68,12 @@ for (const slug of sites) {
     rows.push(`✗ ${slug}: ${problem}`);
     failures += 1;
   }
+  for (const { path } of files.filter((file) => /\.m?js$/.test(file.path))) {
+    const problem = syntaxProblem(readFileSync(join(dist, path), 'utf8'));
+    if (problem === null) continue;
+    rows.push(`✗ ${slug}/${path} ${problem}`);
+    failures += 1;
+  }
 }
 
 console.log(rows.join('\n'));
@@ -74,5 +82,5 @@ if (failures > 0) {
   process.exit(1);
 }
 console.log(
-  '\nAll pages are CSP-safe and within their size budgets, and every file can be served.',
+  '\nAll pages are CSP-safe and within their size budgets, every file can be served, and every script is written in JavaScript Safari 16.4 reads.',
 );
