@@ -4,7 +4,7 @@
 import type { Page } from '@playwright/test';
 import { paste } from '../../../tests/e2e/clipboard.ts';
 import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
-import { fillStorage, seedStores } from '../../../tests/e2e/storage.ts';
+import { fillStorage, readStore, seedStores } from '../../../tests/e2e/storage.ts';
 import { SHELF_VERSION, type Item } from '../src/lib/items.ts';
 
 const form = (page: Page) => page.getByRole('dialog', { name: /^(New|Edit) item$/ });
@@ -161,6 +161,10 @@ test('changes and deletes an item, with a confirmation', async ({ page }) => {
   await form(page).getByRole('button', { name: 'Delete' }).click();
   const confirm = page.getByRole('dialog', { name: 'Delete this item?' });
   await expect(confirm).toContainText('“Running shoes” will be removed.');
+  // Read out with its title, so a screen reader hears what goes (audit 5 G-3).
+  await expect(confirm).toHaveAccessibleDescription(
+    '“Running shoes” will be removed. This can’t be undone.',
+  );
   await confirm.getByRole('button', { name: 'Cancel' }).click();
   await expect(form(page)).toBeVisible();
   await form(page).getByRole('button', { name: 'Delete' }).click();
@@ -237,6 +241,51 @@ test('says so when the item is deleted on another device while “Delete this it
   await expect(names(page)).toHaveCount(0);
 });
 
+/** Deletes an item in another tab (what a sync from another device does too). */
+async function deleteElsewhere(page: Page, name: string): Promise<void> {
+  const other = await page.context().newPage();
+  await other.goto('/');
+  await other.getByRole('button', { name: `Edit ${name}` }).click();
+  await form(other).getByRole('button', { name: 'Delete' }).click();
+  await other
+    .getByRole('dialog', { name: 'Delete this item?' })
+    .getByRole('button', { name: 'Delete' })
+    .click();
+  await expect(other.getByRole('button', { name: `Edit ${name}` })).toHaveCount(0);
+  await other.close();
+}
+
+test('an item deleted elsewhere stays deleted after Save with no change', async ({ page }) => {
+  // Save put it back, everywhere once it synced, as Calendar's and Tasks'
+  // did before audit 4 F1-3 (audit 5 F3-1).
+  await seed(page, [{ name: 'Running shoes', brand: 'ASICS', price: 250 }]);
+  await page.getByRole('button', { name: 'Edit Running shoes' }).click();
+  await deleteElsewhere(page, 'Running shoes');
+  await expect(names(page)).toHaveCount(0);
+  await save(page);
+  await expect(form(page)).toBeHidden();
+  await expect(
+    page.getByRole('alert').filter({
+      hasText:
+        '“Running shoes” was deleted on another device. It stays deleted: nothing in it was changed.',
+    }),
+  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Add item' })).toBeFocused();
+  await expect(names(page)).toHaveCount(0);
+  expect((await readStore<{ items: unknown[] }>(page, 'shelf'))?.data.items).toEqual([]);
+
+  // With a change made here, it comes back: a change wins over a deletion.
+  await seed(page, [{ name: 'Running shoes', brand: 'ASICS', price: 250 }]);
+  await page.getByRole('button', { name: 'Edit Running shoes' }).click();
+  await deleteElsewhere(page, 'Running shoes');
+  await form(page).getByLabel('Notes (optional)').fill('Comfy');
+  await save(page);
+  await expect(form(page)).toBeHidden();
+  await expect(names(page)).toHaveText(['Running shoes']);
+  await expect(card(page, 'Running shoes').locator('[data-notes]')).toHaveText('Comfy');
+  await expect(card(page, 'Running shoes').locator('[data-price]')).toHaveText(/250\.00$/);
+});
+
 test('finds items by search, category, how you like them, and brand', async ({ page }) => {
   await seed(page, [
     { name: 'Greek yogurt', brand: 'Fage', opinion: 'love', price: 4.5 },
@@ -251,6 +300,9 @@ test('finds items by search, category, how you like them, and brand', async ({ p
   await filter(page, 'Search').fill('eu 43');
   await expect(names(page)).toHaveText(['Running shoes']);
   await expect(page.locator('[data-count]')).toHaveText('1 of 4 items');
+  // The category's name counts too, as the badge shows it (audit 5 F3-10).
+  await filter(page, 'Search').fill('personal care');
+  await expect(names(page)).toHaveText(['Face cream']);
   await filter(page, 'Search').fill('');
 
   await filter(page, 'Category').selectOption({ label: 'Personal care' });
