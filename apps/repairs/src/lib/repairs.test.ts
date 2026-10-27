@@ -865,6 +865,35 @@ describe('hours worked and costs', () => {
     expect(summaries.map((summary) => summary.cost)).toEqual([null, 50, null]);
   });
 
+  // Audit 5 F2-1: big sums are rounded by their digits now, as Trades' are,
+  // which stays exact however big they get (multiplying by a million first
+  // isn't above about 9 billion). At Repairs' own limits that never showed,
+  // so this pins it: 3,000 repairs at the biggest costs and hours add up to
+  // the cent.
+  it('adds up the biggest hours and costs exactly, by day and by vehicle', () => {
+    const engine = { name: 'Engine', number: '', quantity: 9999.5, price: 999_999.98 };
+    const costly = Array.from({ length: LIMITS.repairs }, (_, index) =>
+      repair({ id: `r${index}`, hours: 999.99, labour: LIMITS.money - 0.01, parts: [engine] }),
+    );
+    // 9,999.5 × $999,999.98 is $9,999,499,800.01; with the labour, $10,999,499,800.00 each.
+    expect(partCost(engine)).toBe(9_999_499_800.01);
+    expect(repairCost(costly[0] as Repair)).toEqual({
+      parts: 9_999_499_800.01,
+      labour: 999_999_999.99,
+      total: 10_999_499_800,
+    });
+    const all = totals(costly);
+    expect(all).toEqual({ hours: 2_999_970, cost: 32_998_499_400_000 });
+    expect(byDay(costly).map((day) => totals(day.repairs))).toEqual([all]);
+    const summary = vehicleSummaries(vehicles, repairs(...costly)).find(
+      (entry) => entry.vehicle.id === 'b105',
+    );
+    expect(summary?.cost).toBe(all.cost);
+    expect(formatMoney(all.cost as number, 'USD', { locale: 'en-US' })).toBe(
+      '$32,998,499,400,000.00',
+    );
+  });
+
   it('at the limits, looks at each repair once for every vehicle’s summary (audit 4 F2-2)', () => {
     // Looking through every repair for each vehicle froze the page for most
     // of a second at every change, with 3,000 repairs on 500 buses.

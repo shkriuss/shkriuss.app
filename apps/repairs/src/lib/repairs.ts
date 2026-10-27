@@ -730,8 +730,17 @@ export function byDay(repairs: readonly Repair[]): Day[] {
 
 // ---------- Hours and costs ----------
 
-/** Sums without floating-point crumbs (0.1 + 0.2 is 0.3). */
-const tidy = (value: number): number => Math.round(value * 1e6) / 1e6;
+/**
+ * Sums without floating-point crumbs (0.1 + 0.2 is 0.3), to 6 decimals.
+ * Multiplying by a million and rounding is exact only while the product is
+ * well within a number's 53 bits (below a billion here, with room to
+ * spare): Trades' version of it left crumbs that could never be closed
+ * (audit 5 F2-1). Bigger sums, like a fleet's costs, are rounded by their
+ * digits instead (roundDecimal), exact at any size but slower, and every
+ * repair's costs are added up at every change.
+ */
+const tidy = (value: number): number =>
+  Math.abs(value) < 1e9 ? Math.round(value * 1e6) / 1e6 : roundDecimal(value, 6);
 
 /** An amount as it's shown in `currency`: to the cent, or to the yen (no decimals). */
 const shown = (amount: number, currency: Currency): number =>

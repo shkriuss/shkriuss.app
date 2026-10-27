@@ -21,7 +21,10 @@ Your trading journal: log your trades and see what works. Lives at
     (`periodSummary`). The form takes prices
     and quantities up to a trillion (`LIMITS.number`); a trade restored from
     a backup or synced can be bigger (older data must stay readable), and a
-    result too big to work out shows as "—" (`formatResult`).
+    result too big to work out shows as "—" (`formatResult`). Quantities and
+    results are rounded to 8 decimals in a way that stays exact however big
+    they are (`tidy`), so a trade of billions of tokens closed in parts
+    leaves nothing "still open" (audit 5 F2-1).
   - Numbers are read the way the person's language writes them
     (`parseDecimal`), but one comma or point before exactly three digits
     ("149,853", "1.500") could be either sign: the form asks which number

@@ -27,6 +27,7 @@ import {
   decimalText,
   formatMoney,
   parseDecimal,
+  roundDecimal,
   whichAmount,
   type Currency,
   type MoneyOptions,
@@ -759,8 +760,19 @@ export const roomNote = (count: number, locale?: string): string | null =>
 
 // ---------- Results ----------
 
-/** Rounds away the tiny errors of decimal sums (0.1 + 0.2). */
-const tidy = (value: number): number => Math.round(value * 1e8) / 1e8;
+/**
+ * Rounds to 8 decimals, away the tiny errors of decimal sums (0.1 + 0.2).
+ * Multiplying by 100,000,000 and rounding is exact only while the product
+ * is well within a number's 53 bits (below ten million here, with room to
+ * spare). Above that it left crumbs: 123,456,789,012 tokens closed in two
+ * parts kept 0.00001526 "still open" for good, and "Delete a year" then kept
+ * its parts for ever (audit 5 F2-1). Bigger numbers are rounded by their
+ * digits instead (roundDecimal), exact at any size but twenty times slower,
+ * and the results of thousands of trades are worked out at every change.
+ * Never -0 either way.
+ */
+const tidy = (value: number): number =>
+  Math.abs(value) < 1e7 ? Math.round(value * 1e8) / 1e8 || 0 : roundDecimal(value, 8);
 
 export const isOpen = (trade: Trade): boolean => trade.exitPrice === null;
 

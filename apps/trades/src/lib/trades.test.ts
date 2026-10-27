@@ -412,6 +412,75 @@ describe('closing part of a trade', () => {
     expect(overClosed(open, partsOf(after.trades))).toBe(0);
   });
 
+  // Audit 5 F2-1: rounding by multiplying by 100,000,000 was inexact above
+  // about 90 million, so a trade of billions of tokens closed in two parts
+  // kept a crumb (0.00001526) "still open" for good: it stayed under "Open
+  // trades", "Delete a year" kept its parts for ever, and the spreadsheet had
+  // a row for the crumb.
+  it('closes a trade of billions of tokens in parts, leaving nothing open', () => {
+    const lot = trade({
+      id: 'lot',
+      symbol: 'BABYDOGE',
+      entryDate: '2024-01-05',
+      entryPrice: 1.5e-9,
+      quantity: 123_456_789_012,
+      exitDate: null,
+      exitPrice: null,
+    });
+    /** "Close" on the page: `quantity` as typed, or null for all that's shown as still open. */
+    const closeOnPage = (
+      whole: Trade,
+      from: TradesState,
+      quantity: string | null,
+      newId: string,
+      exitDate: string,
+    ): TradesState => {
+      const { form: closing, closeQuantity } = toCloseForm(whole, partsOf(from.trades), 'en-US');
+      const read = readClose(
+        { ...closing, exitDate, exitPrice: '0.000000002' },
+        quantity ?? closeQuantity,
+        from,
+        { id: whole.id, newId },
+        'en-US',
+      );
+      expect(read.problems).toBeUndefined();
+      return closePart(from, read.trade as Trade, read.rest as Trade);
+    };
+    const first = closeOnPage(lot, state(lot), '50000000000', 'p1', '2024-02-01');
+    expect(openQuantity(lot, partsOf(first.trades))).toBe(73_456_789_012);
+    // "Close" again, leaving "Quantity closed" as the form fills it in.
+    const after = closeOnPage(lot, first, null, 'p2', '2024-03-01');
+    expect(openQuantity(lot, partsOf(after.trades))).toBe(0);
+    expect(overClosed(lot, partsOf(after.trades))).toBe(0);
+    expect(openTrades(after)).toEqual([]);
+    // Its parts are the closed trades of 2024: "Delete a year" offers them,
+    // and the trade, closed in parts, goes with them.
+    expect(closedYears(after)).toEqual([{ year: '2024', count: 2, kept: 0 }]);
+    expect(removeClosedYear(after, '2024').trades).toEqual([]);
+    // The spreadsheet: a row for each part, none for anything "still open".
+    const rows = toCsv(after, 'en-US').split('\r\n').slice(1, -1);
+    expect(rows.map((row) => row.split(',')[4])).toEqual(['50000000000', '73456789012']);
+    // Changing the trade (its setup, say) is fine: it holds what its parts closed, exactly.
+    const changed = readChange(
+      { ...toForm(lot, 'en-US'), setup: 'Meme' },
+      after,
+      { id: 'lot', newId: 'n' },
+      'en-US',
+    );
+    expect(changed.trade?.setup).toBe('Meme');
+    expect(changed.parts?.map((part) => part.setup)).toEqual(['Meme', 'Meme']);
+
+    // The most the form takes, closed 1 at a time: no crumb either.
+    const most = trade({ ...lot, id: 'most', quantity: 999_999_999_999 });
+    const one = closeOnPage(most, state(most), '1', 'q1', '2024-02-01');
+    expect(openQuantity(most, partsOf(one.trades))).toBe(999_999_999_998);
+    const rest = closeOnPage(most, one, null, 'q2', '2024-03-01');
+    expect(openQuantity(most, partsOf(rest.trades))).toBe(0);
+    expect(openTrades(rest)).toEqual([]);
+    // Small quantities still add up without decimal crumbs.
+    expect(openQuantity(trade({ ...lot, id: 's', quantity: 0.3 }), new Map([['s', { quantity: 0.1, fees: 0 }]]))).toBe(0.2);
+  });
+
   it('says what’s wrong', () => {
     expect(close(closeForm, '').problems).toEqual({
       closeQuantity: 'Enter how many you closed.',
