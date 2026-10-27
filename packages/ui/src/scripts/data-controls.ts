@@ -19,6 +19,7 @@ import {
 } from '@shkriuss/storage/backup';
 import { DATE_LOCALE } from '../lib/locale.ts';
 import { focusProblem } from './problem.ts';
+import { forgetReminderChecks } from './reminder-checks.ts';
 import { setBusy } from './busy.ts';
 
 /** Backup files bigger than this are turned down (apps save far less). */
@@ -299,8 +300,10 @@ export function mountDataControls(section: HTMLElement): void {
     // says so) once it has reloaded.
     const push = isPushEnabled() || isPushDeletePending() ? disablePush() : Promise.resolve(true);
     // Everything on this device goes now, without waiting for the network
-    // (audit G-2). Sync stops first, so the deletion doesn't reach the other devices.
+    // (audit G-2). Sync stops first, so the deletion doesn't reach the other
+    // devices. The apps' last reminder check goes too (audit 5 D-1).
     stopSync();
+    forgetReminderChecks();
     deleteAll();
     // Files like photos too, then reload so the app starts fresh from empty storage.
     void deleteAllFiles()

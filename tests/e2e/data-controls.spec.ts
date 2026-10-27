@@ -54,6 +54,55 @@ test('an app that saves data shows “Your data”', async ({ page }, testInfo) 
   await expect(controls.getByRole('button', { name: 'Delete all data' })).toBeVisible();
 });
 
+test('“Delete all data” also forgets what this device kept for itself (audit 5 D-1)', async ({
+  page,
+}) => {
+  // What sync and reminders keep on this device under keys backups leave
+  // out: the sync state after sync was turned off, its file lists, and the
+  // apps' shared last reminder check, which "Delete all data" left behind.
+  await page.evaluate(() => {
+    localStorage.setItem(
+      'shkriuss-device:sync',
+      JSON.stringify({
+        secret: null,
+        code: null,
+        remote: null,
+        known: {},
+        dirty: false,
+        base: null,
+        last: 1_700_000_000_000,
+        serverTime: null,
+        connected: null,
+        previous: [],
+        waiting: {},
+      }),
+    );
+    localStorage.setItem(
+      'shkriuss-device:sync-files',
+      '{"uploads":[],"removals":[],"checked":null}',
+    );
+    localStorage.setItem(
+      'shkriuss-device:reminders-checked',
+      JSON.stringify({ stamp: '2026-10-27T09:41', at: Date.now() }),
+    );
+  });
+  await page.getByRole('button', { name: 'Delete all data' }).click();
+  const reloaded = page.waitForEvent('load', { timeout: 10_000 });
+  await page
+    .getByRole('dialog', { name: 'Delete all data?' })
+    .getByRole('button', { name: 'Delete everything' })
+    .click();
+  await reloaded;
+  const left = await page.evaluate(() =>
+    Object.keys(localStorage)
+      .filter((key) => key.startsWith('shkriuss'))
+      .sort(),
+  );
+  // Only a note that the notification server still has this device's
+  // reminders to delete may stay, when it couldn't be reached (not here).
+  expect(left.filter((key) => key !== 'shkriuss-device:push-delete')).toEqual([]);
+});
+
 test.describe('backing up and restoring', () => {
   test.beforeEach(({ page: _ }, testInfo) => {
     test.skip(

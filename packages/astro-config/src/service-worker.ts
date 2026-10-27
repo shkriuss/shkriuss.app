@@ -19,8 +19,8 @@
  *   kept in PREVIOUS_CACHE until the next version. Caches an app manages
  *   itself (names not starting with "shkriuss-") are kept.
  * - Files under /on-demand/ are not saved: they're big, and an app downloads
- *   them only when the person asks (e.g. Grammar's Deep check model, about
- *   385 MB). The app saves them in its own cache, and they're served from
+ *   them only when the person asks (e.g. Grammar's Deep check model,
+ *   381 MB). The app saves them in its own cache, and they're served from
  *   there like any other saved file (docs/adr/0012).
  * - Every saved file is served with the site's security policy now. A file
  *   saved under an older one (the headers changed, the file didn't) would
