@@ -226,6 +226,20 @@ export function mountHabits(root: Document): void {
     roomText.textContent = room ?? '';
   }
 
+  /**
+   * Today, read afresh at a tap. The page looks for a new day once a minute,
+   * so for up to a minute after midnight "today" was still yesterday, and
+   * "Done today" ticked yesterday (audit 5 F1-7).
+   */
+  function todayNow(): IsoDate {
+    const now = today();
+    if (now !== day) {
+      day = now;
+      render();
+    }
+    return now;
+  }
+
   // ---------- Adding ----------
 
   form.addEventListener('submit', (event) => {
@@ -261,6 +275,7 @@ export function mountHabits(root: Document): void {
       openEditor(habit);
       return;
     }
+    todayNow();
     const done = !doneDates(checks, habit.id).has(day);
     // Full: says how to make room (in the notice at the top, read out).
     const problem = done ? checksProblem(checks) : undefined;
@@ -301,6 +316,8 @@ export function mountHabits(root: Document): void {
   });
 
   function openEditor(habit: Habit): void {
+    // The last two weeks to tick end today.
+    todayNow();
     editing = habit.id;
     editName.value = habit.name;
     editName.removeAttribute('aria-invalid');

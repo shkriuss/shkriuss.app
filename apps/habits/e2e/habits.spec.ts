@@ -219,6 +219,26 @@ test('starts a new day while open, keeping the streak', async ({ page }) => {
   await expect(streak(page, 'Stretch')).toHaveText('1-day streak');
 });
 
+test('“Done today” just after midnight ticks the new day', async ({ page }) => {
+  // The page looks for a new day once a minute: a tick at 00:00:10 went on
+  // yesterday, and a minute later today showed as not done (audit 5 F1-7).
+  await page.clock.setSystemTime(new Date('2026-10-19T23:59:40+02:00'));
+  await page.reload();
+  await addHabit(page, 'Stretch');
+  await expect(page.locator('[data-today]')).toHaveText('Monday, October 19');
+  await page.clock.pauseAt(new Date('2026-10-20T00:00:10+02:00'));
+  await doneToday(page, 'Stretch').click();
+  await expect(page.locator('[data-today]')).toHaveText('Tuesday, October 20');
+  await expect(doneToday(page, 'Stretch')).toHaveAttribute('aria-pressed', 'true');
+  await expect(streak(page, 'Stretch')).toHaveText('1-day streak');
+  // Still so once the page notices the new day by itself.
+  await page.clock.runFor('01:00');
+  await expect(doneToday(page, 'Stretch')).toHaveAttribute('aria-pressed', 'true');
+  await expect(card(page, 'Stretch').locator('[data-week-summary]')).toHaveText(
+    'Last 7 days: done 1 time.',
+  );
+});
+
 test('deletes the check marks from a year, to make room', async ({ page }) => {
   // Read every day since 20 December 2025, up to yesterday (audit F1-5).
   const read: Habit = { id: 'read', name: 'Read', days: [...EVERY_DAY] };

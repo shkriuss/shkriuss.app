@@ -489,7 +489,20 @@ export function mountTasks(root: Document): void {
     addInput.removeAttribute('aria-invalid');
   });
 
+  /**
+   * Today, read afresh at a tap. The page looks for a new day once a minute,
+   * so for up to a minute after midnight "today" was still yesterday, and a
+   * repeating task ticked off then got today as its next date (audit 5 F1-7).
+   */
+  function todayNow(): void {
+    const now = todayOf();
+    if (now === day) return;
+    day = now;
+    render();
+  }
+
   function markDone(task: Task): void {
+    todayNow();
     // Where focus goes once it leaves the list: the next task, or the one before.
     const rows = [...groupsBox.querySelectorAll<HTMLElement>('[data-id]')];
     const index = rows.findIndex((row) => row.dataset['id'] === task.id);

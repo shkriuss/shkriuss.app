@@ -202,6 +202,27 @@ test('repeats every 2 weeks, or however often', async ({ page }) => {
   await expect(every).toHaveValue('2');
 });
 
+test('a repeating task ticked off just after midnight moves to tomorrow', async ({ page }) => {
+  // The page looks for a new day once a minute: ticked off at 00:00:10, a
+  // daily task got the new day as its next date, so a minute later it was
+  // "Today" again (audit 5 F1-7).
+  await page.clock.setFixedTime(new Date('2026-10-19T23:59:40+04:00'));
+  await seed(page, [{ title: 'Stretch', date: '2026-10-19', repeat: 'daily' }]);
+  await expect(page.locator('[data-group-title]')).toHaveText(['Today']);
+  await page.clock.setFixedTime(new Date('2026-10-20T00:00:10+04:00'));
+  await box(page, 'Stretch').click();
+  const stretch = page
+    .locator('[data-groups] [data-id]')
+    .filter({ has: page.getByRole('button', { name: 'Edit Stretch' }) });
+  await expect(stretch.locator('[data-due]')).toHaveText('Tomorrow');
+  await expect(page.locator('[data-group-title]')).toHaveText(['Tomorrow']);
+  // Still tomorrow once the page notices the new day by itself.
+  await page.clock.runFor('01:00');
+  await expect(stretch.locator('[data-due]')).toHaveText('Tomorrow');
+  await stretch.getByRole('button', { name: 'Edit Stretch' }).click();
+  await expect(editor(page).getByLabel('Date (optional)')).toHaveValue('2026-10-21');
+});
+
 test('saving the form keeps what changed elsewhere while it was open', async ({ page }) => {
   await seed(page, [
     {
