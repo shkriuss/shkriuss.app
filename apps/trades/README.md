@@ -16,10 +16,19 @@ Your trading journal: log your trades and see what works. Lives at
   - Results for a period (all time, this or last month, this year; by the
     day trades were exited): net result, win rate, profit factor (won for
     each 1 lost), average win and loss, best and worst trade, average R
-    (`stats`), and the same by setup and by month. The form takes prices
+    (`stats`), and the same by setup and by month. Choosing a period reads
+    out how many trades were closed in it and their net result
+    (`periodSummary`). The form takes prices
     and quantities up to a trillion (`LIMITS.number`); a trade restored from
     a backup or synced can be bigger (older data must stay readable), and a
     result too big to work out shows as "—" (`formatResult`).
+  - Numbers are read the way the person's language writes them
+    (`parseDecimal`), but one comma or point before exactly three digits
+    ("149,853", "1.500") could be either sign: the form asks which number
+    is meant. An iPhone's number keypad offers the decimal sign of the
+    phone's region, which may not be the browser language's, and a price
+    can have three decimals (audit 4 F2-10). Fees are asked about the same
+    way, as Budget's amounts are (F2-12).
   - Closing part of a trade (`readClose`): the close form's "Quantity
     closed" is all that's still open unless it's changed. Less than all of
     it adds the part closed as a trade of its own (a new id, that quantity,
@@ -27,8 +36,15 @@ Your trading journal: log your trades and see what works. Lives at
     (`parent`). That trade keeps its quantity (what was bought) and its
     fees: what's still open of it is its quantity less its parts'
     (`openQuantity`), and its fees count with its first part (`openFees`),
-    so none are counted twice. Closing the rest adds a last part; the trade
-    then isn't open, and isn't listed (its parts are the closed trades).
+    so none are counted twice. A part stays closed while its trade is
+    there: to open it again, delete it, and its quantity is open in its
+    trade again. (One opened again and closed in parts of its own made
+    "Delete a year" count what they closed as open again, audit 4 F2-6;
+    parts of parts made before that are kept by "Delete a year".) A part
+    whose trade was deleted (with "Delete a year", when its other parts
+    went) is a trade of its own, and can be opened again like one. Closing the rest adds a last part;
+    the trade then isn't open, and isn't listed (its parts are the closed
+    trades).
     Since closing part never changes the trade itself, a change made to it
     on another device at the same time (a new stop loss, say) can't bring
     back what was closed, and parts closed on two devices both count. If
@@ -53,7 +69,9 @@ Your trading journal: log your trades and see what works. Lives at
     (each part of a trade, and what's still open of it). Text that a
     spreadsheet could read as a formula starts with `'`. The file starts
     with a byte-order mark, so Excel shows text beyond plain English
-    letters (Georgian, "’") as typed.
+    letters (Georgian, "’") as typed. In a language that writes decimals
+    with a comma, cells are split by ";" and numbers written "1,085", as
+    spreadsheets there read them (audit 4 F2-9).
   - Trades keeps up to 3,500 trades, open and closed (`LIMITS.trades`).
     Why not more: each trade is saved on the device, where a browser keeps
     about 5 MB for each site, and with sync on, sync keeps records of its
@@ -74,9 +92,11 @@ Your trading journal: log your trades and see what works. Lives at
     trade is closed (and then the trade goes with them; its parts from other
     years stay, as trades of their own). It says how many that is, and what
     stays, and offers the spreadsheet first. With sync on, they're
-    deleted on the other devices too. Once more than 90% of the 3,500 are
-    used, a note at the top says how many are left and points to it
-    (`roomNote`).
+    deleted on the other devices too. If that year changes on another
+    device or tab while the dialog is open, it closes and says so, rather
+    than deleting another year or more than it said. Once more than 90% of
+    the 3,500 are used, a note at the top says how many are left and points
+    to it (`roomNote`).
   - The currency (`shkriuss:trades-settings`) is only for showing amounts:
     nothing is converted. It's saved only once changed (US dollars until
     then), so a new device has nothing to win over another's when they

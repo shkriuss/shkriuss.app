@@ -85,6 +85,22 @@ describe('units', () => {
     expect(amountProblem('250', 'ml', 'drink')).toBeUndefined();
     expect(amountProblem(' 64 ', 'oz', 'goal')).toBeUndefined();
   });
+
+  // Audit 4 G-1: the fields were type="number", which dropped a comma as it
+  // was typed: "8,5" fl oz was logged as 85, and "16,9" (a 500 ml bottle)
+  // was refused as more than 100.
+  it('reads a decimal comma, as many keyboards type it', () => {
+    for (const locale of ['en-US', 'de-DE']) {
+      expect(amountProblem('8,5', 'oz', 'drink', locale), locale).toBeUndefined();
+      expect(typedMl('8,5', 'oz', locale), locale).toBe(typedMl('8.5', 'oz', 'en-US'));
+      expect(amountProblem('16,9', 'oz', 'drink', locale), locale).toBeUndefined();
+      expect(typedMl('16,9', 'oz', locale), locale).toBe(500);
+    }
+    // Thousands as the language writes them.
+    expect(typedMl('1,500', 'ml', 'en-US')).toBe(1500);
+    expect(typedMl('1.500', 'ml', 'de-DE')).toBe(1500);
+    expect(amountProblem('8,5,5', 'oz', 'drink', 'en-US')).toBe('Enter an amount.');
+  });
 });
 
 describe('settings', () => {

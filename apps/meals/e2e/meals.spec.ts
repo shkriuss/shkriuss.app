@@ -1,6 +1,7 @@
 // Meals' own tests. Shared checks (accessibility, security headers, offline
 // support, privacy, sync) already run for every app from tests/e2e/.
 // The locale is en-US, so weeks start on Sunday: "this week" is 18–24 October.
+import { paste } from '../../../tests/e2e/clipboard.ts';
 import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
 import { readStore } from '../../../tests/e2e/storage.ts';
 import {
@@ -125,7 +126,7 @@ test('says so when the plan is too full to copy last week, and lets go of old me
       { id: 'old', date: '2025-10-01', slot: 'dinner', name: 'Stew' },
       { id: 'a', date: '2026-10-12', slot: 'dinner', name: 'Lentil soup' },
       { id: 'b', date: '2026-10-16', slot: 'lunch', name: 'Salad' },
-      ...Array.from({ length: 4998 }, (_, index) => ({
+      ...Array.from({ length: 1998 }, (_, index) => ({
         id: `later-${index}`,
         date: '2026-12-01',
         slot: 'dinner' as const,
@@ -137,14 +138,14 @@ test('says so when the plan is too full to copy last week, and lets go of old me
     const plan = (await readStore<{ planned: { id: string }[] }>(page, 'meal-plan'))?.data;
     return { count: plan?.planned.length, old: plan?.planned.some((e) => e.id === 'old') };
   };
-  expect(await saved()).toEqual({ count: 5000, old: false });
+  expect(await saved()).toEqual({ count: 2000, old: false });
 
   // Full: nothing is copied, and the notice at the top says why.
   const copy = page.getByRole('button', { name: 'Copy last week’s meals' });
   await copy.click();
   const notice = page.locator('[data-problem-text]');
   await expect(notice).toHaveText(
-    'The plan holds 5,000 meals at most, so nothing was copied. Remove some old ones first.',
+    'The plan holds 2,000 meals at most, so nothing was copied. Remove some old ones first.',
   );
   await expect(notice).toBeVisible();
   await expect(copy).toBeFocused();
@@ -222,6 +223,49 @@ test('a change made in another tab survives a form that was open here', async ({
   await page.getByLabel('Meal', { exact: true }).fill('Lentil soup with bread');
   await planDialog(page).getByRole('button', { name: 'Save' }).click();
   await expect(dayMeals(page, '2026-10-21')).toHaveText([/Lunch\s*Lentil soup with bread/]);
+});
+
+// Audit 4 F2-4: the form stayed open, then saved nothing but said "Changed …",
+// and keyboard focus fell to the top of the page.
+test('says so when what a form is changing is removed in another tab', async ({ page }) => {
+  await newMeal(page, 'Lentil soup', ['Lentils']);
+  await plan(page, '2026-10-21', 'Lentil soup', 'Dinner');
+  await plan(page, '2026-10-22', 'Lentil soup', 'Dinner');
+  const other = await page.context().newPage();
+  await other.clock.setFixedTime(NOW);
+  await other.goto('/');
+
+  // A planned meal, taken off the plan there.
+  const planned = (tab: typeof page, date: string) =>
+    day(tab, date).getByRole('button', { name: /^Lentil soup/ });
+  await planned(page, '2026-10-21').click();
+  await page.getByLabel('For', { exact: true }).selectOption({ label: 'Lunch' });
+  await planned(other, '2026-10-21').click();
+  await planDialog(other).getByRole('button', { name: 'Remove' }).click();
+  await expect(planDialog(page)).toBeHidden();
+  await expect(page.getByRole('alert')).toHaveText(
+    'That meal was taken off the plan on another device.',
+  );
+  await expect(day(page, '2026-10-21').getByText('Nothing planned.')).toBeVisible();
+  // Focus stays in the week, not at the top of the page.
+  await expect(planned(page, '2026-10-22')).toBeFocused();
+  expect((await readStore<{ planned: unknown[] }>(page, 'meal-plan'))?.data.planned).toHaveLength(
+    1,
+  );
+
+  // One of your meals, deleted there.
+  const meals = (tab: typeof page) => tab.locator('[data-meals]');
+  await meals(page).getByRole('button', { name: 'Lentil soup' }).click();
+  await meals(other).getByRole('button', { name: 'Lentil soup' }).click();
+  await mealDialog(other).getByRole('button', { name: 'Delete' }).click();
+  await other
+    .getByRole('dialog', { name: 'Delete this meal?' })
+    .getByRole('button', { name: 'Delete' })
+    .click();
+  await expect(mealDialog(page)).toBeHidden();
+  await expect(page.getByRole('alert')).toHaveText('That meal was deleted on another device.');
+  await expect(meals(page).locator('li')).toHaveCount(0);
+  await other.close();
 });
 
 // Audit 3 G-9: a name button was only as wide as the name.
@@ -332,4 +376,27 @@ test('your meals’ ingredients make the shopping list', async ({ page, context 
   await expect(dayMeals(page, '2026-10-22')).toHaveText([/Lunch\s*lentil soup/]);
   await expect(shoppingNames(page)).toHaveText(['Minced beef', 'Spaghetti', 'Onions']);
   await expect(page.getByRole('button', { name: 'New meal' })).toBeFocused();
+});
+
+// Audit 4 F2-7: the browser kept the start of a long paste without a word.
+test('says when a pasted recipe doesn’t all fit', async ({ page }) => {
+  await page.getByRole('button', { name: 'New meal' }).click();
+  const dialog = mealDialog(page);
+  const notes = dialog.getByLabel('Notes (optional)');
+  await expect(notes).toHaveAccessibleDescription(
+    'How to make it, or where the recipe is. Up to 5,000 characters.',
+  );
+  const text = 'Fry the onions slowly until golden, then add the lentils. '.repeat(90);
+  await paste(notes, text);
+  await expect(notes).toHaveValue(text.slice(0, 5000));
+  const cut =
+    'Only part of that fit. This box takes up to 5,000 characters, so the rest wasn’t added.';
+  await expect(dialog.getByText(cut, { exact: true })).toBeVisible();
+  await expect(
+    dialog.getByRole('alert').filter({ hasText: `Notes (optional): ${cut}` }),
+  ).toBeAttached();
+  // Gone when the form opens again.
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'New meal' }).click();
+  await expect(dialog.getByText(cut, { exact: true })).toBeHidden();
 });

@@ -11,6 +11,7 @@ import { keepFocus } from '@shkriuss/ui/keep-focus';
 import { PAGE_SIZE, shownCount, waitForTyping } from '@shkriuss/ui/long-lists';
 import { reportSave, showProblem } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
+import { watchTextLimits } from '@shkriuss/ui/text-limit';
 import { typedText } from '@shkriuss/ui/typed-text';
 import { site } from 'virtual:shkriuss/site';
 import {
@@ -42,6 +43,7 @@ import {
   openTrades,
   overClosedNote,
   partsOf,
+  periodSummary,
   PERIODS,
   profit,
   readEdited,
@@ -398,8 +400,12 @@ export function mountTrades(root: Document): void {
   const showProblems = (problems: CloseProblems): boolean =>
     showFieldProblems(form, ALL_FIELDS, problems, { focusFirst: true });
 
+  // A paste longer than a box takes is cut by the browser: say so (audit 4 F2-7).
+  const limits = watchTextLimits(form);
+
   function openForm(trade: Trade | undefined, close = false): void {
     editing = trade?.id ?? null;
+    limits.clear();
     closing = close && trade !== undefined && isOpen(trade);
     dialogTitle.textContent = !trade ? 'New trade' : closing ? 'Close trade' : 'Change trade';
     deleteButton.hidden = !trade;
@@ -543,10 +549,14 @@ export function mountTrades(root: Document): void {
   const yearCount = (year: string) =>
     closedYears(state).find((entry) => entry.year === year) ?? { year, count: 0, kept: 0 };
 
+  /** The year the dialog shows, and how many trades it says go. */
+  let shownYear = { year: '', count: 0 };
+
   /** Says what deleting the year chosen removes, and what stays. */
   function showYear(): void {
     const year = yearSelect.value;
     const { count, kept } = yearCount(year);
+    shownYear = { year, count };
     // Parts of a trade still open stay with it (audit 3 F2-2).
     const parts =
       kept === 0
@@ -630,6 +640,10 @@ export function mountTrades(root: Document): void {
     period = PERIODS.find((entry) => entry === periodSelect.value) ?? 'all';
     shown = PAGE_SIZE;
     render();
+    // Every result changed: read out what they are now (audit 4 G-9).
+    announce(
+      periodSummary(period, closedIn(state, period, today()), (amount) => money(amount, true)),
+    );
   });
 
   /** How many closed trades the search finds, for screen readers (audit G-6). */
@@ -670,9 +684,22 @@ export function mountTrades(root: Document): void {
       dialog.close();
       showProblem('That trade was closed on another device.');
     }
+    // The year chosen changed on another device or tab: the dialog closes,
+    // and says why, so its button doesn't delete another year, or more than
+    // it said (audit 4 F2-1).
     if (yearDialog.open) {
-      if (closedYears(state).length === 0) yearDialog.close();
-      else fillYears();
+      const { year, count } = shownYear;
+      const now = yearCount(year).count;
+      if (now === count) fillYears();
+      else {
+        yearDialog.close();
+        deleteYearButton.focus();
+        showProblem(
+          now === 0
+            ? `The closed trades from ${year} were deleted on another device.`
+            : `${year} has ${closedCount(now)} now, after changes on another device. Nothing was deleted.`,
+        );
+      }
     }
     keepFocus(render, newButton);
   }

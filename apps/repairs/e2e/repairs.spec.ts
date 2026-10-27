@@ -2,6 +2,7 @@
 // support, privacy, sync) already run for every app from tests/e2e/.
 import { readFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
+import { paste } from '../../../tests/e2e/clipboard.ts';
 import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
 import { readStore } from '../../../tests/e2e/storage.ts';
 import { LIMITS, REPAIRS_VERSION, type VehiclesState } from '../src/lib/repairs.ts';
@@ -394,6 +395,81 @@ test('deletes a year, after saying what it deletes', async ({ page }) => {
   await expect(vehicleItem(page, 'Bus 12')).toHaveCount(1);
 });
 
+// Audit 4 G-5: "Add a part" added a 31st part without a word, and the
+// problem shown on saving wasn't read out: focus went to "Add a part".
+test('a repair has up to 30 parts, and the form says so', async ({ page }) => {
+  await page.getByRole('button', { name: 'New repair' }).click();
+  const dialog = repairDialog(page);
+  const add = dialog.getByRole('button', { name: 'Add a part' });
+  await expect(add).toHaveAccessibleDescription(`Up to ${LIMITS.parts} parts.`);
+  // A new repair starts with one part.
+  for (let count = 1; count < LIMITS.parts; count += 1) await add.click();
+  await expect(dialog.locator('[data-part-rows] > li')).toHaveCount(LIMITS.parts);
+  await expect(partRow(page, LIMITS.parts).getByLabel('Name')).toBeFocused();
+  await expect(add).toBeHidden();
+  await expect(dialog.getByText(`Up to ${LIMITS.parts} parts.`)).toBeVisible();
+  // One fewer, and it's back.
+  await partRow(page, 3).getByRole('button', { name: 'Remove part 3' }).click();
+  await expect(add).toBeVisible();
+  // The problem with the parts, if there ever is one, is read out by itself.
+  await expect(dialog.locator('[data-error-for="parts"]')).toHaveAttribute('role', 'alert');
+});
+
+// Audit 4 F2-1: "Delete a year…" quietly moved to another year, and its red
+// button then deleted that one; "Delete Bus 105?" deleted repairs added after
+// it said how many go.
+test('deleting a year or a vehicle stops, and says why, when it changes in another tab', async ({
+  page,
+}) => {
+  await seed(page, {
+    vehicles: fleet,
+    repairs: [
+      repair({ date: '2024-03-02' }),
+      repair({ date: '2024-12-31', vehicle: 'b12' }),
+      repair({ work: 'Checked the doors' }),
+      repair({ work: 'New wipers', vehicle: 'b12' }),
+    ],
+  });
+  const other = await page.context().newPage();
+  await other.clock.setFixedTime(NOW);
+  await other.goto('/');
+
+  // The year chosen is deleted there.
+  const deleteYear = page.getByRole('button', { name: 'Delete a year…' });
+  const dialog = yearDialog(page);
+  await deleteYear.click();
+  await expect(dialog.getByRole('button', { name: 'Delete 2 repairs' })).toBeVisible();
+  await other.getByRole('button', { name: 'Delete a year…' }).click();
+  await yearDialog(other).getByRole('button', { name: 'Delete 2 repairs' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole('alert')).toHaveText(
+    'The repairs from 2024 were deleted on another device.',
+  );
+  await expect(deleteYear).toBeFocused();
+  await expect(repairItems(page)).toHaveCount(2);
+
+  // A repair on Bus 105 is added there while "Delete Bus 105?" is open.
+  await vehicleItem(page, 'Bus 105').getByRole('button', { name: 'Edit Bus 105' }).click();
+  await vehicleDialog(page).getByRole('button', { name: 'Delete' }).click();
+  const confirm = page.getByRole('dialog', { name: 'Delete Bus 105?' });
+  await expect(confirm).toContainText('Bus 105 and its 1 repair will be removed.');
+  await other.getByRole('button', { name: 'New repair' }).click();
+  await fillRepair(other, {
+    vehicle: 'Bus 105',
+    mileage: '121000',
+    problem: 'Brake noise',
+    work: 'Replaced the rear pads',
+  });
+  await expect(confirm).toBeHidden();
+  await expect(vehicleDialog(page)).toBeHidden();
+  await expect(page.getByRole('alert')).toHaveText(
+    'Bus 105 has 2 repairs now, after changes on another device. Nothing was deleted.',
+  );
+  await expect(vehicleItem(page, 'Bus 105')).toHaveCount(1);
+  await expect(repairItems(page)).toHaveCount(3);
+  await other.close();
+});
+
 // Audit F2-3: Repairs kept more than fit, and there was no way to make room.
 test('says when Repairs is nearly full, and how to make room', async ({ page }) => {
   // Just over 90% of the repairs Repairs keeps: one a day, back from 2026.
@@ -432,4 +508,98 @@ test('says when Repairs is nearly full, and how to make room', async ({ page }) 
     .click();
   await expect(status(page, /^Deleted \d+ repairs from \d{4}\.$/)).toBeAttached();
   await expect(note).toBeHidden();
+});
+
+// Audit 4 F2-7: the browser kept the start of a long paste without a word.
+test('says when pasted text doesn’t all fit', async ({ page }) => {
+  await page.getByRole('button', { name: 'New repair' }).click();
+  const dialog = repairDialog(page);
+  const damage = dialog.getByLabel('Damage found');
+  await expect(damage).toHaveAccessibleDescription('Up to 2,000 characters.');
+  await expect(dialog.getByLabel('Work done')).toHaveAccessibleDescription(
+    'Up to 2,000 characters.',
+  );
+  const text = 'Front left brake caliper sticking, pads worn unevenly. '.repeat(40);
+  await paste(damage, text);
+  await expect(damage).toHaveValue(text.slice(0, 2000));
+  const cut =
+    'Only part of that fit. This box takes up to 2,000 characters, so the rest wasn’t added.';
+  await expect(dialog.getByText(cut, { exact: true })).toBeVisible();
+  await expect(
+    dialog.getByRole('alert').filter({ hasText: `Damage found: ${cut}` }),
+  ).toBeAttached();
+  // Gone when the form opens again.
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'New repair' }).click();
+  await expect(dialog.getByText(cut, { exact: true })).toBeHidden();
+  await page.keyboard.press('Escape');
+
+  // A vehicle's notes too.
+  await page.getByRole('button', { name: 'Add vehicle' }).click();
+  const notes = vehicleDialog(page).getByLabel('Notes (optional)');
+  await expect(notes).toHaveAccessibleDescription('Up to 500 characters.');
+  await paste(notes, text);
+  await expect(
+    vehicleDialog(page).getByText(
+      'Only part of that fit. This box takes up to 500 characters, so the rest wasn’t added.',
+      { exact: true },
+    ),
+  ).toBeVisible();
+});
+
+test.describe('offline', () => {
+  test.use({ serviceWorkers: 'allow' });
+
+  // Audit 4 J-6: the forms, "Delete a year…" and the photo viewer load the
+  // first time they open, so the page loads less; offline, from the saved copy.
+  test('the forms open offline, loaded the first time they’re used', async ({ page, context }) => {
+    await page.evaluate(async () => {
+      await navigator.serviceWorker.ready;
+    });
+    await page.reload();
+    await expect
+      .poll(() => page.evaluate(() => Boolean(navigator.serviceWorker.controller)))
+      .toBe(true);
+    await context.setOffline(true);
+    await page.reload();
+    await page.getByRole('button', { name: 'New repair' }).click();
+    await expect(repairDialog(page).getByRole('heading', { name: 'New repair' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Add vehicle' }).click();
+    await expect(vehicleDialog(page).getByRole('heading', { name: 'Add vehicle' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Delete a year…' }).click();
+    await expect(status(page, 'There are no repairs to delete.')).toBeVisible();
+    await context.setOffline(false);
+  });
+});
+
+// Audit 4 J-6, from review: the first form opened after each launch got
+// focus only once its file had loaded, after the tap, when an iPhone no
+// longer raises its keyboard.
+test('loads the forms soon after the page, so a tap opens one at once', async ({ page }) => {
+  const loaded = new Set<string>();
+  page.on('request', (request) => {
+    const part = /\/(repair-form|vehicle-form|delete-year|photo-viewer)\.[\w-]+\.js$/.exec(
+      request.url(),
+    )?.[1];
+    if (part) loaded.add(part);
+  });
+  await page.reload();
+  // Before any tap.
+  await expect
+    .poll(() => [...loaded].sort())
+    .toEqual(['delete-year', 'photo-viewer', 'repair-form', 'vehicle-form']);
+  // And ready: the forms add what they say when a paste doesn't fit.
+  await expect(page.locator('#repair-problem-limit')).toBeAttached();
+  await expect(page.locator('#vehicle-notes-limit')).toBeAttached();
+  // Within the tap: the form is open, and the field has focus, before the tap is over.
+  const opened = await page.evaluate(() => {
+    document.querySelector<HTMLElement>('[data-action="new-repair"]')?.click();
+    return {
+      open: document.querySelector<HTMLDialogElement>('[data-repair-dialog]')?.open,
+      focus: document.activeElement?.id,
+    };
+  });
+  expect(opened).toEqual({ open: true, focus: 'repair-vehicle' });
 });

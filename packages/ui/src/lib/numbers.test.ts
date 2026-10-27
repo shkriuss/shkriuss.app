@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   CURRENCIES,
   currencyDigits,
@@ -160,6 +160,47 @@ describe('parseDecimal', () => {
     }
   });
 
+  // Audit 4 F2-10: an iPhone's number keypad offers the decimal sign of the
+  // phone's region, so "149,853" in an English browser may be a price of
+  // 149.853 (with a German region), not 149853.
+  it('with `groupsToo`, asks about one thousands sign before three digits too', () => {
+    const strict = { groupsToo: true };
+    const reads = (locale: string, cases: Record<string, number>) => {
+      for (const [text, value] of Object.entries(cases)) {
+        expect(parseDecimal(text, locale, strict), `${locale} "${text}"`).toBe(value);
+      }
+    };
+    reads('en-US', {
+      '149,853': Number.NaN,
+      '1,500': Number.NaN,
+      '-1,500': Number.NaN,
+      // Clear either way: more or fewer digits, two groups, or both signs.
+      '149.853': 149.853,
+      '149,85': 149.85,
+      '0,853': 0.853,
+      '1,234,567': 1_234_567,
+      '1,234.5': 1234.5,
+      '1500': 1500,
+    });
+    reads('de-DE', { '1.500': Number.NaN, '149,853': 149.853, '1.234,5': 1234.5 });
+    // As with `cents`, a sign that's neither of the locale's own.
+    reads('fr-FR', { '1.500': Number.NaN, '1,500': 1.5 });
+    expect(whichAmount('149,853', 'en-US', strict)).toBe(
+      'Enter 149853 or 149.853 to show which you mean.',
+    );
+    expect(whichAmount('-1,500', 'en-US', strict)).toBe(
+      'Enter -1500 or -1.5 to show which you mean.',
+    );
+    expect(whichAmount('1.500', 'de-DE', strict)).toBe('Enter 1500 or 1,5 to show which you mean.');
+    expect(whichAmount('1.500', 'fr-FR', strict)).toBe('Enter 1500 or 1,5 to show which you mean.');
+    for (const text of ['149.853', '1,234,567', 'abc', '']) {
+      expect(whichAmount(text, 'en-US', strict), text).toBeNull();
+    }
+    // Without it, as before.
+    expect(parseDecimal('149,853', 'en-US')).toBe(149_853);
+    expect(whichAmount('149,853', 'en-US')).toBeNull();
+  });
+
   // Audit F2-10: amounts were shown in the browser's own digits, and those were refused.
   it('reads digits the way the browser shows them', () => {
     for (const locale of ['ar-EG', 'fa-IR', 'bn-BD', 'mr-IN', 'en-US']) {
@@ -265,5 +306,16 @@ describe('formatMoney', () => {
     expect(currencyDigits('USD')).toBe(2);
     expect(currencyDigits('GEL')).toBe(2);
     expect(currencyDigits('JPY')).toBe(0);
+  });
+
+  it('works out a currency’s decimals once (audit 4 F2-2)', () => {
+    // Making a formatter for each amount froze Repairs near its limit.
+    const made = vi.spyOn(Intl, 'NumberFormat');
+    try {
+      for (let time = 0; time < 1000; time += 1) expect(currencyDigits('KWD')).toBe(3);
+      expect(made.mock.calls.length).toBeLessThanOrEqual(1);
+    } finally {
+      made.mockRestore();
+    }
   });
 });

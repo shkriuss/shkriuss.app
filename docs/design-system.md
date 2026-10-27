@@ -80,7 +80,10 @@ point or a comma, read the way the person's language writes thousands, so
 space between digits groups thousands and is checked like a comma, so
 "12 50" isn't a number; with `{ cents: true }`, for amounts kept to the
 cent, a point or comma that could be either before three digits ("1.500"
-in French) isn't read, and `whichAmount` says what to ask;
+in French) isn't read, and `whichAmount` says what to ask; with
+`{ groupsToo: true }`, as in Trades, where prices can have three decimals
+and an iPhone keypad may offer only its region's decimal sign, neither is
+the locale's own thousands sign before three digits ("1,500" in English);
 `parseWhole`, for whole numbers like a mileage; `decimalText`, to fill a
 field with a number so it reads back the same; `roundDecimal`; and
 `formatMoney` with `CURRENCIES` and `currencyDigits`: number fields are
@@ -97,10 +100,10 @@ without minding case, accents or extra spaces: the accents of Latin, Greek
 and Cyrillic letters, while the vowel signs of scripts like Hindi or Thai,
 which are letters, still count),
 `@shkriuss/ui/text-limit` (`watchTextLimit`, for a text box with a
-`maxlength`: browsers keep only the start of a paste that's too long, and
-ignore typing past the limit, without a word, so it says so under the box
-and reads it out; say the limit in the box's hint too, where a paste could
-reach it), `@shkriuss/ui/local-reminders` (notifications while the app is
+`maxlength`, and `watchTextLimits`, for every one in a form: browsers keep
+only the start of a paste that's too long, and ignore typing past the
+limit, without a word, so it says so under the box and reads it out; say
+the limit in the box's hint too, where a paste could reach it), `@shkriuss/ui/local-reminders` (notifications while the app is
 open, with the same texts and the same iPhone and "blocked" cases in every
 app; after the page slept, only ones a few minutes late show, and on the
 night clocks go forward, ones in the skipped hour go off as the clocks

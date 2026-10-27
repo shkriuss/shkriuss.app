@@ -33,10 +33,46 @@ class MemoryStorage implements StorageLike {
   }
 }
 
+/**
+ * navigator.locks as pretend devices have it: one set of locks per device,
+ * as in browsers, where only the tabs of one device share them. The device
+ * asking is the one whose storage the code sees (localStorage), so tabs
+ * sharing a storage share its locks. Only the `ifAvailable` way the sync
+ * client asks.
+ */
+export function deviceLocks(): Navigator {
+  const held = new WeakMap<object, Set<string>>();
+  const locks = {
+    async request(
+      name: string,
+      options: LockOptions,
+      callback: (lock: Lock | null) => Promise<unknown>,
+    ): Promise<unknown> {
+      const device: object = localStorage;
+      const names = held.get(device) ?? new Set<string>();
+      held.set(device, names);
+      if (names.has(name)) {
+        if (options.ifAvailable) return callback(null);
+        throw new Error('Pretend locks only answer at once (ifAvailable).');
+      }
+      names.add(name);
+      try {
+        return await callback({ name, mode: 'exclusive' });
+      } finally {
+        names.delete(name);
+      }
+    },
+  };
+  return new Proxy(navigator, {
+    get: (target, key) => (key === 'locks' ? locks : Reflect.get(target, key, target)),
+  });
+}
+
 /** Stubs what the sync client needs from a browser at `origin`; its requests go to a new server in memory. */
 export function pretendBrowser(origin: string): void {
   const server = memorySync().env;
   const nothing = () => 0;
+  vi.stubGlobal('navigator', deviceLocks());
   vi.stubGlobal('window', {
     setTimeout: nothing,
     clearTimeout: nothing,
@@ -60,6 +96,9 @@ export interface SyncedStoreSetup<T, I extends Identified> {
   migrate?: (old: unknown, version: number) => T | undefined;
   items: (value: T) => readonly I[];
   withItems: (value: T, items: I[]) => T;
+  /** Keeping both versions of an item changed on two devices, as the app does (SyncedStore). */
+  conflictCopy?: (mine: I, theirs: I) => I;
+  keepSame?: boolean | ((value: I) => boolean);
 }
 
 /** An app's key from the account, the same on every device of one person. */
@@ -70,8 +109,12 @@ export class Device<T, I extends Identified> {
   readonly storage = new MemoryStorage();
   readonly store: Store<T>;
   readonly sync: SyncClient;
+  readonly app: string;
+  readonly setup: SyncedStoreSetup<T, I>;
 
   constructor(app: string, secret: Uint8Array<ArrayBuffer>, setup: SyncedStoreSetup<T, I>) {
+    this.app = app;
+    this.setup = setup;
     this.use();
     this.store = createStore<T>({
       key: setup.key,
@@ -89,9 +132,24 @@ export class Device<T, I extends Identified> {
       'shkriuss-device:sync',
       JSON.stringify({ secret: base64url, code: 'K7Q2-M9XD' }),
     );
-    this.sync = createSync({
-      app,
-      stores: [syncedStore({ store: this.store, items: setup.items, withItems: setup.withItems })],
+    this.sync = this.anotherTab();
+  }
+
+  /** The app open in another tab of this device: the same storage, a sync client of its own. */
+  anotherTab(): SyncClient {
+    this.use();
+    const { setup } = this;
+    return createSync({
+      app: this.app,
+      stores: [
+        syncedStore({
+          store: this.store,
+          items: setup.items,
+          withItems: setup.withItems,
+          ...(setup.conflictCopy ? { conflictCopy: setup.conflictCopy } : {}),
+          ...(setup.keepSame === undefined ? {} : { keepSame: setup.keepSame }),
+        }),
+      ],
       onChange: () => undefined,
     });
   }

@@ -25,6 +25,8 @@ export interface Budget {
  * Per-page limits. Raise them only with a good reason (see docs/adr). JS
  * counts every file a page's scripts import before they run (like the shared
  * sync client), which wasn't counted before 35 KB replaced 25 KB (ADR 0007).
+ * What loads later with import() isn't counted: a part that opens rarely,
+ * like a form, can load that way (docs/quality.md, audit 4 J-6).
  */
 export const DEFAULT_BUDGET: Budget = {
   html: 20_000,

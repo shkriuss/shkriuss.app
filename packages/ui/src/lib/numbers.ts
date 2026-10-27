@@ -97,6 +97,16 @@ export interface ParseOptions {
    * is asked which (whichAmount, audit 3 F2-3).
    */
   cents?: boolean;
+  /**
+   * Stricter, for Trades' prices, quantities and fees: as `cents`, and also
+   * one comma or point that this locale groups thousands with, before
+   * exactly three digits ("149,853" in English). An iPhone's number keypad
+   * offers the decimal sign of the phone's region, which may not be the
+   * browser language's (WebKit bug 247242), and a price can have three
+   * decimals, so that may well be 149.853: the person is asked which
+   * (whichAmount, audit 4 F2-10).
+   */
+  groupsToo?: boolean;
 }
 
 /**
@@ -107,7 +117,7 @@ function plainDigits(
   text: string,
   style: Style,
   whole: boolean,
-  { cents = false }: ParseOptions = {},
+  { cents = false, groupsToo = false }: ParseOptions = {},
 ): string | null {
   // Full-width digits and signs are plain ones, and any script's digits are 0 to 9.
   const compact = text
@@ -136,9 +146,15 @@ function plainDigits(
     if (!isGrouped([body.slice(0, only.at), body.slice(only.at + 1)], 3)) only.kind = 'decimal';
     // Kept to the cent, it's read as a decimal sign only if it's this
     // locale's own: "1.500" in French could as well be thousands (ParseOptions).
-    else if (cents && only.kind === 'decimal' && body.charAt(only.at) !== style.decimal) {
+    else if (
+      (cents || groupsToo) &&
+      only.kind === 'decimal' &&
+      body.charAt(only.at) !== style.decimal
+    ) {
       return null;
     }
+    // With `groupsToo`, it isn't read as thousands either (ParseOptions).
+    else if (groupsToo && only.kind === 'group') return null;
   }
   const points = signs.filter((sign) => sign.kind === 'decimal');
   if (points.length > (whole ? 0 : 1)) return null;
@@ -174,7 +190,8 @@ function plainDigits(
  *   number.
  * - Exponents ("1e3"), "Infinity" and anything else aren't numbers.
  * - With `cents`, for amounts kept to the cent: what could be read two ways
- *   isn't a number ("1.500" in French: see ParseOptions).
+ *   isn't a number ("1.500" in French: see ParseOptions). With `groupsToo`,
+ *   neither is "1,500" in English.
  */
 export function parseDecimal(text: string, locale?: string, options?: ParseOptions): number | null {
   const digits = plainDigits(text, styleOf(locale), false, options);
@@ -183,17 +200,26 @@ export function parseDecimal(text: string, locale?: string, options?: ParseOptio
 }
 
 /**
- * What to ask when an amount kept to the cent could be two numbers, so
- * parseDecimal with `cents` didn't read it: for "1.500" in French, "Enter
- * 1500 or 1,5 to show which you mean." Null when it's one number, or none.
+ * What to ask when a number could be two, so parseDecimal with `options`
+ * (`cents` when left out) didn't read it: for "1.500" in French, "Enter
+ * 1500 or 1,5 to show which you mean."; with `groupsToo`, for "149,853" in
+ * English, "Enter 149853 or 149.853 to show which you mean." Null when it's
+ * one number, or none.
  */
-export function whichAmount(text: string, locale?: string): string | null {
+export function whichAmount(
+  text: string,
+  locale?: string,
+  options: ParseOptions = { cents: true },
+): string | null {
   const style = styleOf(locale);
   const digits = plainDigits(text, style, false);
-  if (!digits || plainDigits(text, style, false, { cents: true }) !== null) return null;
-  // Read the other way, its point groups thousands: the same digits without it.
-  const thousands = Number(digits.replace('.', ''));
-  return `Enter ${decimalText(thousands, locale)} or ${decimalText(Number(digits), locale)} to show which you mean.`;
+  if (!digits || plainDigits(text, style, false, options) !== null) return null;
+  // Its one sign, before three digits, read the other way: grouping
+  // thousands (the same digits without it), or as the decimal sign.
+  const [thousands, decimal] = digits.includes('.')
+    ? [Number(digits.replace('.', '')), Number(digits)]
+    : [Number(digits), Number(`${digits.slice(0, -3)}.${digits.slice(-3)}`)];
+  return `Enter ${decimalText(thousands, locale)} or ${decimalText(decimal, locale)} to show which you mean.`;
 }
 
 /**
@@ -253,10 +279,24 @@ export function roundDecimal(value: number, digits: number): number {
 export const CURRENCIES = ['USD', 'EUR', 'GBP', 'GEL', 'CHF', 'JPY', 'CAD', 'AUD'] as const;
 export type Currency = (typeof CURRENCIES)[number];
 
-/** The decimals a currency has: 2 for dollars (cents), 0 for yen. Any ISO 4217 code works. */
-export const currencyDigits = (currency: string): number =>
-  new Intl.NumberFormat('en', { style: 'currency', currency }).resolvedOptions()
-    .maximumFractionDigits ?? 2;
+const digitsOf = new Map<string, number>();
+
+/**
+ * The decimals a currency has: 2 for dollars (cents), 0 for yen. Any ISO
+ * 4217 code works. Remembered for each currency: making a formatter for
+ * each amount froze Repairs for a second at every change near its limit
+ * (audit 4 F2-2).
+ */
+export function currencyDigits(currency: string): number {
+  let digits = digitsOf.get(currency);
+  if (digits === undefined) {
+    digits =
+      new Intl.NumberFormat('en', { style: 'currency', currency }).resolvedOptions()
+        .maximumFractionDigits ?? 2;
+    digitsOf.set(currency, digits);
+  }
+  return digits;
+}
 
 export interface MoneyOptions {
   /** "+$480.00" and "-$120.00" (zero has no sign). */

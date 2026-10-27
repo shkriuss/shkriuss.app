@@ -11,6 +11,7 @@ import { withEdits } from '@shkriuss/sync/edits';
 import { keepFocus } from '@shkriuss/ui/keep-focus';
 import { focusProblem, reportSave, showProblem } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
+import { watchTextLimits } from '@shkriuss/ui/text-limit';
 import { typedText } from '@shkriuss/ui/typed-text';
 import { site } from 'virtual:shkriuss/site';
 import {
@@ -264,7 +265,7 @@ export function mountBudget(root: Document): void {
     roomText.textContent = room ?? '';
 
     const monthEntries = entriesIn(entries, month);
-    const totals = summary(monthEntries, categories);
+    const totals = summary(monthEntries, categories, currencyOf(settings));
     spentText.textContent = money(totals.spent);
     incomeText.textContent = money(totals.income);
     leftText.textContent = money(totals.left, true);
@@ -280,7 +281,9 @@ export function mountBudget(root: Document): void {
     }
 
     noCategories.hidden = categories.categories.length > 0;
-    categoryList.replaceChildren(...byCategory(monthEntries, categories).map(renderCategory));
+    categoryList.replaceChildren(
+      ...byCategory(monthEntries, categories, currencyOf(settings)).map(renderCategory),
+    );
     noEntries.hidden = monthEntries.length > 0;
     entryList.replaceChildren(...monthEntries.map(renderEntry));
     currencySelect.value = currencyOf(settings);
@@ -323,8 +326,13 @@ export function mountBudget(root: Document): void {
     categoryField.hidden = !hasCategory(kindOf());
   }
 
+  // A paste longer than a box takes is cut by the browser: say so (audit 4 F2-7).
+  const entryLimits = watchTextLimits(entryForm);
+  const categoryLimits = watchTextLimits(categoryForm);
+
   function openEntry(entry: Entry | undefined, kind: Kind = 'expense'): void {
     editingEntry = entry?.id ?? null;
+    entryLimits.clear();
     openedEntry = entry ? toEntryForm(entry) : null;
     const values = openedEntry ?? {
       kind,
@@ -373,7 +381,7 @@ export function mountBudget(root: Document): void {
       editingEntry ?? crypto.randomUUID(),
       current ? null : entries.entries.length,
       categories,
-      { currency: currencyOf(settings) },
+      { currency: currencyOf(settings), saved: current },
     );
     if (!read.entry) {
       showProblems(entryForm, ['kind', 'amount', 'date', 'note'], read.problems);
@@ -401,6 +409,7 @@ export function mountBudget(root: Document): void {
 
   function openCategory(category: Category | undefined): void {
     editingCategory = category?.id ?? null;
+    categoryLimits.clear();
     openedCategory = category ? toCategoryForm(category) : null;
     categoryTitle.textContent = category ? 'Change category' : 'New category';
     const values = openedCategory ?? { name: '', limit: '' };
@@ -483,10 +492,14 @@ export function mountBudget(root: Document): void {
   const yearCount = (year: string) =>
     entryYears(entries).find((entry) => entry.year === year)?.count ?? 0;
 
+  /** The year the dialog shows, and how many entries it says go. */
+  let shownYear = { year: '', count: 0 };
+
   /** Says what deleting the year chosen removes. */
   function showYear(): void {
     const year = yearSelect.value;
-    const count = entriesCount(yearCount(year));
+    shownYear = { year, count: yearCount(year) };
+    const count = entriesCount(shownYear.count);
     yearText.textContent = `The ${count} from ${year} will be deleted: expenses, income and refunds. With sync on, they’re deleted on your other devices too. This can’t be undone.`;
     yearConfirm.textContent = `Delete ${count}`;
   }
@@ -650,9 +663,22 @@ export function mountBudget(root: Document): void {
       categoryDialog.close();
       showProblem('That category was deleted on another device.');
     }
+    // The year chosen changed on another device or tab: the dialog closes,
+    // and says why, so its button doesn't delete another year, or more than
+    // it said (audit 4 F2-1).
     if (yearDialog.open) {
-      if (entries.entries.length === 0) yearDialog.close();
-      else fillYears();
+      const { year, count } = shownYear;
+      const now = yearCount(year);
+      if (now === count) fillYears();
+      else {
+        yearDialog.close();
+        deleteYearButton.focus();
+        showProblem(
+          now === 0
+            ? `The entries from ${year} were deleted on another device.`
+            : `${year} has ${entriesCount(now)} now, after changes on another device. Nothing was deleted.`,
+        );
+      }
     }
     keepFocus(render, addExpense);
     reminders.changed();

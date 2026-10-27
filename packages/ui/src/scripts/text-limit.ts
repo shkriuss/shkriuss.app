@@ -8,6 +8,10 @@
  *   const limit = watchTextLimit(textarea);
  *   limit.clear(); // after the page puts other text in the box
  *
+ *   // Or every box with a maxlength in a form, as one:
+ *   const limits = watchTextLimits(form);
+ *   limits.clear(); // when the form opens again
+ *
  * The message shows under the box (a `.field__error` added to its `.field`,
  * and linked to the box with aria-describedby), and is read out while the
  * box has focus. It goes once the text is changed and all of it fits. Say
@@ -95,4 +99,21 @@ export function watchTextLimit(box: HTMLInputElement | HTMLTextAreaElement): Tex
   });
 
   return { clear };
+}
+
+/**
+ * Watches every box with a maxlength in `container` (a form, say), as
+ * watchTextLimit does; clear() takes all their messages away (audit 4 F2-7).
+ */
+export function watchTextLimits(container: ParentNode): TextLimit {
+  const limits = [
+    ...container.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
+      'input[maxlength], textarea[maxlength]',
+    ),
+  ].map((box) => watchTextLimit(box));
+  return {
+    clear() {
+      for (const limit of limits) limit.clear();
+    },
+  };
 }

@@ -1,7 +1,8 @@
 /**
  * Repairs: the photos in the repair form. Picked photos are made smaller one
  * at a time and kept in the form until it's saved; removing a saved photo
- * deletes it only once the form is saved. Split from repairs.ts (audit J-7).
+ * deletes it only once the repair is saved (audit 4 F2-8). Split from
+ * repairs.ts (audit J-7).
  */
 import { required } from '@shkriuss/ui/dom';
 import { countLabel, LIMITS, mergePhotos } from '../lib/repairs.ts';
@@ -33,8 +34,10 @@ export interface FormPhotos {
   /** Waits for picked photos still being made smaller. */
   ready(): Promise<void>;
   /**
-   * Saves picked photos on the device and deletes removed ones. Null if
-   * saving didn't work (the form says so).
+   * Saves picked photos on the device. Null if saving didn't work (the form
+   * says so). `removed`: the photos taken off the repair, to delete once the
+   * repair is saved, not before: if that doesn't work, the repair as saved
+   * still has them (audit 4 F2-8).
    */
   save(): Promise<{ added: string[]; removed: string[] } | null>;
   /** "Add photos": opens the file picker. */
@@ -55,6 +58,11 @@ export function mountFormPhotos(
   const photoError = required<HTMLElement>(form, '[data-error-for="photos"]');
   const photoInput = required<HTMLInputElement>(form, '[data-photo-input]');
   const addPhotosButton = required<HTMLButtonElement>(form, '[data-action="add-photos"]');
+  const missingArea = required<HTMLElement>(form, '[data-form-photos-missing]');
+  const removeMissingButton = required<HTMLButtonElement>(
+    missingArea,
+    '[data-action="remove-missing-photos"]',
+  );
 
   /** The repair form's photos: every id (some may be on another device)… */
   let formPhotos: string[] = [];
@@ -64,6 +72,8 @@ export function mountFormPhotos(
   const pendingPhotos = new Map<string, PhotoFile>();
   /** …and saved ones removed in the form (deleted once it's saved). */
   let removedPhotos: string[] = [];
+  /** The form's photos that aren't on this device, as last shown. */
+  let missingPhotos: string[] = [];
   /** Picked photos being made smaller; saving waits for them. */
   let addingPhotos: Promise<void> = Promise.resolve();
   /** Counts the times the repair form was opened, so late photos don't land in the next one. */
@@ -94,6 +104,7 @@ export function mountFormPhotos(
     );
     const elsewhere = ids.length - here.length;
     const syncing = syncOn();
+    missingPhotos = ids.filter((_, index) => !urls[index]);
     formPhotosElsewhere.hidden = elsewhere === 0;
     formPhotosElsewhere.textContent = syncing
       ? elsewhere === 1
@@ -102,6 +113,12 @@ export function mountFormPhotos(
       : elsewhere === 1
         ? '1 photo is on another device. It stays with this repair.'
         : `${elsewhere} photos are on another device. They stay with this repair.`;
+    // Without sync they can't come here, and they count towards the most a
+    // repair can have: they can be taken off it (audit 4 F2-8). With sync
+    // on, they're on their way.
+    missingArea.hidden = elsewhere === 0 || syncing;
+    removeMissingButton.textContent =
+      elsewhere === 1 ? 'Take it off this repair' : 'Take them off this repair';
     photosSyncHint.textContent = syncing
       ? 'They sync to your other devices, locked so only you can see them. They aren’t in backups.'
       : 'Kept on this device, and not in backups. Turn on sync to have them on your other devices too.';
@@ -141,6 +158,13 @@ export function mountFormPhotos(
     photosBusy.hidden = true;
     if (session === formSession) showPhotoProblem(problems.join(' '));
   }
+
+  removeMissingButton.addEventListener('click', () => {
+    const missing = new Set(missingPhotos);
+    formPhotos = formPhotos.filter((id) => !missing.has(id));
+    removedPhotos = [...removedPhotos, ...missing];
+    void renderFormPhotos().then(() => addPhotosButton.focus());
+  });
 
   photoInput.addEventListener('change', () => {
     const picked = [...(photoInput.files ?? [])];
@@ -194,7 +218,6 @@ export function mountFormPhotos(
       const added = [...pendingPhotos.keys()];
       const removed = removedPhotos;
       pendingPhotos.clear();
-      void deletePhotos(removed);
       removedPhotos = [];
       return { added, removed };
     },

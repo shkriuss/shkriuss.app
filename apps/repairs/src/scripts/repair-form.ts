@@ -7,12 +7,14 @@ import { today } from '@shkriuss/dates';
 import { required } from '@shkriuss/ui/dom';
 import { decimalText } from '@shkriuss/ui/numbers';
 import { focusProblem } from '@shkriuss/ui/problem';
+import { watchTextLimits } from '@shkriuss/ui/text-limit';
 import {
   dateLabel,
   findVehicleByName,
   formatMileage,
   knownPart,
   lastMileage,
+  LIMITS,
   photoFiles,
   readEditedRepair,
   saveRepair,
@@ -29,6 +31,7 @@ import {
   type VehiclesState,
 } from '../lib/repairs.ts';
 import { mountFormPhotos } from './form-photos.ts';
+import { deletePhotos } from './photos.ts';
 
 const EMPTY_PART: PartForm = { name: '', number: '', quantity: '1', price: '' };
 const PART_FIELDS = ['name', 'number', 'quantity', 'price'] as const;
@@ -50,8 +53,8 @@ export interface RepairFormPage {
   data(): { vehicles: VehiclesState; repairs: RepairsState; settings: SettingsState };
   /** The vehicle the list is showing only, if one: a new repair is on it. */
   shownVehicle(): Vehicle | undefined;
-  /** Saves, shows the change, and tells other devices. */
-  save(next: { vehicles?: VehiclesState; repairs?: RepairsState }, message: string): void;
+  /** Saves, shows the change, and tells other devices. False if it couldn't be saved. */
+  save(next: { vehicles?: VehiclesState; repairs?: RepairsState }, message: string): boolean;
   /** The repair just saved is never hidden behind "Show more" (shownCount). */
   keepShown(id: string): void;
   /** After saving: focus the repair in the list, or "New repair" if it isn't shown. */
@@ -97,6 +100,10 @@ export function mountRepairForm(root: ParentNode, page: RepairFormPage): RepairF
   let openedRepair: RepairForm | null = null;
   let saving = false;
   const formPhotos = mountFormPhotos(root, repairForm, { syncOn: () => page.syncOn() });
+  // A paste longer than a box takes is cut by the browser: say so (audit 4
+  // F2-7). Not the parts' short boxes, drawn later inside their labels,
+  // where the message would become part of the box's name.
+  const limits = watchTextLimits(repairForm);
 
   const mileage = (value: number) => formatMileage(value, unitOf(page.data().settings));
 
@@ -135,6 +142,8 @@ export function mountRepairForm(root: ParentNode, page: RepairFormPage): RepairF
         return row;
       }),
     );
+    // As many as a repair can have: the hint under it says how many (audit 4 G-5).
+    addPartButton.hidden = parts.length >= LIMITS.parts;
   }
 
   const partInput = (index: number, key: keyof PartForm) =>
@@ -170,8 +179,11 @@ export function mountRepairForm(root: ParentNode, page: RepairFormPage): RepairF
     const input = repairForm.elements.namedItem(first);
     // Too many photos, with those added on another device: "Remove photo" (audit 3 F2-1).
     const photo = repairForm.querySelector<HTMLElement>('[data-action="remove-photo"]');
+    // Too many parts: the last one, near its "Remove"; the problem is read
+    // out by itself (role="alert"), not "Add a part" (audit 4 G-5).
+    const lastPart = partInput(partValues().length - 1, 'name');
     focusProblem(
-      input instanceof HTMLElement ? input : first === 'photos' ? photo : addPartButton,
+      input instanceof HTMLElement ? input : first === 'photos' ? photo : lastPart,
       problems[first],
     );
     return true;
@@ -180,6 +192,7 @@ export function mountRepairForm(root: ParentNode, page: RepairFormPage): RepairF
   function openRepair(repair: Repair | undefined): void {
     editingRepair = repair?.id ?? null;
     openedRepair = repair ? toRepairForm(repair, page.data().vehicles) : null;
+    limits.clear();
     repairTitle.textContent = repair ? 'Change repair' : 'New repair';
     const only = page.shownVehicle();
     const values = openedRepair ?? {
@@ -280,13 +293,12 @@ export function mountRepairForm(root: ParentNode, page: RepairFormPage): RepairF
     const photos = await formPhotos.save();
     if (!photos) return;
     page.filesAdded(photoFiles(photos.added));
-    page.filesRemoved(photoFiles(photos.removed));
     repairDialog.close();
     // As they are now: a sync may have come while the photos were saved.
     const { vehicles, repairs } = page.data();
     const name = newVehicle?.name ?? vehicleName(vehicles, repair.vehicle);
     page.keepShown(repair.id);
-    page.save(
+    const saved = page.save(
       {
         repairs: saveRepair(repairs, repair),
         ...(newVehicle ? { vehicles: saveVehicle(vehicles, newVehicle) } : {}),
@@ -295,6 +307,12 @@ export function mountRepairForm(root: ParentNode, page: RepairFormPage): RepairF
         ? `Saved the repair on ${name}, and added ${name} to your vehicles.`
         : `Saved the repair on ${name}.`,
     );
+    // Photos taken off it go once it's saved without them. If it couldn't
+    // be, the repair as saved still has them: they stay (audit 4 F2-8).
+    if (saved) {
+      void deletePhotos(photos.removed);
+      page.filesRemoved(photoFiles(photos.removed));
+    }
     page.focusRepair(repair.id);
   }
 
@@ -310,6 +328,7 @@ export function mountRepairForm(root: ParentNode, page: RepairFormPage): RepairF
     inUse: () => (repairDialog.open ? formPhotos.inUse() : []),
     addPart() {
       const parts = partValues();
+      if (parts.length >= LIMITS.parts) return;
       renderParts([...parts, EMPTY_PART]);
       partInput(parts.length, 'name')?.focus();
     },

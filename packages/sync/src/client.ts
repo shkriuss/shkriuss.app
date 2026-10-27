@@ -111,6 +111,13 @@ export const CHANGE_DELAY_MS = 1500;
 export const POLL_MS = 60 * 1000;
 /** Merge again at most this many times in a row when another device writes first. */
 const MAX_ROUNDS = 3;
+/** While another tab of the app syncs, try again this soon. */
+export const TAB_RETRY_MS = 2000;
+/**
+ * After waiting this long for another tab, sync anyway: a tab frozen in the
+ * background, or stuck, while syncing could keep its turn for good.
+ */
+export const TAB_PATIENCE_MS = 60 * 1000;
 
 /** A copy the server sent that can't be opened: from a newer version, damaged, or too big. */
 class UnopenedCopyError extends SyncError {}
@@ -136,6 +143,15 @@ export interface SyncedStore<T = unknown, I extends Identified = Identified> {
    * the item). Edits then also win over deletions on another device.
    */
   conflictCopy?(mine: I, theirs: I): I;
+  /**
+   * With conflictCopy: keep both also when the two devices' versions are
+   * the same, for items whose changes are events, not edits. Tally's water
+   * at 5, counted once on each device, is 6 on both, and that's two glasses,
+   * not one (audit 4 F2-3). Text changed the same way on two devices is one
+   * edit, so it's off unless asked for. True, or a rule for which values
+   * are events: Tally's 0 on both devices is two resets, one change.
+   */
+  keepSame?: boolean | ((value: I) => boolean);
 }
 
 /**
@@ -603,7 +619,14 @@ export function createSync(options: {
         // Deleted elsewhere longer ago than the markers last: deleted here too.
         if (sameCopy && base) result = dropForgotten(result, theirs, base);
         if (synced.conflictCopy && known?.v === version && base?.v === version) {
-          const both = keepBoth(base, result, theirs, synced.conflictCopy, now);
+          const both = keepBoth(
+            base,
+            result,
+            theirs,
+            synced.conflictCopy,
+            now,
+            synced.keepSame ?? false,
+          );
           result = both.snapshot;
           kept += both.kept;
         }
@@ -757,6 +780,45 @@ export function createSync(options: {
     return time === null ? {} : { serverTime: time };
   };
 
+  /** Since when this tab has been waiting for another one to finish syncing. */
+  let waitingSince: number | null = null;
+
+  /**
+   * Runs `task` while no other tab of this app syncs (navigator.locks, in
+   * Safari from 15.4). Two tabs syncing at once each noted the same change,
+   * at a moment of its own, and keeping both versions of the same change
+   * (keepSame) then took it for two (audit 4 F2-3). False, without running
+   * it, while another tab syncs, until it has for TAB_PATIENCE_MS: then it
+   * runs anyway. Without locks, it runs, as before.
+   */
+  async function inTurn(task: () => Promise<void>): Promise<boolean> {
+    const locks = typeof navigator === 'undefined' ? undefined : navigator.locks;
+    if (locks) {
+      let entered = false;
+      try {
+        await locks.request(`shkriuss-sync:${options.app}`, { ifAvailable: true }, async (lock) => {
+          if (lock === null) return;
+          entered = true;
+          await task();
+        });
+      } catch (error) {
+        if (entered) throw error;
+        // Locks refused (in a sandboxed page, say): as without them.
+        await task();
+        return true;
+      }
+      if (entered) {
+        waitingSince = null;
+        return true;
+      }
+      waitingSince ??= Date.now();
+      if (Date.now() - waitingSince < TAB_PATIENCE_MS) return false;
+    }
+    waitingSince = null;
+    await task();
+    return true;
+  }
+
   async function run(): Promise<void> {
     if (!isSyncOn()) return;
     if (busy) {
@@ -764,6 +826,15 @@ export function createSync(options: {
       return;
     }
     busy = true;
+    // Another tab is syncing: this one tries again in a moment.
+    if (!(await inTurn(rounds))) {
+      busy = false;
+      schedule(TAB_RETRY_MS);
+    }
+  }
+
+  /** Merges with the copy online, round after round, until they agree. */
+  async function rounds(): Promise<void> {
     keptBoth = 0;
     emit();
     let event: SyncEvent | undefined;

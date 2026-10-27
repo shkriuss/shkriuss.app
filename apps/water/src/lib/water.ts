@@ -22,6 +22,7 @@ import {
 } from '@shkriuss/dates';
 import type { Notice } from '@shkriuss/push';
 import { defineSettings, type SettingsState as SavedSettings } from '@shkriuss/storage/settings';
+import { parseDecimal } from '@shkriuss/ui/numbers';
 
 /** Millilitres, or US fluid ounces. */
 export type Unit = 'ml' | 'oz';
@@ -216,6 +217,10 @@ export const formatAmount = (ml: number, unit: Unit, locale?: string): string =>
 /**
  * What's wrong with a typed amount, in the units shown, or undefined when
  * it's fine. `kind` is a drink (or a glass or bottle size), or the daily goal.
+ * It's read as typed in `locale` (the browser's own when left out), with a
+ * point or a comma: "8,5" fl oz is 8.5 (parseDecimal). The fields were
+ * `type="number"`, which dropped the comma as it was typed, so 8,5 fl oz
+ * was logged as 85 (audit 4 G-1).
  */
 export function amountProblem(
   typed: string,
@@ -223,8 +228,8 @@ export function amountProblem(
   kind: 'drink' | 'goal',
   locale?: string,
 ): string | undefined {
-  const value = Number(typed.trim());
-  if (typed.trim() === '' || !Number.isFinite(value)) {
+  const value = parseDecimal(typed, locale);
+  if (value === null || !Number.isFinite(value)) {
     return kind === 'goal' ? 'Enter a daily goal.' : 'Enter an amount.';
   }
   const [min, max] = LIMITS[unit][kind];
@@ -236,7 +241,8 @@ export function amountProblem(
 }
 
 /** A typed amount (already checked with amountProblem), in millilitres. */
-export const typedMl = (typed: string, unit: Unit): number => toMl(Number(typed.trim()), unit);
+export const typedMl = (typed: string, unit: Unit, locale?: string): number =>
+  toMl(parseDecimal(typed, locale) ?? 0, unit);
 
 // ---------- Drinks ----------
 

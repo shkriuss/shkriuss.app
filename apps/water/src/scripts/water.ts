@@ -16,6 +16,7 @@ import {
 import { createStore } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
 import { keepFocus } from '@shkriuss/ui/keep-focus';
+import { decimalText } from '@shkriuss/ui/numbers';
 import { focusProblem, reportSave } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { site } from 'virtual:shkriuss/site';
@@ -36,7 +37,6 @@ import {
   inUnit,
   isDrinksState,
   isSettingsState,
-  LIMITS,
   progressText,
   pruneDrinks,
   reachedOn,
@@ -245,16 +245,11 @@ export function mountWater(root: Document): void {
     }
     for (const name of AMOUNTS) {
       const input = amountInput(name);
-      const [min, max] = LIMITS[current][name === 'goal' ? 'goal' : 'drink'];
-      input.min = String(min);
-      input.max = String(max);
       if (input === root.activeElement) continue;
-      input.value = String(inUnit(amountOf(settings, name), current));
+      // As it would be typed here, with this language's decimal sign (audit 4 G-1).
+      input.value = decimalText(inUnit(amountOf(settings, name), current));
       showProblem(input, amountError(name), undefined);
     }
-    const [min, max] = LIMITS[current].drink;
-    otherAmount.min = String(min);
-    otherAmount.max = String(max);
 
     const reminders = remindersOf(settings);
     remindersOn.checked = reminders.on;

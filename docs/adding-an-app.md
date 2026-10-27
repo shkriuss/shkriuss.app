@@ -71,9 +71,10 @@ alphabetical order, so where an entry sits in `apps.json` doesn't matter.
   instead.
 - For a spreadsheet to download (like Budget's), make the file with
   `csvFile` from `@shkriuss/storage/csv`, which keeps text like "=SUM(…)"
-  from running as a formula and starts the file with a byte-order mark (so
-  Excel shows letters beyond English as typed), and save it with
-  `downloadFile`.
+  from running as a formula, starts the file with a byte-order mark (so
+  Excel shows letters beyond English as typed), and splits cells by ";"
+  where decimals are written with a comma (as spreadsheets there read
+  files), and save it with `downloadFile`.
 - Saving can fail (storage full, or blocked). Pass what `save()` gives to
   `reportSave()` from `@shkriuss/ui/problem`: it tells the person, in the
   same words as every app, and gives back whether it saved, so the app only
@@ -208,6 +209,20 @@ is the simplest example to copy. Ask Claude, or:
 The privacy page lists the app automatically, and "Delete all data" already
 removes the device from the server.
 
+## Keeping the page small
+
+Each page's JavaScript must stay under 35 KB gzipped, counting every file
+its scripts import before they run (`pnpm check:dist`). A part that's used
+now and then, like a form or a dialog, can load after the page, with
+`import('./form.ts')`: what loads later isn't counted, and it's in the
+offline copy too. Start loading it once the page has nothing else to do,
+not when it's tapped: an iPhone raises its keyboard only for a field
+focused within the tap, so the form has to be there by then. Repairs'
+forms (`later` and `whenIdle` in `apps/repairs/src/scripts/repairs.ts`)
+show how; Calendar's event editor (`openEditor` in
+`apps/calendar/src/scripts/calendar.ts`) loads when first opened (audit 4
+J-6).
+
 ## Heavy work and WebAssembly (optional)
 
 Work that takes more than a moment (like Grammar's checker) belongs in a web
@@ -282,7 +297,9 @@ The privacy page and the Account page's list of apps that sync include the
 app automatically. When an item is changed on two devices before they sync,
 the newest change wins, unless the store passes `conflictCopy` to keep both
 versions, as Calendar, Meals, Notes, Reminders, Shelf and Tally do (Tally
-is the simplest: see `secondVersion` in `src/lib/counters.ts`). Moving to a
+is the simplest: see `COUNTER_SYNC` in `src/lib/counters.ts`, which also
+keeps both when the two devices counted to the same number, with
+`keepSame`, a rule for which values are events). Moving to a
 new account key (after a lost device) needs no extra code. A form for
 changing an item can stay open while a sync brings another device's change
 to that item: on Save, put on only what the person changed, with

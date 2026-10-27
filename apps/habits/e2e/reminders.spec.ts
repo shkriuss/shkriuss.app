@@ -68,15 +68,17 @@ test('reminds while Habits is open, unless it’s done already', async ({ page }
   await expect(
     page.getByRole('status').filter({ hasText: 'Reminder: Drink water.' }),
   ).toBeAttached();
-  expect(await shownNotifications(page)).toEqual([
-    {
-      title: 'Drink water',
-      body: REMINDER_BODY,
-      tag: expect.any(String),
-      renotify: true,
-      icon: '/icon-192.png',
-    },
-  ]);
+  await expect
+    .poll(() => shownNotifications(page))
+    .toEqual([
+      {
+        title: 'Drink water',
+        body: REMINDER_BODY,
+        tag: expect.any(String),
+        renotify: true,
+        icon: '/icon-192.png',
+      },
+    ]);
 
   // Once only.
   await page.clock.fastForward('02:00');
@@ -99,9 +101,9 @@ test('a reminder in the hour that clocks skip still goes off', async ({ page }) 
   // Open through the night: it goes off as the clocks change, at 3:00.
   await page.clock.runFor('01:00:00');
   await expect(page.getByRole('status').filter({ hasText: 'Reminder: Medicine.' })).toBeAttached();
-  expect(await shownNotifications(page)).toEqual([
-    expect.objectContaining({ title: 'Medicine', body: REMINDER_BODY }),
-  ]);
+  await expect
+    .poll(() => shownNotifications(page))
+    .toEqual([expect.objectContaining({ title: 'Medicine', body: REMINDER_BODY })]);
 });
 
 test('a reminder that comes due while a form is open is read out in it', async ({ page }) => {

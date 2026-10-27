@@ -13,8 +13,9 @@ private car's service history. Lives at <https://repairs.shkriuss.app>.
     `newVehicle`). Deleting a vehicle deletes its repairs, after asking;
   - repairs (`shkriuss:repairs`): the vehicle (by id, so it can be renamed),
     the day, the mileage, the system (brakes, doors…), the damage found, the
-    work done, the parts replaced (name, part number, quantity, price each),
-    the hours worked and the labour (and other) cost. Version 2 added the
+    work done, the parts replaced (name, part number, quantity, price each;
+    up to 30, which the form says under "Add a part", and that button goes
+    once there are 30), the hours worked and the labour (and other) cost. Version 2 added the
     hours, labour and prices, version 3 the photos' ids; `migrateRepairs`
     upgrades older versions (here, from a backup, or from a device that synced
     before), leaving them unknown or empty;
@@ -46,7 +47,9 @@ private car's service history. Lives at <https://repairs.shkriuss.app>.
   the hours and the parts, labour and total cost. Text a spreadsheet could
   read as a formula starts with `'`. The file starts with a byte-order mark,
   so Excel shows text beyond plain English letters (Georgian, "’", the "×"
-  of a part's quantity) as typed.
+  of a part's quantity) as typed. In a language that writes decimals with a
+  comma, cells are split by ";" and numbers written "12,5", as spreadsheets
+  there read them (audit 4 F2-9).
 - Repairs keeps up to 3,000 repairs (`LIMITS.repairs`). Why not more: each
   repair is saved on the device, where a browser keeps about 5 MB for each
   site, and with sync on, sync keeps records of its own there too. The test
@@ -59,9 +62,12 @@ private car's service history. Lives at <https://repairs.shkriuss.app>.
 - To make room, "Delete a year…" (next to the spreadsheet download) deletes
   every repair of one year, with its photos (`repairYears`, `removeYear`).
   It says how many that is, and offers the spreadsheet first. With sync on,
-  the repairs and their photos are deleted on the other devices too. Once
-  more than 90% of the 3,000 are used, a note at the top says how many are
-  left and points to it (`roomNote`).
+  the repairs and their photos are deleted on the other devices too. If
+  that year changes on another device or tab while the dialog is open, it
+  closes and says so, rather than deleting another year or more than it
+  said; so does "Delete Bus 105?" when the bus's repairs change. Once more
+  than 90% of the 3,000 are used, a note at the top says how many are left
+  and points to it (`roomNote`).
 - Photos (up to 10 a repair): picked with "Add photos" (the phone offers its
   camera or its photo library), made smaller on the device (1,600 pixels on
   the longest side, plus a 320-pixel thumbnail, saved again as JPEG, which
@@ -78,7 +84,12 @@ private car's service history. Lives at <https://repairs.shkriuss.app>.
   "Save a copy" saves one as a file. Deleting a repair, a vehicle or a year
   deletes their photos (online too, with sync on); "Delete all data"
   deletes them on this device only (sync is turned off first). A photo
-  taken off a repair on another device is deleted here at the next sync.
+  taken off a repair in its form, or deleted with it, goes only once the
+  change is saved: if it can't be (a full device), the repair as saved
+  still has its photos. With sync off, photos a repair lists that aren't on
+  this device (a backup restored on a new phone, say) can be taken off it
+  in its form ("Take them off this repair"). A photo taken off a repair on
+  another device is deleted here at the next sync.
   Any other photo no repair uses (left by an older backup restored, say) is
   deleted when Repairs opens and after each sync, unless it was saved in
   the last minute (`deleteUnusedPhotos`).
@@ -90,6 +101,10 @@ private car's service history. Lives at <https://repairs.shkriuss.app>.
   tabs. The repair form is in `repair-form.ts` (its photos in
   `form-photos.ts`), the vehicle form in `vehicle-form.ts`, "Delete a
   year" in `delete-year.ts`, and the photo viewer in `photo-viewer.ts`.
+  Each loads after the page, once it has nothing else to do (`later`,
+  `whenIdle`), so the page stays within its size budget and a tap still
+  finds the form there: an iPhone raises its keyboard only for a field
+  focused within the tap.
 - `src/pages/index.astro`: the page, built from `@shkriuss/ui` components.
   `<template>`s hold the markup for a day, a repair, a vehicle and a part row;
   the forms and "Delete a year" are dialogs.

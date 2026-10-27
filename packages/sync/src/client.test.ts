@@ -13,6 +13,8 @@ import {
   saveConnection,
   stopSync,
   syncedStore,
+  TAB_PATIENCE_MS,
+  TAB_RETRY_MS,
   type LinkedData,
   type SyncClient,
   type SyncStatus,
@@ -23,6 +25,7 @@ import { sealStores, syncKeys } from './snapshot.ts';
 import { memorySync, withFiles } from './testing.ts';
 import type { FileList } from './validate.ts';
 import worker, { STORAGE_LIMITS, type SyncEnv } from './worker.ts';
+import { deviceLocks } from '../../../tests/unit/sync-devices.ts';
 
 class MemoryStorage implements StorageLike {
   #map = new Map<string, string>();
@@ -222,6 +225,8 @@ const counter = (id: string, count = 0): Counter => ({ id, name: id, count });
 beforeEach(() => {
   server = memoryServer();
   offline = false;
+  // Each pretend device has locks of its own, as in browsers.
+  vi.stubGlobal('navigator', deviceLocks());
   const noop = () => 0;
   vi.stubGlobal('window', {
     setTimeout: noop,
@@ -791,6 +796,57 @@ describe('syncing between devices', () => {
     await theirs.syncNow();
     await mine.syncNow();
     expect(mine.counters).toEqual([counter('mine')]);
+  });
+});
+
+// Audit 4 F2-3, from review: two tabs syncing at once each noted the same
+// change at a moment of its own, and keeping both versions of the same
+// change took it for two.
+describe('tabs of the app on one device', () => {
+  it('take turns to sync, and one stuck while syncing holds the others up for a minute at most', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(Date.UTC(2026, 9, 26, 12));
+    const phone = new Device(randomBytes(32));
+    const tab = phone.reopen(1);
+    phone.counters = [counter('water', 1)];
+    // A tab frozen in the background while syncing keeps its turn.
+    phone.use();
+    let thaw = (): void => undefined;
+    void navigator.locks.request(
+      'shkriuss-sync:tally',
+      { ifAvailable: true },
+      () =>
+        new Promise<void>((resolve) => {
+          thaw = resolve;
+        }),
+    );
+    const timers = vi.spyOn(window, 'setTimeout');
+    expect((await tab.syncNow()).last).toBeNull();
+    expect(timers).toHaveBeenCalledWith(expect.any(Function), TAB_RETRY_MS);
+    vi.setSystemTime(Date.now() + TAB_PATIENCE_MS - 1);
+    expect((await tab.syncNow()).last).toBeNull();
+    // After a minute, it syncs anyway.
+    vi.setSystemTime(Date.now() + 1);
+    const synced = await tab.syncNow();
+    expect(synced).toMatchObject({ busy: false, problem: null });
+    expect(synced.last).not.toBeNull();
+    thaw();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    // The turn is free again: the other tab syncs at once.
+    vi.setSystemTime(Date.now() + 1000);
+    phone.counters = [counter('water', 2)];
+    expect((await phone.syncNow()).last).toBe(Date.now());
+  });
+
+  it('sync as before where there are no locks (Safari before 15.4)', async () => {
+    vi.stubGlobal('navigator', {});
+    const secret = randomBytes(32);
+    const phone = new Device(secret);
+    phone.counters = [counter('water', 1)];
+    expect(await phone.syncNow()).toMatchObject({ busy: false, problem: null });
+    const tablet = new Device(secret);
+    expect((await tablet.syncNow()).problem).toBeNull();
+    expect(tablet.counters).toEqual([counter('water', 1)]);
   });
 });
 

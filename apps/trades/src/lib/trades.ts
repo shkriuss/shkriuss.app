@@ -27,11 +27,26 @@ import {
   decimalText,
   formatMoney,
   parseDecimal,
+  whichAmount,
   type Currency,
   type MoneyOptions,
+  type ParseOptions,
 } from '@shkriuss/ui/numbers';
 import { DATE_LOCALE } from '@shkriuss/ui/locale';
 import { foldText } from '@shkriuss/ui/text';
+
+/**
+ * How typed numbers are read: one comma or point before exactly three
+ * digits could be either sign ("149,853" may be a price of 149.853, typed
+ * on an iPhone keypad that offers its region's decimal sign; "1.500" in
+ * French), so the person is asked which (audit 4 F2-10, F2-12).
+ */
+const UNSURE: ParseOptions = { groupsToo: true };
+const readNumber = (text: string, locale?: string): number | null =>
+  parseDecimal(text, locale, UNSURE);
+/** What to ask about a number that could be two, else `otherwise`. */
+const notANumber = (text: string, locale: string | undefined, otherwise: string): string =>
+  whichAmount(text, locale, UNSURE) ?? otherwise;
 
 export type Side = 'long' | 'short';
 export const SIDES: readonly Side[] = ['long', 'short'];
@@ -228,7 +243,8 @@ export type Problems = Partial<Record<keyof TradeForm, string>>;
  * for the limit: with more than that, after two devices' trades were put
  * together, any change was, and closing any trade (audit 3 F2-5). Numbers
  * are read as typed in `locale` (the browser's own when left out): "1,25"
- * is 1.25, and "1,250" is 1250 in English (parseDecimal).
+ * is 1.25, "1,250,000" is 1250000 in English, and for "1,250" the person
+ * is asked which they mean (UNSURE).
  */
 export function readTrade(
   form: TradeForm,
@@ -236,7 +252,7 @@ export function readTrade(
   count: number | null,
   locale?: string,
 ): { trade: Trade; problems?: undefined } | { trade?: undefined; problems: Problems } {
-  const parseNumber = (text: string) => parseDecimal(text, locale);
+  const parseNumber = (text: string) => readNumber(text, locale);
   const problems: Problems = {};
   const symbol = form.symbol.trim().toUpperCase();
   if (symbol === '') problems.symbol = 'Enter the symbol, like AAPL.';
@@ -256,7 +272,7 @@ export function readTrade(
       return null;
     }
     if (!isPrice(value)) {
-      problems[field] = 'Enter a number above 0.';
+      problems[field] = notANumber(form[field], locale, 'Enter a number above 0.');
       return null;
     }
     if (value > LIMITS.number) {
@@ -269,8 +285,9 @@ export function readTrade(
   const quantityValue = parseNumber(form.quantity);
   const quantity = isPrice(quantityValue) ? quantityValue : null;
   if (quantityValue === null) problems.quantity = 'Enter how many.';
-  else if (quantity === null) problems.quantity = 'Enter a number above 0.';
-  else if (quantity > LIMITS.number) problems.quantity = 'Enter a smaller number.';
+  else if (quantity === null) {
+    problems.quantity = notANumber(form.quantity, locale, 'Enter a number above 0.');
+  } else if (quantity > LIMITS.number) problems.quantity = 'Enter a smaller number.';
 
   const stop = price('stop', '');
   if (stop !== null && entryPrice !== null && side) {
@@ -296,10 +313,13 @@ export function readTrade(
     }
   }
 
+  // Fees are money: "1.500" in French is asked about, as in Budget and
+  // Repairs (audit 4 F2-12).
   const feesValue = parseNumber(form.fees);
   const fees = feesValue ?? 0;
-  if (!Number.isFinite(fees) || fees < 0) problems.fees = 'Enter 0 or more.';
-  else if (fees > LIMITS.number) problems.fees = 'Enter a smaller number.';
+  if (!Number.isFinite(fees) || fees < 0) {
+    problems.fees = notANumber(form.fees, locale, 'Enter 0 or more.');
+  } else if (fees > LIMITS.number) problems.fees = 'Enter a smaller number.';
 
   // One setup however it's typed: "Breakout  retest" is "Breakout retest".
   const setup = form.setup.replace(/\s+/g, ' ').trim();
@@ -404,15 +424,16 @@ export function readClose(
   const split = partsOf(state.trades).get(ids.id) ?? NO_PARTS;
   const read = readTrade(form, ids.id, saved ? null : state.trades.length, locale);
   const problems: CloseProblems = { ...read.problems };
-  const bought = parseDecimal(form.quantity, locale);
+  const bought = readNumber(form.quantity, locale);
   const open = isPrice(bought) ? tidy(bought - split.quantity) : null;
-  const closed = parseDecimal(closeQuantity, locale);
+  const closed = readNumber(closeQuantity, locale);
   if (open !== null && open <= 0) {
     problems.quantity ??= `Enter more than the ${formatNumber(split.quantity, locale)} closed already.`;
   }
   if (closed === null) problems.closeQuantity = 'Enter how many you closed.';
-  else if (!isPrice(closed)) problems.closeQuantity = 'Enter a number above 0.';
-  else if (open !== null && open > 0 && closed > open) {
+  else if (!isPrice(closed)) {
+    problems.closeQuantity = notANumber(closeQuantity, locale, 'Enter a number above 0.');
+  } else if (open !== null && open > 0 && closed > open) {
     problems.closeQuantity =
       split.quantity > 0
         ? `Enter no more than the ${formatNumber(open, locale)} still open.`
@@ -468,13 +489,33 @@ export function readChange(
   const saved = state.trades.find((trade) => trade.id === ids.id);
   const split = (saved && partsOf(state.trades).get(saved.id)) ?? NO_PARTS;
   if (split.quantity > 0 && (form.exitDate.trim() !== '' || form.exitPrice.trim() !== '')) {
-    const bought = parseDecimal(form.quantity, locale);
+    const bought = readNumber(form.quantity, locale);
     const open = isPrice(bought) ? decimalText(tidy(bought - split.quantity), locale) : '';
     const read = readClose(form, open, state, ids, locale);
     // This form has no "Quantity closed": the quantity is what says it.
     if (!read.problems?.closeQuantity) return read;
     const { closeQuantity, ...problems } = read.problems;
     return { problems: { quantity: closeQuantity, ...problems } };
+  }
+  // A part closed off a trade stays closed: opened again and closed in parts
+  // of its own, "Delete a year" had to choose between counting what they
+  // closed as open again, here or in its trade (audit 4 F2-6). Deleting it
+  // opens its quantity in its trade again. Only while that trade is there:
+  // a part whose trade was deleted (with "Delete a year") is a trade of its
+  // own, and can be opened again like one.
+  if (
+    saved?.parent !== undefined &&
+    state.trades.some((trade) => trade.id === saved.parent) &&
+    !isOpen(saved) &&
+    form.exitDate.trim() === '' &&
+    form.exitPrice.trim() === ''
+  ) {
+    return {
+      problems: {
+        exitDate:
+          'This part was closed off a trade, so it stays closed. To open it again, delete it: its quantity is then open in its trade.',
+      },
+    };
   }
   const read = readTrade(form, ids.id, saved ? null : state.trades.length, locale);
   if (!read.trade) return { problems: read.problems };
@@ -632,7 +673,10 @@ const closedYear = (trade: Trade): string | null => trade.exitDate?.slice(0, 4) 
 /**
  * Whether "Delete a year" keeps a trade closed in that year: part of a trade
  * still open, which needs its parts to know how much of it is (audit 3
- * F2-2). It goes with a later year, once nothing of the trade is open.
+ * F2-2). It goes with a later year, once nothing of the trade is open. And
+ * part of a part, made when a part could still be opened again: its trade,
+ * once emptied, would go with it, and its own trade would count it as open
+ * again (audit 4 F2-6).
  */
 function keptPart(
   trade: Trade,
@@ -640,7 +684,9 @@ function keptPart(
   parts: ReadonlyMap<string, Parts>,
 ): boolean {
   const whole = trade.parent === undefined ? undefined : byId.get(trade.parent);
-  return whole !== undefined && openQuantity(whole, parts) > 0;
+  if (whole === undefined) return false;
+  const partOfPart = whole.parent !== undefined && byId.has(whole.parent);
+  return openQuantity(whole, parts) > 0 || partOfPart;
 }
 
 /**
@@ -804,6 +850,24 @@ export function stats(trades: readonly Trade[]): Stats {
     worst: sorted.at(-1)?.trade ?? null,
     averageR: rs.length === 0 ? null : tidy(rs.reduce((total, r) => total + r, 0) / rs.length),
   };
+}
+
+/**
+ * What's read out when "Results for" changes, as the results change without
+ * a word otherwise (audit 4 G-9): the period, how many trades were closed in
+ * it, and their net result, `money` formatting it as the tile does.
+ */
+export function periodSummary(
+  period: Period,
+  closed: readonly Trade[],
+  money: (amount: number) => string,
+  locale?: string,
+): string {
+  const { count, total } = stats(closed);
+  const label = PERIOD_LABELS[period];
+  return count === 0
+    ? `${label}: no closed trades.`
+    : `${label}: ${closedCount(count, locale)}, net result ${money(total)}.`;
 }
 
 export interface Group {
@@ -984,11 +1048,12 @@ export function dateLabel(date: IsoDate, locale = DATE_LOCALE): string {
 // ---------- Spreadsheet ----------
 
 /**
- * The trades as a CSV file (one row each, the latest entered first). A
- * trade closed in parts has a row for each part, and one for what's still
- * open of it, if anything is.
+ * The trades as a CSV file (one row each, the latest entered first), as a
+ * spreadsheet in the language of `locale` (the browser's own when left out)
+ * reads it (csvFile). A trade closed in parts has a row for each part, and
+ * one for what's still open of it, if anything is.
  */
-export function toCsv(state: TradesState): string {
+export function toCsv(state: TradesState, locale?: string): string {
   const parts = partsOf(state.trades);
   const header = [
     'Symbol',
@@ -1025,7 +1090,7 @@ export function toCsv(state: TradesState): string {
       trade.setup,
       trade.notes,
     ]);
-  return csvFile([header, ...rows]);
+  return csvFile([header, ...rows], locale);
 }
 
 // ---------- Settings ----------

@@ -6,7 +6,8 @@
  * repair-form.ts (its photos in form-photos.ts) and vehicle-form.ts.
  * "Delete a year…", which deletes a year's repairs and their photos to make
  * room, is in delete-year.ts. Photos: photos.ts; looking at them,
- * photo-viewer.ts.
+ * photo-viewer.ts. The forms, "Delete a year…" and the photo viewer load
+ * the first time they open (later()), so opening the page loads less.
  */
 import { today } from '@shkriuss/dates';
 import { createStore, downloadFile } from '@shkriuss/storage';
@@ -47,6 +48,7 @@ import {
   roomNote,
   setCurrency,
   setUnit,
+  sortedVehicles,
   systemNames,
   toCsv,
   totals,
@@ -72,10 +74,10 @@ import {
   thumbUrl,
 } from './photos.ts';
 import { required } from '@shkriuss/ui/dom';
-import { mountDeleteYear } from './delete-year.ts';
-import { mountPhotoViewer } from './photo-viewer.ts';
-import { mountRepairForm } from './repair-form.ts';
-import { mountVehicleForm } from './vehicle-form.ts';
+import type { DeleteYear } from './delete-year.ts';
+import type { PhotoViewer } from './photo-viewer.ts';
+import type { RepairFormControls } from './repair-form.ts';
+import type { VehicleFormControls } from './vehicle-form.ts';
 
 const vehiclesStore = createStore<VehiclesState>({
   key: 'repairs-vehicles',
@@ -102,6 +104,65 @@ const settingsStore = createStore<SettingsState>({
 
 /** Search results are read out this long after the last key press. */
 const ANNOUNCE_DELAY_MS = 700;
+
+/** A part of the page that loads after the page itself (later()). */
+interface Later<T> {
+  /** The part, once loaded. Before, it was never opened: nothing in it needs keeping up. */
+  readonly now: T | null;
+  /** Starts loading the part, without doing anything with it yet. */
+  load(): void;
+  /** Loads the part if need be, then does `act` with it (while loading, only the last asked). */
+  use(act: (part: T) => void): void;
+}
+
+/**
+ * A part of the page loaded with import() after the page itself: the forms,
+ * "Delete a year…" and the photo viewer. Opening the page then loads less,
+ * and stays within its size budget (audit 4 J-6).
+ */
+function later<T>(load: () => Promise<T>): Later<T> {
+  let now: T | null = null;
+  let loading: Promise<void> | null = null;
+  let next: ((part: T) => void) | null = null;
+  const start = (): void => {
+    loading ??= load().then(
+      (part) => {
+        now = part;
+        next?.(part);
+        next = null;
+      },
+      () => {
+        // The next tap tries again. Said only when a tap is waiting for it.
+        loading = null;
+        if (next === null) return;
+        next = null;
+        showProblem('Repairs couldn’t open that. Please try again.');
+      },
+    );
+  };
+  return {
+    get now() {
+      return now;
+    },
+    load: start,
+    use(act) {
+      if (now) {
+        act(now);
+        return;
+      }
+      next = act;
+      start();
+    },
+  };
+}
+
+/** Runs `task` once the page has nothing else to do (soon after it opened). */
+function whenIdle(task: () => void): void {
+  // Safari has no requestIdleCallback: a moment after loading will do.
+  if (typeof window.requestIdleCallback === 'function') {
+    window.requestIdleCallback(task, { timeout: 2000 });
+  } else window.setTimeout(task, 500);
+}
 
 export function mountRepairs(root: Document): void {
   const announcer = required<HTMLElement>(root, '[data-announcer]');
@@ -146,10 +207,15 @@ export function mountRepairs(root: Document): void {
   let shown = PAGE_SIZE;
   /** A repair just saved: never hidden behind "Show more" (shownCount). */
   let reveal: string | null = null;
-  let deleting: { type: 'repair' | 'vehicle'; id: string } | null = null;
+  /** What the delete dialog would delete (for a vehicle, with how many repairs it said go too). */
+  let deleting: { type: 'repair' | 'vehicle'; id: string; count?: number } | null = null;
   let syncWasOn = false;
   let announceTimer: number | undefined;
-  const photoViewer = mountPhotoViewer(root, () => vehicles);
+  const photoViewer = later<PhotoViewer>(() =>
+    import('./photo-viewer.ts').then(({ mountPhotoViewer }) =>
+      mountPhotoViewer(root, () => vehicles),
+    ),
+  );
 
   const announce = (message: string): void => {
     announcer.textContent = message;
@@ -168,10 +234,11 @@ export function mountRepairs(root: Document): void {
   const filterVehicle = (): string | null => vehicleFilter.value || null;
 
   /** Saves, shows the change, and tells other devices. */
+  /** Saves, shows the change, and tells other devices. False if it couldn't be saved. */
   function save(
     next: { vehicles?: VehiclesState; repairs?: RepairsState; settings?: SettingsState },
     message: string,
-  ): void {
+  ): boolean {
     let ok = true;
     if (next.vehicles) {
       vehicles = next.vehicles;
@@ -188,6 +255,7 @@ export function mountRepairs(root: Document): void {
     if (reportSave(ok)) announce(message);
     render();
     sync.changed();
+    return ok;
   }
 
   // ---------- Showing it ----------
@@ -385,9 +453,10 @@ export function mountRepairs(root: Document): void {
     currencySelect.value = currencyOf(settings);
     mileageLabel.textContent = `Mileage (${unitOf(settings)})`;
     labourHint.textContent = `In ${currencyOf(settings)}. Each part’s price goes with the part.`;
+    // Only the names: no summaries to work out again (audit 4 F2-2).
     fillList(
       suggestions.vehicles,
-      vehicleSummaries(vehicles, repairs).map((summary) => summary.vehicle.name),
+      sortedVehicles(vehicles).map((vehicle) => vehicle.name),
     );
     fillList(suggestions.systems, systemNames(repairs));
     fillList(
@@ -407,39 +476,50 @@ export function mountRepairs(root: Document): void {
 
   // ---------- The forms: repair-form.ts, vehicle-form.ts ----------
 
-  const repairEditor = mountRepairForm(root, {
-    data: () => ({ vehicles, repairs, settings }),
-    shownVehicle: () => findVehicle(filterVehicle()),
-    save,
-    keepShown(id) {
-      reveal = id;
-    },
-    focusRepair: (id) => focusItem(daysList, id, 'edit-repair', newRepairButton),
-    syncOn: () => sync.status().on,
-    filesAdded: (files) => sync.filesAdded(files),
-    filesRemoved: (files) => sync.filesRemoved(files),
-  });
+  const repairEditor = later<RepairFormControls>(() =>
+    import('./repair-form.ts').then(({ mountRepairForm }) =>
+      mountRepairForm(root, {
+        data: () => ({ vehicles, repairs, settings }),
+        shownVehicle: () => findVehicle(filterVehicle()),
+        save,
+        keepShown(id) {
+          reveal = id;
+        },
+        focusRepair: (id) => focusItem(daysList, id, 'edit-repair', newRepairButton),
+        syncOn: () => sync.status().on,
+        filesAdded: (files) => sync.filesAdded(files),
+        filesRemoved: (files) => sync.filesRemoved(files),
+      }),
+    ),
+  );
 
-  const vehicleEditor = mountVehicleForm(root, {
-    vehicles: () => vehicles,
-    save,
-    focusVehicle: (id) => focusItem(vehicleList, id, 'edit-vehicle', newVehicleButton),
-  });
+  const vehicleEditor = later<VehicleFormControls>(() =>
+    import('./vehicle-form.ts').then(({ mountVehicleForm }) =>
+      mountVehicleForm(root, {
+        vehicles: () => vehicles,
+        save,
+        focusVehicle: (id) => focusItem(vehicleList, id, 'edit-vehicle', newVehicleButton),
+      }),
+    ),
+  );
 
   // ---------- Deleting ----------
 
+  const repairsOf = (vehicle: string) =>
+    repairs.repairs.filter((repair) => repair.vehicle === vehicle);
+
   function askToDelete(type: 'repair' | 'vehicle'): void {
     if (type === 'repair') {
-      const repair = findRepair(repairEditor.editing());
+      const repair = findRepair(repairEditor.now?.editing());
       if (!repair) return;
       deleting = { type, id: repair.id };
       deleteTitle.textContent = 'Delete this repair?';
       deleteText.textContent = `The repair on ${vehicleName(vehicles, repair.vehicle)} on ${dateLabel(repair.date)} will be removed.`;
     } else {
-      const vehicle = findVehicle(vehicleEditor.editing());
+      const vehicle = findVehicle(vehicleEditor.now?.editing());
       if (!vehicle) return;
-      deleting = { type, id: vehicle.id };
-      const count = repairs.repairs.filter((repair) => repair.vehicle === vehicle.id).length;
+      const count = repairsOf(vehicle.id).length;
+      deleting = { type, id: vehicle.id, count };
       deleteTitle.textContent = `Delete ${vehicle.name}?`;
       deleteText.textContent =
         count === 0
@@ -458,35 +538,44 @@ export function mountRepairs(root: Document): void {
       repairDialog.close();
       const repair = findRepair(target.id);
       if (!repair) return;
-      save({ repairs: removeRepair(repairs, repair.id) }, 'Deleted the repair.');
-      void deletePhotos(repair.photos);
-      sync.filesRemoved(photoFiles(repair.photos));
+      // Its photos go once it's deleted for good, not before (audit 4 F2-8).
+      if (save({ repairs: removeRepair(repairs, repair.id) }, 'Deleted the repair.')) {
+        void deletePhotos(repair.photos);
+        sync.filesRemoved(photoFiles(repair.photos));
+      }
       newRepairButton.focus();
     } else {
       const vehicle = findVehicle(target.id);
       vehicleDialog.close();
       if (!vehicle) return;
-      const own = repairs.repairs.filter((repair) => repair.vehicle === vehicle.id);
+      const own = repairsOf(vehicle.id);
       const count = own.length;
-      void deletePhotos(photosOf(own));
-      sync.filesRemoved(photoFiles(photosOf(own)));
-      save(
+      const saved = save(
         removeVehicle(vehicles, repairs, vehicle.id),
         count === 0
           ? `Deleted ${vehicle.name}.`
           : `Deleted ${vehicle.name} and its ${countLabel(count, 'repair', 'repairs')}.`,
       );
+      // Their photos go once they're deleted for good, not before (audit 4 F2-8).
+      if (saved) {
+        void deletePhotos(photosOf(own));
+        sync.filesRemoved(photoFiles(photosOf(own)));
+      }
       newVehicleButton.focus();
     }
   });
 
   // ---------- Deleting a year: delete-year.ts ----------
 
-  const yearDeleter = mountDeleteYear(root, {
-    repairs: () => repairs,
-    save,
-    filesRemoved: (files) => sync.filesRemoved(files),
-  });
+  const yearDeleter = later<DeleteYear>(() =>
+    import('./delete-year.ts').then(({ mountDeleteYear }) =>
+      mountDeleteYear(root, {
+        repairs: () => repairs,
+        save,
+        filesRemoved: (files) => sync.filesRemoved(files),
+      }),
+    ),
+  );
 
   // ---------- Everything else ----------
 
@@ -496,22 +585,29 @@ export function mountRepairs(root: Document): void {
     const id = button?.closest<HTMLElement>('li[data-id]')?.dataset['id'];
     switch (action) {
       case 'new-repair':
-        repairEditor.open(undefined);
+        repairEditor.use((form) => form.open(undefined));
         break;
       case 'edit-repair':
-        repairEditor.open(findRepair(id));
+        // As it is once the form has loaded.
+        repairEditor.use((form) => {
+          const repair = findRepair(id);
+          if (repair) form.open(repair);
+        });
         break;
       case 'add-part':
-        repairEditor.addPart();
+        repairEditor.now?.addPart();
         break;
       case 'remove-part':
-        repairEditor.removePart(button?.closest('li'));
+        repairEditor.now?.removePart(button?.closest('li'));
         break;
       case 'new-vehicle':
-        vehicleEditor.open(undefined);
+        vehicleEditor.use((form) => form.open(undefined));
         break;
       case 'edit-vehicle':
-        vehicleEditor.open(findVehicle(id));
+        vehicleEditor.use((form) => {
+          const vehicle = findVehicle(id);
+          if (vehicle) form.open(vehicle);
+        });
         break;
       case 'show-vehicle': {
         const vehicle = findVehicle(id);
@@ -533,27 +629,27 @@ export function mountRepairs(root: Document): void {
         break;
       }
       case 'add-photos':
-        repairEditor.pickPhotos();
+        repairEditor.now?.pickPhotos();
         break;
       case 'remove-photo': {
         const photo = button?.closest<HTMLElement>('li[data-photo]')?.dataset['photo'];
-        if (photo) repairEditor.removePhoto(photo);
+        if (photo) repairEditor.now?.removePhoto(photo);
         break;
       }
       case 'view-photo': {
         const repair = findRepair(id);
         const photo = button?.dataset['photo'];
-        if (repair && photo) void photoViewer.open(repair, photo);
+        if (repair && photo) photoViewer.use((viewer) => void viewer.open(repair, photo));
         break;
       }
       case 'previous-photo':
-        photoViewer.step(-1);
+        photoViewer.now?.step(-1);
         break;
       case 'next-photo':
-        photoViewer.step(1);
+        photoViewer.now?.step(1);
         break;
       case 'save-photo':
-        void photoViewer.saveCopy();
+        void photoViewer.now?.saveCopy();
         break;
       case 'cancel':
         button?.closest('dialog')?.close();
@@ -565,7 +661,7 @@ export function mountRepairs(root: Document): void {
         askToDelete('vehicle');
         break;
       case 'delete-year':
-        yearDeleter.open();
+        yearDeleter.use((deleter) => deleter.open());
         break;
       case 'csv': {
         // The answer shows under the button tapped (and is read out).
@@ -634,21 +730,39 @@ export function mountRepairs(root: Document): void {
     vehicles = vehiclesStore.load();
     repairs = repairsStore.load();
     settings = settingsStore.load();
+    // "Delete Bus 105?" says how many repairs go with the bus. When that
+    // changed on another device or tab, it closes, and says why, so it
+    // doesn't delete more than it said (audit 4 F2-1). When what it would
+    // delete is gone, it closes, and the form under it says why.
+    const target = deleteDialog.open ? deleting : null;
+    if (target?.type === 'repair' && !findRepair(target.id)) deleteDialog.close();
+    if (target?.type === 'vehicle') {
+      const vehicle = findVehicle(target.id);
+      const now = repairsOf(target.id).length;
+      if (!vehicle) deleteDialog.close();
+      else if (now !== target.count) {
+        deleteDialog.close();
+        vehicleDialog.close();
+        showProblem(
+          `${vehicle.name} has ${countLabel(now, 'repair', 'repairs')} now, after changes on another device. Nothing was deleted.`,
+        );
+      }
+    }
     // What's being changed was deleted on another device or tab: the form
     // closes, and says why (audit 3 G-6). Changed there, the form's photos
     // follow (audit 3 F2-1).
-    const editingRepair = repairEditor.editing();
+    const editingRepair = repairEditor.now?.editing() ?? null;
     const current = findRepair(editingRepair);
     if (editingRepair !== null && !current) {
       repairDialog.close();
       showProblem('That repair was deleted on another device.');
-    } else if (current) repairEditor.follow(current);
-    const editingVehicle = vehicleEditor.editing();
+    } else if (current) repairEditor.now?.follow(current);
+    const editingVehicle = vehicleEditor.now?.editing() ?? null;
     if (editingVehicle !== null && !findVehicle(editingVehicle)) {
       vehicleDialog.close();
       showProblem('That vehicle was deleted on another device.');
     }
-    yearDeleter.refresh();
+    yearDeleter.now?.refresh();
     keepFocus(render, newRepairButton);
   }
 
@@ -665,7 +779,7 @@ export function mountRepairs(root: Document): void {
    */
   function deleteUnused(): void {
     if (repairsStore.status() !== 'ok') return;
-    const inForm = repairEditor.inUse();
+    const inForm = repairEditor.now?.inUse() ?? [];
     void deleteUnusedPhotos(new Set([...photosOf(repairsStore.load().repairs), ...inForm]));
   }
 
@@ -698,7 +812,7 @@ export function mountRepairs(root: Document): void {
       reload();
       // Photos taken off repairs on another device (or with them) aren't needed
       // here now, unless the repair form being filled in has them.
-      const inForm = repairEditor.inUse();
+      const inForm = repairEditor.now?.inUse() ?? [];
       const used = new Set([...photosOf(repairs.repairs), ...inForm]);
       const unused = before.filter((id) => !used.has(id));
       if (unused.length > 0) void deletePhotos(unused);
@@ -726,4 +840,10 @@ export function mountRepairs(root: Document): void {
   render();
   // Photos left behind (by an older backup restored, say) go.
   deleteUnused();
+  // The parts that load later load now, while nothing else goes on, so a
+  // tap finds them here and opens the form at once, within the tap: an
+  // iPhone raises its keyboard only for a field focused then (audit 4 J-6).
+  whenIdle(() => {
+    for (const part of [repairEditor, vehicleEditor, yearDeleter, photoViewer]) part.load();
+  });
 }

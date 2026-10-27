@@ -1,7 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { appSecret, Device, pretendBrowser } from '../../../../tests/unit/sync-devices.ts';
 import {
   addCounter,
   changeCount,
+  COUNTER_SYNC,
   emptyState,
   isTallyState,
   MAX_COUNTERS,
@@ -10,6 +12,7 @@ import {
   removeCounter,
   resetCounter,
   secondVersion,
+  type Counter,
   type TallyState,
 } from './counters.ts';
 
@@ -103,5 +106,146 @@ describe('isTallyState', () => {
     { counters: [{ id: '', name: 'A', count: 1 }] },
   ])('rejects %j', (value) => {
     expect(isTallyState(value)).toBe(false);
+  });
+});
+
+describe('counting on two devices before they sync (audit 4 F2-3)', () => {
+  beforeEach(() => pretendBrowser('https://tally.shkriuss.app'));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  /** Tally's store, synced as the page syncs it. */
+  const setup = {
+    key: 'tally',
+    version: 1,
+    fallback: emptyState,
+    validate: isTallyState,
+    items: (value: TallyState) => value.counters,
+    withItems: (value: TallyState, counters: Counter[]) => ({ ...value, counters }),
+    ...COUNTER_SYNC,
+  };
+
+  it('keeps both counts, also when both counted to the same number', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(Date.UTC(2026, 9, 26, 12));
+    const secret = appSecret();
+    const phone = new Device('tally', secret, setup);
+    const tablet = new Device('tally', secret, setup);
+    phone.save(changeCount(addCounter(emptyState(), 'Water', 'w'), 'w', 5));
+    await phone.syncNow();
+    await tablet.syncNow();
+    expect(tablet.value.counters).toEqual([{ id: 'w', name: 'Water', count: 5 }]);
+
+    // A glass on each, before the tablet syncs: two glasses, not one.
+    vi.setSystemTime(Date.now() + 60_000);
+    phone.save(changeCount(phone.value, 'w', 1));
+    tablet.save(changeCount(tablet.value, 'w', 1));
+    await phone.syncNow();
+    vi.setSystemTime(Date.now() + 60_000);
+    await tablet.syncNow();
+    await phone.syncNow();
+    const counts = (device: typeof phone) =>
+      device.value.counters.map((counter) => `${counter.name}: ${counter.count}`);
+    expect(counts(tablet)).toEqual(['Water: 6', 'Water (second version): 6']);
+    expect(counts(phone)).toEqual(counts(tablet));
+
+    // Counting on one device only, as usual: one counter.
+    vi.setSystemTime(Date.now() + 60_000);
+    phone.save(changeCount(phone.value, 'w', 1));
+    await phone.syncNow();
+    await tablet.syncNow();
+    expect(counts(tablet)).toEqual(['Water: 7', 'Water (second version): 6']);
+  });
+
+  const counts = (device: Device<TallyState, Counter>) =>
+    device.value.counters.map((counter) => `${counter.name}: ${counter.count}`);
+
+  // From review: a reset on both devices was kept twice too.
+  it('a reset on both devices is one change', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(Date.UTC(2026, 9, 26, 12));
+    const secret = appSecret();
+    const phone = new Device('tally', secret, setup);
+    const tablet = new Device('tally', secret, setup);
+    phone.save(changeCount(addCounter(emptyState(), 'Water', 'w'), 'w', 5));
+    await phone.syncNow();
+    await tablet.syncNow();
+    vi.setSystemTime(Date.now() + 60_000);
+    phone.save(resetCounter(phone.value, 'w'));
+    tablet.save(resetCounter(tablet.value, 'w'));
+    await phone.syncNow();
+    vi.setSystemTime(Date.now() + 60_000);
+    await tablet.syncNow();
+    await phone.syncNow();
+    expect(counts(tablet)).toEqual(['Water: 0']);
+    expect(counts(phone)).toEqual(['Water: 0']);
+  });
+
+  // From review: two tabs on one device, both syncing when it's back online,
+  // each noted the one glass at a moment of its own, and it was kept twice.
+  it('a glass counted with two tabs open is one glass, whichever tab syncs', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(Date.UTC(2026, 9, 26, 12));
+    const phone = new Device('tally', appSecret(), setup);
+    const otherTab = phone.anotherTab();
+    phone.save(changeCount(addCounter(emptyState(), 'Water', 'w'), 'w', 5));
+    await phone.syncNow();
+    vi.setSystemTime(Date.now() + 60_000);
+    // Offline, a glass.
+    phone.save(changeCount(phone.value, 'w', 1));
+
+    // Back online, both tabs sync at once; the first upload's answer is late.
+    const real = globalThis.fetch;
+    const waiting: {
+      method: string;
+      answer: () => Promise<Response>;
+      send: (r: Response) => void;
+    }[] = [];
+    let held = true;
+    vi.stubGlobal('fetch', (input: string, init?: RequestInit) =>
+      held
+        ? new Promise<Response>((send) =>
+            waiting.push({ method: init?.method ?? 'GET', answer: () => real(input, init), send }),
+          )
+        : real(input, init),
+    );
+    const until = async (done: () => boolean) => {
+      for (let tries = 0; tries < 1000 && !done(); tries += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 2));
+      }
+    };
+    let otherDone = false;
+    const first = phone.sync.syncNow();
+    await until(() => waiting.length === 1);
+    vi.setSystemTime(Date.now() + 7);
+    const second = otherTab.syncNow().then(() => {
+      otherDone = true;
+    });
+    // The other tab asks for the copy too, or (taking turns) waits for its turn.
+    await until(() => otherDone || waiting.length === 2);
+    // The first tab's upload reaches the server; its answer comes after the other tab is done.
+    const answer = async (entry: (typeof waiting)[number]) => entry.send(await entry.answer());
+    await answer(waiting.shift() as (typeof waiting)[number]);
+    await until(() => waiting.some((entry) => entry.method === 'PUT'));
+    const upload = waiting.splice(
+      waiting.findIndex((entry) => entry.method === 'PUT'),
+      1,
+    )[0] as (typeof waiting)[number];
+    const uploaded = await upload.answer();
+    while (!otherDone) {
+      const next = waiting.shift();
+      if (next) await answer(next);
+      else await new Promise((resolve) => setTimeout(resolve, 2));
+    }
+    await second;
+    upload.send(uploaded);
+    await first;
+    held = false;
+    vi.stubGlobal('fetch', real);
+    await otherTab.syncNow();
+    await phone.syncNow();
+    expect(counts(phone)).toEqual(['Water: 6']);
   });
 });

@@ -20,6 +20,7 @@ import { withEdits } from '@shkriuss/sync/edits';
 import { keepFocus } from '@shkriuss/ui/keep-focus';
 import { clearProblem, focusProblem, reportSave, showProblem } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
+import { watchTextLimits } from '@shkriuss/ui/text-limit';
 import { site } from 'virtual:shkriuss/site';
 import {
   addExtra,
@@ -423,9 +424,15 @@ export function mountMeals(root: Document): void {
     planName.toggleAttribute('aria-invalid', problems.name !== undefined);
   }
 
+  // A paste longer than a box takes is cut by the browser: say so (audit 4 F2-7).
+  const planLimits = watchTextLimits(planForm);
+  const mealLimits = watchTextLimits(mealForm);
+  const extraLimits = watchTextLimits(extraForm);
+
   /** Opens the plan form for a planned meal, or for a new one on `date`. */
   function openPlan(entry: Planned | null, date: IsoDate, name = ''): void {
     editingPlanned = entry?.id ?? null;
+    planLimits.clear();
     openedPlanned = entry && { name: entry.name, date: entry.date, slot: entry.slot };
     planTitle.textContent = entry ? 'Change meal' : 'Add a meal';
     removePlannedButton.hidden = !entry;
@@ -510,6 +517,7 @@ export function mountMeals(root: Document): void {
 
   function openMeal(meal: Meal | null): void {
     editingMeal = meal?.id ?? null;
+    mealLimits.clear();
     openedMeal = meal && mealDraftOf(meal);
     mealTitle.textContent = meal ? 'Edit meal' : 'New meal';
     planMealButton.hidden = !meal;
@@ -697,6 +705,7 @@ export function mountMeals(root: Document): void {
     const name = extraInput.value.trim();
     const saved = saveShopping(addExtra(shopping, shown, name, crypto.randomUUID()));
     extraInput.value = '';
+    extraLimits.clear();
     shoppingStatus.textContent = '';
     renderShopping();
     if (saved) announce(`Added “${name}” to the list.`);
@@ -730,6 +739,20 @@ export function mountMeals(root: Document): void {
     shopping = shoppingStore.load();
     reminders = remindersStore.load();
     reminderControls.changed();
+    // What's being changed was removed on another device or tab: the form
+    // closes, and says why, instead of saving nothing and saying "Changed"
+    // (audit 4 F2-4, as audit 3 G-6 did for the other apps).
+    const gone = (items: readonly { id: string }[], id: string | null): boolean =>
+      id !== null && !items.some((item) => item.id === id);
+    if (planDialog.open && gone(plan.planned, editingPlanned)) {
+      planDialog.close();
+      showProblem('That meal was taken off the plan on another device.');
+    }
+    if (mealDialog.open && gone(meals.meals, editingMeal)) {
+      if (deleteDialog.open) deleteDialog.close();
+      mealDialog.close();
+      showProblem('That meal was deleted on another device.');
+    }
     keepFocus(render, weekHeading);
   }
 

@@ -33,6 +33,7 @@ import {
   overClosed,
   overClosedNote,
   partsOf,
+  periodSummary,
   profit,
   readChange,
   readClose,
@@ -54,6 +55,7 @@ import {
   toForm,
   TRADES_VERSION,
   withSettings,
+  type Period,
   type Trade,
   type TradeForm,
   type TradesState,
@@ -140,10 +142,11 @@ describe('reading the form', () => {
   it('reads numbers the way the person’s language writes them', () => {
     const price = (text: string, locale: string) =>
       readTrade({ ...form, entryPrice: text, stop: '' }, 'a', 0, locale).trade?.entryPrice;
-    expect(price('1,234', 'en-US')).toBe(1234);
     expect(price('1,234.5', 'en-US')).toBe(1234.5);
-    expect(price('1.234', 'de-DE')).toBe(1234);
+    expect(price('1,234,567', 'en-US')).toBe(1_234_567);
+    expect(price('1.234', 'en-US')).toBe(1.234);
     expect(price('1,234', 'de-DE')).toBe(1.234);
+    expect(price('1.234,5', 'de-DE')).toBe(1234.5);
     // A price with three decimals, shown in the form in German and saved unchanged.
     const forex = trade({ symbol: 'EURUSD', entryPrice: 1.085, exitPrice: 1.092, stop: 1.081 });
     expect(toForm(forex, 'de-DE')).toMatchObject({ entryPrice: '1,085', exitPrice: '1,092' });
@@ -213,6 +216,29 @@ describe('reading the form', () => {
     expect(readTrade({ ...form, stop: '151' }, 'a', 0).problems).toEqual({
       stop: 'For a long trade, the stop loss is below the entry price.',
     });
+    // One sign before three digits could be either: the person is asked
+    // which. An iPhone keypad offers its region's decimal sign, so "149,853"
+    // in English may be a price of 149.853 (audit 4 F2-10); fees are asked
+    // about as Budget's amounts are (audit 4 F2-12).
+    expect(
+      readTrade(
+        { ...form, entryPrice: '149,853', quantity: '1,500', stop: '', fees: '1,000' },
+        'a',
+        0,
+        'en-US',
+      ).problems,
+    ).toEqual({
+      entryPrice: 'Enter 149853 or 149.853 to show which you mean.',
+      quantity: 'Enter 1500 or 1.5 to show which you mean.',
+      fees: 'Enter 1000 or 1 to show which you mean.',
+    });
+    expect(
+      readTrade({ ...form, entryPrice: '1.500', fees: '1.500' }, 'a', 0, 'fr-FR').problems,
+    ).toEqual({
+      entryPrice: 'Enter 1500 or 1,5 to show which you mean.',
+      fees: 'Enter 1500 or 1,5 to show which you mean.',
+    });
+    expect(readTrade({ ...form, fees: '1,5' }, 'a', 0, 'fr-FR').trade?.fees).toBe(1.5);
     expect(readTrade({ ...form, side: 'short' }, 'a', 0).problems).toEqual({
       stop: 'For a short trade, the stop loss is above the entry price.',
     });
@@ -301,6 +327,12 @@ describe('closing part of a trade', () => {
     expect(close(closeForm, '100')).toEqual({
       trade: { ...open, exitDate: '2026-10-05', exitPrice: 110, fees: 2 },
       rest: null,
+    });
+  });
+
+  it('asks which number is meant when the quantity closed could be two (audit 4 F2-10)', () => {
+    expect(close(closeForm, '1,500').problems).toEqual({
+      closeQuantity: 'Enter 1500 or 1.5 to show which you mean.',
     });
   });
 
@@ -675,6 +707,84 @@ describe('making room', () => {
     expect(removeClosedYear(orphan, '2024').trades).toEqual([]);
   });
 
+  // Audit 4 F2-6: 100 bought; 40 closed by mistake as part P, opened again,
+  // then closed in two parts of its own, 10 in 2024 and 30 in 2025. Deleting
+  // 2024 took P with its part, and the 100 showed as open.
+  it('keeps the parts of a part, and no longer lets a part be opened again', () => {
+    const lot = trade({ id: 'a', quantity: 100, exitDate: null, exitPrice: null });
+    const nested = state(
+      lot,
+      trade({ id: 'p', quantity: 40, exitDate: null, exitPrice: null, parent: 'a' }),
+      trade({ id: 'q', quantity: 10, exitDate: '2024-06-01', parent: 'p' }),
+      trade({ id: 'r', quantity: 30, exitDate: '2025-02-01', parent: 'p' }),
+    );
+    expect(openQuantity(lot, partsOf(nested.trades))).toBe(60);
+    // Nothing to delete in either year: each is part of a part.
+    expect(closedYears(nested)).toEqual([]);
+    const after = removeClosedYear(nested, '2024');
+    expect(after).toEqual(nested);
+    expect(openQuantity(lot, partsOf(after.trades))).toBe(60);
+
+    // A part closed off a trade can't be opened again in its form: deleting it does that.
+    const part = trade({
+      id: 'p',
+      quantity: 40,
+      entryDate: '2024-01-02',
+      exitDate: '2024-03-01',
+      parent: 'a',
+    });
+    const kept = state(lot, part);
+    expect(
+      readChange(
+        { ...toForm(part, 'en-US'), exitDate: '', exitPrice: '' },
+        kept,
+        { id: 'p', newId: 'x' },
+        'en-US',
+      ).problems,
+    ).toEqual({
+      exitDate:
+        'This part was closed off a trade, so it stays closed. To open it again, delete it: its quantity is then open in its trade.',
+    });
+    // Its other details still change.
+    expect(
+      readChange(
+        { ...toForm(part, 'en-US'), notes: 'Sold early' },
+        kept,
+        { id: 'p', newId: 'x' },
+        'en-US',
+      ).trade,
+    ).toMatchObject({ id: 'p', parent: 'a', notes: 'Sold early', exitDate: '2024-03-01' });
+
+    // From review: 100 bought, 40 closed in 2024, 60 in 2025. Deleting 2024
+    // deletes its part and the emptied trade; the 2025 part stays, as a
+    // trade of its own, which can be opened again: there's no trade to
+    // delete it into, so the advice would have lost the 60.
+    const split = state(
+      lot,
+      trade({ id: 'p1', quantity: 40, exitDate: '2024-06-01', exitPrice: 110, parent: 'a' }),
+      trade({ id: 'p2', quantity: 60, exitDate: '2025-02-01', exitPrice: 120, parent: 'a' }),
+    );
+    const left = removeClosedYear(split, '2024');
+    expect(left.trades.map((entry) => entry.id)).toEqual(['p2']);
+    const orphan = left.trades[0] as Trade;
+    const reopened = readChange(
+      { ...toForm(orphan, 'en-US'), exitDate: '', exitPrice: '' },
+      left,
+      { id: 'p2', newId: 'x' },
+      'en-US',
+    );
+    expect(reopened.problems).toBeUndefined();
+    expect(reopened.trade).toMatchObject({
+      id: 'p2',
+      quantity: 60,
+      exitDate: null,
+      exitPrice: null,
+    });
+    expect(openTrades(saveTrade(left, reopened.trade as Trade)).map((entry) => entry.id)).toEqual([
+      'p2',
+    ]);
+  });
+
   it('says so once Trades is nearly full', () => {
     const number = (value: number) => new Intl.NumberFormat('en-US').format(value);
     const nearly = LIMITS.trades * 0.9;
@@ -767,6 +877,18 @@ describe('results', () => {
     expect(ids(closedIn(trades, 'last-month', TODAY))).toEqual(['c']);
     expect(ids(closedIn(trades, 'this-year', TODAY))).toEqual(['a', 'b', 'c']);
     expect(ids(closedIn(trades, 'last-month', '2026-01-15'))).toEqual(['d']);
+  });
+
+  // Audit 4 G-9: choosing another period changed every result without a word.
+  it('says what a period’s results are, to read out when it’s chosen', () => {
+    const money = (amount: number) =>
+      formatResult(amount, 'USD', { signed: true, locale: 'en-US' });
+    const summary = (period: Period, today = TODAY) =>
+      periodSummary(period, closedIn(trades, period, today), money, 'en-US');
+    expect(summary('this-month')).toBe('This month: 2 closed trades, net result +$150.00.');
+    expect(summary('last-month')).toBe('Last month: 1 closed trade, net result +$300.00.');
+    expect(summary('all')).toBe('All time: 4 closed trades, net result +$350.00.');
+    expect(summary('last-month', '2027-03-15')).toBe('Last month: no closed trades.');
   });
 
   it('adds up wins and losses', () => {
@@ -962,6 +1084,7 @@ describe('spreadsheet', () => {
           notes: '=SUM(A1)',
         }),
       ),
+      'en-US',
     );
     expect(csv.split('\r\n')).toEqual([
       // A byte-order mark first, for Excel (audit 3 F2-6).
@@ -975,17 +1098,24 @@ describe('spreadsheet', () => {
   it('has a row for each part of a trade, and for what’s still open of it', () => {
     const lot = trade({ id: 'a', quantity: 100, fees: 1, exitDate: null, exitPrice: null });
     const part = trade({ id: 'b', quantity: 40, fees: 2, parent: 'a' });
-    expect(toCsv(state(lot, part)).split('\r\n').slice(1)).toEqual([
+    expect(toCsv(state(lot, part), 'en-US').split('\r\n').slice(1)).toEqual([
       'AAPL,Long,2026-10-01,100,60,,,,0,,,,,',
       'AAPL,Long,2026-10-01,100,40,,2026-10-05,110,2,398,9.95,,,',
       '',
     ]);
     // All of it closed in parts: only the parts.
     const all = trade({ id: 'b', quantity: 100, parent: 'a' });
-    expect(toCsv(state(lot, all)).split('\r\n').slice(1)).toEqual([
+    expect(toCsv(state(lot, all), 'en-US').split('\r\n').slice(1)).toEqual([
       'AAPL,Long,2026-10-01,100,100,,2026-10-05,110,0,1000,10,,,',
       '',
     ]);
+  });
+
+  it('is written as a spreadsheet in the person’s language reads it (audit 4 F2-9)', () => {
+    const forex = trade({ symbol: 'EURUSD', entryPrice: 1.085, exitPrice: 1.092, quantity: 1000 });
+    expect(toCsv(state(forex), 'fr-FR').split('\r\n')[1]).toBe(
+      'EURUSD;Long;2026-10-01;1,085;1000;;2026-10-05;1,092;0;7;0,64516129;;;',
+    );
   });
 });
 

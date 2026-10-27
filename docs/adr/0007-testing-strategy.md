@@ -2,7 +2,9 @@
 
 Status: Accepted (2026-10-16). Changed in October 2026 (audit findings J-4
 and Z-6): the JS budget counts every file a page's scripts import, and is
-35 KB (see `pnpm check:dist` below).
+35 KB (see `pnpm check:dist` below). Changed by audit 4 (J-6): parts a page
+loads later with `import()` aren't counted, and that's how to cut weight
+before raising a budget (below).
 
 ## Context
 
@@ -31,9 +33,16 @@ reach production, and new apps should get strong checks without extra work.
   files they import, like the sync client (about 10 KB) that every app with
   sync loads. So Calendar really loaded 32 KB while the check said 21 KB.
   The check now counts what really loads, and the budget is 35 KB, which
-  every page meets today (Calendar is the biggest). Scripts started later,
+  every page met then (Calendar was the biggest). Scripts started later,
   like workers and Grammar's checker, aren't counted: they're not part of
   opening the page.
+
+  _Changed in October 2026 (audit 4 J-6):_ Repairs had become the biggest
+  page, less than 1 KB under the budget. Its forms, "Delete a year…" and
+  its photo viewer now load with `import()` once the page has opened
+  (Calendar's event editor uses `import()` too, when first opened). Code
+  loaded that way isn't counted either, so it's how to cut weight before
+  raising a budget ([quality.md](../quality.md)).
 
 ## Consequences
 

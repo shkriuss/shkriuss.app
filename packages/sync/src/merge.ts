@@ -266,6 +266,15 @@ export function merge(a: StoreSnapshot, b: StoreSnapshot): StoreSnapshot {
  *   other new items, it goes at the end of the list.
  * - Deleted on one device but changed on the other: the change wins, so no
  *   edit is lost.
+ * - Changed the same way on both: one edit, unless `keepSame` says the
+ *   value is an event (Tally's counts: one more on each device is two more,
+ *   audit 4 F2-3; it's true, or a rule for which values are). Then both are
+ *   kept too, if each change was noted at a different moment (the moment a
+ *   device's sync first saw it): one noted at the same moment is this
+ *   device's own, back from an upload whose answer was lost. Two tabs of
+ *   one device would note one change twice: the sync client lets only one
+ *   tab sync at a time. Two devices whose clocks are both behind the last
+ *   change note theirs at the same moment, so they count once, as before.
  *
  * Returns this device's snapshot to merge, and how many items it kept both of.
  */
@@ -275,6 +284,7 @@ export function keepBoth(
   theirs: StoreSnapshot,
   copy: (mine: Identified, theirs: Identified) => Identified,
   now: number,
+  keepSame: boolean | ((value: Identified) => boolean) = false,
 ): { snapshot: StoreSnapshot; kept: number } {
   const items = byId(mine.items);
   const ids = [...mine.order.ids];
@@ -298,7 +308,11 @@ export function keepBoth(
       continue;
     }
     const hereValue = fingerprint(here.value);
-    if (hereValue === before.h || hereValue === otherValue) continue;
+    if (hereValue === before.h) continue;
+    if (hereValue === otherValue) {
+      const event = typeof keepSame === 'function' ? keepSame(here.value as Identified) : keepSame;
+      if (!event || here.t === other.t) continue;
+    }
     const duplicate = copy(here.value as Identified, other.value as Identified);
     if (duplicate.id in items || Object.hasOwn(theirs.items, duplicate.id)) continue;
     items[id] = other;

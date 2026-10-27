@@ -11,12 +11,12 @@ import { site } from 'virtual:shkriuss/site';
 import {
   addCounter,
   changeCount,
+  COUNTER_SYNC,
   emptyState,
   isTallyState,
   nameError,
   removeCounter,
   resetCounter,
-  secondVersion,
   type Counter,
   type TallyState,
 } from '../lib/counters.ts';
@@ -209,8 +209,9 @@ export function mountTally(root: Document): void {
         store,
         items: (value) => value.counters,
         withItems: (value, counters) => ({ ...value, counters }),
-        // Changed on two devices at once: keep this device's version as its own counter.
-        conflictCopy: (mine) => secondVersion(mine, crypto.randomUUID()),
+        // Changed on two devices at once: keep this device's version as its
+        // own counter, also when both counted to the same number.
+        ...COUNTER_SYNC,
       }),
     ],
     onChange: () => {

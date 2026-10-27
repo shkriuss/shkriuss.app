@@ -25,17 +25,19 @@ test('reminds on the page and with a notification when the time comes', async ({
   await expect(
     page.getByRole('status').filter({ hasText: /^Reminder: Dentist, Today · 10:20\sAM/ }),
   ).toBeAttached();
-  expect(await shownNotifications(page)).toEqual([
-    {
-      title: 'Dentist',
-      body: expect.stringMatching(/^Today · 10:20\sAM – 11:20\sAM$/),
-      // The event's id, like the copy the notification service sends
-      // (push.spec.ts), so the two replace each other (audit 3 F1-6).
-      tag: 'seed-0',
-      icon: '/icon-192.png',
-      renotify: true,
-    },
-  ]);
+  await expect
+    .poll(() => shownNotifications(page))
+    .toEqual([
+      {
+        title: 'Dentist',
+        body: expect.stringMatching(/^Today · 10:20\sAM – 11:20\sAM$/),
+        // The event's id, like the copy the notification service sends
+        // (push.spec.ts), so the two replace each other (audit 3 F1-6).
+        tag: 'seed-0',
+        icon: '/icon-192.png',
+        renotify: true,
+      },
+    ]);
   await checkA11y(page, 'with a reminder showing');
 
   await reminders(page).getByRole('button', { name: 'Dismiss' }).click();

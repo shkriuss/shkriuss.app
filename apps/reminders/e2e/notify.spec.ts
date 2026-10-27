@@ -40,16 +40,18 @@ test('reminds at the time while Reminders is open', async ({ page }) => {
   await expect(
     page.getByRole('status').filter({ hasText: 'Reminder: Stretch, Take my pills.' }),
   ).toBeAttached();
-  expect(await shownNotifications(page)).toEqual([
-    { title: 'Stretch', body: REMINDER_BODY, tag: 'a', renotify: true, icon: '/icon-192.png' },
-    {
-      title: 'Take my pills',
-      body: REMINDER_BODY,
-      tag: 'b',
-      renotify: true,
-      icon: '/icon-192.png',
-    },
-  ]);
+  await expect
+    .poll(() => shownNotifications(page))
+    .toEqual([
+      { title: 'Stretch', body: REMINDER_BODY, tag: 'a', renotify: true, icon: '/icon-192.png' },
+      {
+        title: 'Take my pills',
+        body: REMINDER_BODY,
+        tag: 'b',
+        renotify: true,
+        icon: '/icon-192.png',
+      },
+    ]);
   // Once only; the one that doesn't repeat is now overdue.
   await page.clock.fastForward('02:00');
   expect(await shownNotifications(page)).toHaveLength(2);

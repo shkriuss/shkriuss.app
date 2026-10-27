@@ -409,8 +409,11 @@ import { CURRENCIES, LIMITS, UNIT_LABELS, UNITS } from '../lib/repairs.ts';
           rows="3"
           maxlength={LIMITS.text}
           placeholder="What was wrong"
-          aria-describedby="repair-problem-error"
+          aria-describedby="repair-problem-hint repair-problem-error"
         ></textarea>
+        <p class="field__hint" id="repair-problem-hint">
+          Up to {LIMITS.text.toLocaleString('en')} characters.
+        </p>
         <p class="field__error" id="repair-problem-error" data-error-for="problem"></p>
       </div>
       <div class="field">
@@ -425,24 +428,36 @@ import { CURRENCIES, LIMITS, UNIT_LABELS, UNITS } from '../lib/repairs.ts';
           rows="3"
           maxlength={LIMITS.text}
           placeholder="What you repaired, adjusted or checked"
-          aria-describedby="repair-work-error"
+          aria-describedby="repair-work-hint repair-work-error"
         ></textarea>
+        <p class="field__hint" id="repair-work-hint">
+          Up to {LIMITS.text.toLocaleString('en')} characters.
+        </p>
         <p class="field__error" id="repair-work-error" data-error-for="work"></p>
       </div>
       <fieldset class="stack stack--sm parts">
         <legend class="field__label">Parts replaced</legend>
         <ol role="list" class="stack stack--sm part-rows" data-part-rows></ol>
-        <p class="field__error" data-error-for="parts"></p>
+        <!-- Read out when it's shown: focus is elsewhere then (audit 4 G-5). -->
+        <p class="field__error" role="alert" id="repair-parts-error" data-error-for="parts"></p>
         <div>
-          <Button icon="plus" data-action="add-part">
+          <Button icon="plus" data-action="add-part" aria-describedby="repair-parts-hint">
             Add a part
           </Button>
         </div>
+        <p class="field__hint" id="repair-parts-hint">
+          Up to {LIMITS.parts} parts.
+        </p>
       </fieldset>
       <fieldset class="stack stack--sm">
         <legend class="field__label">Photos</legend>
         <ul role="list" class="photos" data-form-photos></ul>
         <p class="field__hint" data-form-photos-elsewhere hidden></p>
+        <div data-form-photos-missing hidden>
+          <Button variant="ghost" data-action="remove-missing-photos">
+            Take them off this repair
+          </Button>
+        </div>
         <p class="field__hint" data-photos-sync-hint>
           Kept on this device, and not in backups. Turn on sync to have them on your other devices
           too.
@@ -574,8 +589,11 @@ import { CURRENCIES, LIMITS, UNIT_LABELS, UNITS } from '../lib/repairs.ts';
           name="notes"
           rows="3"
           maxlength={LIMITS.notes}
-          aria-describedby="vehicle-notes-error"
+          aria-describedby="vehicle-notes-hint vehicle-notes-error"
         ></textarea>
+        <p class="field__hint" id="vehicle-notes-hint">
+          Up to {LIMITS.notes.toLocaleString('en')} characters.
+        </p>
         <p class="field__error" id="vehicle-notes-error" data-error-for="notes"></p>
       </div>
       <div class="cluster dialog__actions">

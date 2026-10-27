@@ -672,14 +672,26 @@ describe('for people', () => {
       ),
       vehicles,
       setCurrency(emptySettings(), 'GEL'),
+      'en-US',
     );
     expect(csv.split('\r\n')).toEqual([
       // A byte-order mark first, for Excel (audit 3 F2-6).
       '\uFEFFDate,Vehicle,Model,Plate,Mileage (km),System,Damage found,Work done,Parts replaced,Hours worked,Parts cost (GEL),Labour cost (GEL),Total cost (GEL)',
-      '2026-10-21,Bus 12,Isuzu Novociti Life,TB-012-BB,,,,Pads,Brake pads × 2 (BP-1); Clip,1.5,90,20,110',
+      '2026-10-21,Bus 12,Isuzu Novociti Life,TB-012-BB,,,,Pads,"Brake pads × 2 (BP-1); Clip",1.5,90,20,110',
       `2026-10-20,Bus 105,Isuzu Novociti Life,,120000,Brakes,'=cmd,"Fixed, ""properly""",,,,,`,
       '',
     ]);
+    // In German, as its spreadsheets read it (audit 4 F2-9).
+    const german = toCsv(
+      repairs(repair({ id: 'a', parts: [{ name: 'Oil', number: '', quantity: 2.5, price: 4.1 }] })),
+      vehicles,
+      setCurrency(emptySettings(), 'EUR'),
+      'de-DE',
+    ).split('\r\n');
+    expect(german[0]).toMatch(/^\uFEFFDate;Vehicle;Model;/);
+    expect(german[1]).toBe(
+      '2026-10-21;Bus 105;Isuzu Novociti Life;;120000;Brakes;;Replaced the front pads;"Oil × 2,5";;10,25;0;10,25',
+    );
   });
 
   it('uses kilometres and dollars until others are chosen', () => {
@@ -833,7 +845,7 @@ describe('hours worked and costs', () => {
       null,
     ]);
     // The spreadsheet has the same sums.
-    const csv = toCsv(repairs(yen), vehicles, setCurrency(emptySettings(), 'JPY'));
+    const csv = toCsv(repairs(yen), vehicles, setCurrency(emptySettings(), 'JPY'), 'en-US');
     expect(csv.split('\r\n')[1]).toMatch(/,1000,0,1000$/);
   });
 
@@ -851,6 +863,44 @@ describe('hours worked and costs', () => {
       repairs(repair({ id: 'a', labour: 50 }), repair({ id: 'b', vehicle: 'b12' })),
     );
     expect(summaries.map((summary) => summary.cost)).toEqual([null, 50, null]);
+  });
+
+  it('at the limits, looks at each repair once for every vehicle’s summary (audit 4 F2-2)', () => {
+    // Looking through every repair for each vehicle froze the page for most
+    // of a second at every change, with 3,000 repairs on 500 buses.
+    let looks = 0;
+    const many = repairs(
+      ...Array.from({ length: LIMITS.repairs }, (_, index) => {
+        const bus = `bus-${index % LIMITS.vehicles}`;
+        const { vehicle: _vehicle, ...rest } = repair({
+          id: `r${index}`,
+          mileage: 100_000 + index,
+          labour: 20.5,
+        });
+        return Object.defineProperty(rest, 'vehicle', {
+          enumerable: true,
+          get: () => {
+            looks += 1;
+            return bus;
+          },
+        }) as Repair;
+      }),
+    );
+    const fleet: VehiclesState = {
+      vehicles: Array.from({ length: LIMITS.vehicles }, (_, index) =>
+        vehicle({ id: `bus-${index}`, name: `Bus ${index}` }),
+      ),
+    };
+    const summaries = vehicleSummaries(fleet, many, 'USD');
+    expect(looks).toBeLessThan(2 * LIMITS.repairs);
+    // The same as working one out alone.
+    const busZero = summaries.find((summary) => summary.vehicle.id === 'bus-0');
+    expect(busZero).toMatchObject({
+      repairs: LIMITS.repairs / LIMITS.vehicles,
+      lastDate: '2026-10-21',
+      lastMileage: lastMileage(many, 'bus-0')?.mileage,
+      cost: (LIMITS.repairs / LIMITS.vehicles) * 20.5,
+    });
   });
 
   it('remembers each part’s last number and price', () => {
@@ -875,6 +925,12 @@ describe('hours worked and costs', () => {
   it('in words', () => {
     expect(formatHours(1, 'en-US')).toBe('1 hour');
     expect(formatHours(2.5, 'en-US')).toBe('2.5 hours');
+    // The word goes with the number as it's shown, not as it's kept (audit 4 F2-11).
+    expect(formatHours(0.999, 'en-US')).toBe('1 hour');
+    expect(formatHours(1.004, 'en-US')).toBe('1 hour');
+    expect(formatHours(1.01, 'en-US')).toBe('1.01 hours');
+    expect(formatHours(0, 'en-US')).toBe('0 hours');
+    expect(formatHours(0.999, 'de-DE')).toBe('1 hour');
     expect(formatMoney(1234.5, 'USD', { locale: 'en-US' })).toBe('$1,234.50');
     expect(formatMoney(80, 'GEL', { locale: 'en-US' })).toMatch(/^GEL\s80\.00$/);
   });

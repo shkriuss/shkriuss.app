@@ -188,9 +188,22 @@ import { MAX_NAME_LENGTH } from '../lib/counters.ts';
     overflow-wrap: anywhere;
   }
 
+  /* − takes a third of the row and + two thirds. When both no longer fit
+     side by side (large text on a small phone), + goes under − instead of
+     out of the card (audit 4 G-11). */
   .counter__controls {
-    display: grid;
-    grid-template-columns: 1fr 2fr;
+    display: flex;
+    flex-wrap: wrap;
     gap: var(--space-3);
+  }
+
+  /* From a large button's smallest width and twice that, growing 1:2, so +
+     stays twice as wide as −. */
+  .counter__controls > [data-action='decrement'] {
+    flex: 1 1 3.5rem;
+  }
+
+  .counter__controls > [data-action='increment'] {
+    flex: 2 1 7rem;
   }
 </style>
