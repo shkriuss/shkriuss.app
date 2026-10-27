@@ -28,6 +28,7 @@ import type { Notice } from '@shkriuss/push';
 import { secondVersionName } from '@shkriuss/sync';
 import { withEdits } from '@shkriuss/sync/edits';
 import { DATE_LOCALE, ordinal, timeLabel } from '@shkriuss/ui/locale';
+import { cutToLength } from '@shkriuss/ui/text';
 
 export type Repeat = 'none' | 'daily' | 'weekdays' | 'weekly' | 'monthly' | 'yearly';
 export const REPEATS: readonly Repeat[] = [
@@ -70,6 +71,14 @@ export const MAX_TEXT_LENGTH = 120;
 export const MAX_REMINDERS = 300;
 
 export const emptyReminders = (): RemindersState => ({ reminders: [] });
+
+/**
+ * Whether text fits a box that takes `max` characters, counted as people
+ * see them (an emoji once), the way an iPhone's box counts: counted as
+ * JavaScript does, a box full of emoji was refused as too long (audit 5
+ * F1-5).
+ */
+const fits = (text: string, max: number): boolean => cutToLength(text, max) === text;
 
 // ---------- Checking ----------
 
@@ -140,8 +149,7 @@ export function problems(
   const found: Problems = {};
   const text = draft.text.trim();
   if (text === '') found.text = 'Write what to be reminded of.';
-  else if (text.length > MAX_TEXT_LENGTH)
-    found.text = `Use ${MAX_TEXT_LENGTH} characters or fewer.`;
+  else if (!fits(text, MAX_TEXT_LENGTH)) found.text = `Use ${MAX_TEXT_LENGTH} characters or fewer.`;
   else if (editing === undefined && state.reminders.length >= MAX_REMINDERS) {
     found.text = `You can have up to ${MAX_REMINDERS} reminders.`;
   }

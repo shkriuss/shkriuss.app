@@ -53,6 +53,17 @@ describe('checking', () => {
     expect(
       problems({ ...draft, text: 'x'.repeat(MAX_TEXT_LENGTH + 1) }, emptyReminders(), NOW).text,
     ).toBe(`Use ${MAX_TEXT_LENGTH} characters or fewer.`);
+    // Text as long as its box lets in on an iPhone, which counts an emoji or
+    // a flag once: fine, where it was refused as too long (audit 5 F1-5).
+    expect(
+      problems({ ...draft, text: '💊'.repeat(MAX_TEXT_LENGTH) }, emptyReminders(), NOW),
+    ).toEqual({});
+    expect(
+      problems({ ...draft, text: '🇬🇪'.repeat(MAX_TEXT_LENGTH) }, emptyReminders(), NOW),
+    ).toEqual({});
+    expect(
+      problems({ ...draft, text: '💊'.repeat(MAX_TEXT_LENGTH + 1) }, emptyReminders(), NOW).text,
+    ).toBe(`Use ${MAX_TEXT_LENGTH} characters or fewer.`);
     expect(problems({ ...draft, date: '', time: '' }, emptyReminders(), NOW)).toEqual({
       date: 'Choose a day.',
       time: 'Choose a time.',

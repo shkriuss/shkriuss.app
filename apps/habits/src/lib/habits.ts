@@ -24,7 +24,7 @@ import {
 import type { Notice } from '@shkriuss/push';
 import { withEdits } from '@shkriuss/sync/edits';
 import { DATE_LOCALE } from '@shkriuss/ui/locale';
-import { foldText } from '@shkriuss/ui/text';
+import { cutToLength, foldText } from '@shkriuss/ui/text';
 import { roomNote as sharedRoomNote } from '@shkriuss/ui/room-note';
 
 export interface Habit {
@@ -72,6 +72,14 @@ const LOOKBACK_DAYS = 3660;
 
 export const emptyHabits = (): HabitsState => ({ habits: [] });
 export const emptyChecks = (): ChecksState => ({ checks: [] });
+
+/**
+ * Whether text fits a box that takes `max` characters, counted as people
+ * see them (an emoji once), the way an iPhone's box counts: counted as
+ * JavaScript does, a box full of emoji was refused as too long (audit 5
+ * F1-5).
+ */
+const fits = (text: string, max: number): boolean => cutToLength(text, max) === text;
 
 export const checkId = (habit: string, date: IsoDate): string => `${habit}~${date}`;
 
@@ -128,7 +136,7 @@ export function nameError(
 ): string | undefined {
   const trimmed = name.trim();
   if (trimmed.length === 0) return 'Enter a name for the habit.';
-  if (trimmed.length > MAX_NAME_LENGTH) return `Use ${MAX_NAME_LENGTH} characters or fewer.`;
+  if (!fits(trimmed, MAX_NAME_LENGTH)) return `Use ${MAX_NAME_LENGTH} characters or fewer.`;
   // Capitals, accents and extra spaces don't make another name, as in the
   // other apps: "Café" is "cafe" (audit 3 J-12).
   const wanted = foldText(trimmed);

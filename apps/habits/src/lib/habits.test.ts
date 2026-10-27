@@ -55,6 +55,12 @@ describe('habits', () => {
     expect(addHabit(state, 'drink WATER', 'b')).toBe(state);
     expect(addHabit(state, '   ', 'b')).toBe(state);
     expect(nameError('x'.repeat(MAX_NAME_LENGTH + 1), state)).toMatch(/characters or fewer/);
+    // A name as long as its box lets in on an iPhone, which counts an emoji
+    // or a flag once: fine, where it was refused as too long (audit 5 F1-5).
+    expect(nameError('🏃'.repeat(MAX_NAME_LENGTH), state)).toBeUndefined();
+    expect(nameError('🇬🇪'.repeat(MAX_NAME_LENGTH), state)).toBeUndefined();
+    expect(nameError('🏃'.repeat(MAX_NAME_LENGTH + 1), state)).toMatch(/characters or fewer/);
+    expect(isHabitsState(addHabit(state, '🏃'.repeat(MAX_NAME_LENGTH), 'b'))).toBe(true);
     const full = {
       habits: Array.from({ length: MAX_HABITS }, (_, index) => ({
         ...daily,
