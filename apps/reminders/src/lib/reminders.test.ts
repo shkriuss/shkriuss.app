@@ -69,13 +69,40 @@ describe('checking', () => {
   it('lets an overdue reminder’s text be corrected without moving it (audit 4 F1-8)', () => {
     const overdue = reminder('r', '2026-10-21', '09:00');
     const saved = state(overdue);
-    expect(problems({ ...draftOf(overdue), text: 'Call Mum' }, saved, NOW, 'r')).toEqual({});
+    expect(problems({ ...draftOf(overdue), text: 'Call Mum' }, saved, NOW, overdue)).toEqual({});
     // Moved, or one that's done (saving sets it again): still to come.
-    expect(problems({ ...draftOf(overdue), time: '09:30' }, saved, NOW, 'r')).toEqual({
+    expect(problems({ ...draftOf(overdue), time: '09:30' }, saved, NOW, overdue)).toEqual({
       time: 'Choose a time that’s still to come.',
     });
     const done = { ...overdue, done: NOW };
-    expect(problems({ ...draftOf(done), text: 'Call Mum' }, state(done), NOW, 'r')).toEqual({
+    expect(problems({ ...draftOf(done), text: 'Call Mum' }, state(done), NOW, done)).toEqual({
+      time: 'Choose a time that’s still to come.',
+    });
+  });
+
+  it('corrects an overdue reminder’s text after another device ticked it or put it off', () => {
+    // The form opened on an overdue reminder; meanwhile a sync (or another
+    // tab) ticked it done, or put it off. Checked against the reminder as it
+    // was then, the old time counted as set again, and Save was refused with
+    // "Choose a time that’s still to come" (audit 5 F1-2).
+    const overdue = { ...reminder('r', '2026-10-21', '09:00'), text: 'Call Mum' };
+    const corrected = { ...draftOf(overdue), text: 'Call Mum back' };
+    const ticked = setDone(state(overdue), 'r', NOW);
+    expect(problems(corrected, ticked, NOW, overdue)).toEqual({});
+    expect(editReminder(ticked, overdue, corrected).reminders[0]).toEqual({
+      ...overdue,
+      text: 'Call Mum back',
+      done: NOW,
+    });
+    const moved = putOff(state(overdue), 'r', '2026-10-22T09:00');
+    expect(problems(corrected, moved, NOW, overdue)).toEqual({});
+    expect(editReminder(moved, overdue, corrected).reminders[0]).toEqual({
+      ...overdue,
+      text: 'Call Mum back',
+      date: '2026-10-22',
+    });
+    // A time chosen here must still be to come, as before.
+    expect(problems({ ...corrected, time: '09:30' }, ticked, NOW, overdue)).toEqual({
       time: 'Choose a time that’s still to come.',
     });
   });
@@ -87,7 +114,7 @@ describe('checking', () => {
       ),
     );
     expect(problems(draft, full, NOW).text).toBe(`You can have up to ${MAX_REMINDERS} reminders.`);
-    expect(problems(draft, full, NOW, 'r0')).toEqual({});
+    expect(problems(draft, full, NOW, full.reminders[0])).toEqual({});
   });
 
   it('checks saved reminders', () => {

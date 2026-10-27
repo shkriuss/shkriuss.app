@@ -321,7 +321,10 @@ export function mountReminders(root: Document): void {
       return;
     }
     const draft = edit.draft();
-    if (edit.show(problems(draft, state, nowStamp(), reminder.id))) return;
+    // Checked against the reminder as the form opened, not as it is now: one
+    // ticked done or put off elsewhere meanwhile mustn't make a correction
+    // of the text count as setting its old time (audit 5 F1-2).
+    if (edit.show(problems(draft, state, nowStamp(), opened))) return;
     editDialog.close();
     // A sync while the form was open may have changed the reminder on another
     // device: keep that, and put on only what was changed here.

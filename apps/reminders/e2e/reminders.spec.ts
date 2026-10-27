@@ -149,14 +149,20 @@ test('ticks reminders done, puts off overdue ones, and clears done ones', async 
 });
 
 test('saving a change keeps what changed elsewhere while it was open', async ({ page }) => {
-  await seed(page, [reminder('a', 'Call the dentist', '2026-10-21', '18:30')]);
+  // Overdue ones: correcting the text was refused with "Choose a time that’s
+  // still to come" once the other device had ticked or put off the reminder,
+  // as the form was checked against it as it was then (audit 5 F1-2).
+  await seed(page, [
+    reminder('a', 'Call the dentist', '2026-10-21', '09:00'),
+    reminder('b', 'Post the letter', '2026-10-20', '08:00'),
+  ]);
+  await expect(page.locator('[data-groups] h3')).toHaveText(['Overdue']);
   await page.getByRole('button', { name: 'Call the dentist' }).click();
   // Meanwhile, another tab (or a sync from another device) ticks it done.
   const other = await page.context().newPage();
   await other.goto('/');
   await other.getByRole('checkbox', { name: 'Call the dentist: done' }).click();
   await expect(other.locator('[data-done-section]')).toBeVisible();
-  await other.close();
 
   // Only the text is changed here: it stays done (audit F1-2).
   const dialog = editDialog(page);
@@ -169,6 +175,24 @@ test('saving a change keeps what changed elsewhere while it was open', async ({ 
   await expect(
     page.getByRole('checkbox', { name: 'Call the dentist about the X-ray: done' }),
   ).toBeChecked();
+
+  // Put off until tomorrow there, text corrected here: both stay.
+  await page.getByRole('button', { name: 'Post the letter' }).click();
+  await other.getByRole('button', { name: 'Post the letter: remind me tomorrow' }).click();
+  await expect(meta(other, 'Post the letter')).toHaveText(/^Tomorrow at 8:00\sAM$/);
+  await other.close();
+  await dialog.getByLabel('Remind me to').fill('Post the parcel');
+  await dialog.getByRole('button', { name: 'Save' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(meta(page, 'Post the parcel')).toHaveText(/^Tomorrow at 8:00\sAM$/);
+  await expect(page.locator('[data-groups] h3')).toHaveText(['Tomorrow']);
+
+  // A new time chosen here must still be to come, as before.
+  await page.getByRole('button', { name: 'Post the parcel' }).click();
+  await dialog.getByLabel('Time').fill('09:00');
+  await dialog.getByLabel('Day').fill('2026-10-21');
+  await dialog.getByRole('button', { name: 'Save' }).click();
+  await expect(dialog.getByText('Choose a time that’s still to come.')).toBeVisible();
 });
 
 test('says so when the reminder being changed is deleted on another device', async ({ page }) => {
