@@ -230,14 +230,18 @@ describe('your meals', () => {
     });
     // A line too long that comes anyway is cut between whole flags, at 100 of them.
     expect(parseIngredients(flag.repeat(150))).toEqual([flag.repeat(100)]);
-    const planned = { name: family.repeat(LIMITS.name), date: '2026-10-21', slot: 'dinner' } as const;
+    const planned = {
+      name: family.repeat(LIMITS.name),
+      date: '2026-10-21',
+      slot: 'dinner',
+    } as const;
     expect(planProblems(emptyPlan(), planned)).toEqual({});
     expect(extraProblem(emptyShopping(), flag.repeat(LIMITS.ingredient))).toBeNull();
     expect(extraProblem(emptyShopping(), flag.repeat(LIMITS.ingredient + 1))).toBe(
       'Use at most 100 characters.',
     );
     // One letter under thousands of accents is one character, but not without a limit.
-    const zalgo = `Z${'̶'.repeat(2000)}`;
+    const zalgo = `Z${'\u0336'.repeat(2000)}`;
     expect(mealProblems(emptyMeals(), { name: zalgo, ingredients: '', notes: '' })).toEqual({
       name: 'Use at most 100 characters.',
     });

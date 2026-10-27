@@ -30,9 +30,11 @@ describe('nameError', () => {
     // a family emoji or a flag is one character (10 families counted 80).
     expect(nameError('👨‍👩‍👧'.repeat(10), emptyState())).toBeUndefined();
     expect(nameError('🇬🇪'.repeat(MAX_NAME_LENGTH), emptyState())).toBeUndefined();
-    expect(nameError('🇬🇪'.repeat(MAX_NAME_LENGTH + 1), emptyState())).toMatch(/characters or fewer/);
+    expect(nameError('🇬🇪'.repeat(MAX_NAME_LENGTH + 1), emptyState())).toMatch(
+      /characters or fewer/,
+    );
     // One letter under thousands of accents is one character, but not without a limit.
-    expect(nameError(`Z${'̶'.repeat(2000)}`, emptyState())).toMatch(/characters or fewer/);
+    expect(nameError(`Z${'\u0336'.repeat(2000)}`, emptyState())).toMatch(/characters or fewer/);
   });
 
   it('rejects duplicate names, ignoring case, accents and extra spaces', () => {

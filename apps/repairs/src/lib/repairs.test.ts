@@ -368,7 +368,7 @@ describe('repairs', () => {
       }).problems,
     ).toEqual({ name: 'Use 40 characters or fewer.' });
     // One letter under thousands of accents is one character, but not without a limit.
-    const zalgo = `Z${'̶'.repeat(2000)}`;
+    const zalgo = `Z${'\u0336'.repeat(2000)}`;
     expect(read({ system: zalgo }).problems).toEqual({ system: 'Use 40 characters or fewer.' });
     expect(isRepairsState(repairs(repair({ system: zalgo })))).toBe(false);
   });

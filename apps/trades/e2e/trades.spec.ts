@@ -214,7 +214,9 @@ test('the currency, and a spreadsheet of the trades', async ({ page }) => {
   const again = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Download as a spreadsheet (CSV)' }).click();
   await again;
-  await expect.poll(() => said.textContent()).toBe('Downloaded your trades as a spreadsheet. ');
+  await expect
+    .poll(() => said.textContent())
+    .toBe('Downloaded your trades as a spreadsheet.\u00A0');
 });
 
 test('closes part of a trade, then the rest', async ({ page }) => {
@@ -377,7 +379,9 @@ test('deletes a year of closed trades, never open ones', async ({ page }) => {
     'The 2 closed trades from 2024 will be deleted. Open trades stay. With sync on, they’re deleted on your other devices too. This can’t be undone.',
   );
   // Read out with the title (audit 5 G-3).
-  await expect(dialog).toHaveAccessibleDescription(/^The 2 closed trades from 2024 will be deleted/);
+  await expect(dialog).toHaveAccessibleDescription(
+    /^The 2 closed trades from 2024 will be deleted/,
+  );
   await checkA11y(page, 'delete a year');
   await page.emulateMedia({ colorScheme: 'dark' });
   await checkA11y(page, 'delete a year (dark)');

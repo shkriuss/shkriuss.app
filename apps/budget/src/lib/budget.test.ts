@@ -310,7 +310,7 @@ describe('entries', () => {
       name: `Use ${LIMITS.name} characters or fewer.`,
     });
     // One letter under thousands of accents is one character, but not without a limit.
-    const zalgo = `Z${'̶'.repeat(2000)}`;
+    const zalgo = `Z${'\u0336'.repeat(2000)}`;
     expect(name(zalgo).problems).toEqual({ name: `Use ${LIMITS.name} characters or fewer.` });
   });
 

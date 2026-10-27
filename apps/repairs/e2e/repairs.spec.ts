@@ -363,7 +363,9 @@ test('miles, and a spreadsheet of every repair', async ({ page }) => {
   const again = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Download as a spreadsheet (CSV)' }).click();
   await again;
-  await expect.poll(() => said.textContent()).toBe('Downloaded your repairs as a spreadsheet. ');
+  await expect
+    .poll(() => said.textContent())
+    .toBe('Downloaded your repairs as a spreadsheet.\u00A0');
 });
 
 test('deletes a year, after saying what it deletes', async ({ page }) => {

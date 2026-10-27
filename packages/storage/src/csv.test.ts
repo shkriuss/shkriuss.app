@@ -43,7 +43,7 @@ describe('spreadsheet files', () => {
     expect(csvCell(100)).toBe('100');
     // As the number is, with all its digits.
     expect(csvCell(0.1 + 0.2)).toBe('0.30000000000000004');
-    expect(csvFile([['Price'], [1.5e-9]], 'de-DE')).toBe('﻿Price\r\n0,0000000015\r\n');
+    expect(csvFile([['Price'], [1.5e-9]], 'de-DE')).toBe('\uFEFFPrice\r\n0,0000000015\r\n');
   });
 
   it('quotes cells with quotes, commas, semicolons or line breaks, and leaves the rest', () => {

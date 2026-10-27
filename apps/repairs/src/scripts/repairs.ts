@@ -224,7 +224,7 @@ export function mountRepairs(root: Document): void {
    * end (audit 5 G-8).
    */
   const say = (line: HTMLElement, message: string): void => {
-    line.textContent = line.textContent === message ? `${message} ` : message;
+    line.textContent = line.textContent === message ? `${message}\u00A0` : message;
   };
   const announce = (message: string): void => say(announcer, message);
   const mileage = (value: number) => formatMileage(value, unitOf(settings));

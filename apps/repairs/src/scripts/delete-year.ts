@@ -80,7 +80,7 @@ export function mountDeleteYear(root: ParentNode, page: DeleteYearPage): DeleteY
       // reader reads a status line only when it changes, so then a no-break
       // space, which can't be heard, goes on the end (audit 5 G-8).
       const message = 'There are no repairs to delete.';
-      csvStatus.textContent = csvStatus.textContent === message ? `${message} ` : message;
+      csvStatus.textContent = csvStatus.textContent === message ? `${message}\u00A0` : message;
       return;
     }
     yearSelect.replaceChildren();

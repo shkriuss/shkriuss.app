@@ -286,7 +286,7 @@ describe('reading the form', () => {
       notes: `Use ${LIMITS.notes} characters or fewer.`,
     });
     // One letter under thousands of accents is one character, but not without a limit.
-    const zalgo = `Z${'̶'.repeat(2000)}`;
+    const zalgo = `Z${'\u0336'.repeat(2000)}`;
     expect(read({ setup: zalgo }).problems).toEqual({
       setup: `Use ${LIMITS.setup} characters or fewer.`,
     });
@@ -515,7 +515,12 @@ describe('closing part of a trade', () => {
     expect(openQuantity(most, partsOf(rest.trades))).toBe(0);
     expect(openTrades(rest)).toEqual([]);
     // Small quantities still add up without decimal crumbs.
-    expect(openQuantity(trade({ ...lot, id: 's', quantity: 0.3 }), new Map([['s', { quantity: 0.1, fees: 0 }]]))).toBe(0.2);
+    expect(
+      openQuantity(
+        trade({ ...lot, id: 's', quantity: 0.3 }),
+        new Map([['s', { quantity: 0.1, fees: 0 }]]),
+      ),
+    ).toBe(0.2);
   });
 
   it('says what’s wrong', () => {
@@ -1115,7 +1120,8 @@ describe('number sizes', () => {
     // infinite) was called "not a number", with the right message at hand.
     const endless = '9'.repeat(400);
     expect(
-      readTrade({ ...form, entryPrice: endless, quantity: endless, fees: endless }, 'a', 0).problems,
+      readTrade({ ...form, entryPrice: endless, quantity: endless, fees: endless }, 'a', 0)
+        .problems,
     ).toEqual({
       entryPrice: 'Enter a smaller number.',
       quantity: 'Enter a smaller number.',

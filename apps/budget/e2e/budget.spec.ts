@@ -286,7 +286,9 @@ test('the currency, and a spreadsheet of the entries', async ({ page }) => {
   const again = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Download as a spreadsheet (CSV)' }).click();
   await again;
-  await expect.poll(() => said.textContent()).toBe('Downloaded your budget as a spreadsheet. ');
+  await expect
+    .poll(() => said.textContent())
+    .toBe('Downloaded your budget as a spreadsheet.\u00A0');
 });
 
 test('a refund comes off its category’s spending', async ({ page }) => {
