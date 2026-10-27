@@ -4,9 +4,7 @@ Status: Accepted (2026-10-16). Changed in October 2026 (audit findings J-4
 and Z-6): the JS budget counts every file a page's scripts import, and is
 35 KB (see `pnpm check:dist` below). Changed by audit 4 (J-6): parts a page
 loads later with `import()` aren't counted, and that's how to cut weight
-before raising a budget (below). Changed by audit 5 (J-2): Tasks, then the
-biggest page and almost at the budget, loads its form and list editor that
-way too.
+before raising a budget (below).
 
 ## Context
 
@@ -44,7 +42,9 @@ reach production, and new apps should get strong checks without extra work.
   its photo viewer now load with `import()` once the page has opened
   (Calendar's event editor uses `import()` too, when first opened). Code
   loaded that way isn't counted either, so it's how to cut weight before
-  raising a budget ([quality.md](../quality.md)).
+  raising a budget ([quality.md](../quality.md)). Tasks, the biggest page by
+  the fifth audit and almost at the budget, loads its form and list editor
+  that way too (audit 5 J-2).
 
 ## Consequences
 
