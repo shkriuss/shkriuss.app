@@ -75,7 +75,13 @@ See where your money goes, month by month. Lives at
   people see them, as an iPhone's text boxes count what fits in them: a
   flag or a family emoji is one, so what a full box holds is never refused
   on saving (`cutToLength`, audit 5 F2-3).
-- `src/scripts/budget.ts`: connects the page to those rules.
+- `src/scripts/budget.ts`: connects the page to those rules: the month
+  shown, its totals and lists, the settings, the spreadsheet, and keeping
+  up with other devices and tabs. The forms (an entry, a category, "Delete
+  this?") are in `forms.ts` and "Delete a year" in `delete-year.ts`. Each
+  loads after the page, once it has nothing else to do (`later`,
+  `whenIdle`, as in Repairs), so the page stays within its size budget and
+  a tap still finds the form there (audit 5 J-2).
   `src/scripts/reminders.ts`: shows the reminder while Budget is open, and
   sends its schedule to the notification service for "Also remind me when
   Budget is closed".
