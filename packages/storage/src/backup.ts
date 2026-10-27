@@ -19,13 +19,14 @@ import {
   type Store,
 } from './index.ts';
 import { nestedTooDeep } from './nesting.ts';
+import { MIN_PASSPHRASE_LENGTH, passphraseProblem } from './passphrase.ts';
+
+export { MIN_PASSPHRASE_LENGTH, passphraseProblem };
 
 export const BACKUP_FORMAT = 'shkriuss-backup';
 export const BACKUP_VERSION = 1;
 /** How many PBKDF2 rounds new backups use (OWASP's advice for PBKDF2-SHA-256). */
 export const PBKDF2_ITERATIONS = 600_000;
-/** Shorter passphrases are refused. */
-export const MIN_PASSPHRASE_LENGTH = 12;
 // Files asking for fewer rounds are refused (too weak), and more (too slow to open).
 const MIN_ITERATIONS = 100_000;
 const MAX_ITERATIONS = 10_000_000;
@@ -120,14 +121,6 @@ async function deriveKey(
     false,
     ['encrypt', 'decrypt'],
   );
-}
-
-/** A reason the passphrase can't be used, or undefined if it's fine. */
-export function passphraseProblem(passphrase: string): string | undefined {
-  if ([...passphrase.normalize('NFC')].length < MIN_PASSPHRASE_LENGTH) {
-    return `Use at least ${MIN_PASSPHRASE_LENGTH} characters.`;
-  }
-  return undefined;
 }
 
 /** Locks an app's data with a passphrase. */
