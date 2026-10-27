@@ -22,7 +22,11 @@ The checking is done by [Harper](https://github.com/automattic/harper)
   the dictionary on the device with `@shkriuss/storage`, checks a moment
   after typing stops, and applies fixes. On a first visit it starts the
   checker once the offline copy is saved (`offlineCopySaved()`), so the big
-  file is downloaded once and then comes from that copy, offline too.
+  file is downloaded once and then comes from that copy, offline too. The
+  checker downloads that file itself first, so when the download doesn't
+  finish (the connection dropped), the page says so and offers "Try again",
+  instead of blaming the browser (audit 5 G-5); a checker that was
+  downloaded but can't start still says updating the browser may help.
 - `src/scripts/edit-text.ts` and `src/lib/edit.ts`: a fix, and Deep check's
   "Accept" and "Accept all", change the text as one edit, like typing or
   pasting, so Undo (Ctrl+Z, ⌘Z, or shaking an iPhone) takes it back. Setting
@@ -56,7 +60,11 @@ person asks (381 MB), then works offline
 - `src/scripts/deep-check.worker.ts`: runs the model with onnxruntime-web, in
   a worker, on up to 4 cores.
 - `src/scripts/deep-check.ts`: the page part: download (checking every file's
-  SHA-256), check, accept or skip changes, remove.
+  SHA-256; a file that arrives damaged is said to be, as it isn't the
+  connection: audit 5 F3-10), check (its start is read out, so a screen
+  reader doesn't wait in silence: audit 5 G-6), accept or skip changes,
+  remove. Removing or updating Deep check while it starts or checks leaves
+  "Check my text" working: it stayed busy for good (audit 5 F3-5).
 - `scripts/deep-check-files.ts`: runs before every build. Downloads the model
   once into `.cache/` (pinned version, checksum checked), splits it into
   parts Cloudflare can serve, and writes everything to
@@ -65,6 +73,8 @@ person asks (381 MB), then works offline
   README), and test data made with the tested Python code.
 - `e2e/deep-check.spec.ts`: browser tests with the real model, offline too.
 - `public/licenses/gector.txt`, `onnxruntime-web.txt`: their licences.
+  `src/licenses.test.ts` checks that each names its own rights holder:
+  GECToR's carried Harper's "Automattic" notice (audit 5 Z-3).
 
 `"webAssembly": true` in
 [`packages/registry/apps.json`](../../packages/registry/apps.json) lets this

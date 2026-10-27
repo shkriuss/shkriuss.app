@@ -77,6 +77,11 @@ async function sha256(blob: Blob): Promise<string> {
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
+/** A file arrived with the wrong size or SHA-256: thrown away, never saved. */
+class DamagedFile extends Error {}
+
+const STARTING = 'Starting Deep check. This takes a few seconds…';
+
 /**
  * The manifest of the version on the site now (undefined when offline, or
  * when the site doesn't answer in time: on a network that hangs, "Download
@@ -208,7 +213,7 @@ export function mountDeepCheck(root: Document, host: DeepCheckHost): { textChang
     const blob = new Blob(chunks);
     if (bytes !== file.bytes || (await sha256(blob)) !== file.sha256) {
       received(-bytes);
-      throw new Error(`${file.path} arrived damaged`);
+      throw new DamagedFile(`${file.path} arrived damaged`);
     }
     // Saved with the site's headers, as if just downloaded. The service worker
     // serves it with the site's security policy at the time (audit 4 C-4).
@@ -318,6 +323,11 @@ export function mountDeepCheck(root: Document, host: DeepCheckHost): { textChang
         setProblem('Download stopped. Download again to continue where it stopped.');
       } else if (error instanceof DOMException && error.name === 'QuotaExceededError') {
         setProblem('Not enough space on this device. Free up some space, then try again.');
+      } else if (error instanceof DamagedFile) {
+        // Not the connection: the file itself (audit 5 F3-10).
+        setProblem(
+          'One of the files arrived damaged, so it wasn’t kept. Try again. If that happens again and again, the copy on shkriuss.app is damaged, and downloading again won’t help until it’s fixed.',
+        );
       } else {
         setProblem(
           'The download didn’t finish. Check your internet connection and try again: it continues where it stopped.',
@@ -347,11 +357,27 @@ export function mountDeepCheck(root: Document, host: DeepCheckHost): { textChang
 
   // ---------- Checking ----------
 
+  /** Settles the start a check may be waiting for (startWorkerOnce), once the worker is stopped. */
+  let workerStarted: ((ready: boolean) => void) | undefined;
+
+  /**
+   * Stops the worker. A check waiting for it to start, or for its answer,
+   * is told it won't come, and "Check my text" works again: a stopped
+   * worker says nothing, so after "Remove" or an update while it was
+   * starting or checking, the button stayed busy for good, with the
+   * progress bar (audit 5 F3-5).
+   */
   function stopWorker(): void {
     worker?.terminate();
     worker = undefined;
     workerReady = undefined;
+    workerStarted?.(false);
+    workerStarted = undefined;
     pending = undefined;
+    const checking = runButton.getAttribute('aria-disabled') === 'true';
+    checkProgress.hidden = true;
+    setBusy(runButton, false);
+    if (checking) status.textContent = results ? changesSummary(results.changes.length) : '';
   }
 
   function failed(reason: 'files' | 'start'): void {
@@ -391,7 +417,10 @@ export function mountDeepCheck(root: Document, host: DeepCheckHost): { textChang
 
   function startWorkerOnce(manifest: DeepCheckManifest): Promise<boolean> {
     workerReady ??= new Promise<boolean>((resolve) => {
-      status.textContent = 'Starting Deep check. This takes a few seconds…';
+      workerStarted = resolve;
+      status.textContent = STARTING;
+      // Read out: a screen reader heard nothing until the result (audit 5 G-6).
+      host.announce(STARTING);
       const started = startWorker(deepCheckUrl);
       worker = started;
       started.addEventListener('message', (event: MessageEvent<FromDeepCheck>) => {
@@ -413,7 +442,12 @@ export function mountDeepCheck(root: Document, host: DeepCheckHost): { textChang
     return workerReady;
   }
 
-  async function check(): Promise<void> {
+  /**
+   * Checks the text. `asked`: the person tapped "Check my text", so the
+   * start is read out too; checks that follow edits aren't, at every pause
+   * (their result is).
+   */
+  async function check(asked = false): Promise<void> {
     window.clearTimeout(recheckTimer);
     const manifest = saved;
     if (phase !== 'ready' || !manifest) return;
@@ -434,8 +468,11 @@ export function mountDeepCheck(root: Document, host: DeepCheckHost): { textChang
     checkProgress.hidden = false;
     checkBar.max = missing.length;
     checkBar.value = 0;
-    status.textContent =
+    const checking =
       missing.length === 1 ? 'Checking a sentence…' : `Checking ${missing.length} sentences…`;
+    status.textContent = checking;
+    // Read out once: the progress isn't, sentence by sentence (audit 5 G-6).
+    if (asked) host.announce(checking);
     const message: ToDeepCheck = {
       type: 'check',
       id: lastId,
@@ -552,7 +589,7 @@ export function mountDeepCheck(root: Document, host: DeepCheckHost): { textChang
   stopButton.addEventListener('click', () => {
     download?.abort();
   });
-  runButton.addEventListener('click', () => void check());
+  runButton.addEventListener('click', () => void check(true));
   required<HTMLButtonElement>(section, '[data-action="deep-remove"]').addEventListener(
     'click',
     () => {

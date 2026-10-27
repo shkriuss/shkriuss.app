@@ -274,6 +274,10 @@ test('copies and clears the text', async ({ page, context }) => {
 
   await page.getByRole('button', { name: 'Clear' }).click();
   const dialog = page.getByRole('dialog', { name: 'Clear the text?' });
+  // Read out with its title; and clearing drops Undo, so it says so (audit 5 G-3, G-8).
+  await expect(dialog).toHaveAccessibleDescription(
+    'Everything in the text box will be removed. This can’t be undone.',
+  );
   await dialog.getByRole('button', { name: 'Clear' }).click();
   await expect(text(page)).toHaveValue('');
   await expect(text(page)).toBeFocused();
@@ -319,6 +323,31 @@ addEventListener('message', (event) => {
   await text(page).fill('I has a apple.');
   await expect(status(page)).toHaveText('2 suggestions.');
   expect(started).toBe(2);
+});
+
+test('says when the checker couldn’t be downloaded, and tries again', async ({ page, guard }) => {
+  // The connection drops while the checker's file downloads on a first
+  // visit: the browser got the blame, and only a reload helped (audit 5 G-5).
+  guard.allowConsole('net::ERR_FAILED');
+  let cut = true;
+  await page.route('**/*.wasm', (route) => (cut ? route.abort() : route.continue()));
+  await page.goto('/');
+  await expect(status(page)).toHaveText(
+    'The grammar checker couldn’t be downloaded. Check your internet connection and try again.',
+    { timeout: 30_000 },
+  );
+  const tryAgain = page.getByRole('button', { name: 'Try again' });
+  await expect(tryAgain).toBeVisible();
+
+  // Connected again: it downloads, and checks.
+  cut = false;
+  await tryAgain.click();
+  await expect(tryAgain).toBeHidden();
+  await expect(page.getByRole('heading', { name: 'Suggestions' })).toBeFocused();
+  await expect(status(page)).toHaveText(READY, { timeout: 30_000 });
+  await page.getByLabel('American (US)').check();
+  await text(page).fill('I has a apple.');
+  await expect(status(page)).toHaveText('2 suggestions.');
 });
 
 test('says when a pasted text doesn’t all fit', async ({ page }) => {

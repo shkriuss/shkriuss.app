@@ -1,7 +1,7 @@
 /**
  * Deep check: a more thorough check by an AI model that runs on this device
  * (GECToR Large, from Grammarly's researchers; docs/adr/0012). It's
- * downloaded only when the person asks (about 385 MB), then works offline.
+ * downloaded only when the person asks (381 MB), then works offline.
  *
  * This file describes the downloaded files, the messages between the page
  * and the model's worker (scripts/deep-check.worker.ts), and the settings.
@@ -97,7 +97,7 @@ export function parts(bytes: number, partBytes: number): { start: number; end: n
   return ranges;
 }
 
-/** "385 MB" (decimal megabytes, like phones show). */
+/** "381 MB" (decimal megabytes, like phones show). */
 export const megabytes = (bytes: number): string => `${Math.round(bytes / 1_000_000)} MB`;
 
 /** Messages from the page to the Deep check worker. */

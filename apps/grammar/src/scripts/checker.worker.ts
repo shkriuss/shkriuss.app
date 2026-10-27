@@ -56,9 +56,38 @@ let newest = 0;
 /** The person's dictionary, imported again whenever the linter is remade. */
 let words: string[] = [];
 
+/** Harper's WebAssembly file couldn't be downloaded: the connection, not the browser. */
+class DownloadFailed extends Error {}
+
+/**
+ * Downloads Harper's WebAssembly file first, so a download that doesn't
+ * finish (a connection that drops on a first visit) is told apart from a
+ * checker that can't start in this browser, which got the blame for both
+ * (audit 5 G-5). Harper then loads the file itself, from the browser: the
+ * offline copy (the page waits for it before starting the checker), or the
+ * HTTP cache, since build files never change under their names. Only a web
+ * address is downloaded: in Node (the tests), Harper reads the file itself.
+ */
+async function download(): Promise<void> {
+  const url = String(binary.url);
+  if (!/^https?:/.test(url)) return;
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const reader = response.body?.getReader();
+    // All of it: a download that stops half-way fails here, not in Harper.
+    while (reader && !(await reader.read()).done) {
+      // Reading on.
+    }
+  } catch (error) {
+    throw new DownloadFailed(String(error));
+  }
+}
+
 async function handle(message: ToChecker): Promise<void> {
   if (message.type === 'start') {
     linter = (async () => {
+      await download();
       const local = new LocalLinter({ binary, dialect: dialectOf(message.english) });
       await local.setup();
       words = message.words;
@@ -103,7 +132,7 @@ addEventListener('message', (event: MessageEvent<ToChecker>) => {
   if (message.type === 'check') newest = message.id;
   queue = queue
     .then(() => handle(message))
-    .catch(() => {
-      send({ type: 'failed' });
+    .catch((error: unknown) => {
+      send({ type: 'failed', reason: error instanceof DownloadFailed ? 'download' : 'start' });
     });
 });

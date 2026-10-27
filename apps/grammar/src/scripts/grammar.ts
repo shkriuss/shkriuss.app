@@ -63,6 +63,8 @@ const SAVE_DELAY_MS = 500;
 const LOADING = 'Loading the grammar checker…';
 const EMPTY = 'Type or paste your text above, and suggestions show here.';
 const FAILED = 'The grammar checker couldn’t start in this browser. Updating the browser may help.';
+const NOT_DOWNLOADED =
+  'The grammar checker couldn’t be downloaded. Check your internet connection and try again.';
 
 /** "“a”", or "the space" when the text is only spaces. */
 const named = (text: string): string => (text.trim() === '' ? 'the space' : `“${text}”`);
@@ -71,6 +73,7 @@ export function mountGrammar(root: Document): void {
   const textarea = required<HTMLTextAreaElement>(root, '[data-text]');
   const radios = [...root.querySelectorAll<HTMLInputElement>('input[name="english"]')];
   const status = required<HTMLElement>(root, '[data-status]');
+  const retry = required<HTMLElement>(root, '[data-checker-retry]');
   const heading = required<HTMLElement>(root, '[data-suggestions-heading]');
   const list = required<HTMLUListElement>(root, '[data-issues]');
   const issueTemplate = required<HTMLTemplateElement>(root, '[data-issue-template]');
@@ -176,7 +179,7 @@ export function mountGrammar(root: Document): void {
       checkedText = lastText;
       render();
     } else {
-      checkerFailed();
+      checkerFailed(message.reason ?? 'start');
     }
   }
 
@@ -186,9 +189,11 @@ export function mountGrammar(root: Document): void {
   /**
    * The checker stopped working. If it had started, it's started again, a
    * few times at most, and checks the text again once it's ready (audit
-   * F3-4); if it never started, this browser can't run it.
+   * F3-4). If it never started: its file couldn't be downloaded (the
+   * connection), so "Try again" is offered (audit 5 G-5); or this browser
+   * can't run it.
    */
-  function checkerFailed(): void {
+  function checkerFailed(reason: 'download' | 'start' = 'start'): void {
     worker?.terminate();
     if (phase === 'ready' && restarts > 0) {
       restarts -= 1;
@@ -197,15 +202,26 @@ export function mountGrammar(root: Document): void {
       return;
     }
     phase = 'failed';
-    setStatus(FAILED);
+    retry.hidden = reason !== 'download';
+    setStatus(reason === 'download' ? NOT_DOWNLOADED : FAILED);
   }
 
   function startChecker(): void {
     worker = startWorker(checkerUrl);
     worker.addEventListener('message', heard);
-    worker.addEventListener('error', checkerFailed);
+    worker.addEventListener('error', () => checkerFailed());
     tell({ type: 'start', english: state.english, words: state.words });
   }
+
+  // "Try again" after a download that didn't finish: the checker is started again.
+  required<HTMLButtonElement>(retry, 'button').addEventListener('click', () => {
+    retry.hidden = true;
+    phase = 'loading';
+    setStatus(LOADING);
+    // The button is gone: focus goes to the heading above the status, not to the top of the page.
+    heading.focus();
+    startChecker();
+  });
 
   // ---------- Showing what it found ----------
 
