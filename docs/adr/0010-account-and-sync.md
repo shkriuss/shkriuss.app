@@ -15,7 +15,11 @@ passkey's signature made on the Account page. Changed by
 previews, so an app pairs only with the real hub (or, in tests, the local
 one). Changed by audit 4 (F2-3): an app can keep both versions of the same
 change too (`keepSame`, for counts), and only one tab of an app syncs at a
-time (see "keep both" below).
+time (see "keep both" below). Changed by audit 5: an edit made with no
+connection keeps its time (E-1); "Turn off" works when the browser is full
+(E-2); replaced keys are kept for 13 months and apps are done with old keys
+for good (A-1); the "turn off" links are for the day (A-5) and say nothing
+when sync is already off (C-4); all device links share one object (B-2).
 
 ## Context
 

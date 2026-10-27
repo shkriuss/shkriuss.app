@@ -11,7 +11,10 @@ limits add up to about 3.1 GB, so about eight more apps with sync and
 notifications fit (160 MB each) before the limits need lowering, not two
 (audit 3 J-6). Changed by audit 4 (J-6): sync's message when a copy is
 refused stays plain, but no longer because of Calendar's size budget, which
-no longer applies (see "What people see").
+no longer applies (see "What people see"). Changed by audit 5: device links
+are rows in one object (B-2), a library made up through a move is cleaned up
+too (B-1), files count their rows (B-3), what the 13-month clean-up undoes
+for a replaced key (A-1), and the daily row writes (B-4).
 
 ## Context
 
