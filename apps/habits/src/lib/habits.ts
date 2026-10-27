@@ -12,6 +12,7 @@
  */
 import {
   addDays,
+  daysBetween,
   isIsoDate,
   isIsoTime,
   toStamp,
@@ -330,23 +331,35 @@ export function currentStreak(habit: Habit, done: Set<IsoDate>, today: IsoDate):
   return count;
 }
 
-/** The longest run of planned days done in a row, up to today. */
+/**
+ * The longest run of planned days done in a row, up to today. Walks the
+ * days done, oldest first, as days counted from where streaks start looking
+ * back: a run goes on while each is the first planned day after the one
+ * before. Walking every day from the oldest check mark grew with its age,
+ * for every habit at every redraw (audit 5 F1-6).
+ */
 export function bestStreak(habit: Habit, done: Set<IsoDate>, today: IsoDate): number {
-  let first = today;
-  for (const date of done) if (date < first) first = date;
-  let day = first < addDays(today, -LOOKBACK_DAYS) ? addDays(today, -LOOKBACK_DAYS) : first;
-  let run = 0;
+  const since = addDays(today, -LOOKBACK_DAYS);
+  const sinceWeekday = weekday(since);
+  const planned = new Set(habit.days);
+  /** Whether the day `offset` days after `since` is a planned day. */
+  const plannedAt = (offset: number): boolean => planned.has(((sinceWeekday - 1 + offset) % 7) + 1);
+  const days = [...done]
+    .filter((date) => date >= since && date <= today)
+    .map((date) => daysBetween(since, date))
+    .filter(plannedAt)
+    .sort((a, b) => a - b);
   let best = 0;
-  while (day <= today) {
-    if (isPlanned(habit, day)) {
-      if (done.has(day)) {
-        run += 1;
-        best = Math.max(best, run);
-      } else if (day !== today) {
-        run = 0;
-      }
-    }
-    day = addDays(day, 1);
+  let run = 0;
+  let last = -1;
+  for (const offset of days) {
+    // The first planned day after the last one done: within a week, as a
+    // habit has at least one planned day (a bound, should saved data have none).
+    let next = last + 1;
+    while (next < last + 7 && !plannedAt(next)) next += 1;
+    run = last >= 0 && next === offset ? run + 1 : 1;
+    best = Math.max(best, run);
+    last = offset;
   }
   return best;
 }

@@ -1,4 +1,4 @@
-import { addDays, daysBetween } from '@shkriuss/dates';
+import { addDays, daysBetween, weekday } from '@shkriuss/dates';
 import { footprint } from '@shkriuss/sync/testing';
 import { describe, expect, it } from 'vitest';
 import { MAX_SEALED_CHARS } from '../../../../packages/sync/src/validate.ts';
@@ -315,6 +315,81 @@ describe('streaks', () => {
     expect(bestStreak(daily, doneBefore(MONDAY, 1, 5, 6, 7, 8), MONDAY)).toBe(4);
     expect(bestStreak(daily, doneBefore(MONDAY, 0, 1), MONDAY)).toBe(2);
     expect(bestStreak(daily, new Set(), MONDAY)).toBe(0);
+    // Unplanned days between planned ones don't break it; a planned day
+    // missed does; days in the future (another device's clock) don't count.
+    expect(bestStreak(weekdaysOnly, doneBefore(MONDAY, 0, 3, 4), MONDAY)).toBe(3);
+    expect(bestStreak(weekdaysOnly, doneBefore(MONDAY, 0, 3, 5), MONDAY)).toBe(2);
+    expect(bestStreak(daily, doneBefore(MONDAY, -2, -1, 0, 1), MONDAY)).toBe(2);
+  });
+
+  /**
+   * The best streak as it was worked out before (audit 5 F1-6): every day
+   * from the oldest check mark to today, one by one. The new way must give
+   * the same answer, so it's compared with this on many made-up habits.
+   */
+  function slowBestStreak(habit: Habit, done: Set<string>, today: string): number {
+    let first = today;
+    for (const date of done) if (date < first) first = date;
+    let day = first < addDays(today, -3660) ? addDays(today, -3660) : first;
+    let run = 0;
+    let best = 0;
+    while (day <= today) {
+      if (habit.days.includes(weekday(day))) {
+        if (done.has(day)) {
+          run += 1;
+          best = Math.max(best, run);
+        } else if (day !== today) {
+          run = 0;
+        }
+      }
+      day = addDays(day, 1);
+    }
+    return best;
+  }
+
+  it('works out the same best streak as walking every day did', () => {
+    // A simple, repeatable source of made-up habits and check marks.
+    let seed = 2026;
+    const random = (below: number) => {
+      seed = (seed * 48271) % 2147483647;
+      return seed % below;
+    };
+    for (let round = 0; round < 300; round += 1) {
+      const days = EVERY_DAY.filter(() => random(3) > 0);
+      const habit: Habit = { id: 'h', name: 'H', days: days.length ? days : [random(7) + 1] };
+      const today = addDays(MONDAY, random(400) - 200);
+      const done = new Set<string>();
+      // Mostly recent days, with gaps; a few from long ago, and from the future.
+      for (let back = 0; back < 60; back += 1) if (random(4) > 0) done.add(addDays(today, -back));
+      for (let count = random(4); count > 0; count -= 1) {
+        done.add(addDays(today, -(300 + random(4000))));
+      }
+      if (random(5) === 0) done.add(addDays(today, 1 + random(10)));
+      expect(bestStreak(habit, done, today), `round ${round}`).toBe(
+        slowBestStreak(habit, done, today),
+      );
+    }
+  });
+
+  it('is the same with a first check mark 10 years old, and quick', { timeout: 2000 }, () => {
+    // Walking every day from the oldest check mark took about half a second
+    // for 50 habits, at every tap, and more the older it got (audit 5 F1-6).
+    // With 500 habits that was seconds; now it's well within this test's
+    // time, however old the first check mark.
+    const habits = Array.from({ length: 500 }, (_, index) => ({ ...daily, id: `h${index}` }));
+    const tenYearsAgo = addDays(MONDAY, -3650);
+    for (const habit of habits) {
+      const done = new Set([
+        tenYearsAgo,
+        ...Array.from({ length: 200 }, (_, back) => addDays(MONDAY, -back)),
+      ]);
+      expect(bestStreak(habit, done, MONDAY)).toBe(200);
+      expect(currentStreak(habit, done, MONDAY)).toBe(200);
+    }
+    // One older than the streaks look back doesn't count, as before.
+    const old = new Set([addDays(MONDAY, -3661), addDays(MONDAY, -3660), addDays(MONDAY, -3659)]);
+    expect(bestStreak(daily, old, MONDAY)).toBe(2);
+    expect(bestStreak(daily, old, MONDAY)).toBe(slowBestStreak(daily, old, MONDAY));
   });
 
   it('says it in words', () => {
