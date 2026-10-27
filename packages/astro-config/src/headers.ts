@@ -6,35 +6,49 @@
  * Docs: docs/adr/0004-security-headers.md
  */
 
-/** Browser features an app may turn on (everything is off by default). */
+/**
+ * Browser features an app may turn on (everything is off by default). A
+ * browser ignores a name it doesn't know, so newer ones can be listed before
+ * every browser has them (audit 5 C-3).
+ */
 export const PERMISSION_FEATURES = [
   'accelerometer',
+  'ambient-light-sensor',
+  'attribution-reporting',
   'autoplay',
+  'battery',
   'bluetooth',
+  'browsing-topics',
   'camera',
+  'compute-pressure',
   'display-capture',
   'encrypted-media',
   'fullscreen',
+  'gamepad',
   'geolocation',
   'gyroscope',
   'hid',
+  'identity-credentials-get',
   'idle-detection',
+  'join-ad-interest-group',
   'local-fonts',
   'magnetometer',
   'microphone',
   'midi',
+  'otp-credentials',
   'payment',
   'picture-in-picture',
   'publickey-credentials-create',
   'publickey-credentials-get',
+  'run-ad-auction',
   'screen-wake-lock',
   'serial',
+  'shared-storage',
   'storage-access',
   'usb',
   'web-share',
   'window-management',
   'xr-spatial-tracking',
-  'browsing-topics',
 ] as const;
 export type PermissionFeature = (typeof PERMISSION_FEATURES)[number];
 
@@ -112,6 +126,15 @@ export function securityHeaders(options: HeaderOptions = {}): Record<string, str
   };
 }
 
+/**
+ * How browsers may keep hashed build files (/_astro/*): the same as pages,
+ * asking the server each time. The year-long "immutable" header they had
+ * reached a "not found" answer for a missing one too (audit 5 Z-1), and
+ * kept a worker script's old security headers in the browser's cache after
+ * a headers-only change (audit 5 C-1).
+ */
+export const BUILD_FILE_CACHE_CONTROL = 'public, max-age=0, must-revalidate';
+
 /** The full text of the _headers file. */
 export function headersFile(options: HeaderOptions = {}): string {
   const block = (pattern: string, headers: Record<string, string>): string =>
@@ -123,8 +146,12 @@ export function headersFile(options: HeaderOptions = {}): string {
     '',
     block('/*', securityHeaders(options)),
     '',
-    '# Build files have a content hash in their name, so they never change.',
-    block('/_astro/*', { 'Cache-Control': 'public, max-age=31536000, immutable' }),
+    '# Build files have a content hash in their name, so they never change. Still,',
+    '# a browser must ask again each time (a cheap 304 answer): Cloudflare gives',
+    '# this header to its "not found" answer for a missing one too, which a',
+    '# browser kept for the year the header used to say (audit 5 Z-1). The',
+    '# service worker serves saved build files first, so nothing is slower.',
+    block('/_astro/*', { 'Cache-Control': BUILD_FILE_CACHE_CONTROL }),
     '',
   ].join('\n');
 }

@@ -32,6 +32,9 @@
  *   switches to it if it's already open.
  */
 
+import { ROBOTS_TXT } from './robots-txt.ts';
+import { SECURITY_TXT } from './security-txt.ts';
+
 export interface ServiceWorkerOptions {
   /** URL paths to precache, e.g. ["/", "/privacy/", "/_astro/app.1234.css"]. */
   files: readonly string[];
@@ -47,8 +50,11 @@ export const NETWORK_TIMEOUT_MS = 3000;
 /** Where the previous version's build files are kept, for pages still open from it. */
 export const PREVIOUS_CACHE = 'shkriuss-previous';
 
-/** Files in dist/ that are not served as-is, or must not be cached. */
-const NOT_PRECACHED = new Set(['_headers', '_redirects', 'sw.js']);
+/**
+ * Files in dist/ that are not served as-is, must not be cached, or aren't
+ * needed offline (what crawlers and security researchers read).
+ */
+const NOT_PRECACHED = new Set(['_headers', '_redirects', 'sw.js', SECURITY_TXT, ROBOTS_TXT]);
 
 /**
  * Folder in dist/ (and public/) for big files an app downloads only when the
@@ -158,9 +164,17 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (request.mode === 'navigate') {
-    // The page's saved copy, whatever its query string.
+    // The page's saved copy, whatever its query string. Online, Cloudflare
+    // answers "/privacy" with a redirect to "/privacy/", which is how the
+    // copy is saved: an address typed or bookmarked without its slash looks
+    // for that too (audit 5 C-2). A file name (with a dot) is never a page.
     const page = url.origin + url.pathname;
-    const saved = () => caches.match(page, { ignoreSearch: true }).then(withPolicy);
+    const slashed = /\\/[^/.]+$/.test(url.pathname) ? page + '/' : null;
+    const saved = () =>
+      caches
+        .match(page, { ignoreSearch: true })
+        .then((cached) => cached || (slashed && caches.match(slashed, { ignoreSearch: true })))
+        .then(withPolicy);
     const network = fetch(request).then((response) =>
       // Not the page (a server error, or a 4xx a saved page can't have, like
       // the refusal of requests whose cookies are too big): the saved copy is
