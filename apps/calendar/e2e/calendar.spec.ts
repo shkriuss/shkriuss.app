@@ -80,6 +80,38 @@ test('moves the chosen day along at midnight, also after a redraw that came firs
   await expect(dayList(page).getByRole('button')).toHaveText([/Breakfast/]);
 });
 
+test('at midnight, a day with keyboard focus stays chosen, with its focus ring', async ({
+  page,
+}) => {
+  // "Today" moved on, and focus was left on a day that was neither chosen
+  // nor in the Tab order, so it had no focus ring (audit 5 G-8).
+  const saturday = day(page, /^Saturday, October 17, 2026/);
+  await saturday.focus();
+  // Keyboard use, so the focus ring shows: one step right and back.
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowLeft');
+  await expect(saturday).toBeFocused();
+
+  await page.clock.setFixedTime(new Date('2026-10-18T00:00:30'));
+  await page.clock.runFor('01:00');
+  await expect(day(page, /^Sunday, October 18, 2026, today/)).toHaveAttribute(
+    'aria-current',
+    'date',
+  );
+  await expect(saturday).toBeFocused();
+  await expect(saturday).toHaveAttribute('aria-pressed', 'true');
+  await expect(saturday).toHaveAttribute('tabindex', '0');
+  await expect(page.locator('[data-weeks] button[tabindex="0"]')).toHaveCount(1);
+  expect(await saturday.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe(
+    'solid',
+  );
+  await expect(page.locator('[data-day-heading]')).toHaveText('Saturday, October 17');
+  // The arrow keys move on from there.
+  await page.keyboard.press('ArrowRight');
+  await expect(day(page, /^Sunday, October 18, 2026, today/)).toBeFocused();
+  await expect(page.locator('[data-day-heading]')).toHaveText('Today, Sunday, October 18');
+});
+
 test('in a Windows contrast theme, the chosen day and event dots still show', async ({ page }) => {
   // Contrast themes replace backgrounds with the theme's own colours (audit G-6).
   await seed(page, [{ startDate: '2026-10-20', endDate: '2026-10-20' }]);
