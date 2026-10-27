@@ -8,13 +8,18 @@
  * it (successorTag), so they're kept only when this device signs in to that
  * account: another account mustn't get this one's old data (audit A-3). A
  * device signed out because its key was replaced elsewhere keeps nothing,
- * as if it had signed out (forgetReplaced, audit 3 D-8).
+ * as if it had signed out (forgetReplaced, audit 3 D-8). Each is kept for
+ * 13 months from when it was noted (REPLACED_NOTE_MS), as long as the
+ * account service keeps its note: after that, the "moved" notes on the
+ * apps' old copies may be gone too, and a copy a lost device started with
+ * the old key would have come along (audit 5 A-1).
  *
  * And it keeps which apps this device turned on sync for, so the Account
  * page can offer to turn it off again (see `syncedApps`).
  */
 import { fromBase64Url, toBase64Url } from '@shkriuss/crypto';
 import { accountCodeOf, SECRET_BYTES, successorTag } from './secret.ts';
+import { REPLACED_NOTE_MS } from './validate.ts';
 
 const STORAGE_KEY = 'shkriuss-device:account';
 const SYNCED_KEY = 'shkriuss-device:synced-apps';
@@ -35,30 +40,60 @@ interface Saved {
   replaced: string[];
   /** For a replaced key, the tag of the key that replaced it (when known). */
   successors: Record<string, string>;
+  /**
+   * For a replaced key, when it was noted here (ms). Missing for keys noted
+   * before this was kept: they count from the next sign-in or replacement,
+   * which notes the time.
+   */
+  replacedAt: Record<string, number>;
+}
+
+const EMPTY: Saved = { replaced: [], successors: {}, replacedAt: {} };
+
+/** The entries of `value` whose values `keep` accepts, if it's a plain object. */
+function entriesOf<T>(value: unknown, keep: (entry: unknown) => entry is T): Record<string, T> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value).filter((entry): entry is [string, T] => keep(entry[1])),
+  );
 }
 
 function read(): Saved {
   try {
     const value: unknown = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null');
-    if (typeof value !== 'object' || value === null) return { replaced: [], successors: {} };
-    const { secret, since, replaced, successors } = value as Record<string, unknown>;
+    if (typeof value !== 'object' || value === null) return EMPTY;
+    const { secret, since, replaced, successors, replacedAt } = value as Record<string, unknown>;
     return {
       ...(typeof secret === 'string' && typeof since === 'string' ? { secret, since } : {}),
       replaced: Array.isArray(replaced)
         ? replaced.filter((key): key is string => typeof key === 'string')
         : [],
-      successors:
-        typeof successors === 'object' && successors !== null && !Array.isArray(successors)
-          ? Object.fromEntries(
-              Object.entries(successors).filter(
-                (entry): entry is [string, string] => typeof entry[1] === 'string',
-              ),
-            )
-          : {},
+      successors: entriesOf(successors, (tag): tag is string => typeof tag === 'string'),
+      replacedAt: entriesOf(replacedAt, (time): time is number => typeof time === 'number'),
     };
   } catch {
-    return { replaced: [], successors: {} };
+    return EMPTY;
   }
+}
+
+/**
+ * `saved` without the replaced keys noted more than REPLACED_NOTE_MS ago,
+ * and with the time noted for those that have none yet (`now`). Only the
+ * keys listed in `keys` (the replaced keys to keep, newest first) stay.
+ */
+function withFreshReplaced(saved: Saved, keys: readonly string[], now: number): Saved {
+  const replaced = keys.filter((key) => (saved.replacedAt[key] ?? now) > now - REPLACED_NOTE_MS);
+  return {
+    ...saved,
+    replaced,
+    successors: Object.fromEntries(
+      replaced.flatMap((key) => {
+        const tag = saved.successors[key];
+        return tag === undefined ? [] : [[key, tag]];
+      }),
+    ),
+    replacedAt: Object.fromEntries(replaced.map((key) => [key, saved.replacedAt[key] ?? now])),
+  };
 }
 
 function write(saved: Saved): boolean {
@@ -122,15 +157,8 @@ export async function saveAccount(
   now = new Date(),
 ): Promise<boolean> {
   const saved = read();
-  const replaced = await leadingTo(secret, saved);
-  return write({
-    secret: toBase64Url(secret),
-    since: now.toISOString(),
-    replaced,
-    successors: Object.fromEntries(
-      Object.entries(saved.successors).filter(([key]) => replaced.includes(key)),
-    ),
-  });
+  const fresh = withFreshReplaced(saved, await leadingTo(secret, saved), now.getTime());
+  return write({ ...fresh, secret: toBase64Url(secret), since: now.toISOString() });
 }
 
 /**
@@ -138,22 +166,29 @@ export async function saveAccount(
  * replaced it (null if not known). If this device is signed in with it, it's
  * signed out.
  */
-export function noteReplaced(secret: Uint8Array<ArrayBuffer>, successor: string | null): void {
+export function noteReplaced(
+  secret: Uint8Array<ArrayBuffer>,
+  successor: string | null,
+  now = Date.now(),
+): void {
   const text = toBase64Url(secret);
   const saved = read();
-  const replaced = [text, ...saved.replaced.filter((key) => key !== text)].slice(0, MAX_REPLACED);
-  const successors = Object.fromEntries(
-    replaced.flatMap((key) => {
-      const tag = key === text ? successor : saved.successors[key];
-      return tag ? [[key, tag]] : [];
-    }),
-  );
-  write(saved.secret === text ? { replaced, successors } : { ...saved, replaced, successors });
+  const noted = {
+    ...saved,
+    successors: successor ? { ...saved.successors, [text]: successor } : saved.successors,
+    replacedAt: { ...saved.replacedAt, [text]: now },
+  };
+  const keys = [text, ...saved.replaced.filter((key) => key !== text)].slice(0, MAX_REPLACED);
+  const { secret: signedIn, since, ...rest } = withFreshReplaced(noted, keys, now);
+  // Signed in with the replaced key: signed out.
+  const stillSignedIn = signedIn !== undefined && since !== undefined && signedIn !== text;
+  write(stillSignedIn ? { ...rest, secret: signedIn, since } : rest);
 }
 
-/** Account keys this device knows were replaced, newest first. */
-export function replacedSecrets(): Uint8Array<ArrayBuffer>[] {
-  return read()
+/** Account keys this device knows were replaced, newest first (for 13 months each). */
+export function replacedSecrets(now = Date.now()): Uint8Array<ArrayBuffer>[] {
+  const saved = read();
+  return withFreshReplaced(saved, saved.replaced, now)
     .replaced.map(decode)
     .filter((secret) => secret !== null);
 }

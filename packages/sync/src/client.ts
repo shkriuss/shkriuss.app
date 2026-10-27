@@ -58,6 +58,7 @@ import {
   StoppedError,
   updateFiles,
   updateState,
+  withRetired,
   type DeviceState,
 } from './device.ts';
 import { createFileSync, type SyncedFiles } from './files.ts';
@@ -491,8 +492,12 @@ export function createSync(options: {
    * tried again only after this app updates.
    */
   async function fetchPrevious(previous: readonly string[], waited: Record<string, string>) {
-    const copies: (Keys & { secret: Uint8Array<ArrayBuffer>; stores: Stores })[] = [];
-    const movedAway: Uint8Array<ArrayBuffer>[] = [];
+    interface Old {
+      secret: Uint8Array<ArrayBuffer>;
+      encoded: string;
+    }
+    const copies: (Keys & Old & { stores: Stores })[] = [];
+    const movedAway: Old[] = [];
     const waiting: Record<string, string> = {};
     for (const encoded of previous) {
       if (waited[encoded] === versions) {
@@ -513,12 +518,18 @@ export function createSync(options: {
           ready = error.problem === 'update-needed' ? 'wait' : {};
         } else {
           if (!isGone(error)) throw error;
-          if (error instanceof SyncError && error.problem === 'moved') movedAway.push(secret);
-          continue;
+          if (error instanceof SyncError && error.problem === 'moved') {
+            movedAway.push({ secret, encoded });
+            continue;
+          }
+          // Deleted ("Delete the online copy" with the old key): nothing to
+          // bring, but the "moved" note too, as a deleted copy could be
+          // started again with the old key (audit 5 A-1).
+          ready = {};
         }
       }
       if (ready === 'wait') waiting[encoded] = versions;
-      else copies.push({ secret, token, key, stores: ready });
+      else copies.push({ secret, encoded, token, key, stores: ready });
     }
     return { copies, movedAway, waiting };
   }
@@ -550,7 +561,12 @@ export function createSync(options: {
     const stored = loadState();
     if (!stored?.secret) return true;
     const { secret } = stored;
-    const state = { ...stored, known: knownNow(stores, stored.known) };
+    const state = {
+      ...stored,
+      known: knownNow(stores, stored.known),
+      // Old keys this device is done with are never fetched again (audit 5 A-1).
+      previous: stored.previous.filter((key) => !stored.retired.includes(key)),
+    };
     const { token, key } = await syncKeys(fromBase64Url(secret));
     const now = Date.now();
 
@@ -759,7 +775,8 @@ export function createSync(options: {
     // 7. The old copies are in the new one now (and their files, re-sealed with
     // the new key, and the app's linked data): delete them, so devices still
     // using them stop. Old copies another device moved first get their linked
-    // data moved too: that device may have been the lost one.
+    // data moved too: that device may have been the lost one. Either way this
+    // device is done with those keys, for good (audit 5 A-1).
     if (state.previous.length > 0) {
       for (const old of moving) {
         if (files) await fileSync.moveFiles(files, old, { token, key });
@@ -768,9 +785,11 @@ export function createSync(options: {
         if (!response.ok) throw failed(response);
       }
       if (linked) {
-        for (const old of movedAway) await linked.move(old, fromBase64Url(secret));
+        for (const old of movedAway) await linked.move(old.secret, fromBase64Url(secret));
       }
-      if (!updateState(secret, { previous: stillWaiting, waiting })) {
+      const done = [...moving, ...movedAway].map((old) => old.encoded);
+      const retired = withRetired(state.retired, done);
+      if (!updateState(secret, { previous: stillWaiting, waiting, retired })) {
         throw new SyncError(stateProblem());
       }
     }
@@ -966,12 +985,15 @@ export function createSync(options: {
       if (!state?.secret) return;
       // Copies of replaced keys not moved here yet go too, with their linked
       // data: the lost device that has the old key could still read them.
+      // They're marked as moved, so the old key can't start them again, and
+      // this device is done with those keys (audit 5 A-1).
       for (const encoded of state.previous) {
         const old = fromBase64Url(encoded);
         const keys = await syncKeys(old);
         if (linked) await linked.delete(old, await onlineItems(keys));
-        const response = await api('/copy', { method: 'DELETE' }, keys.token);
-        if (!response.ok) throw failed(response);
+        const response = await api('/copy?moved', { method: 'DELETE' }, keys.token);
+        // 507: nothing was online for it, and no room for the note just now.
+        if (!response.ok && response.status !== 507) throw failed(response);
       }
       const secret = fromBase64Url(state.secret);
       const keys = await syncKeys(secret);
@@ -982,7 +1004,7 @@ export function createSync(options: {
       // Only once it's deleted: a sync under way when deleting fails still
       // says what went wrong with it.
       stops += 1;
-      saveState(offState(state));
+      saveState({ ...offState(state), retired: withRetired(state.retired, state.previous) });
       forgetFiles();
       problem = null;
       emit('deleted-online');

@@ -105,9 +105,10 @@ HKDF), like `K7Q2-M9XD`.
 - **On the device:** the account secret, in `localStorage` for the hub only,
   under `shkriuss-device:account`. It's never in backups, and signing out
   deletes it. On the device that replaced the key, the old keys are kept
-  there too (at most 5), so apps can move their old copies. A device signed
-  out because its key was replaced elsewhere keeps nothing of it, as when
-  signing out (audit 3 D-8).
+  there too (at most 5, for 13 months each, as long as the account service
+  keeps its note: [ADR 0017](0017-storage-limits.md), audit 5 A-1), so apps
+  can move their old copies. A device signed out because its key was
+  replaced elsewhere keeps nothing of it, as when signing out (audit 3 D-8).
 - **On the hub's server.** The hub's Worker runs only for `/api/account/*`,
   with one Durable Object for all device links together (a row each), and
   one per passkey lock or replaced key. It stores:
@@ -173,7 +174,11 @@ Then:
   fails the app's checks) waits until the app is updated, while syncing with
   the new key goes on. A replaced key with nothing online for the app gets
   the note that it moved too, so the lost device can't start a copy with it
-  (audit 3 B-1).
+  (audit 3 B-1); so does one whose copy was deleted, and "Delete the online
+  copy" marks the old copies it deletes as moved. An app remembers the old
+  keys it's done with (their copy moved here or on another device, or
+  deleted) and never fetches them again, however often the hub hands them
+  over; "Delete all data" forgets that list with the rest (audit 5 A-1).
 - **Sync history.** A device keeps what it knew at its last sync when sync is
   turned off (by the person, or because the copy was deleted or moved), and
   keeps noting edits and deletions while it's off. Turning sync on again, with

@@ -105,7 +105,9 @@ app need lowering first.
 - A device that comes back later finds no copy, as on a first sync, and
   puts its own data online again. So only copies nobody uses go for good.
 - **A note that a key was replaced** is deleted the same way, 13 months
-  after a device last asked about it. By then no device still has the key.
+  after a device last asked about it. The device that replaced the key
+  forgets the old key after the same 13 months, counted from when it noted
+  it, so no app is handed a key whose notes may be gone (audit 5 A-1).
 - **An online library that was never unlocked** (with the storage code) is
   deleted 30 days after it was last used. It can't hold photos before it's
   unlocked, so nothing is lost: a device still using it makes it again.
@@ -164,8 +166,21 @@ app need lowering first.
   starts a new one from its own data. Edits only that copy had are lost; any
   device that synced in the meantime kept the copy.
 - **A lost device away for over 13 months** is no longer signed out by
-  itself: the note is gone. Its old key no longer reaches anything, since the
-  apps moved their copies to the new key.
+  itself: the note is gone. What the clean-up undoes, exactly: the old key
+  can sign in to the hub on that device again, and an app's old online copy
+  that nobody (not even the lost device) has used for 13 months is deleted
+  with its "moved" note, so the old key can start a copy under that app's
+  old token again. What it can't undo: the person's own devices never read
+  such a copy. The device that replaced the key forgets it after 13 months,
+  and each app remembers the old keys it's done with (their copy moved, by
+  it or by another device, or deleted) and never fetches them again
+  (audit 5 A-1; before, the replacing device handed every app the old key
+  at each "Turn on sync" for ever, and a copy started with it after the
+  clean-up was merged into the person's data). One narrow case is left: an
+  app in which nobody turned sync on again for over 13 months after the
+  key was replaced, and whose old copy nobody used meanwhile, brings along
+  whatever copy the old key started in between, if sync is turned on in it
+  while the hub still hands the old key over.
 - Each copy keeps a little more (when it was last used, and its room), and a
   copy that grows past its room makes one more request, to the meter.
 - Copies and objects from before this change aren't counted until they next

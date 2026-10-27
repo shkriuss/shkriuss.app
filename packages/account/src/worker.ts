@@ -63,6 +63,7 @@ import {
   LINK_LIFETIME_MS,
   MAX_PASSKEY_REQUEST_BYTES,
   MAX_REQUEST_BYTES,
+  REPLACED_NOTE_MS,
   SUCCESSOR_PATTERN,
 } from './validate.ts';
 import { checkAssertion, type Assertion, type PasskeyKey, type Purpose } from './webauthn.ts';
@@ -92,8 +93,12 @@ export interface AccountEnv extends SiteEnv {
 export const STORAGE_LIMITS = { passkeys: 40_000_000, replaced: 40_000_000 } as const;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-/** A replaced-key note nobody has asked about for this long (about 13 months) is deleted. */
-export const UNUSED_MS = 396 * DAY_MS;
+/**
+ * A replaced-key note nobody has asked about for this long (about 13 months)
+ * is deleted. The device that replaced the key forgets it after as long
+ * (./device.ts), so no app gets it once the note may be gone.
+ */
+export const UNUSED_MS = REPLACED_NOTE_MS;
 
 /** A namespace's limit, for the object to check. */
 const limitHeaders = (limit: number) => ({ [LIMIT_HEADER]: String(limit) });
