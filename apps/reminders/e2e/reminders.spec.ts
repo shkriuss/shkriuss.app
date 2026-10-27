@@ -161,7 +161,8 @@ test('saving a change keeps what changed elsewhere while it was open', async ({ 
     reminder('b', 'Post the letter', '2026-10-20', '08:00'),
   ]);
   await expect(page.locator('[data-groups] h3')).toHaveText(['Overdue']);
-  await page.getByRole('button', { name: 'Call the dentist' }).click();
+  // Exact: an overdue reminder's "In 1 hour" and "Tomorrow" are named after it too.
+  await page.getByRole('button', { name: 'Call the dentist', exact: true }).click();
   // Meanwhile, another tab (or a sync from another device) ticks it done.
   const other = await page.context().newPage();
   await other.goto('/');
@@ -181,7 +182,7 @@ test('saving a change keeps what changed elsewhere while it was open', async ({ 
   ).toBeChecked();
 
   // Put off until tomorrow there, text corrected here: both stay.
-  await page.getByRole('button', { name: 'Post the letter' }).click();
+  await page.getByRole('button', { name: 'Post the letter', exact: true }).click();
   await other.getByRole('button', { name: 'Post the letter: remind me tomorrow' }).click();
   await expect(meta(other, 'Post the letter')).toHaveText(/^Tomorrow at 8:00\sAM$/);
   await other.close();
@@ -192,7 +193,7 @@ test('saving a change keeps what changed elsewhere while it was open', async ({ 
   await expect(page.locator('[data-groups] h3')).toHaveText(['Tomorrow']);
 
   // A new time chosen here must still be to come, as before.
-  await page.getByRole('button', { name: 'Post the parcel' }).click();
+  await page.getByRole('button', { name: 'Post the parcel', exact: true }).click();
   await dialog.getByLabel('Time').fill('09:00');
   await dialog.getByLabel('Day').fill('2026-10-21');
   await dialog.getByRole('button', { name: 'Save' }).click();
