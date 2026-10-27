@@ -116,7 +116,7 @@ test('“Turn on sync” gives up on a network that hangs, and says so', async (
   await page.clock.runFor('00:16');
   await expect(status(page)).toHaveText('Opening your shkriuss account…');
   await page.clock.runFor('00:05');
-  const failed = "Couldn’t reach Tally's server. Check your connection and try again.";
+  const failed = 'Couldn’t reach Tally’s server. Check your connection and try again.';
   await expect(status(page)).toHaveText(failed);
   await expect(announcer(page)).toHaveText(failed);
   await expect(turnOn).toBeEnabled();

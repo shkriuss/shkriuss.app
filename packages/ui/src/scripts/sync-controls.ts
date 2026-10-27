@@ -41,8 +41,8 @@ export function mountSyncControls(section: HTMLElement, sync: SyncClient): void 
     'update-needed': `Another device has a newer version of ${app}. Close ${app} and open it again to update, and it will sync.`,
     unreadable: `This version of ${app} can’t read some of the data saved here, so it isn’t syncing, to keep that data safe. Close ${app} and open it again to update.`,
     'too-big': `${app} has too much data to sync.`,
-    deleted: `The online copy was deleted on another device, so sync is off here. ${app}'s data on this device is kept.`,
-    moved: `Your account key was replaced on another device, so sync is off here. ${app}'s data on this device is kept. Turn on sync again to keep syncing.`,
+    deleted: `The online copy was deleted on another device, so sync is off here. ${app}’s data on this device is kept.`,
+    moved: `Your account key was replaced on another device, so sync is off here. ${app}’s data on this device is kept. Turn on sync again to keep syncing.`,
     storage: 'This browser won’t save. Is it in private mode, or is storage blocked?',
     full: `There’s no room left for ${app}’s data in this browser, so it can’t sync. Delete something you don’t need here, and it will sync again.`,
     'files-full': `There’s no room left online for more of ${app}’s photos and files. New ones stay on this device.`,
@@ -51,7 +51,7 @@ export function mountSyncControls(section: HTMLElement, sync: SyncClient): void 
   const EVENTS: Partial<Record<SyncEvent, string>> = {
     connected: `Sync is on. ${app} is now the same on every device where you turn it on.`,
     cancelled: 'Sync wasn’t turned on.',
-    'turned-off': `Sync is off on this device. ${app}'s data here is kept, and so is the online copy for your other devices.`,
+    'turned-off': `Sync is off on this device. ${app}’s data here is kept, and so is the online copy for your other devices.`,
     'kept-on':
       'Sync is still on. That link to turn it off came from a different shkriuss account. To turn sync off here, tap “Turn off on this device”.',
     'deleted-online': 'The online copy is deleted, and sync is off on this device.',
@@ -59,7 +59,7 @@ export function mountSyncControls(section: HTMLElement, sync: SyncClient): void 
       'Synced. Something was changed on two devices at once, so both versions are kept: check for a second copy.',
   };
 
-  const CONNECT_FAILED = `Couldn’t reach ${app}'s server. Check your connection and try again.`;
+  const CONNECT_FAILED = `Couldn’t reach ${app}’s server. Check your connection and try again.`;
   const DELETE_FAILED = 'Couldn’t delete the online copy. Check your connection and try again.';
 
   /** What's being done that the person asked for, like "Opening your shkriuss account…": shown until it's done. */

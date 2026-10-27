@@ -40,10 +40,11 @@ export type PushSupport = 'supported' | 'needs-home-screen' | 'unsupported';
 /**
  * 'server': it couldn't be reached. 'refused': it answered, but with a
  * problem. 'storage': this device couldn't keep the setting (storage full or
- * blocked), so it's still off.
+ * blocked), so it's still off. 'outdated': the part of the app that uploads
+ * couldn't be loaded (the page is from an older version, say).
  */
 export type PushErrorCode =
-  'unsupported' | 'denied' | 'unavailable' | 'server' | 'refused' | 'storage';
+  'unsupported' | 'denied' | 'unavailable' | 'server' | 'refused' | 'storage' | 'outdated';
 
 export class PushError extends Error {
   readonly code: PushErrorCode;

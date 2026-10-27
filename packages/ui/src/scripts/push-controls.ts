@@ -22,6 +22,7 @@ import {
   type PushSynced,
 } from '@shkriuss/push';
 import { setBusy } from './busy.ts';
+import { RELOAD_TO_UPDATE } from './problem.ts';
 
 /** Waits this long after a change before uploading, so quick edits go up together. */
 const SYNC_DELAY_MS = 800;
@@ -56,15 +57,16 @@ export function mountPushControls(block: HTMLElement, options: PushControlsOptio
 
   const ON = `On: reminders arrive even when ${app} is closed.`;
   const OFF = `Off: reminders only arrive while ${app} is open.`;
-  const OFF_NOT_DELETED = `Off, but your reminders couldn’t be removed from ${app}'s server yet.`;
+  const OFF_NOT_DELETED = `Off, but your reminders couldn’t be removed from ${app}’s server yet.`;
   const PROBLEMS: Record<PushErrorCode, string> = {
     unsupported: `This browser can’t get notifications while ${app} is closed.`,
     denied: `Notifications are blocked for ${app}. To allow them, change this site’s settings in your browser.`,
     unavailable:
       'This browser couldn’t connect to a push service. On phones without Google services, like GrapheneOS, use a browser with UnifiedPush, such as IronFox.',
-    server: `Couldn’t reach ${app}'s notification service. Check your connection and try again.`,
-    refused: `${app}'s notification service had a problem. Please try again later.`,
+    server: `Couldn’t reach ${app}’s notification service. Check your connection and try again.`,
+    refused: `${app}’s notification service had a problem. Please try again later.`,
     storage: `${app} couldn’t save this setting on this device, so it’s off. Its storage may be full or blocked.`,
+    outdated: `Part of ${app} couldn’t load. ${RELOAD_TO_UPDATE}`,
   };
   const problemOf = (error: unknown): string =>
     error instanceof PushError ? PROBLEMS[error.code] : 'Something went wrong. Please try again.';
@@ -73,7 +75,7 @@ export function mountPushControls(block: HTMLElement, options: PushControlsOptio
   /** "On", or how many reminders the server has when they don't all fit. */
   const onText = ({ scheduled, left }: PushSynced): string =>
     left > 0
-      ? `On, but only for your next ${scheduled} reminders: ${app}'s server can’t keep more. ${left === 1 ? 'The other one arrives' : `The other ${left} arrive`} only while ${app} is open.`
+      ? `On, but only for your next ${scheduled} reminders: ${app}’s server can’t keep more. ${left === 1 ? 'The other one arrives' : `The other ${left} arrive`} only while ${app} is open.`
       : ON;
 
   function render(message?: string): void {
