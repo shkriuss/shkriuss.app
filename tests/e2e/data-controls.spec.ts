@@ -93,14 +93,18 @@ test('“Delete all data” also forgets what this device kept for itself (audit
     .getByRole('button', { name: 'Delete everything' })
     .click();
   await reloaded;
-  const left = await page.evaluate(() =>
-    Object.keys(localStorage)
-      .filter((key) => key.startsWith('shkriuss'))
+  const left = await page.evaluate(() => ({
+    sample: localStorage.getItem('shkriuss:e2e-sample'),
+    // The app's own stores may be written again as it starts (Calendar notes
+    // when it checked its reminders); what it kept for this device may not.
+    device: Object.keys(localStorage)
+      .filter((key) => key.startsWith('shkriuss-device:'))
       .sort(),
-  );
+  }));
+  expect(left.sample).toBeNull();
   // Only a note that the notification server still has this device's
   // reminders to delete may stay, when it couldn't be reached (not here).
-  expect(left.filter((key) => key !== 'shkriuss-device:push-delete')).toEqual([]);
+  expect(left.device.filter((key) => key !== 'shkriuss-device:push-delete')).toEqual([]);
 });
 
 test('the dialogs that delete read out what they will delete (audit 5 G-3)', async ({
