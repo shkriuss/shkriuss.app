@@ -179,14 +179,18 @@ jobs:
         run: pnpm audit --audit-level high
 
       # pnpm's 7-day wait only applies when it picks versions; CI installs what
-      # the lockfile says, so check what a pull request adds to it.
+      # the lockfile says, so check what a pull request adds to it. The check
+      # that runs is main's copy of the script, from a folder outside the
+      # checkout, so a pull request can't change the check it's checked by
+      # (audit 5 H-3); the rules it applies are main's too (audit 4 H-1).
       - name: No package versions under 7 days old in the lockfile
         if: github.event_name == 'pull_request'
         env:
           BASE_REF: ${{ github.base_ref }}
         run: |
           git fetch --no-tags --depth=1 origin "$BASE_REF"
-          node scripts/lockfile-age.ts "origin/$BASE_REF"
+          git archive "origin/$BASE_REF" scripts/lockfile-age.ts scripts/lib/lockfile-age.ts | tar -x -C "$RUNNER_TEMP"
+          node "$RUNNER_TEMP/scripts/lockfile-age.ts" "origin/$BASE_REF"
 
   deploy:
     name: Deploy to production

@@ -10,7 +10,14 @@
  * written on one line (`evil@1.0.0: {resolution: {…}}`), or with a comment
  * after its name, was installed without any check (audit 5 H-1).
  */
-import { parse } from 'yaml';
+import { createRequire } from 'node:module';
+import { join } from 'node:path';
+import type * as YAML from 'yaml';
+
+// The yaml package, found from the working directory (the repository), not
+// from this file: CI runs main's copy of these scripts from a folder outside
+// the checkout, where nothing is installed (audit 5 H-3).
+const { parse } = createRequire(join(process.cwd(), 'package.json'))('yaml') as typeof YAML;
 
 type Mapping = Record<string, unknown>;
 
