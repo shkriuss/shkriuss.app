@@ -11,8 +11,11 @@ class FakeConnection {
   onversionchange: (() => void) | null = null;
   onclose: (() => void) | null = null;
   closed = false;
+  readonly rows: Map<string, unknown>;
 
-  constructor(private readonly rows: Map<string, unknown>) {}
+  constructor(rows: Map<string, unknown>) {
+    this.rows = rows;
+  }
 
   close(): void {
     this.closed = true;

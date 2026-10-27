@@ -6,7 +6,9 @@ aren't in them, and the Photos app has no Back up or Restore. Changed by
 audit 5: a locked file whose salt, nonce or data isn't the right size is
 turned down as damaged (E-6, A-4); a restore replaces each key in its place
 and says so if the old data couldn't all be put back (E-7); a plain copy
-keeps every saved text exactly (E-8).
+keeps every saved text exactly (E-8); a restore is refused while what's
+saved is from a newer version of the app, as after a rollback, since it
+would replace the person's latest data (E-3).
 
 ## Context
 

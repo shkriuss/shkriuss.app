@@ -182,14 +182,20 @@ const stays = `Everything ${site.name} saves stays in this browser on this devic
     </form>
   </dialog>
 
-  <dialog class="dialog" aria-labelledby="data-delete-title" data-all-data-dialog>
+  {/* Read out with its title: what goes, and that it can't be undone (audit 5 G-3). */}
+  <dialog
+    class="dialog"
+    aria-labelledby="data-delete-title"
+    aria-describedby={site.sync ? 'data-delete-text data-delete-sync' : 'data-delete-text'}
+    data-all-data-dialog
+  >
     <form method="dialog" class="stack">
       <h2 id="data-delete-title">Delete all data?</h2>
-      <p>
+      <p id="data-delete-text">
         This removes everything {site.name} has saved on this device. It can’t be undone. {keep}
       </p>
       {site.sync && (
-        <p>
+        <p id="data-delete-sync">
           If sync is on, it’s turned off on this device first, so your other devices and the online
           copy keep their data.
         </p>

@@ -318,6 +318,16 @@ export function restoreAll(
     const store = stores.get(key);
     if (store) checkWith(store, value);
   }
+  // What's saved now may be from a newer version of the app (a tab open from
+  // before an update, or a rollback): the app looks empty, and restoring a
+  // backup would replace the person's latest data (audit 5 E-3).
+  for (const store of stores.values()) {
+    if (store.status() !== 'newer') continue;
+    throw new BackupError(
+      'newer-version',
+      'What’s saved here now is from a newer version of this app, so it wasn’t replaced: that would lose your latest data. Close the app and open it again to update it, then restore the backup if you still want to. Nothing was changed.',
+    );
+  }
   // Values that weren't JSON (like the theme, "dark") were exported as plain text.
   const serialize = (value: unknown): string =>
     typeof value === 'string' ? value : JSON.stringify(value);

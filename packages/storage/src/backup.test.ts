@@ -321,6 +321,36 @@ describe('restoreAll', () => {
     ]);
   });
 
+  it('refuses to replace data saved by a newer version of the app (audit 5 E-3)', () => {
+    const store = createStore<{ repairs: string[] }>({
+      key: 'repairs',
+      version: 2,
+      fallback: () => ({ repairs: [] }),
+      validate: (value): value is { repairs: string[] } =>
+        Array.isArray((value as { repairs?: unknown } | null)?.repairs),
+      storage,
+    });
+    // After a rollback, or in a tab open from before an update: version 3 saved it.
+    storage.setItem('shkriuss:repairs', '{"v":3,"data":{"repairs":["tyres"]}}');
+    expect(store.status()).toBe('newer');
+    const before = storage.entries();
+    const stores = new Map([[store.key, store]]);
+    // A backup this version can read; even one without that key, since
+    // restoring deletes what the backup doesn't have.
+    const copies = [
+      { ...file, data: { 'shkriuss:theme': 'light' } },
+      { ...file, data: { 'shkriuss:repairs': { v: 2, data: { repairs: ['brakes'] } } } },
+    ];
+    for (const copy of copies) {
+      expect(() => restoreAll(copy, storage, stores)).toThrow(
+        /from a newer version of this app.*Nothing was changed/,
+      );
+    }
+    expect(storage.entries()).toEqual(before);
+    // The page's stores are remembered for later tests in this file: leave it empty.
+    storage.removeItem('shkriuss:repairs');
+  });
+
   it('writes back every saved text exactly, quotes and all (audit 5 E-8)', () => {
     const saved = new MemoryStorage();
     saved.setItem('shkriuss:quoted', '"dark"');

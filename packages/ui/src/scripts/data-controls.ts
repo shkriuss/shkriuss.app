@@ -18,7 +18,7 @@ import {
   type BackupFile,
 } from '@shkriuss/storage/backup';
 import { DATE_LOCALE } from '../lib/locale.ts';
-import { focusProblem } from './problem.ts';
+import { focusProblem, reportLoad } from './problem.ts';
 import { forgetReminderChecks } from './reminder-checks.ts';
 import { setBusy } from './busy.ts';
 
@@ -78,6 +78,12 @@ export function mountDataControls(section: HTMLElement): void {
 
   /** The backup file being restored. */
   let pending: BackupFile | null = null;
+
+  // What's saved may be from a newer version of the app, or unreadable by
+  // this one: say so, or the app just looks empty (audit 5 E-3). Once every
+  // script has made its stores: they all run before the page's load event.
+  if (document.readyState === 'complete') reportLoad();
+  else window.addEventListener('load', () => reportLoad(), { once: true });
 
   /** Shows (or clears) a problem under a field. */
   function setError(form: HTMLFormElement, field: string, message: string): void {

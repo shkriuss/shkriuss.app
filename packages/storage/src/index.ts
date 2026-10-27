@@ -132,12 +132,17 @@ export function allSaved(): boolean {
   return unsaved.size === 0;
 }
 
-const made = new Map<string, Pick<Store<unknown>, 'version' | 'read'>>();
+/** What a backup check, or the page's check of what's saved, needs of a store. */
+export type MadeStore = Pick<Store<unknown>, 'version' | 'read' | 'status'>;
+
+const made = new Map<string, MadeStore>();
 /**
  * Every store made on this page, by full key, so a backup can be checked
- * with them before it replaces anything (restoreAll in ./backup.ts).
+ * with them before it replaces anything (restoreAll in ./backup.ts), and the
+ * page can say when what's saved can't be shown (reportLoad in
+ * @shkriuss/ui/problem, audit 5 E-3).
  */
-export const madeStores: ReadonlyMap<string, Pick<Store<unknown>, 'version' | 'read'>> = made;
+export const madeStores: ReadonlyMap<string, MadeStore> = made;
 
 let askedToKeep = false;
 
@@ -202,7 +207,11 @@ export function createStore<T>(options: StoreOptions<T>): Store<T> {
     version: options.version,
     empty: options.fallback,
     read,
-    status: () => inspect(storage()?.getItem(fullKey)).status,
+    status: () => {
+      // What this store last read or wrote as fine needn't be checked again.
+      const raw = storage()?.getItem(fullKey);
+      return raw != null && raw === fine ? 'ok' : inspect(raw).status;
+    },
 
     raw() {
       try {
