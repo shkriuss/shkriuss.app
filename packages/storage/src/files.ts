@@ -29,11 +29,17 @@ export interface FileStore<T extends StoredFile> {
   removeAll(ids: readonly string[]): Promise<void>;
   /** A file ready to save together with files of other kinds (putTogether). */
   entry(file: T): FileEntry;
+  /** A file to remove together with files of other kinds (removeTogether). */
+  removal(id: string): FileKey;
+}
+
+/** A file of some kind, for removeTogether(): made by its store's removal(). */
+export interface FileKey {
+  readonly key: string;
 }
 
 /** A file of some kind, for putTogether(): made by its store's entry(). */
-export interface FileEntry {
-  readonly key: string;
+export interface FileEntry extends FileKey {
   readonly file: StoredFile;
 }
 
@@ -128,14 +134,9 @@ export function createFileStore<T extends StoredFile>(kind: string): FileStore<T
       return (keys ?? []).map((key) => String(key).slice(kind.length + 1));
     },
     putAll: (files) => putTogether(files.map(entry)),
-    async removeAll(ids) {
-      if (ids.length === 0) return;
-      await transact('readwrite', (table) => {
-        for (const id of ids) table.delete(keyOf(id));
-        return undefined;
-      });
-    },
+    removeAll: (ids) => removeTogether(ids.map((id) => ({ key: keyOf(id) }))),
     entry,
+    removal: (id) => ({ key: keyOf(id) }),
   };
 }
 
@@ -148,6 +149,21 @@ export async function putTogether(entries: readonly FileEntry[]): Promise<void> 
   if (entries.length === 0) return;
   await transact('readwrite', (table) => {
     for (const { key, file } of entries) table.put(file, key);
+    return undefined;
+  });
+}
+
+/**
+ * Removes files of several kinds together, in one transaction: all go, or
+ * none. For records that must never be left without each other, like a
+ * photo's details and its files (each store's removal() makes the keys):
+ * removed one kind at a time, a page closed in between left the files on
+ * the device for good, unseen (audit 5 E-4).
+ */
+export async function removeTogether(keys: readonly FileKey[]): Promise<void> {
+  if (keys.length === 0) return;
+  await transact('readwrite', (table) => {
+    for (const { key } of keys) table.delete(key);
     return undefined;
   });
 }

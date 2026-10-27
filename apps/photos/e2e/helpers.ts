@@ -103,10 +103,10 @@ export const hereWithoutOriginal = (page: Page) =>
       }),
   );
 
-/** How many photos have their original on this device (photos only online don't). */
-export const originalsHere = (page: Page) =>
+/** How many photos have this part (the original, the thumbnail or the screen-sized copy) on this device. */
+const partsHere = (page: Page, part: 'original' | 'thumb' | 'view') =>
   page.evaluate(
-    () =>
+    (part) =>
       new Promise<number>((resolve) => {
         const request = indexedDB.open('shkriuss-files');
         request.onupgradeneeded = () => request.transaction?.abort();
@@ -122,8 +122,43 @@ export const originalsHere = (page: Page) =>
           const files = database.transaction('files').objectStore('files').getAll(range);
           files.onsuccess = () => {
             database.close();
-            resolve(files.result.filter((file: { original: Blob | null }) => file.original).length);
+            resolve(files.result.filter((file: Record<string, Blob | null>) => file[part]).length);
           };
+        };
+      }),
+    part,
+  );
+
+/** How many photos have their original on this device (photos only online don't). */
+export const originalsHere = (page: Page) => partsHere(page, 'original');
+
+/** How many photos have a thumbnail on this device. */
+export const thumbsHere = (page: Page) => partsHere(page, 'thumb');
+
+/** Takes the thumbnail and screen-sized copy of every photo away from this device, keeping originals. */
+export const dropCopies = (page: Page) =>
+  page.evaluate(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        const request = indexedDB.open('shkriuss-files');
+        request.onerror = () => reject(request.error ?? new Error('No database'));
+        request.onsuccess = () => {
+          const database = request.result;
+          const run = database.transaction('files', 'readwrite');
+          const table = run.objectStore('files');
+          const files = table.getAll(
+            IDBKeyRange.bound('photo-files:', 'photo-files;', false, true),
+          );
+          files.onsuccess = () => {
+            for (const file of files.result as { id: string }[]) {
+              table.put({ ...file, thumb: null, view: null }, `photo-files:${file.id}`);
+            }
+          };
+          run.oncomplete = () => {
+            database.close();
+            resolve();
+          };
+          run.onerror = () => reject(run.error ?? new Error('Not saved'));
         };
       }),
   );

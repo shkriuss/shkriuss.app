@@ -80,7 +80,8 @@ import { AppShell, Button, DataControls, Icon, SyncControls } from '@shkriuss/ui
         see them.
       </p>
       <div class="stack" data-online hidden>
-        <p data-online-status></p>
+        <!-- Focusable, so focus comes here from "Unlock online storage" once that's gone (audit 5 G-2). -->
+        <p tabindex="-1" data-online-status></p>
         <form class="stack" data-unlock-form novalidate hidden>
           <p>
             Adding photos to the online library costs money, so it needs the storage code. Enter it
@@ -204,12 +205,18 @@ import { AppShell, Button, DataControls, Icon, SyncControls } from '@shkriuss/ui
     </div>
   </dialog>
 
-  <dialog class="dialog" aria-labelledby="delete-title" data-delete-dialog>
+  {/* Read out with their titles: what each does, filled in before they open (audit 5 G-3). */}
+  <dialog
+    class="dialog"
+    aria-labelledby="delete-title"
+    aria-describedby="delete-text"
+    data-delete-dialog
+  >
     <form method="dialog" class="stack">
       <h2 id="delete-title" data-delete-title>
         Delete this photo?
       </h2>
-      <p data-delete-text>
+      <p id="delete-text" data-delete-text>
         The original and its copies are deleted from this device. This can’t be undone.
       </p>
       <div class="cluster">
@@ -223,10 +230,15 @@ import { AppShell, Button, DataControls, Icon, SyncControls } from '@shkriuss/ui
     </form>
   </dialog>
 
-  <dialog class="dialog" aria-labelledby="free-up-title" data-free-up-dialog>
+  <dialog
+    class="dialog"
+    aria-labelledby="free-up-title"
+    aria-describedby="free-up-text"
+    data-free-up-dialog
+  >
     <form method="dialog" class="stack">
       <h2 id="free-up-title">Free up space on this device?</h2>
-      <p data-free-up-text></p>
+      <p id="free-up-text" data-free-up-text></p>
       <div class="cluster">
         <Button type="submit" value="cancel">
           Cancel
