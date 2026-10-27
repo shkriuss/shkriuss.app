@@ -63,14 +63,40 @@ export interface Notice {
   url?: string;
 }
 
+/** Characters as people see them, where the browser can tell (not Firefox before 125). */
+const characters =
+  typeof Intl.Segmenter === 'function'
+    ? new Intl.Segmenter('en', { granularity: 'grapheme' })
+    : null;
+
+/**
+ * At most `length` JavaScript characters of `text` (what fits in the
+ * message), cut between characters as people see them: a flag, a family or
+ * any emoji cut in two showed as half of it, or as "�" (audit 4 F3-4).
+ */
+export function cutText(text: string, length: number): string {
+  if (text.length <= length) return text;
+  if (!characters) {
+    // At least never half of an emoji's two halves.
+    const last = text.charCodeAt(length - 1);
+    return text.slice(0, last >= 0xd800 && last <= 0xdbff ? length - 1 : length);
+  }
+  let end = 0;
+  for (const { segment } of characters.segment(text)) {
+    if (end + segment.length > length) break;
+    end += segment.length;
+  }
+  return text.slice(0, end);
+}
+
 /** Cuts text so the encrypted message fits (push services take 4 KB). */
-function messageOf(
+export function messageOf(
   notice: Pick<Notice, 'title' | 'body' | 'tag' | 'url'>,
 ): Uint8Array<ArrayBuffer> {
   const encoder = new TextEncoder();
   const message = {
-    title: notice.title.slice(0, 200),
-    body: notice.body.slice(0, 500),
+    title: cutText(notice.title, 200),
+    body: cutText(notice.body, 500),
     tag: notice.tag,
     url: notice.url,
   };
