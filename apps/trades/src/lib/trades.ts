@@ -273,12 +273,13 @@ export function readTrade(
       if (missing) problems[field] = missing;
       return null;
     }
-    if (!isPrice(value)) {
-      problems[field] = notANumber(form[field], locale, 'Enter a number above 0.');
-      return null;
-    }
+    // Before "not a number": one too long to be one reads as infinite (audit 5 F2-5).
     if (value > LIMITS.number) {
       problems[field] = 'Enter a smaller number.';
+      return null;
+    }
+    if (!isPrice(value)) {
+      problems[field] = notANumber(form[field], locale, 'Enter a number above 0.');
       return null;
     }
     return value;
@@ -287,9 +288,10 @@ export function readTrade(
   const quantityValue = parseNumber(form.quantity);
   const quantity = isPrice(quantityValue) ? quantityValue : null;
   if (quantityValue === null) problems.quantity = 'Enter how many.';
+  else if (quantityValue > LIMITS.number) problems.quantity = 'Enter a smaller number.';
   else if (quantity === null) {
     problems.quantity = notANumber(form.quantity, locale, 'Enter a number above 0.');
-  } else if (quantity > LIMITS.number) problems.quantity = 'Enter a smaller number.';
+  }
 
   const stop = price('stop', '');
   if (stop !== null && entryPrice !== null && side) {
@@ -319,9 +321,10 @@ export function readTrade(
   // Repairs (audit 4 F2-12).
   const feesValue = parseNumber(form.fees);
   const fees = feesValue ?? 0;
-  if (!Number.isFinite(fees) || fees < 0) {
+  if (fees > LIMITS.number) problems.fees = 'Enter a smaller number.';
+  else if (!Number.isFinite(fees) || fees < 0) {
     problems.fees = notANumber(form.fees, locale, 'Enter 0 or more.');
-  } else if (fees > LIMITS.number) problems.fees = 'Enter a smaller number.';
+  }
 
   // One setup however it's typed: "Breakout  retest" is "Breakout retest".
   const setup = form.setup.replace(/\s+/g, ' ').trim();

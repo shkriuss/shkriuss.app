@@ -197,7 +197,7 @@ const keep = (amount: number, { currency = 'USD' }: ReadOptions): number =>
 function amountProblem(text: string, optional: boolean, options: ReadOptions): string | undefined {
   const value = parseAmount(text, options);
   if (value === null) return optional ? undefined : 'Enter an amount.';
-  if (!Number.isFinite(value)) {
+  if (Number.isNaN(value)) {
     return whichAmount(text, options.locale) ?? 'Enter a number, like 12.50 or 12,50.';
   }
   if (value <= 0) return 'Enter an amount above 0.';
@@ -206,6 +206,7 @@ function amountProblem(text: string, optional: boolean, options: ReadOptions): s
     const least = 10 ** -currencyDigits(options.currency ?? 'USD');
     return `Enter at least ${decimalText(least, options.locale)}.`;
   }
+  // Also one too long to be a number, which reads as infinite (audit 5 F2-5).
   if (value > LIMITS.amount) return 'Enter a smaller amount.';
   return undefined;
 }

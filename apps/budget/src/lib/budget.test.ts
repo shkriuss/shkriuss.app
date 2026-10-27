@@ -272,6 +272,18 @@ describe('entries', () => {
     expect(readEntry({ ...form, amount: '2000000000' }, 'x', 0, categories).problems).toEqual({
       amount: 'Enter a smaller amount.',
     });
+    // Audit 5 F2-5: one too long to be a number at all (it reads as
+    // infinite) was called "not a number", with the right message at hand.
+    const endless = '9'.repeat(400);
+    expect(readEntry({ ...form, amount: endless }, 'x', 0, categories).problems).toEqual({
+      amount: 'Enter a smaller amount.',
+    });
+    expect(readCategory({ name: 'Rent', limit: endless }, 'p', categories).problems).toEqual({
+      limit: 'Enter a smaller amount.',
+    });
+    expect(readEntry({ ...form, amount: `-${endless}` }, 'x', 0, categories).problems).toEqual({
+      amount: 'Enter an amount above 0.',
+    });
     expect(readEntry(form, 'x', LIMITS.entries, categories).problems).toEqual({
       amount: `You can keep up to ${new Intl.NumberFormat().format(LIMITS.entries)} entries. To make room, delete a year (under Currency and spreadsheet).`,
     });

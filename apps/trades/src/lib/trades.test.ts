@@ -457,9 +457,13 @@ describe('closing part of a trade', () => {
     // and the trade, closed in parts, goes with them.
     expect(closedYears(after)).toEqual([{ year: '2024', count: 2, kept: 0 }]);
     expect(removeClosedYear(after, '2024').trades).toEqual([]);
-    // The spreadsheet: a row for each part, none for anything "still open".
+    // The spreadsheet: a row for each part, none for anything "still open",
+    // with the price in full, as the page shows it (audit 5 F2-6).
     const rows = toCsv(after, 'en-US').split('\r\n').slice(1, -1);
-    expect(rows.map((row) => row.split(',')[4])).toEqual(['50000000000', '73456789012']);
+    expect(rows.map((row) => row.split(',').slice(3, 5))).toEqual([
+      ['0.0000000015', '50000000000'],
+      ['0.0000000015', '73456789012'],
+    ]);
     // Changing the trade (its setup, say) is fine: it holds what its parts closed, exactly.
     const changed = readChange(
       { ...toForm(lot, 'en-US'), setup: 'Meme' },
@@ -1074,6 +1078,19 @@ describe('number sizes', () => {
       'Enter a smaller number.',
     );
     expect(readTrade({ ...form, quantity: '1000000000000' }, 'a', 0).trade?.quantity).toBe(1e12);
+    // Audit 5 F2-5: one too long to be a number at all (it reads as
+    // infinite) was called "not a number", with the right message at hand.
+    const endless = '9'.repeat(400);
+    expect(
+      readTrade({ ...form, entryPrice: endless, quantity: endless, fees: endless }, 'a', 0).problems,
+    ).toEqual({
+      entryPrice: 'Enter a smaller number.',
+      quantity: 'Enter a smaller number.',
+      fees: 'Enter a smaller number.',
+    });
+    expect(readTrade({ ...form, entryPrice: `-${endless}` }, 'a', 0).problems).toEqual({
+      entryPrice: 'Enter a number above 0.',
+    });
   });
 
   // Audit F2-12: a trade restored or synced with prices far beyond what the
