@@ -1,6 +1,7 @@
 // Tasks' own tests. Shared checks (accessibility, security headers, offline
 // support, privacy, sync) already run for every app from tests/e2e/.
 // The locale is en-US.
+import { paste } from '../../../tests/e2e/clipboard.ts';
 import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
 import {
   addTask,
@@ -336,6 +337,56 @@ test('deletes a task, and done ones, with a confirmation', async ({ page }) => {
   await clear.getByRole('button', { name: 'Delete' }).click();
   await expect(page.locator('[data-done-section]')).toBeHidden();
   await expect(titles(page)).toHaveText(['Keep me']);
+});
+
+// Audit 5 F1-4: the browser kept the start of a long paste without a word.
+test('says when a pasted note, step or title doesn’t all fit', async ({ page }) => {
+  const add = page.getByLabel('New task');
+  await paste(add, 'a'.repeat(310));
+  await expect(add).toHaveValue('a'.repeat(300));
+  const cut = (most: string) =>
+    `Only part of that fit. This box takes up to ${most} characters, so the rest wasn’t added.`;
+  await expect(page.getByText(cut('300'), { exact: true })).toBeVisible();
+  // Gone once the task is added, with the box emptied.
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
+  await expect(page.getByText(cut('300'), { exact: true })).toBeHidden();
+  await expect(titles(page)).toHaveCount(1);
+
+  await addTask(page, 'Plan the trip');
+  await page.getByRole('button', { name: 'Edit Plan the trip' }).click();
+  const notes = editor(page).getByLabel('Notes (optional)');
+  await expect(notes).toHaveAccessibleDescription('Up to 5,000 characters.');
+  const text = 'Book the hotel, then the flights, then pack the bags. '.repeat(100);
+  await paste(notes, text);
+  await expect(notes).toHaveValue(text.slice(0, 5000));
+  await expect(editor(page).getByText(cut('5,000'), { exact: true })).toBeVisible();
+  await expect(
+    editor(page)
+      .getByRole('alert')
+      .filter({ hasText: `Notes (optional): ${cut('5,000')}` }),
+  ).toBeAttached();
+  // Gone when the form opens again.
+  await editor(page).getByRole('button', { name: 'Cancel' }).click();
+  await page.getByRole('button', { name: 'Edit Plan the trip' }).click();
+  await expect(editor(page).getByText(cut('5,000'), { exact: true })).toBeHidden();
+
+  // Steps too: the new one, and ones already added (their boxes are made then).
+  const newStep = editor(page).getByLabel('New step');
+  await paste(newStep, 'b'.repeat(210));
+  await expect(newStep).toHaveValue('b'.repeat(200));
+  await expect(editor(page).getByText(cut('200'), { exact: true })).toBeVisible();
+  await newStep.press('Enter');
+  await expect(editor(page).getByLabel('Step 1', { exact: true })).toHaveValue('b'.repeat(200));
+  await expect(editor(page).getByText(cut('200'), { exact: true })).toBeHidden();
+  await paste(editor(page).getByLabel('Step 1', { exact: true }), 'c'.repeat(10));
+  await expect(editor(page).getByLabel('Step 1', { exact: true })).toHaveValue('b'.repeat(200));
+  await expect(
+    editor(page).getByText(
+      'That didn’t fit. This box takes up to 200 characters, so it wasn’t added.',
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await checkA11y(page, 'the form after a paste that didn’t fit');
 });
 
 test('is accessible, in both themes', async ({ page }) => {

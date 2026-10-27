@@ -5,6 +5,7 @@
 // en-US, so weeks start on Sunday and times read like "2:30 PM".
 import { readFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
+import { paste } from '../../../tests/e2e/clipboard.ts';
 import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
 import { day, dayList, editor, monthHeading, newEvent, save, seed, upcoming } from './helpers.ts';
 
@@ -467,6 +468,35 @@ test('explains problems next to each field', async ({ page }) => {
     'The end date must be on or after the start date.',
   );
   await expect(editor(page)).toBeVisible();
+});
+
+// Audit 5 F1-4: the browser kept the start of a long paste without a word.
+test('says when pasted notes or a title don’t all fit', async ({ page }) => {
+  await newEvent(page, 'Dentist');
+  const notes = editor(page).getByLabel('Notes (optional)');
+  await expect(notes).toHaveAccessibleDescription('Up to 1,000 characters.');
+  const text = 'Bring the card, and the X-ray from last year. '.repeat(25);
+  await paste(notes, text);
+  await expect(notes).toHaveValue(text.slice(0, 1000));
+  const cut = (most: string) =>
+    `Only part of that fit. This box takes up to ${most} characters, so the rest wasn’t added.`;
+  await expect(editor(page).getByText(cut('1,000'), { exact: true })).toBeVisible();
+  await expect(
+    editor(page)
+      .getByRole('alert')
+      .filter({ hasText: `Notes (optional): ${cut('1,000')}` }),
+  ).toBeAttached();
+  const title = editor(page).getByLabel('Title');
+  await title.fill('');
+  await paste(title, 'x'.repeat(110));
+  await expect(title).toHaveValue('x'.repeat(100));
+  await expect(editor(page).getByText(cut('100'), { exact: true })).toBeVisible();
+  await checkA11y(page, 'editor after a paste that didn’t fit');
+  // Gone when the editor opens again.
+  await editor(page).getByRole('button', { name: 'Cancel' }).click();
+  await newEvent(page, 'Yoga');
+  await expect(editor(page).getByText(cut('1,000'), { exact: true })).toBeHidden();
+  await expect(editor(page).getByText(cut('100'), { exact: true })).toBeHidden();
 });
 
 test('moves between days and months', async ({ page }) => {

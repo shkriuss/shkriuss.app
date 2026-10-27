@@ -22,6 +22,7 @@ import { onNewDay } from '@shkriuss/ui/new-day';
 import { PAGE_SIZE, shownCount, waitForTyping } from '@shkriuss/ui/long-lists';
 import { clearProblem, focusProblem, reportSave, showProblem } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
+import { watchTextLimit } from '@shkriuss/ui/text-limit';
 import { site } from 'virtual:shkriuss/site';
 import {
   emptyLists,
@@ -127,6 +128,8 @@ export function mountTasks(root: Document): void {
   const addForm = required<HTMLFormElement>(root, '[data-add-form]');
   const addInput = required<HTMLInputElement>(addForm, '[name="title"]');
   const addError = required<HTMLElement>(addForm, '[data-add-error]');
+  // A paste longer than the box takes is cut by the browser: say so (audit 5 F1-4).
+  const addLimit = watchTextLimit(addInput);
   const viewHeading = required<HTMLElement>(root, '[data-view-heading]');
   const viewList = required<HTMLUListElement>(root, '[data-views]');
   const editListButton = required<HTMLButtonElement>(root, '[data-action="edit-list"]');
@@ -480,6 +483,7 @@ export function mountTasks(root: Document): void {
       announce(`Added ${task.title}. Tap it to give it a date or a reminder.`);
     }
     addInput.value = '';
+    addLimit.clear();
     addInput.focus();
   });
 
@@ -788,6 +792,11 @@ export function mountTasks(root: Document): void {
 
   const field = <T extends HTMLElement>(name: string): T => required<T>(form, `[name="${name}"]`);
   const textFields = ['title', 'date', 'time'] as const;
+  // A paste longer than a box takes is cut by the browser: say so (audit 5
+  // F1-4). The steps' boxes are watched as they're made (step-edits.ts).
+  const limits = [field<HTMLInputElement>('title'), field<HTMLTextAreaElement>('notes')].map(
+    (box) => watchTextLimit(box),
+  );
 
   function readDraft(): TaskDraft {
     const value = (name: string): string =>
@@ -849,6 +858,7 @@ export function mountTasks(root: Document): void {
   function openEditor(task: Task): void {
     editingId = task.id;
     opener = focusSpot();
+    for (const limit of limits) limit.clear();
     showProblems({});
     fillForm(draftOf(task));
     openedDraft = readDraft();

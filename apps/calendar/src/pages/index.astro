@@ -335,13 +335,16 @@ import { MAX_NOTES_LENGTH, MAX_TITLE_LENGTH, REPEAT_LABELS, REPEATS } from '../l
         <label class="field__label" for="event-notes">
           Notes (optional)
         </label>
+        <p class="field__hint" id="event-notes-hint">
+          Up to {MAX_NOTES_LENGTH.toLocaleString('en')} characters.
+        </p>
         <textarea
           dir="auto"
           class="input"
           id="event-notes"
           name="notes"
           maxlength={MAX_NOTES_LENGTH}
-          aria-describedby="event-notes-error"
+          aria-describedby="event-notes-hint event-notes-error"
         ></textarea>
         <p class="field__error" id="event-notes-error" data-error-for="notes"></p>
       </div>

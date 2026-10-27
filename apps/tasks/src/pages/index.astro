@@ -242,7 +242,8 @@ import {
     </li>
   </template>
 
-  <!-- One step in the task's form: tick, title and "Remove". -->
+  <!-- One step in the task's form: tick, title and "Remove". The title is in a
+       field, so what doesn't fit its box is said under it (text-limit). -->
   <template data-step-edit-template>
     <li class="step-edit">
       <label class="step-edit__check">
@@ -251,14 +252,16 @@ import {
           Done
         </span>
       </label>
-      <input
-        dir="auto"
-        class="input step-edit__title"
-        type="text"
-        autocomplete="off"
-        maxlength={LIMITS.step}
-        data-step-title
-      />
+      <div class="field step-edit__field">
+        <input
+          dir="auto"
+          class="input"
+          type="text"
+          autocomplete="off"
+          maxlength={LIMITS.step}
+          data-step-title
+        />
+      </div>
       <Button variant="ghost" icon="x" label="Remove step" data-action="remove-step" />
     </li>
   </template>
@@ -302,6 +305,9 @@ import {
         <label class="field__label" for="task-notes">
           Notes (optional)
         </label>
+        <p class="field__hint" id="task-notes-hint">
+          Up to {LIMITS.notes.toLocaleString('en')} characters.
+        </p>
         <textarea
           dir="auto"
           class="input"
@@ -309,13 +315,15 @@ import {
           name="notes"
           rows="3"
           maxlength={LIMITS.notes}
+          aria-describedby="task-notes-hint"
         ></textarea>
       </div>
 
       <fieldset class="stack stack--sm">
         <legend class="field__label">Steps (optional)</legend>
         <ul role="list" class="stack stack--sm" data-step-edit-list></ul>
-        <div class="stack stack--sm">
+        <!-- A field, so what doesn't fit the box is said under it (text-limit). -->
+        <div class="field">
           <label class="field__label" for="new-step">
             New step
           </label>
@@ -885,7 +893,7 @@ import {
     cursor: pointer;
   }
 
-  .step-edit__title {
+  .step-edit__field {
     flex: 1;
     min-width: 0;
   }

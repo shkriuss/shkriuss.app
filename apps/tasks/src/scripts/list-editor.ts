@@ -4,6 +4,7 @@
  */
 import { required } from '@shkriuss/ui/dom';
 import { focusProblem } from '@shkriuss/ui/problem';
+import { watchTextLimits } from '@shkriuss/ui/text-limit';
 import {
   addList,
   listName,
@@ -58,6 +59,8 @@ export function mountListEditor(root: Document, page: ListsPage): void {
   const listTasksField = required<HTMLElement>(listDeleteDialog, '[data-list-tasks-field]');
   const listTasksCount = required<HTMLElement>(listDeleteDialog, '[data-list-tasks-count]');
   const listTasks = required<HTMLSelectElement>(listDeleteDialog, '[data-list-tasks]');
+  // A paste longer than the box takes is cut by the browser: say so (audit 5 F1-4).
+  const limits = watchTextLimits(listForm);
 
   /** The list in the form (null: a new list), where focus goes back to, and the list just saved. */
   let editingListId: string | null = null;
@@ -73,6 +76,7 @@ export function mountListEditor(root: Document, page: ListsPage): void {
   function openListEditor(list: List | null): void {
     editingListId = list?.id ?? null;
     listOpener = root.activeElement instanceof HTMLElement ? root.activeElement : null;
+    limits.clear();
     showListProblem(null);
     listTitle.textContent = list ? 'Edit list' : 'New list';
     deleteListButton.hidden = list === null;

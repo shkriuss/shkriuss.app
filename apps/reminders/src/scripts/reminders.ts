@@ -9,6 +9,7 @@ import { createSync, syncedStore } from '@shkriuss/sync';
 import { keepFocus } from '@shkriuss/ui/keep-focus';
 import { focusProblem, reportSave, showProblem } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
+import { watchTextLimits } from '@shkriuss/ui/text-limit';
 import { site } from 'virtual:shkriuss/site';
 import {
   addReminder,
@@ -65,6 +66,8 @@ function formFields(form: HTMLFormElement) {
   const time = field<HTMLInputElement>('time');
   const repeat = field<HTMLSelectElement>('repeat');
   const inputs = { text, date, time };
+  // A paste longer than the box takes is cut by the browser: say so (audit 5 F1-4).
+  const limits = watchTextLimits(form);
 
   /** Shows what's wrong; focuses the first field with a problem. Returns true if anything is. */
   function show(found: Problems): boolean {
@@ -93,6 +96,7 @@ function formFields(form: HTMLFormElement) {
       date.value = values.date;
       time.value = values.time;
       repeat.value = values.repeat;
+      limits.clear();
       show({});
     },
   };
