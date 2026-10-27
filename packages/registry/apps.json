@@ -67,6 +67,7 @@
       "dataStored": [
         "Your habits: their names, the days you plan them for and their reminder times",
         "Which days you marked each habit done",
+        "When reminders were last checked, so each one shows only once",
         "If you turn on reminders while Habits is closed: this device's notification settings and a random device key (never in backups; after you turn it off, kept only until the server has deleted your reminders)",
         "If you turn on sync: a copy of your habits and check marks on Habits' server, locked on your devices so only they can read it, and this device's sync key (never in backups)",
         "Your light or dark theme choice"
@@ -87,7 +88,7 @@
         "Whether you write American or British English",
         "Words you added to your dictionary",
         "If you turn on sync: a copy of your dictionary and your English choice (never your text) on Grammar's server, locked on your devices so only they can read it, and this device's sync key (never in backups). A word you remove stays there and on your devices, hidden, for 180 days, so your other devices remove it too",
-        "The Deep check model, if you download it (about 380 MB), so it works offline. You can remove it any time",
+        "The Deep check model, if you download it (381 MB), so it works offline. You can remove it any time",
         "Your light or dark theme choice"
       ],
       "webAssembly": true,
@@ -121,6 +122,7 @@
         "Your tasks: their titles, notes, steps, dates and times, how they repeat, reminders, lists, which are important and when you finished them",
         "Your lists: their names",
         "Whether you see tasks by date or in your own order (on this device only)",
+        "When reminders were last checked, so each one shows only once",
         "If you turn on reminders while Tasks is closed: this device's notification settings and a random device key (never in backups; after you turn it off, kept only until the server has deleted your reminders)",
         "If you turn on sync: a copy of your tasks and lists on Tasks' server, locked on your devices so only they can read it, and this device's sync key (never in backups)",
         "Your light or dark theme choice"
@@ -141,6 +143,7 @@
         "Your meals: their names, ingredients and notes",
         "Your shopping lists: what you added and what you ticked off (kept for 8 weeks)",
         "Your reminder times for each meal of the day",
+        "When reminders were last checked, so each one shows only once",
         "If you turn on reminders while Meals is closed: this device's notification settings and a random device key (never in backups; after you turn it off, kept only until the server has deleted your reminders)",
         "If you turn on sync: a copy of your plan, meals, shopping lists and reminder times on Meals' server, locked on your devices so only they can read it, and this device's sync key (never in backups)",
         "Your light or dark theme choice"
@@ -160,6 +163,7 @@
         "How much water you drank, and when (kept for a year)",
         "Your daily goal, glass and bottle sizes, and units",
         "Your reminder settings",
+        "When reminders were last checked, so each one shows only once",
         "If you turn on reminders while Water is closed: this device's notification settings and a random device key (never in backups; after you turn it off, kept only until the server has deleted your reminders)",
         "If you turn on sync: a copy of your drinks and settings on Water's server, locked on your devices so only they can read it, and this device's sync key (never in backups)",
         "Your light or dark theme choice"
@@ -177,6 +181,7 @@
       "storage": "device",
       "dataStored": [
         "Your reminders: what to be reminded of, when, how often it repeats, and which are done",
+        "When reminders were last checked, so each one shows only once",
         "If you turn on reminders while Reminders is closed: this device's notification settings and a random device key (never in backups; after you turn it off, kept only until the server has deleted your reminders)",
         "If you turn on sync: a copy of your reminders on Reminders' server, locked on your devices so only they can read it, and this device's sync key (never in backups)",
         "Your light or dark theme choice"
@@ -212,6 +217,7 @@
         "Your expenses, refunds and income: amounts, days, categories and notes",
         "Your categories and their monthly limits",
         "Which currency to show amounts in, and your monthly reminder settings",
+        "When reminders were last checked, so each one shows only once",
         "If you turn on reminders while Budget is closed: this device's notification settings and a random device key (never in backups; after you turn it off, kept only until the server has deleted your reminders)",
         "If you turn on sync: a copy of your budget on Budget's server, locked on your devices so only they can read it, and this device's sync key (never in backups)",
         "Your light or dark theme choice"
@@ -247,7 +253,7 @@
       "storage": "device",
       "dataStored": [
         "The photos you add, as the original files (with what the camera saved in them, like the date and the place)",
-        "A small copy of each photo for the grid, and a screen-sized one for looking at it",
+        "A small copy of each photo for the grid, a screen-sized one for looking at it, and a count of your changes so that other open tabs notice them",
         "If you turn on sync: every photo in your online library, locked on your devices so only they can read it, and on this device the thumbnails of photos added on your other devices, how far it has caught up, and its sync key (never in backups)",
         "Your light or dark theme choice"
       ],
