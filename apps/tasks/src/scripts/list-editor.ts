@@ -1,6 +1,9 @@
 /**
  * Tasks: adding, renaming and deleting lists (deleting one asks what to do
- * with its tasks). Split from tasks.ts (audit J-7).
+ * with its tasks). Split from tasks.ts (audit J-7). It loads after the page
+ * itself (later() in tasks.ts), so the page starts with less to load
+ * (audit 5 J-2): the page's "New list" and "Rename or delete this list"
+ * buttons call add() and edit() once it has.
  */
 import { required } from '@shkriuss/ui/dom';
 import { focusProblem } from '@shkriuss/ui/problem';
@@ -45,9 +48,15 @@ export interface ListsPage {
   viewHeading: HTMLElement;
 }
 
-export function mountListEditor(root: Document, page: ListsPage): void {
+export interface ListEditor {
+  /** "New list": the form for one. */
+  add(): void;
+  /** "Rename or delete this list": the form for the list shown. */
+  edit(): void;
+}
+
+export function mountListEditor(root: Document, page: ListsPage): ListEditor {
   const viewList = required<HTMLUListElement>(root, '[data-views]');
-  const editListButton = required<HTMLButtonElement>(root, '[data-action="edit-list"]');
   const listEditor = required<HTMLDialogElement>(root, '[data-list-dialog]');
   const listForm = required<HTMLFormElement>(listEditor, '[data-list-form]');
   const listTitle = required<HTMLElement>(listEditor, '[data-list-title]');
@@ -92,22 +101,6 @@ export function mountListEditor(root: Document, page: ListsPage): void {
     (saved ?? (listOpener?.isConnected ? listOpener : page.viewHeading)).focus();
     savedListId = null;
     listOpener = null;
-  });
-
-  required<HTMLButtonElement>(root, '[data-action="add-list"]').addEventListener('click', () => {
-    if (page.lists().lists.length >= MAX_LISTS) {
-      page.say(`You have ${MAX_LISTS} lists, the most Tasks can keep. Delete one to add another.`);
-      return;
-    }
-    openListEditor(null);
-  });
-
-  editListButton.addEventListener('click', () => {
-    const view = page.view();
-    if (typeof view === 'string') return;
-    const id = view.list;
-    const list = page.lists().lists.find((entry) => entry.id === id);
-    if (list) openListEditor(list);
   });
 
   listInput.addEventListener('input', () => {
@@ -198,4 +191,22 @@ export function mountListEditor(root: Document, page: ListsPage): void {
     listOpener = page.viewHeading;
     listEditor.close();
   });
+
+  return {
+    add() {
+      if (page.lists().lists.length >= MAX_LISTS) {
+        page.say(
+          `You have ${MAX_LISTS} lists, the most Tasks can keep. Delete one to add another.`,
+        );
+        return;
+      }
+      openListEditor(null);
+    },
+    edit() {
+      const view = page.view();
+      if (typeof view === 'string') return;
+      const list = page.lists().lists.find((entry) => entry.id === view.list);
+      if (list) openListEditor(list);
+    },
+  };
 }

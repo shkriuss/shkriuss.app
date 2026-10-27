@@ -441,6 +441,20 @@ test('long lists show 100 tasks at a time', async ({ page }) => {
   await expect(more).toBeVisible();
 });
 
+test('a form that can’t load asks for a reload', async ({ page, guard }) => {
+  // The form loads after the page itself (audit 5 J-2). After an update
+  // while the page was open, its old file is gone, so "try again" couldn't
+  // help (audit 4 J-10): it says to reload, as Calendar's editor does.
+  guard.allowConsole('net::ERR_FAILED');
+  await page.route('**/_astro/task-form.*.js', (route) => route.abort());
+  await seed(page, [{ title: 'Pay rent' }]);
+  await page.getByRole('button', { name: 'Edit Pay rent' }).click();
+  await expect(page.getByRole('alert')).toHaveText(
+    'Tasks couldn’t open that. Reload the page to get the latest version, then try again.',
+  );
+  await expect(editor(page)).toBeHidden();
+});
+
 test('ignores saved data it doesn’t understand', async ({ page }) => {
   await page.evaluate(() => {
     localStorage.setItem('shkriuss:tasks', JSON.stringify({ v: 1, data: { tasks: [{ id: 1 }] } }));

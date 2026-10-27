@@ -25,14 +25,25 @@ Your to-do list, with dates, lists and reminders. Lives at
   `@shkriuss/storage`. "Add" puts a task in what's shown (a list, or
   Important). Search finds tasks in what's shown by every word typed, in
   their titles, notes and steps (`matchesSearch`; capitals and accents don't
-  matter). Tapping a task's title opens its form, where steps are added,
-  renamed, ticked and removed (kept only on "Save"). In the list, a task's
-  steps fold out under it and can be ticked there straight away. In "My
-  order", a task is moved by dragging its handle (pointer events, so it
-  works with a finger, a mouse or a pen), by tapping the handle for "Move
-  up" and "Move down", or with the arrow keys on the handle. Whether the
-  list is by date or in your order is a setting for this device only
-  (`shkriuss:task-view`, not synced).
+  matter). In the list, a task's steps fold out under it and can be ticked
+  there straight away. The rest has files of their own next to it:
+  - `views.ts`: what's shown, chosen with the chips (All, Important, or a
+    list);
+  - `task-form.ts`: the form that opens from a task's title, where steps
+    are added, renamed, ticked and removed (`step-edits.ts`; kept only on
+    "Save");
+  - `order.ts`: "My order", where a task is moved by dragging its handle
+    (pointer events, so it works with a finger, a mouse or a pen), by
+    tapping the handle for "Move up" and "Move down", or with the arrow
+    keys on the handle. Whether the list is by date or in your order is a
+    setting for this device only (`shkriuss:task-view`, not synced);
+  - `list-editor.ts`: adding, renaming and deleting lists.
+
+  The task form and the list editor load after the page itself
+  (`later.ts`, with `import()` once the page has nothing else to do, as
+  Repairs' forms do), so opening the page loads less and stays within its
+  size budget.
+
 - `src/scripts/reminders.ts`: reminders while Tasks is open, and, if "Also
   remind me when Tasks is closed" is on, through the shared notification
   service ([ADR 0009](../../docs/adr/0009-push-notifications.md)). Without a
