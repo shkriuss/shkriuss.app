@@ -407,9 +407,9 @@ export function readRepair(
   | { repair?: undefined; newVehicle?: undefined; problems: RepairProblems } {
   const parseNumber = (text: string) => parseDecimal(text, locale);
   const parseMoney = (text: string) => parseDecimal(text, locale, { cents: true });
-  // Over the most allowed: said so, not that it isn't a number (audit 3 F2-8).
-  const over = (value: number | null, most: number) =>
-    value !== null && Number.isFinite(value) && value > most;
+  // Over the most allowed: said so, not that it isn't a number (audit 3 F2-8),
+  // also for a number too long to be one, which reads as infinite (audit 5 F2-5).
+  const over = (value: number | null, most: number) => value !== null && value > most;
   const atMost = (most: number, unit = '') =>
     `Enter at most ${new Intl.NumberFormat(locale).format(most)}${unit}.`;
   const problems: RepairProblems = {};
@@ -482,10 +482,17 @@ export function readRepair(
   });
   if (parts.length > LIMITS.parts) problems['parts'] = `Add up to ${LIMITS.parts} parts.`;
 
-  const hours = parseNumber(form.hours);
+  // Hours are kept to two decimals, as they're shown, so a day's hours add
+  // up to the hours shown: two repairs of 1.125 showed "1.13 hours" each and
+  // "2.25 hours" together (audit 5 F2-4).
+  const typedHours = parseNumber(form.hours);
+  const hours = typedHours === null ? null : roundDecimal(typedHours, 2);
   if (over(hours, LIMITS.hours)) problems['hours'] = atMost(LIMITS.hours, ' hours');
   else if (hours !== null && !isHours(hours)) {
-    problems['hours'] = 'Enter the hours as a number above 0, or leave it empty.';
+    problems['hours'] =
+      typedHours !== null && typedHours > 0
+        ? 'Enter at least 0.01 hours, or leave it empty.'
+        : 'Enter the hours as a number above 0, or leave it empty.';
   }
   const labour = parseMoney(form.labour);
   if (over(labour, LIMITS.money)) problems['labour'] = atMost(LIMITS.money);

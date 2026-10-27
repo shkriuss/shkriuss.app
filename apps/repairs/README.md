@@ -38,9 +38,12 @@ private car's service history. Lives at <https://repairs.shkriuss.app>.
   (`repairCost`); nothing priced means no cost, not zero. Each part's
   quantity × price is rounded once, to the currency's own decimals, as it's
   shown (`partCost`: 2.5 litres at $3.45 is $8.63), and the sums add up those
-  shown amounts, so they match what's on the screen. Hours and costs are
-  added up for each day, for what the list shows, and for each vehicle
-  (`totals`). A part chosen from the suggestions gets its last price too.
+  shown amounts, so they match what's on the screen. Hours are kept to two
+  decimals, as they're shown, for the same reason (a repair saved before
+  with more is rounded once its form is saved; audit 5 F2-4). Hours and
+  costs are added up for each day, for what the list shows, and for each
+  vehicle (`totals`). A part chosen from the suggestions gets its last
+  price too.
   A price or labour cost typed in a way that could be read two ways, like
   "1.500" in French (1500 or 1.5), is asked again.
 - "Download as a spreadsheet (CSV)" saves every repair, one row each, with

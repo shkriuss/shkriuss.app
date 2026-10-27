@@ -330,11 +330,11 @@ describe('repairs', () => {
     const exact = repair({
       mileage: 120_000,
       parts: [{ name: 'Oil', number: '', quantity: 1.125, price: 1.234 }],
-      hours: 1.125,
+      hours: 1.13,
       labour: 1234.5,
     });
     const german = toRepairForm(exact, vehicles, 'de-DE');
-    expect(german).toMatchObject({ mileage: '120000', hours: '1,125', labour: '1234,5' });
+    expect(german).toMatchObject({ mileage: '120000', hours: '1,13', labour: '1234,5' });
     expect(readRepair(german, 'r', repairs(exact), vehicles, newId, 'de-DE').repair).toEqual(exact);
   });
 
@@ -804,6 +804,54 @@ describe('hours worked and costs', () => {
         parts: [part('10000', '1000000000')],
       }).repair,
     ).toMatchObject({ mileage: 9_999_999, hours: 1000, labour: 1e9 });
+    // Audit 5 F2-5: one too long to be a number at all (it reads as
+    // infinite) got the message for something else.
+    const endless = '9'.repeat(400);
+    expect(
+      read({ mileage: endless, hours: endless, labour: endless, parts: [part(endless, endless)] })
+        .problems,
+    ).toEqual({
+      mileage: 'Enter at most 9,999,999.',
+      hours: 'Enter at most 1,000 hours.',
+      labour: 'Enter at most 1,000,000,000.',
+      'part-quantity-0': 'Enter at most 10,000.',
+      'part-price-0': 'Enter at most 1,000,000,000.',
+    });
+  });
+
+  // Audit 5 F2-4: hours were kept with any decimals but shown to two, so two
+  // repairs of 1.125 hours showed "1.13 hours" each and "2.25 hours" together.
+  it('keeps hours to two decimals, as they’re shown, so they add up to the hours shown', () => {
+    const read = (hours: string) =>
+      readRepair(form({ hours }), 'r', emptyRepairs(), vehicles, newId, 'en-US');
+    expect(read('1.125').repair?.hours).toBe(1.13);
+    expect(read('0.005').repair?.hours).toBe(0.01);
+    expect(read('1000.004').repair?.hours).toBe(1000);
+    expect(read('1000.005').problems).toEqual({ hours: 'Enter at most 1,000 hours.' });
+    expect(read('0.004').problems).toEqual({
+      hours: 'Enter at least 0.01 hours, or leave it empty.',
+    });
+    expect(read('-1').problems).toEqual({
+      hours: 'Enter the hours as a number above 0, or leave it empty.',
+    });
+    expect(read('x').problems).toEqual({
+      hours: 'Enter the hours as a number above 0, or leave it empty.',
+    });
+    const first = read('1.125').repair as Repair;
+    const second = { ...first, id: 's' };
+    const day = totals([first, second]);
+    expect(formatHours(first.hours as number, 'en-US')).toBe('1.13 hours');
+    expect(formatHours(day.hours as number, 'en-US')).toBe('2.26 hours');
+    expect(toRepairForm(first, vehicles, 'en-US').hours).toBe('1.13');
+    // A repair saved before with more decimals still reads (older data must),
+    // and is rounded to what it showed once its form is saved.
+    const older = repair({ hours: 1.125 });
+    expect(isRepairsState(repairs(older))).toBe(true);
+    const opened = toRepairForm(older, vehicles, 'en-US');
+    expect(opened.hours).toBe('1.125');
+    expect(readRepair(opened, 'r', repairs(older), vehicles, newId, 'en-US').repair?.hours).toBe(
+      1.13,
+    );
   });
 
   it('works out what a repair cost', () => {
