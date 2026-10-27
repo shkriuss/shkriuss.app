@@ -225,10 +225,22 @@ const fileKey = (id: string) => `file:${id}`;
  */
 const firstVersion = (now: number): number => Math.floor(now / 1000);
 
+/**
+ * What a file takes besides its bytes: its row ("file:<id>" and the bytes)
+ * and its entry in the index of files (the id, its size and when it came),
+ * so each file counts its id twice and this much more. Without it, the
+ * smallest files the checks allow (29 bytes, with 80-character ids) took six
+ * times the room the meter saw (audit 5 B-3).
+ */
+const FILE_ROW_BYTES = 64;
+
 /** What the copy and its files hold, in bytes: what the meter counts. */
 function storedBytes(saved: Saved | undefined, files: FileIndex): number {
   const data = saved && !isDeleted(saved) ? saved.data.length : 0;
-  return Object.values(files).reduce((sum, [size]) => sum + size, data);
+  return Object.entries(files).reduce(
+    (sum, [id, [size]]) => sum + size + 2 * id.length + FILE_ROW_BYTES,
+    data,
+  );
 }
 
 export class SyncCopy {

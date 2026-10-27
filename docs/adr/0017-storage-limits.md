@@ -67,9 +67,20 @@ and a couple of open previews. The per-account limits stay as they were
 (a copy is at most about 1.4 MB, an account's photos at most 800 MB).
 
 **Device links** (the hub's "Show a code") are the one thing a stranger can
-make the servers keep that no meter counts: each is small and deleted 10
-minutes after it's made, so the free daily requests cap them at about 700
-at a time, a few megabytes at most (audit 4 B-1).
+make the servers keep that no meter counts. They're all rows in one object:
+a few hundred bytes each, deleted 10 minutes after they're made by that
+object's alarm, or by whatever request comes next if Cloudflare dropped the
+alarm (it gives up on an alarm after a few tries once the day's free writes
+are used up, which a script making links uses up itself). So the free daily
+requests cap them at about 700 at a time, under a megabyte (audit 4 B-1).
+Until audit 5 (B-2) each link was an object of its own, 12 KB that only its
+own alarm deleted: with the alarm dropped, it stayed for good.
+
+**Files kept with a copy** (Repairs' photos) count their bytes plus their
+id twice and 64 bytes more, for the row that holds each file and its entry
+in the index of files. Without that, the smallest files the checks allow
+(29 bytes, with 80-character ids) took six times the room the meter saw
+(audit 5 B-3). The limits in the table are unchanged; fewer tiny files fit.
 
 Each new app with sync or notifications adds its own limits, so a unit test
 (`tests/unit/free-plan.test.ts`) adds them all up from `apps.json`, with two
@@ -100,7 +111,10 @@ app need lowering first.
   unlocked, so nothing is lost: a device still using it makes it again.
   Unlocked libraries stay. What's left of one after "Delete the online
   copy" is deleted 13 months after a device last used it, and its room is
-  given back (audit 3 D-2); one that gets photos again stays.
+  given back (audit 3 D-2); one that gets photos again stays. That holds
+  whichever request made the library, a move to a new account key included
+  (until audit 5 B-1, a library made up through `POST /api/library/move`
+  had no clean-up, so strangers could fill the libraries' room for good).
 - A token that only asks (a copy that doesn't exist, a file, a replaced-key
   check) keeps nothing at all.
 

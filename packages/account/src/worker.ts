@@ -5,6 +5,8 @@
  * - Device links: a device that's signed in puts the account secret here,
  *   sealed with a one-time key that only goes into the QR code. The other
  *   device fetches it once. After 10 minutes, or once used, it's deleted.
+ *   Every link is a row in one object (LINKS), which deletes the expired
+ *   ones at each request, so a dropped alarm can't leave one behind.
  * - Passkey locks: the account secret sealed with a key that only a passkey
  *   can produce (WebAuthn PRF). Found by a lookup token from the same
  *   passkey, of which the server keeps only the SHA-256 hash. Each lock
@@ -35,7 +37,8 @@
  * together, and all replaced-key notes together, have a limit
  * (STORAGE_LIMITS, kept by each namespace's meter: @shkriuss/server/meter),
  * and a note nobody has asked about for about 13 months is deleted
- * (docs/adr/0017-storage-limits.md). Device links go after 10 minutes anyway.
+ * (docs/adr/0017-storage-limits.md). Device links go after 10 minutes
+ * anyway, and all of them together are one small object.
  */
 import {
   bearerToken,
@@ -46,6 +49,7 @@ import {
   problem,
   runAlarm,
   sha256Text,
+  type DurableObjectListState,
   type DurableObjectNamespace,
   type DurableObjectState,
   type SiteEnv,
@@ -63,8 +67,11 @@ import {
 } from './validate.ts';
 import { checkAssertion, type Assertion, type PasskeyKey, type Purpose } from './webauthn.ts';
 
-/** From the Worker to a link's object: the hash of the token that cancels it. */
+/** From the Worker to the links' object: the hash of the token that cancels a link. */
 const CANCEL_HEADER = 'X-Shkriuss-Cancel';
+
+/** The one object that holds every device link (AccountLink). */
+export const LINKS = 'links';
 
 export interface AccountEnv extends SiteEnv {
   ACCOUNT_LINKS: DurableObjectNamespace;
@@ -103,16 +110,17 @@ export async function handleAccount(
   if (link) {
     const [, id = '', state] = link;
     if (!LINK_ID_PATTERN.test(id)) return problem(404, 'Not found.');
-    const stub = env.ACCOUNT_LINKS.get(env.ACCOUNT_LINKS.idFromName(id));
+    // Every link is in the one object (audit 5 B-2).
+    const stub = env.ACCOUNT_LINKS.get(env.ACCOUNT_LINKS.idFromName(LINKS));
     if (state) {
       if (request.method !== 'GET') return problem(405, 'Use GET.');
-      return stub.fetch('https://link/state');
+      return stub.fetch(`https://link/${id}/state`);
     }
-    if (request.method === 'GET') return stub.fetch('https://link/claim');
+    if (request.method === 'GET') return stub.fetch(`https://link/${id}/claim`);
     if (request.method === 'DELETE') {
       const cancel = bearerToken(request);
       if (!cancel) return problem(401, 'Missing or malformed cancel token.');
-      return stub.fetch('https://link/', {
+      return stub.fetch(`https://link/${id}`, {
         method: 'DELETE',
         headers: { [CANCEL_HEADER]: await sha256Text(cancel) },
       });
@@ -124,7 +132,7 @@ export async function handleAccount(
     if (!checked.ok) return problem(400, checked.error);
     const { data, cancel } = checked.value;
     const body = { data, cancel: cancel === null ? null : await sha256Text(cancel) };
-    return stub.fetch('https://link/', { method: 'PUT', body: JSON.stringify(body) });
+    return stub.fetch(`https://link/${id}`, { method: 'PUT', body: JSON.stringify(body) });
   }
 
   const passkey = /^\/api\/account\/passkey(?:\/(open|remove))?$/.exec(path);
@@ -197,7 +205,7 @@ export async function handleAccount(
 
 export default createWorker<AccountEnv>({ '/api/account': handleAccount });
 
-// ---------- One device link ----------
+// ---------- Device links, all in one object ----------
 
 interface LinkRecord {
   /** The sealed secret, until it's fetched. */
@@ -207,27 +215,49 @@ interface LinkRecord {
   cancel?: string | null;
 }
 
-export class AccountLink {
-  readonly state: DurableObjectState;
+/** A link's row: "link:<id>". */
+const linkKey = (id: string) => `link:${id}`;
+/** "due:<expiry>:<id>": the links in the order they expire, for the sweep. */
+const dueKey = (expiresAt: number, id: string) =>
+  `due:${String(expiresAt).padStart(16, '0')}:${id}`;
+/** Expired links looked at in one go (a few hundred are alive at most). */
+const SWEEP_BATCH = 128;
 
-  constructor(state: DurableObjectState) {
+/**
+ * Every device link, as a row in the one object named LINKS, with one alarm
+ * at the earliest expiry. Each request first deletes the links that have
+ * expired (#sweep), so a junk link is a row of a few hundred bytes that
+ * outlives its 10 minutes only until the next request, even when Cloudflare
+ * dropped the alarm (it gives up after a few tries once the day's free
+ * writes are used up, which a script making links uses up itself). Before,
+ * each link was an object of its own, deleted only by its own alarm: 12 KB
+ * that no meter counted, for good (audit 5 B-2).
+ */
+export class AccountLink {
+  readonly state: DurableObjectListState;
+
+  constructor(state: DurableObjectListState) {
     this.state = state;
   }
 
   async fetch(request: Request): Promise<Response> {
     const { pathname } = new URL(request.url);
+    const [, id = '', action] = /^\/([^/]+)(?:\/(state|claim))?$/.exec(pathname) ?? [];
     // One request at a time, so a link can't be fetched twice.
     return this.state.blockConcurrencyWhile(async () => {
+      const storage = this.state.storage;
       const now = Date.now();
-      const saved = await this.state.storage.get<LinkRecord>('link');
-      const record = saved && saved.expiresAt > now ? saved : undefined;
+      await this.#sweep(now);
+      const record = await storage.get<LinkRecord>(linkKey(id));
 
       if (request.method === 'PUT') {
-        if (saved) return problem(409, 'This link already exists.');
+        if (record) return problem(409, 'This link already exists.');
         const expiresAt = now + LINK_LIFETIME_MS;
         const { data, cancel } = (await request.json()) as { data: string; cancel: string | null };
-        await this.state.storage.put('link', { data, expiresAt, cancel } satisfies LinkRecord);
-        await this.state.storage.setAlarm(expiresAt);
+        await storage.put(linkKey(id), { data, expiresAt, cancel } satisfies LinkRecord);
+        await storage.put(dueKey(expiresAt, id), true);
+        // The alarm is for the earliest expiry; this link's is the latest.
+        if ((await storage.getAlarm()) === null) await storage.setAlarm(expiresAt);
         return json({ expiresAt }, 201);
       }
 
@@ -240,12 +270,12 @@ export class AccountLink {
         if (record.data === null) {
           return json({ error: 'This link was already used.', used: true }, 409);
         }
-        await this.state.storage.deleteAll();
-        await this.state.storage.deleteAlarm();
+        await storage.delete(linkKey(id));
+        await storage.delete(dueKey(record.expiresAt, id));
         return noContent();
       }
 
-      if (pathname === '/state') {
+      if (action === 'state') {
         return json({ state: !record ? 'expired' : record.data === null ? 'used' : 'waiting' });
       }
 
@@ -253,14 +283,41 @@ export class AccountLink {
       if (!record) return problem(410, 'This link has expired.');
       if (record.data === null)
         return json({ error: 'This link was already used.', used: true }, 410);
-      await this.state.storage.put('link', { ...record, data: null });
+      await storage.put(linkKey(id), { ...record, data: null });
       return json({ data: record.data });
     });
   }
 
-  /** At expiry: delete everything. */
+  /** At the earliest expiry: the expired links go, and the alarm moves on. */
   async alarm(): Promise<void> {
-    await runAlarm(this.state, () => this.state.storage.deleteAll());
+    await runAlarm(this.state, async () => {
+      // A link made before links shared one object was an object of its own,
+      // deleted whole at its expiry: still is, if its alarm runs this code.
+      if ((await this.state.storage.get('link')) !== undefined) {
+        await this.state.storage.deleteAll();
+        return;
+      }
+      await this.#sweep(Date.now());
+    });
+  }
+
+  /** Deletes the links that have expired, and plans the next one's end if nothing is planned. */
+  async #sweep(now: number): Promise<void> {
+    const storage = this.state.storage;
+    for (;;) {
+      const due = [...(await storage.list({ prefix: 'due:', limit: SWEEP_BATCH })).keys()];
+      const expired = due.filter((key) => Number(key.split(':')[1]) <= now);
+      for (const key of expired) {
+        await storage.delete(linkKey(key.split(':')[2] ?? ''));
+        await storage.delete(key);
+      }
+      if (expired.length < due.length) {
+        const next = Number(due[expired.length]?.split(':')[1]);
+        if ((await storage.getAlarm()) === null) await storage.setAlarm(next);
+        return;
+      }
+      if (due.length < SWEEP_BATCH) return;
+    }
   }
 }
 

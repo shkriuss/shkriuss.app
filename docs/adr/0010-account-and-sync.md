@@ -109,9 +109,12 @@ HKDF), like `K7Q2-M9XD`.
   out because its key was replaced elsewhere keeps nothing of it, as when
   signing out (audit 3 D-8).
 - **On the hub's server.** The hub's Worker runs only for `/api/account/*`,
-  with one Durable Object per link, passkey lock or replaced key. It stores:
+  with one Durable Object for all device links together (a row each), and
+  one per passkey lock or replaced key. It stores:
   - sealed passkey locks;
-  - sealed device links, for at most 10 minutes;
+  - sealed device links, for at most 10 minutes (expired ones are deleted
+    by the next request, so a dropped alarm can't leave one behind:
+    [ADR 0017](0017-storage-limits.md), audit 5 B-2);
   - a note that an account key was replaced, under the SHA-256 hash of a
     token only that key can make.
 

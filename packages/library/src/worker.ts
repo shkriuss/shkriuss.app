@@ -612,7 +612,7 @@ export class Library {
         return json({ error: 'The library moved to a new account key.', moved: true }, 410);
       }
       if (op === 'move') {
-        return this.#move(meta, token, ((await request.json()) as { from: string }).from);
+        return this.#move(meta, token, ((await request.json()) as { from: string }).from, now);
       }
       if (meta.access === null) {
         meta.access = token;
@@ -620,8 +620,7 @@ export class Library {
       } else if (meta.access !== token) {
         return problem(403, 'This isn’t your library.');
       }
-      if (!meta.unlocked) await this.#touch(now, LOCKED_UNUSED_MS);
-      else if (meta.wiped && !meta.wiping) await this.#touch(now, WIPED_UNUSED_MS);
+      await this.#keepWhileUnused(meta, now);
 
       switch (op) {
         case 'check':
@@ -720,6 +719,16 @@ export class Library {
     const kept = await Promise.all(keep.map(async (key) => [key, await storage.get(key)] as const));
     await storage.deleteAll();
     for (const [key, value] of kept) if (value !== undefined) await storage.put(key, value);
+  }
+
+  /**
+   * A library that was never unlocked, or what's left of a deleted one, is
+   * used now: it stays its 30 days or 13 months more. An unlocked library
+   * stays anyway.
+   */
+  async #keepWhileUnused(meta: Meta, now: number): Promise<void> {
+    if (!meta.unlocked) await this.#touch(now, LOCKED_UNUSED_MS);
+    else if (meta.wiped && !meta.wiping) await this.#touch(now, WIPED_UNUSED_MS);
   }
 
   /** Keeps a locked or deleted library `unusedFor` more (LOCKED_UNUSED_MS, WIPED_UNUSED_MS). */
@@ -974,15 +983,20 @@ export class Library {
   /**
    * After the account key was replaced: the new token takes over, proven
    * with the old one, which is refused from then on. Asking again is fine.
+   * A library made up this way is kept only while it's used, like one made
+   * up any other way: a move was the one first request that didn't plan its
+   * clean-up, so strangers' moves could fill the room for good (audit 5 B-1).
    */
-  async #move(meta: Meta, token: string, from: string): Promise<Response> {
-    if (meta.access === token) return noContent();
-    if (meta.access !== null && meta.access !== from) {
+  async #move(meta: Meta, token: string, from: string, now: number): Promise<Response> {
+    if (meta.access !== null && meta.access !== token && meta.access !== from) {
       return problem(403, 'This isn’t your library.');
     }
-    const retired =
-      meta.access === from ? [...meta.retired, from].slice(-MAX_RETIRED) : meta.retired;
-    await this.#save({ ...meta, access: token, retired });
+    if (meta.access !== token) {
+      const retired =
+        meta.access === from ? [...meta.retired, from].slice(-MAX_RETIRED) : meta.retired;
+      await this.#save({ ...meta, access: token, retired });
+    }
+    await this.#keepWhileUnused(meta, now);
     return noContent();
   }
 
