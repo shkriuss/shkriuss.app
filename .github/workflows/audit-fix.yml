@@ -1,0 +1,24 @@
+
+# Initial setup only. No Claude API access.
+name: Audit fix (setup only)
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  introduction:
+    name: Safe introduction
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Explain this workflow
+        shell: bash
+        run: |
+          echo "Audit-fix workflow is configured."
+          echo "No Claude API request was made."
+          echo "No repository files were changed."
+          echo "## Audit-fix setup" >> "$GITHUB_STEP_SUMMARY"
+          echo "Placeholder only. No audit was performed." >> "$GITHUB_STEP_SUMMARY"
