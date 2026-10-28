@@ -19,6 +19,7 @@ jobs:
   introduction:
     name: Safe introduction
     runs-on: ubuntu-24.04
+    environment: claude-audit
     timeout-minutes: 5
 
     steps:
