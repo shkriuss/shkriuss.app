@@ -1,0 +1,46 @@
+# Setup only. No Claude API access.
+name: Audit fix (setup only)
+
+on:
+  workflow_dispatch:
+    inputs:
+      finding_id:
+        description: 'Fifth audit finding ID'
+        required: true
+        type: choice
+        default: J-5
+        options:
+          - J-5
+          - J-7
+
+permissions: {}
+
+jobs:
+  introduction:
+    name: Safe introduction
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Confirm selected finding
+        shell: bash
+        env:
+          FINDING_ID: ${{ inputs.finding_id }}
+        run: |
+          case "$FINDING_ID" in
+            J-5|J-7) ;;
+            *)
+              echo "::error::Unsupported finding ID"
+              exit 1
+              ;;
+          esac
+
+          echo "Selected fifth-audit finding: $FINDING_ID"
+
+          {
+            echo "## Audit-fix setup"
+            echo "Selected finding: $FINDING_ID"
+            echo "Placeholder only. No audit or fix was performed."
+            echo "No Claude API request was made."
+            echo "No repository files were changed."
+          } >> "$GITHUB_STEP_SUMMARY"
