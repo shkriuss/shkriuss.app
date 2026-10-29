@@ -1,4 +1,3 @@
-
 """Offline one-attempt budget for a future Claude API request."""
 
 
