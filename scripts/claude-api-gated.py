@@ -28,4 +28,12 @@ request_body = {
     ],
 }
 
+if (
+    set(request_body) != {"model", "max_tokens", "messages"}
+    or request_body["messages"] != [
+        {"role": "user", "content": "Reply with exactly CONNECTION_OK."}
+    ]
+):
+    raise SystemExit("Unexpected Claude request content. No request made.")
+
 raise SystemExit("Claude API test not implemented. No request made.")
