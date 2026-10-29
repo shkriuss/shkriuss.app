@@ -28,6 +28,13 @@ jobs:
     timeout-minutes: 5
 
     steps:
+      - name: Block API tests until enabled
+        if: ${{ inputs.api_test }}
+        shell: bash
+        run: |
+          echo "::error::Claude API tests are not enabled yet."
+          exit 1
+
       - name: Confirm selected finding
         shell: bash
         env:
