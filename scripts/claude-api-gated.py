@@ -9,6 +9,8 @@ EXPECTED_LIMITS = {
     "CLAUDE_MAX_REQUESTS": "1",
     "CLAUDE_MAX_INPUT_TOKENS": "4000",
     "CLAUDE_MAX_OUTPUT_TOKENS": "1024",
+    "CLAUDE_MODEL": "claude-sonnet-5-5",
+    "CLAUDE_TEST_PROMPT": "Reply with exactly CONNECTION_OK.",
 }
 
 for name, expected in EXPECTED_LIMITS.items():
