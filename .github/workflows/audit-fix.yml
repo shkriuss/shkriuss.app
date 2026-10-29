@@ -26,6 +26,8 @@ jobs:
     runs-on: ubuntu-24.04
     environment: claude-audit
     timeout-minutes: 5
+    permissions:
+      contents: read
     env:
       CLAUDE_MODEL: claude-sonnet-5-5
       CLAUDE_MAX_INPUT_TOKENS: "4000"
@@ -49,6 +51,11 @@ jobs:
         run: |
           echo "::error::Claude API tests are not enabled yet."
           exit 1
+
+      - name: Check out repository (read only)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Confirm selected finding
         shell: bash
