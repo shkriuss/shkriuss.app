@@ -38,6 +38,9 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Confirm Claude API remains disabled (offline)
+        run: python3 -B scripts/test-claude-api-gated.py
+
       - name: Set up
         uses: ./.github/actions/setup
 
