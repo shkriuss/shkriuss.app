@@ -114,3 +114,23 @@ if output_result.returncode == 0 or (
     raise SystemExit("FAIL: Unsafe output-token setting was not blocked.")
 
 print("PASS: Unsafe output-token setting was rejected.")
+
+prompt_env = enabled_env.copy()
+prompt_env["CLAUDE_TEST_PROMPT"] = "Reply with exactly NOT_OK."
+
+prompt_result = subprocess.run(
+    [sys.executable, "-B", str(script)],
+    env=prompt_env,
+    capture_output=True,
+    text=True,
+    timeout=5,
+    check=False,
+)
+
+if prompt_result.returncode == 0 or (
+    "Unsafe Claude API setting: CLAUDE_TEST_PROMPT. No request made."
+    not in prompt_result.stderr
+):
+    raise SystemExit("FAIL: Unexpected Claude prompt was not blocked.")
+
+print("PASS: Unexpected Claude prompt was rejected.")
