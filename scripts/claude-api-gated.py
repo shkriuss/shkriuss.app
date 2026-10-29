@@ -1,5 +1,6 @@
 """Claude API connectivity test. Disabled until explicitly implemented."""
 
+import json
 import os
 
 if os.environ.get("CLAUDE_API_TEST_ENABLED") != "true":
@@ -38,5 +39,12 @@ if (
 
 if request_body["model"] != "claude-sonnet-5-5" or request_body["max_tokens"] != 1024:
     raise SystemExit("Unexpected Claude model or output limit. No request made.")
+
+request_bytes = json.dumps(
+    request_body, separators=(",", ":"), ensure_ascii=True
+).encode("utf-8")
+
+if len(request_bytes) > 1000:
+    raise SystemExit("Claude request exceeds 1000 bytes. No request made.")
 
 raise SystemExit("Claude API test not implemented. No request made.")
