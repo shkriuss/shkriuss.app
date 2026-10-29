@@ -41,6 +41,9 @@ jobs:
       - name: Confirm Claude API remains disabled (offline)
         run: python3 -B scripts/test-claude-api-gated.py
 
+      - name: Verify Claude one-request budget (offline)
+        run: python3 -B scripts/test-claude-request-budget.py
+
       - name: Set up
         uses: ./.github/actions/setup
 
