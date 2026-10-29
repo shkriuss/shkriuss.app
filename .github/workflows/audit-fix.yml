@@ -12,6 +12,11 @@ on:
         options:
           - J-5
           - J-7
+      api_test:
+        description: 'Request a Claude API test (disabled for now)'
+        required: false
+        type: boolean
+        default: false
 
 permissions: {}
 
