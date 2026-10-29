@@ -26,6 +26,10 @@ jobs:
     runs-on: ubuntu-24.04
     environment: claude-audit
     timeout-minutes: 5
+    env:
+      CLAUDE_MODEL: claude-sonnet-5-5
+      CLAUDE_MAX_INPUT_TOKENS: "4000"
+      CLAUDE_MAX_OUTPUT_TOKENS: "1024"
 
     steps:
       - name: Block API tests until enabled
