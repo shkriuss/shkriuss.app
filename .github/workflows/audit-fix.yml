@@ -57,6 +57,10 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Prepare Claude request offline
+        shell: bash
+        run: python3 -B scripts/claude-connectivity.py
+
       - name: Confirm selected finding
         shell: bash
         env:
