@@ -44,6 +44,9 @@ jobs:
       - name: Verify Claude one-request budget (offline)
         run: python3 -B scripts/test-claude-request-budget.py
 
+      - name: Verify Claude budget integration (offline)
+        run: python3 -B scripts/test-claude-budget-integration.py
+
       - name: Set up
         uses: ./.github/actions/setup
 
