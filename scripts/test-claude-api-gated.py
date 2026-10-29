@@ -54,3 +54,23 @@ if enabled_result.returncode == 0 or (
     raise SystemExit("FAIL: Final Claude API safety stop did not run.")
 
 print("PASS: Final Claude API safety stop remains active.")
+
+unsafe_env = enabled_env.copy()
+unsafe_env["CLAUDE_MAX_REQUESTS"] = "2"
+
+unsafe_result = subprocess.run(
+    [sys.executable, "-B", str(script)],
+    env=unsafe_env,
+    capture_output=True,
+    text=True,
+    timeout=5,
+    check=False,
+)
+
+if unsafe_result.returncode == 0 or (
+    "Unsafe Claude API setting: CLAUDE_MAX_REQUESTS. No request made."
+    not in unsafe_result.stderr
+):
+    raise SystemExit("FAIL: Unsafe request-count setting was not blocked.")
+
+print("PASS: Unsafe request-count setting was rejected.")
