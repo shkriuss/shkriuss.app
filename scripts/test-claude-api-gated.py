@@ -134,3 +134,23 @@ if prompt_result.returncode == 0 or (
     raise SystemExit("FAIL: Unexpected Claude prompt was not blocked.")
 
 print("PASS: Unexpected Claude prompt was rejected.")
+
+model_env = enabled_env.copy()
+model_env["CLAUDE_MODEL"] = "unexpected-model"
+
+model_result = subprocess.run(
+    [sys.executable, "-B", str(script)],
+    env=model_env,
+    capture_output=True,
+    text=True,
+    timeout=5,
+    check=False,
+)
+
+if model_result.returncode == 0 or (
+    "Unsafe Claude API setting: CLAUDE_MODEL. No request made."
+    not in model_result.stderr
+):
+    raise SystemExit("FAIL: Unexpected Claude model was not blocked.")
+
+print("PASS: Unexpected Claude model was rejected.")
