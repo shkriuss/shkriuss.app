@@ -36,4 +36,7 @@ if (
 ):
     raise SystemExit("Unexpected Claude request content. No request made.")
 
+if request_body["model"] != "claude-sonnet-5-5" or request_body["max_tokens"] != 1024:
+    raise SystemExit("Unexpected Claude model or output limit. No request made.")
+
 raise SystemExit("Claude API test not implemented. No request made.")
