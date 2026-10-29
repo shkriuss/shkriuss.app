@@ -41,6 +41,7 @@ jobs:
           [[ "$CLAUDE_MAX_INPUT_TOKENS" == "4000" ]] || exit 1
           [[ "$CLAUDE_MAX_OUTPUT_TOKENS" == "1024" ]] || exit 1
           [[ "$CLAUDE_MAX_REQUESTS" == "1" ]] || exit 1
+          [[ "$CLAUDE_TEST_PROMPT" == "Reply with exactly CONNECTION_OK." ]] || exit 1
 
       - name: Block API tests until enabled
         if: ${{ inputs.api_test }}
