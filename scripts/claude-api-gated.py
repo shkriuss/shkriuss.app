@@ -3,6 +3,8 @@
 import json
 import os
 
+from claude_request_budget import OneRequestBudget
+
 if os.environ.get("CLAUDE_API_TEST_ENABLED") != "true":
     raise SystemExit("Claude API test disabled. No request made.")
 
@@ -46,5 +48,8 @@ request_bytes = json.dumps(
 
 if len(request_bytes) > 1000:
     raise SystemExit("Claude request exceeds 1000 bytes. No request made.")
+
+request_budget = OneRequestBudget()
+request_budget.claim()
 
 raise SystemExit("Claude API test not implemented. No request made.")
