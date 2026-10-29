@@ -94,3 +94,23 @@ if input_result.returncode == 0 or (
     raise SystemExit("FAIL: Unsafe input-token setting was not blocked.")
 
 print("PASS: Unsafe input-token setting was rejected.")
+
+output_env = enabled_env.copy()
+output_env["CLAUDE_MAX_OUTPUT_TOKENS"] = "2048"
+
+output_result = subprocess.run(
+    [sys.executable, "-B", str(script)],
+    env=output_env,
+    capture_output=True,
+    text=True,
+    timeout=5,
+    check=False,
+)
+
+if output_result.returncode == 0 or (
+    "Unsafe Claude API setting: CLAUDE_MAX_OUTPUT_TOKENS. No request made."
+    not in output_result.stderr
+):
+    raise SystemExit("FAIL: Unsafe output-token setting was not blocked.")
+
+print("PASS: Unsafe output-token setting was rejected.")
