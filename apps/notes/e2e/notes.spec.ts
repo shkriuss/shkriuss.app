@@ -395,6 +395,14 @@ test.describe('with the device full (audit 4 F3-1)', () => {
       .getByRole('button', { name: 'Delete' })
       .click();
     await expect(other.getByRole('link', { name: title, exact: true })).toHaveCount(0);
+
+    // Verify the deletion reached persistent storage before closing the tab.
+    const stillStored = async () => {
+      const notes = await savedNotes(other);
+      return notes.some((entry) => entry.startsWith(`${title} | `));
+    };
+    await expect.poll(stillStored).toBe(false);
+
     await other.close();
   }
 
