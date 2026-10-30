@@ -473,7 +473,11 @@ export function mountNotes(root: Document): void {
     current = null;
     unsaved = false;
     left = null;
+
+    const beforeDelete = state;
     const saved = save(removeNote(state, id));
+    if (!saved) state = beforeDelete;
+
     backToList();
     if (saved) announce('Note deleted.');
   });
