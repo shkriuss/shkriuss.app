@@ -409,6 +409,9 @@ test.describe('with the device full (audit 4 F3-1)', () => {
     await page.getByRole('link', { name: 'Diary', exact: true }).click();
     await bodyBox(page).press('End');
     await bodyBox(page).pressSequentially(' — what I wrote today.');
+    await expect.poll(async () =>
+      (await savedNotes(page)).some((entry) => entry.startsWith('Old | '))
+    ).toBe(false);
     await expect(edited(page)).toHaveText('Not saved');
 
     // Another tab shortens another note: that saves, as it takes less room,
