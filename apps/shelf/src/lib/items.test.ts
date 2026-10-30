@@ -146,14 +146,21 @@ describe('the form', () => {
     const atLimit = `https://example.com/${'a'.repeat(LIMITS.link - 20)}`;
     expect(atLimit).toHaveLength(LIMITS.link);
     expect(normalizeLink(atLimit)).toBe(atLimit);
-    // Typed without "https://", which is added: still what the box let in.
-    const noScheme = `example.com/${'a'.repeat(LIMITS.link - 15)}`;
+    // Typed without "https://", which is added: what's saved has to fit the
+    // box too, or the item could never be saved again from its form.
+    const noScheme = `example.com/${'a'.repeat(LIMITS.link - 20)}`;
     expect(normalizeLink(noScheme)).toBe(`https://${noScheme}`);
+    expect(`https://${noScheme}`).toHaveLength(LIMITS.link);
+    const tooLongWithScheme = `example.com/${'a'.repeat(LIMITS.link - 15)}`;
+    expect(normalizeLink(tooLongWithScheme)).toBeUndefined();
     // Longer than the box takes: said so, not "not a web address".
     const tooLong = `https://example.com/${'a'.repeat(LIMITS.link)}`;
     expect(normalizeLink(tooLong)).toBeUndefined();
-    expect(linkProblem(tooLong)).toBe('That link is too long: up to 2,000 characters.');
-    expect(linkProblem(`shop.ge/${'🇬🇪'.repeat(LIMITS.link - 8)}`)).toBeNull();
+    const TOO_LONG =
+      'That link is too long: up to 2,000 characters, with the "https://" added to one typed without it.';
+    expect(linkProblem(tooLong)).toBe(TOO_LONG);
+    expect(linkProblem(tooLongWithScheme)).toBe(TOO_LONG);
+    expect(linkProblem(`shop.ge/${'🇬🇪'.repeat(LIMITS.link - 16)}`)).toBeNull();
     expect(linkProblem('javascript:x')).toBe(
       'Write a web address like https://example.com, or leave it empty.',
     );

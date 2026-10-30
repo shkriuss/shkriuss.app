@@ -350,6 +350,26 @@ test('says when the checker couldn’t be downloaded, and tries again', async ({
   await expect(status(page)).toHaveText('2 suggestions.');
 });
 
+test('offers “Try again” when the checker’s own script couldn’t be loaded', async ({
+  page,
+  guard,
+}) => {
+  // The connection drops before the checker's script itself is fetched (a
+  // first visit): the browser got the blame, with no way to try again (audit 5 G-5).
+  guard.allowConsole('net::ERR_FAILED');
+  let cut = true;
+  await page.route('**/checker.worker*', (route) => (cut ? route.abort() : route.continue()));
+  await page.goto('/');
+  await expect(status(page)).toHaveText(/couldn’t (start|be downloaded)/, { timeout: 30_000 });
+  const tryAgain = page.getByRole('button', { name: 'Try again' });
+  await expect(tryAgain).toBeVisible();
+
+  cut = false;
+  await tryAgain.click();
+  await expect(tryAgain).toBeHidden();
+  await expect(status(page)).toHaveText(READY, { timeout: 30_000 });
+});
+
 test('says when a pasted text doesn’t all fit', async ({ page }) => {
   // The box takes 20,000 characters; the browser keeps the start of a
   // longer paste, and nothing said so (audit F3-3).

@@ -14,8 +14,8 @@ anything else, with brands, prices, shops and links. Lives at
   over 1,000,000,000 is said to be too much (audit 5 F3-10). Links must be
   `http://` or `https://` web addresses; a link is kept as typed (trimmed,
   "https://" added), not as the browser would write it, so the form shows it
-  as it was written, and one longer than its box takes is said to be too
-  long (audit 5 F3-3). A name of flags or other emoji cut for the "(second
+  as it was written, and one longer than its box takes, counting the
+  "https://" added, is said to be too long (audit 5 F3-3). A name of flags or other emoji cut for the "(second
   version)" item is cut between whole characters (audit 5 F3-2). Saved on
   the device under `shkriuss:shelf` (data version 1).
 - `src/lib/hosts.ts`: the website a link goes to, as people read it, with

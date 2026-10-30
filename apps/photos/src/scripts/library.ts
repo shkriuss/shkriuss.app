@@ -18,6 +18,7 @@ import {
   createFileStore,
   keepFiles,
   putTogether,
+  removeLeftOver,
   removeTogether,
   type FileEntry,
 } from '@shkriuss/storage/files';
@@ -67,12 +68,13 @@ export async function loadLibrary(): Promise<Photo[]> {
     .map(toPhoto)
     .filter((photo) => photo !== null)
     .sort(byNewest);
-  // By the keys: details this version can't read still keep their files.
-  const known = new Set(await details.ids());
-  const leftOver = (await files.ids()).filter((id) => !known.has(id));
-  if (leftOver.length > 0) {
-    await files.removeAll(leftOver);
-    for (const id of leftOver) forgetThumb(id);
+  // By the keys (details this version can't read keep their files), in the
+  // one transaction that looks: a photo another tab is saving just now, its
+  // details and files together, isn't taken for files left over.
+  try {
+    for (const id of await removeLeftOver(files, details)) forgetThumb(id);
+  } catch {
+    // Couldn't tidy up (the browser refusing writes, say): the photos are loaded all the same.
   }
   return photos;
 }
@@ -124,10 +126,14 @@ export function thumbUrl(id: string): Promise<string | null> {
   return url;
 }
 
-/** Keeps a downloaded thumbnail of a photo that's only online. */
+/**
+ * Keeps a downloaded thumbnail of a photo that's only online (or one this
+ * browser can't show). In one transaction with reading what's there: read
+ * first and saved after, it put an original back that "Free up space" had
+ * just removed in between (audit 5 E-4).
+ */
 export async function keepThumb(id: string, thumb: Blob): Promise<string> {
-  const existing = await getFiles(id);
-  await files.putAll([{ id, original: null, view: null, ...existing, thumb }]);
+  await files.change(id, (existing) => ({ id, original: null, view: null, ...existing, thumb }));
   forgetThumb(id);
   const url = URL.createObjectURL(thumb);
   thumbs.set(id, Promise.resolve(url));

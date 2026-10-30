@@ -521,7 +521,7 @@ export function mountNotes(root: Document): void {
     left = null;
     backToList();
     say(
-      'Your notes were deleted in another tab, with “Delete all data”. What was typed here is gone too.',
+      'Your notes were deleted in another tab (“Delete all data”, or a restore replacing them). What was typed here is gone too.',
     );
   }
 

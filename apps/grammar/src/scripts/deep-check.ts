@@ -230,7 +230,7 @@ export function mountDeepCheck(root: Document, host: DeepCheckHost): { textChang
     current = (await currentManifest()) ?? current;
     const manifest = current;
     if (!manifest) {
-      setProblem('Couldn’t reach shkriuss.app. Check your internet connection and try again.');
+      setProblem('Couldn’t reach the server. Check your internet connection and try again.');
       return undefined;
     }
     const cache = await caches.open(DEEP_CHECK_CACHE);
@@ -326,7 +326,7 @@ export function mountDeepCheck(root: Document, host: DeepCheckHost): { textChang
       } else if (error instanceof DamagedFile) {
         // Not the connection: the file itself (audit 5 F3-10).
         setProblem(
-          'One of the files arrived damaged, so it wasn’t kept. Try again. If that happens again and again, the copy on shkriuss.app is damaged, and downloading again won’t help until it’s fixed.',
+          'One of the files arrived damaged, so it wasn’t kept. Try again. If that happens again and again, the copy on the server is damaged, and downloading again won’t help until it’s fixed.',
         );
       } else {
         setProblem(

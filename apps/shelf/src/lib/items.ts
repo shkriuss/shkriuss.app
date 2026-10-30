@@ -161,6 +161,10 @@ export function priceProblem(text: string, locale?: string): string | null {
 /** Whether `text` is longer than `max` characters as people see them (as Safari's boxes count). */
 const longerThan = (text: string, max: number): boolean => cutToLength(text, max) !== text;
 
+/** A typed link with "https://" added when it has no scheme ("shop.ge:8080/x" has none: a dot makes it a host and port). */
+const withHttps = (typed: string): string =>
+  /^[a-z][a-z\d+-]*:/i.test(typed) ? typed : `https://${typed}`;
+
 /**
  * A link as typed, trimmed, with "https://" added when it has no scheme:
  * "shop.ge/item" becomes "https://shop.ge/item". It's kept as written, so
@@ -168,14 +172,15 @@ const longerThan = (text: string, max: number): boolean => cutToLength(text, max
  * form of it ("xn--…" names, "%E1%83…" for letters in other scripts) is for
  * the link itself, in the page's anchor (audit 5 F3-3). "" when empty;
  * undefined when it isn't a web address (only http and https are allowed, so
- * a link can never run code: audit C-4), or longer than the box takes.
+ * a link can never run code: audit C-4), or longer than the box takes once
+ * "https://" is added (what's saved has to fit the box too, or the item could
+ * never be saved again).
  */
 export function normalizeLink(text: string): string | undefined {
   const trimmed = text.trim();
   if (trimmed === '') return '';
-  if (longerThan(trimmed, LIMITS.link)) return undefined;
-  // "shop.ge:8080/x" has no scheme: one with a dot in it is a host and port.
-  const withScheme = /^[a-z][a-z\d+-]*:/i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  const withScheme = withHttps(trimmed);
+  if (longerThan(withScheme, LIMITS.link)) return undefined;
   try {
     const url = new URL(withScheme);
     if (url.protocol !== 'https:' && url.protocol !== 'http:') return undefined;
@@ -188,8 +193,9 @@ export function normalizeLink(text: string): string | undefined {
 
 /** What's wrong with a typed link, or null when it's a web address (or empty). */
 export function linkProblem(text: string): string | null {
-  if (longerThan(text.trim(), LIMITS.link)) {
-    return `That link is too long: up to ${LIMITS.link.toLocaleString('en')} characters.`;
+  const trimmed = text.trim();
+  if (trimmed !== '' && longerThan(withHttps(trimmed), LIMITS.link)) {
+    return `That link is too long: up to ${LIMITS.link.toLocaleString('en')} characters, with the "https://" added to one typed without it.`;
   }
   if (normalizeLink(text) === undefined) {
     return 'Write a web address like https://example.com, or leave it empty.';

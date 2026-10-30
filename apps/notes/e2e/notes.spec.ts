@@ -490,7 +490,7 @@ test('“Delete all data” in another tab deletes the note being typed in here 
   // The other tab shows the empty list, says why, and puts nothing back.
   await expect(other.getByText('No notes yet')).toBeVisible();
   await expect(other.locator('[data-problem]')).toContainText(
-    'Your notes were deleted in another tab, with “Delete all data”. What was typed here is gone too.',
+    'Your notes were deleted in another tab (“Delete all data”, or a restore replacing them). What was typed here is gone too.',
   );
   await other.clock.runFor(2000);
   expect(await other.evaluate(() => localStorage.getItem('shkriuss:notes'))).toBeNull();

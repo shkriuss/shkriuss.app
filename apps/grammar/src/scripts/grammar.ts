@@ -193,7 +193,7 @@ export function mountGrammar(root: Document): void {
    * connection), so "Try again" is offered (audit 5 G-5); or this browser
    * can't run it.
    */
-  function checkerFailed(reason: 'download' | 'start' = 'start'): void {
+  function checkerFailed(reason: 'download' | 'start' = 'start', canRetry = false): void {
     worker?.terminate();
     if (phase === 'ready' && restarts > 0) {
       restarts -= 1;
@@ -202,14 +202,19 @@ export function mountGrammar(root: Document): void {
       return;
     }
     phase = 'failed';
-    retry.hidden = reason !== 'download';
+    retry.hidden = reason !== 'download' && !canRetry;
     setStatus(reason === 'download' ? NOT_DOWNLOADED : FAILED);
   }
 
   function startChecker(): void {
     worker = startWorker(checkerUrl);
     worker.addEventListener('message', heard);
-    worker.addEventListener('error', () => checkerFailed());
+    // The worker's own script couldn't be loaded either, say (the connection
+    // dropped before it was fetched): offline, that's a download to try again;
+    // trying again is harmless in any case (audit 5 G-5).
+    worker.addEventListener('error', () =>
+      checkerFailed(navigator.onLine ? 'start' : 'download', true),
+    );
     tell({ type: 'start', english: state.english, words: state.words });
   }
 
