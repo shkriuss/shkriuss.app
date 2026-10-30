@@ -50,6 +50,9 @@ jobs:
       - name: Verify Claude audit workflow safety (offline)
         run: python3 -B scripts/test-claude-audit-concurrency.py
 
+      - name: Verify Claude API has no unexpected imports (offline)
+        run: python3 -B scripts/test-claude-no-network.py
+
       - name: Set up
         uses: ./.github/actions/setup
 
