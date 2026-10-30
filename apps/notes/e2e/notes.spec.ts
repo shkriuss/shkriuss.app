@@ -392,13 +392,17 @@ test.describe('with the device full (audit 4 F3-1)', () => {
     await other.getByRole('button', { name: 'Delete', exact: true }).click();
 
     // Observe the storage event in the original tab.
-    await page.evaluate(() => {
+    await page.evaluate((deletedTitle) => {
       window.addEventListener('storage', (event) => {
-        if (event.key === 'shkriuss:notes') {
+        if (event.key !== 'shkriuss:notes' || !event.newValue) return;
+        const saved = JSON.parse(event.newValue) as {
+          data: { notes: { title: string }[] };
+        };
+        if (saved.data.notes.every((note) => note.title !== deletedTitle)) {
           document.documentElement.dataset['notesDeleteEvent'] = 'seen';
         }
       });
-    });
+    }, title);
 
     await other
       .getByRole('dialog', { name: 'Delete this note?' })
