@@ -4,7 +4,10 @@ from unittest.mock import patch
 
 from claude_api_http import prepare_claude_request
 
-body = b'{"model":"claude-sonnet-5-5","max_tokens":1024}'
+body = (
+    b'{"model":"claude-sonnet-5-5","max_tokens":1024,'
+    b'"messages":[{"role":"user","content":"Reply with exactly CONNECTION_OK."}]}'
+)
 
 with patch(
     "socket.socket.connect",
