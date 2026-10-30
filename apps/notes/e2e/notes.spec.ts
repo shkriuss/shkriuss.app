@@ -425,9 +425,11 @@ test.describe('with the device full (audit 4 F3-1)', () => {
 
     // Room again (a big note deleted elsewhere): the typing is saved.
     await deleteElsewhere(page, 'Old');
-    await expect.poll(async () =>
-      (await savedNotes(page)).some((entry) => entry.startsWith('Old | '))
-    ).toBe(false);
+    const oldIsSaved = async () => {
+      const notes = await savedNotes(page);
+      return notes.some((entry) => entry.startsWith('Old | '));
+    };
+    await expect.poll(oldIsSaved).toBe(false);
     await expect(edited(page)).toHaveText(/^Edited /);
     await expect(bodyBox(page)).toHaveValue('Start — what I wrote today.');
     expect(await savedNotes(page)).toContain('Diary | Start — what I wrote today.');
