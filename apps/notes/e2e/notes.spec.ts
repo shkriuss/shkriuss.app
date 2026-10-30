@@ -422,6 +422,21 @@ test.describe('with the device full (audit 4 F3-1)', () => {
     await other.close();
   }
 
+  test('keeps a note visible when its deletion cannot be saved', async ({ page }) => {
+    await writeNote(page, 'Old', 'Important text');
+    await page.getByRole('link', { name: 'Old', exact: true }).click();
+    await failSaving(page);
+
+    await page.getByRole('button', { name: 'Delete', exact: true }).click();
+    await page
+      .getByRole('dialog', { name: 'Delete this note?' })
+      .getByRole('button', { name: 'Delete' })
+      .click();
+
+    expect(await savedNotes(page)).toContain('Old | Important text');
+    await expect(page.getByRole('link', { name: 'Old', exact: true })).toBeVisible();
+  });
+
   test('typing that couldn’t be saved stays, through a change saved elsewhere', async ({
     page,
   }) => {
