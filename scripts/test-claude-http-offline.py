@@ -38,4 +38,22 @@ with patch(
         else:
             raise AssertionError("Invalid API key was accepted.")
 
+    unexpected_bodies = (
+        body.replace(b"CONNECTION_OK", b"NOT_OK"),
+        body.replace(b"claude-sonnet-5-5", b"other-model"),
+        body.replace(b"1024", b"2048"),
+        body + b" ",
+    )
+
+    for unexpected_body in unexpected_bodies:
+        try:
+            prepare_claude_request(unexpected_body, "offline-test-key")
+        except ValueError as error:
+            if str(error) != (
+                "Unexpected Claude request content. No request made."
+            ):
+                raise AssertionError("Unexpected rejection reason.") from error
+        else:
+            raise AssertionError("Unexpected Claude request was accepted.")
+
 print("PASS: Claude HTTP request prepared safely offline.")
