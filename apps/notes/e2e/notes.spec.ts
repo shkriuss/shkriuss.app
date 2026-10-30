@@ -429,6 +429,9 @@ test.describe('with the device full (audit 4 F3-1)', () => {
       (await savedNotes(page)).some((entry) => entry.startsWith('Old | '))
     ).toBe(false);
     await expect(edited(page)).toHaveText(/^Edited /);
+    await expect(bodyBox(page)).toHaveValue('Start — what I wrote today.');
+    expect(await savedNotes(page)).toContain('Diary | Start — what I wrote today.');
+  });
 
   test('typing on after a save that failed isn’t taken for a change made elsewhere', async ({
     page,
