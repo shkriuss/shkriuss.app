@@ -1,0 +1,89 @@
+# Setup only. No Claude API access.
+name: Audit fix (setup only)
+
+on:
+  workflow_dispatch:
+    inputs:
+      finding_id:
+        description: 'Fifth audit finding ID'
+        required: true
+        type: choice
+        default: J-5
+        options:
+          - J-5
+          - J-7
+      api_test:
+        description: 'Request a Claude API test (disabled for now)'
+        required: false
+        type: boolean
+        default: false
+
+permissions: {}
+
+concurrency:
+  group: claude-audit-manual
+  cancel-in-progress: false
+
+jobs:
+  introduction:
+    name: Safe introduction
+    runs-on: ubuntu-24.04
+    environment: claude-audit
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    env:
+      CLAUDE_MODEL: claude-sonnet-5-5
+      CLAUDE_MAX_INPUT_TOKENS: '4000'
+      CLAUDE_MAX_OUTPUT_TOKENS: '1024'
+      CLAUDE_MAX_REQUESTS: '1'
+      CLAUDE_TEST_PROMPT: 'Reply with exactly CONNECTION_OK.'
+
+    steps:
+      - name: Validate Claude test settings
+        shell: bash
+        run: |
+          [[ "$CLAUDE_MODEL" == "claude-sonnet-5-5" ]] || exit 1
+          [[ "$CLAUDE_MAX_INPUT_TOKENS" == "4000" ]] || exit 1
+          [[ "$CLAUDE_MAX_OUTPUT_TOKENS" == "1024" ]] || exit 1
+          [[ "$CLAUDE_MAX_REQUESTS" == "1" ]] || exit 1
+          [[ "$CLAUDE_TEST_PROMPT" == "Reply with exactly CONNECTION_OK." ]] || exit 1
+
+      - name: Block API tests until enabled
+        if: ${{ inputs.api_test }}
+        shell: bash
+        run: |
+          echo "::error::Claude API tests are not enabled yet."
+          exit 1
+
+      - name: Check out repository (read only)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Prepare Claude request offline
+        shell: bash
+        run: python3 -B scripts/claude-connectivity.py
+
+      - name: Confirm selected finding
+        shell: bash
+        env:
+          FINDING_ID: ${{ inputs.finding_id }}
+        run: |
+          case "$FINDING_ID" in
+            J-5|J-7) ;;
+            *)
+              echo "::error::Unsupported finding ID"
+              exit 1
+              ;;
+          esac
+
+          echo "Selected fifth-audit finding: $FINDING_ID"
+
+          {
+            echo "## Audit-fix setup"
+            echo "Selected finding: $FINDING_ID"
+            echo "Placeholder only. No audit or fix was performed."
+            echo "No Claude API request was made."
+            echo "No repository files were changed."
+          } >> "$GITHUB_STEP_SUMMARY"
