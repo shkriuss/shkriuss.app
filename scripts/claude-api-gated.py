@@ -52,4 +52,11 @@ if len(request_bytes) > 1000:
 request_budget = OneRequestBudget()
 request_budget.claim()
 
+# Offline preparation only. No real key or network request.
+prepared_request = prepare_claude_request(
+    request_bytes, "offline-test-key"
+)
+if prepared_request.data != request_bytes:
+    raise SystemExit("Offline Claude request mismatch. No request made.")
+
 raise SystemExit("Claude API test not implemented. No request made.")
