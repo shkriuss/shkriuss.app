@@ -56,6 +56,9 @@ jobs:
       - name: Verify Claude HTTP request preparation (offline)
         run: python3 -B scripts/test-claude-http-offline.py
 
+      - name: Verify Claude single-attempt transport (offline)
+        run: python3 -B scripts/test-claude-transport-offline.py
+
       - name: Set up
         uses: ./.github/actions/setup
 
