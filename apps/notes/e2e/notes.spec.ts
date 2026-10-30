@@ -393,11 +393,35 @@ async function deleteElsewhere(page: Page, title: string): Promise<void> {
   await other.goto('/');
   await other.getByRole('link', { name: title, exact: true }).click();
   await other.getByRole('button', { name: 'Delete', exact: true }).click();
+
+  // Observe the storage event in the original tab.
+  await page.evaluate((deletedTitle) => {
+    window.addEventListener('storage', (event) => {
+      if (event.key !== 'shkriuss:notes' || !event.newValue) return;
+      const saved = JSON.parse(event.newValue) as {
+        data: { notes: { title: string }[] };
+      };
+      if (saved.data.notes.every((note) => note.title !== deletedTitle)) {
+        document.documentElement.dataset['notesDeleteEvent'] = 'seen';
+      }
+    });
+  }, title);
+
   await other
     .getByRole('dialog', { name: 'Delete this note?' })
     .getByRole('button', { name: 'Delete' })
     .click();
   await expect(other.getByRole('link', { name: title, exact: true })).toHaveCount(0);
+
+  // Verify the deletion reached persistent storage before closing the tab.
+  const stillStored = async () => {
+    const notes = await savedNotes(other);
+    return notes.some((entry) => entry.startsWith(`${title} | `));
+  };
+  await expect.poll(stillStored).toBe(false);
+
+  await expect(page.locator('html')).toHaveAttribute('data-notes-delete-event', 'seen');
+
   await other.close();
 }
 
@@ -500,6 +524,21 @@ test('“Delete all data” in another tab deletes the note being typed in here 
 });
 
 test.describe('with the device full (audit 4 F3-1)', () => {
+  test('keeps a note visible when its deletion cannot be saved', async ({ page }) => {
+    await writeNote(page, 'Old', 'Important text');
+    await page.getByRole('link', { name: 'Old', exact: true }).click();
+    await failSaving(page);
+
+    await page.getByRole('button', { name: 'Delete', exact: true }).click();
+    await page
+      .getByRole('dialog', { name: 'Delete this note?' })
+      .getByRole('button', { name: 'Delete' })
+      .click();
+
+    expect(await savedNotes(page)).toContain('Old | Important text');
+    await expect(page.getByRole('link', { name: 'Old', exact: true })).toBeVisible();
+  });
+
   test('typing that couldn’t be saved stays, through a change saved elsewhere', async ({
     page,
   }) => {
@@ -527,6 +566,11 @@ test.describe('with the device full (audit 4 F3-1)', () => {
 
     // Room again (a big note deleted elsewhere): the typing is saved.
     await deleteElsewhere(page, 'Old');
+    const oldIsSaved = async () => {
+      const notes = await savedNotes(page);
+      return notes.some((entry) => entry.startsWith('Old | '));
+    };
+    await expect.poll(oldIsSaved).toBe(false);
     await expect(edited(page)).toHaveText(/^Edited /);
     await expect(bodyBox(page)).toHaveValue('Start — what I wrote today.');
     expect(await savedNotes(page)).toContain('Diary | Start — what I wrote today.');
