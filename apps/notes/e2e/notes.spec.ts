@@ -390,6 +390,16 @@ test.describe('with the device full (audit 4 F3-1)', () => {
     await other.goto('/');
     await other.getByRole('link', { name: title, exact: true }).click();
     await other.getByRole('button', { name: 'Delete', exact: true }).click();
+
+    // Observe the storage event in the original tab.
+    await page.evaluate(() => {
+      window.addEventListener('storage', (event) => {
+        if (event.key === 'shkriuss:notes') {
+          document.documentElement.dataset['notesDeleteEvent'] = 'seen';
+        }
+      });
+    });
+
     await other
       .getByRole('dialog', { name: 'Delete this note?' })
       .getByRole('button', { name: 'Delete' })
@@ -402,6 +412,8 @@ test.describe('with the device full (audit 4 F3-1)', () => {
       return notes.some((entry) => entry.startsWith(`${title} | `));
     };
     await expect.poll(stillStored).toBe(false);
+
+    await expect(page.locator('html')).toHaveAttribute('data-notes-delete-event', 'seen');
 
     await other.close();
   }
