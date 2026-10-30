@@ -77,4 +77,31 @@ with (
 
     connection_type.return_value.request.assert_called_once()
 
+    # Simulate a connection failure after the attempt is claimed.
+    connection_type.reset_mock()
+    failed_budget = OneRequestBudget()
+    connection_type.return_value.request.side_effect = OSError(
+        "Simulated network failure"
+    )
+
+    try:
+        send_once(request, failed_budget, approved=True)
+    except OSError as error:
+        assert str(error) == "Simulated network failure"
+    else:
+        raise AssertionError("Network failure was not reported")
+
+    connection_type.return_value.request.assert_called_once()
+    connection_type.return_value.close.assert_called_once()
+
+    # Even after a failed connection, this budget cannot retry.
+    try:
+        send_once(request, failed_budget, approved=True)
+    except RuntimeError as error:
+        assert "No second attempt allowed" in str(error)
+    else:
+        raise AssertionError("Retry after failure was allowed")
+
+    connection_type.return_value.request.assert_called_once()
+
 print("PASS: Claude transport safely tested offline.")
