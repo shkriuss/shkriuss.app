@@ -20,6 +20,10 @@ on:
 
 permissions: {}
 
+concurrency:
+  group: claude-audit-manual
+  cancel-in-progress: false
+
 jobs:
   introduction:
     name: Safe introduction
