@@ -5,6 +5,11 @@ from urllib.request import Request
 CLAUDE_MESSAGES_URL = "https://api.anthropic.com/v1/messages"
 ANTHROPIC_VERSION = "2023-06-01"
 
+EXPECTED_REQUEST_BYTES = (
+    b'{"model":"claude-sonnet-5-5","max_tokens":1024,'
+    b'"messages":[{"role":"user","content":"Reply with exactly CONNECTION_OK."}]}'
+)
+
 
 def prepare_claude_request(request_bytes: bytes, api_key: str) -> Request:
     """Build the fixed HTTPS request. This function performs no network I/O."""
@@ -24,3 +29,6 @@ def prepare_claude_request(request_bytes: bytes, api_key: str) -> Request:
         },
         method="POST",
     )
+  
+    if request_bytes != EXPECTED_REQUEST_BYTES:
+        raise ValueError("Unexpected Claude request content. No request made.")
