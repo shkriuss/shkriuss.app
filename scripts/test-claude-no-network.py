@@ -13,6 +13,7 @@ allowed_imports = {
     "json",
     "os",
     "claude_request_budget",
+    "claude_api_http",
 }
 actual_imports = set()
 
