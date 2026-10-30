@@ -19,6 +19,9 @@ def prepare_claude_request(request_bytes: bytes, api_key: str) -> Request:
     if not api_key or "\r" in api_key or "\n" in api_key:
         raise ValueError("Invalid Claude API key.")
 
+    if request_bytes != EXPECTED_REQUEST_BYTES:
+        raise ValueError("Unexpected Claude request content. No request made.")
+
     return Request(
         CLAUDE_MESSAGES_URL,
         data=request_bytes,
@@ -29,6 +32,3 @@ def prepare_claude_request(request_bytes: bytes, api_key: str) -> Request:
         },
         method="POST",
     )
-  
-    if request_bytes != EXPECTED_REQUEST_BYTES:
-        raise ValueError("Unexpected Claude request content. No request made.")
