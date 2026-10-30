@@ -3,6 +3,7 @@
 import json
 import os
 
+from claude_api_http import prepare_claude_request
 from claude_request_budget import OneRequestBudget
 
 if os.environ.get("CLAUDE_API_TEST_ENABLED") != "true":
