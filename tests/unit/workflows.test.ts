@@ -7,6 +7,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { parse } from 'yaml';
 import { ICON_COLORS } from '../../packages/registry/src/index.ts';
 import { iconNames } from '../../packages/ui/src/icons/index.ts';
 
@@ -19,15 +20,73 @@ const workflowFiles = [
   ),
 ];
 
+/**
+ * Every `uses:` in a workflow or action, read as YAML the way GitHub reads
+ * it, wherever it is: a step's or a job's (a reusable workflow), with a
+ * quoted key, or in a step written on one line (audit 5 H-4). Read by line
+ * patterns, a quoted key was missed.
+ */
+function actionsUsed(yaml: string): string[] {
+  const found: string[] = [];
+  const walk = (node: unknown): void => {
+    if (Array.isArray(node)) {
+      node.forEach(walk);
+      return;
+    }
+    if (typeof node !== 'object' || node === null) return;
+    for (const [key, value] of Object.entries(node)) {
+      if (key === 'uses' && typeof value === 'string') found.push(value);
+      walk(value);
+    }
+  };
+  walk(parse(yaml));
+  return found;
+}
+
+/**
+ * "owner/repo@<commit>" (or "owner/repo/path@<commit>") with the full
+ * 40-character commit, which no tag or branch can move. Only zizmor's online
+ * check in CI tells whether that commit really belongs to the action.
+ */
+const PINNED = /^[\w.-]+\/[\w.-]+(?:\/[^@\s]+)?@[0-9a-f]{40}$/;
+
 describe('GitHub Actions are pinned to commits', () => {
   it.each(workflowFiles)('%s', (file) => {
-    const uses = [...readFileSync(file, 'utf8').matchAll(/uses:\s*([^\s#]+)/g)].map(
-      (match) => match[1] as string,
-    );
+    const uses = actionsUsed(readFileSync(file, 'utf8'));
+    expect(uses.length, 'uses at least one action').toBeGreaterThan(0);
     for (const action of uses) {
       if (action.startsWith('./')) continue;
-      expect(action, `${action} should be pinned to a full commit SHA`).toMatch(/@[0-9a-f]{40}$/);
+      expect(action, `${action} should be pinned to a full commit SHA`).toMatch(PINNED);
     }
+  });
+
+  it('sees every way a step can be written (audit 5 H-4)', () => {
+    const workflow = `
+on: push
+jobs:
+  a:
+    steps:
+      - uses: actions/checkout@v4
+      - "uses": actions/setup-node@v4
+      - {name: on one line, uses: someone/thing@v1}
+      - name: local
+        uses: ./.github/actions/setup
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+  b:
+    uses: someone/workflows/.github/workflows/x.yml@main
+`;
+    const used = actionsUsed(workflow);
+    expect(used).toEqual([
+      'actions/checkout@v4',
+      'actions/setup-node@v4',
+      'someone/thing@v1',
+      './.github/actions/setup',
+      'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9',
+      'someone/workflows/.github/workflows/x.yml@main',
+    ]);
+    expect(used.filter((action) => PINNED.test(action))).toEqual([
+      'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9',
+    ]);
   });
 });
 

@@ -452,6 +452,10 @@ This area is split into three tasks:
 
 - Does each job have only the permissions it needs, and secrets only where
   needed? Is any secret printed, or written to a file that's uploaded?
+- The Claude workflow (`.github/workflows/claude.yml`,
+  [ADR 0020](../adr/0020-claude-in-github-actions.md)): who can start it,
+  what its API key and the Claude GitHub App's token can reach, and whether
+  a branch's code it runs (the tests) could get either.
 - Could a broken or malicious build reach production? Deploys should run
   only from `main`, after every check, using the same build that was tested.
 - For every dependency:
