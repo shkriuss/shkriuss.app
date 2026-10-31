@@ -183,8 +183,9 @@ export function mountSyncControls(section: HTMLElement, sync: SyncClient): void 
   });
 
   button('sync-off').addEventListener('click', () => {
-    sync.turnOff();
-    button('sync-on').focus();
+    // Read out what happened, also if it's a storage problem it already read out (audit 5 E-2).
+    asked = true;
+    if (sync.turnOff()) button('sync-on').focus();
   });
 
   button('sync-delete').addEventListener('click', () => {

@@ -39,6 +39,7 @@ function syncingWith(secret: Uint8Array<ArrayBuffer>, old: Uint8Array<ArrayBuffe
     connected: T0,
     previous: [encoded(old)],
     waiting: { [encoded(old)]: '1 1' },
+    retired: [],
   };
   expect(saveState(state)).toBe(true);
   return state;
@@ -89,6 +90,35 @@ describe('connecting to another account (audit 4 A-1)', () => {
     const another = randomBytes(32);
     expect(saveConnection({ secret: mine, code: 'AAAA-AAAA', replaces: [another] })).toBe(true);
     expect(loadState()?.previous).toEqual([encoded(myOld), encoded(another)]);
+  });
+});
+
+describe('replaced keys this device is done with (audit 5 A-1)', () => {
+  it('never come back into the keys to move, however often the hub sends them', () => {
+    const mine = randomBytes(32);
+    const done = randomBytes(32);
+    const still = randomBytes(32);
+    const state = syncingWith(mine, still);
+    expect(saveState({ ...state, retired: [encoded(done)] })).toBe(true);
+    // Turned on again with the same key, and with another key.
+    expect(saveConnection({ secret: mine, code: 'AAAA-AAAA', replaces: [done, still] })).toBe(true);
+    expect(loadState()).toMatchObject({ previous: [encoded(still)], retired: [encoded(done)] });
+    const next = randomBytes(32);
+    expect(saveConnection({ secret: next, code: 'BBBB-BBBB', replaces: [done, mine] })).toBe(true);
+    expect(loadState()).toMatchObject({ previous: [encoded(mine)], retired: [encoded(done)] });
+    // Kept when sync is turned off.
+    const off = loadState();
+    if (!off) throw new Error('No state');
+    expect(saveState(offState(off))).toBe(true);
+    expect(loadState()?.retired).toEqual([encoded(done)]);
+  });
+
+  it('are none in state saved before they were kept', () => {
+    localStorage.setItem(
+      'shkriuss-device:sync',
+      JSON.stringify({ secret: encoded(randomBytes(32)), code: 'AAAA-AAAA', retired: 'junk' }),
+    );
+    expect(loadState()?.retired).toEqual([]);
   });
 });
 

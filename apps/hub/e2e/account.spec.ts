@@ -187,7 +187,7 @@ test('adds another device with a one-time code', async ({ page, browser, baseURL
   await expect(page.locator('[data-link-qr] svg')).toHaveCount(0);
 
   // A code works once.
-  guard.allowConsole('410');
+  guard.allowConsole('Failed to load resource: the server responded with a status of 410 (Gone)');
   const third = await (await otherDevice(browser, baseURL)).newPage();
   await third.goto(url);
   // Used by someone else first: the person is told, and what to do.
@@ -330,7 +330,7 @@ test('“Done” makes the code stop working, so someone who saw it can’t use 
   await page.getByRole('button', { name: 'Done' }).click();
   expect((await cancelled).status()).toBe(204);
 
-  guard.allowConsole('410');
+  guard.allowConsole('Failed to load resource: the server responded with a status of 410 (Gone)');
   const other = await otherDevice(browser, baseURL);
   const second = await other.newPage();
   await second.goto(url);
@@ -454,6 +454,40 @@ test('replacing the key signs out every device that has the old one', async ({
   await tablet.context().close();
 });
 
+test('the dialogs read out what they mean, with their question (audit 5 G-3)', async ({ page }) => {
+  const { code } = await createAccount(page);
+  const dialog = page.getByRole('dialog', { name: 'Sign out of this device?' });
+  await page.getByRole('button', { name: 'Sign out of this device' }).click();
+  await expect(dialog).toHaveAccessibleDescription(
+    /^To sign in again you.ll need your recovery key/,
+  );
+  await expect(dialog).not.toHaveAccessibleDescription(/keep syncing/);
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(dialog).toBeHidden();
+
+  // With an app that syncs on this device, that it keeps syncing is read out too.
+  const [synced] = syncApps;
+  if (!synced) throw new Error('No app syncs');
+  await page.evaluate(
+    ({ app, code: accountCode }) =>
+      localStorage.setItem(
+        'shkriuss-device:synced-apps',
+        JSON.stringify([{ app, code: accountCode, origin: `https://${app}.shkriuss.app` }]),
+      ),
+    { app: synced.slug, code },
+  );
+  await page.getByRole('button', { name: 'Sign out of this device' }).click();
+  await expect(dialog).toHaveAccessibleDescription(
+    new RegExp(`^To sign in again .* keep syncing after you sign out\\. .*${synced.name}\\.$`),
+  );
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+
+  await page.getByRole('button', { name: 'Show recovery key' }).click();
+  await expect(page.getByRole('dialog', { name: 'Your recovery key' })).toHaveAccessibleDescription(
+    /^Anyone who sees it can sign in to your account/,
+  );
+});
+
 test('lists the apps that sync, with links that turn on sync there', async ({ page }) => {
   await createAccount(page);
   for (const app of syncApps) {
@@ -519,7 +553,9 @@ test.describe('passkeys', () => {
     await expect(message(page)).toHaveText('Signed in with your passkey.');
 
     // Removed: it no longer signs in.
-    guard.allowConsole('404');
+    guard.allowConsole(
+      'Failed to load resource: the server responded with a status of 404 (Not Found)',
+    );
     await page.getByRole('button', { name: 'Remove a passkey' }).click();
     await expect(page.locator('[data-passkey-status]')).toHaveText(
       'That passkey no longer signs in to your account.',
@@ -564,8 +600,12 @@ test.describe('passkeys', () => {
     const signals = () =>
       page.evaluate(() => (window as unknown as { signals: unknown[] }).signals.length);
     let status = 500;
-    guard.allowConsole('500');
-    guard.allowConsole('409');
+    guard.allowConsole(
+      'Failed to load resource: the server responded with a status of 500 (Internal Server Error)',
+    );
+    guard.allowConsole(
+      'Failed to load resource: the server responded with a status of 409 (Conflict)',
+    );
     await page.route('**/api/account/passkey', (route) =>
       route.request().method() === 'PUT'
         ? route.fulfill({ status, contentType: 'application/json', body: '{"error":"x"}' })

@@ -15,7 +15,13 @@ passkey's signature made on the Account page. Changed by
 previews, so an app pairs only with the real hub (or, in tests, the local
 one). Changed by audit 4 (F2-3): an app can keep both versions of the same
 change too (`keepSame`, for counts), and only one tab of an app syncs at a
-time (see "keep both" below).
+time (see "keep both" below). Changed by audit 5: an edit made with no
+connection keeps its time (E-1); "Turn off" works when the browser is full
+(E-2); replaced keys are kept for 13 months and apps are done with old keys
+for good (A-1); the "turn off" links are for the day (A-5) and say nothing
+when sync is already off (C-4); all device links share one object (B-2);
+an app loads the code that connects it to the account only when that's
+needed, so every page stays within its JavaScript budget (J-2).
 
 ## Context
 
@@ -105,13 +111,17 @@ HKDF), like `K7Q2-M9XD`.
 - **On the device:** the account secret, in `localStorage` for the hub only,
   under `shkriuss-device:account`. It's never in backups, and signing out
   deletes it. On the device that replaced the key, the old keys are kept
-  there too (at most 5), so apps can move their old copies. A device signed
-  out because its key was replaced elsewhere keeps nothing of it, as when
-  signing out (audit 3 D-8).
+  there too (at most 5, for 13 months each, as long as the account service
+  keeps its note: [ADR 0017](0017-storage-limits.md), audit 5 A-1), so apps
+  can move their old copies. A device signed out because its key was
+  replaced elsewhere keeps nothing of it, as when signing out (audit 3 D-8).
 - **On the hub's server.** The hub's Worker runs only for `/api/account/*`,
-  with one Durable Object per link, passkey lock or replaced key. It stores:
+  with one Durable Object for all device links together (a row each), and
+  one per passkey lock or replaced key. It stores:
   - sealed passkey locks;
-  - sealed device links, for at most 10 minutes;
+  - sealed device links, for at most 10 minutes (expired ones are deleted
+    by the next request, so a dropped alarm can't leave one behind:
+    [ADR 0017](0017-storage-limits.md), audit 5 B-2);
   - a note that an account key was replaced, under the SHA-256 hash of a
     token only that key can make.
 
@@ -170,7 +180,11 @@ Then:
   fails the app's checks) waits until the app is updated, while syncing with
   the new key goes on. A replaced key with nothing online for the app gets
   the note that it moved too, so the lost device can't start a copy with it
-  (audit 3 B-1).
+  (audit 3 B-1); so does one whose copy was deleted, and "Delete the online
+  copy" marks the old copies it deletes as moved. An app remembers the old
+  keys it's done with (their copy moved here or on another device, or
+  deleted) and never fetches them again, however often the hub hands them
+  over; "Delete all data" forgets that list with the rest (audit 5 A-1).
 - **Sync history.** A device keeps what it knew at its last sync when sync is
   turned off (by the person, or because the copy was deleted or moved), and
   keeps noting edits and deletions while it's off. Turning sync on again, with
@@ -178,7 +192,11 @@ Then:
   data" forgets it, and so does restoring a backup while sync is off, so older
   data never counts as new. Restoring while sync is on replaces the data on
   every device, on purpose: the restored data syncs as new edits, as the
-  Restore dialog warns.
+  Restore dialog warns. When the browser has no room to keep that history
+  as sync turns off, the key alone goes, and sync is off all the same: a
+  later "Turn on sync" starts like the first time. Before, "Turn off" that
+  couldn't be saved left sync on, while the page said it was off (audit 5
+  E-2); if not even the key can go, the page says what's wrong instead.
 
 ### Syncing apps through the account
 
@@ -193,9 +211,14 @@ in with `sync: true` in `apps.json`.
   - It makes a one-time ECDH P-256 key pair, keeps the private half in this
     tab, and opens `/account/?connect=<app>&from=<its address>&key=…&state=…`.
   - The hub only continues if `from` is that app's real address (on the real
-    site, `https://<app>.shkriuss.app`; in a preview, the same preview's app).
+    site, `https://<app>.shkriuss.app`; in a preview, the same preview's app)
+    and the one-time key is a real P-256 key (a link with 65 bytes that
+    aren't one used to leave the confirm button busy for good: audit 5 A-3).
     After the person confirms, it derives the app's own key, seals it to the
     one-time public key, and goes back to the app with the result after `#`.
+    Any website can open an app with `#sync=connect`: that only starts this
+    request, which the person confirms on the hub with the account code in
+    view, and cancelling changes nothing (audit 5 C-4).
   - The app opens it, removes it from the address bar, and forgets the
     one-time key. The app and the hub never call each other's servers, and
     the CSP stays `'self'`.
@@ -208,9 +231,15 @@ in with `sync: true` in `apps.json`.
   - For those apps, the list of apps says "Turn off sync in …". The link opens
     the app with `#sync=off&proof=…`. The proof comes from the app's own key
     (HKDF, `turnOffProof`), so only the account the app syncs with can make
-    it: a link from anyone else leaves sync on, and the app says so.
+    it: a link from anyone else leaves sync on, and the app says so. It's
+    made for the day, and the app takes today's and yesterday's, so a link
+    that lands in the browser's history (which browsers sync to their own
+    servers) can't turn sync off for good; the page makes fresh links each
+    time it comes back on screen (audit 5 A-5).
   - Sync turned off inside the app isn't seen by the hub. Its link still says
-    "Turn off" until it's tapped, which then finds sync already off.
+    "Turn off" until it's tapped, which then finds sync already off, and
+    changes nothing and says nothing: any website can open the link too
+    (audit 5 C-4).
 - **Storage.**
   - The app's own key gives two more keys: a token for its server, and a key
     for the data.
@@ -259,7 +288,12 @@ in with `sync: true` in `apps.json`.
   - Each item carries the time it last changed, inside the encrypted copy.
     When two devices both changed an item, the newest change wins. A change
     always gets a time after the version it was made from, so a device
-    whose clock is behind doesn't lose its own edits.
+    whose clock is behind doesn't lose its own edits. The time is that of
+    the sync a moment after the change, or, when that sync can't reach the
+    copy (no connection) or the app is put away first, the time it noted
+    the change then: before, a change made on day 1 with no connection
+    got the time of the first sync that reached the copy, day 21 say, and
+    beat a newer change made elsewhere on day 10 (audit 5 E-1).
   - Deleting leaves a marker with the time, so deletions sync. Markers are
     dropped after 180 days. A device away longer still deletes an item it
     saw in the copy that the same copy no longer has, unless it changed the
@@ -409,7 +443,21 @@ in with `sync: true` in `apps.json`.
   determined could use up the daily free quota. Things would pause until the
   next day; nothing is exposed and nothing costs money. Someone could also
   fill one app's room for online copies, which doesn't reset daily
-  ([ADR 0017](0017-storage-limits.md)).
+  ([ADR 0017](0017-storage-limits.md)). Besides the 100,000 requests a day,
+  the free plan allows 100,000 row writes a day for every app's objects
+  together (each `setAlarm()` is one), and those run out first: a device
+  link writes 2 or 3 rows, a stranger's first sync copy about 7, so some
+  14,000 to 50,000 such requests pause the online features until 00:00
+  UTC, far fewer than the requests allowed (`tests/unit/free-plan.test.ts`
+  pins those counts: audit 5 B-4).
+- **Two tabs of an app, one of them syncing.** Only one tab syncs at a
+  time, but the other saves as usual, and the browser passes writes between
+  tabs with a delay: a save in the other tab that lands in the few
+  milliseconds between a sync's reading of a store and its saving of the
+  merge is overwritten by the merge. It needs an edit at that very moment
+  (a few milliseconds a minute in the biggest apps); closing it would take
+  a lock around every save in every app, so it stays as it is (audit 5
+  E-9, a suspicion: it can't be shown in the tests' shared storage).
 - **The hub now runs a small Worker for `/api/account/*`.** Every other request
   is still a static file.
 - **QR codes are made by our own encoder** (`packages/ui/src/lib/qr.ts`), not a

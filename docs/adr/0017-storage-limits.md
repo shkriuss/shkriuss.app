@@ -11,7 +11,11 @@ limits add up to about 3.1 GB, so about eight more apps with sync and
 notifications fit (160 MB each) before the limits need lowering, not two
 (audit 3 J-6). Changed by audit 4 (J-6): sync's message when a copy is
 refused stays plain, but no longer because of Calendar's size budget, which
-no longer applies (see "What people see").
+no longer applies (see "What people see"). Changed by audit 5: device links
+are rows in one object (B-2), a library made up through a move is cleaned up
+too (B-1), files count their rows (B-3), what the 13-month clean-up undoes
+for a replaced key (A-1), and the daily row writes (B-4); and its body no
+longer describes pull request previews (J-4).
 
 ## Context
 
@@ -22,15 +26,16 @@ no longer applies (see "What people see").
   servers from knowing who anyone is, but it also means **the server can't
   tell a real token from a made-up one**. Each limit was per token, so
   nothing limited the total.
-- Unlike the daily request allowance, **storage doesn't reset at midnight**.
+- Unlike the daily request allowance (and the daily row writes, which run
+  out first: [ADR 0010](0010-account-and-sync.md), "Free quota"),
+  **storage doesn't reset at midnight**.
   Once it's full, every write fails in every app (sync, notifications,
   linking a device), and the owner can't tell junk from real data: it's all
   named by hashes, on purpose.
 - Cloudflare keeps even a tiny object in at least 12 KB (measured on the
   live account), so many tiny objects add up too.
 - The rate limit at Cloudflare (deployment.md, 30 requests per 10 seconds
-  for `/api/`) slows things down, but doesn't cover PR previews
-  (`*.workers.dev`) and can't stop a patient script.
+  for `/api/`) slows things down, but can't stop a patient script.
 
 ## Decision
 
@@ -47,35 +52,46 @@ no longer applies (see "What people see").
 - When there's no room, the request gets **507** and nothing is kept. Copies
   already online keep syncing as long as they stay about the same size.
 - The meter keeps only a hash of each object's id and how much room it has.
-- The Worker tells each object its limit for that site: the real sites get
-  the full limit, PR previews a small one, as each preview has its own
-  storage, which counts against the same 5 GB.
+- The Worker tells each object its limit (the table below). Pull request
+  previews, which had a small limit of their own against the same 5 GB,
+  are gone (ADR 0019).
 
 ### The limits
 
-| What                                        | Real site, each     | Preview, each | Where              |
-| ------------------------------------------- | ------------------- | ------------- | ------------------ |
-| An app's online copies (each app with sync) | 120 MB              | 20 MB         | `packages/sync`    |
-| Repairs' copies with their photos           | 1 GB                | 80 MB         | `packages/sync`    |
-| An app's notification schedules (each app)  | 40 MB               | 8 MB          | `packages/push`    |
-| Passkey locks; replaced-key notes           | 40 MB each          | 4 MB each     | `packages/account` |
-| Online libraries (Photos)                   | 32 MB (about 2,000) | 4 MB          | `packages/library` |
+| What                                        | Each site           | Where              |
+| ------------------------------------------- | ------------------- | ------------------ |
+| An app's online copies (each app with sync) | 120 MB              | `packages/sync`    |
+| Repairs' copies with their photos           | 1 GB                | `packages/sync`    |
+| An app's notification schedules (each app)  | 40 MB               | `packages/push`    |
+| Passkey locks; replaced-key notes           | 40 MB each          | `packages/account` |
+| Online libraries (Photos)                   | 32 MB (about 2,000) | `packages/library` |
 
-All together that's about 3 GB on the real sites, so a full namespace never
-stops the others, and there's room left for the owner's online library list
-and a couple of open previews. The per-account limits stay as they were
+All together that's about 3 GB, so a full namespace never stops the others,
+and there's room left for the owner's online library list. The per-account
+limits stay as they were
 (a copy is at most about 1.4 MB, an account's photos at most 800 MB).
 
 **Device links** (the hub's "Show a code") are the one thing a stranger can
-make the servers keep that no meter counts: each is small and deleted 10
-minutes after it's made, so the free daily requests cap them at about 700
-at a time, a few megabytes at most (audit 4 B-1).
+make the servers keep that no meter counts. They're all rows in one object:
+a few hundred bytes each, deleted 10 minutes after they're made by that
+object's alarm, or by whatever request comes next if Cloudflare dropped the
+alarm (it gives up on an alarm after a few tries once the day's free writes
+are used up, which a script making links uses up itself). So the free daily
+requests cap them at about 700 at a time, under a megabyte (audit 4 B-1).
+Until audit 5 (B-2) each link was an object of its own, 12 KB that only its
+own alarm deleted: with the alarm dropped, it stayed for good.
+
+**Files kept with a copy** (Repairs' photos) count their bytes plus their
+id twice and 64 bytes more, for the row that holds each file and its entry
+in the index of files. Without that, the smallest files the checks allow
+(29 bytes, with 80-character ids) took six times the room the meter saw
+(audit 5 B-3). The limits in the table are unchanged; fewer tiny files fit.
 
 Each new app with sync or notifications adds its own limits, so a unit test
-(`tests/unit/free-plan.test.ts`) adds them all up from `apps.json`, with two
-open previews and the library list, and fails above 4.5 GB (audit J-2).
-There's room for about two more apps with both; past that, the limits per
-app need lowering first.
+(`tests/unit/free-plan.test.ts`) adds them all up from `apps.json`, with the
+library list, and fails above 4.5 GB (audit J-2). There's room for about
+eight more apps with both (the status note above says how that changed);
+past that, the limits per app need lowering first.
 
 ### Unused copies are deleted
 
@@ -94,13 +110,18 @@ app need lowering first.
 - A device that comes back later finds no copy, as on a first sync, and
   puts its own data online again. So only copies nobody uses go for good.
 - **A note that a key was replaced** is deleted the same way, 13 months
-  after a device last asked about it. By then no device still has the key.
+  after a device last asked about it. The device that replaced the key
+  forgets the old key after the same 13 months, counted from when it noted
+  it, so no app is handed a key whose notes may be gone (audit 5 A-1).
 - **An online library that was never unlocked** (with the storage code) is
   deleted 30 days after it was last used. It can't hold photos before it's
   unlocked, so nothing is lost: a device still using it makes it again.
   Unlocked libraries stay. What's left of one after "Delete the online
   copy" is deleted 13 months after a device last used it, and its room is
-  given back (audit 3 D-2); one that gets photos again stays.
+  given back (audit 3 D-2); one that gets photos again stays. That holds
+  whichever request made the library, a move to a new account key included
+  (until audit 5 B-1, a library made up through `POST /api/library/move`
+  had no clean-up, so strangers could fill the libraries' room for good).
 - A token that only asks (a copy that doesn't exist, a file, a replaced-key
   check) keeps nothing at all.
 
@@ -150,8 +171,21 @@ app need lowering first.
   starts a new one from its own data. Edits only that copy had are lost; any
   device that synced in the meantime kept the copy.
 - **A lost device away for over 13 months** is no longer signed out by
-  itself: the note is gone. Its old key no longer reaches anything, since the
-  apps moved their copies to the new key.
+  itself: the note is gone. What the clean-up undoes, exactly: the old key
+  can sign in to the hub on that device again, and an app's old online copy
+  that nobody (not even the lost device) has used for 13 months is deleted
+  with its "moved" note, so the old key can start a copy under that app's
+  old token again. What it can't undo: the person's own devices never read
+  such a copy. The device that replaced the key forgets it after 13 months,
+  and each app remembers the old keys it's done with (their copy moved, by
+  it or by another device, or deleted) and never fetches them again
+  (audit 5 A-1; before, the replacing device handed every app the old key
+  at each "Turn on sync" for ever, and a copy started with it after the
+  clean-up was merged into the person's data). One narrow case is left: an
+  app in which nobody turned sync on again for over 13 months after the
+  key was replaced, and whose old copy nobody used meanwhile, brings along
+  whatever copy the old key started in between, if sync is turned on in it
+  while the hub still hands the old key over.
 - Each copy keeps a little more (when it was last used, and its room), and a
   copy that grows past its room makes one more request, to the meter.
 - Copies and objects from before this change aren't counted until they next
@@ -159,8 +193,8 @@ app need lowering first.
 
 ## Alternatives
 
-- **Only the rate limit at Cloudflare.** It doesn't cover previews, and a
-  slow script still fills 5 GB in time.
+- **Only the rate limit at Cloudflare.** A slow script still fills 5 GB in
+  time.
 - **Accounts the server knows about, or an invite code for online
   features** (like Photos' storage code). That would tell real users from
   strangers, but it means a list of accounts, or that nobody but the owner's

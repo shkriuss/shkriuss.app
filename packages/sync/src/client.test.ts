@@ -51,7 +51,12 @@ class MemoryStorage implements StorageLike {
 
 // ---------- The server, in memory ----------
 
-const memoryServer = (): SyncEnv => memorySync().env;
+/** The server in memory: its env is what the Worker gets; `copies` are its objects, with runAlarms(). */
+let memory: ReturnType<typeof memorySync>;
+const memoryServer = (): SyncEnv => {
+  memory = memorySync();
+  return memory.env;
+};
 
 // ---------- Pretend devices ----------
 
@@ -550,6 +555,24 @@ describe('syncing between devices', () => {
     const fromThisAccount = opened(await turnOffProof(secret));
     await vi.waitFor(() => expect(fromThisAccount.events).toEqual(['turned-off']));
     expect(fromThisAccount.sync.status().on).toBe(false);
+
+    // Yesterday's link still works (the Account page may have been open
+    // since before midnight); an older one, from the browser's history
+    // say, doesn't (audit 5 A-5).
+    const DAY = 24 * HOUR;
+    const yesterday = opened(await turnOffProof(secret, Date.now() - DAY));
+    await vi.waitFor(() => expect(yesterday.events).toEqual(['turned-off']));
+    const older = opened(await turnOffProof(secret, Date.now() - 2 * DAY));
+    await vi.waitFor(() => expect(older.events).toContain('kept-on'));
+    expect(older.sync.status().on).toBe(true);
+
+    // Opened with sync already off (any website can open such a link):
+    // nothing happens, and nothing is said (audit 5 C-4).
+    const stateOff = fromThisAccount.storage.getItem('shkriuss-device:sync');
+    const again = fromThisAccount.reopen(1);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(again.events).toEqual([]);
+    expect(fromThisAccount.storage.getItem('shkriuss-device:sync')).toBe(stateOff);
   });
 
   it('moves everything to a new account key, and stops the old copy', async () => {
@@ -725,6 +748,135 @@ describe('syncing between devices', () => {
       const fresh = (await (await call(newKey, '/copy')).json()) as { version: number };
       expect(fresh.version).toBeGreaterThan(0);
       expect((await call(oldKey, '/copy')).status).toBe(200);
+    });
+  });
+
+  describe('a replaced key after the 13-month clean-up (audit 5 A-1)', () => {
+    const DAY = 24 * 60 * 60 * 1000;
+    const stateOf = (device: Device) =>
+      JSON.parse(device.storage.getItem('shkriuss-device:sync') ?? '{}') as {
+        previous: string[];
+        retired?: string[];
+      };
+
+    it('can start a fresh copy, which this device never brings into the person’s data', async () => {
+      // The server's "moved" note goes with the clean-up of unused copies,
+      // and the hub hands an app the replaced keys at every "Turn on sync":
+      // whatever the old key put online since was merged in.
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(Date.UTC(2026, 9, 27, 12));
+      const oldKey = randomBytes(32);
+      const newKey = randomBytes(32);
+      const tablet = new Device(oldKey);
+      const lost = new Device(oldKey);
+      tablet.counters = [counter('water', 1)];
+      expect((await tablet.syncNow()).problem).toBeNull();
+      expect((await lost.syncNow()).problem).toBeNull();
+
+      // The key is replaced on the tablet; the app connects again and moves the copy.
+      tablet.connect(newKey, [oldKey]);
+      expect((await tablet.syncNow()).problem).toBeNull();
+      expect(stateOf(tablet)).toMatchObject({ previous: [], retired: [toBase64Url(oldKey)] });
+      expect(await lost.syncNow()).toMatchObject({ on: false, problem: 'moved' });
+
+      // The tablet keeps syncing; 400 days later the old copy's note was cleaned up.
+      vi.setSystemTime(Date.now() + 200 * DAY);
+      tablet.counters = [counter('water', 2)];
+      expect((await tablet.syncNow()).problem).toBeNull();
+      vi.setSystemTime(Date.now() + 200 * DAY);
+      expect(await memory.copies.runAlarms()).toBeGreaterThan(0);
+
+      // The lost device (still holding the old key) starts a fresh copy with it.
+      lost.connect(oldKey);
+      lost.counters = [counter('water', 999), counter('planted by the old key')];
+      expect((await lost.syncNow()).problem).toBeNull();
+
+      // The person turns sync off and on again in the app on the tablet: the
+      // hub still hands it the old key, but the tablet is done with that key.
+      tablet.use();
+      tablet.sync.turnOff();
+      tablet.connect(newKey, [oldKey]);
+      expect(stateOf(tablet).previous).toEqual([]);
+      expect((await tablet.syncNow()).problem).toBeNull();
+      expect(tablet.counters).toEqual([counter('water', 2)]);
+      // Nor did it touch the old key's copy.
+      expect((await lost.syncNow()).problem).toBeNull();
+      expect(lost.counters).toEqual([counter('water', 999), counter('planted by the old key')]);
+    });
+
+    it('a deleted old copy gets the note that it moved too, so the old key can’t start it again', async () => {
+      const oldKey = randomBytes(32);
+      const newKey = randomBytes(32);
+      const tablet = new Device(oldKey);
+      const lost = new Device(oldKey);
+      tablet.counters = [counter('water')];
+      await tablet.syncNow();
+      await lost.syncNow();
+      // "Delete the online copy" on the tablet, then the key is replaced there.
+      tablet.use();
+      await tablet.sync.deleteOnline();
+      expect(await lost.syncNow()).toMatchObject({ on: false, problem: 'deleted' });
+      tablet.connect(newKey, [oldKey]);
+      expect((await tablet.syncNow()).problem).toBeNull();
+      expect(stateOf(tablet)).toMatchObject({ previous: [], retired: [toBase64Url(oldKey)] });
+
+      const restart = { method: 'PUT', body: JSON.stringify({ base: null, data: 'A'.repeat(40) }) };
+      const answer = await call(oldKey, '/copy', restart, worker);
+      expect(answer.status).toBe(410);
+      expect(await answer.json()).toMatchObject({ moved: true });
+    });
+
+    it('“Delete the online copy” marks the old copies it deletes as moved, and is done with their keys', async () => {
+      const oldKey = randomBytes(32);
+      const newKey = randomBytes(32);
+      const tablet = new Device(oldKey);
+      tablet.counters = [counter('water')];
+      await tablet.syncNow();
+      // The key is replaced, but the first sync with the new one fails.
+      tablet.connect(newKey, [oldKey]);
+      offline = true;
+      expect((await tablet.syncNow()).problem).toBe('offline');
+      offline = false;
+      tablet.use();
+      await tablet.sync.deleteOnline();
+      expect(stateOf(tablet)).toMatchObject({ previous: [], retired: [toBase64Url(oldKey)] });
+      const restart = { method: 'PUT', body: JSON.stringify({ base: null, data: 'A'.repeat(40) }) };
+      expect(await (await call(oldKey, '/copy', restart, worker)).json()).toMatchObject({
+        moved: true,
+      });
+      // And with nothing online for the old key, and no room for a note, it still deletes.
+      const other = new Device(null);
+      other.counters = [counter('juice')];
+      other.connect(randomBytes(32), [randomBytes(32)]);
+      await other.syncNow();
+      const meter = server.SYNC_COPIES.get(server.SYNC_COPIES.idFromName('meter'));
+      const limit = STORAGE_LIMITS.files;
+      await meter.fetch('https://meter/', {
+        method: 'POST',
+        body: JSON.stringify({ id: 'strangers', bytes: limit, limit }),
+      });
+      other.use();
+      other.sync.turnOff();
+      other.connect(randomBytes(32), [randomBytes(32)]);
+      await other.sync.deleteOnline();
+      expect(other.sync.status().on).toBe(false);
+    });
+
+    it('keeps an old key only until its copy was moved, whoever moved it', async () => {
+      const oldKey = randomBytes(32);
+      const newKey = randomBytes(32);
+      const tablet = new Device(oldKey);
+      const laptop = new Device(oldKey);
+      tablet.counters = [counter('water')];
+      await tablet.syncNow();
+      await laptop.syncNow();
+      // The laptop moves the copy first; the tablet only hears that it moved.
+      laptop.connect(newKey, [oldKey]);
+      expect((await laptop.syncNow()).problem).toBeNull();
+      tablet.connect(newKey, [oldKey]);
+      expect((await tablet.syncNow()).problem).toBeNull();
+      expect(stateOf(tablet)).toMatchObject({ previous: [], retired: [toBase64Url(oldKey)] });
+      expect(stateOf(laptop)).toMatchObject({ previous: [], retired: [toBase64Url(oldKey)] });
     });
   });
 
@@ -1139,6 +1291,206 @@ describe('items this version of the app can’t keep (audit F2-8)', () => {
     expect((await tablet.syncNow()).problem).toBe('update-needed');
     expect(await phone.syncNow()).toMatchObject({ problem: null });
     expect(phone.currency).toBe('INR');
+  });
+});
+
+describe('an edit made with no connection (audit 5 E-1)', () => {
+  // With sync on, nothing noted when an edit was made: its time was set by
+  // the first sync that got as far as merging. A tablet's edit from day 1,
+  // offline, synced on day 21 with day 21's time, and beat a phone's edit
+  // from day 10 in every app where the newest change wins.
+  const DAY = 24 * HOUR;
+  const T0 = Date.UTC(2026, 9, 1, 12);
+
+  /** Phone and tablet in step with milk (and eggs); the tablet's edit on day 1 finds no connection. */
+  async function tabletEditsOffline(counters: Counter[], edited: Counter[]) {
+    const secret = randomBytes(32);
+    const phone = new Device(secret);
+    const tablet = new Device(secret);
+    vi.setSystemTime(T0);
+    phone.counters = counters;
+    await phone.syncNow();
+    await tablet.syncNow();
+    vi.setSystemTime(T0 + DAY);
+    offline = true;
+    tablet.counters = edited;
+    expect((await tablet.syncNow()).problem).toBe('offline');
+    offline = false;
+    return { phone, tablet };
+  }
+
+  it('keeps the time it was made, so a newer edit elsewhere wins', async () => {
+    const { phone, tablet } = await tabletEditsOffline([counter('milk', 1)], [counter('milk', 2)]);
+    // Day 10: the phone changes milk to 7, and syncs. Day 21: the tablet is back.
+    vi.setSystemTime(T0 + 10 * DAY);
+    phone.counters = [counter('milk', 7)];
+    expect((await phone.syncNow()).problem).toBeNull();
+    vi.setSystemTime(T0 + 21 * DAY);
+    expect((await tablet.syncNow()).problem).toBeNull();
+    expect((await phone.syncNow()).problem).toBeNull();
+    expect(tablet.counters).toEqual([counter('milk', 7)]);
+    expect(phone.counters).toEqual([counter('milk', 7)]);
+    vi.useRealTimers();
+  });
+
+  it('and so does a deletion, which a newer edit elsewhere survives', async () => {
+    const { phone, tablet } = await tabletEditsOffline(
+      [counter('milk', 1), counter('eggs')],
+      [counter('eggs')],
+    );
+    vi.setSystemTime(T0 + 10 * DAY);
+    phone.counters = [counter('milk', 7), counter('eggs')];
+    await phone.syncNow();
+    vi.setSystemTime(T0 + 21 * DAY);
+    await tablet.syncNow();
+    await phone.syncNow();
+    expect(phone.counters).toEqual([counter('milk', 7), counter('eggs')]);
+    expect(tablet.counters).toEqual(phone.counters);
+    vi.useRealTimers();
+  });
+
+  it('still wins when it’s the newer one', async () => {
+    const { phone, tablet } = await tabletEditsOffline([counter('milk', 1)], [counter('milk', 2)]);
+    // The phone's edit is from before the tablet's.
+    vi.setSystemTime(T0 + HOUR);
+    phone.counters = [counter('milk', 7)];
+    await phone.syncNow();
+    vi.setSystemTime(T0 + 21 * DAY);
+    await tablet.syncNow();
+    await phone.syncNow();
+    expect(phone.counters).toEqual([counter('milk', 2)]);
+    expect(tablet.counters).toEqual([counter('milk', 2)]);
+    vi.useRealTimers();
+  });
+
+  it('keeps its time when the app is put away before it could sync at all', async () => {
+    // An edit, then the phone locked within the 1.5 seconds before the sync:
+    // the page is hidden, and may never run again before it's closed.
+    const listeners: (() => void)[] = [];
+    const page = { visibilityState: 'visible' };
+    vi.stubGlobal('document', {
+      ...page,
+      addEventListener: (type: string, listener: () => void) => {
+        if (type === 'visibilitychange') listeners.push(listener);
+      },
+    });
+    const secret = randomBytes(32);
+    const phone = new Device(secret);
+    const tablet = new Device(secret);
+    vi.setSystemTime(T0);
+    phone.counters = [counter('milk', 1)];
+    await phone.syncNow();
+    await tablet.syncNow();
+    vi.setSystemTime(T0 + DAY);
+    tablet.counters = [counter('milk', 2)];
+    // Hidden: what was edited is noted, with its time.
+    (document as unknown as { visibilityState: string }).visibilityState = 'hidden';
+    tablet.use();
+    for (const listener of listeners) listener();
+
+    vi.setSystemTime(T0 + 10 * DAY);
+    phone.counters = [counter('milk', 7)];
+    await phone.syncNow();
+    vi.setSystemTime(T0 + 21 * DAY);
+    (document as unknown as { visibilityState: string }).visibilityState = 'visible';
+    await tablet.syncNow();
+    await phone.syncNow();
+    expect(tablet.counters).toEqual([counter('milk', 7)]);
+    expect(phone.counters).toEqual([counter('milk', 7)]);
+    vi.useRealTimers();
+  });
+
+  it('keeps both versions, in apps that ask for it, as before', async () => {
+    const secret = randomBytes(32);
+    const phone = new Device(secret, 1, true);
+    const tablet = new Device(secret, 1, true);
+    vi.setSystemTime(T0);
+    phone.counters = [counter('milk', 1)];
+    await phone.syncNow();
+    await tablet.syncNow();
+    vi.setSystemTime(T0 + DAY);
+    offline = true;
+    tablet.counters = [counter('milk', 2)];
+    await tablet.syncNow();
+    offline = false;
+    vi.setSystemTime(T0 + 10 * DAY);
+    phone.counters = [counter('milk', 7)];
+    await phone.syncNow();
+    vi.setSystemTime(T0 + 21 * DAY);
+    await tablet.syncNow();
+    await phone.syncNow();
+    expect(phone.counters).toEqual([
+      counter('milk', 7),
+      { ...counter('milk-2', 2), name: 'milk (2)' },
+    ]);
+    vi.useRealTimers();
+  });
+});
+
+describe('turning sync off when the browser has no room (audit 5 E-2)', () => {
+  // Turning off wrote the whole state again (without the key): with no
+  // room, the write failed, the key stayed, and the page said "Sync is off".
+  it('“Turn off on this device” really turns it off: the key goes alone', async () => {
+    const secret = randomBytes(32);
+    const phone = new Device(secret);
+    phone.counters = [counter('water', 1)];
+    expect((await phone.syncNow()).problem).toBeNull();
+    phone.storage.full = true;
+    phone.use();
+    expect(phone.sync.turnOff()).toBe(true);
+    expect(phone.events).toContain('turned-off');
+    expect(phone.sync.status().on).toBe(false);
+    expect(phone.storage.getItem('shkriuss-device:sync')).toBeNull();
+    // Room again later: nothing goes up.
+    phone.storage.full = false;
+    phone.counters = [counter('water', 2)];
+    await phone.syncNow();
+    const tablet = new Device(secret);
+    await tablet.syncNow();
+    expect(tablet.counters).toEqual([counter('water', 1)]);
+  });
+
+  it('“Delete the online copy” leaves sync off here', async () => {
+    const secret = randomBytes(32);
+    const phone = new Device(secret);
+    phone.counters = [counter('water', 1)];
+    await phone.syncNow();
+    phone.storage.full = true;
+    phone.use();
+    await phone.sync.deleteOnline();
+    expect(phone.events).toContain('deleted-online');
+    expect(phone.sync.status().on).toBe(false);
+    phone.storage.full = false;
+    expect(await phone.syncNow()).toMatchObject({ on: false, problem: null });
+  });
+
+  it('a copy deleted on another device turns sync off here too', async () => {
+    const secret = randomBytes(32);
+    const phone = new Device(secret);
+    const tablet = new Device(secret);
+    phone.counters = [counter('water', 1)];
+    await phone.syncNow();
+    await tablet.syncNow();
+    phone.use();
+    await phone.sync.deleteOnline();
+    tablet.storage.full = true;
+    expect(await tablet.syncNow()).toMatchObject({ on: false, problem: 'deleted' });
+    expect(tablet.counters).toEqual([counter('water', 1)]);
+  });
+
+  it('says what’s wrong, not "off", when nothing at all can be saved', async () => {
+    const secret = randomBytes(32);
+    const phone = new Device(secret);
+    phone.counters = [counter('water', 1)];
+    await phone.syncNow();
+    phone.use();
+    phone.storage.full = true;
+    phone.storage.removeItem = () => {
+      throw new DOMException('Storage is blocked.', 'SecurityError');
+    };
+    expect(phone.sync.turnOff()).toBe(false);
+    expect(phone.events).not.toContain('turned-off');
+    expect(phone.sync.status()).toMatchObject({ on: true, problem: 'storage' });
   });
 });
 

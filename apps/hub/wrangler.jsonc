@@ -14,9 +14,9 @@
     "not_found_handling": "404-page",
     "html_handling": "auto-trailing-slash",
   },
-  // One store per device link (deleted after 10 minutes), one per passkey
-  // lock, and one per replaced account key. SQLite-backed, as the free plan
-  // requires.
+  // One store for every device link together (each deleted after 10
+  // minutes), one per passkey lock, and one per replaced account key.
+  // SQLite-backed, as the free plan requires.
   "durable_objects": {
     "bindings": [
       { "name": "ACCOUNT_LINKS", "class_name": "AccountLink" },

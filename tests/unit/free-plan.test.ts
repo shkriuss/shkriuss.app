@@ -6,12 +6,20 @@
  */
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
-import { STORAGE_LIMITS as ACCOUNT } from '../../packages/account/src/worker.ts';
+import { describe, expect, it, vi } from 'vitest';
+import { randomBytes, toBase64Url } from '../../packages/crypto/src/index.ts';
+import accountWorker, {
+  AccountLink,
+  STORAGE_LIMITS as ACCOUNT,
+  type AccountEnv,
+} from '../../packages/account/src/worker.ts';
 import { LIMITS as LIBRARY_LIMITS } from '../../packages/library/src/validate.ts';
 import { STORAGE_LIMITS as LIBRARY } from '../../packages/library/src/worker.ts';
 import { DAILY_SENDS, STORAGE_LIMITS as PUSH } from '../../packages/push/src/worker.ts';
 import { apps } from '../../packages/registry/src/index.ts';
+import type { DurableObjectNamespace } from '../../packages/server/src/index.ts';
+import { memoryNamespace, MemoryStorage } from '../../packages/server/src/testing.ts';
+import { memorySync } from '../../packages/sync/src/testing.ts';
 import { STORAGE_LIMITS as SYNC } from '../../packages/sync/src/worker.ts';
 import { parseJsonc } from '../../scripts/lib/jsonc.ts';
 
@@ -86,5 +94,64 @@ describe('the free plan, shared by every app', () => {
       waiting,
       'Push services could keep the servers waiting too long: lower DAILY_SENDS (docs/adr/0009).',
     ).toBeLessThanOrEqual(FREE_SECONDS / 4);
+  });
+});
+
+/** Durable Object rows written while `run` runs: each put() and each setAlarm() is one. */
+async function rowsWritten(run: () => Promise<unknown>): Promise<number> {
+  const put = vi.spyOn(MemoryStorage.prototype, 'put');
+  const alarm = vi.spyOn(MemoryStorage.prototype, 'setAlarm');
+  try {
+    await run();
+    return put.mock.calls.length + alarm.mock.calls.length;
+  } finally {
+    put.mockRestore();
+    alarm.mockRestore();
+  }
+}
+
+describe('the free plan’s row writes (audit 5 B-4)', () => {
+  // Besides 100,000 requests a day, SQLite-backed objects may write 100,000
+  // rows a day for every app together, and a setAlarm() counts as one. Those
+  // run out first: the cheapest requests a stranger can make that write
+  // anything cost these rows (docs/adr/0010, "Free quota"), so a new route
+  // can't quietly make it cheaper without failing here.
+  const FREE_ROW_WRITES = 100_000;
+  const FREE_REQUESTS = 100_000;
+
+  it('a device link: its row, its place in the order of expiry, and the first alarm', async () => {
+    const links = memoryNamespace((state) => new AccountLink(state));
+    const env: AccountEnv = {
+      ASSETS: { fetch: async () => new Response('page') },
+      ACCOUNT_LINKS: links.namespace,
+      ACCOUNT_PASSKEYS: null as unknown as DurableObjectNamespace,
+      ACCOUNT_STATUS: null as unknown as DurableObjectNamespace,
+    };
+    const link = (id: string) =>
+      accountWorker.fetch(
+        new Request(`https://shkriuss.app/api/account/link/${id}`, {
+          method: 'PUT',
+          body: JSON.stringify({ data: 'A'.repeat(80) }),
+        }),
+        env,
+      );
+    expect(await rowsWritten(() => link('A'.repeat(22)))).toBe(3);
+    expect(await rowsWritten(() => link('B'.repeat(22)))).toBe(2);
+    // So about 50,000 such requests use up the day's writes, long before its requests.
+    expect(FREE_ROW_WRITES / 2).toBeLessThan(FREE_REQUESTS);
+  });
+
+  it('a first sync copy: the meter’s two rows, its room, the write count, the copy, its last use and the alarm', async () => {
+    const server = memorySync();
+    const copy = () =>
+      server.fetch(
+        new Request('https://notes.shkriuss.app/api/sync/copy', {
+          method: 'PUT',
+          headers: { Authorization: `Bearer ${toBase64Url(randomBytes(32))}` },
+          body: JSON.stringify({ base: null, data: 'A'.repeat(100) }),
+        }),
+      );
+    expect(await rowsWritten(copy)).toBe(7);
+    expect(FREE_ROW_WRITES / 7).toBeLessThan(FREE_REQUESTS);
   });
 });

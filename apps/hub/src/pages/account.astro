@@ -362,10 +362,15 @@ const pushApps = listedApps.filter((app) => app.pushNotifications === true);
       </section>
     </section>
 
-    <dialog class="dialog" aria-labelledby="key-dialog-title" data-key-dialog>
+    <dialog
+      class="dialog"
+      aria-labelledby="key-dialog-title"
+      aria-describedby="key-dialog-note"
+      data-key-dialog
+    >
       <div class="stack">
         <h2 id="key-dialog-title">Your recovery key</h2>
-        <p class="notice notice--danger">
+        <p class="notice notice--danger" id="key-dialog-note">
           Anyone who sees it can sign in to your account. Don't share it or post it.
         </p>
         <p class="code-text" data-dialog-key></p>
@@ -382,14 +387,20 @@ const pushApps = listedApps.filter((app) => app.pushNotifications === true);
       </div>
     </dialog>
 
-    <dialog class="dialog" aria-labelledby="sign-out-title" data-sign-out-dialog>
+    {/* What it means is read out with the question (aria-describedby; the script adds the apps' paragraph when it's shown: audit 5 G-3). */}
+    <dialog
+      class="dialog"
+      aria-labelledby="sign-out-title"
+      aria-describedby="sign-out-description"
+      data-sign-out-dialog
+    >
       <form method="dialog" class="stack">
         <h2 id="sign-out-title">Sign out of this device?</h2>
-        <p>
+        <p id="sign-out-description">
           To sign in again you'll need your recovery key, a passkey, or a code from another
           signed-in device.
         </p>
-        <p data-sign-out-apps hidden>
+        <p id="sign-out-apps" data-sign-out-apps hidden>
           Apps on this device keep syncing after you sign out. To stop that, cancel, and use the
           "Turn off sync in …" links on this page first: <span data-sign-out-app-names></span>.
         </p>
