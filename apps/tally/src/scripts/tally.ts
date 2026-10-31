@@ -7,6 +7,7 @@ import { createSync, syncedStore } from '@shkriuss/sync';
 import { keepFocus } from '@shkriuss/ui/keep-focus';
 import { focusProblem, reportSave } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
+import { watchTextLimit } from '@shkriuss/ui/text-limit';
 import { site } from 'virtual:shkriuss/site';
 import {
   addCounter,
@@ -35,6 +36,8 @@ export function mountTally(root: Document): void {
   const form = required<HTMLFormElement>(root, '[data-add-form]');
   const input = required<HTMLInputElement>(form, 'input[name="name"]');
   const error = required<HTMLElement>(form, '[data-name-error]');
+  // Says so when a pasted name doesn't all fit the box (audit 5 G-4).
+  const limit = watchTextLimit(input);
   const list = required<HTMLUListElement>(root, '[data-counters]');
   const empty = required<HTMLElement>(root, '[data-empty]');
   const template = required<HTMLTemplateElement>(root, '[data-counter-template]');
@@ -122,6 +125,7 @@ export function mountTally(root: Document): void {
     error.textContent = '';
     input.removeAttribute('aria-invalid');
     input.value = '';
+    limit.clear();
     if (save(addCounter(state, name, crypto.randomUUID()))) announce(`Added counter ${name}.`);
   });
 

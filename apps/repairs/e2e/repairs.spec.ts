@@ -72,6 +72,8 @@ test('logs a repair with its parts, and suggests what was used before', async ({
   await expect(page.getByRole('heading', { name: 'Wednesday, October 21, 2026' })).toBeVisible();
   const item = repairItems(page).first();
   await expect(item.locator('[data-title]')).toHaveText('Bus 105');
+  // Named with its day for screen readers, as the day heading is outside it (audit 5 G-8).
+  await expect(item.locator('[data-title]')).toHaveAccessibleName('Bus 105, Oct 21, 2026');
   await expect(item.locator('[data-meta]')).toHaveText('123,456 km · Brakes');
   await expect(item).toContainText(/Damage found\s*Grinding noise from the front axle/);
   await expect(item.locator('[data-parts] li')).toHaveText([
@@ -235,6 +237,10 @@ test('changes and deletes repairs and vehicles', async ({ page }) => {
   await expect(confirm).toContainText(
     'The repair on Bus 105 on Oct 20, 2026 will be removed. This can’t be undone.',
   );
+  // Read out with the title, before "Cancel" (audit 5 G-3).
+  await expect(confirm).toHaveAccessibleDescription(
+    'The repair on Bus 105 on Oct 20, 2026 will be removed. This can’t be undone.',
+  );
   await confirm.getByRole('button', { name: 'Delete' }).click();
   await expect(status(page, 'Deleted the repair.')).toBeAttached();
   await expect(repairItems(page)).toHaveCount(1);
@@ -260,6 +266,9 @@ test('changes and deletes repairs and vehicles', async ({ page }) => {
   await form.getByRole('button', { name: 'Delete' }).click();
   const confirmVehicle = page.getByRole('dialog', { name: 'Delete Bus 012?' });
   await expect(confirmVehicle).toContainText(
+    'Bus 012 and its 1 repair will be removed. This can’t be undone.',
+  );
+  await expect(confirmVehicle).toHaveAccessibleDescription(
     'Bus 012 and its 1 repair will be removed. This can’t be undone.',
   );
   await confirmVehicle.getByRole('button', { name: 'Delete' }).click();
@@ -344,6 +353,19 @@ test('miles, and a spreadsheet of every repair', async ({ page }) => {
     '2026-10-21,Bus 105,Isuzu Novociti Life,,120000,Brakes,"Door sensor fault, ""intermittent""",Replaced the front pads,Door sensor (DS-4),,,,',
     '',
   ]);
+
+  // Downloaded again: read out again, as the same words with a no-break
+  // space, which can't be heard, on the end (audit 5 G-8).
+  const said = page
+    .getByRole('status')
+    .filter({ hasText: 'Downloaded your repairs as a spreadsheet.' });
+  expect(await said.textContent()).toBe('Downloaded your repairs as a spreadsheet.');
+  const again = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download as a spreadsheet (CSV)' }).click();
+  await again;
+  await expect
+    .poll(() => said.textContent())
+    .toBe('Downloaded your repairs as a spreadsheet.\u00A0');
 });
 
 test('deletes a year, after saying what it deletes', async ({ page }) => {
@@ -374,6 +396,8 @@ test('deletes a year, after saying what it deletes', async ({ page }) => {
   await expect(dialog.locator('[data-year-text]')).toHaveText(
     'The 2 repairs from 2024 will be deleted, with their photos. With sync on, they’re deleted on your other devices too. This can’t be undone.',
   );
+  // Read out with the title (audit 5 G-3).
+  await expect(dialog).toHaveAccessibleDescription(/^The 2 repairs from 2024 will be deleted/);
   await checkA11y(page, 'delete a year');
 
   // The spreadsheet first, from the dialog.
