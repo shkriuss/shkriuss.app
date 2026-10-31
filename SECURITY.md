@@ -127,7 +127,12 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
   by other means, a package from a web address or a git repository instead
   of the npm registry (a registry version that names its own download
   address counts too), or a new or changed hash that isn't the one the npm
-  registry has for that version (`scripts/lockfile-age.ts`).
+  registry has for that version (`scripts/lockfile-age.ts`). It reads the
+  lockfile as YAML, the way pnpm does, so an entry written in another style
+  than pnpm's own is checked all the same, and it refuses a pull request
+  that adds an `.npmrc` or changes where pnpm downloads from in
+  `pnpm-workspace.yaml` (audit 5 H-1). CI runs `main`'s copy of that check,
+  so a pull request can't change the check it's checked by (audit 5 H-3).
 - Production deploys only happen from `main`, after every check passes,
   including the dependency audit, and only for `main`'s newest commit (so
   re-running an older run can't put older code back). Only the deploy steps

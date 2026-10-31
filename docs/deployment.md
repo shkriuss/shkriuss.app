@@ -22,10 +22,12 @@ pull request ──► CI checks
   (`1a2b3c4d-tally.shkriuss.workers.dev`, audit finding I-6): they served
   only old static files, never anyone's data.
 - **Production:** `.github/workflows/ci.yml`. On every push to `main` it runs
-  every check, then deploys the exact files it tested, one site at a time
-  (Grammar's big model download is made again from the same checked files),
-  then checks that every live site shows the page that was deployed, with
-  its security rules, and that its server answers.
+  every check, then deploys the build it tested, one site at a time (two
+  parts are made again at deploy time from the same pinned inputs, which
+  gives the same result: each site's server code, which wrangler bundles,
+  and Grammar's big model download), then checks that every live site shows
+  the page that was deployed, with its security rules, and that its server
+  answers.
 - **No previews:** a pull request gets CI's checks, not preview links
   ([ADR 0019](adr/0019-no-pull-request-previews.md)). A preview ran a pull
   request's code, before it was merged, with a token that can change the
@@ -134,6 +136,11 @@ version of the site):
    **Block force pushes**, **Require a pull request before merging** (0
    approvals: you can't approve your own) and **Require status checks to
    pass** with **Checks**, **Secret scan** and **Dependency audit**.
+   Optional there: **Require branches to be up to date before merging**, so
+   two pull requests that pass on their own can't be merged into a `main`
+   that fails together (nothing deploys then until a fix is merged). Its
+   cost: a pull request opened before another was merged needs **Update
+   branch** and a new CI run first, Dependabot's too (audit 5 I-3).
 4. **Settings → General → Features:** Wikis, Projects and Issues are off.
    Security reports come through private vulnerability reporting.
 5. **Settings → General → Pull Requests:** keep only **Allow squash
@@ -155,6 +162,8 @@ I-1 to I-10).
    shkriuss.app → Configuration → Auto renew: On.** Check under **Billing →
    Payment info** that the card on file won't expire before the renewal
    date. Without this, the domain lapses after a year and every app stops.
+   Other domains in the same Cloudflare account have an auto-renew switch of
+   their own: check each (audit 5 I-4).
 2. **Say the domain sends no email**, so nobody can send convincing fake
    mail "from" shkriuss.app. **DNS → Records → Add record**, three times:
    - type `MX`, name `@`, mail server `.`, priority `0`;
@@ -168,7 +177,11 @@ I-1 to I-10).
    where it's off, so they can't be deleted there. Don't press **Onboard
    Domain** for shkriuss.app: that turns Email Routing on, and the two rules
    would forward mail again. If it's ever turned on, delete them first,
-   under its **Routing rules** (audit 3 I-1). Security reports come through
+   under its **Routing rules** (audit 3 I-1). They can also be deleted
+   while it's off, through Cloudflare's API, with a token that has _Email
+   Routing Rules: Edit_ (`DELETE /zones/<zone>/email/routing/rules/<id>`
+   for each, then the list call to confirm): ask Claude for that, in a
+   session with such a token (audit 5 I-2). Security reports come through
    GitHub, as every site's `/.well-known/security.txt` says.
 
    Optional: the same `MX` and SPF records for each app's own address, like
@@ -196,7 +209,11 @@ I-1 to I-10).
    live check after each deploy fails if a page has changed. Server-side
    Excludes, once under Scrape Shield, needs nothing: Cloudflare retired it
    in June 2024, so it has no switch, and the zone's old setting (the API
-   still says `on`) does nothing.
+   still says `on`) does nothing. Cloudflare also answers `/robots.txt`
+   with a text of its own on a site that has none; the build ships one for
+   every site, so each serves its own (audit 5 I-1). If Cloudflare's text
+   ever comes back, the switch is under **Security → Settings → Bot
+   traffic** (its managed `robots.txt` for AI crawlers).
 5. **Limit requests to the servers:** **Security → WAF → Rate limiting
    rules → Create rule**: "URI Path starts with `/api/`", 30 requests per 10
    seconds, action **Block**. It slows down a script trying to use up the
@@ -209,7 +226,10 @@ I-1 to I-10).
 6. **Account safety:** **Manage Account → Members → Enforce two-factor
    authentication: On.** And **Notifications → Add → Usage Based Billing →
    R2**: an alert when storage passes 20 GB, so unusual uploads show up before
-   they cost anything.
+   they cost anything. Optional: **Manage Account → Configurations → Zone
+   Holds → shkriuss.app: On**, which stops anyone adding `shkriuss.app` as a
+   zone in another Cloudflare account, on top of the registrar's transfer
+   lock (audit 5 I-4).
 
 ## Rolling back
 
@@ -231,12 +251,17 @@ I-1 to I-10).
 A deploy runs every check first, and they need a few outside services:
 npm (the packages, installed again from scratch for the deploy itself),
 Ubuntu's mirrors (the browser's system libraries) and GitHub. Playwright's
-browser and Grammar's model come from CI's cache once they've been
-downloaded, so their download servers are only needed after an update. If
-one of these is down, a merge (even a fix) can't deploy until it's back:
-re-run the failed job then. The live sites stay as they were meanwhile; to
-undo a bad deploy in the meantime, use the dashboard's **Rollback** above
-(audit H-2).
+browser and Grammar's model come from CI's cache, so their download servers
+(Playwright's, and Hugging Face) are needed only after an update, or when
+the cache has gone: GitHub deletes a cache nobody has used for 7 days. The
+**Keep caches** workflow (`.github/workflows/keep-cache.yml`) uses both
+twice a week and downloads again whatever is missing, so a quiet week
+doesn't empty them (audit 5 H-2); **Actions → Caches** on GitHub shows
+what's there, and **Run workflow** on that workflow fills it by hand. If
+one of these services is down while CI needs it, a merge (even a fix) can't
+deploy until it's back: re-run the failed job then. The live sites stay as
+they were meanwhile; to undo a bad deploy in the meantime, use the
+dashboard's **Rollback** above (audit H-2).
 
 ## Costs
 

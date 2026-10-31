@@ -4,7 +4,10 @@ Status: Accepted (2026-10-16). Changed in October 2026 (audit findings J-4
 and Z-6): the JS budget counts every file a page's scripts import, and is
 35 KB (see `pnpm check:dist` below). Changed by audit 4 (J-6): parts a page
 loads later with `import()` aren't counted, and that's how to cut weight
-before raising a budget (below).
+before raising a budget (below). Changed by audit 4 (J-3): `pnpm check:dist`
+also refuses a built script whose syntax is newer than ES2022, what Safari
+16.4 reads, packages' code included (only the syntax: a newer function it
+calls isn't seen; [quality.md](../quality.md)).
 
 ## Context
 
