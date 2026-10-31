@@ -3,6 +3,7 @@
 import json
 import os
 
+from claude_api_http import prepare_claude_request
 from claude_request_budget import OneRequestBudget
 
 if os.environ.get("CLAUDE_API_TEST_ENABLED") != "true":
@@ -51,5 +52,12 @@ if len(request_bytes) > 1000:
 
 request_budget = OneRequestBudget()
 request_budget.claim()
+
+# Offline preparation only. No real key or network request.
+prepared_request = prepare_claude_request(
+    request_bytes, "offline-test-key"
+)
+if prepared_request.data != request_bytes:
+    raise SystemExit("Offline Claude request mismatch. No request made.")
 
 raise SystemExit("Claude API test not implemented. No request made.")

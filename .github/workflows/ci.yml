@@ -53,6 +53,15 @@ jobs:
       - name: Verify Claude API has no unexpected imports (offline)
         run: python3 -B scripts/test-claude-no-network.py
 
+      - name: Verify Claude HTTP request preparation (offline)
+        run: python3 -B scripts/test-claude-http-offline.py
+
+      - name: Verify Claude single-attempt transport (offline)
+        run: python3 -B scripts/test-claude-transport-offline.py
+
+      - name: Verify Claude one-time claim guard (offline)
+        run: python3 -B scripts/test-claude-claim-offline.py
+
       - name: Set up
         uses: ./.github/actions/setup
 
