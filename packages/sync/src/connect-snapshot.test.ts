@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   connectResultUrl,
   connectUrl,
+  isConnectKey,
+  isTurnOffProof,
   MAX_REPLACED,
   newConnectRequest,
   openConnection,
@@ -61,16 +63,38 @@ describe('connecting an app', () => {
       expect(parseConnectResult(hash), hash).toBeNull();
     }
   });
+
+  it('tells a one-time key that isn’t one from a real one (audit 5 A-3)', async () => {
+    const { request } = await newConnectRequest('notes', 'https://notes.shkriuss.app');
+    expect(await isConnectKey(request.key)).toBe(true);
+    // 65 bytes that aren't a point on the curve fit the pattern, but sealing for them throws.
+    const junk = toBase64Url(new Uint8Array(65));
+    const search = `?connect=notes&from=https://notes.shkriuss.app&key=${junk}&state=${request.state}`;
+    expect(parseConnectRequest(search)).toEqual({ ...request, key: junk });
+    expect(await isConnectKey(junk)).toBe(false);
+    await expect(sealForApp({ ...request, key: junk }, connection)).rejects.toThrow();
+  });
 });
 
 describe('turning sync off from the hub', () => {
-  it('proves the link is from the account the app syncs with', async () => {
+  const T0 = Date.UTC(2026, 9, 27, 12);
+  const DAY = 24 * 60 * 60 * 1000;
+
+  it('proves the link is from the account the app syncs with, for the day (audit 5 A-5)', async () => {
     const secret = randomBytes(32);
-    const proof = await turnOffProof(secret);
-    expect(await turnOffProof(secret)).toBe(proof);
-    expect(await turnOffProof(randomBytes(32))).not.toBe(proof);
+    const proof = await turnOffProof(secret, T0);
+    expect(await turnOffProof(secret, T0 + 60_000)).toBe(proof);
+    expect(await turnOffProof(randomBytes(32), T0)).not.toBe(proof);
+    expect(await turnOffProof(secret, T0 + DAY)).not.toBe(proof);
     // Not the server's token: the proof never leaves the device.
     expect(proof).not.toBe((await syncKeys(secret)).token);
+    // Taken today and tomorrow (the Account page may have been open since
+    // before midnight), by the account's apps only, and never later.
+    expect(await isTurnOffProof(secret, proof, T0)).toBe(true);
+    expect(await isTurnOffProof(secret, proof, T0 + DAY)).toBe(true);
+    expect(await isTurnOffProof(secret, proof, T0 + 2 * DAY)).toBe(false);
+    expect(await isTurnOffProof(secret, proof, T0 - DAY)).toBe(false);
+    expect(await isTurnOffProof(randomBytes(32), proof, T0)).toBe(false);
 
     const url = new URL(turnOffUrl('https://tally.shkriuss.app', proof));
     expect(url.origin).toBe('https://tally.shkriuss.app');

@@ -765,6 +765,60 @@ describe('libraries nobody unlocked (docs/adr/0017)', () => {
     vi.setSystemTime(START + 20 * DAY);
     expect((await client(library, token()).call('/changes?since=0')).status).toBe(403);
     expect(object.storage.alarm).toBe(START + LOCKED_UNUSED_MS);
+    // Nor does a move that isn't allowed (the old token isn't the library's).
+    expect((await client(library, token()).post('/move', { from: token() })).status).toBe(403);
+    expect(object.storage.alarm).toBe(START + LOCKED_UNUSED_MS);
+  });
+
+  it('one made up through a move is deleted when unused too (audit 5 B-1)', async () => {
+    // A move was the one first request that didn't plan the clean-up, so a
+    // stranger could fill the libraries' room for good with them.
+    vi.useFakeTimers({ now: START });
+    const library = libraryId();
+    const device = client(library, token());
+    expect((await device.post('/move', { from: token() })).status).toBe(204);
+    const object = server.objects.get(library);
+    const meter = server.objects.get('meter')?.storage;
+    if (!object || !meter) throw new Error('No library');
+    expect(await meter.get('total')).toBe(16 * 1024);
+    expect(object.storage.map.has('active')).toBe(true);
+    expect(object.storage.alarm).toBe(START + LOCKED_UNUSED_MS);
+
+    vi.setSystemTime(START + LOCKED_UNUSED_MS);
+    await wake(object);
+    expect(object.storage.map.size).toBe(0);
+    expect(await meter.get('total')).toBe(0);
+  });
+
+  it('made up through moves, they give their room back for real ones after 30 days (audit 5 B-1)', async () => {
+    vi.useFakeTimers({ now: START });
+    // Room for two libraries, both taken by a stranger's moves.
+    server = memoryLibrary(CODE, { limit: 2 * 16 * 1024 });
+    for (let index = 0; index < 2; index += 1) {
+      expect((await client(libraryId(), token()).post('/move', { from: token() })).status).toBe(
+        204,
+      );
+    }
+    const theirs = client(libraryId(), token());
+    expect((await theirs.call('/changes?since=0')).status).toBe(507);
+    // Once nobody has used the junk for 30 days, it goes, and a real device's library fits.
+    vi.setSystemTime(START + LOCKED_UNUSED_MS);
+    for (const object of server.objects.values()) {
+      if (object.storage.alarm !== null && object.storage.alarm <= Date.now()) await wake(object);
+    }
+    expect((await theirs.call('/changes?since=0')).status).toBe(200);
+  });
+
+  it('an unlocked library moved to a new key keeps no clean-up, like any unlocked one', async () => {
+    vi.useFakeTimers({ now: START });
+    const library = libraryId();
+    const oldToken = token();
+    const device = client(library, oldToken);
+    await device.unlock();
+    expect((await client(library, token()).post('/move', { from: oldToken })).status).toBe(204);
+    const object = server.objects.get(library);
+    expect(object?.storage.alarm).toBeNull();
+    expect(object?.storage.map.has('active')).toBe(false);
   });
 });
 

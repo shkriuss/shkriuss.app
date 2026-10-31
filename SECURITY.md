@@ -45,7 +45,11 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
   ([ADR 0018](docs/adr/0018-passkey-signatures.md)). It also notes account
   keys that were replaced (after a lost device), under the hash of a token
   only the old key can make; devices holding a replaced key sign out, and it
-  can't sign in again. There are no account ids, emails or passwords.
+  can't sign in again while the note is kept (13 months after a device
+  last asked; the device that replaced the key forgets it after as long,
+  and apps never fetch a copy with an old key they're done with:
+  [ADR 0017](docs/adr/0017-storage-limits.md)). There are no account ids,
+  emails or passwords.
   Requests from other sites are refused (`Sec-Fetch-Site`), and bodies are
   limited to 1 KB (4 KB for passkeys' signatures).
 - Apps that can **sync** (`"sync": true` in `apps.json`) run `/api/sync/*` in their own

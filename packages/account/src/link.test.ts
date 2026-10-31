@@ -2,20 +2,25 @@
  * Device links (link.ts) against the account service (worker.ts), kept in
  * memory: making one, using it once, and cancelling it.
  */
-import { randomBytes } from '@shkriuss/crypto';
+import { randomBytes, toBase64Url } from '@shkriuss/crypto';
 import type { DurableObjectNamespace } from '@shkriuss/server';
 import { memoryNamespace } from '@shkriuss/server/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { REQUEST_MS } from './errors.ts';
 import { cancelLink, claimLink, createLink, linkState, parseLinkFragment } from './link.ts';
-import worker, { AccountLink, type AccountEnv } from './worker.ts';
+import { LINK_LIFETIME_MS } from './validate.ts';
+import worker, { AccountLink, LINKS, type AccountEnv } from './worker.ts';
 
 const ORIGIN = 'https://shkriuss.app';
 
+/** The links' objects in memory: one, named LINKS, holds every link. */
+let links: ReturnType<typeof memoryNamespace<AccountLink>>;
+
 beforeEach(() => {
+  links = memoryNamespace((state) => new AccountLink(state));
   const env: AccountEnv = {
     ASSETS: { fetch: async () => new Response('page') },
-    ACCOUNT_LINKS: memoryNamespace((state) => new AccountLink(state)).namespace,
+    ACCOUNT_LINKS: links.namespace,
     ACCOUNT_PASSKEYS: null as unknown as DurableObjectNamespace,
     ACCOUNT_STATUS: null as unknown as DurableObjectNamespace,
   };
@@ -69,6 +74,94 @@ describe('a device link', () => {
     expect(await linkState(link.id)).toBe('waiting');
     const anonymous = await fetch(`/api/account/link/${link.id}`, { method: 'DELETE' });
     expect(anonymous.status).toBe(401);
+  });
+});
+
+// A link was an object of its own, deleted only by its own alarm. When
+// Cloudflare drops that alarm (it gives up after a few tries once the day's
+// free writes are used up, which a script making links uses up itself), the
+// link stayed for good: 12 KB that no meter counted.
+describe('links, kept as rows in one object (audit 5 B-2)', () => {
+  const T0 = Date.UTC(2026, 9, 27, 12);
+  const MINUTE = 60_000;
+  /** The one object's storage, and its rows for links. */
+  const storage = () => links.objects.get(LINKS)?.storage;
+  const rows = () => [...(storage()?.map.keys() ?? [])].sort();
+
+  it('are rows in one object, with the alarm at the earliest expiry', async () => {
+    vi.useFakeTimers({ now: T0, toFake: ['Date'] });
+    const first = await createLink(randomBytes(32), ORIGIN);
+    vi.setSystemTime(T0 + MINUTE);
+    const second = await createLink(randomBytes(32), ORIGIN);
+    expect([...links.objects.keys()]).toEqual([LINKS]);
+    expect(rows()).toEqual(
+      [
+        `link:${first.id}`,
+        `link:${second.id}`,
+        `due:${String(T0 + LINK_LIFETIME_MS).padStart(16, '0')}:${first.id}`,
+        `due:${String(T0 + MINUTE + LINK_LIFETIME_MS).padStart(16, '0')}:${second.id}`,
+      ].sort(),
+    );
+    expect(storage()?.alarm).toBe(T0 + LINK_LIFETIME_MS);
+    expect(JSON.stringify(storage()?.map.get(`link:${first.id}`)).length).toBeLessThan(300);
+  });
+
+  it('go when they expire: the alarm deletes them and moves on to the next', async () => {
+    vi.useFakeTimers({ now: T0, toFake: ['Date'] });
+    const first = await createLink(randomBytes(32), ORIGIN);
+    vi.setSystemTime(T0 + MINUTE);
+    const second = await createLink(randomBytes(32), ORIGIN);
+    vi.setSystemTime(T0 + LINK_LIFETIME_MS);
+    expect(await links.runAlarms()).toBe(1);
+    expect(rows().filter((key) => key.startsWith('link:'))).toEqual([`link:${second.id}`]);
+    expect(storage()?.alarm).toBe(T0 + MINUTE + LINK_LIFETIME_MS);
+    expect(await linkState(first.id)).toBe('expired');
+    expect(await linkState(second.id)).toBe('waiting');
+    vi.setSystemTime(T0 + MINUTE + LINK_LIFETIME_MS);
+    await links.runAlarms();
+    expect(rows()).toEqual([]);
+  });
+
+  it('go at the next request when the alarm was lost, which also sets it again', async () => {
+    vi.useFakeTimers({ now: T0, toFake: ['Date'] });
+    const link = await createLink(randomBytes(32), ORIGIN);
+    // Cloudflare couldn't run the alarm (the day's limit was reached) and gave up.
+    const store = storage();
+    if (store) store.alarm = null;
+    vi.setSystemTime(T0 + 400 * 24 * 60 * MINUTE);
+    expect(await linkState(link.id)).toBe('expired');
+    expect(rows()).toEqual([]);
+    await expect(claimLink(fragmentOf(link.url))).rejects.toMatchObject({ code: 'link-used' });
+    // A new link plans its own end again.
+    const fresh = await createLink(randomBytes(32), ORIGIN);
+    expect(rows().filter((key) => key.startsWith('link:'))).toEqual([`link:${fresh.id}`]);
+    expect(storage()?.alarm).toBe(Date.now() + LINK_LIFETIME_MS);
+  });
+
+  it('say "used" until the link expires, then nothing is left of it', async () => {
+    vi.useFakeTimers({ now: T0, toFake: ['Date'] });
+    const link = await createLink(randomBytes(32), ORIGIN);
+    await claimLink(fragmentOf(link.url));
+    expect(await linkState(link.id)).toBe('used');
+    expect(storage()?.map.get(`link:${link.id}`)).toMatchObject({ data: null });
+    vi.setSystemTime(T0 + LINK_LIFETIME_MS);
+    expect(await linkState(link.id)).toBe('expired');
+    expect(rows()).toEqual([]);
+  });
+
+  it('one made before this change, in an object of its own, still goes with its alarm', async () => {
+    vi.useFakeTimers({ now: T0, toFake: ['Date'] });
+    const id = toBase64Url(randomBytes(16));
+    const old = links.namespace.get(links.namespace.idFromName(id));
+    await old.fetch(`https://link/${id}/state`);
+    const store = links.objects.get(id)?.storage;
+    if (!store) throw new Error('No object');
+    store.map.set('link', { data: 'A'.repeat(80), expiresAt: T0 + LINK_LIFETIME_MS, cancel: null });
+    store.alarm = T0 + LINK_LIFETIME_MS;
+    vi.setSystemTime(T0 + LINK_LIFETIME_MS);
+    await links.runAlarms();
+    expect(store.map.size).toBe(0);
+    expect(store.alarm).toBeNull();
   });
 });
 

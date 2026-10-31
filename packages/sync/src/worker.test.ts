@@ -141,6 +141,34 @@ describe('all of an app’s copies together', () => {
     expect(statuses.at(-1)).toBe(507);
     expect(keptBytes(server)).toBeLessThan(FILES_LIMIT);
   });
+
+  it('with the smallest files, count the rows that list them too (audit 5 B-3)', async () => {
+    // Besides a file's bytes, the copy keeps a row for the file and an entry
+    // in the index of files, each with the file's id. For the smallest files
+    // the checks allow, with the longest ids, those took six times the room
+    // the meter saw.
+    const server = memorySync();
+    const token = madeUpToken();
+    const file = new Uint8Array(29);
+    for (let index = 0; index < 300; index += 1) {
+      const id = `f${String(index).padStart(79, 'x')}`;
+      const response = await server.fetchWithFiles(
+        request(SITE, `files/${id}`, token, { method: 'PUT', body: file }),
+      );
+      expect(response.status).toBe(204);
+    }
+    const counted = (await server.copies.objects.get('meter')?.storage.get<number>('total')) ?? 0;
+    // What the files really take: their rows, keys and values, and the index.
+    const [, copy] = [...server.copies.objects].find(([name]) => name !== 'meter') ?? [];
+    let kept = 0;
+    for (const [key, value] of copy?.storage.map ?? []) {
+      if (key !== 'files' && !key.startsWith('file:')) continue;
+      kept +=
+        key.length + (value instanceof Uint8Array ? value.length : JSON.stringify(value).length);
+    }
+    expect(kept).toBeGreaterThan(300 * 29 * 6);
+    expect(counted).toBeGreaterThanOrEqual(OBJECT_BYTES + kept);
+  });
 });
 
 describe('a copy sent to the Worker', () => {

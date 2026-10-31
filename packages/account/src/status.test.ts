@@ -207,6 +207,51 @@ describe('a device whose key was replaced elsewhere (audit 3 D-8)', () => {
   });
 });
 
+describe('replaced keys this device keeps (audit 5 A-1)', () => {
+  // The account service forgets a replaced key 13 months after a device last
+  // asked about it, and so does the "moved" note on the app's old online
+  // copy. The hub kept the old key for ever, and handed it to every app at
+  // each "Turn on sync": a copy the old key started after the clean-up was
+  // brought into the person's data.
+  it('are forgotten 13 months after they were noted', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(Date.UTC(2026, 9, 27, 12));
+    const [old, next] = [randomBytes(32), randomBytes(32)];
+    await saveAccount(old);
+    await replaceAccountKey(old, next);
+    expect(replacedSecrets()).toEqual([old]);
+    vi.setSystemTime(Date.now() + UNUSED_MS - 1);
+    expect(replacedSecrets()).toEqual([old]);
+    vi.setSystemTime(Date.now() + 1);
+    expect(replacedSecrets()).toEqual([]);
+    // Signing in again leaves nothing of it in the browser's storage.
+    await saveAccount(next);
+    expect(localStorage.getItem('shkriuss-device:account')).not.toContain(toBase64Url(old));
+  });
+
+  it('noted before the time was kept, count from the next sign-in', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(Date.UTC(2026, 9, 27, 12));
+    const [old, next] = [randomBytes(32), randomBytes(32)];
+    localStorage.setItem(
+      'shkriuss-device:account',
+      JSON.stringify({
+        secret: toBase64Url(next),
+        since: new Date().toISOString(),
+        replaced: [toBase64Url(old)],
+        successors: { [toBase64Url(old)]: await successorTag(old, next) },
+      }),
+    );
+    expect(replacedSecrets()).toEqual([old]);
+    vi.setSystemTime(Date.now() + 2 * UNUSED_MS);
+    expect(replacedSecrets()).toEqual([old]);
+    await saveAccount(next);
+    expect(replacedSecrets()).toEqual([old]);
+    vi.setSystemTime(Date.now() + UNUSED_MS);
+    expect(replacedSecrets()).toEqual([]);
+  });
+});
+
 describe('replaced keys and other accounts (audit A-3)', () => {
   it('forgets them when signing in to another account, so that account doesn’t get their data', async () => {
     const [old, next, someoneElse] = [randomBytes(32), randomBytes(32), randomBytes(32)];
