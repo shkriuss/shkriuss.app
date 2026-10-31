@@ -36,7 +36,7 @@ import {
   whichAmount,
   type Currency,
 } from '@shkriuss/ui/numbers';
-import { compareText, foldText } from '@shkriuss/ui/text';
+import { compareText, cutToLength, foldText } from '@shkriuss/ui/text';
 import { roomNote as sharedRoomNote } from '@shkriuss/ui/room-note';
 import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
@@ -152,8 +152,18 @@ export const emptyRepairs = (): RepairsState => ({ repairs: [] });
 
 // ---------- Checking saved data ----------
 
+/**
+ * Whether text fits a limit, counted as text boxes count their maxlength on
+ * an iPhone: a flag, a family emoji or a letter with its accent is one
+ * character, so what a full box holds is never refused, on saving or when
+ * it's loaded or synced (cutToLength). Before, each half of an emoji
+ * counted, and "Work done" of 300 family emoji was "Use 2000 characters or
+ * fewer." (audit 5 F2-3).
+ */
+const fits = (text: string, max: number): boolean => cutToLength(text, max) === text;
+
 const isText = (value: unknown, max: number): value is string =>
-  typeof value === 'string' && value.length <= max;
+  typeof value === 'string' && fits(value, max);
 
 const isMileage = (value: unknown): value is number =>
   typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= LIMITS.mileage;
@@ -299,7 +309,7 @@ export function readVehicle(
   // two devices that each added "Bus 105" before they first synced.
   const unchanged = own !== undefined && fold(own.name) === fold(name);
   if (name === '') problems.name = 'Enter a name or number, like a bus number.';
-  else if (name.length > LIMITS.vehicle)
+  else if (!fits(name, LIMITS.vehicle))
     problems.name = `Use ${LIMITS.vehicle} characters or fewer.`;
   else if (
     !unchanged &&
@@ -310,11 +320,11 @@ export function readVehicle(
     problems.name = `You can keep up to ${LIMITS.vehicles} vehicles.`;
   }
   const model = oneLine(form.model);
-  if (model.length > LIMITS.model) problems.model = `Use ${LIMITS.model} characters or fewer.`;
+  if (!fits(model, LIMITS.model)) problems.model = `Use ${LIMITS.model} characters or fewer.`;
   const plate = oneLine(form.plate).toUpperCase();
-  if (plate.length > LIMITS.plate) problems.plate = `Use ${LIMITS.plate} characters or fewer.`;
+  if (!fits(plate, LIMITS.plate)) problems.plate = `Use ${LIMITS.plate} characters or fewer.`;
   const notes = form.notes.trim();
-  if (notes.length > LIMITS.notes) problems.notes = `Use ${LIMITS.notes} characters or fewer.`;
+  if (!fits(notes, LIMITS.notes)) problems.notes = `Use ${LIMITS.notes} characters or fewer.`;
   if (Object.keys(problems).length > 0) return { problems };
   return { vehicle: { id, name, model, plate, notes } };
 }
@@ -407,9 +417,9 @@ export function readRepair(
   | { repair?: undefined; newVehicle?: undefined; problems: RepairProblems } {
   const parseNumber = (text: string) => parseDecimal(text, locale);
   const parseMoney = (text: string) => parseDecimal(text, locale, { cents: true });
-  // Over the most allowed: said so, not that it isn't a number (audit 3 F2-8).
-  const over = (value: number | null, most: number) =>
-    value !== null && Number.isFinite(value) && value > most;
+  // Over the most allowed: said so, not that it isn't a number (audit 3 F2-8),
+  // also for a number too long to be one, which reads as infinite (audit 5 F2-5).
+  const over = (value: number | null, most: number) => value !== null && value > most;
   const atMost = (most: number, unit = '') =>
     `Enter at most ${new Intl.NumberFormat(locale).format(most)}${unit}.`;
   const problems: RepairProblems = {};
@@ -419,7 +429,7 @@ export function readRepair(
   let newVehicle: Vehicle | null = null;
   if (name === '') problems['vehicle'] = 'Enter the vehicle, like a bus number.';
   else if (!vehicle) {
-    if (name.length > LIMITS.vehicle) {
+    if (!fits(name, LIMITS.vehicle)) {
       problems['vehicle'] = `Use ${LIMITS.vehicle} characters or fewer.`;
     } else if (vehicles.vehicles.length >= LIMITS.vehicles) {
       problems['vehicle'] = `You can keep up to ${LIMITS.vehicles} vehicles.`;
@@ -438,12 +448,12 @@ export function readRepair(
   }
 
   const system = oneLine(form.system);
-  if (system.length > LIMITS.system)
+  if (!fits(system, LIMITS.system))
     problems['system'] = `Use ${LIMITS.system} characters or fewer.`;
   const problem = form.problem.trim();
-  if (problem.length > LIMITS.text) problems['problem'] = `Use ${LIMITS.text} characters or fewer.`;
+  if (!fits(problem, LIMITS.text)) problems['problem'] = `Use ${LIMITS.text} characters or fewer.`;
   const work = form.work.trim();
-  if (work.length > LIMITS.text) problems['work'] = `Use ${LIMITS.text} characters or fewer.`;
+  if (!fits(work, LIMITS.text)) problems['work'] = `Use ${LIMITS.text} characters or fewer.`;
 
   const parts: Part[] = [];
   form.parts.forEach((row, index) => {
@@ -461,10 +471,10 @@ export function readRepair(
       return;
     }
     if (partName === '') problems[`part-name-${index}`] = 'Enter the part’s name.';
-    else if (partName.length > LIMITS.partName) {
+    else if (!fits(partName, LIMITS.partName)) {
       problems[`part-name-${index}`] = `Use ${LIMITS.partName} characters or fewer.`;
     }
-    if (number.length > LIMITS.partNumber) {
+    if (!fits(number, LIMITS.partNumber)) {
       problems[`part-number-${index}`] = `Use ${LIMITS.partNumber} characters or fewer.`;
     }
     const quantity = typedQuantity ?? 1;
@@ -482,10 +492,17 @@ export function readRepair(
   });
   if (parts.length > LIMITS.parts) problems['parts'] = `Add up to ${LIMITS.parts} parts.`;
 
-  const hours = parseNumber(form.hours);
+  // Hours are kept to two decimals, as they're shown, so a day's hours add
+  // up to the hours shown: two repairs of 1.125 showed "1.13 hours" each and
+  // "2.25 hours" together (audit 5 F2-4).
+  const typedHours = parseNumber(form.hours);
+  const hours = typedHours === null ? null : roundDecimal(typedHours, 2);
   if (over(hours, LIMITS.hours)) problems['hours'] = atMost(LIMITS.hours, ' hours');
   else if (hours !== null && !isHours(hours)) {
-    problems['hours'] = 'Enter the hours as a number above 0, or leave it empty.';
+    problems['hours'] =
+      typedHours !== null && typedHours > 0
+        ? 'Enter at least 0.01 hours, or leave it empty.'
+        : 'Enter the hours as a number above 0, or leave it empty.';
   }
   const labour = parseMoney(form.labour);
   if (over(labour, LIMITS.money)) problems['labour'] = atMost(LIMITS.money);
@@ -730,8 +747,18 @@ export function byDay(repairs: readonly Repair[]): Day[] {
 
 // ---------- Hours and costs ----------
 
-/** Sums without floating-point crumbs (0.1 + 0.2 is 0.3). */
-const tidy = (value: number): number => Math.round(value * 1e6) / 1e6;
+/**
+ * Sums without floating-point crumbs (0.1 + 0.2 is 0.3), to 6 decimals.
+ * Multiplying by a million and rounding is exact only while the product is
+ * well within a number's 53 bits (below a billion here, with room to
+ * spare): Trades' version of it left crumbs that could never be closed
+ * (audit 5 F2-1). Bigger sums, like a fleet's costs, are rounded by their
+ * digits instead (roundDecimal), as exact as a number of that size can be
+ * but slower, and every repair's costs are added up at every change; what's
+ * shown is rounded to the cent after (`shown`).
+ */
+const tidy = (value: number): number =>
+  Math.abs(value) < 1e9 ? Math.round(value * 1e6) / 1e6 : roundDecimal(value, 6);
 
 /** An amount as it's shown in `currency`: to the cent, or to the yen (no decimals). */
 const shown = (amount: number, currency: Currency): number =>

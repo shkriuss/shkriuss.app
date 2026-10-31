@@ -29,6 +29,23 @@ describe('spreadsheet files', () => {
     expect(csvCell('Pads - front')).toBe('Pads - front');
   });
 
+  // Audit 5 F2-6: a tiny price was written "1.5e-9" ("1,5e-9" where decimals
+  // take a comma), which a spreadsheet may read as text, while the page
+  // shows it as 0.0000000015.
+  it('writes every digit of a number, never an exponent', () => {
+    expect(csvCell(1.5e-9)).toBe('0.0000000015');
+    expect(csvCell(1.5e-9, ',')).toBe('0,0000000015');
+    expect(csvCell(-1.5e-9)).toBe('-0.0000000015');
+    expect(csvCell(5e-7)).toBe('0.0000005');
+    expect(csvCell(1e21)).toBe('1000000000000000000000');
+    expect(csvCell(1e12)).toBe('1000000000000');
+    expect(csvCell(123.45, ',')).toBe('123,45');
+    expect(csvCell(100)).toBe('100');
+    // As the number is, with all its digits.
+    expect(csvCell(0.1 + 0.2)).toBe('0.30000000000000004');
+    expect(csvFile([['Price'], [1.5e-9]], 'de-DE')).toBe('\uFEFFPrice\r\n0,0000000015\r\n');
+  });
+
   it('quotes cells with quotes, commas, semicolons or line breaks, and leaves the rest', () => {
     expect(csvCell('Fixed, "properly"')).toBe('"Fixed, ""properly"""');
     expect(csvCell('two\nlines')).toBe('"two\nlines"');
