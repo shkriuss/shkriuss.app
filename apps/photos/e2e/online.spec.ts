@@ -242,6 +242,9 @@ test('keyboard focus stays on a photo while photos go online', async ({ page }) 
   });
   await turnOnSync(page, 'Photos');
   await unlock(page);
+  // Unlocking ends by putting focus on the status line (audit 5 G-2): wait for
+  // it, or it could take focus from the photo focused next (CI, 31 October).
+  await expect(onlineStatus(page)).toBeFocused();
   const tile = page.getByRole('button', { name: 'Photo taken Jul 4, 2019, 6:30:05 PM' });
   await tile.focus();
   await page.evaluate(() => {
