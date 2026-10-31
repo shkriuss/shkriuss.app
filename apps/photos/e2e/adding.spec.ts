@@ -74,8 +74,8 @@ test('a full device: says the photo couldn’t be saved, and keeps nothing of it
   page,
 }) => {
   // The likeliest failure for an app that keeps originals: the browser runs
-  // out of room for them (audit 4 J-5). A photo's files are saved first, then
-  // its details; if those fail, its files go again.
+  // out of room for them (audit 4 J-5). A photo's files and details are
+  // saved together; if either can't be, nothing of the photo is kept.
   await page.goto('/');
   for (const kind of ['photo-files:', 'photo:']) {
     await page.evaluate((kind) => {

@@ -8,7 +8,7 @@
 import { isIsoDate, parts, type IsoDate } from '@shkriuss/dates';
 import { secondVersionName } from '@shkriuss/sync';
 import { compareText, cutToLength, foldText } from '@shkriuss/ui/text';
-import { formatMoney } from '@shkriuss/ui/numbers';
+import { formatMoney, parseDecimal, roundDecimal, whichAmount } from '@shkriuss/ui/numbers';
 import { DATE_LOCALE } from '@shkriuss/ui/locale';
 import { readableHost } from './hosts.ts';
 
@@ -131,49 +131,89 @@ export interface ItemDraft {
 export type DraftField = 'name' | 'price' | 'link' | 'bought' | 'form';
 
 /**
- * A price as typed: "12.50", "12,50" or "1 299". A space may group
- * thousands (three digits after it), so "12 50" isn't a price: it was read
- * as 1,250 (audit 3 F2-4, which Budget's and Trades' amounts had too). Null
- * when empty; undefined when it isn't a price.
+ * A price as typed, read as the money apps read amounts (parseDecimal, audit
+ * 5 F3-10): "12.50" and "12,50" are 12.5 everywhere, "1,299.50" in English
+ * and "1.299,50" in German are 1299.5, "1 299" is 1299, and any script's
+ * digits count ("١٢" is 12). Kept to the cent: "1.500" in French, which
+ * could be 1500 or 1.5, isn't read (`cents`), and "12.345" isn't a price.
+ * Null when empty; undefined when it isn't a price, or is below 0 or over
+ * MAX_PRICE (priceProblem says what's wrong). `locale`: how the person
+ * writes numbers (the browser's own when it's left out).
  */
-export function parsePrice(text: string): number | null | undefined {
-  const compact = text.trim().replace(/(\d)\s+(?=\d{3}(?!\d))/g, '$1');
-  if (compact === '') return null;
-  if (!/^\d+([.,]\d{1,2})?$/.test(compact)) return undefined;
-  const price = Number(compact.replace(',', '.'));
-  return price <= MAX_PRICE ? price : undefined;
+export function parsePrice(text: string, locale?: string): number | null | undefined {
+  const price = parseDecimal(text, locale, { cents: true });
+  if (price === null) return null;
+  if (!Number.isFinite(price) || price < 0 || price > MAX_PRICE) return undefined;
+  return roundDecimal(price, 2) === price ? price : undefined;
 }
 
+/** What's wrong with a typed price, or null when it's one (or empty). */
+export function priceProblem(text: string, locale?: string): string | null {
+  if (parsePrice(text, locale) !== undefined) return null;
+  const amount = parseDecimal(text, locale, { cents: true });
+  if (amount !== null && Number.isFinite(amount) && amount > MAX_PRICE) {
+    return `A price can be up to ${MAX_PRICE.toLocaleString('en')}.`;
+  }
+  // "1.500" in French: 1500, or 1.5? Asked which, as in the money apps.
+  return whichAmount(text, locale) ?? 'Write a price like 12.50, or leave it empty.';
+}
+
+/** Whether `text` is longer than `max` characters as people see them (as Safari's boxes count). */
+const longerThan = (text: string, max: number): boolean => cutToLength(text, max) !== text;
+
+/** A typed link with "https://" added when it has no scheme ("shop.ge:8080/x" has none: a dot makes it a host and port). */
+const withHttps = (typed: string): string =>
+  /^[a-z][a-z\d+-]*:/i.test(typed) ? typed : `https://${typed}`;
+
 /**
- * A link as typed: "shop.ge/item" becomes "https://shop.ge/item". "" when
- * empty; undefined when it isn't a web address (only http and https are
- * allowed, so a link can never run code).
+ * A link as typed, trimmed, with "https://" added when it has no scheme:
+ * "shop.ge/item" becomes "https://shop.ge/item". It's kept as written, so
+ * the form shows it that way when the item is opened again: a browser's own
+ * form of it ("xn--…" names, "%E1%83…" for letters in other scripts) is for
+ * the link itself, in the page's anchor (audit 5 F3-3). "" when empty;
+ * undefined when it isn't a web address (only http and https are allowed, so
+ * a link can never run code: audit C-4), or longer than the box takes once
+ * "https://" is added (what's saved has to fit the box too, or the item could
+ * never be saved again).
  */
 export function normalizeLink(text: string): string | undefined {
   const trimmed = text.trim();
   if (trimmed === '') return '';
-  // "shop.ge:8080/x" has no scheme: one with a dot in it is a host and port.
-  const withScheme = /^[a-z][a-z\d+-]*:/i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  const withScheme = withHttps(trimmed);
+  if (longerThan(withScheme, LIMITS.link)) return undefined;
   try {
     const url = new URL(withScheme);
     if (url.protocol !== 'https:' && url.protocol !== 'http:') return undefined;
-    if (!url.hostname.includes('.') || url.href.length > LIMITS.link) return undefined;
-    return url.href;
+    if (!url.hostname.includes('.')) return undefined;
+    return withScheme;
   } catch {
     return undefined;
   }
 }
 
+/** What's wrong with a typed link, or null when it's a web address (or empty). */
+export function linkProblem(text: string): string | null {
+  const trimmed = text.trim();
+  if (trimmed !== '' && longerThan(withHttps(trimmed), LIMITS.link)) {
+    return `That link is too long: up to ${LIMITS.link.toLocaleString('en')} characters, with the "https://" added to one typed without it.`;
+  }
+  if (normalizeLink(text) === undefined) {
+    return 'Write a web address like https://example.com, or leave it empty.';
+  }
+  return null;
+}
+
 /** What's wrong with the form, by field (empty when it can be saved). */
-export function draftProblems(draft: ItemDraft): Partial<Record<DraftField, string>> {
+export function draftProblems(
+  draft: ItemDraft,
+  locale?: string,
+): Partial<Record<DraftField, string>> {
   const problems: Partial<Record<DraftField, string>> = {};
   if (draft.name.trim() === '') problems.name = 'Give it a name.';
-  if (parsePrice(draft.price) === undefined) {
-    problems.price = 'Write a price like 12.50, or leave it empty.';
-  }
-  if (normalizeLink(draft.link) === undefined) {
-    problems.link = 'Write a web address like https://example.com, or leave it empty.';
-  }
+  const price = priceProblem(draft.price, locale);
+  if (price !== null) problems.price = price;
+  const link = linkProblem(draft.link);
+  if (link !== null) problems.link = link;
   if (draft.bought !== '' && !isIsoDate(draft.bought)) {
     problems.bought = 'Choose a date, or leave it empty.';
   }
@@ -187,15 +227,24 @@ export function draftProblems(draft: ItemDraft): Partial<Record<DraftField, stri
  */
 const cut = (text: string, max: number): string => cutToLength(text.trim(), max);
 
-/** The item a (checked) draft describes. Keeps `created` from the item it changes. */
-export function itemFromDraft(draft: ItemDraft, id: string, now: number, existing?: Item): Item {
+/**
+ * The item a (checked) draft describes. Keeps `created` from the item it
+ * changes. `locale`: how the person writes numbers (see parsePrice).
+ */
+export function itemFromDraft(
+  draft: ItemDraft,
+  id: string,
+  now: number,
+  existing?: Item,
+  locale?: string,
+): Item {
   return {
     id,
     name: cut(draft.name, LIMITS.name),
     brand: cut(draft.brand, LIMITS.brand),
     category: draft.category,
     opinion: oneOf(draft.opinion, OPINIONS) ? draft.opinion : 'use',
-    price: parsePrice(draft.price) ?? null,
+    price: parsePrice(draft.price, locale) ?? null,
     currency: oneOf(draft.currency, CURRENCIES) ? draft.currency : DEFAULT_CURRENCY,
     shop: cut(draft.shop, LIMITS.shop),
     link: normalizeLink(draft.link) ?? '',
@@ -256,13 +305,46 @@ export function moveItems(state: ShelfState, from: string, to: string): ShelfSta
 }
 
 /**
+ * Characters as people see them, to cut between. Firefox before 125 can't
+ * tell them apart: there, each code point is one (an emoji's two halves
+ * still stay together), as in cutToLength.
+ */
+const characters =
+  typeof Intl.Segmenter === 'function'
+    ? new Intl.Segmenter('en', { granularity: 'grapheme' })
+    : null;
+
+/**
+ * The longest start of `text` at most `max` long (as JavaScript counts),
+ * never cut in the middle of a character as people see it: an emoji (also
+ * a family, a flag or a skin tone), or a letter with its accent. As Notes'
+ * fitText.
+ */
+function fitText(text: string, max: number): string {
+  if (text.length <= max) return text;
+  const parts = characters ? characters.segment(text) : [...text].map((segment) => ({ segment }));
+  let end = 0;
+  for (const { segment } of parts) {
+    if (end + segment.length > max) break;
+    end += segment.length;
+  }
+  return text.slice(0, end);
+}
+
+/** How much of a name fits before packages/sync adds " (second version)". */
+const SECOND_VERSION_ROOM = LIMITS.name - (secondVersionName('x', LIMITS.name).length - 'x'.length);
+
+/**
  * An item changed on two devices at once: this device's version, kept as a
- * second item next to the other device's (packages/sync, conflictCopy).
+ * second item next to the other device's (packages/sync, conflictCopy). A
+ * long name is cut between whole characters first, as Notes does: cut by
+ * code points, a name of flags, families, skin tones or letters with their
+ * accents ended in half a character (audit 5 F3-2).
  */
 export const secondVersion = (item: Item, id: string): Item => ({
   ...item,
   id,
-  name: secondVersionName(item.name, LIMITS.name),
+  name: secondVersionName(fitText(item.name.trim(), SECOND_VERSION_ROOM), LIMITS.name),
 });
 
 // ---------- Showing them ----------
@@ -297,14 +379,16 @@ export const NO_FILTERS: Filters = {
 
 /**
  * The items to list: those matching every filter and every word searched
- * for, sorted. `categories` are the ones that exist now.
+ * for (in the name, brand, shop, size, notes and the category's name: audit
+ * 5 F3-10), sorted. `categories` are the ones that exist now.
  */
 export function visibleItems(
   state: ShelfState,
   filters: Filters,
-  categories: readonly { id: string }[],
+  categories: readonly { id: string; name: string }[],
 ): Item[] {
   const known = idsOf(categories);
+  const names = new Map(categories.map((category) => [category.id, category.name]));
   const words = foldText(filters.search).split(/\s+/).filter(Boolean);
   const brand = filters.brand === null ? null : foldText(filters.brand);
   const sorters: Record<Sort, (a: Item, b: Item) => number> = {
@@ -329,8 +413,9 @@ export function visibleItems(
       if (filters.category !== 'all' && categoryOf(item, known) !== filters.category) return false;
       if (filters.opinion !== 'all' && item.opinion !== filters.opinion) return false;
       if (brand !== null && foldText(item.brand) !== brand) return false;
+      const category = names.get(categoryOf(item, known)) ?? '';
       const text = foldText(
-        [item.name, item.brand, item.shop, item.variant, item.notes].join('\n'),
+        [item.name, item.brand, item.shop, item.variant, item.notes, category].join('\n'),
       );
       return words.every((word) => text.includes(word));
     })

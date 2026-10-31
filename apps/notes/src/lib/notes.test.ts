@@ -14,6 +14,7 @@ import {
   migrateNotes,
   notesCount,
   removeNote,
+  restoreNote,
   keepOtherVersion,
   keptVersion,
   secondVersion,
@@ -63,6 +64,24 @@ describe('writing notes', () => {
     expect(addNote(full, 'one-more', 1)).toBe(full);
   });
 
+  it('brings back a note deleted elsewhere while it’s typed in, even at the limit (audit 5 F3-8)', () => {
+    // The page adds the note back, then puts the typing on it: at 2,000
+    // notes, addNote left it out, and the typing was never saved.
+    const full: NotesState = {
+      notes: Array.from({ length: MAX_NOTES }, (_, index) => note(`n${index}`, 'x')),
+    };
+    const typed = editNote(
+      restoreNote(full, 'typed-here', 5000),
+      'typed-here',
+      { body: 'kept' },
+      5000,
+    );
+    expect(typed.notes).toHaveLength(MAX_NOTES + 1);
+    expect(typed.notes[0]).toEqual({ ...note('typed-here', '', 'kept', 5000), created: 5000 });
+    // "New note" still stops at the limit.
+    expect(addNote(typed, 'one-more', 1)).toBe(typed);
+  });
+
   it('keeps all a title box let in, counted as Safari counts (audit 4 F3-4)', () => {
     // Safari's maxlength counts characters as people see them, so its box
     // takes 120 thumbs-up with a skin tone, which JavaScript counts as 480.
@@ -94,6 +113,22 @@ describe('writing notes', () => {
     expect(dropIfEmpty(state, 'b')).toBe(state);
     expect(dropIfEmpty(state, 'c')).toBe(state);
     expect(dropIfEmpty(state, 'missing')).toBe(state);
+  });
+
+  it('keeps an older note that was emptied, so nothing is deleted without asking (audit 5 F3-7)', () => {
+    // Written in once (its edits are later than its making), cleared to be
+    // rewritten later: it stays, with its pin. A note made on this page and
+    // emptied again goes, as before: nothing is lost with it.
+    const emptied = editNote(
+      { notes: [note('old', 'Was written', 'then cleared', 1000, true)] },
+      'old',
+      { title: '', body: ' ' },
+      2000,
+    );
+    expect(dropIfEmpty(emptied, 'old')).toBe(emptied);
+    expect(dropIfEmpty(emptied, 'old', new Set(['old'])).notes).toEqual([]);
+    const untouched = { notes: [{ ...note('new', '', '', 3000), created: 3000 }] };
+    expect(dropIfEmpty(untouched, 'new').notes).toEqual([]);
   });
 
   it('puts back a note as the device has it, for typing that couldn’t be saved (audit 4 F3-1)', () => {
@@ -177,20 +212,32 @@ describe('writing notes', () => {
     expect(keptVersion(after, after, 'a', shown)).toBeUndefined();
   });
 
-  it('drops notes left empty a while ago, but not one opened or new', () => {
-    // A page closed in a new note left it behind (audit F3-9).
+  it('drops notes left empty a while ago, but not one opened, new, or emptied on purpose', () => {
+    // A page closed in a new note left it behind (audit F3-9): never written
+    // in, so it's still as it was made.
     const now = 100 * EMPTY_NOTE_MS;
     const old = now - EMPTY_NOTE_MS - 1;
+    const untouched = (id: string, title: string, body: string, at: number): Note => ({
+      ...note(id, title, body, at),
+      created: at,
+    });
     const state = {
       notes: [
-        note('a', '', '', old),
-        note('b', ' ', '\n', old),
+        untouched('a', '', '', old),
+        untouched('b', ' ', '\n', old),
         note('c', 'Written', '', old),
-        note('d', '', '', old),
-        note('e', '', '', now - 60_000),
+        untouched('d', '', '', old),
+        untouched('e', '', '', now - 60_000),
+        // Written in long ago, then cleared: kept (audit 5 F3-7).
+        note('f', '', '', old),
       ],
     };
-    expect(dropEmptyNotes(state, 'd', now).notes.map((entry) => entry.id)).toEqual(['c', 'd', 'e']);
+    expect(dropEmptyNotes(state, 'd', now).notes.map((entry) => entry.id)).toEqual([
+      'c',
+      'd',
+      'e',
+      'f',
+    ]);
     const tidy = { notes: [note('c', 'Written', '', old)] };
     expect(dropEmptyNotes(tidy, null, now)).toBe(tidy);
   });

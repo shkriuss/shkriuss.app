@@ -43,7 +43,6 @@ import {
   getFiles,
   keepThumb,
   loadProgress,
-  moveFiles,
   removeOriginal,
   saveDetails,
   saveProgress,
@@ -302,8 +301,11 @@ export function startOnline(list: PhotoList): Online {
         // it got there): they don't come back (audit 3 F3-1).
         new Set(progress.removals),
       );
-      for (const { from, to } of applied.moves) await moveFiles(from, to);
-      if (applied.save.length > 0) await saveDetails(applied.save);
+      // The files of a photo here that's the same as one online go to its
+      // id with the details, in one step (audit 5 E-4).
+      if (applied.save.length > 0 || applied.moves.length > 0) {
+        await saveDetails(applied.save, applied.moves);
+      }
       if (applied.remove.length > 0) await deletePhotos(applied.remove);
       await updateProgress((current) => ({
         library,

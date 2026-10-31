@@ -97,6 +97,25 @@ export function toPhoto(value: unknown): Photo | null {
   return { ...value, online: isOnlinePlace(online) ? online : null, here: here !== false };
 }
 
+/** The copies made from a photo: a thumbnail for the grid, and one to look at (null: this browser couldn't make them). */
+export interface PhotoCopies {
+  view: Blob | null;
+  thumb: Blob | null;
+}
+
+/**
+ * The copies to keep when a photo is picked again (its original was only
+ * online, say after "Free up space"): the ones just `made` from it, or,
+ * where this browser couldn't make them (a HEIC outside Safari), the ones
+ * `kept` here already, like a thumbnail downloaded from the online library,
+ * made by the device that added the photo. Before, they were replaced with
+ * none, and the photo showed as "HEIC" from then on (audit 5 F3-6).
+ */
+export const copiesToKeep = (made: PhotoCopies, kept: PhotoCopies | undefined): PhotoCopies => ({
+  view: made.view ?? kept?.view ?? null,
+  thumb: made.thumb ?? kept?.thumb ?? null,
+});
+
 /** Just the details, as sent to the online library. */
 export const detailsOf = ({
   id,
@@ -350,9 +369,16 @@ export function isIPhoneOrIPad(userAgent: string, touchPoints: number): boolean 
   );
 }
 
+/**
+ * A file name's extension: a few letters, maybe with digits after the
+ * first ("jpg", "heic", "mp4"). Not a number: "holiday.2019" has none
+ * (audit 5 F3-10).
+ */
+const EXTENSION = /\.([A-Za-z][A-Za-z0-9]{0,4})$/;
+
 /** The kind of file, for people: "JPG", "HEIC"… */
 export function formatLabel(photo: Pick<Photo, 'name' | 'type'>): string {
-  const fromName = /\.([A-Za-z0-9]{1,5})$/.exec(photo.name)?.[1];
+  const fromName = EXTENSION.exec(photo.name)?.[1];
   return (
     fromName ??
     EXTENSIONS.get(photo.type) ??
@@ -372,12 +398,16 @@ export function downloadName(photo: Pick<Photo, 'name' | 'type' | 'taken'>): str
     .replace(/-{2,}/g, '-')
     .replace(/^[.\s]+/, '')
     .trim();
-  // Cut by whole characters, so an emoji is never cut in half (audit 3 C-6).
-  const safe = [...cleaned].slice(0, 120).join('').trimEnd();
+  // Cut by whole characters, so an emoji is never cut in half (audit 3 C-6);
+  // never ending in a dot or a space, before the extension ("photo..jpg").
+  const safe = [...cleaned]
+    .slice(0, 120)
+    .join('')
+    .replace(/[.\s]+$/, '');
   const fallback = `photo-${photo.taken.replace(/[:T]/g, '-')}`;
   const name = safe || fallback;
   const extension = EXTENSIONS.get(photo.type);
-  return /\.[A-Za-z0-9]{1,5}$/.test(name) || !extension ? name : `${name}.${extension}`;
+  return EXTENSION.test(name) || !extension ? name : `${name}.${extension}`;
 }
 
 /** What happened when photos were picked, for a message. */

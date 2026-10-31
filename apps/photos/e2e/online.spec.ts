@@ -22,6 +22,7 @@ import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
 import { TEST_STORAGE_CODE } from '../../../tests/e2e/sites.ts';
 import {
   addPhotos,
+  dropCopies,
   hereWithoutOriginal,
   jpeg,
   naturalWidth,
@@ -29,6 +30,7 @@ import {
   originalsHere,
   picture,
   stored,
+  thumbsHere,
   withExif,
 } from './helpers.ts';
 
@@ -160,6 +162,8 @@ test('puts photos online, and shows them on the other devices', async ({
   );
   await checkA11y(page, 'online library: the storage code');
   await unlock(page);
+  // Focus goes to the status line, not to the top of the page (audit 5 G-2).
+  await expect(onlineStatus(page)).toBeFocused();
   await expect(onlineStatus(page)).toHaveText(/^Online: 2 photos · /, ONLINE);
   await checkA11y(page, 'online library: all online');
 
@@ -192,6 +196,10 @@ test('puts photos online, and shows them on the other devices', async ({
   await dialog.getByRole('button', { name: 'Delete' }).click();
   const confirm = tablet.getByRole('dialog', { name: 'Delete this photo?' });
   await expect(confirm).toContainText('deleted from this device and from your online library');
+  // Read out with its title, so a screen reader hears it goes online too (audit 5 G-3).
+  await expect(confirm).toHaveAccessibleDescription(
+    'It’s deleted from this device and from your online library, so from your other devices too. This can’t be undone.',
+  );
   const removed = tablet.waitForResponse(
     (response) => response.url().endsWith('/api/library/remove') && response.ok(),
   );
@@ -494,6 +502,7 @@ test('frees up space on this device, and the photos still show', async ({ page }
   await freeUp.click();
   const confirm = page.getByRole('dialog', { name: 'Free up space on this device?' });
   await expect(confirm).toContainText('This removes the original of 1 photo (');
+  await expect(confirm).toHaveAccessibleDescription(/^This removes the original of 1 photo \(/);
   await checkA11y(page, 'free up space');
   await confirm.getByRole('button', { name: 'Free up space' }).click();
   await expect(page.getByRole('status').filter({ hasText: /^Freed up / })).toBeAttached();
@@ -567,6 +576,78 @@ test('frees up space on this device, and the photos still show', async ({ page }
   expect(await originalsHere(page)).toBe(1);
   await expect(tiles(page)).toHaveCount(1);
   await expect(freeUp).toBeVisible();
+});
+
+test('a photo picked again where this browser can’t show it keeps its thumbnail, and the viewer says out loud when a download fails', async ({
+  page,
+  browser,
+  guard,
+}) => {
+  // Re-adding a HEIC on a Pixel replaced the thumbnail downloaded from the
+  // online library with none, so it showed as "HEIC" from then on (audit 5
+  // F3-6); and the viewer showed, but didn't read out, that a download
+  // failed (audit 5 G-7).
+  guard.allowConsole('net::ERR_INTERNET_DISCONNECTED');
+  const { key } = await createAccount(page);
+  await page.goto('/');
+  const appURL = new URL(page.url()).origin;
+  // Camera-sized, so its screen-sized copy (2,048 pixels) is told from the original (4,000).
+  const original = withExif(await picture(page), '2026:10:21 14:03:22');
+  await addPhotos(page, [jpeg('IMG_0030.JPG', original)]);
+  await turnOnSync(page, 'Photos');
+  await unlock(page);
+  await expect(onlineStatus(page)).toHaveText(/^Online: 1 photo · /, ONLINE);
+
+  // A tablet whose browser can't show this kind of photo (as Chrome can't show HEIC).
+  const tablet = await (await otherDevice(browser)).newPage();
+  await tablet.route('**/_astro/process.worker-*.js', async (route) => {
+    const response = await route.fetch();
+    const script = await response.text();
+    await route.fulfill({
+      response,
+      body: `self.createImageBitmap = () => Promise.reject(new Error('Not this kind'));\n${script}`,
+    });
+  });
+  await signInWithKey(tablet, key);
+  await tablet.goto(`${appURL}/`);
+  await turnOnSync(tablet, 'Photos');
+  const tile = tablet.getByRole('button', { name: 'Photo taken Oct 21, 2026, 2:03:22 PM' });
+  await expect(tile).toBeVisible(ONLINE);
+  await expect.poll(() => naturalWidth(tile.locator('img')), ONLINE).toBe(512);
+
+  // Offline, the screen-sized copy can't be downloaded: said in the viewer, and read out.
+  const failed = 'Couldn’t download this photo. Check your connection and try again.';
+  await tablet.context().setOffline(true);
+  await tile.click();
+  const dialog = tablet.locator('[data-viewer]');
+  const viewerStatus = dialog.locator('[data-viewer-status]');
+  await expect(dialog.locator('[data-viewer-none]')).toHaveText(failed);
+  await expect(viewerStatus).toHaveText(failed);
+  await expect(viewerStatus).toHaveAttribute('data-problem', '');
+  await dialog.getByRole('button', { name: 'Close' }).click();
+  await tablet.context().setOffline(false);
+
+  // The original picked on the tablet: back there, with the thumbnail it had.
+  await addPhotos(tablet, [jpeg('IMG_0030.JPG', original)]);
+  await expect(
+    tablet.getByRole('status').filter({ hasText: '1 original is back on this device.' }),
+  ).toBeAttached();
+  expect(await originalsHere(tablet)).toBe(1);
+  expect(await thumbsHere(tablet)).toBe(1);
+  await tablet.reload();
+  await expect.poll(() => naturalWidth(tile.locator('img')), ONLINE).toBe(512);
+  // Its screen-sized copy comes from the online library, as it's there.
+  await tile.click();
+  await expect.poll(() => naturalWidth(dialog.getByRole('img')), ONLINE).toBe(2048);
+  await expect(viewerStatus).toHaveText('');
+  await expect(dialog.locator('[data-detail="where"]')).toHaveText('On this device and online');
+  await dialog.getByRole('button', { name: 'Close' }).click();
+
+  // Even without its thumbnail here, a photo on this device shows the online library's.
+  await dropCopies(tablet);
+  await tablet.reload();
+  await expect.poll(() => naturalWidth(tile.locator('img')), ONLINE).toBe(512);
+  await tablet.context().close();
 });
 
 test('frees up space only when the online library has just said the photos are there', async ({

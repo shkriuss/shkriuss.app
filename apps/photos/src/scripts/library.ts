@@ -5,14 +5,23 @@
  *   "photo:<id>"        its details and where it is (Photo): small, so the whole list loads fast
  *   "photo-files:<id>"  the original file as it was picked, and the two copies
  *
- * The files are saved first and the details last, so a photo only shows once
- * everything is saved; deleting goes the other way round. A photo that's
- * only online (docs/adr/0016) has no original here, and keeps its thumbnail
- * once it's downloaded; "Free up space" changes both records at once. How
- * far this device has caught up with the online library is kept here too
+ * The two are saved together, and deleted together, in one transaction, so
+ * a photo never shows without its files, and files are never left behind
+ * without their photo (audit 5 E-4; files found so, from an older version,
+ * go when the library loads). A photo that's only online (docs/adr/0016)
+ * has no original here, and keeps its thumbnail once it's downloaded;
+ * "Free up space" changes both records at once. How far this device has
+ * caught up with the online library is kept here too
  * ("photos-online:state"), so "Delete all data" forgets it with the photos.
  */
-import { createFileStore, keepFiles, putTogether } from '@shkriuss/storage/files';
+import {
+  createFileStore,
+  keepFiles,
+  putTogether,
+  removeLeftOver,
+  removeTogether,
+  type FileEntry,
+} from '@shkriuss/storage/files';
 import { changeCount } from '../lib/changes.ts';
 import { byNewest, toPhoto, type Photo } from '../lib/photos.ts';
 
@@ -47,31 +56,57 @@ const changes = changeCount();
 /** True if another Photos tab changed the photos since this one last loaded or changed them. */
 export const changedElsewhere = (): boolean => changes.changedElsewhere();
 
-/** Every photo's details, newest first. */
+/**
+ * Every photo's details, newest first. Files left without any details (an
+ * older version's deletion or save stopped half-way, or a thumbnail that
+ * arrived after its photo was deleted) go too: never shown, they'd stay on
+ * the device for good (audit 5 E-4).
+ */
 export async function loadLibrary(): Promise<Photo[]> {
   changes.loading();
-  return (await details.all())
+  const photos = (await details.all())
     .map(toPhoto)
     .filter((photo) => photo !== null)
     .sort(byNewest);
+  // By the keys (details this version can't read keep their files), in the
+  // one transaction that looks: a photo another tab is saving just now, its
+  // details and files together, isn't taken for files left over.
+  try {
+    for (const id of await removeLeftOver(files, details)) forgetThumb(id);
+  } catch {
+    // Couldn't tidy up (the browser refusing writes, say): the photos are loaded all the same.
+  }
+  return photos;
 }
 
-/** Saves a photo: its files, then its details. Throws if the device is out of space. */
+/**
+ * Saves a photo: its files and its details together, in one transaction,
+ * so a page closed between them can't leave the files without the photo
+ * (audit 5 E-4). Throws if the device is out of space.
+ */
 export async function savePhoto(photo: Photo, photoFiles: PhotoFiles): Promise<void> {
-  await files.putAll([photoFiles]);
-  try {
-    await details.putAll([photo]);
-  } catch (error) {
-    await files.removeAll([photo.id]).catch(() => undefined);
-    throw error;
-  }
+  await putTogether([files.entry(photoFiles), details.entry(photo)]);
   changes.changed();
   void keepFiles();
 }
 
-/** Saves photos' details (where they are has changed, or they're new from another device). */
-export async function saveDetails(photos: readonly Photo[]): Promise<void> {
-  await details.putAll(photos);
+/**
+ * Saves photos' details (where they are has changed, or they're new from
+ * another device). `moves`: photos here that are the same as one online
+ * (applyChanges), whose files go to the online photo's id first, in the
+ * same transaction, so another tab loading the library can't find them
+ * without details in between and tidy them away (audit 5 E-4).
+ */
+export async function saveDetails(
+  photos: readonly Photo[],
+  moves: readonly { from: string; to: string }[] = [],
+): Promise<void> {
+  const moved: FileEntry[] = [];
+  for (const { from, to } of moves) {
+    const found = await getFiles(from);
+    if (found) moved.push(files.entry({ ...found, id: to }));
+  }
+  await putTogether([...moved, ...photos.map((photo) => details.entry(photo))]);
   changes.changed();
 }
 
@@ -91,10 +126,14 @@ export function thumbUrl(id: string): Promise<string | null> {
   return url;
 }
 
-/** Keeps a downloaded thumbnail of a photo that's only online. */
+/**
+ * Keeps a downloaded thumbnail of a photo that's only online (or one this
+ * browser can't show). In one transaction with reading what's there: read
+ * first and saved after, it put an original back that "Free up space" had
+ * just removed in between (audit 5 E-4).
+ */
 export async function keepThumb(id: string, thumb: Blob): Promise<string> {
-  const existing = await getFiles(id);
-  await files.putAll([{ id, original: null, view: null, ...existing, thumb }]);
+  await files.change(id, (existing) => ({ id, original: null, view: null, ...existing, thumb }));
   forgetThumb(id);
   const url = URL.createObjectURL(thumb);
   thumbs.set(id, Promise.resolve(url));
@@ -106,12 +145,16 @@ function forgetThumb(id: string): void {
   thumbs.delete(id);
 }
 
-/** Deletes photos from this device: details first, then files. */
+/**
+ * Deletes photos from this device: details and files together, in one
+ * transaction, so a page closed in between can't leave the files behind
+ * (audit 5 E-4).
+ */
 export async function deletePhotos(ids: readonly string[]): Promise<void> {
-  await details.removeAll(ids);
+  if (ids.length === 0) return;
+  await removeTogether(ids.flatMap((id) => [details.removal(id), files.removal(id)]));
   changes.changed();
   for (const id of ids) forgetThumb(id);
-  await files.removeAll(ids).catch(() => undefined);
 }
 
 /**
@@ -139,12 +182,6 @@ export async function removeOriginal(photo: Photo): Promise<Photo> {
  */
 export async function withOriginals(): Promise<Set<string>> {
   return new Set((await files.all()).filter((found) => found.original).map((found) => found.id));
-}
-
-/** Gives a photo's files to another id (the same photo, as it's known online). */
-export async function moveFiles(from: string, to: string): Promise<void> {
-  const found = await getFiles(from);
-  if (found) await files.putAll([{ ...found, id: to }]);
 }
 
 export const loadProgress = (): Promise<OnlineProgress | undefined> =>

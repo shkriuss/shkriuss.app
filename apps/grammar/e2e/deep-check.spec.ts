@@ -47,6 +47,10 @@ test('downloads only when asked, then checks the text and makes its changes', as
   ).toBeAttached();
 
   await button(page, 'Check my text').click();
+  // Read out at once, so a screen reader doesn't wait in silence (audit 5 G-6).
+  await expect(page.locator('[data-announcer]')).toHaveText(
+    'Starting Deep check. This takes a few seconds…',
+  );
   await expect(deepStatus(page)).toHaveText('4 changes suggested.', { timeout: 120_000 });
   await expect(deep(page).getByRole('listitem')).toHaveText([
     /I hashave a apple/,
@@ -123,14 +127,63 @@ test('downloads only when asked, then checks the text and makes its changes', as
   expect(requests.join('\n')).not.toContain('apple');
 
   await button(page, 'Remove Deep check from this device').click();
+  const remove = page.getByRole('dialog', { name: 'Remove Deep check?' });
+  // Read out with its title (audit 5 G-3).
+  await expect(remove).toHaveAccessibleDescription(
+    'It’s removed from this device, freeing its space. You can download it again later.',
+  );
+  await remove.getByRole('button', { name: 'Remove' }).click();
+  await expect(button(page, 'Download Deep check')).toBeFocused();
+  expect(await page.evaluate(() => caches.has('deep-check'))).toBe(false);
+  await page.reload();
+  await expect(button(page, 'Download Deep check')).toBeVisible();
+});
+
+test('“Check my text” works again after Deep check is removed while it starts (audit 5 F3-5)', async ({
+  page,
+}) => {
+  await open(page);
+  await text(page).fill('She go to school every days.');
+  await download(page);
+  const check = deep(page).locator('[data-action="deep-run"]');
+  await check.click();
+  await expect(page.locator('[data-announcer]')).toHaveText(
+    'Starting Deep check. This takes a few seconds…',
+  );
+  await expect(check).toHaveAttribute('aria-disabled', 'true');
+
+  // Removed while it starts: before, the button stayed busy for good, with
+  // the progress bar, and the next download found it like that.
+  await button(page, 'Remove Deep check from this device').click();
   await page
     .getByRole('dialog', { name: 'Remove Deep check?' })
     .getByRole('button', { name: 'Remove' })
     .click();
   await expect(button(page, 'Download Deep check')).toBeFocused();
-  expect(await page.evaluate(() => caches.has('deep-check'))).toBe(false);
-  await page.reload();
-  await expect(button(page, 'Download Deep check')).toBeVisible();
+  await expect(check).not.toHaveAttribute('aria-disabled');
+  await expect(deep(page).locator('[data-deep-check-progress]')).toBeHidden();
+  await expect(deepStatus(page)).toHaveText('');
+
+  await download(page);
+  await check.click();
+  await expect(button(page, 'Change “go” to “goes”')).toBeVisible({ timeout: 120_000 });
+});
+
+test('says when a file arrives damaged, instead of blaming the connection (audit 5 F3-10)', async ({
+  page,
+}) => {
+  await open(page);
+  // One small file comes back changed: a damaged copy on the site, say.
+  await page.route('**/on-demand/deep-check/labels.*', async (route) => {
+    const response = await route.fetch();
+    await route.fulfill({ response, body: `${await response.text()}\nextra` });
+  });
+  await button(page, 'Download Deep check').click();
+  await expect(deep(page).locator('[data-deep-problem]')).toHaveText(
+    /^One of the files arrived damaged, so it wasn’t kept\. Try again\./,
+    { timeout: 120_000 },
+  );
+  await expect(button(page, 'Download Deep check')).toBeFocused();
 });
 
 test.describe('offline', () => {
