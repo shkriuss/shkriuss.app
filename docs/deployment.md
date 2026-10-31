@@ -296,6 +296,8 @@ Everything here fits Cloudflare's and GitHub's free plans:
   40,000 of the 100,000 free daily Durable Object requests that every app
   shares.
 - The domain renewal, and R2 above 10 GB, are your only regular costs.
+- Optional: the **Claude** workflow is paid from your Claude API balance,
+  for the runs you start ([claude-in-github.md](claude-in-github.md#what-it-costs)).
 
 ## Troubleshooting
 
