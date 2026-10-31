@@ -464,9 +464,12 @@ export function mountCalendar(root: Document): void {
   });
 
   // A new day, while Calendar stays open or when it comes back on screen:
-  // move "today" along, as the other apps do (audit F1-12).
+  // move "today" along, as the other apps do (audit F1-12). Unless keyboard
+  // focus is on the day in the month: the chosen day is the one in the Tab
+  // order, and moving on left focus on a day that was neither, without its
+  // focus ring (audit 5 G-8). It stays chosen; the arrow keys move on.
   onNewDay((day, before) => {
-    if (selected === before) selected = day;
+    if (selected === before && !weeksBody.contains(root.activeElement)) selected = day;
     viewMonth = shiftMonth(selected, 0);
     // Drawn again in the background: keyboard focus stays where it was (audit G-3).
     keepFocus(render, newEventButton);

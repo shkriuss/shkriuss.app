@@ -7,6 +7,7 @@
 import { showFieldProblems } from '@shkriuss/ui/dom';
 import { hasEdits } from '@shkriuss/sync/edits';
 import { focusSpot, returnFocus, type FocusSpot } from '@shkriuss/ui/keep-focus';
+import { watchTextLimits } from '@shkriuss/ui/text-limit';
 import {
   addDays,
   daysBetween,
@@ -88,6 +89,8 @@ export function mountEventEditor(root: Document, page: EditorPage): EventEditor 
   const repeatUntilInput = input<HTMLInputElement>('repeatUntil');
   const reminderInput = input<HTMLSelectElement>('reminder');
   const notesInput = input<HTMLTextAreaElement>('notes');
+  // A paste longer than a box takes is cut by the browser: say so (audit 5 F1-4).
+  const limits = watchTextLimits(form);
 
   const deleteDialog = required<HTMLDialogElement>(root, '[data-delete-dialog]');
   const deleteMessage = required<HTMLElement>(deleteDialog, '[data-delete-message]');
@@ -169,6 +172,7 @@ export function mountEventEditor(root: Document, page: EditorPage): EventEditor 
     if (editor.open) return;
     editingId = event?.id ?? null;
     opener = from;
+    limits.clear();
     showProblems({});
     editorTitle.textContent = event ? 'Edit event' : 'New event';
     deleteButton.hidden = !event;

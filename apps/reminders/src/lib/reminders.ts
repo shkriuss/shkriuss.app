@@ -28,6 +28,7 @@ import type { Notice } from '@shkriuss/push';
 import { secondVersionName } from '@shkriuss/sync';
 import { withEdits } from '@shkriuss/sync/edits';
 import { DATE_LOCALE, ordinal, timeLabel } from '@shkriuss/ui/locale';
+import { cutToLength } from '@shkriuss/ui/text';
 
 export type Repeat = 'none' | 'daily' | 'weekdays' | 'weekly' | 'monthly' | 'yearly';
 export const REPEATS: readonly Repeat[] = [
@@ -71,6 +72,14 @@ export const MAX_REMINDERS = 300;
 
 export const emptyReminders = (): RemindersState => ({ reminders: [] });
 
+/**
+ * Whether text fits a box that takes `max` characters, counted as people
+ * see them (an emoji once), the way an iPhone's box counts: counted as
+ * JavaScript does, a box full of emoji was refused as too long (audit 5
+ * F1-5).
+ */
+const fits = (text: string, max: number): boolean => cutToLength(text, max) === text;
+
 // ---------- Checking ----------
 
 const isStamp = (value: unknown): value is Stamp =>
@@ -113,7 +122,10 @@ export type Problems = Partial<Record<'text' | 'date' | 'time', string>>;
  * Whether saving `draft` sets a reminder for a time (so it must still be to
  * come): a new one, one done (saving sets it again), or one given another
  * day, time or repeat. Only an overdue one's text corrected doesn't (audit 4
- * F1-8).
+ * F1-8). `reminder` is the one as its form opened: compared with the
+ * reminder as it is now, one ticked done or put off elsewhere meanwhile
+ * (a sync, or another tab) made a text-only correction count as setting
+ * the old, passed time, so it was refused (audit 5 F1-2).
  */
 const setsTime = (reminder: Reminder | undefined, draft: Draft): boolean =>
   reminder === undefined ||
@@ -125,20 +137,19 @@ const setsTime = (reminder: Reminder | undefined, draft: Draft): boolean =>
 /**
  * What's wrong with a reminder as typed, field by field. A reminder that
  * doesn't repeat must still be to come (`now`), when it's set (setsTime);
- * `editing` is the one being changed, if any (it doesn't count towards the
- * limit).
+ * `editing` is the one being changed, as its form opened, if any (it
+ * doesn't count towards the limit).
  */
 export function problems(
   draft: Draft,
   state: RemindersState,
   now: Stamp,
-  editing?: string,
+  editing?: Reminder,
 ): Problems {
   const found: Problems = {};
   const text = draft.text.trim();
   if (text === '') found.text = 'Write what to be reminded of.';
-  else if (text.length > MAX_TEXT_LENGTH)
-    found.text = `Use ${MAX_TEXT_LENGTH} characters or fewer.`;
+  else if (!fits(text, MAX_TEXT_LENGTH)) found.text = `Use ${MAX_TEXT_LENGTH} characters or fewer.`;
   else if (editing === undefined && state.reminders.length >= MAX_REMINDERS) {
     found.text = `You can have up to ${MAX_REMINDERS} reminders.`;
   }
@@ -148,10 +159,7 @@ export function problems(
     !found.date &&
     draft.repeat === 'none' &&
     toStamp(draft.date, draft.time) <= now &&
-    setsTime(
-      state.reminders.find((reminder) => reminder.id === editing),
-      draft,
-    )
+    setsTime(editing, draft)
   ) {
     found.time = 'Choose a time that’s still to come.';
   }

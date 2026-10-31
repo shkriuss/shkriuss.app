@@ -118,6 +118,13 @@ its notification server, docs/adr/0009).
   UnifiedPush, such as IronFox with the Sunup app.
 - **On iPhone and iPad**, notifications only work after adding Calendar to
   the Home Screen (iOS 16.4 or later).
+- **Text limits** (a title of 100 characters, notes of 1,000) count
+  characters as people see them, as an iPhone's text boxes count what fits
+  in them: a flag or a family emoji is one, so what a full box holds is
+  never refused, on saving or when it's loaded or synced (audit 5 F1-5). A
+  device still on the version before this one can't read a text that only
+  this counting lets in, and shows a sync problem until it's updated
+  (reload the page there).
 - **Import limits.** Calendar can't show everything a .ics file can say yet:
   repeats like "every 2 weeks" or "Mondays and Wednesdays", and changes to
   single dates of a repeating event, are listed as not imported. Times with a

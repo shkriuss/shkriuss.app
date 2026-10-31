@@ -256,9 +256,10 @@ offline copy too. Start loading it once the page has nothing else to do,
 not when it's tapped: an iPhone raises its keyboard only for a field
 focused within the tap, so the form has to be there by then. Repairs'
 forms (`later` and `whenIdle` in `apps/repairs/src/scripts/repairs.ts`)
-show how; Calendar's event editor (`openEditor` in
-`apps/calendar/src/scripts/calendar.ts`) loads when first opened (audit 4
-J-6).
+show how, and Tasks' form and list editor load the same way
+(`apps/tasks/src/scripts/later.ts`, audit 5 J-2); Calendar's event editor
+(`openEditor` in `apps/calendar/src/scripts/calendar.ts`) loads when first
+opened (audit 4 J-6).
 
 ## Heavy work and WebAssembly (optional)
 

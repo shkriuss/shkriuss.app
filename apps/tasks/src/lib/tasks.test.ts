@@ -340,6 +340,107 @@ describe('changes', () => {
       const saved = editedTask(opened, { ...opened, notes: 'Not too much' }, plants.id, 6000);
       expect(saved).toMatchObject({ id: plants.id, date: TODAY, notes: 'Not too much' });
     });
+
+    // The steps were one field: renaming one here put back every tick made
+    // elsewhere meanwhile (audit 5 F1-1). Now they're merged step by step.
+    describe('merges the steps one by one', () => {
+      const trip = task({
+        title: 'Trip',
+        steps: [
+          { id: 'hotel', title: 'Book the hotel', done: false },
+          { id: 'pack', title: 'Pack', done: false },
+          { id: 'tickets', title: 'Tickets', done: false },
+        ],
+      });
+      const before = draftOf(trip);
+      const stepsOf = (edited: TaskDraft, current: Task | undefined) =>
+        editedTask(before, edited, trip.id, 9000, current).steps;
+      const rename = (steps: TaskDraft['steps'], id: string, title: string) =>
+        steps.map((step) => (step.id === id ? { ...step, title } : step));
+
+      it('keeps a step ticked elsewhere while another is renamed here', () => {
+        // On the phone, "Book the hotel" is ticked in the list.
+        const ticked = tickStep(stateOf(trip), trip.id, 'hotel', true, 5000).tasks[0];
+        const edited = { ...before, steps: rename(before.steps, 'pack', 'Pack the bags') };
+        expect(stepsOf(edited, ticked)).toEqual([
+          { id: 'hotel', title: 'Book the hotel', done: true },
+          { id: 'pack', title: 'Pack the bags', done: false },
+          { id: 'tickets', title: 'Tickets', done: false },
+        ]);
+        // Ticked there and renamed here: both.
+        const edits = { ...before, steps: rename(before.steps, 'hotel', 'Book the hotel room') };
+        expect(stepsOf(edits, ticked)[0]).toEqual({
+          id: 'hotel',
+          title: 'Book the hotel room',
+          done: true,
+        });
+        // Unticked here after it was ticked there: the change here wins.
+        const unticked = {
+          ...before,
+          steps: before.steps.map((step) => ({ ...step, done: step.id === 'hotel' })),
+        };
+        const back = { ...unticked, steps: rename(before.steps, 'pack', 'Pack the bags') };
+        expect(editedTask(unticked, back, trip.id, 9000, ticked).steps[0]?.done).toBe(false);
+      });
+
+      it('keeps steps added on either side, and removes those removed here', () => {
+        const there: Task = {
+          ...trip,
+          steps: [...trip.steps, { id: 'insurance', title: 'Insurance', done: false }],
+        };
+        const edited = {
+          ...before,
+          steps: [
+            ...before.steps.filter((step) => step.id !== 'tickets'),
+            { id: 'visa', title: 'Visa', done: false },
+          ],
+        };
+        expect(stepsOf(edited, there).map((step) => step.id)).toEqual([
+          'hotel',
+          'pack',
+          'visa',
+          'insurance',
+        ]);
+        // Removed here even though it was ticked there.
+        const ticked = tickStep(stateOf(trip), trip.id, 'tickets', true, 5000).tasks[0];
+        expect(stepsOf(edited, ticked).map((step) => step.id)).toEqual(['hotel', 'pack', 'visa']);
+      });
+
+      it('keeps the merged steps when the form wins over a change that doesn’t fit it', () => {
+        // The phone cleared the date and ticked "Book the hotel"; here, a
+        // reminder was set, which needs a date: the form's date and reminder
+        // win, as they were checked, and the tick stays all the same.
+        const dated = task({
+          title: 'Trip',
+          date: '2026-10-20',
+          steps: trip.steps.map((step) => ({ ...step })),
+        });
+        const opened = draftOf(dated);
+        const cleared = { ...dated, date: null, time: null, reminder: null, steps: [] };
+        const there = tickStep(
+          stateOf({ ...cleared, steps: dated.steps }),
+          dated.id,
+          'hotel',
+          true,
+          5000,
+        ).tasks[0];
+        const saved = editedTask(opened, { ...opened, reminder: '10' }, dated.id, 9000, there);
+        expect(saved.date).toBe('2026-10-20');
+        expect(saved.reminder).toBe(10);
+        expect(saved.steps[0]).toEqual({ id: 'hotel', title: 'Book the hotel', done: true });
+      });
+
+      it('lets a step removed elsewhere stay only if it was changed here', () => {
+        const there: Task = { ...trip, steps: trip.steps.filter((step) => step.id !== 'pack') };
+        expect(stepsOf(before, there).map((step) => step.id)).toEqual(['hotel', 'tickets']);
+        const edited = { ...before, steps: rename(before.steps, 'pack', 'Pack the bags') };
+        expect(stepsOf(edited, there)).toEqual([
+          { id: 'hotel', title: 'Book the hotel', done: false },
+          { id: 'pack', title: 'Pack the bags', done: false },
+          { id: 'tickets', title: 'Tickets', done: false },
+        ]);
+      });
+    });
   });
 
   it('comes back to its day of the month after a short month', () => {

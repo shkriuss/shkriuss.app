@@ -3,6 +3,7 @@
  * Every function returns new data instead of changing the old.
  */
 import { secondVersionName } from '@shkriuss/sync';
+import { cutToLength } from '@shkriuss/ui/text';
 import {
   addDays,
   compareDates,
@@ -72,6 +73,15 @@ export type DraftField =
   | 'notes'
   | 'form';
 
+/**
+ * Whether text fits a box that takes `max` characters, counted as people
+ * see them (an emoji once), the way an iPhone's box counts: counted as
+ * JavaScript does, a box full of emoji was refused as too long (audit 5
+ * F1-5). Saved data is checked the same way (isCalendarState), so what an
+ * iPhone lets in is kept.
+ */
+const fits = (text: string, max: number): boolean => cutToLength(text, max) === text;
+
 /** Reminders run from 4 weeks before to the start (all-day: to 23:59 on the first day). */
 export function isValidReminder(minutes: unknown, allDay: boolean): minutes is number {
   return (
@@ -102,7 +112,7 @@ export function draftProblems(draft: EventDraft): Partial<Record<DraftField, str
   const problems: Partial<Record<DraftField, string>> = {};
   const title = draft.title.trim();
   if (!title) problems.title = 'Enter a title.';
-  else if (title.length > MAX_TITLE_LENGTH)
+  else if (!fits(title, MAX_TITLE_LENGTH))
     problems.title = `Use ${MAX_TITLE_LENGTH} characters or fewer.`;
 
   if (!isIsoDate(draft.startDate)) problems.startDate = 'Enter a valid start date.';
@@ -153,7 +163,7 @@ export function draftProblems(draft: EventDraft): Partial<Record<DraftField, str
   }
   if (draft.reminder !== null && !isValidReminder(draft.reminder, allDay))
     problems.reminder = 'Choose when to be reminded.';
-  if (draft.notes.length > MAX_NOTES_LENGTH)
+  if (!fits(draft.notes, MAX_NOTES_LENGTH))
     problems.notes = `Use ${MAX_NOTES_LENGTH} characters or fewer.`;
   return problems;
 }

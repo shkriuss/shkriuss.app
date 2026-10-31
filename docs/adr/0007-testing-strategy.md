@@ -45,7 +45,9 @@ reach production, and new apps should get strong checks without extra work.
   its photo viewer now load with `import()` once the page has opened
   (Calendar's event editor uses `import()` too, when first opened). Code
   loaded that way isn't counted either, so it's how to cut weight before
-  raising a budget ([quality.md](../quality.md)).
+  raising a budget ([quality.md](../quality.md)). Tasks, the biggest page by
+  the fifth audit and almost at the budget, loads its form and list editor
+  that way too (audit 5 J-2).
 
 ## Consequences
 
