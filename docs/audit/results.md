@@ -8,12 +8,13 @@ The repository is public, so anything still open that could be used against
 anyone is listed here without its details until it's fixed (see
 [SECURITY.md](../../SECURITY.md)).
 
-## Four audits, four sets of numbers
+## Five audits, five sets of numbers
 
 Each audit numbered its findings by area from 1, so "B-2" means a different
 finding in each. Here, the second audit's numbers start with 2 ("2B-2"), the
-third's with 3 ("3B-2") and the fourth's with 4 ("4B-2"). Code comments,
-commits and docs name the finding they fix like this:
+third's with 3 ("3B-2"), the fourth's with 4 ("4B-2") and the fifth's with 5
+("5B-2"). Code comments, commits and docs name the finding they fix like
+this:
 
 | Audit                                | Fixed in                                                                                                                              | Written there as                      | Here |
 | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- | ---- |
@@ -21,11 +22,12 @@ commits and docs name the finding they fix like this:
 | [Second](#second-audit), 79 findings | [#70](https://github.com/shkriuss/shkriuss.app/pull/70) to [#77](https://github.com/shkriuss/shkriuss.app/pull/77), 25 October        | "(audit B-2)", in #70 to #77          | 2B-2 |
 | [Third](#third-audit), 77 findings   | [#79](https://github.com/shkriuss/shkriuss.app/pull/79) to [#88](https://github.com/shkriuss/shkriuss.app/pull/88), 26 October        | "(audit 3 B-2)"                       | 3B-2 |
 | [Fourth](#fourth-audit), 78 findings | [#89](https://github.com/shkriuss/shkriuss.app/pull/89) to [#93](https://github.com/shkriuss/shkriuss.app/pull/93), 26 and 27 October | "(audit 4 B-2)"                       | 4B-2 |
+| [Fifth](#fifth-audit), 81 findings   | [#94](https://github.com/shkriuss/shkriuss.app/pull/94) to [#99](https://github.com/shkriuss/shkriuss.app/pull/99), 27 October        | "(audit 5 B-2)"                       | 5B-2 |
 
 So an "(audit B-2)" without an audit number means the first or the second
 audit: the history of its line (`git blame`, or **Blame** on GitHub) shows
 which pull request wrote it. The next audit writes its own number the same
-way: "(audit 5 B-2)" in code, "5B-2" here (the brief says so too).
+way: "(audit 6 B-2)" in code, "6B-2" here (the brief says so too).
 
 ## First audit
 
@@ -798,3 +800,243 @@ Severity is the auditor's, as before.
 | ID   | Severity | What was wrong                                                          | What happened                                                                                                |
 | ---- | -------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | 4Z-1 | Info     | The brief's security goals 4 and 8 promised what the free plan can't do | Fixed: the brief names it as an accepted exception ([#89](https://github.com/shkriuss/shkriuss.app/pull/89)) |
+
+## Fifth audit
+
+### How it was done
+
+- **Who:** Claude Code (27 October 2026), at commit `9f382e9`. It did area I
+  (the live domain, Cloudflare and GitHub settings) itself, and separate
+  reviews did A, B, C, D, E, F1, F2, F3, G, H, J and Z; every finding was
+  checked against the code again (its proof test run, or the code it points
+  to read) before anything was changed. The fixes were made in six batches
+  by separate sessions, and each batch was read again before it was merged
+  (the app batches by a separate review), which found a few problems in the
+  first versions of the fixes: a step still lost in one Tasks case, big
+  trades with decimals, a photo's files left behind on a full device. Those
+  are fixed in the same pull requests.
+- **What:** as before: the code, the workflows, and the live sites and
+  settings (read-only).
+- **Evidence:** each finding came with a test or a command that shows it.
+  Each fix comes with a test that fails without it, where one can be
+  written.
+- **Fixes:** in pull requests ([#94](https://github.com/shkriuss/shkriuss.app/pull/94)) (CI, deploys, supply chain and docs),
+  ([#95](https://github.com/shkriuss/shkriuss.app/pull/95)) (the browser platform, storage, data controls and backups), ([#96](https://github.com/shkriuss/shkriuss.app/pull/96))
+  (sync, the account, the servers and the privacy page), ([#97](https://github.com/shkriuss/shkriuss.app/pull/97)) (Calendar,
+  Reminders, Habits, Tasks and Water), ([#98](https://github.com/shkriuss/shkriuss.app/pull/98)) (Budget, Trades, Repairs, Meals
+  and Tally) and ([#99](https://github.com/shkriuss/shkriuss.app/pull/99)) (Notes, Shelf, Grammar and Photos). This page, the
+  brief's own corrections (5J-7) and PLAN.md's line counts (5J-3) come in a
+  pull request of their own.
+
+### Totals
+
+| Severity | Found | Fixed | Partly fixed | Explained |
+| -------- | ----- | ----- | ------------ | --------- |
+| High     | –     | –     | –            | –         |
+| Medium   | 8     | 8     | –            | –         |
+| Low      | 42    | 40    | –            | 2         |
+| Info     | 31    | 27    | –            | 4         |
+| **All**  | 81    | 75    | –            | 6         |
+
+There were no Critical or High findings: no way was found for anyone to read
+or change someone else's data, take over an account, run code on the sites,
+or run up costs. The eight Medium findings were about data that could go
+wrong quietly (an edit made with no connection dated too late, "Turn off"
+that didn't, a replaced key reaching the data again, a trade that could
+never be closed), two ways a stranger could make the servers keep something
+for good, a one-year cache header on a "not found" answer, and lockfile
+checks that could be got around.
+
+### What's left for you
+
+**Settings** (all described in [deployment.md](../deployment.md)):
+
+- After the browser platform pull request is live, the check after the
+  deploy compares each site's `robots.txt` with the one it ships (5I-1). If
+  that check fails, Cloudflare's managed `robots.txt` is still adding its
+  text: turn it off under **Security → Settings → Bot traffic**.
+- Once: **Actions → Keep caches → Run workflow**, then look at **Actions →
+  Caches** (5H-2). Grammar's model has one download source (Hugging Face)
+  and CI's cache as the only copy; a second source needs a copy you
+  control ([ADR 0012](../adr/0012-deep-check-ai-model.md) says what).
+- Optional: **Require branches to be up to date before merging** in the
+  `main` ruleset (5I-3), with the cost it brings; **Zone Holds** for
+  shkriuss.app and the auto-renew switch of each other domain in the
+  account (5I-4); and the two leftover Email Routing rules, which can be
+  deleted through Cloudflare's API with a token that may edit them (5I-2).
+
+**Choices made for you, which you can change:**
+
+- A sync round still re-reads every synced store (5J-1): about 50 ms a
+  minute on the biggest apps. Skipping it safely has to key on the store's
+  text and the whole sync state together, which is more than a small change
+  should carry.
+- A note that a photo was deleted online stays sealed for the photo's id,
+  not for one upload of it (5A-2): a server that was restored or tampered
+  with could replay it after the photo is added again. The fix needs
+  Photos' photo record to keep something of each upload
+  ([ADR 0016](../adr/0016-online-photo-library.md)).
+- Two tabs of one app writing in the same few milliseconds as a sync's save
+  step can still lose a write (5E-9): stopping that needs a lock around
+  every save in every app ([ADR 0010](../adr/0010-account-and-sync.md)).
+- After an account key is replaced, an app in which nobody turned sync on
+  again for over 13 months, whose old copy nobody used meanwhile, could
+  still bring along a copy the old key started in between (the narrowest
+  case of 5A-1, [ADR 0017](../adr/0017-storage-limits.md)).
+- Helpers copied between apps (the "every typed word" search, `later` and
+  `whenIdle`, counting characters as an iPhone does, a message read out
+  again) are planned for the design system, as one change
+  ([PLAN.md](../PLAN.md), 5J-9).
+
+The second audit's Undo after one-tap removals is still open
+([above](#left-for-you-to-decide)).
+
+### Every finding
+
+Severity is the auditor's, as before.
+
+#### A. Account and keys
+
+| ID   | Severity | What was wrong                                                                                                                                                   | What happened                                                                                                                                                                                      |
+| ---- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 5A-1 | Medium   | A replaced account key reached the data again after the 13-month clean-up: the replacing device kept the old key for ever, and the server's "moved" note expired | Fixed ([#96](https://github.com/shkriuss/shkriuss.app/pull/96)); its narrowest case stays ([above](#whats-left-for-you-2))                                                                         |
+| 5A-2 | Low      | A photo's deletion note could be replayed after "Delete the online copy" and a re-add, deleting the photo everywhere (a malicious or restored server)            | Explained ([ADR 0016](../adr/0016-online-photo-library.md)): a fix needs Photos' photo record to change ([above](#whats-left-for-you-2)) ([#96](https://github.com/shkriuss/shkriuss.app/pull/96)) |
+| 5A-3 | Low      | A connect link with a key that isn't a curve point left the Account page's confirm button busy for good                                                          | Fixed ([#96](https://github.com/shkriuss/shkriuss.app/pull/96))                                                                                                                                    |
+| 5A-4 | Info     | A crafted backup file (an undecodable salt) got "Something went wrong" instead of the backup wording (same as 5E-6)                                              | Fixed ([#95](https://github.com/shkriuss/shkriuss.app/pull/95))                                                                                                                                    |
+| 5A-5 | Info     | The "turn sync off" proof in the hub's link was a permanent capability that lands in browser history                                                             | Fixed: it's for the day ([#96](https://github.com/shkriuss/shkriuss.app/pull/96))                                                                                                                  |
+
+#### B. Servers and the bill
+
+| ID   | Severity | What was wrong                                                                                                               | What happened                                                                                                                |
+| ---- | -------- | ---------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| 5B-1 | Medium   | A library made up through the `move` route never got a clean-up alarm, so strangers could fill Photos' library room for good | Fixed ([#96](https://github.com/shkriuss/shkriuss.app/pull/96))                                                              |
+| 5B-2 | Medium   | A device link whose expiry alarm Cloudflare gives up on stayed for good, and nothing counted links                           | Fixed: every link is a row in one object, swept at each request ([#96](https://github.com/shkriuss/shkriuss.app/pull/96))    |
+| 5B-3 | Low      | The sync files meter counted only the files' bytes; the smallest files took six times the room it saw                        | Fixed ([#96](https://github.com/shkriuss/shkriuss.app/pull/96))                                                              |
+| 5B-4 | Info     | The free plan's row writes run out far sooner than its requests, and no doc or test said so                                  | Fixed: ADRs 0010 and 0017 say so, with the counts pinned by a test ([#96](https://github.com/shkriuss/shkriuss.app/pull/96)) |
+
+#### C. Pages and the browser
+
+| ID   | Severity | What was wrong                                                                                      | What happened                                                                                                                                                                          |
+| ---- | -------- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 5C-1 | Low      | A headers-only deploy didn't reach a worker script the browser's own cache held for a year          | Fixed ([#95](https://github.com/shkriuss/shkriuss.app/pull/95))                                                                                                                        |
+| 5C-2 | Info     | Offline, a page address without its trailing slash showed "Page not found"                          | Fixed ([#95](https://github.com/shkriuss/shkriuss.app/pull/95))                                                                                                                        |
+| 5C-3 | Info     | A few newer browser features weren't named in the Permissions-Policy                                | Fixed ([#95](https://github.com/shkriuss/shkriuss.app/pull/95))                                                                                                                        |
+| 5C-4 | Info     | Any website could start an app's connect flow, or make it say "Sync is off", with a link (harmless) | Fixed for "off" (an app already off says nothing); the connect link explained in [ADR 0010](../adr/0010-account-and-sync.md) ([#96](https://github.com/shkriuss/shkriuss.app/pull/96)) |
+
+#### D. Privacy and what the pages promise
+
+| ID   | Severity | What was wrong                                                                                                                                                                                      | What happened                                                                                                                                                                     |
+| ---- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 5D-1 | Low      | "Delete all data" left the reminders check behind in six apps, and their privacy lines didn't list it                                                                                               | Fixed ([#95](https://github.com/shkriuss/shkriuss.app/pull/95); the privacy lines in [#96](https://github.com/shkriuss/shkriuss.app/pull/96))                                     |
+| 5D-2 | Low      | A second Notes tab with typing waiting to be saved put the note back right after "Delete all data"                                                                                                  | Fixed ([#99](https://github.com/shkriuss/shkriuss.app/pull/99))                                                                                                                   |
+| 5D-3 | Info     | Small privacy-page and doc statements no longer exact (deleted-library leftovers, locked libraries deleted after 30 days, the replaced-key note's times, Photos' change counter, Deep check's size) | Fixed ([#96](https://github.com/shkriuss/shkriuss.app/pull/96), [#95](https://github.com/shkriuss/shkriuss.app/pull/95), [#99](https://github.com/shkriuss/shkriuss.app/pull/99)) |
+
+#### E. Saving and syncing data
+
+| ID   | Severity | What was wrong                                                                                              | What happened                                                                                                                                                     |
+| ---- | -------- | ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 5E-1 | Medium   | An edit made with no connection was dated when it next synced, so an older edit could overwrite a newer one | Fixed ([#96](https://github.com/shkriuss/shkriuss.app/pull/96))                                                                                                   |
+| 5E-2 | Medium   | "Turn off on this device" stayed on when the browser's storage was full, and said it was off                | Fixed ([#96](https://github.com/shkriuss/shkriuss.app/pull/96))                                                                                                   |
+| 5E-3 | Low      | After a rollback the app opened empty with no explanation, and Restore then replaced the newer data         | Fixed ([#95](https://github.com/shkriuss/shkriuss.app/pull/95))                                                                                                   |
+| 5E-4 | Low      | Photos: a deletion or save that stopped between its two steps left photo files on the device for good       | Fixed ([#99](https://github.com/shkriuss/shkriuss.app/pull/99))                                                                                                   |
+| 5E-5 | Low      | IndexedDB: a connection the browser closed on its own was reused until the page was reloaded (suspicion)    | Fixed ([#95](https://github.com/shkriuss/shkriuss.app/pull/95))                                                                                                   |
+| 5E-6 | Info     | A locked backup with an undecodable salt or IV got "Something went wrong" (same as 5A-4)                    | Fixed ([#95](https://github.com/shkriuss/shkriuss.app/pull/95))                                                                                                   |
+| 5E-7 | Low      | If putting the old data back after a failed restore also failed, the old data was gone (suspicion)          | Fixed: each key is replaced in its place, and put back in an order that fits ([#95](https://github.com/shkriuss/shkriuss.app/pull/95))                            |
+| 5E-8 | Info     | A plain backup didn't round-trip a value saved as a quoted JSON string (none exists today)                  | Fixed ([#95](https://github.com/shkriuss/shkriuss.app/pull/95))                                                                                                   |
+| 5E-9 | Info     | Two tabs: a write in the few milliseconds of a sync round's save step could be lost (suspicion)             | Explained ([ADR 0010](../adr/0010-account-and-sync.md)): a known limit ([above](#whats-left-for-you-2)) ([#96](https://github.com/shkriuss/shkriuss.app/pull/96)) |
+
+#### F1. Calendar, Tasks, Reminders, Habits, Water
+
+| ID    | Severity | What was wrong                                                                                                   | What happened                                                   |
+| ----- | -------- | ---------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| 5F1-1 | Low      | Tasks: a step ticked on another device was lost when any step was changed in a form open meanwhile               | Fixed ([#97](https://github.com/shkriuss/shkriuss.app/pull/97)) |
+| 5F1-2 | Low      | Reminders: a text-only correction of an overdue reminder was refused once another device ticked it or put it off | Fixed ([#97](https://github.com/shkriuss/shkriuss.app/pull/97)) |
+| 5F1-3 | Low      | Habits, Tasks, Reminders, Water: a reminder due in the minute the app was opened never rang in the open app      | Fixed ([#95](https://github.com/shkriuss/shkriuss.app/pull/95)) |
+| 5F1-4 | Low      | Calendar, Tasks, Reminders, Habits: a long paste was cut without a word (same as 5G-4)                           | Fixed ([#97](https://github.com/shkriuss/shkriuss.app/pull/97)) |
+| 5F1-5 | Low      | Reminders, Habits, Calendar: on an iPhone the box let in more than the rules accepted (counted differently)      | Fixed ([#97](https://github.com/shkriuss/shkriuss.app/pull/97)) |
+| 5F1-6 | Info     | Habits: streaks were worked out day by day from the oldest check mark on every redraw                            | Fixed ([#97](https://github.com/shkriuss/shkriuss.app/pull/97)) |
+| 5F1-7 | Info     | Habits, Tasks, Water: "today" lagged up to a minute after midnight while the page was on screen                  | Fixed ([#97](https://github.com/shkriuss/shkriuss.app/pull/97)) |
+
+#### F2. Budget, Trades, Repairs, Meals, Tally
+
+| ID    | Severity | What was wrong                                                                                                                      | What happened                                                                                     |
+| ----- | -------- | ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| 5F2-1 | Medium   | Trades: a trade of 10 billion tokens or more could never be fully closed in parts, and "Delete a year" then kept its parts for ever | Fixed, for big trades with decimals too ([#98](https://github.com/shkriuss/shkriuss.app/pull/98)) |
+| 5F2-2 | Low      | Budget: "Spent" and "Left" were rounded once at the end, so months in the trillions didn't match the categories                     | Fixed ([#98](https://github.com/shkriuss/shkriuss.app/pull/98))                                   |
+| 5F2-3 | Low      | Budget, Trades, Repairs, Meals, Tally: on iPhones, text the box let in was refused on saving                                        | Fixed ([#98](https://github.com/shkriuss/shkriuss.app/pull/98))                                   |
+| 5F2-4 | Low      | Repairs: hours were kept with any decimals but shown to two, so totals didn't match                                                 | Fixed ([#98](https://github.com/shkriuss/shkriuss.app/pull/98))                                   |
+| 5F2-5 | Info     | A number too long to be one was called "not a number"                                                                               | Fixed ([#98](https://github.com/shkriuss/shkriuss.app/pull/98))                                   |
+| 5F2-6 | Info     | Trades' spreadsheet wrote tiny prices with an exponent                                                                              | Fixed ([#98](https://github.com/shkriuss/shkriuss.app/pull/98))                                   |
+| 5F2-7 | Info     | Tests: gaps that let 5F2-1, 5F2-2 and 5F2-4 through                                                                                 | Fixed ([#98](https://github.com/shkriuss/shkriuss.app/pull/98))                                   |
+
+#### F3. Notes, Shelf, Grammar, Photos
+
+| ID     | Severity | What was wrong                                                                                                                 | What happened                                                   |
+| ------ | -------- | ------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------- |
+| 5F3-1  | Low      | Shelf: saving an unchanged form brought back an item deleted on another device                                                 | Fixed ([#99](https://github.com/shkriuss/shkriuss.app/pull/99)) |
+| 5F3-2  | Low      | Shelf: the "(second version)" name was cut inside an emoji, a flag or an accent                                                | Fixed ([#99](https://github.com/shkriuss/shkriuss.app/pull/99)) |
+| 5F3-3  | Low      | Shelf: non-Latin links were saved and shown encoded, and a link that fit the box could be refused                              | Fixed ([#99](https://github.com/shkriuss/shkriuss.app/pull/99)) |
+| 5F3-4  | Low      | Shelf: most Japanese web addresses stayed as "xn--…", though the README said Japanese is shown                                 | Fixed ([#99](https://github.com/shkriuss/shkriuss.app/pull/99)) |
+| 5F3-5  | Low      | Grammar: "Check my text" stayed unusable after Deep check was removed or updated while starting                                | Fixed ([#99](https://github.com/shkriuss/shkriuss.app/pull/99)) |
+| 5F3-6  | Low      | Photos: re-adding a photo this browser can't decode replaced its downloaded thumbnail with none                                | Fixed ([#99](https://github.com/shkriuss/shkriuss.app/pull/99)) |
+| 5F3-7  | Low      | Notes: an old note whose text was cleared was deleted silently when it was left                                                | Fixed ([#99](https://github.com/shkriuss/shkriuss.app/pull/99)) |
+| 5F3-8  | Low      | Notes: at 2,000 notes, typing in a note deleted elsewhere was silently never saved                                             | Fixed ([#99](https://github.com/shkriuss/shkriuss.app/pull/99)) |
+| 5F3-9  | Info     | Grammar: nothing tested that Harper's positions match JavaScript's after an emoji                                              | Fixed ([#99](https://github.com/shkriuss/shkriuss.app/pull/99)) |
+| 5F3-10 | Info     | Smaller points: Shelf's price parsing and search, Deep check's size and download message, HEIC across devices, odd photo names | Fixed ([#99](https://github.com/shkriuss/shkriuss.app/pull/99)) |
+
+#### G. Accessibility
+
+| ID   | Severity | What was wrong                                                                                                                                | What happened                                                                                                                                                                                                                                                                                                     |
+| ---- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 5G-1 | Low      | A control hidden (not replaced) by a background redraw dropped keyboard focus to the top of the page                                          | Fixed ([#95](https://github.com/shkriuss/shkriuss.app/pull/95); Tasks' list editor in [#97](https://github.com/shkriuss/shkriuss.app/pull/97))                                                                                                                                                                    |
+| 5G-2 | Low      | Photos: after "Unlock online storage" succeeded, focus was dropped to the top                                                                 | Fixed ([#99](https://github.com/shkriuss/shkriuss.app/pull/99))                                                                                                                                                                                                                                                   |
+| 5G-3 | Low      | Confirmation dialogs didn't read out what they would delete (80 of 94 dialogs had no description)                                             | Fixed, in every app ([#95](https://github.com/shkriuss/shkriuss.app/pull/95), [#96](https://github.com/shkriuss/shkriuss.app/pull/96), [#97](https://github.com/shkriuss/shkriuss.app/pull/97), [#98](https://github.com/shkriuss/shkriuss.app/pull/98), [#99](https://github.com/shkriuss/shkriuss.app/pull/99)) |
+| 5G-4 | Low      | Long pastes were still cut without a word in Tasks, Calendar, Habits, Reminders and Tally (same as 5F1-4)                                     | Fixed ([#97](https://github.com/shkriuss/shkriuss.app/pull/97); Tally in [#98](https://github.com/shkriuss/shkriuss.app/pull/98))                                                                                                                                                                                 |
+| 5G-5 | Low      | Grammar: a checker that couldn't be downloaded was blamed on the browser, with no "Try again"                                                 | Fixed ([#99](https://github.com/shkriuss/shkriuss.app/pull/99))                                                                                                                                                                                                                                                   |
+| 5G-6 | Low      | Grammar's Deep check said nothing to screen readers while it started and checked                                                              | Fixed ([#99](https://github.com/shkriuss/shkriuss.app/pull/99))                                                                                                                                                                                                                                                   |
+| 5G-7 | Low      | Photos: a picture that couldn't be downloaded wasn't announced in the viewer                                                                  | Fixed ([#99](https://github.com/shkriuss/shkriuss.app/pull/99))                                                                                                                                                                                                                                                   |
+| 5G-8 | Info     | Smaller points: Calendar's focus ring at midnight, repeated messages not read out, Grammar's "Clear the text?" wording, Repairs' button names | Fixed ([#97](https://github.com/shkriuss/shkriuss.app/pull/97), [#98](https://github.com/shkriuss/shkriuss.app/pull/98), [#99](https://github.com/shkriuss/shkriuss.app/pull/99))                                                                                                                                 |
+
+#### H. CI and deploys
+
+| ID   | Severity | What was wrong                                                                                        | What happened                                                                                                                                                                                                       |
+| ---- | -------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 5H-1 | Medium   | The lockfile checks could be bypassed by how the lockfile was written                                 | Fixed ([#94](https://github.com/shkriuss/shkriuss.app/pull/94))                                                                                                                                                     |
+| 5H-2 | Low      | With a cold cache every deploy depended on Hugging Face, and the download wasn't bounded              | Fixed: a bounded download, and a workflow that keeps CI's caches warm; a second download source needs a copy you control ([above](#whats-left-for-you-2)) ([#94](https://github.com/shkriuss/shkriuss.app/pull/94)) |
+| 5H-3 | Low      | The package-age check ran the pull request's own copy of the checker                                  | Fixed ([#94](https://github.com/shkriuss/shkriuss.app/pull/94))                                                                                                                                                     |
+| 5H-4 | Info     | The action-pinning unit test wasn't strict on its own (zizmor is what enforces it)                    | Fixed ([#94](https://github.com/shkriuss/shkriuss.app/pull/94))                                                                                                                                                     |
+| 5H-5 | Info     | Three doc sentences overstated or were stale ("exact files", ADR 0012's previews, the cache sentence) | Fixed ([#94](https://github.com/shkriuss/shkriuss.app/pull/94))                                                                                                                                                     |
+
+#### I. Domain and Cloudflare
+
+| ID   | Severity | What was wrong                                                                                                                                                         | What happened                                                                                                                                                                                                                 |
+| ---- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 5I-1 | Low      | Cloudflare served a `robots.txt` (its "Content Signals Policy") that the sites didn't have                                                                             | Fixed: every site ships its own, and the check after a deploy compares it ([above](#whats-left-for-you-2)) ([#95](https://github.com/shkriuss/shkriuss.app/pull/95), [#94](https://github.com/shkriuss/shkriuss.app/pull/94)) |
+| 5I-2 | Info     | The two leftover Email Routing rules can be removed through the API (the docs said they can't be deleted)                                                              | Fixed: deployment.md says how ([#94](https://github.com/shkriuss/shkriuss.app/pull/94))                                                                                                                                       |
+| 5I-3 | Info     | Merging didn't require a branch to be up to date with `main`                                                                                                           | Explained ([above](#whats-left-for-you-2)): optional, with its cost, in deployment.md ([#94](https://github.com/shkriuss/shkriuss.app/pull/94))                                                                               |
+| 5I-4 | Info     | Small hardening steps and notes: zone hold, secret-scanning extras, the account's other domains, CAA for email certificates, SSL Labs, stale `checklists` certificates | Explained ([above](#whats-left-for-you-2)): in deployment.md, for you to turn on ([#94](https://github.com/shkriuss/shkriuss.app/pull/94))                                                                                    |
+
+#### J. Architecture and tests
+
+| ID    | Severity | What was wrong                                                                                                                                        | What happened                                                                                                                                                                                                                                                                                                                        |
+| ----- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 5J-1  | Low      | Every sync round re-read and re-fingerprinted every item of every synced store on the main thread                                                     | Explained ([above](#whats-left-for-you-2)): left as is ([#96](https://github.com/shkriuss/shkriuss.app/pull/96))                                                                                                                                                                                                                     |
+| 5J-2  | Low      | The JavaScript budget was nearly used up again (Tasks 375 bytes under, Budget 829)                                                                    | Fixed: Tasks' form, Budget's forms, the backup code and sync's connect code load after the page ([#97](https://github.com/shkriuss/shkriuss.app/pull/97), [#98](https://github.com/shkriuss/shkriuss.app/pull/98), [#95](https://github.com/shkriuss/shkriuss.app/pull/95), [#96](https://github.com/shkriuss/shkriuss.app/pull/96)) |
+| 5J-3  | Low      | PLAN.md's line counts were wrong when written; Tasks' page script was one 880-line closure                                                            | Fixed ([#97](https://github.com/shkriuss/shkriuss.app/pull/97); PLAN.md here)                                                                                                                                                                                                                                                        |
+| 5J-4  | Low      | ADR 0017's body still described previews and "about two more apps"                                                                                    | Fixed ([#96](https://github.com/shkriuss/shkriuss.app/pull/96))                                                                                                                                                                                                                                                                      |
+| 5J-5  | Info     | ADR 0007 didn't record the ES2022 check (audit 4 J-3)                                                                                                 | Fixed ([#94](https://github.com/shkriuss/shkriuss.app/pull/94))                                                                                                                                                                                                                                                                      |
+| 5J-6  | Info     | adding-an-app.md's "Wait about a minute" for the New app workflow was optimistic                                                                      | Fixed ([#94](https://github.com/shkriuss/shkriuss.app/pull/94))                                                                                                                                                                                                                                                                      |
+| 5J-7  | Info     | The brief's "largest files" claim missed the sync client; the largest test file is 2,562 lines                                                        | Fixed (here)                                                                                                                                                                                                                                                                                                                         |
+| 5J-8  | Info     | What a newcomer needed that no doc mentioned (the in-memory Worker fakes, `ALLOW_LOCAL_ENDPOINTS`, running one test file or one site's browser tests) | Fixed ([#94](https://github.com/shkriuss/shkriuss.app/pull/94))                                                                                                                                                                                                                                                                      |
+| 5J-9  | Info     | The "every typed word is in the folded text" search was written five times                                                                            | Explained ([above](#whats-left-for-you-2)): planned, with the other copied helpers ([PLAN.md](../PLAN.md))                                                                                                                                                                                                                           |
+| 5J-10 | Info     | Three keep-focus tests picked sites from plain tables, so a new app was skipped there silently                                                        | Fixed ([#95](https://github.com/shkriuss/shkriuss.app/pull/95))                                                                                                                                                                                                                                                                      |
+
+#### Z. Anything else
+
+| ID   | Severity | What was wrong                                                                                                  | What happened                                                                                                                                          |
+| ---- | -------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 5Z-1 | Medium   | A missing file under `/_astro/` was served as "not found" with a one-year `immutable` cache header              | Fixed ([#95](https://github.com/shkriuss/shkriuss.app/pull/95))                                                                                        |
+| 5Z-2 | Low      | Downloads freed their file after one second, likely too soon for an iPhone's download prompt                    | Fixed ([#95](https://github.com/shkriuss/shkriuss.app/pull/95); the hub's wording in [#96](https://github.com/shkriuss/shkriuss.app/pull/96))          |
+| 5Z-3 | Low      | The Deep check licence file named Automattic as GECToR's copyright holder                                       | Fixed ([#99](https://github.com/shkriuss/shkriuss.app/pull/99))                                                                                        |
+| 5Z-4 | Info     | Gaps in the "nothing from other websites" guards: resource hints, loose `allowConsole`, no precache size budget | Fixed ([#94](https://github.com/shkriuss/shkriuss.app/pull/94); the hub's console messages in [#96](https://github.com/shkriuss/shkriuss.app/pull/96)) |
+| 5Z-5 | Info     | Four known advisories in a build-only dependency (`fast-uri`), below CI's gate                                  | Fixed ([#94](https://github.com/shkriuss/shkriuss.app/pull/94))                                                                                        |
