@@ -26,6 +26,7 @@ mark them "Superseded by ADR N" instead.
 | [0017](0017-storage-limits.md)                   | Limits on what the servers keep, and clean-up of copies nobody uses             | Accepted |
 | [0018](0018-passkey-signatures.md)               | The account service checks that a passkey was used on the Account page          | Accepted |
 | [0019](0019-no-pull-request-previews.md)         | No pull request previews: each site is only at its own domain                   | Accepted |
+| [0020](0020-claude-in-github-actions.md)         | Claude Code in GitHub Actions, started by hand, paid by the API balance         | Accepted |
 
 Template: **Context** (the problem), **Decision** (what we do), **Consequences**
 (good and bad), **Alternatives** (what we didn't pick and why).

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   BackupError,
+  base64ByteLength,
   decryptBackup,
   encryptBackup,
   passphraseProblem,
@@ -11,10 +12,19 @@ import {
 } from './backup.ts';
 import { createStore, exportAll, type ExportFile, type StorageLike } from './index.ts';
 
-/** In-memory stand-in for localStorage; can be given a maximum number of items, like a full disk. */
+/**
+ * In-memory stand-in for localStorage; can be given a maximum number of
+ * items, or of characters in its values (like a browser's quota), or made to
+ * refuse every write after some number, like a full disk.
+ */
 class MemoryStorage implements StorageLike {
   #map = new Map<string, string>();
   maxItems = Infinity;
+  maxChars = Infinity;
+  failAfterWrites = Infinity;
+  writes = 0;
+  /** Runs just before a write (what another tab might do meanwhile). */
+  beforeWrite: (() => void) | null = null;
   get length(): number {
     return this.#map.size;
   }
@@ -25,9 +35,23 @@ class MemoryStorage implements StorageLike {
     return this.#map.get(key) ?? null;
   }
   setItem(key: string, value: string): void {
-    if (!this.#map.has(key) && this.#map.size >= this.maxItems) {
+    this.beforeWrite?.();
+    const others = [...this.#map].reduce(
+      (sum, [name, text]) => sum + (name === key ? 0 : text.length),
+      0,
+    );
+    if (
+      (!this.#map.has(key) && this.#map.size >= this.maxItems) ||
+      others + value.length > this.maxChars ||
+      this.writes >= this.failAfterWrites
+    ) {
       throw new DOMException('Quota exceeded', 'QuotaExceededError');
     }
+    this.writes += 1;
+    this.#map.set(key, value);
+  }
+  /** What another tab wrote: no checks. */
+  wroteElsewhere(key: string, value: string): void {
     this.#map.set(key, value);
   }
   removeItem(key: string): void {
@@ -37,6 +61,9 @@ class MemoryStorage implements StorageLike {
     return [...this.#map.entries()].sort(([a], [b]) => a.localeCompare(b));
   }
 }
+
+/** `bytes` zero bytes in base64 (what a locked file's fields look like). */
+const zeros = (bytes: number) => btoa(String.fromCharCode(...new Uint8Array(bytes)));
 
 const PASSPHRASE = 'correct horse battery staple';
 // The fewest rounds a file may use; keeps the tests fast.
@@ -149,6 +176,51 @@ describe('readBackup', () => {
     expect(code(kdf(50_000_000))).toBe('not-a-backup'); // would freeze the page
     expect(code(JSON.stringify({ ...backup, data: 'not base64!' }))).toBe('not-a-backup');
   });
+
+  it('turns down a damaged locked file by its own words, not “Something went wrong” (audit 5 E-6, A-4)', async () => {
+    const backup = await encryptBackup(file, PASSPHRASE, FAST);
+    const code = (changed: Partial<EncryptedBackup>) => {
+      try {
+        readBackup(JSON.stringify({ ...backup, ...changed }), 'calendar');
+        return 'ok';
+      } catch (error) {
+        return (error as BackupError).code;
+      }
+    };
+    const withSalt = (salt: string) => ({ kdf: { ...backup.kdf, salt } });
+    // Text that looks like base64 but can't be decoded ("AAAAA" is no whole
+    // number of bytes): atob() threw from decryptBackup, outside its checks.
+    expect(code(withSalt('AAAAA'))).toBe('not-a-backup');
+    expect(code(withSalt('A'))).toBe('not-a-backup');
+    expect(code(withSalt(''))).toBe('not-a-backup');
+    // The wrong sizes: a salt of 8 bytes, a nonce of 16, data shorter than its check value.
+    expect(code(withSalt(zeros(8)))).toBe('not-a-backup');
+    expect(code({ cipher: { ...backup.cipher, iv: zeros(16) } })).toBe('not-a-backup');
+    expect(code({ data: zeros(15) })).toBe('not-a-backup');
+    expect(code({ data: '' })).toBe('not-a-backup');
+    expect(code({})).toBe('ok');
+    expect(code(withSalt(zeros(16)))).toBe('ok');
+  });
+
+  it('counts the bytes in base64 text the way atob() does', () => {
+    // Every text up to 6 characters long from a letter and the padding sign.
+    const texts = [''];
+    for (let length = 1; length <= 6; length += 1) {
+      for (const text of texts.filter((shorter) => shorter.length === length - 1)) {
+        texts.push(`${text}A`, `${text}=`);
+      }
+    }
+    for (const text of [...texts, 'ab+/', 'abc', 'a+/=', '+/==', 'AB+/ab==', 'AB+/abc=']) {
+      let expected: number | null;
+      try {
+        expected = atob(text).length;
+      } catch {
+        expected = null;
+      }
+      expect(base64ByteLength(text), JSON.stringify(text)).toBe(expected);
+    }
+    expect(base64ByteLength('not base64!')).toBeNull();
+  });
 });
 
 describe('restoreAll', () => {
@@ -177,6 +249,136 @@ describe('restoreAll', () => {
     const big = { ...file, data: { 'shkriuss:a': 1, 'shkriuss:b': 2, 'shkriuss:c': 3 } };
     expect(() => restoreAll(big, storage)).toThrow(/There isn’t enough room/);
     expect(storage.entries()).toEqual(before);
+  });
+
+  it('replaces each key in its place, and puts the old data back in an order that fits (audit 5 E-7)', () => {
+    // Room for 10 characters, all in use. The backup makes one key smaller
+    // and one bigger, and adds one that doesn't fit.
+    const full = new MemoryStorage();
+    full.setItem('shkriuss:a', 'xxxxx');
+    full.setItem('shkriuss:b', 'yyyyy');
+    full.maxChars = 10;
+    const before = full.entries();
+    const data = { 'shkriuss:a': '1', 'shkriuss:b': '999999999', 'shkriuss:c': '1' };
+    expect(() => restoreAll({ ...file, data }, full, new Map())).toThrow(/Nothing was changed/);
+    // Put back the smaller one (b) first: a first would have asked for 14.
+    expect(full.entries()).toEqual(before);
+    // With room, the keys are replaced where they are, and the backup's new one added.
+    full.maxChars = 11;
+    expect(restoreAll({ ...file, data }, full, new Map())).toBe(3);
+    expect(full.entries()).toEqual([
+      ['shkriuss:a', '1'],
+      ['shkriuss:b', '999999999'],
+      ['shkriuss:c', '1'],
+    ]);
+  });
+
+  it('says so when the old data can’t all go back, so the backup is restored again (audit 5 E-7)', () => {
+    // The browser refuses every write after the first: the rollback's too.
+    const refusing = new MemoryStorage();
+    refusing.setItem('shkriuss:a', '{"v":1,"data":"old a"}');
+    refusing.setItem('shkriuss:b', '{"v":1,"data":"old b"}');
+    refusing.writes = 0;
+    refusing.failAfterWrites = 1;
+    const data = { 'shkriuss:a': { v: 1, data: 'new a' }, 'shkriuss:b': { v: 1, data: 'new b' } };
+    let caught: unknown;
+    try {
+      restoreAll({ ...file, data }, refusing, new Map());
+    } catch (error) {
+      caught = error;
+    }
+    // The backup's own words, not a bare DOMException ("Something went wrong").
+    expect(caught).toBeInstanceOf(BackupError);
+    expect((caught as BackupError).message).toMatch(
+      /some of your old data couldn’t be put back either.*restore the backup again/,
+    );
+    // Nothing is simply gone: each key holds the old or the backup's value.
+    expect(refusing.getItem('shkriuss:a')).toBe('{"v":1,"data":"new a"}');
+    expect(refusing.getItem('shkriuss:b')).toBe('{"v":1,"data":"old b"}');
+
+    // Another tab of the app took the room the moment the restore started.
+    const shared = new MemoryStorage();
+    shared.setItem('shkriuss:a', 'xxxxx');
+    shared.setItem('shkriuss:b', 'yyyyy');
+    shared.maxChars = 10;
+    shared.beforeWrite = () => {
+      shared.beforeWrite = null;
+      shared.wroteElsewhere('shkriuss:other', 'zzzz');
+    };
+    const bigger = { 'shkriuss:a': '1', 'shkriuss:b': '999999999' };
+    expect(() => restoreAll({ ...file, data: bigger }, shared, new Map())).toThrow(
+      /couldn’t be put back either/,
+    );
+    expect(shared.getItem('shkriuss:a')).toBe('1');
+    expect(shared.getItem('shkriuss:b')).toBe('yyyyy');
+    expect(shared.getItem('shkriuss:other')).toBe('zzzz');
+    // Restored again once there's room: done, and what the backup doesn't have goes.
+    shared.maxChars = Infinity;
+    expect(restoreAll({ ...file, data: bigger }, shared, new Map())).toBe(2);
+    expect(shared.entries()).toEqual([
+      ['shkriuss:a', '1'],
+      ['shkriuss:b', '999999999'],
+    ]);
+  });
+
+  it('refuses to replace data saved by a newer version of the app (audit 5 E-3)', () => {
+    const store = createStore<{ repairs: string[] }>({
+      key: 'repairs',
+      version: 2,
+      fallback: () => ({ repairs: [] }),
+      validate: (value): value is { repairs: string[] } =>
+        Array.isArray((value as { repairs?: unknown } | null)?.repairs),
+      storage,
+    });
+    // After a rollback, or in a tab open from before an update: version 3 saved it.
+    storage.setItem('shkriuss:repairs', '{"v":3,"data":{"repairs":["tyres"]}}');
+    expect(store.status()).toBe('newer');
+    const before = storage.entries();
+    const stores = new Map([[store.key, store]]);
+    // A backup this version can read; even one without that key, since
+    // restoring deletes what the backup doesn't have.
+    const copies = [
+      { ...file, data: { 'shkriuss:theme': 'light' } },
+      { ...file, data: { 'shkriuss:repairs': { v: 2, data: { repairs: ['brakes'] } } } },
+    ];
+    for (const copy of copies) {
+      expect(() => restoreAll(copy, storage, stores)).toThrow(
+        /from a newer version of this app.*Nothing was changed/,
+      );
+    }
+    expect(storage.entries()).toEqual(before);
+    // The page's stores are remembered for later tests in this file: leave it empty.
+    storage.removeItem('shkriuss:repairs');
+  });
+
+  it('writes back every saved text exactly, quotes and all (audit 5 E-8)', () => {
+    const saved = new MemoryStorage();
+    saved.setItem('shkriuss:quoted', '"dark"');
+    saved.setItem('shkriuss:number', '42');
+    saved.setItem('shkriuss:flag', 'true');
+    saved.setItem('shkriuss:nothing', 'null');
+    saved.setItem('shkriuss:theme', 'dark');
+    saved.setItem('shkriuss:store', '{"v":1,"data":[1]}');
+    const before = saved.entries();
+    const copy = exportAll('x', saved);
+    expect(copy.data).toEqual({
+      'shkriuss:quoted': '"dark"',
+      'shkriuss:number': '42',
+      'shkriuss:flag': 'true',
+      'shkriuss:nothing': 'null',
+      'shkriuss:theme': 'dark',
+      'shkriuss:store': { v: 1, data: [1] },
+    });
+    const target = new MemoryStorage();
+    expect(restoreAll(copy, target, new Map())).toBe(6);
+    expect(target.entries()).toEqual(before);
+    // A copy made before this change had the number 42 and null as values: the same text comes back.
+    const older = { ...copy, data: { 'shkriuss:number': 42, 'shkriuss:nothing': null } };
+    expect(restoreAll(older, target, new Map())).toBe(2);
+    expect(target.entries()).toEqual([
+      ['shkriuss:nothing', 'null'],
+      ['shkriuss:number', '42'],
+    ]);
   });
 
   it('explains when the browser blocks storage', () => {

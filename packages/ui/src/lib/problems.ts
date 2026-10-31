@@ -2,7 +2,7 @@
  * The words for problems, the same in every app (scripts/problem.ts shows
  * them). Kept apart from the page so they can be tested on their own.
  */
-import type { SaveProblem } from '@shkriuss/storage';
+import type { SaveProblem, StoreStatus } from '@shkriuss/storage';
 
 /** What to tell the person when saving didn't work, for each reason. */
 const SAVE_PROBLEMS: Record<SaveProblem, string> = {
@@ -20,6 +20,25 @@ export const SAVE_PROBLEM_TEXTS: readonly string[] = Object.values(SAVE_PROBLEMS
 
 export function saveProblemText(problem: SaveProblem): string {
   return SAVE_PROBLEMS[problem];
+}
+
+/** Why what's saved can't be shown: a store's status that isn't "ok" or "empty". */
+export type LoadProblem = Extract<StoreStatus, 'newer' | 'unreadable'>;
+
+/**
+ * What to tell the person when what's saved can't be shown, so the app
+ * doesn't just look empty, and a backup isn't restored over the newer data
+ * (reportLoad in ../scripts/problem.ts, audit 5 E-3).
+ */
+const LOAD_PROBLEMS: Record<LoadProblem, string> = {
+  newer:
+    'Your data here was saved by a newer version of this app, so this version can’t show it yet. It isn’t lost: reload the page to get the newer version, or wait for the next update. Restoring a backup now would replace it.',
+  unreadable:
+    'Your data here can’t be read by this version of the app, so it isn’t shown. Reload the page to get the latest version. If that doesn’t help, you can restore a backup under Your data.',
+};
+
+export function loadProblemText(problem: LoadProblem): string {
+  return LOAD_PROBLEMS[problem];
 }
 
 /** A field's error as it's read out, with the field's name first: "Name: Enter a name." */

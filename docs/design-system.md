@@ -124,7 +124,10 @@ and when the page comes back on screen),
 `@shkriuss/ui/problem` (telling people about a problem the same way in every
 app: `showProblem` puts it in the notice at the top of every page, which is
 read out at once; `reportSave(store.save(…))` says when saving didn't work,
-and why; `focusProblem` goes to a form's first wrong field, or reads its error
+and why; `reportLoad` says when what's saved can't be shown (saved by a newer
+version of the app, or unreadable by this one), so an app doesn't just look
+empty: `DataControls` calls it once the page's scripts have made their stores
+(audit 5 E-3); `focusProblem` goes to a form's first wrong field, or reads its error
 out if the person is in it already; `clearProblem` takes the notice away;
 `RELOAD_TO_UPDATE`, to say when a part of the page that loads later can't be
 loaded, which mostly happens after an update while the page stayed open),
@@ -166,8 +169,9 @@ change, the app puts focus where it makes sense. A list drawn again in the
 background (a change in another tab or from another device, or a new day)
 goes through `keepFocus`, which puts focus back on the new copy of the same
 control, found by its data attributes and its item's (`<li data-id="…">`).
-If that item is gone, focus goes to the one after it (or before it), or else
-to the control given:
+If that item is gone, or the control is still there but hidden or disabled
+now (a list's own button after the list was deleted elsewhere, audit 5 G-1),
+focus goes to the one after it (or before it), or else to the control given:
 
 ```ts
 import { keepFocus } from '@shkriuss/ui/keep-focus';

@@ -6,20 +6,27 @@
 import { today } from '@shkriuss/dates';
 import { disablePush, isPushDeletePending, isPushEnabled } from '@shkriuss/push';
 import { deleteAll, downloadFile, exportAll, type ExportFile } from '@shkriuss/storage';
+import type { BackupFile } from '@shkriuss/storage/backup';
 import { deleteAllFiles } from '@shkriuss/storage/files';
+import { passphraseProblem } from '@shkriuss/storage/passphrase';
 import { isSyncOn, stopSync } from '@shkriuss/sync';
-import {
-  BackupError,
-  decryptBackup,
-  encryptBackup,
-  passphraseProblem,
-  readBackup,
-  restoreAll,
-  type BackupFile,
-} from '@shkriuss/storage/backup';
 import { DATE_LOCALE } from '../lib/locale.ts';
-import { focusProblem } from './problem.ts';
+import { focusProblem, RELOAD_TO_UPDATE, reportLoad } from './problem.ts';
+import { forgetReminderChecks } from './reminder-checks.ts';
 import { setBusy } from './busy.ts';
+
+/**
+ * The backup code (locking, unlocking, checking and restoring files) is
+ * loaded when first needed: it's the biggest part of "Your data", and most
+ * visits never use it (the pages' JavaScript budget, audit 5). The passphrase
+ * rule, checked as the person types, is in a small module of its own.
+ */
+const backupTools = () => import('@shkriuss/storage/backup');
+/** When that code can't be loaded: mostly after an update while the page stayed open. */
+const NO_TOOLS = `Couldn’t load the backup tools. ${RELOAD_TO_UPDATE}`;
+/** A backup's own explanation of a problem (a BackupError), or a plain one. */
+const explain = (error: unknown): string =>
+  error instanceof Error && error.name === 'BackupError' ? error.message : 'Something went wrong.';
 
 /** Backup files bigger than this are turned down (apps save far less). */
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
@@ -77,6 +84,12 @@ export function mountDataControls(section: HTMLElement): void {
 
   /** The backup file being restored. */
   let pending: BackupFile | null = null;
+
+  // What's saved may be from a newer version of the app, or unreadable by
+  // this one: say so, or the app just looks empty (audit 5 E-3). Once every
+  // script has made its stores: they all run before the page's load event.
+  if (document.readyState === 'complete') reportLoad();
+  else window.addEventListener('load', () => reportLoad(), { once: true });
 
   /** Shows (or clears) a problem under a field. */
   function setError(form: HTMLFormElement, field: string, message: string): void {
@@ -151,20 +164,24 @@ export function mountDataControls(section: HTMLElement): void {
       return;
     }
     busy(backupDialog, 'Locking your backup…');
-    encryptBackup(exportAll(app), passphrase.value).then(
-      (backup) => {
-        downloadFile(`${app}-backup-${today()}.json`, JSON.stringify(backup, null, 2));
-        busy(backupDialog, '');
-        backupDialog.close();
-        status.textContent = 'Your backup was downloaded. Keep the passphrase safe.';
-      },
-      () => {
-        busy(backupDialog, '');
-        find<HTMLElement>(backupDialog, '[data-dialog-status]').textContent =
-          'Something went wrong while locking the backup. Please try again.';
-        // Focus stays where it was; if it was nowhere, it's on the button to try again.
-        if (!backupDialog.contains(document.activeElement)) backupSubmit.focus();
-      },
+    const failed = (message: string): void => {
+      busy(backupDialog, '');
+      find<HTMLElement>(backupDialog, '[data-dialog-status]').textContent = message;
+      // Focus stays where it was; if it was nowhere, it's on the button to try again.
+      if (!backupDialog.contains(document.activeElement)) backupSubmit.focus();
+    };
+    backupTools().then(
+      ({ encryptBackup }) =>
+        encryptBackup(exportAll(app), passphrase.value).then(
+          (backup) => {
+            downloadFile(`${app}-backup-${today()}.json`, JSON.stringify(backup, null, 2));
+            busy(backupDialog, '');
+            backupDialog.close();
+            status.textContent = 'Your backup was downloaded. Keep the passphrase safe.';
+          },
+          () => failed('Something went wrong while locking the backup. Please try again.'),
+        ),
+      () => failed(NO_TOOLS),
     );
   });
 
@@ -218,19 +235,23 @@ export function mountDataControls(section: HTMLElement): void {
       return;
     }
     file.text().then(
-      (text) => {
-        try {
-          const backup = readBackup(text, app);
-          showRestore(
-            backup,
-            backup.kind === 'encrypted'
-              ? `This backup is from ${dateOf(backup.backup.createdAt)} and is locked with a passphrase.`
-              : `This backup is from ${dateOf(backup.file.exportedAt)}.`,
-          );
-        } catch (error) {
-          showRestore(null, error instanceof BackupError ? error.message : 'Something went wrong.');
-        }
-      },
+      (text) =>
+        backupTools().then(
+          ({ readBackup }) => {
+            try {
+              const backup = readBackup(text, app);
+              showRestore(
+                backup,
+                backup.kind === 'encrypted'
+                  ? `This backup is from ${dateOf(backup.backup.createdAt)} and is locked with a passphrase.`
+                  : `This backup is from ${dateOf(backup.file.exportedAt)}.`,
+              );
+            } catch (error) {
+              showRestore(null, explain(error));
+            }
+          },
+          () => showRestore(null, NO_TOOLS),
+        ),
       () => {
         showRestore(null, 'This file couldn’t be read.');
       },
@@ -253,19 +274,22 @@ export function mountDataControls(section: HTMLElement): void {
     if (!restorePassphrase.value) return unlockProblem('Enter the passphrase for this backup.');
     busy(restoreDialog, 'Unlocking…');
     try {
+      const { decryptBackup } = await backupTools();
       return await decryptBackup(file.backup, restorePassphrase.value);
     } catch (error) {
       busy(restoreDialog, '');
-      return unlockProblem(error instanceof BackupError ? error.message : 'Something went wrong.');
+      return unlockProblem(explain(error));
     }
   }
 
   restoreForm.addEventListener('submit', (event) => {
     event.preventDefault();
     if (!pending) return;
-    void unlocked(pending).then((data) => {
+    void unlocked(pending).then(async (data) => {
       if (!data) return;
+      busy(restoreDialog, 'Restoring…');
       try {
+        const { restoreAll } = await backupTools();
         // Sync is off: forget what was synced before, so turning it on again
         // doesn't treat the restored (older) data as new edits. Only once the
         // backup is in: one that's refused changes nothing (audit 4 E-2).
@@ -274,8 +298,7 @@ export function mountDataControls(section: HTMLElement): void {
         if (syncWasOff) stopSync();
       } catch (error) {
         busy(restoreDialog, '');
-        find<HTMLElement>(restoreDialog, '[data-dialog-status]').textContent =
-          error instanceof BackupError ? error.message : 'Something went wrong.';
+        find<HTMLElement>(restoreDialog, '[data-dialog-status]').textContent = explain(error);
         return;
       }
       busy(restoreDialog, 'Restored. Reloading…');
@@ -299,8 +322,10 @@ export function mountDataControls(section: HTMLElement): void {
     // says so) once it has reloaded.
     const push = isPushEnabled() || isPushDeletePending() ? disablePush() : Promise.resolve(true);
     // Everything on this device goes now, without waiting for the network
-    // (audit G-2). Sync stops first, so the deletion doesn't reach the other devices.
+    // (audit G-2). Sync stops first, so the deletion doesn't reach the other
+    // devices. The apps' last reminder check goes too (audit 5 D-1).
     stopSync();
+    forgetReminderChecks();
     deleteAll();
     // Files like photos too, then reload so the app starts fresh from empty storage.
     void deleteAllFiles()
