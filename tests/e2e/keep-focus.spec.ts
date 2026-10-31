@@ -110,9 +110,12 @@ const cases: EverySite<Case> = {
   },
   calendar: {
     setup: async (page) => {
-      // A day in the month, chosen with the arrow keys.
-      await page.locator('[data-weeks] button[tabindex="0"]').focus();
-      await page.keyboard.press('ArrowRight');
+      // Choose another day without leaving the current month.
+      const focused = page.locator('[data-weeks] button[tabindex="0"]');
+      await focused.focus();
+      const date = await focused.getAttribute('data-date');
+      if (!date) throw new Error('Calendar selected day missing');
+      await page.keyboard.press(date.endsWith('-01') ? 'ArrowRight' : 'ArrowLeft');
       const label = await page.evaluate(() => document.activeElement?.getAttribute('aria-label'));
       return page.locator('[data-weeks]').getByRole('button', { name: label ?? '', exact: true });
     },
