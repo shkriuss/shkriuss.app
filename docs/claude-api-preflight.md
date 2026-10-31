@@ -46,4 +46,3 @@ Status: OFFLINE ONLY. No paid API requests authorized.
 - Environment approval alone does not authorize paid API usage.
 - The one-time Git tag claim remains offline-only and is not connected to the workflow.
 - The final Claude API safety stop must remain active until separately authorized.
-- 
