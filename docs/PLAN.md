@@ -295,8 +295,6 @@ they ran out.)
   changing the design everywhere.
 - [`docs/deployment.md`](deployment.md): deploys, the token setup, rolling
   back, costs, and troubleshooting.
-- [`docs/claude-in-github.md`](claude-in-github.md): the **Claude** workflow,
-  for asking Claude from GitHub when the subscription's limit has run out.
 - [`docs/quality.md`](quality.md): every check, and what to do when one
   fails.
 - [`docs/adr/`](adr/): short decision records, listed in

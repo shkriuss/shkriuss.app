@@ -1,6 +1,8 @@
 # 0020. Claude in GitHub Actions, paid by the API
 
-Status: Accepted (2026-10-31).
+Status: Superseded by [ADR 0021](0021-no-claude-workflow.md) (2026-10-31):
+the workflow and its guide were removed the same day, after the sixth audit
+found its safeguards didn't hold (6H-1).
 
 ## Context
 
@@ -22,10 +24,10 @@ Status: Accepted (2026-10-31).
 
 ## Decision
 
-- **The official action.** `.github/workflows/claude.yml` runs Claude Code
+- **The official action.** The workflow `claude.yml` runs Claude Code
   with `anthropics/claude-code-action`, pinned to a commit (a release at
   least a week old, as with packages), and its key is the `ANTHROPIC_API_KEY`
-  secret. The owner's guide is [docs/claude-in-github.md](../claude-in-github.md).
+  secret. The owner's guide was `claude-in-github.md`, in `docs/` (removed with it).
 - **Started only by hand:** **Actions → Claude → Run workflow**, with what to
   do and, optionally, a pull request's number. Only people with write access
   can start a workflow. Not by "@claude" comments: on a public repository
