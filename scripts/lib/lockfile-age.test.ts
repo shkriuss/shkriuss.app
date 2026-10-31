@@ -2,9 +2,12 @@ import { describe, expect, it } from 'vitest';
 import {
   addedPackages,
   changedPackages,
+  changedSourceSettings,
   lockedPackages,
+  npmrcFiles,
   registryIntegrity,
   releaseAgeRules,
+  saysWhereFrom,
   tooNew,
   unregisteredPackages,
 } from './lockfile-age.ts';
@@ -56,6 +59,11 @@ describe('the lockfile age check', () => {
         "minimumReleaseAge: 60\nminimumReleaseAgeExclude:\n  - harper.js\n  - '@types/*'\n",
       ),
     ).toEqual({ minutes: 60, exclude: ['harper.js', '@types/*'] });
+    // Written as YAML allows too (audit 5 H-1), and refused when it isn't a number.
+    expect(
+      releaseAgeRules("minimumReleaseAge: 60\nminimumReleaseAgeExclude: [harper.js, '@types/*']\n"),
+    ).toEqual({ minutes: 60, exclude: ['harper.js', '@types/*'] });
+    expect(() => releaseAgeRules('minimumReleaseAge: a week\n')).toThrow(/number of minutes/);
   });
 
   it('refuses versions younger than the rule, or with no publish time, unless excluded', () => {
@@ -138,10 +146,6 @@ packages:
       integrity: sha512-x
       tarball: https://example.com/block.tgz
 
-  twice@1.0.0:
-    resolution: {integrity: sha512-x}
-    resolution: {integrity: sha512-x, tarball: https://example.com/twice.tgz}
-
   none@1.0.0:
     engines: {node: '>=20'}
 
@@ -153,12 +157,76 @@ snapshots:
 
   is-number@7.0.0: {}
 `;
+    expect(unregisteredPackages(head)).toEqual(['is-number@7.0.0', 'block@1.0.0', 'none@1.0.0']);
+  });
+
+  it('sees an entry however it’s written, as pnpm does (audit 5 H-1)', () => {
+    // These are the entries that slipped past the check when it read the
+    // lockfile line by line: pnpm installed each of them (the tarball one from
+    // the address). The hash is is-number 7.0.0's real one.
+    const integrity =
+      'sha512-lzgNOt9BFpUf8fKXwpR7OnQQcmhaE8qokUrT3MkLGkNqcuRez4304GIi4pPM88uIRod8g5eY4tNUI3bvkDj2uA==';
+    const empty = "lockfileVersion: '9.0'\n\npackages:\n\nsnapshots:\n";
+    const onOneLine = `packages:\n\n  is-number@7.0.0: {resolution: {integrity: ${integrity}}, engines: {node: '>=0.12.0'}}\n`;
+    const withComment = `packages:\n\n  is-number@7.0.0: # pinned\n    resolution: {integrity: ${integrity}}\n    engines: {node: '>=0.12.0'}\n`;
+    const quotedAndSpaced = `packages:\n\n  "is-number@7.0.0" :\n    resolution:   {integrity: ${integrity}}\n`;
+    for (const head of [onOneLine, withComment, quotedAndSpaced]) {
+      expect([...lockedPackages(head)], head).toEqual(['is-number@7.0.0']);
+      expect(addedPackages(empty, head), head).toEqual([['is-number', '7.0.0']]);
+      expect(changedPackages(empty, head), head).toEqual([['is-number', '7.0.0', integrity]]);
+      expect(unregisteredPackages(head), head).toEqual([]);
+    }
+    const tarballOnOneLine = `packages:\n\n  is-number@7.0.0: {resolution: {integrity: ${integrity}, tarball: 'http://127.0.0.1:10000/evil.tgz'}, engines: {node: '>=0.12.0'}}\n`;
+    expect(unregisteredPackages(tarballOnOneLine)).toEqual(['is-number@7.0.0']);
+    expect(changedPackages(empty, tarballOnOneLine)).toEqual([]);
+  });
+
+  it('counts an entry that isn’t a mapping, or a hash that isn’t one, as not from npm', () => {
+    const head = `packages:
+
+  nothing@1.0.0:
+
+  words@1.0.0: pinned
+
+  list@1.0.0:
+    - resolution: {integrity: sha512-x}
+
+  notahash@1.0.0:
+    resolution: {integrity: 'see https://example.com'}
+
+  number@1.0.0:
+    resolution: {integrity: 12345}
+
+  merged@1.0.0:
+    <<: {resolution: {integrity: sha512-x}}
+
+  fine@1.0.0:
+    resolution: {integrity: sha512-x}
+`;
     expect(unregisteredPackages(head)).toEqual([
-      'is-number@7.0.0',
-      'block@1.0.0',
-      'twice@1.0.0',
-      'none@1.0.0',
+      'nothing@1.0.0',
+      'words@1.0.0',
+      'list@1.0.0',
+      'notahash@1.0.0',
+      'number@1.0.0',
+      'merged@1.0.0',
     ]);
+    expect(changedPackages('packages:\n', head)).toEqual([['fine', '1.0.0', 'sha512-x']]);
+  });
+
+  it('refuses a lockfile pnpm would refuse: a key written twice, or not YAML at all', () => {
+    const twice = `packages:
+
+  twice@1.0.0:
+    resolution: {integrity: sha512-x}
+    resolution: {integrity: sha512-x, tarball: https://example.com/twice.tgz}
+`;
+    expect(() => unregisteredPackages(twice)).toThrow(/unique/);
+    expect(() => lockedPackages('packages:\n  a: [\n')).toThrow();
+    expect(() => lockedPackages('- a list\n')).toThrow(/mapping/);
+    expect(() => lockedPackages('packages: a word\n')).toThrow(/mapping/);
+    expect([...lockedPackages('')]).toEqual([]);
+    expect([...lockedPackages('packages:\n')]).toEqual([]);
   });
 
   it('finds the registry versions a pull request adds or gives another hash (audit 3 H-1)', () => {
@@ -190,5 +258,42 @@ snapshots:
     const current = readFileSync('pnpm-lock.yaml', 'utf8');
     expect(changedPackages(current, current)).toEqual([]);
     expect(changedPackages('packages:\n', current).length).toBe(lockedPackages(current).size);
+  });
+
+  it('notices a changed registry, proxy, certificate or fetch setting (audit 5 H-1)', () => {
+    const base =
+      'packages:\n  - apps/*\ncatalog:\n  astro: ^7.4.0\nminimumReleaseAge: 10080\nfetchRetries: 2\n';
+    expect(changedSourceSettings(base, base)).toEqual([]);
+    // What doesn't say where packages come from can change.
+    expect(changedSourceSettings(base, base.replace('10080', '20160'))).toEqual([]);
+    for (const [line, setting] of [
+      ['registry: https://registry.example/', 'registry'],
+      ["'@types:registry': https://registry.example/", '@types:registry'],
+      ["'//registry.example/:_authToken': secret", '//registry.example/:_authToken'],
+      ['strictSsl: false', 'strictSsl'],
+      ['strict-ssl: false', 'strict-ssl'],
+      ['httpsProxy: http://proxy.example:8080', 'httpsProxy'],
+      ['cafile: ./ca.pem', 'cafile'],
+      ['fetchTimeout: 1', 'fetchTimeout'],
+    ]) {
+      expect(changedSourceSettings(base, `${base}${line}\n`), line).toEqual([setting]);
+      expect(saysWhereFrom(setting ?? ''), setting).toBe(true);
+    }
+    // Changed and removed count too.
+    expect(changedSourceSettings(base, base.replace('fetchRetries: 2', 'fetchRetries: 9'))).toEqual(
+      ['fetchRetries'],
+    );
+    expect(changedSourceSettings(base, base.replace('fetchRetries: 2\n', ''))).toEqual([
+      'fetchRetries',
+    ]);
+    for (const setting of ['catalog', 'packages', 'overrides', 'minimumReleaseAge', 'catalogs']) {
+      expect(saysWhereFrom(setting), setting).toBe(false);
+    }
+  });
+
+  it('finds .npmrc files in any folder (audit 5 H-1)', () => {
+    expect(
+      npmrcFiles(['.npmrc', 'apps/tally/.npmrc', 'docs/npmrc.md', 'x/.npmrc.bak', '']),
+    ).toEqual(['.npmrc', 'apps/tally/.npmrc']);
   });
 });

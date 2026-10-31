@@ -19,13 +19,23 @@
  *   error. When focus is in that field already (the person pressed Enter or
  *   Done in it), focusing it reads nothing, so the error is read out instead,
  *   with the field's name: "New counter: Enter a name for the counter."
+ * - reportLoad(): says when what's saved can't be shown (saved by a newer
+ *   version of the app, or unreadable by this one), so the app doesn't
+ *   just look empty. "Your data" (./data-controls.ts) calls it once the
+ *   page's scripts have made their stores.
  * - RELOAD_TO_UPDATE: what to say when a part of the page that loads later
  *   (a form, a dialog) can't be loaded:
  *
  *     showProblem(`Calendar couldn’t open the event. ${RELOAD_TO_UPDATE}`);
  */
-import { allSaved, lastSaveProblem } from '@shkriuss/storage';
-import { SAVE_PROBLEM_TEXTS, saveProblemText, spokenFieldProblem } from '../lib/problems.ts';
+import { allSaved, lastSaveProblem, madeStores, type StoreStatus } from '@shkriuss/storage';
+import {
+  loadProblemText,
+  SAVE_PROBLEM_TEXTS,
+  saveProblemText,
+  spokenFieldProblem,
+  type LoadProblem,
+} from '../lib/problems.ts';
 
 const noticeArea = (): HTMLElement | null => document.querySelector('[data-problem]');
 
@@ -122,6 +132,28 @@ export function reportSave(saved: boolean, { repeat = true }: ReportSaveOptions 
  * behind a dialog, where a screen reader doesn't hear it.
  */
 export const saveProblem = (): string => saveProblemText(lastSaveProblem());
+
+/**
+ * Tells the person when what's saved can't be shown: saved by a newer version
+ * of the app (a tab open from before an update, or a rollback), or data this
+ * version can't read. Without a word the app just looks empty, and the
+ * natural next step, restoring a backup, would replace the newer data (audit
+ * 5 E-3; Restore refuses it too). Looks at every store made on the page, so
+ * it's called once the page's scripts have made theirs. True when all of it
+ * can be shown.
+ */
+export function reportLoad(
+  stores: Iterable<{ status(): StoreStatus }> = madeStores.values(),
+): boolean {
+  let problem: LoadProblem | null = null;
+  for (const store of stores) {
+    const status = store.status();
+    if (status === 'newer') problem = 'newer';
+    else if (status === 'unreadable' && problem === null) problem = 'unreadable';
+  }
+  if (problem) showProblem(loadProblemText(problem));
+  return problem === null;
+}
 
 // ---------- Errors in forms ----------
 

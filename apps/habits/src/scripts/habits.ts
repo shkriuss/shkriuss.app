@@ -11,6 +11,7 @@ import { keepFocus } from '@shkriuss/ui/keep-focus';
 import { onNewDay } from '@shkriuss/ui/new-day';
 import { clearProblem, focusProblem, reportSave, showProblem } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
+import { watchTextLimit, watchTextLimits } from '@shkriuss/ui/text-limit';
 import { site } from 'virtual:shkriuss/site';
 import {
   addHabit,
@@ -113,6 +114,10 @@ export function mountHabits(root: Document): void {
   const yearSelect = required<HTMLSelectElement>(yearForm, '[data-year-select]');
   const yearText = required<HTMLElement>(yearForm, '[data-year-text]');
   const yearConfirm = required<HTMLElement>(yearForm, '[data-year-confirm]');
+
+  // A paste longer than a box takes is cut by the browser: say so (audit 5 F1-4).
+  const addLimit = watchTextLimit(input);
+  const editLimits = watchTextLimits(editForm);
 
   const weekStart = firstDayOfWeek(navigator.language);
   let habits = habitsStore.load();
@@ -226,6 +231,20 @@ export function mountHabits(root: Document): void {
     roomText.textContent = room ?? '';
   }
 
+  /**
+   * Today, read afresh at a tap. The page looks for a new day once a minute,
+   * so for up to a minute after midnight "today" was still yesterday, and
+   * "Done today" ticked yesterday (audit 5 F1-7).
+   */
+  function todayNow(): IsoDate {
+    const now = today();
+    if (now !== day) {
+      day = now;
+      render();
+    }
+    return now;
+  }
+
   // ---------- Adding ----------
 
   form.addEventListener('submit', (event) => {
@@ -241,6 +260,7 @@ export function mountHabits(root: Document): void {
     error.textContent = '';
     input.removeAttribute('aria-invalid');
     input.value = '';
+    addLimit.clear();
     if (save({ habits: addHabit(habits, name, crypto.randomUUID()) })) announce(`Added ${name}.`);
   });
 
@@ -261,6 +281,7 @@ export function mountHabits(root: Document): void {
       openEditor(habit);
       return;
     }
+    todayNow();
     const done = !doneDates(checks, habit.id).has(day);
     // Full: says how to make room (in the notice at the top, read out).
     const problem = done ? checksProblem(checks) : undefined;
@@ -301,7 +322,10 @@ export function mountHabits(root: Document): void {
   });
 
   function openEditor(habit: Habit): void {
+    // The last two weeks to tick end today.
+    todayNow();
     editing = habit.id;
+    editLimits.clear();
     editName.value = habit.name;
     editName.removeAttribute('aria-invalid');
     nameErrorText.textContent = '';

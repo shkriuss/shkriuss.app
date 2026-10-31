@@ -153,15 +153,16 @@ describe('your meals', () => {
     // 100 is fine, and spaces at the ends don't count.
     const hundred = { ...draft, ingredients: `  ${'x'.repeat(100)}  \nEggs` };
     expect(mealProblems(emptyMeals(), hundred)).toEqual({});
-    // Cut where it must be: never in the middle of a flag or a family.
+    // Cut where it must be: never in the middle of a flag or a family, each
+    // of which is one character, as people see it (audit 5 F2-3).
     for (const emoji of ['🇬🇪', '👨‍👩‍👧']) {
-      expect(parseIngredients(`${'x'.repeat(LIMITS.ingredient - 1)}${emoji}`)).toEqual([
-        'x'.repeat(LIMITS.ingredient - 1),
+      const full = `${'x'.repeat(LIMITS.ingredient - 1)}${emoji}`;
+      expect(parseIngredients(full)).toEqual([full]);
+      expect(parseIngredients(`${full}${emoji}`)).toEqual([full]);
+      expect(parseIngredients(`${'x'.repeat(LIMITS.ingredient)}${emoji}`)).toEqual([
+        'x'.repeat(LIMITS.ingredient),
       ]);
     }
-    expect(parseIngredients(`${'x'.repeat(LIMITS.ingredient - 2)}🇬🇪`)).toEqual([
-      `${'x'.repeat(LIMITS.ingredient - 2)}🇬🇪`,
-    ]);
   });
 
   it('cuts by code points where the browser can’t tell characters apart', async () => {
@@ -201,6 +202,49 @@ describe('your meals', () => {
     expect(mealProblems(state, { ...draft, name: 'Stew', notes: 'x'.repeat(5001) }).notes).toBe(
       'Use at most 5,000 characters.',
     );
+  });
+
+  // Audit 5 F2-3: an iPhone's text boxes count a flag or a family emoji as
+  // one character, so a full box was refused on saving: a name of 60 flags
+  // counted 120 code points, and was "Use at most 100 characters."
+  it('counts characters as people see them, as an iPhone’s text boxes do', () => {
+    const family = '👨‍👩‍👧';
+    const flag = '🇬🇪';
+    const draft = {
+      name: flag.repeat(60),
+      ingredients: family.repeat(LIMITS.ingredient),
+      notes: flag.repeat(LIMITS.notes),
+    };
+    expect(mealProblems(emptyMeals(), draft)).toEqual({});
+    expect(mealFromDraft(draft, 'm').ingredients).toEqual([family.repeat(LIMITS.ingredient)]);
+    expect(
+      mealProblems(emptyMeals(), {
+        name: flag.repeat(LIMITS.name + 1),
+        ingredients: `${flag.repeat(LIMITS.ingredient + 1)}\nEggs`,
+        notes: family.repeat(LIMITS.notes + 1),
+      }),
+    ).toEqual({
+      name: 'Use at most 100 characters.',
+      ingredients: 'Use at most 100 characters on each line.',
+      notes: 'Use at most 5,000 characters.',
+    });
+    // A line too long that comes anyway is cut between whole flags, at 100 of them.
+    expect(parseIngredients(flag.repeat(150))).toEqual([flag.repeat(100)]);
+    const planned = {
+      name: family.repeat(LIMITS.name),
+      date: '2026-10-21',
+      slot: 'dinner',
+    } as const;
+    expect(planProblems(emptyPlan(), planned)).toEqual({});
+    expect(extraProblem(emptyShopping(), flag.repeat(LIMITS.ingredient))).toBeNull();
+    expect(extraProblem(emptyShopping(), flag.repeat(LIMITS.ingredient + 1))).toBe(
+      'Use at most 100 characters.',
+    );
+    // One letter under thousands of accents is one character, but not without a limit.
+    const zalgo = `Z${'\u0336'.repeat(2000)}`;
+    expect(mealProblems(emptyMeals(), { name: zalgo, ingredients: '', notes: '' })).toEqual({
+      name: 'Use at most 100 characters.',
+    });
   });
 
   it('adds, changes, finds and deletes meals', () => {

@@ -93,13 +93,30 @@ export function migrateNotes(old: unknown, version: number): NotesState | undefi
   };
 }
 
+const newNote = (id: string, now: number): Note => ({
+  id,
+  title: '',
+  body: '',
+  created: now,
+  updated: now,
+  pinned: false,
+});
+
 /** Adds a new, empty note. Returns the same state when there are already MAX_NOTES. */
 export function addNote(state: NotesState, id: string, now: number): NotesState {
   if (state.notes.length >= MAX_NOTES) return state;
-  return {
-    notes: [{ id, title: '', body: '', created: now, updated: now, pinned: false }, ...state.notes],
-  };
+  return { notes: [newNote(id, now), ...state.notes] };
 }
+
+/**
+ * Adds back a note deleted on another device while it was being typed in
+ * here (its typing is put on it next), whatever the count: at MAX_NOTES,
+ * addNote left it out, and the typing was never saved, without a word
+ * (audit 5 F3-8). "New note" still stops at MAX_NOTES.
+ */
+export const restoreNote = (state: NotesState, id: string, now: number): NotesState => ({
+  notes: [newNote(id, now), ...state.notes],
+});
 
 /**
  * Changes a note's title and/or body (cut to their limits). It counts as
@@ -146,24 +163,43 @@ export function withSavedNote(state: NotesState, saved: NotesState, id: string):
 
 export const isEmpty = (note: Note): boolean => note.title.trim() === '' && note.body.trim() === '';
 
-/** Removes a note if nothing was written in it (when leaving it). */
-export function dropIfEmpty(state: NotesState, id: string): NotesState {
+/**
+ * Whether nothing was ever written in a note: it's empty, and still as
+ * addNote made it (typing, even typing taken out again, is saved as an edit
+ * with a later time).
+ */
+const neverWritten = (note: Note): boolean => isEmpty(note) && note.updated === note.created;
+
+/**
+ * Removes the note `id` when it's left empty and nothing was ever written
+ * in it, or it was made since this page opened (`madeHere`) and emptied
+ * again: nothing is lost with it. An older note that was emptied stays,
+ * with its pin and dates, so nothing is deleted without asking: before, it
+ * went without a word, and with sync on, everywhere (audit 5 F3-7).
+ */
+export function dropIfEmpty(
+  state: NotesState,
+  id: string,
+  madeHere: ReadonlySet<string> = new Set(),
+): NotesState {
   const note = state.notes.find((entry) => entry.id === id);
-  return note && isEmpty(note) ? removeNote(state, id) : state;
+  if (!note || !isEmpty(note)) return state;
+  return neverWritten(note) || madeHere.has(id) ? removeNote(state, id) : state;
 }
 
 /** How long a note nothing is written in stays, if it isn't left (the page was closed in it). */
 export const EMPTY_NOTE_MS = 10 * 60 * 1000;
 
 /**
- * Removes notes nothing was written in for a while (EMPTY_NOTE_MS): left
- * behind when a page was closed in a new note before it could drop it
+ * Removes notes nothing was ever written in for a while (EMPTY_NOTE_MS):
+ * left behind when a page was closed in a new note before it could drop it
  * (audit F3-9). Not `keep` (the note the page opens), nor a newer one,
- * which may be open in another tab or on another device.
+ * which may be open in another tab or on another device, nor a note that
+ * was emptied on purpose (audit 5 F3-7).
  */
 export function dropEmptyNotes(state: NotesState, keep: string | null, now: number): NotesState {
   const notes = state.notes.filter(
-    (note) => note.id === keep || !isEmpty(note) || note.updated > now - EMPTY_NOTE_MS,
+    (note) => note.id === keep || !neverWritten(note) || note.updated > now - EMPTY_NOTE_MS,
   );
   return notes.length === state.notes.length ? state : { notes };
 }

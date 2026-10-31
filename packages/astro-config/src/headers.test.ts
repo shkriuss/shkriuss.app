@@ -5,7 +5,7 @@
  * Change these only on purpose, with the ADR.
  */
 import { describe, expect, it } from 'vitest';
-import { securityHeaders } from './headers.ts';
+import { headersFile, securityHeaders } from './headers.ts';
 import { defineAppConfig } from './index.ts';
 
 const CSP = [
@@ -28,32 +28,42 @@ const CSP = [
 const permissions = (allowed: string[] = []) =>
   [
     'accelerometer',
+    'ambient-light-sensor',
+    'attribution-reporting',
     'autoplay',
+    'battery',
     'bluetooth',
+    'browsing-topics',
     'camera',
+    'compute-pressure',
     'display-capture',
     'encrypted-media',
     'fullscreen',
+    'gamepad',
     'geolocation',
     'gyroscope',
     'hid',
+    'identity-credentials-get',
     'idle-detection',
+    'join-ad-interest-group',
     'local-fonts',
     'magnetometer',
     'microphone',
     'midi',
+    'otp-credentials',
     'payment',
     'picture-in-picture',
     'publickey-credentials-create',
     'publickey-credentials-get',
+    'run-ad-auction',
     'screen-wake-lock',
     'serial',
+    'shared-storage',
     'storage-access',
     'usb',
     'web-share',
     'window-management',
     'xr-spatial-tracking',
-    'browsing-topics',
   ]
     .map((feature) => `${feature}=${allowed.includes(feature) ? '(self)' : '()'}`)
     .join(', ');
@@ -91,6 +101,17 @@ describe('the security headers', () => {
     expect(() =>
       defineAppConfig({ slug: 'notes', allowFeatures: ['publickey-credentials-create'] }),
     ).toThrow(/Only the hub may use passkeys/);
+  });
+
+  it('never let a browser keep a build file, or a “not found” for one, without asking again (audit 5 Z-1)', () => {
+    // Cloudflare gives the /_astro/* header to its "not found" answer for a
+    // missing build file too: with a year-long "immutable" header, a browser
+    // kept that failure for a year.
+    const file = headersFile();
+    expect(file).toContain('/_astro/*\n  Cache-Control: public, max-age=0, must-revalidate\n');
+    const buildFiles = file.slice(file.indexOf('/_astro/*'));
+    expect(buildFiles).not.toContain('immutable');
+    expect(buildFiles).not.toMatch(/max-age=[1-9]/);
   });
 
   it('allow WebAssembly, and the policy for its threads, only for an app that runs it', () => {

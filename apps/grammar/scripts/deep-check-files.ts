@@ -17,12 +17,10 @@
  * name, and phones that have Deep check download only what changed.
  */
 import { createHash } from 'node:crypto';
-import { createReadStream, createWriteStream, existsSync } from 'node:fs';
-import { mkdir, open, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { createReadStream, existsSync } from 'node:fs';
+import { mkdir, open, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import type { ReadableStream as NodeReadableStream } from 'node:stream/web';
 import { fileURLToPath } from 'node:url';
 import {
   DEEP_CHECK_PATH,
@@ -31,6 +29,7 @@ import {
   type DeepCheckFile,
   type DeepCheckManifest,
 } from '../src/lib/deep-check.ts';
+import { downloadFile } from './download.ts';
 
 /** The model: Meyssa/gector-large-2024 (Apache-2.0), a fixed version. */
 const MODEL = {
@@ -38,6 +37,12 @@ const MODEL = {
   bytes: 361_359_853,
   sha256: '919aad79620328f632d501dabe444ada071c0a665b0d05e5c7ce8cce74ee9ae5',
 };
+/**
+ * How long one try at downloading the model may take: 361 MB at a slow
+ * 0.6 MB/s. A stalled or never-ending answer stops here, not at the job's
+ * time limit (audit 5 H-2).
+ */
+const DOWNLOAD_TIMEOUT_MS = 10 * 60_000;
 /** Under Cloudflare's 25 MiB limit per file, with room to spare. */
 const PART_BYTES = 24 * 1024 * 1024;
 
@@ -57,40 +62,15 @@ async function isModelCached(): Promise<boolean> {
   return (await sha256Of(cachedModel)) === MODEL.sha256;
 }
 
-/** Downloads the model to .cache/ (a few tries, as networks fail), checking its checksum. */
+/**
+ * Downloads the model to .cache/ (a few tries, as networks fail). The size
+ * the server announces must be the model's, no more than that is read, each
+ * try has a time limit, and the checksum must match (download.ts).
+ */
 async function downloadModel(): Promise<void> {
   await mkdir(dirname(cachedModel), { recursive: true });
-  const partial = `${cachedModel}.download`;
-  for (let attempt = 1; ; attempt += 1) {
-    try {
-      console.log(`Downloading the Deep check model (${MODEL.bytes} bytes)…`);
-      const response = await fetch(MODEL.url);
-      if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`);
-      const hash = createHash('sha256');
-      const hashing = new Transform({
-        transform(chunk: Buffer, _encoding, done) {
-          hash.update(chunk);
-          done(null, chunk);
-        },
-      });
-      await pipeline(
-        Readable.fromWeb(response.body as NodeReadableStream<Uint8Array>),
-        hashing,
-        createWriteStream(partial),
-      );
-      const sha256 = hash.digest('hex');
-      if (sha256 !== MODEL.sha256) throw new Error(`checksum ${sha256} doesn't match`);
-      await rename(partial, cachedModel);
-      return;
-    } catch (error) {
-      await rm(partial, { force: true });
-      if (attempt === 3) {
-        throw new Error(`Couldn't download the model: ${String(error)}`, { cause: error });
-      }
-      console.warn(`Download failed (${String(error)}), trying again…`);
-      await new Promise((resolve) => setTimeout(resolve, attempt * 5000));
-    }
-  }
+  console.log(`Downloading the Deep check model (${MODEL.bytes} bytes)…`);
+  await downloadFile(MODEL.url, cachedModel, MODEL, { timeoutMs: DOWNLOAD_TIMEOUT_MS });
 }
 
 /** Writes a file under its hashed name and describes it. */

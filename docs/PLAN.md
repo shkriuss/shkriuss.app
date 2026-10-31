@@ -161,8 +161,10 @@ Defined once in `packages/astro-config/src/headers.ts`
 | `Cross-Origin-Embedder-Policy` | `require-corp`                                                                                                                                                                                                                                                                | Completes cross-origin isolation.                                                                                                   |
 | `X-Frame-Options`              | `DENY`                                                                                                                                                                                                                                                                        | Anti-framing for older browsers.                                                                                                    |
 
-Hashed build files (`/_astro/*`) are cached for a year. Pages revalidate on
-every visit, so updates appear right away.
+Hashed build files (`/_astro/*`) are revalidated like pages (a cheap 304
+when nothing changed), because a year-long cache header also reached
+Cloudflare's "not found" answer for a missing one (audit 5 Z-1). Pages
+revalidate on every visit, so updates appear right away.
 
 Enforcement: ESLint bans `innerHTML` and friends; `pnpm check:dist` fails on
 inline `<script>`, `<style>`, `style=""` or `onclick=`; browser tests fail on
@@ -293,6 +295,8 @@ they ran out.)
   changing the design everywhere.
 - [`docs/deployment.md`](deployment.md): deploys, the token setup, rolling
   back, costs, and troubleshooting.
+- [`docs/claude-in-github.md`](claude-in-github.md): the **Claude** workflow,
+  for asking Claude from GitHub when the subscription's limit has run out.
 - [`docs/quality.md`](quality.md): every check, and what to do when one
   fails.
 - [`docs/adr/`](adr/): short decision records, listed in
@@ -322,7 +326,9 @@ they ran out.)
   Rule), if you want it.
 - [x] `security.txt` (at `/.well-known/security.txt` on every site, written
       by the build from `packages/astro-config/src/security-txt.ts`): it
-      points to GitHub's private security reports.
+      points to GitHub's private security reports. And `robots.txt` the same
+      way (`robots-txt.ts`): every page may be read, `/api/` not; without
+      one, Cloudflare served its own (audit 5 I-1).
 - [x] Email anti-spoofing DNS records (SPF `-all`, DMARC `reject`, null MX),
       since the domain sends no email.
 - [x] Import-from-file for app data: **Back up** (locked with a passphrase)

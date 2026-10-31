@@ -20,7 +20,8 @@ packages/ui/         design system: tokens, CSS, Astro components, icons, AppShe
                      and page helpers every app uses (@shkriuss/ui/dom, /problem, …)
 packages/registry/   apps.json = the single list of apps (+ validation)
 packages/astro-config/ defineAppConfig(): headers, manifest, icons, service worker
-packages/storage/    on-device storage helpers (createStore, export, backup, restore, delete; files/photos; CSV; settings)
+packages/storage/    on-device storage helpers (createStore, export, backup, restore, delete; files/photos; CSV;
+                     settings; nesting = a depth limit for JSON from outside)
 packages/push/       optional notifications while an app is closed (client + per-app Worker)
 packages/account/    optional shkriuss account: recovery key, passkeys, device links (+ hub Worker)
 packages/sync/       optional sync between devices through the account (client + per-app Worker; photos too)
@@ -43,6 +44,8 @@ pnpm verify                      # CI's Checks job, in order (secret scan, zizmo
                                  # the unit tests in German run in CI only):
 pnpm format:check && pnpm lint && pnpm typecheck && pnpm test
 pnpm build && pnpm check:dist && pnpm test:e2e
+pnpm vitest run apps/tally/src/lib/counters.test.ts   # one unit test file
+E2E_SITES=tally pnpm test:e2e --project=tally          # one site's browser tests (after pnpm build)
 pnpm new-app <slug> --name "Name" --description "One sentence." --icon note --color blue --stores "Your notes"
 ```
 

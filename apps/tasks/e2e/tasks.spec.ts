@@ -1,6 +1,7 @@
 // Tasks' own tests. Shared checks (accessibility, security headers, offline
 // support, privacy, sync) already run for every app from tests/e2e/.
 // The locale is en-US.
+import { paste } from '../../../tests/e2e/clipboard.ts';
 import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
 import {
   addTask,
@@ -202,6 +203,27 @@ test('repeats every 2 weeks, or however often', async ({ page }) => {
   await expect(every).toHaveValue('2');
 });
 
+test('a repeating task ticked off just after midnight moves to tomorrow', async ({ page }) => {
+  // The page looks for a new day once a minute: ticked off at 00:00:10, a
+  // daily task got the new day as its next date, so a minute later it was
+  // "Today" again (audit 5 F1-7).
+  await page.clock.setFixedTime(new Date('2026-10-19T23:59:40+04:00'));
+  await seed(page, [{ title: 'Stretch', date: '2026-10-19', repeat: 'daily' }]);
+  await expect(page.locator('[data-group-title]')).toHaveText(['Today']);
+  await page.clock.setFixedTime(new Date('2026-10-20T00:00:10+04:00'));
+  await box(page, 'Stretch').click();
+  const stretch = page
+    .locator('[data-groups] [data-id]')
+    .filter({ has: page.getByRole('button', { name: 'Edit Stretch' }) });
+  await expect(stretch.locator('[data-due]')).toHaveText('Tomorrow');
+  await expect(page.locator('[data-group-title]')).toHaveText(['Tomorrow']);
+  // Still tomorrow once the page notices the new day by itself.
+  await page.clock.runFor('01:00');
+  await expect(stretch.locator('[data-due]')).toHaveText('Tomorrow');
+  await stretch.getByRole('button', { name: 'Edit Stretch' }).click();
+  await expect(editor(page).getByLabel('Date (optional)')).toHaveValue('2026-10-21');
+});
+
 test('saving the form keeps what changed elsewhere while it was open', async ({ page }) => {
   await seed(page, [
     {
@@ -293,6 +315,10 @@ test('deletes a task, and done ones, with a confirmation', async ({ page }) => {
   await editor(page).getByRole('button', { name: 'Delete' }).click();
   const confirm = page.getByRole('dialog', { name: 'Delete this task?' });
   await expect(confirm).toContainText('“Wrong task” will be removed.');
+  // Read out with the title, before "Cancel" (audit 5 G-3).
+  await expect(confirm).toHaveAccessibleDescription(
+    /“Wrong task” will be removed\. This can’t be undone\./,
+  );
   await confirm.getByRole('button', { name: 'Cancel' }).click();
   await expect(editor(page)).toBeVisible();
   await editor(page).getByRole('button', { name: 'Delete' }).click();
@@ -305,9 +331,62 @@ test('deletes a task, and done ones, with a confirmation', async ({ page }) => {
   await page.getByRole('button', { name: 'Delete done tasks' }).click();
   const clear = page.getByRole('dialog', { name: 'Delete done tasks?' });
   await expect(clear).toContainText('The 2 done tasks shown here will be removed.');
+  await expect(clear).toHaveAccessibleDescription(
+    'The 2 done tasks shown here will be removed. This can’t be undone.',
+  );
   await clear.getByRole('button', { name: 'Delete' }).click();
   await expect(page.locator('[data-done-section]')).toBeHidden();
   await expect(titles(page)).toHaveText(['Keep me']);
+});
+
+// Audit 5 F1-4: the browser kept the start of a long paste without a word.
+test('says when a pasted note, step or title doesn’t all fit', async ({ page }) => {
+  const add = page.getByLabel('New task');
+  await paste(add, 'a'.repeat(310));
+  await expect(add).toHaveValue('a'.repeat(300));
+  const cut = (most: string) =>
+    `Only part of that fit. This box takes up to ${most} characters, so the rest wasn’t added.`;
+  await expect(page.getByText(cut('300'), { exact: true })).toBeVisible();
+  // Gone once the task is added, with the box emptied.
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
+  await expect(page.getByText(cut('300'), { exact: true })).toBeHidden();
+  await expect(titles(page)).toHaveCount(1);
+
+  await addTask(page, 'Plan the trip');
+  await page.getByRole('button', { name: 'Edit Plan the trip' }).click();
+  const notes = editor(page).getByLabel('Notes (optional)');
+  await expect(notes).toHaveAccessibleDescription('Up to 5,000 characters.');
+  const text = 'Book the hotel, then the flights, then pack the bags. '.repeat(100);
+  await paste(notes, text);
+  await expect(notes).toHaveValue(text.slice(0, 5000));
+  await expect(editor(page).getByText(cut('5,000'), { exact: true })).toBeVisible();
+  await expect(
+    editor(page)
+      .getByRole('alert')
+      .filter({ hasText: `Notes (optional): ${cut('5,000')}` }),
+  ).toBeAttached();
+  // Gone when the form opens again.
+  await editor(page).getByRole('button', { name: 'Cancel' }).click();
+  await page.getByRole('button', { name: 'Edit Plan the trip' }).click();
+  await expect(editor(page).getByText(cut('5,000'), { exact: true })).toBeHidden();
+
+  // Steps too: the new one, and ones already added (their boxes are made then).
+  const newStep = editor(page).getByLabel('New step');
+  await paste(newStep, 'b'.repeat(210));
+  await expect(newStep).toHaveValue('b'.repeat(200));
+  await expect(editor(page).getByText(cut('200'), { exact: true })).toBeVisible();
+  await newStep.press('Enter');
+  await expect(editor(page).getByLabel('Step 1', { exact: true })).toHaveValue('b'.repeat(200));
+  await expect(editor(page).getByText(cut('200'), { exact: true })).toBeHidden();
+  await paste(editor(page).getByLabel('Step 1', { exact: true }), 'c'.repeat(10));
+  await expect(editor(page).getByLabel('Step 1', { exact: true })).toHaveValue('b'.repeat(200));
+  await expect(
+    editor(page).getByText(
+      'That didn’t fit. This box takes up to 200 characters, so it wasn’t added.',
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await checkA11y(page, 'the form after a paste that didn’t fit');
 });
 
 test('is accessible, in both themes', async ({ page }) => {
@@ -360,6 +439,20 @@ test('long lists show 100 tasks at a time', async ({ page }) => {
   await expect(titles(page)).toHaveCount(100);
   await expect(doneTitles(page)).toHaveCount(100);
   await expect(more).toBeVisible();
+});
+
+test('a form that can’t load asks for a reload', async ({ page, guard }) => {
+  // The form loads after the page itself (audit 5 J-2). After an update
+  // while the page was open, its old file is gone, so "try again" couldn't
+  // help (audit 4 J-10): it says to reload, as Calendar's editor does.
+  guard.allowConsole('net::ERR_FAILED');
+  await page.route('**/_astro/task-form.*.js', (route) => route.abort());
+  await seed(page, [{ title: 'Pay rent' }]);
+  await page.getByRole('button', { name: 'Edit Pay rent' }).click();
+  await expect(page.getByRole('alert')).toHaveText(
+    'Tasks couldn’t open that. Reload the page to get the latest version, then try again.',
+  );
+  await expect(editor(page)).toBeHidden();
 });
 
 test('ignores saved data it doesn’t understand', async ({ page }) => {

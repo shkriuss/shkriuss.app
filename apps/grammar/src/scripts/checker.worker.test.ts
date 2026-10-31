@@ -39,14 +39,25 @@ describe('the checker', () => {
     tell({ type: 'english', english: 'british' });
     tell({ type: 'words', words: ['Shkriuss'] });
     await answer('ready');
-    tell({ type: 'check', id: 1, text: 'I has a apple. Shkriuss likes the colour.' });
+    // Emoji before the mistakes: a family and a flag, several of
+    // JavaScript's units each (audit 5 F3-9).
+    const text = '👨‍👩‍👧 🇬🇪 I has a apple. Shkriuss likes the colour.';
+    tell({ type: 'check', id: 1, text });
     const checked = await answer('checked');
 
     expect(sent.map((message) => message.type)).toEqual(['ready', 'checked']);
-    const problems = checked.type === 'checked' ? checked.issues.map((issue) => issue.problem) : [];
+    const issues = checked.type === 'checked' ? checked.issues : [];
+    const problems = issues.map((issue) => issue.problem);
     expect(problems).toContain('has');
     // British: "colour" is right. In the dictionary: "Shkriuss" is right.
     expect(problems).not.toContain('colour');
     expect(problems).not.toContain('Shkriuss');
+    // Positions count as JavaScript counts (UTF-16), also after emoji: if a
+    // Harper update counted code points, every fix after an emoji would land
+    // early and corrupt the text (audit 5 F3-9).
+    expect(issues.length).toBeGreaterThan(0);
+    for (const issue of issues) {
+      expect(text.slice(issue.start, issue.end), issue.problem).toBe(issue.problem);
+    }
   }, 30_000);
 });

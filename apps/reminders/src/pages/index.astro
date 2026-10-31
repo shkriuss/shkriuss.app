@@ -255,10 +255,18 @@ import { MAX_TEXT_LENGTH, REPEAT_CHOICES, REPEATS } from '../lib/reminders.ts';
     </form>
   </dialog>
 
-  <dialog class="dialog" aria-labelledby="clear-title" data-clear-dialog>
+  <!-- Both are read out with what they delete, and that it can't be undone (audit 5 G-3). -->
+  <dialog
+    class="dialog"
+    aria-labelledby="clear-title"
+    aria-describedby="clear-text"
+    data-clear-dialog
+  >
     <form method="dialog" class="stack">
       <h2 id="clear-title">Delete done reminders?</h2>
-      <p data-clear-text>The done reminders will be removed. This can’t be undone.</p>
+      <p id="clear-text" data-clear-text>
+        The done reminders will be removed. This can’t be undone.
+      </p>
       <div class="cluster">
         <Button type="submit" value="cancel">
           Cancel
@@ -270,10 +278,15 @@ import { MAX_TEXT_LENGTH, REPEAT_CHOICES, REPEATS } from '../lib/reminders.ts';
     </form>
   </dialog>
 
-  <dialog class="dialog" aria-labelledby="delete-title" data-delete-dialog>
+  <dialog
+    class="dialog"
+    aria-labelledby="delete-title"
+    aria-describedby="delete-message"
+    data-delete-dialog
+  >
     <form method="dialog" class="stack">
       <h2 id="delete-title">Delete this reminder?</h2>
-      <p>
+      <p id="delete-message">
         “<span dir="auto" data-delete-text></span>” will be removed. This can’t be undone.
       </p>
       <div class="cluster">

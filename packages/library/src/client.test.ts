@@ -222,6 +222,48 @@ describe('deletion notes', () => {
     expect((await tablet.api.changes(0)).changes).toEqual(real);
   });
 
+  it('from before “Delete the online copy” still count for a photo put back under its old id (audit 5 A-2)', async () => {
+    // The seal is for the library and the photo's id, not for one upload of
+    // it: a server that replays the genuine note from before the library was
+    // deleted (one restored from a backup, say) would have the photo deleted
+    // on every device. Binding the seal to the upload needs each device to
+    // keep something of that upload with the photo, which is Photos' photo
+    // record to change: a known limit for now (docs/adr/0016).
+    const secret = randomBytes(32);
+    const phone = await device(secret);
+    await phone.api.unlock(CODE);
+    await phone.api.upload('photo-0001', photo, parts());
+    await phone.api.remove(['photo-0001']);
+    const proof = (
+      (await (
+        await fetch(`${ORIGIN}/api/library/changes?since=0`, {
+          headers: {
+            Authorization: `Bearer ${(await libraryAccess(secret, phone.record)).token}`,
+            'X-Library': phone.record.library,
+          },
+        })
+      ).json()) as { rows: { id: string; proof?: string }[] }
+    ).rows.find((row) => row.id === 'photo-0001')?.proof;
+    expect(proof).toMatch(/\./);
+
+    // "Delete the online copy": the library is wiped, then unlocked and
+    // filled again (its id comes from the app key), and a device that still
+    // had the photo puts it back under the same id.
+    await phone.api.wipe();
+    const object = server.objects.get(phone.record.library);
+    if (!object) throw new Error('No library');
+    await object.library.alarm();
+    await phone.api.unlock(CODE);
+    const again = await phone.api.upload('photo-0001', photo, parts());
+    expect((await phone.api.changes(0)).changes.some((change) => 'deleted' in change)).toBe(false);
+    addRows([{ id: 'photo-0001', seq: again.seq + 1, deleted: true, at: 1, proof }]);
+    expect((await phone.api.changes(0)).changes.at(-1)).toEqual({
+      id: 'photo-0001',
+      seq: again.seq + 1,
+      deleted: true,
+    });
+  });
+
   it('that a refused upload gives must be real too', async () => {
     const phone = await device(randomBytes(32));
     await phone.api.unlock(CODE);

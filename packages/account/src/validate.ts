@@ -8,6 +8,16 @@ import { ALGORITHMS, type Assertion, type PasskeyKey } from './webauthn.ts';
 /** A device link lasts this long, and works once. */
 export const LINK_LIFETIME_MS = 10 * 60 * 1000;
 
+/**
+ * The account service keeps the note that a key was replaced this long
+ * (about 13 months) after a device last asked about it, and the device that
+ * replaced the key keeps the old key this long after noting it: by then the
+ * note is gone, and so is the "moved" note on the apps' old online copies,
+ * so an old key handed to an app after that could bring along a copy that a
+ * lost device started meanwhile (audit 5 A-1).
+ */
+export const REPLACED_NOTE_MS = 396 * 24 * 60 * 60 * 1000;
+
 /** A link id: 16 random bytes, base64url. */
 export const LINK_ID_PATTERN = /^[A-Za-z0-9_-]{22}$/;
 

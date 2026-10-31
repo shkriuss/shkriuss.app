@@ -25,6 +25,10 @@ reasons: [ADR 0015](../../docs/adr/0015-photos-app.md) (on the device) and
   (`photo:<id>`), its files (`photo-files:<id>`: the original and the two
   copies; only the thumbnail for a photo that's only online), and how far
   this device has caught up with the online library (`photos-online:state`).
+  A photo's details and files are saved together and deleted together, in
+  one transaction, so a page closed in between can't leave files behind
+  without their photo; files found like that (from an older version) go
+  when the library loads (audit 5 E-4).
 - The online library (`@shkriuss/library`, `@shkriuss/sync`):
   - `src/lib/online.ts`: its rules, with unit tests: what changes from other
     devices do here (`applyChanges`, which also keeps the same photo once),
@@ -46,11 +50,25 @@ reasons: [ADR 0015](../../docs/adr/0015-photos-app.md) (on the device) and
   "Select" to save or delete several (its bar stays at the top of the screen
   while choosing, unless large text makes it too tall), and the online
   library's part of "Sync between your devices" (storage code, status, "Free
-  up space on this device").
+  up space on this device"; once the code is accepted, focus goes to the
+  status line: audit 5 G-2). A photo whose screen-sized copy can't be
+  downloaded says so in the viewer's status line too, so it's read out
+  (audit 5 G-7).
 - `src/pages/index.astro`: the page, built from `@shkriuss/ui` components.
   `<template>`s hold the markup for a month and a photo.
 - Photos a browser can't show (like HEIC outside Safari) are kept anyway: the
-  grid shows their kind, and "Save original" works.
+  grid shows their kind, and "Save original" works. With sync on, the grid
+  and the viewer show the online library's thumbnail and screen-sized copy
+  of such a photo when it has them (made by the device that added it); and
+  picking such a photo again, to put its original back after "Free up
+  space", keeps the copies it had here (audit 5 F3-6). The other way round
+  isn't helped: a photo added where the browser can't show it goes online
+  without a thumbnail or screen-sized copy, so no device shows it, not even
+  Safari, which could; "Save original" still works everywhere. Making the
+  copies there would mean reading the original on a device that can, which
+  isn't done (audit 5 F3-10). A name like "holiday.2019" is saved as
+  "holiday.2019.jpg", with its kind shown as "JPG": a number after a dot
+  isn't a kind (audit 5 F3-10).
 - On iPhone and iPad, photos picked from the Photo Library likely arrive as
   JPEG copies made by iOS, not the HEIC originals: Safari's photo picker
   (which every browser there uses) asks for the "compatible" version, and

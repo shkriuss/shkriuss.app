@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
+import { paste } from '../../../tests/e2e/clipboard.ts';
 import { checkA11y, expect, failSaving, test } from '../../../tests/e2e/fixtures.ts';
 
 async function addCounter(page: Page, name: string): Promise<void> {
@@ -90,6 +91,23 @@ test('keeps keyboard focus on the button after counting', async ({ page }) => {
   ).toBeFocused();
 });
 
+// Audit 5 G-4: the browser kept the start of a long paste without a word.
+test('says when a pasted name doesn’t all fit', async ({ page }) => {
+  const input = page.getByLabel('New counter');
+  const text = 'Glasses of water on a hot day, '.repeat(3);
+  await paste(input, text);
+  await expect(input).toHaveValue(text.slice(0, 60));
+  const cut =
+    'Only part of that fit. This box takes up to 60 characters, so the rest wasn’t added.';
+  await expect(page.getByText(cut, { exact: true })).toBeVisible();
+  await expect(input).toHaveAccessibleDescription(new RegExp(cut));
+  // Gone once the text is changed to one that fits, and the counter is added.
+  await input.fill('Water');
+  await expect(page.getByText(cut, { exact: true })).toBeHidden();
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Water' })).toBeVisible();
+});
+
 test('explains invalid names', async ({ page }) => {
   const input = page.getByLabel('New counter');
   await page.getByRole('button', { name: 'Add', exact: true }).click();
@@ -133,6 +151,8 @@ test('asks before resetting a count to 0', async ({ page }) => {
   const dialog = page.getByRole('dialog', { name: 'Reset “Cups” to 0?' });
   await expect(dialog).toBeVisible();
   await expect(dialog).toContainText('It’s at 3 now.');
+  // Read out with the title, before "Cancel" (audit 5 G-3).
+  await expect(dialog).toHaveAccessibleDescription('It’s at 3 now. This can’t be undone.');
   await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused();
   await checkA11y(page, 'reset dialog');
 
@@ -180,9 +200,12 @@ test('resets and deletes counters (with confirmation)', async ({ page }) => {
 
   await books.getByRole('button', { name: 'Delete Books' }).click();
   const dialog = page.getByRole('dialog', { name: 'Delete this counter?' });
-  // Every delete dialog says so (audit 4 G-12).
+  // Every delete dialog says so (audit 4 G-12), read out with its title (audit 5 G-3).
   await expect(dialog).toContainText(
     '“Books” and its count will be removed. This can’t be undone.',
+  );
+  await expect(dialog).toHaveAccessibleDescription(
+    /^“Books” and its count will be removed\. This\s+can’t be undone\.$/,
   );
   await checkA11y(page, 'delete dialog');
   await dialog.getByRole('button', { name: 'Cancel' }).click();

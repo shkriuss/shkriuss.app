@@ -4,7 +4,11 @@ Status: Accepted (2026-10-18). There are no pull request previews any more
 ([ADR 0019](0019-no-pull-request-previews.md)), so the model isn't uploaded to
 them. Changed in October 2026 (audit 3 F3-2, G-7): short forms typed without
 an apostrophe are split into words as spaCy splits them, and the list of
-files to download has a time limit (see Decision).
+files to download has a time limit (see Decision). Changed by audit 5 (H-2):
+the build's download of the model has limits (the size the server announces
+must be the model's, no more than that is read, and each try has a time
+limit), and a workflow keeps CI's copy of the model in its cache twice a
+week (see Consequences).
 
 ## Context
 
@@ -122,8 +126,21 @@ check:dist` now checks every file's size), and adds onnxruntime-web's files
   Face is down. Only the checks job saves to the cache; the build checks the
   checksum whatever the cache holds. If the cache is empty (GitHub drops
   copies unused for a week) and the file has gone from Hugging Face, builds
-  stop with a clear error until we host a copy elsewhere. PR previews upload
-  the model to each preview.
+  stop with a clear error until we host a copy elsewhere. (PR previews,
+  which uploaded the model to each preview, are gone: ADR 0019.)
+
+  _Changed by audit 5 (H-2):_ the **Keep caches** workflow
+  (`.github/workflows/keep-cache.yml`) restores the cache twice a week, and
+  downloads and saves the model again when it has gone, so a quiet week no
+  longer empties it; the download itself refuses an answer that doesn't
+  announce the model's size, reads no more than that, and gives each try 10
+  minutes. A second place to download from would need a copy the owner
+  controls, checked by the same SHA-256: a release asset of this repository
+  (releases take files up to 2 GB; a workflow run once, with permission to
+  write releases for that run only, could make it from the cached model), or
+  an object in an R2 bucket of the Cloudflare account. Until one exists,
+  Hugging Face is the only source and CI's cache the only copy.
+
 - Dependabot updates onnxruntime-web like any dependency; phones with Deep
   check are offered the update and download only the changed files.
 

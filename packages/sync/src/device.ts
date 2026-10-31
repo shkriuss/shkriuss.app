@@ -56,7 +56,20 @@ export interface DeviceState {
    * found: they're tried again once the app is updated.
    */
   waiting: Record<string, string>;
+  /**
+   * Keys from replaced account keys this device is done with: their copy
+   * was moved (here, or by another device) or deleted. The hub hands an app
+   * its replaced keys at every "Turn on sync" for 13 months, but these are
+   * never fetched or merged again: once the server's note that the old copy
+   * moved is cleaned up, a lost device could start a copy with the old key,
+   * and it would have been brought into the person's data (audit 5 A-1).
+   * Kept when sync is turned off; at most MAX_RETIRED, oldest first.
+   */
+  retired: string[];
 }
+
+/** Retired keys remembered (the hub sends at most 5 replaced keys at a time). */
+const MAX_RETIRED = 20;
 
 const strings = (value: unknown): string[] =>
   Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
@@ -93,11 +106,16 @@ export function loadState(): DeviceState | null {
       connected: typeof state.connected === 'number' ? state.connected : null,
       previous: strings(state.previous),
       waiting: stringRecord(state.waiting),
+      retired: strings(state.retired),
     };
   } catch {
     return null;
   }
 }
+
+/** `retired` with `keys` added (once each), the oldest dropped past MAX_RETIRED. */
+export const withRetired = (retired: readonly string[], keys: readonly string[]): string[] =>
+  [...new Set([...retired, ...keys])].slice(-MAX_RETIRED);
 
 /** Whether the latest saveState() that didn't work found the browser's storage full. */
 let stateFull = false;
@@ -194,17 +212,19 @@ export const offState = (state: DeviceState): DeviceState => ({
  * the person pressed at `turnedOn`: see DeviceState.connected). Connecting
  * again with the same key keeps what this device knew; with another key,
  * this device's data is merged into that account's copy at the next sync.
- * Keys the new one replaced are remembered until their copies are moved.
- * Returns false if the browser won't save.
+ * Keys the new one replaced are remembered until their copies are moved;
+ * keys this device is done with (`retired`) never again. Returns false if
+ * the browser won't save.
  */
 export function saveConnection(connection: Connection, turnedOn = Date.now()): boolean {
   const existing = loadState();
   const secret = toBase64Url(connection.secret);
-  const replaces = connection.replaces.map(toBase64Url);
+  const retired = existing?.retired ?? [];
+  const replaces = connection.replaces
+    .map(toBase64Url)
+    .filter((key) => key !== secret && !retired.includes(key));
   if (existing?.secret === secret) {
-    const previous = [...new Set([...existing.previous, ...replaces])].filter(
-      (key) => key !== secret,
-    );
+    const previous = [...new Set([...existing.previous, ...replaces])];
     return saveState({ ...existing, code: connection.code, connected: turnedOn, previous });
   }
   // Another key: only the keys it replaced move into it. Old keys the last
@@ -213,7 +233,7 @@ export function saveConnection(connection: Connection, turnedOn = Date.now()): b
   // (If it is this account, but the hub no longer knows those keys, their
   // copies stay where they are, as when sync turns off: nothing in them is
   // lost, and a copy nobody uses is deleted after 13 months.)
-  const previous = [...new Set(replaces)].filter((key) => key !== secret);
+  const previous = [...new Set(replaces)];
   const waiting = Object.fromEntries(
     Object.entries(existing?.waiting ?? {}).filter(([key]) => previous.includes(key)),
   );
@@ -230,6 +250,7 @@ export function saveConnection(connection: Connection, turnedOn = Date.now()): b
     connected: turnedOn,
     previous,
     waiting,
+    retired,
   });
 }
 

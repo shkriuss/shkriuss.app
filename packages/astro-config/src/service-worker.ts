@@ -19,8 +19,8 @@
  *   kept in PREVIOUS_CACHE until the next version. Caches an app manages
  *   itself (names not starting with "shkriuss-") are kept.
  * - Files under /on-demand/ are not saved: they're big, and an app downloads
- *   them only when the person asks (e.g. Grammar's Deep check model, about
- *   385 MB). The app saves them in its own cache, and they're served from
+ *   them only when the person asks (e.g. Grammar's Deep check model,
+ *   381 MB). The app saves them in its own cache, and they're served from
  *   there like any other saved file (docs/adr/0012).
  * - Every saved file is served with the site's security policy now. A file
  *   saved under an older one (the headers changed, the file didn't) would
@@ -31,6 +31,9 @@
  * - Tapping a notification (e.g. a Calendar reminder) opens the app, or
  *   switches to it if it's already open.
  */
+
+import { ROBOTS_TXT } from './robots-txt.ts';
+import { SECURITY_TXT } from './security-txt.ts';
 
 export interface ServiceWorkerOptions {
   /** URL paths to precache, e.g. ["/", "/privacy/", "/_astro/app.1234.css"]. */
@@ -47,8 +50,11 @@ export const NETWORK_TIMEOUT_MS = 3000;
 /** Where the previous version's build files are kept, for pages still open from it. */
 export const PREVIOUS_CACHE = 'shkriuss-previous';
 
-/** Files in dist/ that are not served as-is, or must not be cached. */
-const NOT_PRECACHED = new Set(['_headers', '_redirects', 'sw.js']);
+/**
+ * Files in dist/ that are not served as-is, must not be cached, or aren't
+ * needed offline (what crawlers and security researchers read).
+ */
+const NOT_PRECACHED = new Set(['_headers', '_redirects', 'sw.js', SECURITY_TXT, ROBOTS_TXT]);
 
 /**
  * Folder in dist/ (and public/) for big files an app downloads only when the
@@ -158,9 +164,17 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (request.mode === 'navigate') {
-    // The page's saved copy, whatever its query string.
+    // The page's saved copy, whatever its query string. Online, Cloudflare
+    // answers "/privacy" with a redirect to "/privacy/", which is how the
+    // copy is saved: an address typed or bookmarked without its slash looks
+    // for that too (audit 5 C-2). A file name (with a dot) is never a page.
     const page = url.origin + url.pathname;
-    const saved = () => caches.match(page, { ignoreSearch: true }).then(withPolicy);
+    const slashed = /\\/[^/.]+$/.test(url.pathname) ? page + '/' : null;
+    const saved = () =>
+      caches
+        .match(page, { ignoreSearch: true })
+        .then((cached) => cached || (slashed && caches.match(slashed, { ignoreSearch: true })))
+        .then(withPolicy);
     const network = fetch(request).then((response) =>
       // Not the page (a server error, or a 4xx a saved page can't have, like
       // the refusal of requests whose cookies are too big): the saved copy is

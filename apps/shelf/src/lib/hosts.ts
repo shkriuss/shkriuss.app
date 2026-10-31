@@ -73,10 +73,19 @@ export function decodePunycode(input: string): string | null {
   return output.map((code) => String.fromCodePoint(code)).join('');
 }
 
-/** Scripts with no letters that look like Latin ones: a name in one of them can't pass for another site's. */
-const READABLE = ['Georgian', 'Han', 'Hiragana', 'Katakana', 'Hangul'].map(
-  (script) => new RegExp(`^[\\p{Script=${script}}0-9-]+$`, 'u'),
-);
+/**
+ * Scripts with no letters that look like Latin ones: a name in one of them
+ * can't pass for another site's. Japanese names mix kanji (Han) with kana,
+ * and use the prolonged sound mark "ー" and the middle dot "・", which
+ * belong to no one script, so those go together, as browsers' own rules
+ * have them: before, "コーヒー.jp" and "東京タワー.jp" stayed as "xn--…"
+ * (audit 5 F3-4).
+ */
+const READABLE = [
+  '\\p{Script=Georgian}',
+  '\\p{Script=Han}\\p{Script=Hiragana}\\p{Script=Katakana}\\u30FB\\u30FC',
+  '\\p{Script=Hangul}',
+].map((letters) => new RegExp(`^[${letters}0-9-]+$`, 'u'));
 
 /** Whether a part of a name, decoded, is in one readable script (with digits and hyphens). */
 const isReadable = (label: string): boolean =>

@@ -7,7 +7,10 @@ optional, end-to-end encrypted account to sync apps between devices. Extended
 by [ADR 0013](0013-photos-on-the-device.md): photos are kept in IndexedDB.
 Extended by [ADR 0016](0016-online-photo-library.md): Photos' optional online
 library goes through the account and is kept in Cloudflare R2, free up to
-10 GB, then paid.
+10 GB, then paid. Changed by audit 5 E-3: an app says, at the top of its
+page, when what's saved was saved by a newer version of it (a tab open from
+before an update, or a rollback) or can't be read, instead of looking empty;
+Restore refuses to replace the newer data.
 
 ## Context
 

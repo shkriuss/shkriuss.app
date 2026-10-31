@@ -5,7 +5,10 @@ Status: Accepted (2026-10-22). Builds on [ADR 0010](0010-account-and-sync.md)
 [ADR 0015](0015-photos-app.md) (the Photos app on the device). How many
 libraries there can be is limited by [ADR 0017](0017-storage-limits.md).
 Changed by [ADR 0019](0019-no-pull-request-previews.md): there are no pull
-request previews, so no `shkriuss-photos-preview` bucket either.
+request previews, so no `shkriuss-photos-preview` bucket either. Updated by
+audit 5: a deletion note's seal is for the photo's id, not one upload of it
+(A-2, a known limit), a library made up through a move is cleaned up like
+any other (B-1), and what a deleted library keeps (D-3).
 
 ## Context
 
@@ -165,9 +168,10 @@ every device. That's far beyond what sync can hold:
   A photo still on its way up while its library is deleted isn't added to
   the new one: its file is deleted instead (audit finding B-7).
   What's left of a deleted library (its empty list, with the hashes of its
-  token and of any replaced ones, a hash of the storage code it was
-  unlocked with, how many changes it had, and the day and number of its
-  last uploads) was kept for good. Now it's deleted too, with any file
+  token and of any replaced ones, how many changes it had, and the day and
+  number of its last uploads; since audit 4 D-1 it's locked instead of
+  keeping a hash of the storage code it was unlocked with, audit 5 D-3)
+  was kept for good. Now it's deleted too, with any file
   an upload left in R2 since, once nobody has used it for 13 months, and
   its room is given back (audit 3 D-2). A device that uses it in that time
   keeps it 13 months more; one that adds photos to it again makes it an
@@ -208,8 +212,16 @@ every device. That's far beyond what sync can hold:
   the answer to an upload, counts only with the seal of the device that
   deleted the photo, made with the library's key for that library and that
   photo. Notes from before seals were added have none, so a device that
-  hadn't caught up with one keeps that photo. Whoever controls the servers
-  could still change the apps themselves.
+  hadn't caught up with one keeps that photo. The seal is for the library
+  and the photo's id, not for one upload of it: after "Delete the online
+  copy", a photo put back under its old id (by a device that still had it)
+  would be deleted everywhere by a server that replays the genuine note
+  from before, as one restored from a backup might (audit 5 A-2). Binding
+  the seal to the upload needs each device to keep something of that
+  upload with the photo (its sealed details' hash, say), which is Photos'
+  photo record to change, so it isn't done yet; the server's own epoch
+  can't do it, since the server names the epoch. Whoever controls the
+  servers could still change the apps themselves.
 - **Free plan requests:** an upload is one Worker request and four Durable
   Object requests (the library twice, `LibraryGate` twice); a screen of
   thumbnails is a few. A device checks for changes about once a minute while

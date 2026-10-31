@@ -354,14 +354,20 @@ const STAT_TILES = [
     </form>
   </dialog>
 
-  <dialog class="dialog" aria-labelledby="delete-title" data-delete-dialog>
+  {/* Read out with its title: what goes, what becomes of its parts, and that it can't be undone (audit 5 G-3). */}
+  <dialog
+    class="dialog"
+    aria-labelledby="delete-title"
+    aria-describedby="delete-text delete-more"
+    data-delete-dialog
+  >
     <form method="dialog" class="stack">
       <h2 id="delete-title">Delete this trade?</h2>
-      <p>
+      <p id="delete-text">
         The <span dir="auto" data-delete-name></span> trade will be removed from your journal. This
         can’t be undone.
       </p>
-      <p data-delete-more hidden></p>
+      <p id="delete-more" data-delete-more hidden></p>
       <div class="cluster">
         <Button type="submit" value="cancel">
           Cancel
@@ -374,7 +380,7 @@ const STAT_TILES = [
   </dialog>
 
   <!-- "Delete a year…": every trade closed in the year chosen, to make room. -->
-  <dialog class="dialog" aria-labelledby="year-title" data-year-dialog>
+  <dialog class="dialog" aria-labelledby="year-title" aria-describedby="year-text" data-year-dialog>
     <form class="stack" data-year-form novalidate>
       <h2 id="year-title">Delete a year</h2>
       <div class="field">
