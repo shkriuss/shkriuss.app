@@ -11,9 +11,14 @@ Write things down. Lives at <https://notes.shkriuss.app>.
   one note;
   `#note=<id>` in the address opens a note, so the back button works.
   Typing is saved a moment after the last key press, and straight away when
-  leaving the note or the page. A new note nothing was written in goes when
-  it's left, closing the page too (one a closed page left behind goes the
-  next time Notes opens, ten minutes on). List titles are cut between whole
+  leaving the note or the page. A new note (made since the page opened)
+  left empty goes when it's left, closing the page too (one a closed page
+  left behind, never written in, goes the next time Notes opens, ten
+  minutes on); any other note that's emptied stays, with its pin, so
+  nothing is deleted without asking (audit 5 F3-7). A note deleted on another device while it's being typed in here
+  comes back with the typing, even at 2,000 notes (audit 5 F3-8); "Delete
+  all data" in another tab of this browser deletes it too, instead of the
+  typing putting it back (audit 5 D-2). List titles are cut between whole
   characters: an emoji, a flag, a letter with its accent.
   When the device is full, typing that can't be saved says "Not saved" and
   stays in the box, also through changes saved elsewhere; it's tried again

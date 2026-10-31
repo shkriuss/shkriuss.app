@@ -13,6 +13,7 @@ import { canFreeUp, deleteMessage, freeable, onlineMessage, onlyOnline } from '.
 import {
   addedMessage,
   byMonth,
+  copiesToKeep,
   countLabel,
   downloadName,
   formatBytes,
@@ -22,6 +23,7 @@ import {
   localDateTime,
   monthLabel,
   PAGE_SIZE,
+  PARTS,
   photoAlt,
   shownLabel,
   takenLabel,
@@ -222,9 +224,15 @@ export function mountPhotos(root: Document): void {
 
   // ---------- Showing the library ----------
 
-  /** A photo's thumbnail: from this device, or (only online) downloaded. */
+  /**
+   * A photo's thumbnail: from this device, or downloaded from the online
+   * library, which has one (also for a photo here that this browser
+   * couldn't make one for, like a HEIC outside Safari: audit 5 F3-6).
+   */
   async function photoThumb(photo: Photo): Promise<string | null> {
-    return (await thumbUrl(photo.id)) ?? (photo.here ? null : online.thumb(photo));
+    return (
+      (await thumbUrl(photo.id)) ?? (photo.online?.parts[PARTS.thumb] ? online.thumb(photo) : null)
+    );
   }
 
   function renderTile(photo: Photo): HTMLLIElement {
@@ -365,12 +373,9 @@ export function mountPhotos(root: Document): void {
               here: true,
             };
         try {
-          await savePhoto(photo, {
-            id: photo.id,
-            original: file,
-            view: read.view,
-            thumb: read.thumb,
-          });
+          // Picked again: copies this browser couldn't make stay as they were (audit 5 F3-6).
+          const kept = known ? await getFiles(known.id) : undefined;
+          await savePhoto(photo, { id: photo.id, original: file, ...copiesToKeep(read, kept) });
           byHash.set(photo.hash, photo);
           photos = known ? withChanges(photos, [photo]) : withAdded(photos, photo);
           if (known) result.restored += 1;
@@ -461,6 +466,8 @@ export function mountPhotos(root: Document): void {
     viewerImage.removeAttribute('src');
     viewerImage.alt = photoAlt(photo);
     viewerNone.hidden = true;
+    // A problem with the photo shown before isn't this one's.
+    if (viewerStatus.hasAttribute('data-problem')) tellInViewer('');
     viewerTitle.textContent = takenLabel(photo.taken);
     const index = photos.indexOf(photo);
     required<HTMLElement>(viewer, '[data-detail="name"]').textContent = photo.name || 'No name';
@@ -475,18 +482,24 @@ export function mountPhotos(root: Document): void {
       required<HTMLElement>(viewer, `[data-action="${action}"]`).hidden = photos.length < 2;
     }
     renderSaveOriginal();
-    // The screen-sized copy: from this device, or downloaded (photos only online).
+    // The screen-sized copy: from this device, or downloaded from the online
+    // library, which has one (also for a photo here that this browser
+    // couldn't make one for: audit 5 F3-6).
+    const downloadable = online.state().on && (photo.online?.parts[PARTS.view] ?? 0) > 0;
     const view =
-      (await getFiles(id))?.view ?? (photo.online ? await online.download(photo, 'view') : null);
+      (await getFiles(id))?.view ?? (downloadable ? await online.download(photo, 'view') : null);
     // Another photo is shown now, or the viewer was closed while this one downloaded.
     if (viewing?.id !== id) return;
     viewing.url = view ? URL.createObjectURL(view) : null;
     if (viewing.url) viewerImage.src = viewing.url;
-    viewerNone.textContent =
-      photo.here || photo.online?.parts[1] === 0
-        ? 'This browser can’t show this kind of photo. “Save original” saves it as it is, to open in another app.'
-        : 'Couldn’t download this photo. Check your connection and try again.';
+    const problem = downloadable
+      ? 'Couldn’t download this photo. Check your connection and try again.'
+      : 'This browser can’t show this kind of photo. “Save original” saves it as it is, to open in another app.';
+    viewerNone.textContent = problem;
     viewerNone.hidden = viewing.url !== null;
+    // A failed download is read out too: focus is on the title, which says
+    // nothing of it (audit 5 G-7).
+    if (viewing.url === null && downloadable) tellInViewer(problem, true);
   }
 
   function openPhoto(id: string): void {

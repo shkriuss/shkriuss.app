@@ -13,7 +13,7 @@
  */
 import { createStore } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
-import { withEdits } from '@shkriuss/sync/edits';
+import { hasEdits, withEdits } from '@shkriuss/sync/edits';
 import { focusSpot, keepFocus, returnFocus, type FocusSpot } from '@shkriuss/ui/keep-focus';
 import { PAGE_SIZE, shownCount, waitForTyping } from '@shkriuss/ui/long-lists';
 import {
@@ -484,14 +484,24 @@ export function mountShelf(root: Document): void {
   form.addEventListener('submit', (event) => {
     event.preventDefault();
     const draft = readDraft();
+    const existing = find(editingId);
+    // Deleted on another device, and nothing changed here: it stays deleted,
+    // as in Calendar and Tasks (audit 4 F1-3). Saving the form as it was
+    // brought the item back, everywhere once it synced (audit 5 F3-1).
+    if (editingId !== null && !existing && openedDraft && !hasEdits(openedDraft, draft)) {
+      itemGone(
+        `“${openedDraft.name}” was deleted on another device. It stays deleted: nothing in it was changed.`,
+      );
+      return;
+    }
     const problems = draftProblems(draft);
-    if (editingId === null && state.items.length >= MAX_ITEMS) {
+    // Also an item deleted elsewhere that a change here brings back: it's added again.
+    if (!existing && state.items.length >= MAX_ITEMS) {
       problems.form = `You can keep up to ${itemsCount(MAX_ITEMS)}. Delete some to add more.`;
     }
     if (showProblems(problems)) return;
 
     const now = Date.now();
-    const existing = find(editingId);
     // A sync while the form was open may have changed the item on another
     // device: keep those changes, and put on only what was changed here.
     const edited =
@@ -540,11 +550,11 @@ export function mountShelf(root: Document): void {
    * also when that happened while "Delete this item?" was open, where the
    * form stayed open and "Save" brought the item back (audit 4 F3-5).
    */
-  function itemGone(): void {
+  function itemGone(message = 'That item was already deleted on another device.'): void {
     editingId = null;
     opener = focusSpot(addButton);
     editor.close();
-    say('That item was already deleted on another device.');
+    say(message);
   }
 
   deleteButton.addEventListener('click', () => {

@@ -207,6 +207,10 @@ test('deletes a note after asking', async ({ page }) => {
   await page.getByRole('button', { name: 'Delete', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Delete this note?' });
   await expect(dialog).toContainText('“Delete me” will be removed.');
+  // Read out with its title, so a screen reader hears what goes (audit 5 G-3).
+  await expect(dialog).toHaveAccessibleDescription(
+    '“Delete me” will be removed. This can’t be undone.',
+  );
   await dialog.getByRole('button', { name: 'Cancel' }).click();
   await expect(bodyBox(page)).toHaveValue('Old stuff');
 
@@ -373,55 +377,153 @@ test('says so in the editor when typing can’t be saved', async ({ page }) => {
   await expect(bodyBox(page)).toHaveValue('');
 });
 
+const edited = (page: Page) => page.locator('[data-edited]');
+const savedNotes = (page: Page) =>
+  page.evaluate(() =>
+    (
+      JSON.parse(localStorage.getItem('shkriuss:notes') ?? 'null') as {
+        data: { notes: { title: string; body: string }[] };
+      }
+    ).data.notes.map((note) => `${note.title} | ${note.body}`),
+  );
+
+/** Deletes a note in another tab (what a sync from another device does too). */
+async function deleteElsewhere(page: Page, title: string): Promise<void> {
+  const other = await page.context().newPage();
+  await other.goto('/');
+  await other.getByRole('link', { name: title, exact: true }).click();
+  await other.getByRole('button', { name: 'Delete', exact: true }).click();
+
+  // Observe the storage event in the original tab.
+  await page.evaluate((deletedTitle) => {
+    window.addEventListener('storage', (event) => {
+      if (event.key !== 'shkriuss:notes' || !event.newValue) return;
+      const saved = JSON.parse(event.newValue) as {
+        data: { notes: { title: string }[] };
+      };
+      if (saved.data.notes.every((note) => note.title !== deletedTitle)) {
+        document.documentElement.dataset['notesDeleteEvent'] = 'seen';
+      }
+    });
+  }, title);
+
+  await other
+    .getByRole('dialog', { name: 'Delete this note?' })
+    .getByRole('button', { name: 'Delete' })
+    .click();
+  await expect(other.getByRole('link', { name: title, exact: true })).toHaveCount(0);
+
+  // Verify the deletion reached persistent storage before closing the tab.
+  const stillStored = async () => {
+    const notes = await savedNotes(other);
+    return notes.some((entry) => entry.startsWith(`${title} | `));
+  };
+  await expect.poll(stillStored).toBe(false);
+
+  await expect(page.locator('html')).toHaveAttribute('data-notes-delete-event', 'seen');
+
+  await other.close();
+}
+
+test('an older note that was emptied stays; a new one typed in and emptied goes (audit 5 F3-7)', async ({
+  page,
+}) => {
+  // Before, any note left empty went, without asking: an old note cleared
+  // to be rewritten later was deleted, with its pin, and with sync on, everywhere.
+  await writeNote(page, 'Keep me', 'Some text');
+  // From before the page opened: not one made just now.
+  await page.reload();
+  await card(page, 'Keep me').getByRole('link').click();
+  await page.getByRole('button', { name: 'Pin' }).click();
+  await titleBox(page).fill('');
+  await bodyBox(page).fill('');
+  await page.getByRole('button', { name: 'All notes' }).click();
+  expect(await titles(page)).toEqual(['New note']);
+  await expect(card(page, 'New note').getByRole('img', { name: 'Pinned' })).toBeVisible();
+  await page.reload();
+  expect(await titles(page)).toEqual(['New note']);
+
+  // A note made now, typed in, then emptied: nothing is lost with it, so it goes.
+  await page.getByRole('button', { name: 'New note' }).click();
+  await titleBox(page).fill('Oops');
+  await expect(edited(page)).toHaveText(/^Edited /);
+  await titleBox(page).fill('');
+  await page.getByRole('button', { name: 'All notes' }).click();
+  expect(await titles(page)).toEqual(['New note']);
+});
+
+test('typing in a note deleted elsewhere is saved, even at the most notes (audit 5 F3-8)', async ({
+  page,
+}) => {
+  // At the limit, the note couldn't be added back, so the typing was never
+  // saved, and nothing said so. One over the limit, from a backup, say.
+  await page.clock.install();
+  await page.evaluate(() => {
+    const notes = Array.from({ length: 2001 }, (_, index) => ({
+      id: `note-${index + 1}`,
+      title: `Note ${index + 1}`,
+      body: '',
+      created: index + 1,
+      updated: index + 1,
+      pinned: false,
+    }));
+    localStorage.setItem('shkriuss:notes', JSON.stringify({ v: 2, data: { notes } }));
+  });
+  await page.reload();
+  await page.getByRole('link', { name: 'Note 2001', exact: true }).click();
+  await page.clock.pauseAt((await page.evaluate(() => Date.now())) + 1000);
+  await bodyBox(page).pressSequentially('Still here');
+  // Deleted in another tab (as a sync from another device does): the typing
+  // here brings it back at once, so that tab shows it again too.
+  const other = await page.context().newPage();
+  await other.goto('/');
+  await other.getByRole('link', { name: 'Note 2001', exact: true }).click();
+  await other.getByRole('button', { name: 'Delete', exact: true }).click();
+  await other
+    .getByRole('dialog', { name: 'Delete this note?' })
+    .getByRole('button', { name: 'Delete' })
+    .click();
+  await expect(other.getByRole('status').filter({ hasText: 'Note deleted.' })).toBeAttached();
+  await expect(edited(page)).toHaveText(/^Edited /);
+  await expect(other.getByRole('link', { name: 'Note 2001', exact: true })).toHaveCount(1);
+  await other.close();
+  const saved = await savedNotes(page);
+  expect(saved).toContain('Note 2001 | Still here');
+  expect(saved).toHaveLength(2001);
+});
+
+test('“Delete all data” in another tab deletes the note being typed in here too (audit 5 D-2)', async ({
+  page,
+}) => {
+  // Typing waiting to be saved here put the note back, right after the
+  // other tab said everything was deleted.
+  await writeNote(page, 'Diary', 'Start');
+  const other = await page.context().newPage();
+  await other.clock.install();
+  await other.goto('/');
+  await other.getByRole('link', { name: 'Diary', exact: true }).click();
+  await other.clock.pauseAt((await other.evaluate(() => Date.now())) + 1000);
+  await bodyBox(other).pressSequentially(' and more');
+
+  await page.getByRole('button', { name: 'Delete all data' }).click();
+  await page
+    .getByRole('dialog', { name: 'Delete all data?' })
+    .getByRole('button', { name: 'Delete everything' })
+    .click();
+  await expect(page.getByText('No notes yet')).toBeVisible();
+  // The other tab shows the empty list, says why, and puts nothing back.
+  await expect(other.getByText('No notes yet')).toBeVisible();
+  await expect(other.locator('[data-problem]')).toContainText(
+    'Your notes were deleted in another tab (“Delete all data”, or a restore replacing them). What was typed here is gone too.',
+  );
+  await other.clock.runFor(2000);
+  expect(await other.evaluate(() => localStorage.getItem('shkriuss:notes'))).toBeNull();
+  await other.close();
+  await page.reload();
+  await expect(page.getByText('No notes yet')).toBeVisible();
+});
+
 test.describe('with the device full (audit 4 F3-1)', () => {
-  const edited = (page: Page) => page.locator('[data-edited]');
-  const savedNotes = (page: Page) =>
-    page.evaluate(() =>
-      (
-        JSON.parse(localStorage.getItem('shkriuss:notes') ?? 'null') as {
-          data: { notes: { title: string; body: string }[] };
-        }
-      ).data.notes.map((note) => `${note.title} | ${note.body}`),
-    );
-
-  /** Deletes a note in another tab (what a sync from another device does too). */
-  async function deleteElsewhere(page: Page, title: string): Promise<void> {
-    const other = await page.context().newPage();
-    await other.goto('/');
-    await other.getByRole('link', { name: title, exact: true }).click();
-    await other.getByRole('button', { name: 'Delete', exact: true }).click();
-
-    // Observe the storage event in the original tab.
-    await page.evaluate((deletedTitle) => {
-      window.addEventListener('storage', (event) => {
-        if (event.key !== 'shkriuss:notes' || !event.newValue) return;
-        const saved = JSON.parse(event.newValue) as {
-          data: { notes: { title: string }[] };
-        };
-        if (saved.data.notes.every((note) => note.title !== deletedTitle)) {
-          document.documentElement.dataset['notesDeleteEvent'] = 'seen';
-        }
-      });
-    }, title);
-
-    await other
-      .getByRole('dialog', { name: 'Delete this note?' })
-      .getByRole('button', { name: 'Delete' })
-      .click();
-    await expect(other.getByRole('link', { name: title, exact: true })).toHaveCount(0);
-
-    // Verify the deletion reached persistent storage before closing the tab.
-    const stillStored = async () => {
-      const notes = await savedNotes(other);
-      return notes.some((entry) => entry.startsWith(`${title} | `));
-    };
-    await expect.poll(stillStored).toBe(false);
-
-    await expect(page.locator('html')).toHaveAttribute('data-notes-delete-event', 'seen');
-
-    await other.close();
-  }
-
   test('keeps a note visible when its deletion cannot be saved', async ({ page }) => {
     await writeNote(page, 'Old', 'Important text');
     await page.getByRole('link', { name: 'Old', exact: true }).click();

@@ -31,7 +31,7 @@ import {
 } from '@shkriuss/dates';
 import type { Notice } from '@shkriuss/push';
 import { secondVersionName } from '@shkriuss/sync';
-import { compareText, foldText } from '@shkriuss/ui/text';
+import { compareText, cutToLength, foldText } from '@shkriuss/ui/text';
 import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
 /**
@@ -70,37 +70,21 @@ export const byText = compareText;
 /** Trimmed, with runs of spaces made one. */
 const tidy = (text: string): string => text.trim().replace(/\s+/g, ' ');
 
-/** How long text is, for the limits: in code points (an emoji's parts count apart). */
-const length = (text: string): number => [...text].length;
+/**
+ * Whether text fits a limit, counted as text boxes count their maxlength on
+ * an iPhone: a flag, a family emoji or a letter with its accent is one
+ * character, so what a full box holds is never refused on saving. Code
+ * points where the browser can't tell them apart (Firefox before 125;
+ * cutToLength). Before, each part of an emoji counted, and 60 flags, which
+ * a box of 100 lets in, were "at most 100 characters" too many (audit 5 F2-3).
+ */
+const fits = (text: string, max: number): boolean => cutToLength(text, max) === text;
 
 /**
- * The characters of text as people see them, to cut between: a flag, a
- * family emoji or a letter with its accent is one. Code points where the
- * browser can't tell (Firefox before 125).
+ * At most `max` characters as people see them, cut between whole ones
+ * (audit 3 F2-7): splitting a flag would leave half of it.
  */
-const characters =
-  typeof Intl.Segmenter === 'function'
-    ? new Intl.Segmenter('en', { granularity: 'grapheme' })
-    : null;
-
-/**
- * At most `max` long (as `length` counts), cut between whole characters as
- * people see them (audit 3 F2-7): splitting a flag would leave half of it.
- */
-function cut(text: string, max: number): string {
-  if (length(text) <= max) return text;
-  const parts = characters
-    ? Array.from(characters.segment(text), ({ segment }) => segment)
-    : [...text];
-  let kept = '';
-  let size = 0;
-  for (const part of parts) {
-    size += length(part);
-    if (size > max) break;
-    kept += part;
-  }
-  return kept.trimEnd();
-}
+const cut = (text: string, max: number): string => cutToLength(text, max).trimEnd();
 
 const plural = (count: number, one: string, many = `${one}s`): string =>
   `${count.toLocaleString('en')} ${count === 1 ? one : many}`;
@@ -237,15 +221,15 @@ export function mealProblems(
       ? undefined
       : state.meals.find((meal) => meal.id !== editing && foldText(meal.name) === key);
   if (name === '') problems.name = 'Give the meal a name.';
-  else if (length(name) > LIMITS.name) problems.name = `Use at most ${LIMITS.name} characters.`;
+  else if (!fits(name, LIMITS.name)) problems.name = `Use at most ${LIMITS.name} characters.`;
   else if (same) problems.name = `You already have “${same.name}”.`;
   // Too long a line was cut without a word, and two that start the same became one (audit 3 F2-7).
-  if (draft.ingredients.split('\n').some((line) => length(tidy(line)) > LIMITS.ingredient)) {
+  if (draft.ingredients.split('\n').some((line) => !fits(tidy(line), LIMITS.ingredient))) {
     problems.ingredients = `Use at most ${LIMITS.ingredient} characters on each line.`;
   } else if (parseIngredients(draft.ingredients).length > MAX_INGREDIENTS) {
     problems.ingredients = `Up to ${MAX_INGREDIENTS} ingredients.`;
   }
-  if (length(draft.notes) > LIMITS.notes) {
+  if (!fits(draft.notes, LIMITS.notes)) {
     problems.notes = `Use at most ${LIMITS.notes.toLocaleString('en')} characters.`;
   }
   if (editing === undefined && state.meals.length >= MAX_MEALS) {
@@ -365,7 +349,7 @@ export function planProblems(
   const problems: Partial<Record<PlanField, string>> = {};
   const name = tidy(draft.name);
   if (name === '') problems.name = 'Write what you’ll eat.';
-  else if (length(name) > LIMITS.name) problems.name = `Use at most ${LIMITS.name} characters.`;
+  else if (!fits(name, LIMITS.name)) problems.name = `Use at most ${LIMITS.name} characters.`;
   if (!isIsoDate(draft.date) || !isSlot(draft.slot)) {
     problems.form = 'Choose a day and a meal of the day.';
   } else if (editing === undefined && state.planned.length >= MAX_PLANNED) {
@@ -631,7 +615,7 @@ export function setDone(
 export function extraProblem(shopping: ShoppingState, name: string): string | null {
   const text = tidy(name);
   if (text === '') return 'Write what to buy.';
-  if (length(text) > LIMITS.ingredient) return `Use at most ${LIMITS.ingredient} characters.`;
+  if (!fits(text, LIMITS.ingredient)) return `Use at most ${LIMITS.ingredient} characters.`;
   // Only what was added by hand counts: ticking things off keeps them, so it
   // couldn't make room, as the message said (audit 3 F2-9). Removing does.
   if (shopping.items.filter((item) => item.extra).length >= MAX_SHOPPING) {

@@ -5,9 +5,12 @@ Count anything with a tap. Lives at <https://tally.shkriuss.app>.
 This is the example app: it shows the patterns every app should follow.
 
 - `src/lib/counters.ts`: the app's rules as plain functions, with unit tests
-  next to them (`counters.test.ts`).
+  next to them (`counters.test.ts`). A counter's name holds 60 characters
+  as people see them, as an iPhone's text box counts what fits in it: a
+  flag or a family emoji is one (`cutToLength`, audit 5 F2-3).
 - `src/scripts/tally.ts`: connects the page to those rules and saves data
-  on the device with `@shkriuss/storage`. The counters are drawn again
+  on the device with `@shkriuss/storage`, and says when a pasted name
+  doesn't all fit the box (audit 5 G-4). The counters are drawn again
   with `keepFocus` (`@shkriuss/ui/keep-focus`), so keyboard focus stays on
   the button it was on, also after a change from another tab or device,
   and goes to the next counter's if that counter was deleted there.

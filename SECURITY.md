@@ -112,6 +112,13 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
   are no pull request previews: [ADR 0019](docs/adr/0019-no-pull-request-previews.md)).
   Photos' storage code is a secret of `production` too, handed to its Worker
   at deploy in a temporary file that's deleted straight after.
+- The Claude API key, for the **Claude** workflow, is a secret of the
+  `claude` environment, which only `main` can use. Only someone with write
+  access can start that workflow (by hand, never from a comment). The token
+  it pushes with can't change workflows or push to `main`, and it never has
+  the Cloudflare token. It runs a branch's tests in the job that holds the
+  key, so the key's real limit is the prepaid API balance
+  ([ADR 0020](docs/adr/0020-claude-in-github-actions.md)).
 - gitleaks scans every commit for secrets; zizmor checks the workflows,
   including that each pinned commit really belongs to its action;
   `pnpm audit` checks for known vulnerabilities; Dependabot proposes updates
@@ -124,7 +131,12 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
   by other means, a package from a web address or a git repository instead
   of the npm registry (a registry version that names its own download
   address counts too), or a new or changed hash that isn't the one the npm
-  registry has for that version (`scripts/lockfile-age.ts`).
+  registry has for that version (`scripts/lockfile-age.ts`). It reads the
+  lockfile as YAML, the way pnpm does, so an entry written in another style
+  than pnpm's own is checked all the same, and it refuses a pull request
+  that adds an `.npmrc` or changes where pnpm downloads from in
+  `pnpm-workspace.yaml` (audit 5 H-1). CI runs `main`'s copy of that check,
+  so a pull request can't change the check it's checked by (audit 5 H-3).
 - Production deploys only happen from `main`, after every check passes,
   including the dependency audit, and only for `main`'s newest commit (so
   re-running an older run can't put older code back). Only the deploy steps

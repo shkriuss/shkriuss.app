@@ -14,6 +14,14 @@
  * 5. JavaScript syntax the oldest browser supported reads: every built
  *    script must read as ES2022, all that Safari 16.4 has (audit 4 J-3).
  *    Only the syntax: a newer function called in it isn't seen.
+ * 6. Other websites: a page that loads anything from another website (a
+ *    script, a style, an image, a frame, or a preconnect or dns-prefetch
+ *    hint) tells that website about every visit. The CSP doesn't cover the
+ *    hints, and the browser tests see only requests a page makes, so this
+ *    reads the page: no address starting with http://, https:// or // in
+ *    anything that loads. Plain links (<a href>) are fine (audit 5 Z-4).
+ * 7. The offline copy: the service worker saves every file in dist/ outside
+ *    on-demand/ on the first visit, so all of them together have a budget.
  */
 import { gzipSync } from 'node:zlib';
 import { parse } from 'acorn';
@@ -131,6 +139,51 @@ function isScriptUrl(value: string): boolean {
   return /^javascript:/i.test(address.slice(start));
 }
 
+/** Elements that load from an address, and the attributes that hold it (audit 5 Z-4). */
+const LOADS_FROM: Record<string, readonly string[]> = {
+  link: ['href', 'imagesrcset'],
+  script: ['src'],
+  img: ['src', 'srcset'],
+  iframe: ['src'],
+  source: ['src', 'srcset'],
+  video: ['src', 'poster'],
+  audio: ['src'],
+  embed: ['src'],
+  object: ['data'],
+  track: ['src'],
+};
+
+/** Kinds of <link> the browser doesn't load: the address is only information. */
+const LINK_NOT_LOADED = new Set([
+  'alternate',
+  'author',
+  'bookmark',
+  'canonical',
+  'help',
+  'license',
+  'me',
+  'next',
+  'prev',
+  'privacy-policy',
+  'search',
+  'tag',
+  'terms-of-service',
+]);
+
+/** The addresses in an attribute: one, or each candidate of a srcset ("a.png 1x, b.png 2x"). */
+function addressesIn(key: string, value: string): string[] {
+  if (!key.endsWith('srcset')) return [value];
+  return value.split(',').map((candidate) => candidate.trim().split(/\s+/)[0] ?? '');
+}
+
+/** Whether an address is another website's: "http://…", "https://…" or "//…", as browsers read it. */
+function isOtherWebsite(value: string): boolean {
+  const address = value.replace(/[\t\n\r]/g, '');
+  let start = 0;
+  while (start < address.length && address.charCodeAt(start) <= 0x20) start += 1;
+  return /^(?:https?:)?\/\//i.test(address.slice(start));
+}
+
 /** Returns a description of every CSP problem in the HTML (empty when clean). */
 export function cspProblems(html: string): string[] {
   const problems: string[] = [];
@@ -145,6 +198,21 @@ export function cspProblems(html: string): string[] {
       if (key === 'style') problems.push(`style="" attribute in ${text.slice(0, 60)}…`);
       if (/^on[a-z]+$/.test(key)) problems.push(`inline event handler ${key}=`);
       if (URL_ATTRIBUTES.has(key) && isScriptUrl(value)) problems.push(`javascript: in ${key}=`);
+    }
+    const loads = LOADS_FROM[name];
+    if (!loads) continue;
+    const kinds = (valueOf('rel') ?? '').toLowerCase().split(/\s+/).filter(Boolean);
+    const onlyInformation =
+      name === 'link' && kinds.length > 0 && kinds.every((kind) => LINK_NOT_LOADED.has(kind));
+    if (onlyInformation) continue;
+    const shown = name === 'link' ? `<link rel="${kinds.join(' ')}">` : `<${name}>`;
+    for (const [key, value] of attributes) {
+      if (!loads.includes(key)) continue;
+      for (const address of addressesIn(key, value)) {
+        if (isOtherWebsite(address)) {
+          problems.push(`${shown} loads from another website: ${address.slice(0, 80)}`);
+        }
+      }
     }
   }
   return problems;
@@ -221,6 +289,32 @@ export function fileSizeProblems(files: readonly { path: string; bytes: number }
       (file) =>
         `${file.path} is ${file.bytes} bytes: Cloudflare serves files up to ${MAX_FILE_BYTES} bytes (split it into parts)`,
     );
+}
+
+/**
+ * The most an offline copy may be: every file in dist/ outside on-demand/,
+ * which the service worker saves on the first visit (audit 5 Z-4). Grammar's
+ * is about 21 MB (its checker's WebAssembly); the others are under 1 MB.
+ */
+export const MAX_PRECACHE_BYTES = 30_000_000;
+
+/** What the service worker saves: everything but the on-demand downloads. */
+export function precacheBytes(files: readonly { path: string; bytes: number }[]): number {
+  return files
+    .filter((file) => !file.path.replace(/\\/g, '/').startsWith('on-demand/'))
+    .reduce((total, file) => total + file.bytes, 0);
+}
+
+export function precacheProblems(
+  files: readonly { path: string; bytes: number }[],
+  budget = MAX_PRECACHE_BYTES,
+): string[] {
+  const bytes = precacheBytes(files);
+  return bytes > budget
+    ? [
+        `the offline copy is ${bytes} bytes (budget ${budget}): every file outside on-demand/ is saved on the first visit`,
+      ]
+    : [];
 }
 
 /** Words that run into a link, or out of one: "run by<a …>", "</a>and". */

@@ -1,10 +1,54 @@
 import { addMinutes, nowStamp, toStamp, type Stamp } from '@shkriuss/dates';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { reminderWindow, type ReminderCheck } from './reminder-window.ts';
+import { firstCheck, reminderWindow, type ReminderCheck } from './reminder-window.ts';
 
 const MINUTE = 60_000;
 const T = Date.UTC(2026, 9, 21, 8);
 const check = (stamp: Stamp, minutes = 0): ReminderCheck => ({ stamp, at: T + minutes * MINUTE });
+
+/** Whether a reminder at `due` is in the window, if there is one. */
+const covers = (window: { from: Stamp; to: Stamp } | null, due: Stamp): boolean =>
+  window !== null && window.from < due && due <= window.to;
+
+// Audit 5 F1-3: checks started from the moment the page opened, so a reminder
+// due in that very minute was in no window and never rang in the open app.
+describe('where a page that has just opened starts checking', () => {
+  // Opened at 10:00:05, with a reminder at 10:00; the first check is 20 s on.
+  const opened = check('2026-10-21T10:00', 5 / 60);
+
+  it('is the minute before, so a reminder due in the minute the app opened rings once', () => {
+    const start = firstCheck(opened, null);
+    expect(start).toEqual({ stamp: '2026-10-21T09:59', at: T - 55_000 });
+    let last = start;
+    const rang: Stamp[] = [];
+    for (let second = 25; second <= 185; second += 20) {
+      const now = check(addMinutes('2026-10-21T10:00', Math.floor(second / 60)), second / 60);
+      const window = reminderWindow(last, now);
+      if (!window) continue;
+      last = now;
+      if (covers(window, '2026-10-21T10:00')) rang.push(now.stamp);
+    }
+    expect(rang).toEqual(['2026-10-21T10:00']);
+  });
+
+  it('is another tab’s check from a moment ago, so what it showed isn’t shown again', () => {
+    // The other tab checked at 10:00:02 (or this page did, before a reload).
+    const shared = check('2026-10-21T10:00', 2 / 60);
+    expect(firstCheck(opened, shared)).toBe(shared);
+    expect(reminderWindow(shared, check('2026-10-21T10:00', 25 / 60))).toBeNull();
+  });
+
+  it('ignores a shared check older than a minute, or from a clock ahead of this one', () => {
+    const start = { stamp: '2026-10-21T09:59', at: T - 55_000 };
+    // A check 61 seconds before this page opened: the minute before was checked, but not since.
+    expect(firstCheck(opened, check('2026-10-21T09:59', -56 / 60))).toEqual(start);
+    // A check two seconds "later" than now: a clock set wrong, not a check just made.
+    expect(firstCheck(opened, check('2026-10-21T10:00', 7 / 60))).toEqual(start);
+    // One second later is a browser blurring the time it tells pages.
+    const blurred = check('2026-10-21T10:00', 6 / 60);
+    expect(firstCheck(opened, blurred)).toBe(blurred);
+  });
+});
 
 describe('the times an open page checks for reminders', () => {
   it('are those since the last check', () => {

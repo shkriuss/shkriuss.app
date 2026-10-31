@@ -217,9 +217,16 @@ export function mountRepairs(root: Document): void {
     ),
   );
 
-  const announce = (message: string): void => {
-    announcer.textContent = message;
+  /**
+   * Puts a message in a status line, the same message again too (a second
+   * "Downloaded…"): a screen reader reads a status line only when it
+   * changes, so then a no-break space, which can't be heard, goes on the
+   * end (audit 5 G-8).
+   */
+  const say = (line: HTMLElement, message: string): void => {
+    line.textContent = line.textContent === message ? `${message}\u00A0` : message;
   };
+  const announce = (message: string): void => say(announcer, message);
   const mileage = (value: number) => formatMileage(value, unitOf(settings));
   const money = (amount: number) => formatMoney(amount, currencyOf(settings));
   /** "6.5 hours · $250.00", or "" if neither was noted. */
@@ -268,7 +275,12 @@ export function mountRepairs(root: Document): void {
     const fragment = repairTemplate.content.cloneNode(true) as DocumentFragment;
     const item = required<HTMLLIElement>(fragment, 'li');
     item.dataset['id'] = repair.id;
-    required<HTMLElement>(item, '[data-title]').textContent = vehicleName(vehicles, repair.vehicle);
+    const title = required<HTMLElement>(item, '[data-title]');
+    const vehicle = vehicleName(vehicles, repair.vehicle);
+    title.textContent = vehicle;
+    // Named with its day too: a screen reader's list of buttons read "Bus
+    // 105, Bus 105, Bus 105" (audit 5 G-8).
+    title.setAttribute('aria-label', `${vehicle}, ${dateLabel(repair.date)}`);
     const meta = required<HTMLElement>(item, '[data-meta]');
     meta.textContent = repair.mileage === null ? '' : mileage(repair.mileage);
     if (repair.system) {
@@ -669,11 +681,11 @@ export function mountRepairs(root: Document): void {
           button?.closest('dialog, section')?.querySelector<HTMLElement>('[data-csv-status]') ??
           csvStatus;
         if (repairs.repairs.length === 0) {
-          status.textContent = 'There’s nothing to download yet.';
+          say(status, 'There’s nothing to download yet.');
           break;
         }
         downloadFile(`repairs-${today()}.csv`, toCsv(repairs, vehicles, settings), 'text/csv');
-        status.textContent = 'Downloaded your repairs as a spreadsheet.';
+        say(status, 'Downloaded your repairs as a spreadsheet.');
         break;
       }
     }

@@ -1,8 +1,10 @@
 /**
  * Checks every built site in apps/<slug>/dist (run `pnpm build` first):
- * CSP safety (nothing inline), per-page size budgets, words running into
- * links, that every file is small enough for Cloudflare to serve, and that
- * every script is written in JavaScript Safari 16.4 reads (ES2022).
+ * CSP safety (nothing inline, nothing loaded from another website),
+ * per-page size budgets, words running into links, that every file is
+ * small enough for Cloudflare to serve, that the offline copy (every file
+ * outside on-demand/) is within its budget, and that every script is
+ * written in JavaScript Safari 16.4 reads (ES2022).
  *
  *   pnpm check:dist
  */
@@ -13,7 +15,10 @@ import {
   cspProblems,
   fileSizeProblems,
   gzipSize,
+  MAX_PRECACHE_BYTES,
   pageAssets,
+  precacheBytes,
+  precacheProblems,
   scriptsLoaded,
   spacingProblems,
   syntaxProblem,
@@ -68,6 +73,14 @@ for (const slug of sites) {
     rows.push(`✗ ${slug}: ${problem}`);
     failures += 1;
   }
+  const offline = precacheProblems(files);
+  rows.push(
+    `${offline.length ? '✗' : '✓'} ${slug}: offline copy ${precacheBytes(files)} bytes (budget ${MAX_PRECACHE_BYTES})`,
+  );
+  for (const problem of offline) {
+    rows.push(`    ${problem}`);
+    failures += 1;
+  }
   for (const { path } of files.filter((file) => /\.m?js$/.test(file.path))) {
     const problem = syntaxProblem(readFileSync(join(dist, path), 'utf8'));
     if (problem === null) continue;
@@ -82,5 +95,5 @@ if (failures > 0) {
   process.exit(1);
 }
 console.log(
-  '\nAll pages are CSP-safe and within their size budgets, every file can be served, and every script is written in JavaScript Safari 16.4 reads.',
+  '\nAll pages are CSP-safe, load nothing from another website and are within their size budgets; every file can be served, every offline copy is within its budget, and every script is written in JavaScript Safari 16.4 reads.',
 );

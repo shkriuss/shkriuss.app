@@ -114,6 +114,10 @@ test('renames, adds and deletes categories, and the items follow', async ({ page
   await expect(deleteDialog(page)).toContainText(
     '“Clothes and shoes” will be removed. Its items stay. This can’t be undone.',
   );
+  // Read out with its title, so a screen reader hears what goes (audit 5 G-3).
+  await expect(deleteDialog(page)).toHaveAccessibleDescription(
+    '“Clothes and shoes” will be removed. Its items stay. This can’t be undone.',
+  );
   await deleteDialog(page).getByLabel('Move its 1 item to').selectOption({ label: 'Other' });
   await deleteDialog(page).getByRole('button', { name: 'Delete' }).click();
   await expect(categoryForm(page)).toBeHidden();

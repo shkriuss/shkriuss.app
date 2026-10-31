@@ -75,6 +75,10 @@ import { MAX_TEXT_LENGTH } from '../lib/grammar.ts';
       <p role="status" data-status>
         Loading the grammar checker…
       </p>
+      <!-- When the checker's file couldn't be downloaded (audit 5 G-5). -->
+      <div data-checker-retry hidden>
+        <Button data-action="retry-checker">Try again</Button>
+      </div>
       <ul role="list" class="stack issues" data-issues></ul>
     </section>
 
@@ -91,8 +95,8 @@ import { MAX_TEXT_LENGTH } from '../lib/grammar.ts';
 
       <div class="stack stack--sm" data-deep-panel="absent">
         <p>
-          It needs a one-time download of <strong data-deep-size>about 380 MB</strong>, best on
-          Wi‑Fi. Then it’s saved on this device and works offline.
+          It needs a one-time download of <strong data-deep-size>381 MB</strong>, best on Wi‑Fi.
+          Then it’s saved on this device and works offline.
         </p>
         <div class="cluster">
           <Button variant="primary" icon="download" data-action="deep-download">
@@ -271,10 +275,16 @@ import { MAX_TEXT_LENGTH } from '../lib/grammar.ts';
     </li>
   </template>
 
-  <dialog class="dialog" aria-labelledby="clear-title" data-clear-dialog>
+  {/* Read out with their titles: what each does (audit 5 G-3). Clearing drops Undo too (G-8). */}
+  <dialog
+    class="dialog"
+    aria-labelledby="clear-title"
+    aria-describedby="clear-text"
+    data-clear-dialog
+  >
     <form method="dialog" class="stack">
       <h2 id="clear-title">Clear the text?</h2>
-      <p>Everything in the text box will be removed.</p>
+      <p id="clear-text">Everything in the text box will be removed. This can’t be undone.</p>
       <div class="cluster">
         <Button type="submit" value="cancel">
           Cancel
@@ -285,10 +295,17 @@ import { MAX_TEXT_LENGTH } from '../lib/grammar.ts';
       </div>
     </form>
   </dialog>
-  <dialog class="dialog" aria-labelledby="deep-remove-title" data-deep-remove-dialog>
+  <dialog
+    class="dialog"
+    aria-labelledby="deep-remove-title"
+    aria-describedby="deep-remove-text"
+    data-deep-remove-dialog
+  >
     <form method="dialog" class="stack">
       <h2 id="deep-remove-title">Remove Deep check?</h2>
-      <p>It’s removed from this device, freeing its space. You can download it again later.</p>
+      <p id="deep-remove-text">
+        It’s removed from this device, freeing its space. You can download it again later.
+      </p>
       <div class="cluster">
         <Button type="submit" value="cancel">
           Cancel

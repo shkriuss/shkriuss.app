@@ -1,9 +1,13 @@
 /**
  * Tasks: adding, renaming and deleting lists (deleting one asks what to do
- * with its tasks). Split from tasks.ts (audit J-7).
+ * with its tasks). Split from tasks.ts (audit J-7). It loads after the page
+ * itself (later() in tasks.ts), so the page starts with less to load
+ * (audit 5 J-2): the page's "New list" and "Rename or delete this list"
+ * buttons call add() and edit() once it has.
  */
 import { required } from '@shkriuss/ui/dom';
 import { focusProblem } from '@shkriuss/ui/problem';
+import { watchTextLimits } from '@shkriuss/ui/text-limit';
 import {
   addList,
   listName,
@@ -44,9 +48,15 @@ export interface ListsPage {
   viewHeading: HTMLElement;
 }
 
-export function mountListEditor(root: Document, page: ListsPage): void {
+export interface ListEditor {
+  /** "New list": the form for one. */
+  add(): void;
+  /** "Rename or delete this list": the form for the list shown. */
+  edit(): void;
+}
+
+export function mountListEditor(root: Document, page: ListsPage): ListEditor {
   const viewList = required<HTMLUListElement>(root, '[data-views]');
-  const editListButton = required<HTMLButtonElement>(root, '[data-action="edit-list"]');
   const listEditor = required<HTMLDialogElement>(root, '[data-list-dialog]');
   const listForm = required<HTMLFormElement>(listEditor, '[data-list-form]');
   const listTitle = required<HTMLElement>(listEditor, '[data-list-title]');
@@ -58,6 +68,8 @@ export function mountListEditor(root: Document, page: ListsPage): void {
   const listTasksField = required<HTMLElement>(listDeleteDialog, '[data-list-tasks-field]');
   const listTasksCount = required<HTMLElement>(listDeleteDialog, '[data-list-tasks-count]');
   const listTasks = required<HTMLSelectElement>(listDeleteDialog, '[data-list-tasks]');
+  // A paste longer than the box takes is cut by the browser: say so (audit 5 F1-4).
+  const limits = watchTextLimits(listForm);
 
   /** The list in the form (null: a new list), where focus goes back to, and the list just saved. */
   let editingListId: string | null = null;
@@ -73,6 +85,7 @@ export function mountListEditor(root: Document, page: ListsPage): void {
   function openListEditor(list: List | null): void {
     editingListId = list?.id ?? null;
     listOpener = root.activeElement instanceof HTMLElement ? root.activeElement : null;
+    limits.clear();
     showListProblem(null);
     listTitle.textContent = list ? 'Edit list' : 'New list';
     deleteListButton.hidden = list === null;
@@ -88,22 +101,6 @@ export function mountListEditor(root: Document, page: ListsPage): void {
     (saved ?? (listOpener?.isConnected ? listOpener : page.viewHeading)).focus();
     savedListId = null;
     listOpener = null;
-  });
-
-  required<HTMLButtonElement>(root, '[data-action="add-list"]').addEventListener('click', () => {
-    if (page.lists().lists.length >= MAX_LISTS) {
-      page.say(`You have ${MAX_LISTS} lists, the most Tasks can keep. Delete one to add another.`);
-      return;
-    }
-    openListEditor(null);
-  });
-
-  editListButton.addEventListener('click', () => {
-    const view = page.view();
-    if (typeof view === 'string') return;
-    const id = view.list;
-    const list = page.lists().lists.find((entry) => entry.id === id);
-    if (list) openListEditor(list);
   });
 
   listInput.addEventListener('input', () => {
@@ -153,6 +150,12 @@ export function mountListEditor(root: Document, page: ListsPage): void {
     listDeleteName.textContent = name;
     // Its tasks can stay (without a list), move to another list, or go too.
     listTasksField.hidden = count === 0;
+    // Read out as the dialog opens: the message, and that there are tasks to
+    // choose about (a hidden field's label would still be read: audit 5 G-3).
+    listDeleteDialog.setAttribute(
+      'aria-describedby',
+      count === 0 ? 'list-delete-message' : 'list-delete-message list-tasks-label',
+    );
     listTasksCount.textContent = tasksCount(count);
     listTasks.replaceChildren(
       new Option('Keep them, without a list', NO_LIST),
@@ -188,4 +191,22 @@ export function mountListEditor(root: Document, page: ListsPage): void {
     listOpener = page.viewHeading;
     listEditor.close();
   });
+
+  return {
+    add() {
+      if (page.lists().lists.length >= MAX_LISTS) {
+        page.say(
+          `You have ${MAX_LISTS} lists, the most Tasks can keep. Delete one to add another.`,
+        );
+        return;
+      }
+      openListEditor(null);
+    },
+    edit() {
+      const view = page.view();
+      if (typeof view === 'string') return;
+      const list = page.lists().lists.find((entry) => entry.id === view.list);
+      if (list) openListEditor(list);
+    },
+  };
 }

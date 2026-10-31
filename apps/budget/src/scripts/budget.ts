@@ -1,17 +1,20 @@
 /**
  * Budget's page behaviour: connects pages/index.astro to the rules in
  * lib/budget.ts, saves on the device, and syncs the categories, entries and
- * settings when sync is on. "Delete a year…" deletes a year's entries, to
- * make room. The monthly reminder: reminders.ts.
+ * settings when sync is on. Here: the month shown, its totals and lists,
+ * the settings, the spreadsheet, and keeping up with other devices and
+ * tabs. The forms (an entry, a category, "Delete this?") are in forms.ts,
+ * and "Delete a year…", which deletes a year's entries to make room, in
+ * delete-year.ts: each loads after the page, once it has nothing else to
+ * do (later()), so opening Budget loads less (audit 5 J-2). The monthly
+ * reminder: reminders.ts.
  */
 import { isIsoTime, monthOf, nowStamp, today } from '@shkriuss/dates';
 import { createStore, downloadFile } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
-import { withEdits } from '@shkriuss/sync/edits';
 import { keepFocus } from '@shkriuss/ui/keep-focus';
-import { focusProblem, reportSave, showProblem } from '@shkriuss/ui/problem';
+import { focusProblem, RELOAD_TO_UPDATE, reportSave, showProblem } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
-import { watchTextLimits } from '@shkriuss/ui/text-limit';
 import { typedText } from '@shkriuss/ui/typed-text';
 import { site } from 'virtual:shkriuss/site';
 import {
@@ -24,54 +27,38 @@ import {
   emptyCategories,
   emptyEntries,
   emptySettings,
-  entriesCount,
   entriesIn,
   CATEGORIES_VERSION,
   ENTRIES_VERSION,
-  entryYears,
   formatMoney,
-  hasCategory,
   isCategoriesState,
   isEntriesState,
   isSettingsState,
-  KINDS,
   migrateEntries,
   monthLabel,
   nextReminder,
-  readCategory,
-  readEntry,
-  removeCategory,
-  removeEntry,
-  removeYear,
   REMINDER_DAYS,
   reminderOf,
   reminderSentence,
   roomNote,
-  saveCategory,
-  saveEntry,
   setCurrency,
   setReminder,
   shiftMonth,
-  suggestedDay,
   summary,
-  toCategoryForm,
   toCsv,
-  toEntryForm,
   whenLabel,
   withSettings,
   type CategoriesState,
-  type Category,
-  type CategoryForm,
   type CategoryTotal,
   type EntriesState,
   type Entry,
-  type EntryForm,
-  type Kind,
   type Reminder,
   type SettingsState,
 } from '../lib/budget.ts';
 import { mountReminders } from './reminders.ts';
-import { required, showFieldProblems } from '@shkriuss/ui/dom';
+import { required } from '@shkriuss/ui/dom';
+import type { DeleteYear } from './delete-year.ts';
+import type { Forms } from './forms.ts';
 
 const categoriesStore = createStore<CategoriesState>({
   key: 'budget-categories',
@@ -101,12 +88,64 @@ function tone(element: Element, amount: number): void {
   element.classList.toggle('loss', amount < 0);
 }
 
-/** Shows a form's problems; focuses the first. Returns true if there are any. */
-const showProblems = (
-  form: HTMLFormElement,
-  names: readonly string[],
-  problems: Partial<Record<string, string>>,
-): boolean => showFieldProblems(form, names, problems, { focusFirst: true });
+/** A part of the page that loads after the page itself (later()). */
+interface Later<T> {
+  /** The part, once loaded. Before, it was never opened: nothing in it needs keeping up. */
+  readonly now: T | null;
+  /** Starts loading the part, without doing anything with it yet. */
+  load(): void;
+  /** Loads the part if need be, then does `act` with it (while loading, only the last asked). */
+  use(act: (part: T) => void): void;
+}
+
+/**
+ * A part of the page loaded with import() after the page itself: the forms
+ * and "Delete a year…". Opening the page then loads less, and stays within
+ * its size budget, as Repairs' parts do (audit 4 J-6, audit 5 J-2).
+ */
+function later<T>(load: () => Promise<T>): Later<T> {
+  let now: T | null = null;
+  let loading: Promise<void> | null = null;
+  let next: ((part: T) => void) | null = null;
+  const start = (): void => {
+    loading ??= load().then(
+      (part) => {
+        now = part;
+        next?.(part);
+        next = null;
+      },
+      () => {
+        // The next tap tries again. Said only when a tap is waiting for it.
+        loading = null;
+        if (next === null) return;
+        next = null;
+        showProblem(`Budget couldn’t open that. ${RELOAD_TO_UPDATE}`);
+      },
+    );
+  };
+  return {
+    get now() {
+      return now;
+    },
+    load: start,
+    use(act) {
+      if (now) {
+        act(now);
+        return;
+      }
+      next = act;
+      start();
+    },
+  };
+}
+
+/** Runs `task` once the page has nothing else to do (soon after it opened). */
+function whenIdle(task: () => void): void {
+  // Safari has no requestIdleCallback: a moment after loading will do.
+  if (typeof window.requestIdleCallback === 'function') {
+    window.requestIdleCallback(task, { timeout: 2000 });
+  } else window.setTimeout(task, 500);
+}
 
 export function mountBudget(root: Document): void {
   const announcer = required<HTMLElement>(root, '[data-announcer]');
@@ -129,45 +168,27 @@ export function mountBudget(root: Document): void {
   const reminderDay = required<HTMLSelectElement>(root, '[data-reminder="day"]');
   const reminderTime = required<HTMLInputElement>(root, '[data-reminder="time"]');
   const csvStatus = required<HTMLElement>(root, '[data-csv-status]');
-  const deleteYearButton = required<HTMLButtonElement>(root, '[data-action="delete-year"]');
   const roomText = required<HTMLElement>(root, '[data-room-note]');
   const reminderError = required<HTMLElement>(root, '[data-reminder-error]');
   const reminderNext = required<HTMLElement>(root, '[data-reminder-next]');
   const categoryTemplate = required<HTMLTemplateElement>(root, '[data-category-template]');
   const entryTemplate = required<HTMLTemplateElement>(root, '[data-entry-template]');
 
-  const entryDialog = required<HTMLDialogElement>(root, '[data-entry-dialog]');
-  const entryForm = required<HTMLFormElement>(entryDialog, '[data-entry-form]');
-  const entryTitle = required<HTMLElement>(entryDialog, '[data-entry-title]');
-  const categoryField = required<HTMLElement>(entryForm, '[data-category-field]');
-  const categorySelect = required<HTMLSelectElement>(entryForm, '[data-category-select]');
-  const categoryDialog = required<HTMLDialogElement>(root, '[data-category-dialog]');
-  const categoryForm = required<HTMLFormElement>(categoryDialog, '[data-category-form]');
-  const categoryTitle = required<HTMLElement>(categoryDialog, '[data-category-title]');
-  const deleteDialog = required<HTMLDialogElement>(root, '[data-delete-dialog]');
-  const deleteTitle = required<HTMLElement>(deleteDialog, '[data-delete-title]');
-  const deleteText = required<HTMLElement>(deleteDialog, '[data-delete-text]');
-  const yearDialog = required<HTMLDialogElement>(root, '[data-year-dialog]');
-  const yearForm = required<HTMLFormElement>(yearDialog, '[data-year-form]');
-  const yearSelect = required<HTMLSelectElement>(yearForm, '[data-year-select]');
-  const yearText = required<HTMLElement>(yearForm, '[data-year-text]');
-  const yearConfirm = required<HTMLElement>(yearForm, '[data-year-confirm]');
-
   let categories = categoriesStore.load();
   let entries = entriesStore.load();
   let settings = settingsStore.load();
   let month = monthOf(today());
-  /** What's in the forms: the entry or category being changed (null: a new one). */
-  let editingEntry: string | null = null;
-  let editingCategory: string | null = null;
-  /** The forms as they opened, to tell what the person changed (see withEdits). */
-  let openedEntry: EntryForm | null = null;
-  let openedCategory: CategoryForm | null = null;
-  let deleting: { type: 'entry' | 'category'; id: string } | null = null;
 
-  const announce = (message: string): void => {
-    announcer.textContent = message;
+  /**
+   * Puts a message in a status line, the same message again too (a second
+   * "Downloaded…"): a screen reader reads a status line only when it
+   * changes, so then a no-break space, which can't be heard, goes on the
+   * end (audit 5 G-8).
+   */
+  const say = (line: HTMLElement, message: string): void => {
+    line.textContent = line.textContent === message ? `${message}\u00A0` : message;
   };
+  const announce = (message: string): void => say(announcer, message);
   const money = (amount: number, signed = false) =>
     formatMoney(amount, currencyOf(settings), { signed });
   const findEntry = (id: string | null | undefined) =>
@@ -309,236 +330,28 @@ export function mountBudget(root: Document): void {
     (button ?? fallback).focus();
   }
 
-  // ---------- Entries ----------
+  // ---------- The forms: forms.ts; "Delete a year…": delete-year.ts ----------
 
-  const kindOf = (): Kind =>
-    KINDS.find((kind) => kind === (entryForm.elements.namedItem('kind') as RadioNodeList).value) ??
-    'expense';
+  const forms = later<Forms>(() =>
+    import('./forms.ts').then(({ mountForms }) =>
+      mountForms(root, {
+        data: () => ({ categories, entries, settings }),
+        month: () => month,
+        showMonth(shown) {
+          month = shown;
+        },
+        save,
+        focusEntry: (id) => focusItem(entryList, id, addExpense),
+        focusCategory: (id) => focusItem(categoryList, id, newCategoryButton),
+      }),
+    ),
+  );
 
-  /** The form's title: what it adds (it follows the type chosen), or "Change entry". */
-  function showTitle(): void {
-    const adding = { expense: 'Add expense', income: 'Add income', refund: 'Add refund' };
-    entryTitle.textContent = editingEntry ? 'Change entry' : adding[kindOf()];
-  }
-
-  function showCategoryField(): void {
-    categoryField.hidden = !hasCategory(kindOf());
-  }
-
-  // A paste longer than a box takes is cut by the browser: say so (audit 4 F2-7).
-  const entryLimits = watchTextLimits(entryForm);
-  const categoryLimits = watchTextLimits(categoryForm);
-
-  function openEntry(entry: Entry | undefined, kind: Kind = 'expense'): void {
-    editingEntry = entry?.id ?? null;
-    entryLimits.clear();
-    openedEntry = entry ? toEntryForm(entry) : null;
-    const values = openedEntry ?? {
-      kind,
-      amount: '',
-      date: suggestedDay(month, today()),
-      category: '',
-      note: '',
-    };
-    categorySelect.replaceChildren(
-      new Option('No category', ''),
-      ...categories.categories.map((category) => new Option(category.name, category.id)),
-    );
-    for (const [name, value] of Object.entries(values)) {
-      (entryForm.elements.namedItem(name) as { value: string }).value = value;
-    }
-    required<HTMLElement>(entryForm, '[data-action="delete-entry"]').hidden = !entry;
-    showProblems(entryForm, ['kind', 'amount', 'date', 'note'], {});
-    showTitle();
-    showCategoryField();
-    entryDialog.showModal();
-    // The amount first: the type is already chosen by the button tapped.
-    (entryForm.elements.namedItem('amount') as HTMLInputElement).focus();
-  }
-
-  entryForm.addEventListener('change', (event) => {
-    if ((event.target as HTMLInputElement).name !== 'kind') return;
-    showTitle();
-    showCategoryField();
-  });
-
-  entryForm.addEventListener('submit', (event) => {
-    event.preventDefault();
-    const value = (name: string) => (entryForm.elements.namedItem(name) as { value: string }).value;
-    const edited: EntryForm = {
-      kind: kindOf(),
-      amount: value('amount'),
-      date: value('date'),
-      category: value('category'),
-      note: value('note'),
-    };
-    // A sync or another tab may have changed the entry while the form was
-    // open: keep that, and put on only what was changed here (audit 3 F2-1).
-    const current = findEntry(editingEntry);
-    const read = readEntry(
-      current && openedEntry ? withEdits(openedEntry, edited, toEntryForm(current)) : edited,
-      editingEntry ?? crypto.randomUUID(),
-      current ? null : entries.entries.length,
-      categories,
-      { currency: currencyOf(settings), saved: current },
-    );
-    if (!read.entry) {
-      showProblems(entryForm, ['kind', 'amount', 'date', 'note'], read.problems);
-      return;
-    }
-    const { entry } = read;
-    entryDialog.close();
-    // Show the month it's in.
-    const moved = monthOf(entry.date) !== month;
-    month = monthOf(entry.date);
-    const what =
-      entry.kind === 'income'
-        ? `Saved ${money(entry.amount)} income`
-        : entry.kind === 'refund'
-          ? `Saved a ${money(entry.amount)} refund on ${categoryName(entry)}`
-          : `Saved ${money(entry.amount)} on ${categoryName(entry)}`;
-    save(
-      { entries: saveEntry(entries, entry) },
-      moved ? `${what}, in ${monthLabel(month)}.` : `${what}.`,
-    );
-    focusItem(entryList, entry.id, addExpense);
-  });
-
-  // ---------- Categories ----------
-
-  function openCategory(category: Category | undefined): void {
-    editingCategory = category?.id ?? null;
-    categoryLimits.clear();
-    openedCategory = category ? toCategoryForm(category) : null;
-    categoryTitle.textContent = category ? 'Change category' : 'New category';
-    const values = openedCategory ?? { name: '', limit: '' };
-    (categoryForm.elements.namedItem('name') as HTMLInputElement).value = values.name;
-    (categoryForm.elements.namedItem('limit') as HTMLInputElement).value = values.limit;
-    required<HTMLElement>(categoryForm, '[data-action="delete-category"]').hidden = !category;
-    showProblems(categoryForm, ['name', 'limit'], {});
-    categoryDialog.showModal();
-  }
-
-  categoryForm.addEventListener('submit', (event) => {
-    event.preventDefault();
-    const edited: CategoryForm = {
-      name: (categoryForm.elements.namedItem('name') as HTMLInputElement).value,
-      limit: (categoryForm.elements.namedItem('limit') as HTMLInputElement).value,
-    };
-    // Changed meanwhile on another device or tab: only what was changed here goes on it.
-    const current = findCategory(editingCategory);
-    const read = readCategory(
-      current && openedCategory
-        ? withEdits(openedCategory, edited, toCategoryForm(current))
-        : edited,
-      editingCategory ?? crypto.randomUUID(),
-      categories,
-      { currency: currencyOf(settings) },
-    );
-    if (!read.category) {
-      showProblems(categoryForm, ['name', 'limit'], read.problems);
-      return;
-    }
-    const { category } = read;
-    categoryDialog.close();
-    save({ categories: saveCategory(categories, category) }, `Saved ${category.name}.`);
-    focusItem(categoryList, category.id, newCategoryButton);
-  });
-
-  // ---------- Deleting ----------
-
-  function askToDelete(type: 'entry' | 'category'): void {
-    if (type === 'entry') {
-      const entry = findEntry(editingEntry);
-      if (!entry) return;
-      deleting = { type, id: entry.id };
-      deleteTitle.textContent = 'Delete this entry?';
-      const refund = entry.kind === 'refund' ? ' refund' : '';
-      deleteText.textContent = `${money(entry.amount)}${refund} (${categoryName(entry)}, ${dayLabel(entry.date)}) will be removed. This can’t be undone.`;
-    } else {
-      const category = findCategory(editingCategory);
-      if (!category) return;
-      deleting = { type, id: category.id };
-      deleteTitle.textContent = 'Delete this category?';
-      deleteText.textContent = `“${category.name}” will be removed. Its expenses stay, under “No category”. This can’t be undone.`;
-    }
-    deleteDialog.returnValue = '';
-    deleteDialog.showModal();
-  }
-
-  deleteDialog.addEventListener('close', () => {
-    const target = deleting;
-    deleting = null;
-    if (deleteDialog.returnValue !== 'confirm' || !target) return;
-    if (target.type === 'entry') {
-      const entry = findEntry(target.id);
-      entryDialog.close();
-      if (!entry) return;
-      save({ entries: removeEntry(entries, entry.id) }, `Deleted the entry.`);
-      addExpense.focus();
-    } else {
-      const category = findCategory(target.id);
-      categoryDialog.close();
-      if (!category) return;
-      save({ categories: removeCategory(categories, category.id) }, `Deleted ${category.name}.`);
-      newCategoryButton.focus();
-    }
-  });
-
-  // ---------- Deleting a year ----------
-
-  /** How many entries the year chosen has (0 if it has none now). */
-  const yearCount = (year: string) =>
-    entryYears(entries).find((entry) => entry.year === year)?.count ?? 0;
-
-  /** The year the dialog shows, and how many entries it says go. */
-  let shownYear = { year: '', count: 0 };
-
-  /** Says what deleting the year chosen removes. */
-  function showYear(): void {
-    const year = yearSelect.value;
-    shownYear = { year, count: yearCount(year) };
-    const count = entriesCount(shownYear.count);
-    yearText.textContent = `The ${count} from ${year} will be deleted: expenses, income and refunds. With sync on, they’re deleted on your other devices too. This can’t be undone.`;
-    yearConfirm.textContent = `Delete ${count}`;
-  }
-
-  /** The years with entries to choose from (the year chosen stays chosen while it has any). */
-  function fillYears(): void {
-    const chosen = yearSelect.value;
-    const years = entryYears(entries);
-    yearSelect.replaceChildren(
-      ...years.map(({ year, count }) => new Option(`${year} (${entriesCount(count)})`, year)),
-    );
-    // Else the first, the earliest year: the oldest entries are the likeliest to go.
-    if (years.some(({ year }) => year === chosen)) yearSelect.value = chosen;
-    showYear();
-  }
-
-  function openYears(): void {
-    if (entries.entries.length === 0) {
-      csvStatus.textContent = 'There are no entries to delete.';
-      return;
-    }
-    yearSelect.replaceChildren();
-    fillYears();
-    required<HTMLElement>(yearForm, '[data-csv-status]').textContent = '';
-    yearDialog.showModal();
-    yearSelect.focus();
-  }
-
-  yearSelect.addEventListener('change', showYear);
-
-  yearForm.addEventListener('submit', (event) => {
-    event.preventDefault();
-    const year = yearSelect.value;
-    const count = yearCount(year);
-    yearDialog.close();
-    deleteYearButton.focus();
-    if (count === 0) return;
-    // Like deleting entries one by one, so other devices delete them too.
-    save({ entries: removeYear(entries, year) }, `Deleted ${entriesCount(count)} from ${year}.`);
-  });
+  const yearDeleter = later<DeleteYear>(() =>
+    import('./delete-year.ts').then(({ mountDeleteYear }) =>
+      mountDeleteYear(root, { entries: () => entries, save, say }),
+    ),
+  );
 
   // ---------- Everything else ----------
 
@@ -560,16 +373,25 @@ export function mountBudget(root: Document): void {
         break;
       case 'add-expense':
       case 'add-income':
-        openEntry(undefined, action === 'add-income' ? 'income' : 'expense');
+        forms.use((form) =>
+          form.openEntry(undefined, action === 'add-income' ? 'income' : 'expense'),
+        );
         break;
       case 'edit-entry':
-        openEntry(findEntry(id));
+        // As it is once the form has loaded.
+        forms.use((form) => {
+          const entry = findEntry(id);
+          if (entry) form.openEntry(entry);
+        });
         break;
       case 'new-category':
-        openCategory(undefined);
+        forms.use((form) => form.openCategory(undefined));
         break;
       case 'edit-category':
-        openCategory(findCategory(id));
+        forms.use((form) => {
+          const category = findCategory(id);
+          if (category) form.openCategory(category);
+        });
         break;
       case 'suggested': {
         const before = categories.categories.length;
@@ -582,13 +404,13 @@ export function mountBudget(root: Document): void {
         button?.closest('dialog')?.close();
         break;
       case 'delete-entry':
-        askToDelete('entry');
+        forms.now?.askToDelete('entry');
         break;
       case 'delete-category':
-        askToDelete('category');
+        forms.now?.askToDelete('category');
         break;
       case 'delete-year':
-        openYears();
+        yearDeleter.use((deleter) => deleter.open());
         break;
       case 'csv': {
         // The answer shows under the button tapped (and is read out).
@@ -596,21 +418,14 @@ export function mountBudget(root: Document): void {
           button?.closest('dialog, section')?.querySelector<HTMLElement>('[data-csv-status]') ??
           csvStatus;
         if (entries.entries.length === 0) {
-          status.textContent = 'There’s nothing to download yet.';
+          say(status, 'There’s nothing to download yet.');
           break;
         }
         downloadFile(`budget-${today()}.csv`, toCsv(entries, categories), 'text/csv');
-        status.textContent = 'Downloaded your budget as a spreadsheet.';
+        say(status, 'Downloaded your budget as a spreadsheet.');
         break;
       }
     }
-  });
-
-  entryDialog.addEventListener('close', () => {
-    editingEntry = null;
-  });
-  categoryDialog.addEventListener('close', () => {
-    editingCategory = null;
   });
 
   currencySelect.addEventListener('change', () => {
@@ -652,33 +467,10 @@ export function mountBudget(root: Document): void {
     categories = categoriesStore.load();
     entries = entriesStore.load();
     settings = settingsStore.load();
-    // What's being changed was deleted on another device or tab: what was
-    // typed is gone with the form, so it says why (audit 3 G-6).
-    if (editingEntry !== null && !findEntry(editingEntry)) {
-      entryDialog.close();
-      showProblem('That entry was deleted on another device.');
-    }
-    if (editingCategory !== null && !findCategory(editingCategory)) {
-      categoryDialog.close();
-      showProblem('That category was deleted on another device.');
-    }
-    // The year chosen changed on another device or tab: the dialog closes,
-    // and says why, so its button doesn't delete another year, or more than
-    // it said (audit 4 F2-1).
-    if (yearDialog.open) {
-      const { year, count } = shownYear;
-      const now = yearCount(year);
-      if (now === count) fillYears();
-      else {
-        yearDialog.close();
-        deleteYearButton.focus();
-        showProblem(
-          now === 0
-            ? `The entries from ${year} were deleted on another device.`
-            : `${year} has ${entriesCount(now)} now, after changes on another device. Nothing was deleted.`,
-        );
-      }
-    }
+    // A form whose entry or category was deleted there closes and says why
+    // (audit 3 G-6); "Delete a year…" follows the year chosen (audit 4 F2-1).
+    forms.now?.refresh();
+    yearDeleter.now?.refresh();
     keepFocus(render, addExpense);
     reminders.changed();
   }
@@ -729,4 +521,10 @@ export function mountBudget(root: Document): void {
   const reminders = mountReminders(root, { settings: () => settings, announce });
 
   render();
+  // The parts that load later load now, while nothing else goes on, so a
+  // tap finds them here and opens the form at once, within the tap: an
+  // iPhone raises its keyboard only for a field focused then (audit 4 J-6).
+  whenIdle(() => {
+    for (const part of [forms, yearDeleter]) part.load();
+  });
 }

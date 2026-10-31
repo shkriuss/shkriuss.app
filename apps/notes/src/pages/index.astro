@@ -128,10 +128,16 @@ import { MAX_BODY_LENGTH, MAX_TITLE_LENGTH } from '../lib/notes.ts';
     </li>
   </template>
 
-  <dialog class="dialog" aria-labelledby="delete-title" data-delete-dialog>
+  {/* Read out with its title: what goes (audit 5 G-3). */}
+  <dialog
+    class="dialog"
+    aria-labelledby="delete-title"
+    aria-describedby="delete-text"
+    data-delete-dialog
+  >
     <form method="dialog" class="stack">
       <h2 id="delete-title">Delete this note?</h2>
-      <p>
+      <p id="delete-text">
         “<span dir="auto" data-delete-name></span>” will be removed. This can’t be undone.
       </p>
       <div class="cluster">

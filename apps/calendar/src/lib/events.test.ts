@@ -4,6 +4,7 @@ import {
   draftProblems,
   emptyState,
   isCalendarState,
+  MAX_NOTES_LENGTH,
   MAX_TITLE_LENGTH,
   migrateState,
   occurrencesBetween,
@@ -50,6 +51,17 @@ describe('draftProblems', () => {
     expect(draftProblems(draft({ startTime: '25:00' })).startTime).toBeTruthy();
     expect(draftProblems(draft({ startTime: null, endTime: '10:00' })).endTime).toBeTruthy();
     expect(draftProblems(draft({ notes: 'x'.repeat(1001) })).notes).toBeTruthy();
+  });
+
+  it('counts a title or notes as an iPhone’s box does: an emoji or a flag once', () => {
+    // A title as long as its box lets in on an iPhone was refused as too
+    // long, and the saved-data check would have refused it too (audit 5 F1-5).
+    const title = '🎉'.repeat(MAX_TITLE_LENGTH);
+    const notes = '🇬🇪'.repeat(MAX_NOTES_LENGTH);
+    expect(draftProblems(draft({ title, notes }))).toEqual({});
+    expect(draftProblems(draft({ title: `${title}🎉` })).title).toMatch(/100/);
+    expect(draftProblems(draft({ notes: `${notes}🇬🇪` })).notes).toMatch(/1000/);
+    expect(isCalendarState({ events: [{ id: 'x', ...draft({ title, notes }) }] })).toBe(true);
   });
 
   it('allows an overnight event that ends the next day', () => {

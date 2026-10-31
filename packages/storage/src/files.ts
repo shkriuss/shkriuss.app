@@ -29,11 +29,26 @@ export interface FileStore<T extends StoredFile> {
   removeAll(ids: readonly string[]): Promise<void>;
   /** A file ready to save together with files of other kinds (putTogether). */
   entry(file: T): FileEntry;
+  /** A file to remove together with files of other kinds (removeTogether). */
+  removal(id: string): FileKey;
+  /**
+   * Changes one file in a single transaction: `update` gets the file as it
+   * is now (undefined if there's none), and what it returns is saved. Read
+   * in one transaction and saved in another, a change made in between (by
+   * another tab, or a sync) was undone (audit 5 E-4).
+   */
+  change(id: string, update: (existing: T | undefined) => T): Promise<void>;
+  /** This kind's name in the keys ("<kind>:<id>"). */
+  readonly kind: string;
+}
+
+/** A file of some kind, for removeTogether(): made by its store's removal(). */
+export interface FileKey {
+  readonly key: string;
 }
 
 /** A file of some kind, for putTogether(): made by its store's entry(). */
-export interface FileEntry {
-  readonly key: string;
+export interface FileEntry extends FileKey {
   readonly file: StoredFile;
 }
 
@@ -84,6 +99,12 @@ function open(): Promise<IDBDatabase> {
       ready.close();
       opening = null;
     };
+    // The browser closed it itself (the site's data cleared in its settings,
+    // or the device short of space, say): the next operation opens it again,
+    // instead of every one failing until the page is reloaded (audit 5 E-5).
+    ready.onclose = () => {
+      opening = null;
+    };
     return ready;
   })().catch((error: unknown) => {
     opening = null;
@@ -92,7 +113,13 @@ function open(): Promise<IDBDatabase> {
   return opening;
 }
 
-/** Runs `work` in one transaction; resolves once it's all saved. */
+/**
+ * Runs `work` in one transaction; resolves once it's all saved. A request
+ * that fails later (no room, say) abandons the transaction by itself; one
+ * that can't even be made (the browser refuses it on the spot, as a browser
+ * test's pretend full device does) is abandoned here, so nothing of a batch
+ * is kept either way: all or none (audit 5 E-4).
+ */
 async function transact<R>(
   mode: IDBTransactionMode,
   work: (table: IDBObjectStore) => IDBRequest<R> | undefined,
@@ -100,20 +127,35 @@ async function transact<R>(
   const database = await open();
   return new Promise<R | undefined>((resolve, reject) => {
     const transaction = database.transaction(TABLE, mode);
-    const request = work(transaction.objectStore(TABLE));
+    let request: IDBRequest<R> | undefined;
+    try {
+      request = work(transaction.objectStore(TABLE));
+    } catch (error) {
+      transaction.abort();
+      reject(error);
+      return;
+    }
+    // Set after the requests are made: a browser test holds a library's
+    // load by taking over this handler from inside the request.
     transaction.oncomplete = () => resolve(request ? request.result : undefined);
     transaction.onerror = () => reject(transaction.error ?? new Error('Couldn’t save the files.'));
     transaction.onabort = () => reject(transaction.error ?? new Error('Couldn’t save the files.'));
   });
 }
 
+/** Every key from "<kind>:" up to "<kind>;" (the next character) is this kind's. */
+const rangeOf = (kind: string): IDBKeyRange =>
+  IDBKeyRange.bound(`${kind}:`, `${kind};`, false, true);
+/** The id in a key of this kind. */
+const idOf = (kind: string, key: IDBValidKey): string => String(key).slice(kind.length + 1);
+
 /** Files of one kind, e.g. createFileStore("repair-photos"). */
 export function createFileStore<T extends StoredFile>(kind: string): FileStore<T> {
   const keyOf = (id: string) => `${kind}:${id}`;
-  // Every key from "<kind>:" up to "<kind>;" (the next character) is this kind's.
-  const range = () => IDBKeyRange.bound(`${kind}:`, `${kind};`, false, true);
+  const range = () => rangeOf(kind);
   const entry = (file: T): FileEntry => ({ key: keyOf(file.id), file });
   return {
+    kind,
     async get(id) {
       return (
         (await transact<T>('readonly', (table) => table.get(keyOf(id)) as IDBRequest<T>)) ??
@@ -125,18 +167,56 @@ export function createFileStore<T extends StoredFile>(kind: string): FileStore<T
     },
     async ids() {
       const keys = await transact<IDBValidKey[]>('readonly', (table) => table.getAllKeys(range()));
-      return (keys ?? []).map((key) => String(key).slice(kind.length + 1));
+      return (keys ?? []).map((key) => idOf(kind, key));
     },
     putAll: (files) => putTogether(files.map(entry)),
-    async removeAll(ids) {
-      if (ids.length === 0) return;
+    removeAll: (ids) => removeTogether(ids.map((id) => ({ key: keyOf(id) }))),
+    entry,
+    removal: (id) => ({ key: keyOf(id) }),
+    async change(id, update) {
+      const key = keyOf(id);
       await transact('readwrite', (table) => {
-        for (const id of ids) table.delete(keyOf(id));
+        const found = table.get(key) as IDBRequest<T | undefined>;
+        // Inside the request's callback the transaction is still open: the
+        // change is saved before anything else can change the file.
+        found.onsuccess = () => {
+          table.put(update(found.result ?? undefined), key);
+        };
         return undefined;
       });
     },
-    entry,
   };
+}
+
+/**
+ * Removes the files of `store` whose id has no file in `kept` (a photo's
+ * files without its details), in the one transaction that looks them up: a
+ * photo another tab is saving at that moment, details and files together,
+ * can't be taken for one left over, as it could when the two kinds were
+ * read in two transactions (audit 5 E-4). Resolves with the ids removed.
+ */
+export async function removeLeftOver(
+  store: { readonly kind: string },
+  kept: { readonly kind: string },
+): Promise<string[]> {
+  const removed: string[] = [];
+  await transact('readwrite', (table) => {
+    const keptKeys = table.getAllKeys(rangeOf(kept.kind));
+    keptKeys.onsuccess = () => {
+      const have = new Set(keptKeys.result.map((key) => idOf(kept.kind, key)));
+      const keys = table.getAllKeys(rangeOf(store.kind));
+      keys.onsuccess = () => {
+        for (const key of keys.result) {
+          const id = idOf(store.kind, key);
+          if (have.has(id)) continue;
+          removed.push(id);
+          table.delete(key);
+        }
+      };
+    };
+    return undefined;
+  });
+  return removed;
 }
 
 /**
@@ -148,6 +228,21 @@ export async function putTogether(entries: readonly FileEntry[]): Promise<void> 
   if (entries.length === 0) return;
   await transact('readwrite', (table) => {
     for (const { key, file } of entries) table.put(file, key);
+    return undefined;
+  });
+}
+
+/**
+ * Removes files of several kinds together, in one transaction: all go, or
+ * none. For records that must never be left without each other, like a
+ * photo's details and its files (each store's removal() makes the keys):
+ * removed one kind at a time, a page closed in between left the files on
+ * the device for good, unseen (audit 5 E-4).
+ */
+export async function removeTogether(keys: readonly FileKey[]): Promise<void> {
+  if (keys.length === 0) return;
+  await transact('readwrite', (table) => {
+    for (const { key } of keys) table.delete(key);
     return undefined;
   });
 }

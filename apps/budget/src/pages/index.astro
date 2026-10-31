@@ -382,12 +382,18 @@ import {
     </form>
   </dialog>
 
-  <dialog class="dialog" aria-labelledby="delete-title" data-delete-dialog>
+  {/* Read out with its title: what goes, and that it can't be undone (audit 5 G-3). */}
+  <dialog
+    class="dialog"
+    aria-labelledby="delete-title"
+    aria-describedby="delete-text"
+    data-delete-dialog
+  >
     <form method="dialog" class="stack">
       <h2 id="delete-title" data-delete-title>
         Delete this?
       </h2>
-      <p data-delete-text></p>
+      <p id="delete-text" data-delete-text></p>
       <div class="cluster">
         <Button type="submit" value="cancel">
           Cancel
@@ -400,7 +406,7 @@ import {
   </dialog>
 
   <!-- "Delete a year…": every entry of the year chosen, to make room. -->
-  <dialog class="dialog" aria-labelledby="year-title" data-year-dialog>
+  <dialog class="dialog" aria-labelledby="year-title" aria-describedby="year-text" data-year-dialog>
     <form class="stack" data-year-form novalidate>
       <h2 id="year-title">Delete a year</h2>
       <div class="field">

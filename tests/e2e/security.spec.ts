@@ -2,7 +2,11 @@
  * Security and privacy checks that run against EVERY site, using the real
  * _headers file served by Cloudflare's local runtime.
  */
-import { contentSecurityPolicy } from '../../packages/astro-config/src/headers.ts';
+import {
+  BUILD_FILE_CACHE_CONTROL,
+  contentSecurityPolicy,
+} from '../../packages/astro-config/src/headers.ts';
+import { robotsTxt } from '../../packages/astro-config/src/robots-txt.ts';
 import { getSite } from '../../packages/registry/src/index.ts';
 import { expect, test } from './fixtures.ts';
 
@@ -45,6 +49,14 @@ test('says where to report a security problem, for this site (audit 3 I-3)', asy
   expect(await response.text()).toContain(`Canonical: ${origin}/.well-known/security.txt`);
 });
 
+test('serves a robots.txt of its own, so Cloudflare doesn’t (audit 5 I-1)', async ({ request }) => {
+  // Without one, Cloudflare served a robots.txt of its own under the site's name.
+  const response = await request.get('/robots.txt');
+  expect(response.status()).toBe(200);
+  expect(response.headers()['content-type']).toMatch(/^text\/plain/);
+  expect(await response.text()).toBe(robotsTxt());
+});
+
 test('the CSP blocks inline scripts and only allows our own files', () => {
   const csp = contentSecurityPolicy();
   expect(csp).toContain("default-src 'none'");
@@ -74,7 +86,7 @@ test('pages set no cookies and load nothing from other websites', async ({ page,
   expect(await context.cookies()).toEqual([]);
 });
 
-test('hashed build files are cached for a year, pages are always revalidated', async ({
+test('build files, pages and a “not found” for a build file are never kept without asking again', async ({
   page,
   request,
 }) => {
@@ -85,7 +97,24 @@ test('hashed build files are cached for a year, pages are always revalidated', a
     .getAttribute('href');
   expect(asset).toBeTruthy();
   const assetResponse = await request.get(asset as string);
-  expect(assetResponse.headers()['cache-control']).toBe('public, max-age=31536000, immutable');
+  expect(assetResponse.status()).toBe(200);
+  expect(assetResponse.headers()['cache-control']).toBe(BUILD_FILE_CACHE_CONTROL);
+
+  // A build file that isn't there gets the /_astro/* header too, on the "not
+  // found" page. With a year-long "immutable" header, a browser kept that
+  // failure for a year, and the page needing the file stayed broken on that
+  // device (audit 5 Z-1).
+  const missing = '/_astro/not-there.abcdef12.js';
+  const missingResponse = await request.get(missing);
+  expect(missingResponse.status()).toBe(404);
+  for (const [path, response] of [
+    [asset as string, assetResponse],
+    [missing, missingResponse],
+  ] as const) {
+    const cacheControl = response.headers()['cache-control'] ?? '';
+    expect(cacheControl, path).not.toContain('immutable');
+    expect(cacheControl, path).not.toMatch(/max-age=[1-9]/);
+  }
 
   // Pages and the service worker: never kept without asking the server again.
   for (const path of ['/', '/sw.js']) {

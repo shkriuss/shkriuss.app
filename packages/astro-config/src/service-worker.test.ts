@@ -15,12 +15,14 @@ describe('precacheUrls', () => {
     ]);
   });
 
-  it('leaves out files that are not served as-is, and on-demand downloads', () => {
+  it('leaves out files that are not served as-is, on-demand downloads, and what only crawlers read', () => {
     expect(
       precacheUrls([
         '_headers',
         'sw.js',
         'index.html',
+        '.well-known/security.txt',
+        'robots.txt',
         'on-demand/deep-check/manifest.json',
         'on-demand/deep-check/model.00.0123456789ab.bin',
       ]),
@@ -238,6 +240,26 @@ describe('the service worker', () => {
     const model = await second.file('/on-demand/model.bin');
     expect(model.headers.get('Content-Security-Policy')).toBe(CSP_NOW);
     expect(await model.text()).toBe('model');
+  });
+
+  it('offline, shows a saved page asked for without its trailing slash (audit 5 C-2)', async () => {
+    let online = true;
+    const worker = running(
+      (url) => {
+        if (!online) throw new TypeError('offline');
+        return page(`page ${new URL(url).pathname}`);
+      },
+      { files: ['/', '/404', '/privacy/'] },
+    );
+    await worker.start();
+    online = false;
+    // As typed or bookmarked: online, Cloudflare redirects it to "/privacy/".
+    expect(await (await worker.open('/privacy')).text()).toBe('page /privacy/');
+    expect(await (await worker.open('/privacy?from=mail')).text()).toBe('page /privacy/');
+    expect(await (await worker.open('/privacy/')).text()).toBe('page /privacy/');
+    // A page that was never saved, and a file name, still get "Page not found".
+    expect(await (await worker.open('/account')).text()).toBe('page /404');
+    expect(await (await worker.open('/privacy.txt')).text()).toBe('page /404');
   });
 
   it('saves pages only with their own version’s files, never from the network', async () => {

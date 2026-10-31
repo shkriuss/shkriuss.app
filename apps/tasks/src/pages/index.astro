@@ -242,7 +242,8 @@ import {
     </li>
   </template>
 
-  <!-- One step in the task's form: tick, title and "Remove". -->
+  <!-- One step in the task's form: tick, title and "Remove". The title is in a
+       field, so what doesn't fit its box is said under it (text-limit). -->
   <template data-step-edit-template>
     <li class="step-edit">
       <label class="step-edit__check">
@@ -251,14 +252,16 @@ import {
           Done
         </span>
       </label>
-      <input
-        dir="auto"
-        class="input step-edit__title"
-        type="text"
-        autocomplete="off"
-        maxlength={LIMITS.step}
-        data-step-title
-      />
+      <div class="field step-edit__field">
+        <input
+          dir="auto"
+          class="input"
+          type="text"
+          autocomplete="off"
+          maxlength={LIMITS.step}
+          data-step-title
+        />
+      </div>
       <Button variant="ghost" icon="x" label="Remove step" data-action="remove-step" />
     </li>
   </template>
@@ -302,6 +305,9 @@ import {
         <label class="field__label" for="task-notes">
           Notes (optional)
         </label>
+        <p class="field__hint" id="task-notes-hint">
+          Up to {LIMITS.notes.toLocaleString('en')} characters.
+        </p>
         <textarea
           dir="auto"
           class="input"
@@ -309,13 +315,15 @@ import {
           name="notes"
           rows="3"
           maxlength={LIMITS.notes}
+          aria-describedby="task-notes-hint"
         ></textarea>
       </div>
 
       <fieldset class="stack stack--sm">
         <legend class="field__label">Steps (optional)</legend>
         <ul role="list" class="stack stack--sm" data-step-edit-list></ul>
-        <div class="stack stack--sm">
+        <!-- A field, so what doesn't fit the box is said under it (text-limit). -->
+        <div class="field">
           <label class="field__label" for="new-step">
             New step
           </label>
@@ -452,10 +460,16 @@ import {
     </form>
   </dialog>
 
-  <dialog class="dialog" aria-labelledby="delete-title" data-delete-dialog>
+  <!-- Each confirmation is read out with what it deletes (audit 5 G-3). -->
+  <dialog
+    class="dialog"
+    aria-labelledby="delete-title"
+    aria-describedby="delete-message"
+    data-delete-dialog
+  >
     <form method="dialog" class="stack">
       <h2 id="delete-title">Delete this task?</h2>
-      <p>
+      <p id="delete-message">
         “<span dir="auto" data-delete-name></span>” will be removed. This can’t be undone.
       </p>
       <div class="cluster">
@@ -504,14 +518,20 @@ import {
     </form>
   </dialog>
 
-  <dialog class="dialog" aria-labelledby="list-delete-title" data-list-delete-dialog>
+  <!-- Described by its message and, when the list has tasks, their field's label (list-editor.ts). -->
+  <dialog
+    class="dialog"
+    aria-labelledby="list-delete-title"
+    aria-describedby="list-delete-message list-tasks-label"
+    data-list-delete-dialog
+  >
     <form method="dialog" class="stack">
       <h2 id="list-delete-title">Delete this list?</h2>
-      <p>
+      <p id="list-delete-message">
         “<span dir="auto" data-list-delete-name></span>” will be removed. This can’t be undone.
       </p>
       <div class="field" data-list-tasks-field>
-        <label class="field__label" for="list-tasks">
+        <label class="field__label" for="list-tasks" id="list-tasks-label">
           Its <span data-list-tasks-count>tasks</span>
         </label>
         <select class="input" id="list-tasks" data-list-tasks></select>
@@ -527,10 +547,17 @@ import {
     </form>
   </dialog>
 
-  <dialog class="dialog" aria-labelledby="clear-title" data-clear-dialog>
+  <dialog
+    class="dialog"
+    aria-labelledby="clear-title"
+    aria-describedby="clear-text"
+    data-clear-dialog
+  >
     <form method="dialog" class="stack">
       <h2 id="clear-title">Delete done tasks?</h2>
-      <p data-clear-text>The done tasks shown here will be removed. This can’t be undone.</p>
+      <p id="clear-text" data-clear-text>
+        The done tasks shown here will be removed. This can’t be undone.
+      </p>
       <div class="cluster">
         <Button type="submit" value="cancel">
           Cancel
@@ -866,7 +893,7 @@ import {
     cursor: pointer;
   }
 
-  .step-edit__title {
+  .step-edit__field {
     flex: 1;
     min-width: 0;
   }

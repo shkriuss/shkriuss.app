@@ -40,6 +40,7 @@ import {
   NOTES_VERSION,
   notesCount,
   removeNote,
+  restoreNote,
   secondVersion,
   setPinned,
   titleOf,
@@ -116,6 +117,8 @@ export function mountNotes(root: Document): void {
   let left: string | null = null;
   /** A note that was just made, so the editor starts in the title box. */
   let creating: string | null = null;
+  /** Notes made since this page opened: left empty, they go, as nothing is lost (dropIfEmpty). */
+  const madeHere = new Set<string>();
   /** True once the list was shown: "All notes" then goes back instead of adding to history. */
   let listShown = false;
   let fromList = false;
@@ -231,11 +234,14 @@ export function mountNotes(root: Document): void {
    */
   let unsaved = false;
 
-  /** Saves what's typed. If the note was deleted on another device meanwhile, it comes back. */
+  /**
+   * Saves what's typed. If the note was deleted on another device meanwhile,
+   * it comes back with the typing, also at the limit of notes (audit 5 F3-8).
+   */
   function saveText(): void {
     if (current === null) return;
     const now = Date.now();
-    const base = find(current) ? state : addNote(state, current, now);
+    const base = find(current) ? state : restoreNote(state, current, now);
     // Saved after each pause in typing: a problem is read out once, not at every pause.
     const saved = save(
       editNote(base, current, { title: titleField.value, body: bodyField.value }, now),
@@ -262,12 +268,12 @@ export function mountNotes(root: Document): void {
   }
 
   /**
-   * Leaves the note in the editor (saving it), and drops it if nothing was
-   * written. Typing that still can't be saved goes then: the note goes back
-   * to what the device has, so the list, the note opened again and changes
-   * from elsewhere show that, and the person is told. Kept in memory, it
-   * was lost later without a word, or taken for the saved note (audit 4
-   * F3-1). Gives what to tell them, or null.
+   * Leaves the note in the editor (saving it), and drops it if it's a new
+   * one left empty. Typing that still can't be saved goes then: the note
+   * goes back to what the device has, so the list, the note opened again
+   * and changes from elsewhere show that, and the person is told. Kept in
+   * memory, it was lost later without a word, or taken for the saved note
+   * (audit 4 F3-1). Gives what to tell them, or null.
    */
   function leaveNote(): string | null {
     if (current === null) return null;
@@ -281,7 +287,7 @@ export function mountNotes(root: Document): void {
       if (note) lost = `Your last changes to “${titleText(note)}” are gone. ${saveProblem()}`;
       state = withSavedNote(state, store.load(), left);
     }
-    const next = dropIfEmpty(state, left);
+    const next = dropIfEmpty(state, left, madeHere);
     if (next !== state) save(next);
     return lost;
   }
@@ -397,6 +403,7 @@ export function mountNotes(root: Document): void {
     }
     const id = crypto.randomUUID();
     save(addNote(state, id, Date.now()));
+    madeHere.add(id);
     creating = id;
     location.hash = `note=${id}`;
   });
@@ -489,7 +496,7 @@ export function mountNotes(root: Document): void {
   window.addEventListener('pagehide', () => {
     flush();
     if (current === null) return;
-    const next = dropIfEmpty(state, current);
+    const next = dropIfEmpty(state, current, madeHere);
     if (next === state) return;
     save(next);
     rememberDropped(current);
@@ -498,9 +505,35 @@ export function mountNotes(root: Document): void {
     if (document.visibilityState === 'hidden') flush();
   });
 
+  /**
+   * "Delete all data" in another tab (or a restore there, which starts by
+   * deleting) removed the notes. Typing waiting to be saved here would have
+   * put its note back, right after everything was said to be deleted (audit
+   * 5 D-2): it goes, with the note, and the list shows what's saved now.
+   */
+  function dataDeleted(): void {
+    window.clearTimeout(saveTimer);
+    saveTimer = undefined;
+    unsaved = false;
+    typingFrom = null;
+    state = store.load();
+    if (current === null) {
+      if (!listView.hidden) keepFocus(() => renderList(), newButton);
+      return;
+    }
+    current = null;
+    left = null;
+    backToList();
+    say(
+      'Your notes were deleted in another tab (“Delete all data”, or a restore replacing them). What was typed here is gone too.',
+    );
+  }
+
   // If Notes is open in two tabs, keep them the same.
   window.addEventListener('storage', (event) => {
-    if (event.key === store.key) refresh();
+    if (event.key !== store.key) return;
+    if (event.newValue === null) dataDeleted();
+    else refresh();
   });
 
   // Sync between devices through the shkriuss account (if turned on).

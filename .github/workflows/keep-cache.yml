@@ -1,0 +1,59 @@
+# Keeps CI's two big caches alive: Grammar's Deep check model (361 MB, from
+# Hugging Face) and Playwright's browser. GitHub deletes a cache nobody has
+# used for 7 days, after which the next merge, a fix included, would need
+# those download servers to be up (audit 5 H-2). This runs twice a week: it
+# restores each cache (which counts as using it), and downloads and saves
+# again whatever is missing. Docs: docs/deployment.md ("When a service CI
+# needs is down").
+name: Keep caches
+
+on:
+  schedule:
+    # Mondays and Thursdays at 04:17 UTC: never a full 7 days between uses.
+    # GitHub pauses a schedule in a repository with no commits for 60 days;
+    # Dependabot's merges keep this one going.
+    - cron: '17 4 * * 1,4'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  keep:
+    name: Restore and save the caches
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Check out code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up
+        uses: ./.github/actions/setup
+
+      # Restores the model, and saves it when the job ends if it wasn't there.
+      - name: Grammar's Deep check model, from the cache
+        uses: ./.github/actions/deep-check-model
+        with:
+          save: 'true'
+
+      # The script downloads the model only when the copy on disk is missing
+      # or wrong; it writes the files it makes outside the checkout.
+      - name: Download the model if the cache didn't have it
+        run: node apps/grammar/scripts/deep-check-files.ts "$RUNNER_TEMP/deep-check"
+
+      - name: Find Playwright's version
+        id: playwright
+        run: echo "version=$(pnpm exec playwright --version | awk '{ print $2 }')" >> "$GITHUB_OUTPUT"
+
+      # The same key as ci.yml's, so this is the cache its browser tests use.
+      - name: Browser for end-to-end tests, from the cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+
+      - name: Download the browser if the cache didn't have it
+        run: pnpm exec playwright install chromium

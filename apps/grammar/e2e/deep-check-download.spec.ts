@@ -111,7 +111,7 @@ test('says what it’s doing while the list of files comes, and when it can’t 
   await page.evaluate(() => {
     (Reflect.get(window, 'runOut') as () => void)();
   });
-  const problem = 'Couldn’t reach shkriuss.app. Check your internet connection and try again.';
+  const problem = 'Couldn’t reach the server. Check your internet connection and try again.';
   await expect(deep(page).locator('[data-deep-problem]')).toHaveText(problem);
   await expect(page.getByRole('status').filter({ hasText: problem })).toBeAttached();
   await expect(deep(page).getByText(checking)).toBeHidden();

@@ -27,13 +27,14 @@ import {
   decimalText,
   formatMoney,
   parseDecimal,
+  roundDecimal,
   whichAmount,
   type Currency,
   type MoneyOptions,
   type ParseOptions,
 } from '@shkriuss/ui/numbers';
 import { DATE_LOCALE } from '@shkriuss/ui/locale';
-import { foldText } from '@shkriuss/ui/text';
+import { cutToLength, foldText } from '@shkriuss/ui/text';
 import { roomNote as sharedRoomNote } from '@shkriuss/ui/room-note';
 
 /**
@@ -111,6 +112,15 @@ export const LIMITS = {
 
 export const emptyTrades = (): TradesState => ({ trades: [] });
 
+/**
+ * Whether text fits a limit, counted as text boxes count their maxlength on
+ * an iPhone: a flag, a family emoji or a letter with its accent is one
+ * character, so what a full box holds is never refused on saving
+ * (cutToLength). Before, each half of an emoji counted, and a setup of 6
+ * family emoji was "Use 40 characters or fewer." (audit 5 F2-3).
+ */
+const fits = (text: string, max: number): boolean => cutToLength(text, max) === text;
+
 // ---------- Checking ----------
 
 const isPrice = (value: unknown): value is number =>
@@ -180,7 +190,9 @@ export function partsOf(trades: readonly Trade[]): Map<string, Parts> {
  * (0 once it's closed itself). Below 0 when more was closed than bought.
  */
 export const openQuantity = (trade: Trade, parts: ReadonlyMap<string, Parts>): number =>
-  trade.exitPrice === null ? tidy(trade.quantity - (parts.get(trade.id)?.quantity ?? 0)) : 0;
+  trade.exitPrice === null
+    ? nearly(trade.quantity, tidy(trade.quantity - (parts.get(trade.id)?.quantity ?? 0)))
+    : 0;
 
 /**
  * The trade's own fees not yet counted with a part: each part closed takes
@@ -199,7 +211,7 @@ export function overClosed(trade: Trade, parts: ReadonlyMap<string, Parts>): num
   const split = parts.get(trade.id)?.quantity ?? 0;
   if (split === 0) return 0;
   const closed = tidy((trade.exitPrice === null ? 0 : trade.quantity) + split);
-  return Math.max(0, tidy(closed - trade.quantity));
+  return Math.max(0, nearly(trade.quantity, tidy(closed - trade.quantity)));
 }
 
 /**
@@ -257,7 +269,7 @@ export function readTrade(
   const problems: Problems = {};
   const symbol = form.symbol.trim().toUpperCase();
   if (symbol === '') problems.symbol = 'Enter the symbol, like AAPL.';
-  else if (symbol.length > LIMITS.symbol) {
+  else if (!fits(symbol, LIMITS.symbol)) {
     problems.symbol = `Use ${LIMITS.symbol} characters or fewer.`;
   } else if (count !== null && count >= LIMITS.trades) {
     problems.symbol = `You can keep up to ${new Intl.NumberFormat().format(LIMITS.trades)} trades. To make room, delete a year (under Currency and spreadsheet).`;
@@ -272,12 +284,13 @@ export function readTrade(
       if (missing) problems[field] = missing;
       return null;
     }
-    if (!isPrice(value)) {
-      problems[field] = notANumber(form[field], locale, 'Enter a number above 0.');
-      return null;
-    }
+    // Before "not a number": one too long to be one reads as infinite (audit 5 F2-5).
     if (value > LIMITS.number) {
       problems[field] = 'Enter a smaller number.';
+      return null;
+    }
+    if (!isPrice(value)) {
+      problems[field] = notANumber(form[field], locale, 'Enter a number above 0.');
       return null;
     }
     return value;
@@ -286,9 +299,10 @@ export function readTrade(
   const quantityValue = parseNumber(form.quantity);
   const quantity = isPrice(quantityValue) ? quantityValue : null;
   if (quantityValue === null) problems.quantity = 'Enter how many.';
+  else if (quantityValue > LIMITS.number) problems.quantity = 'Enter a smaller number.';
   else if (quantity === null) {
     problems.quantity = notANumber(form.quantity, locale, 'Enter a number above 0.');
-  } else if (quantity > LIMITS.number) problems.quantity = 'Enter a smaller number.';
+  }
 
   const stop = price('stop', '');
   if (stop !== null && entryPrice !== null && side) {
@@ -318,15 +332,16 @@ export function readTrade(
   // Repairs (audit 4 F2-12).
   const feesValue = parseNumber(form.fees);
   const fees = feesValue ?? 0;
-  if (!Number.isFinite(fees) || fees < 0) {
+  if (fees > LIMITS.number) problems.fees = 'Enter a smaller number.';
+  else if (!Number.isFinite(fees) || fees < 0) {
     problems.fees = notANumber(form.fees, locale, 'Enter 0 or more.');
-  } else if (fees > LIMITS.number) problems.fees = 'Enter a smaller number.';
+  }
 
   // One setup however it's typed: "Breakout  retest" is "Breakout retest".
   const setup = form.setup.replace(/\s+/g, ' ').trim();
-  if (setup.length > LIMITS.setup) problems.setup = `Use ${LIMITS.setup} characters or fewer.`;
+  if (!fits(setup, LIMITS.setup)) problems.setup = `Use ${LIMITS.setup} characters or fewer.`;
   const notes = form.notes.trim();
-  if (notes.length > LIMITS.notes) problems.notes = `Use ${LIMITS.notes} characters or fewer.`;
+  if (!fits(notes, LIMITS.notes)) problems.notes = `Use ${LIMITS.notes} characters or fewer.`;
 
   if (Object.keys(problems).length > 0 || !side || entryPrice === null || quantity === null) {
     return { problems };
@@ -426,7 +441,7 @@ export function readClose(
   const read = readTrade(form, ids.id, saved ? null : state.trades.length, locale);
   const problems: CloseProblems = { ...read.problems };
   const bought = readNumber(form.quantity, locale);
-  const open = isPrice(bought) ? tidy(bought - split.quantity) : null;
+  const open = isPrice(bought) ? nearly(bought, tidy(bought - split.quantity)) : null;
   const closed = readNumber(closeQuantity, locale);
   if (open !== null && open <= 0) {
     problems.quantity ??= `Enter more than the ${formatNumber(split.quantity, locale)} closed already.`;
@@ -520,7 +535,7 @@ export function readChange(
   }
   const read = readTrade(form, ids.id, saved ? null : state.trades.length, locale);
   if (!read.trade) return { problems: read.problems };
-  if (read.trade.quantity < split.quantity) {
+  if (nearly(read.trade.quantity, read.trade.quantity - split.quantity) < 0) {
     return {
       problems: {
         quantity: `Enter at least the ${formatNumber(split.quantity, locale)} closed already.`,
@@ -759,8 +774,30 @@ export const roomNote = (count: number, locale?: string): string | null =>
 
 // ---------- Results ----------
 
-/** Rounds away the tiny errors of decimal sums (0.1 + 0.2). */
-const tidy = (value: number): number => Math.round(value * 1e8) / 1e8;
+/**
+ * Rounds to 8 decimals, away the tiny errors of decimal sums (0.1 + 0.2).
+ * Multiplying by 100,000,000 and rounding is exact only while the product
+ * is well within a number's 53 bits (below ten million here, with room to
+ * spare). Above that it left crumbs: 123,456,789,012 tokens closed in two
+ * parts kept 0.00001526 "still open" for good, and "Delete a year" then kept
+ * its parts for ever (audit 5 F2-1). Bigger numbers are rounded by their
+ * digits instead (roundDecimal), as exact as a number of that size can be
+ * (see `nearly`) but twenty times slower, and the results of thousands of
+ * trades are worked out at every change. Never -0 either way.
+ */
+const tidy = (value: number): number =>
+  Math.abs(value) < 1e7 ? Math.round(value * 1e8) / 1e8 || 0 : roundDecimal(value, 8);
+
+/**
+ * A difference between two quantities that a number of their size can't
+ * tell apart (its last binary digits: above a hundred million, that's
+ * coarser than 8 decimals) counts as none. Closing "the rest" of
+ * 100,015,838.00209475 tokens, as the form showed it, summed to a digit
+ * more than was bought, and the trade stayed open, or warned of a second
+ * device, for good (audit 5 F2-1).
+ */
+const nearly = (size: number, diff: number): number =>
+  Math.abs(diff) <= Math.abs(size) * 2 ** -50 ? 0 : diff;
 
 export const isOpen = (trade: Trade): boolean => trade.exitPrice === null;
 

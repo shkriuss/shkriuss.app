@@ -3,6 +3,7 @@ import {
   addedMessage,
   byMonth,
   byNewest,
+  copiesToKeep,
   downloadName,
   detailsOf,
   formatBytes,
@@ -71,6 +72,21 @@ describe('a photo’s details', () => {
 
   it('keep the time as this device shows it', () => {
     expect(localDateTime(new Date(2026, 9, 21, 9, 5, 7))).toBe('2026-10-21T09:05:07');
+  });
+
+  it('keep the copies a photo picked again had, where this browser can’t make them (audit 5 F3-6)', () => {
+    // A HEIC added on an iPhone, re-added on a Pixel (its original was only
+    // online): the thumbnail downloaded from the online library stayed, not
+    // none. Copies made here come first.
+    const made = { view: new Blob(['new view']), thumb: new Blob(['new thumb']) };
+    const kept = { view: null, thumb: new Blob(['downloaded thumb']) };
+    expect(copiesToKeep({ view: null, thumb: null }, kept)).toEqual(kept);
+    expect(copiesToKeep(made, kept)).toEqual(made);
+    expect(copiesToKeep({ view: null, thumb: null }, undefined)).toEqual({
+      view: null,
+      thumb: null,
+    });
+    expect(copiesToKeep(made, undefined)).toEqual(made);
   });
 });
 
@@ -285,6 +301,16 @@ describe('for people', () => {
     expect(formatLabel({ name: 'IMG_0001.HEIC', type: 'image/heic' })).toBe('HEIC');
     expect(formatLabel({ name: 'scan', type: 'image/png' })).toBe('PNG');
     expect(formatLabel({ name: 'scan', type: '' })).toBe('FILE');
+    expect(formatLabel({ name: 'clip.mp4', type: '' })).toBe('MP4');
+    // A number after a dot isn't the kind (audit 5 F3-10).
+    expect(formatLabel({ name: 'holiday.2019', type: 'image/jpeg' })).toBe('JPG');
+  });
+
+  it('gives odd names an extension too (audit 5 F3-10)', () => {
+    expect(downloadName(photo({ name: 'holiday.2019' }))).toBe('holiday.2019.jpg');
+    expect(downloadName(photo({ name: 'photo.' }))).toBe('photo.jpg');
+    expect(downloadName(photo({ name: 'photo . ' }))).toBe('photo.jpg');
+    expect(downloadName(photo({ name: '...' }))).toBe('photo-2026-10-21-14-03-22.jpg');
   });
 
   it('takes a type that’s the name of an object’s own function for an unknown one (audit 4 C-2)', () => {

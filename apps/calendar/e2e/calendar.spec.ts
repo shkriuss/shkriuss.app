@@ -5,6 +5,7 @@
 // en-US, so weeks start on Sunday and times read like "2:30 PM".
 import { readFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
+import { paste } from '../../../tests/e2e/clipboard.ts';
 import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
 import { day, dayList, editor, monthHeading, newEvent, save, seed, upcoming } from './helpers.ts';
 
@@ -78,6 +79,38 @@ test('moves the chosen day along at midnight, also after a redraw that came firs
     'true',
   );
   await expect(dayList(page).getByRole('button')).toHaveText([/Breakfast/]);
+});
+
+test('at midnight, a day with keyboard focus stays chosen, with its focus ring', async ({
+  page,
+}) => {
+  // "Today" moved on, and focus was left on a day that was neither chosen
+  // nor in the Tab order, so it had no focus ring (audit 5 G-8).
+  const saturday = day(page, /^Saturday, October 17, 2026/);
+  await saturday.focus();
+  // Keyboard use, so the focus ring shows: one step right and back.
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowLeft');
+  await expect(saturday).toBeFocused();
+
+  await page.clock.setFixedTime(new Date('2026-10-18T00:00:30'));
+  await page.clock.runFor('01:00');
+  await expect(day(page, /^Sunday, October 18, 2026, today/)).toHaveAttribute(
+    'aria-current',
+    'date',
+  );
+  await expect(saturday).toBeFocused();
+  await expect(saturday).toHaveAttribute('aria-pressed', 'true');
+  await expect(saturday).toHaveAttribute('tabindex', '0');
+  await expect(page.locator('[data-weeks] button[tabindex="0"]')).toHaveCount(1);
+  expect(await saturday.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe(
+    'solid',
+  );
+  await expect(page.locator('[data-day-heading]')).toHaveText('Saturday, October 17');
+  // The arrow keys move on from there.
+  await page.keyboard.press('ArrowRight');
+  await expect(day(page, /^Sunday, October 18, 2026, today/)).toBeFocused();
+  await expect(page.locator('[data-day-heading]')).toHaveText('Today, Sunday, October 18');
 });
 
 test('in a Windows contrast theme, the chosen day and event dots still show', async ({ page }) => {
@@ -172,6 +205,10 @@ test('edits and deletes an event, with a confirmation', async ({ page }) => {
   await editor(page).getByRole('button', { name: 'Delete' }).click();
   const confirm = page.getByRole('dialog', { name: 'Delete this event?' });
   await expect(confirm).toContainText('“Dentist check-up” will be removed. This can’t be undone.');
+  // Read out with the title, before "Cancel" (audit 5 G-3).
+  await expect(confirm).toHaveAccessibleDescription(
+    '“Dentist check-up” will be removed. This can’t be undone.',
+  );
   await checkA11y(page, 'delete dialog');
 
   // Cancel goes back to editing.
@@ -431,6 +468,35 @@ test('explains problems next to each field', async ({ page }) => {
     'The end date must be on or after the start date.',
   );
   await expect(editor(page)).toBeVisible();
+});
+
+// Audit 5 F1-4: the browser kept the start of a long paste without a word.
+test('says when pasted notes or a title don’t all fit', async ({ page }) => {
+  await newEvent(page, 'Dentist');
+  const notes = editor(page).getByLabel('Notes (optional)');
+  await expect(notes).toHaveAccessibleDescription('Up to 1,000 characters.');
+  const text = 'Bring the card, and the X-ray from last year. '.repeat(25);
+  await paste(notes, text);
+  await expect(notes).toHaveValue(text.slice(0, 1000));
+  const cut = (most: string) =>
+    `Only part of that fit. This box takes up to ${most} characters, so the rest wasn’t added.`;
+  await expect(editor(page).getByText(cut('1,000'), { exact: true })).toBeVisible();
+  await expect(
+    editor(page)
+      .getByRole('alert')
+      .filter({ hasText: `Notes (optional): ${cut('1,000')}` }),
+  ).toBeAttached();
+  const title = editor(page).getByLabel('Title');
+  await title.fill('');
+  await paste(title, 'x'.repeat(110));
+  await expect(title).toHaveValue('x'.repeat(100));
+  await expect(editor(page).getByText(cut('100'), { exact: true })).toBeVisible();
+  await checkA11y(page, 'editor after a paste that didn’t fit');
+  // Gone when the editor opens again.
+  await editor(page).getByRole('button', { name: 'Cancel' }).click();
+  await newEvent(page, 'Yoga');
+  await expect(editor(page).getByText(cut('1,000'), { exact: true })).toBeHidden();
+  await expect(editor(page).getByText(cut('100'), { exact: true })).toBeHidden();
 });
 
 test('moves between days and months', async ({ page }) => {

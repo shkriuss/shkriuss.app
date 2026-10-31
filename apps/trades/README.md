@@ -21,7 +21,12 @@ Your trading journal: log your trades and see what works. Lives at
     (`periodSummary`). The form takes prices
     and quantities up to a trillion (`LIMITS.number`); a trade restored from
     a backup or synced can be bigger (older data must stay readable), and a
-    result too big to work out shows as "—" (`formatResult`).
+    result too big to work out shows as "—" (`formatResult`). Quantities and
+    results are rounded to 8 decimals by their digits once they're big
+    (`tidy`), and a difference too small for a number of that size to tell
+    apart counts as none (`nearly`), so a trade of billions of tokens, or
+    of a hundred million with decimals, closed in parts leaves nothing
+    "still open" (audit 5 F2-1).
   - Numbers are read the way the person's language writes them
     (`parseDecimal`), but one comma or point before exactly three digits
     ("149,853", "1.500") could be either sign: the form asks which number
@@ -101,6 +106,10 @@ Your trading journal: log your trades and see what works. Lives at
     nothing is converted. It's saved only once changed (US dollars until
     then), so a new device has nothing to win over another's when they
     first sync.
+  - Text limits (the symbol, setup and notes) count characters as people
+    see them, as an iPhone's text boxes count what fits in them: a flag or
+    a family emoji is one, so what a full box holds is never refused on
+    saving (`cutToLength`, audit 5 F2-3).
 - `src/scripts/trades.ts`: connects the page to those rules. Open trades are
   listed first, with "Close" to fill in the exit (all of the trade, or part
   of it). Closed trades can be searched by symbol, setup or notes, and show

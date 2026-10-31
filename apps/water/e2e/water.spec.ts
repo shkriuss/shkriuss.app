@@ -63,6 +63,32 @@ test('adds glasses and bottles towards the goal, and removes them', async ({ pag
   await expect(glass).toBeFocused();
 });
 
+test('a glass just after midnight counts for the new day', async ({ page }) => {
+  // The page looks for a new day once a minute: a glass at 00:00:10 was
+  // "added tomorrow", with yesterday's total as today's (audit 5 F1-7).
+  await page.clock.setFixedTime(new Date('2026-10-20T23:59:40+04:00'));
+  await page.reload();
+  await expect(page.locator('[data-date]')).toHaveText('Tuesday, October 20');
+  await page.clock.setFixedTime(new Date('2026-10-21T00:00:10+04:00'));
+  // "Other amount" offers the new day and the day before it.
+  await page.getByRole('button', { name: 'Other amount' }).click();
+  await expect(otherDialog(page).getByLabel('Day')).toHaveValue(TODAY);
+  await expect(otherDialog(page).getByLabel('Day').locator('option')).toHaveText([
+    'Today',
+    'Yesterday',
+  ]);
+  await otherDialog(page).getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.locator('[data-date]')).toHaveText('Wednesday, October 21');
+
+  await page.getByRole('button', { name: 'Glass 250 ml' }).click();
+  await expect(status(page, 'Added 250 ml. 250 ml of 2,000 ml today.')).toBeAttached();
+  await expect(total(page)).toHaveText('250 ml');
+  await expect(history(page).first()).toHaveText(/Today\s*250 ml/);
+  // Still so once the page notices the new day by itself.
+  await page.clock.runFor('01:00');
+  await expect(total(page)).toHaveText('250 ml');
+});
+
 test('adds any amount, earlier today or yesterday', async ({ page }) => {
   await page.getByRole('button', { name: 'Other amount' }).click();
   const dialog = otherDialog(page);

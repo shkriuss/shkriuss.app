@@ -108,9 +108,12 @@ test('chooses several to save or delete, and deletes one while looking at it', a
   await expect(status(page, 'Saved 2 originals.')).toBeAttached();
   await expect.poll(() => saved.length).toBe(2);
 
-  // Deleting them, after asking.
+  // Deleting them, after asking. The dialog is read out with what goes (audit 5 G-3).
   await page.getByRole('button', { name: 'Delete', exact: true }).click();
   const confirm = page.getByRole('dialog', { name: 'Delete 2 photos?' });
+  await expect(confirm).toHaveAccessibleDescription(
+    'The originals and their copies are deleted from this device. This can’t be undone.',
+  );
   await confirm.getByRole('button', { name: 'Delete' }).click();
   await expect(status(page, 'Deleted 2 photos.')).toBeAttached();
   await expect(tiles(page)).toHaveCount(1);
@@ -164,6 +167,69 @@ test('loads the library again on focus only when another tab changed it', async 
   await focus();
   await focus();
   expect(await reads()).toBe(1);
+});
+
+test('a photo’s details and files are saved and deleted together, and files left without details go (audit 5 E-4)', async ({
+  page,
+}) => {
+  await expect(page.getByText('No photos yet.', { exact: false })).toBeVisible();
+  // Counts the transactions that write: one for both records, so a page
+  // closed between two can't leave the files without the photo, or behind it.
+  await page.evaluate(() => {
+    const transaction = IDBDatabase.prototype.transaction;
+    const counted = window as unknown as { writes: number };
+    counted.writes = 0;
+    IDBDatabase.prototype.transaction = function (
+      this: IDBDatabase,
+      ...args: Parameters<typeof transaction>
+    ) {
+      if (args[1] === 'readwrite') counted.writes += 1;
+      return transaction.apply(this, args);
+    };
+  });
+  const writes = () => page.evaluate(() => (window as unknown as { writes: number }).writes);
+  await addPhotos(page, [jpeg('IMG_0001.JPG', await picture(page, { width: 400, height: 300 }))]);
+  await expect(tiles(page)).toHaveCount(1);
+  expect(await stored(page)).toEqual({ photos: 1, files: 1 });
+  expect(await writes()).toBe(1);
+
+  await tiles(page).first().click();
+  await viewer(page).getByRole('button', { name: 'Delete' }).click();
+  await page
+    .getByRole('dialog', { name: 'Delete this photo?' })
+    .getByRole('button', { name: 'Delete' })
+    .click();
+  await expect(status(page, 'Deleted the photo.')).toBeAttached();
+  expect(await stored(page)).toEqual({ photos: 0, files: 0 });
+  expect(await writes()).toBe(2);
+
+  // Files without any photo (left by an older version): gone the next time Photos opens.
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        const request = indexedDB.open('shkriuss-files');
+        request.onerror = () => reject(request.error ?? new Error('No database'));
+        request.onsuccess = () => {
+          const database = request.result;
+          const run = database.transaction('files', 'readwrite');
+          run
+            .objectStore('files')
+            .put(
+              { id: 'left-over', original: new Blob(['bytes']), view: null, thumb: null },
+              'photo-files:left-over',
+            );
+          run.oncomplete = () => {
+            database.close();
+            resolve();
+          };
+          run.onerror = () => reject(run.error ?? new Error('Not saved'));
+        };
+      }),
+  );
+  expect(await stored(page)).toEqual({ photos: 0, files: 1 });
+  await page.reload();
+  await expect(page.getByText('No photos yet.', { exact: false })).toBeVisible();
+  await expect.poll(() => stored(page)).toEqual({ photos: 0, files: 0 });
 });
 
 test('“Delete all data” deletes the photos', async ({ page }) => {
