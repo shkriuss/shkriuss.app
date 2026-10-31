@@ -34,24 +34,24 @@ You never need a computer:
   can watch it under **Actions**).
 - **New app:** ask Claude, or use **Actions → New app → Run workflow**
   ([guide](docs/adding-an-app.md)).
-- **When Claude's weekly limit has run out:** **Actions → Claude → Run
-  workflow** asks Claude from GitHub, paid by your Claude API balance
-  ([guide](docs/claude-in-github.md)).
+- **When Claude's weekly limit has run out:** work waits until it resets
+  (claude.ai → **Settings → Usage** shows when), or uses your plan's extra
+  usage, which is paid separately
+  ([ADR 0021](docs/adr/0021-no-claude-workflow.md)).
 
 ## Documentation
 
-| Document                                             | What it covers                                                      |
-| ---------------------------------------------------- | ------------------------------------------------------------------- |
-| [docs/PLAN.md](docs/PLAN.md)                         | The plan: technology choices, architecture, roadmap, your checklist |
-| [docs/adding-an-app.md](docs/adding-an-app.md)       | Creating a new app, step by step                                    |
-| [docs/design-system.md](docs/design-system.md)       | Colours, components, and changing the look everywhere               |
-| [docs/deployment.md](docs/deployment.md)             | Cloudflare, production deploys, rolling back                        |
-| [docs/quality.md](docs/quality.md)                   | Every automatic check and what to do when one fails                 |
-| [docs/claude-in-github.md](docs/claude-in-github.md) | Asking Claude from GitHub (Actions), paid by the API                |
-| [docs/audit/](docs/audit/)                           | The audit brief, and the prompts for auditing with AI tools         |
-| [docs/adr/](docs/adr/)                               | Short records of the main decisions and why                         |
-| [SECURITY.md](SECURITY.md)                           | Security model and how to report a problem                          |
-| [CLAUDE.md](CLAUDE.md)                               | Rules and commands for AI assistants and developers                 |
+| Document                                       | What it covers                                                      |
+| ---------------------------------------------- | ------------------------------------------------------------------- |
+| [docs/PLAN.md](docs/PLAN.md)                   | The plan: technology choices, architecture, roadmap, your checklist |
+| [docs/adding-an-app.md](docs/adding-an-app.md) | Creating a new app, step by step                                    |
+| [docs/design-system.md](docs/design-system.md) | Colours, components, and changing the look everywhere               |
+| [docs/deployment.md](docs/deployment.md)       | Cloudflare, production deploys, rolling back                        |
+| [docs/quality.md](docs/quality.md)             | Every automatic check and what to do when one fails                 |
+| [docs/audit/](docs/audit/)                     | The audit brief, and the prompts for auditing with AI tools         |
+| [docs/adr/](docs/adr/)                         | Short records of the main decisions and why                         |
+| [SECURITY.md](SECURITY.md)                     | Security model and how to report a problem                          |
+| [CLAUDE.md](CLAUDE.md)                         | Rules and commands for AI assistants and developers                 |
 
 ## For developers
 

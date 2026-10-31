@@ -112,13 +112,9 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
   are no pull request previews: [ADR 0019](docs/adr/0019-no-pull-request-previews.md)).
   Photos' storage code is a secret of `production` too, handed to its Worker
   at deploy in a temporary file that's deleted straight after.
-- The Claude API key, for the **Claude** workflow, is a secret of the
-  `claude` environment, which only `main` can use. Only someone with write
-  access can start that workflow (by hand, never from a comment). The token
-  it pushes with can't change workflows or push to `main`, and it never has
-  the Cloudflare token. It runs a branch's tests in the job that holds the
-  key, so the key's real limit is the prepaid API balance
-  ([ADR 0020](docs/adr/0020-claude-in-github-actions.md)).
+- No workflow runs Claude or holds a Claude API key: the **Claude** workflow
+  was removed because a pull request's code it ran could reach the write
+  token it held ([ADR 0021](docs/adr/0021-no-claude-workflow.md)).
 - gitleaks scans every commit for secrets; zizmor checks the workflows,
   including that each pinned commit really belongs to its action;
   `pnpm audit` checks for known vulnerabilities; Dependabot proposes updates
