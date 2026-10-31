@@ -337,13 +337,19 @@ they ran out.)
 - Upgrades when tooling allows: Node 26 LTS, TypeScript 7, pnpm 11+
   ([ADR 0005](adr/0005-pnpm-typescript-versions.md)).
 - Before an app's page script grows much more: split it by feature, as was
-  done for Calendar and Repairs. The biggest are Tasks (about 850 lines),
-  Photos, Meals, Shelf, Repairs, Budget, the Account page and Trades (about
-  600 each). If that's no longer enough, [ADR 0001](adr/0001-static-astro-sites.md) says
+  done for Calendar, Repairs, Tasks and Budget (audit 5 J-2, J-3). The
+  biggest are now Shelf, Repairs, the Account page and Meals (800 to 900
+  lines each), then Photos, Trades and Tasks (about 700). If that's no
+  longer enough, [ADR 0001](adr/0001-static-astro-sites.md) says
   when to consider a UI framework, with a decision record (audit 4 J-10).
 - Before Photos' libraries reach many tens of thousands of photos: load its
   list of photos a page at a time from the device's database (an index, and
   a step up in its version), instead of all of it at once (audit 4 J-10).
+- Move the helpers copied between apps into `@shkriuss/ui`, as one change:
+  the "every typed word" search (five apps), `later` and `whenIdle`
+  (Repairs, Budget, Tasks), counting characters as an iPhone's box does
+  (`fits`, eight apps) and reading a repeated message out again (audit 5
+  J-9).
 
 **Milestone 3: real apps**
 
