@@ -33,3 +33,17 @@ Status: OFFLINE ONLY. No paid API requests authorized.
 - No private audit content in API requests or public logs.
 - No automatic code changes or merges.
 - No unauthorized production deployments.
+
+## GitHub environment approval
+
+- Environment: `claude-audit`.
+- Required reviewers: enabled.
+- Only the repository owner's GitHub account is listed.
+- Prevent self-review: disabled to permit owner approval.
+- Deployment branches: `main` only.
+- Administrator bypass: disabled.
+- Approval is a deliberate self-approval step, not independent review.
+- Environment approval alone does not authorize paid API usage.
+- The one-time Git tag claim remains offline-only and is not connected to the workflow.
+- The final Claude API safety stop must remain active until separately authorized.
+- 
