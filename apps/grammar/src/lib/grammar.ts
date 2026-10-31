@@ -248,4 +248,11 @@ export type ToChecker =
 
 /** Messages from the checker to the page. */
 export type FromChecker =
-  { type: 'ready' } | { type: 'checked'; id: number; issues: Issue[] } | { type: 'failed' };
+  | { type: 'ready' }
+  | { type: 'checked'; id: number; issues: Issue[] }
+  /**
+   * `download`: Harper's file couldn't be downloaded (audit 5 G-5);
+   * `start` (or none, from an older checker): it couldn't start in this
+   * browser, or stopped working.
+   */
+  | { type: 'failed'; reason?: 'download' | 'start' };

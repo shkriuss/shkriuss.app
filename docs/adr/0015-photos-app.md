@@ -4,7 +4,10 @@ Status: Accepted (2026-10-21). Builds on [ADR 0013](0013-photos-on-the-device.md
 (files on the device). Extended by [ADR 0016](0016-online-photo-library.md):
 with sync on, the library is also online, in Cloudflare R2, and "Free up
 space" can leave only the thumbnail on a device. Updated in October 2026
-(audit 4 F3-3): dates are read from HEIC, PNG and WebP files too.
+(audit 4 F3-3): dates are read from HEIC, PNG and WebP files too. Changed
+in October 2026 (audit 5 E-4): a photo's two records are saved together and
+deleted together, in one transaction, instead of one after the other (see
+Decision).
 
 ## Context
 
@@ -32,8 +35,12 @@ This first part works on the device only, like every other app.
     512-pixel JPEG thumbnail for the grid, and a 2,048-pixel JPEG for looking
     at it.
 
-  The files are saved before the details, and deleted after them, so a
-  photo never shows without its files.
+  The files and the details are saved together, and deleted together, in
+  one transaction, so a photo never shows without its files, and files are
+  never left behind without their photo. (They were saved and deleted one
+  after the other at first; a page closed in between left files on the
+  device for good: audit 5 E-4. Files found like that go when the library
+  loads.)
 
 - **Read in a worker** (`process.worker.ts`): the SHA-256 of the original,
   when it was taken, and the two copies. Big photos never freeze the page.

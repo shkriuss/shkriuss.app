@@ -48,13 +48,43 @@ describe('readableHost', () => {
     expect(readableHost('shop.ge')).toBe('shop.ge');
   });
 
+  it('shows Japanese names, which mix kanji and kana and use “ー” (audit 5 F3-4)', () => {
+    // The prolonged sound mark belongs to no script, and most names mix
+    // scripts: these stayed as "xn--…".
+    for (const name of [
+      'コーヒー',
+      'ソニー',
+      'ラーメン',
+      '東京タワー',
+      'お寿司',
+      'どこでも',
+      'ドコモ',
+      '々',
+      'ゝ',
+      'セブン-11',
+    ]) {
+      expect(readableHost(`${punycodeOf(name)}.jp`), name).toBe(`${name}.jp`);
+    }
+    expect(readableHost(`${punycodeOf('コーヒー・ショップ')}.jp`)).toBe('コーヒー・ショップ.jp');
+  });
+
   it('keeps punycode where the letters could pass for another site’s', () => {
     // Cyrillic "аррӏе" looks like "apple".
     expect(readableHost('xn--80ak6aa92e.com')).toBe('xn--80ak6aa92e.com');
-    // Latin letters with accents, Greek, Arabic, mixed scripts, emoji.
-    for (const name of ['bücher', 'αβγ', 'العربية', 'shopმაღაზია', 'მაღაზია日本', '😀']) {
+    // Latin letters with accents, Greek, Arabic, mixed scripts (also Latin
+    // letters among kana, or Japanese with Georgian or Korean), emoji.
+    for (const name of [
+      'bücher',
+      'αβγ',
+      'العربية',
+      'shopმაღაზია',
+      'მაღაზია日本',
+      'shopコーヒー',
+      'コーヒー한국',
+      '😀',
+    ]) {
       const host = `${punycodeOf(name)}.ge`;
-      expect(readableHost(host)).toBe(host);
+      expect(readableHost(host), name).toBe(host);
     }
     // One part that can't be shown keeps the whole name as it is.
     const host = `${punycodeOf('მაღაზია')}.${punycodeOf('bücher')}.ge`;
