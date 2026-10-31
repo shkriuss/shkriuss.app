@@ -27,7 +27,8 @@ opens a pull request.
 2. In the list of workflows, tap **New app**.
 3. Tap **Run workflow**, fill in the form (fields above), and tap the green
    **Run workflow** button.
-4. Wait about a minute, then tap the finished run. Its summary has an
+4. Wait a few minutes (the run installs everything, builds the new app and
+   runs the unit tests), then tap the finished run. Its summary has an
    **Open a pull request** link: tap it, then tap **Create pull request**.
 5. Wait for the checks (green ticks).
 6. When you're happy, tap **Merge pull request**. About half an hour later
@@ -73,6 +74,12 @@ in alphabetical order, so where an entry sits in `apps.json` doesn't matter.
   data. Apps whose data is too big for a backup file (like Photos) use
   `<DataControls backup={false}>`, with a sentence inside saying what to do
   instead.
+- Data from outside (a backup being restored, a file, another device's
+  copy) is untrusted: `createStore`'s `validate` checks its shape, and
+  `nestedTooDeep()` from `@shkriuss/storage/nesting` refuses JSON nested
+  more than `MAX_NESTING` (64) levels deep before anything walks it.
+  Restoring a backup and sync already check that (audit 3 C-1), so an app
+  needs it only for files it parses itself.
 - For a spreadsheet to download (like Budget's), make the file with
   `csvFile` from `@shkriuss/storage/csv`, which keeps text like "=SUM(…)"
   from running as a formula, starts the file with a byte-order mark (so
@@ -95,7 +102,11 @@ in alphabetical order, so where an entry sits in `apps.json` doesn't matter.
   example for all of this. To start a test with saved data, use
   `seedStores()` from `tests/e2e/storage.ts` with the app's own version
   constant (like `TASKS_VERSION`), and `readStore()` to check what was
-  saved. Test photos come from `tests/e2e/photos.ts`.
+  saved. Test photos come from `tests/e2e/photos.ts`; `paste()` in
+  `tests/e2e/clipboard.ts` pastes text the way a person does (cut by a
+  box's `maxlength`, unlike `fill()`); `tests/e2e/notifications.ts` fakes
+  notifications and runs a small push receiver, for notifications while an
+  app is closed.
 - Fill in the app's lines in the shared browser tests' tables. Every site
   needs one in each, or the test fails for it (audit 3 J-11), and
   `pnpm new-app` adds them as `null` ("New: nothing for this test yet"):
@@ -181,7 +192,9 @@ command in `playwright.config.ts`, from each site's folder, on a port of its
 own, with its `--var` settings (`HUB_ORIGIN` tells an app where the hub is,
 which a local address can't tell; `ACCOUNT_ORIGIN` tells the hub where its
 Account page is, for passkeys; `LIBRARY_STORAGE_CODE` unlocks an online
-library). The easiest way to see them working is a browser test:
+library; `ALLOW_LOCAL_ENDPOINTS:true` lets an app's notifications server
+send to a push address on this computer, like the tests' receiver, which
+it refuses otherwise). The easiest way to see them working is a browser test:
 `E2E_SITES=<slug> pnpm test:e2e apps/<slug>/e2e/sync.spec.ts --headed`.
 
 ### Names that are part of the saved data
@@ -311,6 +324,17 @@ or:
    use it). Browser tests of syncing go in `apps/<slug>/e2e/sync.spec.ts`,
    with the helpers in `tests/e2e/account.ts` (`expectSealed()` checks that
    what goes online is sealed).
+
+**Testing a Worker.** Unit tests run a Worker's real code in memory, with
+the fakes in `@shkriuss/server/testing`: `memoryNamespace()` makes a Durable
+Object namespace whose objects keep their storage in a `Map` (and wakes due
+alarms when a test asks), `memoryState()` makes one object's state, and
+`MemoryStorage` its storage. `memorySync()` from `@shkriuss/sync/testing` is
+a whole sync server built that way (`withFiles` is the sync Worker with
+photos on), and `memoryLibrary()` and `MemoryBucket` (an R2 bucket in a
+`Map`) in `packages/library/src/testing.ts` do the same for an online
+library. The packages' own `*.test.ts` files show each in use;
+`tests/unit/sync-devices.ts` (above) builds on `memorySync()`.
 
 **An online library** like Photos' (big files in R2, [ADR 0016](adr/0016-online-photo-library.md))
 needs more: `"library": true` in `apps.json`; an R2 bucket named

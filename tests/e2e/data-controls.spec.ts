@@ -54,6 +54,120 @@ test('an app that saves data shows “Your data”', async ({ page }, testInfo) 
   await expect(controls.getByRole('button', { name: 'Delete all data' })).toBeVisible();
 });
 
+test('“Delete all data” also forgets what this device kept for itself (audit 5 D-1)', async ({
+  page,
+}) => {
+  // What sync and reminders keep on this device under keys backups leave
+  // out: the sync state after sync was turned off, its file lists, and the
+  // apps' shared last reminder check, which "Delete all data" left behind.
+  await page.evaluate(() => {
+    localStorage.setItem(
+      'shkriuss-device:sync',
+      JSON.stringify({
+        secret: null,
+        code: null,
+        remote: null,
+        known: {},
+        dirty: false,
+        base: null,
+        last: 1_700_000_000_000,
+        serverTime: null,
+        connected: null,
+        previous: [],
+        waiting: {},
+      }),
+    );
+    localStorage.setItem(
+      'shkriuss-device:sync-files',
+      '{"uploads":[],"removals":[],"checked":null}',
+    );
+    localStorage.setItem(
+      'shkriuss-device:reminders-checked',
+      JSON.stringify({ stamp: '2026-10-27T09:41', at: Date.now() }),
+    );
+  });
+  await page.getByRole('button', { name: 'Delete all data' }).click();
+  const reloaded = page.waitForEvent('load', { timeout: 10_000 });
+  await page
+    .getByRole('dialog', { name: 'Delete all data?' })
+    .getByRole('button', { name: 'Delete everything' })
+    .click();
+  await reloaded;
+  const left = await page.evaluate(() => ({
+    sample: localStorage.getItem('shkriuss:e2e-sample'),
+    // The app's own stores may be written again as it starts (Calendar notes
+    // when it checked its reminders); what it kept for this device may not.
+    device: Object.keys(localStorage)
+      .filter((key) => key.startsWith('shkriuss-device:'))
+      .sort(),
+  }));
+  expect(left.sample).toBeNull();
+  // Only a note that the notification server still has this device's
+  // reminders to delete may stay, when it couldn't be reached (not here).
+  expect(left.device.filter((key) => key !== 'shkriuss-device:push-delete')).toEqual([]);
+});
+
+test('the dialogs that delete read out what they will delete (audit 5 G-3)', async ({
+  page,
+}, testInfo) => {
+  // A screen reader says a dialog's name and its description as it opens,
+  // then the focused button: without the description it heard "Delete all
+  // data? dialog, Cancel, button" and had to read on.
+  await page.getByRole('button', { name: 'Delete all data' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Delete all data?' });
+  await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused();
+  await expect(dialog).toHaveAccessibleDescription(
+    /^This removes everything .+ has saved on this device\. It can’t be undone\./,
+  );
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+
+  if (!getSite(testInfo.project.name).sync) return;
+  // "Delete the online copy?" shows only with sync on: its wording is checked
+  // without an account, opened the way the sync script opens it.
+  await page.evaluate(() => {
+    document.querySelector<HTMLDialogElement>('[data-sync-delete-dialog]')?.showModal();
+  });
+  const online = page.getByRole('dialog', { name: 'Delete the online copy?' });
+  await expect(online).toBeVisible();
+  const text = ((await online.locator('form > p').first().textContent()) ?? '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  expect(text).toMatch(/^This deletes /);
+  await expect(online).toHaveAccessibleDescription(text);
+  await page.keyboard.press('Escape');
+  await expect(online).toBeHidden();
+});
+
+test('says when what’s saved is from a newer version of the app, and Restore leaves it alone (audit 5 E-3)', async ({
+  page,
+}, testInfo) => {
+  const slug = testInfo.project.name;
+  // Each app's main store is named after it; Photos keeps its photos in the
+  // files database, and in this storage a count of its changes.
+  const key = `shkriuss:${slug === 'photos' ? 'photos-changes' : slug}`;
+  // Saved by a version far ahead of this one: after a rollback, or in a tab
+  // open from before an update. The app showed nothing, with no word.
+  const newer = JSON.stringify({ v: 1_000_000, data: {} });
+  await page.evaluate(({ key, value }) => localStorage.setItem(key, value), { key, value: newer });
+  await page.reload();
+  const problem = page.locator('[data-problem]').getByRole('alert');
+  await expect(problem).toHaveText(/saved by a newer version of this app/);
+  await checkA11y(page, 'newer data notice');
+
+  if (NO_BACKUPS.includes(slug)) return;
+  // Restoring a backup this version can read would delete the newer data: refused.
+  const copy = {
+    app: slug,
+    exportedAt: new Date().toISOString(),
+    data: { 'shkriuss:e2e-sample': SAMPLE },
+  };
+  await chooseBackup(page, { name: 'copy.json', buffer: Buffer.from(JSON.stringify(copy)) });
+  await restoreDialog(page).getByRole('button', { name: 'Restore' }).click();
+  await expect(restoreDialog(page)).toContainText(/newer version of this app.*Nothing was changed/);
+  expect(await page.evaluate((key) => localStorage.getItem(key), key)).toBe(newer);
+});
+
 test.describe('backing up and restoring', () => {
   test.beforeEach(({ page: _ }, testInfo) => {
     test.skip(

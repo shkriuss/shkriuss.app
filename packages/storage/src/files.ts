@@ -84,6 +84,12 @@ function open(): Promise<IDBDatabase> {
       ready.close();
       opening = null;
     };
+    // The browser closed it itself (the site's data cleared in its settings,
+    // or the device short of space, say): the next operation opens it again,
+    // instead of every one failing until the page is reloaded (audit 5 E-5).
+    ready.onclose = () => {
+      opening = null;
+    };
     return ready;
   })().catch((error: unknown) => {
     opening = null;
