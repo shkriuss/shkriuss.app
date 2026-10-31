@@ -259,6 +259,39 @@ describe('reading the form', () => {
     });
   });
 
+  // Audit 5 F2-3: an iPhone's text boxes count a flag or a family emoji as
+  // one character, so a full box was refused on saving: a setup of 6 family
+  // emoji counted 48, and was "Use 40 characters or fewer."
+  it('counts characters as people see them, as an iPhone’s text boxes do', () => {
+    const family = '👨‍👩‍👧';
+    const flag = '🇬🇪';
+    const read = (fields: Partial<TradeForm>) => readTrade({ ...form, ...fields }, 'a', 0);
+    expect(read({ setup: family.repeat(6) }).trade?.setup).toBe(family.repeat(6));
+    const full = read({
+      symbol: flag.repeat(LIMITS.symbol),
+      setup: flag.repeat(LIMITS.setup),
+      notes: family.repeat(LIMITS.notes),
+    });
+    expect(full.problems).toBeUndefined();
+    expect(full.trade?.symbol).toBe(flag.repeat(LIMITS.symbol));
+    expect(
+      read({
+        symbol: flag.repeat(LIMITS.symbol + 1),
+        setup: flag.repeat(LIMITS.setup + 1),
+        notes: flag.repeat(LIMITS.notes + 1),
+      }).problems,
+    ).toEqual({
+      symbol: `Use ${LIMITS.symbol} characters or fewer.`,
+      setup: `Use ${LIMITS.setup} characters or fewer.`,
+      notes: `Use ${LIMITS.notes} characters or fewer.`,
+    });
+    // One letter under thousands of accents is one character, but not without a limit.
+    const zalgo = `Z${'\u0336'.repeat(2000)}`;
+    expect(read({ setup: zalgo }).problems).toEqual({
+      setup: `Use ${LIMITS.setup} characters or fewer.`,
+    });
+  });
+
   it('checks saved trades', () => {
     expect(isTradesState(state(trade({})))).toBe(true);
     expect(isTradesState(state(trade({ exitDate: null, exitPrice: null })))).toBe(true);
@@ -410,6 +443,125 @@ describe('closing part of a trade', () => {
     // The results count each part once: 398 + 1200, and "x".
     expect(stats(closedTrades(after.trades))).toMatchObject({ count: 3, total: 1698 });
     expect(overClosed(open, partsOf(after.trades))).toBe(0);
+  });
+
+  // Audit 5 F2-1: rounding by multiplying by 100,000,000 was inexact above
+  // about 90 million, so a trade of billions of tokens closed in two parts
+  // kept a crumb (0.00001526) "still open" for good: it stayed under "Open
+  // trades", "Delete a year" kept its parts for ever, and the spreadsheet had
+  // a row for the crumb.
+  it('closes a trade of a hundred million tokens with decimals in parts, as the form shows them', () => {
+    // A number can't hold 8 decimals at that size: "the rest", as the form
+    // showed it, summed to a digit more than was bought, and the trade stayed
+    // open, or warned of a second device, for good (audit 5 F2-1).
+    const coin = trade({
+      id: 'coin',
+      symbol: 'PEPE',
+      entryDate: '2024-01-05',
+      entryPrice: 0.0000012,
+      quantity: 100_015_838.00209475,
+      exitDate: null,
+      exitPrice: null,
+    });
+    const close = (from: TradesState, quantity: string | null, newId: string): TradesState => {
+      const { form, closeQuantity } = toCloseForm(coin, partsOf(from.trades), 'en-US');
+      const read = readClose(
+        { ...form, exitDate: '2024-02-01', exitPrice: '0.0000015' },
+        quantity ?? closeQuantity,
+        from,
+        { id: coin.id, newId },
+        'en-US',
+      );
+      expect(read.problems).toBeUndefined();
+      return closePart(from, read.trade as Trade, read.rest as Trade);
+    };
+    const half = close(state(coin), '0.5', 'c1');
+    const rest = close(half, null, 'c2');
+    expect(openQuantity(coin, partsOf(rest.trades))).toBe(0);
+    expect(overClosed(coin, partsOf(rest.trades))).toBe(0);
+    expect(openTrades(rest)).toEqual([]);
+    expect(closedYears(rest)).toEqual([{ year: '2024', count: 2, kept: 0 }]);
+    // Its setup can still be changed: it holds what its parts closed.
+    const changed = readChange(
+      { ...toForm(coin, 'en-US'), setup: 'Meme' },
+      rest,
+      { id: 'coin', newId: 'n' },
+      'en-US',
+    );
+    expect(changed.trade?.setup).toBe('Meme');
+  });
+
+  it('closes a trade of billions of tokens in parts, leaving nothing open', () => {
+    const lot = trade({
+      id: 'lot',
+      symbol: 'BABYDOGE',
+      entryDate: '2024-01-05',
+      entryPrice: 1.5e-9,
+      quantity: 123_456_789_012,
+      exitDate: null,
+      exitPrice: null,
+    });
+    /** "Close" on the page: `quantity` as typed, or null for all that's shown as still open. */
+    const closeOnPage = (
+      whole: Trade,
+      from: TradesState,
+      quantity: string | null,
+      newId: string,
+      exitDate: string,
+    ): TradesState => {
+      const { form: closing, closeQuantity } = toCloseForm(whole, partsOf(from.trades), 'en-US');
+      const read = readClose(
+        { ...closing, exitDate, exitPrice: '0.000000002' },
+        quantity ?? closeQuantity,
+        from,
+        { id: whole.id, newId },
+        'en-US',
+      );
+      expect(read.problems).toBeUndefined();
+      return closePart(from, read.trade as Trade, read.rest as Trade);
+    };
+    const first = closeOnPage(lot, state(lot), '50000000000', 'p1', '2024-02-01');
+    expect(openQuantity(lot, partsOf(first.trades))).toBe(73_456_789_012);
+    // "Close" again, leaving "Quantity closed" as the form fills it in.
+    const after = closeOnPage(lot, first, null, 'p2', '2024-03-01');
+    expect(openQuantity(lot, partsOf(after.trades))).toBe(0);
+    expect(overClosed(lot, partsOf(after.trades))).toBe(0);
+    expect(openTrades(after)).toEqual([]);
+    // Its parts are the closed trades of 2024: "Delete a year" offers them,
+    // and the trade, closed in parts, goes with them.
+    expect(closedYears(after)).toEqual([{ year: '2024', count: 2, kept: 0 }]);
+    expect(removeClosedYear(after, '2024').trades).toEqual([]);
+    // The spreadsheet: a row for each part, none for anything "still open",
+    // with the price in full, as the page shows it (audit 5 F2-6).
+    const rows = toCsv(after, 'en-US').split('\r\n').slice(1, -1);
+    expect(rows.map((row) => row.split(',').slice(3, 5))).toEqual([
+      ['0.0000000015', '50000000000'],
+      ['0.0000000015', '73456789012'],
+    ]);
+    // Changing the trade (its setup, say) is fine: it holds what its parts closed, exactly.
+    const changed = readChange(
+      { ...toForm(lot, 'en-US'), setup: 'Meme' },
+      after,
+      { id: 'lot', newId: 'n' },
+      'en-US',
+    );
+    expect(changed.trade?.setup).toBe('Meme');
+    expect(changed.parts?.map((part) => part.setup)).toEqual(['Meme', 'Meme']);
+
+    // The most the form takes, closed 1 at a time: no crumb either.
+    const most = trade({ ...lot, id: 'most', quantity: 999_999_999_999 });
+    const one = closeOnPage(most, state(most), '1', 'q1', '2024-02-01');
+    expect(openQuantity(most, partsOf(one.trades))).toBe(999_999_999_998);
+    const rest = closeOnPage(most, one, null, 'q2', '2024-03-01');
+    expect(openQuantity(most, partsOf(rest.trades))).toBe(0);
+    expect(openTrades(rest)).toEqual([]);
+    // Small quantities still add up without decimal crumbs.
+    expect(
+      openQuantity(
+        trade({ ...lot, id: 's', quantity: 0.3 }),
+        new Map([['s', { quantity: 0.1, fees: 0 }]]),
+      ),
+    ).toBe(0.2);
   });
 
   it('says what’s wrong', () => {
@@ -1005,6 +1157,20 @@ describe('number sizes', () => {
       'Enter a smaller number.',
     );
     expect(readTrade({ ...form, quantity: '1000000000000' }, 'a', 0).trade?.quantity).toBe(1e12);
+    // Audit 5 F2-5: one too long to be a number at all (it reads as
+    // infinite) was called "not a number", with the right message at hand.
+    const endless = '9'.repeat(400);
+    expect(
+      readTrade({ ...form, entryPrice: endless, quantity: endless, fees: endless }, 'a', 0)
+        .problems,
+    ).toEqual({
+      entryPrice: 'Enter a smaller number.',
+      quantity: 'Enter a smaller number.',
+      fees: 'Enter a smaller number.',
+    });
+    expect(readTrade({ ...form, entryPrice: `-${endless}` }, 'a', 0).problems).toEqual({
+      entryPrice: 'Enter a number above 0.',
+    });
   });
 
   // Audit F2-12: a trade restored or synced with prices far beyond what the

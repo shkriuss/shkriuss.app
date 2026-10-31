@@ -5,31 +5,31 @@
  * "Add" puts a task in what's being shown (a list, or Important). Ticking a
  * task's box marks it done (a repeating one moves on to its next date);
  * unticking it under "Done" brings it back. A task's steps fold out under
- * it and can be ticked there. Tapping a title opens the task. In "My order",
- * tasks are moved by dragging their handle (or Move up / Move down, or the
- * arrow keys on the handle); the order is the order of the saved tasks.
- * When sync is on, the newest change to each task and list wins.
+ * it and can be ticked there. Tapping a title opens the task. When sync is
+ * on, the newest change to each task and list wins.
  *
- * The steps in the task form are in step-edits.ts; adding, renaming and
- * deleting lists, in list-editor.ts; reminders, in reminders.ts.
+ * The rest has files of its own (audit 5 J-3): what's shown (All, Important
+ * or a list) in views.ts; "My order", where tasks are moved by dragging
+ * their handle, in order.ts; the task form in task-form.ts (its steps in
+ * step-edits.ts); adding, renaming and deleting lists in list-editor.ts;
+ * reminders in reminders.ts. The form and the list editor load after the
+ * page itself (later.ts), so opening the page loads less (audit 5 J-2).
  */
 import { today as todayOf } from '@shkriuss/dates';
 import { createStore } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
-import { hasEdits } from '@shkriuss/sync/edits';
-import { focusSpot, keepFocus, returnFocus, type FocusSpot } from '@shkriuss/ui/keep-focus';
+import { keepFocus } from '@shkriuss/ui/keep-focus';
 import { onNewDay } from '@shkriuss/ui/new-day';
 import { PAGE_SIZE, shownCount, waitForTyping } from '@shkriuss/ui/long-lists';
 import { clearProblem, focusProblem, reportSave, showProblem } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
+import { watchTextLimit } from '@shkriuss/ui/text-limit';
 import { site } from 'virtual:shkriuss/site';
 import {
   emptyLists,
   isListsState,
   listName,
   LISTS_VERSION,
-  sortedLists,
-  type List,
   type ListsState,
 } from '../lib/lists.ts';
 import {
@@ -37,51 +37,41 @@ import {
   completeTask,
   defaultViewSettings,
   doneTasks,
-  draftOf,
-  draftProblems,
   dueText,
-  editedTask,
   emptyTasks,
   formatDay,
-  inView,
   isTasksState,
   isViewSettings,
   matchesSearch,
   MAX_TASKS,
   migrateTasks,
-  moveTask,
   newTask,
   NO_LIST,
   openGroups,
-  openPerList,
   orderedTasks,
-  removeTask,
   removeTasks,
   reopenTask,
   searchWords,
   repeatText,
-  everyUnit,
-  parseEvery,
   stepsText,
   tasksCount,
   TASKS_VERSION,
   tickStep,
-  updateTask,
   VIEW_SETTINGS_VERSION,
   WHEN_LABELS,
   whenOf,
-  type DraftField,
   type Task,
-  type TaskDraft,
   type TasksState,
-  type View,
   type ViewSettings,
   type When,
 } from '../lib/tasks.ts';
-import { mountListEditor } from './list-editor.ts';
+import { later, whenIdle } from './later.ts';
+import type { ListEditor } from './list-editor.ts';
+import { mountOrder } from './order.ts';
 import { mountReminders } from './reminders.ts';
-import { mountStepEdits } from './step-edits.ts';
-import { required, showFieldProblems } from '@shkriuss/ui/dom';
+import type { TaskForm } from './task-form.ts';
+import { mountViews } from './views.ts';
+import { required } from '@shkriuss/ui/dom';
 
 const tasksStore = createStore<TasksState>({
   key: 'tasks',
@@ -106,29 +96,16 @@ const viewStore = createStore<ViewSettings>({
   validate: isViewSettings,
 });
 
-/** Form fields with a place for a problem, in the order they appear. */
-const FIELD_ORDER: DraftField[] = ['title', 'date', 'time', 'every'];
-/** A handle has to move this far (px) before it counts as dragging, not a tap. */
-const DRAG_START_PX = 6;
-/** While dragging this close (px) to the top or bottom of the screen, it scrolls. */
-const SCROLL_EDGE_PX = 64;
-const SCROLL_STEP_PX = 16;
 /** Search results are read out this long after the last key press. */
 const ANNOUNCE_DELAY_MS = 700;
-/** Said in the form when its task was deleted on another device or in another tab. */
-const GONE =
-  'This task was deleted on another device or in another tab. Saving a change brings it back.';
-
-const keyOf = (view: View): string => (typeof view === 'string' ? view : `list:${view.list}`);
-const viewOf = (key: string): View =>
-  key === 'all' || key === 'important' ? key : { list: key.slice('list:'.length) };
 
 export function mountTasks(root: Document): void {
   const addForm = required<HTMLFormElement>(root, '[data-add-form]');
   const addInput = required<HTMLInputElement>(addForm, '[name="title"]');
   const addError = required<HTMLElement>(addForm, '[data-add-error]');
-  const viewHeading = required<HTMLElement>(root, '[data-view-heading]');
-  const viewList = required<HTMLUListElement>(root, '[data-views]');
+  // A paste longer than the box takes is cut by the browser: say so (audit 5 F1-4).
+  const addLimit = watchTextLimit(addInput);
+  const addListButton = required<HTMLButtonElement>(root, '[data-action="add-list"]');
   const editListButton = required<HTMLButtonElement>(root, '[data-action="edit-list"]');
   const empty = required<HTMLElement>(root, '[data-empty]');
   const groupsBox = required<HTMLElement>(root, '[data-groups]');
@@ -139,29 +116,17 @@ export function mountTasks(root: Document): void {
   const doneMore = required<HTMLElement>(root, '[data-done-more]');
   const groupTemplate = required<HTMLTemplateElement>(root, '[data-group-template]');
   const taskTemplate = required<HTMLTemplateElement>(root, '[data-task-template]');
-  const viewTemplate = required<HTMLTemplateElement>(root, '[data-view-template]');
   const stepTemplate = required<HTMLTemplateElement>(root, '[data-step-template]');
   const announcer = required<HTMLElement>(root, '[data-announcer]');
   const searchInput = required<HTMLInputElement>(root, '[data-search]');
   const orderSelect = required<HTMLSelectElement>(root, '[data-order]');
   const moveHint = required<HTMLElement>(root, '[data-move-hint]');
   const orderedTemplate = required<HTMLTemplateElement>(root, '[data-ordered-template]');
-
-  const editor = required<HTMLDialogElement>(root, '[data-task-dialog]');
-  const form = required<HTMLFormElement>(editor, '[data-task-form]');
-  const listField = required<HTMLElement>(form, '[data-list-field]');
-  const everyField = required<HTMLElement>(form, '[data-every-field]');
-  const everyUnitText = required<HTMLElement>(form, '[data-every-unit]');
-  const goneNote = required<HTMLElement>(form, '[data-gone-note]');
-  const deleteDialog = required<HTMLDialogElement>(root, '[data-delete-dialog]');
-  const deleteName = required<HTMLElement>(deleteDialog, '[data-delete-name]');
-
   const clearDialog = required<HTMLDialogElement>(root, '[data-clear-dialog]');
   const clearText = required<HTMLElement>(clearDialog, '[data-clear-text]');
 
   let tasks = tasksStore.load();
   let lists = listsStore.load();
-  let view: View = 'all';
   let settings = viewStore.load();
   /** What's typed in Search ("" for everything). */
   let search = '';
@@ -172,24 +137,6 @@ export function mountTasks(root: Document): void {
   let reveal: string | null = null;
   let announceTimer: number | undefined;
   let day = todayOf();
-  /** The task showing Move up / Move down, and the one being dragged. */
-  let movingId: string | null = null;
-  let drag: {
-    id: string;
-    row: HTMLElement;
-    list: HTMLElement;
-    pointerId: number;
-    startY: number;
-    moved: boolean;
-  } | null = null;
-  /** A drag ends with a click on the handle; that click isn't a tap. */
-  let suppressClick = false;
-  /** The task open in the form, where focus goes back to, and the task just saved. */
-  let editingId: string | null = null;
-  /** The form as it opened, to tell what the person changed (see editedTask). */
-  let openedDraft: TaskDraft | null = null;
-  let opener: FocusSpot | null = null;
-  let savedId: string | null = null;
   /** Tasks whose steps are folded out in the list. */
   const openSteps = new Set<string>();
 
@@ -211,17 +158,25 @@ export function mountTasks(root: Document): void {
     return saved;
   };
   const find = (id: string | null): Task | undefined => tasks.tasks.find((task) => task.id === id);
-  const viewName = (shown: View): string =>
-    shown === 'all'
-      ? 'All tasks'
-      : shown === 'important'
-        ? 'Important'
-        : listName(lists, shown.list);
-  const openCount = (shown: View): number =>
-    tasks.tasks.filter((task) => task.done === null && inView(task, shown)).length;
   /** A task's checkbox or title on the page, wherever it is. */
   const control = (id: string, selector: string): HTMLElement | null =>
     root.querySelector<HTMLElement>(`[data-id="${CSS.escape(id)}"] ${selector}`);
+  /** Shows a task at the next draw, however far down it is. */
+  const keepShown = (id: string): void => {
+    reveal = id;
+  };
+
+  // What's shown: all tasks, the important ones, or a list (views.ts).
+  const views = mountViews(root, {
+    tasks: () => tasks,
+    lists: () => lists,
+    chosen() {
+      firstPages();
+      render();
+    },
+    announce,
+  });
+  const viewHeading = views.heading;
 
   function saveTasks(next: TasksState): boolean {
     tasks = next;
@@ -271,7 +226,7 @@ export function mountTasks(root: Document): void {
     const reminder = !done && task.date !== null && task.reminder !== null;
     required<HTMLElement>(row, '[data-reminder-tag]').hidden = !reminder;
     // In a list, its name would only repeat the heading.
-    const list = typeof view === 'string' ? listName(lists, task.list) : '';
+    const list = typeof views.view() === 'string' ? listName(lists, task.list) : '';
     required<HTMLElement>(row, '[data-list-tag]').hidden = list === '';
     required<HTMLElement>(row, '[data-list-name]').textContent = list;
     required<HTMLElement>(row, '[data-meta]').hidden =
@@ -280,10 +235,11 @@ export function mountTasks(root: Document): void {
 
     // In "My order": the handle, and Move up / Move down once it's tapped.
     required<HTMLElement>(row, '[data-order-controls]').hidden = done || settings.order !== 'mine';
+    const moving = order.moving() === task.id;
     const handle = required<HTMLElement>(row, '[data-handle]');
     handle.setAttribute('aria-label', `Move ${task.title}`);
-    handle.setAttribute('aria-expanded', String(movingId === task.id));
-    required<HTMLElement>(row, '[data-move-buttons]').hidden = movingId !== task.id;
+    handle.setAttribute('aria-expanded', String(moving));
+    required<HTMLElement>(row, '[data-move-buttons]').hidden = !moving;
     required<HTMLElement>(row, '[data-action="move-up"]').setAttribute(
       'aria-label',
       `Move ${task.title} up`,
@@ -322,52 +278,17 @@ export function mountTasks(root: Document): void {
     return group;
   }
 
-  function renderViews(): void {
-    const perList = openPerList(tasks);
-    const choices: { view: View; name: string; count: number }[] = [
-      { view: 'all', name: 'All', count: openCount('all') },
-      { view: 'important', name: 'Important', count: openCount('important') },
-      ...sortedLists(lists).map((list: List) => ({
-        view: { list: list.id },
-        name: list.name,
-        count: perList.get(list.id) ?? 0,
-      })),
-    ];
-    // Keep focus on the same choice when the buttons are made again.
-    const focused = (root.activeElement as HTMLElement | null)?.closest<HTMLElement>('[data-view]')
-      ?.dataset['view'];
-    viewList.replaceChildren(
-      ...choices.map((choice) => {
-        const fragment = viewTemplate.content.cloneNode(true) as DocumentFragment;
-        const entry = required<HTMLLIElement>(fragment, 'li');
-        const button = required<HTMLButtonElement>(entry, '[data-view]');
-        button.dataset['view'] = keyOf(choice.view);
-        button.setAttribute('aria-pressed', String(keyOf(choice.view) === keyOf(view)));
-        required<HTMLElement>(entry, '[data-view-name]').textContent = choice.name;
-        required<HTMLElement>(entry, '[data-view-count]').textContent = String(choice.count);
-        return entry;
-      }),
-    );
-    if (focused) {
-      viewList.querySelector<HTMLElement>(`[data-view="${CSS.escape(focused)}"]`)?.focus();
-    }
-  }
-
   function render(): void {
-    // A list deleted (here or on another device) can't stay shown.
-    if (typeof view !== 'string' && listName(lists, view.list) === '') view = 'all';
-    renderViews();
-    viewHeading.textContent = viewName(view);
-    editListButton.hidden = typeof view === 'string';
-
+    views.render();
+    const view = views.view();
     // Changes from elsewhere end a drag.
-    drag = null;
+    order.drawn();
     const mine = settings.order === 'mine';
     orderSelect.value = settings.order;
     moveHint.hidden = !mine;
     // Never hidden by paging: the task with focus, or one just changed.
     const focused = (root.activeElement as HTMLElement | null)?.closest<HTMLElement>('[data-id]');
-    const keep = [reveal, focused?.dataset['id'], movingId];
+    const keep = [reveal, focused?.dataset['id'], order.moving()];
     reveal = null;
     let open: number;
     let openTotal: number;
@@ -465,6 +386,7 @@ export function mountTasks(root: Document): void {
       return;
     }
     addInput.removeAttribute('aria-invalid');
+    const view = views.view();
     const task = newTask(title, crypto.randomUUID(), Date.now(), {
       list: typeof view === 'string' ? NO_LIST : view.list,
       important: view === 'important',
@@ -480,6 +402,7 @@ export function mountTasks(root: Document): void {
       announce(`Added ${task.title}. Tap it to give it a date or a reminder.`);
     }
     addInput.value = '';
+    addLimit.clear();
     addInput.focus();
   });
 
@@ -489,7 +412,20 @@ export function mountTasks(root: Document): void {
     addInput.removeAttribute('aria-invalid');
   });
 
+  /**
+   * Today, read afresh at a tap. The page looks for a new day once a minute,
+   * so for up to a minute after midnight "today" was still yesterday, and a
+   * repeating task ticked off then got today as its next date (audit 5 F1-7).
+   */
+  function todayNow(): void {
+    const now = todayOf();
+    if (now === day) return;
+    day = now;
+    render();
+  }
+
   function markDone(task: Task): void {
+    todayNow();
     // Where focus goes once it leaves the list: the next task, or the one before.
     const rows = [...groupsBox.querySelectorAll<HTMLElement>('[data-id]')];
     const index = rows.findIndex((row) => row.dataset['id'] === task.id);
@@ -555,146 +491,35 @@ export function mountTasks(root: Document): void {
         .closest('[data-action="edit"]')
         ?.closest<HTMLElement>('[data-id]')?.dataset['id'];
       const task = find(id ?? null);
-      if (task) openEditor(task);
+      // The form may load first (the first tap after the page opened): by
+      // then the task may have changed, or gone, on another device or tab.
+      if (task) {
+        taskForm.use((form) => {
+          form.open(find(task.id) ?? task);
+          form.refresh();
+        });
+      }
     });
   }
 
-  // ---------- My order: dragging, Move up / Move down, arrow keys ----------
+  // ---------- My order: order.ts ----------
 
-  /** Moves a task, then puts focus back on the same control and says where it is. */
-  function commitMove(
-    task: Task,
-    target: { before: string } | { after: string },
-    focus: string,
-  ): void {
-    const next = moveTask(tasks, task.id, target);
-    reveal = task.id;
-    if (next !== tasks && !saveTasks(next)) {
-      control(task.id, focus)?.focus();
-      return;
-    }
-    control(task.id, focus)?.focus();
-    const ordered = orderedTasks(tasks, view, search);
-    const position = ordered.findIndex((entry) => entry.id === task.id) + 1;
-    announce(`${task.title}: ${position} of ${ordered.length}.`);
-  }
-
-  /** One place up (-1) or down (1) among the tasks shown. */
-  function moveBy(task: Task, step: -1 | 1, focus: string): void {
-    const ordered = orderedTasks(tasks, view, search);
-    const neighbour = ordered[ordered.findIndex((entry) => entry.id === task.id) + step];
-    if (!neighbour) {
-      announce(step < 0 ? `${task.title} is first already.` : `${task.title} is last already.`);
-      return;
-    }
-    commitMove(task, step < 0 ? { before: neighbour.id } : { after: neighbour.id }, focus);
-  }
-
-  const taskOf = (element: Element): Task | undefined =>
-    find(element.closest<HTMLElement>('[data-id]')?.dataset['id'] ?? null);
-
-  groupsBox.addEventListener('pointerdown', (event) => {
-    suppressClick = false;
-    const handle = (event.target as Element).closest<HTMLElement>('[data-handle]');
-    const row = handle?.closest<HTMLElement>('[data-id]');
-    if (!handle || !row?.parentElement || event.button !== 0) return;
-    drag = {
-      id: row.dataset['id'] ?? '',
-      row,
-      list: row.parentElement,
-      pointerId: event.pointerId,
-      startY: event.clientY,
-      moved: false,
-    };
-    handle.setPointerCapture(event.pointerId);
-  });
-
-  groupsBox.addEventListener('pointermove', (event) => {
-    if (!drag || event.pointerId !== drag.pointerId) return;
-    if (!drag.moved) {
-      if (Math.abs(event.clientY - drag.startY) < DRAG_START_PX) return;
-      drag.moved = true;
-      drag.row.classList.add('task--dragging');
-      drag.list.classList.add('tasks--dragging');
-    }
-    event.preventDefault();
-    // Past the middle of the task under the pointer: that task moves the
-    // other way, so the dragged one (and its handle) stays where it is.
-    for (const other of drag.list.children) {
-      if (other === drag.row || !(other instanceof HTMLElement)) continue;
-      const box = other.getBoundingClientRect();
-      if (event.clientY < box.top || event.clientY > box.bottom) continue;
-      const middle = box.top + box.height / 2;
-      const above =
-        (other.compareDocumentPosition(drag.row) & Node.DOCUMENT_POSITION_FOLLOWING) > 0;
-      if (above && event.clientY < middle) drag.list.insertBefore(other, drag.row.nextSibling);
-      else if (!above && event.clientY > middle) drag.list.insertBefore(other, drag.row);
-      break;
-    }
-    // Near the top or bottom of the screen: scroll, to reach tasks out of view.
-    // (Straight away, not smoothly, to keep up with the finger.)
-    if (event.clientY < SCROLL_EDGE_PX) {
-      window.scrollBy({ top: -SCROLL_STEP_PX, behavior: 'instant' });
-    } else if (event.clientY > window.innerHeight - SCROLL_EDGE_PX) {
-      window.scrollBy({ top: SCROLL_STEP_PX, behavior: 'instant' });
-    }
-  });
-
-  function endDrag(event: PointerEvent, cancelled: boolean): void {
-    if (!drag || event.pointerId !== drag.pointerId) return;
-    const { id, row, list, moved } = drag;
-    drag = null;
-    row.classList.remove('task--dragging');
-    list.classList.remove('tasks--dragging');
-    // Not moved: a tap, and the click that follows shows Move up / Move down.
-    if (!moved) return;
-    suppressClick = true;
-    const task = find(id);
-    if (cancelled || !task) {
-      render();
-      return;
-    }
-    const next = (row.nextElementSibling as HTMLElement | null)?.dataset['id'];
-    const previous = (row.previousElementSibling as HTMLElement | null)?.dataset['id'];
-    if (next) commitMove(task, { before: next }, '[data-handle]');
-    else if (previous) commitMove(task, { after: previous }, '[data-handle]');
-  }
-
-  groupsBox.addEventListener('pointerup', (event) => endDrag(event, false));
-  groupsBox.addEventListener('pointercancel', (event) => endDrag(event, true));
-
-  groupsBox.addEventListener('click', (event) => {
-    const clicked = (event.target as Element).closest<HTMLElement>(
-      '[data-handle], [data-action="move-up"], [data-action="move-down"]',
-    );
-    const task = clicked ? taskOf(clicked) : undefined;
-    if (!clicked || !task) return;
-    if (clicked.matches('[data-handle]')) {
-      if (suppressClick) {
-        suppressClick = false;
-        return;
-      }
-      movingId = movingId === task.id ? null : task.id;
-      render();
-      control(task.id, movingId ? '[data-action="move-up"]' : '[data-handle]')?.focus();
-      return;
-    }
-    const up = clicked.matches('[data-action="move-up"]');
-    moveBy(task, up ? -1 : 1, up ? '[data-action="move-up"]' : '[data-action="move-down"]');
-  });
-
-  groupsBox.addEventListener('keydown', (event) => {
-    const handle = (event.target as Element).closest<HTMLElement>('[data-handle]');
-    const task = handle ? taskOf(handle) : undefined;
-    if (!task || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) return;
-    event.preventDefault();
-    moveBy(task, event.key === 'ArrowUp' ? -1 : 1, '[data-handle]');
+  const order = mountOrder(groupsBox, {
+    tasks: () => tasks,
+    view: views.view,
+    search: () => search,
+    find,
+    saveTasks,
+    render,
+    keepShown,
+    control,
+    announce,
   });
 
   orderSelect.addEventListener('change', () => {
     settings = { order: orderSelect.value === 'mine' ? 'mine' : 'date' };
     report(viewStore.save(settings));
-    movingId = null;
+    order.reset();
     render();
     announce(
       settings.order === 'mine'
@@ -703,11 +528,12 @@ export function mountTasks(root: Document): void {
     );
   });
 
-  // ---------- What's shown ----------
+  // ---------- Searching, and deleting done tasks ----------
 
   /** How many tasks the search found, for screen readers. */
   function announceFound(): void {
     if (search.trim() === '') return;
+    const view = views.view();
     const found = orderedTasks(tasks, view, search).length + doneTasks(tasks, view, search).length;
     announce(`${tasksCount(found)} found.`);
   }
@@ -722,7 +548,7 @@ export function mountTasks(root: Document): void {
   const typedSearch = waitForTyping(() => {
     if (search === searchInput.value) return;
     search = searchInput.value;
-    movingId = null;
+    order.reset();
     firstPages();
     render();
     window.clearTimeout(announceTimer);
@@ -742,18 +568,9 @@ export function mountTasks(root: Document): void {
     announce('Search cleared.');
   });
 
-  viewList.addEventListener('click', (event) => {
-    const key = (event.target as Element).closest<HTMLElement>('[data-view]')?.dataset['view'];
-    if (key === undefined) return;
-    view = viewOf(key);
-    firstPages();
-    render();
-    announce(`${viewName(view)}: ${tasksCount(openCount(view))} to do.`);
-  });
-
   required<HTMLButtonElement>(root, '[data-action="clear-done"]').addEventListener('click', () => {
     typedSearch.flush();
-    const count = doneTasks(tasks, view, search).length;
+    const count = doneTasks(tasks, views.view(), search).length;
     clearText.textContent =
       count === 1
         ? 'The done task shown here will be removed. This can’t be undone.'
@@ -764,200 +581,50 @@ export function mountTasks(root: Document): void {
 
   clearDialog.addEventListener('close', () => {
     if (clearDialog.returnValue !== 'confirm') return;
-    const done = doneTasks(tasks, view, search);
+    const done = doneTasks(tasks, views.view(), search);
     if (saveTasks(removeTasks(tasks, new Set(done.map((task) => task.id))))) {
       announce(`Deleted ${done.length} done ${done.length === 1 ? 'task' : 'tasks'}.`);
     }
     viewHeading.focus();
   });
 
-  // ---------- The task form ----------
+  // ---------- The task form and the lists: task-form.ts and list-editor.ts ----------
 
-  const field = <T extends HTMLElement>(name: string): T => required<T>(form, `[name="${name}"]`);
-  const textFields = ['title', 'date', 'time'] as const;
+  const taskForm = later<TaskForm>(() =>
+    import('./task-form.ts').then(({ mountTaskForm }) =>
+      mountTaskForm(root, {
+        tasks: () => tasks,
+        lists: () => lists,
+        view: views.view,
+        viewName: () => views.name(),
+        saveTasks,
+        keepShown,
+        control,
+        announce,
+        offerNotifications: () => reminders.offerNotifications(),
+        viewHeading,
+      }),
+    ),
+  );
 
-  function readDraft(): TaskDraft {
-    const value = (name: string): string =>
-      field<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(name).value;
-    return {
-      title: value('title'),
-      notes: value('notes'),
-      steps: stepEdits.steps(),
-      list: value('list'),
-      important: field<HTMLInputElement>('important').checked,
-      date: value('date'),
-      time: value('time'),
-      repeat: value('repeat'),
-      every: value('every'),
-      reminder: value('reminder'),
-    };
-  }
+  const listEditor = later<ListEditor>(() =>
+    import('./list-editor.ts').then(({ mountListEditor }) =>
+      mountListEditor(root, {
+        lists: () => lists,
+        tasks: () => tasks,
+        view: views.view,
+        setView: views.set,
+        saveLists,
+        saveTasks,
+        announce,
+        say,
+        viewHeading,
+      }),
+    ),
+  );
 
-  function fillForm(draft: TaskDraft): void {
-    for (const name of textFields) field<HTMLInputElement>(name).value = draft[name];
-    field<HTMLTextAreaElement>('notes').value = draft.notes;
-    stepEdits.fill(draft.steps);
-    field<HTMLSelectElement>('repeat').value = draft.repeat;
-    field<HTMLInputElement>('every').value = draft.every;
-    showEvery();
-    field<HTMLSelectElement>('reminder').value = draft.reminder;
-    field<HTMLInputElement>('important').checked = draft.important;
-    const list = field<HTMLSelectElement>('list');
-    list.replaceChildren(
-      new Option('No list', NO_LIST),
-      ...sortedLists(lists).map((entry) => new Option(entry.name, entry.id)),
-    );
-    list.value = draft.list;
-    // In a list that's gone (deleted on another device): none.
-    if (list.value !== draft.list) list.value = NO_LIST;
-    listField.hidden = lists.lists.length === 0;
-  }
-
-  /** "Repeat every … weeks": only for repeats that count days, weeks, months or years. */
-  function showEvery(): void {
-    const repeat = field<HTMLSelectElement>('repeat').value;
-    const unit = everyUnit(repeat, parseEvery(field<HTMLInputElement>('every').value) ?? 2);
-    everyField.hidden = unit === '';
-    everyUnitText.textContent = unit;
-  }
-
-  field<HTMLSelectElement>('repeat').addEventListener('change', showEvery);
-  field<HTMLInputElement>('every').addEventListener('input', showEvery);
-
-  const stepEdits = mountStepEdits(root, form, announce);
-
-  /** Shows each problem next to its field; focuses the first. Returns true if there are any. */
-  const showProblems = (problems: Partial<Record<DraftField, string>>, onlyClear = false) =>
-    showFieldProblems(form, [...FIELD_ORDER, 'form'], problems, {
-      onlyClear,
-      focusFirst: !onlyClear,
-    });
-
-  function openEditor(task: Task): void {
-    editingId = task.id;
-    opener = focusSpot();
-    showProblems({});
-    fillForm(draftOf(task));
-    openedDraft = readDraft();
-    goneNote.hidden = true;
-    editor.showModal();
-    field<HTMLInputElement>('title').focus();
-  }
-
-  // However the form closes (Save, Cancel, Escape), put focus somewhere useful:
-  // on the task just saved, or where the form was opened from (its new copy,
-  // if the list was drawn again meanwhile: audit 3 G-3).
-  editor.addEventListener('close', () => {
-    const saved = savedId ? control(savedId, '[data-action="edit"]') : null;
-    if (saved) saved.focus();
-    else if (opener) {
-      // Focus left in the closed form goes nowhere.
-      const active = root.activeElement;
-      if (active instanceof HTMLElement && editor.contains(active)) active.blur();
-      returnFocus(opener, viewHeading);
-    } else viewHeading.focus();
-    savedId = null;
-    opener = null;
-  });
-
-  // Clear a field's problem as soon as it's fixed.
-  form.addEventListener('input', () => {
-    if (form.querySelector('[aria-invalid="true"]')) showProblems(draftProblems(readDraft()), true);
-  });
-
-  /** The form closes after its task was deleted, here or elsewhere. */
-  function closeDeleted(message: string): void {
-    editingId = null;
-    opener = focusSpot(viewHeading);
-    announce(message);
-    editor.close();
-  }
-
-  /**
-   * Says in the form when its task was deleted on another device or in
-   * another tab. It stays open, as a change wins over a deletion, but Delete
-   * and Save did nothing, or put the task back without a word (audit 4
-   * F1-3). Read out in the dialog (audit 4 G-2).
-   */
-  function showGone(): void {
-    const deleted = editor.open && editingId !== null && !find(editingId);
-    if (goneNote.hidden === !deleted) return;
-    goneNote.hidden = !deleted;
-    goneNote.textContent = deleted ? GONE : '';
-    if (deleted) announce(GONE);
-  }
-
-  form.addEventListener('submit', (event) => {
-    event.preventDefault();
-    if (editingId === null) return;
-    const draft = readDraft();
-    // Deleted elsewhere, and nothing changed here: it stays deleted.
-    if (!find(editingId) && openedDraft && !hasEdits(openedDraft, draft)) {
-      closeDeleted(`${openedDraft.title} stays deleted: nothing in it was changed.`);
-      return;
-    }
-    const problems = draftProblems(draft);
-    if (showProblems(problems)) return;
-    // A sync while the form was open may have changed the task on another
-    // device: keep that, and put on only what was changed here.
-    const task = editedTask(openedDraft ?? draft, draft, editingId, Date.now(), find(editingId));
-    reveal = task.id;
-    if (saveTasks(updateTask(tasks, task))) {
-      announce(
-        inView(task, view)
-          ? `Saved ${task.title}.`
-          : `Saved ${task.title}. It isn’t in ${viewName(view)} any more.`,
-      );
-    }
-    if (task.reminder !== null) reminders.offerNotifications();
-    savedId = task.id;
-    editor.close();
-  });
-
-  required<HTMLButtonElement>(editor, '[data-action="cancel"]').addEventListener('click', () => {
-    editor.close();
-  });
-
-  required<HTMLButtonElement>(editor, '[data-action="delete"]').addEventListener('click', () => {
-    const task = find(editingId);
-    if (!task) {
-      if (openedDraft) closeDeleted(`${openedDraft.title} was already deleted.`);
-      return;
-    }
-    deleteName.textContent = task.title;
-    deleteDialog.returnValue = '';
-    // Opens on top of the form; "Cancel" goes back to it.
-    deleteDialog.showModal();
-  });
-
-  deleteDialog.addEventListener('close', () => {
-    if (deleteDialog.returnValue !== 'confirm') return;
-    const task = find(editingId);
-    if (!task) {
-      if (openedDraft) closeDeleted(`${openedDraft.title} was already deleted.`);
-      return;
-    }
-    editingId = null;
-    opener = focusSpot(viewHeading);
-    if (saveTasks(removeTask(tasks, task.id))) announce(`Deleted ${task.title}.`);
-    editor.close();
-  });
-
-  // ---------- Lists ----------
-
-  mountListEditor(root, {
-    lists: () => lists,
-    tasks: () => tasks,
-    view: () => view,
-    setView(next) {
-      view = next;
-    },
-    saveLists,
-    saveTasks,
-    announce,
-    say,
-    viewHeading,
-  });
+  addListButton.addEventListener('click', () => listEditor.use((editor) => editor.add()));
+  editListButton.addEventListener('click', () => listEditor.use((editor) => editor.edit()));
 
   // ---------- Elsewhere ----------
 
@@ -967,7 +634,7 @@ export function mountTasks(root: Document): void {
     lists = listsStore.load();
     reminders.changed();
     keepFocus(render, viewHeading);
-    showGone();
+    taskForm.now?.refresh();
   }
 
   // If Tasks is open in two tabs, keep them the same.
@@ -1006,4 +673,11 @@ export function mountTasks(root: Document): void {
   mountSyncControls(required<HTMLElement>(root, '[data-sync-controls]'), sync);
 
   render();
+  // The parts that load later load now, while nothing else goes on, so a
+  // tap finds them here and opens the form at once, within the tap: an
+  // iPhone raises its keyboard only for a field focused then (audit 4 J-6).
+  whenIdle(() => {
+    taskForm.load();
+    listEditor.load();
+  });
 }

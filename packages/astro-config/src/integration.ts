@@ -6,6 +6,7 @@
  *
  * - _headers: the shared security headers;
  * - .well-known/security.txt: where to report a security problem;
+ * - robots.txt: what crawlers may read (everything but /api/);
  * - manifest.webmanifest, favicon.svg and PNG icons, for installing the app;
  * - sw.js: the offline service worker (it lists every other file, except
  *   on-demand ones, so it is written last).
@@ -18,6 +19,7 @@ import type { AstroIntegration } from 'astro';
 import { hubOrigin, type SiteInfo } from '@shkriuss/registry';
 import { appIconSvg, ICON_VARIANTS, renderPng, type IconVariant } from './app-icons.ts';
 import { contentSecurityPolicy, headersFile, type HeaderOptions } from './headers.ts';
+import { ROBOTS_TXT, robotsTxt } from './robots-txt.ts';
 import { SECURITY_TXT, securityTxt } from './security-txt.ts';
 import { webManifest } from './manifest.ts';
 import { ON_DEMAND_DIR, precacheUrls, serviceWorkerSource } from './service-worker.ts';
@@ -95,18 +97,23 @@ export function shkriussIntegration(options: IntegrationOptions): AstroIntegrati
         await write('_headers', headersFile(options));
         await mkdir(join(distDir, dirname(SECURITY_TXT)), { recursive: true });
         await write(SECURITY_TXT, securityTxt(site.origin));
+        await write(ROBOTS_TXT, robotsTxt());
         await write('manifest.webmanifest', `${JSON.stringify(webManifest(site), null, 2)}\n`);
         await write('favicon.svg', appIconSvg(site, ICON_VARIANTS.favicon));
         for (const [file, { size, variant }] of Object.entries(PNG_ICONS)) {
           await write(file, await renderPng(appIconSvg(site, variant), size));
         }
-        logger.info('Wrote _headers, security.txt, manifest.webmanifest and icons.');
+        logger.info('Wrote _headers, security.txt, robots.txt, manifest.webmanifest and icons.');
 
         if (options.pwa) {
           const files = (await listFiles(distDir)).filter(
-            // security.txt isn't needed offline, and its date would change the version.
+            // security.txt and robots.txt aren't needed offline, and the
+            // date in security.txt would change the version.
             (file) =>
-              file !== '_headers' && file !== SECURITY_TXT && !file.startsWith(ON_DEMAND_DIR),
+              file !== '_headers' &&
+              file !== SECURITY_TXT &&
+              file !== ROBOTS_TXT &&
+              !file.startsWith(ON_DEMAND_DIR),
           );
           const urls = precacheUrls(files);
           const csp = contentSecurityPolicy(options);

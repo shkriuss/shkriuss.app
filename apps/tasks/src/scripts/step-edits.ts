@@ -4,6 +4,7 @@
  */
 import { required } from '@shkriuss/ui/dom';
 import { focusProblem } from '@shkriuss/ui/problem';
+import { watchTextLimit } from '@shkriuss/ui/text-limit';
 import { MAX_STEPS, type Step } from '../lib/tasks.ts';
 
 export interface StepEdits {
@@ -22,6 +23,8 @@ export function mountStepEdits(
   const stepEditList = required<HTMLUListElement>(form, '[data-step-edit-list]');
   const newStep = required<HTMLInputElement>(form, '[data-new-step]');
   const stepError = required<HTMLElement>(form, '[data-step-error]');
+  // A paste longer than a box takes is cut by the browser: say so (audit 5 F1-4).
+  const newStepLimit = watchTextLimit(newStep);
 
   let draftSteps: Step[] = [];
 
@@ -35,8 +38,11 @@ export function mountStepEdits(
         required<HTMLInputElement>(item, '[data-step-done]').checked = step.done;
         required<HTMLElement>(item, '[data-step-done-label]').textContent = `Step ${number} done`;
         const title = required<HTMLInputElement>(item, '[data-step-title]');
+        // An id of its own: what doesn't fit its box is said under it (text-limit).
+        title.id = `step-${step.id}`;
         title.value = step.title;
         title.setAttribute('aria-label', `Step ${number}`);
+        watchTextLimit(title);
         required<HTMLElement>(item, '[data-action="remove-step"]').setAttribute(
           'aria-label',
           `Remove step ${number}`,
@@ -66,6 +72,7 @@ export function mountStepEdits(
     draftSteps.push({ id: crypto.randomUUID(), title, done: false });
     renderStepEdits();
     newStep.value = '';
+    newStepLimit.clear();
     newStep.focus();
     announce(`Added step ${title}.`);
   }
@@ -120,6 +127,7 @@ export function mountStepEdits(
     fill(steps) {
       draftSteps = steps.map((step) => ({ ...step }));
       newStep.value = '';
+      newStepLimit.clear();
       stepError.textContent = '';
       renderStepEdits();
     },

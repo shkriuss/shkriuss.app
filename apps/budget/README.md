@@ -29,7 +29,10 @@ See where your money goes, month by month. Lives at
     win over another's when they first sync. After a change of currency,
     totals add up each amount as it's shown (three $0.50 coffees are ¥1
     each, and ¥3 spent), and an amount saved with cents stays as it is
-    until it's changed in its form (audit 4 F2-5).
+    until it's changed in its form (audit 4 F2-5). They're added up in
+    whole cents (`addShown`), so thousands of the biggest amounts add up
+    to the cent, and a month's "Spent" always matches its categories'
+    spending (audit 5 F2-2).
 - A month shows what was spent, earned and is left (`summary`), each
   category's spending against its limit (`byCategory`; over the limit, its
   bar turns red), and the month's entries, the latest first. Once a
@@ -68,7 +71,17 @@ See where your money goes, month by month. Lives at
   to the 28th or the last day, at a chosen time. The last day is sent as "a
   day before the 1st", so it's right in every month, however long
   (`reminderNotices`).
-- `src/scripts/budget.ts`: connects the page to those rules.
+- Text limits (a category's name, an entry's note) count characters as
+  people see them, as an iPhone's text boxes count what fits in them: a
+  flag or a family emoji is one, so what a full box holds is never refused
+  on saving (`cutToLength`, audit 5 F2-3).
+- `src/scripts/budget.ts`: connects the page to those rules: the month
+  shown, its totals and lists, the settings, the spreadsheet, and keeping
+  up with other devices and tabs. The forms (an entry, a category, "Delete
+  this?") are in `forms.ts` and "Delete a year" in `delete-year.ts`. Each
+  loads after the page, once it has nothing else to do (`later`,
+  `whenIdle`, as in Repairs), so the page stays within its size budget and
+  a tap still finds the form there (audit 5 J-2).
   `src/scripts/reminders.ts`: shows the reminder while Budget is open, and
   sends its schedule to the notification service for "Also remind me when
   Budget is closed".

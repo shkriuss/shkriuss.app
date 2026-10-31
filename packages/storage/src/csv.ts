@@ -20,9 +20,29 @@ export function decimalSignOf(locale?: string): '.' | ',' {
 }
 
 /**
- * One cell. Numbers stay numbers, negative too, with `decimal` as their
- * decimal sign. Text is quoted when it holds a quote, a comma, a semicolon
- * or a line break, whichever sign the file splits cells at, so a
+ * A number with all its digits and never an exponent: "0.0000000015", not
+ * "1.5e-9", which a spreadsheet may read as text, and as the page shows it.
+ * Written as decimalText (@shkriuss/ui/numbers) writes it, which this
+ * package can't import, as that one imports this (audit 5 F2-6).
+ */
+function plainDigits(value: number): string {
+  const [mantissa = '', exponent = '0'] = String(Math.abs(value)).split('e');
+  const [before = '', after = ''] = mantissa.split('.');
+  // Where the decimal point goes in all the digits, once the exponent is undone.
+  const point = before.length + Number(exponent);
+  const digits = `${'0'.repeat(Math.max(0, 1 - point))}${before}${after}`.padEnd(point, '0');
+  const at = Math.max(1, point);
+  const whole = digits.slice(0, at).replace(/^0+(?=\d)/, '');
+  const fraction = digits.slice(at).replace(/0+$/, '');
+  const sign = value < 0 ? '-' : '';
+  return fraction ? `${sign}${whole}.${fraction}` : `${sign}${whole}`;
+}
+
+/**
+ * One cell. Numbers stay numbers, negative too, with every digit written
+ * out (plainDigits) and `decimal` as their decimal sign. Text is quoted
+ * when it holds a quote, a comma, a semicolon or a line break, whichever
+ * sign the file splits cells at, so a
  * spreadsheet that splits at the other one keeps it whole. Text that a
  * spreadsheet would run as a formula gets a ' in front: at its start (=, +,
  * -, @, a tab or a carriage return), so a note typed as "=HYPERLINK(…)"
@@ -35,7 +55,7 @@ export function decimalSignOf(locale?: string): '.' | ',' {
 export function csvCell(value: CsvValue, decimal: '.' | ',' = '.'): string {
   if (value === null) return '';
   if (typeof value === 'number') {
-    const text = String(value);
+    const text = Number.isFinite(value) ? plainDigits(value) : String(value);
     return decimal === ',' ? text.replace('.', ',') : text;
   }
   let text = value;

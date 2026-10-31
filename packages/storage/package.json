@@ -10,6 +10,7 @@
     "./csv": "./src/csv.ts",
     "./files": "./src/files.ts",
     "./nesting": "./src/nesting.ts",
+    "./passphrase": "./src/passphrase.ts",
     "./settings": "./src/settings.ts"
   },
   "scripts": {

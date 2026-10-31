@@ -2,8 +2,9 @@
  * After a production deploy, checks every live site: it answers, serves
  * exactly the home page that was deployed (apps/<slug>/dist/index.html, so a
  * Cloudflare feature can't quietly rewrite pages), and sends our security
- * headers and its /.well-known/security.txt as deployed. Apps with
- * notifications while closed must
+ * headers and its /.well-known/security.txt and /robots.txt as deployed (a
+ * site without a robots.txt got one written by Cloudflare, audit 5 I-1).
+ * Apps with notifications while closed must
  * also answer /api/push/key with their public key, and the hub its account
  * service (/api/account/ping), and apps with sync /api/sync/hub, and apps
  * with an online library /api/library/* (asking for a token). Apps with
@@ -76,17 +77,21 @@ const onDemand = new Map(
     }),
 );
 const SECURITY_TXT = '.well-known/security.txt';
-/** Each site's security.txt, as deployed (its "Expires" date is set at build time). */
-const deployedSecurityTxt = new Map(
-  slugs.map((slug) => {
-    const path = join(repoRoot, 'apps', slug, 'dist', SECURITY_TXT);
-    if (!existsSync(path)) {
-      console.error(`No build to compare with: ${path}. Run pnpm build first.`);
-      process.exit(1);
-    }
-    return [getSite(slug).origin, readFileSync(path, 'utf8')];
-  }),
-);
+const ROBOTS_TXT = 'robots.txt';
+/** Each site's text file at `path`, as deployed (security.txt's "Expires" date is set at build time). */
+const deployedText = (path: string) =>
+  new Map(
+    slugs.map((slug) => {
+      const file = join(repoRoot, 'apps', slug, 'dist', path);
+      if (!existsSync(file)) {
+        console.error(`No build to compare with: ${file}. Run pnpm build first.`);
+        process.exit(1);
+      }
+      return [getSite(slug).origin, readFileSync(file, 'utf8')];
+    }),
+  );
+const deployedSecurityTxt = deployedText(SECURITY_TXT);
+const deployedRobotsTxt = deployedText(ROBOTS_TXT);
 /** Each site's expected CSP (apps that run WebAssembly allow just that). */
 const expectedCsp = new Map(
   slugs.map((slug) => {
@@ -114,6 +119,13 @@ async function check(origin: string): Promise<string | undefined> {
     const securityTxt = await fetch(`${origin}/${SECURITY_TXT}`);
     if (!securityTxt.ok || (await securityTxt.text()) !== deployedSecurityTxt.get(origin)) {
       return `/${SECURITY_TXT} isn't the one deployed`;
+    }
+    // Cloudflare can serve a robots.txt of its own, or add its text to ours
+    // (its "managed robots.txt", in the dashboard under the zone's bot
+    // settings): then this says so, and that setting needs turning off.
+    const robotsTxt = await fetch(`${origin}/${ROBOTS_TXT}`);
+    if (!robotsTxt.ok || (await robotsTxt.text()) !== deployedRobotsTxt.get(origin)) {
+      return `/${ROBOTS_TXT} isn't the one deployed (is Cloudflare's managed robots.txt on?)`;
     }
     if (syncOrigins.has(origin)) {
       const hub = await fetch(`${origin}/api/sync/hub`);

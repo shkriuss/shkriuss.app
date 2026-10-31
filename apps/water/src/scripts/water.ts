@@ -271,6 +271,7 @@ export function mountWater(root: Document): void {
 
   /** Adds a drink; says what's wrong instead if the day is full. */
   function add(ml: number, date: IsoDate, time: IsoTime): void {
+    todayNow();
     const goal = amountOf(settings, 'goal');
     const next = addDrink(drinks, { id: crypto.randomUUID(), date, time, ml });
     const total = totalOn(next, day, unit());
@@ -311,6 +312,7 @@ export function mountWater(root: Document): void {
 
   // "Other amount": any amount, at another time today or yesterday.
   otherButton.addEventListener('click', () => {
+    todayNow();
     otherForm.reset();
     for (const field of ['amount', 'time', 'day']) otherError(field).textContent = '';
     otherAmount.removeAttribute('aria-invalid');
@@ -438,6 +440,19 @@ export function mountWater(root: Document): void {
   const redraw = (draw: () => void = render): void => {
     keepFocus(draw, required<HTMLButtonElement>(root, '[data-add="glass"]'));
   };
+
+  /**
+   * Today, read afresh at a tap. The page looks for a new day once a minute,
+   * so for up to a minute after midnight "today" was still yesterday: a
+   * glass then was "added tomorrow", and today's total was yesterday's
+   * (audit 5 F1-7).
+   */
+  function todayNow(): void {
+    const now = today();
+    if (now === day) return;
+    day = now;
+    redraw();
+  }
 
   function reload(): void {
     drinks = drinksStore.load();

@@ -272,12 +272,46 @@ describe('entries', () => {
     expect(readEntry({ ...form, amount: '2000000000' }, 'x', 0, categories).problems).toEqual({
       amount: 'Enter a smaller amount.',
     });
+    // Audit 5 F2-5: one too long to be a number at all (it reads as
+    // infinite) was called "not a number", with the right message at hand.
+    const endless = '9'.repeat(400);
+    expect(readEntry({ ...form, amount: endless }, 'x', 0, categories).problems).toEqual({
+      amount: 'Enter a smaller amount.',
+    });
+    expect(readCategory({ name: 'Rent', limit: endless }, 'p', categories).problems).toEqual({
+      limit: 'Enter a smaller amount.',
+    });
+    expect(readEntry({ ...form, amount: `-${endless}` }, 'x', 0, categories).problems).toEqual({
+      amount: 'Enter an amount above 0.',
+    });
     expect(readEntry(form, 'x', LIMITS.entries, categories).problems).toEqual({
       amount: `You can keep up to ${new Intl.NumberFormat().format(LIMITS.entries)} entries. To make room, delete a year (under Currency and spreadsheet).`,
     });
     // Audit 3 F2-5: with more than that (two devices' entries put together by
     // sync), every change was refused. A change adds none, so it's fine.
     expect(readEntry(form, 'x', null, categories).entry?.amount).toBe(12.5);
+  });
+
+  // Audit 5 F2-3: an iPhone's text boxes count a flag or a family emoji as
+  // one character, so a full box was refused on saving: a note of 20 family
+  // emoji counted 160, and was "Use 100 characters or fewer."
+  it('counts characters as people see them, as an iPhone’s text boxes do', () => {
+    const family = '👨‍👩‍👧';
+    const flag = '🇬🇪';
+    const note = (text: string) => readEntry({ ...form, note: text }, 'x', 0, categories);
+    expect(note(family.repeat(20)).entry?.note).toBe(family.repeat(20));
+    expect(note(flag.repeat(LIMITS.note)).entry?.note).toBe(flag.repeat(LIMITS.note));
+    expect(note(flag.repeat(LIMITS.note + 1)).problems).toEqual({
+      note: `Use ${LIMITS.note} characters or fewer.`,
+    });
+    const name = (text: string) => readCategory({ name: text, limit: '' }, 'p', categories);
+    expect(name(flag.repeat(LIMITS.name)).category?.name).toBe(flag.repeat(LIMITS.name));
+    expect(name(family.repeat(LIMITS.name + 1)).problems).toEqual({
+      name: `Use ${LIMITS.name} characters or fewer.`,
+    });
+    // One letter under thousands of accents is one character, but not without a limit.
+    const zalgo = `Z${'\u0336'.repeat(2000)}`;
+    expect(name(zalgo).problems).toEqual({ name: `Use ${LIMITS.name} characters or fewer.` });
   });
 
   // Audit F2-13: yen kept cents, so 0.01 yen was saved and shown as "¥0",
@@ -449,6 +483,44 @@ describe('months', () => {
     expect(formatMoney(totals.spent, 'USD', { locale: 'en-US' })).toBe('$0.00');
     expect(formatMoney(totals.left, 'USD', { signed: true, locale: 'en-US' })).toBe('$0.00');
     expect(Object.is(byCategory(evened, categories)[0]?.spent, 0)).toBe(true);
+  });
+
+  // Audit 5 F2-2: "Spent" added the amounts as decimals and rounded once at
+  // the end, the categories after each amount, so with thousands of
+  // billion-dollar entries they disagreed by cents (3,000,000,000,029.30
+  // against the right 3,000,000,000,030.00), and the budget line was off too.
+  it('adds up thousands of the biggest amounts to the cent, the month and its categories alike', () => {
+    const big: CategoriesState = { categories: [{ id: 'c', name: 'Big', limit: 1e9 }] };
+    const many = (count: number, amount: number, kind: Entry['kind'] = 'expense') =>
+      Array.from({ length: count }, (_, index) =>
+        entry({ id: `${kind}-${amount}-${index}`, kind, amount, category: 'c' }),
+      );
+    const month = [...many(3000, LIMITS.amount), ...many(3000, 0.01)];
+    const totals = summary(month, big);
+    expect(totals.spent).toBe(3_000_000_000_030);
+    expect(totals.spentWithLimit).toBe(3_000_000_000_030);
+    expect(byCategory(month, big)[0]?.spent).toBe(3_000_000_000_030);
+    expect(budgetLine(totals, 'USD', 'en-US')).toEqual({
+      text: '$2,999,000,000,030.00 over the $1,000,000,000.00 budgeted',
+      over: true,
+    });
+    // 2,000 of $999,999,999.99 and 4,000 of $0.01: $2,000,000,000,020.00.
+    const milder = [...many(2000, LIMITS.amount - 0.01), ...many(4000, 0.01)];
+    expect(summary(milder, big).spent).toBe(2_000_000_000_020);
+    expect(byCategory(milder, big)[0]?.spent).toBe(2_000_000_000_020);
+    // Income and refunds add up the same way, and "Left" follows.
+    const mixed = [
+      ...many(2000, LIMITS.amount, 'income'),
+      ...many(2000, 0.01, 'income'),
+      ...many(1000, 0.01, 'refund'),
+      ...many(1000, LIMITS.amount),
+    ];
+    expect(summary(mixed, big)).toMatchObject({
+      income: 2_000_000_000_020,
+      spent: 999_999_999_990,
+      left: 1_000_000_000_030,
+    });
+    expect(byCategory(mixed, big)[0]?.spent).toBe(999_999_999_990);
   });
 
   it('takes refunds off their category’s spending, and off what was spent', () => {

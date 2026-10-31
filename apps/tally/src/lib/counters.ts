@@ -3,7 +3,7 @@
  * Every function returns a new state instead of changing the old one.
  */
 import { secondVersionName } from '@shkriuss/sync';
-import { foldText } from '@shkriuss/ui/text';
+import { cutToLength, foldText } from '@shkriuss/ui/text';
 
 export interface Counter {
   id: string;
@@ -40,11 +40,19 @@ export function isTallyState(value: unknown): value is TallyState {
   return Array.isArray(counters) && counters.every(isCounter);
 }
 
+/**
+ * Whether a name fits (MAX_NAME_LENGTH), counted as text boxes count their
+ * maxlength on an iPhone: a flag, a family emoji or a letter with its
+ * accent is one character, so what a full box holds is never refused on
+ * saving (cutToLength, audit 5 F2-3).
+ */
+const fits = (name: string): boolean => cutToLength(name, MAX_NAME_LENGTH) === name;
+
 /** Returns an error message for a counter name, or undefined when it's fine. */
 export function nameError(name: string, state: TallyState): string | undefined {
   const trimmed = name.trim();
   if (trimmed.length === 0) return 'Enter a name for the counter.';
-  if (trimmed.length > MAX_NAME_LENGTH) {
+  if (!fits(trimmed)) {
     return `Use ${MAX_NAME_LENGTH} characters or fewer.`;
   }
   // The same name without minding case or accents ("Café" is "Cafe"), as in

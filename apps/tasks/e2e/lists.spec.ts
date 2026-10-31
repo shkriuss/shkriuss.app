@@ -82,6 +82,10 @@ test('deleting a list keeps its tasks, moves them, or deletes them', async ({ pa
   await page.getByRole('button', { name: 'Rename or delete this list' }).click();
   await listForm(page).getByRole('button', { name: 'Delete' }).click();
   await expect(deleteDialog(page)).toContainText('“Work” will be removed. This can’t be undone.');
+  // Read out with the title: the message, and that its tasks are asked about (audit 5 G-3).
+  await expect(deleteDialog(page)).toHaveAccessibleDescription(
+    /“Work” will be removed\. This can’t be undone\.\s+Its 1 task$/,
+  );
   await checkA11y(page, 'deleting a list');
   await deleteDialog(page).getByLabel('Its 1 task').selectOption({ label: 'Move them to Home' });
   await deleteDialog(page).getByRole('button', { name: 'Delete' }).click();

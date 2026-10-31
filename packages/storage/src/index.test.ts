@@ -3,6 +3,8 @@ import {
   allSaved,
   createStore,
   deleteAll,
+  DOWNLOAD_URL_MS,
+  downloadFile,
   exportAll,
   getLocalStorage,
   lastSaveProblem,
@@ -242,6 +244,79 @@ describe('exportAll / deleteAll', () => {
     expect(ownKeys(undefined)).toEqual([]);
     expect(deleteAll(undefined)).toBe(0);
     expect(exportAll('x', undefined, new Date(0)).data).toEqual({});
+  });
+
+  it('exports a saved text that isn’t an object or a list as it is, quotes and all (audit 5 E-8)', () => {
+    storage.setItem('shkriuss:quoted', '"dark"');
+    storage.setItem('shkriuss:number', '42');
+    storage.setItem('shkriuss:list', '[1,2]');
+    storage.setItem('shkriuss:theme', 'dark');
+    expect(exportAll('x', storage, new Date(0)).data).toEqual({
+      'shkriuss:quoted': '"dark"',
+      'shkriuss:number': '42',
+      'shkriuss:list': [1, 2],
+      'shkriuss:theme': 'dark',
+    });
+  });
+});
+
+describe('downloadFile (audit 5 Z-2)', () => {
+  const link = {
+    href: '',
+    download: '',
+    hidden: false,
+    clicks: 0,
+    click: () => undefined,
+    remove: () => undefined,
+  };
+  const listeners = new Map<string, () => void>();
+  let revoke: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    link.clicks = 0;
+    link.click = () => {
+      link.clicks += 1;
+    };
+    listeners.clear();
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:tally/backup');
+    revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    vi.stubGlobal('document', { createElement: () => link, body: { append: () => undefined } });
+    vi.stubGlobal('window', {
+      setTimeout: (callback: () => void, ms: number) => setTimeout(callback, ms),
+      clearTimeout: (timer: number) => clearTimeout(timer),
+      addEventListener: (type: string, listener: () => void) => listeners.set(type, listener),
+      removeEventListener: (type: string) => listeners.delete(type),
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  it('keeps the file’s address for a minute: long enough for an iPhone’s download prompt', () => {
+    downloadFile('tally-backup-2026-10-27.json', '{}');
+    expect(link).toMatchObject({
+      href: 'blob:tally/backup',
+      download: 'tally-backup-2026-10-27.json',
+      clicks: 1,
+    });
+    // A second (what it was) is too soon for "Do you want to download…?".
+    vi.advanceTimersByTime(DOWNLOAD_URL_MS - 1);
+    expect(revoke).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(revoke).toHaveBeenCalledWith('blob:tally/backup');
+    expect(listeners.has('pagehide')).toBe(false);
+  });
+
+  it('frees it when the page goes away, once', () => {
+    downloadFile('tally-backup-2026-10-27.json', '{}');
+    listeners.get('pagehide')?.();
+    expect(revoke).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(DOWNLOAD_URL_MS);
+    expect(revoke).toHaveBeenCalledTimes(1);
   });
 });
 

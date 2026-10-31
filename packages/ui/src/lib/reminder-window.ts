@@ -34,6 +34,26 @@ export const LATE_MINUTES = 5;
 export const MAX_CLOCK_CHANGE_MINUTES = 12 * 60;
 /** Summer time never puts clocks back further than this (minutes); more is a new time zone. */
 export const MAX_SUMMER_TIME_MINUTES = 2 * 60;
+/**
+ * How far apart two tabs' clocks can read at once: some browsers blur the
+ * time a page reads, for privacy. A check another tab made up to this much
+ * "later" than now is one it made just before.
+ */
+export const CLOCK_BLUR_MS = 1_000;
+
+/**
+ * Where a page that has just opened starts checking: the minute before now,
+ * so a reminder due in the very minute the app was opened still rings (its
+ * checks start from the last check, which used to be the moment it opened,
+ * audit 5 F1-3); unless `shared`, the last check by the app's other tabs,
+ * or by this page before it was reloaded, is more recent (and not from a
+ * clock ahead of this one): then from there, so what that check showed
+ * isn't shown again.
+ */
+export function firstCheck(now: ReminderCheck, shared: ReminderCheck | null): ReminderCheck {
+  const start = { stamp: addMinutes(now.stamp, -1), at: now.at - 60_000 };
+  return shared && shared.at > start.at && shared.at <= now.at + CLOCK_BLUR_MS ? shared : start;
+}
 
 /** Whether the clock went back from `last` to `now` further than summer time ever does. */
 export function wentBackFar(last: ReminderCheck, now: ReminderCheck): boolean {

@@ -931,6 +931,10 @@ test('signed in to another account, photos go up to that account’s library', a
     .getByRole('dialog', { name: 'Sign out of this device?' })
     .getByRole('button', { name: 'Sign out' })
     .click();
+  // Signing out happens when the dialog's close event runs, a moment after the
+  // click: leaving the page at once could skip it, and the next page was still
+  // signed in (CI, 31 October). The hub's own tests wait the same way.
+  await expect(page.getByRole('button', { name: 'Create an account' })).toBeVisible();
   await createAccount(page);
   await connectAgain(page, appURL);
 

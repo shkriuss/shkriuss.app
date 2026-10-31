@@ -317,6 +317,62 @@ describe('repairs', () => {
     ).toHaveLength(1);
   });
 
+  // Audit 5 F2-3: an iPhone's text boxes count a flag or a family emoji as
+  // one character, so a full box was refused on saving: "Work done" of 300
+  // family emoji counted 2,400, and was "Use 2000 characters or fewer."; and
+  // had it been saved, the check on loading would have refused it too.
+  it('counts characters as people see them, as an iPhone’s text boxes do, saved or synced too', () => {
+    const family = '👨‍👩‍👧';
+    const flag = '🇬🇪';
+    const read = (fields: Partial<RepairForm>) =>
+      readRepair(form(fields), 'r', emptyRepairs(), vehicles, newId, 'en-US');
+    const part = (name: string, number: string) => ({ name, number, quantity: '1', price: '' });
+    const full = read({
+      work: family.repeat(LIMITS.text),
+      problem: flag.repeat(LIMITS.text),
+      system: flag.repeat(LIMITS.system),
+      parts: [part(flag.repeat(LIMITS.partName), flag.repeat(LIMITS.partNumber))],
+    });
+    expect(full.problems).toBeUndefined();
+    // What was saved reads, here and on another device.
+    expect(isRepairsState(repairs(full.repair as Repair))).toBe(true);
+    expect(
+      read({
+        work: flag.repeat(LIMITS.text + 1),
+        problem: family.repeat(LIMITS.text + 1),
+        system: flag.repeat(LIMITS.system + 1),
+        parts: [part(flag.repeat(LIMITS.partName + 1), flag.repeat(LIMITS.partNumber + 1))],
+      }).problems,
+    ).toEqual({
+      work: 'Use 2000 characters or fewer.',
+      problem: 'Use 2000 characters or fewer.',
+      system: 'Use 40 characters or fewer.',
+      'part-name-0': 'Use 60 characters or fewer.',
+      'part-number-0': 'Use 40 characters or fewer.',
+    });
+    const bus = readVehicle(
+      {
+        name: flag.repeat(LIMITS.vehicle),
+        model: family.repeat(LIMITS.model),
+        plate: flag.repeat(LIMITS.plate),
+        notes: family.repeat(LIMITS.notes),
+      },
+      'x',
+      vehicles,
+    );
+    expect(bus.problems).toBeUndefined();
+    expect(isVehiclesState({ vehicles: [bus.vehicle as Vehicle] })).toBe(true);
+    expect(
+      readVehicle({ name: flag.repeat(LIMITS.vehicle + 1), model: '', plate: '', notes: '' }, 'x', {
+        vehicles: [],
+      }).problems,
+    ).toEqual({ name: 'Use 40 characters or fewer.' });
+    // One letter under thousands of accents is one character, but not without a limit.
+    const zalgo = `Z${'\u0336'.repeat(2000)}`;
+    expect(read({ system: zalgo }).problems).toEqual({ system: 'Use 40 characters or fewer.' });
+    expect(isRepairsState(repairs(repair({ system: zalgo })))).toBe(false);
+  });
+
   it('shows a saved repair in the form again', () => {
     const saved = repair({
       mileage: null,
@@ -330,11 +386,11 @@ describe('repairs', () => {
     const exact = repair({
       mileage: 120_000,
       parts: [{ name: 'Oil', number: '', quantity: 1.125, price: 1.234 }],
-      hours: 1.125,
+      hours: 1.13,
       labour: 1234.5,
     });
     const german = toRepairForm(exact, vehicles, 'de-DE');
-    expect(german).toMatchObject({ mileage: '120000', hours: '1,125', labour: '1234,5' });
+    expect(german).toMatchObject({ mileage: '120000', hours: '1,13', labour: '1234,5' });
     expect(readRepair(german, 'r', repairs(exact), vehicles, newId, 'de-DE').repair).toEqual(exact);
   });
 
@@ -804,6 +860,54 @@ describe('hours worked and costs', () => {
         parts: [part('10000', '1000000000')],
       }).repair,
     ).toMatchObject({ mileage: 9_999_999, hours: 1000, labour: 1e9 });
+    // Audit 5 F2-5: one too long to be a number at all (it reads as
+    // infinite) got the message for something else.
+    const endless = '9'.repeat(400);
+    expect(
+      read({ mileage: endless, hours: endless, labour: endless, parts: [part(endless, endless)] })
+        .problems,
+    ).toEqual({
+      mileage: 'Enter at most 9,999,999.',
+      hours: 'Enter at most 1,000 hours.',
+      labour: 'Enter at most 1,000,000,000.',
+      'part-quantity-0': 'Enter at most 10,000.',
+      'part-price-0': 'Enter at most 1,000,000,000.',
+    });
+  });
+
+  // Audit 5 F2-4: hours were kept with any decimals but shown to two, so two
+  // repairs of 1.125 hours showed "1.13 hours" each and "2.25 hours" together.
+  it('keeps hours to two decimals, as they’re shown, so they add up to the hours shown', () => {
+    const read = (hours: string) =>
+      readRepair(form({ hours }), 'r', emptyRepairs(), vehicles, newId, 'en-US');
+    expect(read('1.125').repair?.hours).toBe(1.13);
+    expect(read('0.005').repair?.hours).toBe(0.01);
+    expect(read('1000.004').repair?.hours).toBe(1000);
+    expect(read('1000.005').problems).toEqual({ hours: 'Enter at most 1,000 hours.' });
+    expect(read('0.004').problems).toEqual({
+      hours: 'Enter at least 0.01 hours, or leave it empty.',
+    });
+    expect(read('-1').problems).toEqual({
+      hours: 'Enter the hours as a number above 0, or leave it empty.',
+    });
+    expect(read('x').problems).toEqual({
+      hours: 'Enter the hours as a number above 0, or leave it empty.',
+    });
+    const first = read('1.125').repair as Repair;
+    const second = { ...first, id: 's' };
+    const day = totals([first, second]);
+    expect(formatHours(first.hours as number, 'en-US')).toBe('1.13 hours');
+    expect(formatHours(day.hours as number, 'en-US')).toBe('2.26 hours');
+    expect(toRepairForm(first, vehicles, 'en-US').hours).toBe('1.13');
+    // A repair saved before with more decimals still reads (older data must),
+    // and is rounded to what it showed once its form is saved.
+    const older = repair({ hours: 1.125 });
+    expect(isRepairsState(repairs(older))).toBe(true);
+    const opened = toRepairForm(older, vehicles, 'en-US');
+    expect(opened.hours).toBe('1.125');
+    expect(readRepair(opened, 'r', repairs(older), vehicles, newId, 'en-US').repair?.hours).toBe(
+      1.13,
+    );
   });
 
   it('works out what a repair cost', () => {
@@ -863,6 +967,35 @@ describe('hours worked and costs', () => {
       repairs(repair({ id: 'a', labour: 50 }), repair({ id: 'b', vehicle: 'b12' })),
     );
     expect(summaries.map((summary) => summary.cost)).toEqual([null, 50, null]);
+  });
+
+  // Audit 5 F2-1: big sums are rounded by their digits now, as Trades' are,
+  // which stays exact however big they get (multiplying by a million first
+  // isn't above about 9 billion). At Repairs' own limits that never showed,
+  // so this pins it: 3,000 repairs at the biggest costs and hours add up to
+  // the cent.
+  it('adds up the biggest hours and costs exactly, by day and by vehicle', () => {
+    const engine = { name: 'Engine', number: '', quantity: 9999.5, price: 999_999.98 };
+    const costly = Array.from({ length: LIMITS.repairs }, (_, index) =>
+      repair({ id: `r${index}`, hours: 999.99, labour: LIMITS.money - 0.01, parts: [engine] }),
+    );
+    // 9,999.5 × $999,999.98 is $9,999,499,800.01; with the labour, $10,999,499,800.00 each.
+    expect(partCost(engine)).toBe(9_999_499_800.01);
+    expect(repairCost(costly[0] as Repair)).toEqual({
+      parts: 9_999_499_800.01,
+      labour: 999_999_999.99,
+      total: 10_999_499_800,
+    });
+    const all = totals(costly);
+    expect(all).toEqual({ hours: 2_999_970, cost: 32_998_499_400_000 });
+    expect(byDay(costly).map((day) => totals(day.repairs))).toEqual([all]);
+    const summary = vehicleSummaries(vehicles, repairs(...costly)).find(
+      (entry) => entry.vehicle.id === 'b105',
+    );
+    expect(summary?.cost).toBe(all.cost);
+    expect(formatMoney(all.cost as number, 'USD', { locale: 'en-US' })).toBe(
+      '$32,998,499,400,000.00',
+    );
   });
 
   it('at the limits, looks at each repair once for every vehicle’s summary (audit 4 F2-2)', () => {
