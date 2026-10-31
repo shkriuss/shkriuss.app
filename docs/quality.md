@@ -71,8 +71,9 @@ test and fails only there.
   Trades are opened again (`tests/e2e/keep-focus.spec.ts`).
 - **Security:** every security header is present on pages, the 404 page and
   other files; no console errors (so no CSP or Trusted Types violations); no
-  cookies; no requests to any other website; build files are cached and pages
-  aren't.
+  cookies; no requests to any other website; build files, pages, and a "not
+  found" for a build file are never kept without asking the server again
+  (audit 5 Z-1); every site serves its own `robots.txt` (audit 5 I-1).
 - **Install and offline:** the manifest and every icon load, and the site
   works offline after the first visit, including when the network hangs
   instead of failing (for example, airplane mode with a VPN on): it waits 3

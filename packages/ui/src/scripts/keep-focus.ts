@@ -15,8 +15,9 @@
  * data-date="…") and those of the item it's in: the nearest element around
  * it with a data attribute that names it, like <li data-id="…">. So it
  * needs no id of its own. If that item is gone (deleted on another device),
- * focus goes to the control like it just after it, or else just before it;
- * with neither, to `fallback`.
+ * or the control is still there but hidden or disabled now, focus goes to
+ * the control like it just after it, or else just before it; with neither,
+ * to `fallback`.
  *
  * Dialogs: when one closes, the browser puts focus back on what opened it,
  * unless a list drawn again meanwhile replaced that. Then
@@ -142,11 +143,11 @@ export function returnFocus(
 ): void {
   const active = document.activeElement;
   if (!spot || (active && active !== document.body)) return;
-  // Still on the page: moved, not drawn again (or hidden, and then it stays where it is).
-  if (spot.element.isConnected) {
-    focusOn(spot.element, options);
-    return;
-  }
+  // Still on the page and able to take focus: moved, not drawn again. Hidden
+  // or disabled by the redraw (a list's own button, after the list was
+  // deleted in another tab): look on, as for a control that's gone, so
+  // focus doesn't fall to the top of the page (audit 5 G-1).
+  if (spot.element.isConnected && focusOn(spot.element, options)) return;
   const within = spot.around.find((element) => element.isConnected);
   if (within && spot.places.some((place) => focusPlace(place, within, options))) return;
   fallback?.focus(options);

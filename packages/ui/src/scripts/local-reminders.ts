@@ -4,9 +4,9 @@
  * page, and shows it as a notification if the person allowed them. After
  * the page slept, only reminders a few minutes late are shown; when the
  * clocks change, ones in the skipped hour go off as they do
- * (../lib/reminder-window.ts). The app's open tabs share their last check,
- * so each reminder shows as a notification once, not once in each; each tab
- * on screen reads it out itself. It keeps
+ * (../lib/reminder-window.ts). The app's open tabs share their last check
+ * (./reminder-checks.ts), so each reminder shows as a notification once,
+ * not once in each; each tab on screen reads it out itself. It keeps
  * the "Notifications are …" line and the "Turn on notifications" button
  * (`[data-notify-status]`, `[data-notify-enable]`) right, and mounts
  * "Also remind me when … is closed" (./push-controls.ts, docs/adr/0009):
@@ -30,48 +30,19 @@
  */
 import { nowStamp, type Stamp } from '@shkriuss/dates';
 import { pushHolds, type Notice } from '@shkriuss/push';
-import { reminderWindow, type ReminderCheck } from '../lib/reminder-window.ts';
+import {
+  CLOCK_BLUR_MS,
+  firstCheck,
+  reminderWindow,
+  type ReminderCheck,
+} from '../lib/reminder-window.ts';
 import { mountPushControls } from './push-controls.ts';
 import { required } from './dom.ts';
+import { loadChecked, saveChecked } from './reminder-checks.ts';
 
 export { MAX_SUMMER_TIME_MINUTES } from '../lib/reminder-window.ts';
 
 const CHECK_EVERY_MS = 20_000;
-/**
- * How far apart two tabs' clocks can read at once: some browsers blur the
- * time a page reads, for privacy. A check another tab made up to this much
- * "later" than now is one it made just before.
- */
-const CLOCK_BLUR_MS = 1_000;
-/**
- * The last check, shared by the app's open tabs, so a reminder rings once,
- * not once in each (audit 4 F1-6), as in Calendar. On this device only.
- */
-const CHECKED_KEY = 'shkriuss-device:reminders-checked';
-const STAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
-
-function loadChecked(): ReminderCheck | null {
-  try {
-    const value = JSON.parse(localStorage.getItem(CHECKED_KEY) ?? 'null') as {
-      stamp?: unknown;
-      at?: unknown;
-    } | null;
-    const { stamp, at } = value ?? {};
-    return typeof stamp === 'string' && STAMP_PATTERN.test(stamp) && typeof at === 'number'
-      ? { stamp, at }
-      : null;
-  } catch {
-    return null;
-  }
-}
-
-function saveChecked(check: ReminderCheck): void {
-  try {
-    localStorage.setItem(CHECKED_KEY, JSON.stringify(check));
-  } catch {
-    // Storage blocked or full: each tab goes by its own checks.
-  }
-}
 
 /**
  * How long a tab keeps its turn after a check: another tab's copy of
@@ -258,9 +229,12 @@ export function mountLocalReminders(
   /**
    * Reminders up to this local time have been checked, then (see
    * ../lib/reminder-window.ts), for notifications, by this tab. A later
-   * check by another tab counts too (loadChecked).
+   * check by another tab counts too (loadChecked, ./reminder-checks.ts). It
+   * starts a minute back, so a reminder due in the minute the app opened
+   * rings too, unless another tab (or this page before a reload) showed it
+   * a moment ago (audit 5 F1-3).
    */
-  let checked: ReminderCheck = { stamp: nowStamp(), at: Date.now() };
+  let checked: ReminderCheck = firstCheck({ stamp: nowStamp(), at: Date.now() }, loadChecked());
   /** And for reading out, by this tab alone. */
   let said: ReminderCheck = checked;
 

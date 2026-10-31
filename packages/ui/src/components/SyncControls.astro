@@ -77,10 +77,16 @@ const Heading = `h${level}` as 'h2' | 'h3';
     </a>
   </p>
 
-  <dialog class="dialog" aria-labelledby="sync-delete-title" data-sync-delete-dialog>
+  {/* Read out with its title: what "Delete the online copy" deletes (audit 5 G-3). */}
+  <dialog
+    class="dialog"
+    aria-labelledby="sync-delete-title"
+    aria-describedby="sync-delete-text"
+    data-sync-delete-dialog
+  >
     <form method="dialog" class="stack">
       <h2 id="sync-delete-title">Delete the online copy?</h2>
-      <p>{deleteText}</p>
+      <p id="sync-delete-text">{deleteText}</p>
       <div class="cluster">
         <Button type="submit" value="cancel">
           Cancel

@@ -280,15 +280,21 @@ test('a list drawn again after a change in another tab keeps keyboard focus', as
   await expect(control).toBeFocused();
 });
 
-/** Apps whose focused item can be taken away in another tab, and what then gets focus. */
-const goneCases: Record<
-  string,
-  {
-    setup: Case['setup'];
-    change: Case['change'];
-    next: (page: Page) => Locator;
-  }
-> = {
+/** How a site's focused item is taken away in another tab, and what then gets focus. */
+interface GoneCase {
+  setup: Case['setup'];
+  change: Case['change'];
+  next: (page: Page) => Locator;
+}
+
+/**
+ * Every site (null: not scripted here; the test above covers its redraw, and
+ * the code that moves focus on is shared), so a new app isn't left out
+ * without a word (audit 5 J-10).
+ */
+const goneCases: EverySite<GoneCase> = {
+  budget: null,
+  calendar: null,
   grammar: {
     setup: async (page) => {
       test.slow();
@@ -305,6 +311,9 @@ const goneCases: Record<
     change: (other) => button(other, 'Remove “Beta” from my dictionary').click(),
     next: (page) => button(page, 'Remove “Gamma” from my dictionary'),
   },
+  hub: null,
+  meals: null,
+  notes: null,
   photos: {
     setup: async (page) => {
       await addPhoto(page, '2026:10:21 14:03:22', '#c33');
@@ -340,6 +349,9 @@ const goneCases: Record<
     change: (other) => button(other, /^Remove 500 ml/).click(),
     next: (page) => button(page, /^Remove 250 ml/),
   },
+  repairs: null,
+  shelf: null,
+  trades: null,
   // Audit 3 G-3: focus fell to the top of the page.
   tally: {
     setup: async (page) => {
@@ -398,8 +410,8 @@ const goneCases: Record<
 test('when the focused item is taken away in another tab, focus goes to the next one', async ({
   page,
 }) => {
-  const app = goneCases[test.info().project.name];
-  test.skip(!app, 'Tested on a few apps.');
+  const app = forThisSite(goneCases);
+  test.skip(!app, 'Not scripted for this site: the test above covers its redraw.');
   if (!app) return;
   await page.goto('/');
   const control = await app.setup(page);
@@ -411,19 +423,39 @@ test('when the focused item is taken away in another tab, focus goes to the next
   await expect(app.next(page)).toBeFocused();
 });
 
-/** Apps with a dialog opened from a list (their own close handlers, if any, use returnFocus). */
-const dialogCases: Record<string, Case | null | undefined> = {
-  budget: cases['budget'],
+/**
+ * Every site's dialog opened from a list (their own close handlers, if any,
+ * use returnFocus), or null: no such dialog, or one like another app's that
+ * isn't scripted here (audit 5 J-10).
+ */
+const dialogCases: EverySite<Case> = {
+  budget: cases['budget'] ?? null,
+  // Its dialogs ("Clear the text?", "Remove Deep check?") aren't opened from a list.
+  grammar: null,
+  // "Edit habit" opens from its list, like Tasks' editor: not scripted here.
+  habits: null,
+  // No list, and no dialog opened from one.
+  hub: null,
   meals: {
     // A day's "Add a meal".
     setup: (page) => Promise.resolve(button(page, /^Add a meal/).first()),
     change: (other) => enter(other, 'Add to the list', 'Bread'),
     shown: (page) => page.getByRole('checkbox', { name: 'Bread', exact: true }),
   },
-  repairs: cases['repairs'],
+  // "Delete this note?" opens from the note, not from the list: not scripted here.
+  notes: null,
+  // Its dialogs open from the viewer, which the grid opens: not scripted here.
+  photos: null,
+  // "Change reminder" opens from its list, like Tasks' editor: not scripted here.
+  reminders: null,
+  repairs: cases['repairs'] ?? null,
   // Its own close handler sent focus to "Add item" after a redraw (audit 3 G-3).
-  shelf: cases['shelf'],
-  trades: cases['trades'],
+  shelf: cases['shelf'] ?? null,
+  // "Delete this counter?" opens from its list, like Tasks' editor: not scripted here.
+  tally: null,
+  trades: cases['trades'] ?? null,
+  // Its only dialog, "Add a drink", isn't opened from a list.
+  water: null,
   // These two put focus back themselves, and sent it to a fallback (audit 3 G-3).
   calendar: {
     setup: async (page) => {
@@ -450,8 +482,8 @@ const dialogCases: Record<string, Case | null | undefined> = {
 test('a dialog opened from a list gives focus back after the list was drawn again', async ({
   page,
 }) => {
-  const app = dialogCases[test.info().project.name];
-  test.skip(!app, 'This site has no dialog opened from a list that changes in the background.');
+  const app = forThisSite(dialogCases);
+  test.skip(!app, 'This site has no dialog opened from a list, or one isn’t scripted here.');
   if (!app) return;
   await page.goto('/');
   const control = await app.setup(page);
@@ -467,13 +499,33 @@ test('a dialog opened from a list gives focus back after the list was drawn agai
   await expect(control).toBeFocused();
 });
 
-/** Apps that draw their lists again when the person comes back to them in a new month. */
-const comingBack = ['budget', 'trades'];
+/**
+ * Every site: the apps that draw their lists again when the person comes
+ * back to them in a new month (their lists are the month's), or null
+ * (audit 5 J-10).
+ */
+const comingBack: EverySite<Case> = {
+  budget: cases['budget'] ?? null,
+  trades: cases['trades'] ?? null,
+  // The others don't redraw by the month on coming back.
+  calendar: null,
+  grammar: null,
+  habits: null,
+  hub: null,
+  meals: null,
+  notes: null,
+  photos: null,
+  reminders: null,
+  repairs: null,
+  shelf: null,
+  tally: null,
+  tasks: null,
+  water: null,
+};
 
 test('coming back to the app draws its lists again only in a new month', async ({ page }) => {
-  const name = test.info().project.name;
-  const app = cases[name];
-  test.skip(!app || !comingBack.includes(name), 'Only some apps do this.');
+  const app = forThisSite(comingBack);
+  test.skip(!app, 'This site doesn’t draw its lists again by the month.');
   if (!app) return;
   await page.clock.install({ time: new Date('2026-10-21T10:00:00') });
   await page.goto('/');
@@ -490,4 +542,38 @@ test('coming back to the app draws its lists again only in a new month', async (
   await comeBack();
   expect(await sameFocused(page)).toBe(false);
   await expect(control).toBeFocused();
+});
+
+test('a control hidden by a change in another tab gives focus to what takes its place', async ({
+  page,
+}) => {
+  // A control still on the page but hidden by the redraw dropped focus to the
+  // top of the page (audit 5 G-1). Scripted for Tasks, whose "Rename or
+  // delete this list" is hidden once the shown list is deleted elsewhere;
+  // the code that moves focus on (keepFocus) is the same in every app.
+  test.skip(test.info().project.name !== 'tasks', 'Scripted for Tasks; the code is shared.');
+  await page.goto('/');
+  await button(page, 'New list').click();
+  await fillDialog(page, { Name: 'Work' });
+  const editList = button(page, 'Rename or delete this list');
+  await expect(editList).toBeVisible();
+  const other = await secondTab(page);
+  await editList.focus();
+
+  // The other tab (or another device) deletes the list.
+  await other.locator('[data-views]').getByRole('button', { name: /^Work/ }).click();
+  await button(other, 'Rename or delete this list').click();
+  await other
+    .getByRole('dialog', { name: 'Edit list' })
+    .getByRole('button', { name: 'Delete' })
+    .click();
+  await other
+    .getByRole('dialog', { name: 'Delete this list?' })
+    .getByRole('button', { name: 'Delete' })
+    .click();
+
+  // The first tab shows every task again and hides the button; focus goes to
+  // the heading it gives as the fallback, not to the top of the page.
+  await expect(editList).toBeHidden();
+  await expect(page.getByRole('heading', { name: 'All tasks' })).toBeFocused();
 });
