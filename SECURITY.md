@@ -132,7 +132,12 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
   than pnpm's own is checked all the same, and it refuses a pull request
   that adds an `.npmrc` or changes where pnpm downloads from in
   `pnpm-workspace.yaml` (audit 5 H-1). CI runs `main`'s copy of that check,
-  so a pull request can't change the check it's checked by (audit 5 H-3).
+  with `main`'s packages, before anything from the pull request is
+  installed or run, so a pull request can't change the check or what reads
+  its lockfile (audit 5 H-3, audit 6 H-1). It can change CI itself: GitHub
+  runs a pull request's own copy of the workflows (`.github/`), so changes
+  there are read like code before merging
+  ([quality.md](docs/quality.md)).
 - Production deploys only happen from `main`, after every check passes,
   including the dependency audit, and only for `main`'s newest commit (so
   re-running an older run can't put older code back). Only the deploy steps

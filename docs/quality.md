@@ -42,10 +42,21 @@ entry counts however it's written (audit 5 H-1). It also fails when a pull
 request adds an `.npmrc`, or changes where pnpm downloads from (a registry,
 proxy, certificate or `fetch…` setting in `pnpm-workspace.yaml`): nothing
 here needs that, so ask Claude; the check has to allow it first, in a pull
-request of its own. The copy of the check that runs is `main`'s, from a
-folder outside the checkout, so a pull request can't change the check it's
-checked by (audit 5 H-3); the rules it applies (`minimumReleaseAge` and its
-exceptions) are `main`'s too (audit 4 H-1).
+request of its own. The copy of the check that runs is `main`'s, in a
+folder outside the checkout with `main`'s packages installed beside it (its
+YAML reader among them), and it runs before any pnpm command in the pull
+request's checkout: the **Dependency audit** job never installs the pull
+request's packages (`pnpm audit` reads only the lockfile). So neither the
+pull request's code nor its lockfile can change the check, or what reads
+the lockfile (audit 5 H-3, audit 6 H-1). The rules it applies
+(`minimumReleaseAge` and its exceptions) are `main`'s too (audit 4 H-1).
+
+What a pull request can change is CI itself: GitHub runs the pull
+request's own copy of `.github/` (the workflows and the shared actions),
+and `package.json`'s `packageManager` and `.node-version` choose which pnpm
+and Node.js CI downloads. So read a pull request's changes to those like
+code, whoever opened it, before merging; Dependabot's change only version
+numbers and pins.
 
 The unit test that checks the workflows' pins (`tests/unit/workflows.test.ts`)
 reads them as YAML, as GitHub does, so a step written any way GitHub accepts

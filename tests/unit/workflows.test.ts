@@ -1,6 +1,7 @@
 /**
  * Guards for the GitHub workflows:
  * - every third-party action is pinned to an exact commit (supply-chain safety);
+ * - the lockfile check runs main's copy, before anything from a pull request;
  * - the build CI saves for the deploy keeps every file;
  * - the "New app" form offers exactly the icons and colours that exist.
  */
@@ -87,6 +88,62 @@ jobs:
     expect(used.filter((action) => PINNED.test(action))).toEqual([
       'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9',
     ]);
+  });
+});
+
+interface Step {
+  name?: string;
+  uses?: string;
+  run?: string;
+  with?: Record<string, string>;
+  env?: Record<string, string>;
+}
+interface Job {
+  name?: string;
+  if?: string;
+  needs?: string | string[];
+  steps?: Step[];
+  concurrency?: { group?: string; 'cancel-in-progress'?: unknown };
+  outputs?: Record<string, string>;
+}
+const ci = parse(readFileSync(join(github, 'workflows/ci.yml'), 'utf8')) as {
+  concurrency: { group: string; 'cancel-in-progress': unknown };
+  jobs: Record<string, Job>;
+};
+
+describe('the lockfile check runs before anything from the pull request (audit 6 H-1)', () => {
+  const steps = ci.jobs['audit']?.steps ?? [];
+  const at = steps.findIndex((step) => step.run?.includes('lockfile-age.ts'));
+
+  it('runs main’s copy, with main’s packages, in a folder outside the checkout', () => {
+    expect(at, 'the step that runs the check').toBeGreaterThan(0);
+    const run = steps[at]?.run ?? '';
+    expect(run).toContain('git archive "origin/$BASE_REF" package.json pnpm-lock.yaml');
+    expect(run).toContain(
+      '(cd "$RUNNER_TEMP/base" && pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile',
+    );
+    expect(run).toContain('node "$RUNNER_TEMP/base/scripts/lockfile-age.ts" "origin/$BASE_REF"');
+  });
+
+  it('only checks out the code and sets up pnpm and Node.js before it, and never installs the pull request’s packages', () => {
+    for (const step of steps.slice(0, at)) {
+      if (step.uses?.startsWith('actions/checkout@')) continue;
+      expect(step.uses, step.name).toBe('./.github/actions/setup');
+      expect(step.with, step.name).toMatchObject({ install: 'false', cache: 'false' });
+    }
+    for (const step of steps) {
+      if (step.uses === './.github/actions/setup') expect(step.with?.['install']).toBe('false');
+      expect(step.run ?? '', step.name).not.toMatch(/^\s*pnpm (?:install|i|add)\b/m);
+    }
+  });
+
+  it('the setup action installs packages only when asked', () => {
+    const setup = parse(readFileSync(join(github, 'actions/setup/action.yml'), 'utf8')) as {
+      runs: { steps: (Step & { if?: string })[] };
+    };
+    const install = setup.runs.steps.filter((step) => step.run?.includes('pnpm install'));
+    expect(install.length).toBe(1);
+    expect(install[0]?.if).toBe("inputs.install == 'true'");
   });
 });
 

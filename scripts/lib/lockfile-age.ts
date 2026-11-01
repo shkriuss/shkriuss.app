@@ -10,14 +10,13 @@
  * written on one line (`evil@1.0.0: {resolution: {…}}`), or with a comment
  * after its name, was installed without any check (audit 5 H-1).
  */
-import { createRequire } from 'node:module';
-import { join } from 'node:path';
-import type * as YAML from 'yaml';
-
-// The yaml package, found from the working directory (the repository), not
-// from this file: CI runs main's copy of these scripts from a folder outside
-// the checkout, where nothing is installed (audit 5 H-3).
-const { parse } = createRequire(join(process.cwd(), 'package.json'))('yaml') as typeof YAML;
+// Found from this file's folder, never from the working directory: CI runs
+// main's copy of these scripts in a folder of its own, with main's packages
+// installed beside it, against a pull request's checkout (audit 5 H-3). Found
+// from the working directory, the YAML reader was the one the pull request's
+// own lockfile installed, so it could make its lockfile read as anything
+// (audit 6 H-1).
+import { parse } from 'yaml';
 
 type Mapping = Record<string, unknown>;
 

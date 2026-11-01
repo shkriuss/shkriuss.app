@@ -1,3 +1,8 @@
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   addedPackages,
@@ -295,5 +300,38 @@ snapshots:
     expect(
       npmrcFiles(['.npmrc', 'apps/tally/.npmrc', 'docs/npmrc.md', 'x/.npmrc.bak', '']),
     ).toEqual(['.npmrc', 'apps/tally/.npmrc']);
+  });
+
+  it('reads YAML with the yaml package beside it, never the working directory’s (audit 6 H-1)', () => {
+    // CI runs these checks in a pull request's checkout, whose node_modules
+    // its own lockfile decides. A "yaml" there that read every lockfile as
+    // main's made the check pass whatever the pull request added.
+    const checkout = mkdtempSync(join(tmpdir(), 'lockfile-age-'));
+    try {
+      mkdirSync(join(checkout, 'node_modules/yaml'), { recursive: true });
+      writeFileSync(join(checkout, 'package.json'), '{"type": "module"}\n');
+      writeFileSync(
+        join(checkout, 'node_modules/yaml/package.json'),
+        '{"name": "yaml", "version": "2.9.1", "main": "index.cjs"}\n',
+      );
+      writeFileSync(
+        join(checkout, 'node_modules/yaml/index.cjs'),
+        "throw new Error('the yaml package in the working directory was used');\n",
+      );
+      const lib = pathToFileURL(join(import.meta.dirname, 'lockfile-age.ts')).href;
+      const output = execFileSync(
+        process.execPath,
+        [
+          '--input-type=module',
+          '--eval',
+          `const { lockedPackages } = await import(${JSON.stringify(lib)});
+           console.log([...lockedPackages('packages:\\n  is-number@7.0.0: {}\\n')].join());`,
+        ],
+        { cwd: checkout, encoding: 'utf8', env: { ...process.env, NODE_PATH: '' } },
+      );
+      expect(output.trim()).toBe('is-number@7.0.0');
+    } finally {
+      rmSync(checkout, { recursive: true, force: true });
+    }
   });
 });

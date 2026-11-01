@@ -172,25 +172,38 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up
+      # pnpm and Node.js only: this job never installs the pull request's
+      # packages, so none of their code runs here (pnpm audit reads only the
+      # lockfile).
+      - name: Set up pnpm and Node.js
         uses: ./.github/actions/setup
-
-      - name: Check for known high or critical vulnerabilities
-        run: pnpm audit --audit-level high
+        with:
+          cache: 'false'
+          install: 'false'
 
       # pnpm's 7-day wait only applies when it picks versions; CI installs what
-      # the lockfile says, so check what a pull request adds to it. The check
-      # that runs is main's copy of the script, from a folder outside the
-      # checkout, so a pull request can't change the check it's checked by
-      # (audit 5 H-3); the rules it applies are main's too (audit 4 H-1).
+      # the lockfile says, so check what a pull request adds to it. What runs
+      # is main's copy of the check, with main's packages (its YAML reader
+      # among them) installed beside it in a folder outside the checkout, and
+      # before any pnpm command in the checkout: so neither the pull request's
+      # code nor its lockfile can change the check, or what reads the lockfile
+      # (audit 5 H-3, audit 6 H-1). The rules it applies are main's too
+      # (audit 4 H-1). NODE_PATH is for main's copy of the check from before
+      # audit 6 H-1, which looked for its packages from the working directory.
       - name: No package versions under 7 days old in the lockfile
         if: github.event_name == 'pull_request'
         env:
           BASE_REF: ${{ github.base_ref }}
+          NODE_PATH: ${{ runner.temp }}/base/node_modules
         run: |
           git fetch --no-tags --depth=1 origin "$BASE_REF"
-          git archive "origin/$BASE_REF" scripts/lockfile-age.ts scripts/lib/lockfile-age.ts | tar -x -C "$RUNNER_TEMP"
-          node "$RUNNER_TEMP/scripts/lockfile-age.ts" "origin/$BASE_REF"
+          mkdir "$RUNNER_TEMP/base"
+          git archive "origin/$BASE_REF" package.json pnpm-lock.yaml pnpm-workspace.yaml scripts/lockfile-age.ts scripts/lib/lockfile-age.ts | tar -x -C "$RUNNER_TEMP/base"
+          (cd "$RUNNER_TEMP/base" && pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile --store-dir "$RUNNER_TEMP/base-store")
+          node "$RUNNER_TEMP/base/scripts/lockfile-age.ts" "origin/$BASE_REF"
+
+      - name: Check for known high or critical vulnerabilities
+        run: pnpm audit --audit-level high
 
   deploy:
     name: Deploy to production

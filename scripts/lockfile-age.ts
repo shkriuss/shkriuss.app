@@ -5,9 +5,13 @@
  * scripts/lib/lockfile-age.ts), and when the pull request changes where
  * pnpm downloads from: an .npmrc file, or a registry, proxy, certificate or
  * fetch setting in pnpm-workspace.yaml (audit 5 H-1). Run by CI on pull
- * requests, with the base branch fetched:
+ * requests, in the pull request's checkout with the base branch fetched:
  *
  *   node scripts/lockfile-age.ts origin/main
+ *
+ * CI runs the base branch's copy of this script, from a folder of its own with
+ * the base branch's packages, before anything from the pull request is
+ * installed (.github/workflows/ci.yml, audit 6 H-1).
  */
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
