@@ -99,6 +99,12 @@ const FIRST_PARTS_AT_ONCE = 8;
 
 const fileKey = (prefix: string, id: string) => `${prefix}/${id}`;
 
+/**
+ * Another token's library (after a move, the lost device's, perhaps). It
+ * says so, so the device doesn't take any other 403 for this (audit 6 A-5).
+ */
+const notYours = () => json({ error: 'This isn’t your library.', notYours: true }, 403);
+
 /** The storage code, compared in constant time (as hashes, so the lengths match). */
 async function isStorageCode(given: string, code: string): Promise<boolean> {
   return equalBytes(await sha256(utf8(given)), await sha256(utf8(code)));
@@ -618,7 +624,7 @@ export class Library {
         meta.access = token;
         await this.#save(meta);
       } else if (meta.access !== token) {
-        return problem(403, 'This isn’t your library.');
+        return notYours();
       }
       await this.#keepWhileUnused(meta, now);
 
@@ -989,7 +995,7 @@ export class Library {
    */
   async #move(meta: Meta, token: string, from: string, now: number): Promise<Response> {
     if (meta.access !== null && meta.access !== token && meta.access !== from) {
-      return problem(403, 'This isn’t your library.');
+      return notYours();
     }
     if (meta.access !== token) {
       const retired =

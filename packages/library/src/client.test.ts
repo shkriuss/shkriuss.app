@@ -356,6 +356,43 @@ describe('a replaced account key', () => {
   });
 });
 
+describe('a 403 that isn’t the library’s own (audit 6 A-5)', () => {
+  // Any 403 to the move counted as "a device with the old key took the
+  // library": a challenge page from Cloudflare, say, marked the person's
+  // library as taken for good, with nothing moved.
+  it('fails the move, to be tried again, instead of marking the library taken', async () => {
+    const oldKey = randomBytes(32);
+    const newKey = randomBytes(32);
+    const phone = await device(oldKey);
+    await phone.api.unlock(CODE);
+    await phone.api.upload('photo-0001', photo, parts());
+    const service = globalThis.fetch;
+    vi.stubGlobal('fetch', async (input: string, init?: RequestInit) =>
+      String(input).endsWith('/api/library/move')
+        ? new Response('<!DOCTYPE html><title>Just a moment...</title>', {
+            status: 403,
+            headers: { 'Content-Type': 'text/html', 'cf-mitigated': 'challenge' },
+          })
+        : service(input, init),
+    );
+    let saved: readonly LibraryRecord[] = [phone.record];
+    const linked = linkedLibrary(
+      () => saved,
+      (records) => {
+        saved = records;
+        return true;
+      },
+    );
+    expect((await failure(linked.move(oldKey, newKey))).status).toBe(403);
+    expect(saved).toEqual([phone.record]);
+
+    vi.stubGlobal('fetch', service);
+    await linked.move(oldKey, newKey);
+    expect(saved).toEqual([await libraryRecord(newKey, phone.record)]);
+    expect((await failure(phone.api.changes(0))).problem).toBe('moved');
+  });
+});
+
 describe('deleting with the online copy', () => {
   it('deletes everything in the library', async () => {
     const secret = randomBytes(32);
