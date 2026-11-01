@@ -18,13 +18,7 @@ import {
 import { sha256Text } from '@shkriuss/server';
 import { successorTag } from './secret.ts';
 import { HUB, testPasskey } from './testing.ts';
-import {
-  finishReplacing,
-  isReplaced,
-  replaceAccountKey,
-  replacedNote,
-  signOutIfReplaced,
-} from './status.ts';
+import { checkReplaced, isReplaced, replaceAccountKey, replacedNote } from './status.ts';
 import worker, {
   AccountPasskey,
   AccountStatus,
@@ -74,6 +68,8 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+/** What checkReplaced says when nothing changed. */
+const UNCHANGED = { outcome: 'unchanged' };
 /** A small limit, so the tests fill it quickly. */
 const SMALL_LIMIT = 4_000_000;
 const madeUpToken = () => toBase64Url(randomBytes(32));
@@ -176,7 +172,7 @@ describe('a device whose key was replaced elsewhere (audit 3 D-8)', () => {
     const [old, next] = [randomBytes(32), randomBytes(32)];
     const phone = await phoneAfterReplacing(old, next);
     // Notes synced here with that key: it still may (it has its own key).
-    expect(await signOutIfReplaced(phone)).toEqual(['notes']);
+    expect(await checkReplaced(phone)).toEqual({ outcome: 'signed-out', apps: ['notes'] });
     expect(await currentAccount()).toBeNull();
     expect(replacedSecrets()).toEqual([]);
     expect(localStorage.getItem('shkriuss-device:account')).toBeNull();
@@ -193,13 +189,13 @@ describe('a device whose key was replaced elsewhere (audit 3 D-8)', () => {
     const account = await currentAccount();
     if (!account) throw new Error('Not signed in');
     noteSyncOn('notes', account.code, NOTES);
-    expect(await signOutIfReplaced(account)).toBeNull();
+    expect(await checkReplaced(account)).toEqual(UNCHANGED);
 
     // Replaced, but the account service can't be reached: checked again next time.
     await replaceAccountKey(key, randomBytes(32));
     await saveAccount(key);
     vi.stubGlobal('fetch', () => Promise.reject(new TypeError('offline')));
-    expect(await signOutIfReplaced(account)).toBeNull();
+    expect(await checkReplaced(account)).toEqual(UNCHANGED);
     expect((await currentAccount())?.secret).toEqual(key);
     expect([...syncedApps(account.code).keys()]).toEqual(['notes']);
   });
@@ -208,7 +204,7 @@ describe('a device whose key was replaced elsewhere (audit 3 D-8)', () => {
     const [old, next] = [randomBytes(32), randomBytes(32)];
     const phone = await phoneAfterReplacing(old, next);
     await saveAccount(next);
-    expect(await signOutIfReplaced(phone)).toBeNull();
+    expect(await checkReplaced(phone)).toEqual(UNCHANGED);
     expect((await currentAccount())?.secret).toEqual(next);
   });
 });
@@ -223,12 +219,14 @@ describe('a key replacement whose answer never came (audit 6 A-1)', () => {
   async function pageOpens() {
     const account = await currentAccount();
     if (!account) throw new Error('Not signed in');
-    return { finished: await finishReplacing(account), account };
+    return checkReplaced(account);
   }
 
-  it('is finished the next time the page opens, keeping the old key for the apps', async () => {
-    const [old, next] = [randomBytes(32), randomBytes(32)];
-    await saveAccount(old);
+  /** Replaces `old` with `next`: the account service notes it, but its answer is lost. */
+  async function replaceWithLostAnswer(
+    old: Uint8Array<ArrayBuffer>,
+    next: Uint8Array<ArrayBuffer>,
+  ) {
     const service = globalThis.fetch;
     vi.stubGlobal('fetch', async (input: string, init?: RequestInit) => {
       await service(input, init);
@@ -236,19 +234,54 @@ describe('a key replacement whose answer never came (audit 6 A-1)', () => {
     });
     await expect(replaceAccountKey(old, next)).rejects.toMatchObject({ code: 'server' });
     vi.stubGlobal('fetch', service);
+  }
+
+  it('is finished the next time the page opens, keeping the old key for the apps', async () => {
+    const [old, next] = [randomBytes(32), randomBytes(32)];
+    await saveAccount(old);
+    await replaceWithLostAnswer(old, next);
     expect(await isReplaced(old)).toBe(true);
     expect((await currentAccount())?.secret).toEqual(old);
 
-    expect((await pageOpens()).finished).toEqual({ saved: true });
+    expect(await pageOpens()).toEqual({ outcome: 'replaced', saved: true, noted: true });
     const account = await currentAccount();
     expect(account?.secret).toEqual(next);
     expect(replacedSecrets()).toEqual([old]);
-    if (account) expect(await signOutIfReplaced(account)).toBeNull();
     // Signed in, the replacement under way is over.
     expect(JSON.parse(localStorage.getItem('shkriuss-device:account') ?? '{}')).not.toHaveProperty(
       'next',
     );
-    expect((await pageOpens()).finished).toBeNull();
+    expect(await pageOpens()).toEqual(UNCHANGED);
+  });
+
+  it('changes nothing when the one check fails, and is finished the next time (audit 7 A-1, run 27)', async () => {
+    // The page asked twice as it opened: when only the first check failed,
+    // the second took this device for a lost one. It signed out and forgot
+    // the old key (and the new one), so no app could move its old copy.
+    const [old, next] = [randomBytes(32), randomBytes(32)];
+    await saveAccount(old);
+    const phone = await currentAccount();
+    if (!phone) throw new Error('Not signed in');
+    noteSyncOn('notes', phone.code, 'https://notes.shkriuss.app');
+    await replaceWithLostAnswer(old, next);
+
+    // The first request fails (a timeout, a dropped connection, a 503); any
+    // later one would get through.
+    const service = globalThis.fetch;
+    let calls = 0;
+    vi.stubGlobal('fetch', async (input: string, init?: RequestInit) => {
+      calls += 1;
+      return calls === 1 ? new Response(null, { status: 503 }) : service(input, init);
+    });
+    expect(await pageOpens()).toEqual(UNCHANGED);
+    expect(calls).toBe(1);
+    expect((await currentAccount())?.secret).toEqual(old);
+    expect([...syncedApps(phone.code).keys()]).toEqual(['notes']);
+
+    // Next time, it's finished.
+    expect(await pageOpens()).toEqual({ outcome: 'replaced', saved: true, noted: true });
+    expect((await currentAccount())?.secret).toEqual(next);
+    expect(replacedSecrets()).toEqual([old]);
   });
 
   it('isn’t, and changes nothing, when the request never got there', async () => {
@@ -259,9 +292,7 @@ describe('a key replacement whose answer never came (audit 6 A-1)', () => {
     await expect(replaceAccountKey(old, next)).rejects.toMatchObject({ code: 'server' });
     vi.stubGlobal('fetch', service);
 
-    const { finished, account } = await pageOpens();
-    expect(finished).toBeNull();
-    expect(await signOutIfReplaced(account)).toBeNull();
+    expect(await pageOpens()).toEqual(UNCHANGED);
     expect((await currentAccount())?.secret).toEqual(old);
     // Trying again works as usual.
     expect(await replaceAccountKey(old, next)).toEqual({ saved: true, noted: true });
@@ -283,9 +314,7 @@ describe('a key replacement whose answer never came (audit 6 A-1)', () => {
     await replaceAccountKey(old, theirs);
     vi.stubGlobal('localStorage', here);
 
-    const { finished, account } = await pageOpens();
-    expect(finished).toBeNull();
-    expect(await signOutIfReplaced(account)).toEqual([]);
+    expect(await pageOpens()).toEqual({ outcome: 'signed-out', apps: [] });
     expect(await currentAccount()).toBeNull();
     expect(replacedSecrets()).toEqual([]);
   });

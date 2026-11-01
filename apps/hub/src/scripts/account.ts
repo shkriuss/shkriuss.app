@@ -8,10 +8,10 @@ import {
   addPasskey,
   appSecretOf,
   cancelLink,
+  checkReplaced,
   claimLink,
   createLink,
   currentAccount,
-  finishReplacing,
   forgetAccount,
   generateSecret,
   isReplaced,
@@ -28,11 +28,11 @@ import {
   sameSecret,
   saveAccount,
   signInWithPasskey,
-  signOutIfReplaced,
   syncedApps,
   type Account,
   type AccountErrorCode,
   type DeviceLink,
+  type KeyCheck,
   type LinkState,
 } from '@shkriuss/account';
 import { today } from '@shkriuss/dates';
@@ -842,21 +842,20 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
 
   window.addEventListener('hashchange', () => void openLink(location.hash));
 
-  // Replaced here, but the answer never came (the connection dropped, or
-  // the page was closed): finished now, as if it had (audit 6 A-1).
-  const finished = account ? await finishReplacing(account) : null;
-  if (finished) account = await currentAccount();
-
-  // Replaced on another device (a lost device): signed out here, keeping
-  // nothing of it, as "Sign out" does (audit 3 D-8). Its apps here keep
-  // their own keys: the message names them, now that the list is gone.
-  const stillSyncing = account ? await signOutIfReplaced(account) : null;
-  if (stillSyncing) {
+  // One question to the account service, and one answer acted on (audit 7
+  // A-1, run 27). Replaced on another device (a lost device): signed out
+  // here, keeping nothing of it, as "Sign out" does (audit 3 D-8). Its apps
+  // here keep their own keys: the message names them, now that the list is
+  // gone. Replaced here, but the answer never came (the connection dropped,
+  // or the page was closed): finished now, as if it had (audit 6 A-1).
+  const checked: KeyCheck = account ? await checkReplaced(account) : { outcome: 'unchanged' };
+  if (checked.outcome === 'signed-out') {
     account = null;
-    const names = syncLinks.filter(({ slug }) => stillSyncing.includes(slug));
+    const names = syncLinks.filter(({ slug }) => checked.apps.includes(slug));
     say(replacedHere(names.map(({ name }) => name)), true);
-  } else if (finished) {
-    say(finished.saved ? REPLACED.done : STORAGE_BLOCKED, !finished.saved);
+  } else if (checked.outcome === 'replaced') {
+    account = await currentAccount();
+    say(checked.saved ? REPLACED.done : STORAGE_BLOCKED, !checked.saved);
   }
   // The account key, and the replaced keys the apps need, are only in this
   // browser: it's asked not to delete them when it's short of space, as

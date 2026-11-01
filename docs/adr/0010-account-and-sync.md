@@ -34,7 +34,10 @@ after 180 days (S5); an edit keeps its time also when the app is put away
 while a sync waits for the server (S22); an older version of an app keeps the
 stores a newer one added in the copy (S4); when that code can't be loaded (a
 page left open from before an update), "Turn on sync" says to reload the page
-rather than check the connection (S40).
+rather than check the connection (S40). Changed by audit 7: the Account page
+asks the account service once as it opens and acts on that one answer, so a
+replacement whose answer was lost is finished then or left for the next time,
+never taken for a lost device's (A-1, run 27).
 
 ## Context
 
@@ -180,7 +183,11 @@ connection drops, or the page is closed); then the next time the Account
 page opens, the note's tag names that new key, which only this device
 could have made, so it finishes step 3 instead of taking itself for a
 lost device. Before, it signed out and forgot the old key, so no app could
-move its old copy any more (audit 6 A-1).
+move its old copy any more (audit 6 A-1). The page asks the service once as
+it opens, and acts on that one answer: if the service can't be reached,
+nothing changes until the next time. It used to ask twice, and when only
+the first check failed, the second still took it for a lost device (audit 7
+A-1, run 27).
 
 Then:
 

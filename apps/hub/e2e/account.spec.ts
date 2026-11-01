@@ -545,6 +545,45 @@ test('replacing the key signs out every device that has the old one', async ({
   await tablet.context().close();
 });
 
+/** What this device keeps about its account: the key, and the replaced keys. */
+const storedAccount = (page: Page) =>
+  page.evaluate(
+    () =>
+      JSON.parse(localStorage.getItem('shkriuss-device:account') ?? 'null') as {
+        secret?: string;
+        replaced?: string[];
+      } | null,
+  );
+
+/**
+ * Replaces the key on a signed-in page: the account service notes it, but
+ * its answer is lost (the connection drops). Returns the new recovery key.
+ */
+async function replaceWithLostAnswer(page: Page): Promise<string> {
+  await page.route('**/api/account/status', async (route) => {
+    if (route.request().method() !== 'PUT') return route.fallback();
+    await route.fetch();
+    return route.abort('connectionreset');
+  });
+  await page.getByRole('button', { name: 'Replace the account key' }).click();
+  await page.getByRole('button', { name: 'Get a new key' }).click();
+  const key = (await page.locator('[data-new-key]').textContent()) ?? '';
+  await page.getByLabel("I've saved my recovery key").check();
+  await page.getByRole('button', { name: 'Replace the key' }).click();
+  await expect(page.locator('[data-new-status]')).toHaveText(/^Couldn’t reach shkriuss\.app/);
+  await page.unrouteAll();
+  return key;
+}
+
+/** Checks the page is signed in with `key`, keeping `old` for the apps to move their old copies. */
+async function finishedWith(page: Page, key: string, old: string | undefined): Promise<void> {
+  await page.getByRole('button', { name: 'Show recovery key' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Your recovery key' });
+  await expect(dialog.locator('[data-dialog-key]')).toHaveText(key);
+  await dialog.getByRole('button', { name: 'Close' }).click();
+  expect((await storedAccount(page))?.replaced).toEqual([old]);
+}
+
 test('a key replaced here whose answer never came is finished when the page opens again', async ({
   page,
   guard,
@@ -554,44 +593,48 @@ test('a key replaced here whose answer never came is finished when the page open
   // for a lost one, signed out and forgot the old key, so no app could move
   // its old copy any more (audit 6 A-1).
   const old = await createAccount(page);
-  const oldSecret = await page.evaluate(
-    () =>
-      (JSON.parse(localStorage.getItem('shkriuss-device:account') ?? '{}') as { secret: string })
-        .secret,
-  );
-  await page.route('**/api/account/status', async (route) => {
-    if (route.request().method() !== 'PUT') return route.fallback();
-    await route.fetch();
-    return route.abort('connectionreset');
-  });
+  const oldSecret = (await storedAccount(page))?.secret;
   guard.allowConsole('net::ERR_CONNECTION_RESET');
-  await page.getByRole('button', { name: 'Replace the account key' }).click();
-  await page.getByRole('button', { name: 'Get a new key' }).click();
-  const key = (await page.locator('[data-new-key]').textContent()) ?? '';
-  await page.getByLabel("I've saved my recovery key").check();
-  await page.getByRole('button', { name: 'Replace the key' }).click();
-  await expect(page.locator('[data-new-status]')).toHaveText(/^Couldn’t reach shkriuss\.app/);
-  await page.unrouteAll();
+  const key = await replaceWithLostAnswer(page);
 
   await page.reload();
   await expect(view(page, 'signed-in')).toBeVisible();
   await expect(message(page)).toHaveText(/^Your account key is replaced\./);
   await expect(accountCode(page)).not.toHaveText(old.code);
-  await page.getByRole('button', { name: 'Show recovery key' }).click();
-  await expect(
-    page.getByRole('dialog', { name: 'Your recovery key' }).locator('[data-dialog-key]'),
-  ).toHaveText(key);
-  // The old key stays, for the apps to move their old copies.
-  expect(
-    await page.evaluate(
-      () =>
-        (
-          JSON.parse(localStorage.getItem('shkriuss-device:account') ?? '{}') as {
-            replaced?: string[];
-          }
-        ).replaced,
-    ),
-  ).toEqual([oldSecret]);
+  await finishedWith(page, key, oldSecret);
+});
+
+test('a key replaced here whose answer never came stays as it is when the check fails, then is finished (audit 7 A-1, run 27)', async ({
+  page,
+  guard,
+}) => {
+  // The page asked the account service twice as it opened: when only the
+  // first check failed, the second took this device for a lost one. It
+  // signed out, and forgot the old key (and the new one).
+  const old = await createAccount(page);
+  const oldSecret = (await storedAccount(page))?.secret;
+  guard.allowConsole('net::ERR_CONNECTION_RESET');
+  guard.allowConsole('net::ERR_FAILED');
+  const key = await replaceWithLostAnswer(page);
+
+  let checks = 0;
+  await page.route('**/api/account/status', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    checks += 1;
+    return checks === 1 ? route.abort('connectionreset') : route.fallback();
+  });
+  await page.reload();
+  await expect(view(page, 'signed-in')).toBeVisible();
+  await expect(accountCode(page)).toHaveText(old.code);
+  await expect(message(page)).toBeHidden();
+  expect(checks).toBe(1);
+  expect((await storedAccount(page))?.secret).toBe(oldSecret);
+
+  await page.reload();
+  await expect(message(page)).toHaveText(/^Your account key is replaced\./);
+  await expect(accountCode(page)).not.toHaveText(old.code);
+  expect(checks).toBe(2);
+  await finishedWith(page, key, oldSecret);
 });
 
 test('asks the browser to keep the account on this device', async ({ page }) => {

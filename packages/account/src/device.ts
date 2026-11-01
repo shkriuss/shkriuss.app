@@ -198,7 +198,7 @@ export async function saveAccount(
  * closed): without this, the next visit took this device for a lost one,
  * signed it out and forgot the old key, so no app could move its old copy
  * any more (audit 6 A-1). With it, the next visit finishes the replacement
- * (finishReplacing in ./status.ts). The person has saved `next`'s recovery
+ * (checkReplaced in ./status.ts). The person has saved `next`'s recovery
  * key by then.
  */
 export function noteReplacing(
@@ -328,7 +328,7 @@ export function forgetAccount(): void {
  * on in it again. Null, and nothing changes, if this device is signed in
  * with another key by now (in another tab).
  */
-export function forgetReplaced(account: Account): string[] | null {
+export function forgetReplaced(account: Pick<Account, 'secret' | 'code'>): string[] | null {
   if (read().secret !== toBase64Url(account.secret)) return null;
   const apps = [...syncedApps(account.code).keys()];
   forgetAccount();
