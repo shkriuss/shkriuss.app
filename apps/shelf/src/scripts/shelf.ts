@@ -705,17 +705,21 @@ export function mountShelf(root: Document): void {
 
   categoryForm.addEventListener('submit', (event) => {
     event.preventDefault();
-    // Deleted on another device, and its name not changed here: it stays
-    // deleted, as an item does (audit 5 F3-1). Saving the form as it was
-    // brought it back, everywhere once it synced (audit 6 F3-4).
-    if (
-      editingCategoryId !== null &&
-      !findCategory(editingCategoryId) &&
-      categoryInput.value.trim() === openedCategoryName
-    ) {
-      categoryGone(
-        `“${openedCategoryName}” was deleted on another device. It stays deleted: its name wasn’t changed.`,
-      );
+    // Its name not changed here: there's nothing to save. Saved as it was, a
+    // category deleted on another device meanwhile came back, everywhere
+    // once it synced (audit 6 F3-4), and one renamed there got its old name
+    // back. Deleted, it stays deleted, as an item does (audit 5 F3-1).
+    if (editingCategoryId !== null && categoryInput.value.trim() === openedCategoryName) {
+      const category = findCategory(editingCategoryId);
+      if (!category) {
+        categoryGone(
+          `“${openedCategoryName}” was deleted on another device. It stays deleted: its name wasn’t changed.`,
+        );
+        return;
+      }
+      announce(`Saved category ${category.name}.`);
+      savedCategoryId = category.id;
+      categoryEditor.close();
       return;
     }
     const problem = categoryProblem(categoriesState, categoryInput.value, editingCategoryId);

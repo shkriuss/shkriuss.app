@@ -289,3 +289,24 @@ test.describe('another device deletes a category meanwhile (audit 4 F3-5)', () =
     await expect(badge(page, 'Socks')).toHaveText('Personal items');
   });
 });
+
+test('Save with its name unchanged keeps a new name from another device', async ({ page }) => {
+  // Before, it put the old name back, here and, once synced, everywhere.
+  await chip(page, 'Home').click();
+  // Renamed in another tab, as a sync from another device would.
+  const other = await page.context().newPage();
+  await other.goto('/');
+  await chip(other, 'Home').click();
+  await categoryForm(other).getByLabel('Name').fill('House');
+  await categoryForm(other).getByRole('button', { name: 'Save' }).click();
+  await other.close();
+  await expect(chip(page, 'House')).toHaveCount(1);
+
+  await categoryForm(page).getByRole('button', { name: 'Save' }).click();
+  await expect(categoryForm(page)).toBeHidden();
+  await expect(chip(page, 'House')).toBeFocused();
+  await expect(chip(page, 'Home')).toHaveCount(0);
+  expect((await readStore(page, 'shelf-categories'))?.data).toEqual({
+    changes: [{ id: 'home', name: 'House', removed: false }],
+  });
+});

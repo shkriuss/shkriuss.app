@@ -53,8 +53,9 @@ anything else, with brands, prices, shops and links. Lives at
   what was typed (audit 4 F3-1). An item deleted on another device while
   its form was open comes back only if something in the form was changed;
   saved as it was, it stays deleted, and the page says so (audit 5 F3-1).
-  A category's form is the same: one deleted elsewhere comes back only if
-  its name was changed (audit 6 F3-4).
+  A category's form saved with its name unchanged changes nothing: one
+  deleted elsewhere meanwhile stays deleted (saying so), and one renamed
+  there keeps that name (audit 6 F3-4).
   Text limits count characters as people see them, as Safari's text boxes
   do, so nothing a box lets in is cut (audit 4 F3-4).
 - `src/pages/index.astro`: the page, built from `@shkriuss/ui` components.
