@@ -348,7 +348,9 @@ added to the deploy step's `env:` in `.github/workflows/ci.yml` (only
 `PHOTOS_STORAGE_CODE` is there now). If one is missing, the deploy only
 warns, and the library stays locked. The 1 TB limit is per app, so each
 library adds up to about $15 a month to the bill's ceiling
-([deployment](deployment.md)).
+([deployment](deployment.md)), and its lists' 320 MB to the server storage
+every app shares (`tests/unit/free-plan.test.ts` counts it,
+[ADR 0017](adr/0017-storage-limits.md)).
 
 The privacy page and the Account page's list of apps that sync include the
 app automatically. When an item is changed on two devices before they sync,

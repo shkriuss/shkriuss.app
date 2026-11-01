@@ -32,6 +32,14 @@ export const LIMITS = {
    * and four row writes, of 100,000 a day each for every app together.
    */
   uploadsPerDay: 10_000,
+  /**
+   * Room for every library's list together, in bytes of Durable Object
+   * storage: each item counts itemListBytes (a photo about 750) and each
+   * deletion note NOTE_BYTES, so about 400,000 photos. Kept by LibraryGate:
+   * the lists share the storage every app does (docs/adr/0017), and only
+   * someone with the storage code can add to them (audit 6).
+   */
+  listBytes: 320_000_000,
   /** Sealed details, in base64url characters. */
   detailsChars: 4000,
   /** Parts per item (Photos: thumbnail, screen-sized copy, original). */
@@ -115,6 +123,30 @@ export function parseParts(header: string | null): number[] | null {
   if (parts.some((size) => size !== 0 && size < SEAL_BYTES)) return null;
   const total = parts.reduce((sum, size) => sum + size, 0);
   return total > 0 && total <= LIMITS.itemBytes ? parts : null;
+}
+
+/**
+ * What a deletion note counts in its library's list: its two rows (the
+ * change, and the id it keeps from being used again), with the longest id
+ * and seal there can be. Notes stay for good (docs/adr/0016).
+ */
+export const NOTE_BYTES = 512;
+
+/**
+ * What an item counts in its library's list (LIMITS.listBytes): its two
+ * rows, the change with its sealed details and the id, keys and numbers
+ * included. Never less than NOTE_BYTES, so deleting it, which leaves a
+ * note in its place, never needs more room. A photo counts about 750.
+ */
+export function itemListBytes(item: {
+  id: string;
+  key: string;
+  details: string;
+  parts: readonly number[];
+}): number {
+  const rows =
+    256 + 2 * item.id.length + item.key.length + item.details.length + 12 * item.parts.length;
+  return Math.max(NOTE_BYTES, rows);
 }
 
 /** Sealed details: base64url of the right size. */

@@ -8,11 +8,14 @@ Changed by [ADR 0019](0019-no-pull-request-previews.md): there are no pull
 request previews, so no `shkriuss-photos-preview` bucket either. Updated by
 audit 5: a deletion note's seal is for the photo's id, not one upload of it
 (A-2, a known limit), a library made up through a move is cleaned up like
-any other (B-1), and what a deleted library keeps (D-3). Updated by audit
+any other (B-1), and what a deleted library keeps (D-3). Changed by audit
 6: only the library's own refusal marks a library as taken (A-5), the work
 with the library goes by the photos in the device's database at that
-moment, not by the page's own list (F3-1), and a photo that can't be
-deleted on the device isn't deleted online (F3-4).
+moment, not by the page's own list (F3-1), a photo that can't be deleted on
+the device isn't deleted online (F3-4), and the lists have a limit of their
+own, 320 MB for all of an app's libraries together, counting what each
+photo and each deletion note really takes (see "Protecting the bill" and
+"The list's size").
 
 ## Context
 
@@ -127,9 +130,14 @@ every device. That's far beyond what sync can hold:
   the new code once.
 - **Limits across all libraries,** because anyone can make up a library, so
   limits kept in each would protect nothing. One more Durable Object
-  (`LibraryGate`) keeps them: 1 TB stored and 10,000 uploads a day in all.
-  The upload limit keeps a big import from using up the free daily requests
-  every app shares.
+  (`LibraryGate`) keeps them: 1 TB stored, 320 MB of lists and 10,000
+  uploads a day in all. The upload limit keeps a big import from using up
+  the free daily requests every app shares. The lists' limit keeps them
+  inside the Durable Object storage every app shares
+  ([ADR 0017](0017-storage-limits.md)): until audit 6 nothing counted
+  them, so someone with the storage code could fill that storage with
+  tiny photos carrying long details, or with deletion notes for photos
+  that never existed.
 - **20 wrong codes an hour from each internet address** (for IPv6, each
   network: the first 64 bits), whatever the library. Not 20 for everyone
   together: then a stranger could use them up every hour and nobody could
@@ -245,8 +253,12 @@ every device. That's far beyond what sync can hold:
   every app shares (it was 20,000 a day until 24 October 2026, which could
   have left too few for the other apps). Bigger imports take several days,
   or the Workers paid plan ($5 a month) lifts the daily limits.
-- **The list's size:** about 400 bytes per photo in the Durable Object
-  (about 160 MB at 400,000 photos), well inside 1 GB.
+- **The list's size:** each photo counts what its two rows take, its
+  sealed details included (`itemListBytes` in `packages/library`): about
+  750 bytes for a photo, more for long details, so the 320 MB hold about
+  400,000 photos. (This said about 400 bytes per photo until audit 6,
+  which measured it.) When all of an app's lists together reach 320 MB,
+  uploads get "The online storage is full", as at 1 TB.
 - **Deleted photos leave small notes for good** (audit 3 B-5): two rows
   for each, about 300 bytes together, for the library's life. One is the
   note that it was deleted, with the deleting device's seal, which a
@@ -256,9 +268,13 @@ every device. That's far beyond what sync can hold:
   server doesn't know the devices (one may come back after months), and
   without the sealed note a device can't tell a deleted photo from one a
   server hides (audit A-8), so it would put the photo back online. The
-  400,000-photo limit, and the free-plan budget in
-  `tests/unit/free-plan.test.ts`, count photos that are there, not these
-  notes: 100,000 deletions add about 30 MB, still well inside 1 GB.
+  400,000-photo limit counts photos that are there, not these notes, but
+  the lists' 320 MB counts both: each note 512 bytes (the most one can
+  take), so 100,000 deletions take about 51 MB of it. A deleted photo's
+  note takes the room the photo had, so deleting is never refused. A note
+  for a photo the list doesn't have (one another device may be putting
+  online just then) is kept only while there's room: without room,
+  nothing can be added anyway (audit 6).
 - **Uploads only while Photos is open.** Browsers don't upload in the
   background for a website.
 - **A lost device** keeps whatever it already downloaded, and still knows

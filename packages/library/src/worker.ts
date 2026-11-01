@@ -66,9 +66,11 @@ import {
   checkUnlock,
   isDetails,
   ITEM_ID,
+  itemListBytes,
   KEY_ID,
   LIBRARY_ID,
   LIMITS,
+  NOTE_BYTES,
   parseParts,
   utcDay,
   type Changes,
@@ -88,7 +90,8 @@ export interface LibraryEnv extends SiteEnv {
 
 /**
  * All libraries together, counted as 16 KB each (a new library holds less;
- * what's added after the storage code is limited by LibraryGate).
+ * what's added after the storage code, the files and the lists, is limited
+ * by LibraryGate: LIMITS.bytes and LIMITS.listBytes).
  */
 export const STORAGE_LIMITS = 32_000_000;
 
@@ -157,10 +160,13 @@ export async function handleLibrary(
       method: 'POST',
       body: JSON.stringify(body),
     });
-  /** Bytes a library says it no longer stores are taken off the total. */
+  /** Bytes a library says it no longer stores (files, and room in its list) are taken off the totals. */
   const released = async (response: Response) => {
     const freed = Number(response.headers.get('X-Freed') ?? '0');
-    if (response.ok && freed > 0) await gate('release', { bytes: freed });
+    const listBytes = Number(response.headers.get('X-Freed-List') ?? '0');
+    if (response.ok && (freed > 0 || listBytes > 0)) {
+      await gate('release', { bytes: freed, listBytes });
+    }
     return response;
   };
   /** Which of these items the library has (only those are read from R2). */
@@ -273,7 +279,9 @@ export async function handleLibrary(
   if (!begin.ok) return begin;
   // Which library this is: one deleted in the meantime doesn't take it (B-7).
   const { epoch } = (await begin.json()) as { epoch: string };
-  const room = await gate('reserve', { size });
+  // Room in R2, and in the lists (the library counts the same).
+  const listBytes = itemListBytes({ id: item, key: keyId, details, parts });
+  const room = await gate('reserve', { size, listBytes });
   if (!room.ok) return room;
   try {
     await env.LIBRARY_FILES.put(key, request.body);
@@ -285,7 +293,7 @@ export async function handleLibrary(
   if (commit.headers.get('X-Discard') === '1') {
     await env.LIBRARY_FILES.delete(key).catch(() => undefined);
   }
-  if (commit.ok) await gate('add', { size });
+  if (commit.ok) await gate('add', { size, listBytes });
   return commit;
 }
 
@@ -340,6 +348,11 @@ export default createWorker<LibraryEnv>({ '/api/library': handleLibrary });
 interface GateState {
   /** Bytes stored, all libraries together. */
   bytes: number;
+  /**
+   * Room their lists take, as counted (itemListBytes, NOTE_BYTES): missing
+   * before it was counted (audit 6), and only what's added since then.
+   */
+  lists?: number;
   /** Uploads on `day` (UTC). */
   day: string;
   uploads: number;
@@ -354,7 +367,11 @@ const saltKey = (hour: number) => `salt:${hourText(hour)}`;
 /**
  * What protects the bill, kept across every library: anyone can make up a
  * library, so limits kept in each would protect nothing. One object, named
- * "gate"; the Worker asks it before each upload and each try of the code.
+ * "gate"; the Worker asks it before each upload and each try of the code,
+ * and a library before it keeps a note for an id its list never had. It
+ * keeps the room the lists take too: they're in the Durable Object storage
+ * every app shares (docs/adr/0017), and someone with the storage code could
+ * otherwise fill it (audit 6).
  * Wrong tries are kept per caller, as the caller's id hashed with a random
  * salt made for that hour, and deleted with the salt when the hour is over
  * (audit 3 D-8): from then on, nothing kept can be turned back into an
@@ -376,13 +393,15 @@ export class LibraryGate {
         caller?: string;
         size?: number;
         bytes?: number;
+        listBytes?: number;
       };
       const storage = this.state.storage;
       const now = Date.now();
       const today = utcDay(now);
       const saved = await storage.get<GateState>('gate');
-      const gate: GateState = {
+      const gate: Required<GateState> = {
         bytes: saved?.bytes ?? 0,
+        lists: saved?.lists ?? 0,
         day: today,
         uploads: saved?.day === today ? saved.uploads : 0,
       };
@@ -417,9 +436,11 @@ export class LibraryGate {
         return json({ error: 'That isn’t the storage code.', wrong: true }, 403);
       }
       const size = Math.max(0, Number(body.size ?? body.bytes ?? 0));
+      const list = Number.isSafeInteger(body.listBytes) ? Math.max(0, body.listBytes ?? 0) : 0;
+      const full = () => json({ error: 'The online storage is full.', full: true }, 507);
       if (op === 'reserve') {
-        if (gate.bytes + size > LIMITS.bytes) {
-          return json({ error: 'The online storage is full.', full: true }, 507);
+        if (gate.bytes + size > LIMITS.bytes || gate.lists + list > LIMITS.listBytes) {
+          return full();
         }
         if (gate.uploads >= LIMITS.uploadsPerDay) {
           return json(
@@ -430,11 +451,26 @@ export class LibraryGate {
         return noContent();
       }
       if (op === 'add') {
-        await save({ ...gate, bytes: gate.bytes + size, uploads: gate.uploads + 1 });
+        await save({
+          ...gate,
+          bytes: gate.bytes + size,
+          lists: gate.lists + list,
+          uploads: gate.uploads + 1,
+        });
+        return noContent();
+      }
+      // Notes for ids a list never had (from a library): counted at once, if there's room.
+      if (op === 'notes') {
+        if (gate.lists + list > LIMITS.listBytes) return full();
+        await save({ ...gate, lists: gate.lists + list });
         return noContent();
       }
       if (op === 'release') {
-        await save({ ...gate, bytes: Math.max(0, gate.bytes - size) });
+        await save({
+          ...gate,
+          bytes: Math.max(0, gate.bytes - size),
+          lists: Math.max(0, gate.lists - list),
+        });
         return noContent();
       }
       return problem(404, 'Not found.');
@@ -486,6 +522,12 @@ interface Meta {
   epoch: string;
   items: number;
   bytes: number;
+  /**
+   * Room its list takes, as LibraryGate counts it (itemListBytes, NOTE_BYTES),
+   * so it can be given back when the library is deleted. Missing in one from
+   * before the lists were counted (audit 6): its older items aren't counted.
+   */
+  list?: number;
   /** Uploads on `day` (UTC). */
   day: string;
   uploads: number;
@@ -503,8 +545,12 @@ interface Meta {
   wipeLocked?: true;
 }
 
-/** What the list knows of each item it ever had. */
-type Entry = { seq: number; size: number } | { seq: number; deleted: true; proof?: string };
+/**
+ * What the list knows of each item it ever had. `list`: the room the item
+ * counts (itemListBytes; missing in items from before it was counted).
+ */
+type Entry =
+  { seq: number; size: number; list?: number } | { seq: number; deleted: true; proof?: string };
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
@@ -706,6 +752,7 @@ export class Library {
         epoch: crypto.randomUUID(),
         items: 0,
         bytes: 0,
+        list: 0,
         wiping: false,
         wiped: true,
         unlockedWith: WIPED_LOCK,
@@ -912,14 +959,17 @@ export class Library {
     const seq = meta.seq + 1;
     const today = utcDay(now);
     const row: ItemRow = { ...item, seq, at: now };
+    // As the Worker counted it with LibraryGate before the upload.
+    const list = itemListBytes(item);
     await this.state.storage.put(seqKey(seq), row);
-    await this.state.storage.put(itemKey(item.id), { seq, size } satisfies Entry);
+    await this.state.storage.put(itemKey(item.id), { seq, size, list } satisfies Entry);
     const { wiped, wipeLocked: _, ...kept } = meta;
     await this.#save({
       ...kept,
       seq,
       items: meta.items + 1,
       bytes: meta.bytes + size,
+      list: (meta.list ?? 0) + list,
       day: today,
       uploads: (meta.day === today ? meta.uploads : 0) + 1,
     });
@@ -936,7 +986,10 @@ export class Library {
    * Deletes items and their files, leaving markers so other devices delete
    * them too. An id the list doesn't have gets a marker only while items can
    * be added (it may be on its way up); otherwise there's nothing to stop, and
-   * a stranger's made-up library can't fill storage with markers.
+   * a stranger's made-up library can't fill storage with markers. Such a
+   * marker needs room in the lists (LibraryGate): without it, nothing can be
+   * added anyway, so none is kept (audit 6). A deleted item's marker takes
+   * the room the item had, and the rest is given back.
    */
   async #remove(
     meta: Meta,
@@ -950,21 +1003,29 @@ export class Library {
       removals.map(async ([id]) => [id, await this.state.storage.get<Entry>(itemKey(id))] as const),
     );
     const live = entries.filter(
-      (pair): pair is readonly [string, { seq: number; size: number }] =>
+      (pair): pair is readonly [string, { seq: number; size: number; list?: number }] =>
         pair[1] !== undefined && !('deleted' in pair[1]),
     );
+    const unknown = entries.filter(([, entry]) => entry === undefined).length;
+    const noting = adding && unknown > 0 && (await this.#roomForNotes(unknown));
     // Files first: if that fails, nothing changes and the device tries again.
     if (live.length > 0) {
       await this.env.LIBRARY_FILES.delete(live.map(([id]) => fileKey(meta.prefix, id)));
     }
     let { seq, items, bytes } = meta;
+    let list = meta.list ?? 0;
+    let freedList = 0;
     for (const [id, entry] of entries) {
       if (entry && 'deleted' in entry) continue;
-      if (!entry && !adding) continue;
+      if (!entry && !noting) continue;
       if (entry) {
         await this.state.storage.delete(seqKey(entry.seq));
         items -= 1;
         bytes -= entry.size;
+        // Never less than NOTE_BYTES (itemListBytes): the note fits in its room.
+        if (entry.list !== undefined) freedList += entry.list - NOTE_BYTES;
+      } else {
+        list += NOTE_BYTES;
       }
       seq += 1;
       // The deleting device's seal goes with the note, so other devices can tell it's real.
@@ -979,11 +1040,32 @@ export class Library {
       } satisfies DeletedRow);
       await this.state.storage.put(itemKey(id), { seq, deleted: true, ...sealed } satisfies Entry);
     }
-    await this.#save({ ...meta, seq, items, bytes });
+    // Never more than it counted: older items weren't (audit 6).
+    freedList = Math.min(freedList, list);
+    await this.#save({ ...meta, seq, items, bytes, list: list - freedList });
     return new Response(null, {
       status: 204,
-      headers: { ...API_HEADERS, 'X-Freed': String(meta.bytes - bytes) },
+      headers: {
+        ...API_HEADERS,
+        'X-Freed': String(meta.bytes - bytes),
+        'X-Freed-List': String(freedList),
+      },
     });
+  }
+
+  /**
+   * Room in every library's list for `count` more deletion notes, counted
+   * at once by LibraryGate; false if there's none.
+   */
+  async #roomForNotes(count: number): Promise<boolean> {
+    const gate = this.env.LIBRARY_GATE.get(this.env.LIBRARY_GATE.idFromName('gate'));
+    const answer = await gate.fetch('https://gate/notes', {
+      method: 'POST',
+      body: JSON.stringify({ listBytes: count * NOTE_BYTES }),
+    });
+    if (answer.status === 507) return false;
+    if (!answer.ok) throw new Error('The libraries’ limits didn’t answer.');
+    return true;
   }
 
   /**
@@ -1022,6 +1104,7 @@ export class Library {
       return json({ wiping: false }, 202);
     }
     const freed = meta.wiping ? 0 : meta.bytes;
+    const freedList = meta.wiping ? 0 : (meta.list ?? 0);
     if (!meta.wiping) await this.#save({ ...meta, wiping: true });
     await this.state.storage.setAlarm(Date.now());
     return new Response(JSON.stringify({ wiping: true }), {
@@ -1030,6 +1113,7 @@ export class Library {
         'Content-Type': 'application/json; charset=utf-8',
         ...API_HEADERS,
         'X-Freed': String(freed),
+        'X-Freed-List': String(freedList),
       },
     });
   }

@@ -29,8 +29,12 @@ const repoRoot = join(import.meta.dirname, '../..');
 const FREE_STORAGE = 5_000_000_000;
 /** What the limits may add up to; the rest is a margin. */
 const STORAGE_BUDGET = 4_500_000_000;
-/** The owner's online library list, outside the meters (docs/adr/0016: about 400 bytes a photo). */
-const LIBRARY_LIST = LIBRARY_LIMITS.items * 400;
+/**
+ * An app's online libraries' lists together, kept by its LibraryGate
+ * (docs/adr/0016: a photo counts about 750 bytes). Until audit 6 no meter
+ * counted them, and this was a guess, for the owner's library alone.
+ */
+const LIBRARY_LISTS = LIBRARY_LIMITS.listBytes;
 
 /** Durable Object time on the free plan, a day: 13,000 GB-s, an object counting as 128 MB. */
 const FREE_SECONDS = 13_000 / 0.128;
@@ -65,14 +69,14 @@ function storageLimits(): number {
   for (const app of apps) {
     if (app.sync) total += syncsFiles(app.slug) ? SYNC.files : SYNC.copies;
     if (app.pushNotifications) total += PUSH;
-    if (app.library) total += LIBRARY;
+    if (app.library) total += LIBRARY + LIBRARY_LISTS;
   }
   return total;
 }
 
 describe('the free plan, shared by every app', () => {
-  it('has room for every server’s storage limit and the library list', () => {
-    const total = storageLimits() + LIBRARY_LIST;
+  it('has room for every server’s storage limit, the online libraries’ lists included', () => {
+    const total = storageLimits();
     expect(STORAGE_BUDGET).toBeLessThan(FREE_STORAGE);
     expect(
       total,

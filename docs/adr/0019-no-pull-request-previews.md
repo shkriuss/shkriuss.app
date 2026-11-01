@@ -50,7 +50,8 @@ and [ADR 0017](0017-storage-limits.md) that made room for previews.
 - No unmerged code ever runs with the token, and there are no public copies
   of unmerged code, and no server outside the rate limit.
 - All 100 Durable Object namespaces and the 4.5 GB storage budget are for the
-  live sites (33 namespaces and 3.1 GB of limits today).
+  live sites (33 namespaces and 3.1 GB of limits when this was decided;
+  3.3 GB since audit 6 counted the online library's lists).
 - Fewer parts to keep working: a workflow, a script, a GitHub environment, a
   storage bucket, and an approval on every push.
 - Nobody can try a change on a phone before it's live. Tests run in Chromium

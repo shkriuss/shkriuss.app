@@ -5,7 +5,7 @@
 import { randomBytes, sha256, toBase64Url } from '@shkriuss/crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { memoryLibrary } from './testing.ts';
-import { LIMITS, type Changes } from './validate.ts';
+import { itemListBytes, LIMITS, NOTE_BYTES, type Changes } from './validate.ts';
 import { LOCKED_UNUSED_MS, STORAGE_LIMITS, SWEEP_MS, WIPED_UNUSED_MS } from './worker.ts';
 
 const ORIGIN = 'https://photos.example';
@@ -435,6 +435,108 @@ describe('protecting the bill', () => {
     // Only that clean-up is planned: no files to look for in R2, as it never had any.
     expect(storage?.alarm).toBeGreaterThan(Date.now() + LOCKED_UNUSED_MS - 60_000);
     expect(list).not.toHaveBeenCalled();
+  });
+
+  // A library's list (each item's row, with its sealed details, and each
+  // deletion note) was counted by no meter: someone with the storage code
+  // could fill the storage every app shares with tiny items carrying long
+  // details, or with notes for ids that were never there (audit 6).
+  describe('the room every library’s list takes', () => {
+    const lists = async () =>
+      (await server.gateStorage.get<{ lists?: number }>('gate'))?.lists ?? 0;
+    /** What a library's list keeps: its rows' keys and values. */
+    const kept = (storage: { map: Map<string, unknown> } | undefined) =>
+      [...(storage?.map ?? [])]
+        .filter(([key]) => key.startsWith('seq:') || key.startsWith('item:'))
+        .reduce((sum, [key, value]) => sum + key.length + JSON.stringify(value).length, 0);
+    /** Uploads an item of one 28-byte part with `chars` characters of details. */
+    const tiny = (
+      device: ReturnType<typeof client>,
+      id: string,
+      chars: number = LIMITS.detailsChars,
+    ) =>
+      device.call(`/items/${id}`, {
+        method: 'PUT',
+        body: new Uint8Array(28),
+        headers: {
+          'Content-Length': '28',
+          'X-Library-Parts': '28',
+          'X-Library-Key': 'k1',
+          'X-Library-Details': 'D'.repeat(chars),
+        },
+      });
+
+    it('counts at least what each list keeps, long details and deletion notes included', async () => {
+      const device = client(libraryId(), token());
+      await device.unlock();
+      const storage = [...server.objects.values()][0]?.storage;
+      for (let index = 0; index < 20; index += 1) {
+        expect((await tiny(device, `photo-${1000 + index}`)).status).toBe(200);
+      }
+      expect(await lists()).toBeGreaterThanOrEqual(kept(storage));
+      // Notes for ids it never had (they may be on their way up), and for some it has.
+      const never = Array.from({ length: LIMITS.remove }, (_, index) => `never-${1000 + index}`);
+      expect((await device.remove(never)).status).toBe(204);
+      expect((await device.remove(['photo-1000', 'photo-1001'])).status).toBe(204);
+      expect(await lists()).toBeGreaterThanOrEqual(kept(storage));
+      // Kept as the library's own count too, which a deletion gives back.
+      const meta = await storage?.get<{ list: number }>('meta');
+      expect(meta?.list).toBe(await lists());
+    });
+
+    it('stops uploads, and notes for ids a list never had, once the room is full', async () => {
+      const device = client(libraryId(), token());
+      await device.unlock();
+      expect((await device.put(ITEM, [100])).status).toBe(200);
+      const before = await lists();
+      // Nearly full, from every library together.
+      const gate = await server.gateStorage.get<Record<string, unknown>>('gate');
+      await server.gateStorage.put('gate', { ...gate, lists: LIMITS.listBytes - 100 });
+      const full = await device.put('photo-0002', [100]);
+      expect(full.status).toBe(507);
+      expect(await full.json()).toMatchObject({ full: true });
+      expect(server.bucket.files.size).toBe(1);
+      // A note for an id it doesn't have isn't kept: nothing can be added anyway.
+      const storage = [...server.objects.values()][0]?.storage;
+      const rows = storage?.map.size;
+      expect((await device.remove(['photo-never'])).status).toBe(204);
+      expect(storage?.map.size).toBe(rows);
+      // Deleting a photo it has is never refused: its note takes its room.
+      expect((await device.remove([ITEM])).status).toBe(204);
+      expect(server.bucket.files.size).toBe(0);
+      expect((await device.changes()).rows).toEqual([
+        { id: ITEM, seq: 2, deleted: true, at: expect.any(Number) },
+      ]);
+      expect(await lists()).toBe(LIMITS.listBytes - 100 - (before - NOTE_BYTES));
+    });
+
+    it('gives a list’s room back when its library is deleted', async () => {
+      const first = client(libraryId(), token());
+      const second = client(libraryId(), token());
+      await first.unlock();
+      await second.unlock();
+      await tiny(first, 'photo-1000');
+      await first.remove(['never-1000']);
+      await tiny(second, 'photo-2000', 40);
+      const theirs = itemListBytes({
+        id: 'photo-2000',
+        key: 'k1',
+        details: 'D'.repeat(40),
+        parts: [28],
+      });
+      expect(await lists()).toBeGreaterThan(theirs);
+      expect((await first.call('', { method: 'DELETE' })).status).toBe(202);
+      expect(await lists()).toBe(theirs);
+      // Asking again while it's being deleted doesn't give it back twice.
+      expect((await first.call('', { method: 'DELETE' })).status).toBe(202);
+      expect(await lists()).toBe(theirs);
+      // Once deleted, the list starts again from nothing.
+      vi.useFakeTimers({ now: Date.now(), toFake: ['Date'] });
+      const storage = [...server.objects.values()][0]?.storage;
+      if (storage) storage.alarm = null;
+      await [...server.objects.values()][0]?.library.alarm();
+      expect((await storage?.get<{ list: number }>('meta'))?.list).toBe(0);
+    });
   });
 
   it('starts a deletion again if its alarm stopped', async () => {
