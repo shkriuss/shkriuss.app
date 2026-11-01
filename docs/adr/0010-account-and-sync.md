@@ -30,18 +30,11 @@ and it's cancelled when it's hidden as expired (A-1); the hub asks the browser
 to keep the account, as the apps keep their data (E-6); a device link costs 4
 row writes, not 2 or 3, as deleting it counts too (see "Free quota"); a
 deletion made with sync off or no connection is kept until it's online, even
-after 180 days (S5); a deletion made with sync off or no connection is kept
-until it's online, even after 180 days (S5); an edit keeps its time also when
-the app is put away while a sync waits for the server (S22); a deletion made
-with sync off or no connection is kept until it's online, even after 180 days
-(S5); an edit keeps its time also when the app is put away while a sync waits
-for the server (S22); an older version of an app keeps the stores a newer one
-added in the copy (S4); a deletion made with sync off or no connection is kept
-until it's online, even after 180 days (S5); an edit keeps its time also when
-the app is put away while a sync waits for the server (S22); an older version
-of an app keeps the stores a newer one added in the copy (S4); when that code
-can't be loaded (a page left open from before an update), "Turn on sync" says
-to reload the page rather than check the connection (S40).
+after 180 days (S5); an edit keeps its time also when the app is put away
+while a sync waits for the server (S22); an older version of an app keeps the
+stores a newer one added in the copy (S4); when that code can't be loaded (a
+page left open from before an update), "Turn on sync" says to reload the page
+rather than check the connection (S40).
 
 ## Context
 
