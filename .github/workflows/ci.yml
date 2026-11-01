@@ -37,9 +37,13 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Check out code
+      # With the history: the privacy page shows the day its text was merged,
+      # from git (apps/hub/src/lib/last-updated.ts, audit 6 D-2). Without it,
+      # the page shows the day the text was written.
+      - name: Check out code (with its history)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Set up

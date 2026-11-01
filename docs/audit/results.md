@@ -22,7 +22,7 @@ this:
 | [Second](#second-audit), 79 findings | [#70](https://github.com/shkriuss/shkriuss.app/pull/70) to [#77](https://github.com/shkriuss/shkriuss.app/pull/77), 25 October        | "(audit B-2)", in #70 to #77          | 2B-2 |
 | [Third](#third-audit), 77 findings   | [#79](https://github.com/shkriuss/shkriuss.app/pull/79) to [#88](https://github.com/shkriuss/shkriuss.app/pull/88), 26 October        | "(audit 3 B-2)"                       | 3B-2 |
 | [Fourth](#fourth-audit), 78 findings | [#89](https://github.com/shkriuss/shkriuss.app/pull/89) to [#93](https://github.com/shkriuss/shkriuss.app/pull/93), 26 and 27 October | "(audit 4 B-2)"                       | 4B-2 |
-| [Fifth](#fifth-audit), 81 findings   | [#94](https://github.com/shkriuss/shkriuss.app/pull/94) to [#99](https://github.com/shkriuss/shkriuss.app/pull/99), 27 October        | "(audit 5 B-2)"                       | 5B-2 |
+| [Fifth](#fifth-audit), 81 findings   | [#94](https://github.com/shkriuss/shkriuss.app/pull/94) to [#99](https://github.com/shkriuss/shkriuss.app/pull/99), 31 October        | "(audit 5 B-2)"                       | 5B-2 |
 
 So an "(audit B-2)" without an audit number means the first or the second
 audit: the history of its line (`git blame`, or **Blame** on GitHub) shows

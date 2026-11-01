@@ -27,6 +27,14 @@ import { RELOAD_TO_UPDATE } from './problem.ts';
 /** Waits this long after a change before uploading, so quick edits go up together. */
 const SYNC_DELAY_MS = 800;
 
+/**
+ * Said after "add … to your Home Screen": on an iPhone or iPad, the app there
+ * keeps its own data, apart from Safari's, so it starts empty. "Your data"
+ * (DataControls, at the bottom of every app) says how to bring it (audit 6 Z-1).
+ */
+export const STARTS_EMPTY_THERE =
+  'It starts empty there: see “Your data” below to bring what’s saved here.';
+
 export interface PushControlsOptions {
   /** The app's notifications as they are now. */
   notices: () => Notice[];
@@ -200,7 +208,7 @@ export function mountPushControls(block: HTMLElement, options: PushControlsOptio
     toggle.disabled = true;
     status.textContent =
       support === 'needs-home-screen'
-        ? `On iPhone and iPad, add ${app} to your Home Screen and open it from there to get reminders while it’s closed.`
+        ? `On iPhone and iPad, add ${app} to your Home Screen and open it from there to get reminders while it’s closed. ${STARTS_EMPTY_THERE}`
         : PROBLEMS.unsupported;
   }
 

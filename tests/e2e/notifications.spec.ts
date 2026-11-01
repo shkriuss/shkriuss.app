@@ -46,5 +46,31 @@ test('says how to get them on an iPhone (no notifications in the browser)', asyn
   await page.goto('/');
   await expect(status(page)).toHaveText(/^This browser can’t show notifications/);
   await expect(status(page)).toContainText(`add ${name} to your Home Screen`);
+  // The app there starts empty (audit 6 Z-1).
+  await expect(status(page)).toContainText(
+    'It starts empty there: see “Your data” below to bring what’s saved here.',
+  );
   await expect(enable(page)).toBeHidden();
+});
+
+test.describe('in Safari on an iPhone', () => {
+  test.use({
+    userAgent:
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+  });
+
+  test('says reminders while closed need the Home Screen, where the app starts empty (audit 6 Z-1)', async ({
+    page,
+  }, testInfo) => {
+    const { name } = getSite(testInfo.project.name);
+    // Safari has no notifications outside the Home Screen.
+    await fakeNotifications(page, 'unsupported');
+    await page.goto('/');
+    await expect(page.locator('[data-closed-status]')).toHaveText(
+      `On iPhone and iPad, add ${name} to your Home Screen and open it from there to get reminders while it’s closed. It starts empty there: see “Your data” below to bring what’s saved here.`,
+    );
+    await expect(
+      page.getByRole('checkbox', { name: `Also remind me when ${name} is closed` }),
+    ).toBeDisabled();
+  });
 });

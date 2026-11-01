@@ -138,8 +138,9 @@ check:dist` now checks every file's size), and adds onnxruntime-web's files
 - A build needs the 361 MB model from Hugging Face. CI keeps a copy in its
   cache, named after the model's SHA-256 (`.github/actions/deep-check-model`),
   so once it has been downloaded, builds and deploys work even if Hugging
-  Face is down. Only the checks job saves to the cache; the build checks the
-  checksum whatever the cache holds. If the cache is empty (GitHub drops
+  Face is down. Only the checks job (and the Keep caches workflow, below)
+  saves to the cache; the build checks the checksum whatever the cache
+  holds. If the cache is empty (GitHub drops
   copies unused for a week) and the file has gone from Hugging Face, builds
   stop with a clear error until we host a copy elsewhere. (PR previews,
   which uploaded the model to each preview, are gone: ADR 0019.)

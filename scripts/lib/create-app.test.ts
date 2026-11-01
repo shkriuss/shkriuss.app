@@ -1,11 +1,17 @@
-import { cp, mkdtemp, readFile, rm, writeFile, mkdir } from 'node:fs/promises';
+import { cp, mkdtemp, readdir, readFile, rm, writeFile, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { PRIVACY_PAGE } from '../../apps/hub/src/lib/last-updated.ts';
+import { DATE_LINE, fingerprint, shownOf } from '../../apps/hub/src/lib/privacy-fingerprint.ts';
+import { byName, hubSiteInfo, siteInfo, type Registry } from '../../packages/registry/src/index.ts';
 import {
   createApp,
   optionProblems,
+  privacyPageFor,
+  SHARED_TEST_FILES,
   SHARED_TEST_TABLES,
+  siteTables,
   TEMPLATE_SLUG,
   THEME_CHOICE,
   withSiteLine,
@@ -13,6 +19,23 @@ import {
 } from './create-app.ts';
 
 const repoRoot = join(import.meta.dirname, '../..');
+
+/** A shared test file as the temporary repo has it: each of its tables, with one app. */
+const sampleTests = (file: string, slug = 'tally'): string =>
+  SHARED_TEST_TABLES.filter((table) => table.file === file)
+    .map(({ start }) => `${start}Case> = {\n  ${slug}: tallyCase,\n};\n`)
+    .join('\n');
+
+/** Every test file in tests/e2e, with what it says. */
+async function sharedTests(root: string): Promise<{ file: string; source: string }[]> {
+  const files = (await readdir(join(root, 'tests/e2e'))).filter((name) => name.endsWith('.ts'));
+  return Promise.all(
+    files.map(async (name) => ({
+      file: `tests/e2e/${name}`,
+      source: await readFile(join(root, 'tests/e2e', name), 'utf8'),
+    })),
+  );
+}
 
 const sampleRegistry = {
   site: {
@@ -68,6 +91,30 @@ describe('optionProblems', () => {
   });
 });
 
+describe('siteTables', () => {
+  it('lists each table’s sites, not what’s inside their lines', () => {
+    const source = [
+      'const cases: EverySite<Case> = {',
+      '  budget: {',
+      '    setup: async (page) => page,',
+      '  },',
+      '  // Nothing to test.',
+      '  hub: null,',
+      "  'new-app': null,",
+      '};',
+      '',
+      'const other = { tally: 1 };',
+      'const comingBack: EverySite<Case> = {',
+      "  budget: cases['budget'] ?? null,",
+      '};',
+    ].join('\n');
+    expect(siteTables(source)).toEqual([
+      { name: 'cases', start: 'const cases: EverySite<', sites: ['budget', 'hub', 'new-app'] },
+      { name: 'comingBack', start: 'const comingBack: EverySite<', sites: ['budget'] },
+    ]);
+  });
+});
+
 describe('createApp', () => {
   let root: string;
 
@@ -78,9 +125,10 @@ describe('createApp', () => {
     await writeFile(join(root, 'packages/registry/apps.json'), JSON.stringify(sampleRegistry));
     // The shared browser tests' tables, with one app in each.
     await mkdir(join(root, 'tests/e2e'), { recursive: true });
-    for (const { file, start } of SHARED_TEST_TABLES) {
-      await writeFile(join(root, file), `${start}Case> = {\n  tally: tallyCase,\n};\n`);
-    }
+    for (const file of SHARED_TEST_FILES) await writeFile(join(root, file), sampleTests(file));
+    // The privacy page, whose date and fingerprint a new app changes.
+    await mkdir(join(root, 'apps/hub/src/pages'), { recursive: true });
+    await cp(join(repoRoot, PRIVACY_PAGE), join(root, PRIVACY_PAGE));
   });
 
   afterEach(async () => {
@@ -143,10 +191,13 @@ describe('createApp', () => {
 
   it('gives the new app a line, to fill in, in each shared browser test (audit 3 J-11)', async () => {
     await createApp(root, options);
-    for (const { file, start } of SHARED_TEST_TABLES) {
+    for (const file of SHARED_TEST_FILES) {
       const source = await readFile(join(root, file), 'utf8');
       expect(source, file).toBe(
-        `${start}Case> = {\n  tally: tallyCase,\n  // New: nothing for this test yet. Put what to do here once the app has it.\n  'notes': null,\n};\n`,
+        sampleTests(file).replaceAll(
+          '\n};',
+          "\n  // New: nothing for this test yet. Put what to do here once the app has it.\n  'notes': null,\n};",
+        ),
       );
     }
   });
@@ -156,6 +207,64 @@ describe('createApp', () => {
       const source = await readFile(join(repoRoot, file), 'utf8');
       expect(withSiteLine(source, start, 'notes'), file).toContain("  'notes': null,\n};");
     }
+  });
+
+  it('knows every table in the shared browser tests (audit 6 J-1)', async () => {
+    // keep-focus got three more tables, and a new app had a line in none of
+    // them, so its first pull request failed.
+    const found = (await sharedTests(repoRoot)).flatMap(({ file, source }) =>
+      siteTables(source).map(({ start }) => ({ file, start })),
+    );
+    expect(found.length).toBeGreaterThanOrEqual(6);
+    expect(
+      found.filter(
+        (table) =>
+          !SHARED_TEST_TABLES.some(
+            ({ file, start }) => file === table.file && start === table.start,
+          ),
+      ),
+      'Add these to SHARED_TEST_TABLES in scripts/lib/create-app.ts',
+    ).toEqual([]);
+  });
+
+  it('gives a new app a line in every table of the real shared browser tests', async () => {
+    for (const { file, source } of await sharedTests(repoRoot)) {
+      await writeFile(join(root, file), source);
+    }
+    // A slug none of them has a line for yet (Notes has one in each).
+    await createApp(root, { ...options, slug: 'journal', name: 'Journal' });
+    for (const { file, source } of await sharedTests(root)) {
+      for (const { name, sites } of siteTables(source)) {
+        expect(sites, `${file} ${name}`).toContain('journal');
+      }
+    }
+  });
+
+  it('sets the privacy page’s date and fingerprint for the new row', async () => {
+    // A new app adds a row to the privacy page, and its test then failed
+    // until both were set: the New app workflow runs that test before it
+    // pushes, so it never got as far as making a branch.
+    const before = await readFile(join(root, PRIVACY_PAGE), 'utf8');
+    await createApp(root, options, new Date(2099, 2, 4, 12));
+    const after = await readFile(join(root, PRIVACY_PAGE), 'utf8');
+    const registry = JSON.parse(
+      await readFile(join(root, 'packages/registry/apps.json'), 'utf8'),
+    ) as Registry;
+    const shown = shownOf([
+      hubSiteInfo(registry.site),
+      ...[...registry.apps].sort(byName).map(siteInfo),
+    ]);
+    expect(DATE_LINE.exec(after)?.slice(1)).toEqual(['4 March 2099', fingerprint(before, shown)]);
+    expect(after.replace(DATE_LINE, '')).toBe(before.replace(DATE_LINE, ''));
+  });
+
+  it('never moves the privacy page’s date back', () => {
+    const source =
+      "---\nconst LAST_UPDATED = '9 May 2099'; // text 0123456789abcdef\n---\n<p>Hi</p>\n";
+    const registry = { ...sampleRegistry, apps: [] } as unknown as Registry;
+    expect(privacyPageFor(source, registry, new Date(2026, 10, 1))).toMatch(
+      /^const LAST_UPDATED = '9 May 2099'; \/\/ text [0-9a-f]{16}$/m,
+    );
   });
 
   it('changes nothing when a table can’t be found', async () => {

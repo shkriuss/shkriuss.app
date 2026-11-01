@@ -415,8 +415,11 @@ in with `sync: true` in `apps.json`.
   (audit 3 B-3). Whoever controls the servers could also
   change the apps themselves, so these limits matter most for mistakes.
 - **What doesn't sync:** settings that belong to one device, such as
-  notifications, reminder bookkeeping and the theme. "Delete all data" turns
-  sync off on that device first, so the deletion doesn't spread.
+  whether to send reminders while the app is closed (the device's
+  notification settings), reminder bookkeeping and the theme. An app's
+  reminder times are part of its data, and do sync (Water, Meals and Budget
+  keep them as settings; audit 6 D-1). "Delete all data" turns sync off on
+  that device first, so the deletion doesn't spread.
 
 ## Consequences
 

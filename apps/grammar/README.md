@@ -4,8 +4,8 @@ Check your English, American or British. Lives at
 <https://grammar.shkriuss.app>.
 
 The checking is done by [Harper](https://github.com/automattic/harper)
-(`harper.js`), running on the device as WebAssembly. Nothing is sent anywhere
-([ADR 0011](../../docs/adr/0011-on-device-grammar-checking.md)).
+(`harper.js`), running on the device as WebAssembly. Your text is never sent
+anywhere ([ADR 0011](../../docs/adr/0011-on-device-grammar-checking.md)).
 
 - `src/lib/grammar.ts`: the rules as plain functions, with unit tests next to
   them (`grammar.test.ts`): what a problem looks like, how a fix changes the

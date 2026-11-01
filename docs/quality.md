@@ -27,7 +27,8 @@ written in newer syntax fails it (audit 4 J-3). Write that code the ES2022
 way, or leave out the package that brings it. It checks only the syntax:
 a package that calls a function Safari 16.4 doesn't have (like
 `Object.groupBy`) passes, so check that in the support tables. The type
-check holds the code here to ES2022, functions included
+check holds the code here to ES2022's functions, plus ES2023's array
+methods (`findLast`, `toSorted`…), which Safari 16.4 has
 (`tsconfig.base.json`). It also refuses a page that loads anything from
 another website: a `link` (a `preconnect` or `dns-prefetch` hint too, which
 the browser tests can't see), `script`, `img`, `iframe`, `source`, `video`
@@ -156,7 +157,10 @@ moderate or low advisory doesn't stop anything (`--audit-level high`).
 The tests that need something from each app (the large-text, focus and
 saving ones) have a table with a line for every site, `null` where a test
 can't apply; a site missing from a table fails the test, so no app is
-skipped without a word (`tests/e2e/every-site.ts`, audit 3 J-11).
+skipped without a word (`tests/e2e/every-site.ts`, audit 3 J-11). A unit
+test checks the same before anything is built, and that no table keeps a
+line for a site that's gone (`tests/unit/shared-test-tables.test.ts`,
+audit 6 J-3).
 
 ## Tools Dependabot can't update
 

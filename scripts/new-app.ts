@@ -6,8 +6,8 @@
  *
  * Example:
  *
- *   pnpm new-app notes --name "Notes" --description "Quick notes, saved on your device." \
- *     --icon note --color blue --stores "Your notes"
+ *   pnpm new-app journal --name "Journal" --description "A few lines a day, saved on your device." \
+ *     --icon note --color blue --stores "Your journal entries"
  *
  * Then run `pnpm install` so the workspace picks up the new app.
  * Full guide: docs/adding-an-app.md
@@ -15,7 +15,7 @@
 import { execFileSync } from 'node:child_process';
 import { relative } from 'node:path';
 import { parseArgs } from 'node:util';
-import { createApp, SHARED_TEST_TABLES } from './lib/create-app.ts';
+import { createApp, SHARED_TEST_FILES } from './lib/create-app.ts';
 
 const repoRoot = new URL('..', import.meta.url).pathname;
 
@@ -59,14 +59,15 @@ try {
       '--log-level=warn',
       appDir,
       'packages/registry/apps.json',
-      ...SHARED_TEST_TABLES.map(({ file }) => file),
+      ...SHARED_TEST_FILES,
     ],
     { cwd: repoRoot, stdio: 'inherit' },
   );
 
   console.log(`
 Created ${entry.name} in ${relative(repoRoot, appDir)}/ and added it to packages/registry/apps.json,
-and to the shared browser tests' tables (as null: nothing to test yet).
+and to the shared browser tests' tables (as null: nothing to test yet). The privacy page lists it,
+so its "Last updated" date is today's.
 It's listed on the hub once merged. To deploy it without listing it, set "status" to "hidden" in apps.json.
 
 Next:

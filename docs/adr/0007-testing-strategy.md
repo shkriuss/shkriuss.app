@@ -7,7 +7,9 @@ loads later with `import()` aren't counted, and that's how to cut weight
 before raising a budget (below). Changed by audit 4 (J-3): `pnpm check:dist`
 also refuses a built script whose syntax is newer than ES2022, what Safari
 16.4 reads, packages' code included (only the syntax: a newer function it
-calls isn't seen; [quality.md](../quality.md)).
+calls isn't seen; [quality.md](../quality.md)). Changed by audit 5 (Z-4): it
+also refuses a page that loads anything from another website, and an
+offline copy over 30 MB ([quality.md](../quality.md) lists every check).
 
 ## Context
 
@@ -28,8 +30,9 @@ reach production, and new apps should get strong checks without extra work.
   cross-origin requests, no cookies, 320px reflow, skip link, manifest,
   icons and offline support.
 - **`pnpm check:dist`**: no inline code in built HTML, plus gzipped byte
-  budgets per page (HTML 20 KB, CSS 15 KB, JS 35 KB). The JS counts every
-  file a page's scripts import before they run.
+  budgets per page (HTML 20 KB, CSS 15 KB, JS 35 KB), and the later checks
+  in the status above ([quality.md](../quality.md) has the full list). The
+  JS counts every file a page's scripts import before they run.
 
   _Changed in October 2026 (audit findings J-4 and Z-6):_ the JS budget was
   25 KB, but it counted only the files named in the HTML, not the shared

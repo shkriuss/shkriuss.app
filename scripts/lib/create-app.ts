@@ -5,12 +5,18 @@
  */
 import { cp, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { dayName, laterDay, PRIVACY_PAGE } from '../../apps/hub/src/lib/last-updated.ts';
+import { DATE_LINE, shownOf, withDate } from '../../apps/hub/src/lib/privacy-fingerprint.ts';
 import {
+  byName,
+  hubSiteInfo,
   ICON_COLORS,
+  siteInfo,
   slugProblems,
   validateRegistry,
   type AppEntry,
   type IconColor,
+  type Registry,
 } from '../../packages/registry/src/index.ts';
 import { isIconName, iconNames } from '../../packages/ui/src/icons/index.ts';
 
@@ -72,14 +78,51 @@ export interface CreateAppResult {
 export const THEME_CHOICE = 'Your light or dark theme choice';
 
 /**
- * The shared browser tests whose tables need a line for every site
- * (tests/e2e/every-site.ts), and how each table starts.
+ * The shared browser tests' tables that need a line for every site
+ * (tests/e2e/every-site.ts), and how each table starts. A file can have
+ * several (keep-focus has four). A unit test checks that every
+ * `EverySite` table in tests/e2e is here, so a new one can't be missed
+ * (audit 6 J-1).
  */
 export const SHARED_TEST_TABLES = [
+  { file: 'tests/e2e/data-controls.spec.ts', start: 'const mainStores: EverySite<' },
   { file: 'tests/e2e/saving.spec.ts', start: 'const changes: EverySite<' },
   { file: 'tests/e2e/keep-focus.spec.ts', start: 'const cases: EverySite<' },
+  { file: 'tests/e2e/keep-focus.spec.ts', start: 'const goneCases: EverySite<' },
+  { file: 'tests/e2e/keep-focus.spec.ts', start: 'const dialogCases: EverySite<' },
+  { file: 'tests/e2e/keep-focus.spec.ts', start: 'const comingBack: EverySite<' },
   { file: 'tests/e2e/large-text.spec.ts', start: 'const cases: EverySite<' },
 ] as const;
+
+/** The files with those tables, each once. */
+export const SHARED_TEST_FILES: readonly string[] = [
+  ...new Set(SHARED_TEST_TABLES.map(({ file }) => file)),
+];
+
+/** A table in a shared browser test: its name, how it starts, and the sites it has a line for. */
+export interface SiteTable {
+  name: string;
+  start: string;
+  sites: string[];
+}
+
+/**
+ * The `EverySite` tables in a test file's `source` (`const <name>:
+ * EverySite<…> = {`), each with the sites it has a line for: its keys at
+ * the first level (two spaces in), up to the `};` that ends it.
+ */
+export function siteTables(source: string): SiteTable[] {
+  return [...source.matchAll(/^(?:export )?const (\w+): EverySite</gm)].map((match) => {
+    const end = source.indexOf('\n};', match.index);
+    const body = source.slice(match.index, end === -1 ? undefined : end);
+    const name = match[1] ?? '';
+    return {
+      name,
+      start: `const ${name}: EverySite<`,
+      sites: [...body.matchAll(/^ {2}'?([a-z][a-z0-9-]*)'?:/gm)].map((key) => key[1] ?? ''),
+    };
+  });
+}
 
 /**
  * `source` with a line for `slug` at the end of the table that starts with
@@ -96,12 +139,30 @@ export function withSiteLine(source: string, start: string, slug: string): strin
 }
 
 /**
- * Copies the template, replaces the slug, appends the app to apps.json and
- * gives it a line in each shared browser test's table (SHARED_TEST_TABLES).
+ * The privacy page with its "Last updated" date and fingerprint set for
+ * `registry`: a new app adds its row to the page, so the page changed, and
+ * apps/hub/src/privacy.test.ts fails until both are set. The New app
+ * workflow runs that test before it pushes, so without this it stopped
+ * there. The date is `now`'s day, or the page's own if that's later.
+ */
+export function privacyPageFor(source: string, registry: Registry, now: Date): string {
+  const written = DATE_LINE.exec(source)?.[1] ?? '';
+  const shown = shownOf([
+    hubSiteInfo(registry.site),
+    ...[...registry.apps].sort(byName).map(siteInfo),
+  ]);
+  return withDate(source, laterDay(dayName(now), written), shown);
+}
+
+/**
+ * Copies the template, replaces the slug, appends the app to apps.json,
+ * gives it a line in each shared browser test's table (SHARED_TEST_TABLES)
+ * and sets the privacy page's date for its new row.
  */
 export async function createApp(
   repoRoot: string,
   options: NewAppOptions,
+  now: Date = new Date(),
 ): Promise<CreateAppResult> {
   const registryPath = join(repoRoot, 'packages/registry/apps.json');
   const registry = validateRegistry(JSON.parse(await readFile(registryPath, 'utf8')));
@@ -114,21 +175,6 @@ export async function createApp(
   if (await exists(appDir)) problems.push(`The folder apps/${options.slug} already exists.`);
   if (problems.length > 0) {
     throw new Error(`Can't create the app:\n- ${problems.join('\n- ')}`);
-  }
-  // Worked out before anything is written, so a table that can't be found stops it all.
-  const tables = await Promise.all(
-    SHARED_TEST_TABLES.map(async ({ file, start }) => {
-      const path = join(repoRoot, file);
-      return { path, content: withSiteLine(await readFile(path, 'utf8'), start, options.slug) };
-    }),
-  );
-
-  await cp(join(repoRoot, 'templates/app'), appDir, { recursive: true });
-  for (const file of await listFilesRecursive(appDir)) {
-    const content = await readFile(file, 'utf8');
-    if (content.includes(TEMPLATE_SLUG)) {
-      await writeFile(file, content.replaceAll(TEMPLATE_SLUG, options.slug));
-    }
   }
 
   // Every page has the theme switch, which saves the choice on the device.
@@ -150,8 +196,32 @@ export async function createApp(
   };
   const updated = { ...registry, apps: [...registry.apps, entry] };
   validateRegistry(updated);
+
+  // Worked out before anything is written, so a table or a page that can't
+  // be found stops it all. Each file gets a line in every one of its tables.
+  const tables = await Promise.all(
+    SHARED_TEST_FILES.map(async (file) => {
+      const path = join(repoRoot, file);
+      let content = await readFile(path, 'utf8');
+      for (const table of SHARED_TEST_TABLES) {
+        if (table.file === file) content = withSiteLine(content, table.start, options.slug);
+      }
+      return { path, content };
+    }),
+  );
+  const privacyPath = join(repoRoot, PRIVACY_PAGE);
+  const privacy = privacyPageFor(await readFile(privacyPath, 'utf8'), updated, now);
+
+  await cp(join(repoRoot, 'templates/app'), appDir, { recursive: true });
+  for (const file of await listFilesRecursive(appDir)) {
+    const content = await readFile(file, 'utf8');
+    if (content.includes(TEMPLATE_SLUG)) {
+      await writeFile(file, content.replaceAll(TEMPLATE_SLUG, options.slug));
+    }
+  }
   await writeFile(registryPath, `${JSON.stringify(updated, null, 2)}\n`);
   for (const { path, content } of tables) await writeFile(path, content);
+  await writeFile(privacyPath, privacy);
 
   return { appDir, entry };
 }

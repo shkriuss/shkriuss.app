@@ -2,8 +2,8 @@
 # so builds and deploys don't need Hugging Face once it's been downloaded
 # (audit finding Z-3). The cache is named after the model's SHA-256, and the
 # build checks that checksum whatever the cache holds
-# (apps/grammar/scripts/deep-check-files.ts). Only the checks job saves to
-# the cache; jobs that deploy only read it.
+# (apps/grammar/scripts/deep-check-files.ts). Only the checks job and the
+# Keep caches workflow save to the cache; jobs that deploy only read it.
 name: Deep check model
 description: Restore Grammar's Deep check model from the cache (and save it, if asked)
 inputs:
