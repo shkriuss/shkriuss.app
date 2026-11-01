@@ -11,6 +11,7 @@ import {
   removeYear,
   repairsIn,
   repairYears,
+  unusedPhotos,
   type RepairsState,
 } from '../lib/repairs.ts';
 import { deletePhotos } from './photos.ts';
@@ -101,14 +102,17 @@ export function mountDeleteYear(root: ParentNode, page: DeleteYearPage): DeleteY
     deleteYearButton.focus();
     if (gone.length === 0) return;
     // Like deleting repairs one by one: other devices delete them too, and
-    // their photos go, once the repairs are deleted for good (audit 4 F2-8).
+    // their photos go, once the repairs are deleted for good (audit 4 F2-8),
+    // unless a repair left has them too (audit 6 F2-1).
+    const next = removeYear(repairs, year);
     const saved = page.save(
-      { repairs: removeYear(repairs, year) },
+      { repairs: next },
       `Deleted ${repairsCount(gone.length)} from ${year}.`,
     );
     if (!saved) return;
-    void deletePhotos(photosOf(gone));
-    page.filesRemoved(photoFiles(photosOf(gone)));
+    const photos = unusedPhotos(photosOf(gone), next);
+    void deletePhotos(photos);
+    page.filesRemoved(photoFiles(photos));
   });
 
   return {

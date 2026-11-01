@@ -332,9 +332,18 @@ export function deleteAll(storage: StorageLike | undefined = getLocalStorage()):
  */
 export const DOWNLOAD_URL_MS = 60_000;
 
-/** Starts a download of `content` as a file. Browser only. */
-export function downloadFile(filename: string, content: string, type = 'application/json'): void {
-  const url = URL.createObjectURL(new Blob([content], { type }));
+/**
+ * Starts a download of `content` as a file: text (of this `type`), or a
+ * file the app has already, like a photo, as it is. Browser only.
+ */
+export function downloadFile(
+  filename: string,
+  content: string | Blob,
+  type = 'application/json',
+): void {
+  const url = URL.createObjectURL(
+    content instanceof Blob ? content : new Blob([content], { type }),
+  );
   const link = document.createElement('a');
   link.href = url;
   link.download = filename;

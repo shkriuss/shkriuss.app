@@ -311,6 +311,19 @@ describe('downloadFile (audit 5 Z-2)', () => {
     expect(listeners.has('pagehide')).toBe(false);
   });
 
+  // Audit 6 C-2: Repairs' "Save a copy" had a download of its own, freed
+  // after 10 seconds.
+  it('downloads a file the app has, like a photo, as it is, for as long', () => {
+    const photo = new Blob(['jpeg'], { type: 'image/jpeg' });
+    downloadFile('bus-105-2026-10-21-photo-1.jpg', photo);
+    expect(URL.createObjectURL).toHaveBeenCalledWith(photo);
+    expect(link).toMatchObject({ download: 'bus-105-2026-10-21-photo-1.jpg', clicks: 1 });
+    vi.advanceTimersByTime(DOWNLOAD_URL_MS - 1);
+    expect(revoke).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(revoke).toHaveBeenCalledWith('blob:tally/backup');
+  });
+
   it('frees it when the page goes away, once', () => {
     downloadFile('tally-backup-2026-10-27.json', '{}');
     listeners.get('pagehide')?.();

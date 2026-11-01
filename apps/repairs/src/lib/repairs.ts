@@ -36,7 +36,7 @@ import {
   whichAmount,
   type Currency,
 } from '@shkriuss/ui/numbers';
-import { compareText, cutToLength, foldText } from '@shkriuss/ui/text';
+import { compareText, cutToLength, foldText, withinLength } from '@shkriuss/ui/text';
 import { roomNote as sharedRoomNote } from '@shkriuss/ui/room-note';
 import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
@@ -153,17 +153,23 @@ export const emptyRepairs = (): RepairsState => ({ repairs: [] });
 // ---------- Checking saved data ----------
 
 /**
- * Whether text fits a limit, counted as text boxes count their maxlength on
- * an iPhone: a flag, a family emoji or a letter with its accent is one
- * character, so what a full box holds is never refused, on saving or when
- * it's loaded or synced (cutToLength). Before, each half of an emoji
- * counted, and "Work done" of 300 family emoji was "Use 2000 characters or
- * fewer." (audit 5 F2-3).
+ * Whether text typed in a form fits a limit, counted as text boxes count
+ * their maxlength on an iPhone: a flag, a family emoji or a letter with its
+ * accent is one character, so what a full box holds is never refused on
+ * saving (cutToLength). Before, each half of an emoji counted, and "Work
+ * done" of 300 family emoji was "Use 2000 characters or fewer." (audit 5
+ * F2-3).
  */
 const fits = (text: string, max: number): boolean => cutToLength(text, max) === text;
 
+/**
+ * Saved text, loaded or synced, is checked loosely (withinLength): browsers
+ * of different ages count some scripts' characters differently, and a
+ * Hindi "Work done" that fit on a new iPhone stopped sync on an older one,
+ * which counted it longer (audit 6 F2-3).
+ */
 const isText = (value: unknown, max: number): value is string =>
-  typeof value === 'string' && fits(value, max);
+  typeof value === 'string' && withinLength(value, max);
 
 const isMileage = (value: unknown): value is number =>
   typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= LIMITS.mileage;
@@ -396,6 +402,17 @@ export interface RepairForm {
  */
 export type RepairProblems = Partial<Record<string, string>>;
 
+/** A part's row left empty (like the one a new repair's form starts with): it's left out. */
+function isEmptyRow(row: PartForm, locale?: string): boolean {
+  const quantity = parseDecimal(row.quantity, locale);
+  return (
+    oneLine(row.name) === '' &&
+    oneLine(row.number) === '' &&
+    (quantity === null || quantity === 1) &&
+    parseDecimal(row.price, locale, { cents: true }) === null
+  );
+}
+
 /**
  * Reads the repair form into a repair (with the given id), or says what's
  * wrong, field by field. A vehicle that isn't saved yet is made, with an id
@@ -457,19 +474,11 @@ export function readRepair(
 
   const parts: Part[] = [];
   form.parts.forEach((row, index) => {
+    if (isEmptyRow(row, locale)) return;
     const partName = oneLine(row.name);
     const number = oneLine(row.number).toUpperCase();
     const typedQuantity = parseNumber(row.quantity);
     const price = parseMoney(row.price);
-    // An empty row is left out.
-    if (
-      partName === '' &&
-      number === '' &&
-      (typedQuantity === null || typedQuantity === 1) &&
-      price === null
-    ) {
-      return;
-    }
     if (partName === '') problems[`part-name-${index}`] = 'Enter the part’s name.';
     else if (!fits(partName, LIMITS.partName)) {
       problems[`part-name-${index}`] = `Use ${LIMITS.partName} characters or fewer.`;
@@ -543,13 +552,22 @@ export function readRepair(
 }
 
 /**
+ * What the repair form says when the vehicle a repair was on was deleted
+ * (on another device), so its vehicle is empty there (toRepairForm).
+ */
+export const VEHICLE_GONE =
+  'The vehicle this repair was on was deleted on another device. Enter the vehicle.';
+
+/**
  * A repair as the form shows it: numbers as they'd be typed in `locale` (the
- * browser's own when left out), so saving the form unchanged keeps them.
+ * browser's own when left out), so saving the form unchanged keeps them. A
+ * vehicle that was deleted is left empty, to be entered again: saving its
+ * stand-in, "Unknown vehicle", added a vehicle of that name (audit 6 F2-3).
  */
 export function toRepairForm(repair: Repair, vehicles: VehiclesState, locale?: string): RepairForm {
   const number = (value: number | null) => (value === null ? '' : decimalText(value, locale));
   return {
-    vehicle: vehicleName(vehicles, repair.vehicle),
+    vehicle: vehicles.vehicles.find((vehicle) => vehicle.id === repair.vehicle)?.name ?? '',
     date: repair.date,
     mileage: number(repair.mileage),
     system: repair.system,
@@ -586,13 +604,66 @@ export function mergePhotos(
 }
 
 /**
+ * A repair's parts when the repair changed while its form was open
+ * (readEditedRepair): its parts as they are now, with what was done to
+ * them in the form. A part changed in the form is changed in its place,
+ * one removed there is removed, and one added there goes at the end. So a
+ * part added, changed or removed on another device meanwhile stays as it
+ * is there: before, any change to the parts here put the form's whole list
+ * back (audit 6 F2-2). A part changed both here and there is kept both
+ * ways, so neither change is lost; the one that's wrong can be removed.
+ * `opened` is the parts the form opened with, `edited` the form's rows now
+ * (empty ones are left out), `now` the repair's parts now, all as the form
+ * shows them.
+ */
+export function mergeParts(
+  opened: readonly PartForm[],
+  edited: readonly PartForm[],
+  now: readonly PartForm[],
+  locale?: string,
+): PartForm[] {
+  const key = ({ name, number, quantity, price }: PartForm) =>
+    JSON.stringify([name, number, quantity, price]);
+  // The parts the form opened with that no row kept as they were: changed or removed.
+  const gone: (string | null)[] = opened.map(key);
+  const added: { row: PartForm; at: number }[] = [];
+  edited
+    .filter((row) => !isEmptyRow(row, locale))
+    .forEach((row, at) => {
+      const index = gone.indexOf(key(row));
+      if (index === -1) added.push({ row, at });
+      else gone[index] = null;
+    });
+  // A row that isn't as any part was, where a part that's gone was: that part, changed.
+  const changed = new Map<number, PartForm>();
+  const extra: PartForm[] = [];
+  for (const { row, at } of added) {
+    if (typeof gone[at] === 'string' && !changed.has(at)) changed.set(at, row);
+    else extra.push(row);
+  }
+  // Each part that's gone in the form, found among the parts now, is changed or removed there.
+  const waiting = gone.flatMap((value, index) => (value === null ? [] : [{ value, index }]));
+  const merged = now.flatMap((part) => {
+    const at = waiting.findIndex(({ value }) => value === key(part));
+    const [found] = at === -1 ? [] : waiting.splice(at, 1);
+    if (!found) return [part];
+    const row = changed.get(found.index);
+    changed.delete(found.index);
+    return row ? [row] : [];
+  });
+  // Changed here, and changed or removed there too: here's way is kept as well.
+  return [...merged, ...changed.values(), ...extra];
+}
+
+/**
  * Reads the repair form (readRepair) when the repair may have changed while
  * it was open, on another device or in another tab: only what was changed
  * in the form goes on the repair as it is now (withEdits), so the other
- * change stays (audit 3 F2-1). The photos are the form's, which follow the
- * repair's while it's open (mergePhotos). If the two don't fit together,
- * the form wins, as it was checked. `opened` is the form as it opened (null
- * for a new repair), `edited` as it is now.
+ * change stays (audit 3 F2-1); its parts one by one (mergeParts). The
+ * photos are the form's, which follow the repair's while it's open
+ * (mergePhotos). If the two don't fit together, the form wins, as it was
+ * checked. `opened` is the form as it opened (null for a new repair),
+ * `edited` as it is now.
  */
 export function readEditedRepair(
   opened: RepairForm | null,
@@ -607,7 +678,11 @@ export function readEditedRepair(
   const current = repairs.repairs.find((repair) => repair.id === id);
   if (!opened || !current) return read(edited);
   const now = toRepairForm(current, vehicles, locale);
-  const merged = read({ ...withEdits(opened, edited, now), photos: edited.photos });
+  const merged = read({
+    ...withEdits(opened, edited, now),
+    parts: mergeParts(opened.parts, edited.parts, now.parts, locale),
+    photos: edited.photos,
+  });
   return merged.repair ? merged : read(edited);
 }
 
@@ -926,9 +1001,35 @@ export function systemNames(state: RepairsState): string[] {
 /** The longest side of a saved photo, and of its thumbnail, in pixels. */
 export const PHOTO_SIZES = { full: 1600, thumb: 320 };
 
+/**
+ * The file name "Save a copy" gives a repair's photo: its vehicle, day and
+ * number, like "bus-105-2026-10-21-photo-1.jpg". Letters and digits of any
+ * script stay ("ავტობუსი-105-…"); anything else, which a file name may not
+ * hold or can't show, becomes one "-". Before, only a to z did, and a bus
+ * named in Georgian lost its name (audit 6 F2-5).
+ */
+export const photoCopyName = (vehicle: string, date: IsoDate, number: number): string =>
+  `${`${vehicle}-${date}-photo-${number}`
+    .toLowerCase()
+    .replace(/[^\p{L}\p{M}\p{N}]+/gu, '-')
+    .replace(/^-/, '')}.jpg`;
+
 /** The photos of these repairs (to delete with them). */
 export const photosOf = (repairs: readonly Repair[]): string[] =>
   repairs.flatMap((repair) => repair.photos);
+
+/**
+ * Of these photos, the ones no repair in `state` has: those to delete once
+ * the repairs that had them are deleted, or saved without them. A photo two
+ * repairs have stays while one of them is left: an older version saved a
+ * copy of a repair, with the same photos, when its form was closed while it
+ * waited for a photo (audit 6 F2-1), and deleting the copy deleted the
+ * original's photos.
+ */
+export function unusedPhotos(photos: readonly string[], state: RepairsState): string[] {
+  const used = new Set(photosOf(state.repairs));
+  return photos.filter((photo) => !used.has(photo));
+}
 
 /**
  * The biggest a saved photo may be, in bytes: the sync server takes files up

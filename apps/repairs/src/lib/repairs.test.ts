@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { addDays } from '@shkriuss/dates';
 import { footprint, sampleText } from '@shkriuss/sync/testing';
 import { MAX_SEALED_CHARS } from '../../../../packages/sync/src/validate.ts';
@@ -21,12 +21,14 @@ import {
   knownPart,
   LIMITS,
   lastMileage,
+  mergeParts,
   mergePhotos,
   migrateRepairs,
   modelNames,
   partCost,
   partLabel,
   partNames,
+  photoCopyName,
   photoFiles,
   photosOf,
   readEditedRepair,
@@ -50,9 +52,11 @@ import {
   toRepairForm,
   totals,
   unitOf,
+  unusedPhotos,
   vehicleName,
   vehicleSummaries,
   withSettings,
+  type PartForm,
   type Repair,
   type RepairForm,
   type RepairsState,
@@ -373,6 +377,54 @@ describe('repairs', () => {
     expect(isRepairsState(repairs(repair({ system: zalgo })))).toBe(false);
   });
 
+  // Audit 6 F2-3: a Hindi "Work done" that fit on a new iPhone was refused
+  // where it was synced to an older one, whose browser counts its letters
+  // as more characters, and sync stopped there for every repair.
+  it('loads and syncs what fit on another device, which may count characters differently', async () => {
+    // 2,000 characters here: "स्त्री" is one since Unicode 15.1 (2023).
+    const work = 'स्त्री '.repeat(LIMITS.text / 2);
+    const saved = readRepair(form({ work }), 'r', emptyRepairs(), vehicles, newId).repair as Repair;
+    expect(saved.work).toBe(work.trim());
+    // A browser from before then breaks after each virama: "स्", "त्", "री".
+    const Segmenter = Intl.Segmenter;
+    class Older {
+      segment(text: string) {
+        return [...new Segmenter('en', { granularity: 'grapheme' }).segment(text)].flatMap(
+          ({ segment }) => segment.split(/(?<=्)/).map((part) => ({ segment: part })),
+        );
+      }
+    }
+    vi.stubGlobal('Intl', Object.assign(Object.create(Intl) as typeof Intl, { Segmenter: Older }));
+    vi.resetModules();
+    try {
+      const older = await import('./repairs.ts');
+      expect(older.isRepairsState(repairs(saved))).toBe(true);
+      // A part's name and a vehicle's too.
+      const part = { name: 'स्त्री'.repeat(LIMITS.partName), number: '', quantity: 1, price: null };
+      expect(older.isRepairsState(repairs(repair({ parts: [part] })))).toBe(true);
+      const bus = vehicle({ name: 'स्त्री'.repeat(LIMITS.vehicle) });
+      expect(older.isVehiclesState({ vehicles: [bus] })).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+      vi.resetModules();
+    }
+  });
+
+  // Audit 6 F2-3 (run 24): the form showed "Unknown vehicle" for a vehicle
+  // deleted on another device, and saving it added a vehicle by that name.
+  it('asks for the vehicle again when the one a repair was on was deleted', () => {
+    const orphan = repair({ vehicle: 'deleted' });
+    expect(vehicleName(vehicles, orphan.vehicle)).toBe('Unknown vehicle');
+    const opened = toRepairForm(orphan, vehicles);
+    expect(opened.vehicle).toBe('');
+    expect(readRepair(opened, 'r', repairs(orphan), vehicles, newId).problems).toEqual({
+      vehicle: 'Enter the vehicle, like a bus number.',
+    });
+    expect(
+      readRepair({ ...opened, vehicle: 'Bus 12' }, 'r', repairs(orphan), vehicles, newId),
+    ).toMatchObject({ repair: { vehicle: 'b12' }, newVehicle: null });
+  });
+
   it('shows a saved repair in the form again', () => {
     const saved = repair({
       mileage: null,
@@ -475,6 +527,68 @@ describe('repairs', () => {
     expect(
       readEditedRepair(form2, { ...form2, problem: '' }, 'r', cleared, vehicles, newId).repair,
     ).toMatchObject({ problem: '', work: 'Replaced the door glass' });
+  });
+
+  // Audit 6 F2-2: the parts were one field, so a price typed here put the
+  // form's whole list back, and a part added on the tablet meanwhile was gone.
+  it('keeps the parts changed on another device while the form was open, part by part', () => {
+    const pads = { name: 'Brake pads', number: '', quantity: 2, price: null };
+    const fluid = { name: 'Brake fluid', number: '', quantity: 1, price: 12 };
+    const before = repair({ parts: [pads] });
+    const opened = toRepairForm(before, vehicles, 'en-US');
+    const [padsRow] = opened.parts as [PartForm];
+    const read = (edited: RepairForm, now: Repair) =>
+      readEditedRepair(opened, edited, 'r', repairs(now), vehicles, newId, 'en-US').repair;
+    // Meanwhile, on the tablet: brake fluid added, and the hours noted.
+    const tablet = { ...before, parts: [pads, fluid], hours: 1.5 };
+    // Here: the pads' price typed in.
+    expect(read({ ...opened, parts: [{ ...padsRow, price: '45' }] }, tablet)).toMatchObject({
+      hours: 1.5,
+      parts: [{ ...pads, price: 45 }, fluid],
+    });
+    // Or a part added here: both are kept, the new one last.
+    const bolt = { name: 'Bolt', number: 'M8', quantity: '4', price: '' };
+    expect(read({ ...opened, parts: [padsRow, bolt] }, tablet)?.parts).toEqual([
+      pads,
+      fluid,
+      { name: 'Bolt', number: 'M8', quantity: 4, price: null },
+    ]);
+    // Or the pads removed here: the fluid stays.
+    expect(read({ ...opened, parts: [] }, tablet)?.parts).toEqual([fluid]);
+    // The pads changed there, the bolt added here: both.
+    const counted = { ...before, parts: [{ ...pads, quantity: 4 }] };
+    expect(read({ ...opened, parts: [padsRow, bolt] }, counted)?.parts).toEqual([
+      { ...pads, quantity: 4 },
+      { name: 'Bolt', number: 'M8', quantity: 4, price: null },
+    ]);
+    // The same part changed both here and there: kept both ways, so neither is lost.
+    expect(read({ ...opened, parts: [{ ...padsRow, price: '45' }] }, counted)?.parts).toEqual([
+      { ...pads, quantity: 4 },
+      { ...pads, price: 45 },
+    ]);
+    // Nothing done to the parts here: they're as they are there, even with
+    // the empty row a form with no parts starts with.
+    const none = toRepairForm(repair({}), vehicles, 'en-US');
+    const empty = { name: '', number: '', quantity: '1', price: '' };
+    expect(
+      readEditedRepair(
+        none,
+        { ...none, work: 'Checked again', parts: [empty] },
+        'r',
+        repairs(repair({ parts: [fluid] })),
+        vehicles,
+        newId,
+        'en-US',
+      ).repair,
+    ).toMatchObject({ work: 'Checked again', parts: [fluid] });
+    // Not changed there: the form's parts, as they are in it.
+    const rows = [{ ...padsRow, price: '45' }, bolt];
+    expect(mergeParts(opened.parts, rows, opened.parts, 'en-US')).toEqual(rows);
+    const three = [padsRow, bolt, { ...bolt, name: 'Nut' }];
+    expect(mergeParts(three, [padsRow, { ...bolt, name: 'Nut', quantity: '8' }], three)).toEqual([
+      padsRow,
+      { ...bolt, name: 'Nut', quantity: '8' },
+    ]);
   });
 
   it('keeps the photos added on another device, and those taken off here stay off', () => {
@@ -1142,6 +1256,31 @@ describe('photos', () => {
       'p2',
       'p3',
     ]);
+  });
+
+  // Audit 6 F2-1: an older version could save a copy of a repair with the
+  // same photos; deleting the copy deleted the original's photos.
+  it('deletes only the photos no repair left has', () => {
+    const original = repair({ id: 'a', photos: ['p1', 'p2'] });
+    const copy = repair({ id: 'b', photos: ['p1'] });
+    const left = removeRepair(repairs(original, copy), 'b');
+    expect(unusedPhotos(copy.photos, left)).toEqual([]);
+    expect(unusedPhotos(['p1', 'p2', 'p3'], removeRepair(left, 'a'))).toEqual(['p1', 'p2', 'p3']);
+    expect(unusedPhotos(['p2', 'p3'], left)).toEqual(['p3']);
+  });
+
+  // Audit 6 F2-5: only a to z were kept, so a bus named in Georgian lost its name.
+  it('saves a copy named after its vehicle, in any script', () => {
+    expect(photoCopyName('Bus 105', '2026-10-21', 1)).toBe('bus-105-2026-10-21-photo-1.jpg');
+    expect(photoCopyName('ავტობუსი 105', '2026-10-21', 2)).toBe(
+      'ავტობუსი-105-2026-10-21-photo-2.jpg',
+    );
+    expect(photoCopyName('बस १०५', '2026-10-21', 1)).toBe('बस-१०५-2026-10-21-photo-1.jpg');
+    // What a file name can't hold, or can't show, isn't kept.
+    expect(photoCopyName('A/C: "Bus​ 7"?', '2026-10-21', 3)).toBe(
+      'a-c-bus-7-2026-10-21-photo-3.jpg',
+    );
+    expect(photoCopyName('🚌', '2026-10-21', 1)).toBe('2026-10-21-photo-1.jpg');
   });
 
   it('sync as a thumbnail and a full photo, each a file', () => {

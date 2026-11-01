@@ -54,6 +54,7 @@ import {
   totals,
   unitOf,
   UNITS,
+  unusedPhotos,
   vehicleName,
   vehicleSummaries,
   withSettings,
@@ -550,10 +551,13 @@ export function mountRepairs(root: Document): void {
       repairDialog.close();
       const repair = findRepair(target.id);
       if (!repair) return;
-      // Its photos go once it's deleted for good, not before (audit 4 F2-8).
-      if (save({ repairs: removeRepair(repairs, repair.id) }, 'Deleted the repair.')) {
-        void deletePhotos(repair.photos);
-        sync.filesRemoved(photoFiles(repair.photos));
+      // Its photos go once it's deleted for good, not before (audit 4 F2-8),
+      // unless another repair has them too (audit 6 F2-1).
+      const next = removeRepair(repairs, repair.id);
+      if (save({ repairs: next }, 'Deleted the repair.')) {
+        const photos = unusedPhotos(repair.photos, next);
+        void deletePhotos(photos);
+        sync.filesRemoved(photoFiles(photos));
       }
       newRepairButton.focus();
     } else {
@@ -562,16 +566,19 @@ export function mountRepairs(root: Document): void {
       if (!vehicle) return;
       const own = repairsOf(vehicle.id);
       const count = own.length;
+      const next = removeVehicle(vehicles, repairs, vehicle.id);
       const saved = save(
-        removeVehicle(vehicles, repairs, vehicle.id),
+        next,
         count === 0
           ? `Deleted ${vehicle.name}.`
           : `Deleted ${vehicle.name} and its ${countLabel(count, 'repair', 'repairs')}.`,
       );
-      // Their photos go once they're deleted for good, not before (audit 4 F2-8).
+      // Their photos go once they're deleted for good, not before (audit 4
+      // F2-8), unless another repair has them too (audit 6 F2-1).
       if (saved) {
-        void deletePhotos(photosOf(own));
-        sync.filesRemoved(photoFiles(photosOf(own)));
+        const photos = unusedPhotos(photosOf(own), next.repairs);
+        void deletePhotos(photos);
+        sync.filesRemoved(photoFiles(photos));
       }
       newVehicleButton.focus();
     }

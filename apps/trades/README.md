@@ -41,7 +41,11 @@ Your trading journal: log your trades and see what works. Lives at
     (`parent`). That trade keeps its quantity (what was bought) and its
     fees: what's still open of it is its quantity less its parts'
     (`openQuantity`), and its fees count with its first part (`openFees`),
-    so none are counted twice. A part stays closed while its trade is
+    so none are counted twice. Closing the rest from the trade's own form
+    ("Change trade", with an exit filled in), which shows the trade's fees,
+    counts them the same way: left as they are, the last part takes only
+    the fees not counted yet; fees typed there are the last part's (audit 6
+    F2-1, where they counted twice). A part stays closed while its trade is
     there: to open it again, delete it, and its quantity is open in its
     trade again. (One opened again and closed in parts of its own made
     "Delete a year" count what they closed as open again, audit 4 F2-6;
@@ -61,17 +65,23 @@ Your trading journal: log your trades and see what works. Lives at
     number of closed trades, the win rate, the averages, by setup and by
     month), as it has its own exit and result: one position closed in three
     parts is three closed trades. The page says so under the results when
-    the trades shown have parts. A part takes the trade's entry price, side
-    and setup as they were when it was closed; putting one of those right
-    on the trade later changes its parts too, in the same save, unless a
-    part was given its own (`followingParts`), so their results follow. A
-    stop loss moved later, or the trade's notes, stay the trade's own.
+    the trades shown have parts. A part takes the trade's symbol, entry
+    price, side and setup as they were when it was closed; putting one of
+    those right on the trade later changes its parts too, in the same save,
+    unless a part was given its own (`followingParts`), so their results
+    follow. With a new entry price or side, a part takes the trade's stop
+    loss too if it had the trade's, and a stop loss left on the wrong side
+    of a part's entry is taken off it, as its R would mean nothing (audit 6
+    F2-4). A stop loss moved later on its own, or the trade's notes, stay
+    the trade's own.
   - Parts came in data version 2 (`TRADES_VERSION`). What version 1 saved
     reads the same (`migrateTrades`): its parts were trades of their own,
     next to the rest, made smaller. A device still on version 1 waits for
     its update before it syncs, instead of counting parts twice.
   - "Download as a spreadsheet (CSV)" saves every trade with its result
-    (each part of a trade, and what's still open of it). Text that a
+    (each part of a trade, and what's still open of it). A trade closed
+    more than it was bought has a row with what it bought, its notes
+    starting with what the page says of it (audit 6 F2-4). Text that a
     spreadsheet could read as a formula starts with `'`. The file starts
     with a byte-order mark, so Excel shows text beyond plain English
     letters (Georgian, "’") as typed. In a language that writes decimals
@@ -91,11 +101,17 @@ Your trading journal: log your trades and see what works. Lives at
   - To make room, "Delete a year…" (next to the spreadsheet download)
     deletes the trades closed in one year, by the day they were closed
     (`closedYears`, `removeClosedYear`). It never changes a trade, so a
-    change to one on a device that hadn't synced can't bring back what was
-    deleted. Open trades always stay, and so do the parts of them closed
-    that year, which say how much is still open: they go once all of their
-    trade is closed (and then the trade goes with them; its parts from other
-    years stay, as trades of their own). It says how many that is, and what
+    change to an open trade on a device that hadn't synced can't bring back
+    what was closed of it. Open trades always stay, and so do the parts of
+    them closed that year, which say how much is still open: they go once
+    all of their trade is closed (and then the trade goes with them; its
+    parts from other years stay, as trades of their own). That trade, once
+    deleted, can come back: the newest change wins, so a change made to it
+    after the deletion, on a device offline since before its last part was
+    closed (its stop loss moved there, say), brings it back without its
+    parts, as open, with all it bought. It's then deleted by hand. A mark
+    on the trade couldn't stop that, as such a change replaces the whole
+    trade (audit 6 F2-2). The dialog says how many trades go, and what
     stays, and offers the spreadsheet first. With sync on, they're
     deleted on the other devices too. If that year changes on another
     device or tab while the dialog is open, it closes and says so, rather

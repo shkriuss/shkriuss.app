@@ -10,7 +10,11 @@ private car's service history. Lives at <https://repairs.shkriuss.app>.
   - vehicles (`shkriuss:repairs-vehicles`): a name or number (a bus number, a
     plate, "My car"), and optionally the model, number plate and notes. Typing
     a new vehicle in the repair form adds it (`readRepair` returns it as
-    `newVehicle`). Deleting a vehicle deletes its repairs, after asking;
+    `newVehicle`). Deleting a vehicle deletes its repairs, after asking. A
+    repair changed on another device after its vehicle was deleted comes
+    back, as "Unknown vehicle"; its form asks for the vehicle again, as
+    saving the stand-in added a vehicle called "Unknown vehicle" (audit 6
+    F2-3);
   - repairs (`shkriuss:repairs`): the vehicle (by id, so it can be renamed),
     the day, the mileage, the system (brakes, doors…), the damage found, the
     work done, the parts replaced (name, part number, quantity, price each;
@@ -48,10 +52,16 @@ private car's service history. Lives at <https://repairs.shkriuss.app>.
   "1.500" in French (1500 or 1.5), is asked again.
 - Text limits (a vehicle's name, the work done…) count characters as
   people see them, as an iPhone's text boxes count what fits in them: a
-  flag or a family emoji is one, so what a full box holds is never refused,
-  on saving or when it's loaded or synced (`cutToLength`, audit 5 F2-3). A
-  device still on the version before this one can't read a text that only
-  this counting lets in, and shows a sync problem until it's updated
+  flag or a family emoji is one, so what a full box holds is never refused
+  on saving (`cutToLength`, audit 5 F2-3). What's loaded or synced is
+  checked loosely, at most 16 JavaScript characters for each character
+  allowed (`withinLength`): browsers of different ages split some scripts
+  into characters differently (since Unicode 15.1, "स्त्री" is one, where
+  an iPhone on iOS 16 counts three), and a Hindi "Work done" that fit on
+  one device stopped sync on another (audit 6 F2-3). Such a text may still
+  be too long for the older device's own form, which counts as its boxes
+  do. A device on a version from before audit 5 can't read a text that
+  only this counting lets in, and shows a sync problem until it's updated
   (reload the page there).
 - "Download as a spreadsheet (CSV)" saves every repair, one row each, with
   the hours and the parts, labour and total cost. Text a spreadsheet could
@@ -90,9 +100,16 @@ private car's service history. Lives at <https://repairs.shkriuss.app>.
   device downloads the thumbnail when the list shows it and the full photo
   when it's opened, and says "1 photo hasn't arrived yet" until it can (with
   sync off: "1 photo on another device"). A photo is saved small enough to
-  sync (`MAX_PHOTO_BYTES`, `PHOTO_QUALITIES`). Photos aren't in backups;
-  "Save a copy" saves one as a file. Deleting a repair, a vehicle or a year
-  deletes their photos (online too, with sync on); "Delete all data"
+  sync (`MAX_PHOTO_BYTES`, `PHOTO_QUALITIES`). Saving the form waits for
+  photos still being made smaller; if the form is closed meanwhile
+  (Cancel, Escape, or Delete), nothing is saved (audit 6 F2-1: it was saved
+  anyway, as a copy with the same photos). Photos aren't in backups, as
+  "Your data" says next to "Back up" and "Delete all data" (audit 6 E-3);
+  "Save a copy" saves one as a file, named after its vehicle and day in any
+  script ("ავტობუსი-105-2026-10-21-photo-1.jpg", `photoCopyName`), with
+  `downloadFile`, as every download is. Deleting a repair, a vehicle or a year
+  deletes their photos (online too, with sync on), except those another
+  repair has too (`unusedPhotos`); "Delete all data"
   deletes them on this device only (sync is turned off first). A photo
   taken off a repair in its form, or deleted with it, goes only once the
   change is saved: if it can't be (a full device), the repair as saved
@@ -123,9 +140,12 @@ private car's service history. Lives at <https://repairs.shkriuss.app>.
   photos (`syncHandler({ files: true })`). The newest change to
   each vehicle, repair and setting wins. A repair's form that's open while
   a sync (or another tab) changes the repair saves only what was changed in
-  it (`readEditedRepair`), and its photos follow the repair's while it's
-  open (`mergePhotos`): a photo added on another device meanwhile stays,
-  and one taken off in the form stays off. The vehicle form saves only
+  it (`readEditedRepair`); its parts one by one (`mergeParts`), so a part
+  added, changed or removed on another device meanwhile stays that way, and
+  only the parts changed in the form change (a part changed in both is kept
+  both ways, so neither change is lost; audit 6 F2-2). Its photos follow the
+  repair's while it's open (`mergePhotos`): a photo added on another device
+  meanwhile stays, and one taken off in the form stays off. The vehicle form saves only
   what was changed in it too. Vehicles and repairs reach
   `withItems` unchecked, so ones from an older version can be upgraded first;
   they're checked after.

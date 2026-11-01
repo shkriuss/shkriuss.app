@@ -124,7 +124,13 @@ import { CURRENCIES, LIMITS, UNIT_LABELS, UNITS } from '../lib/repairs.ts';
 
     <SyncControls />
 
-    <DataControls />
+    {/* Right above "Back up" and "Delete all data" (audit 6 E-3). */}
+    <DataControls>
+      <p class="muted">
+        Photos aren’t in backups. To keep them somewhere else too, turn on sync to have them on your
+        other devices, or open a photo and tap “Save a copy”.
+      </p>
+    </DataControls>
   </div>
 
   <!-- Live region: tells screen reader users what changed. -->

@@ -87,7 +87,10 @@ in alphabetical order, so where an entry sits in `apps.json` doesn't matter.
   from running as a formula, starts the file with a byte-order mark (so
   Excel shows letters beyond English as typed), and splits cells by ";"
   where decimals are written with a comma (as spreadsheets there read
-  files), and save it with `downloadFile`.
+  files), and save it with `downloadFile`. A file the app has already, like
+  a photo, downloads the same way (`downloadFile(name, blob)`): it keeps the
+  file for the minute an iPhone's "Do you want to download…?" can take,
+  which a download of the app's own freed too soon (audit 6 C-2).
 - Saving can fail (storage full, or blocked). Pass what `save()` gives to
   `reportSave()` from `@shkriuss/ui/problem`: it tells the person, in the
   same words as every app, and gives back whether it saved, so the app only

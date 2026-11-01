@@ -382,13 +382,22 @@ const sameTrade = (a: Trade, b: Trade): boolean =>
   (Object.keys({ ...a, ...b }) as (keyof Trade)[]).every((key) => a[key] === b[key]);
 
 /** What a trade's parts closed already take from it when it's changed (followingParts). */
-const FOLLOWED = ['entryPrice', 'side', 'setup'] as const;
+const FOLLOWED = ['symbol', 'entryPrice', 'side', 'setup'] as const;
+
+/** Whether a stop loss is on its side of the entry price: below it for a long trade, above for a short one. */
+const stopFits = (side: Side, entryPrice: number, stop: number | null): boolean =>
+  stop === null || (side === 'long' ? stop < entryPrice : stop > entryPrice);
 
 /**
- * A trade's parts closed already, changed with it: its entry price, side or
- * setup put right (a typo, say) is theirs too, as they're the same trade,
- * so their results follow (audit 3 F2-10). A part whose own value was
- * different (changed on its own) keeps it. `before` is the trade as saved.
+ * A trade's parts closed already, changed with it: its symbol, entry price,
+ * side or setup put right (a typo, say) is theirs too, as they're the same
+ * trade, so their results follow (audit 3 F2-10). A part whose own value
+ * was different (changed on its own) keeps it. With a new entry price or
+ * side, a part takes the trade's stop loss too if it had the trade's, and
+ * one left on the wrong side of its entry goes: the symbol stayed as it
+ * was, and a part kept a stop loss above its entry for a long trade, its R
+ * meant nothing, and its own form refused it (audit 6 F2-4). `before` is
+ * the trade as saved.
  */
 function followingParts(state: TradesState, before: Trade | undefined, after: Trade): Trade[] {
   if (!before || FOLLOWED.every((key) => before[key] === after[key])) return [];
@@ -396,12 +405,19 @@ function followingParts(state: TradesState, before: Trade | undefined, after: Tr
     const take = (key: (typeof FOLLOWED)[number]) =>
       part[key] === before[key] && part[key] !== after[key];
     if (part.parent !== after.id || !FOLLOWED.some(take)) return [];
+    const side = take('side') ? after.side : part.side;
+    const entryPrice = take('entryPrice') ? after.entryPrice : part.entryPrice;
+    const moved =
+      (take('side') || take('entryPrice')) && part.stop !== null && part.stop === before.stop;
+    const stop = moved ? after.stop : part.stop;
     return [
       {
         ...part,
-        entryPrice: take('entryPrice') ? after.entryPrice : part.entryPrice,
-        side: take('side') ? after.side : part.side,
+        symbol: take('symbol') ? after.symbol : part.symbol,
+        entryPrice,
+        side,
         setup: take('setup') ? after.setup : part.setup,
+        stop: stopFits(side, entryPrice, stop) ? stop : null,
       },
     ];
   });
@@ -494,7 +510,11 @@ export function readClose(
  * Reads the trade form when it isn't closing: a new trade, or a change to
  * one in `state` (`ids.id`). A part keeps naming its trade. A trade with
  * parts keeps at least what they closed, and given an exit, what's still
- * open of it is closed as its last part (readClose).
+ * open of it is closed as its last part (readClose). That part's fees are
+ * those of the trade not counted yet (openFees) while the form's fees are
+ * the trade's as saved, which its first part counted already; fees typed
+ * in are the part's, as in the close form. Before, the last part took the
+ * trade's fees again, so they counted twice (audit 6 F2-1).
  */
 export function readChange(
   form: TradeForm,
@@ -503,11 +523,20 @@ export function readChange(
   locale?: string,
 ): ReadTrades {
   const saved = state.trades.find((trade) => trade.id === ids.id);
-  const split = (saved && partsOf(state.trades).get(saved.id)) ?? NO_PARTS;
-  if (split.quantity > 0 && (form.exitDate.trim() !== '' || form.exitPrice.trim() !== '')) {
+  const parts = partsOf(state.trades);
+  const split = (saved && parts.get(saved.id)) ?? NO_PARTS;
+  if (
+    saved &&
+    split.quantity > 0 &&
+    (form.exitDate.trim() !== '' || form.exitPrice.trim() !== '')
+  ) {
     const bought = readNumber(form.quantity, locale);
     const open = isPrice(bought) ? decimalText(tidy(bought - split.quantity), locale) : '';
-    const read = readClose(form, open, state, ids, locale);
+    const asSaved =
+      form.fees.trim() === '' ? saved.fees === 0 : readNumber(form.fees, locale) === saved.fees;
+    const left = openFees(saved, parts);
+    const fees = !asSaved ? form.fees : left === 0 ? '' : decimalText(left, locale);
+    const read = readClose({ ...form, fees }, open, state, ids, locale);
     // This form has no "Quantity closed": the quantity is what says it.
     if (!read.problems?.closeQuantity) return read;
     const { closeQuantity, ...problems } = read.problems;
@@ -733,7 +762,10 @@ export function closedYears(state: TradesState): YearCount[] {
  * was deleted (audit 3 F2-2). Open trades stay, and so do the parts of
  * them still open (keptPart). A trade closed in parts, all of it, goes
  * with its parts of that year, as it would count them as open again; its
- * other parts stay, as trades of their own.
+ * other parts stay, as trades of their own. That trade is deleted, not
+ * changed, so a change made to it on a device that hadn't synced, dated
+ * after the deletion, brings it back without its parts, as open (audit 6
+ * F2-2; the README says why it stays so).
  */
 export function removeClosedYear(state: TradesState, year: string): TradesState {
   const parts = partsOf(state.trades);
@@ -1091,10 +1123,23 @@ export function dateLabel(date: IsoDate, locale = DATE_LOCALE): string {
  * The trades as a CSV file (one row each, the latest entered first), as a
  * spreadsheet in the language of `locale` (the browser's own when left out)
  * reads it (csvFile). A trade closed in parts has a row for each part, and
- * one for what's still open of it, if anything is.
+ * one for what's still open of it, if anything is. One closed more than it
+ * was bought (overClosed) has a row with what it bought, its notes starting
+ * with what the page says of it: it was left out, so nothing in the file
+ * said what was bought (audit 6 F2-4).
  */
 export function toCsv(state: TradesState, locale?: string): string {
   const parts = partsOf(state.trades);
+  const byId = new Map(state.trades.map((trade) => [trade.id, trade]));
+  /** An open trade's: what's still open of it, or all it bought if more than that was closed. */
+  const quantity = (trade: Trade): number => {
+    const open = isOpen(trade) ? openQuantity(trade, parts) : 0;
+    return open > 0 ? open : trade.quantity;
+  };
+  const notes = (trade: Trade): string => {
+    const note = isOpen(trade) ? overClosedNote(trade, parts, byId, locale) : null;
+    return note === null ? trade.notes : [note, trade.notes].filter(Boolean).join(' ');
+  };
   const header = [
     'Symbol',
     'Side',
@@ -1112,14 +1157,16 @@ export function toCsv(state: TradesState, locale?: string): string {
     'Notes',
   ];
   const rows = state.trades
-    .filter((trade) => !isOpen(trade) || openQuantity(trade, parts) > 0)
+    .filter(
+      (trade) => !isOpen(trade) || openQuantity(trade, parts) > 0 || overClosed(trade, parts) > 0,
+    )
     .sort((a, b) => b.entryDate.localeCompare(a.entryDate))
     .map((trade) => [
       trade.symbol,
       SIDE_LABELS[trade.side],
       trade.entryDate,
       trade.entryPrice,
-      isOpen(trade) ? openQuantity(trade, parts) : trade.quantity,
+      quantity(trade),
       trade.stop,
       trade.exitDate,
       trade.exitPrice,
@@ -1128,7 +1175,7 @@ export function toCsv(state: TradesState, locale?: string): string {
       returnPercent(trade),
       rMultiple(trade),
       trade.setup,
-      trade.notes,
+      notes(trade),
     ]);
   return csvFile([header, ...rows], locale);
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { compareText, cutToLength, foldText } from './text.ts';
+import { compareText, cutToLength, foldText, withinLength } from './text.ts';
 
 describe('compareText', () => {
   it('sorts like localeCompare, ignoring case and accents, with numbers in order', () => {
@@ -105,6 +105,17 @@ describe('cutToLength (audit 4 F3-4)', () => {
     expect(cutToLength(`${families}!`, 200)).toBe(families);
     const scotland = '🏴󠁧󠁢󠁳󠁣󠁴󠁿'.repeat(200);
     expect(cutToLength(`${scotland}!`, 200)).toBe(scotland);
+  });
+
+  // Audit 6 F2-3: browsers count some scripts' characters differently.
+  it('lets saved text through loosely, as any browser may have cut it', () => {
+    for (const text of ['स्त्री '.repeat(2000), '🏴󠁧󠁢󠁳󠁣󠁴󠁿'.repeat(200), `a${'́'.repeat(10_000)}`]) {
+      expect(withinLength(cutToLength(text, 200), 200)).toBe(true);
+    }
+    // Twice the limit, as an older iPhone counts Hindi, is fine; text far
+    // longer than any typed isn't.
+    expect(withinLength('स्त्री '.repeat(200), 200)).toBe(true);
+    expect(withinLength(`a${'́'.repeat(10_000)}`, 200)).toBe(false);
   });
 
   it('still loads, and keeps emoji whole, where the browser can’t tell characters apart', async () => {

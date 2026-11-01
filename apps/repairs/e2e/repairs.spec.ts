@@ -303,6 +303,30 @@ test('a repair’s vehicle fills its line, a big target however short', async ({
   expect(title?.width).toBeGreaterThan((line?.width ?? 0) / 2);
 });
 
+// Audit 6 F2-3: a repair whose vehicle was deleted on another device (it came
+// back with a change made there) showed "Unknown vehicle" in its form, and
+// saving the form added a vehicle by that name.
+test('asks for the vehicle of a repair whose vehicle was deleted elsewhere', async ({ page }) => {
+  await seed(page, { vehicles: fleet, repairs: [repair({ vehicle: 'deleted' })] });
+  await expect(repairItems(page).first()).toContainText('Unknown vehicle');
+  await repairItems(page).first().locator('[data-action="edit-repair"]').click();
+  const dialog = repairDialog(page);
+  const field = dialog.getByLabel('Vehicle');
+  await expect(field).toHaveValue('');
+  await expect(field).toBeFocused();
+  await expect(field).toHaveAccessibleDescription(
+    /The vehicle this repair was on was deleted on another device\. Enter the vehicle\./,
+  );
+  await fillRepair(page, { hours: '1' });
+  await expect(dialog.locator('[data-error-for="vehicle"]')).toHaveText(
+    'Enter the vehicle, like a bus number.',
+  );
+  await fillRepair(page, { vehicle: 'Bus 12' });
+  await expect(status(page, 'Saved the repair on Bus 12.')).toBeAttached();
+  const saved = await readStore<VehiclesState>(page, 'repairs-vehicles');
+  expect(saved?.data.vehicles.map((entry) => entry.name)).toEqual(['Bus 105', 'Bus 12', 'My car']);
+});
+
 // Audit 3 F2-1: the vehicle's form saved every field as it was when it opened.
 test('a change made in another tab survives a vehicle form open here', async ({ page }) => {
   await seed(page, { vehicles: fleet });
