@@ -96,6 +96,11 @@ export interface Online {
    * they show here again, as only online, once sync is on (audit 3 F3-1).
    */
   removed(photos: readonly Photo[], everywhere: boolean): Promise<void>;
+  /**
+   * Photos that removed() was told of couldn't be deleted here after all
+   * (the page says so): they aren't deleted online either (audit 6 F3-4).
+   */
+  kept(ids: readonly string[]): Promise<void>;
   unlock(code: string): Promise<UnlockResult>;
   /** A thumbnail of a photo that's only online: downloaded and kept. */
   thumb(photo: Photo): Promise<string | null>;
@@ -585,6 +590,13 @@ export function startOnline(list: PhotoList): Online {
         removals: [...new Set([...(current?.removals ?? []), ...online])],
       }));
       if (sync.status().on) schedule();
+    },
+    async kept(ids) {
+      const back = new Set(ids);
+      await updateProgress((current) => ({
+        ...(current ?? fresh(inUse)),
+        removals: (current?.removals ?? []).filter((id) => !back.has(id)),
+      }));
     },
     async unlock(code) {
       try {

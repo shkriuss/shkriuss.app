@@ -9,9 +9,10 @@ request previews, so no `shkriuss-photos-preview` bucket either. Updated by
 audit 5: a deletion note's seal is for the photo's id, not one upload of it
 (A-2, a known limit), a library made up through a move is cleaned up like
 any other (B-1), and what a deleted library keeps (D-3). Updated by audit
-6: only the library's own refusal marks a library as taken (A-5), and the
-work with the library goes by the photos in the device's database at that
-moment, not by the page's own list (F3-1).
+6: only the library's own refusal marks a library as taken (A-5), the work
+with the library goes by the photos in the device's database at that
+moment, not by the page's own list (F3-1), and a photo that can't be
+deleted on the device isn't deleted online (F3-4).
 
 ## Context
 
@@ -92,7 +93,9 @@ every device. That's far beyond what sync can hold:
   was deleted everywhere then, though the dialog had said "from this
   device"). A photo deleted while sync was on is still deleted everywhere
   if sync is turned off before that reaches the online library, and it
-  doesn't come back on that device meanwhile.
+  doesn't come back on that device meanwhile. One that can't be deleted on
+  the device (the page says so) isn't deleted online later either (audit 6
+  F3-4).
 - **"Free up space on this device"** removes originals (and screen-sized
   copies) that are safely online, keeping thumbnails. Only when tapped, and
   only once the library has answered since Photos opened, while it isn't

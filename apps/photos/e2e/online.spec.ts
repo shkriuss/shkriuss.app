@@ -374,6 +374,44 @@ test('a photo deleted while sync is off is deleted only on this device: the onli
   await tablet.context().close();
 });
 
+test('a photo that couldn’t be deleted here, as the page says, isn’t deleted online later either', async ({
+  page,
+}) => {
+  // The deletion online was noted first, and still went ahead (audit 6 F3-4).
+  await createAccount(page);
+  await page.goto('/');
+  await photoOnline(page, 'IMG_0019.JPG');
+  const removals: string[] = [];
+  page.on('request', (request) => {
+    if (request.url().endsWith('/api/library/remove')) removals.push(request.url());
+  });
+
+  // Deleting can't be saved on this device just now.
+  await page.evaluate(() => {
+    const remove = IDBObjectStore.prototype.delete;
+    (window as unknown as { canDelete: () => void }).canDelete = () => {
+      IDBObjectStore.prototype.delete = remove;
+    };
+    IDBObjectStore.prototype.delete = () => {
+      throw new DOMException('Not just now.', 'UnknownError');
+    };
+  });
+  await tiles(page).first().click();
+  expect(await deleteInViewer(page)).toMatch(/^It’s deleted from this device and from your online/);
+  const viewerStatus = page.locator('[data-viewer] [data-viewer-status]');
+  await expect(viewerStatus).toHaveText('Couldn’t delete. Please try again.');
+  await page.evaluate(() => (window as unknown as { canDelete: () => void }).canDelete());
+  await page.locator('[data-viewer]').getByRole('button', { name: 'Close' }).click();
+
+  // It's still here, and online.
+  await syncNow(page);
+  await syncNow(page);
+  expect(removals).toEqual([]);
+  await expect(tiles(page)).toHaveCount(1);
+  await expect(onlineStatus(page)).toHaveText(/^Online: 1 photo · /);
+  expect(await stored(page)).toEqual({ photos: 1, files: 1 });
+});
+
 test('a photo deleted while sync is on is deleted everywhere, even if sync is turned off before that gets online', async ({
   page,
   browser,

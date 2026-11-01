@@ -640,12 +640,21 @@ export function mountPhotos(root: Document): void {
     const gone = new Set(ids);
     try {
       // Online too, now or when sync is on again, if the dialog said so.
+      // Noted first: if the page is closed before the photos go from here,
+      // they still go everywhere, as asked.
       await online.removed(
         photos.filter((photo) => gone.has(photo.id)),
         everywhere,
       );
+    } catch {
+      problem('Couldn’t delete. Please try again.');
+      return;
+    }
+    try {
       await deletePhotos(ids);
     } catch {
+      // Not deleted here, as the page says: so not online later either (audit 6 F3-4).
+      if (everywhere) await online.kept(ids).catch(() => undefined);
       problem('Couldn’t delete. Please try again.');
       return;
     }
