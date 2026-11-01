@@ -129,7 +129,12 @@ shape (a new field that must be there, a stricter check, a renamed field):
 
 1. Raise the store's `version` in its `createStore` options, and add
    `migrate(data, fromVersion)`, which turns what older versions saved into
-   the new shape. Never make `validate` stricter without it.
+   the new shape. Never make `validate` stricter without it. With sync, keep
+   every item and its `id`: another device's items are brought to the new
+   shape one by one, by id, so an item the migration drops, or gives a new
+   id, stays as the old version saved it, and the newer version can't sync
+   (unless it still accepts those items as they are, as Photos does with its
+   version 1 library records).
 2. Test it: data saved by the old version (`seedStores()` with the old
    version number) loads, and saves back in the new shape.
 3. What happens then: data from a newer version is never saved over. A

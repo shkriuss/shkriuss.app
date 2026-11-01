@@ -447,7 +447,12 @@ export function createSync(options: {
     return Object.values(remote.stores).flatMap((snapshot) => valuesOf(snapshot));
   }
 
-  /** The other device's items for one store, in this app's current data version. */
+  /**
+   * The other device's items for one store, in this app's current data
+   * version: each item takes its migrated value, by id. So a migration must
+   * keep every item and its id (docs/adding-an-app.md): one it drops, or
+   * gives a new id, stays as the old version saved it.
+   */
   function upgrade(synced: SyncedStore, remote: StoreSnapshot): StoreSnapshot {
     if (remote.v > synced.store.version) throw new SyncError('update-needed');
     if (remote.v === synced.store.version) return remote;
