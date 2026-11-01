@@ -103,7 +103,8 @@ private car's service history. Lives at <https://repairs.shkriuss.app>.
   sync (`MAX_PHOTO_BYTES`, `PHOTO_QUALITIES`). Saving the form waits for
   photos still being made smaller; if the form is closed meanwhile
   (Cancel, Escape, or Delete), nothing is saved (audit 6 F2-1: it was saved
-  anyway, as a copy with the same photos). Photos aren't in backups;
+  anyway, as a copy with the same photos). Photos aren't in backups, as
+  "Your data" says next to "Back up" and "Delete all data" (audit 6 E-3);
   "Save a copy" saves one as a file, named after its vehicle and day in any
   script ("ავტობუსი-105-2026-10-21-photo-1.jpg", `photoCopyName`), with
   `downloadFile`, as every download is. Deleting a repair, a vehicle or a year

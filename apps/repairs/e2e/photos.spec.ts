@@ -495,7 +495,11 @@ test('photos on another device, and deleting all data', async ({ page }) => {
   expect(saved?.data.repairs[0]?.photos).toEqual(['taken-on-the-tablet', expect.any(String)]);
   expect(await storedPhotos(page)).toBe(1);
 
-  // "Delete all data" deletes the photos too.
+  // "Delete all data" deletes the photos too. Next to it, and to "Back up",
+  // the page says backups don't have them (audit 6 E-3).
+  await expect(page.locator('[data-data-controls]')).toContainText(
+    'Photos aren’t in backups. To keep them somewhere else too, turn on sync',
+  );
   await page.getByRole('button', { name: 'Delete all data' }).click();
   await page.getByRole('button', { name: 'Delete everything' }).click();
   await expect(page.getByText('No repairs yet.', { exact: false })).toBeVisible();
