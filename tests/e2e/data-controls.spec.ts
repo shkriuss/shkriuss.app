@@ -2,6 +2,7 @@
 import { readFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
 import { getSite } from '../../packages/registry/src/index.ts';
+import { forThisSite, type EverySite } from './every-site.ts';
 import { checkA11y, expect, test } from './fixtures.ts';
 
 const PASSPHRASE = 'four random words here';
@@ -168,13 +169,39 @@ test('the dialogs that delete read out what they will delete (audit 5 G-3)', asy
   await expect(online).toBeHidden();
 });
 
+/**
+ * Each site's main store, for the test below: named after the app, or null
+ * where there's none. A new app saves nothing but its theme until it's
+ * built, so the generator gives it null (audit 6 J-1: the test failed for
+ * every new app). Every site has a line (every-site.ts).
+ */
+const mainStores: EverySite<string> = {
+  budget: 'shkriuss:budget',
+  calendar: 'shkriuss:calendar',
+  grammar: 'shkriuss:grammar',
+  habits: 'shkriuss:habits',
+  // No app data (the beforeEach above skips it).
+  hub: null,
+  meals: 'shkriuss:meals',
+  notes: 'shkriuss:notes',
+  // Its photos are in the files database; this storage has a count of its changes.
+  photos: 'shkriuss:photos-changes',
+  reminders: 'shkriuss:reminders',
+  repairs: 'shkriuss:repairs',
+  shelf: 'shkriuss:shelf',
+  tally: 'shkriuss:tally',
+  tasks: 'shkriuss:tasks',
+  trades: 'shkriuss:trades',
+  water: 'shkriuss:water',
+};
+
 test('says when what’s saved is from a newer version of the app, and Restore leaves it alone (audit 5 E-3)', async ({
   page,
 }, testInfo) => {
   const slug = testInfo.project.name;
-  // Each app's main store is named after it; Photos keeps its photos in the
-  // files database, and in this storage a count of its changes.
-  const key = `shkriuss:${slug === 'photos' ? 'photos-changes' : slug}`;
+  const key = forThisSite(mainStores);
+  test.skip(!key, 'This site has no store of its own yet.');
+  if (!key) return;
   // Saved by a version far ahead of this one: after a rollback, or in a tab
   // open from before an update. The app showed nothing, with no word.
   const newer = JSON.stringify({ v: 1_000_000, data: {} });

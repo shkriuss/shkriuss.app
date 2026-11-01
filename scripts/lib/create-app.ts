@@ -85,6 +85,7 @@ export const THEME_CHOICE = 'Your light or dark theme choice';
  * (audit 6 J-1).
  */
 export const SHARED_TEST_TABLES = [
+  { file: 'tests/e2e/data-controls.spec.ts', start: 'const mainStores: EverySite<' },
   { file: 'tests/e2e/saving.spec.ts', start: 'const changes: EverySite<' },
   { file: 'tests/e2e/keep-focus.spec.ts', start: 'const cases: EverySite<' },
   { file: 'tests/e2e/keep-focus.spec.ts', start: 'const goneCases: EverySite<' },

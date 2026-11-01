@@ -55,8 +55,8 @@ pnpm --filter journal dev
    `"storage": "device"` and the theme choice in `dataStored` (every page
    saves it, so keep both).
 3. Adds a line for the app to every table in the shared browser tests
-   (`tests/e2e/saving.spec.ts`, `keep-focus.spec.ts` and
-   `large-text.spec.ts`; they're listed below), as `null` with "New:
+   (`tests/e2e/data-controls.spec.ts`, `saving.spec.ts`, `keep-focus.spec.ts`
+   and `large-text.spec.ts`; they're listed below), as `null` with "New:
    nothing for this test yet", so they don't fail for it. Fill them in as
    the app grows (see below). Then it formats the new files.
 4. Sets the privacy page's "Last updated" date to today, with the
@@ -122,6 +122,8 @@ in alphabetical order, so where an entry sits in `apps.json` doesn't matter.
 - Fill in the app's lines in the shared browser tests' tables. Every site
   needs one in each, or the test fails for it (audit 3 J-11), and
   `pnpm new-app` adds them as `null` ("New: nothing for this test yet"):
+  - `mainStores` in `tests/e2e/data-controls.spec.ts`: the app's main
+    store's key (`shkriuss:<slug>`), once it saves something;
   - `changes` in `tests/e2e/saving.spec.ts`: one tap or entry that saves;
   - in `tests/e2e/keep-focus.spec.ts`: `cases`, a list that a change in
     another tab draws again; `goneCases`, the focused item deleted in
