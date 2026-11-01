@@ -25,7 +25,8 @@ needed, so every page stays within its JavaScript budget (J-2). Changed by
 audit 6: a key replacement whose answer was lost is finished the next time
 the Account page opens, instead of signing that device out (A-1); "Turn on
 sync for …" waits half a second before it works, like "Add this device"
-(A-2).
+(A-2); a device code's 10 minutes are counted by the clock of the device
+showing it, and it's cancelled when it's hidden as expired (A-1).
 
 ## Context
 
@@ -101,6 +102,11 @@ The requirements:
      trying until the code expires, and says so if a device used it
      meanwhile (audit finding A-2: hiding the code used to leave it working,
      with nobody watching).
+   - The device showing the code counts its 10 minutes by its own clock,
+     from just before it sends the code to the account service, and
+     cancels the code when it hides it then. Before, it compared the service's time of expiry
+     with its own clock: one running 15 minutes ahead hid each code at once
+     as expired, and left it working, unwatched (audit 6 A-1).
 
 **Account code:** an 8-character fingerprint of the secret (40 bits from
 HKDF), like `K7Q2-M9XD`.

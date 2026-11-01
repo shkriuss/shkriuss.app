@@ -393,6 +393,39 @@ test('“Done” makes the code stop working, so someone who saw it can’t use 
   await other.close();
 });
 
+test('a device whose clock runs ahead shows its code for the 10 minutes, then makes it stop working', async ({
+  page,
+  request,
+}) => {
+  // The page took the server's time of expiry by its own clock: 15 minutes
+  // ahead, it hid the code at once as "expired", and left it working,
+  // with nobody watching, for the rest of its 10 minutes (audit 6 A-1).
+  await page.clock.install({ time: new Date(Date.now() + 15 * 60 * 1000) });
+  await createAccount(page);
+  await page.getByRole('button', { name: 'Show a code' }).click();
+  const status = page.locator('[data-link-status]');
+  await expect(status).toHaveText(/Waiting for your other device/);
+  const url = (await page.locator('[data-link-url]').textContent()) ?? '';
+  const id = /#link=([\w-]{22})\./.exec(url)?.[1] ?? '';
+  // Two checks with the account service later, it's still there.
+  await page.clock.runFor(4100);
+  await expect(status).toHaveText(/Waiting for your other device/);
+  await expect(page.locator('[data-link-qr] svg')).toHaveCount(1);
+
+  // Its 10 minutes over, by this device's clock: hidden, and cancelled.
+  const cancelled = page.waitForResponse(
+    (response) =>
+      response.url().includes('/api/account/link/') && response.request().method() === 'DELETE',
+  );
+  await page.clock.fastForward('10:00');
+  await expect(status).toHaveText('The code expired. Show a new one if you still need it.');
+  await expect(page.locator('[data-link-qr] svg')).toHaveCount(0);
+  expect((await cancelled).status()).toBe(204);
+  expect(await (await request.get(`/api/account/link/${id}/state`)).json()).toEqual({
+    state: 'expired',
+  });
+});
+
 test('asks before switching a signed-in device to another account', async ({
   page,
   browser,

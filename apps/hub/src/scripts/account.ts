@@ -469,7 +469,9 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
       stopLink();
       linkStatus.textContent = LINK_USED;
     } else if (state === 'expired' || Date.now() > shown.expiresAt) {
-      stopLink();
+      // Cancelled too: by the server's clock, it may still work a moment
+      // longer, and hidden it mustn't (audit 6 A-1).
+      void dropLink();
       linkStatus.textContent = 'The code expired. Show a new one if you still need it.';
     }
   }
