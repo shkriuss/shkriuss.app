@@ -144,7 +144,8 @@ describe('items', () => {
     const item = changes.changes[0] as LibraryItem;
     expect(item).toMatchObject({ id: 'photo-0001', details: photo, parts: uploaded.parts });
 
-    const thumbs = await tablet.api.firstParts([item, { ...item, id: 'photo-none' }]);
+    // The same item twice is asked for once: the server refuses doubles (audit 6).
+    const thumbs = await tablet.api.firstParts([item, { ...item, id: 'photo-none' }, item]);
     expect([...thumbs.keys()]).toEqual(['photo-0001']);
     expect(new TextDecoder().decode(thumbs.get('photo-0001'))).toBe('thumbnail'.repeat(5));
     expect(await tablet.api.part(item, 1)).toBeNull();

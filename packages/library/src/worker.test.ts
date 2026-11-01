@@ -289,6 +289,28 @@ describe('items', () => {
     expect(bytes.slice(4, 4 + 35)).toEqual(new Uint8Array(35).fill(1));
   });
 
+  // One request asking for the same photo 40 times read it 40 times from R2,
+  // and each read is billed (audit 6): one that names a photo twice is refused.
+  it('reads each first part at most once a request, and only of photos the library has', async () => {
+    const { device } = await unlocked();
+    await device.put(ITEM, [1000, 50]);
+    const get = vi.spyOn(server.bucket, 'get');
+    const again = await device.post('/first-parts', {
+      items: Array.from({ length: LIMITS.firstParts }, () => [ITEM, 1000]),
+    });
+    expect(again.status).toBe(400);
+    expect(get).not.toHaveBeenCalled();
+    const ids = Array.from(
+      { length: LIMITS.firstParts - 1 },
+      (_, index) => `photo-${2000 + index}`,
+    );
+    const once = await device.post('/first-parts', {
+      items: [ITEM, ...ids].map((id) => [id, 1000]),
+    });
+    expect(once.status).toBe(200);
+    expect(get).toHaveBeenCalledOnce();
+  });
+
   it('refuses ones that make no sense', async () => {
     const { device } = await unlocked();
     expect((await device.put('x', [100])).status).toBe(400);

@@ -299,7 +299,10 @@ Everything here fits Cloudflare's and GitHub's free plans:
   ([ADR 0009](adr/0009-push-notifications.md)).
 - Photos' online library uses R2: free up to 10 GB, then about $0.015 per GB
   a month (about $15 a month for 1 TB, the most it holds), and downloads are
-  free. Each photo put online is one Worker request and four Durable Object
+  free. Reading files is free up to 10 million reads a month, far more than
+  normal use; someone whose library has photos could make it about $40 a
+  month at most ([ADR 0016](adr/0016-online-photo-library.md), "Reading from
+  R2"). Each photo put online is one Worker request and four Durable Object
   requests. At most 10,000 photos go up a day, which takes at most about
   40,000 of the 100,000 free daily Durable Object requests that every app
   shares.

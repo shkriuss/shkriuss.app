@@ -64,11 +64,21 @@ describe('bodies', () => {
       ok: true,
       value: [['photo-0001', 100]],
     });
-    const many = Array.from({ length: LIMITS.firstParts + 1 }, () => ['photo-0001', 100]);
+    const many = Array.from({ length: LIMITS.firstParts + 1 }, (_, i) => [
+      `photo-${1000 + i}`,
+      100,
+    ]);
     for (const body of [
       {},
       { items: [] },
       { items: many },
+      // Each item once: the same one again would be read from R2 again (audit 6).
+      {
+        items: [
+          ['photo-0001', 100],
+          ['photo-0001', 100],
+        ],
+      },
       { items: [['photo-0001', 10]] },
       { items: [['photo-0001', LIMITS.firstPartBytes + 1]] },
       { items: [['bad id', 100]] },
@@ -191,5 +201,14 @@ describe('the limits the docs promise', () => {
     expect(NOTE_BYTES).toBe(512);
     expect(LIMITS.items).toBe(400_000);
     expect(LIMITS.itemBytes).toBe(95_000_000);
+  });
+
+  it('40 thumbnails in one request, so at most about 4 million R2 reads a day', () => {
+    // ADR 0016: "up to 40 in one request", "One request reads at most 40
+    // thumbnails ... at most about 4 million reads a day", "about $40 a
+    // month at most"; SECURITY.md and docs/deployment.md: "about $40 a month".
+    expect(LIMITS.firstParts).toBe(40);
+    const readsAMonth = LIMITS.firstParts * 100_000 * 30;
+    expect(Math.round(((readsAMonth - 10_000_000) / 1_000_000) * 0.36)).toBe(40);
   });
 });

@@ -164,7 +164,11 @@ function fields(body: unknown, names: readonly string[]): Record<string, unknown
   return Object.keys(record).every((key) => names.includes(key)) ? record : null;
 }
 
-/** POST /api/library/first-parts: { items: [[id, bytes], …] }, the first part of each. */
+/**
+ * POST /api/library/first-parts: { items: [[id, bytes], …] }, the first part
+ * of each. Each id once: every part is a read from R2, which is billed, so
+ * one request can't read the same one 40 times (audit 6).
+ */
 export function checkFirstParts(body: unknown): Checked<[string, number][]> {
   const items = fields(body, ['items'])?.['items'];
   if (
@@ -180,11 +184,12 @@ export function checkFirstParts(body: unknown): Checked<[string, number][]> {
         Number.isSafeInteger(item[1]) &&
         item[1] >= SEAL_BYTES &&
         item[1] <= LIMITS.firstPartBytes,
-    )
+    ) ||
+    new Set(items.map((item: [string, number]) => item[0])).size !== items.length
   ) {
     return {
       ok: false,
-      error: `"items" must be 1 to ${LIMITS.firstParts} pairs of an id and a size.`,
+      error: `"items" must be 1 to ${LIMITS.firstParts} pairs of an id and a size, each id once.`,
     };
   }
   return { ok: true, value: items as [string, number][] };

@@ -77,7 +77,9 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
   and changing the code locks
   every library. Hard limits across all libraries (1 TB, 320 MB of lists,
   10,000 uploads a day), plus 400,000 photos per library and 95 MB each,
-  mean nobody can run up the bill.
+  mean nobody can run up the bill beyond what ADR 0016 sets out (reads from
+  R2 are limited by the daily requests: about $40 a month at most, and only
+  by someone whose library has photos).
 - An app connects by sending the person to the hub with a one-time ECDH
   public key; after they confirm, the hub seals the app's key to it and sends
   it back in the URL fragment, only to that app's real address. The app and

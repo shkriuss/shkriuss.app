@@ -12,10 +12,11 @@ any other (B-1), and what a deleted library keeps (D-3). Changed by audit
 6: only the library's own refusal marks a library as taken (A-5), the work
 with the library goes by the photos in the device's database at that
 moment, not by the page's own list (F3-1), a photo that can't be deleted on
-the device isn't deleted online (F3-4), and the lists have a limit of their
+the device isn't deleted online (F3-4), the lists have a limit of their
 own, 320 MB for all of an app's libraries together, counting what each
 photo and each deletion note really takes (see "Protecting the bill" and
-"The list's size").
+"The list's size"), and a request for thumbnails names each photo once,
+and what reads from R2 can cost is written down ("Reading from R2").
 
 ## Context
 
@@ -153,6 +154,19 @@ every device. That's far beyond what sync can hold:
 - **A library that was never unlocked costs nothing in R2.** Thumbnails and
   parts are read only for items its list has, deleting it lists no files,
   and "remove" leaves no markers in it.
+- **Reading from R2** (thumbnails, a photo opened, an original saved) has
+  no count of its own: keeping one would cost a write in `LibraryGate` for
+  every screen of thumbnails, out of the daily writes every app shares.
+  Requests limit it instead. One request reads at most 40 thumbnails, each
+  once (until audit 6 it could name the same photo 40 times) and only of
+  photos its library has, so only someone whose library has photos (with
+  the storage code, or a lost device before the library is moved) can make
+  many reads. On the free plan, the 100,000 requests a day that every app
+  shares allow at most about 4 million reads a day, about 120 million a
+  month: R2 gives 10 million a month free, then charges $0.36 per million,
+  so about $40 a month at most, while every app's online features pause
+  each day once the requests run out. On the Workers paid plan, only the
+  rate-limiting rule ([deployment](../deployment.md)) slows it down.
 - **Access:** requests carry a token from the app's own key (HKDF). The
   first one to reach a new library becomes its token; others are refused.
 
@@ -219,7 +233,10 @@ every device. That's far beyond what sync can hold:
 ## Consequences
 
 - All libraries together can grow to 1 TB, about $15 a month at most. Below
-  10 GB it costs nothing. Until the owner's device moves the library after
+  10 GB it costs nothing. Reading from R2 costs nothing in normal use (a
+  screen of thumbnails is at most 40 reads, of 10 million free a month);
+  someone whose library has photos could make it about $40 a month more at
+  most on the free plan ("Reading from R2", above). Until the owner's device moves the library after
   the account key is replaced, the old key can still read, delete or take
   it ([ADR 0010](0010-account-and-sync.md)); if it takes it, the owner's
   devices start a new one, as above.
