@@ -49,7 +49,8 @@ interface Saved {
   successors: Record<string, string>;
   /**
    * For a replaced key, when it was noted here (ms). Missing for keys noted
-   * before this was kept: they count from the next sign-in or replacement,
+   * before this was kept: they count from the next time the Account page
+   * opens (currentAccount), or this device signs in or replaces a key,
    * which notes the time.
    */
   replacedAt: Record<string, number>;
@@ -127,7 +128,14 @@ function decode(text: string): Uint8Array<ArrayBuffer> | null {
 
 /** The account this device is signed in to, or null. */
 export async function currentAccount(): Promise<Account | null> {
-  const { secret: text, since } = read();
+  const saved = read();
+  // Replaced keys noted before their time was kept start their 13 months
+  // now. Only signing in or another replacement noted it, so on a device
+  // that stayed signed in they were handed to the apps for ever (audit 6 A-4).
+  if (saved.replaced.some((key) => saved.replacedAt[key] === undefined)) {
+    write(withFreshReplaced(saved, saved.replaced, Date.now()));
+  }
+  const { secret: text, since } = saved;
   const secret = text === undefined ? null : decode(text);
   if (!secret || since === undefined) return null;
   return { secret, code: await accountCodeOf(secret), since };

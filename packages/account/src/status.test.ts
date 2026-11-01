@@ -334,6 +334,31 @@ describe('replaced keys this device keeps (audit 5 A-1)', () => {
     vi.setSystemTime(Date.now() + UNUSED_MS);
     expect(replacedSecrets()).toEqual([]);
   });
+
+  it('noted before the time was kept, count from the next time the page opens (audit 6 A-4)', async () => {
+    // Only signing in or another replacement noted the time: on a device
+    // that stayed signed in, they were handed to the apps for ever.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(Date.UTC(2026, 9, 31, 12));
+    const [old, next] = [randomBytes(32), randomBytes(32)];
+    localStorage.setItem(
+      'shkriuss-device:account',
+      JSON.stringify({
+        secret: toBase64Url(next),
+        since: '2026-10-20T10:00:00.000Z',
+        replaced: [toBase64Url(old)],
+        successors: { [toBase64Url(old)]: await successorTag(old, next) },
+      }),
+    );
+    expect((await currentAccount())?.secret).toEqual(next);
+    vi.setSystemTime(Date.now() + UNUSED_MS - 1);
+    // Opening the page again doesn't start them again.
+    await currentAccount();
+    expect(replacedSecrets()).toEqual([old]);
+    vi.setSystemTime(Date.now() + 1);
+    expect(replacedSecrets()).toEqual([]);
+    expect((await currentAccount())?.secret).toEqual(next);
+  });
 });
 
 describe('replaced keys and other accounts (audit A-3)', () => {
