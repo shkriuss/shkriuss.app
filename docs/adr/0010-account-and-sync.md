@@ -23,7 +23,9 @@ when sync is already off (C-4); all device links share one object (B-2);
 an app loads the code that connects it to the account only when that's
 needed, so every page stays within its JavaScript budget (J-2). Changed by
 audit 6: a key replacement whose answer was lost is finished the next time
-the Account page opens, instead of signing that device out (A-1).
+the Account page opens, instead of signing that device out (A-1); "Turn on
+sync for …" waits half a second before it works, like "Add this device"
+(A-2).
 
 ## Context
 
@@ -228,7 +230,11 @@ in with `sync: true` in `apps.json`.
     one-time public key, and goes back to the app with the result after `#`.
     Any website can open an app with `#sync=connect`: that only starts this
     request, which the person confirms on the hub with the account code in
-    view, and cancelling changes nothing (audit 5 C-4).
+    view, and cancelling changes nothing (audit 5 C-4). Like "Add this
+    device", "Turn on sync for …" works only half a second after it's on
+    screen in a window that has focus, so the second click of a
+    double-click that website asked for, landing as its own window closes,
+    can't confirm it (audit 4 C-6, audit 6 A-2).
   - The app opens it, removes it from the address bar, and forgets the
     one-time key. The app and the hub never call each other's servers, and
     the CSP stays `'self'`.

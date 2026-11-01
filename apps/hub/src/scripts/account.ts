@@ -84,7 +84,7 @@ const CONNECT_BROKEN =
 const LINK_POLL_MS = 2000;
 /** A message that appears is shown (and read out) this long after it's put on the page. */
 const SAY_DELAY_MS = 100;
-/** "Add this device" works this long after its question is on screen (see holdAccept). */
+/** "Add this device" and "Turn on sync for …" work this long after their question is on screen (see holdAccept). */
 const ACCEPT_DELAY_MS = 500;
 
 const PROBLEMS: Record<AccountErrorCode, string> = {
@@ -213,6 +213,7 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
 
   const connectNote = required<HTMLElement>(root, '[data-connect-note]');
   const connectCode = required<HTMLElement>(root, '[data-connect-code]');
+  const acceptConnectButton = required<HTMLButtonElement>(root, '[data-action="accept-connect"]');
   const connecting = await connectRequestOf(location.search);
   if (connecting === 'invalid') {
     message.hidden = false;
@@ -332,6 +333,7 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
       void showSyncApps();
     }
     if (focus) root.querySelector<HTMLElement>(`[data-view="${view}"] [tabindex="-1"]`)?.focus();
+    holdAccept();
   }
 
   function home(focus = true): void {
@@ -519,25 +521,30 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
     linkCode.textContent = await accountCodeOf(linked);
     linkReplace.hidden = !account;
     show('link-confirm');
-    holdAccept();
     return true;
   }
 
   /**
-   * "Add this device" works only once the question has been on screen, in a
-   * window that has focus, for half a second. A press sooner may be the
-   * second half of a double-click another website asked for, closing its own
-   * window over this one in between ("DoubleClickjacking", audit 4 C-6).
-   * Meanwhile it's marked busy, not disabled: keyboard focus stays on it
-   * when the person comes back from another window (audit G-7).
+   * "Add this device" and "Turn on sync for …" work only once their
+   * question has been on screen, in a window that has focus, for half a
+   * second: another website can bring either up (a link; an app opened with
+   * "#sync=connect"), and a press sooner may be the second half of a
+   * double-click it asked for, closing its own window over this one in
+   * between ("DoubleClickjacking", audit 4 C-6, audit 6 A-2). Meanwhile
+   * they're marked busy, not disabled: keyboard focus stays on them when the
+   * person comes back from another window (audit G-7).
    */
+  const confirmations = [acceptLinkButton, acceptConnectButton];
   let acceptTimer: number | undefined;
+  /** "Turn on sync for …" was pressed: it stays busy while the page goes back to the app. */
+  let leaving = false;
   function holdAccept(): void {
     window.clearTimeout(acceptTimer);
-    setBusy(acceptLinkButton, true);
-    if (!linked || !document.hasFocus()) return;
+    for (const button of confirmations) setBusy(button, true);
+    const shown = confirmations.find((button) => !button.closest('[hidden]'));
+    if (!shown || leaving || !document.hasFocus()) return;
     acceptTimer = window.setTimeout(() => {
-      setBusy(acceptLinkButton, false);
+      setBusy(shown, false);
     }, ACCEPT_DELAY_MS);
   }
   window.addEventListener('focus', holdAccept);
@@ -635,7 +642,9 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
       }),
     'accept-connect': async (button) => {
       if (!account || !connecting || connecting === 'invalid') return;
+      if (button.ariaDisabled === 'true') return;
       // Stays busy: the page goes back to the app.
+      leaving = true;
       setBusy(button, true);
       const { request, app } = connecting;
       try {
@@ -649,6 +658,7 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
         location.replace(connectResultUrl(request.from, result));
       } catch {
         // Not expected (the request was checked), but never a button stuck busy (audit 5 A-3).
+        leaving = false;
         setBusy(button, false);
         say(CONNECT_BROKEN, true);
       }

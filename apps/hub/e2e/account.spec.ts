@@ -1,7 +1,7 @@
 // The optional shkriuss account (packages/account, docs/adr/0010): creating
 // one, the recovery key, adding a device with a one-time code, passkeys, and
 // what the account service accepts.
-import { randomBytes } from 'node:crypto';
+import { randomBytes, webcrypto } from 'node:crypto';
 import type { Browser, BrowserContext, CDPSession, Download, Page } from '@playwright/test';
 import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
 import { sites } from '../../../tests/e2e/sites.ts';
@@ -618,6 +618,57 @@ test('refuses to connect an app from the wrong address', async ({ page }) => {
     `/account/?connect=nope&from=${encodeURIComponent('http://127.0.0.1:1')}&key=${key}&state=${state}`,
   );
   await expect(message(page)).toHaveText(/This link to connect an app doesn’t work/);
+});
+
+test('“Turn on sync for …” works only a moment after its question is on screen', async ({
+  page,
+  guard,
+}) => {
+  // Any website can bring this question up (ADR 0010), so a press sooner may
+  // be the second click of a double-click it asked for, as for "Add this
+  // device" (audit 4 C-6, audit 6 A-2).
+  await createAccount(page);
+  const [app] = syncApps;
+  if (!app) throw new Error('No app syncs');
+  // What an app sends: a one-time public key, and where to come back to.
+  const pair = await webcrypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, [
+    'deriveBits',
+  ]);
+  const key = Buffer.from(await webcrypto.subtle.exportKey('raw', pair.publicKey)).toString(
+    'base64url',
+  );
+  const state = randomBytes(16).toString('base64url');
+  const from = 'http://127.0.0.1:1';
+  guard.allowOrigin(from);
+  await page.route(`${from}/**`, (route) =>
+    route.fulfill({ status: 200, contentType: 'text/html', body: '<p>The app</p>' }),
+  );
+  // Paused: no timer fires but those the test runs.
+  await page.clock.install({ time: new Date('2026-10-26T12:00:00') });
+  await page.clock.pauseAt(new Date('2026-10-26T12:00:01'));
+  await page.goto(
+    `/account/?connect=${app.slug}&from=${encodeURIComponent(from)}&key=${key}&state=${state}`,
+  );
+  await expect(view(page, 'connect')).toBeVisible();
+  const turnOn = page.getByRole('button', { name: `Turn on sync for ${app.name}` });
+  await expect(turnOn).toHaveAttribute('aria-disabled', 'true');
+  // A press meanwhile does nothing.
+  await turnOn.focus();
+  await page.keyboard.press('Enter');
+  await page.clock.runFor(400);
+  await expect(turnOn).toHaveAttribute('aria-disabled', 'true');
+  await expect(view(page, 'connect')).toBeVisible();
+  await page.clock.runFor(100);
+  await expect(turnOn).not.toHaveAttribute('aria-disabled');
+  // Away from the window and back: another half second, focus still on it.
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await expect(turnOn).toHaveAttribute('aria-disabled', 'true');
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(turnOn).toBeFocused();
+  await page.clock.runFor(500);
+  await expect(turnOn).not.toHaveAttribute('aria-disabled');
+  await turnOn.click();
+  await page.waitForURL((url) => url.origin === from && url.hash.startsWith('#connect='));
 });
 
 test.describe('passkeys', () => {
