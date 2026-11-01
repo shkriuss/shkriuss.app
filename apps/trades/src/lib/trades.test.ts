@@ -660,6 +660,53 @@ describe('closing part of a trade', () => {
     expect(readChange(partForm, after, { id: 'b', newId: 'n' }, 'en-US').parts).toBeUndefined();
   });
 
+  // Audit 6 F2-4: a symbol put right stayed wrong on the parts, and an entry
+  // price put right left a part's stop loss above its entry for a long trade.
+  it('changes the parts with the trade’s symbol, and their stop loss with its entry price', () => {
+    const appl = trade({
+      id: 'a',
+      symbol: 'APPL',
+      quantity: 100,
+      stop: 95,
+      exitDate: null,
+      exitPrice: null,
+    });
+    const first = close(
+      { ...toForm(appl, 'en-US'), exitDate: '2026-10-05', exitPrice: '110' },
+      '50',
+      state(appl),
+      'p',
+    );
+    const closed = closePart(state(appl), first.trade as Trade, first.rest as Trade);
+    const part = first.trade as Trade;
+    const change = (fields: Partial<TradeForm>, from = closed) =>
+      readChange({ ...toForm(appl, 'en-US'), ...fields }, from, { id: 'a', newId: 'n' }, 'en-US');
+    expect(change({ symbol: 'aapl' }).parts).toEqual([{ ...part, symbol: 'AAPL' }]);
+    expect(matchesSearch({ ...part, symbol: 'AAPL' }, 'AAPL')).toBe(true);
+    // The entry price and stop loss put right: the part takes both, and its R follows.
+    const fixed = change({ entryPrice: '90', stop: '85' }).parts?.[0] as Trade;
+    expect(fixed).toEqual({ ...part, entryPrice: 90, stop: 85 });
+    expect(rMultiple(fixed)).toBe(4);
+    // Its own form saves it unchanged.
+    const after = saveTrade(closed, fixed);
+    expect(readChange(toForm(fixed, 'en-US'), after, { id: 'p', newId: 'n' }, 'en-US')).toEqual({
+      trade: fixed,
+      rest: null,
+    });
+    // A part given a stop loss of its own keeps it, unless it's on the wrong side now.
+    const own = saveTrade(closed, { ...part, stop: 97 });
+    expect(change({ entryPrice: '101', stop: '96' }, own).parts).toEqual([
+      { ...part, entryPrice: 101, stop: 97 },
+    ]);
+    expect(change({ entryPrice: '90', stop: '85' }, own).parts).toEqual([
+      { ...part, entryPrice: 90, stop: null },
+    ]);
+    // Short, not long: the stop loss above the entry goes with it.
+    expect(change({ side: 'short', stop: '105' }).parts).toEqual([
+      { ...part, side: 'short', stop: 105 },
+    ]);
+  });
+
   it('says when more was closed than bought, on the trade and its parts', () => {
     // Two devices each closed what they saw still open (60).
     const twice = saveTrade(

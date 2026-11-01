@@ -382,13 +382,22 @@ const sameTrade = (a: Trade, b: Trade): boolean =>
   (Object.keys({ ...a, ...b }) as (keyof Trade)[]).every((key) => a[key] === b[key]);
 
 /** What a trade's parts closed already take from it when it's changed (followingParts). */
-const FOLLOWED = ['entryPrice', 'side', 'setup'] as const;
+const FOLLOWED = ['symbol', 'entryPrice', 'side', 'setup'] as const;
+
+/** Whether a stop loss is on its side of the entry price: below it for a long trade, above for a short one. */
+const stopFits = (side: Side, entryPrice: number, stop: number | null): boolean =>
+  stop === null || (side === 'long' ? stop < entryPrice : stop > entryPrice);
 
 /**
- * A trade's parts closed already, changed with it: its entry price, side or
- * setup put right (a typo, say) is theirs too, as they're the same trade,
- * so their results follow (audit 3 F2-10). A part whose own value was
- * different (changed on its own) keeps it. `before` is the trade as saved.
+ * A trade's parts closed already, changed with it: its symbol, entry price,
+ * side or setup put right (a typo, say) is theirs too, as they're the same
+ * trade, so their results follow (audit 3 F2-10). A part whose own value
+ * was different (changed on its own) keeps it. With a new entry price or
+ * side, a part takes the trade's stop loss too if it had the trade's, and
+ * one left on the wrong side of its entry goes: the symbol stayed as it
+ * was, and a part kept a stop loss above its entry for a long trade, its R
+ * meant nothing, and its own form refused it (audit 6 F2-4). `before` is
+ * the trade as saved.
  */
 function followingParts(state: TradesState, before: Trade | undefined, after: Trade): Trade[] {
   if (!before || FOLLOWED.every((key) => before[key] === after[key])) return [];
@@ -396,12 +405,19 @@ function followingParts(state: TradesState, before: Trade | undefined, after: Tr
     const take = (key: (typeof FOLLOWED)[number]) =>
       part[key] === before[key] && part[key] !== after[key];
     if (part.parent !== after.id || !FOLLOWED.some(take)) return [];
+    const side = take('side') ? after.side : part.side;
+    const entryPrice = take('entryPrice') ? after.entryPrice : part.entryPrice;
+    const moved =
+      (take('side') || take('entryPrice')) && part.stop !== null && part.stop === before.stop;
+    const stop = moved ? after.stop : part.stop;
     return [
       {
         ...part,
-        entryPrice: take('entryPrice') ? after.entryPrice : part.entryPrice,
-        side: take('side') ? after.side : part.side,
+        symbol: take('symbol') ? after.symbol : part.symbol,
+        entryPrice,
+        side,
         setup: take('setup') ? after.setup : part.setup,
+        stop: stopFits(side, entryPrice, stop) ? stop : null,
       },
     ];
   });

@@ -61,11 +61,15 @@ Your trading journal: log your trades and see what works. Lives at
     number of closed trades, the win rate, the averages, by setup and by
     month), as it has its own exit and result: one position closed in three
     parts is three closed trades. The page says so under the results when
-    the trades shown have parts. A part takes the trade's entry price, side
-    and setup as they were when it was closed; putting one of those right
-    on the trade later changes its parts too, in the same save, unless a
-    part was given its own (`followingParts`), so their results follow. A
-    stop loss moved later, or the trade's notes, stay the trade's own.
+    the trades shown have parts. A part takes the trade's symbol, entry
+    price, side and setup as they were when it was closed; putting one of
+    those right on the trade later changes its parts too, in the same save,
+    unless a part was given its own (`followingParts`), so their results
+    follow. With a new entry price or side, a part takes the trade's stop
+    loss too if it had the trade's, and a stop loss left on the wrong side
+    of a part's entry is taken off it, as its R would mean nothing (audit 6
+    F2-4). A stop loss moved later on its own, or the trade's notes, stay
+    the trade's own.
   - Parts came in data version 2 (`TRADES_VERSION`). What version 1 saved
     reads the same (`migrateTrades`): its parts were trades of their own,
     next to the rest, made smaller. A device still on version 1 waits for
