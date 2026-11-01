@@ -65,6 +65,7 @@ import {
   merge,
   observe,
   prune,
+  pruneUnsent,
   upgradeKnown,
   valuesOf,
   type Identified,
@@ -658,6 +659,8 @@ export function createSync(options: {
 
     // 3. Merge.
     const merged: Stores = {};
+    /** The merge before old deletion markers are dropped from it (see step 5). */
+    const unpruned: Stores = {};
     /** What the online copy holds now, as this device has seen it. */
     const seen: Record<string, Known> = {};
     let kept = 0;
@@ -694,6 +697,7 @@ export function createSync(options: {
         const theirs = old.stores[synced.store.key];
         if (theirs) result = merge(result, theirs);
       }
+      unpruned[synced.store.key] = result;
       merged[synced.store.key] = prune(result, now);
     }
 
@@ -780,7 +784,16 @@ export function createSync(options: {
           : remote.kind === 'none'
             ? null
             : state.base;
-      if (!updateState(secret, { known: knowns, dirty: true, base: seenOnline })) {
+      // The upload takes deletions older than the markers to the copy by
+      // leaving the items out. Until it has, the markers of those made here
+      // stay in what this device knew: if the upload fails, or another
+      // device wrote first, the next round still knows they were deleted
+      // here (audit 6 S5).
+      const pending: Record<string, Known> = {};
+      for (const [storeKey, snapshot] of Object.entries(unpruned)) {
+        pending[storeKey] = knownFrom(pruneUnsent(snapshot, seenOnline?.stores[storeKey], now));
+      }
+      if (!updateState(secret, { known: pending, dirty: true, base: seenOnline })) {
         throw stateNotSaved();
       }
       // What this device knew says the merge now: nothing to undo, and
@@ -1124,11 +1137,14 @@ export function createSync(options: {
     const known = { ...state.known };
     let changed = false;
     for (const synced of stores) {
-      const before = known[synced.store.key];
+      const { key } = synced.store;
+      const before = known[key];
       if (!before || unsyncable(synced, before)) continue;
       const seen = observe(before, synced.items(synced.store.load()), synced.store.version, now);
       if (!seen.changed) continue;
-      known[synced.store.key] = knownFrom(prune(seen.snapshot, now));
+      // Not online yet: a deletion made here keeps its marker until a sync
+      // takes it there, even after 180 days (audit 6 S5).
+      known[key] = knownFrom(pruneUnsent(seen.snapshot, state.base?.stores[key], now));
       changed = true;
     }
     return changed ? known : null;

@@ -22,14 +22,15 @@ for good (A-1); the "turn off" links are for the day (A-5) and say nothing
 when sync is already off (C-4); all device links share one object (B-2);
 an app loads the code that connects it to the account only when that's
 needed, so every page stays within its JavaScript budget (J-2). Changed by
-audit 6: a key replacement whose answer was lost is finished the next time
-the Account page opens, instead of signing that device out (A-1); "Turn on
-sync for …" waits half a second before it works, like "Add this device"
-(A-2); a device code's 10 minutes are counted by the clock of the device
-showing it, and it's cancelled when it's hidden as expired (A-1); the hub
-asks the browser to keep the account, as the apps keep their data (E-6); a
-device link costs 4 row writes, not 2 or 3, as deleting it counts too (see
-"Free quota").
+audit 6: a key replacement whose answer was lost is finished the next time the
+Account page opens, instead of signing that device out (A-1); "Turn on sync
+for …" waits half a second before it works, like "Add this device" (A-2); a
+device code's 10 minutes are counted by the clock of the device showing it,
+and it's cancelled when it's hidden as expired (A-1); the hub asks the browser
+to keep the account, as the apps keep their data (E-6); a device link costs 4
+row writes, not 2 or 3, as deleting it counts too (see "Free quota"); a
+deletion made with sync off or no connection is kept until it's online, even
+after 180 days (S5).
 
 ## Context
 
@@ -332,7 +333,10 @@ in with `sync: true` in `apps.json`.
   - Deleting leaves a marker with the time, so deletions sync. Markers are
     dropped after 180 days. A device away longer still deletes an item it
     saw in the copy that the same copy no longer has, unless it changed the
-    item since.
+    item since. A marker made on a device with sync off, or with no
+    connection, stays until a sync has taken the deletion online, however
+    long that takes: before, the first edit there after 180 days dropped it,
+    and the item came back on every device (audit 6 S5).
   - The list's order is merged the same way: the newest move wins. Adding or
     deleting an item isn't a move, so it doesn't undo a move made on another
     device (audit finding E-12). Items only the other device has go where it

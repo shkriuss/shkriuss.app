@@ -8,8 +8,10 @@
  *   it was made from, even if this device's clock is behind.
  * - Deleting an item leaves a small marker (a "tombstone") with the time, so
  *   the deletion reaches the other devices instead of the item coming back.
- *   Markers are dropped after 180 days. A device away longer still deletes
- *   an item it saw online that the copy no longer has (dropForgotten).
+ *   Markers are dropped after 180 days, but not before they're online: one
+ *   made with sync off, or no connection, waits for the next sync however
+ *   long that takes (pruneUnsent). A device away longer still deletes an
+ *   item it saw online that the copy no longer has (dropForgotten).
  * - The order of the list is one more thing that changes over time: the
  *   newest order wins, and new items from the other device go at the end.
  *
@@ -375,14 +377,39 @@ export function dropForgotten(
   return { ...mine, items };
 }
 
-/** Drops deletion markers older than TOMBSTONE_DAYS. */
-export function prune(snapshot: StoreSnapshot, now: number): StoreSnapshot {
+/** Drops deletion markers older than TOMBSTONE_DAYS, except those `keep` asks for. */
+export function prune(
+  snapshot: StoreSnapshot,
+  now: number,
+  keep: (id: string) => boolean = () => false,
+): StoreSnapshot {
   const cutoff = now - TOMBSTONE_DAYS * 24 * 60 * 60 * 1000;
   const items = byId<Entry>();
   for (const [id, entry] of Object.entries(snapshot.items)) {
-    if (!isTombstone(entry) || entry.t >= cutoff) items[id] = entry;
+    if (!isTombstone(entry) || entry.t >= cutoff || keep(id)) items[id] = entry;
   }
   return { ...snapshot, items };
+}
+
+/**
+ * Like prune(), for what a device knows that isn't online yet: edits noted
+ * while sync was off or there was no connection, or a merge whose upload
+ * didn't go through. A marker for an item the online copy still had when
+ * this device last saw it (`online`) is a deletion made here that hasn't
+ * reached the copy: it stays, however old, or the item would come back from
+ * the copy, here and on every device (audit 6 S5). Not knowing what was
+ * online, it drops nothing. Markers of items that were never online still go.
+ */
+export function pruneUnsent(
+  snapshot: StoreSnapshot,
+  online: Known | undefined,
+  now: number,
+): StoreSnapshot {
+  if (!online) return snapshot;
+  return prune(snapshot, now, (id) => {
+    const there = own(online.items, id);
+    return there !== undefined && !isTombstone(there);
+  });
 }
 
 /** What a device should remember after a sync that ended with `snapshot`. */

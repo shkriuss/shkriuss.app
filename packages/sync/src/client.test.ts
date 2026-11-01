@@ -1913,6 +1913,99 @@ describe('deletions older than the markers (180 days)', () => {
     expect(tablet.counters).toEqual([counter('a')]);
   });
 
+  // Each edit made while a deletion waits to go online notes the time of what
+  // changed. Before, it also dropped the deletion's marker once it was 180
+  // days old: this device forgot it had deleted the item, and the item came
+  // back from the copy, here and everywhere (audit 6 S5).
+  it('made while sync was off, still reach the other devices after more edits months later', async () => {
+    const secret = randomBytes(32);
+    const phone = new Device(secret);
+    const tablet = new Device(secret);
+    vi.setSystemTime(T0);
+    phone.counters = [counter('a'), counter('b')];
+    await phone.syncNow();
+    await tablet.syncNow();
+
+    tablet.use().sync.turnOff();
+    vi.setSystemTime(T0 + DAY);
+    tablet.counters = [counter('a')];
+    vi.setSystemTime(T0 + 201 * DAY);
+    tablet.counters = [counter('a', 1)];
+    vi.setSystemTime(T0 + 202 * DAY);
+    tablet.connect(secret);
+    expect((await tablet.syncNow()).problem).toBeNull();
+    expect((await phone.syncNow()).problem).toBeNull();
+    await tablet.syncNow();
+    expect(phone.counters).toEqual([counter('a', 1)]);
+    expect(tablet.counters).toEqual([counter('a', 1)]);
+  });
+
+  it('made with no connection, still reach the other devices after more edits months later', async () => {
+    const secret = randomBytes(32);
+    const phone = new Device(secret);
+    const tablet = new Device(secret);
+    vi.setSystemTime(T0);
+    phone.counters = [counter('a'), counter('b')];
+    await phone.syncNow();
+    await tablet.syncNow();
+
+    vi.setSystemTime(T0 + DAY);
+    offline = true;
+    tablet.counters = [counter('a')];
+    expect((await tablet.syncNow()).problem).toBe('offline');
+    // The copy changes meanwhile.
+    offline = false;
+    vi.setSystemTime(T0 + 90 * DAY);
+    phone.counters = [counter('a'), counter('b'), counter('c')];
+    await phone.syncNow();
+    vi.setSystemTime(T0 + 201 * DAY);
+    offline = true;
+    tablet.counters = [counter('a', 1)];
+    expect((await tablet.syncNow()).problem).toBe('offline');
+
+    offline = false;
+    vi.setSystemTime(T0 + 202 * DAY);
+    expect((await tablet.syncNow()).problem).toBeNull();
+    expect((await phone.syncNow()).problem).toBeNull();
+    await tablet.syncNow();
+    const ids = (device: Device) => device.counters.map((item) => item.id).sort();
+    expect(ids(phone)).toEqual(['a', 'c']);
+    expect(ids(tablet)).toEqual(['a', 'c']);
+  });
+
+  it('made here, still reach the other devices when the upload that takes them there fails', async () => {
+    const secret = randomBytes(32);
+    const phone = new Device(secret);
+    const tablet = new Device(secret);
+    vi.setSystemTime(T0);
+    phone.counters = [counter('a'), counter('b')];
+    await phone.syncNow();
+    await tablet.syncNow();
+    vi.setSystemTime(T0 + DAY);
+    offline = true;
+    tablet.counters = [counter('a')];
+    expect((await tablet.syncNow()).problem).toBe('offline');
+    offline = false;
+
+    // Months later the tablet reaches the copy, but its upload doesn't go
+    // through. Then the phone changes something else.
+    vi.setSystemTime(T0 + 201 * DAY);
+    const uploads = intercept((_path, init) => {
+      if (init?.method === 'PUT') throw new TypeError('Failed to fetch');
+      return undefined;
+    });
+    expect((await tablet.syncNow()).problem).toBe('offline');
+    uploads();
+    vi.setSystemTime(T0 + 201 * DAY + HOUR);
+    phone.counters = [counter('a', 1), counter('b')];
+    expect((await phone.syncNow()).problem).toBeNull();
+
+    expect((await tablet.syncNow()).problem).toBeNull();
+    expect((await phone.syncNow()).problem).toBeNull();
+    expect(phone.counters).toEqual([counter('a', 1)]);
+    expect(tablet.counters).toEqual([counter('a', 1)]);
+  });
+
   it('don’t touch a copy that was started again', async () => {
     const secret = randomBytes(32);
     const phone = new Device(secret);
