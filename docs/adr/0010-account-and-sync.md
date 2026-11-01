@@ -179,7 +179,10 @@ Then:
 
 - **Every device with the old key** asks the account service when it opens
   the Account page, and signs out if the key was replaced. The old recovery
-  key, links made with it, and passkeys that unlock it can't sign in any more.
+  key, links made with it, and passkeys that unlock it can't sign in any more,
+  as long as the service keeps its note: 13 months after anyone last asked
+  about it, an old passkey the person didn't remove signs in to the old key
+  again ([ADR 0017](0017-storage-limits.md), audit 6 A-3).
   If the service can't be reached, the device carries on and checks next time.
   Signed out this way, it forgets the key and which apps synced there, as
   signing out does; the Account page names those apps, which keep syncing
