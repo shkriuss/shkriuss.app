@@ -66,6 +66,50 @@ describe('readableHost', () => {
       expect(readableHost(`${punycodeOf(name)}.jp`), name).toBe(`${name}.jp`);
     }
     expect(readableHost(`${punycodeOf('コーヒー・ショップ')}.jp`)).toBe('コーヒー・ショップ.jp');
+    // Still shown, next to the look-alikes below: "ー" after Hiragana, the
+    // kanji "一" among kanji, Hiragana "へ" among Hiragana, whole Korean syllables.
+    for (const name of ['すごーい', '一休', '一番館', 'へいわ', 'ヘルプ', '서울-24']) {
+      const host = `${punycodeOf(name)}.jp`;
+      expect(readableHost(host), name).toBe(`${name}.jp`);
+    }
+  });
+
+  it('keeps punycode for a Japanese or Korean name with a look-alike in it (audit 6 C-1)', () => {
+    // Japanese names may mix kanji and kana, but some of their characters
+    // look just like others, or like digits and signs. Browsers' rules say
+    // where each may stand; anywhere else, the name stays as "xn--…".
+    for (const name of [
+      // The kanji "一" ("one") next to kana, where "ー" belongs: "コ一ヒ一"
+      // reads as "コーヒー", "東京タワ一" as "東京タワー".
+      'コ一ヒ一',
+      '東京タワ一',
+      // "ー" only after kana; "・" only between Japanese letters.
+      'ー',
+      '東京ー',
+      'ーヒー',
+      '・コーヒー',
+      'コーヒー・',
+      '1・2',
+      // Kanji that pass for digits or signs, next to digits: "1〇〇" for "100";
+      // or alone: "丨〇" for "10".
+      '1〇〇',
+      '丨〇',
+      '〇',
+      '1十1',
+      // A kana that looks like a slash, between digits: "1ノ2" for "1/2".
+      '1ノ2',
+      // Hiragana "へ" and Katakana "ヘ" look the same: "へルプ" for "ヘルプ".
+      'へルプ',
+      'ヘいわ',
+      // Korean letters on their own, not whole syllables, pass for digits
+      // and Latin letters: "1ㅇㅇ" for "100", "ㅣㅇ" for "10".
+      '1ㅇㅇ',
+      'ㅣㅇ',
+    ]) {
+      const host = `${punycodeOf(name)}.jp`;
+      expect(host.startsWith('xn--'), name).toBe(true);
+      expect(readableHost(host), name).toBe(host);
+    }
   });
 
   it('keeps punycode where the letters could pass for another site’s', () => {

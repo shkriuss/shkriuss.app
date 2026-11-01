@@ -23,7 +23,11 @@ anything else, with brands, prices, shops and links. Lives at
   punycode ("xn--lodaaxko2f.xn--node"); Shelf shows it in its own letters
   when each such part is in one script whose letters don't look like Latin
   ones (Georgian, Chinese, Japanese, Korean). Japanese counts as one script:
-  its names mix kanji and kana, with the marks "ー" and "・" (audit 5 F3-4).
+  its names mix kanji and kana, with the marks "ー" and "・" (audit 5 F3-4),
+  but only where browsers' rules let each stand: a character that passes for
+  another one there (the kanji "一" next to kana reads as "ー", a kanji next
+  to digits as a digit, Hiragana "へ" among Katakana as "ヘ") keeps the name
+  as punycode, and Korean shows only as whole syllables (audit 6 C-1).
   Others, which could pass for another site's name (a Cyrillic "аррӏе" looks
   like "apple"), stay as punycode, as browsers show them.
 - `src/lib/categories.ts`: the categories, with tests (`categories.test.ts`).

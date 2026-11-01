@@ -79,17 +79,67 @@ export function decodePunycode(input: string): string | null {
  * and use the prolonged sound mark "ー" and the middle dot "・", which
  * belong to no one script, so those go together, as browsers' own rules
  * have them: before, "コーヒー.jp" and "東京タワー.jp" stayed as "xn--…"
- * (audit 5 F3-4).
+ * (audit 5 F3-4). Korean: whole syllables only, as Korean names are
+ * written; its letters on their own ("ㅇ", "ㅣ") pass for "0" and "1".
  */
 const READABLE = [
   '\\p{Script=Georgian}',
   '\\p{Script=Han}\\p{Script=Hiragana}\\p{Script=Katakana}\\u30FB\\u30FC',
-  '\\p{Script=Hangul}',
+  '\\uAC00-\\uD7A3',
 ].map((letters) => new RegExp(`^[${letters}0-9-]+$`, 'u'));
 
-/** Whether a part of a name, decoded, is in one readable script (with digits and hyphens). */
+const KANA = '\\p{Script=Hiragana}\\p{Script=Katakana}';
+const JAPANESE = `\\p{Script=Han}${KANA}`;
+/** Kanji that pass for a digit or a sign ("〇" for "0", "十" for "+"): Chromium's list. */
+const KANJI_SIGNS = '一丨乛七丅十〇工丁丶亅二亠冖宀巛';
+/** Kana and kanji that pass for a slash: Chromium's list. */
+const SLASHES = 'ノソゾン丶乀乁丿';
+
+/**
+ * Where a Japanese name's look-alikes may not stand, from the rules
+ * Chromium's address bar follows (its IDN spoof checker), and the kanji "一"
+ * next to kana, where it reads as "ー" ("コ一ヒ一" for "コーヒー"). Mixing
+ * kanji and kana let these pass (audit 6 C-1).
+ */
+const LOOK_ALIKES = [
+  // "ー" only after kana (or another "ー"): elsewhere it passes for a dash.
+  new RegExp(`(?:^|[^${KANA}ー])ー`, 'u'),
+  // "・" only between Japanese letters: elsewhere it passes for a dot.
+  new RegExp(`^・|・$|[^${JAPANESE}ー]・|・[^${JAPANESE}]`, 'u'),
+  // "一" next to kana or "ー" passes for "ー".
+  new RegExp(`[${KANA}ー]一|一[${KANA}ー]`, 'u'),
+  // Next to a digit or a hyphen, kanji that pass for digits or signs ("1〇〇"
+  // for "100"); between them, a slash ("1ノ2" for "1/2").
+  new RegExp(`[0-9-][${KANJI_SIGNS}]|[${KANJI_SIGNS}][0-9-]|[0-9-][${SLASHES}][0-9-]`, 'u'),
+  // Nothing but digits and kanji that pass for digits: "丨〇" for "10".
+  /^[0-9〇丨丩-]+$/u,
+];
+
+/**
+ * Hiragana "へべぺ" and Katakana "ヘベペ" look the same: one of them among
+ * the other kana passes for it ("へルプ" for "ヘルプ"), as Chromium's rules
+ * have it.
+ */
+function mixedHe(label: string): boolean {
+  const hiragana = label.match(/\p{Script=Hiragana}/gu) ?? [];
+  const katakana = label.match(/\p{Script=Katakana}/gu) ?? [];
+  return (
+    hiragana.length > 0 &&
+    katakana.length > 0 &&
+    (hiragana.every((letter) => 'へべぺ'.includes(letter)) ||
+      katakana.every((letter) => 'ヘベペ'.includes(letter)))
+  );
+}
+
+/**
+ * Whether a part of a name, decoded, is in one readable script (with digits
+ * and hyphens), with no look-alike out of place.
+ */
 const isReadable = (label: string): boolean =>
-  /\P{ASCII}/u.test(label) && READABLE.some((script) => script.test(label));
+  /\P{ASCII}/u.test(label) &&
+  READABLE.some((script) => script.test(label)) &&
+  !LOOK_ALIKES.some((pattern) => pattern.test(label)) &&
+  !mixedHe(label);
 
 /**
  * A host name ("xn--lodaaxko2f.xn--node") as people read it ("მაღაზია.გე"),
