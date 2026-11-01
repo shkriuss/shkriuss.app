@@ -1120,10 +1120,23 @@ export function dateLabel(date: IsoDate, locale = DATE_LOCALE): string {
  * The trades as a CSV file (one row each, the latest entered first), as a
  * spreadsheet in the language of `locale` (the browser's own when left out)
  * reads it (csvFile). A trade closed in parts has a row for each part, and
- * one for what's still open of it, if anything is.
+ * one for what's still open of it, if anything is. One closed more than it
+ * was bought (overClosed) has a row with what it bought, its notes starting
+ * with what the page says of it: it was left out, so nothing in the file
+ * said what was bought (audit 6 F2-4).
  */
 export function toCsv(state: TradesState, locale?: string): string {
   const parts = partsOf(state.trades);
+  const byId = new Map(state.trades.map((trade) => [trade.id, trade]));
+  /** An open trade's: what's still open of it, or all it bought if more than that was closed. */
+  const quantity = (trade: Trade): number => {
+    const open = isOpen(trade) ? openQuantity(trade, parts) : 0;
+    return open > 0 ? open : trade.quantity;
+  };
+  const notes = (trade: Trade): string => {
+    const note = isOpen(trade) ? overClosedNote(trade, parts, byId, locale) : null;
+    return note === null ? trade.notes : [note, trade.notes].filter(Boolean).join(' ');
+  };
   const header = [
     'Symbol',
     'Side',
@@ -1141,14 +1154,16 @@ export function toCsv(state: TradesState, locale?: string): string {
     'Notes',
   ];
   const rows = state.trades
-    .filter((trade) => !isOpen(trade) || openQuantity(trade, parts) > 0)
+    .filter(
+      (trade) => !isOpen(trade) || openQuantity(trade, parts) > 0 || overClosed(trade, parts) > 0,
+    )
     .sort((a, b) => b.entryDate.localeCompare(a.entryDate))
     .map((trade) => [
       trade.symbol,
       SIDE_LABELS[trade.side],
       trade.entryDate,
       trade.entryPrice,
-      isOpen(trade) ? openQuantity(trade, parts) : trade.quantity,
+      quantity(trade),
       trade.stop,
       trade.exitDate,
       trade.exitPrice,
@@ -1157,7 +1172,7 @@ export function toCsv(state: TradesState, locale?: string): string {
       returnPercent(trade),
       rMultiple(trade),
       trade.setup,
-      trade.notes,
+      notes(trade),
     ]);
   return csvFile([header, ...rows], locale);
 }

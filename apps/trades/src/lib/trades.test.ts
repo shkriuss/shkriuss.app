@@ -1361,6 +1361,33 @@ describe('spreadsheet', () => {
     ]);
   });
 
+  // Audit 6 F2-4 (run 24): a trade closed more than it was bought (on two
+  // devices at once) is listed on the page to put right, but the spreadsheet
+  // left it out, with only its parts.
+  it('has a row for a trade closed more than it was bought, saying so', () => {
+    const lot = trade({
+      id: 'a',
+      quantity: 100,
+      notes: 'Earnings',
+      exitDate: null,
+      exitPrice: null,
+    });
+    const twice = [
+      trade({ id: 'b', quantity: 100, parent: 'a' }),
+      trade({ id: 'c', quantity: 100, parent: 'a', exitDate: '2026-10-06' }),
+    ];
+    expect(
+      toCsv(state(lot, ...twice), 'en-US')
+        .split('\r\n')
+        .slice(1),
+    ).toEqual([
+      'AAPL,Long,2026-10-01,100,100,,,,0,,,,,200 closed of the 100 bought: two devices may have closed it at the same time. Delete the close that’s wrong. Earnings',
+      'AAPL,Long,2026-10-01,100,100,,2026-10-05,110,0,1000,10,,,',
+      'AAPL,Long,2026-10-01,100,100,,2026-10-06,110,0,1000,10,,,',
+      '',
+    ]);
+  });
+
   it('is written as a spreadsheet in the person’s language reads it (audit 4 F2-9)', () => {
     const forex = trade({ symbol: 'EURUSD', entryPrice: 1.085, exitPrice: 1.092, quantity: 1000 });
     expect(toCsv(state(forex), 'fr-FR').split('\r\n')[1]).toBe(

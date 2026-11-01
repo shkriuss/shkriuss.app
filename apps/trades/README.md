@@ -79,7 +79,9 @@ Your trading journal: log your trades and see what works. Lives at
     next to the rest, made smaller. A device still on version 1 waits for
     its update before it syncs, instead of counting parts twice.
   - "Download as a spreadsheet (CSV)" saves every trade with its result
-    (each part of a trade, and what's still open of it). Text that a
+    (each part of a trade, and what's still open of it). A trade closed
+    more than it was bought has a row with what it bought, its notes
+    starting with what the page says of it (audit 6 F2-4). Text that a
     spreadsheet could read as a formula starts with `'`. The file starts
     with a byte-order mark, so Excel shows text beyond plain English
     letters (Georgian, "’") as typed. In a language that writes decimals
