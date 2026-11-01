@@ -88,7 +88,10 @@ Open the repository on GitHub → **Settings** → **Environments**.
    _repository_ secret named `CLOUDFLARE_API_TOKEN` or `PHOTOS_STORAGE_CODE`.
    Repository secrets reach every run, whatever its environment.
 3. There's no other environment. If the list still has `preview` (from when
-   pull requests had previews), delete it: it holds a copy of the token.
+   pull requests had previews), or `claude` or `claude-audit` (from the
+   Claude workflow, which was removed:
+   [ADR 0021](adr/0021-no-claude-workflow.md)), delete them: `preview`
+   holds a copy of the token, and the other two may hold a Claude API key.
 
 Never paste the token anywhere else, including chat.
 
