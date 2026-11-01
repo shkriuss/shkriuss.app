@@ -13,6 +13,8 @@ import {
   MAX_TITLE_LENGTH,
   migrateNotes,
   notesCount,
+  noteHash,
+  noteIdOf,
   removeNote,
   restoreNote,
   keepOtherVersion,
@@ -333,6 +335,34 @@ describe('what the list shows', () => {
     expect(notesCount(1)).toBe('1 note');
     expect(notesCount(0)).toBe('0 notes');
     expect(notesCount(12)).toBe('12 notes');
+  });
+});
+
+describe('a note’s address', () => {
+  it('opens any note, whatever its id (audit 6 F3-1)', () => {
+    // The app's own ids are as they were.
+    const uuid = '0b6e4cd1-6c3e-4a3e-9f7b-3d9d2f1c8a10';
+    expect(noteHash(uuid)).toBe(`#note=${uuid}`);
+    expect(noteIdOf(`#note=${uuid}`)).toBe(uuid);
+    // Ids from a backup: a space, a dot, other letters, a long one, signs
+    // that mean something in an address. Each is read back as it is.
+    for (const id of ['note 1', 'a.b', 'x'.repeat(65), 'ノート', '50%', 'a#b&c=d', '🙂', '%E0']) {
+      const hash = noteHash(id);
+      expect(hash, id).toMatch(/^#note=[\w.!~*'()%-]+$/);
+      expect(noteIdOf(hash), id).toBe(id);
+    }
+    // As a browser gives it back once it's in the address.
+    expect(noteIdOf(new URL(`https://notes.example/${noteHash('ノート 1')}`).hash)).toBe(
+      'ノート 1',
+    );
+    // Typed by hand, not encoded.
+    expect(noteIdOf('#note=%E0')).toBe('%E0');
+  });
+
+  it('isn’t a note for other links within the page', () => {
+    for (const hash of ['', '#', '#main', '#note=', '#notes=a', 'note=a']) {
+      expect(noteIdOf(hash), hash).toBeNull();
+    }
   });
 });
 

@@ -327,6 +327,30 @@ export function visibleNotes(state: NotesState, search = ''): Note[] {
     );
 }
 
+/**
+ * A note's address in the page ("#note=<id>"), which opens it. The id is
+ * encoded, so any saved id fits: the app makes them from letters, digits
+ * and "-", but a note from a backup can have any (audit 6 F3-1).
+ */
+export const noteHash = (id: string): string => `#note=${encodeURIComponent(id)}`;
+
+/**
+ * The note an address is for (noteHash), or null for another link within
+ * the page (like "Skip to content"). Before, only ids of up to 64 letters,
+ * digits, "_" and "-" were read: a note with another id was listed, but
+ * tapping it opened nothing (audit 6 F3-1).
+ */
+export function noteIdOf(hash: string): string | null {
+  const encoded = /^#note=(.+)$/.exec(hash)?.[1];
+  if (encoded === undefined) return null;
+  try {
+    return decodeURIComponent(encoded);
+  } catch {
+    // Not encoded as noteHash does ("%E0", typed by hand): as it is.
+    return encoded;
+  }
+}
+
 /** When a note was edited: the time if today, else the date ("14:05", "12 Oct", "12 Oct 2025"). */
 export function editedLabel(updated: number, now: number, locale = DATE_LOCALE): string {
   const date = new Date(updated);

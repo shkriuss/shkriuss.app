@@ -229,6 +229,37 @@ test('says when a note link is for a note that isn’t here', async ({ page }) =
   expect(page.url()).not.toContain('#note=');
 });
 
+test('opens a note whatever its id, as from a backup (audit 6 F3-1)', async ({ page }) => {
+  // The app's own ids fit in an address as they are; a note from a backup
+  // with a space, a dot, other letters or a long id in its id was listed,
+  // but tapping it did nothing.
+  const ids = ['note 1', 'a.b', 'x'.repeat(65), 'ノート', '50%', 'a#b&c=d'];
+  await page.evaluate((list) => {
+    const notes = list.map((id, index) => ({
+      id,
+      title: `Note ${index + 1}`,
+      body: `Text of ${id}`,
+      created: index + 1,
+      updated: index + 1,
+      pinned: false,
+    }));
+    localStorage.setItem('shkriuss:notes', JSON.stringify({ v: 2, data: { notes } }));
+  }, ids);
+  await page.reload();
+  for (const [index, id] of ids.entries()) {
+    const link = card(page, `Note ${index + 1}`).getByRole('link');
+    await link.click();
+    await expect(titleBox(page)).toHaveValue(`Note ${index + 1}`);
+    await expect(bodyBox(page)).toHaveValue(`Text of ${id}`);
+    await page.getByRole('button', { name: 'All notes' }).click();
+    await expect(link).toBeFocused();
+  }
+  // Its address opens it too, after a reload.
+  await card(page, 'Note 4').getByRole('link').click();
+  await page.reload();
+  await expect(bodyBox(page)).toHaveValue('Text of ノート');
+});
+
 test('opens a note from its address, and "All notes" stays in the app', async ({ page }) => {
   await writeNote(page, 'Linked');
   await card(page, 'Linked').getByRole('link').click();

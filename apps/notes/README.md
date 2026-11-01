@@ -9,7 +9,9 @@ Write things down. Lives at <https://notes.shkriuss.app>.
 - `src/scripts/notes.ts`: connects the page to those rules and saves on the
   device with `@shkriuss/storage`. Two views, the list (titles only) and
   one note;
-  `#note=<id>` in the address opens a note, so the back button works.
+  `#note=<id>` in the address opens a note, so the back button works; the
+  id is encoded there, so a note from a backup opens whatever its id
+  (audit 6 F3-1).
   Typing is saved a moment after the last key press, and straight away when
   leaving the note or the page. A new note (made since the page opened)
   left empty goes when it's left, closing the page too (one a closed page

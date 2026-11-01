@@ -39,6 +39,8 @@ import {
   migrateNotes,
   NOTES_VERSION,
   notesCount,
+  noteHash,
+  noteIdOf,
   removeNote,
   restoreNote,
   secondVersion,
@@ -63,8 +65,6 @@ const store = createStore<NotesState>({
 const SAVE_DELAY_MS = 400;
 /** Search results are read out this long after the last key press. */
 const ANNOUNCE_DELAY_MS = 700;
-
-const noteIdOf = (hash: string): string | null => /^#note=([\w-]{1,64})$/.exec(hash)?.[1] ?? null;
 
 /**
  * A new note left empty is dropped as the page goes away (audit F3-9). This
@@ -158,7 +158,7 @@ export function mountNotes(root: Document): void {
     const item = required<HTMLLIElement>(fragment, 'li');
     item.dataset['id'] = note.id;
     const link = required<HTMLAnchorElement>(item, '[data-open]');
-    link.href = `#note=${note.id}`;
+    link.href = noteHash(note.id);
     link.textContent = titleText(note);
     required<HTMLElement>(item, '[data-pinned]').hidden = !note.pinned;
     return item;
@@ -405,7 +405,7 @@ export function mountNotes(root: Document): void {
     save(addNote(state, id, Date.now()));
     madeHere.add(id);
     creating = id;
-    location.hash = `note=${id}`;
+    location.hash = noteHash(id);
   });
 
   // The list is drawn again once typing pauses, not at every key (audit J-1).
