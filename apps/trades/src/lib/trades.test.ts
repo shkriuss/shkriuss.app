@@ -660,6 +660,43 @@ describe('closing part of a trade', () => {
     expect(readChange(partForm, after, { id: 'b', newId: 'n' }, 'en-US').parts).toBeUndefined();
   });
 
+  // Audit 6 F2-1 (run 24): closing the rest from the trade's own form, which
+  // shows its fees, gave the last part those fees again.
+  it('counts a trade’s fees once when the rest is closed from its own form', () => {
+    const lot = trade({ id: 'a', quantity: 100, fees: 10, exitDate: null, exitPrice: null });
+    const opened = toCloseForm(lot, partsOf([lot]), 'en-US');
+    const first = close(
+      { ...opened.form, exitDate: '2026-10-10', exitPrice: '105' },
+      '50',
+      state(lot),
+      'p1',
+    );
+    expect(first.trade?.fees).toBe(10);
+    const after = closePart(state(lot), first.trade as Trade, first.rest as Trade);
+    expect(openFees(lot, partsOf(after.trades))).toBe(0);
+    // "Change trade": its form shows the trade's own fees, 10.
+    const form = { ...toForm(lot, 'en-US'), exitDate: '2026-10-20', exitPrice: '110' };
+    expect(form.fees).toBe('10');
+    const rest = readChange(form, after, { id: 'a', newId: 'p2' }, 'en-US');
+    expect(rest.trade).toMatchObject({ id: 'p2', quantity: 50, fees: 0, parent: 'a' });
+    expect(rest.rest).toBe(lot);
+    const done = closePart(after, rest.trade as Trade, rest.rest as Trade);
+    // 250 - 10 and 500: the $10 of fees counted once.
+    expect(stats(closedTrades(done.trades))).toMatchObject({ count: 2, total: 740 });
+    // Through a sync too (readEdited), and fees typed in are the last part's own.
+    const change = { form: toForm(lot, 'en-US'), closeQuantity: '' };
+    const edited = (fees: string) => ({ form: { ...form, fees }, closeQuantity: '' });
+    const ids = { id: 'a', newId: 'p2' };
+    expect(readEdited(change, edited('10'), after, ids, false, 'en-US').trade?.fees).toBe(0);
+    expect(readEdited(change, edited('2'), after, ids, false, 'en-US').trade?.fees).toBe(2);
+    expect(readEdited(change, edited('1,500'), after, ids, false, 'en-US').problems).toEqual({
+      fees: 'Enter 1500 or 1.5 to show which you mean.',
+    });
+    // With fees still to count, the last part has them.
+    const half = closePart(state(lot), { ...(first.trade as Trade), fees: 4 }, lot);
+    expect(readChange(form, half, ids, 'en-US').trade?.fees).toBe(6);
+  });
+
   // Audit 6 F2-4: a symbol put right stayed wrong on the parts, and an entry
   // price put right left a part's stop loss above its entry for a long trade.
   it('changes the parts with the trade’s symbol, and their stop loss with its entry price', () => {

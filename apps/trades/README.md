@@ -41,7 +41,11 @@ Your trading journal: log your trades and see what works. Lives at
     (`parent`). That trade keeps its quantity (what was bought) and its
     fees: what's still open of it is its quantity less its parts'
     (`openQuantity`), and its fees count with its first part (`openFees`),
-    so none are counted twice. A part stays closed while its trade is
+    so none are counted twice. Closing the rest from the trade's own form
+    ("Change trade", with an exit filled in), which shows the trade's fees,
+    counts them the same way: left as they are, the last part takes only
+    the fees not counted yet; fees typed there are the last part's (audit 6
+    F2-1, where they counted twice). A part stays closed while its trade is
     there: to open it again, delete it, and its quantity is open in its
     trade again. (One opened again and closed in parts of its own made
     "Delete a year" count what they closed as open again, audit 4 F2-6;
