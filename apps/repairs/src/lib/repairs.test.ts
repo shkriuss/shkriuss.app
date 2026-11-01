@@ -21,6 +21,7 @@ import {
   knownPart,
   LIMITS,
   lastMileage,
+  mergeParts,
   mergePhotos,
   migrateRepairs,
   modelNames,
@@ -55,6 +56,7 @@ import {
   vehicleName,
   vehicleSummaries,
   withSettings,
+  type PartForm,
   type Repair,
   type RepairForm,
   type RepairsState,
@@ -477,6 +479,68 @@ describe('repairs', () => {
     expect(
       readEditedRepair(form2, { ...form2, problem: '' }, 'r', cleared, vehicles, newId).repair,
     ).toMatchObject({ problem: '', work: 'Replaced the door glass' });
+  });
+
+  // Audit 6 F2-2: the parts were one field, so a price typed here put the
+  // form's whole list back, and a part added on the tablet meanwhile was gone.
+  it('keeps the parts changed on another device while the form was open, part by part', () => {
+    const pads = { name: 'Brake pads', number: '', quantity: 2, price: null };
+    const fluid = { name: 'Brake fluid', number: '', quantity: 1, price: 12 };
+    const before = repair({ parts: [pads] });
+    const opened = toRepairForm(before, vehicles, 'en-US');
+    const [padsRow] = opened.parts as [PartForm];
+    const read = (edited: RepairForm, now: Repair) =>
+      readEditedRepair(opened, edited, 'r', repairs(now), vehicles, newId, 'en-US').repair;
+    // Meanwhile, on the tablet: brake fluid added, and the hours noted.
+    const tablet = { ...before, parts: [pads, fluid], hours: 1.5 };
+    // Here: the pads' price typed in.
+    expect(read({ ...opened, parts: [{ ...padsRow, price: '45' }] }, tablet)).toMatchObject({
+      hours: 1.5,
+      parts: [{ ...pads, price: 45 }, fluid],
+    });
+    // Or a part added here: both are kept, the new one last.
+    const bolt = { name: 'Bolt', number: 'M8', quantity: '4', price: '' };
+    expect(read({ ...opened, parts: [padsRow, bolt] }, tablet)?.parts).toEqual([
+      pads,
+      fluid,
+      { name: 'Bolt', number: 'M8', quantity: 4, price: null },
+    ]);
+    // Or the pads removed here: the fluid stays.
+    expect(read({ ...opened, parts: [] }, tablet)?.parts).toEqual([fluid]);
+    // The pads changed there, the bolt added here: both.
+    const counted = { ...before, parts: [{ ...pads, quantity: 4 }] };
+    expect(read({ ...opened, parts: [padsRow, bolt] }, counted)?.parts).toEqual([
+      { ...pads, quantity: 4 },
+      { name: 'Bolt', number: 'M8', quantity: 4, price: null },
+    ]);
+    // The same part changed both here and there: kept both ways, so neither is lost.
+    expect(read({ ...opened, parts: [{ ...padsRow, price: '45' }] }, counted)?.parts).toEqual([
+      { ...pads, quantity: 4 },
+      { ...pads, price: 45 },
+    ]);
+    // Nothing done to the parts here: they're as they are there, even with
+    // the empty row a form with no parts starts with.
+    const none = toRepairForm(repair({}), vehicles, 'en-US');
+    const empty = { name: '', number: '', quantity: '1', price: '' };
+    expect(
+      readEditedRepair(
+        none,
+        { ...none, work: 'Checked again', parts: [empty] },
+        'r',
+        repairs(repair({ parts: [fluid] })),
+        vehicles,
+        newId,
+        'en-US',
+      ).repair,
+    ).toMatchObject({ work: 'Checked again', parts: [fluid] });
+    // Not changed there: the form's parts, as they are in it.
+    const rows = [{ ...padsRow, price: '45' }, bolt];
+    expect(mergeParts(opened.parts, rows, opened.parts, 'en-US')).toEqual(rows);
+    const three = [padsRow, bolt, { ...bolt, name: 'Nut' }];
+    expect(mergeParts(three, [padsRow, { ...bolt, name: 'Nut', quantity: '8' }], three)).toEqual([
+      padsRow,
+      { ...bolt, name: 'Nut', quantity: '8' },
+    ]);
   });
 
   it('keeps the photos added on another device, and those taken off here stay off', () => {

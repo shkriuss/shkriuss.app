@@ -396,6 +396,17 @@ export interface RepairForm {
  */
 export type RepairProblems = Partial<Record<string, string>>;
 
+/** A part's row left empty (like the one a new repair's form starts with): it's left out. */
+function isEmptyRow(row: PartForm, locale?: string): boolean {
+  const quantity = parseDecimal(row.quantity, locale);
+  return (
+    oneLine(row.name) === '' &&
+    oneLine(row.number) === '' &&
+    (quantity === null || quantity === 1) &&
+    parseDecimal(row.price, locale, { cents: true }) === null
+  );
+}
+
 /**
  * Reads the repair form into a repair (with the given id), or says what's
  * wrong, field by field. A vehicle that isn't saved yet is made, with an id
@@ -457,19 +468,11 @@ export function readRepair(
 
   const parts: Part[] = [];
   form.parts.forEach((row, index) => {
+    if (isEmptyRow(row, locale)) return;
     const partName = oneLine(row.name);
     const number = oneLine(row.number).toUpperCase();
     const typedQuantity = parseNumber(row.quantity);
     const price = parseMoney(row.price);
-    // An empty row is left out.
-    if (
-      partName === '' &&
-      number === '' &&
-      (typedQuantity === null || typedQuantity === 1) &&
-      price === null
-    ) {
-      return;
-    }
     if (partName === '') problems[`part-name-${index}`] = 'Enter the part’s name.';
     else if (!fits(partName, LIMITS.partName)) {
       problems[`part-name-${index}`] = `Use ${LIMITS.partName} characters or fewer.`;
@@ -586,13 +589,66 @@ export function mergePhotos(
 }
 
 /**
+ * A repair's parts when the repair changed while its form was open
+ * (readEditedRepair): its parts as they are now, with what was done to
+ * them in the form. A part changed in the form is changed in its place,
+ * one removed there is removed, and one added there goes at the end. So a
+ * part added, changed or removed on another device meanwhile stays as it
+ * is there: before, any change to the parts here put the form's whole list
+ * back (audit 6 F2-2). A part changed both here and there is kept both
+ * ways, so neither change is lost; the one that's wrong can be removed.
+ * `opened` is the parts the form opened with, `edited` the form's rows now
+ * (empty ones are left out), `now` the repair's parts now, all as the form
+ * shows them.
+ */
+export function mergeParts(
+  opened: readonly PartForm[],
+  edited: readonly PartForm[],
+  now: readonly PartForm[],
+  locale?: string,
+): PartForm[] {
+  const key = ({ name, number, quantity, price }: PartForm) =>
+    JSON.stringify([name, number, quantity, price]);
+  // The parts the form opened with that no row kept as they were: changed or removed.
+  const gone: (string | null)[] = opened.map(key);
+  const added: { row: PartForm; at: number }[] = [];
+  edited
+    .filter((row) => !isEmptyRow(row, locale))
+    .forEach((row, at) => {
+      const index = gone.indexOf(key(row));
+      if (index === -1) added.push({ row, at });
+      else gone[index] = null;
+    });
+  // A row that isn't as any part was, where a part that's gone was: that part, changed.
+  const changed = new Map<number, PartForm>();
+  const extra: PartForm[] = [];
+  for (const { row, at } of added) {
+    if (typeof gone[at] === 'string' && !changed.has(at)) changed.set(at, row);
+    else extra.push(row);
+  }
+  // Each part that's gone in the form, found among the parts now, is changed or removed there.
+  const waiting = gone.flatMap((value, index) => (value === null ? [] : [{ value, index }]));
+  const merged = now.flatMap((part) => {
+    const at = waiting.findIndex(({ value }) => value === key(part));
+    const [found] = at === -1 ? [] : waiting.splice(at, 1);
+    if (!found) return [part];
+    const row = changed.get(found.index);
+    changed.delete(found.index);
+    return row ? [row] : [];
+  });
+  // Changed here, and changed or removed there too: here's way is kept as well.
+  return [...merged, ...changed.values(), ...extra];
+}
+
+/**
  * Reads the repair form (readRepair) when the repair may have changed while
  * it was open, on another device or in another tab: only what was changed
  * in the form goes on the repair as it is now (withEdits), so the other
- * change stays (audit 3 F2-1). The photos are the form's, which follow the
- * repair's while it's open (mergePhotos). If the two don't fit together,
- * the form wins, as it was checked. `opened` is the form as it opened (null
- * for a new repair), `edited` as it is now.
+ * change stays (audit 3 F2-1); its parts one by one (mergeParts). The
+ * photos are the form's, which follow the repair's while it's open
+ * (mergePhotos). If the two don't fit together, the form wins, as it was
+ * checked. `opened` is the form as it opened (null for a new repair),
+ * `edited` as it is now.
  */
 export function readEditedRepair(
   opened: RepairForm | null,
@@ -607,7 +663,11 @@ export function readEditedRepair(
   const current = repairs.repairs.find((repair) => repair.id === id);
   if (!opened || !current) return read(edited);
   const now = toRepairForm(current, vehicles, locale);
-  const merged = read({ ...withEdits(opened, edited, now), photos: edited.photos });
+  const merged = read({
+    ...withEdits(opened, edited, now),
+    parts: mergeParts(opened.parts, edited.parts, now.parts, locale),
+    photos: edited.photos,
+  });
   return merged.repair ? merged : read(edited);
 }
 
