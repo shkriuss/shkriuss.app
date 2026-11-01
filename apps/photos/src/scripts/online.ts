@@ -646,9 +646,10 @@ export function startOnline(list: PhotoList): Online {
         }
         // As saved on this device now, not as this tab's list has them:
         // another tab may have found them gone from the library since
-        // (audit 6 F3-1). The list catches up with them too.
-        const chosen = new Set(photos.map((photo) => photo.id));
-        const now = (await photosNow()).filter((photo) => chosen.has(photo.id));
+        // (audit 6 F3-1). In the order asked (newest first); the list
+        // catches up with them too.
+        const saved = new Map((await photosNow()).map((photo) => [photo.id, photo]));
+        const now = photos.flatMap((photo) => saved.get(photo.id) ?? []);
         list.changed({ save: now });
         const still = freeable(now).photos;
         if (!stillOn() || !canFreeUp(state()) || still.length === 0) {
