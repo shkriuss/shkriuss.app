@@ -97,10 +97,11 @@ const LAST_UPDATED = '1 November 2026'; // text e228cd9fb3cb69b5
             gave it; your time zone; for each reminder, when it starts, how long before to remind
             you, how it repeats and until when, and its locked message, padded to a multiple of 256
             bytes so that its size says little about how long it is; how many reminders there are;
-            when the app last sent them, when deliveries started failing (if they do), and when you
-            last sent a test notification; and how many messages it has sent your device today. Only
-            the message is locked: the server needs the rest to send it on time. It never gets what
-            the reminders are about.
+            when the app last sent them, and when deliveries started failing (if they do); and how
+            many messages it has sent your device today. Only the message is locked: the server
+            needs the rest to send it on time. It never gets what the reminders are about. When you
+            send a test notification, the server remembers when only in its memory, for a few
+            seconds, so that tests can't come too fast; it stores nothing about it.
           </li>
           <li>
             Each reminder that won't happen again is deleted after it's sent. Turning the option

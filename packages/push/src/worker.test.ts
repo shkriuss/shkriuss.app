@@ -278,6 +278,40 @@ describe('what’s kept for how long', () => {
     await passDays(1);
     expect([...server.devices.values()].map(({ storage }) => storage.map.size)).toEqual([0]);
   });
+
+  // A made-up device's test kept a row and an alarm that no meter counted,
+  // which only that alarm deleted (audit 6): nothing at all, now, from
+  // the moment it's answered, whether it was sent, too soon or one too many.
+  it('keeps nothing, not even for a moment, for a device without a schedule', async () => {
+    const sent = pushService();
+    const nothingKept = () =>
+      [...server.devices.values()].every(
+        ({ storage }) => storage.map.size === 0 && storage.alarm === null,
+      );
+    const phone = device();
+    expect((await phone.test()).status).toBe(200);
+    expect(nothingKept()).toBe(true);
+    // Still 10 seconds between them.
+    expect((await phone.test()).status).toBe(429);
+    vi.setSystemTime(Date.now() + 10_000);
+    expect((await phone.test()).status).toBe(200);
+    // The rest of the day's test messages, each from a made-up device; then one too many.
+    for (let tests = 2; tests < DAILY_SHARES.test; tests += 1) {
+      expect((await device().test()).status).toBe(200);
+    }
+    expect((await device().test()).status).toBe(429);
+    expect(sent).toHaveBeenCalledTimes(DAILY_SHARES.test);
+    expect(nothingKept()).toBe(true);
+    expect(server.meter.map.size).toBe(0);
+  });
+
+  it('a push service saying a device without a schedule is gone keeps nothing either', async () => {
+    pushService(410);
+    expect((await device().test()).status).toBe(410);
+    expect(
+      [...server.devices.values()].map(({ storage }) => [storage.map.size, storage.alarm]),
+    ).toEqual([[0, null]]);
+  });
 });
 
 describe('a push service that’s slow or never answers (audit B-1)', () => {

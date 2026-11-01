@@ -17,7 +17,8 @@ too (B-1), files count their rows (B-3), what the 13-month clean-up undoes
 for a replaced key (A-1), and the daily row writes (B-4); and its body no
 longer describes pull request previews (J-4). Changed by audit 6: what the
 13-month clean-up of a replaced-key note means for the person's own old
-passkeys and recovery key (A-3).
+passkeys and recovery key (A-3), and a test notification keeps nothing for
+a device without a schedule.
 
 ## Context
 
@@ -125,7 +126,9 @@ past that, the limits per app need lowering first.
   (until audit 5 B-1, a library made up through `POST /api/library/move`
   had no clean-up, so strangers could fill the libraries' room for good).
 - A token that only asks (a copy that doesn't exist, a file, a replaced-key
-  check) keeps nothing at all.
+  check) keeps nothing at all, and nor does a test notification from a
+  device without a schedule (until audit 6 it kept a row and a wake-up
+  that no meter counted, deleted only by that wake-up).
 
 ### What people see
 

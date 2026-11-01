@@ -275,6 +275,15 @@ type Signed = { authorization: string } | 'limit' | 'failed';
 export class PushDevice {
   readonly state: DurableObjectState;
   readonly env: PushEnv;
+  /**
+   * When this device last asked for a test message (ms). Only in memory: a
+   * device without a schedule keeps nothing at all, since anyone can make
+   * one up and no meter counts it (audit 6). Cloudflare keeps an object
+   * in memory far longer than TEST_GAP_MS after a request; if it doesn't,
+   * a test only comes a little sooner, and the day's test messages
+   * (DAILY_SHARES.test) are limited anyway.
+   */
+  #lastTest = 0;
 
   constructor(state: DurableObjectState, env: PushEnv) {
     this.state = state;
@@ -427,12 +436,11 @@ export class PushDevice {
       const checked = checkTest(read.body, allowLocal(this.env));
       if (!checked.ok) return problem(400, checked.error);
       const { endpoint, payload } = checked.value;
-      const lastTest = (await this.state.storage.get<number>('lastTest')) ?? 0;
-      if (now - lastTest < TEST_GAP_MS) return problem(429, 'Wait a few seconds.');
-      await this.state.storage.put('lastTest', now);
-      // Without a schedule, the test's time is kept only as long as it's needed.
-      if (!record) await this.state.storage.setAlarm(now + TEST_GAP_MS);
-      else await this.#arm(record);
+      if (now - this.#lastTest < TEST_GAP_MS) return problem(429, 'Wait a few seconds.');
+      this.#lastTest = now;
+      // A device with a schedule: its wake-up is set again, in case
+      // Cloudflare dropped it (audit 3 B-4). One without keeps nothing.
+      if (record) await this.#arm(record);
       // Test messages have their own share of the day: any made-up device can ask for them.
       const signed = await this.#sign(endpoint, 1, 'test');
       if (signed === 'limit') return problem(429, 'No more notifications today; try tomorrow.');
@@ -441,7 +449,7 @@ export class PushDevice {
         signed === 'failed' ? 'retry' : await this.#send(endpoint, payload, signed.authorization);
       await this.#countWaiting(started, 'test');
       if (result === 'gone') {
-        await this.#forget();
+        if (record) await this.#forget();
         return problem(410, 'This device is no longer subscribed.');
       }
       return result === 'sent'
@@ -490,7 +498,8 @@ export class PushDevice {
   async #sendDue(): Promise<void> {
     const record = await this.#record();
     const now = Date.now();
-    // No schedule (only a test's time), not uploaded for 13 months
+    // No schedule (only a test's time, which versions before audit 6 kept
+    // for 10 seconds), not uploaded for 13 months
     // (updates.windowStart is the last upload, give or take 10 minutes), or
     // nothing has got through for two days (a made-up or long-dead push address).
     if (
