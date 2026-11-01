@@ -69,5 +69,8 @@ overrides:
 # cooldown to the whole lockfile, so a younger package here makes it fail.
 # For an urgent security fix, list the package under minimumReleaseAgeExclude,
 # in a pull request of its own, merged first: the check on pull requests
-# (scripts/lockfile-age.ts) reads this list from main (audit 4 H-1).
+# (scripts/lockfile-age.ts) reads this list from main (audit 4 H-1). While
+# pnpm audit fails, that pull request also lists the advisory under
+# auditConfig.ignoreGhsas, or it can't be merged either (docs/quality.md,
+# "When a new advisory stops every merge", audit 6 H-4).
 minimumReleaseAge: 10080

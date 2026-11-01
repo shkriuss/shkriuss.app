@@ -150,6 +150,6 @@ if (young.length > 0) {
   const days = Math.round(rules.minutes / 1440);
   fail(
     'Too new',
-    `These were published less than ${days} days ago: ${young.join(', ')}. Wait, or for an urgent security fix list the package under minimumReleaseAgeExclude in pnpm-workspace.yaml, in a pull request of its own merged first (this check reads the list from ${base}).`,
+    `These were published less than ${days} days ago: ${young.join(', ')}. Wait, or for an urgent security fix list the package under minimumReleaseAgeExclude in pnpm-workspace.yaml, in a pull request of its own merged first (this check reads the list from ${base}; if pnpm audit fails too, see "When a new advisory stops every merge" in docs/quality.md).`,
   );
 }
