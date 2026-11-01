@@ -120,6 +120,36 @@ test('a tab with an old list doesn’t take the other tab’s photo for one that
   await expect(page.locator('[data-viewer] [data-detail="where"]')).toHaveText('On this device');
 });
 
+test('a tab with an old list that adds a photo of its own still knows the other tab’s', async ({
+  page,
+}) => {
+  // Its own change hid the other tab's from it: it went on trusting its list.
+  const other = await twoTabs(page);
+  const held: Route[] = [];
+  let uploading = false;
+  await page.route('**/api/library/**', async (route) => {
+    const url = route.request().url();
+    if (route.request().method() === 'PUT' && url.includes('/api/library/items/')) uploading = true;
+    if (uploading && url.includes('/api/library/changes')) held.push(route);
+    else await route.fallback();
+  });
+  await addOnline(page, 'IMG_0110.JPG');
+
+  // The other tab adds a photo of its own, then looks at the library, as it does after adding.
+  const july = withExif(
+    await picture(other, { width: 800, height: 600, color: '#36c' }),
+    '2019:07:04 18:30:05',
+  );
+  await addPhotos(other, [jpeg('IMG_0111.JPG', july)]);
+  await expect(onlineStatus(other)).toHaveText(/^Online: 2 photos · /, ONLINE);
+  expect(await markedHere(page, 'IMG_0110.JPG')).toBe(true);
+  expect(await markedHere(page, 'IMG_0111.JPG')).toBe(true);
+  expect(await originalsHere(page)).toBe(2);
+
+  await page.unroute('**/api/library/**');
+  for (const route of held) await route.continue().catch(() => undefined);
+});
+
 test('a tab with an old list that deletes the online copy marks every photo here as not online, so they go up again', async ({
   page,
 }) => {

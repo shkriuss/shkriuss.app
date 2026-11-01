@@ -39,9 +39,10 @@ reasons: [ADR 0015](../../docs/adr/0015-photos-app.md) (on the device) and
     it), puts photos online a few at a time, and downloads thumbnails
     (several at once), screen-sized copies and originals when they're
     needed. What it saves or deletes here goes by the photos in the
-    database at that moment, not by the page's own list: with Photos open
-    in two tabs, a tab's list is loaded again only when it gets focus, so
-    it can be older (audit 6 F3-1).
+    database at that moment, not by the page's own list, whenever another
+    tab may have changed them: with Photos open in two tabs, a tab's list
+    is loaded again only when it gets focus, so it can be older (audit 6
+    F3-1).
   - `src/worker.ts`: the Worker for `/api/sync/*` and `/api/library/*`.
     `wrangler.jsonc` has the R2 bucket, `shkriuss-photos`.
   - Adding photos online needs the storage code once per account (the

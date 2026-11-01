@@ -39,6 +39,7 @@ import {
 } from '../lib/online.ts';
 import { detailsOf, PARTS, type Photo } from '../lib/photos.ts';
 import {
+  changedElsewhere,
   deletePhotos,
   getFiles,
   keepThumb,
@@ -319,11 +320,14 @@ export function startOnline(list: PhotoList): Online {
         await forgetOnline();
         continue;
       }
-      // Compared with what's on this device now, not with this tab's list:
-      // with a list older than that (another tab added photos since), a photo
-      // missing from it looked new from another device, and was saved as
-      // only online over the real one (audit 6 F3-1).
-      const here = page.changes.length > 0 ? await photosNow() : [];
+      // Compared with what's on this device now. That's this tab's list,
+      // unless another tab changed the photos since it was loaded: then a
+      // photo missing from it looked new from another device, and was saved
+      // as only online over the real one (audit 6 F3-1), so they're read
+      // from the database instead (not every time: with a big library, that
+      // takes a while, for each page of changes).
+      const here =
+        page.changes.length === 0 ? [] : changedElsewhere() ? await photosNow() : list.all();
       const applied = applyChanges(
         new Map(here.map((photo) => [photo.id, photo])),
         page.changes,
