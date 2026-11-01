@@ -29,8 +29,12 @@ const repoRoot = join(import.meta.dirname, '../..');
 const FREE_STORAGE = 5_000_000_000;
 /** What the limits may add up to; the rest is a margin. */
 const STORAGE_BUDGET = 4_500_000_000;
-/** The owner's online library list, outside the meters (docs/adr/0016: about 400 bytes a photo). */
-const LIBRARY_LIST = LIBRARY_LIMITS.items * 400;
+/**
+ * An app's online libraries' lists together, kept by its LibraryGate
+ * (docs/adr/0016: a photo counts about 750 bytes). Until audit 6 no meter
+ * counted them, and this was a guess, for the owner's library alone.
+ */
+const LIBRARY_LISTS = LIBRARY_LIMITS.listBytes;
 
 /** Durable Object time on the free plan, a day: 13,000 GB-s, an object counting as 128 MB. */
 const FREE_SECONDS = 13_000 / 0.128;
@@ -65,14 +69,14 @@ function storageLimits(): number {
   for (const app of apps) {
     if (app.sync) total += syncsFiles(app.slug) ? SYNC.files : SYNC.copies;
     if (app.pushNotifications) total += PUSH;
-    if (app.library) total += LIBRARY;
+    if (app.library) total += LIBRARY + LIBRARY_LISTS;
   }
   return total;
 }
 
 describe('the free plan, shared by every app', () => {
-  it('has room for every server’s storage limit and the library list', () => {
-    const total = storageLimits() + LIBRARY_LIST;
+  it('has room for every server’s storage limit, the online libraries’ lists included', () => {
+    const total = storageLimits();
     expect(STORAGE_BUDGET).toBeLessThan(FREE_STORAGE);
     expect(
       total,
@@ -97,16 +101,20 @@ describe('the free plan, shared by every app', () => {
   });
 });
 
-/** Durable Object rows written while `run` runs: each put() and each setAlarm() is one. */
+/**
+ * Durable Object rows written while `run` runs: each put(), each delete()
+ * (deleting a row writes it too) and each setAlarm() is one. Until audit 6
+ * deletes weren't counted, so a device link looked half as dear.
+ */
 async function rowsWritten(run: () => Promise<unknown>): Promise<number> {
-  const put = vi.spyOn(MemoryStorage.prototype, 'put');
-  const alarm = vi.spyOn(MemoryStorage.prototype, 'setAlarm');
+  const spies = (['put', 'delete', 'setAlarm'] as const).map((name) =>
+    vi.spyOn(MemoryStorage.prototype, name),
+  );
   try {
     await run();
-    return put.mock.calls.length + alarm.mock.calls.length;
+    return spies.reduce((sum, spy) => sum + spy.mock.calls.length, 0);
   } finally {
-    put.mockRestore();
-    alarm.mockRestore();
+    for (const spy of spies) spy.mockRestore();
   }
 }
 
@@ -119,7 +127,8 @@ describe('the free plan’s row writes (audit 5 B-4)', () => {
   const FREE_ROW_WRITES = 100_000;
   const FREE_REQUESTS = 100_000;
 
-  it('a device link: its row, its place in the order of expiry, and the first alarm', async () => {
+  /** The hub's device links, in memory, and a way to make one or ask about one. */
+  function deviceLinks() {
     const links = memoryNamespace((state) => new AccountLink(state));
     const env: AccountEnv = {
       ASSETS: { fetch: async () => new Response('page') },
@@ -127,18 +136,43 @@ describe('the free plan’s row writes (audit 5 B-4)', () => {
       ACCOUNT_PASSKEYS: null as unknown as DurableObjectNamespace,
       ACCOUNT_STATUS: null as unknown as DurableObjectNamespace,
     };
-    const link = (id: string) =>
-      accountWorker.fetch(
-        new Request(`https://shkriuss.app/api/account/link/${id}`, {
-          method: 'PUT',
-          body: JSON.stringify({ data: 'A'.repeat(80) }),
-        }),
-        env,
-      );
+    const call = (path: string, init?: RequestInit) =>
+      accountWorker.fetch(new Request(`https://shkriuss.app/api/account/link/${path}`, init), env);
+    return {
+      link: (id: string) =>
+        call(id, { method: 'PUT', body: JSON.stringify({ data: 'A'.repeat(80) }) }),
+      state: (id: string) => call(`${id}/state`),
+    };
+  }
+
+  it('a device link when it’s made: its row, its place in the order of expiry, and the first alarm', async () => {
+    const { link } = deviceLinks();
     expect(await rowsWritten(() => link('A'.repeat(22)))).toBe(3);
     expect(await rowsWritten(() => link('B'.repeat(22)))).toBe(2);
-    // So about 50,000 such requests use up the day's writes, long before its requests.
-    expect(FREE_ROW_WRITES / 2).toBeLessThan(FREE_REQUESTS);
+  });
+
+  // A link's two rows are deleted when it expires, by its alarm or the next
+  // request: two more writes, which the docs left out until audit 6.
+  it('a device link in all: 4 rows, so about 25,000 links use up a day’s writes', async () => {
+    vi.useFakeTimers({ now: Date.UTC(2026, 9, 31, 12), toFake: ['Date'] });
+    try {
+      const { link, state } = deviceLinks();
+      const ids = Array.from({ length: 100 }, (_, index) => `${String(index).padStart(22, 'L')}`);
+      const made = await rowsWritten(async () => {
+        for (const id of ids) expect((await link(id)).status).toBe(201);
+      });
+      vi.advanceTimersByTime(11 * 60 * 1000);
+      // Whatever request comes next deletes the expired ones.
+      const deleted = await rowsWritten(async () => {
+        expect(await (await state(ids[0] ?? '')).json()).toEqual({ state: 'expired' });
+      });
+      expect(made + deleted).toBe(4 * ids.length + 1);
+      // ADR 0010 and 0017: "about 25,000" links a day, before the day's requests run out.
+      expect(FREE_ROW_WRITES / 4).toBe(25_000);
+      expect(FREE_ROW_WRITES / 4).toBeLessThan(FREE_REQUESTS);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('a first sync copy: the meter’s two rows, its room, the write count, the copy, its last use and the alarm', async () => {

@@ -226,7 +226,10 @@ const linkKey = (id: string) => `link:${id}`;
 /** "due:<expiry>:<id>": the links in the order they expire, for the sweep. */
 const dueKey = (expiresAt: number, id: string) =>
   `due:${String(expiresAt).padStart(16, '0')}:${id}`;
-/** Expired links looked at in one go (a few hundred are alive at most). */
+/**
+ * Expired links looked at in one go: usually a few are alive, but a script
+ * can make about 25,000 a day, all at once (docs/adr/0017, "Device links").
+ */
 const SWEEP_BATCH = 128;
 
 /**

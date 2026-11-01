@@ -6,7 +6,9 @@ any more ([ADR 0019](0019-no-pull-request-previews.md)), so what this says
 about them no longer applies. Changed by audit 4: the app checks daily that
 the server still has its schedule, "minutes before" reminders in the hour
 clocks skip go off as they change, and an open app tells whether the server
-sends a reminder reminder by reminder (all below).
+sends a reminder reminder by reminder (all below). Changed by audit 6: a
+test notification from a device without a schedule keeps nothing on the
+server (see "What the server stores").
 
 ## Context
 
@@ -59,7 +61,11 @@ browsers like IronFox receive Web Push through **UnifiedPush**.
   inside the encrypted message. A device is addressed by a random key that only the phone has
   (sent as a bearer token; the server keeps only its SHA-256 hash).
   It also counts how many messages the device got that day (UTC), for its
-  daily limit (audit 3 B-2).
+  daily limit (audit 3 B-2). "Send a test notification" from a device
+  without a schedule keeps nothing at all: the 10 seconds needed between
+  two tests are kept only in the server's memory. Until audit 6 that time
+  was stored, with a wake-up to delete it, so any made-up device key made
+  the server keep a row that no storage limit counted.
 - **Repeating notifications keep working** without opening the app: the server
   computes each next time from the pattern, in the phone's time zone (so
   daylight saving doesn't shift them). A time the clocks skip goes off as

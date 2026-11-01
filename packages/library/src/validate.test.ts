@@ -6,7 +6,9 @@ import {
   checkRemove,
   checkUnlock,
   isDetails,
+  itemListBytes,
   LIMITS,
+  NOTE_BYTES,
   parseParts,
   utcDay,
 } from './validate.ts';
@@ -62,11 +64,21 @@ describe('bodies', () => {
       ok: true,
       value: [['photo-0001', 100]],
     });
-    const many = Array.from({ length: LIMITS.firstParts + 1 }, () => ['photo-0001', 100]);
+    const many = Array.from({ length: LIMITS.firstParts + 1 }, (_, i) => [
+      `photo-${1000 + i}`,
+      100,
+    ]);
     for (const body of [
       {},
       { items: [] },
       { items: many },
+      // Each item once: the same one again would be read from R2 again (audit 6).
+      {
+        items: [
+          ['photo-0001', 100],
+          ['photo-0001', 100],
+        ],
+      },
       { items: [['photo-0001', 10]] },
       { items: [['photo-0001', LIMITS.firstPartBytes + 1]] },
       { items: [['bad id', 100]] },
@@ -110,6 +122,56 @@ describe('bodies', () => {
   });
 });
 
+// A library's list was counted by no meter, and items with long details
+// took ten times what the budget assumed (audit 6): what each counts now.
+describe('room in a library’s list', () => {
+  /** A row as kept: its key and its value, with what SQLite adds to each (about 32 bytes). */
+  const row = (key: string, value: unknown) => key.length + JSON.stringify(value).length + 32;
+  /** The biggest numbers a row can hold, so nothing is counted short. */
+  const BIG = Number.MAX_SAFE_INTEGER;
+  const seqKey = `seq:${String(BIG).padStart(16, '0')}`;
+  /** An item's two rows, as the Worker keeps them. */
+  const itemRows = (item: { id: string; key: string; details: string; parts: number[] }) =>
+    row(seqKey, { ...item, seq: BIG, at: BIG }) +
+    row(`item:${item.id}`, { seq: BIG, size: LIMITS.itemBytes, list: 99_999 });
+  /** A deletion note's two rows. */
+  const noteRows = (id: string, proof: string) =>
+    row(seqKey, { id, seq: BIG, deleted: true, at: BIG, proof }) +
+    row(`item:${id}`, { seq: BIG, deleted: true, proof });
+
+  it('counts at least what an item’s rows take, however long its id and details', () => {
+    for (const id of ['photo-01', 'p'.repeat(64)]) {
+      for (const details of ['D'.repeat(40), 'D'.repeat(LIMITS.detailsChars)]) {
+        for (const parts of [[LIMITS.itemBytes], Array(LIMITS.parts).fill(23_750_000)]) {
+          const item = { id, key: 'k'.repeat(16), details, parts };
+          expect(itemListBytes(item)).toBeGreaterThanOrEqual(itemRows(item));
+        }
+      }
+    }
+  });
+
+  it('counts a note at least what it takes, and an item never less than its note', () => {
+    const proof = `${'k'.repeat(16)}.${'s'.repeat(64)}`;
+    expect(NOTE_BYTES).toBeGreaterThanOrEqual(noteRows('p'.repeat(64), proof));
+    const smallest = { id: 'photo-01', key: 'k', details: 'D'.repeat(40), parts: [28] };
+    expect(itemListBytes(smallest)).toBe(NOTE_BYTES);
+  });
+
+  it('counts a photo about 750 bytes, so the room holds about 400,000', () => {
+    // Photos' details: when it was taken and added, its name, type, size,
+    // width, height and SHA-256, sealed (about 250 characters before).
+    const photo = {
+      id: crypto.randomUUID(),
+      key: 'k1',
+      details: 'D'.repeat(366),
+      parts: [45_678, 456_789, 3_456_817],
+    };
+    expect(itemListBytes(photo)).toBeGreaterThan(700);
+    expect(itemListBytes(photo)).toBeLessThan(800);
+    expect(LIMITS.listBytes / 800).toBe(LIMITS.items);
+  });
+});
+
 it('counts days in UTC', () => {
   expect(utcDay(Date.UTC(2026, 9, 22, 23, 59))).toBe('2026-10-22');
   expect(utcDay(Date.UTC(2026, 9, 23, 0, 0))).toBe('2026-10-23');
@@ -125,16 +187,28 @@ describe('the limits the docs promise', () => {
     expect(LIMITS.unlockTries).toBe(20);
   });
 
-  it('10,000 uploads a day, 1 TB in all; 400,000 photos per library, 95 MB each', () => {
-    // SECURITY.md: "Hard limits across all libraries (1 TB, 10,000 uploads a
-    // day), plus 400,000 photos per library and 95 MB each"; ADR 0016: "1 TB
-    // stored and 10,000 uploads a day in all", "400,000 photos, and 95 MB per
-    // photo"; docs/deployment.md: "At most 10,000 photos go up a day";
-    // Photos' status line (apps/photos/src/lib/online.ts): "too big to keep
-    // online (over 95 MB)".
+  it('10,000 uploads a day, 1 TB and 320 MB of lists in all; 400,000 photos per library, 95 MB each', () => {
+    // SECURITY.md: "Hard limits across all libraries (1 TB, 320 MB of lists,
+    // 10,000 uploads a day), plus 400,000 photos per library and 95 MB
+    // each"; ADR 0016: "1 TB stored, 320 MB of lists and 10,000 uploads a
+    // day in all", "400,000 photos, and 95 MB per photo", "each note 512
+    // bytes"; ADR 0017's table: "320 MB"; docs/deployment.md: "At most
+    // 10,000 photos go up a day"; Photos' status line
+    // (apps/photos/src/lib/online.ts): "too big to keep online (over 95 MB)".
     expect(LIMITS.uploadsPerDay).toBe(10_000);
     expect(LIMITS.bytes).toBe(1_000_000_000_000);
+    expect(LIMITS.listBytes).toBe(320_000_000);
+    expect(NOTE_BYTES).toBe(512);
     expect(LIMITS.items).toBe(400_000);
     expect(LIMITS.itemBytes).toBe(95_000_000);
+  });
+
+  it('40 thumbnails in one request, so at most about 4 million R2 reads a day', () => {
+    // ADR 0016: "up to 40 in one request", "One request reads at most 40
+    // thumbnails ... at most about 4 million reads a day", "about $40 a
+    // month at most"; SECURITY.md and docs/deployment.md: "about $40 a month".
+    expect(LIMITS.firstParts).toBe(40);
+    const readsAMonth = LIMITS.firstParts * 100_000 * 30;
+    expect(Math.round(((readsAMonth - 10_000_000) / 1_000_000) * 0.36)).toBe(40);
   });
 });

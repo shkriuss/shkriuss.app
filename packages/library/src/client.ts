@@ -501,9 +501,16 @@ export function libraryApi(access: LibraryAccess) {
       items: readonly { id: string; key: string; parts: readonly number[] }[],
     ): Promise<Map<string, Uint8Array<ArrayBuffer>>> {
       const found = new Map<string, Uint8Array<ArrayBuffer>>();
-      const wanted = items.filter(
-        (item) => (item.parts[0] ?? 0) > 0 && (item.parts[0] ?? 0) <= LIMITS.firstPartBytes,
-      );
+      // Each item once: the server refuses a request that names one twice.
+      const wanted = [
+        ...new Map(
+          items
+            .filter(
+              (item) => (item.parts[0] ?? 0) > 0 && (item.parts[0] ?? 0) <= LIMITS.firstPartBytes,
+            )
+            .map((item) => [item.id, item]),
+        ).values(),
+      ];
       for (let start = 0; start < wanted.length; start += LIMITS.firstParts) {
         const batch = wanted.slice(start, start + LIMITS.firstParts);
         const response = await post('/first-parts', {
