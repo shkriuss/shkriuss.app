@@ -2,6 +2,7 @@
  * Guards for the GitHub workflows:
  * - every third-party action is pinned to an exact commit (supply-chain safety);
  * - the lockfile check runs main's copy, before anything from a pull request;
+ * - no other run can cancel the deploy of main's newest commit;
  * - the build CI saves for the deploy keeps every file;
  * - the "New app" form offers exactly the icons and colours that exist.
  */
@@ -92,6 +93,7 @@ jobs:
 });
 
 interface Step {
+  id?: string;
   name?: string;
   uses?: string;
   run?: string;
@@ -144,6 +146,34 @@ describe('the lockfile check runs before anything from the pull request (audit 6
     const install = setup.runs.steps.filter((step) => step.run?.includes('pnpm install'));
     expect(install.length).toBe(1);
     expect(install[0]?.if).toBe("inputs.install == 'true'");
+  });
+});
+
+describe('nothing can cancel the deploy of main’s newest commit (audit 6 H-6)', () => {
+  // GitHub keeps one waiting run (or job) per concurrency group, and cancels
+  // it when another one queues.
+  it('only a pull request’s runs share a group, so only they cancel each other', () => {
+    expect(ci.concurrency.group).toBe(
+      "ci-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}",
+    );
+    expect(ci.concurrency['cancel-in-progress']).toBe("${{ github.event_name == 'pull_request' }}");
+  });
+
+  it('only a run that will deploy waits its turn in the production group', () => {
+    const queued = Object.entries(ci.jobs).filter(([, job]) => job.concurrency !== undefined);
+    expect(queued.map(([name]) => name)).toEqual(['deploy']);
+    const deploy = ci.jobs['deploy'];
+    const newest = ci.jobs['newest'];
+    expect(deploy?.concurrency).toEqual({ group: 'production', 'cancel-in-progress': false });
+    expect(deploy?.needs).toBe('newest');
+    expect(deploy?.if).toMatch(/&& needs\.newest\.outputs\.deploy == 'true'$/);
+    expect(newest?.needs).toEqual(['checks', 'secrets', 'audit']);
+    expect(newest?.outputs?.['deploy']).toBe('${{ steps.newest.outputs.deploy }}');
+    // The deploy job checks again, the same way, before it deploys anything.
+    const check = (job: Job | undefined) => job?.steps?.find((step) => step.id === 'newest')?.run;
+    expect(check(newest)).toContain('commits/main');
+    expect(check(deploy)).toBe(check(newest));
+    expect(deploy?.steps?.[0]?.id).toBe('newest');
   });
 });
 

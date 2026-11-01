@@ -110,7 +110,9 @@ Never paste the token anywhere else, including chat.
 To change the storage code, change the secret: the next deploy gives the
 new one to the Worker. To deploy again without merging anything, open the
 newest **CI** run on `main` → **Re-run all jobs**. Only the newest commit on
-`main` deploys: re-running an older run checks it but deploys nothing.
+`main` deploys: re-running an older run checks it but deploys nothing, and
+no other run (an older one re-run, or one started with **Run workflow**)
+can cancel the newest one's deploy while it waits its turn (audit 6 H-6).
 
 ### GitHub settings
 
@@ -259,9 +261,12 @@ twice a week and downloads again whatever is missing, so a quiet week
 doesn't empty them (audit 5 H-2); **Actions → Caches** on GitHub shows
 what's there, and **Run workflow** on that workflow fills it by hand. If
 one of these services is down while CI needs it, a merge (even a fix) can't
-deploy until it's back: re-run the failed job then. The live sites stay as
-they were meanwhile; to undo a bad deploy in the meantime, use the
-dashboard's **Rollback** above (audit H-2).
+deploy until it's back: then open the newest **CI** run on `main` →
+**Re-run all jobs**. Not **Re-run failed jobs**: the build the deploy uses
+is kept for one day, so a day later only re-running everything (which
+builds it again) can deploy (audit 6 H-9). The live sites stay as they were
+meanwhile; to undo a bad deploy in the meantime, use the dashboard's
+**Rollback** above (audit H-2).
 
 ## Costs
 
