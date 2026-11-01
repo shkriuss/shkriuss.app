@@ -72,14 +72,50 @@ export interface CreateAppResult {
 export const THEME_CHOICE = 'Your light or dark theme choice';
 
 /**
- * The shared browser tests whose tables need a line for every site
- * (tests/e2e/every-site.ts), and how each table starts.
+ * The shared browser tests' tables that need a line for every site
+ * (tests/e2e/every-site.ts), and how each table starts. A file can have
+ * several (keep-focus has four). A unit test checks that every
+ * `EverySite` table in tests/e2e is here, so a new one can't be missed
+ * (audit 6 J-1).
  */
 export const SHARED_TEST_TABLES = [
   { file: 'tests/e2e/saving.spec.ts', start: 'const changes: EverySite<' },
   { file: 'tests/e2e/keep-focus.spec.ts', start: 'const cases: EverySite<' },
+  { file: 'tests/e2e/keep-focus.spec.ts', start: 'const goneCases: EverySite<' },
+  { file: 'tests/e2e/keep-focus.spec.ts', start: 'const dialogCases: EverySite<' },
+  { file: 'tests/e2e/keep-focus.spec.ts', start: 'const comingBack: EverySite<' },
   { file: 'tests/e2e/large-text.spec.ts', start: 'const cases: EverySite<' },
 ] as const;
+
+/** The files with those tables, each once. */
+export const SHARED_TEST_FILES: readonly string[] = [
+  ...new Set(SHARED_TEST_TABLES.map(({ file }) => file)),
+];
+
+/** A table in a shared browser test: its name, how it starts, and the sites it has a line for. */
+export interface SiteTable {
+  name: string;
+  start: string;
+  sites: string[];
+}
+
+/**
+ * The `EverySite` tables in a test file's `source` (`const <name>:
+ * EverySite<…> = {`), each with the sites it has a line for: its keys at
+ * the first level (two spaces in), up to the `};` that ends it.
+ */
+export function siteTables(source: string): SiteTable[] {
+  return [...source.matchAll(/^(?:export )?const (\w+): EverySite</gm)].map((match) => {
+    const end = source.indexOf('\n};', match.index);
+    const body = source.slice(match.index, end === -1 ? undefined : end);
+    const name = match[1] ?? '';
+    return {
+      name,
+      start: `const ${name}: EverySite<`,
+      sites: [...body.matchAll(/^ {2}'?([a-z][a-z0-9-]*)'?:/gm)].map((key) => key[1] ?? ''),
+    };
+  });
+}
 
 /**
  * `source` with a line for `slug` at the end of the table that starts with
@@ -115,11 +151,16 @@ export async function createApp(
   if (problems.length > 0) {
     throw new Error(`Can't create the app:\n- ${problems.join('\n- ')}`);
   }
-  // Worked out before anything is written, so a table that can't be found stops it all.
+  // Worked out before anything is written, so a table that can't be found
+  // stops it all. Each file gets a line in every one of its tables.
   const tables = await Promise.all(
-    SHARED_TEST_TABLES.map(async ({ file, start }) => {
+    SHARED_TEST_FILES.map(async (file) => {
       const path = join(repoRoot, file);
-      return { path, content: withSiteLine(await readFile(path, 'utf8'), start, options.slug) };
+      let content = await readFile(path, 'utf8');
+      for (const table of SHARED_TEST_TABLES) {
+        if (table.file === file) content = withSiteLine(content, table.start, options.slug);
+      }
+      return { path, content };
     }),
   );
 

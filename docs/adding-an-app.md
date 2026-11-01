@@ -54,11 +54,11 @@ pnpm --filter notes dev
 2. Adds the app to `packages/registry/apps.json` with `"status": "live"`,
    `"storage": "device"` and the theme choice in `dataStored` (every page
    saves it, so keep both).
-3. Adds a line for the app to the three shared browser tests' tables
+3. Adds a line for the app to every table in the shared browser tests
    (`tests/e2e/saving.spec.ts`, `keep-focus.spec.ts` and
-   `large-text.spec.ts`), as `null` with "New: nothing for this test yet",
-   so they don't fail for it. Fill them in as the app grows (see below).
-   Then it formats the new files.
+   `large-text.spec.ts`; they're listed below), as `null` with "New:
+   nothing for this test yet", so they don't fail for it. Fill them in as
+   the app grows (see below). Then it formats the new files.
 
 That's all: the hub, the privacy page, the browser tests, the build and the
 deploy all read from the registry and the `apps/` folder. The hub lists apps
@@ -115,11 +115,21 @@ in alphabetical order, so where an entry sits in `apps.json` doesn't matter.
 - Fill in the app's lines in the shared browser tests' tables. Every site
   needs one in each, or the test fails for it (audit 3 J-11), and
   `pnpm new-app` adds them as `null` ("New: nothing for this test yet"):
-  `changes` in `tests/e2e/saving.spec.ts` (one tap or entry that saves),
-  `cases` in `tests/e2e/keep-focus.spec.ts` (a list that a change in
-  another tab draws again) and `cases` in `tests/e2e/large-text.spec.ts`
-  (things to put on the page). Leave `null` only where a test can't apply,
-  with a comment saying why.
+  - `changes` in `tests/e2e/saving.spec.ts`: one tap or entry that saves;
+  - in `tests/e2e/keep-focus.spec.ts`: `cases`, a list that a change in
+    another tab draws again; `goneCases`, the focused item deleted in
+    another tab, and what gets focus then; `dialogCases`, a dialog opened
+    from a list while another tab changes it; and `comingBack`, lists drawn
+    again in a new month;
+  - `cases` in `tests/e2e/large-text.spec.ts`: things to put on the page.
+
+  Leave `null` only where a test can't apply, or isn't scripted for the
+  app, with a comment saying why. A unit test
+  (`tests/unit/shared-test-tables.test.ts`) checks that each table has a
+  line for every site, and none for a site that's gone. A new table needs
+  adding to `SHARED_TEST_TABLES` in `scripts/lib/create-app.ts`, so the
+  generator fills it in too (a unit test checks that as well, audit 6 J-1).
+
 - If the app needs a browser feature (for example keeping the screen on),
   allow it in `astro.config.ts`:
   `defineAppConfig({ slug: 'notes', allowFeatures: ['screen-wake-lock'] })`.
@@ -191,8 +201,8 @@ shared component it uses, try one:
 `pnpm new-app scratch --name "Scratch" --description "A test."`,
 `pnpm install`, then `pnpm --filter scratch typecheck` and
 `pnpm --filter scratch build`. Undo it all before committing: the app's
-folder, and its lines in `packages/registry/apps.json`, the three shared
-tests and `pnpm-lock.yaml`.
+folder, and its lines in `packages/registry/apps.json`, the shared browser
+tests' tables (search `tests/e2e` for "New: nothing") and `pnpm-lock.yaml`.
 
 `pnpm --filter <slug> dev` shows the page only: it has no `/api`, so "Turn
 on sync", notifications while closed and the online library don't work
@@ -400,10 +410,14 @@ online. So remove an app in steps (ask Claude for each):
    migration that deletes their classes (`"deleted_classes"`; Cloudflare's
    [guide](https://developers.cloudflare.com/durable-objects/reference/durable-object-class-migrations-legacy/)).
    When it deploys, everything its servers kept is deleted.
-3. **Remove it:** delete `apps/<slug>/` and its entry in `apps.json` in one
-   pull request. After merging, delete the Worker in the Cloudflare
-   dashboard (**Workers & Pages** → the app → **Settings** → **Delete**).
-   That removes its address too.
+3. **Remove it:** in one pull request, delete `apps/<slug>/`, its entry in
+   `apps.json`, its lines in the shared browser tests' tables
+   (`tests/e2e/*.spec.ts`; until they go, those tests fail on every site,
+   and `tests/unit/shared-test-tables.test.ts` lists each one, audit 6 J-3)
+   and its entry in `APPLIED_MIGRATIONS` in
+   `tests/unit/registry-consistency.test.ts`. After merging, delete the
+   Worker in the Cloudflare dashboard (**Workers & Pages** → the app →
+   **Settings** → **Delete**). That removes its address too.
 4. **An app with an online library** (see below) also has an R2 bucket,
    `shkriuss-<slug>`, and a storage code secret in GitHub
    (`<SLUG>_STORAGE_CODE`). Delete the bucket in the dashboard (**R2** → the

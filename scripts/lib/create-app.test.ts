@@ -1,11 +1,13 @@
-import { cp, mkdtemp, readFile, rm, writeFile, mkdir } from 'node:fs/promises';
+import { cp, mkdtemp, readdir, readFile, rm, writeFile, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   createApp,
   optionProblems,
+  SHARED_TEST_FILES,
   SHARED_TEST_TABLES,
+  siteTables,
   TEMPLATE_SLUG,
   THEME_CHOICE,
   withSiteLine,
@@ -13,6 +15,23 @@ import {
 } from './create-app.ts';
 
 const repoRoot = join(import.meta.dirname, '../..');
+
+/** A shared test file as the temporary repo has it: each of its tables, with one app. */
+const sampleTests = (file: string, slug = 'tally'): string =>
+  SHARED_TEST_TABLES.filter((table) => table.file === file)
+    .map(({ start }) => `${start}Case> = {\n  ${slug}: tallyCase,\n};\n`)
+    .join('\n');
+
+/** Every test file in tests/e2e, with what it says. */
+async function sharedTests(root: string): Promise<{ file: string; source: string }[]> {
+  const files = (await readdir(join(root, 'tests/e2e'))).filter((name) => name.endsWith('.ts'));
+  return Promise.all(
+    files.map(async (name) => ({
+      file: `tests/e2e/${name}`,
+      source: await readFile(join(root, 'tests/e2e', name), 'utf8'),
+    })),
+  );
+}
 
 const sampleRegistry = {
   site: {
@@ -68,6 +87,30 @@ describe('optionProblems', () => {
   });
 });
 
+describe('siteTables', () => {
+  it('lists each table’s sites, not what’s inside their lines', () => {
+    const source = [
+      'const cases: EverySite<Case> = {',
+      '  budget: {',
+      '    setup: async (page) => page,',
+      '  },',
+      '  // Nothing to test.',
+      '  hub: null,',
+      "  'new-app': null,",
+      '};',
+      '',
+      'const other = { tally: 1 };',
+      'const comingBack: EverySite<Case> = {',
+      "  budget: cases['budget'] ?? null,",
+      '};',
+    ].join('\n');
+    expect(siteTables(source)).toEqual([
+      { name: 'cases', start: 'const cases: EverySite<', sites: ['budget', 'hub', 'new-app'] },
+      { name: 'comingBack', start: 'const comingBack: EverySite<', sites: ['budget'] },
+    ]);
+  });
+});
+
 describe('createApp', () => {
   let root: string;
 
@@ -78,9 +121,7 @@ describe('createApp', () => {
     await writeFile(join(root, 'packages/registry/apps.json'), JSON.stringify(sampleRegistry));
     // The shared browser tests' tables, with one app in each.
     await mkdir(join(root, 'tests/e2e'), { recursive: true });
-    for (const { file, start } of SHARED_TEST_TABLES) {
-      await writeFile(join(root, file), `${start}Case> = {\n  tally: tallyCase,\n};\n`);
-    }
+    for (const file of SHARED_TEST_FILES) await writeFile(join(root, file), sampleTests(file));
   });
 
   afterEach(async () => {
@@ -143,10 +184,13 @@ describe('createApp', () => {
 
   it('gives the new app a line, to fill in, in each shared browser test (audit 3 J-11)', async () => {
     await createApp(root, options);
-    for (const { file, start } of SHARED_TEST_TABLES) {
+    for (const file of SHARED_TEST_FILES) {
       const source = await readFile(join(root, file), 'utf8');
       expect(source, file).toBe(
-        `${start}Case> = {\n  tally: tallyCase,\n  // New: nothing for this test yet. Put what to do here once the app has it.\n  'notes': null,\n};\n`,
+        sampleTests(file).replaceAll(
+          '\n};',
+          "\n  // New: nothing for this test yet. Put what to do here once the app has it.\n  'notes': null,\n};",
+        ),
       );
     }
   });
@@ -155,6 +199,37 @@ describe('createApp', () => {
     for (const { file, start } of SHARED_TEST_TABLES) {
       const source = await readFile(join(repoRoot, file), 'utf8');
       expect(withSiteLine(source, start, 'notes'), file).toContain("  'notes': null,\n};");
+    }
+  });
+
+  it('knows every table in the shared browser tests (audit 6 J-1)', async () => {
+    // keep-focus got three more tables, and a new app had a line in none of
+    // them, so its first pull request failed.
+    const found = (await sharedTests(repoRoot)).flatMap(({ file, source }) =>
+      siteTables(source).map(({ start }) => ({ file, start })),
+    );
+    expect(found.length).toBeGreaterThanOrEqual(6);
+    expect(
+      found.filter(
+        (table) =>
+          !SHARED_TEST_TABLES.some(
+            ({ file, start }) => file === table.file && start === table.start,
+          ),
+      ),
+      'Add these to SHARED_TEST_TABLES in scripts/lib/create-app.ts',
+    ).toEqual([]);
+  });
+
+  it('gives a new app a line in every table of the real shared browser tests', async () => {
+    for (const { file, source } of await sharedTests(repoRoot)) {
+      await writeFile(join(root, file), source);
+    }
+    // A slug none of them has a line for yet (Notes has one in each).
+    await createApp(root, { ...options, slug: 'journal', name: 'Journal' });
+    for (const { file, source } of await sharedTests(root)) {
+      for (const { name, sites } of siteTables(source)) {
+        expect(sites, `${file} ${name}`).toContain('journal');
+      }
     }
   });
 
