@@ -7,6 +7,7 @@ import {
   canFreeUp,
   deleteMessage,
   freeable,
+  notOnlineMessage,
   onlineMessage,
   onlyOnline,
   RECORDS,
@@ -141,6 +142,28 @@ describe('the delete dialog (audit 3 F3-1)', () => {
     expect(deleteMessage(1234, 1233, false, 'en-US')).toBe(
       'The originals and their copies are deleted from this device. Your online library keeps the 1,233 that are in it, which show here again when you turn sync on again; the other one can’t be brought back.',
     );
+  });
+});
+
+describe('“Delete all data?” (audit 6 E-3)', () => {
+  it('with sync on, says which photos aren’t online yet: they go for good', () => {
+    const photos = [
+      photo('a'),
+      photo('b', { online: place }),
+      photo('c', { here: false, online: place }),
+    ];
+    expect(notOnlineMessage(photos, true)).toBe(
+      '1 photo on this device isn’t online yet, so it’s deleted for good. To keep it, save its original first.',
+    );
+    expect(notOnlineMessage([...photos, photo('d'), photo('e')], true, 'en-US')).toBe(
+      '3 photos on this device aren’t online yet, so they’re deleted for good. To keep them, save their originals first.',
+    );
+  });
+
+  it('says nothing more when every photo here is online, or with sync off (it says how to keep them then)', () => {
+    expect(notOnlineMessage([photo('b', { online: place })], true)).toBe('');
+    expect(notOnlineMessage([], true)).toBe('');
+    expect(notOnlineMessage([photo('a')], false)).toBe('');
   });
 });
 

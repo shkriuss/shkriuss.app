@@ -83,7 +83,9 @@ reasons: [ADR 0015](../../docs/adr/0015-photos-app.md) (on the device) and
   Compatible".
 - No backup files: photos are too big for them (`<DataControls backup={false}>`).
   "Delete all data" deletes the photos, and its dialog says how to keep them
-  first instead of "Back up first" (audit 4 D-4).
+  first instead of "Back up first" (audit 4 D-4). With sync on, it also says
+  how many photos here aren't online yet, as the online copy doesn't keep
+  those (`notOnlineMessage` in `src/lib/online.ts`, audit 6 E-3).
 - In Firefox, all of shkriuss.app's apps share one storage limit, 10 GiB,
   unless a site has persistent storage (which Photos asks for, and Firefox
   asks the person about): a big library there can leave the other apps

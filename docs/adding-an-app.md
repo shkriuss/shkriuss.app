@@ -73,7 +73,9 @@ in alphabetical order, so where an entry sits in `apps.json` doesn't matter.
   `<DataControls />` on the page so people can back up, restore or delete their
   data. Apps whose data is too big for a backup file (like Photos) use
   `<DataControls backup={false}>`, with a sentence inside saying what to do
-  instead.
+  instead. With `deleteNote`, "Delete all data?" gets one more line, which
+  the app's script fills in (`[data-delete-note]`) with what it knows only
+  then, like Photos' count of photos not online yet.
 - Data from outside (a backup being restored, a file, another device's
   copy) is untrusted: `createStore`'s `validate` checks its shape, and
   `nestedTooDeep()` from `@shkriuss/storage/nesting` refuses JSON nested

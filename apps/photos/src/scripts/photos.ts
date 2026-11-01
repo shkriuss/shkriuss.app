@@ -9,7 +9,14 @@ import { focusProblem, showProblem } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { setBusy } from '@shkriuss/ui/busy';
 import { keepFocus } from '@shkriuss/ui/keep-focus';
-import { canFreeUp, deleteMessage, freeable, onlineMessage, onlyOnline } from '../lib/online.ts';
+import {
+  canFreeUp,
+  deleteMessage,
+  freeable,
+  notOnlineMessage,
+  onlineMessage,
+  onlyOnline,
+} from '../lib/online.ts';
 import {
   addedMessage,
   byMonth,
@@ -99,6 +106,7 @@ export function mountPhotos(root: Document): void {
   const freeUp = required<HTMLElement>(root, '[data-free-up]');
   const freeUpDialog = required<HTMLDialogElement>(root, '[data-free-up-dialog]');
   const freeUpText = required<HTMLElement>(freeUpDialog, '[data-free-up-text]');
+  const deleteAllNote = required<HTMLElement>(root, '[data-delete-note]');
 
   /** Every photo, newest first. */
   let photos: Photo[] = [];
@@ -169,6 +177,9 @@ export function mountPhotos(root: Document): void {
     const state = online.state();
     onlineOff.hidden = state.on;
     onlineSection.hidden = !state.on;
+    // "Delete all data?" says the online copy keeps its data: not photos that aren't in it yet (audit 6 E-3).
+    deleteAllNote.textContent = notOnlineMessage(photos, state.on);
+    deleteAllNote.hidden = deleteAllNote.textContent === '';
     if (!state.on) return;
     onlineStatus.textContent = onlineMessage(state);
     unlockForm.hidden = !state.checked || state.unlocked || state.problem === 'not-set-up';

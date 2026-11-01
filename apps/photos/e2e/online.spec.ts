@@ -266,6 +266,48 @@ test('keyboard focus stays on a photo while photos go online', async ({ page }) 
   await expect(tile).toBeFocused();
 });
 
+test('“Delete all data?” says how many photos aren’t online yet: sync doesn’t keep those', async ({
+  page,
+}) => {
+  // It said only that the online copy keeps its data (audit 6 E-3).
+  await createAccount(page);
+  await page.goto('/');
+  const october = withExif(await picture(page, { width: 400, height: 300 }), '2026:10:21 14:03:22');
+  const july = withExif(
+    await picture(page, { width: 400, height: 300, color: '#36c' }),
+    '2019:07:04 18:30:05',
+  );
+  await addPhotos(page, [jpeg('IMG_0017.JPG', october), jpeg('IMG_0018.JPG', july)]);
+  const dialog = page.getByRole('dialog', { name: 'Delete all data?' });
+  const note = dialog.locator('[data-delete-note]');
+
+  // With sync off, it says how to keep them already.
+  await page.getByRole('button', { name: 'Delete all data' }).click();
+  await expect(note).toBeHidden();
+  await page.keyboard.press('Escape');
+
+  // Sync on, but the storage code not given yet: nothing has gone up.
+  await turnOnSync(page, 'Photos');
+  await expect(onlineStatus(page)).toHaveText('To keep photos online, enter the storage code.');
+  await page.getByRole('button', { name: 'Delete all data' }).click();
+  await expect(note).toHaveText(
+    '2 photos on this device aren’t online yet, so they’re deleted for good. To keep them, save their originals first.',
+  );
+  await expect(dialog).toHaveAccessibleDescription(
+    /keep their data\. 2 photos on this device aren’t online yet, so they’re deleted for good\. To keep them, save their originals first\.$/,
+  );
+  await checkA11y(page, 'delete all data: photos not online yet');
+  await page.keyboard.press('Escape');
+
+  // Once they're online, there's nothing more to say.
+  await unlock(page);
+  await expect(onlineStatus(page)).toHaveText(/^Online: 2 photos · /, ONLINE);
+  await page.getByRole('button', { name: 'Delete all data' }).click();
+  await expect(note).toBeHidden();
+  await expect(dialog).not.toHaveAccessibleDescription(/online yet/);
+  await page.keyboard.press('Escape');
+});
+
 /** A second device signed in to the same account, with sync on in Photos. */
 async function tabletWith(browser: Browser, key: string, appURL: string): Promise<Page> {
   const tablet = await (await otherDevice(browser)).newPage();
