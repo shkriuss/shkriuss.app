@@ -183,8 +183,12 @@ window.addEventListener('storage', () => keepFocus(reload, addButton));
 
 Dialogs need nothing: when one closes after a redraw replaced the control
 that opened it, AppShell puts focus on its new copy. An app whose close
-handler moves focus itself (Shelf's forms) records `focusSpot()` when the
-dialog opens and calls `returnFocus(spot, fallback)` when it closes. And
+handler moves focus itself (Shelf's forms) records `focusSpot(control)`
+when the dialog opens, with the control that was tapped (the click's
+`target.closest(…)`), and calls `returnFocus(spot, fallback)` when it
+closes. Not `focusSpot()`, where focus is: Safari doesn't focus a button
+that's tapped or clicked, so there it's nothing, and focus went to the
+fallback at the top of the page, which jumped there (audit 6 G-1). And
 while a dialog is open, a screen reader can't hear the page behind it, its
 messages (`role="status"`) and problem notice included, so AppShell gives
 each dialog a hidden message area of its own and says there what they say

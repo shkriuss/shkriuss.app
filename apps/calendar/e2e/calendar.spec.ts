@@ -355,6 +355,32 @@ test('closing the editor without saving changes nothing', async ({ page }) => {
   await expect(page.getByText('Nothing planned on this day.')).toBeVisible();
 });
 
+test('closing the editor after a tap that focused nothing stays where it was', async ({ page }) => {
+  // Safari doesn't focus a button that's tapped or clicked: closing the
+  // editor without saving sent focus to "New event" at the top, and the page
+  // jumped there (audit 6 G-1). element.click() taps without focusing too.
+  await page.setViewportSize({ width: 390, height: 740 });
+  await seed(
+    page,
+    Array.from({ length: 20 }, (_, index) => ({
+      title: `Meeting ${index + 1}`,
+      startDate: '2026-10-18',
+      endDate: '2026-10-18',
+    })),
+    {},
+  );
+  const meeting = upcoming(page).getByRole('button').filter({ hasText: 'Meeting 18' });
+  await meeting.scrollIntoViewIfNeeded();
+  await meeting.evaluate((button: HTMLElement) => button.click());
+  await expect(editor(page)).toBeVisible();
+  await editor(page)
+    .getByRole('button', { name: 'Cancel' })
+    .evaluate((button: HTMLElement) => button.click());
+  await expect(editor(page)).toBeHidden();
+  await expect(meeting).toBeFocused();
+  await expect(meeting).toBeInViewport();
+});
+
 test('repeats an event every week until a date', async ({ page }) => {
   await newEvent(page, 'Yoga');
   const repeat = editor(page).getByLabel('Repeats', { exact: true });

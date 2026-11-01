@@ -441,6 +441,27 @@ test('long lists show 100 tasks at a time', async ({ page }) => {
   await expect(more).toBeVisible();
 });
 
+test('closing the form after a tap that focused nothing stays where it was', async ({ page }) => {
+  // Safari doesn't focus a button that's tapped or clicked: closing the form
+  // without saving sent focus to the heading at the top, and the page
+  // jumped there (audit 6 G-1). element.click() taps without focusing too.
+  await page.setViewportSize({ width: 390, height: 740 });
+  await seed(
+    page,
+    Array.from({ length: 40 }, (_, index) => ({ title: `Task ${index + 1}` })),
+  );
+  const title = page.getByRole('button', { name: 'Edit Task 35', exact: true });
+  await title.scrollIntoViewIfNeeded();
+  await title.evaluate((button: HTMLElement) => button.click());
+  await expect(editor(page)).toBeVisible();
+  await editor(page)
+    .getByRole('button', { name: 'Cancel' })
+    .evaluate((button: HTMLElement) => button.click());
+  await expect(editor(page)).toBeHidden();
+  await expect(title).toBeFocused();
+  await expect(title).toBeInViewport();
+});
+
 test('a form that can’t load asks for a reload', async ({ page, guard }) => {
   // The form loads after the page itself (audit 5 J-2). After an update
   // while the page was open, its old file is gone, so "try again" couldn't

@@ -55,8 +55,8 @@ export interface TaskFormPage {
 }
 
 export interface TaskForm {
-  /** Opens a task in the form. */
-  open(task: Task): void;
+  /** Opens a task in the form; focus goes back to `from` (the title tapped) when it closes. */
+  open(task: Task, from: FocusSpot | null): void;
   /** After changes from another device or tab: says in the form if its task was deleted there. */
   refresh(): void;
 }
@@ -146,9 +146,9 @@ export function mountTaskForm(root: Document, page: TaskFormPage): TaskForm {
       focusFirst: !onlyClear,
     });
 
-  function open(task: Task): void {
+  function open(task: Task, from: FocusSpot | null): void {
     editingId = task.id;
-    opener = focusSpot();
+    opener = from;
     for (const limit of limits) limit.clear();
     showProblems({});
     fillForm(draftOf(task));

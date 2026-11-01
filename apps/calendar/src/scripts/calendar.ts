@@ -350,9 +350,12 @@ export function mountCalendar(root: Document): void {
     );
   }
 
-  function openEditor(event: CalendarEvent | null): void {
-    // Where focus goes back to when it closes: where it is now, before loading.
-    const from = focusSpot();
+  function openEditor(event: CalendarEvent | null, control: Element | null): void {
+    // Where focus goes back to when it closes: the control tapped, found
+    // before loading. Not where focus is: Safari doesn't focus a button
+    // that's tapped or clicked, and focus went to "New event" at the top
+    // instead (audit 6 G-1).
+    const from = focusSpot(control);
     editor ??= import('./event-editor.ts').then(({ mountEventEditor }) =>
       mountEventEditor(root, {
         ...page,
@@ -379,16 +382,15 @@ export function mountCalendar(root: Document): void {
   // ---------- Buttons and keys ----------
 
   newEventButton.addEventListener('click', () => {
-    openEditor(null);
+    openEditor(null, newEventButton);
   });
 
   // Tapping an event in any list (the day, the next 7 days, reminders) opens it.
   root.addEventListener('click', (clickEvent) => {
-    const id = (clickEvent.target as Element)
-      .closest('[data-action="edit"]')
-      ?.closest<HTMLElement>('[data-id]')?.dataset['id'];
+    const edit = (clickEvent.target as Element).closest('[data-action="edit"]');
+    const id = edit?.closest<HTMLElement>('[data-id]')?.dataset['id'];
     const event = state.events.find((entry) => entry.id === id);
-    if (event) openEditor(event);
+    if (event) openEditor(event, edit);
   });
 
   required<HTMLButtonElement>(root, '[data-action="prev-month"]').addEventListener('click', () => {

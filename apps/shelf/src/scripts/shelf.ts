@@ -435,11 +435,14 @@ export function mountShelf(root: Document): void {
       focusFirst: !onlyClear,
     });
 
-  function openEditor(item: Item | null): void {
+  /** `from` is the control tapped, where focus goes back to when the form closes. */
+  function openEditor(item: Item | null, from: Element | null): void {
     editingId = item?.id ?? null;
     openedDraft = item ? draftOf(item) : null;
-    // Opened with nothing focused (a tap, in Safari): back to "Add item".
-    opener = focusSpot() ?? focusSpot(addButton);
+    // The control tapped, not where focus is: Safari doesn't focus a button
+    // that's tapped or clicked, and focus went to "Add item" at the top
+    // instead, scrolling the page there (audit 6 G-1).
+    opener = focusSpot(from) ?? focusSpot(addButton);
     showProblems({});
     editorTitle.textContent = item ? 'Edit item' : 'New item';
     deleteButton.hidden = item === null;
@@ -594,15 +597,14 @@ export function mountShelf(root: Document): void {
       say(`You have ${itemsCount(MAX_ITEMS)}, the most Shelf can keep. Delete some to add more.`);
       return;
     }
-    openEditor(null);
+    openEditor(null, addButton);
   });
 
   list.addEventListener('click', (event) => {
-    const id = (event.target as Element)
-      .closest('[data-action="edit"]')
-      ?.closest<HTMLElement>('[data-id]')?.dataset['id'];
+    const edit = (event.target as Element).closest('[data-action="edit"]');
+    const id = edit?.closest<HTMLElement>('[data-id]')?.dataset['id'];
     const item = find(id ?? null);
-    if (item) openEditor(item);
+    if (item) openEditor(item, edit);
   });
 
   brandList.addEventListener('click', (event) => {
@@ -667,9 +669,10 @@ export function mountShelf(root: Document): void {
     else categoryInput.removeAttribute('aria-invalid');
   }
 
-  function openCategoryEditor(category: Category | null): void {
+  /** `from` is the control tapped, as for the item form (audit 6 G-1). */
+  function openCategoryEditor(category: Category | null, from: Element | null): void {
     editingCategoryId = category?.id ?? null;
-    categoryOpener = focusSpot() ?? focusSpot(addCategoryButton);
+    categoryOpener = focusSpot(from) ?? focusSpot(addCategoryButton);
     showCategoryProblem(null);
     categoryFormError.textContent = '';
     categoryTitle.textContent = category ? 'Edit category' : 'New category';
@@ -848,15 +851,13 @@ export function mountShelf(root: Document): void {
       );
       return;
     }
-    openCategoryEditor(null);
+    openCategoryEditor(null, addCategoryButton);
   });
 
   categoryList.addEventListener('click', (event) => {
-    const id = (event.target as Element).closest<HTMLElement>('[data-category-id]')?.dataset[
-      'categoryId'
-    ];
-    const category = findCategory(id ?? null);
-    if (category) openCategoryEditor(category);
+    const chip = (event.target as Element).closest<HTMLElement>('[data-category-id]');
+    const category = findCategory(chip?.dataset['categoryId'] ?? null);
+    if (category) openCategoryEditor(category, chip);
   });
 
   /** After changes from another device or tab: keyboard focus stays where it was (audit G-3). */

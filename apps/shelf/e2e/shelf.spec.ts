@@ -383,6 +383,27 @@ test('long lists show 100 items at a time', async ({ page }) => {
   await expect(page.locator('[data-count]')).toHaveText('120 items');
 });
 
+test('closing the form after a tap that focused nothing stays where it was', async ({ page }) => {
+  // Safari doesn't focus a button that's tapped or clicked: closing the form
+  // without saving sent focus to "Add item" at the top, and the page jumped
+  // there (audit 6 G-1). element.click() taps without focusing too.
+  await page.setViewportSize({ width: 390, height: 740 });
+  await seed(
+    page,
+    Array.from({ length: 40 }, (_, index) => ({ name: `Item ${index + 1}` })),
+  );
+  const item = page.getByRole('button', { name: 'Edit Item 35', exact: true });
+  await item.scrollIntoViewIfNeeded();
+  await item.evaluate((button: HTMLElement) => button.click());
+  await expect(form(page)).toBeVisible();
+  await form(page)
+    .getByRole('button', { name: 'Cancel' })
+    .evaluate((button: HTMLElement) => button.click());
+  await expect(form(page)).toBeHidden();
+  await expect(item).toBeFocused();
+  await expect(item).toBeInViewport();
+});
+
 test('ignores saved data it doesn’t understand', async ({ page }) => {
   await page.evaluate(() => {
     localStorage.setItem('shkriuss:shelf', JSON.stringify({ v: 1, data: { items: [{ id: 1 }] } }));

@@ -18,7 +18,7 @@
 import { today as todayOf } from '@shkriuss/dates';
 import { createStore } from '@shkriuss/storage';
 import { createSync, syncedStore } from '@shkriuss/sync';
-import { keepFocus } from '@shkriuss/ui/keep-focus';
+import { focusSpot, keepFocus } from '@shkriuss/ui/keep-focus';
 import { onNewDay } from '@shkriuss/ui/new-day';
 import { PAGE_SIZE, shownCount, waitForTyping } from '@shkriuss/ui/long-lists';
 import { clearProblem, focusProblem, reportSave, showProblem } from '@shkriuss/ui/problem';
@@ -487,15 +487,18 @@ export function mountTasks(root: Document): void {
       true,
     );
     box.addEventListener('click', (event) => {
-      const id = (event.target as Element)
-        .closest('[data-action="edit"]')
-        ?.closest<HTMLElement>('[data-id]')?.dataset['id'];
+      const edit = (event.target as Element).closest('[data-action="edit"]');
+      const id = edit?.closest<HTMLElement>('[data-id]')?.dataset['id'];
       const task = find(id ?? null);
       // The form may load first (the first tap after the page opened): by
       // then the task may have changed, or gone, on another device or tab.
       if (task) {
+        // Focus goes back to the title tapped when the form closes. Safari
+        // doesn't focus a button that's tapped or clicked, so where focus
+        // was sent it to the heading at the top instead (audit 6 G-1).
+        const from = focusSpot(edit);
         taskForm.use((form) => {
-          form.open(find(task.id) ?? task);
+          form.open(find(task.id) ?? task, from);
           form.refresh();
         });
       }
