@@ -219,7 +219,7 @@
         "Which currency to show amounts in, and your monthly reminder settings",
         "When reminders were last checked, so each one shows only once",
         "If you turn on reminders while Budget is closed: this device's notification settings and a random device key (never in backups; after you turn it off, kept only until the server has deleted your reminders)",
-        "If you turn on sync: a copy of your budget on Budget's server, locked on your devices so only they can read it, and this device's sync key (never in backups)",
+        "If you turn on sync: a copy of your expenses, refunds and income, your categories, currency and monthly reminder on Budget's server, locked on your devices so only they can read it, and this device's sync key (never in backups)",
         "Your light or dark theme choice"
       ],
       "pushNotifications": true,
@@ -238,7 +238,7 @@
         "Photos you add to repairs, made smaller on this device (they aren't in backups)",
         "Your vehicles: their names or numbers, and the model, plate and notes you add",
         "Whether to show distances in kilometres or miles, and which currency to show costs in",
-        "If you turn on sync: a copy of your records and photos on Repairs' server, locked on your devices so only they can read it, and this device's sync key (never in backups)",
+        "If you turn on sync: a copy of your records, vehicles, settings and photos on Repairs' server, locked on your devices so only they can read it, and this device's sync key (never in backups)",
         "Your light or dark theme choice"
       ],
       "sync": true

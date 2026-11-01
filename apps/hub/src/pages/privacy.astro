@@ -21,7 +21,7 @@ const whereLabel: Record<StorageKind, string> = {
 // The day this page's text last changed (people rely on it), and a
 // fingerprint of that text: ../privacy.test.ts fails when the text changes
 // but they don't, and says what to set (audit 3 D-7).
-const LAST_UPDATED = '1 November 2026'; // text e01b7fb4a581411f
+const LAST_UPDATED = '1 November 2026'; // text e643ad812d271b30
 // The page shows the day that change was merged, so went live, if that's
 // later than the day it was written (audit 6 D-2).
 const shownDate = lastUpdated(LAST_UPDATED);
@@ -101,11 +101,12 @@ const shownDate = lastUpdated(LAST_UPDATED);
             gave it; your time zone; for each reminder, when it starts, how long before to remind
             you, how it repeats and until when, and its locked message, padded to a multiple of 256
             bytes so that its size says little about how long it is; how many reminders there are;
-            when the app last sent them, and when deliveries started failing (if they do); and how
-            many messages it has sent your device today. Only the message is locked: the server
-            needs the rest to send it on time. It never gets what the reminders are about. When you
-            send a test notification, the server remembers when only in its memory, for a few
-            seconds, so that tests can't come too fast; it stores nothing about it.
+            when the app last sent them, and when deliveries started failing (if they do); for a
+            reminder that couldn't be delivered yet, how many tries it has had and when it's tried
+            again; and how many messages it has sent your device today. Only the message is locked:
+            the server needs the rest to send it on time. It never gets what the reminders are
+            about. When you send a test notification, the server remembers when only in its memory,
+            for a few seconds, so that tests can't come too fast; it stores nothing about it.
           </li>
           <li>
             Each reminder that won't happen again is deleted after it's sent. Turning the option
@@ -135,8 +136,9 @@ const shownDate = lastUpdated(LAST_UPDATED);
           </li>
           <li>
             The push service sees when each reminder is sent, which app sends it, and roughly how
-            long it is, but not what it says. It already knows which phone or browser it delivers
-            to, as it does for any app's notifications.
+            long it is, but not what it says. If your device is off or offline, it keeps the
+            message, still locked, for up to 6 hours to deliver it later. It already knows which
+            phone or browser it delivers to, as it does for any app's notifications.
           </li>
           <li>Nothing is shared between apps, and the server is never told who you are.</li>
         </ul>
@@ -186,10 +188,11 @@ const shownDate = lastUpdated(LAST_UPDATED);
         )}
       </li>
       <li>
-        That's all. There's no list of accounts, and nothing stored that connects an account to you,
-        to your devices, or to your data in any app. Like any web request, each request comes with
-        your device's internet address and the time: Cloudflare's servers handle them to answer it,
-        and nothing here keeps them.
+        That's all, apart from <a href="#bookkeeping">the servers' own bookkeeping</a> (below).
+        There's no list of accounts, and nothing stored that connects an account to you, to your
+        devices, or to your data in any app. Like any web request, each request comes with your
+        device's internet address and the time: Cloudflare's servers handle them to answer it, and
+        nothing here keeps them.
       </li>
     </ul>
 
@@ -208,21 +211,19 @@ const shownDate = lastUpdated(LAST_UPDATED);
           </li>
           <li>
             The app's own server on Cloudflare keeps one locked copy of the app's data, with when it
-            was made (to the second), last changed and last used. It sees how big the copy is and
-            when it changes, but never what's in it. Nothing it stores says which account is yours.
-            Nothing links one app's copy to another's either, except that someone who could read the
-            servers' storage might pair them up by those times (say, if you turned on sync in
-            several apps one after another). Each sync also comes with your internet address and the
-            time, which aren't kept.
+            was made (to the second), when it was last changed and used, and how many times it was
+            changed. It sees how big the copy is and when it changes, but never what's in it.
+            Nothing it stores says which account is yours. Nothing links one app's copy to another's
+            either, except that someone who could read the servers' storage might pair them up by
+            those times (say, if you turned on sync in several apps one after another). Each sync
+            also comes with your internet address and the time, which aren't kept.
           </li>
           <li>
             A copy that no device has synced with for 13 months is deleted, with the photos synced
             with it. Your devices keep their data, and the next sync from one of them puts it online
             again.{' '}
             {librarySites.length > 0 &&
-              'An online library that was unlocked with the storage code isn’t deleted that way, even unused: it stays until you tap “Delete the online copy” (below). One never unlocked holds no photos, and is deleted after 30 days unused. '}
-            So that the storage all the apps share can't fill up, the server also keeps how much
-            room each copy takes.
+              'An online library that was unlocked with the storage code isn’t deleted that way, even unused: it stays until you tap “Delete the online copy” (below). One never unlocked holds no photos, and is deleted after 30 days unused.'}
           </li>
           <li>
             In apps with photos, each photo is locked on your device in the same way and kept with
@@ -247,7 +248,9 @@ const shownDate = lastUpdated(LAST_UPDATED);
             </li>
           )}
           <li>
-            Settings that belong to one device (like notifications and your theme) don't sync.
+            Settings that belong to one device don't sync, like whether to remind you while the app
+            is closed, when reminders were last checked, and your theme. An app's reminder times do
+            sync, with the rest of its data.
           </li>
           <li>
             “Turn off on this device” stops syncing there and keeps your data. “Delete the online
@@ -269,6 +272,15 @@ const shownDate = lastUpdated(LAST_UPDATED);
         </ul>
       </>
     )}
+
+    <h2 id="bookkeeping">The servers' own bookkeeping</h2>
+    <p>
+      The servers above also keep a little for their own work, which says nothing about what you
+      saved or who you are: how much room each thing they keep takes, under a scrambled name, so the
+      storage all the apps share can't fill up; how many changes or uploads came in the last ten
+      minutes, to limit them; and how many times in a row their own scheduled work (like deleting
+      what's expired) has failed, so they try again. It goes when what it's about is deleted.
+    </p>
 
     <h2>What these apps never do</h2>
     <ul>
