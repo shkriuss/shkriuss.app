@@ -2,9 +2,13 @@ import { cp, mkdtemp, readdir, readFile, rm, writeFile, mkdir } from 'node:fs/pr
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { PRIVACY_PAGE } from '../../apps/hub/src/lib/last-updated.ts';
+import { DATE_LINE, fingerprint, shownOf } from '../../apps/hub/src/lib/privacy-fingerprint.ts';
+import { byName, hubSiteInfo, siteInfo, type Registry } from '../../packages/registry/src/index.ts';
 import {
   createApp,
   optionProblems,
+  privacyPageFor,
   SHARED_TEST_FILES,
   SHARED_TEST_TABLES,
   siteTables,
@@ -122,6 +126,9 @@ describe('createApp', () => {
     // The shared browser tests' tables, with one app in each.
     await mkdir(join(root, 'tests/e2e'), { recursive: true });
     for (const file of SHARED_TEST_FILES) await writeFile(join(root, file), sampleTests(file));
+    // The privacy page, whose date and fingerprint a new app changes.
+    await mkdir(join(root, 'apps/hub/src/pages'), { recursive: true });
+    await cp(join(repoRoot, PRIVACY_PAGE), join(root, PRIVACY_PAGE));
   });
 
   afterEach(async () => {
@@ -231,6 +238,33 @@ describe('createApp', () => {
         expect(sites, `${file} ${name}`).toContain('journal');
       }
     }
+  });
+
+  it('sets the privacy page’s date and fingerprint for the new row', async () => {
+    // A new app adds a row to the privacy page, and its test then failed
+    // until both were set: the New app workflow runs that test before it
+    // pushes, so it never got as far as making a branch.
+    const before = await readFile(join(root, PRIVACY_PAGE), 'utf8');
+    await createApp(root, options, new Date(2099, 2, 4, 12));
+    const after = await readFile(join(root, PRIVACY_PAGE), 'utf8');
+    const registry = JSON.parse(
+      await readFile(join(root, 'packages/registry/apps.json'), 'utf8'),
+    ) as Registry;
+    const shown = shownOf([
+      hubSiteInfo(registry.site),
+      ...[...registry.apps].sort(byName).map(siteInfo),
+    ]);
+    expect(DATE_LINE.exec(after)?.slice(1)).toEqual(['4 March 2099', fingerprint(before, shown)]);
+    expect(after.replace(DATE_LINE, '')).toBe(before.replace(DATE_LINE, ''));
+  });
+
+  it('never moves the privacy page’s date back', () => {
+    const source =
+      "---\nconst LAST_UPDATED = '9 May 2099'; // text 0123456789abcdef\n---\n<p>Hi</p>\n";
+    const registry = { ...sampleRegistry, apps: [] } as unknown as Registry;
+    expect(privacyPageFor(source, registry, new Date(2026, 10, 1))).toMatch(
+      /^const LAST_UPDATED = '9 May 2099'; \/\/ text [0-9a-f]{16}$/m,
+    );
   });
 
   it('changes nothing when a table can’t be found', async () => {

@@ -262,29 +262,38 @@ export function getApp(slug: string): AppEntry {
 
 /** Information about the hub (slug "hub") or any app. */
 export function getSite(slug: string): SiteInfo {
-  if (slug === HUB_SLUG) {
-    return {
-      slug: HUB_SLUG,
-      kind: 'hub',
-      name: hub.name,
-      description: hub.description,
-      icon: hub.icon,
-      color: hub.color,
-      origin: hubOrigin,
-      storage: 'device',
-      // Where they are is in the privacy page's other column: with a passkey,
-      // the key is on the account's server too (audit 3 D-8).
-      dataStored: [
-        'If you use a shkriuss account: its key, and which apps you turned on sync for on this device (never in backups)',
-        'Your light or dark theme choice',
-      ],
-      pushNotifications: false,
-      sync: false,
-      library: false,
-      webAssembly: false,
-    };
-  }
-  const app = getApp(slug);
+  return slug === HUB_SLUG ? hubSiteInfo(hub) : siteInfo(getApp(slug));
+}
+
+/**
+ * What getSite() says about the hub, and (below) about an app, from entries
+ * that may not be the ones in apps.json yet (the app generator, which works
+ * out the privacy page's fingerprint with the new app in).
+ */
+export function hubSiteInfo(site: HubEntry): SiteInfo {
+  return {
+    slug: HUB_SLUG,
+    kind: 'hub',
+    name: site.name,
+    description: site.description,
+    icon: site.icon,
+    color: site.color,
+    origin: `https://${site.domain}`,
+    storage: 'device',
+    // Where they are is in the privacy page's other column: with a passkey,
+    // the key is on the account's server too (audit 3 D-8).
+    dataStored: [
+      'If you use a shkriuss account: its key, and which apps you turned on sync for on this device (never in backups)',
+      'Your light or dark theme choice',
+    ],
+    pushNotifications: false,
+    sync: false,
+    library: false,
+    webAssembly: false,
+  };
+}
+
+export function siteInfo(app: AppEntry): SiteInfo {
   return {
     slug: app.slug,
     kind: 'app',

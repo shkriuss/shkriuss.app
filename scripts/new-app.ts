@@ -66,7 +66,8 @@ try {
 
   console.log(`
 Created ${entry.name} in ${relative(repoRoot, appDir)}/ and added it to packages/registry/apps.json,
-and to the shared browser tests' tables (as null: nothing to test yet).
+and to the shared browser tests' tables (as null: nothing to test yet). The privacy page lists it,
+so its "Last updated" date is today's.
 It's listed on the hub once merged. To deploy it without listing it, set "status" to "hidden" in apps.json.
 
 Next:

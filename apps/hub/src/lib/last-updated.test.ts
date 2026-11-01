@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { dayOf, lastUpdated, laterDay, mergedDay } from './last-updated.ts';
+import { dayName, dayOf, lastUpdated, laterDay, mergedDay } from './last-updated.ts';
 
 describe('dayOf', () => {
   it('gives the day where the commit was made', () => {
@@ -13,6 +13,13 @@ describe('dayOf', () => {
     expect(dayOf('2026-11-01T01:05:00+04:00')).toBe('1 November 2026');
     expect(dayOf('not a time')).toBeNull();
     expect(dayOf('2026-13-01T00:00:00Z')).toBeNull();
+  });
+});
+
+describe('dayName', () => {
+  it('writes a day as the page does', () => {
+    expect(dayName(new Date(2026, 10, 1, 9, 30))).toBe('1 November 2026');
+    expect(dayName(new Date(2027, 0, 31))).toBe('31 January 2027');
   });
 });
 

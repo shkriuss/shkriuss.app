@@ -59,6 +59,9 @@ pnpm --filter journal dev
    `large-text.spec.ts`; they're listed below), as `null` with "New:
    nothing for this test yet", so they don't fail for it. Fill them in as
    the app grows (see below). Then it formats the new files.
+4. Sets the privacy page's "Last updated" date to today, with the
+   fingerprint its test checks (`apps/hub/src/privacy.test.ts`): the page
+   lists the new app, so it changed (audit 6 J-1).
 
 That's all: the hub, the privacy page, the browser tests, the build and the
 deploy all read from the registry and the `apps/` folder. The hub lists apps
@@ -206,7 +209,8 @@ shared component it uses, try one:
 `pnpm install`, then `pnpm --filter scratch typecheck` and
 `pnpm --filter scratch build`. Undo it all before committing: the app's
 folder, and its lines in `packages/registry/apps.json`, the shared browser
-tests' tables (search `tests/e2e` for "New: nothing") and `pnpm-lock.yaml`.
+tests' tables (search `tests/e2e` for "New: nothing"), the privacy page's
+date line and `pnpm-lock.yaml`.
 
 `pnpm --filter <slug> dev` shows the page only: it has no `/api`, so "Turn
 on sync", notifications while closed and the online library don't work

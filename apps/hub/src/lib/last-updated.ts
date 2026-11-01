@@ -42,6 +42,10 @@ export function dayOf(time: string): string | null {
   return match && month ? `${Number(match[3])} ${month} ${match[1]}` : null;
 }
 
+/** `now`'s day on this computer, as the page writes days: "1 November 2026". */
+export const dayName = (now: Date): string =>
+  `${now.getDate()} ${MONTHS[now.getMonth()] ?? ''} ${now.getFullYear()}`;
+
 /** "31 October 2026" → 20261031, to compare days. Null if it isn't such a day. */
 function dayNumber(day: string): number | null {
   const match = /^(\d{1,2}) ([A-Z][a-z]+) (\d{4})$/.exec(day);
