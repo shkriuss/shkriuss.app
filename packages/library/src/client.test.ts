@@ -15,6 +15,7 @@ import {
   libraryApi,
   LibraryError,
   libraryRecord,
+  LIMITS,
   linkedLibrary,
   tidyRecords,
   usableRecord,
@@ -23,6 +24,7 @@ import {
   type LibraryRecord,
 } from './client.ts';
 import { memoryLibrary } from './testing.ts';
+import { utcDay } from './validate.ts';
 
 const ORIGIN = 'https://photos.example';
 const CODE = 'correct horse battery staple';
@@ -163,6 +165,33 @@ describe('items', () => {
     expect((await phone.api.changes(0)).changes).toEqual([
       { id: 'photo-0001', seq: 2, deleted: true },
     ]);
+  });
+
+  it('say it’s the day’s uploads only when the library says so, not for Cloudflare’s block of too many requests (audit 6 B-3)', async () => {
+    const phone = await device(randomBytes(32));
+    await phone.api.unlock(CODE);
+    await server.gateStorage.put('gate', {
+      bytes: 0,
+      day: utcDay(Date.now()),
+      uploads: LIMITS.uploadsPerDay,
+    });
+    const today = await failure(phone.api.upload('photo-0001', photo, parts()));
+    expect(today.problem).toBe('daily-limit');
+    expect(today.retryAt).toBeGreaterThan(Date.now());
+
+    // The rate-limiting rule (docs/deployment.md) answers 429 with a page of its own.
+    vi.stubGlobal(
+      'fetch',
+      async () =>
+        new Response('<!DOCTYPE html><title>Access denied</title>', {
+          status: 429,
+          headers: { 'Content-Type': 'text/html' },
+        }),
+    );
+    const blocked = await failure(phone.api.changes(0));
+    expect(blocked.problem).toBe('server');
+    expect(blocked.status).toBe(429);
+    expect((await failure(phone.api.upload('photo-0002', photo, parts()))).problem).toBe('server');
   });
 
   it('can’t be read by another account', async () => {

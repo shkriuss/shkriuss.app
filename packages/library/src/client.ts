@@ -282,7 +282,11 @@ async function failure(response: Response): Promise<LibraryError> {
   }
   if (response.status === 429) {
     if (flag('tooMany')) return error('too-many-tries');
-    return error('daily-limit', typeof body['retryAt'] === 'number' ? body['retryAt'] : null);
+    // The day's uploads always say when they start again. Any other 429 is
+    // Cloudflare's block of too many requests (docs/deployment.md), with a
+    // page of its own: it lifts by itself, so it's tried again later (audit 6 B-3).
+    if (typeof body['retryAt'] === 'number') return error('daily-limit', body['retryAt']);
+    return error('server');
   }
   if (response.status === 503 && flag('notSetUp')) return error('not-set-up');
   if (response.status === 503 && flag('wiping')) return error('wiping');
