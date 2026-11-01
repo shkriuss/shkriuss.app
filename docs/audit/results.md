@@ -1091,8 +1091,8 @@ repair's photos, and four problems in CI's package checks.
 
 - Done on 1 November 2026: the `claude` and `claude-audit` environments
   are deleted ([ADR 0021](../adr/0021-no-claude-workflow.md)).
-- If you saved your recovery key with "Show recovery key" while signed in,
-  check that the file has the key the dialog shows (6A-1, run 21).
+- Done on 1 November 2026: the saved recovery key file matches the key
+  "Show recovery key" shows (6A-1, run 21).
 - Titles of notes already in a browser's history stay there until you clear
   it (6Z-2).
 - The `minimatch` advisory waits for ESLint to allow minimatch 11 (6H-5,
