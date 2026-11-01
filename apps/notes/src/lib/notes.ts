@@ -38,8 +38,16 @@ const LIST_TITLE_LENGTH = 80;
 
 export const emptyState = (): NotesState => ({ notes: [] });
 
+/** The latest time a JavaScript date can hold (ms since 1970: in the year 275760). */
+const LATEST_TIME = 8.64e15;
+
+/**
+ * A time a note can show. A later one (from a damaged or edited backup)
+ * passed, and the note could never be opened: showing when it was edited
+ * failed (audit 6 C-3).
+ */
 const isTime = (value: unknown): value is number =>
-  typeof value === 'number' && Number.isFinite(value) && value >= 0;
+  typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= LATEST_TIME;
 
 function isNote(value: unknown): value is Note {
   if (typeof value !== 'object' || value === null) return false;

@@ -384,8 +384,17 @@ describe('isNotesState', () => {
       { notes: [{ id: 'a', text: 'Version 1', created: 1, updated: 1, pinned: false }] },
       { notes: [{ ...note('a', 'Hi'), updated: Number.NaN }] },
       { notes: [{ ...note('a', 'Hi'), pinned: 'yes' }] },
+      // Later than a date can hold: such a note could never be opened (audit 6 C-3).
+      { notes: [{ ...note('a', 'Hi'), updated: 1e16 }] },
+      { notes: [{ ...note('a', 'Hi'), created: 8.64e15 + 1 }] },
     ]) {
       expect(isNotesState(value), JSON.stringify(value)).toBe(false);
     }
+  });
+
+  it('accepts any time a date can hold, and shows it', () => {
+    const latest = note('a', 'Hi', '', 8.64e15);
+    expect(isNotesState({ notes: [latest] })).toBe(true);
+    expect(editedLabel(latest.updated, Date.now(), 'en-GB')).toMatch(/^13 \S+ 275760$/);
   });
 });
