@@ -314,7 +314,17 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
     });
   }
 
+  /** Forgets the new key shown to save, which the person didn't confirm. */
+  function dropPending(): void {
+    pending = null;
+    newKey.textContent = '';
+    newStatus.textContent = '';
+  }
+
   function show(view: View, focus = true): void {
+    // A new key goes with its view, however that's left: kept, it was what
+    // "Show recovery key" downloaded and copied later (audit 6 A-1).
+    if (view !== 'new') dropPending();
     for (const element of views) element.hidden = element.dataset['view'] !== view;
     if (view === 'signed-in' && account) {
       accountCode.textContent = account.code;
@@ -379,6 +389,13 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
     savedCheck.checked = false;
     finishCreate.disabled = true;
     show('new');
+  }
+
+  /** Downloads a recovery key file. */
+  function downloadKey(key: string, code: string, status: HTMLElement): void {
+    downloadFile('shkriuss-recovery-key.txt', recoveryFile(key, code), 'text/plain');
+    // The page can't tell when the browser has saved it (audit 5 Z-2).
+    status.textContent = 'Download started. Keep the file somewhere safe.';
   }
 
   async function copy(text: string, status: HTMLElement): Promise<void> {
@@ -553,8 +570,7 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
       if (!pending) return;
       const { secret, replacing } = pending;
       if (!replacing) {
-        pending = null;
-        newKey.textContent = '';
+        dropPending();
         await signIn(secret, 'Your account is ready, and this device is signed in.', null);
         return;
       }
@@ -568,8 +584,7 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
         newStatus.textContent = problemOf(error);
         return;
       }
-      pending = null;
-      newKey.textContent = '';
+      dropPending();
       account = await currentAccount();
       void dropLink();
       linkStatus.textContent = '';
@@ -582,22 +597,19 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
       show('replace');
     },
     'start-replace': () => showNewKey(true),
-    'download-key': async () => {
-      const source =
-        pending ?? (account && { key: await recoveryKeyOf(account.secret), code: account.code });
-      if (!source) return;
-      downloadFile(
-        'shkriuss-recovery-key.txt',
-        recoveryFile(source.key, source.code),
-        'text/plain',
-      );
-      // The page can't tell when the browser has saved it (audit 5 Z-2).
-      (pending ? newStatus : dialogStatus).textContent =
-        'Download started. Keep the file somewhere safe.';
+    // "Save your recovery key": the new key.
+    'download-key': () => {
+      if (pending) downloadKey(pending.key, pending.code, newStatus);
     },
     'copy-key': async () => {
       if (pending) await copy(pending.key, newStatus);
-      else if (account) await copy(await recoveryKeyOf(account.secret), dialogStatus);
+    },
+    // "Your recovery key": this account's, whatever else the page holds (audit 6 A-1).
+    'download-account-key': async () => {
+      if (account) downloadKey(await recoveryKeyOf(account.secret), account.code, dialogStatus);
+    },
+    'copy-account-key': async () => {
+      if (account) await copy(await recoveryKeyOf(account.secret), dialogStatus);
     },
     'show-recovery-form': () => {
       say(null);
@@ -608,9 +620,7 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
       recoveryInput.focus();
     },
     back: () => {
-      pending = null;
       linked = null;
-      newKey.textContent = '';
       home();
     },
     'passkey-sign-in': (button) =>
@@ -793,10 +803,7 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
       if (changed) {
         void dropLink();
         linkStatus.textContent = '';
-        if (pending?.replacing) {
-          pending = null;
-          newKey.textContent = '';
-        }
+        if (pending?.replacing) dropPending();
         if (keyDialog.open) keyDialog.close();
         if (signOutDialog.open) signOutDialog.close();
         say(

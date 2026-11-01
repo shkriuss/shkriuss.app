@@ -2,7 +2,7 @@
 // one, the recovery key, adding a device with a one-time code, passkeys, and
 // what the account service accepts.
 import { randomBytes } from 'node:crypto';
-import type { Browser, BrowserContext, CDPSession, Page } from '@playwright/test';
+import type { Browser, BrowserContext, CDPSession, Download, Page } from '@playwright/test';
 import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
 import { sites } from '../../../tests/e2e/sites.ts';
 import { apps, hub } from '../../../packages/registry/src/index.ts';
@@ -44,6 +44,13 @@ async function otherDevice(browser: Browser, baseURL: string | undefined): Promi
   });
 }
 
+/** What a downloaded file holds, as text. */
+async function downloadedText(file: Download): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of await file.createReadStream()) chunks.push(chunk as Buffer);
+  return Buffer.concat(chunks).toString('utf8');
+}
+
 test('creates an account once the recovery key is saved', async ({ page }) => {
   await page.goto('/account/');
   await expect(view(page, 'signed-out')).toBeVisible();
@@ -60,9 +67,7 @@ test('creates an account once the recovery key is saved', async ({ page }) => {
   await page.getByRole('button', { name: 'Download recovery key' }).click();
   const file = await download;
   expect(file.suggestedFilename()).toBe('shkriuss-recovery-key.txt');
-  const chunks: Buffer[] = [];
-  for await (const chunk of await file.createReadStream()) chunks.push(chunk as Buffer);
-  const text = Buffer.concat(chunks).toString('utf8');
+  const text = await downloadedText(file);
   expect(text).toContain(key);
 
   // Nothing is saved until the person confirms.
@@ -232,6 +237,55 @@ test('“Add this device” works only a moment after its question is on screen'
   await expect(add).toBeFocused();
   await second.clock.runFor(500);
   await expect(add).not.toHaveAttribute('aria-disabled');
+  await other.close();
+});
+
+test('“Show recovery key” saves and copies this account’s key, even after a new key was left unsaved', async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  // A new key shown by "Create an account" stayed in the page after a link
+  // opened in the same tab, and the dialog's Download and Copy used it: a
+  // key to no account (audit 6 A-1).
+  const { key, code } = await createAccount(page);
+  await page.getByRole('button', { name: 'Show a code' }).click();
+  await expect(page.locator('[data-link-url]')).toHaveText(/#link=/);
+  const url = (await page.locator('[data-link-url]').textContent()) ?? '';
+
+  const other = await otherDevice(browser, baseURL);
+  await other.grantPermissions(['clipboard-read', 'clipboard-write']);
+  const second = await other.newPage();
+  await second.goto('/account/');
+  await second.getByRole('button', { name: 'Create an account' }).click();
+  const unsaved = (await second.locator('[data-new-key]').textContent()) ?? '';
+  expect(unsaved).toMatch(RECOVERY_KEY);
+  // The link pasted into this tab's address bar: only the part after "#"
+  // changes, so the page stays as it is.
+  await second.evaluate((link) => {
+    location.hash = new URL(link).hash;
+  }, url);
+  await expect(view(second, 'link-confirm')).toBeVisible();
+  await expect(second.locator('[data-new-key]')).toHaveText('');
+  const add = second.getByRole('button', { name: 'Add this device' });
+  await expect(add).not.toHaveAttribute('aria-disabled');
+  await add.click();
+  await expect(accountCode(second)).toHaveText(code);
+
+  await second.getByRole('button', { name: 'Show recovery key' }).click();
+  const dialog = second.getByRole('dialog', { name: 'Your recovery key' });
+  const status = dialog.locator('[data-dialog-status]');
+  await expect(dialog.locator('[data-dialog-key]')).toHaveText(key);
+  const download = second.waitForEvent('download');
+  await dialog.getByRole('button', { name: 'Download' }).click();
+  const text = await downloadedText(await download);
+  expect(text).toContain(key);
+  expect(text).toContain(`Account code: ${code}`);
+  expect(text).not.toContain(unsaved);
+  await expect(status).toHaveText('Download started. Keep the file somewhere safe.');
+  await dialog.getByRole('button', { name: 'Copy' }).click();
+  await expect(status).toHaveText('Copied.');
+  expect(await second.evaluate(() => navigator.clipboard.readText())).toBe(key);
   await other.close();
 });
 
