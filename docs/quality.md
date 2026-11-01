@@ -109,7 +109,9 @@ that pull request still has the old version, so its own audit fails too
    package age check reads the exception from `main`, so it passes. With
    the fix in, the audit passes without the ignore entry, so remove it here.
 3. **Once the fixed version is 7 days old,** remove the
-   `minimumReleaseAgeExclude` entry.
+   `minimumReleaseAgeExclude` entry. Until then Dependabot's updates may
+   fail: it applies its 7-day wait to the whole lockfile
+   ([ADR 0005](adr/0005-pnpm-typescript-versions.md)).
 
 If there's no fix yet, step 1 alone lets work go on; the ignore entry stays
 until there is one. Check first what the advisory can reach: one in a tool
