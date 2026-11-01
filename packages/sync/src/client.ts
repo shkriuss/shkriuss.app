@@ -13,7 +13,8 @@
  * merge (./merge.ts: newest edit of each item wins, deletions sync), save the
  * result here, and upload it if it differs. The copy is sealed on the device
  * (./snapshot.ts). Conflicting uploads from two devices are caught by the
- * server (version numbers) and simply merged again.
+ * server (version numbers) and simply merged again. Stores in the copy that
+ * this version of the app doesn't sync (a newer version's) stay as they are.
  *
  * This device's sync key and what it knew at the last sync are kept under
  * "shkriuss-device:", which backups skip. What it knew stays when sync is
@@ -65,6 +66,7 @@ import {
   merge,
   observe,
   prune,
+  pruneUnsent,
   upgradeKnown,
   valuesOf,
   type Identified,
@@ -73,6 +75,7 @@ import {
 } from './merge.ts';
 import {
   api,
+  connectProblem,
   failed,
   GoneError,
   goneError,
@@ -97,6 +100,7 @@ import { FILE_ID, MAX_SEALED_CHARS } from './validate.ts';
 export { isSyncOn, saveConnection, stopSync } from './device.ts';
 export type { SyncedFiles } from './files.ts';
 export { fingerprint, secondVersionName } from './merge.ts';
+export { connectProblem } from './requests.ts';
 export type { SyncProblem } from './requests.ts';
 
 const PENDING_KEY = 'shkriuss-device:connect';
@@ -208,7 +212,10 @@ export interface SyncClient {
   /** Call after every save. */
   changed(): void;
   syncNow(): Promise<void>;
-  /** Goes to the hub to connect this app (the page navigates away). */
+  /**
+   * Goes to the hub to connect this app (the page navigates away). If it
+   * can't, it rejects: connectProblem() says what to tell the person.
+   */
   connect(): Promise<void>;
   /**
    * Stops syncing on this device; the online copy stays for other devices.
@@ -383,16 +390,18 @@ export function createSync(options: {
    * every device where it was on then, whether it had synced yet or not; one
    * where sync was turned on after the deletion starts a new copy, or joins
    * one another device started, so turning sync on again works (audit 4
-   * E-1). Both times are the sync server's.
+   * E-1). Both times are the sync server's. `whole`: the copy even if it's
+   * the one this device saw last.
    */
   async function fetchCopy(
     state: DeviceState,
     token: string,
     key: Uint8Array<ArrayBuffer>,
+    whole: boolean,
   ): Promise<Remote> {
     let remote: Remote;
     try {
-      remote = await fetchRemote(state.remote?.version ?? null, token, key);
+      remote = await fetchRemote(whole ? null : (state.remote?.version ?? null), token, key);
     } catch (error) {
       if (
         error instanceof GoneError &&
@@ -438,7 +447,12 @@ export function createSync(options: {
     return Object.values(remote.stores).flatMap((snapshot) => valuesOf(snapshot));
   }
 
-  /** The other device's items for one store, in this app's current data version. */
+  /**
+   * The other device's items for one store, in this app's current data
+   * version: each item takes its migrated value, by id. So a migration must
+   * keep every item and its id (docs/adding-an-app.md): one it drops, or
+   * gives a new id, stays as the old version saved it.
+   */
   function upgrade(synced: SyncedStore, remote: StoreSnapshot): StoreSnapshot {
     if (remote.v > synced.store.version) throw new SyncError('update-needed');
     if (remote.v === synced.store.version) return remote;
@@ -456,12 +470,26 @@ export function createSync(options: {
   /** This app's data versions: an old copy that needs newer ones is tried again once they change. */
   const versions = [SYNC_VERSION, ...stores.map((synced) => synced.store.version)].join(' ');
 
+  /** The keys of the stores this version of the app syncs. */
+  const ownKeys = new Set(stores.map((each) => each.store.key));
+  /**
+   * The stores of a copy that this version of the app doesn't sync: ones a
+   * newer version added (or an older one synced). This version keeps them in
+   * the copy as they are. Left out, what a newer device added to them was
+   * taken there for deleted long ago, and deleted everywhere (audit 6 S4).
+   */
+  const othersOf = (copy: Stores): Stores =>
+    Object.fromEntries(Object.entries(copy).filter(([storeKey]) => !ownKeys.has(storeKey)));
+
   /**
    * An old copy's stores in this app's data versions, ready to merge, or
    * "wait" if one needs a newer version of the app or fails the store's own
-   * checks (then it can't be merged, but nothing in it is lost).
+   * checks (then it can't be merged, but nothing in it is lost). One with a
+   * store this version doesn't sync waits too: that store can't be brought
+   * along by this version.
    */
   function readOld(old: Stores): Stores | 'wait' {
+    if (Object.keys(othersOf(old)).length > 0) return 'wait';
     const ready: Stores = {};
     try {
       for (const synced of stores) {
@@ -572,9 +600,10 @@ export function createSync(options: {
     const { token, key } = await syncKeys(fromBase64Url(secret));
     const now = Date.now();
 
-    // 1. This device.
+    // 1. This device. What was edited here counts as noted only once what this
+    // device knew is saved with it (step 5 or 6): if the app is put away
+    // before that, the edit is noted then (audit 6 S22).
     const { before, local, changed: localChanged } = observeAll(state, now);
-    edited = false;
     knownSaved = false;
     const upgraded = state.known !== stored.known;
     try {
@@ -613,7 +642,13 @@ export function createSync(options: {
     // go online now, before the data that uses them, so other devices find
     // them as soon as it arrives; only now, so a device that may not sync the
     // copy (still on a deleted one) never puts its files there (audit 4 E-1).
-    const remote = await fetchCopy(state, token, key);
+    // The copy last seen had stores this version doesn't sync: an upload must
+    // keep them, so a round that may upload (an edit here, or an old copy to
+    // bring along) needs the whole copy, also if it hasn't changed (audit 6
+    // S4).
+    const toMove = state.previous.some((old) => state.waiting[old] !== versions);
+    const whole = state.remote?.others === true && (localChanged || state.dirty || toMove);
+    const remote = await fetchCopy(state, token, key, whole);
     if (files) await fileSync.uploadFiles(files);
     const {
       copies: moving,
@@ -655,9 +690,18 @@ export function createSync(options: {
         : remote.kind === 'same'
           ? (state.remote?.written ?? 0)
           : 0;
+    // Stores this version doesn't sync go up as they are (othersOf), and the
+    // next round knows the copy has some. An older copy's are older too:
+    // kept, they'd take back what was added to them since, so a device that
+    // syncs them merges that copy instead.
+    const others = remote.kind === 'copy' ? othersOf(remote.stores) : {};
+    const carried = Object.keys(others).length > 0 ? { others: true as const } : {};
+    if (older && carried.others) throw new SyncError('update-needed');
 
     // 3. Merge.
     const merged: Stores = {};
+    /** The merge before old deletion markers are dropped from it (see step 5). */
+    const unpruned: Stores = {};
     /** What the online copy holds now, as this device has seen it. */
     const seen: Record<string, Known> = {};
     let kept = 0;
@@ -694,6 +738,7 @@ export function createSync(options: {
         const theirs = old.stores[synced.store.key];
         if (theirs) result = merge(result, theirs);
       }
+      unpruned[synced.store.key] = result;
       merged[synced.store.key] = prune(result, now);
     }
 
@@ -756,10 +801,10 @@ export function createSync(options: {
       return new SyncError(stateProblem());
     };
 
-    // 5. Upload, if the copy online isn't already this.
-    let online =
+    // 5. Upload, if the copy online isn't already this (with `others`).
+    let online: DeviceState['remote'] =
       remote.kind === 'copy'
-        ? { version: remote.version, epoch: remote.epoch, written }
+        ? { version: remote.version, epoch: remote.epoch, written, ...carried }
         : state.remote && { ...state.remote, written };
     const same =
       remote.kind === 'same'
@@ -770,6 +815,8 @@ export function createSync(options: {
               canonical(merged[synced.store.key]) === canonical(remote.stores[synced.store.key]),
           );
     const knowns = knownsOf(merged);
+    /** What this device knew was saved as just before the upload (none without one). */
+    let pending: Record<string, Known> | null = null;
     if (!same) {
       // Remember the merge first: if the upload fails, the next round uploads it
       // as it is, instead of mistaking it for new edits made on this device.
@@ -780,14 +827,26 @@ export function createSync(options: {
           : remote.kind === 'none'
             ? null
             : state.base;
-      if (!updateState(secret, { known: knowns, dirty: true, base: seenOnline })) {
+      // The upload takes deletions older than the markers to the copy by
+      // leaving the items out. Until it has, the markers of those made here
+      // stay in what this device knew: if the upload fails, or another
+      // device wrote first, the next round still knows they were deleted
+      // here (audit 6 S5).
+      const unsent: Record<string, Known> = {};
+      for (const [storeKey, snapshot] of Object.entries(unpruned)) {
+        unsent[storeKey] = knownFrom(pruneUnsent(snapshot, seenOnline?.stores[storeKey], now));
+      }
+      if (!updateState(secret, { known: unsent, dirty: true, base: seenOnline })) {
         throw stateNotSaved();
       }
-      // What this device knew says the merge now: nothing to undo, and
-      // nothing to note if the upload fails (round()).
+      pending = unsent;
+      // What this device knew says the merge now, with every edit made here
+      // until step 4 checked: nothing to undo, and nothing to note if the
+      // upload fails (round()).
       changed.length = 0;
       knownSaved = true;
-      const data = await sealStores(key, options.app, merged, written + 1);
+      edited = false;
+      const data = await sealStores(key, options.app, { ...others, ...merged }, written + 1);
       if (data.length > MAX_SEALED_CHARS) throw new SyncError('too-big');
       const base = remote.kind === 'none' ? null : (online?.version ?? null);
       const response = await api(
@@ -801,14 +860,28 @@ export function createSync(options: {
       if (response.status === 413) throw new SyncError('too-big');
       if (!response.ok) throw failed(response);
       const saved = (await response.json()) as { version: number; epoch: string };
-      online = { ...saved, written: written + 1 };
+      online = { ...saved, written: written + 1, ...carried };
     }
 
-    // 6. Remember. The copy online is now the merge.
+    // 6. Remember. The copy online is now the merge. An edit made while the
+    // upload was on its way, and noted as the app was put away (here or in
+    // another tab: rememberEdits), keeps that note and its time: the next
+    // round uploads it, maybe only when the app is opened again, days later.
+    // Before, this step saved over the note, and that round dated the edit
+    // (audit 6 S22).
+    const noted = pending !== null && canonical(loadState()?.known) !== canonical(pending);
     const base = online ? { epoch: online.epoch, stores: knowns } : null;
-    const saved = { remote: online, known: knowns, dirty: false, base, last: now, ...answered() };
+    const saved = {
+      remote: online,
+      ...(noted ? {} : { known: knowns, dirty: false }),
+      base,
+      last: now,
+      ...answered(),
+    };
     if (!updateState(secret, saved)) throw stateNotSaved();
     knownSaved = true;
+    // Without an upload, nothing could be edited here since step 4 checked.
+    if (pending === null) edited = false;
 
     // 7. The old copies are in the new one now (and their files, re-sealed with
     // the new key, and the app's linked data): delete them, so devices still
@@ -941,7 +1014,11 @@ export function createSync(options: {
    * The code for connecting to the account, loaded only when it's needed
    * (below, and in connect()): nearly every page never needs it (audit 5 J-2).
    */
-  const connectCode = () => import('./connect.ts');
+  const connectCode = () =>
+    import('./connect.ts').catch(() => {
+      // Mostly a page from before an update, whose files are gone (audit 6 S40).
+      throw new SyncError('outdated');
+    });
 
   /** Coming back from the hub with "#connect=…". */
   async function finishConnect(): Promise<void> {
@@ -1124,11 +1201,14 @@ export function createSync(options: {
     const known = { ...state.known };
     let changed = false;
     for (const synced of stores) {
-      const before = known[synced.store.key];
+      const { key } = synced.store;
+      const before = known[key];
       if (!before || unsyncable(synced, before)) continue;
       const seen = observe(before, synced.items(synced.store.load()), synced.store.version, now);
       if (!seen.changed) continue;
-      known[synced.store.key] = knownFrom(prune(seen.snapshot, now));
+      // Not online yet: a deletion made here keeps its marker until a sync
+      // takes it there, even after 180 days (audit 6 S5).
+      known[key] = knownFrom(pruneUnsent(seen.snapshot, state.base?.stores[key], now));
       changed = true;
     }
     return changed ? known : null;
@@ -1145,8 +1225,9 @@ export function createSync(options: {
 
   /**
    * Sync is on, but no round has noted an edit made here yet (none reached
-   * the copy, or the page is being put away before the next one): it's noted
-   * now, with its time, as `dirty` for the next round to upload. An edit
+   * the copy, or the page is being put away before the next one, or while
+   * one waits for the server): it's noted now, with its time, as `dirty`
+   * for the next round to upload. An edit
    * made on day 1 was otherwise dated by the first round that reached the
    * copy, day 21 say, and won over a newer edit made elsewhere on day 10
    * (audit 5 E-1). Stopped meanwhile, or data this version can't read: the
@@ -1175,7 +1256,8 @@ export function createSync(options: {
 
   // Keep up with other devices while the app is open. Put away (the phone
   // locked, another app): an edit no round has noted yet is noted now, with
-  // its time, as the page may not run again before it's closed (audit 5 E-1).
+  // its time, as the page may not run again before it's closed (audit 5 E-1),
+  // also while a sync waits for the server (audit 6 S22).
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') schedule(0);
     else if (edited) rememberEdits();
@@ -1196,8 +1278,8 @@ export function createSync(options: {
     // From the hub's list of apps: "Turn on sync" straight away.
     history.replaceState(null, '', `${location.pathname}${location.search}`);
     window.setTimeout(() => {
-      client.connect().catch(() => {
-        problem = 'connect-failed';
+      client.connect().catch((error: unknown) => {
+        problem = connectProblem(error);
         emit();
       });
     }, 0);

@@ -125,6 +125,42 @@ test('“Turn on sync” gives up on a network that hangs, and says so', async (
   await expect(status(page)).toHaveText(failed);
 });
 
+// Trying again only helps when the connection was the problem (audit 6 S40).
+test('“Turn on sync” says to reload when the page’s code is gone after an update', async ({
+  page,
+  guard,
+}) => {
+  // The page stayed open through updates: its code for turning sync on is
+  // gone from the server.
+  guard.allowConsole('404 (Not Found)');
+  await page.route('**/_astro/connect.*.js', (route) => route.fulfill({ status: 404, body: '' }));
+  await page.goto('/');
+  const turnOn = page.getByRole('button', { name: 'Turn on sync' });
+  await turnOn.click();
+  const outdated =
+    'Part of Tally couldn’t load. Reload the page to get the latest version, then try again.';
+  await expect(status(page)).toHaveText(outdated);
+  await expect(announcer(page)).toHaveText(outdated);
+  await expect(turnOn).toBeEnabled();
+});
+
+test('“Turn on sync” says so when this browser won’t keep what it needs', async ({ page }) => {
+  await page.goto('/');
+  await page.evaluate(() => {
+    const setItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (this: Storage, key: string, value: string) {
+      if (this === window.sessionStorage) {
+        throw new DOMException('The operation is insecure.', 'SecurityError');
+      }
+      setItem.call(this, key, value);
+    };
+  });
+  await page.getByRole('button', { name: 'Turn on sync' }).click();
+  const refused = 'This browser won’t save. Is it in private mode, or is storage blocked?';
+  await expect(status(page)).toHaveText(refused);
+  await expect(announcer(page)).toHaveText(refused);
+});
+
 test('the sync status is shown, but only news is read out', async ({ page, guard }) => {
   // The test cuts the connection below.
   guard.allowConsole('net::ERR_FAILED');

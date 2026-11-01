@@ -22,14 +22,19 @@ for good (A-1); the "turn off" links are for the day (A-5) and say nothing
 when sync is already off (C-4); all device links share one object (B-2);
 an app loads the code that connects it to the account only when that's
 needed, so every page stays within its JavaScript budget (J-2). Changed by
-audit 6: a key replacement whose answer was lost is finished the next time
-the Account page opens, instead of signing that device out (A-1); "Turn on
-sync for …" waits half a second before it works, like "Add this device"
-(A-2); a device code's 10 minutes are counted by the clock of the device
-showing it, and it's cancelled when it's hidden as expired (A-1); the hub
-asks the browser to keep the account, as the apps keep their data (E-6); a
-device link costs 4 row writes, not 2 or 3, as deleting it counts too (see
-"Free quota").
+audit 6: a key replacement whose answer was lost is finished the next time the
+Account page opens, instead of signing that device out (A-1); "Turn on sync
+for …" waits half a second before it works, like "Add this device" (A-2); a
+device code's 10 minutes are counted by the clock of the device showing it,
+and it's cancelled when it's hidden as expired (A-1); the hub asks the browser
+to keep the account, as the apps keep their data (E-6); a device link costs 4
+row writes, not 2 or 3, as deleting it counts too (see "Free quota"); a
+deletion made with sync off or no connection is kept until it's online, even
+after 180 days (S5); an edit keeps its time also when the app is put away
+while a sync waits for the server (S22); an older version of an app keeps the
+stores a newer one added in the copy (S4); when that code can't be loaded (a
+page left open from before an update), "Turn on sync" says to reload the page
+rather than check the connection (S40).
 
 ## Context
 
@@ -325,14 +330,20 @@ in with `sync: true` in `apps.json`.
     always gets a time after the version it was made from, so a device
     whose clock is behind doesn't lose its own edits. The time is that of
     the sync a moment after the change, or, when that sync can't reach the
-    copy (no connection) or the app is put away first, the time it noted
-    the change then: before, a change made on day 1 with no connection
-    got the time of the first sync that reached the copy, day 21 say, and
-    beat a newer change made elsewhere on day 10 (audit 5 E-1).
+    copy (no connection) or the app is put away before it's done, the time
+    it noted the change then: before, a change made on day 1 with no
+    connection got the time of the first sync that reached the copy, day 21
+    say, and beat a newer change made elsewhere on day 10 (audit 5 E-1).
+    That includes a change made while a sync waits for the server, and one
+    noted while an upload is on its way, which that upload's last step
+    used to save over (audit 6 S22).
   - Deleting leaves a marker with the time, so deletions sync. Markers are
     dropped after 180 days. A device away longer still deletes an item it
     saw in the copy that the same copy no longer has, unless it changed the
-    item since.
+    item since. A marker made on a device with sync off, or with no
+    connection, stays until a sync has taken the deletion online, however
+    long that takes: before, the first edit there after 180 days dropped it,
+    and the item came back on every device (audit 6 S5).
   - The list's order is merged the same way: the newest move wins. Adding or
     deleting an item isn't a move, so it doesn't undo a move made on another
     device (audit finding E-12). Items only the other device has go where it
@@ -365,7 +376,15 @@ in with `sync: true` in `apps.json`.
     version added without a new data version (a currency an older version
     doesn't offer, say): an app drops or changes items it can't read, and
     those would spread as deletions, so the device waits instead of saving
-    them (audit finding F2-8). Older data is upgraded with the store's own
+    them (audit finding F2-8). A whole store that a newer version syncs and
+    this one doesn't (one an app adds to `createSync` later) is kept in the
+    copy as it is, and so are the photos online: before, an older version
+    left the store out of its upload, and a newer device then took what it
+    had seen there for deleted long ago, and deleted it everywhere (audit 6
+    S4). An old key's copy with such a store waits for a device that syncs
+    it to bring it along, and so does a copy older than one the device saw
+    (see "What a server could do" below), whose store would be older too.
+    Older data is upgraded with the store's own
     migration and checked with its own validation before it's saved. After
     such an update, only what was really changed on a device counts as
     edited: it compares with its data as still saved in the old version.

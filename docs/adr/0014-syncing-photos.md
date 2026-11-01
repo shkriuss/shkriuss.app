@@ -3,7 +3,9 @@
 Status: Accepted (2026-10-21). Extends [ADR 0010](0010-account-and-sync.md)
 (sync) and [ADR 0013](0013-photos-on-the-device.md) (photos on the device).
 Repairs' copies and photos together have a limit (1 GB):
-[ADR 0017](0017-storage-limits.md).
+[ADR 0017](0017-storage-limits.md). Changed by audit 6 (S4): the daily
+check of a device on an older version of the app deletes no photos while
+the copy has data only a newer version syncs.
 
 ## Context
 
@@ -47,7 +49,9 @@ repairs may have a thousand of them.
 - **A daily check:** once a day (and when sync is turned on) a device
   compares the online list with what its data uses: photos missing online go
   up (like ones taken before sync was on), and online photos nothing uses,
-  more than a day old, are deleted.
+  more than a day old, are deleted. A device on an older version of the app
+  deletes none while the copy has data only a newer version syncs, as it
+  can't see which photos that data uses (audit 6 S4).
 - **Replacing the account key:** the photos move with the copy, sealed again
   with the new key, before the old copy is deleted.
 - **Limits:** a photo is saved small enough to sync (at most 1.4 MB; a very

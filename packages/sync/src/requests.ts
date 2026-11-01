@@ -25,7 +25,12 @@ export type SyncProblem =
   /** There's no room online for more files: new ones stay on this device. */
   | 'files-full'
   /** Coming back from the hub didn't work (took too long, or another tab). */
-  | 'connect-failed';
+  | 'connect-failed'
+  /**
+   * Part of this page couldn't be loaded: mostly a page from before an
+   * update, whose files are gone. Reloading helps, trying again doesn't.
+   */
+  | 'outdated';
 
 export class SyncError extends Error {
   readonly problem: SyncProblem;
@@ -66,6 +71,24 @@ export async function api(path: string, init: RequestInit = {}, token?: string):
 /** Why a round failed. An answer that stopped coming in time is no connection. */
 export const problemOf = (error: unknown): SyncProblem =>
   error instanceof SyncError ? error.problem : isTimeout(error) ? 'offline' : 'server';
+
+/**
+ * Why "Turn on sync" (SyncClient.connect) didn't get as far as the hub, in
+ * what to tell the person: this browser won't keep the request ('storage',
+ * 'full'), or the page is out of date ('outdated'), where trying again
+ * doesn't help; otherwise 'connect-failed' (no connection, or the server
+ * refused), where it may. Before, every one said to check the connection
+ * (audit 6 S40).
+ */
+export function connectProblem(
+  error: unknown,
+): Extract<SyncProblem, 'storage' | 'full' | 'outdated' | 'connect-failed'> {
+  if (!(error instanceof SyncError)) return 'connect-failed';
+  const { problem } = error;
+  return problem === 'storage' || problem === 'full' || problem === 'outdated'
+    ? problem
+    : 'connect-failed';
+}
 
 /**
  * The copy was deleted, or moved to a new account key. A deleted one says

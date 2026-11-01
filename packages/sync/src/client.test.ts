@@ -8,6 +8,7 @@ import { createStore, deleteAll, type StorageLike, type Store } from '@shkriuss/
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   CHANGE_DELAY_MS,
+  connectProblem,
   createSync,
   POLL_MS,
   saveConnection,
@@ -20,8 +21,8 @@ import {
   type SyncStatus,
 } from './client.ts';
 import { parseConnectRequest, sealForApp, turnOffProof } from './connect.ts';
-import { observe } from './merge.ts';
-import { sealStores, syncKeys } from './snapshot.ts';
+import { observe, valuesOf, type Identified } from './merge.ts';
+import { openStores, sealStores, syncKeys } from './snapshot.ts';
 import { memorySync, withFiles } from './testing.ts';
 import type { FileList } from './validate.ts';
 import worker, { STORAGE_LIMITS, type SyncEnv } from './worker.ts';
@@ -1294,6 +1295,241 @@ describe('items this version of the app can’t keep (audit F2-8)', () => {
   });
 });
 
+describe('a store a newer version of the app syncs (audit 6 S4)', () => {
+  // Before, a device on an older version uploaded the copy without the
+  // stores it didn't know. A newer device that had seen an item there then
+  // took it for deleted long ago, and deleted it everywhere.
+  const isCounters = (value: unknown): value is Counters =>
+    typeof value === 'object' &&
+    value !== null &&
+    Array.isArray((value as Counters).counters) &&
+    (value as Counters).counters.every((item) => typeof item?.count === 'number');
+
+  /**
+   * A device whose version of the app syncs the stores `keys` ("first", and
+   * "extra" in the newer version), with photos on (files) or not. `storage`:
+   * this browser's, after the app was updated.
+   */
+  function appDevice(
+    secret: Uint8Array<ArrayBuffer> | null,
+    keys: readonly string[],
+    { files = false, storage = new MemoryStorage() } = {},
+  ) {
+    const use = () => vi.stubGlobal('localStorage', storage);
+    use();
+    if (secret) {
+      storage.setItem(
+        'shkriuss-device:sync',
+        JSON.stringify({ secret: toBase64Url(secret), code: 'K7Q2-M9XD' }),
+      );
+    }
+    const made = new Map(
+      keys.map((key) => [
+        key,
+        createStore<Counters>({
+          key,
+          version: 1,
+          fallback: () => ({ counters: [] }),
+          validate: isCounters,
+        }),
+      ]),
+    );
+    const photos = new Map<string, Uint8Array<ArrayBuffer>>();
+    const sync = createSync({
+      app: 'tally',
+      stores: [...made.values()].map((store) =>
+        syncedStore({
+          store,
+          items: (value: Counters) => value.counters,
+          withItems: (value: Counters, counters: Counter[]) => ({ ...value, counters }),
+        }),
+      ),
+      onChange: () => undefined,
+      ...(files
+        ? {
+            files: {
+              wanted: () =>
+                new Set(
+                  [...made.values()].flatMap((store) =>
+                    store.load().counters.flatMap((item) => item.photos ?? []),
+                  ),
+                ),
+              read: async (id: string) => photos.get(id) ?? null,
+            },
+          }
+        : {}),
+    });
+    const store = (key: string) => {
+      use();
+      const found = made.get(key);
+      if (!found) throw new Error(`No store ${key}`);
+      return found;
+    };
+    return {
+      storage,
+      sync,
+      add(key: string, id: string, photo?: string) {
+        const item: Counter = photo ? { ...counter(id), photos: [photo] } : counter(id);
+        if (photo) {
+          photos.set(photo, utf8(photo));
+          sync.filesAdded([photo]);
+        }
+        expect(store(key).save({ counters: [...store(key).load().counters, item] })).toBe(true);
+        sync.changed();
+      },
+      ids: (key: string) =>
+        store(key)
+          .load()
+          .counters.map((item) => item.id),
+      connect(appSecret: Uint8Array<ArrayBuffer>, replaces: Uint8Array<ArrayBuffer>[]) {
+        use();
+        expect(saveConnection({ secret: appSecret, code: 'N3W5-K3Y8', replaces })).toBe(true);
+      },
+      async syncNow() {
+        use();
+        await sync.syncNow();
+        return sync.status();
+      },
+    };
+  }
+  const NEWER = ['first', 'extra'];
+  const OLDER = ['first'];
+
+  /** The ids in each store of the copy online now. */
+  async function online(secret: Uint8Array<ArrayBuffer>): Promise<Record<string, string[]>> {
+    const copy = (await (await call(secret, '/copy')).json()) as { data: string };
+    const { stores } = await openStores((await syncKeys(secret)).key, 'tally', copy.data);
+    return Object.fromEntries(
+      Object.entries(stores).map(([key, snapshot]) => [
+        key,
+        (valuesOf(snapshot) as Identified[]).map((item) => item.id),
+      ]),
+    );
+  }
+
+  it('is kept in the copy by an older version, so nothing added to it is deleted', async () => {
+    const secret = randomBytes(32);
+    const phone = appDevice(secret, NEWER);
+    const tablet = appDevice(secret, NEWER);
+    const laptop = appDevice(secret, OLDER);
+    phone.add('first', 'f1');
+    expect((await phone.syncNow()).problem).toBeNull();
+    expect((await tablet.syncNow()).problem).toBeNull();
+    expect((await laptop.syncNow()).problem).toBeNull();
+    phone.add('extra', 'x1');
+    expect((await phone.syncNow()).problem).toBeNull();
+    laptop.add('first', 'f2');
+    expect((await laptop.syncNow()).problem).toBeNull();
+    tablet.add('extra', 'x2');
+    expect((await tablet.syncNow()).problem).toBeNull();
+    expect((await phone.syncNow()).problem).toBeNull();
+    expect((await laptop.syncNow()).problem).toBeNull();
+    for (const device of [phone, tablet]) {
+      expect(device.ids('first').sort()).toEqual(['f1', 'f2']);
+      expect(device.ids('extra').sort()).toEqual(['x1', 'x2']);
+    }
+    expect(laptop.ids('first').sort()).toEqual(['f1', 'f2']);
+  });
+
+  it('is kept also when the older version uploads without new changes online', async () => {
+    const secret = randomBytes(32);
+    const phone = appDevice(secret, NEWER);
+    const laptop = appDevice(secret, OLDER);
+    phone.add('extra', 'x1');
+    await phone.syncNow();
+    expect((await laptop.syncNow()).problem).toBeNull();
+    // The copy is the one the laptop saw: only its own change goes up.
+    laptop.add('first', 'f1');
+    expect((await laptop.syncNow()).problem).toBeNull();
+    const ids = await online(secret);
+    expect(ids['shkriuss:first']).toEqual(['f1']);
+    expect(ids['shkriuss:extra']).toEqual(['x1']);
+  });
+
+  it('is synced from the start once the older device is updated, and nothing is deleted', async () => {
+    const secret = randomBytes(32);
+    const phone = appDevice(secret, NEWER);
+    const laptop = appDevice(secret, OLDER);
+    phone.add('extra', 'x1');
+    await phone.syncNow();
+    laptop.add('first', 'f1');
+    await laptop.syncNow();
+
+    const updated = appDevice(null, NEWER, { storage: laptop.storage });
+    expect((await updated.syncNow()).problem).toBeNull();
+    expect((await phone.syncNow()).problem).toBeNull();
+    expect(updated.ids('extra')).toEqual(['x1']);
+    expect(phone.ids('extra')).toEqual(['x1']);
+    expect(phone.ids('first')).toEqual(['f1']);
+  });
+
+  it('in an older copy (the server went back), waits rather than take back what was added', async () => {
+    const secret = randomBytes(32);
+    const phone = appDevice(secret, NEWER);
+    const laptop = appDevice(secret, OLDER);
+    phone.add('extra', 'x1');
+    await phone.syncNow();
+    const old = (await (await call(secret, '/copy')).json()) as { data: string };
+    phone.add('extra', 'x2');
+    await phone.syncNow();
+    expect((await laptop.syncNow()).problem).toBeNull();
+
+    // The server goes back to the old copy (restored from a backup, say).
+    const current = (await (await call(secret, '/copy')).json()) as { version: number };
+    const body = JSON.stringify({ base: current.version, data: old.data });
+    expect((await call(secret, '/copy', { method: 'PUT', body })).status).toBe(200);
+    laptop.add('first', 'f1');
+    expect((await laptop.syncNow()).problem).toBe('update-needed');
+    // The phone merges it without taking what it lacks as deleted; then the
+    // laptop syncs again.
+    expect((await phone.syncNow()).problem).toBeNull();
+    expect((await laptop.syncNow()).problem).toBeNull();
+    expect((await phone.syncNow()).problem).toBeNull();
+    expect(phone.ids('extra').sort()).toEqual(['x1', 'x2']);
+    expect(phone.ids('first')).toEqual(['f1']);
+    expect(laptop.ids('first')).toEqual(['f1']);
+  });
+
+  it('keeps its files online: the older version’s daily check leaves them alone', async () => {
+    const secret = randomBytes(32);
+    const phone = appDevice(secret, NEWER, { files: true });
+    const laptop = appDevice(secret, OLDER, { files: true });
+    vi.setSystemTime(Date.UTC(2026, 10, 1, 12));
+    phone.add('extra', 'x1', 'p1');
+    expect((await phone.syncNow()).problem).toBeNull();
+    expect(await fileIds(secret)).toEqual(['p1']);
+    // Two days later the laptop syncs for the first time: a check of every file.
+    vi.setSystemTime(Date.UTC(2026, 10, 3, 12));
+    expect((await laptop.syncNow()).problem).toBeNull();
+    expect(await fileIds(secret)).toEqual(['p1']);
+    vi.useRealTimers();
+  });
+
+  it('in an old copy, waits for the update instead of being left behind', async () => {
+    // A lost phone, on the newer version, wrote "extra" to the copy of the
+    // old account key. The key is replaced; the laptop, on the older version,
+    // turns sync on first, and leaves the old copy for a device that can
+    // bring all of it.
+    const oldSecret = randomBytes(32);
+    const newSecret = randomBytes(32);
+    const lost = appDevice(oldSecret, NEWER);
+    lost.add('first', 'f1');
+    lost.add('extra', 'x1');
+    expect((await lost.syncNow()).problem).toBeNull();
+
+    const laptop = appDevice(null, OLDER);
+    laptop.connect(newSecret, [oldSecret]);
+    expect((await laptop.syncNow()).problem).toBeNull();
+    const tablet = appDevice(null, NEWER);
+    tablet.connect(newSecret, [oldSecret]);
+    expect((await tablet.syncNow()).problem).toBeNull();
+    expect(tablet.ids('first')).toEqual(['f1']);
+    expect(tablet.ids('extra')).toEqual(['x1']);
+    expect((await laptop.syncNow()).problem).toBeNull();
+    expect(laptop.ids('first')).toEqual(['f1']);
+  });
+});
+
 describe('an edit made with no connection (audit 5 E-1)', () => {
   // With sync on, nothing noted when an edit was made: its time was set by
   // the first sync that got as far as merging. A tablet's edit from day 1,
@@ -1398,6 +1634,121 @@ describe('an edit made with no connection (audit 5 E-1)', () => {
     expect(tablet.counters).toEqual([counter('milk', 7)]);
     expect(phone.counters).toEqual([counter('milk', 7)]);
     vi.useRealTimers();
+  });
+
+  describe('put away while a sync waits for the server (audit 6 S22)', () => {
+    /** The page's visibilitychange listeners, and putting it away or back. */
+    function page() {
+      const listeners: (() => void)[] = [];
+      const doc = {
+        visibilityState: 'visible',
+        addEventListener: (type: string, listener: () => void) => {
+          if (type === 'visibilitychange') listeners.push(listener);
+        },
+      };
+      vi.stubGlobal('document', doc);
+      return {
+        hide(device: Device) {
+          doc.visibilityState = 'hidden';
+          device.use();
+          for (const listener of listeners) listener();
+        },
+        show() {
+          doc.visibilityState = 'visible';
+        },
+      };
+    }
+
+    /** From now on, requests (or only uploads) wait; `reached` resolves when one does. */
+    function holdRequests(onlyUploads: boolean) {
+      const realFetch = globalThis.fetch;
+      let reached: () => void = () => undefined;
+      let release: () => void = () => undefined;
+      const arrived = new Promise<void>((resolve) => {
+        reached = resolve;
+      });
+      const released = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      vi.stubGlobal('fetch', async (input: string, init?: RequestInit) => {
+        if (!onlyUploads || init?.method === 'PUT') {
+          reached();
+          await released;
+        }
+        return realFetch(input, init);
+      });
+      return { arrived, release, restore: () => vi.stubGlobal('fetch', realFetch) };
+    }
+
+    it('an edit made during the upload keeps its time, so a newer edit elsewhere wins', async () => {
+      const { hide, show } = page();
+      const secret = randomBytes(32);
+      const phone = new Device(secret);
+      const tablet = new Device(secret);
+      vi.setSystemTime(T0);
+      phone.counters = [counter('milk', 1)];
+      await phone.syncNow();
+      await tablet.syncNow();
+
+      // Day 1: an edit, and its upload is slow; meanwhile another edit, and
+      // the tablet is locked. Then the upload's answer comes.
+      vi.setSystemTime(T0 + DAY);
+      tablet.counters = [counter('milk', 2)];
+      const upload = holdRequests(true);
+      const sync = tablet.syncNow();
+      await upload.arrived;
+      vi.setSystemTime(T0 + DAY + 2000);
+      tablet.counters = [counter('milk', 3)];
+      hide(tablet);
+      upload.release();
+      await sync;
+      upload.restore();
+
+      vi.setSystemTime(T0 + 3 * DAY);
+      phone.counters = [counter('milk', 7)];
+      expect((await phone.syncNow()).problem).toBeNull();
+      vi.setSystemTime(T0 + 5 * DAY);
+      show();
+      expect((await tablet.syncNow()).problem).toBeNull();
+      await phone.syncNow();
+      expect(tablet.counters).toEqual([counter('milk', 7)]);
+      expect(phone.counters).toEqual([counter('milk', 7)]);
+    });
+
+    it('an edit made just before keeps its time, even if the app is closed before the answer', async () => {
+      const { hide, show } = page();
+      const secret = randomBytes(32);
+      const phone = new Device(secret);
+      const tablet = new Device(secret);
+      vi.setSystemTime(T0);
+      phone.counters = [counter('milk', 1)];
+      await phone.syncNow();
+      await tablet.syncNow();
+
+      // Day 1: an edit; its sync waits for a server that doesn't answer, and
+      // the tablet is locked. The phone closes the app in the background
+      // (the sync never finishes, and its tab's lock goes with it).
+      vi.setSystemTime(T0 + DAY);
+      tablet.counters = [counter('milk', 2)];
+      const requests = holdRequests(false);
+      void tablet.syncNow();
+      await requests.arrived;
+      hide(tablet);
+      requests.restore();
+      vi.stubGlobal('navigator', deviceLocks());
+
+      vi.setSystemTime(T0 + 10 * DAY);
+      phone.counters = [counter('milk', 7)];
+      expect((await phone.syncNow()).problem).toBeNull();
+      // Day 21: the app is opened again on the tablet.
+      vi.setSystemTime(T0 + 21 * DAY);
+      show();
+      const reopened = tablet.reopen(1);
+      expect((await reopened.syncNow()).problem).toBeNull();
+      await phone.syncNow();
+      expect(reopened.counters).toEqual([counter('milk', 7)]);
+      expect(phone.counters).toEqual([counter('milk', 7)]);
+    });
   });
 
   it('keeps both versions, in apps that ask for it, as before', async () => {
@@ -1911,6 +2262,99 @@ describe('deletions older than the markers (180 days)', () => {
     await tablet.syncNow();
     expect(phone.counters).toEqual([counter('a')]);
     expect(tablet.counters).toEqual([counter('a')]);
+  });
+
+  // Each edit made while a deletion waits to go online notes the time of what
+  // changed. Before, it also dropped the deletion's marker once it was 180
+  // days old: this device forgot it had deleted the item, and the item came
+  // back from the copy, here and everywhere (audit 6 S5).
+  it('made while sync was off, still reach the other devices after more edits months later', async () => {
+    const secret = randomBytes(32);
+    const phone = new Device(secret);
+    const tablet = new Device(secret);
+    vi.setSystemTime(T0);
+    phone.counters = [counter('a'), counter('b')];
+    await phone.syncNow();
+    await tablet.syncNow();
+
+    tablet.use().sync.turnOff();
+    vi.setSystemTime(T0 + DAY);
+    tablet.counters = [counter('a')];
+    vi.setSystemTime(T0 + 201 * DAY);
+    tablet.counters = [counter('a', 1)];
+    vi.setSystemTime(T0 + 202 * DAY);
+    tablet.connect(secret);
+    expect((await tablet.syncNow()).problem).toBeNull();
+    expect((await phone.syncNow()).problem).toBeNull();
+    await tablet.syncNow();
+    expect(phone.counters).toEqual([counter('a', 1)]);
+    expect(tablet.counters).toEqual([counter('a', 1)]);
+  });
+
+  it('made with no connection, still reach the other devices after more edits months later', async () => {
+    const secret = randomBytes(32);
+    const phone = new Device(secret);
+    const tablet = new Device(secret);
+    vi.setSystemTime(T0);
+    phone.counters = [counter('a'), counter('b')];
+    await phone.syncNow();
+    await tablet.syncNow();
+
+    vi.setSystemTime(T0 + DAY);
+    offline = true;
+    tablet.counters = [counter('a')];
+    expect((await tablet.syncNow()).problem).toBe('offline');
+    // The copy changes meanwhile.
+    offline = false;
+    vi.setSystemTime(T0 + 90 * DAY);
+    phone.counters = [counter('a'), counter('b'), counter('c')];
+    await phone.syncNow();
+    vi.setSystemTime(T0 + 201 * DAY);
+    offline = true;
+    tablet.counters = [counter('a', 1)];
+    expect((await tablet.syncNow()).problem).toBe('offline');
+
+    offline = false;
+    vi.setSystemTime(T0 + 202 * DAY);
+    expect((await tablet.syncNow()).problem).toBeNull();
+    expect((await phone.syncNow()).problem).toBeNull();
+    await tablet.syncNow();
+    const ids = (device: Device) => device.counters.map((item) => item.id).sort();
+    expect(ids(phone)).toEqual(['a', 'c']);
+    expect(ids(tablet)).toEqual(['a', 'c']);
+  });
+
+  it('made here, still reach the other devices when the upload that takes them there fails', async () => {
+    const secret = randomBytes(32);
+    const phone = new Device(secret);
+    const tablet = new Device(secret);
+    vi.setSystemTime(T0);
+    phone.counters = [counter('a'), counter('b')];
+    await phone.syncNow();
+    await tablet.syncNow();
+    vi.setSystemTime(T0 + DAY);
+    offline = true;
+    tablet.counters = [counter('a')];
+    expect((await tablet.syncNow()).problem).toBe('offline');
+    offline = false;
+
+    // Months later the tablet reaches the copy, but its upload doesn't go
+    // through. Then the phone changes something else.
+    vi.setSystemTime(T0 + 201 * DAY);
+    const uploads = intercept((_path, init) => {
+      if (init?.method === 'PUT') throw new TypeError('Failed to fetch');
+      return undefined;
+    });
+    expect((await tablet.syncNow()).problem).toBe('offline');
+    uploads();
+    vi.setSystemTime(T0 + 201 * DAY + HOUR);
+    phone.counters = [counter('a', 1), counter('b')];
+    expect((await phone.syncNow()).problem).toBeNull();
+
+    expect((await tablet.syncNow()).problem).toBeNull();
+    expect((await phone.syncNow()).problem).toBeNull();
+    expect(phone.counters).toEqual([counter('a', 1)]);
+    expect(tablet.counters).toEqual([counter('a', 1)]);
   });
 
   it('don’t touch a copy that was started again', async () => {
@@ -2902,6 +3346,52 @@ describe('what a device knew can’t be saved right after the data was (audit 3 
     expect(tablet.counters).toEqual([counter('water', 5)]);
     expect(phone.counters).toEqual([counter('water', 5)]);
     vi.useRealTimers();
+  });
+});
+
+describe('“Turn on sync” that can’t get to the hub (audit 6 S40)', () => {
+  /** What "Turn on sync" fails with, as connectProblem() tells it; null if it opened the hub. */
+  async function turnOn(): Promise<string | null> {
+    const page = { hash: '', pathname: '/', search: '', origin: ORIGIN, opened: '' };
+    vi.stubGlobal('location', {
+      ...page,
+      assign: (url: string) => {
+        page.opened = url;
+      },
+    });
+    const device = new Device(null);
+    try {
+      await device.sync.connect();
+    } catch (error) {
+      return connectProblem(error);
+    }
+    expect(page.opened).toContain('/account/?connect=tally');
+    return null;
+  }
+
+  it('says when this browser won’t keep the request, as trying again won’t help', async () => {
+    expect(await turnOn()).toBeNull();
+    const tab = new MemoryStorage();
+    tab.full = true;
+    vi.stubGlobal('sessionStorage', tab);
+    expect(await turnOn()).toBe('full');
+    vi.stubGlobal('sessionStorage', {
+      setItem: () => {
+        throw new DOMException('The operation is insecure.', 'SecurityError');
+      },
+    });
+    expect(await turnOn()).toBe('storage');
+  });
+
+  it('asks to try again when there’s no connection, or the server answers oddly', async () => {
+    offline = true;
+    expect(await turnOn()).toBe('connect-failed');
+    offline = false;
+    const done = intercept((path) =>
+      path.endsWith('/hub') ? new Response('<html>Sign in to the Wi-Fi</html>') : undefined,
+    );
+    expect(await turnOn()).toBe('connect-failed');
+    done();
   });
 });
 

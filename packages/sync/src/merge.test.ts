@@ -8,6 +8,7 @@ import {
   merge,
   observe,
   prune,
+  pruneUnsent,
   sameSnapshot,
   secondVersionName,
   TOMBSTONE_DAYS,
@@ -474,6 +475,42 @@ describe('prune', () => {
       order: { ids: ['live'], t: 0 },
     };
     expect(Object.keys(prune(snapshot, now).items).sort()).toEqual(['live', 'recent']);
+  });
+});
+
+describe('pruneUnsent', () => {
+  it('keeps an old deletion made here until the copy has it (audit 6 S5)', () => {
+    const now = 1_000 * DAY;
+    const old = now - (TOMBSTONE_DAYS + 1) * DAY;
+    const snapshot: StoreSnapshot = {
+      v: 1,
+      items: {
+        // Deleted here; the copy still had it when this device last saw it.
+        waiting: { t: old, deleted: true },
+        // The copy had the deletion already.
+        sent: { t: old, deleted: true },
+        // Added and deleted here: never online.
+        never: { t: old, deleted: true },
+        recent: { t: now - DAY, deleted: true },
+        live: { t: old, value: counter('live') },
+      },
+      order: { ids: ['live'], t: 0 },
+    };
+    const online: Known = {
+      items: {
+        waiting: { h: fingerprint(counter('waiting')), t: 0 },
+        sent: { t: old, deleted: true },
+        live: { h: fingerprint(counter('live')), t: old },
+      },
+      order: { ids: ['waiting', 'live'], t: 0 },
+    };
+    expect(Object.keys(pruneUnsent(snapshot, online, now).items).sort()).toEqual([
+      'live',
+      'recent',
+      'waiting',
+    ]);
+    // Not knowing what's online, nothing goes.
+    expect(pruneUnsent(snapshot, undefined, now)).toEqual(snapshot);
   });
 });
 

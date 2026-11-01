@@ -19,10 +19,12 @@ export interface DeviceState {
   secret: string | null;
   code: string | null;
   /**
-   * The online copy's version and lineage when last seen, and the most times
-   * devices had written it (sealed in the copy; missing before that was added).
+   * The online copy's version and lineage when last seen, the most times
+   * devices had written it (sealed in the copy; missing before that was
+   * added), and whether it had stores this version of the app doesn't sync
+   * (a newer version's: they're kept in it as they are, audit 6 S4).
    */
-  remote: { version: number; epoch: string; written?: number } | null;
+  remote: { version: number; epoch: string; written?: number; others?: true } | null;
   /** What this device knew at the last sync, per store key. */
   known: Record<string, Known>;
   /** True when `known` holds a merge that isn't online yet (the upload failed). */
