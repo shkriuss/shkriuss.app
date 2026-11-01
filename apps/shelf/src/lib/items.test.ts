@@ -15,6 +15,7 @@ import {
   lastCurrency,
   LIMITS,
   linkHost,
+  linkHref,
   linkProblem,
   MAX_ITEMS,
   MAX_PRICE,
@@ -442,6 +443,26 @@ describe('showing items', () => {
     expect(linkHost('javascript://shop.example/%0Aalert(1)')).toBe('');
     expect(linkHost('intent://shop.example/#Intent;end')).toBe('');
     expect(linkHost('file://shop.example/x')).toBe('');
+  });
+
+  it('opens the website it shows, also for a link typed without "//" (audit 6 F3-2)', () => {
+    // On the page, the browser reads a link against Shelf's own address: as
+    // typed, "https:shop.ge/item" opened Shelf's own "shop.ge/item" page.
+    const shelf = 'https://shelf.shkriuss.app/';
+    for (const typed of ['https:shop.ge/item', 'https:/shop.ge/item', 'HTTPS:shop.ge/item']) {
+      const saved = normalizeLink(typed) ?? '';
+      expect(saved, typed).toBe(typed);
+      expect(linkHost(saved), typed).toBe('shop.ge');
+      expect(new URL(linkHref(saved), shelf).href, typed).toBe('https://shop.ge/item');
+    }
+    expect(linkHref('https://www.amazon.com/dp/B0')).toBe('https://www.amazon.com/dp/B0');
+    expect(linkHref('http://shop.ge')).toBe('http://shop.ge/');
+    // A Georgian address: the browser's own form of it, for the browser.
+    expect(linkHref('https://მაღაზია.გე/item')).toBe('https://xn--lodaaxko2f.xn--node/item');
+    // Saved data from a backup or another device: only web links.
+    expect(linkHref('')).toBe('');
+    expect(linkHref('javascript:alert(1)')).toBe('');
+    expect(linkHref('shop.ge/item')).toBe('');
   });
 
   it('counts items', () => {

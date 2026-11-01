@@ -88,6 +88,27 @@ test('adds an item with its brand, price, shop and link, and remembers it', asyn
   await expect(form(page).getByLabel('Use it')).toBeChecked();
 });
 
+test('a link typed without “//” opens the website it shows (audit 6 F3-2)', async ({ page }) => {
+  // The browser read "https:shop.ge/item" against Shelf's own address: the
+  // card said "shop.ge", and opened a page on Shelf. Only with the page's own
+  // scheme ("https:" on shelf.shkriuss.app; these tests run on "http:").
+  const scheme = new URL(page.url()).protocol;
+  const typed = `${scheme}shop.ge/item`;
+  await page.getByRole('button', { name: 'Add item' }).click();
+  await form(page).getByLabel('Name').fill('Kettle');
+  await form(page).getByLabel('Link (optional)').fill(typed);
+  await save(page);
+  const link = card(page, 'Kettle').getByRole('link', {
+    name: 'Open shop.ge for Kettle, in a new tab',
+  });
+  expect(await link.evaluate((anchor: HTMLAnchorElement) => anchor.href)).toBe(
+    `${scheme}//shop.ge/item`,
+  );
+  // The form still shows it as it was typed.
+  await page.getByRole('button', { name: 'Edit Kettle' }).click();
+  await expect(form(page).getByLabel('Link (optional)')).toHaveValue(typed);
+});
+
 test('explains what to fix before saving', async ({ page }) => {
   await page.getByRole('button', { name: 'Add item' }).click();
   await save(page);

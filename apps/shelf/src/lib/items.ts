@@ -495,19 +495,32 @@ export function formatDate(date: IsoDate, locale = DATE_LOCALE): string {
   }).format(new Date(Date.UTC(year, month - 1, day)));
 }
 
+/** A saved link read as a web address on its own, or null when it isn't one. */
+function webLink(link: string): URL | null {
+  try {
+    // Links from backups and other devices skip the form's check: only web links show.
+    const url = new URL(link);
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * The website a link goes to, without "www." ("shop.ge"), in its own
  * letters when that's safe ("მაღაზია.გე", not "xn--lodaaxko2f.xn--node").
  */
 export function linkHost(link: string): string {
-  try {
-    // Links from backups and other devices skip the form's check: only web links show.
-    const url = new URL(link);
-    if (url.protocol !== 'https:' && url.protocol !== 'http:') return '';
-    return readableHost(url.hostname.replace(/^www\./, ''));
-  } catch {
-    return '';
-  }
+  const url = webLink(link);
+  return url ? readableHost(url.hostname.replace(/^www\./, '')) : '';
 }
+
+/**
+ * The address the page's link opens: the saved link as linkHost reads it,
+ * written out in full. Put in the page as typed, "https:shop.ge/item" (no
+ * "//") was read against Shelf's own address, so the card said "shop.ge"
+ * but opened a page on Shelf (audit 6 F3-2). "" when it isn't a web link.
+ */
+export const linkHref = (link: string): string => webLink(link)?.href ?? '';
 
 export const itemsCount = (count: number): string => `${count} ${count === 1 ? 'item' : 'items'}`;

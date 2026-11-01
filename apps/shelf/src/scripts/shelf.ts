@@ -54,6 +54,7 @@ import {
   itemsPerCategory,
   lastCurrency,
   linkHost,
+  linkHref,
   MAX_ITEMS,
   moveItems,
   NO_CATEGORY,
@@ -271,7 +272,7 @@ export function mountShelf(root: Document): void {
     const host = linkHost(item.link);
     required<HTMLElement>(card, '[data-link-row]').hidden = host === '';
     if (host !== '') {
-      link.href = item.link;
+      link.href = linkHref(item.link);
       text('[data-link-host]', host);
       link.setAttribute('aria-label', `Open ${host} for ${item.name}, in a new tab`);
     }
