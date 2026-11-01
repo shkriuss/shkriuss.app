@@ -1,4 +1,4 @@
-# Audit results, October 2026
+# Audit results, October and November 2026
 
 This is what each full audit found, and what happened to each finding.
 The brief every auditor followed is in [README.md](README.md), and the
@@ -8,26 +8,27 @@ The repository is public, so anything still open that could be used against
 anyone is listed here without its details until it's fixed (see
 [SECURITY.md](../../SECURITY.md)).
 
-## Five audits, five sets of numbers
+## Six audits, six sets of numbers
 
 Each audit numbered its findings by area from 1, so "B-2" means a different
 finding in each. Here, the second audit's numbers start with 2 ("2B-2"), the
-third's with 3 ("3B-2"), the fourth's with 4 ("4B-2") and the fifth's with 5
-("5B-2"). Code comments, commits and docs name the finding they fix like
+third's with 3 ("3B-2"), the fourth's with 4 ("4B-2"), the fifth's with 5 ("5B-2") and
+the sixth's with 6 ("6B-2"). Code comments, commits and docs name the finding they fix like
 this:
 
-| Audit                                | Fixed in                                                                                                                              | Written there as                      | Here |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- | ---- |
-| [First](#first-audit), 162 findings  | [#50](https://github.com/shkriuss/shkriuss.app/pull/50) to [#62](https://github.com/shkriuss/shkriuss.app/pull/62), 23 and 24 October | "(audit B-2)", in a change before #70 | B-2  |
-| [Second](#second-audit), 79 findings | [#70](https://github.com/shkriuss/shkriuss.app/pull/70) to [#77](https://github.com/shkriuss/shkriuss.app/pull/77), 25 October        | "(audit B-2)", in #70 to #77          | 2B-2 |
-| [Third](#third-audit), 77 findings   | [#79](https://github.com/shkriuss/shkriuss.app/pull/79) to [#88](https://github.com/shkriuss/shkriuss.app/pull/88), 26 October        | "(audit 3 B-2)"                       | 3B-2 |
-| [Fourth](#fourth-audit), 78 findings | [#89](https://github.com/shkriuss/shkriuss.app/pull/89) to [#93](https://github.com/shkriuss/shkriuss.app/pull/93), 26 and 27 October | "(audit 4 B-2)"                       | 4B-2 |
-| [Fifth](#fifth-audit), 81 findings   | [#94](https://github.com/shkriuss/shkriuss.app/pull/94) to [#99](https://github.com/shkriuss/shkriuss.app/pull/99), 31 October        | "(audit 5 B-2)"                       | 5B-2 |
+| Audit                                | Fixed in                                                                                                                                          | Written there as                                             | Here |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | ---- |
+| [First](#first-audit), 162 findings  | [#50](https://github.com/shkriuss/shkriuss.app/pull/50) to [#62](https://github.com/shkriuss/shkriuss.app/pull/62), 23 and 24 October             | "(audit B-2)", in a change before #70                        | B-2  |
+| [Second](#second-audit), 79 findings | [#70](https://github.com/shkriuss/shkriuss.app/pull/70) to [#77](https://github.com/shkriuss/shkriuss.app/pull/77), 25 October                    | "(audit B-2)", in #70 to #77                                 | 2B-2 |
+| [Third](#third-audit), 77 findings   | [#79](https://github.com/shkriuss/shkriuss.app/pull/79) to [#88](https://github.com/shkriuss/shkriuss.app/pull/88), 26 October                    | "(audit 3 B-2)"                                              | 3B-2 |
+| [Fourth](#fourth-audit), 78 findings | [#89](https://github.com/shkriuss/shkriuss.app/pull/89) to [#93](https://github.com/shkriuss/shkriuss.app/pull/93), 26 and 27 October             | "(audit 4 B-2)"                                              | 4B-2 |
+| [Fifth](#fifth-audit), 81 findings   | [#94](https://github.com/shkriuss/shkriuss.app/pull/94) to [#99](https://github.com/shkriuss/shkriuss.app/pull/99), 31 October                    | "(audit 5 B-2)"                                              | 5B-2 |
+| [Sixth](#sixth-audit), 86 findings   | [#116](https://github.com/shkriuss/shkriuss.app/pull/116) to [#125](https://github.com/shkriuss/shkriuss.app/pull/125), 31 October and 1 November | "(audit 6 B-2)", with its run where two runs used the number | 6B-2 |
 
 So an "(audit B-2)" without an audit number means the first or the second
 audit: the history of its line (`git blame`, or **Blame** on GitHub) shows
 which pull request wrote it. The next audit writes its own number the same
-way: "(audit 6 B-2)" in code, "6B-2" here (the brief says so too).
+way: "(audit 7 B-2)" in code, "7B-2" here (the brief says so too).
 
 ## First audit
 
@@ -1040,3 +1041,215 @@ Severity is the auditor's, as before.
 | 5Z-3 | Low      | The Deep check licence file named Automattic as GECToR's copyright holder                                       | Fixed ([#99](https://github.com/shkriuss/shkriuss.app/pull/99))                                                                                        |
 | 5Z-4 | Info     | Gaps in the "nothing from other websites" guards: resource hints, loose `allowConsole`, no precache size budget | Fixed ([#94](https://github.com/shkriuss/shkriuss.app/pull/94); the hub's console messages in [#96](https://github.com/shkriuss/shkriuss.app/pull/96)) |
 | 5Z-5 | Info     | Four known advisories in a build-only dependency (`fast-uri`), below CI's gate                                  | Fixed ([#94](https://github.com/shkriuss/shkriuss.app/pull/94))                                                                                        |
+
+## Sixth audit
+
+### How it was done
+
+- **Who:** Claude Opus 5.5 reviewed every area except I, and Claude Fable 5.1
+  gave second opinions on every area but G, J and Z, all on 31 October 2026,
+  at commit `1156e37`. They ran as Claude Code (`claude -p`) from a GitHub
+  Actions workflow in a separate, private repository, which kept the reports
+  out of sight until the fixes were merged. Area I (the live domain,
+  Cloudflare and GitHub settings) wasn't reviewed this time: it needs the
+  Cloudflare token.
+- **Numbers:** several runs reviewed each area, and each run numbered its
+  findings from 1, so one number can mean two findings. Here, and in the pull
+  requests, such a number also names its run ("6A-1 (run 21)"). Findings that
+  two runs reported are listed once.
+- **Checked first:** every finding was checked against the code (often by
+  reproducing it with a test) before anything was changed. Each fix comes
+  with a test that fails without it, where one can be written; one finding
+  turned out to have two more ways to lose photos, fixed with it.
+- **Fixes:** [#116](https://github.com/shkriuss/shkriuss.app/pull/116) (the Claude workflow), [#117](https://github.com/shkriuss/shkriuss.app/pull/117) (the account), [#118](https://github.com/shkriuss/shkriuss.app/pull/118)
+  (Photos), [#119](https://github.com/shkriuss/shkriuss.app/pull/119) (CI and the supply chain), [#120](https://github.com/shkriuss/shkriuss.app/pull/120) (the servers), [#121](https://github.com/shkriuss/shkriuss.app/pull/121)
+  (sync), [#122](https://github.com/shkriuss/shkriuss.app/pull/122) (Repairs and Trades), [#123](https://github.com/shkriuss/shkriuss.app/pull/123) (Tasks, Calendar, Reminders
+  and Water), [#124](https://github.com/shkriuss/shkriuss.app/pull/124) (Notes, Shelf and Grammar) and [#125](https://github.com/shkriuss/shkriuss.app/pull/125) (the privacy
+  page, the docs and the app generator). This page comes in a pull request
+  of its own.
+
+### Totals
+
+| Severity | Found | Fixed | Explained |
+| -------- | ----- | ----- | --------- |
+| High     | 2     | 2     | –         |
+| Medium   | 10    | 10    | –         |
+| Low      | 41    | 39    | 2         |
+| Info     | 33    | 27    | 6         |
+| **All**  | 86    | 78    | 8         |
+
+The two High findings were a second Photos tab that could make a device
+lose photos, and the Claude workflow, which could have let a malicious
+package version in a Dependabot pull request reach the live sites. Both are
+fixed: the workflow is removed. The ten Medium findings were a recovery key
+dialog that could save the wrong key, a key replacement that could lose
+the old key, two ways sync could lose or bring back data, a test
+notification that left a row behind, a Repairs copy that shared another
+repair's photos, and four problems in CI's package checks.
+
+### What's left for you
+
+- Under **Settings → Environments**, delete `claude` and `claude-audit`
+  ([ADR 0021](../adr/0021-no-claude-workflow.md)).
+- If you saved your recovery key with "Show recovery key" while signed in,
+  check that the file has the key the dialog shows (6A-1, run 21).
+- Titles of notes already in a browser's history stay there until you clear
+  it (6Z-2).
+- The `minimatch` advisory waits for ESLint to allow minimatch 11 (6H-5,
+  run 20); the way out if an advisory ever blocks merges is in
+  [quality.md](../quality.md).
+
+**Choices made for you, which you can change:** an old passkey 13 months
+after a key replacement (6A-3), a trade brought back by an offline device
+(6F2-2, run 24), shared tries on one internet address (6B-3, run 18), and
+the other "Explained" rows below.
+
+### Every finding
+
+Severity is the auditor's; where two runs disagreed, the higher one.
+
+#### A. Account and keys
+
+| ID                | Severity | What was wrong                                                                                                                         | What happened                                                                                                                                                    |
+| ----------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 6A-1 (run 21)     | Medium   | The signed-in "Show recovery key" dialog's Download and Copy could save an abandoned new key, not the account's                        | Fixed ([#117](https://github.com/shkriuss/shkriuss.app/pull/117))                                                                                                |
+| 6A-1 (run 5)      | Medium   | A key replacement whose answer was lost signed the replacing device out and lost the old key, so the apps' old copies were never moved | Fixed: the device keeps the new key first and finishes next time ([#117](https://github.com/shkriuss/shkriuss.app/pull/117))                                     |
+| 6A-2 (runs 5, 17) | Low      | "Turn on sync for …" had no hold against the double-click trick that "Add this device" has                                             | Fixed ([#117](https://github.com/shkriuss/shkriuss.app/pull/117))                                                                                                |
+| 6A-1 (run 17)     | Low      | A device whose clock ran ahead hid its device code as expired without cancelling it                                                    | Fixed ([#117](https://github.com/shkriuss/shkriuss.app/pull/117))                                                                                                |
+| 6A-3 (run 17)     | Low      | Thirteen months after a key is replaced, an old passkey that wasn't removed signs in to the replaced key again                         | Explained in ADRs 0010 and 0017: keeping the note for good would let strangers fill storage for good ([#117](https://github.com/shkriuss/shkriuss.app/pull/117)) |
+| 6A-4 (run 17)     | Info     | Replaced keys noted before the 13-month limit never started their 13 months on a device that stayed signed in                          | Fixed ([#117](https://github.com/shkriuss/shkriuss.app/pull/117))                                                                                                |
+| 6A-5 (run 17)     | Info     | Any 403 during a key move counted as "the lost device took the library", for good                                                      | Fixed ([#117](https://github.com/shkriuss/shkriuss.app/pull/117))                                                                                                |
+| 6A-2 (run 21)     | Info     | The device-link cancel token was compared with `!==`, not in constant time                                                             | Fixed ([#117](https://github.com/shkriuss/shkriuss.app/pull/117))                                                                                                |
+
+#### B. Servers and the bill
+
+| ID                          | Severity | What was wrong                                                                                    | What happened                                                                                                        |
+| --------------------------- | -------- | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| 6B-1 (run 18)               | Medium   | A test notification from a made-up device kept a row no meter counted                             | Fixed ([#120](https://github.com/shkriuss/shkriuss.app/pull/120))                                                    |
+| 6B-1 (run 6), 6B-2 (run 18) | Low      | An online library's list, and its deletion notes, were outside every meter                        | Fixed: the lists have a limit of their own ([#120](https://github.com/shkriuss/shkriuss.app/pull/120))               |
+| 6B-2 (run 6)                | Low      | One "first parts" request could read the same item 40 times from R2                               | Fixed; what reads can cost is in ADR 0016 ([#120](https://github.com/shkriuss/shkriuss.app/pull/120))                |
+| 6B-3 (run 6)                | Low      | Cloudflare's rate-limit block was read by Photos as "That's all the uploads for today"            | Fixed ([#118](https://github.com/shkriuss/shkriuss.app/pull/118))                                                    |
+| 6B-4 (run 6), 6J-11         | Info     | The device-link numbers in ADRs 0010 and 0017 and the free-plan test left out the sweep's deletes | Fixed ([#120](https://github.com/shkriuss/shkriuss.app/pull/120))                                                    |
+| 6B-3 (run 18)               | Info     | Everyone behind one internet address shares its storage-code tries                                | Explained in ADR 0016 ([#120](https://github.com/shkriuss/shkriuss.app/pull/120))                                    |
+| 6B-4 (run 18)               | Info     | A replaced-key note can be made by `PUT` from any status token                                    | Explained: it's metered and cleaned up, as ADR 0017 says ([#120](https://github.com/shkriuss/shkriuss.app/pull/120)) |
+
+#### C. Pages and the browser
+
+| ID           | Severity | What was wrong                                                                                                  | What happened                                                                     |
+| ------------ | -------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| 6C-1         | Low      | Shelf showed look-alike Japanese and number-like web addresses in their own letters                             | Fixed ([#124](https://github.com/shkriuss/shkriuss.app/pull/124))                 |
+| 6C-2         | Low      | Repairs' "Save a copy" freed the photo after 10 seconds, too soon for an iPhone                                 | Fixed ([#122](https://github.com/shkriuss/shkriuss.app/pull/122))                 |
+| 6C-3         | Info     | A note dated past what a date can hold passed Notes' checks, then couldn't be opened                            | Fixed ([#124](https://github.com/shkriuss/shkriuss.app/pull/124))                 |
+| 6C-4         | Info     | Photos built two selectors from photo ids without `CSS.escape`                                                  | Fixed ([#118](https://github.com/shkriuss/shkriuss.app/pull/118))                 |
+| C-1 (run 23) | Info     | Deep check's JavaScript is loaded by `import()`, so its SHA-256 check covers it only through the service worker | Explained in ADR 0012 ([#124](https://github.com/shkriuss/shkriuss.app/pull/124)) |
+
+#### D. Privacy and what the pages promise
+
+| ID                           | Severity | What was wrong                                                                                       | What happened                                                                                         |
+| ---------------------------- | -------- | ---------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| 6D-1 (run 10)                | Low      | With sync on, Meals kept the names of ticked ingredients for 180 days; the privacy page said 8 weeks | Fixed: the privacy page and README say so ([#125](https://github.com/shkriuss/shkriuss.app/pull/125)) |
+| 6D-2 (run 10)                | Low      | The privacy page's "Last updated" was the day the text was written, not the day it went live         | Fixed ([#125](https://github.com/shkriuss/shkriuss.app/pull/125))                                     |
+| 6D-3 (run 10), 6D-2 (run 25) | Info     | Small things the servers keep that the privacy page's lists left out                                 | Fixed ([#125](https://github.com/shkriuss/shkriuss.app/pull/125))                                     |
+| 6D-4 (run 10)                | Info     | "Download recovery key" on an iPhone most likely saves to iCloud Drive, and nothing said so          | Fixed ([#117](https://github.com/shkriuss/shkriuss.app/pull/117))                                     |
+| 6D-1 (run 25)                | Info     | "Settings that belong to one device don't sync" read as if reminder times don't sync                 | Fixed ([#125](https://github.com/shkriuss/shkriuss.app/pull/125))                                     |
+
+#### E. Saving and syncing data
+
+| ID                          | Severity | What was wrong                                                                                                                                                                 | What happened                                                                                                                               |
+| --------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| 6E-1 (runs 7, 19)           | Medium   | An older version of an app uploaded the copy without a store a newer version added, and that data was then deleted everywhere                                                  | Fixed ([#121](https://github.com/shkriuss/shkriuss.app/pull/121))                                                                           |
+| 6E-4 (run 7), 6E-2 (run 19) | Medium   | A deletion made with sync off or offline was forgotten after 180 days, and the item came back everywhere                                                                       | Fixed ([#121](https://github.com/shkriuss/shkriuss.app/pull/121))                                                                           |
+| 6E-2 (run 7), 6E-3 (run 19) | Low      | An edit made around an upload round, with the app then put away, was dated by the next sync                                                                                    | Fixed ([#121](https://github.com/shkriuss/shkriuss.app/pull/121))                                                                           |
+| 6E-3 (run 7)                | Low      | Photos' "Delete all data?" said the online copy keeps the data, but photos not online yet are deleted for good; Repairs said "Back up first", but its photos aren't in backups | Fixed ([#118](https://github.com/shkriuss/shkriuss.app/pull/118), [#122](https://github.com/shkriuss/shkriuss.app/pull/122))                |
+| 6E-5                        | Low      | Nothing said that a private window deletes everything when it closes                                                                                                           | Fixed ([#125](https://github.com/shkriuss/shkriuss.app/pull/125))                                                                           |
+| 6E-6                        | Low      | The hub never asked the browser to keep its data, though it holds the account secret                                                                                           | Fixed ([#117](https://github.com/shkriuss/shkriuss.app/pull/117))                                                                           |
+| 6E-4 (run 19)               | Info     | Smaller points: migrations and ids, the 60-second wait for another tab                                                                                                         | Fixed in docs (a migration must keep every item and its id); the wait explained ([#121](https://github.com/shkriuss/shkriuss.app/pull/121)) |
+
+#### F1. Calendar, Tasks, Reminders, Habits, Water
+
+| ID             | Severity | What was wrong                                                                                                     | What happened                                                                                              |
+| -------------- | -------- | ------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| 6F1-1 (run 11) | Low      | Tasks: a step typed in "New step" was thrown away by Save, and the page said "Saved"                               | Fixed ([#123](https://github.com/shkriuss/shkriuss.app/pull/123))                                          |
+| 6F1-1 (run 26) | Low      | Tasks: Save with nothing changed counted as an edit, so it could overwrite another device's change                 | Fixed ([#123](https://github.com/shkriuss/shkriuss.app/pull/123))                                          |
+| 6F1-2 (run 11) | Low      | Calendar's import cut titles and notes that fit, and cut flags and family emoji in half                            | Fixed ([#123](https://github.com/shkriuss/shkriuss.app/pull/123))                                          |
+| 6F1-3          | Low      | The "(second version)" copy cut its title inside an emoji                                                          | Fixed in the shared sync helper, for every app ([#123](https://github.com/shkriuss/shkriuss.app/pull/123)) |
+| 6F1-4          | Low      | Calendar: whether a saved title "fits" depended on the browser's Unicode version, so a device could stop syncing   | Fixed ([#123](https://github.com/shkriuss/shkriuss.app/pull/123))                                          |
+| 6F1-5          | Info     | Tasks: at the 50-step limit, a step added on another device was dropped                                            | Fixed ([#123](https://github.com/shkriuss/shkriuss.app/pull/123))                                          |
+| 6F1-6          | Info     | Water and Reminders said a reminder stops once done, but a closed device keeps reminding until the app opens there | Fixed: the pages say so ([#123](https://github.com/shkriuss/shkriuss.app/pull/123))                        |
+| 6F1-2 (run 26) | Info     | Calendar: "Nothing planned in the next 7 days" shows under a list of holidays                                      | Explained: on purpose, and tested ([#123](https://github.com/shkriuss/shkriuss.app/pull/123))              |
+
+#### F2. Budget, Trades, Repairs, Meals, Tally
+
+| ID             | Severity | What was wrong                                                                                                   | What happened                                                                                                                                          |
+| -------------- | -------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 6F2-1 (run 12) | Medium   | Repairs: Cancel after Save, while a photo was being made smaller, saved a copy that shared the original's photos | Fixed ([#122](https://github.com/shkriuss/shkriuss.app/pull/122))                                                                                      |
+| 6F2-2 (run 12) | Low      | Repairs: a form open while another device added a part dropped that part on save                                 | Fixed ([#122](https://github.com/shkriuss/shkriuss.app/pull/122))                                                                                      |
+| 6F2-3 (run 12) | Low      | Repairs: saved text was checked by the browser's own grapheme rules, which differ between versions               | Fixed with `withinLength`, shared with Calendar ([#122](https://github.com/shkriuss/shkriuss.app/pull/122))                                            |
+| 6F2-4 (run 12) | Low      | Trades: correcting a trade after part of it was closed left its closed parts with the old symbol                 | Fixed ([#122](https://github.com/shkriuss/shkriuss.app/pull/122))                                                                                      |
+| 6F2-1 (run 24) | Low      | Trades: a trade's fees counted twice when the rest was closed through "Change trade"                             | Fixed ([#122](https://github.com/shkriuss/shkriuss.app/pull/122))                                                                                      |
+| 6F2-2 (run 24) | Low      | Trades: "Delete a year" can bring a closed trade back from a device that was offline                             | Explained in the README: stopping it would change how sync settles conflicts for every app ([#122](https://github.com/shkriuss/shkriuss.app/pull/122)) |
+| 6F2-5 (run 12) | Info     | Repairs: "Save a copy" dropped letters that aren't plain English from the file name                              | Fixed ([#122](https://github.com/shkriuss/shkriuss.app/pull/122))                                                                                      |
+| 6F2-3 (run 24) | Info     | Repairs: saving a repair whose vehicle was deleted elsewhere made an "Unknown vehicle"                           | Fixed ([#122](https://github.com/shkriuss/shkriuss.app/pull/122))                                                                                      |
+| 6F2-4 (run 24) | Info     | Trades' spreadsheet left out a trade closed more than it was bought                                              | Fixed ([#122](https://github.com/shkriuss/shkriuss.app/pull/122))                                                                                      |
+
+#### F3. Notes, Shelf, Grammar, Photos
+
+| ID             | Severity | What was wrong                                                                              | What happened                                                                                                               |
+| -------------- | -------- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| 6F3-1 (run 13) | High     | Photos: a second Photos tab with an old list of photos made the device lose photos          | Fixed: the online library's work reads the photos on the device ([#118](https://github.com/shkriuss/shkriuss.app/pull/118)) |
+| 6F3-2 (run 13) | Low      | Shelf: a link typed as "https:shop.ge/item" showed "shop.ge" but opened a page on Shelf     | Fixed ([#124](https://github.com/shkriuss/shkriuss.app/pull/124))                                                           |
+| 6F3-3 (run 13) | Low      | Notes: after a delete that couldn't be saved, typing that couldn't be saved showed as saved | Fixed ([#124](https://github.com/shkriuss/shkriuss.app/pull/124))                                                           |
+| 6F3-4 (run 13) | Low      | Shelf: saving an unchanged category form brought back a category deleted elsewhere          | Fixed ([#124](https://github.com/shkriuss/shkriuss.app/pull/124))                                                           |
+| 6F3-1 (run 22) | Low      | Notes: a note whose id didn't fit the address pattern was listed but couldn't be opened     | Fixed ([#124](https://github.com/shkriuss/shkriuss.app/pull/124))                                                           |
+| 6F3-2 (run 22) | Info     | Shelf: a price with more than two decimals was rounded on save                              | Fixed ([#124](https://github.com/shkriuss/shkriuss.app/pull/124))                                                           |
+| 6F3-3 (run 22) | Info     | Grammar: a Deep check failure while checking said "couldn't start in this browser"          | Fixed ([#124](https://github.com/shkriuss/shkriuss.app/pull/124))                                                           |
+| 6F3-4 (run 22) | Info     | Photos: with sync on, a photo that couldn't be deleted here was still deleted online later  | Fixed ([#118](https://github.com/shkriuss/shkriuss.app/pull/118))                                                           |
+
+#### G. Accessibility
+
+| ID   | Severity | What was wrong                                                                               | What happened                                                     |
+| ---- | -------- | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| 6G-1 | Low      | On Safari, closing Tasks', Calendar's or Shelf's editor without saving jumped to the top     | Fixed ([#123](https://github.com/shkriuss/shkriuss.app/pull/123)) |
+| 6G-2 | Low      | Photos: the problem notice covered the selection bar                                         | Fixed ([#118](https://github.com/shkriuss/shkriuss.app/pull/118)) |
+| 6G-3 | Low      | Tasks' "Edit list" said nothing when its list was deleted elsewhere                          | Fixed ([#123](https://github.com/shkriuss/shkriuss.app/pull/123)) |
+| 6G-4 | Low      | "Turn on sync" said "Check your connection" when the page was out of date or storage refused | Fixed ([#121](https://github.com/shkriuss/shkriuss.app/pull/121)) |
+| 6G-5 | Low      | Photos: "Free up space" said nothing while it waited for the online library                  | Fixed ([#118](https://github.com/shkriuss/shkriuss.app/pull/118)) |
+
+#### H. CI and deploys
+
+| ID                          | Severity | What was wrong                                                                                                 | What happened                                                                                                                                   |
+| --------------------------- | -------- | -------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| 6H-1 (run 9), 6H-2 (run 20) | High     | The Claude workflow ran a Dependabot branch's code in a job that could reach a write token and `main`'s caches | Fixed: the workflow is removed, [ADR 0021](../adr/0021-no-claude-workflow.md) ([#116](https://github.com/shkriuss/shkriuss.app/pull/116))       |
+| 6H-1 (run 20), 6H-5 (run 9) | Medium   | The lockfile checks ran with the pull request's own code (its `yaml` package)                                  | Fixed ([#119](https://github.com/shkriuss/shkriuss.app/pull/119))                                                                               |
+| 6H-2 (run 9)                | Medium   | A lockfile with a YAML merge key hid every package from the lockfile checks                                    | Fixed ([#119](https://github.com/shkriuss/shkriuss.app/pull/119))                                                                               |
+| 6H-3 (run 9)                | Medium   | `configDependencies` installed a package of any age, and ran it, with no check                                 | Fixed ([#119](https://github.com/shkriuss/shkriuss.app/pull/119))                                                                               |
+| 6H-4 (run 9)                | Medium   | A new "high" advisory stopped every merge and deploy for a week, and the documented way out couldn't be merged | Fixed: a way out that can be merged, in quality.md; the gate is unchanged ([#119](https://github.com/shkriuss/shkriuss.app/pull/119))           |
+| 6H-6 (run 9)                | Low      | A later run on `main` that didn't deploy could cancel the pending run that would have                          | Fixed ([#119](https://github.com/shkriuss/shkriuss.app/pull/119))                                                                               |
+| 6H-7 (run 9)                | Low      | The Claude workflow could hand Claude a stranger's CI log                                                      | Fixed: the workflow is removed ([#116](https://github.com/shkriuss/shkriuss.app/pull/116))                                                      |
+| 6H-3 (run 20), 6H-8 (run 9) | Low      | The Claude workflow's "never force push" rule was easy to step around                                          | Fixed: the workflow is removed ([#116](https://github.com/shkriuss/shkriuss.app/pull/116))                                                      |
+| 6H-9 (run 9)                | Info     | "Re-run failed jobs" can't deploy a day later: the saved build is kept for a day                               | Fixed in deployment.md: "Re-run all jobs" ([#119](https://github.com/shkriuss/shkriuss.app/pull/119))                                           |
+| 6H-10 (run 9)               | Info     | PLAN.md's list of workflows left out the newest                                                                | Fixed ([#119](https://github.com/shkriuss/shkriuss.app/pull/119))                                                                               |
+| 6H-4 (run 20)               | Info     | deployment.md said `production` was the only environment                                                       | Fixed ([#119](https://github.com/shkriuss/shkriuss.app/pull/119)); true again once `claude` and `claude-audit` are deleted                      |
+| 6H-5 (run 20)               | Info     | A moderate `minimatch` advisory, through ESLint, that Dependabot can't fix                                     | Explained: below CI's gate and lint-only; it waits for ESLint to allow minimatch 11 ([#119](https://github.com/shkriuss/shkriuss.app/pull/119)) |
+
+#### J. Architecture and tests
+
+| ID    | Severity | What was wrong                                                                                              | What happened                                                                                                      |
+| ----- | -------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| 6J-1  | Low      | The app generator gave a new app a line in only one of the shared tests' tables, so its pull request failed | Fixed, with two more things that stopped every new app ([#125](https://github.com/shkriuss/shkriuss.app/pull/125)) |
+| 6J-2  | Low      | deployment.md and PLAN.md weren't updated for the Claude workflow's environment                             | Fixed: the workflow is removed ([#116](https://github.com/shkriuss/shkriuss.app/pull/116))                         |
+| 6J-3  | Low      | "Removing an app" left the shared tests' lines for it                                                       | Fixed, and a unit test names any left behind ([#125](https://github.com/shkriuss/shkriuss.app/pull/125))           |
+| 6J-4  | Info     | Smaller wrong steps in adding-an-app.md                                                                     | Fixed ([#125](https://github.com/shkriuss/shkriuss.app/pull/125))                                                  |
+| 6J-5  | Info     | claude-in-github.md promised CI on every push and contradicted itself                                       | Fixed: removed with the workflow ([#116](https://github.com/shkriuss/shkriuss.app/pull/116))                       |
+| 6J-6  | Info     | PLAN.md said the deploy ships "the exact files it tested"                                                   | Fixed ([#125](https://github.com/shkriuss/shkriuss.app/pull/125))                                                  |
+| 6J-7  | Info     | Older sentences that outlived the fifth audit's CI changes                                                  | Fixed ([#125](https://github.com/shkriuss/shkriuss.app/pull/125))                                                  |
+| 6J-8  | Info     | The brief's "largest files" list was stale again                                                            | Fixed: the brief gives the command instead ([#125](https://github.com/shkriuss/shkriuss.app/pull/125))             |
+| 6J-9  | Info     | This page dated the fifth audit's fixes 27 October; they were merged on 31 October                          | Fixed ([#125](https://github.com/shkriuss/shkriuss.app/pull/125))                                                  |
+| 6J-10 | Info     | "Delete a year…" is written three times (Budget, Repairs, Trades)                                           | Explained: sharing it wasn't clearly simpler ([#122](https://github.com/shkriuss/shkriuss.app/pull/122))           |
+
+#### Z. Anything else
+
+| ID   | Severity | What was wrong                                                                        | What happened                                                     |
+| ---- | -------- | ------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| 6Z-1 | Low      | "Add it to your Home Screen" didn't say the Home Screen app starts empty on an iPhone | Fixed ([#125](https://github.com/shkriuss/shkriuss.app/pull/125)) |
+| 6Z-2 | Low      | Notes put each note's title in the page title, so it landed in the browser's history  | Fixed ([#124](https://github.com/shkriuss/shkriuss.app/pull/124)) |
