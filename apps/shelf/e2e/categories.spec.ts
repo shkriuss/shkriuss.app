@@ -2,7 +2,7 @@
 // ones too), and the items follow. Syncing them: e2e/sync.spec.ts.
 import type { Page } from '@playwright/test';
 import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
-import { seedStores } from '../../../tests/e2e/storage.ts';
+import { readStore, seedStores } from '../../../tests/e2e/storage.ts';
 import { CATEGORIES_VERSION } from '../src/lib/categories.ts';
 import { SHELF_VERSION, type Item } from '../src/lib/items.ts';
 
@@ -225,6 +225,33 @@ test.describe('another device deletes a category meanwhile (audit 4 F3-5)', () =
         .getByRole('alert')
         .filter({ hasText: 'That category was already deleted on another device.' }),
     ).toBeVisible();
+  });
+
+  test('Save with its name unchanged leaves it deleted (audit 6 F3-4)', async ({ page }) => {
+    // Before, it came back, here and, once synced, on every device.
+    await chip(page, 'Home').click();
+    await deleteElsewhere(page, 'Home');
+    await categoryForm(page).getByRole('button', { name: 'Save' }).click();
+    await expect(categoryForm(page)).toBeHidden();
+    await expect(
+      page.getByRole('alert').filter({
+        hasText: '“Home” was deleted on another device. It stays deleted: its name wasn’t changed.',
+      }),
+    ).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Add category' })).toBeFocused();
+    await expect(chip(page, 'Home')).toHaveCount(0);
+    expect((await readStore(page, 'shelf-categories'))?.data).toEqual({
+      changes: [{ id: 'home', name: 'Home', removed: true }],
+    });
+
+    // A new name brings it back: a change wins over a deletion, as for items.
+    await seed(page, [], [{ id: 'gifts', name: 'Gifts', removed: false }]);
+    await chip(page, 'Gifts').click();
+    await deleteElsewhere(page, 'Gifts');
+    await categoryForm(page).getByLabel('Name').fill('Presents');
+    await categoryForm(page).getByRole('button', { name: 'Save' }).click();
+    await expect(categoryForm(page)).toBeHidden();
+    await expect(chip(page, 'Presents')).toHaveText(/^Presents\s*0 items$/);
   });
 
   test('the category its items were to go to: asked again, not moved to none', async ({ page }) => {
