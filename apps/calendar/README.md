@@ -137,8 +137,9 @@ its notification server, docs/adr/0009).
   in odd files), the rest are listed as not imported. Only the first 5,000
   events in a file are read (Calendar holds 2,000), and the import says how
   many more there were; an event the file ends in the middle of is listed
-  as not imported. Titles over 100 characters and notes over 1,000 are cut
-  short, never in the middle of an emoji.
+  as not imported. Titles over 100 characters and notes over 1,000, counted
+  as the editor counts them (a flag or a family emoji is one), are cut
+  short, never in the middle of an emoji, a flag or an accented letter.
 - **Repeating events from another time zone** keep the time their first date
   has on the phone. When that time zone changes its clocks (summer time) on
   other dates than the phone's, some of the times end up an hour off: a weekly

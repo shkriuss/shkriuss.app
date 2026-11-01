@@ -14,6 +14,7 @@
  * to another day near the end of a month, where its dates can come out wrong.
  */
 import { fingerprint } from '@shkriuss/sync';
+import { cutToLength } from '@shkriuss/ui/text';
 import {
   addDays,
   addMinutes,
@@ -634,18 +635,15 @@ const TOO_MANY_COUNTS =
   'The file has too many repeats for Calendar to work out when this one stops.';
 
 /**
- * `text` cut to `max` (counted as the limits count), ending in "…". Cut by
- * whole characters, so an emoji is never cut in half, which showed as "�"
- * (audit 4 F1-10).
+ * `text` cut to `max` characters, ending in "…", unless it fits. Counted
+ * and cut as the limits count (cutToLength: an emoji or a flag is one), so
+ * what the editor takes is kept whole, and a flag, a family emoji or an
+ * emoji's halves are never cut apart, which showed as "�" or a lone letter
+ * (audit 4 F1-10, audit 6 F1-2).
  */
 function truncate(text: string, max: number): string {
-  if (text.length <= max) return text;
-  let kept = '';
-  for (const character of text) {
-    if (kept.length + character.length > max - 1) break;
-    kept += character;
-  }
-  return `${kept}…`;
+  if (cutToLength(text, max) === text) return text;
+  return `${cutToLength(text, max - 1)}…`;
 }
 
 interface Flags {
