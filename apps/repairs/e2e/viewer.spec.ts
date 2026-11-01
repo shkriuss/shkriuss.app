@@ -46,3 +46,42 @@ test('a photo opens with focus on which photo it is', async ({ page }) => {
   await page.keyboard.press('Escape');
   await expect(thumb).toBeFocused();
 });
+
+// Audit 6 C-2: "Save a copy" freed the photo after 10 seconds. Safari on an
+// iPhone asks "Do you want to download…?" first, and fetches it only then.
+test('a copy saved stays there for a minute, for an iPhone to ask first', async ({ page }) => {
+  // Notes each file's address freed.
+  await page.addInitScript(() => {
+    const freed: string[] = [];
+    const free = URL.revokeObjectURL.bind(URL);
+    Object.assign(window, { freed });
+    URL.revokeObjectURL = (url: string) => {
+      freed.push(url);
+      free(url);
+    };
+  });
+  await page.clock.install({ time: NOW });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'New repair' }).click();
+  await repairDialog(page).getByLabel('Vehicle').fill('Bus 105');
+  await addPhotos(page, [jpeg('door.jpg', await picture(page, { width: 800, height: 600 }))]);
+  await expect(repairDialog(page).locator('[data-form-photos] img')).toHaveCount(1);
+  await fillRepair(page, {});
+  await repairItems(page).first().getByRole('button', { name: 'Photo 1' }).click();
+  const download = page.waitForEvent('download');
+  await page
+    .getByRole('dialog', { name: 'Photo' })
+    .getByRole('button', { name: 'Save a copy' })
+    .click();
+  const url = (await download).url();
+  expect(url).toMatch(/^blob:/);
+  const freed = () =>
+    page.evaluate(
+      (address) => (window as unknown as { freed: string[] }).freed.includes(address),
+      url,
+    );
+  await page.clock.fastForward(30_000);
+  expect(await freed()).toBe(false);
+  await page.clock.fastForward(31_000);
+  expect(await freed()).toBe(true);
+});

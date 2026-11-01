@@ -27,6 +27,7 @@ import {
   partCost,
   partLabel,
   partNames,
+  photoCopyName,
   photoFiles,
   photosOf,
   readEditedRepair,
@@ -1154,6 +1155,20 @@ describe('photos', () => {
     expect(unusedPhotos(copy.photos, left)).toEqual([]);
     expect(unusedPhotos(['p1', 'p2', 'p3'], removeRepair(left, 'a'))).toEqual(['p1', 'p2', 'p3']);
     expect(unusedPhotos(['p2', 'p3'], left)).toEqual(['p3']);
+  });
+
+  // Audit 6 F2-5: only a to z were kept, so a bus named in Georgian lost its name.
+  it('saves a copy named after its vehicle, in any script', () => {
+    expect(photoCopyName('Bus 105', '2026-10-21', 1)).toBe('bus-105-2026-10-21-photo-1.jpg');
+    expect(photoCopyName('ავტობუსი 105', '2026-10-21', 2)).toBe(
+      'ავტობუსი-105-2026-10-21-photo-2.jpg',
+    );
+    expect(photoCopyName('बस १०५', '2026-10-21', 1)).toBe('बस-१०५-2026-10-21-photo-1.jpg');
+    // What a file name can't hold, or can't show, isn't kept.
+    expect(photoCopyName('A/C: "Bus​ 7"?', '2026-10-21', 3)).toBe(
+      'a-c-bus-7-2026-10-21-photo-3.jpg',
+    );
+    expect(photoCopyName('🚌', '2026-10-21', 1)).toBe('2026-10-21-photo-1.jpg');
   });
 
   it('sync as a thumbnail and a full photo, each a file', () => {

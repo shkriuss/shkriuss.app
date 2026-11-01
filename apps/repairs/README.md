@@ -94,7 +94,9 @@ private car's service history. Lives at <https://repairs.shkriuss.app>.
   photos still being made smaller; if the form is closed meanwhile
   (Cancel, Escape, or Delete), nothing is saved (audit 6 F2-1: it was saved
   anyway, as a copy with the same photos). Photos aren't in backups;
-  "Save a copy" saves one as a file. Deleting a repair, a vehicle or a year
+  "Save a copy" saves one as a file, named after its vehicle and day in any
+  script ("ავტობუსი-105-2026-10-21-photo-1.jpg", `photoCopyName`), with
+  `downloadFile`, as every download is. Deleting a repair, a vehicle or a year
   deletes their photos (online too, with sync on), except those another
   repair has too (`unusedPhotos`); "Delete all data"
   deletes them on this device only (sync is turned off first). A photo

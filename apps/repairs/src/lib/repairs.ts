@@ -926,6 +926,19 @@ export function systemNames(state: RepairsState): string[] {
 /** The longest side of a saved photo, and of its thumbnail, in pixels. */
 export const PHOTO_SIZES = { full: 1600, thumb: 320 };
 
+/**
+ * The file name "Save a copy" gives a repair's photo: its vehicle, day and
+ * number, like "bus-105-2026-10-21-photo-1.jpg". Letters and digits of any
+ * script stay ("ავტობუსი-105-…"); anything else, which a file name may not
+ * hold or can't show, becomes one "-". Before, only a to z did, and a bus
+ * named in Georgian lost its name (audit 6 F2-5).
+ */
+export const photoCopyName = (vehicle: string, date: IsoDate, number: number): string =>
+  `${`${vehicle}-${date}-photo-${number}`
+    .toLowerCase()
+    .replace(/[^\p{L}\p{M}\p{N}]+/gu, '-')
+    .replace(/^-/, '')}.jpg`;
+
 /** The photos of these repairs (to delete with them). */
 export const photosOf = (repairs: readonly Repair[]): string[] =>
   repairs.flatMap((repair) => repair.photos);

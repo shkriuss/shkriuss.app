@@ -2,8 +2,15 @@
  * Repairs: looking at a repair's photos one at a time (the photos on this
  * device), and saving a copy of one. Split from repairs.ts (audit J-7).
  */
+import { downloadFile } from '@shkriuss/storage';
 import { required } from '@shkriuss/ui/dom';
-import { dateLabel, vehicleName, type Repair, type VehiclesState } from '../lib/repairs.ts';
+import {
+  dateLabel,
+  photoCopyName,
+  vehicleName,
+  type Repair,
+  type VehiclesState,
+} from '../lib/repairs.ts';
 import { getPhoto, thumbUrl } from './photos.ts';
 
 export interface PhotoViewer {
@@ -76,15 +83,12 @@ export function mountPhotoViewer(root: ParentNode, vehicles: () => VehiclesState
       const { repair, ids, index } = viewing;
       const photo = await getPhoto(ids[index] ?? '');
       if (!photo?.full) return;
-      const name = `${vehicleName(vehicles(), repair.vehicle)}-${repair.date}-photo-${index + 1}`
-        .toLowerCase()
-        .replace(/[^a-z0-9-]+/g, '-');
-      const url = URL.createObjectURL(photo.blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${name}.jpg`;
-      link.click();
-      window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      // Kept for a minute, as every download is: Safari on an iPhone asks
+      // first, and fetches the file only then (audit 6 C-2).
+      downloadFile(
+        photoCopyName(vehicleName(vehicles(), repair.vehicle), repair.date, index + 1),
+        photo.blob,
+      );
     },
   };
 }
