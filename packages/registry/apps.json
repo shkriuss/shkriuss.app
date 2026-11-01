@@ -145,7 +145,7 @@
         "Your reminder times for each meal of the day",
         "When reminders were last checked, so each one shows only once",
         "If you turn on reminders while Meals is closed: this device's notification settings and a random device key (never in backups; after you turn it off, kept only until the server has deleted your reminders)",
-        "If you turn on sync: a copy of your plan, meals, shopping lists and reminder times on Meals' server, locked on your devices so only they can read it, and this device's sync key (never in backups)",
+        "If you turn on sync: a copy of your plan, meals, shopping lists and reminder times on Meals' server, locked on your devices so only they can read it, and this device's sync key (never in backups). An ingredient you untick, or whose list is let go after 8 weeks, stays there and on your devices, hidden, for 180 days (its name and the list's week), so your other devices remove it too",
         "Your light or dark theme choice"
       ],
       "pushNotifications": true,

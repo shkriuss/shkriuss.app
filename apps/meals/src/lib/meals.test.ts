@@ -1,6 +1,8 @@
 import { addDays } from '@shkriuss/dates';
+import { getSite } from '@shkriuss/registry';
 import { footprint, sampleText } from '@shkriuss/sync/testing';
 import { describe, expect, it, vi } from 'vitest';
+import { knownFrom, observe, TOMBSTONE_DAYS } from '../../../../packages/sync/src/merge.ts';
 import { MAX_SEALED_CHARS } from '../../../../packages/sync/src/validate.ts';
 import {
   addExtra,
@@ -569,6 +571,25 @@ describe('shopping', () => {
       'onions',
     ]);
     expect(removeExtra(shopping, 'm').items).toEqual([]);
+  });
+
+  // Audit 6 D-1: a tick's id is its week and the ingredient, and with sync on
+  // a tick that goes (unticked, or let go with its week) stays as a deletion
+  // marker under that id for 180 days. The privacy page said "8 weeks".
+  it('keeps a tick that goes under its ingredient while sync remembers it, as the privacy page says', () => {
+    const test = { key: 'pregnancy test', name: 'Pregnancy test', extra: false };
+    const ticked = setDone(emptyShopping(), MONDAY, test, true);
+    const first = observe({ items: {}, order: { ids: [], t: 0 } }, ticked.items, 1, 1_000);
+    const later = addDays(MONDAY, 7 * (SHOPPING_WEEKS_KEPT + 1));
+    const pruned = pruneShopping(ticked, addDays(later, -7 * SHOPPING_WEEKS_KEPT));
+    expect(pruned.items).toEqual([]);
+    const { snapshot } = observe(knownFrom(first.snapshot), pruned.items, 1, 2_000);
+    expect(snapshot.items[`${MONDAY}:pregnancy test`]).toEqual({ t: 2_000, deleted: true });
+    expect(TOMBSTONE_DAYS).toBe(180);
+
+    const { dataStored } = getSite('meals');
+    const syncLine = dataStored.find((line) => line.startsWith('If you turn on sync'));
+    expect(syncLine).toMatch(/untick.*let go after 8 weeks.*180 days/);
   });
 
   // Audit 3 F2-9: "The shopping list is full. Tick some things off first."

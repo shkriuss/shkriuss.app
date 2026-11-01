@@ -26,7 +26,11 @@ Plan your meals for the week, and what to buy for them. Lives at
     week (`shoppingWeek`), so a phone whose weeks start on Monday and a
     tablet whose weeks start on Sunday share it when they sync (version 1
     used each device's own first day; `migrateShopping` moves it). Weeks
-    older than 8 are let go (`pruneShopping`). Up to 500 things added by
+    older than 8 are let go (`pruneShopping`). A tick's id is its week and
+    the ingredient (`tickId`), so with sync on, a tick that goes (unticked,
+    or let go with its week) is remembered by that id for 180 days, as
+    every deleted item is, so other devices remove it too; the privacy page
+    says so (audit 6 D-1). Up to 500 things added by
     hand are kept, all weeks together, ticked or not (`MAX_SHOPPING`):
     about 55 a week over the 9 weeks' lists kept. Then adding one is
     refused, and the list says to remove some first; ticking still works
