@@ -26,7 +26,8 @@ audit 6: a key replacement whose answer was lost is finished the next time
 the Account page opens, instead of signing that device out (A-1); "Turn on
 sync for …" waits half a second before it works, like "Add this device"
 (A-2); a device code's 10 minutes are counted by the clock of the device
-showing it, and it's cancelled when it's hidden as expired (A-1).
+showing it, and it's cancelled when it's hidden as expired (A-1); the hub
+asks the browser to keep the account, as the apps keep their data (E-6).
 
 ## Context
 
@@ -125,6 +126,10 @@ HKDF), like `K7Q2-M9XD`.
   keeps its note: [ADR 0017](0017-storage-limits.md), audit 5 A-1), so apps
   can move their old copies. A device signed out because its key was
   replaced elsewhere keeps nothing of it, as when signing out (audit 3 D-8).
+  Once signed in, the Account page asks the browser to keep its data
+  (persistent storage), as each app does after its first save, so it's
+  less likely to be deleted when the device runs short of space (audit 6
+  E-6).
 - **On the hub's server.** The hub's Worker runs only for `/api/account/*`,
   with one Durable Object for all device links together (a row each), and
   one per passkey lock or replaced key. It stores:

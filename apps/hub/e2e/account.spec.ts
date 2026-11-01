@@ -590,6 +590,39 @@ test('a key replaced here whose answer never came is finished when the page open
   ).toEqual([oldSecret]);
 });
 
+test('asks the browser to keep the account on this device', async ({ page }) => {
+  // The apps asked, the hub didn't, though it keeps the account key and the
+  // replaced keys the apps need (audit 6 E-6).
+  await page.addInitScript(() => {
+    const asked = { times: 0 };
+    Object.assign(window, { asked });
+    Object.defineProperty(navigator.storage, 'persisted', {
+      configurable: true,
+      value: async () => false,
+    });
+    Object.defineProperty(navigator.storage, 'persist', {
+      configurable: true,
+      value: async () => {
+        asked.times += 1;
+        return true;
+      },
+    });
+  });
+  const asked = () =>
+    page.evaluate(() => (window as unknown as { asked: { times: number } }).asked.times);
+  await createAccount(page);
+  await expect.poll(asked).toBe(1);
+  // Signed in before this change: asked when the page opens.
+  await page.reload();
+  await expect(view(page, 'signed-in')).toBeVisible();
+  await expect.poll(asked).toBe(1);
+  // Signed out, there's nothing to keep.
+  await signOut(page);
+  await page.reload();
+  await expect(view(page, 'signed-out')).toBeVisible();
+  expect(await asked()).toBe(0);
+});
+
 test('the dialogs read out what they mean, with their question (audit 5 G-3)', async ({ page }) => {
   const { code } = await createAccount(page);
   const dialog = page.getByRole('dialog', { name: 'Sign out of this device?' });

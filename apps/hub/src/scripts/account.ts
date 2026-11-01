@@ -37,7 +37,7 @@ import {
 } from '@shkriuss/account';
 import { today } from '@shkriuss/dates';
 import { apps, type AppEntry } from '@shkriuss/registry';
-import { downloadFile } from '@shkriuss/storage';
+import { downloadFile, keepData } from '@shkriuss/storage';
 import {
   connectResultUrl,
   isConnectKey,
@@ -367,6 +367,7 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
       say(STORAGE_BLOCKED, true);
       return false;
     }
+    keepData();
     account = await currentAccount();
     void dropLink();
     home();
@@ -857,6 +858,11 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
   } else if (finished) {
     say(finished.saved ? REPLACED.done : STORAGE_BLOCKED, !finished.saved);
   }
+  // The account key, and the replaced keys the apps need, are only in this
+  // browser: it's asked not to delete them when it's short of space, as
+  // each app asks after its first save (keepData; signIn asks too). The hub
+  // didn't (audit 6 E-6).
+  if (account) keepData();
 
   if (!(await openLink(location.hash))) home(false);
 }
