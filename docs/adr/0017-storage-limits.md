@@ -21,7 +21,9 @@ passkeys and recovery key (A-3), a test notification keeps nothing for a
 device without a schedule, and the online libraries' lists have a limit of
 their own, kept by `LibraryGate`, instead of a guess outside every meter.
 So the limits add up to about 3.3 GB, and about seven more apps with sync
-and notifications fit, not eight.
+and notifications fit, not eight. And what caps the device links, with the
+old per-link objects that may be left over, is said right (see "Device
+links").
 
 ## Context
 
@@ -91,13 +93,26 @@ alone, while a photo's sealed details may be 4,000 characters.
 
 **Device links** (the hub's "Show a code") are the one thing a stranger can
 make the servers keep that no meter counts. They're all rows in one object:
-a few hundred bytes each, deleted 10 minutes after they're made by that
-object's alarm, or by whatever request comes next if Cloudflare dropped the
-alarm (it gives up on an alarm after a few tries once the day's free writes
-are used up, which a script making links uses up itself). So the free daily
-requests cap them at about 700 at a time, under a megabyte (audit 4 B-1).
+a few hundred bytes each (about 1 KB at most), deleted 10 minutes after
+they're made by that object's alarm, or by whatever request comes next if
+Cloudflare dropped the alarm (it gives up on an alarm after a few tries
+once the day's free writes are used up, which a script making links uses
+up itself). What caps them is the day's free row writes: each link costs
+4 (its two rows, and deleting them), so about 25,000 links use up a day's
+writes ([ADR 0010](0010-account-and-sync.md), "Free quota"). Nothing
+makes a script spread them over the day, so all of those may be there at
+once: about 30 MB at most, in that one object, until they're deleted
+(after 00:00 UTC, if the day's writes ran out first). That's still small
+next to the 5 GB, and it never lasts (audit 4 B-1). Until audit 6 this
+said "about 700 at a time, under a megabyte", which counted neither the
+deletes nor a script making them all at once.
+
 Until audit 5 (B-2) each link was an object of its own, 12 KB that only its
-own alarm deleted: with the alarm dropped, it stayed for good.
+own alarm deleted: with the alarm dropped, it stayed for good. The Worker
+now only reaches the one object, so any such object made before then whose
+alarm Cloudflare had already given up on can't be reached any more, and
+stays. If there are any, the Cloudflare dashboard's storage for the hub's
+`AccountLink` namespace shows how much (12 KB each).
 
 **Files kept with a copy** (Repairs' photos) count their bytes plus their
 id twice and 64 bytes more, for the row that holds each file and its entry

@@ -27,7 +27,9 @@ the Account page opens, instead of signing that device out (A-1); "Turn on
 sync for …" waits half a second before it works, like "Add this device"
 (A-2); a device code's 10 minutes are counted by the clock of the device
 showing it, and it's cancelled when it's hidden as expired (A-1); the hub
-asks the browser to keep the account, as the apps keep their data (E-6).
+asks the browser to keep the account, as the apps keep their data (E-6); a
+device link costs 4 row writes, not 2 or 3, as deleting it counts too (see
+"Free quota").
 
 ## Context
 
@@ -478,11 +480,16 @@ in with `sync: true` in `apps.json`.
   fill one app's room for online copies, which doesn't reset daily
   ([ADR 0017](0017-storage-limits.md)). Besides the 100,000 requests a day,
   the free plan allows 100,000 row writes a day for every app's objects
-  together (each `setAlarm()` is one), and those run out first: a device
-  link writes 2 or 3 rows, a stranger's first sync copy about 7, so some
-  14,000 to 50,000 such requests pause the online features until 00:00
-  UTC, far fewer than the requests allowed (`tests/unit/free-plan.test.ts`
-  pins those counts: audit 5 B-4).
+  together (each `setAlarm()` is one, and so is each row deleted), and
+  those run out first: a device link writes 4 rows in all (2 when it's
+  made, and 2 more when it's deleted after it expires; the first link also
+  sets an alarm), a stranger's first sync copy about 7, so some 14,000 to
+  25,000 such requests pause the online features until 00:00 UTC, far
+  fewer than the requests allowed (`tests/unit/free-plan.test.ts` pins
+  those counts: audit 5 B-4). Links made late in a UTC day are deleted
+  after midnight, out of the next day's writes. (Until audit 6 this said
+  2 or 3 rows a link, and up to 50,000 requests: the deletes weren't
+  counted.)
 - **Two tabs of an app, one of them syncing.** Only one tab syncs at a
   time, but the other saves as usual, and the browser passes writes between
   tabs with a delay: a save in the other tab that lands in the few
