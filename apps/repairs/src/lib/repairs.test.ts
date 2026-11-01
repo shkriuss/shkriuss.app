@@ -410,6 +410,21 @@ describe('repairs', () => {
     }
   });
 
+  // Audit 6 F2-3 (run 24): the form showed "Unknown vehicle" for a vehicle
+  // deleted on another device, and saving it added a vehicle by that name.
+  it('asks for the vehicle again when the one a repair was on was deleted', () => {
+    const orphan = repair({ vehicle: 'deleted' });
+    expect(vehicleName(vehicles, orphan.vehicle)).toBe('Unknown vehicle');
+    const opened = toRepairForm(orphan, vehicles);
+    expect(opened.vehicle).toBe('');
+    expect(readRepair(opened, 'r', repairs(orphan), vehicles, newId).problems).toEqual({
+      vehicle: 'Enter the vehicle, like a bus number.',
+    });
+    expect(
+      readRepair({ ...opened, vehicle: 'Bus 12' }, 'r', repairs(orphan), vehicles, newId),
+    ).toMatchObject({ repair: { vehicle: 'b12' }, newVehicle: null });
+  });
+
   it('shows a saved repair in the form again', () => {
     const saved = repair({
       mileage: null,

@@ -22,6 +22,7 @@ import {
   toRepairForm,
   unitOf,
   unusedPhotos,
+  VEHICLE_GONE,
   vehicleName,
   type PartForm,
   type Repair,
@@ -231,7 +232,8 @@ export function mountRepairForm(root: ParentNode, page: RepairFormPage): RepairF
     renderParts(values.parts.length > 0 ? values.parts : [EMPTY_PART]);
     formPhotos.reset(values.photos);
     required<HTMLElement>(repairForm, '[data-action="delete-repair"]').hidden = !repair;
-    showRepairProblems({});
+    // Its vehicle was deleted on another device: the form asks for it (audit 6 F2-3).
+    showRepairProblems(repair && values.vehicle === '' ? { vehicle: VEHICLE_GONE } : {});
     renderMileageHint();
     repairDialog.showModal();
     // Straight to what's needed: the vehicle, or the mileage once it's known.

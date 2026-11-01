@@ -10,7 +10,11 @@ private car's service history. Lives at <https://repairs.shkriuss.app>.
   - vehicles (`shkriuss:repairs-vehicles`): a name or number (a bus number, a
     plate, "My car"), and optionally the model, number plate and notes. Typing
     a new vehicle in the repair form adds it (`readRepair` returns it as
-    `newVehicle`). Deleting a vehicle deletes its repairs, after asking;
+    `newVehicle`). Deleting a vehicle deletes its repairs, after asking. A
+    repair changed on another device after its vehicle was deleted comes
+    back, as "Unknown vehicle"; its form asks for the vehicle again, as
+    saving the stand-in added a vehicle called "Unknown vehicle" (audit 6
+    F2-3);
   - repairs (`shkriuss:repairs`): the vehicle (by id, so it can be renamed),
     the day, the mileage, the system (brakes, doors…), the damage found, the
     work done, the parts replaced (name, part number, quantity, price each;

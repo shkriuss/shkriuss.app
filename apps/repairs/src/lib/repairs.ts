@@ -552,13 +552,22 @@ export function readRepair(
 }
 
 /**
+ * What the repair form says when the vehicle a repair was on was deleted
+ * (on another device), so its vehicle is empty there (toRepairForm).
+ */
+export const VEHICLE_GONE =
+  'The vehicle this repair was on was deleted on another device. Enter the vehicle.';
+
+/**
  * A repair as the form shows it: numbers as they'd be typed in `locale` (the
- * browser's own when left out), so saving the form unchanged keeps them.
+ * browser's own when left out), so saving the form unchanged keeps them. A
+ * vehicle that was deleted is left empty, to be entered again: saving its
+ * stand-in, "Unknown vehicle", added a vehicle of that name (audit 6 F2-3).
  */
 export function toRepairForm(repair: Repair, vehicles: VehiclesState, locale?: string): RepairForm {
   const number = (value: number | null) => (value === null ? '' : decimalText(value, locale));
   return {
-    vehicle: vehicleName(vehicles, repair.vehicle),
+    vehicle: vehicles.vehicles.find((vehicle) => vehicle.id === repair.vehicle)?.name ?? '',
     date: repair.date,
     mileage: number(repair.mileage),
     system: repair.system,
