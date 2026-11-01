@@ -626,8 +626,12 @@ export function mountTasks(root: Document): void {
     ),
   );
 
-  addListButton.addEventListener('click', () => listEditor.use((editor) => editor.add()));
-  editListButton.addEventListener('click', () => listEditor.use((editor) => editor.edit()));
+  addListButton.addEventListener('click', () =>
+    listEditor.use((editor) => editor.add(addListButton)),
+  );
+  editListButton.addEventListener('click', () =>
+    listEditor.use((editor) => editor.edit(editListButton)),
+  );
 
   // ---------- Elsewhere ----------
 
@@ -638,6 +642,7 @@ export function mountTasks(root: Document): void {
     reminders.changed();
     keepFocus(render, viewHeading);
     taskForm.now?.refresh();
+    listEditor.now?.refresh();
   }
 
   // If Tasks is open in two tabs, keep them the same.

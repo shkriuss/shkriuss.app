@@ -66,7 +66,8 @@ Your to-do list, with dates, lists and reminders. Lives at
   changed, so it can't win over a change another device hasn't synced yet.
   A task deleted meanwhile: the form says so, and
   saving a change brings it back; Save with nothing changed, or Delete,
-  leaves it deleted.
+  leaves it deleted. The same goes for a list deleted while "Edit list" is
+  open.
 - `e2e/`: browser tests (`helpers.ts` is shared by them). The shared
   accessibility, security and offline checks in `tests/e2e/` run too.
 
