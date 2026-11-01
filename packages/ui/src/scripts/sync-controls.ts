@@ -2,9 +2,16 @@
  * "Sync between your devices" (components/SyncControls.astro): connects the
  * buttons and the status line to an app's sync client (@shkriuss/sync).
  */
-import type { SyncClient, SyncEvent, SyncProblem, SyncStatus } from '@shkriuss/sync';
+import {
+  connectProblem,
+  type SyncClient,
+  type SyncEvent,
+  type SyncProblem,
+  type SyncStatus,
+} from '@shkriuss/sync';
 import { DATE_LOCALE } from '../lib/locale.ts';
 import { setBusy } from './busy.ts';
+import { RELOAD_TO_UPDATE } from './problem.ts';
 
 /** How often "Last synced …" is brought up to date. */
 const REFRESH_MS = 30 * 1000;
@@ -47,6 +54,7 @@ export function mountSyncControls(section: HTMLElement, sync: SyncClient): void 
     full: `There’s no room left for ${app}’s data in this browser, so it can’t sync. Delete something you don’t need here, and it will sync again.`,
     'files-full': `There’s no room left online for more of ${app}’s photos and files. New ones stay on this device.`,
     'connect-failed': 'Turning on sync didn’t finish. Please try again.',
+    outdated: `Part of ${app} couldn’t load. ${RELOAD_TO_UPDATE}`,
   };
   const EVENTS: Partial<Record<SyncEvent, string>> = {
     connected: `Sync is on. ${app} is now the same on every device where you turn it on.`,
@@ -162,9 +170,12 @@ export function mountSyncControls(section: HTMLElement, sync: SyncClient): void 
   button('sync-on').addEventListener('click', () => {
     start('Opening your shkriuss account…');
     setBusy(button('sync-on'), true);
-    sync.connect().catch(() => {
+    sync.connect().catch((error: unknown) => {
       setBusy(button('sync-on'), false);
-      done(CONNECT_FAILED);
+      // Only "check your connection" when that's what may help: a page out of
+      // date, or a browser that won't save, says so (audit 6 S40).
+      const problem = connectProblem(error);
+      done(problem === 'connect-failed' ? CONNECT_FAILED : PROBLEMS[problem]);
     });
   });
 

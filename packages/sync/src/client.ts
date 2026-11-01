@@ -75,6 +75,7 @@ import {
 } from './merge.ts';
 import {
   api,
+  connectProblem,
   failed,
   GoneError,
   goneError,
@@ -99,6 +100,7 @@ import { FILE_ID, MAX_SEALED_CHARS } from './validate.ts';
 export { isSyncOn, saveConnection, stopSync } from './device.ts';
 export type { SyncedFiles } from './files.ts';
 export { fingerprint, secondVersionName } from './merge.ts';
+export { connectProblem } from './requests.ts';
 export type { SyncProblem } from './requests.ts';
 
 const PENDING_KEY = 'shkriuss-device:connect';
@@ -210,7 +212,10 @@ export interface SyncClient {
   /** Call after every save. */
   changed(): void;
   syncNow(): Promise<void>;
-  /** Goes to the hub to connect this app (the page navigates away). */
+  /**
+   * Goes to the hub to connect this app (the page navigates away). If it
+   * can't, it rejects: connectProblem() says what to tell the person.
+   */
   connect(): Promise<void>;
   /**
    * Stops syncing on this device; the online copy stays for other devices.
@@ -1004,7 +1009,11 @@ export function createSync(options: {
    * The code for connecting to the account, loaded only when it's needed
    * (below, and in connect()): nearly every page never needs it (audit 5 J-2).
    */
-  const connectCode = () => import('./connect.ts');
+  const connectCode = () =>
+    import('./connect.ts').catch(() => {
+      // Mostly a page from before an update, whose files are gone (audit 6 S40).
+      throw new SyncError('outdated');
+    });
 
   /** Coming back from the hub with "#connect=…". */
   async function finishConnect(): Promise<void> {
@@ -1264,8 +1273,8 @@ export function createSync(options: {
     // From the hub's list of apps: "Turn on sync" straight away.
     history.replaceState(null, '', `${location.pathname}${location.search}`);
     window.setTimeout(() => {
-      client.connect().catch(() => {
-        problem = 'connect-failed';
+      client.connect().catch((error: unknown) => {
+        problem = connectProblem(error);
         emit();
       });
     }, 0);

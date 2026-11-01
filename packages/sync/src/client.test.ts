@@ -8,6 +8,7 @@ import { createStore, deleteAll, type StorageLike, type Store } from '@shkriuss/
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   CHANGE_DELAY_MS,
+  connectProblem,
   createSync,
   POLL_MS,
   saveConnection,
@@ -3345,6 +3346,52 @@ describe('what a device knew can’t be saved right after the data was (audit 3 
     expect(tablet.counters).toEqual([counter('water', 5)]);
     expect(phone.counters).toEqual([counter('water', 5)]);
     vi.useRealTimers();
+  });
+});
+
+describe('“Turn on sync” that can’t get to the hub (audit 6 S40)', () => {
+  /** What "Turn on sync" fails with, as connectProblem() tells it; null if it opened the hub. */
+  async function turnOn(): Promise<string | null> {
+    const page = { hash: '', pathname: '/', search: '', origin: ORIGIN, opened: '' };
+    vi.stubGlobal('location', {
+      ...page,
+      assign: (url: string) => {
+        page.opened = url;
+      },
+    });
+    const device = new Device(null);
+    try {
+      await device.sync.connect();
+    } catch (error) {
+      return connectProblem(error);
+    }
+    expect(page.opened).toContain('/account/?connect=tally');
+    return null;
+  }
+
+  it('says when this browser won’t keep the request, as trying again won’t help', async () => {
+    expect(await turnOn()).toBeNull();
+    const tab = new MemoryStorage();
+    tab.full = true;
+    vi.stubGlobal('sessionStorage', tab);
+    expect(await turnOn()).toBe('full');
+    vi.stubGlobal('sessionStorage', {
+      setItem: () => {
+        throw new DOMException('The operation is insecure.', 'SecurityError');
+      },
+    });
+    expect(await turnOn()).toBe('storage');
+  });
+
+  it('asks to try again when there’s no connection, or the server answers oddly', async () => {
+    offline = true;
+    expect(await turnOn()).toBe('connect-failed');
+    offline = false;
+    const done = intercept((path) =>
+      path.endsWith('/hub') ? new Response('<html>Sign in to the Wi-Fi</html>') : undefined,
+    );
+    expect(await turnOn()).toBe('connect-failed');
+    done();
   });
 });
 
