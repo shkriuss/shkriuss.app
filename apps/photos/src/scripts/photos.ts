@@ -104,6 +104,8 @@ export function mountPhotos(root: Document): void {
   const unlockButton = required<HTMLButtonElement>(unlockForm, 'button[type="submit"]');
   const unlockStatus = required<HTMLElement>(unlockForm, '[data-unlock-status]');
   const freeUp = required<HTMLElement>(root, '[data-free-up]');
+  const freeUpButton = required<HTMLButtonElement>(freeUp, '[data-action="free-up-space"]');
+  const freeUpStatus = required<HTMLElement>(freeUp, '[data-free-up-status]');
   const freeUpDialog = required<HTMLDialogElement>(root, '[data-free-up-dialog]');
   const freeUpText = required<HTMLElement>(freeUpDialog, '[data-free-up-text]');
   const deleteAllNote = required<HTMLElement>(root, '[data-delete-note]');
@@ -123,6 +125,8 @@ export function mountPhotos(root: Document): void {
   });
   let shown = PAGE_SIZE;
   let busy = false;
+  /** While "Free up space" asks the online library and removes originals. */
+  let freeing = false;
   /** While choosing photos: the chosen ones. */
   let choosing = false;
   const chosen = new Set<string>();
@@ -184,7 +188,8 @@ export function mountPhotos(root: Document): void {
     onlineStatus.textContent = onlineMessage(state);
     unlockForm.hidden = !state.checked || state.unlocked || state.problem === 'not-set-up';
     // Only once the library has answered: this device's note that photos are online may be old.
-    freeUp.hidden = !canFreeUp(state) || freeable(photos).photos.length === 0;
+    // Not while it's freeing up space, which has focus.
+    freeUp.hidden = !freeing && (!canFreeUp(state) || freeable(photos).photos.length === 0);
   }
 
   function codeProblem(message: string): void {
@@ -676,7 +681,7 @@ export function mountPhotos(root: Document): void {
 
   function askToFreeUp(): void {
     const { photos: list, bytes } = freeable(photos);
-    if (list.length === 0 || !canFreeUp(online.state())) return;
+    if (freeing || list.length === 0 || !canFreeUp(online.state())) return;
     freeUpText.textContent =
       list.length === 1
         ? `This removes the original of 1 photo (${formatBytes(bytes)}) from this device. It stays in your online library: the photo still shows here, and “Save original” downloads it again.`
@@ -685,15 +690,34 @@ export function mountPhotos(root: Document): void {
     freeUpDialog.showModal();
   }
 
+  // It asks the online library first, after any upload under way, which can
+  // take a while: it says so, and the button is busy, so a second press
+  // isn't a second go (audit 6 G-5).
   freeUpDialog.addEventListener('close', () => {
-    if (freeUpDialog.returnValue !== 'confirm') return;
-    void online.freeUpSpace(freeable(photos).photos).then(
-      (bytes) => {
-        announce(`Freed up ${formatBytes(bytes)} on this device.`);
-        libraryHeading.focus();
-      },
-      () => problem('Couldn’t free up space. Please try again.'),
-    );
+    if (freeUpDialog.returnValue !== 'confirm' || freeing) return;
+    freeing = true;
+    setBusy(freeUpButton, true);
+    freeUpStatus.textContent = 'Freeing up space…';
+    void online
+      .freeUpSpace(freeable(photos).photos)
+      .then(
+        (bytes) => `Freed up ${formatBytes(bytes)} on this device.`,
+        () => null,
+      )
+      .then((freed) => {
+        freeing = false;
+        setBusy(freeUpButton, false);
+        freeUpStatus.textContent = '';
+        renderOnline();
+        if (freed) {
+          announce(freed);
+          libraryHeading.focus();
+          return;
+        }
+        problem('Couldn’t free up space. Please try again.');
+        // Gone meanwhile (the library can't be reached now, say): focus isn't lost with it.
+        if (freeUp.hidden) libraryHeading.focus();
+      });
   });
 
   // ---------- Buttons ----------

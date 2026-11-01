@@ -734,6 +734,48 @@ test('frees up space only when the online library has just said the photos are t
   expect(await originalsHere(page)).toBe(1);
 });
 
+test('“Free up space” says it’s waiting for the online library, and a second press does nothing', async ({
+  page,
+}) => {
+  // It said nothing and wasn't busy meanwhile, so a second press opened the
+  // dialog again and queued a second go (audit 6 G-5).
+  await createAccount(page);
+  await page.goto('/');
+  await photoOnline(page, 'IMG_0009.JPG');
+
+  // A slow connection: the library's answer waits until let go.
+  let letGo = (): void => undefined;
+  const goOn = new Promise<void>((resolve) => {
+    letGo = resolve;
+  });
+  const asked: string[] = [];
+  await page.route('**/api/library/changes*', async (route) => {
+    asked.push(route.request().url());
+    await goOn;
+    await route.continue();
+  });
+  const freeUp = page.getByRole('button', { name: 'Free up space on this device' });
+  const confirm = page.getByRole('dialog', { name: 'Free up space on this device?' });
+  await freeUp.click();
+  await confirm.getByRole('button', { name: 'Free up space' }).click();
+  const status = page.locator('[data-free-up-status]');
+  await expect(status).toHaveText('Freeing up space…');
+  await expect(status).toHaveRole('status');
+  await expect(freeUp).toHaveAttribute('aria-disabled', 'true');
+  await expect(freeUp).toBeFocused();
+  await checkA11y(page, 'freeing up space');
+  await expect.poll(() => asked.length).toBeGreaterThan(0);
+
+  await freeUp.click({ force: true });
+  await expect(confirm).toBeHidden();
+  letGo();
+  await expect(page.getByRole('status').filter({ hasText: /^Freed up / })).toBeAttached(ONLINE);
+  expect(await originalsHere(page)).toBe(0);
+  await expect(status).toHaveText('');
+  await expect(page.locator('[data-library-heading]')).toBeFocused();
+  await page.unroute('**/api/library/changes*');
+});
+
 /** "Delete the online copy", from Photos' own sync controls. */
 async function deleteOnlineCopy(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Delete the online copy' }).click();

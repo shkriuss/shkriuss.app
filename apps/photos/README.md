@@ -53,10 +53,11 @@ reasons: [ADR 0015](../../docs/adr/0015-photos-app.md) (on the device) and
   "Select" to save or delete several (its bar stays at the top of the screen
   while choosing, unless large text makes it too tall; a problem notice
   scrolls with the page meanwhile, so it never covers the bar: audit 6
-  G-2), and the online
-  library's part of "Sync between your devices" (storage code, status, "Free
-  up space on this device"; once the code is accepted, focus goes to the
-  status line: audit 5 G-2). A photo whose screen-sized copy can't be
+  G-2), and the online library's part of "Sync between your devices"
+  (storage code, status, "Free up space on this device"; once the code is
+  accepted, focus goes to the status line: audit 5 G-2; while "Free up
+  space" asks the library first, it says "Freeing up space…" and its
+  button is busy: audit 6 G-5). A photo whose screen-sized copy can't be
   downloaded says so in the viewer's status line too, so it's read out
   (audit 5 G-7).
 - `src/pages/index.astro`: the page, built from `@shkriuss/ui` components.
