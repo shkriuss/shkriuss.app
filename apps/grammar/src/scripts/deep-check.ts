@@ -380,7 +380,12 @@ export function mountDeepCheck(root: Document, host: DeepCheckHost): { textChang
     if (checking) status.textContent = results ? changesSummary(results.changes.length) : '';
   }
 
-  function failed(reason: 'files' | 'start'): void {
+  /**
+   * The worker can't go on. Stopped either way: after a failure while
+   * checking (short of memory, say), the model may not work again until it
+   * starts afresh, and stopping frees its memory.
+   */
+  function failed(reason: 'files' | 'start' | 'check'): void {
     stopWorker();
     checkProgress.hidden = true;
     setBusy(runButton, false);
@@ -389,6 +394,11 @@ export function mountDeepCheck(root: Document, host: DeepCheckHost): { textChang
       saved = undefined;
       show('absent', downloadButton);
       setProblem('Some Deep check files are missing from this device. Download it again.');
+    } else if (reason === 'check') {
+      // It had started: the browser isn't the problem (audit 6).
+      setProblem(
+        'Deep check stopped before it finished checking. Try again. If it stops again, close other apps to free up memory, or check a shorter part of your text.',
+      );
     } else {
       setProblem(
         'Deep check couldn’t start in this browser. Updating the browser may help. See also “Slow, or doesn’t start?” below.',
