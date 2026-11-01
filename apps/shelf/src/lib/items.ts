@@ -8,7 +8,13 @@
 import { isIsoDate, parts, type IsoDate } from '@shkriuss/dates';
 import { secondVersionName } from '@shkriuss/sync';
 import { compareText, cutToLength, foldText } from '@shkriuss/ui/text';
-import { formatMoney, parseDecimal, roundDecimal, whichAmount } from '@shkriuss/ui/numbers';
+import {
+  decimalText,
+  formatMoney,
+  parseDecimal,
+  roundDecimal,
+  whichAmount,
+} from '@shkriuss/ui/numbers';
 import { DATE_LOCALE } from '@shkriuss/ui/locale';
 import { readableHost } from './hosts.ts';
 
@@ -256,6 +262,17 @@ export function itemFromDraft(
   };
 }
 
+/**
+ * A price as the form shows it: 4.5 as "4.50", whole prices without
+ * decimals ("250"). One the form can't save (from an edited backup, say) is
+ * shown as it is, never rounded or with an exponent, so saving the form
+ * doesn't change it without a word: it says what's wrong (audit 6).
+ */
+function priceText(price: number): string {
+  if (price > MAX_PRICE || roundDecimal(price, 2) !== price) return decimalText(price, 'en');
+  return Number.isInteger(price) ? String(price) : price.toFixed(2);
+}
+
 /** The form's text for an item, to edit it. */
 export function draftOf(item: Item): ItemDraft {
   return {
@@ -263,13 +280,7 @@ export function draftOf(item: Item): ItemDraft {
     brand: item.brand,
     category: item.category,
     opinion: item.opinion,
-    // 4.5 shows as "4.50"; whole prices without decimals ("250").
-    price:
-      item.price === null
-        ? ''
-        : Number.isInteger(item.price)
-          ? String(item.price)
-          : item.price.toFixed(2),
+    price: item.price === null ? '' : priceText(item.price),
     currency: item.currency,
     shop: item.shop,
     link: item.link,

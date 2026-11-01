@@ -210,6 +210,29 @@ describe('the form', () => {
     expect(itemFromDraft(draft({ category: NO_CATEGORY }), 'c', 1).category).toBe(NO_CATEGORY);
   });
 
+  it('shows a price saved elsewhere as it is, never rounded or as "1e+21" (audit 6)', () => {
+    // From an edited backup, say: the form showed 12.345 as "12.35" and saved
+    // that, without a word, and 10^21 as "1e+21", which it said wasn't a price.
+    const made = item();
+    const shown = (price: number) => draftOf({ ...made, price }).price;
+    expect(shown(12.345)).toBe('12.345');
+    expect(priceProblem(shown(12.345), EN)).toBe('Write a price like 12.50, or leave it empty.');
+    expect(shown(1e21)).toBe('1000000000000000000000');
+    expect(priceProblem(shown(1e21), EN)).toBe('A price can be up to 1,000,000,000.');
+    expect(shown(1e-7)).toBe('0.0000001');
+    // Prices the form saves look as before, and read back the same.
+    for (const [price, text] of [
+      [4.5, '4.50'],
+      [0.01, '0.01'],
+      [250, '250'],
+      [999_999_999.99, '999999999.99'],
+      [MAX_PRICE, '1000000000'],
+    ] as const) {
+      expect(shown(price)).toBe(text);
+      expect(parsePrice(text, EN)).toBe(price);
+    }
+  });
+
   it('keeps all a box let in, counted as Safari counts (audit 4 F3-4)', () => {
     // Safari's maxlength counts characters as people see them: its name box
     // takes 150 flags (300 in JavaScript), and its notes box 500 of these.

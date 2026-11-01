@@ -11,7 +11,9 @@ anything else, with brands, prices, shops and links. Lives at
   bought it and notes. A price is read the way the money apps read amounts
   (`parseDecimal` from `@shkriuss/ui/numbers`: "12,50", "1,299.50" in
   English, "1.299,50" in German, any script's digits), kept to the cent, and
-  over 1,000,000,000 is said to be too much (audit 5 F3-10). Links must be
+  over 1,000,000,000 is said to be too much (audit 5 F3-10). A price saved
+  some other way (an edited backup, say) shows in the form as it is, not
+  rounded, so saving the form never changes it without a word (audit 6). Links must be
   `http://` or `https://` web addresses; a link is kept as typed (trimmed,
   "https://" added), not as the browser would write it, so the form shows it
   as it was written, and one longer than its box takes, counting the
