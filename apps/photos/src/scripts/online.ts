@@ -597,6 +597,8 @@ export function startOnline(list: PhotoList): Online {
     },
     async kept(ids) {
       const back = new Set(ids);
+      // None was noted (none was online): nothing to take back.
+      if (!(await loadProgress())?.removals.some((id) => back.has(id))) return;
       await updateProgress((current) => ({
         ...(current ?? fresh(inUse)),
         removals: (current?.removals ?? []).filter((id) => !back.has(id)),
