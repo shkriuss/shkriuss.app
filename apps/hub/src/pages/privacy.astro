@@ -1,6 +1,7 @@
 ---
 import { apps, byName, getSite, HUB_SLUG, type StorageKind } from '@shkriuss/registry';
 import { AppShell } from '@shkriuss/ui';
+import { lastUpdated } from '../lib/last-updated.ts';
 
 // The table is built from the registry, so it is always up to date.
 const sites = [getSite(HUB_SLUG), ...[...apps].sort(byName).map((app) => getSite(app.slug))];
@@ -20,7 +21,10 @@ const whereLabel: Record<StorageKind, string> = {
 // The day this page's text last changed (people rely on it), and a
 // fingerprint of that text: ../privacy.test.ts fails when the text changes
 // but they don't, and says what to set (audit 3 D-7).
-const LAST_UPDATED = '1 November 2026'; // text 0942a04fb3921aa1
+const LAST_UPDATED = '1 November 2026'; // text 8b1958cd99c9201b
+// The page shows the day that change was merged, so went live, if that's
+// later than the day it was written (audit 6 D-2).
+const shownDate = lastUpdated(LAST_UPDATED);
 ---
 
 <AppShell
@@ -29,7 +33,7 @@ const LAST_UPDATED = '1 November 2026'; // text 0942a04fb3921aa1
 >
   <article class="prose">
     <h1>Privacy</h1>
-    <p class="muted">Last updated: {LAST_UPDATED}</p>
+    <p class="muted">Last updated: {shownDate}</p>
 
     <p class="lead">
       Short version: these apps don't collect your personal data. There are no cookies, analytics,

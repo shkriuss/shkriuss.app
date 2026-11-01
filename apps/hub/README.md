@@ -12,7 +12,10 @@ page, and the Account page for the optional shkriuss account.
   numbers from the code, so update it when they change. When its text
   changes, so does its "Last updated" date: `src/privacy.test.ts` keeps a
   fingerprint of the text next to the date, and fails until both are
-  updated, saying what to set.
+  updated, saying what to set. That's the day the text was written; the
+  page shows the day it was merged, so went live, when that's later
+  (`src/lib/last-updated.ts` asks git, which is why CI's Checks job fetches
+  the whole history; audit 6 D-2).
 - `src/pages/account.astro` and `src/scripts/account.ts`: the Account page.
   The account itself is in `packages/account`
   ([ADR 0010](../../docs/adr/0010-account-and-sync.md)).

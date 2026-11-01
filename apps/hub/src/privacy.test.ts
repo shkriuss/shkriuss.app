@@ -87,6 +87,12 @@ describe('the privacy page', () => {
     ).toBe(now);
   });
 
+  it('shows the day its text went live, if that’s later (audit 6 D-2)', () => {
+    // lib/last-updated.ts: the day the pull request was merged, from git.
+    expect(source).toContain('const shownDate = lastUpdated(LAST_UPDATED);');
+    expect(source).toContain('Last updated: {shownDate}');
+  });
+
   it('notices a changed word, but not a line wrapped differently', () => {
     const now = fingerprint(source);
     expect(fingerprint(source.replace('Short version', 'Short\n      version'))).toBe(now);
