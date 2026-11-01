@@ -1,12 +1,20 @@
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   addedPackages,
+  changedManifestSettings,
   changedPackages,
   changedSourceSettings,
   lockedPackages,
   npmrcFiles,
+  pnpmfiles,
   registryIntegrity,
   releaseAgeRules,
+  runsCode,
   saysWhereFrom,
   tooNew,
   unregisteredPackages,
@@ -197,9 +205,6 @@ snapshots:
   number@1.0.0:
     resolution: {integrity: 12345}
 
-  merged@1.0.0:
-    <<: {resolution: {integrity: sha512-x}}
-
   fine@1.0.0:
     resolution: {integrity: sha512-x}
 `;
@@ -209,7 +214,6 @@ snapshots:
       'list@1.0.0',
       'notahash@1.0.0',
       'number@1.0.0',
-      'merged@1.0.0',
     ]);
     expect(changedPackages('packages:\n', head)).toEqual([['fine', '1.0.0', 'sha512-x']]);
   });
@@ -227,6 +231,59 @@ snapshots:
     expect(() => lockedPackages('packages: a word\n')).toThrow(/mapping/);
     expect([...lockedPackages('')]).toEqual([]);
     expect([...lockedPackages('packages:\n')]).toEqual([]);
+  });
+
+  it('refuses YAML that pnpm reads differently: "<<" merge keys, keys written as lists (audit 6 H-2)', () => {
+    // pnpm 10.34.7 installed is-odd from a lockfile written each of these
+    // ways. The yaml package saw no "packages:" in the first three, and
+    // is-odd without its resolution in the fourth.
+    const integrity =
+      'sha512-CQpnWPrDwmP1+SMHXZhtLtJv90yiyVfluGsX5iNCVkrhQtU3TQHsUWPG9wkdk9Lgd5yNpAg9jQEo90CBaXgWMA==';
+    const entry = `is-odd@3.0.1:\n      resolution: {integrity: ${integrity}}\n`;
+    const base = "lockfileVersion: '9.0'\n\npackages:\n\nsnapshots:\n";
+    const hiding = {
+      anchored: `lockfileVersion: '9.0'\nhidden: &hidden\n  packages:\n    ${entry}<<: *hidden\n`,
+      inline: `lockfileVersion: '9.0'\n<<:\n  packages:\n    ${entry}`,
+      keyAsList: `lockfileVersion: '9.0'\n? [packages]\n:\n    ${entry}`,
+      inEntry: `packages:\n  is-odd@3.0.1:\n    <<: {resolution: {integrity: ${integrity}}}\n`,
+      yaml11: `%YAML 1.1\n---\n<<: {packages: {is-odd@3.0.1: {resolution: {integrity: ${integrity}}}}}\n`,
+    };
+    // None of these is in a lockfile pnpm writes, so they're refused too.
+    const unusual = {
+      quotedMerge: `'<<': {packages: {}}\npackages: {}\n`,
+      keyAsMapping: `? {packages: x}\n: {}\npackages: {}\n`,
+      alias: `packages:\n  a@1.0.0: &a {resolution: {integrity: sha512-x}}\n  b@1.0.0: *a\n`,
+      anchor: `packages: &p\n  a@1.0.0: {resolution: {integrity: sha512-x}}\n`,
+      tag: `packages: !!map\n  a@1.0.0: {resolution: {integrity: sha512-x}}\n`,
+      localTag: `packages:\n  a@1.0.0: {resolution: {integrity: !hash sha512-x}}\n`,
+      tagDirective: `%TAG !e! tag:example.com,2000:\n---\npackages: {}\n`,
+    };
+    for (const [name, head] of Object.entries({ ...hiding, ...unusual })) {
+      expect(() => addedPackages(base, head), name).toThrow(/pnpm never writes/);
+      expect(() => changedPackages(base, head), name).toThrow(/pnpm never writes/);
+      expect(() => unregisteredPackages(head), name).toThrow(/pnpm never writes/);
+    }
+    expect(() => addedPackages(base, hiding.inline)).toThrow(
+      'pnpm-lock.yaml uses a "<<" merge key, which pnpm never writes',
+    );
+    // Strings that only look like those are fine.
+    const lookalikes = `packages:\n  a@1.0.0:\n    resolution: {integrity: sha512-x}\n    note: '<< &a *a !tag %YAML'\n`;
+    expect([...lockedPackages(lookalikes)]).toEqual(['a@1.0.0']);
+  });
+
+  it('refuses the same in pnpm-workspace.yaml, where a "<<" set a registry unseen (audit 6 H-2)', () => {
+    const base = 'packages: []\n';
+    const merged = 'packages: []\nx: &x\n  registry: https://example.invalid/\n<<: *x\n';
+    expect(() => changedSourceSettings(base, merged)).toThrow(/pnpm never writes/);
+    const inline = 'packages: []\n<<:\n  registry: https://example.invalid/\n';
+    expect(() => changedSourceSettings(base, inline)).toThrow(/merge key, which pnpm never writes/);
+    expect(() => releaseAgeRules('x: &x\n  minimumReleaseAge: 0\n<<: *x\n')).toThrow(
+      /pnpm never writes/,
+    );
+    // This repository's own files are plain YAML.
+    const workspace = readFileSync('pnpm-workspace.yaml', 'utf8');
+    expect(releaseAgeRules(workspace).minutes).toBe(10080);
+    expect(changedSourceSettings(workspace, workspace)).toEqual([]);
   });
 
   it('finds the registry versions a pull request adds or gives another hash (audit 3 H-1)', () => {
@@ -295,5 +352,80 @@ snapshots:
     expect(
       npmrcFiles(['.npmrc', 'apps/tally/.npmrc', 'docs/npmrc.md', 'x/.npmrc.bak', '']),
     ).toEqual(['.npmrc', 'apps/tally/.npmrc']);
+  });
+
+  it('notices config dependencies and pnpmfiles, code pnpm runs with no check (audit 6 H-3)', () => {
+    // pnpm 10.34.7 installed a 4-day-old version this way, whatever
+    // minimumReleaseAge said, and installs them for any command, pnpm audit too.
+    const base = 'packages:\n  - apps/*\nminimumReleaseAge: 10080\n';
+    for (const [line, setting] of [
+      ['configDependencies:\n  pnpm-plugin-x: "1.0.0+sha512-AAAA"', 'configDependencies'],
+      ["config-dependencies:\n  '@pnpm/plugin-x': 1.0.0+sha512-AAAA", 'config-dependencies'],
+      ['pnpmfile: tools/hooks.cjs', 'pnpmfile'],
+      ['globalPnpmfile: /tmp/hooks.cjs', 'globalPnpmfile'],
+    ]) {
+      expect(changedSourceSettings(base, `${base}${line}\n`), line).toEqual([setting]);
+      expect(runsCode(setting ?? ''), setting).toBe(true);
+    }
+    for (const setting of ['catalog', 'overrides', 'onlyBuiltDependencies', 'packages']) {
+      expect(runsCode(setting), setting).toBe(false);
+    }
+
+    // pnpm reads configDependencies from the root package.json's "pnpm" field too.
+    const manifest = '{"name": "x", "pnpm": {"overrides": {"a": "1.0.0"}}}';
+    const withConfigDependency =
+      '{"name": "x", "pnpm": {"overrides": {"a": "1.0.0"}, "configDependencies": {"pnpm-plugin-x": "1.0.0+sha512-AAAA"}}}';
+    expect(changedManifestSettings(manifest, withConfigDependency)).toEqual([
+      'pnpm.configDependencies',
+    ]);
+    expect(changedManifestSettings(withConfigDependency, manifest)).toEqual([
+      'pnpm.configDependencies',
+    ]);
+    expect(changedManifestSettings('{"name": "x"}', manifest)).toEqual([]);
+    expect(() => changedManifestSettings(manifest, '{"pnpm": []}')).toThrow(/isn't an object/);
+    const own = readFileSync('package.json', 'utf8');
+    expect(changedManifestSettings(own, own)).toEqual([]);
+
+    expect(
+      pnpmfiles([
+        '.pnpmfile.cjs',
+        'apps/tally/.pnpmfile.cjs',
+        'docs/pnpmfile.md',
+        '.pnpmfile.cjs.bak',
+      ]),
+    ).toEqual(['.pnpmfile.cjs', 'apps/tally/.pnpmfile.cjs']);
+  });
+
+  it('reads YAML with the yaml package beside it, never the working directory’s (audit 6 H-1)', () => {
+    // CI runs these checks in a pull request's checkout, whose node_modules
+    // its own lockfile decides. A "yaml" there that read every lockfile as
+    // main's made the check pass whatever the pull request added.
+    const checkout = mkdtempSync(join(tmpdir(), 'lockfile-age-'));
+    try {
+      mkdirSync(join(checkout, 'node_modules/yaml'), { recursive: true });
+      writeFileSync(join(checkout, 'package.json'), '{"type": "module"}\n');
+      writeFileSync(
+        join(checkout, 'node_modules/yaml/package.json'),
+        '{"name": "yaml", "version": "2.9.1", "main": "index.cjs"}\n',
+      );
+      writeFileSync(
+        join(checkout, 'node_modules/yaml/index.cjs'),
+        "throw new Error('the yaml package in the working directory was used');\n",
+      );
+      const lib = pathToFileURL(join(import.meta.dirname, 'lockfile-age.ts')).href;
+      const output = execFileSync(
+        process.execPath,
+        [
+          '--input-type=module',
+          '--eval',
+          `const { lockedPackages } = await import(${JSON.stringify(lib)});
+           console.log([...lockedPackages('packages:\\n  is-number@7.0.0: {}\\n')].join());`,
+        ],
+        { cwd: checkout, encoding: 'utf8', env: { ...process.env, NODE_PATH: '' } },
+      );
+      expect(output.trim()).toBe('is-number@7.0.0');
+    } finally {
+      rmSync(checkout, { recursive: true, force: true });
+    }
   });
 });

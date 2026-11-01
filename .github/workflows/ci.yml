@@ -13,8 +13,12 @@ on:
 permissions: {}
 
 concurrency:
-  group: ci-${{ github.ref }}
-  # Cancel outdated PR runs, but never cancel a run on main (it may be deploying).
+  # A pull request's newer push cancels its older run. Every other run has a
+  # group of its own (its ID, which its re-runs keep): GitHub keeps one
+  # waiting run per group and cancels it when another one queues, so a run
+  # started by hand, or a re-run of an older one, could cancel the run that
+  # would have deployed main's newest commit (audit 6 H-6).
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
@@ -107,6 +111,8 @@ jobs:
       # again, from the same pinned, checksum-checked files (docs/adr/0012).
       # Files in folders whose names start with a dot (the hub's
       # /.well-known/security.txt) are left out unless include-hidden-files.
+      # Kept for a day: to deploy again later, "Re-run all jobs", which builds
+      # it again ("Re-run failed jobs" would find it gone; audit 6 H-9).
       - name: Save the tested build for deployment
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -172,30 +178,72 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up
+      # pnpm and Node.js only: this job never installs the pull request's
+      # packages, so none of their code runs here (pnpm audit reads only the
+      # lockfile).
+      - name: Set up pnpm and Node.js
         uses: ./.github/actions/setup
-
-      - name: Check for known high or critical vulnerabilities
-        run: pnpm audit --audit-level high
+        with:
+          cache: 'false'
+          install: 'false'
 
       # pnpm's 7-day wait only applies when it picks versions; CI installs what
-      # the lockfile says, so check what a pull request adds to it. The check
-      # that runs is main's copy of the script, from a folder outside the
-      # checkout, so a pull request can't change the check it's checked by
-      # (audit 5 H-3); the rules it applies are main's too (audit 4 H-1).
+      # the lockfile says, so check what a pull request adds to it. What runs
+      # is main's copy of the check, with main's packages (its YAML reader
+      # among them) installed beside it in a folder outside the checkout, and
+      # before any pnpm command in the checkout: so neither the pull request's
+      # code nor its lockfile can change the check, or what reads the lockfile
+      # (audit 5 H-3, audit 6 H-1). The rules it applies are main's too
+      # (audit 4 H-1). NODE_PATH is for main's copy of the check from before
+      # audit 6 H-1, which looked for its packages from the working directory;
+      # the copy since then finds them beside itself.
       - name: No package versions under 7 days old in the lockfile
         if: github.event_name == 'pull_request'
         env:
           BASE_REF: ${{ github.base_ref }}
         run: |
           git fetch --no-tags --depth=1 origin "$BASE_REF"
-          git archive "origin/$BASE_REF" scripts/lockfile-age.ts scripts/lib/lockfile-age.ts | tar -x -C "$RUNNER_TEMP"
-          node "$RUNNER_TEMP/scripts/lockfile-age.ts" "origin/$BASE_REF"
+          mkdir "$RUNNER_TEMP/base"
+          git archive "origin/$BASE_REF" package.json pnpm-lock.yaml pnpm-workspace.yaml scripts/lockfile-age.ts scripts/lib/lockfile-age.ts | tar -x -C "$RUNNER_TEMP/base"
+          (cd "$RUNNER_TEMP/base" && pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile --store-dir "$RUNNER_TEMP/base-store")
+          NODE_PATH="$RUNNER_TEMP/base/node_modules" node "$RUNNER_TEMP/base/scripts/lockfile-age.ts" "origin/$BASE_REF"
+
+      - name: Check for known high or critical vulnerabilities
+        run: pnpm audit --audit-level high
+
+  # Only main's newest commit deploys: re-running an older run must never put
+  # older code back live. Decided here, before the deploy job waits its turn
+  # in the "production" group: GitHub keeps one waiting job per group and
+  # cancels it when another one queues, so a run that won't deploy must never
+  # queue there, or it could cancel the newest commit's deploy (audit 6 H-6).
+  newest:
+    name: Newest commit on main
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [checks, secrets, audit]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      deploy: ${{ steps.newest.outputs.deploy }}
+    steps:
+      - name: Deploy only the newest commit on main
+        id: newest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          latest=$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq .sha)
+          if [ "$latest" = "$GITHUB_SHA" ]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice title=Not deployed::A newer commit (${latest:0:7}) is on main. It deploys instead, so this older one doesn't."
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+          fi
 
   deploy:
     name: Deploy to production
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [checks, secrets, audit]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.newest.outputs.deploy == 'true'
+    needs: newest
     # The Cloudflare token and the storage code are secrets of the "production"
     # environment, which only main can use (docs/deployment.md). Only the steps
     # that need the token get it.
@@ -211,7 +259,9 @@ jobs:
       # Not a secret: it only says which Cloudflare account to deploy to.
       CLOUDFLARE_ACCOUNT_ID: 29431d9d1143cc458db3ad0598c84302
     steps:
-      # Re-running an older run must never put older code back live.
+      # Checked again, the same way: a newer commit may have been merged while
+      # this job waited its turn, and "Re-run failed jobs" keeps the answer
+      # the job above gave the first time.
       - name: Deploy only the newest commit on main
         id: newest
         env:

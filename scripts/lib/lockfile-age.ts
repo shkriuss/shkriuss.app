@@ -8,16 +8,16 @@
  * The lockfile is read as YAML, as pnpm reads it. Read line by line, these
  * checks saw only entries written the way pnpm writes them, so an entry
  * written on one line (`evil@1.0.0: {resolution: {…}}`), or with a comment
- * after its name, was installed without any check (audit 5 H-1).
+ * after its name, was installed without any check (audit 5 H-1). YAML that
+ * pnpm reads differently from the yaml package is refused (audit 6 H-2).
  */
-import { createRequire } from 'node:module';
-import { join } from 'node:path';
-import type * as YAML from 'yaml';
-
-// The yaml package, found from the working directory (the repository), not
-// from this file: CI runs main's copy of these scripts from a folder outside
-// the checkout, where nothing is installed (audit 5 H-3).
-const { parse } = createRequire(join(process.cwd(), 'package.json'))('yaml') as typeof YAML;
+// Found from this file's folder, never from the working directory: CI runs
+// main's copy of these scripts in a folder of its own, with main's packages
+// installed beside it, against a pull request's checkout (audit 5 H-3). Found
+// from the working directory, the YAML reader was the one the pull request's
+// own lockfile installed, so it could make its lockfile read as anything
+// (audit 6 H-1).
+import { type Document, isScalar, parseDocument, visit } from 'yaml';
 
 type Mapping = Record<string, unknown>;
 
@@ -25,12 +25,66 @@ const isMapping = (value: unknown): value is Mapping =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
+ * What a YAML file uses that pnpm never writes, and that pnpm (which reads
+ * YAML with js-yaml) reads differently from the yaml package: a "<<" merge
+ * key, which pnpm applies and this reader doesn't, or a key written as a
+ * list or a mapping (`? [packages]`), which pnpm reads as "packages" and
+ * this one as "[ packages ]". Either hid every package from these checks
+ * while pnpm still installed them (audit 6 H-2). Anchors, aliases, tags and
+ * `%` directives are refused too: pnpm writes none of them, and they're
+ * where YAML readers differ. Undefined for plain YAML.
+ */
+function notPlainYaml(document: Document.Parsed): string | undefined {
+  const { yaml, tags } = document.directives;
+  if (
+    yaml.explicit ||
+    Object.entries(tags).some(
+      ([handle, prefix]) => handle !== '!!' || prefix !== 'tag:yaml.org,2002:',
+    )
+  ) {
+    return 'a % directive';
+  }
+  let found: string | undefined;
+  visit(document, {
+    Alias() {
+      found = 'an alias (*name)';
+      return visit.BREAK;
+    },
+    Pair(_, pair) {
+      const key = pair.key;
+      if (!isScalar(key)) found = 'a key written as a list or a mapping';
+      // In YAML 1.1 the yaml package reads a merge key as a symbol.
+      else if (key.value === '<<' || key.source === '<<' || typeof key.value === 'symbol') {
+        found = 'a "<<" merge key';
+      }
+      return found ? visit.BREAK : undefined;
+    },
+    Node(_, node) {
+      if (node.anchor) found = 'an anchor (&name)';
+      else if (node.tag) found = 'a tag (!name)';
+      return found ? visit.BREAK : undefined;
+    },
+  });
+  return found;
+}
+
+/**
  * A YAML file read as a mapping (an empty file is an empty one). YAML the
  * parser refuses, like a key written twice, is an error here too: pnpm
- * would refuse the file as well.
+ * would refuse the file as well. So is YAML that pnpm would read
+ * differently (see notPlainYaml).
  */
 function mappingOf(text: string, what: string): Mapping {
-  const document: unknown = parse(text);
+  const parsed = parseDocument(text);
+  const [error] = parsed.errors;
+  if (error) throw error;
+  const unusual = notPlainYaml(parsed);
+  if (unusual) {
+    throw new Error(
+      `${what} uses ${unusual}, which pnpm never writes and reads differently from this check (audit 6 H-2)`,
+    );
+  }
+  const document: unknown = parsed.toJS();
   if (document === null || document === undefined) return {};
   if (!isMapping(document)) throw new Error(`${what} isn't a YAML mapping`);
   return document;
@@ -170,6 +224,9 @@ export function tooNew(
     .map(([name, version]) => `${name}@${version}`);
 }
 
+/** A setting's name as pnpm matches it, "strict-ssl" (.npmrc) and "strictSsl" alike. */
+const settingName = (setting: string) => setting.toLowerCase().replaceAll('-', '');
+
 /**
  * Whether a pnpm setting says where packages come from, or how they're
  * fetched: the registry (for a scope too, "@types:registry"), a line about
@@ -177,7 +234,7 @@ export function tooNew(
  * fetch… settings. These aren't expected to change (audit 5 H-1).
  */
 export function saysWhereFrom(setting: string): boolean {
-  const name = setting.toLowerCase().replaceAll('-', '');
+  const name = settingName(setting);
   return (
     name.includes('registry') ||
     name.startsWith('fetch') ||
@@ -187,14 +244,28 @@ export function saysWhereFrom(setting: string): boolean {
 }
 
 /**
- * The settings in pnpm-workspace.yaml that `head` adds, changes or removes
- * among those that say where packages come from (audit 5 H-1).
+ * Whether a pnpm setting names code that pnpm itself loads and runs: config
+ * dependencies, which pnpm installs whenever it starts (for `pnpm audit`
+ * too), before anything else, with no 7-day wait, and which aren't in the
+ * lockfile's packages, so these checks never saw them; pnpm then runs the
+ * hooks file (pnpmfile.cjs) of each one named like a plugin with every
+ * command. Or a hooks file of its own (pnpmfile, globalPnpmfile). Nothing
+ * here uses any of them, so they aren't expected to change (audit 6 H-3).
  */
-export function changedSourceSettings(base: string, head: string): string[] {
-  const settingsOf = (text: string) =>
+export function runsCode(setting: string): boolean {
+  return ['configdependencies', 'pnpmfile', 'globalpnpmfile'].includes(settingName(setting));
+}
+
+/** The settings `head` adds, changes or removes among those `guarded` picks. */
+function changedSettings(
+  base: Mapping,
+  head: Mapping,
+  guarded: (setting: string) => boolean,
+): string[] {
+  const settingsOf = (settings: Mapping) =>
     new Map(
-      Object.entries(mappingOf(text, 'pnpm-workspace.yaml'))
-        .filter(([key]) => saysWhereFrom(key))
+      Object.entries(settings)
+        .filter(([key]) => guarded(key))
         .map(([key, value]) => [key, JSON.stringify(value)]),
     );
   const before = settingsOf(base);
@@ -205,8 +276,50 @@ export function changedSourceSettings(base: string, head: string): string[] {
 }
 
 /**
+ * The settings in pnpm-workspace.yaml that `head` adds, changes or removes
+ * among those that say where packages come from (audit 5 H-1), or that name
+ * code pnpm runs (audit 6 H-3).
+ */
+export function changedSourceSettings(base: string, head: string): string[] {
+  return changedSettings(
+    mappingOf(base, 'pnpm-workspace.yaml'),
+    mappingOf(head, 'pnpm-workspace.yaml'),
+    (setting) => saysWhereFrom(setting) || runsCode(setting),
+  );
+}
+
+/** The "pnpm" field of a package.json. */
+function pnpmFieldOf(packageJson: string): Mapping {
+  const manifest: unknown = JSON.parse(packageJson);
+  if (!isMapping(manifest)) throw new Error("package.json isn't a JSON object");
+  const field = manifest['pnpm'] ?? {};
+  if (!isMapping(field)) throw new Error('"pnpm" in package.json isn\'t an object');
+  return field;
+}
+
+/**
+ * The settings in the root package.json's "pnpm" field that `head` adds,
+ * changes or removes among those that name code pnpm runs, as
+ * "pnpm.<setting>": pnpm reads configDependencies from there too
+ * (audit 6 H-3).
+ */
+export function changedManifestSettings(base: string, head: string): string[] {
+  return changedSettings(pnpmFieldOf(base), pnpmFieldOf(head), runsCode).map(
+    (setting) => `pnpm.${setting}`,
+  );
+}
+
+/**
  * The .npmrc files among these paths, in any folder: pnpm reads each of
  * them, and one can name another registry (audit 5 H-1).
  */
 export const npmrcFiles = (paths: readonly string[]): string[] =>
   paths.filter((path) => path === '.npmrc' || path.endsWith('/.npmrc'));
+
+/**
+ * The pnpm hooks files (.pnpmfile.cjs) among these paths, in any folder:
+ * pnpm runs the one at the top of the repository with every command, even
+ * one that then refuses to install (audit 6 H-3).
+ */
+export const pnpmfiles = (paths: readonly string[]): string[] =>
+  paths.filter((path) => path === '.pnpmfile.cjs' || path.endsWith('/.pnpmfile.cjs'));

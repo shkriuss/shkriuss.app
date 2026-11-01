@@ -458,6 +458,19 @@ This area is split into three tasks:
   from every token, key and `main`'s caches.
 - Could a broken or malicious build reach production? Deploys should run
   only from `main`, after every check, using the same build that was tested.
+- Could `main`'s newest commit end up never deployed, with nothing failing?
+  Look at the concurrency groups, re-runs and runs started by hand (audit 6
+  H-6).
+- Can a pull request's own files (its `pnpm-lock.yaml`,
+  `pnpm-workspace.yaml` or `package.json`) change what the lockfile check
+  (`scripts/lockfile-age.ts`) reads or runs, or add a package it doesn't
+  see? `main`'s copy runs first in its job, with `main`'s packages, and
+  nothing from the pull request is installed there (audit 6 H-1). Look for
+  YAML that pnpm (js-yaml) and the check (the `yaml` package) read
+  differently: it refuses `<<` merge keys, keys written as lists, anchors,
+  aliases, tags and directives (audit 6 H-2). And for anything else pnpm
+  installs or runs that isn't in the lockfile's `packages:`, like config
+  dependencies and pnpmfiles, which it refuses (audit 6 H-3).
 - For every dependency:
   - is it needed and maintained?
   - are install scripts allowed only where listed?

@@ -1,11 +1,15 @@
 # Shared setup for every workflow: pnpm, Node.js (version from .node-version)
-# and dependencies from the lockfile. Actions are pinned to exact commits;
-# Dependabot keeps them up to date.
+# and dependencies from the lockfile (unless install is "false"). Actions are
+# pinned to exact commits; Dependabot keeps them up to date.
 name: Setup
 description: Install pnpm, Node.js and dependencies
 inputs:
   cache:
     description: '"false" for a clean install that does not use or save the shared package cache (the deploy job)'
+    required: false
+    default: 'true'
+  install:
+    description: '"false" to install only pnpm and Node.js, not the packages (the dependency audit, which never installs a pull request''s packages)'
     required: false
     default: 'true'
 runs:
@@ -23,5 +27,6 @@ runs:
         package-manager-cache: false
 
     - name: Install dependencies
+      if: inputs.install == 'true'
       shell: bash
       run: pnpm install --frozen-lockfile

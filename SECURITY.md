@@ -131,11 +131,20 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
   lockfile as YAML, the way pnpm does, so an entry written in another style
   than pnpm's own is checked all the same, and it refuses a pull request
   that adds an `.npmrc` or changes where pnpm downloads from in
-  `pnpm-workspace.yaml` (audit 5 H-1). CI runs `main`'s copy of that check,
-  so a pull request can't change the check it's checked by (audit 5 H-3).
+  `pnpm-workspace.yaml` (audit 5 H-1). YAML that pnpm reads differently
+  from the check (a `<<` merge key, for one) is refused too (audit 6 H-2),
+  and so is code pnpm would run itself: a config dependency, which pnpm
+  installs with no 7-day wait, or a pnpmfile (audit 6 H-3). CI runs
+  `main`'s copy of that check, with `main`'s packages, before anything from
+  the pull request is installed or run, so a pull request can't change the
+  check or what reads its lockfile (audit 5 H-3, audit 6 H-1). It can
+  change CI itself: GitHub runs a pull request's own copy of the workflows
+  (`.github/`), so changes there are read like code before merging
+  ([quality.md](docs/quality.md)).
 - Production deploys only happen from `main`, after every check passes,
   including the dependency audit, and only for `main`'s newest commit (so
-  re-running an older run can't put older code back). Only the deploy steps
+  re-running an older run can't put older code back, nor cancel the newest
+  one's deploy: audit 6 H-6). Only the deploy steps
   see the token, and the deploy job installs without the shared package
   cache. That stops mistakes, not a bad dependency: any code that runs in a
   job (an install script, a build step) can read every secret of that job

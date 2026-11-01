@@ -88,7 +88,10 @@ Open the repository on GitHub → **Settings** → **Environments**.
    _repository_ secret named `CLOUDFLARE_API_TOKEN` or `PHOTOS_STORAGE_CODE`.
    Repository secrets reach every run, whatever its environment.
 3. There's no other environment. If the list still has `preview` (from when
-   pull requests had previews), delete it: it holds a copy of the token.
+   pull requests had previews), or `claude` or `claude-audit` (from the
+   Claude workflow, which was removed:
+   [ADR 0021](adr/0021-no-claude-workflow.md)), delete them: `preview`
+   holds a copy of the token, and the other two may hold a Claude API key.
 
 Never paste the token anywhere else, including chat.
 
@@ -110,7 +113,9 @@ Never paste the token anywhere else, including chat.
 To change the storage code, change the secret: the next deploy gives the
 new one to the Worker. To deploy again without merging anything, open the
 newest **CI** run on `main` → **Re-run all jobs**. Only the newest commit on
-`main` deploys: re-running an older run checks it but deploys nothing.
+`main` deploys: re-running an older run checks it but deploys nothing, and
+no other run (an older one re-run, or one started with **Run workflow**)
+can cancel the newest one's deploy while it waits its turn (audit 6 H-6).
 
 ### GitHub settings
 
@@ -259,9 +264,12 @@ twice a week and downloads again whatever is missing, so a quiet week
 doesn't empty them (audit 5 H-2); **Actions → Caches** on GitHub shows
 what's there, and **Run workflow** on that workflow fills it by hand. If
 one of these services is down while CI needs it, a merge (even a fix) can't
-deploy until it's back: re-run the failed job then. The live sites stay as
-they were meanwhile; to undo a bad deploy in the meantime, use the
-dashboard's **Rollback** above (audit H-2).
+deploy until it's back: then open the newest **CI** run on `main` →
+**Re-run all jobs**. Not **Re-run failed jobs**: the build the deploy uses
+is kept for one day, so a day later only re-running everything (which
+builds it again) can deploy (audit 6 H-9). The live sites stay as they were
+meanwhile; to undo a bad deploy in the meantime, use the dashboard's
+**Rollback** above (audit H-2).
 
 ## Costs
 
@@ -299,12 +307,13 @@ Everything here fits Cloudflare's and GitHub's free plans:
 
 ## Troubleshooting
 
-| Problem                                                       | Fix                                                                                                                                                                           |
-| ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Deploy fails with "Add the CLOUDFLARE_API_TOKEN secret"       | Add it to the `production` environment (see setup).                                                                                                                           |
-| Deploy fails with "Authentication error [code: 10000]"        | The token is missing a permission or the zone. Edit it in Cloudflare (**My Profile** → **API Tokens** → **Edit**) and check all three permission rows and both resource rows. |
-| "Custom domain … already exists / conflicting DNS record"     | A DNS record already uses that name. Delete it in Cloudflare (**shkriuss.app** → **DNS** → **Records**) and re-run the workflow.                                              |
-| A new app's address doesn't work right after the first deploy | DNS and certificates can take a few minutes. The smoke test retries for about 5 minutes.                                                                                      |
-| "Could not create the R2 bucket …"                            | Turn on R2 in Cloudflare, and give the token `Account` · `Workers R2 Storage` · `Edit` (see setup).                                                                           |
-| Photos says "Online storage isn't set up yet"                 | Add the `PHOTOS_STORAGE_CODE` secret to the `production` environment (see setup). The next merge to `main` gives it to the Worker.                                            |
-| An app keeps saying "Couldn't sync just now"                  | Its server may have reached its limit (ADR 0017); unused copies go after 13 months. To raise it: `STORAGE_LIMITS` in `packages/sync/src/worker.ts`, all under 5 GB.           |
+| Problem                                                        | Fix                                                                                                                                                                           |
+| -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Deploy fails with "Add the CLOUDFLARE_API_TOKEN secret"        | Add it to the `production` environment (see setup).                                                                                                                           |
+| Every pull request fails **Dependency audit**, nothing deploys | A new advisory in a dependency: [quality.md](quality.md#when-a-new-advisory-stops-every-merge) says how to go on.                                                             |
+| Deploy fails with "Authentication error [code: 10000]"         | The token is missing a permission or the zone. Edit it in Cloudflare (**My Profile** → **API Tokens** → **Edit**) and check all three permission rows and both resource rows. |
+| "Custom domain … already exists / conflicting DNS record"      | A DNS record already uses that name. Delete it in Cloudflare (**shkriuss.app** → **DNS** → **Records**) and re-run the workflow.                                              |
+| A new app's address doesn't work right after the first deploy  | DNS and certificates can take a few minutes. The smoke test retries for about 5 minutes.                                                                                      |
+| "Could not create the R2 bucket …"                             | Turn on R2 in Cloudflare, and give the token `Account` · `Workers R2 Storage` · `Edit` (see setup).                                                                           |
+| Photos says "Online storage isn't set up yet"                  | Add the `PHOTOS_STORAGE_CODE` secret to the `production` environment (see setup). The next merge to `main` gives it to the Worker.                                            |
+| An app keeps saying "Couldn't sync just now"                   | Its server may have reached its limit (ADR 0017); unused copies go after 13 months. To raise it: `STORAGE_LIMITS` in `packages/sync/src/worker.ts`, all under 5 GB.           |
