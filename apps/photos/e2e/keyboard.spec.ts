@@ -122,3 +122,51 @@ test('the selection bar stays in sight while choosing, never over the photo with
   const large = await places(page);
   expect(large.focused.top >= large.bar.bottom || large.focused.bottom <= large.bar.top).toBe(true);
 });
+
+test('the problem notice never covers the selection bar while choosing', async ({ page }) => {
+  // Both stayed at the top of the screen, the notice over the bar: its
+  // buttons couldn't be seen or tapped, even with keyboard focus (audit 6 G-2).
+  await page.setViewportSize({ width: 360, height: 640 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/');
+  await addSome(page, 30);
+  // The device is full: the next photo can't be saved, and the notice says so.
+  await page.evaluate(() => {
+    IDBObjectStore.prototype.put = () => {
+      throw new DOMException('The device is full.', 'QuotaExceededError');
+    };
+  });
+  await addPhotos(page, [jpeg('IMG_0100.JPG', await picture(page, { width: 120, height: 90 }))]);
+  const notice = page.locator('[data-problem]');
+  await expect(notice.getByRole('alert')).toContainText('1 photo couldn’t be saved.');
+
+  // Choosing photos further down, to delete some.
+  await page.getByRole('button', { name: 'Select' }).click();
+  await press(page, 'Tab', 28);
+  await expect(tiles(page).nth(27)).toBeFocused();
+  await page.keyboard.press('Space');
+  const bar = page.locator('[data-selection]');
+  await expect(bar).toContainText('1 photo chosen');
+  for (const name of ['Save originals', 'Delete', 'Done']) {
+    const button = bar.getByRole('button', { name, exact: true });
+    await button.focus();
+    // What's at the middle of the button, and at its corners, is the button itself.
+    const covered = await button.evaluate((element) => {
+      const { left, right, top, bottom } = element.getBoundingClientRect();
+      const points = [
+        [(left + right) / 2, (top + bottom) / 2],
+        [left + 4, top + 4],
+        [right - 4, top + 4],
+        [left + 4, bottom - 4],
+        [right - 4, bottom - 4],
+      ] as const;
+      return points.filter(([x, y]) => !element.contains(document.elementFromPoint(x, y))).length;
+    });
+    expect(covered, `${name}: points covered`).toBe(0);
+    expect((await places(page)).focused.top).toBeGreaterThanOrEqual(0);
+  }
+  // The notice is still at the top of the page, and stays in sight again once choosing is done.
+  await expect(notice.getByRole('alert')).toBeAttached();
+  await bar.getByRole('button', { name: 'Done' }).click();
+  expect(await notice.evaluate((element) => getComputedStyle(element).position)).toBe('sticky');
+});

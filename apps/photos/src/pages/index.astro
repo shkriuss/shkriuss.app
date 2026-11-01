@@ -383,6 +383,21 @@ import { AppShell, Button, DataControls, Icon, SyncControls } from '@shkriuss/ui
     scroll-padding-block-start: calc(var(--space-2) + 30dvh);
   }
 
+  /*
+   * While the bar stays in sight, the page's problem notice scrolls with the
+   * page: stuck at the top too, it covered the bar and its buttons (audit 6
+   * G-2). It's read out when it's shown, and it's still at the top of the
+   * page. Then only the bar needs room at the top (this rule is more
+   * specific than the notice's own, which comes later).
+   */
+  :global(:root:has(.selection:not([hidden], .selection--tall)) .problem) {
+    position: static;
+  }
+
+  :global(:root:has(.selection:not([hidden], .selection--tall)):has(.problem:not(:empty))) {
+    scroll-padding-block-start: calc(var(--space-2) + 30dvh);
+  }
+
   .selection__count {
     flex: 1 1 100%;
     margin: 0;

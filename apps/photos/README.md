@@ -51,7 +51,9 @@ reasons: [ADR 0015](../../docs/adr/0015-photos-app.md) (on the device) and
   the second), adding photos, the viewer (Previous/Next and the arrow keys,
   which read out the photo shown; its details, "Save original", Delete),
   "Select" to save or delete several (its bar stays at the top of the screen
-  while choosing, unless large text makes it too tall), and the online
+  while choosing, unless large text makes it too tall; a problem notice
+  scrolls with the page meanwhile, so it never covers the bar: audit 6
+  G-2), and the online
   library's part of "Sync between your devices" (storage code, status, "Free
   up space on this device"; once the code is accepted, focus goes to the
   status line: audit 5 G-2). A photo whose screen-sized copy can't be
