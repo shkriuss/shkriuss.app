@@ -204,6 +204,9 @@ export function mountTaskForm(root: Document, page: TaskFormPage): TaskForm {
   form.addEventListener('submit', (event) => {
     event.preventDefault();
     if (editingId === null) return;
+    // A step still in "New step" is saved too (audit 6 F1-1), or, with no
+    // room for it, the form stays open, saying so.
+    if (!stepEdits.addTyped()) return;
     const draft = readDraft();
     // Deleted elsewhere, and nothing changed here: it stays deleted.
     if (!find(editingId) && openedDraft && !hasEdits(openedDraft, draft)) {

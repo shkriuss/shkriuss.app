@@ -34,7 +34,7 @@ Your to-do list, with dates, lists and reminders. Lives at
     list);
   - `task-form.ts`: the form that opens from a task's title, where steps
     are added, renamed, ticked and removed (`step-edits.ts`; kept only on
-    "Save");
+    "Save", which adds a step still typed in "New step" too);
   - `order.ts`: "My order", where a task is moved by dragging its handle
     (pointer events, so it works with a finger, a mouse or a pen), by
     tapping the handle for "Move up" and "Move down", or with the arrow

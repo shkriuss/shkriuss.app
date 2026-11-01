@@ -12,6 +12,12 @@ export interface StepEdits {
   fill(steps: readonly Step[]): void;
   /** The steps as they are in the form now. */
   steps(): Step[];
+  /**
+   * Saving: a step still in "New step" is added, as if "Add step" had been
+   * pressed; Save dropped it without a word (audit 6 F1-1). False, with the
+   * problem shown at the box, when the task has no room for it.
+   */
+  addTyped(): boolean;
 }
 
 export function mountStepEdits(
@@ -57,22 +63,33 @@ export function mountStepEdits(
     return draftSteps.find((step) => step.id === id);
   };
 
+  /** Shows a problem at "New step", and focuses it; null takes it away. */
+  function showStepProblem(problem: string | null): void {
+    stepError.textContent = problem ?? '';
+    if (!problem) {
+      newStep.removeAttribute('aria-invalid');
+      return;
+    }
+    newStep.setAttribute('aria-invalid', 'true');
+    focusProblem(newStep, problem);
+  }
+
+  /** Adds `title` as a step, and empties "New step". */
+  function add(title: string): void {
+    draftSteps.push({ id: crypto.randomUUID(), title, done: false });
+    renderStepEdits();
+    newStep.value = '';
+    newStepLimit.clear();
+  }
+
   function addStep(): void {
     const title = newStep.value.trim();
     let problem: string | null = null;
     if (title === '') problem = 'Write the step first.';
     else if (draftSteps.length >= MAX_STEPS) problem = `A task can have up to ${MAX_STEPS} steps.`;
-    stepError.textContent = problem ?? '';
-    if (problem) {
-      newStep.setAttribute('aria-invalid', 'true');
-      focusProblem(newStep, problem);
-      return;
-    }
-    newStep.removeAttribute('aria-invalid');
-    draftSteps.push({ id: crypto.randomUUID(), title, done: false });
-    renderStepEdits();
-    newStep.value = '';
-    newStepLimit.clear();
+    showStepProblem(problem);
+    if (problem) return;
+    add(title);
     newStep.focus();
     announce(`Added step ${title}.`);
   }
@@ -128,9 +145,22 @@ export function mountStepEdits(
       draftSteps = steps.map((step) => ({ ...step }));
       newStep.value = '';
       newStepLimit.clear();
-      stepError.textContent = '';
+      showStepProblem(null);
       renderStepEdits();
     },
     steps: () => draftSteps.map((step) => ({ ...step })),
+    addTyped() {
+      const title = newStep.value.trim();
+      if (title === '') return true;
+      if (draftSteps.length >= MAX_STEPS) {
+        showStepProblem(
+          `A task can have up to ${MAX_STEPS} steps, so this one can’t be added. Clear it to save without it.`,
+        );
+        return false;
+      }
+      showStepProblem(null);
+      add(title);
+      return true;
+    },
   };
 }
