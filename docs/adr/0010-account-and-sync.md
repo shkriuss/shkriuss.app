@@ -32,7 +32,11 @@ row writes, not 2 or 3, as deleting it counts too (see "Free quota"); a
 deletion made with sync off or no connection is kept until it's online, even
 after 180 days (S5); a deletion made with sync off or no connection is kept
 until it's online, even after 180 days (S5); an edit keeps its time also when
-the app is put away while a sync waits for the server (S22).
+the app is put away while a sync waits for the server (S22); a deletion made
+with sync off or no connection is kept until it's online, even after 180 days
+(S5); an edit keeps its time also when the app is put away while a sync waits
+for the server (S22); an older version of an app keeps the stores a newer one
+added in the copy (S4).
 
 ## Context
 
@@ -374,7 +378,15 @@ in with `sync: true` in `apps.json`.
     version added without a new data version (a currency an older version
     doesn't offer, say): an app drops or changes items it can't read, and
     those would spread as deletions, so the device waits instead of saving
-    them (audit finding F2-8). Older data is upgraded with the store's own
+    them (audit finding F2-8). A whole store that a newer version syncs and
+    this one doesn't (one an app adds to `createSync` later) is kept in the
+    copy as it is, and so are the photos online: before, an older version
+    left the store out of its upload, and a newer device then took what it
+    had seen there for deleted long ago, and deleted it everywhere (audit 6
+    S4). An old key's copy with such a store waits for a device that syncs
+    it to bring it along, and so does a copy older than one the device saw
+    (see "What a server could do" below), whose store would be older too.
+    Older data is upgraded with the store's own
     migration and checked with its own validation before it's saved. After
     such an update, only what was really changed on a device counts as
     edited: it compares with its data as still saved in the old version.

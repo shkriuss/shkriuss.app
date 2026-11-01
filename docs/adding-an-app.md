@@ -364,6 +364,11 @@ changing an item can stay open while a sync brings another device's change
 to that item: on Save, put on only what the person changed, with
 `withEdits` from `@shkriuss/sync/edits` (see `editedTask` in Tasks).
 
+A later version can add a store to `createSync`: devices still on an older
+version keep that store in the copy as it is, with its photos online, until
+they update. A store taken out of `createSync` stays in the copy the same
+way, and older versions keep syncing it.
+
 ## Listing it on the hub
 
 A new app is listed on the hub as soon as it's merged (`"status": "live"`).

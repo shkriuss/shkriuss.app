@@ -147,8 +147,10 @@ export function createFileSync(app: string) {
    * file is checked against the online list (missing ones go up, unused ones
    * older than a day are deleted). Deleting only works while the copy online
    * is still the one this device just synced (the server checks), so a file
-   * another device has started using again is never deleted. Returns false
-   * if it should run again after another sync.
+   * another device has started using again is never deleted. While the copy
+   * has stores this version of the app doesn't sync (a newer version's), the
+   * files they use can't be told apart, so no unused file is deleted then
+   * (audit 6 S4). Returns false if it should run again after another sync.
    */
   async function tidyFiles(synced: SyncedFiles): Promise<boolean> {
     const now = Date.now();
@@ -172,9 +174,12 @@ export function createFileSync(app: string) {
         if (!(await upload(synced, keys, id))) break;
       }
       if (online.version !== base) return false;
-      for (const [id, [, at]] of Object.entries(online.files)) {
-        if (wanted.has(id) || online.now - at < NEW_FILE_MS) continue;
-        if (!(await deleteFile(keys, id, base))) return false;
+      // Not while the files of stores this version doesn't sync aren't in `wanted`.
+      if (work.state.remote.others !== true) {
+        for (const [id, [, at]] of Object.entries(online.files)) {
+          if (wanted.has(id) || online.now - at < NEW_FILE_MS) continue;
+          if (!(await deleteFile(keys, id, base))) return false;
+        }
       }
       updateFiles((current) => ({ ...current, checked: now }));
     } catch (error) {

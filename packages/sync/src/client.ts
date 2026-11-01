@@ -13,7 +13,8 @@
  * merge (./merge.ts: newest edit of each item wins, deletions sync), save the
  * result here, and upload it if it differs. The copy is sealed on the device
  * (./snapshot.ts). Conflicting uploads from two devices are caught by the
- * server (version numbers) and simply merged again.
+ * server (version numbers) and simply merged again. Stores in the copy that
+ * this version of the app doesn't sync (a newer version's) stay as they are.
  *
  * This device's sync key and what it knew at the last sync are kept under
  * "shkriuss-device:", which backups skip. What it knew stays when sync is
@@ -384,16 +385,18 @@ export function createSync(options: {
    * every device where it was on then, whether it had synced yet or not; one
    * where sync was turned on after the deletion starts a new copy, or joins
    * one another device started, so turning sync on again works (audit 4
-   * E-1). Both times are the sync server's.
+   * E-1). Both times are the sync server's. `whole`: the copy even if it's
+   * the one this device saw last.
    */
   async function fetchCopy(
     state: DeviceState,
     token: string,
     key: Uint8Array<ArrayBuffer>,
+    whole: boolean,
   ): Promise<Remote> {
     let remote: Remote;
     try {
-      remote = await fetchRemote(state.remote?.version ?? null, token, key);
+      remote = await fetchRemote(whole ? null : (state.remote?.version ?? null), token, key);
     } catch (error) {
       if (
         error instanceof GoneError &&
@@ -457,12 +460,26 @@ export function createSync(options: {
   /** This app's data versions: an old copy that needs newer ones is tried again once they change. */
   const versions = [SYNC_VERSION, ...stores.map((synced) => synced.store.version)].join(' ');
 
+  /** The keys of the stores this version of the app syncs. */
+  const ownKeys = new Set(stores.map((each) => each.store.key));
+  /**
+   * The stores of a copy that this version of the app doesn't sync: ones a
+   * newer version added (or an older one synced). This version keeps them in
+   * the copy as they are. Left out, what a newer device added to them was
+   * taken there for deleted long ago, and deleted everywhere (audit 6 S4).
+   */
+  const othersOf = (copy: Stores): Stores =>
+    Object.fromEntries(Object.entries(copy).filter(([storeKey]) => !ownKeys.has(storeKey)));
+
   /**
    * An old copy's stores in this app's data versions, ready to merge, or
    * "wait" if one needs a newer version of the app or fails the store's own
-   * checks (then it can't be merged, but nothing in it is lost).
+   * checks (then it can't be merged, but nothing in it is lost). One with a
+   * store this version doesn't sync waits too: that store can't be brought
+   * along by this version.
    */
   function readOld(old: Stores): Stores | 'wait' {
+    if (Object.keys(othersOf(old)).length > 0) return 'wait';
     const ready: Stores = {};
     try {
       for (const synced of stores) {
@@ -615,7 +632,13 @@ export function createSync(options: {
     // go online now, before the data that uses them, so other devices find
     // them as soon as it arrives; only now, so a device that may not sync the
     // copy (still on a deleted one) never puts its files there (audit 4 E-1).
-    const remote = await fetchCopy(state, token, key);
+    // The copy last seen had stores this version doesn't sync: an upload must
+    // keep them, so a round that may upload (an edit here, or an old copy to
+    // bring along) needs the whole copy, also if it hasn't changed (audit 6
+    // S4).
+    const toMove = state.previous.some((old) => state.waiting[old] !== versions);
+    const whole = state.remote?.others === true && (localChanged || state.dirty || toMove);
+    const remote = await fetchCopy(state, token, key, whole);
     if (files) await fileSync.uploadFiles(files);
     const {
       copies: moving,
@@ -657,6 +680,13 @@ export function createSync(options: {
         : remote.kind === 'same'
           ? (state.remote?.written ?? 0)
           : 0;
+    // Stores this version doesn't sync go up as they are (othersOf), and the
+    // next round knows the copy has some. An older copy's are older too:
+    // kept, they'd take back what was added to them since, so a device that
+    // syncs them merges that copy instead.
+    const others = remote.kind === 'copy' ? othersOf(remote.stores) : {};
+    const carried = Object.keys(others).length > 0 ? { others: true as const } : {};
+    if (older && carried.others) throw new SyncError('update-needed');
 
     // 3. Merge.
     const merged: Stores = {};
@@ -761,10 +791,10 @@ export function createSync(options: {
       return new SyncError(stateProblem());
     };
 
-    // 5. Upload, if the copy online isn't already this.
-    let online =
+    // 5. Upload, if the copy online isn't already this (with `others`).
+    let online: DeviceState['remote'] =
       remote.kind === 'copy'
-        ? { version: remote.version, epoch: remote.epoch, written }
+        ? { version: remote.version, epoch: remote.epoch, written, ...carried }
         : state.remote && { ...state.remote, written };
     const same =
       remote.kind === 'same'
@@ -806,7 +836,7 @@ export function createSync(options: {
       changed.length = 0;
       knownSaved = true;
       edited = false;
-      const data = await sealStores(key, options.app, merged, written + 1);
+      const data = await sealStores(key, options.app, { ...others, ...merged }, written + 1);
       if (data.length > MAX_SEALED_CHARS) throw new SyncError('too-big');
       const base = remote.kind === 'none' ? null : (online?.version ?? null);
       const response = await api(
@@ -820,7 +850,7 @@ export function createSync(options: {
       if (response.status === 413) throw new SyncError('too-big');
       if (!response.ok) throw failed(response);
       const saved = (await response.json()) as { version: number; epoch: string };
-      online = { ...saved, written: written + 1 };
+      online = { ...saved, written: written + 1, ...carried };
     }
 
     // 6. Remember. The copy online is now the merge. An edit made while the
