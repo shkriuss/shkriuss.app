@@ -23,10 +23,16 @@ export function changeCount(storage?: StorageLike) {
     loading(): void {
       seen = count.load();
     },
-    /** This tab changed the library. */
+    /**
+     * This tab changed the library. A change another tab made first, which
+     * this tab hasn't loaded, still counts as one from elsewhere: before,
+     * this tab's own change hid it, so it never loaded the other tab's
+     * photos (audit 6 F3-1).
+     */
     changed(): void {
-      seen = count.load() + 1;
-      count.save(seen);
+      const now = count.load();
+      if (now === seen) seen = now + 1;
+      count.save(now + 1);
     },
     /**
      * Another tab changed the library since this one last loaded or changed

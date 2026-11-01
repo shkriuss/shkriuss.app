@@ -38,7 +38,11 @@ reasons: [ADR 0015](../../docs/adr/0015-photos-app.md) (on the device) and
     off, a photo is deleted only on this device: the online library keeps
     it), puts photos online a few at a time, and downloads thumbnails
     (several at once), screen-sized copies and originals when they're
-    needed.
+    needed. What it saves or deletes here goes by the photos in the
+    database at that moment, not by the page's own list, whenever another
+    tab may have changed them: with Photos open in two tabs, a tab's list
+    is loaded again only when it gets focus, so it can be older (audit 6
+    F3-1).
   - `src/worker.ts`: the Worker for `/api/sync/*` and `/api/library/*`.
     `wrangler.jsonc` has the R2 bucket, `shkriuss-photos`.
   - Adding photos online needs the storage code once per account (the
@@ -48,10 +52,13 @@ reasons: [ADR 0015](../../docs/adr/0015-photos-app.md) (on the device) and
   the second), adding photos, the viewer (Previous/Next and the arrow keys,
   which read out the photo shown; its details, "Save original", Delete),
   "Select" to save or delete several (its bar stays at the top of the screen
-  while choosing, unless large text makes it too tall), and the online
-  library's part of "Sync between your devices" (storage code, status, "Free
-  up space on this device"; once the code is accepted, focus goes to the
-  status line: audit 5 G-2). A photo whose screen-sized copy can't be
+  while choosing, unless large text makes it too tall; a problem notice
+  scrolls with the page meanwhile, so it never covers the bar: audit 6
+  G-2), and the online library's part of "Sync between your devices"
+  (storage code, status, "Free up space on this device"; once the code is
+  accepted, focus goes to the status line: audit 5 G-2; while "Free up
+  space" asks the library first, it says "Freeing up space…" and its
+  button is busy: audit 6 G-5). A photo whose screen-sized copy can't be
   downloaded says so in the viewer's status line too, so it's read out
   (audit 5 G-7).
 - `src/pages/index.astro`: the page, built from `@shkriuss/ui` components.
@@ -80,12 +87,15 @@ reasons: [ADR 0015](../../docs/adr/0015-photos-app.md) (on the device) and
   Compatible".
 - No backup files: photos are too big for them (`<DataControls backup={false}>`).
   "Delete all data" deletes the photos, and its dialog says how to keep them
-  first instead of "Back up first" (audit 4 D-4).
+  first instead of "Back up first" (audit 4 D-4). With sync on, it also says
+  how many photos here aren't online yet, as the online copy doesn't keep
+  those (`notOnlineMessage` in `src/lib/online.ts`, audit 6 E-3).
 - In Firefox, all of shkriuss.app's apps share one storage limit, 10 GiB,
   unless a site has persistent storage (which Photos asks for, and Firefox
   asks the person about): a big library there can leave the other apps
   without room. Chrome and Safari give each app's address its own limit
   (audit 4 C-7).
 - `e2e/`: browser tests (`helpers.ts` makes photos, with the date a camera
-  writes in them; `online.spec.ts` uses two devices). The shared
+  writes in them; `online.spec.ts` uses two devices, `tabs.spec.ts` two
+  tabs of one browser). The shared
   accessibility, security, offline and sync checks run too.

@@ -178,6 +178,25 @@ export function deleteMessage(
   return `${here} Your online library keeps ${kept}; ${others} can’t be brought back.`;
 }
 
+/**
+ * What "Delete all data?" adds with sync on. It says the online copy keeps
+ * its data, but photos here that haven't gone up yet (still to go, or too
+ * big) aren't in it, so they're deleted for good (audit 6 E-3). Empty when
+ * there are none, or with sync off: the dialog says how to keep them then.
+ */
+export function notOnlineMessage(
+  photos: readonly Photo[],
+  syncOn: boolean,
+  locale?: string,
+): string {
+  const count = syncOn ? photos.filter((photo) => photo.here && !photo.online).length : 0;
+  if (count === 0) return '';
+  const label = countLabel(count, 'photo', 'photos', locale);
+  return count === 1
+    ? `${label} on this device isn’t online yet, so it’s deleted for good. To keep it, save its original first.`
+    : `${label} on this device aren’t online yet, so they’re deleted for good. To keep them, save their originals first.`;
+}
+
 export type OnlineProblem =
   | Exclude<LibraryProblem, 'wrong-code' | 'too-many-tries' | 'deleted' | 'exists' | 'too-big'>
   /** This browser won't save. */

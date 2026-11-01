@@ -44,6 +44,20 @@ describe('whether another tab changed the library', () => {
     expect(second.changedElsewhere()).toBe(true);
   });
 
+  it('is still told when this tab changes the library after another tab did (audit 6 F3-1)', () => {
+    const storage = new SharedStorage();
+    const first = changeCount(storage);
+    const second = changeCount(storage);
+    first.loading();
+    second.changed();
+    // The first tab saves something of its own (a look at the online library) before loading again.
+    first.changed();
+    expect(first.changedElsewhere()).toBe(true);
+    expect(second.changedElsewhere()).toBe(true);
+    first.loading();
+    expect(first.changedElsewhere()).toBe(false);
+  });
+
   it('is told after “Delete all data” too', () => {
     const storage = new SharedStorage();
     const tab = changeCount(storage);

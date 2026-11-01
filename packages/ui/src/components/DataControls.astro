@@ -21,10 +21,22 @@ interface Props {
    * the data, instead of backing up, which isn't there (audit 4 D-4).
    */
   keepFirst?: string;
+  /**
+   * Adds a line to "Delete all data?", read out with it, for what the app
+   * knows only at the time: its script fills in `[data-delete-note]` and
+   * shows it (it's hidden while there's nothing to say). Photos says how
+   * many photos aren't online yet, which sync doesn't keep (audit 6 E-3).
+   */
+  deleteNote?: boolean;
 }
 
-const { level = 2, backup = true, keepFirst = '' } = Astro.props;
+const { level = 2, backup = true, keepFirst = '', deleteNote = false } = Astro.props;
 const keep = backup ? 'Back up first if you might want it later.' : keepFirst;
+const deleteDescription = [
+  'data-delete-text',
+  ...(site.sync ? ['data-delete-sync'] : []),
+  ...(deleteNote ? ['data-delete-note'] : []),
+].join(' ');
 const Heading = `h${level}` as 'h2' | 'h3';
 // What the person can turn on that sends data off the device: reminders
 // while it's closed don't need sync or an account (audit 3 D-5).
@@ -186,7 +198,7 @@ const stays = `Everything ${site.name} saves stays in this browser on this devic
   <dialog
     class="dialog"
     aria-labelledby="data-delete-title"
-    aria-describedby={site.sync ? 'data-delete-text data-delete-sync' : 'data-delete-text'}
+    aria-describedby={deleteDescription}
     data-all-data-dialog
   >
     <form method="dialog" class="stack">
@@ -200,6 +212,7 @@ const stays = `Everything ${site.name} saves stays in this browser on this devic
           copy keep their data.
         </p>
       )}
+      {deleteNote && <p id="data-delete-note" data-delete-note hidden />}
       <div class="cluster">
         <Button type="submit" value="cancel">
           Cancel

@@ -266,6 +266,48 @@ test('keyboard focus stays on a photo while photos go online', async ({ page }) 
   await expect(tile).toBeFocused();
 });
 
+test('“Delete all data?” says how many photos aren’t online yet: sync doesn’t keep those', async ({
+  page,
+}) => {
+  // It said only that the online copy keeps its data (audit 6 E-3).
+  await createAccount(page);
+  await page.goto('/');
+  const october = withExif(await picture(page, { width: 400, height: 300 }), '2026:10:21 14:03:22');
+  const july = withExif(
+    await picture(page, { width: 400, height: 300, color: '#36c' }),
+    '2019:07:04 18:30:05',
+  );
+  await addPhotos(page, [jpeg('IMG_0017.JPG', october), jpeg('IMG_0018.JPG', july)]);
+  const dialog = page.getByRole('dialog', { name: 'Delete all data?' });
+  const note = dialog.locator('[data-delete-note]');
+
+  // With sync off, it says how to keep them already.
+  await page.getByRole('button', { name: 'Delete all data' }).click();
+  await expect(note).toBeHidden();
+  await page.keyboard.press('Escape');
+
+  // Sync on, but the storage code not given yet: nothing has gone up.
+  await turnOnSync(page, 'Photos');
+  await expect(onlineStatus(page)).toHaveText('To keep photos online, enter the storage code.');
+  await page.getByRole('button', { name: 'Delete all data' }).click();
+  await expect(note).toHaveText(
+    '2 photos on this device aren’t online yet, so they’re deleted for good. To keep them, save their originals first.',
+  );
+  await expect(dialog).toHaveAccessibleDescription(
+    /keep their data\. 2 photos on this device aren’t online yet, so they’re deleted for good\. To keep them, save their originals first\.$/,
+  );
+  await checkA11y(page, 'delete all data: photos not online yet');
+  await page.keyboard.press('Escape');
+
+  // Once they're online, there's nothing more to say.
+  await unlock(page);
+  await expect(onlineStatus(page)).toHaveText(/^Online: 2 photos · /, ONLINE);
+  await page.getByRole('button', { name: 'Delete all data' }).click();
+  await expect(note).toBeHidden();
+  await expect(dialog).not.toHaveAccessibleDescription(/online yet/);
+  await page.keyboard.press('Escape');
+});
+
 /** A second device signed in to the same account, with sync on in Photos. */
 async function tabletWith(browser: Browser, key: string, appURL: string): Promise<Page> {
   const tablet = await (await otherDevice(browser)).newPage();
@@ -330,6 +372,44 @@ test('a photo deleted while sync is off is deleted only on this device: the onli
   await tablet.waitForTimeout(500);
   await expect(tiles(tablet)).toHaveCount(1);
   await tablet.context().close();
+});
+
+test('a photo that couldn’t be deleted here, as the page says, isn’t deleted online later either', async ({
+  page,
+}) => {
+  // The deletion online was noted first, and still went ahead (audit 6 F3-4).
+  await createAccount(page);
+  await page.goto('/');
+  await photoOnline(page, 'IMG_0019.JPG');
+  const removals: string[] = [];
+  page.on('request', (request) => {
+    if (request.url().endsWith('/api/library/remove')) removals.push(request.url());
+  });
+
+  // Deleting can't be saved on this device just now.
+  await page.evaluate(() => {
+    const remove = IDBObjectStore.prototype.delete;
+    (window as unknown as { canDelete: () => void }).canDelete = () => {
+      IDBObjectStore.prototype.delete = remove;
+    };
+    IDBObjectStore.prototype.delete = () => {
+      throw new DOMException('Not just now.', 'UnknownError');
+    };
+  });
+  await tiles(page).first().click();
+  expect(await deleteInViewer(page)).toMatch(/^It’s deleted from this device and from your online/);
+  const viewerStatus = page.locator('[data-viewer] [data-viewer-status]');
+  await expect(viewerStatus).toHaveText('Couldn’t delete. Please try again.');
+  await page.evaluate(() => (window as unknown as { canDelete: () => void }).canDelete());
+  await page.locator('[data-viewer]').getByRole('button', { name: 'Close' }).click();
+
+  // It's still here, and online.
+  await syncNow(page);
+  await syncNow(page);
+  expect(removals).toEqual([]);
+  await expect(tiles(page)).toHaveCount(1);
+  await expect(onlineStatus(page)).toHaveText(/^Online: 1 photo · /);
+  expect(await stored(page)).toEqual({ photos: 1, files: 1 });
 });
 
 test('a photo deleted while sync is on is deleted everywhere, even if sync is turned off before that gets online', async ({
@@ -690,6 +770,48 @@ test('frees up space only when the online library has just said the photos are t
     page.getByRole('alert').filter({ hasText: 'Couldn’t free up space. Please try again.' }),
   ).toBeVisible();
   expect(await originalsHere(page)).toBe(1);
+});
+
+test('“Free up space” says it’s waiting for the online library, and a second press does nothing', async ({
+  page,
+}) => {
+  // It said nothing and wasn't busy meanwhile, so a second press opened the
+  // dialog again and queued a second go (audit 6 G-5).
+  await createAccount(page);
+  await page.goto('/');
+  await photoOnline(page, 'IMG_0009.JPG');
+
+  // A slow connection: the library's answer waits until let go.
+  let letGo = (): void => undefined;
+  const goOn = new Promise<void>((resolve) => {
+    letGo = resolve;
+  });
+  const asked: string[] = [];
+  await page.route('**/api/library/changes*', async (route) => {
+    asked.push(route.request().url());
+    await goOn;
+    await route.continue();
+  });
+  const freeUp = page.getByRole('button', { name: 'Free up space on this device' });
+  const confirm = page.getByRole('dialog', { name: 'Free up space on this device?' });
+  await freeUp.click();
+  await confirm.getByRole('button', { name: 'Free up space' }).click();
+  const status = page.locator('[data-free-up-status]');
+  await expect(status).toHaveText('Freeing up space…');
+  await expect(status).toHaveRole('status');
+  await expect(freeUp).toHaveAttribute('aria-disabled', 'true');
+  await expect(freeUp).toBeFocused();
+  await checkA11y(page, 'freeing up space');
+  await expect.poll(() => asked.length).toBeGreaterThan(0);
+
+  await freeUp.click({ force: true });
+  await expect(confirm).toBeHidden();
+  letGo();
+  await expect(page.getByRole('status').filter({ hasText: /^Freed up / })).toBeAttached(ONLINE);
+  expect(await originalsHere(page)).toBe(0);
+  await expect(status).toHaveText('');
+  await expect(page.locator('[data-library-heading]')).toBeFocused();
+  await page.unroute('**/api/library/changes*');
 });
 
 /** "Delete the online copy", from Photos' own sync controls. */

@@ -110,14 +110,19 @@ import { AppShell, Button, DataControls, Icon, SyncControls } from '@shkriuss/ui
           </div>
           <p class="muted" role="status" data-unlock-status></p>
         </form>
-        <div data-free-up hidden>
-          <Button data-action="free-up-space">Free up space on this device</Button>
+        <div class="stack stack--sm" data-free-up hidden>
+          <div>
+            <Button data-action="free-up-space">Free up space on this device</Button>
+          </div>
+          <!-- While it asks the online library first (audit 6 G-5). -->
+          <p class="muted" role="status" data-free-up-status></p>
         </div>
       </div>
     </SyncControls>
 
     <DataControls
       backup={false}
+      deleteNote
       keepFirst="To keep your photos, save the originals you want first (open one and tap “Save original”, or choose several with “Select”), or turn on sync to keep them online."
     >
       <p class="muted">
@@ -379,6 +384,21 @@ import { AppShell, Button, DataControls, Icon, SyncControls } from '@shkriuss/ui
   /* A photo that gets focus scrolls into view below the bar, never under it
      (the bar is at most 30% of the screen while it stays in sight). */
   :global(:root:has(.selection:not([hidden], .selection--tall))) {
+    scroll-padding-block-start: calc(var(--space-2) + 30dvh);
+  }
+
+  /*
+   * While the bar stays in sight, the page's problem notice scrolls with the
+   * page: stuck at the top too, it covered the bar and its buttons (audit 6
+   * G-2). It's read out when it's shown, and it's still at the top of the
+   * page. Then only the bar needs room at the top (this rule is more
+   * specific than the notice's own, which comes later).
+   */
+  :global(:root:has(.selection:not([hidden], .selection--tall)) .problem) {
+    position: static;
+  }
+
+  :global(:root:has(.selection:not([hidden], .selection--tall)):has(.problem:not(:empty))) {
     scroll-padding-block-start: calc(var(--space-2) + 30dvh);
   }
 

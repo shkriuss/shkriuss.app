@@ -9,7 +9,14 @@ import { focusProblem, showProblem } from '@shkriuss/ui/problem';
 import { mountSyncControls } from '@shkriuss/ui/sync-controls';
 import { setBusy } from '@shkriuss/ui/busy';
 import { keepFocus } from '@shkriuss/ui/keep-focus';
-import { canFreeUp, deleteMessage, freeable, onlineMessage, onlyOnline } from '../lib/online.ts';
+import {
+  canFreeUp,
+  deleteMessage,
+  freeable,
+  notOnlineMessage,
+  onlineMessage,
+  onlyOnline,
+} from '../lib/online.ts';
 import {
   addedMessage,
   byMonth,
@@ -97,8 +104,11 @@ export function mountPhotos(root: Document): void {
   const unlockButton = required<HTMLButtonElement>(unlockForm, 'button[type="submit"]');
   const unlockStatus = required<HTMLElement>(unlockForm, '[data-unlock-status]');
   const freeUp = required<HTMLElement>(root, '[data-free-up]');
+  const freeUpButton = required<HTMLButtonElement>(freeUp, '[data-action="free-up-space"]');
+  const freeUpStatus = required<HTMLElement>(freeUp, '[data-free-up-status]');
   const freeUpDialog = required<HTMLDialogElement>(root, '[data-free-up-dialog]');
   const freeUpText = required<HTMLElement>(freeUpDialog, '[data-free-up-text]');
+  const deleteAllNote = required<HTMLElement>(root, '[data-delete-note]');
 
   /** Every photo, newest first. */
   let photos: Photo[] = [];
@@ -115,6 +125,8 @@ export function mountPhotos(root: Document): void {
   });
   let shown = PAGE_SIZE;
   let busy = false;
+  /** While "Free up space" asks the online library and removes originals. */
+  let freeing = false;
   /** While choosing photos: the chosen ones. */
   let choosing = false;
   const chosen = new Set<string>();
@@ -169,11 +181,15 @@ export function mountPhotos(root: Document): void {
     const state = online.state();
     onlineOff.hidden = state.on;
     onlineSection.hidden = !state.on;
+    // "Delete all data?" says the online copy keeps its data: not photos that aren't in it yet (audit 6 E-3).
+    deleteAllNote.textContent = notOnlineMessage(photos, state.on);
+    deleteAllNote.hidden = deleteAllNote.textContent === '';
     if (!state.on) return;
     onlineStatus.textContent = onlineMessage(state);
     unlockForm.hidden = !state.checked || state.unlocked || state.problem === 'not-set-up';
     // Only once the library has answered: this device's note that photos are online may be old.
-    freeUp.hidden = !canFreeUp(state) || freeable(photos).photos.length === 0;
+    // Not while it's freeing up space, which has focus.
+    freeUp.hidden = !freeing && (!canFreeUp(state) || freeable(photos).photos.length === 0);
   }
 
   function codeProblem(message: string): void {
@@ -309,7 +325,7 @@ export function mountPhotos(root: Document): void {
     shown += PAGE_SIZE;
     render();
     // Carry on from the first photo just shown.
-    monthsList.querySelector<HTMLElement>(`[data-id="${first?.id ?? ''}"]`)?.focus();
+    monthsList.querySelector<HTMLElement>(`[data-id="${CSS.escape(first?.id ?? '')}"]`)?.focus();
   });
 
   // ---------- Adding photos ----------
@@ -540,7 +556,9 @@ export function mountPhotos(root: Document): void {
       shown = Math.ceil((at + 1) / PAGE_SIZE) * PAGE_SIZE;
       render();
     }
-    (monthsList.querySelector<HTMLElement>(`[data-id="${id ?? ''}"]`) ?? libraryHeading).focus();
+    (
+      monthsList.querySelector<HTMLElement>(`[data-id="${CSS.escape(id ?? '')}"]`) ?? libraryHeading
+    ).focus();
   });
 
   /** Photos whose originals are downloading: "Save original" waits for them. */
@@ -622,12 +640,21 @@ export function mountPhotos(root: Document): void {
     const gone = new Set(ids);
     try {
       // Online too, now or when sync is on again, if the dialog said so.
+      // Noted first: if the page is closed before the photos go from here,
+      // they still go everywhere, as asked.
       await online.removed(
         photos.filter((photo) => gone.has(photo.id)),
         everywhere,
       );
+    } catch {
+      problem('Couldn’t delete. Please try again.');
+      return;
+    }
+    try {
       await deletePhotos(ids);
     } catch {
+      // Not deleted here, as the page says: so not online later either (audit 6 F3-4).
+      if (everywhere) await online.kept(ids).catch(() => undefined);
       problem('Couldn’t delete. Please try again.');
       return;
     }
@@ -665,7 +692,7 @@ export function mountPhotos(root: Document): void {
 
   function askToFreeUp(): void {
     const { photos: list, bytes } = freeable(photos);
-    if (list.length === 0 || !canFreeUp(online.state())) return;
+    if (freeing || list.length === 0 || !canFreeUp(online.state())) return;
     freeUpText.textContent =
       list.length === 1
         ? `This removes the original of 1 photo (${formatBytes(bytes)}) from this device. It stays in your online library: the photo still shows here, and “Save original” downloads it again.`
@@ -674,15 +701,34 @@ export function mountPhotos(root: Document): void {
     freeUpDialog.showModal();
   }
 
+  // It asks the online library first, after any upload under way, which can
+  // take a while: it says so, and the button is busy, so a second press
+  // isn't a second go (audit 6 G-5).
   freeUpDialog.addEventListener('close', () => {
-    if (freeUpDialog.returnValue !== 'confirm') return;
-    void online.freeUpSpace(freeable(photos).photos).then(
-      (bytes) => {
-        announce(`Freed up ${formatBytes(bytes)} on this device.`);
-        libraryHeading.focus();
-      },
-      () => problem('Couldn’t free up space. Please try again.'),
-    );
+    if (freeUpDialog.returnValue !== 'confirm' || freeing) return;
+    freeing = true;
+    setBusy(freeUpButton, true);
+    freeUpStatus.textContent = 'Freeing up space…';
+    void online
+      .freeUpSpace(freeable(photos).photos)
+      .then(
+        (bytes) => `Freed up ${formatBytes(bytes)} on this device.`,
+        () => null,
+      )
+      .then((freed) => {
+        freeing = false;
+        setBusy(freeUpButton, false);
+        freeUpStatus.textContent = '';
+        renderOnline();
+        if (freed) {
+          announce(freed);
+          libraryHeading.focus();
+          return;
+        }
+        problem('Couldn’t free up space. Please try again.');
+        // Gone meanwhile (the library can't be reached now, say): focus isn't lost with it.
+        if (freeUp.hidden) libraryHeading.focus();
+      });
   });
 
   // ---------- Buttons ----------

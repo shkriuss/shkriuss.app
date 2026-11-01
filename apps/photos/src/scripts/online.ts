@@ -39,10 +39,12 @@ import {
 } from '../lib/online.ts';
 import { detailsOf, PARTS, type Photo } from '../lib/photos.ts';
 import {
+  changedElsewhere,
   deletePhotos,
   getFiles,
   keepThumb,
   loadProgress,
+  photosNow,
   removeOriginal,
   saveDetails,
   saveProgress,
@@ -95,6 +97,11 @@ export interface Online {
    * they show here again, as only online, once sync is on (audit 3 F3-1).
    */
   removed(photos: readonly Photo[], everywhere: boolean): Promise<void>;
+  /**
+   * Photos that removed() was told of couldn't be deleted here after all
+   * (the page says so): they aren't deleted online either (audit 6 F3-4).
+   */
+  kept(ids: readonly string[]): Promise<void>;
   unlock(code: string): Promise<UnlockResult>;
   /** A thumbnail of a photo that's only online: downloaded and kept. */
   thumb(photo: Photo): Promise<string | null>;
@@ -214,18 +221,20 @@ export function startOnline(list: PhotoList): Online {
 
   /**
    * What was online is gone (the library was deleted), or in another library
-   * now: photos only there go too, and those here go up again. A photo
-   * marked as here without its original (an older version's "Free up space"
-   * stopped half-way) was only online too, so it isn't kept as here
-   * (audit F3-1).
+   * now: photos only there go too, and those here go up again. Every photo
+   * on this device, not only those in this tab's list, which may be older
+   * (audit 6 F3-1). A photo is here when its original is: one marked as
+   * here without it (an older version's "Free up space" stopped half-way)
+   * was only online too, so it isn't kept as here (audit F3-1), and one
+   * whose original is here stays, whatever its mark says (audit 6 F3-1).
    */
   async function forgetOnline(library?: string, removals: string[] = []): Promise<void> {
-    const all = list.all();
+    const all = await photosNow();
     const originals = await withOriginals();
-    const here = (photo: Photo) => photo.here && originals.has(photo.id);
-    const gone = all.filter((photo) => !here(photo)).map((photo) => photo.id);
-    const stay = all.filter((photo) => here(photo) && photo.online);
-    const offline = stay.map((photo) => ({ ...photo, online: null }));
+    const gone = all.filter((photo) => !originals.has(photo.id)).map((photo) => photo.id);
+    const offline = all
+      .filter((photo) => originals.has(photo.id) && (photo.online || !photo.here))
+      .map((photo) => ({ ...photo, online: null, here: true }));
     if (offline.length > 0) await saveDetails(offline);
     if (gone.length > 0) await deletePhotos(gone);
     await updateProgress((current) => fresh(library ?? current?.library ?? '', removals));
@@ -236,21 +245,38 @@ export function startOnline(list: PhotoList): Online {
    * Sync is off here: photos only online can't be seen until it's on again.
    * They go from the list at once, and from the device in turn, after a
    * round under way (which stops at its next step), so that round can't
-   * write back where it had got to (audit F3-2).
+   * write back where it had got to (audit F3-2). Never one whose original
+   * is here: another tab may have put it back since this tab's list was
+   * loaded (audit 6 F3-1).
    */
   function hideOnlyOnline(
     ids: readonly string[] = onlyOnline(list.all()).map((photo) => photo.id),
   ): Promise<void> {
     list.changed({ remove: ids });
     return inTurn(async () => {
-      const gone = [...new Set([...ids, ...onlyOnline(list.all()).map((photo) => photo.id)])];
+      const now = await photosNow();
+      const originals = await withOriginals();
+      const gone = [...new Set([...ids, ...onlyOnline(now).map((photo) => photo.id)])].filter(
+        (id) => !originals.has(id),
+      );
+      // Marked as only online with the original here (as this could happen
+      // before): marked as here again. Taken from the list but here: back in it.
+      const mended = now
+        .filter((photo) => !photo.here && originals.has(photo.id))
+        .map((photo) => ({ ...photo, here: true }));
+      const asked = new Set(ids);
+      const back = [
+        ...mended,
+        ...now.filter((photo) => photo.here && asked.has(photo.id) && originals.has(photo.id)),
+      ];
+      if (mended.length > 0) await saveDetails(mended);
       if (gone.length > 0) await deletePhotos(gone);
       // Start again from the beginning next time, to find them again.
       await updateProgress((current) => ({
         ...fresh(current?.library ?? ''),
         removals: current?.removals ?? [],
       }));
-      list.changed({ remove: gone });
+      list.changed({ save: back, remove: gone });
     });
   }
 
@@ -294,8 +320,16 @@ export function startOnline(list: PhotoList): Online {
         await forgetOnline();
         continue;
       }
+      // Compared with what's on this device now. That's this tab's list,
+      // unless another tab changed the photos since it was loaded: then a
+      // photo missing from it looked new from another device, and was saved
+      // as only online over the real one (audit 6 F3-1), so they're read
+      // from the database instead (not every time: with a big library, that
+      // takes a while, for each page of changes).
+      const here =
+        page.changes.length === 0 ? [] : changedElsewhere() ? await photosNow() : list.all();
       const applied = applyChanges(
-        new Map(list.all().map((photo) => [photo.id, photo])),
+        new Map(here.map((photo) => [photo.id, photo])),
         page.changes,
         // Deleted here, and not online yet (say sync was turned off before
         // it got there): they don't come back (audit 3 F3-1).
@@ -347,6 +381,11 @@ export function startOnline(list: PhotoList): Online {
           found.view,
           found.original,
         ]);
+        // Sync turned off meanwhile, maybe by "Delete the online copy" in
+        // another tab, which has already marked this device's photos as not
+        // online: not marked as online now. If it's still in the library, a
+        // later look at the library's changes finds it there (audit 6 F3-1).
+        if (!stillOn()) return;
         const now = list.get(photo.id);
         if (!now) {
           // Deleted here while it was going up.
@@ -556,6 +595,15 @@ export function startOnline(list: PhotoList): Online {
       }));
       if (sync.status().on) schedule();
     },
+    async kept(ids) {
+      const back = new Set(ids);
+      // None was noted (none was online): nothing to take back.
+      if (!(await loadProgress())?.removals.some((id) => back.has(id))) return;
+      await updateProgress((current) => ({
+        ...(current ?? fresh(inUse)),
+        removals: (current?.removals ?? []).filter((id) => !back.has(id)),
+      }));
+    },
     async unlock(code) {
       try {
         const api = await connect();
@@ -614,8 +662,14 @@ export function startOnline(list: PhotoList): Online {
           // The status line catches up, whatever happened.
           schedule();
         }
-        const chosen = new Set(photos.map((photo) => photo.id));
-        const still = freeable(list.all()).photos.filter((photo) => chosen.has(photo.id));
+        // As saved on this device now, not as this tab's list has them:
+        // another tab may have found them gone from the library since
+        // (audit 6 F3-1). In the order asked (newest first); the list
+        // catches up with them too.
+        const saved = new Map((await photosNow()).map((photo) => [photo.id, photo]));
+        const now = photos.flatMap((photo) => saved.get(photo.id) ?? []);
+        list.changed({ save: now });
+        const still = freeable(now).photos;
         if (!stillOn() || !canFreeUp(state()) || still.length === 0) {
           throw new Error('Nothing to free up.');
         }
