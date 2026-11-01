@@ -325,7 +325,7 @@ export function mountPhotos(root: Document): void {
     shown += PAGE_SIZE;
     render();
     // Carry on from the first photo just shown.
-    monthsList.querySelector<HTMLElement>(`[data-id="${first?.id ?? ''}"]`)?.focus();
+    monthsList.querySelector<HTMLElement>(`[data-id="${CSS.escape(first?.id ?? '')}"]`)?.focus();
   });
 
   // ---------- Adding photos ----------
@@ -556,7 +556,9 @@ export function mountPhotos(root: Document): void {
       shown = Math.ceil((at + 1) / PAGE_SIZE) * PAGE_SIZE;
       render();
     }
-    (monthsList.querySelector<HTMLElement>(`[data-id="${id ?? ''}"]`) ?? libraryHeading).focus();
+    (
+      monthsList.querySelector<HTMLElement>(`[data-id="${CSS.escape(id ?? '')}"]`) ?? libraryHeading
+    ).focus();
   });
 
   /** Photos whose originals are downloading: "Save original" waits for them. */

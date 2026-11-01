@@ -74,3 +74,40 @@ test('a photo opens with focus on which photo it is', async ({ page }) => {
   await page.keyboard.press('Escape');
   await expect(tiles.nth(1)).toBeFocused();
 });
+
+test('closing the viewer goes back to the photo whatever its id', async ({ page }) => {
+  // An id with a quote in it (a record made by hand: Photos makes UUIDs)
+  // broke the selector that finds the photo again, and focus was lost
+  // (audit 6 C-4).
+  await page.goto('/');
+  await addPhotos(page, [jpeg('IMG_0001.JPG', await picture(page, { width: 400, height: 300 }))]);
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        const request = indexedDB.open('shkriuss-files');
+        request.onsuccess = () => {
+          const database = request.result;
+          const run = database.transaction('files', 'readwrite');
+          const table = run.objectStore('files');
+          const found = table.getAll(IDBKeyRange.bound('photo:', 'photo;', false, true));
+          found.onsuccess = () => {
+            const [photo] = found.result as { id: string }[];
+            table.put({ ...photo, id: 'a"b] c' }, 'photo:a"b] c');
+          };
+          run.oncomplete = () => {
+            database.close();
+            resolve();
+          };
+          run.onerror = () => reject(run.error ?? new Error('Not saved'));
+        };
+      }),
+  );
+  await page.reload();
+  const tiles = page.locator('[data-months] .tile');
+  await expect(tiles).toHaveCount(2);
+  for (const at of [0, 1]) {
+    await tiles.nth(at).click();
+    await page.locator('[data-viewer]').getByRole('button', { name: 'Close' }).click();
+    await expect(tiles.nth(at)).toBeFocused();
+  }
+});
