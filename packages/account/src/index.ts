@@ -40,5 +40,11 @@ export {
   sameSecret,
   type RecoveryKeyResult,
 } from './secret.ts';
-export { isReplaced, replaceAccountKey, replacedNote, signOutIfReplaced } from './status.ts';
+export {
+  finishReplacing,
+  isReplaced,
+  replaceAccountKey,
+  replacedNote,
+  signOutIfReplaced,
+} from './status.ts';
 export { LINK_LIFETIME_MS } from './validate.ts';

@@ -67,6 +67,25 @@ describe('a device link', () => {
     expect(await linkState(link.id)).toBe('used');
   });
 
+  it('counts its 10 minutes by this device’s clock, not the server’s (audit 6 A-1)', async () => {
+    // The page compared the server's time of expiry with its own clock: a
+    // device 15 minutes ahead hid a code at once as "expired", and left it
+    // working, with nobody watching.
+    const T0 = Date.UTC(2026, 9, 31, 12);
+    vi.useFakeTimers({ now: T0, toFake: ['Date'] });
+    const service = globalThis.fetch;
+    vi.stubGlobal('fetch', async (input: string, init?: RequestInit) => {
+      vi.setSystemTime(T0 - 15 * 60_000);
+      try {
+        return await service(input, init);
+      } finally {
+        vi.setSystemTime(T0);
+      }
+    });
+    const link = await createLink(randomBytes(32), ORIGIN);
+    expect(link.expiresAt).toBe(T0 + LINK_LIFETIME_MS);
+  });
+
   it('can only be cancelled with its own token', async () => {
     const link = await createLink(randomBytes(32), ORIGIN);
     const stranger = { ...link, cancel: link.cancel.replace(/^./, (c) => (c === 'A' ? 'B' : 'A')) };

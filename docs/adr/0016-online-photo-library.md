@@ -8,7 +8,8 @@ Changed by [ADR 0019](0019-no-pull-request-previews.md): there are no pull
 request previews, so no `shkriuss-photos-preview` bucket either. Updated by
 audit 5: a deletion note's seal is for the photo's id, not one upload of it
 (A-2, a known limit), a library made up through a move is cleaned up like
-any other (B-1), and what a deleted library keeps (D-3).
+any other (B-1), and what a deleted library keeps (D-3). Updated by audit
+6: only the library's own refusal marks a library as taken (A-5).
 
 ## Context
 
@@ -153,7 +154,9 @@ every device. That's far beyond what sync can hold:
   request made by hand, could move a library first. Then the library is
   theirs, and the server refuses the person's move (403). The person's device then marks the library as taken in its
   record, still retires the old copy, and starts a new library with the new
-  key. Photos says plainly what happened, photos on the person's devices go
+  key. Only the library's own refusal, which says so (`notYours`), counts:
+  any other 403 (a challenge page from Cloudflare, say) fails the sync
+  round, and the move is tried again (audit 6 A-5). Photos says plainly what happened, photos on the person's devices go
   up to the new library, and photos that were only online are lost to them.
   A device tries the move even when another device moved the old copy
   first, since that may have been the lost one.

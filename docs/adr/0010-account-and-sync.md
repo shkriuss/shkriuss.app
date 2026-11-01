@@ -21,7 +21,13 @@ connection keeps its time (E-1); "Turn off" works when the browser is full
 for good (A-1); the "turn off" links are for the day (A-5) and say nothing
 when sync is already off (C-4); all device links share one object (B-2);
 an app loads the code that connects it to the account only when that's
-needed, so every page stays within its JavaScript budget (J-2).
+needed, so every page stays within its JavaScript budget (J-2). Changed by
+audit 6: a key replacement whose answer was lost is finished the next time
+the Account page opens, instead of signing that device out (A-1); "Turn on
+sync for …" waits half a second before it works, like "Add this device"
+(A-2); a device code's 10 minutes are counted by the clock of the device
+showing it, and it's cancelled when it's hidden as expired (A-1); the hub
+asks the browser to keep the account, as the apps keep their data (E-6).
 
 ## Context
 
@@ -61,7 +67,10 @@ The requirements:
    - It's shown when the account is created. The account isn't saved until the
      person confirms they've saved the key.
    - It can be downloaded as a text file, and seen again on any signed-in
-     device.
+     device. The page says that on an iPhone or iPad a download usually goes
+     to iCloud Drive, which Apple can read without Advanced Data
+     Protection, so a password manager or paper is safer there (audit 6
+     D-4).
 2. **Passkey (optional).** This works where the password manager supports the
    WebAuthn **PRF** extension, for example Google Password Manager on Android,
    or iCloud Keychain on iOS 18 and later.
@@ -97,6 +106,11 @@ The requirements:
      trying until the code expires, and says so if a device used it
      meanwhile (audit finding A-2: hiding the code used to leave it working,
      with nobody watching).
+   - The device showing the code counts its 10 minutes by its own clock,
+     from just before it sends the code to the account service, and
+     cancels the code when it hides it then. Before, it compared the service's time of expiry
+     with its own clock: one running 15 minutes ahead hid each code at once
+     as expired, and left it working, unwatched (audit 6 A-1).
 
 **Account code:** an 8-character fingerprint of the secret (40 bits from
 HKDF), like `K7Q2-M9XD`.
@@ -115,6 +129,10 @@ HKDF), like `K7Q2-M9XD`.
   keeps its note: [ADR 0017](0017-storage-limits.md), audit 5 A-1), so apps
   can move their old copies. A device signed out because its key was
   replaced elsewhere keeps nothing of it, as when signing out (audit 3 D-8).
+  Once signed in, the Account page asks the browser to keep its data
+  (persistent storage), as each app does after its first save, so it's
+  less likely to be deleted when the device runs short of space (audit 6
+  E-6).
 - **On the hub's server.** The hub's Worker runs only for `/api/account/*`,
   with one Durable Object for all device links together (a row each), and
   one per passkey lock or replaced key. It stores:
@@ -149,11 +167,22 @@ person still has, **"Replace the account key"** on the Account page:
    about the new one from it.
 3. Signs this device in with the new key, and remembers the old one.
 
+Before step 2, the device notes the new key it's replacing the old one
+with. The service may note the old key while its answer is lost (the
+connection drops, or the page is closed); then the next time the Account
+page opens, the note's tag names that new key, which only this device
+could have made, so it finishes step 3 instead of taking itself for a
+lost device. Before, it signed out and forgot the old key, so no app could
+move its old copy any more (audit 6 A-1).
+
 Then:
 
 - **Every device with the old key** asks the account service when it opens
   the Account page, and signs out if the key was replaced. The old recovery
-  key, links made with it, and passkeys that unlock it can't sign in any more.
+  key, links made with it, and passkeys that unlock it can't sign in any more,
+  as long as the service keeps its note: 13 months after anyone last asked
+  about it, an old passkey the person didn't remove signs in to the old key
+  again ([ADR 0017](0017-storage-limits.md), audit 6 A-3).
   If the service can't be reached, the device carries on and checks next time.
   Signed out this way, it forgets the key and which apps synced there, as
   signing out does; the Account page names those apps, which keep syncing
@@ -218,7 +247,11 @@ in with `sync: true` in `apps.json`.
     one-time public key, and goes back to the app with the result after `#`.
     Any website can open an app with `#sync=connect`: that only starts this
     request, which the person confirms on the hub with the account code in
-    view, and cancelling changes nothing (audit 5 C-4).
+    view, and cancelling changes nothing (audit 5 C-4). Like "Add this
+    device", "Turn on sync for …" works only half a second after it's on
+    screen in a window that has focus, so the second click of a
+    double-click that website asked for, landing as its own window closes,
+    can't confirm it (audit 4 C-6, audit 6 A-2).
   - The app opens it, removes it from the address bar, and forgets the
     one-time key. The app and the hub never call each other's servers, and
     the CSP stays `'self'`.

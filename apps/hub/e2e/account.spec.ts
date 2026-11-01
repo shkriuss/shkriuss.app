@@ -1,8 +1,8 @@
 // The optional shkriuss account (packages/account, docs/adr/0010): creating
 // one, the recovery key, adding a device with a one-time code, passkeys, and
 // what the account service accepts.
-import { randomBytes } from 'node:crypto';
-import type { Browser, BrowserContext, CDPSession, Page } from '@playwright/test';
+import { randomBytes, webcrypto } from 'node:crypto';
+import type { Browser, BrowserContext, CDPSession, Download, Page } from '@playwright/test';
 import { checkA11y, expect, test } from '../../../tests/e2e/fixtures.ts';
 import { sites } from '../../../tests/e2e/sites.ts';
 import { apps, hub } from '../../../packages/registry/src/index.ts';
@@ -44,6 +44,13 @@ async function otherDevice(browser: Browser, baseURL: string | undefined): Promi
   });
 }
 
+/** What a downloaded file holds, as text. */
+async function downloadedText(file: Download): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of await file.createReadStream()) chunks.push(chunk as Buffer);
+  return Buffer.concat(chunks).toString('utf8');
+}
+
 test('creates an account once the recovery key is saved', async ({ page }) => {
   await page.goto('/account/');
   await expect(view(page, 'signed-out')).toBeVisible();
@@ -54,15 +61,17 @@ test('creates an account once the recovery key is saved', async ({ page }) => {
   expect(key).toMatch(RECOVERY_KEY);
   const continueButton = page.getByRole('button', { name: 'Continue' });
   await expect(continueButton).toBeDisabled();
+  // Safari there saves downloads to iCloud Drive by default (audit 6 D-4).
+  await expect(view(page, 'new')).toContainText(
+    'On an iPhone or iPad, a download usually goes to iCloud Drive',
+  );
   await checkA11y(page, 'account: save the recovery key');
 
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Download recovery key' }).click();
   const file = await download;
   expect(file.suggestedFilename()).toBe('shkriuss-recovery-key.txt');
-  const chunks: Buffer[] = [];
-  for await (const chunk of await file.createReadStream()) chunks.push(chunk as Buffer);
-  const text = Buffer.concat(chunks).toString('utf8');
+  const text = await downloadedText(file);
   expect(text).toContain(key);
 
   // Nothing is saved until the person confirms.
@@ -235,6 +244,55 @@ test('“Add this device” works only a moment after its question is on screen'
   await other.close();
 });
 
+test('“Show recovery key” saves and copies this account’s key, even after a new key was left unsaved', async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  // A new key shown by "Create an account" stayed in the page after a link
+  // opened in the same tab, and the dialog's Download and Copy used it: a
+  // key to no account (audit 6 A-1).
+  const { key, code } = await createAccount(page);
+  await page.getByRole('button', { name: 'Show a code' }).click();
+  await expect(page.locator('[data-link-url]')).toHaveText(/#link=/);
+  const url = (await page.locator('[data-link-url]').textContent()) ?? '';
+
+  const other = await otherDevice(browser, baseURL);
+  await other.grantPermissions(['clipboard-read', 'clipboard-write']);
+  const second = await other.newPage();
+  await second.goto('/account/');
+  await second.getByRole('button', { name: 'Create an account' }).click();
+  const unsaved = (await second.locator('[data-new-key]').textContent()) ?? '';
+  expect(unsaved).toMatch(RECOVERY_KEY);
+  // The link pasted into this tab's address bar: only the part after "#"
+  // changes, so the page stays as it is.
+  await second.evaluate((link) => {
+    location.hash = new URL(link).hash;
+  }, url);
+  await expect(view(second, 'link-confirm')).toBeVisible();
+  await expect(second.locator('[data-new-key]')).toHaveText('');
+  const add = second.getByRole('button', { name: 'Add this device' });
+  await expect(add).not.toHaveAttribute('aria-disabled');
+  await add.click();
+  await expect(accountCode(second)).toHaveText(code);
+
+  await second.getByRole('button', { name: 'Show recovery key' }).click();
+  const dialog = second.getByRole('dialog', { name: 'Your recovery key' });
+  const status = dialog.locator('[data-dialog-status]');
+  await expect(dialog.locator('[data-dialog-key]')).toHaveText(key);
+  const download = second.waitForEvent('download');
+  await dialog.getByRole('button', { name: 'Download' }).click();
+  const text = await downloadedText(await download);
+  expect(text).toContain(key);
+  expect(text).toContain(`Account code: ${code}`);
+  expect(text).not.toContain(unsaved);
+  await expect(status).toHaveText('Download started. Keep the file somewhere safe.');
+  await dialog.getByRole('button', { name: 'Copy' }).click();
+  await expect(status).toHaveText('Copied.');
+  expect(await second.evaluate(() => navigator.clipboard.readText())).toBe(key);
+  await other.close();
+});
+
 test('signed out in another tab: says so, closes the recovery key, and moves focus', async ({
   page,
 }) => {
@@ -337,6 +395,39 @@ test('“Done” makes the code stop working, so someone who saw it can’t use 
   await expect(message(second)).toHaveText(/^This code has expired/);
   await expect(view(second, 'signed-out')).toBeVisible();
   await other.close();
+});
+
+test('a device whose clock runs ahead shows its code for the 10 minutes, then makes it stop working', async ({
+  page,
+  request,
+}) => {
+  // The page took the server's time of expiry by its own clock: 15 minutes
+  // ahead, it hid the code at once as "expired", and left it working,
+  // with nobody watching, for the rest of its 10 minutes (audit 6 A-1).
+  await page.clock.install({ time: new Date(Date.now() + 15 * 60 * 1000) });
+  await createAccount(page);
+  await page.getByRole('button', { name: 'Show a code' }).click();
+  const status = page.locator('[data-link-status]');
+  await expect(status).toHaveText(/Waiting for your other device/);
+  const url = (await page.locator('[data-link-url]').textContent()) ?? '';
+  const id = /#link=([\w-]{22})\./.exec(url)?.[1] ?? '';
+  // Two checks with the account service later, it's still there.
+  await page.clock.runFor(4100);
+  await expect(status).toHaveText(/Waiting for your other device/);
+  await expect(page.locator('[data-link-qr] svg')).toHaveCount(1);
+
+  // Its 10 minutes over, by this device's clock: hidden, and cancelled.
+  const cancelled = page.waitForResponse(
+    (response) =>
+      response.url().includes('/api/account/link/') && response.request().method() === 'DELETE',
+  );
+  await page.clock.fastForward('10:00');
+  await expect(status).toHaveText('The code expired. Show a new one if you still need it.');
+  await expect(page.locator('[data-link-qr] svg')).toHaveCount(0);
+  expect((await cancelled).status()).toBe(204);
+  expect(await (await request.get(`/api/account/link/${id}/state`)).json()).toEqual({
+    state: 'expired',
+  });
 });
 
 test('asks before switching a signed-in device to another account', async ({
@@ -454,6 +545,88 @@ test('replacing the key signs out every device that has the old one', async ({
   await tablet.context().close();
 });
 
+test('a key replaced here whose answer never came is finished when the page opens again', async ({
+  page,
+  guard,
+}) => {
+  // The account service noted the old key as replaced, but its answer was
+  // lost, and the page was closed: the next time, this device took itself
+  // for a lost one, signed out and forgot the old key, so no app could move
+  // its old copy any more (audit 6 A-1).
+  const old = await createAccount(page);
+  const oldSecret = await page.evaluate(
+    () =>
+      (JSON.parse(localStorage.getItem('shkriuss-device:account') ?? '{}') as { secret: string })
+        .secret,
+  );
+  await page.route('**/api/account/status', async (route) => {
+    if (route.request().method() !== 'PUT') return route.fallback();
+    await route.fetch();
+    return route.abort('connectionreset');
+  });
+  guard.allowConsole('net::ERR_CONNECTION_RESET');
+  await page.getByRole('button', { name: 'Replace the account key' }).click();
+  await page.getByRole('button', { name: 'Get a new key' }).click();
+  const key = (await page.locator('[data-new-key]').textContent()) ?? '';
+  await page.getByLabel("I've saved my recovery key").check();
+  await page.getByRole('button', { name: 'Replace the key' }).click();
+  await expect(page.locator('[data-new-status]')).toHaveText(/^Couldn’t reach shkriuss\.app/);
+  await page.unrouteAll();
+
+  await page.reload();
+  await expect(view(page, 'signed-in')).toBeVisible();
+  await expect(message(page)).toHaveText(/^Your account key is replaced\./);
+  await expect(accountCode(page)).not.toHaveText(old.code);
+  await page.getByRole('button', { name: 'Show recovery key' }).click();
+  await expect(
+    page.getByRole('dialog', { name: 'Your recovery key' }).locator('[data-dialog-key]'),
+  ).toHaveText(key);
+  // The old key stays, for the apps to move their old copies.
+  expect(
+    await page.evaluate(
+      () =>
+        (
+          JSON.parse(localStorage.getItem('shkriuss-device:account') ?? '{}') as {
+            replaced?: string[];
+          }
+        ).replaced,
+    ),
+  ).toEqual([oldSecret]);
+});
+
+test('asks the browser to keep the account on this device', async ({ page }) => {
+  // The apps asked, the hub didn't, though it keeps the account key and the
+  // replaced keys the apps need (audit 6 E-6).
+  await page.addInitScript(() => {
+    const asked = { times: 0 };
+    Object.assign(window, { asked });
+    Object.defineProperty(navigator.storage, 'persisted', {
+      configurable: true,
+      value: async () => false,
+    });
+    Object.defineProperty(navigator.storage, 'persist', {
+      configurable: true,
+      value: async () => {
+        asked.times += 1;
+        return true;
+      },
+    });
+  });
+  const asked = () =>
+    page.evaluate(() => (window as unknown as { asked: { times: number } }).asked.times);
+  await createAccount(page);
+  await expect.poll(asked).toBe(1);
+  // Signed in before this change: asked when the page opens.
+  await page.reload();
+  await expect(view(page, 'signed-in')).toBeVisible();
+  await expect.poll(asked).toBe(1);
+  // Signed out, there's nothing to keep.
+  await signOut(page);
+  await page.reload();
+  await expect(view(page, 'signed-out')).toBeVisible();
+  expect(await asked()).toBe(0);
+});
+
 test('the dialogs read out what they mean, with their question (audit 5 G-3)', async ({ page }) => {
   const { code } = await createAccount(page);
   const dialog = page.getByRole('dialog', { name: 'Sign out of this device?' });
@@ -515,6 +688,57 @@ test('refuses to connect an app from the wrong address', async ({ page }) => {
     `/account/?connect=nope&from=${encodeURIComponent('http://127.0.0.1:1')}&key=${key}&state=${state}`,
   );
   await expect(message(page)).toHaveText(/This link to connect an app doesn’t work/);
+});
+
+test('“Turn on sync for …” works only a moment after its question is on screen', async ({
+  page,
+  guard,
+}) => {
+  // Any website can bring this question up (ADR 0010), so a press sooner may
+  // be the second click of a double-click it asked for, as for "Add this
+  // device" (audit 4 C-6, audit 6 A-2).
+  await createAccount(page);
+  const [app] = syncApps;
+  if (!app) throw new Error('No app syncs');
+  // What an app sends: a one-time public key, and where to come back to.
+  const pair = await webcrypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, [
+    'deriveBits',
+  ]);
+  const key = Buffer.from(await webcrypto.subtle.exportKey('raw', pair.publicKey)).toString(
+    'base64url',
+  );
+  const state = randomBytes(16).toString('base64url');
+  const from = 'http://127.0.0.1:1';
+  guard.allowOrigin(from);
+  await page.route(`${from}/**`, (route) =>
+    route.fulfill({ status: 200, contentType: 'text/html', body: '<p>The app</p>' }),
+  );
+  // Paused: no timer fires but those the test runs.
+  await page.clock.install({ time: new Date('2026-10-26T12:00:00') });
+  await page.clock.pauseAt(new Date('2026-10-26T12:00:01'));
+  await page.goto(
+    `/account/?connect=${app.slug}&from=${encodeURIComponent(from)}&key=${key}&state=${state}`,
+  );
+  await expect(view(page, 'connect')).toBeVisible();
+  const turnOn = page.getByRole('button', { name: `Turn on sync for ${app.name}` });
+  await expect(turnOn).toHaveAttribute('aria-disabled', 'true');
+  // A press meanwhile does nothing.
+  await turnOn.focus();
+  await page.keyboard.press('Enter');
+  await page.clock.runFor(400);
+  await expect(turnOn).toHaveAttribute('aria-disabled', 'true');
+  await expect(view(page, 'connect')).toBeVisible();
+  await page.clock.runFor(100);
+  await expect(turnOn).not.toHaveAttribute('aria-disabled');
+  // Away from the window and back: another half second, focus still on it.
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await expect(turnOn).toHaveAttribute('aria-disabled', 'true');
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(turnOn).toBeFocused();
+  await page.clock.runFor(500);
+  await expect(turnOn).not.toHaveAttribute('aria-disabled');
+  await turnOn.click();
+  await page.waitForURL((url) => url.origin === from && url.hash.startsWith('#connect='));
 });
 
 test.describe('passkeys', () => {

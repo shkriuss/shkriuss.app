@@ -243,17 +243,21 @@ export class LibraryError extends Error {
   readonly status: number | null;
   /** For 'deleted': the deletion note's seal the server gave, to check. */
   readonly proof: string | null;
+  /** The library said it's another token's ("This isn't your library"): not just any 403. */
+  readonly notYours: boolean;
   constructor(
     problem: LibraryProblem,
     retryAt: number | null = null,
     status: number | null = null,
     proof: string | null = null,
+    notYours = false,
   ) {
     super(problem);
     this.problem = problem;
     this.retryAt = retryAt;
     this.status = status;
     this.proof = proof;
+    this.notYours = notYours;
   }
 }
 
@@ -273,6 +277,9 @@ async function failure(response: Response): Promise<LibraryError> {
   }
   if (response.status === 409) return error('exists');
   if (response.status === 403 && flag('wrong')) return error('wrong-code');
+  if (response.status === 403 && flag('notYours')) {
+    return new LibraryError('server', null, response.status, null, true);
+  }
   if (response.status === 429) {
     if (flag('tooMany')) return error('too-many-tries');
     return error('daily-limit', typeof body['retryAt'] === 'number' ? body['retryAt'] : null);
@@ -282,9 +289,13 @@ async function failure(response: Response): Promise<LibraryError> {
   return error(response.status >= 500 ? 'offline' : 'server');
 }
 
-/** "This isn't your library": this key's token isn't the library's. */
-const isRefused = (error: unknown): boolean =>
-  error instanceof LibraryError && error.problem === 'server' && error.status === 403;
+/**
+ * "This isn't your library": this key's token isn't the library's. Only the
+ * library's own answer says so: any other 403 (a challenge page from
+ * Cloudflare, say) once counted too, and marked the library as taken for
+ * good, with nothing moved (audit 6 A-5).
+ */
+const isRefused = (error: unknown): boolean => error instanceof LibraryError && error.notYours;
 
 /** An item from the list of changes, its details opened. */
 export interface LibraryItem {

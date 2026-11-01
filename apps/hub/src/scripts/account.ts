@@ -11,6 +11,7 @@ import {
   claimLink,
   createLink,
   currentAccount,
+  finishReplacing,
   forgetAccount,
   generateSecret,
   isReplaced,
@@ -36,7 +37,7 @@ import {
 } from '@shkriuss/account';
 import { today } from '@shkriuss/dates';
 import { apps, type AppEntry } from '@shkriuss/registry';
-import { downloadFile } from '@shkriuss/storage';
+import { downloadFile, keepData } from '@shkriuss/storage';
 import {
   connectResultUrl,
   isConnectKey,
@@ -83,7 +84,7 @@ const CONNECT_BROKEN =
 const LINK_POLL_MS = 2000;
 /** A message that appears is shown (and read out) this long after it's put on the page. */
 const SAY_DELAY_MS = 100;
-/** "Add this device" works this long after its question is on screen (see holdAccept). */
+/** "Add this device" and "Turn on sync for …" work this long after their question is on screen (see holdAccept). */
 const ACCEPT_DELAY_MS = 500;
 
 const PROBLEMS: Record<AccountErrorCode, string> = {
@@ -212,6 +213,7 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
 
   const connectNote = required<HTMLElement>(root, '[data-connect-note]');
   const connectCode = required<HTMLElement>(root, '[data-connect-code]');
+  const acceptConnectButton = required<HTMLButtonElement>(root, '[data-action="accept-connect"]');
   const connecting = await connectRequestOf(location.search);
   if (connecting === 'invalid') {
     message.hidden = false;
@@ -314,13 +316,24 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
     });
   }
 
+  /** Forgets the new key shown to save, which the person didn't confirm. */
+  function dropPending(): void {
+    pending = null;
+    newKey.textContent = '';
+    newStatus.textContent = '';
+  }
+
   function show(view: View, focus = true): void {
+    // A new key goes with its view, however that's left: kept, it was what
+    // "Show recovery key" downloaded and copied later (audit 6 A-1).
+    if (view !== 'new') dropPending();
     for (const element of views) element.hidden = element.dataset['view'] !== view;
     if (view === 'signed-in' && account) {
       accountCode.textContent = account.code;
       void showSyncApps();
     }
     if (focus) root.querySelector<HTMLElement>(`[data-view="${view}"] [tabindex="-1"]`)?.focus();
+    holdAccept();
   }
 
   function home(focus = true): void {
@@ -354,6 +367,7 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
       say(STORAGE_BLOCKED, true);
       return false;
     }
+    keepData();
     account = await currentAccount();
     void dropLink();
     home();
@@ -379,6 +393,13 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
     savedCheck.checked = false;
     finishCreate.disabled = true;
     show('new');
+  }
+
+  /** Downloads a recovery key file. */
+  function downloadKey(key: string, code: string, status: HTMLElement): void {
+    downloadFile('shkriuss-recovery-key.txt', recoveryFile(key, code), 'text/plain');
+    // The page can't tell when the browser has saved it (audit 5 Z-2).
+    status.textContent = 'Download started. Keep the file somewhere safe.';
   }
 
   async function copy(text: string, status: HTMLElement): Promise<void> {
@@ -449,7 +470,9 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
       stopLink();
       linkStatus.textContent = LINK_USED;
     } else if (state === 'expired' || Date.now() > shown.expiresAt) {
-      stopLink();
+      // Cancelled too: by the server's clock, it may still work a moment
+      // longer, and hidden it mustn't (audit 6 A-1).
+      void dropLink();
       linkStatus.textContent = 'The code expired. Show a new one if you still need it.';
     }
   }
@@ -501,25 +524,30 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
     linkCode.textContent = await accountCodeOf(linked);
     linkReplace.hidden = !account;
     show('link-confirm');
-    holdAccept();
     return true;
   }
 
   /**
-   * "Add this device" works only once the question has been on screen, in a
-   * window that has focus, for half a second. A press sooner may be the
-   * second half of a double-click another website asked for, closing its own
-   * window over this one in between ("DoubleClickjacking", audit 4 C-6).
-   * Meanwhile it's marked busy, not disabled: keyboard focus stays on it
-   * when the person comes back from another window (audit G-7).
+   * "Add this device" and "Turn on sync for …" work only once their
+   * question has been on screen, in a window that has focus, for half a
+   * second: another website can bring either up (a link; an app opened with
+   * "#sync=connect"), and a press sooner may be the second half of a
+   * double-click it asked for, closing its own window over this one in
+   * between ("DoubleClickjacking", audit 4 C-6, audit 6 A-2). Meanwhile
+   * they're marked busy, not disabled: keyboard focus stays on them when the
+   * person comes back from another window (audit G-7).
    */
+  const confirmations = [acceptLinkButton, acceptConnectButton];
   let acceptTimer: number | undefined;
+  /** "Turn on sync for …" was pressed: it stays busy while the page goes back to the app. */
+  let leaving = false;
   function holdAccept(): void {
     window.clearTimeout(acceptTimer);
-    setBusy(acceptLinkButton, true);
-    if (!linked || !document.hasFocus()) return;
+    for (const button of confirmations) setBusy(button, true);
+    const shown = confirmations.find((button) => !button.closest('[hidden]'));
+    if (!shown || leaving || !document.hasFocus()) return;
     acceptTimer = window.setTimeout(() => {
-      setBusy(acceptLinkButton, false);
+      setBusy(shown, false);
     }, ACCEPT_DELAY_MS);
   }
   window.addEventListener('focus', holdAccept);
@@ -553,8 +581,7 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
       if (!pending) return;
       const { secret, replacing } = pending;
       if (!replacing) {
-        pending = null;
-        newKey.textContent = '';
+        dropPending();
         await signIn(secret, 'Your account is ready, and this device is signed in.', null);
         return;
       }
@@ -568,8 +595,7 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
         newStatus.textContent = problemOf(error);
         return;
       }
-      pending = null;
-      newKey.textContent = '';
+      dropPending();
       account = await currentAccount();
       void dropLink();
       linkStatus.textContent = '';
@@ -582,22 +608,19 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
       show('replace');
     },
     'start-replace': () => showNewKey(true),
-    'download-key': async () => {
-      const source =
-        pending ?? (account && { key: await recoveryKeyOf(account.secret), code: account.code });
-      if (!source) return;
-      downloadFile(
-        'shkriuss-recovery-key.txt',
-        recoveryFile(source.key, source.code),
-        'text/plain',
-      );
-      // The page can't tell when the browser has saved it (audit 5 Z-2).
-      (pending ? newStatus : dialogStatus).textContent =
-        'Download started. Keep the file somewhere safe.';
+    // "Save your recovery key": the new key.
+    'download-key': () => {
+      if (pending) downloadKey(pending.key, pending.code, newStatus);
     },
     'copy-key': async () => {
       if (pending) await copy(pending.key, newStatus);
-      else if (account) await copy(await recoveryKeyOf(account.secret), dialogStatus);
+    },
+    // "Your recovery key": this account's, whatever else the page holds (audit 6 A-1).
+    'download-account-key': async () => {
+      if (account) downloadKey(await recoveryKeyOf(account.secret), account.code, dialogStatus);
+    },
+    'copy-account-key': async () => {
+      if (account) await copy(await recoveryKeyOf(account.secret), dialogStatus);
     },
     'show-recovery-form': () => {
       say(null);
@@ -608,9 +631,7 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
       recoveryInput.focus();
     },
     back: () => {
-      pending = null;
       linked = null;
-      newKey.textContent = '';
       home();
     },
     'passkey-sign-in': (button) =>
@@ -624,7 +645,9 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
       }),
     'accept-connect': async (button) => {
       if (!account || !connecting || connecting === 'invalid') return;
+      if (button.ariaDisabled === 'true') return;
       // Stays busy: the page goes back to the app.
+      leaving = true;
       setBusy(button, true);
       const { request, app } = connecting;
       try {
@@ -638,6 +661,7 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
         location.replace(connectResultUrl(request.from, result));
       } catch {
         // Not expected (the request was checked), but never a button stuck busy (audit 5 A-3).
+        leaving = false;
         setBusy(button, false);
         say(CONNECT_BROKEN, true);
       }
@@ -793,10 +817,7 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
       if (changed) {
         void dropLink();
         linkStatus.textContent = '';
-        if (pending?.replacing) {
-          pending = null;
-          newKey.textContent = '';
-        }
+        if (pending?.replacing) dropPending();
         if (keyDialog.open) keyDialog.close();
         if (signOutDialog.open) signOutDialog.close();
         say(
@@ -821,6 +842,11 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
 
   window.addEventListener('hashchange', () => void openLink(location.hash));
 
+  // Replaced here, but the answer never came (the connection dropped, or
+  // the page was closed): finished now, as if it had (audit 6 A-1).
+  const finished = account ? await finishReplacing(account) : null;
+  if (finished) account = await currentAccount();
+
   // Replaced on another device (a lost device): signed out here, keeping
   // nothing of it, as "Sign out" does (audit 3 D-8). Its apps here keep
   // their own keys: the message names them, now that the list is gone.
@@ -829,7 +855,14 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
     account = null;
     const names = syncLinks.filter(({ slug }) => stillSyncing.includes(slug));
     say(replacedHere(names.map(({ name }) => name)), true);
+  } else if (finished) {
+    say(finished.saved ? REPLACED.done : STORAGE_BLOCKED, !finished.saved);
   }
+  // The account key, and the replaced keys the apps need, are only in this
+  // browser: it's asked not to delete them when it's short of space, as
+  // each app asks after its first save (keepData; signIn asks too). The hub
+  // didn't (audit 6 E-6).
+  if (account) keepData();
 
   if (!(await openLink(location.hash))) home(false);
 }

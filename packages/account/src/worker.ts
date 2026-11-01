@@ -54,6 +54,7 @@ import {
   type DurableObjectState,
   type SiteEnv,
 } from '@shkriuss/server';
+import { equalBytes, utf8 } from '@shkriuss/crypto';
 import { LIMIT_HEADER, limitOf, METER, meterFetch, release, reserve } from '@shkriuss/server/meter';
 import {
   checkAssertionShape,
@@ -269,7 +270,9 @@ export class AccountLink {
       // Cancelled by the device that made it ("Done"): it stops working at once.
       if (request.method === 'DELETE') {
         if (!record) return noContent();
-        if (!record.cancel || record.cancel !== request.headers.get(CANCEL_HEADER)) {
+        // Hashes of the token, compared in constant time as every secret is (audit 6 A-2).
+        const given = utf8(request.headers.get(CANCEL_HEADER) ?? '');
+        if (!record.cancel || !equalBytes(utf8(record.cancel), given)) {
           return problem(403, 'Only the device that made this link can cancel it.');
         }
         if (record.data === null) {

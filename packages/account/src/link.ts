@@ -10,12 +10,16 @@
 import { fromBase64Url, open, randomBytes, seal, toBase64Url } from '@shkriuss/crypto';
 import { AccountError, api } from './errors.ts';
 import { SECRET_BYTES } from './secret.ts';
-import { LINK_ID_PATTERN } from './validate.ts';
+import { LINK_ID_PATTERN, LINK_LIFETIME_MS } from './validate.ts';
 
 export interface DeviceLink {
   id: string;
   /** Open this on the other device (it's what the QR code holds). */
   url: string;
+  /**
+   * When it stops working, by this device's clock (ms). The server's own
+   * time can be minutes off from it (audit 6 A-1).
+   */
   expiresAt: number;
   /** Cancels the link (cancelLink): only this device has it. */
   cancel: string;
@@ -34,13 +38,20 @@ export async function createLink(
   const key = randomBytes(32);
   const cancel = toBase64Url(randomBytes(32));
   const data = await seal(key, secret, label(id));
+  // Its 10 minutes start when the server gets it: counted from just before,
+  // it's never shown for longer than it works.
+  const sent = Date.now();
   const response = await api(`/link/${id}`, {
     method: 'PUT',
     body: JSON.stringify({ data, cancel }),
   });
   if (response.status !== 201) throw new AccountError('server', 'Couldn’t make a link.');
-  const { expiresAt } = (await response.json()) as { expiresAt: number };
-  return { id, url: `${origin}/account/#link=${id}.${toBase64Url(key)}`, expiresAt, cancel };
+  return {
+    id,
+    url: `${origin}/account/#link=${id}.${toBase64Url(key)}`,
+    expiresAt: sent + LINK_LIFETIME_MS,
+    cancel,
+  };
 }
 
 /**

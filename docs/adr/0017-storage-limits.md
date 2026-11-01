@@ -15,7 +15,9 @@ no longer applies (see "What people see"). Changed by audit 5: device links
 are rows in one object (B-2), a library made up through a move is cleaned up
 too (B-1), files count their rows (B-3), what the 13-month clean-up undoes
 for a replaced key (A-1), and the daily row writes (B-4); and its body no
-longer describes pull request previews (J-4).
+longer describes pull request previews (J-4). Changed by audit 6: what the
+13-month clean-up of a replaced-key note means for the person's own old
+passkeys and recovery key (A-3).
 
 ## Context
 
@@ -176,8 +178,9 @@ past that, the limits per app need lowering first.
   that nobody (not even the lost device) has used for 13 months is deleted
   with its "moved" note, so the old key can start a copy under that app's
   old token again. What it can't undo: the person's own devices never read
-  such a copy. The device that replaced the key forgets it after 13 months,
-  and each app remembers the old keys it's done with (their copy moved, by
+  such a copy (unless one signs in with the old key again: next point).
+  The device that replaced the key forgets it after 13 months, and each
+  app remembers the old keys it's done with (their copy moved, by
   it or by another device, or deleted) and never fetches them again
   (audit 5 A-1; before, the replacing device handed every app the old key
   at each "Turn on sync" for ever, and a copy started with it after the
@@ -186,6 +189,19 @@ past that, the limits per app need lowering first.
   key was replaced, and whose old copy nobody used meanwhile, brings along
   whatever copy the old key started in between, if sync is turned on in it
   while the hub still hands the old key over.
+- **The person's own old passkey, or old recovery key, after 13 months.**
+  Only the note stops them signing in, and once a lost device has signed
+  out nobody asks about it (the device that replaced the key never does),
+  so it goes 13 months after the replacement, or after the last try with
+  the old key. Then a passkey the person didn't remove (locks are never
+  deleted, above) or an old recovery key file signs a device in to the old
+  key again, and apps turned on there sync with it, where whoever kept the
+  old key can read them. The Account page tells the person to remove old
+  passkeys when they replace the key, and signed in this way it shows the
+  old account code. Keeping the note for good would let strangers fill its
+  room for good, and keeping it alive from the person's device would work
+  only while that device stays signed in and opens the Account page at
+  least once a year, so it stays as it is (audit 6 A-3).
 - Each copy keeps a little more (when it was last used, and its room), and a
   copy that grows past its room makes one more request, to the meter.
 - Copies and objects from before this change aren't counted until they next
