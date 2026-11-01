@@ -54,6 +54,35 @@ test('an app that saves data shows “Your data”', async ({ page }, testInfo) 
   await expect(controls.getByRole('button', { name: 'Delete all data' })).toBeVisible();
 });
 
+test('says when the browser deletes it all by itself, and how to keep it (audit 6 E-5, Z-1)', async ({
+  page,
+}, testInfo) => {
+  const { name, sync } = getSite(testInfo.project.name);
+  const backups = !NO_BACKUPS.includes(testInfo.project.name);
+  const controls = page.getByRole('region', { name: 'Your data' });
+  const safari = controls.getByText(/^Safari deletes a website’s data when it isn’t opened/);
+  await expect(safari).toBeVisible();
+  // Following "add it to your Home Screen" alone left everything in Safari:
+  // on an iPhone, the app there has its own storage.
+  await expect(safari).toContainText(
+    `On an iPhone or iPad, ${name} on the Home Screen keeps its own data, apart from Safari’s, so it starts empty: `,
+  );
+  await expect(safari).toContainText(
+    [
+      ...(backups ? ['back up here and restore it there'] : []),
+      ...(sync ? ['turn on sync in both'] : []),
+    ].join(', or ') + '.',
+  );
+  // Saving works in a private window, so nothing else warns that closing it
+  // deletes everything.
+  await expect(controls.getByText(/^In a private window/)).toHaveText(
+    `In a private window, everything is deleted when you close it: ${[
+      ...(backups ? ['back up'] : []),
+      ...(sync ? ['turn on sync'] : []),
+    ].join(' or ')} before you do.`,
+  );
+});
+
 test('“Delete all data” also forgets what this device kept for itself (audit 5 D-1)', async ({
   page,
 }) => {

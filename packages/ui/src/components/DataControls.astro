@@ -47,6 +47,23 @@ const optIns = [
 const stays = `Everything ${site.name} saves stays in this browser on this device${
   optIns.length > 0 ? `, unless you turn on ${optIns.join(' or ')}` : '. Nothing is sent anywhere'
 }.`;
+// When the browser deletes it all by itself, and how to keep it. On an
+// iPhone or iPad, the app on the Home Screen has its own storage, so it
+// starts empty (audit 6 Z-1); a private window deletes everything when it
+// closes, and saving works there, so nothing else warns (audit 6 E-5).
+const homeScreen = `Safari deletes a website’s data when it isn’t opened for 7 days, unless it’s on your Home Screen. Add ${site.name} to your Home Screen${site.sync ? ', or turn on sync' : ''}${backup ? ', and back up now and then' : ''} to keep it safe.`;
+const bringOver = [
+  ...(backup ? ['back up here and restore it there'] : []),
+  ...(site.sync ? ['turn on sync in both'] : []),
+].join(', or ');
+const startsEmpty = `On an iPhone or iPad, ${site.name} on the Home Screen keeps its own data, apart from Safari’s, so it starts empty${bringOver ? `: ${bringOver}` : ''}.`;
+const keepBeforeClosing = [
+  ...(backup ? ['back up'] : []),
+  ...(site.sync ? ['turn on sync'] : []),
+].join(' or ');
+const privateWindow = `In a private window, everything is deleted when you close it${
+  keepBeforeClosing ? `: ${keepBeforeClosing} before you do` : ''
+}.`;
 ---
 
 <section
@@ -63,9 +80,8 @@ const stays = `Everything ${site.name} saves stays in this browser on this devic
         ? `${stays} Back up to keep your own copy.`
         : `${stays} Back up to keep a copy, or to move your data to another device.`}
   </p>
-  <p class="muted">
-    {`Safari deletes a website’s data when it isn’t opened for 7 days, unless it’s on your Home Screen. Add ${site.name} to your Home Screen${site.sync ? ', or turn on sync' : ''}${backup ? ', and back up now and then' : ''} to keep it safe.`}
-  </p>
+  <p class="muted">{`${homeScreen} ${startsEmpty}`}</p>
+  <p class="muted">{privateWindow}</p>
   <slot />
   <div class="cluster">
     <Button icon="download" data-action="backup" hidden={!backup}>

@@ -36,11 +36,12 @@ import {
   reminderWindow,
   type ReminderCheck,
 } from '../lib/reminder-window.ts';
-import { mountPushControls } from './push-controls.ts';
+import { mountPushControls, STARTS_EMPTY_THERE } from './push-controls.ts';
 import { required } from './dom.ts';
 import { loadChecked, saveChecked } from './reminder-checks.ts';
 
 export { MAX_SUMMER_TIME_MINUTES } from '../lib/reminder-window.ts';
+export { STARTS_EMPTY_THERE } from './push-controls.ts';
 
 const CHECK_EVERY_MS = 20_000;
 
@@ -111,7 +112,7 @@ export const permission = (): Permission =>
 /** The status line for each permission. */
 export function statusTexts(app: string, what = 'reminders'): Record<Permission, string> {
   return {
-    unsupported: `This browser can’t show notifications. On iPhone or iPad, add ${app} to your Home Screen to get them.`,
+    unsupported: `This browser can’t show notifications. On iPhone or iPad, add ${app} to your Home Screen to get them. ${STARTS_EMPTY_THERE}`,
     default: `Notifications are off. Turn them on to get ${what}.`,
     granted: 'Notifications are on.',
     denied: `Notifications are blocked for ${app}. To allow them, change this site’s settings in your browser.`,

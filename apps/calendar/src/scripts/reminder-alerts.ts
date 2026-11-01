@@ -18,6 +18,7 @@ import { keepFocus } from '@shkriuss/ui/keep-focus';
 import {
   mountNotificationStatus,
   showNotifications,
+  STARTS_EMPTY_THERE,
   type Permission,
 } from '@shkriuss/ui/local-reminders';
 import { wentBackFar, type ReminderCheck } from '@shkriuss/ui/reminder-window';
@@ -63,8 +64,7 @@ const checks = createStore<Checks>({
 });
 
 const STATUS: Record<Permission, string> = {
-  unsupported:
-    'This browser can’t show notifications, so reminders show on this page while Calendar is open. On iPhone or iPad, add Calendar to your Home Screen to get notifications.',
+  unsupported: `This browser can’t show notifications, so reminders show on this page while Calendar is open. On iPhone or iPad, add Calendar to your Home Screen to get notifications. ${STARTS_EMPTY_THERE}`,
   default: 'Notifications are off. Reminders show on this page while Calendar is open.',
   granted: 'Notifications are on. Reminders also show on this page while Calendar is open.',
   denied:

@@ -21,7 +21,7 @@ const whereLabel: Record<StorageKind, string> = {
 // The day this page's text last changed (people rely on it), and a
 // fingerprint of that text: ../privacy.test.ts fails when the text changes
 // but they don't, and says what to set (audit 3 D-7).
-const LAST_UPDATED = '1 November 2026'; // text 8b1958cd99c9201b
+const LAST_UPDATED = '1 November 2026'; // text e01b7fb4a581411f
 // The page shows the day that change was merged, so went live, if that's
 // later than the day it was written (audit 6 D-2).
 const shownDate = lastUpdated(LAST_UPDATED);
@@ -307,13 +307,16 @@ const shownDate = lastUpdated(LAST_UPDATED);
       <li>You can also clear a site's data in your browser settings.</li>
       <li>
         Unless you turn on sync, your data is only on your device, so clearing your browser data or
-        losing the device deletes it. Back up if you want to keep a copy or move to a new device.
+        losing the device deletes it. So does closing a private window, which deletes everything the
+        sites in it saved. Back up if you want to keep a copy or move to a new device.
       </li>
       <li>
         Safari also deletes a website's data when it isn't opened for 7 days, unless it's on your
         Home Screen. The apps, and the Account page once you're signed in, ask your browser to keep
         their data, but it decides. Adding an app to your Home Screen, sync and backups all keep it
-        safe.
+        safe. On an iPhone or iPad, an app on the Home Screen keeps its own data, apart from
+        Safari's, so it starts empty: back up in Safari and restore it there, or turn on sync in
+        both.
       </li>
     </ul>
 
