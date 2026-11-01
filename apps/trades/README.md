@@ -101,11 +101,17 @@ Your trading journal: log your trades and see what works. Lives at
   - To make room, "Delete a year…" (next to the spreadsheet download)
     deletes the trades closed in one year, by the day they were closed
     (`closedYears`, `removeClosedYear`). It never changes a trade, so a
-    change to one on a device that hadn't synced can't bring back what was
-    deleted. Open trades always stay, and so do the parts of them closed
-    that year, which say how much is still open: they go once all of their
-    trade is closed (and then the trade goes with them; its parts from other
-    years stay, as trades of their own). It says how many that is, and what
+    change to an open trade on a device that hadn't synced can't bring back
+    what was closed of it. Open trades always stay, and so do the parts of
+    them closed that year, which say how much is still open: they go once
+    all of their trade is closed (and then the trade goes with them; its
+    parts from other years stay, as trades of their own). That trade, once
+    deleted, can come back: the newest change wins, so a change made to it
+    after the deletion, on a device offline since before its last part was
+    closed (its stop loss moved there, say), brings it back without its
+    parts, as open, with all it bought. It's then deleted by hand. A mark
+    on the trade couldn't stop that, as such a change replaces the whole
+    trade (audit 6 F2-2). The dialog says how many trades go, and what
     stays, and offers the spreadsheet first. With sync on, they're
     deleted on the other devices too. If that year changes on another
     device or tab while the dialog is open, it closes and says so, rather

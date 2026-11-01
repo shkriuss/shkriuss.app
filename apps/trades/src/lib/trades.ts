@@ -762,7 +762,10 @@ export function closedYears(state: TradesState): YearCount[] {
  * was deleted (audit 3 F2-2). Open trades stay, and so do the parts of
  * them still open (keptPart). A trade closed in parts, all of it, goes
  * with its parts of that year, as it would count them as open again; its
- * other parts stay, as trades of their own.
+ * other parts stay, as trades of their own. That trade is deleted, not
+ * changed, so a change made to it on a device that hadn't synced, dated
+ * after the deletion, brings it back without its parts, as open (audit 6
+ * F2-2; the README says why it stays so).
  */
 export function removeClosedYear(state: TradesState, year: string): TradesState {
   const parts = partsOf(state.trades);
