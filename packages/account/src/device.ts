@@ -12,7 +12,9 @@
  * 13 months from when it was noted (REPLACED_NOTE_MS), as long as the
  * account service keeps its note: after that, the "moved" notes on the
  * apps' old copies may be gone too, and a copy a lost device started with
- * the old key would have come along (audit 5 A-1).
+ * the old key would have come along (audit 5 A-1). While it replaces its
+ * key, it keeps the new one too (noteReplacing), in case the account
+ * service's answer is lost (audit 6 A-1).
  *
  * And it keeps which apps this device turned on sync for, so the Account
  * page can offer to turn it off again (see `syncedApps`).
@@ -37,6 +39,11 @@ export interface Account {
 interface Saved {
   secret?: string;
   since?: string;
+  /**
+   * The key this device is replacing `secret` with, from just before it
+   * tells the account service until it signs in with it (noteReplacing).
+   */
+  next?: string;
   replaced: string[];
   /** For a replaced key, the tag of the key that replaced it (when known). */
   successors: Record<string, string>;
@@ -62,9 +69,13 @@ function read(): Saved {
   try {
     const value: unknown = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null');
     if (typeof value !== 'object' || value === null) return EMPTY;
-    const { secret, since, replaced, successors, replacedAt } = value as Record<string, unknown>;
+    const { secret, since, next, replaced, successors, replacedAt } = value as Record<
+      string,
+      unknown
+    >;
     return {
       ...(typeof secret === 'string' && typeof since === 'string' ? { secret, since } : {}),
+      ...(typeof next === 'string' ? { next } : {}),
       replaced: Array.isArray(replaced)
         ? replaced.filter((key): key is string => typeof key === 'string')
         : [],
@@ -157,8 +168,45 @@ export async function saveAccount(
   now = new Date(),
 ): Promise<boolean> {
   const saved = read();
-  const fresh = withFreshReplaced(saved, await leadingTo(secret, saved), now.getTime());
-  return write({ ...fresh, secret: toBase64Url(secret), since: now.toISOString() });
+  // Signed in: a replacement this device had under way (`next`) is over.
+  const { replaced, successors, replacedAt } = withFreshReplaced(
+    saved,
+    await leadingTo(secret, saved),
+    now.getTime(),
+  );
+  return write({
+    replaced,
+    successors,
+    replacedAt,
+    secret: toBase64Url(secret),
+    since: now.toISOString(),
+  });
+}
+
+/**
+ * Notes, before the account service is told, that this device is replacing
+ * its key `current` with `next`. The service may note the old key as
+ * replaced while its answer is lost (the connection drops, or the page is
+ * closed): without this, the next visit took this device for a lost one,
+ * signed it out and forgot the old key, so no app could move its old copy
+ * any more (audit 6 A-1). With it, the next visit finishes the replacement
+ * (finishReplacing in ./status.ts). The person has saved `next`'s recovery
+ * key by then.
+ */
+export function noteReplacing(
+  current: Uint8Array<ArrayBuffer>,
+  next: Uint8Array<ArrayBuffer>,
+): void {
+  const saved = read();
+  if (saved.secret !== toBase64Url(current)) return;
+  write({ ...saved, next: toBase64Url(next) });
+}
+
+/** The key this device was replacing `account`'s with (noteReplacing), if it hasn't signed in with it yet. */
+export function replacingWith(account: Account): Uint8Array<ArrayBuffer> | null {
+  const { secret, next } = read();
+  if (secret !== toBase64Url(account.secret) || next === undefined) return null;
+  return decode(next);
 }
 
 /**

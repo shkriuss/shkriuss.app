@@ -5,7 +5,14 @@
  * in again.
  */
 import { hkdf, toBase64Url } from '@shkriuss/crypto';
-import { forgetReplaced, noteReplaced, saveAccount, type Account } from './device.ts';
+import {
+  forgetReplaced,
+  noteReplaced,
+  noteReplacing,
+  replacingWith,
+  saveAccount,
+  type Account,
+} from './device.ts';
 import { AccountError, api } from './errors.ts';
 import { successorTag } from './secret.ts';
 import { SUCCESSOR_PATTERN } from './validate.ts';
@@ -74,6 +81,8 @@ export async function replaceAccountKey(
   // The note says which key replaced this one, in a way only devices that
   // have both can check: they keep the old key only for that account.
   const successor = await successorTag(current, next);
+  // Kept here first, in case the service's answer is lost (audit 6 A-1).
+  noteReplacing(current, next);
   const response = await api(
     '/status',
     { method: 'PUT', body: JSON.stringify({ successor }) },
@@ -83,4 +92,24 @@ export async function replaceAccountKey(
   if (!response.ok && noted) throw new AccountError('server', 'Couldn’t replace the account key.');
   noteReplaced(current, successor);
   return { saved: await saveAccount(next), noted };
+}
+
+/**
+ * Finishes a key replacement this device started whose answer never came
+ * (audit 6 A-1): the account service noted the old key as replaced, but
+ * this device didn't get to sign in with the new one. The note's tag needs
+ * both keys, so if it names the key this device was replacing with, the
+ * replacement was this device's: it signs in with the new key and keeps the
+ * old one for the apps, as if the answer had come. Returns whether the
+ * browser stored that, or null if there's nothing to finish (or the service
+ * can't be reached: then it's checked next time).
+ */
+export async function finishReplacing(account: Account): Promise<{ saved: boolean } | null> {
+  const next = replacingWith(account);
+  if (!next) return null;
+  const note = await replacedNote(account.secret).catch(() => null);
+  const successor = await successorTag(account.secret, next);
+  if (!note?.replaced || note.successor !== successor) return null;
+  noteReplaced(account.secret, successor);
+  return { saved: await saveAccount(next) };
 }

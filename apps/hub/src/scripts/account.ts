@@ -11,6 +11,7 @@ import {
   claimLink,
   createLink,
   currentAccount,
+  finishReplacing,
   forgetAccount,
   generateSecret,
   isReplaced,
@@ -828,6 +829,11 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
 
   window.addEventListener('hashchange', () => void openLink(location.hash));
 
+  // Replaced here, but the answer never came (the connection dropped, or
+  // the page was closed): finished now, as if it had (audit 6 A-1).
+  const finished = account ? await finishReplacing(account) : null;
+  if (finished) account = await currentAccount();
+
   // Replaced on another device (a lost device): signed out here, keeping
   // nothing of it, as "Sign out" does (audit 3 D-8). Its apps here keep
   // their own keys: the message names them, now that the list is gone.
@@ -836,6 +842,8 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
     account = null;
     const names = syncLinks.filter(({ slug }) => stillSyncing.includes(slug));
     say(replacedHere(names.map(({ name }) => name)), true);
+  } else if (finished) {
+    say(finished.saved ? REPLACED.done : STORAGE_BLOCKED, !finished.saved);
   }
 
   if (!(await openLink(location.hash))) home(false);

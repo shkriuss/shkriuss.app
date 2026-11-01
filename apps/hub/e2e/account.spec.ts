@@ -508,6 +508,55 @@ test('replacing the key signs out every device that has the old one', async ({
   await tablet.context().close();
 });
 
+test('a key replaced here whose answer never came is finished when the page opens again', async ({
+  page,
+  guard,
+}) => {
+  // The account service noted the old key as replaced, but its answer was
+  // lost, and the page was closed: the next time, this device took itself
+  // for a lost one, signed out and forgot the old key, so no app could move
+  // its old copy any more (audit 6 A-1).
+  const old = await createAccount(page);
+  const oldSecret = await page.evaluate(
+    () =>
+      (JSON.parse(localStorage.getItem('shkriuss-device:account') ?? '{}') as { secret: string })
+        .secret,
+  );
+  await page.route('**/api/account/status', async (route) => {
+    if (route.request().method() !== 'PUT') return route.fallback();
+    await route.fetch();
+    return route.abort('connectionreset');
+  });
+  guard.allowConsole('net::ERR_CONNECTION_RESET');
+  await page.getByRole('button', { name: 'Replace the account key' }).click();
+  await page.getByRole('button', { name: 'Get a new key' }).click();
+  const key = (await page.locator('[data-new-key]').textContent()) ?? '';
+  await page.getByLabel("I've saved my recovery key").check();
+  await page.getByRole('button', { name: 'Replace the key' }).click();
+  await expect(page.locator('[data-new-status]')).toHaveText(/^Couldn’t reach shkriuss\.app/);
+  await page.unrouteAll();
+
+  await page.reload();
+  await expect(view(page, 'signed-in')).toBeVisible();
+  await expect(message(page)).toHaveText(/^Your account key is replaced\./);
+  await expect(accountCode(page)).not.toHaveText(old.code);
+  await page.getByRole('button', { name: 'Show recovery key' }).click();
+  await expect(
+    page.getByRole('dialog', { name: 'Your recovery key' }).locator('[data-dialog-key]'),
+  ).toHaveText(key);
+  // The old key stays, for the apps to move their old copies.
+  expect(
+    await page.evaluate(
+      () =>
+        (
+          JSON.parse(localStorage.getItem('shkriuss-device:account') ?? '{}') as {
+            replaced?: string[];
+          }
+        ).replaced,
+    ),
+  ).toEqual([oldSecret]);
+});
+
 test('the dialogs read out what they mean, with their question (audit 5 G-3)', async ({ page }) => {
   const { code } = await createAccount(page);
   const dialog = page.getByRole('dialog', { name: 'Sign out of this device?' });

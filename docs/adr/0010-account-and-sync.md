@@ -21,7 +21,9 @@ connection keeps its time (E-1); "Turn off" works when the browser is full
 for good (A-1); the "turn off" links are for the day (A-5) and say nothing
 when sync is already off (C-4); all device links share one object (B-2);
 an app loads the code that connects it to the account only when that's
-needed, so every page stays within its JavaScript budget (J-2).
+needed, so every page stays within its JavaScript budget (J-2). Changed by
+audit 6: a key replacement whose answer was lost is finished the next time
+the Account page opens, instead of signing that device out (A-1).
 
 ## Context
 
@@ -148,6 +150,14 @@ person still has, **"Replace the account key"** on the Account page:
    device that has both can check: one with only the old key learns nothing
    about the new one from it.
 3. Signs this device in with the new key, and remembers the old one.
+
+Before step 2, the device notes the new key it's replacing the old one
+with. The service may note the old key while its answer is lost (the
+connection drops, or the page is closed); then the next time the Account
+page opens, the note's tag names that new key, which only this device
+could have made, so it finishes step 3 instead of taking itself for a
+lost device. Before, it signed out and forgot the old key, so no app could
+move its old copy any more (audit 6 A-1).
 
 Then:
 
