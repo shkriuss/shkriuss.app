@@ -39,6 +39,8 @@ import {
   migrateNotes,
   NOTES_VERSION,
   notesCount,
+  noteHash,
+  noteIdOf,
   removeNote,
   restoreNote,
   secondVersion,
@@ -63,8 +65,6 @@ const store = createStore<NotesState>({
 const SAVE_DELAY_MS = 400;
 /** Search results are read out this long after the last key press. */
 const ANNOUNCE_DELAY_MS = 700;
-
-const noteIdOf = (hash: string): string | null => /^#note=([\w-]{1,64})$/.exec(hash)?.[1] ?? null;
 
 /**
  * A new note left empty is dropped as the page goes away (audit F3-9). This
@@ -158,7 +158,7 @@ export function mountNotes(root: Document): void {
     const item = required<HTMLLIElement>(fragment, 'li');
     item.dataset['id'] = note.id;
     const link = required<HTMLAnchorElement>(item, '[data-open]');
-    link.href = `#note=${note.id}`;
+    link.href = noteHash(note.id);
     link.textContent = titleText(note);
     required<HTMLElement>(item, '[data-pinned]').hidden = !note.pinned;
     return item;
@@ -204,11 +204,14 @@ export function mountNotes(root: Document): void {
 
   function showEdited(note: Note): void {
     edited.textContent = isEmpty(note) ? '' : `Edited ${editedLabel(note.updated, Date.now())}`;
-    document.title = `${titleText(note)} · ${pageTitle}`;
   }
 
   function openNote(note: Note): void {
     current = note.id;
+    // Says what the page is for, never what the note says: browsers keep
+    // page titles in their history (and sync it), where "Delete all data"
+    // can't reach (audit 6 Z-2).
+    document.title = `Note · ${pageTitle}`;
     unsaved = false;
     fromList = listShown;
     titleField.value = note.title;
@@ -405,7 +408,7 @@ export function mountNotes(root: Document): void {
     save(addNote(state, id, Date.now()));
     madeHere.add(id);
     creating = id;
-    location.hash = `note=${id}`;
+    location.hash = noteHash(id);
   });
 
   // The list is drawn again once typing pauses, not at every key (audit J-1).
@@ -477,16 +480,25 @@ export function mountNotes(root: Document): void {
   deleteDialog.addEventListener('close', () => {
     if (deleteDialog.returnValue !== 'confirm' || current === null) return;
     const id = current;
+    const note = find(id);
+    const typingLost = unsaved;
     current = null;
     unsaved = false;
     left = null;
 
     const beforeDelete = state;
     const saved = save(removeNote(state, id));
-    if (!saved) state = beforeDelete;
+    // Not deleted: the note stays as the device has it. Typing that couldn't
+    // be saved goes, and the person is told, as when a note is left (audit 4
+    // F3-1): kept in memory, it showed as saved, and a reload lost it
+    // without a word (audit 6 F3-3).
+    if (!saved) state = withSavedNote(beforeDelete, store.load(), id);
 
     backToList();
     if (saved) announce('Note deleted.');
+    else if (typingLost && note) {
+      say(`Your last changes to “${titleText(note)}” are gone. ${saveProblem()}`);
+    }
   });
 
   window.addEventListener('hashchange', () => route());

@@ -113,7 +113,9 @@ let queue = Promise.resolve();
 
 async function check(id: number, sentences: string[][]): Promise<void> {
   if (id !== newest || !model) return;
-  const loaded = await model;
+  // Didn't start: the start's own answer says so (once).
+  const loaded = await model.catch(() => undefined);
+  if (!loaded) return;
   const corrected: string[][] = [];
   for (const [index, words] of sentences.entries()) {
     if (id !== newest) return;
@@ -146,8 +148,10 @@ addEventListener('message', (event: MessageEvent<ToDeepCheck>) => {
     queue = queue
       .then(() => check(message.id, message.sentences))
       .catch((error: unknown) => {
-        console.error('Deep check failed:', error);
-        send({ type: 'failed', reason: 'start' });
+        // It started, then failed while checking (short of memory, say): not
+        // "couldn't start in this browser", which sent people to update it.
+        console.error('Deep check failed while checking:', error);
+        send({ type: 'failed', reason: 'check' });
       });
   }
 });

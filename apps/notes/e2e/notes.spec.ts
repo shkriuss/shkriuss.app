@@ -42,7 +42,9 @@ test('writes a note, lists its title, and keeps it after a reload', async ({ pag
   await expect(bodyBox(page)).toBeFocused();
   await bodyBox(page).fill('Milk\nEggs and bread');
   await expect(page.getByText(/^Edited /)).toBeVisible();
-  await expect(page).toHaveTitle('Shopping list · Notes');
+  // The page's title says a note is open, not what it says: browsers keep
+  // titles in their history, where "Delete all data" can't reach (audit 6 Z-2).
+  await expect(page).toHaveTitle('Note · Notes');
 
   await page.getByRole('button', { name: 'All notes' }).click();
   const shopping = card(page, 'Shopping list');
@@ -227,6 +229,37 @@ test('says when a note link is for a note that isn’t here', async ({ page }) =
   await page.goto('/#note=not-here');
   await expect(page.getByText('That note isn’t on this device.')).toBeVisible();
   expect(page.url()).not.toContain('#note=');
+});
+
+test('opens a note whatever its id, as from a backup (audit 6 F3-1)', async ({ page }) => {
+  // The app's own ids fit in an address as they are; a note from a backup
+  // with a space, a dot, other letters or a long id in its id was listed,
+  // but tapping it did nothing.
+  const ids = ['note 1', 'a.b', 'x'.repeat(65), 'ノート', '50%', 'a#b&c=d'];
+  await page.evaluate((list) => {
+    const notes = list.map((id, index) => ({
+      id,
+      title: `Note ${index + 1}`,
+      body: `Text of ${id}`,
+      created: index + 1,
+      updated: index + 1,
+      pinned: false,
+    }));
+    localStorage.setItem('shkriuss:notes', JSON.stringify({ v: 2, data: { notes } }));
+  }, ids);
+  await page.reload();
+  for (const [index, id] of ids.entries()) {
+    const link = card(page, `Note ${index + 1}`).getByRole('link');
+    await link.click();
+    await expect(titleBox(page)).toHaveValue(`Note ${index + 1}`);
+    await expect(bodyBox(page)).toHaveValue(`Text of ${id}`);
+    await page.getByRole('button', { name: 'All notes' }).click();
+    await expect(link).toBeFocused();
+  }
+  // Its address opens it too, after a reload.
+  await card(page, 'Note 4').getByRole('link').click();
+  await page.reload();
+  await expect(bodyBox(page)).toHaveValue('Text of ノート');
 });
 
 test('opens a note from its address, and "All notes" stays in the app', async ({ page }) => {
@@ -537,6 +570,34 @@ test.describe('with the device full (audit 4 F3-1)', () => {
 
     expect(await savedNotes(page)).toContain('Old | Important text');
     await expect(page.getByRole('link', { name: 'Old', exact: true })).toBeVisible();
+  });
+
+  test('typing that couldn’t be saved, then a deletion that couldn’t: the typing is said to be gone (audit 6 F3-3)', async ({
+    page,
+  }) => {
+    // Before, the note opened again showed that typing as if it were saved
+    // ("Edited …"), and a reload lost it without a word.
+    await writeNote(page, 'Diary', 'Saved text.');
+    await page.getByRole('link', { name: 'Diary', exact: true }).click();
+    await failSaving(page);
+    await bodyBox(page).press('End');
+    await bodyBox(page).pressSequentially(' Typed, not saved.');
+    await expect(edited(page)).toHaveText('Not saved');
+    await page.getByRole('button', { name: 'Delete', exact: true }).click();
+    await page
+      .getByRole('dialog', { name: 'Delete this note?' })
+      .getByRole('button', { name: 'Delete' })
+      .click();
+
+    await expect(page.getByRole('link', { name: 'Diary', exact: true })).toBeVisible();
+    await expect(page.locator('[data-problem]')).toContainText(
+      'Your last changes to “Diary” are gone. Couldn’t save: there’s no room left',
+    );
+    expect(await savedNotes(page)).toEqual(['Diary | Saved text.']);
+    // Opened again: as the device has it.
+    await page.getByRole('link', { name: 'Diary', exact: true }).click();
+    await expect(bodyBox(page)).toHaveValue('Saved text.');
+    await expect(edited(page)).toHaveText(/^Edited /);
   });
 
   test('typing that couldn’t be saved stays, through a change saved elsewhere', async ({

@@ -58,7 +58,11 @@ person asks (381 MB), then works offline
 - `src/lib/deep-check.ts`: settings, the downloaded files' list
   (`manifest.json`), and the messages between the page and the worker.
 - `src/scripts/deep-check.worker.ts`: runs the model with onnxruntime-web, in
-  a worker, on up to 4 cores.
+  a worker, on up to 4 cores. It tells the page whether files are missing,
+  the model didn't start, or it failed while checking (short of memory,
+  say), which the page says in those words, not as "couldn't start in this
+  browser" (audit 6). `deep-check.worker.test.ts` tests that with a
+  stand-in for onnxruntime-web.
 - `src/scripts/deep-check.ts`: the page part: download (checking every file's
   SHA-256; a file that arrives damaged is said to be, as it isn't the
   connection: audit 5 F3-10), check (its start is read out, so a screen

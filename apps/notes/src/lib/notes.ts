@@ -38,8 +38,16 @@ const LIST_TITLE_LENGTH = 80;
 
 export const emptyState = (): NotesState => ({ notes: [] });
 
+/** The latest time a JavaScript date can hold (ms since 1970: in the year 275760). */
+const LATEST_TIME = 8.64e15;
+
+/**
+ * A time a note can show. A later one (from a damaged or edited backup)
+ * passed, and the note could never be opened: showing when it was edited
+ * failed (audit 6 C-3).
+ */
 const isTime = (value: unknown): value is number =>
-  typeof value === 'number' && Number.isFinite(value) && value >= 0;
+  typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= LATEST_TIME;
 
 function isNote(value: unknown): value is Note {
   if (typeof value !== 'object' || value === null) return false;
@@ -325,6 +333,30 @@ export function visibleNotes(state: NotesState, search = ''): Note[] {
       (a, b) =>
         Number(b.pinned) - Number(a.pinned) || b.updated - a.updated || (a.id < b.id ? -1 : 1),
     );
+}
+
+/**
+ * A note's address in the page ("#note=<id>"), which opens it. The id is
+ * encoded, so any saved id fits: the app makes them from letters, digits
+ * and "-", but a note from a backup can have any (audit 6 F3-1).
+ */
+export const noteHash = (id: string): string => `#note=${encodeURIComponent(id)}`;
+
+/**
+ * The note an address is for (noteHash), or null for another link within
+ * the page (like "Skip to content"). Before, only ids of up to 64 letters,
+ * digits, "_" and "-" were read: a note with another id was listed, but
+ * tapping it opened nothing (audit 6 F3-1).
+ */
+export function noteIdOf(hash: string): string | null {
+  const encoded = /^#note=(.+)$/.exec(hash)?.[1];
+  if (encoded === undefined) return null;
+  try {
+    return decodeURIComponent(encoded);
+  } catch {
+    // Not encoded as noteHash does ("%E0", typed by hand): as it is.
+    return encoded;
+  }
 }
 
 /** When a note was edited: the time if today, else the date ("14:05", "12 Oct", "12 Oct 2025"). */

@@ -300,8 +300,9 @@ don't stop at these questions: anything else you find in the area counts.
 - Our subdomains all belong to the same site (`shkriuss.app`). Is there any
   trust between them, through `postMessage`, shared storage or cookies?
 - On-demand downloads are never precached, are downloaded only when the
-  person asks, are checked by SHA-256 before use, and are at most 25 MiB per
-  file. Only allowed apps compile WebAssembly.
+  person asks, are checked by SHA-256 before they're kept (ADR 0012 says
+  which are always read back from the checked copy), and are at most 25 MiB
+  per file. Only allowed apps compile WebAssembly.
 - Downloads ("Save original", backups) have the right content types and safe
   file names.
 

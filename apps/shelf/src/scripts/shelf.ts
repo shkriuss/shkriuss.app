@@ -54,6 +54,7 @@ import {
   itemsPerCategory,
   lastCurrency,
   linkHost,
+  linkHref,
   MAX_ITEMS,
   moveItems,
   NO_CATEGORY,
@@ -185,8 +186,9 @@ export function mountShelf(root: Document): void {
   let opener: FocusSpot | null = null;
   /** The item just saved, so focus can go to it in the list. */
   let savedId: string | null = null;
-  /** The same for the category form. */
+  /** The same for the category form, with its name as it opened. */
   let editingCategoryId: string | null = null;
+  let openedCategoryName: string | null = null;
   let categoryOpener: FocusSpot | null = null;
   let savedCategoryId: string | null = null;
   let announceTimer: number | undefined;
@@ -271,7 +273,7 @@ export function mountShelf(root: Document): void {
     const host = linkHost(item.link);
     required<HTMLElement>(card, '[data-link-row]').hidden = host === '';
     if (host !== '') {
-      link.href = item.link;
+      link.href = linkHref(item.link);
       text('[data-link-host]', host);
       link.setAttribute('aria-label', `Open ${host} for ${item.name}, in a new tab`);
     }
@@ -672,6 +674,7 @@ export function mountShelf(root: Document): void {
   /** `from` is the control tapped, as for the item form (audit 6 G-1). */
   function openCategoryEditor(category: Category | null, from: Element | null): void {
     editingCategoryId = category?.id ?? null;
+    openedCategoryName = category?.name ?? null;
     categoryOpener = focusSpot(from) ?? focusSpot(addCategoryButton);
     showCategoryProblem(null);
     categoryFormError.textContent = '';
@@ -702,6 +705,23 @@ export function mountShelf(root: Document): void {
 
   categoryForm.addEventListener('submit', (event) => {
     event.preventDefault();
+    // Its name not changed here: there's nothing to save. Saved as it was, a
+    // category deleted on another device meanwhile came back, everywhere
+    // once it synced (audit 6 F3-4), and one renamed there got its old name
+    // back. Deleted, it stays deleted, as an item does (audit 5 F3-1).
+    if (editingCategoryId !== null && categoryInput.value.trim() === openedCategoryName) {
+      const category = findCategory(editingCategoryId);
+      if (!category) {
+        categoryGone(
+          `“${openedCategoryName}” was deleted on another device. It stays deleted: its name wasn’t changed.`,
+        );
+        return;
+      }
+      announce(`Saved category ${category.name}.`);
+      savedCategoryId = category.id;
+      categoryEditor.close();
+      return;
+    }
     const problem = categoryProblem(categoriesState, categoryInput.value, editingCategoryId);
     showCategoryProblem(problem);
     if (problem) {
@@ -736,14 +756,14 @@ export function mountShelf(root: Document): void {
 
   /**
    * The category in the form was deleted on another device meanwhile: there's
-   * nothing to delete. Says so, rather than doing nothing, as for items
-   * (audit 4 F3-5).
+   * nothing to delete, or to save when its name wasn't changed. Says so,
+   * rather than doing nothing, as for items (audit 4 F3-5).
    */
-  function categoryGone(): void {
+  function categoryGone(message = 'That category was already deleted on another device.'): void {
     editingCategoryId = null;
     categoryOpener = focusSpot(addCategoryButton);
     categoryEditor.close();
-    say('That category was already deleted on another device.');
+    say(message);
   }
 
   required<HTMLButtonElement>(categoryEditor, '[data-action="cancel-category"]').addEventListener(

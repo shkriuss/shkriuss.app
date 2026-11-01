@@ -9,7 +9,11 @@ Write things down. Lives at <https://notes.shkriuss.app>.
 - `src/scripts/notes.ts`: connects the page to those rules and saves on the
   device with `@shkriuss/storage`. Two views, the list (titles only) and
   one note;
-  `#note=<id>` in the address opens a note, so the back button works.
+  `#note=<id>` in the address opens a note, so the back button works; the
+  id is encoded there, so a note from a backup opens whatever its id
+  (audit 6 F3-1). With a note open, the page's title is "Note · Notes",
+  never the note's own title: browsers keep page titles in their history
+  (and sync it), where "Delete all data" can't reach (audit 6 Z-2).
   Typing is saved a moment after the last key press, and straight away when
   leaving the note or the page. A new note (made since the page opened)
   left empty goes when it's left, closing the page too (one a closed page
@@ -24,7 +28,8 @@ Write things down. Lives at <https://notes.shkriuss.app>.
   stays in the box, also through changes saved elsewhere; it's tried again
   with the next typing, and on leaving the note or the page. If it still
   can't be saved when the note is left, the note goes back to what's saved,
-  and the page says the typing is gone (audit 4 F3-1). Titles (200) and
+  and the page says the typing is gone (audit 4 F3-1); the same when the
+  note's deletion can't be saved either (audit 6 F3-3). Titles (200) and
   notes (100,000) are limited in characters as people see them, as Safari's
   text boxes count, so nothing a box lets in is cut (audit 4 F3-4).
 - `src/pages/index.astro`: the page, built from `@shkriuss/ui` components.

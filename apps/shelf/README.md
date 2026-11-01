@@ -11,11 +11,16 @@ anything else, with brands, prices, shops and links. Lives at
   bought it and notes. A price is read the way the money apps read amounts
   (`parseDecimal` from `@shkriuss/ui/numbers`: "12,50", "1,299.50" in
   English, "1.299,50" in German, any script's digits), kept to the cent, and
-  over 1,000,000,000 is said to be too much (audit 5 F3-10). Links must be
+  over 1,000,000,000 is said to be too much (audit 5 F3-10). A price saved
+  some other way (an edited backup, say) shows in the form as it is, not
+  rounded, so saving the form never changes it without a word (audit 6). Links must be
   `http://` or `https://` web addresses; a link is kept as typed (trimmed,
   "https://" added), not as the browser would write it, so the form shows it
   as it was written, and one longer than its box takes, counting the
-  "https://" added, is said to be too long (audit 5 F3-3). A name of flags or other emoji cut for the "(second
+  "https://" added, is said to be too long (audit 5 F3-3). The card's link
+  opens it written out in full (`linkHref`), so one typed without "//"
+  ("https:shop.ge/item") opens the website the card names, not a page on
+  Shelf (audit 6 F3-2). A name of flags or other emoji cut for the "(second
   version)" item is cut between whole characters (audit 5 F3-2). Saved on
   the device under `shkriuss:shelf` (data version 1).
 - `src/lib/hosts.ts`: the website a link goes to, as people read it, with
@@ -23,7 +28,11 @@ anything else, with brands, prices, shops and links. Lives at
   punycode ("xn--lodaaxko2f.xn--node"); Shelf shows it in its own letters
   when each such part is in one script whose letters don't look like Latin
   ones (Georgian, Chinese, Japanese, Korean). Japanese counts as one script:
-  its names mix kanji and kana, with the marks "ー" and "・" (audit 5 F3-4).
+  its names mix kanji and kana, with the marks "ー" and "・" (audit 5 F3-4),
+  but only where browsers' rules let each stand: a character that passes for
+  another one there (the kanji "一" next to kana reads as "ー", a kanji next
+  to digits as a digit, Hiragana "へ" among Katakana as "ヘ") keeps the name
+  as punycode, and Korean shows only as whole syllables (audit 6 C-1).
   Others, which could pass for another site's name (a Cyrillic "аррӏе" looks
   like "apple"), stay as punycode, as browsers show them.
 - `src/lib/categories.ts`: the categories, with tests (`categories.test.ts`).
@@ -44,6 +53,9 @@ anything else, with brands, prices, shops and links. Lives at
   what was typed (audit 4 F3-1). An item deleted on another device while
   its form was open comes back only if something in the form was changed;
   saved as it was, it stays deleted, and the page says so (audit 5 F3-1).
+  A category's form saved with its name unchanged changes nothing: one
+  deleted elsewhere meanwhile stays deleted (saying so), and one renamed
+  there keeps that name (audit 6 F3-4).
   Text limits count characters as people see them, as Safari's text boxes
   do, so nothing a box lets in is cut (audit 4 F3-4).
 - `src/pages/index.astro`: the page, built from `@shkriuss/ui` components.

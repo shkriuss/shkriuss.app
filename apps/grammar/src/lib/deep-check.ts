@@ -111,4 +111,5 @@ export type FromDeepCheck =
   | { type: 'ready'; threads: number }
   | { type: 'progress'; id: number; done: number; total: number }
   | { type: 'checked'; id: number; corrected: string[][] }
-  | { type: 'failed'; reason: 'files' | 'start' };
+  /** Files missing from this device, the model didn't start, or it failed while checking. */
+  | { type: 'failed'; reason: 'files' | 'start' | 'check' };

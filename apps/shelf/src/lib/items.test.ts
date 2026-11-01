@@ -15,6 +15,7 @@ import {
   lastCurrency,
   LIMITS,
   linkHost,
+  linkHref,
   linkProblem,
   MAX_ITEMS,
   MAX_PRICE,
@@ -207,6 +208,29 @@ describe('the form', () => {
     const odd = itemFromDraft(draft({ opinion: 'y', currency: 'z' }), 'b', 1);
     expect([odd.opinion, odd.currency]).toEqual(['use', 'GEL']);
     expect(itemFromDraft(draft({ category: NO_CATEGORY }), 'c', 1).category).toBe(NO_CATEGORY);
+  });
+
+  it('shows a price saved elsewhere as it is, never rounded or as "1e+21" (audit 6)', () => {
+    // From an edited backup, say: the form showed 12.345 as "12.35" and saved
+    // that, without a word, and 10^21 as "1e+21", which it said wasn't a price.
+    const made = item();
+    const shown = (price: number) => draftOf({ ...made, price }).price;
+    expect(shown(12.345)).toBe('12.345');
+    expect(priceProblem(shown(12.345), EN)).toBe('Write a price like 12.50, or leave it empty.');
+    expect(shown(1e21)).toBe('1000000000000000000000');
+    expect(priceProblem(shown(1e21), EN)).toBe('A price can be up to 1,000,000,000.');
+    expect(shown(1e-7)).toBe('0.0000001');
+    // Prices the form saves look as before, and read back the same.
+    for (const [price, text] of [
+      [4.5, '4.50'],
+      [0.01, '0.01'],
+      [250, '250'],
+      [999_999_999.99, '999999999.99'],
+      [MAX_PRICE, '1000000000'],
+    ] as const) {
+      expect(shown(price)).toBe(text);
+      expect(parsePrice(text, EN)).toBe(price);
+    }
   });
 
   it('keeps all a box let in, counted as Safari counts (audit 4 F3-4)', () => {
@@ -442,6 +466,26 @@ describe('showing items', () => {
     expect(linkHost('javascript://shop.example/%0Aalert(1)')).toBe('');
     expect(linkHost('intent://shop.example/#Intent;end')).toBe('');
     expect(linkHost('file://shop.example/x')).toBe('');
+  });
+
+  it('opens the website it shows, also for a link typed without "//" (audit 6 F3-2)', () => {
+    // On the page, the browser reads a link against Shelf's own address: as
+    // typed, "https:shop.ge/item" opened Shelf's own "shop.ge/item" page.
+    const shelf = 'https://shelf.shkriuss.app/';
+    for (const typed of ['https:shop.ge/item', 'https:/shop.ge/item', 'HTTPS:shop.ge/item']) {
+      const saved = normalizeLink(typed) ?? '';
+      expect(saved, typed).toBe(typed);
+      expect(linkHost(saved), typed).toBe('shop.ge');
+      expect(new URL(linkHref(saved), shelf).href, typed).toBe('https://shop.ge/item');
+    }
+    expect(linkHref('https://www.amazon.com/dp/B0')).toBe('https://www.amazon.com/dp/B0');
+    expect(linkHref('http://shop.ge')).toBe('http://shop.ge/');
+    // A Georgian address: the browser's own form of it, for the browser.
+    expect(linkHref('https://მაღაზია.გე/item')).toBe('https://xn--lodaaxko2f.xn--node/item');
+    // Saved data from a backup or another device: only web links.
+    expect(linkHref('')).toBe('');
+    expect(linkHref('javascript:alert(1)')).toBe('');
+    expect(linkHref('shop.ge/item')).toBe('');
   });
 
   it('counts items', () => {

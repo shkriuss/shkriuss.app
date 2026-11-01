@@ -8,7 +8,8 @@ files to download has a time limit (see Decision). Changed by audit 5 (H-2):
 the build's download of the model has limits (the size the server announces
 must be the model's, no more than that is read, and each try has a time
 limit), and a workflow keeps CI's copy of the model in its cache twice a
-week (see Consequences).
+week (see Consequences). Made clearer by audit 6 (C-1): which downloaded
+files are always read back from the checked copy (see Decision).
 
 ## Context
 
@@ -78,6 +79,20 @@ Published results on the same set agree: GPT-4 asked to correct scores 43
   site doesn't answer within 20 seconds (`fetchWithLimit`, as sync does), it
   uses the list it got when the page opened, or else says it couldn't reach
   shkriuss.app (audit 3 G-7).
+
+  _Made clearer by audit 6 (C-1):_ the worker reads the model, the
+  WebAssembly and the data files from that cache, so those are always the
+  checked copies. Its two JavaScript files (onnxruntime-web and its loader)
+  are started with `import()`, an ordinary request, which the service
+  worker answers from the same cache. On a page the service worker doesn't
+  control (the first moments of a first visit, a reload that skips it, a
+  browser with service workers off), they come from the site instead, like
+  every other script on the page, under the same `script-src 'self'`. That
+  gives nothing away: the SHA-256 check is there against damaged downloads,
+  and the page already trusts the site for every script it runs. Starting
+  them from the checked copy without the service worker would need `blob:`
+  scripts in the CSP, which isn't worth it.
+
 - **Hosted on the site itself.** Before each build,
   `apps/grammar/scripts/deep-check-files.ts` downloads the model from Hugging
   Face once (pinned commit; the build fails if the SHA-256 differs), splits
