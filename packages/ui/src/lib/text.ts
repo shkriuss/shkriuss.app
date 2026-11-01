@@ -74,3 +74,17 @@ export function cutToLength(text: string, max: number): string {
   }
   return text.slice(0, end);
 }
+
+/**
+ * Whether text saved before (loaded, or synced from another device) keeps
+ * to a limit of `max` characters as people see them, counted loosely: at
+ * most MOST_PER_CHARACTER JavaScript characters for each, the most
+ * cutToLength keeps. Browsers don't all split text into characters the
+ * same way: since Unicode 15.1 (2023), a cluster of consonants in Hindi,
+ * Bengali and other scripts is one character, where an older iPhone counts
+ * two or three. Checked with cutToLength, a text that fit where it was
+ * typed was refused on another device, and stopped sync there (audit 6
+ * F2-3). Forms count exactly (cutToLength); this is for what's saved.
+ */
+export const withinLength = (text: string, max: number): boolean =>
+  text.length <= max * MOST_PER_CHARACTER;

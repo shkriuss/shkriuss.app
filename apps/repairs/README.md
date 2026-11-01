@@ -48,10 +48,16 @@ private car's service history. Lives at <https://repairs.shkriuss.app>.
   "1.500" in French (1500 or 1.5), is asked again.
 - Text limits (a vehicle's name, the work done…) count characters as
   people see them, as an iPhone's text boxes count what fits in them: a
-  flag or a family emoji is one, so what a full box holds is never refused,
-  on saving or when it's loaded or synced (`cutToLength`, audit 5 F2-3). A
-  device still on the version before this one can't read a text that only
-  this counting lets in, and shows a sync problem until it's updated
+  flag or a family emoji is one, so what a full box holds is never refused
+  on saving (`cutToLength`, audit 5 F2-3). What's loaded or synced is
+  checked loosely, at most 16 JavaScript characters for each character
+  allowed (`withinLength`): browsers of different ages split some scripts
+  into characters differently (since Unicode 15.1, "स्त्री" is one, where
+  an iPhone on iOS 16 counts three), and a Hindi "Work done" that fit on
+  one device stopped sync on another (audit 6 F2-3). Such a text may still
+  be too long for the older device's own form, which counts as its boxes
+  do. A device on a version from before audit 5 can't read a text that
+  only this counting lets in, and shows a sync problem until it's updated
   (reload the page there).
 - "Download as a spreadsheet (CSV)" saves every repair, one row each, with
   the hours and the parts, labour and total cost. Text a spreadsheet could

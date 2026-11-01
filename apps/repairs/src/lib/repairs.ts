@@ -36,7 +36,7 @@ import {
   whichAmount,
   type Currency,
 } from '@shkriuss/ui/numbers';
-import { compareText, cutToLength, foldText } from '@shkriuss/ui/text';
+import { compareText, cutToLength, foldText, withinLength } from '@shkriuss/ui/text';
 import { roomNote as sharedRoomNote } from '@shkriuss/ui/room-note';
 import { DATE_LOCALE } from '@shkriuss/ui/locale';
 
@@ -153,17 +153,23 @@ export const emptyRepairs = (): RepairsState => ({ repairs: [] });
 // ---------- Checking saved data ----------
 
 /**
- * Whether text fits a limit, counted as text boxes count their maxlength on
- * an iPhone: a flag, a family emoji or a letter with its accent is one
- * character, so what a full box holds is never refused, on saving or when
- * it's loaded or synced (cutToLength). Before, each half of an emoji
- * counted, and "Work done" of 300 family emoji was "Use 2000 characters or
- * fewer." (audit 5 F2-3).
+ * Whether text typed in a form fits a limit, counted as text boxes count
+ * their maxlength on an iPhone: a flag, a family emoji or a letter with its
+ * accent is one character, so what a full box holds is never refused on
+ * saving (cutToLength). Before, each half of an emoji counted, and "Work
+ * done" of 300 family emoji was "Use 2000 characters or fewer." (audit 5
+ * F2-3).
  */
 const fits = (text: string, max: number): boolean => cutToLength(text, max) === text;
 
+/**
+ * Saved text, loaded or synced, is checked loosely (withinLength): browsers
+ * of different ages count some scripts' characters differently, and a
+ * Hindi "Work done" that fit on a new iPhone stopped sync on an older one,
+ * which counted it longer (audit 6 F2-3).
+ */
 const isText = (value: unknown, max: number): value is string =>
-  typeof value === 'string' && fits(value, max);
+  typeof value === 'string' && withinLength(value, max);
 
 const isMileage = (value: unknown): value is number =>
   typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= LIMITS.mileage;

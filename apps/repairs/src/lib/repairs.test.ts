@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { addDays } from '@shkriuss/dates';
 import { footprint, sampleText } from '@shkriuss/sync/testing';
 import { MAX_SEALED_CHARS } from '../../../../packages/sync/src/validate.ts';
@@ -375,6 +375,39 @@ describe('repairs', () => {
     const zalgo = `Z${'\u0336'.repeat(2000)}`;
     expect(read({ system: zalgo }).problems).toEqual({ system: 'Use 40 characters or fewer.' });
     expect(isRepairsState(repairs(repair({ system: zalgo })))).toBe(false);
+  });
+
+  // Audit 6 F2-3: a Hindi "Work done" that fit on a new iPhone was refused
+  // where it was synced to an older one, whose browser counts its letters
+  // as more characters, and sync stopped there for every repair.
+  it('loads and syncs what fit on another device, which may count characters differently', async () => {
+    // 2,000 characters here: "स्त्री" is one since Unicode 15.1 (2023).
+    const work = 'स्त्री '.repeat(LIMITS.text / 2);
+    const saved = readRepair(form({ work }), 'r', emptyRepairs(), vehicles, newId).repair as Repair;
+    expect(saved.work).toBe(work.trim());
+    // A browser from before then breaks after each virama: "स्", "त्", "री".
+    const Segmenter = Intl.Segmenter;
+    class Older {
+      segment(text: string) {
+        return [...new Segmenter('en', { granularity: 'grapheme' }).segment(text)].flatMap(
+          ({ segment }) => segment.split(/(?<=्)/).map((part) => ({ segment: part })),
+        );
+      }
+    }
+    vi.stubGlobal('Intl', Object.assign(Object.create(Intl) as typeof Intl, { Segmenter: Older }));
+    vi.resetModules();
+    try {
+      const older = await import('./repairs.ts');
+      expect(older.isRepairsState(repairs(saved))).toBe(true);
+      // A part's name and a vehicle's too.
+      const part = { name: 'स्त्री'.repeat(LIMITS.partName), number: '', quantity: 1, price: null };
+      expect(older.isRepairsState(repairs(repair({ parts: [part] })))).toBe(true);
+      const bus = vehicle({ name: 'स्त्री'.repeat(LIMITS.vehicle) });
+      expect(older.isVehiclesState({ vehicles: [bus] })).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+      vi.resetModules();
+    }
   });
 
   it('shows a saved repair in the form again', () => {
