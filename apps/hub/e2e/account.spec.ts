@@ -61,6 +61,10 @@ test('creates an account once the recovery key is saved', async ({ page }) => {
   expect(key).toMatch(RECOVERY_KEY);
   const continueButton = page.getByRole('button', { name: 'Continue' });
   await expect(continueButton).toBeDisabled();
+  // Safari there saves downloads to iCloud Drive by default (audit 6 D-4).
+  await expect(view(page, 'new')).toContainText(
+    'On an iPhone or iPad, a download usually goes to iCloud Drive',
+  );
   await checkA11y(page, 'account: save the recovery key');
 
   const download = page.waitForEvent('download');

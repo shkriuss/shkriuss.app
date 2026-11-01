@@ -67,7 +67,10 @@ The requirements:
    - It's shown when the account is created. The account isn't saved until the
      person confirms they've saved the key.
    - It can be downloaded as a text file, and seen again on any signed-in
-     device.
+     device. The page says that on an iPhone or iPad a download usually goes
+     to iCloud Drive, which Apple can read without Advanced Data
+     Protection, so a password manager or paper is safer there (audit 6
+     D-4).
 2. **Passkey (optional).** This works where the password manager supports the
    WebAuthn **PRF** extension, for example Google Password Manager on Android,
    or iCloud Keychain on iOS 18 and later.
