@@ -18,7 +18,10 @@ Build habits one day at a time. Lives at <https://habits.shkriuss.app>.
   says so; when it's full, a new tick waits until there's room. "Delete check
   marks from a year…" (under Check marks) makes room: every habit's marks
   from the year chosen go, on every device with sync on, and streaks then
-  count only the days that are kept.
+  count only the days that are kept. If that year's check marks change on
+  another device or tab while the dialog is open, it closes and says so,
+  rather than deleting another year or more than it said, as in Budget,
+  Repairs and Trades.
 - `src/pages/index.astro`: the page, built from `@shkriuss/ui` components.
   `<template>`s hold the markup for one habit and one day of its week. The
   edit dialog changes the name, days and reminder, ticks the last 2 weeks

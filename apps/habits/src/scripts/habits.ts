@@ -442,10 +442,14 @@ export function mountHabits(root: Document): void {
   const yearCount = (year: string): number =>
     checkYears(checks).find((entry) => entry.year === year)?.count ?? 0;
 
+  /** The year the dialog shows, and how many check marks it says go. */
+  let shownYear = { year: '', count: 0 };
+
   /** Says what deleting the year chosen removes. */
   function showYear(): void {
     const year = yearSelect.value;
-    const count = checksCount(yearCount(year));
+    shownYear = { year, count: yearCount(year) };
+    const count = checksCount(shownYear.count);
     yearText.textContent = `The ${count} from ${year} will be deleted, for every habit. Streaks then count only the days that are kept. With sync on, they’re deleted on your other devices too. This can’t be undone.`;
     yearConfirm.textContent = `Delete ${count}`;
   }
@@ -505,9 +509,22 @@ export function mountHabits(root: Document): void {
       editDialog.close();
       showProblem('That habit was deleted on another device.');
     }
+    // The year chosen changed on another device or tab: the dialog closes,
+    // and says why, so its button doesn't delete another year, or more than
+    // it said, as in Budget, Repairs and Trades (audit 4 F2-1, audit 7 G-1).
     if (yearDialog.open) {
-      if (checks.checks.length === 0) yearDialog.close();
-      else fillYears();
+      const { year, count } = shownYear;
+      const now = yearCount(year);
+      if (now === count) fillYears();
+      else {
+        yearDialog.close();
+        deleteYearButton.focus();
+        showProblem(
+          now === 0
+            ? `The check marks from ${year} were deleted on another device.`
+            : `${year} has ${checksCount(now)} now, after changes on another device. Nothing was deleted.`,
+        );
+      }
     }
     render();
     reminders.changed();
