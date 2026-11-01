@@ -24,7 +24,8 @@ Write things down. Lives at <https://notes.shkriuss.app>.
   stays in the box, also through changes saved elsewhere; it's tried again
   with the next typing, and on leaving the note or the page. If it still
   can't be saved when the note is left, the note goes back to what's saved,
-  and the page says the typing is gone (audit 4 F3-1). Titles (200) and
+  and the page says the typing is gone (audit 4 F3-1); the same when the
+  note's deletion can't be saved either (audit 6 F3-3). Titles (200) and
   notes (100,000) are limited in characters as people see them, as Safari's
   text boxes count, so nothing a box lets in is cut (audit 4 F3-4).
 - `src/pages/index.astro`: the page, built from `@shkriuss/ui` components.

@@ -539,6 +539,34 @@ test.describe('with the device full (audit 4 F3-1)', () => {
     await expect(page.getByRole('link', { name: 'Old', exact: true })).toBeVisible();
   });
 
+  test('typing that couldn’t be saved, then a deletion that couldn’t: the typing is said to be gone (audit 6 F3-3)', async ({
+    page,
+  }) => {
+    // Before, the note opened again showed that typing as if it were saved
+    // ("Edited …"), and a reload lost it without a word.
+    await writeNote(page, 'Diary', 'Saved text.');
+    await page.getByRole('link', { name: 'Diary', exact: true }).click();
+    await failSaving(page);
+    await bodyBox(page).press('End');
+    await bodyBox(page).pressSequentially(' Typed, not saved.');
+    await expect(edited(page)).toHaveText('Not saved');
+    await page.getByRole('button', { name: 'Delete', exact: true }).click();
+    await page
+      .getByRole('dialog', { name: 'Delete this note?' })
+      .getByRole('button', { name: 'Delete' })
+      .click();
+
+    await expect(page.getByRole('link', { name: 'Diary', exact: true })).toBeVisible();
+    await expect(page.locator('[data-problem]')).toContainText(
+      'Your last changes to “Diary” are gone. Couldn’t save: there’s no room left',
+    );
+    expect(await savedNotes(page)).toEqual(['Diary | Saved text.']);
+    // Opened again: as the device has it.
+    await page.getByRole('link', { name: 'Diary', exact: true }).click();
+    await expect(bodyBox(page)).toHaveValue('Saved text.');
+    await expect(edited(page)).toHaveText(/^Edited /);
+  });
+
   test('typing that couldn’t be saved stays, through a change saved elsewhere', async ({
     page,
   }) => {

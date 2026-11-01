@@ -477,16 +477,25 @@ export function mountNotes(root: Document): void {
   deleteDialog.addEventListener('close', () => {
     if (deleteDialog.returnValue !== 'confirm' || current === null) return;
     const id = current;
+    const note = find(id);
+    const typingLost = unsaved;
     current = null;
     unsaved = false;
     left = null;
 
     const beforeDelete = state;
     const saved = save(removeNote(state, id));
-    if (!saved) state = beforeDelete;
+    // Not deleted: the note stays as the device has it. Typing that couldn't
+    // be saved goes, and the person is told, as when a note is left (audit 4
+    // F3-1): kept in memory, it showed as saved, and a reload lost it
+    // without a word (audit 6 F3-3).
+    if (!saved) state = withSavedNote(beforeDelete, store.load(), id);
 
     backToList();
     if (saved) announce('Note deleted.');
+    else if (typingLost && note) {
+      say(`Your last changes to “${titleText(note)}” are gone. ${saveProblem()}`);
+    }
   });
 
   window.addEventListener('hashchange', () => route());
