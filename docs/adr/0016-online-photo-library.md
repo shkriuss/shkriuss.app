@@ -9,7 +9,9 @@ request previews, so no `shkriuss-photos-preview` bucket either. Updated by
 audit 5: a deletion note's seal is for the photo's id, not one upload of it
 (A-2, a known limit), a library made up through a move is cleaned up like
 any other (B-1), and what a deleted library keeps (D-3). Updated by audit
-6: only the library's own refusal marks a library as taken (A-5).
+6: only the library's own refusal marks a library as taken (A-5), and the
+work with the library goes by the photos in the device's database at that
+moment, not by the page's own list (F3-1).
 
 ## Context
 
@@ -72,7 +74,12 @@ every device. That's far beyond what sync can hold:
   forgets it too). It asks only once its own photos are loaded: compared
   with a list not loaded yet, a photo here that the changes mentioned
   looked new from another device, and was saved as only online (audit 3
-  F3-8).
+  F3-8). The changes are compared with the photos in the database at that
+  moment, not with the page's list: with Photos open in two tabs, each has
+  its own list, loaded again only when the tab gets focus, so one can be
+  older than the database. The same goes for what a deleted library, or
+  sync turned off, takes from the device, and for "Free up space"; a photo
+  whose original is on the device is never deleted then (audit 6 F3-1).
 - **Other devices download little:** thumbnails for the photos on screen
   (up to 40 in one request), the screen-sized copy when a photo is opened,
   and the original only to save it. Downloads read just that part of the

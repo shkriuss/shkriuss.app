@@ -80,6 +80,16 @@ export async function loadLibrary(): Promise<Photo[]> {
 }
 
 /**
+ * Every photo's details as saved on this device now, in no order, and
+ * without tidying anything or counting as a load. For the online library's
+ * work, which mustn't go by the tab's own list: another Photos tab may have
+ * added, changed or deleted photos since this one loaded it (audit 6 F3-1).
+ */
+export async function photosNow(): Promise<Photo[]> {
+  return (await details.all()).map(toPhoto).filter((photo) => photo !== null);
+}
+
+/**
  * Saves a photo: its files and its details together, in one transaction,
  * so a page closed between them can't leave the files without the photo
  * (audit 5 E-4). Throws if the device is out of space.
