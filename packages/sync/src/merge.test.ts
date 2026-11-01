@@ -427,6 +427,27 @@ describe('secondVersionName', () => {
     expect(emoji).toBe('😀😀😀😀😀😀 (second version)');
     expect(secondVersionName('   ', 60)).toBe('Second version');
   });
+
+  it('never cuts a flag, a family emoji or an accented letter in half (audit 6 F1-3)', () => {
+    // Cut by code points, a flag (two of them) ended as a lone letter in a
+    // box, and a family (seven) as a different emoji and a joiner.
+    const suffix = ' (second version)';
+    for (const [whole, max] of [
+      ['🇬🇪', 60],
+      ['👨‍👩‍👧‍👦', 60],
+      // "e" and its accent, as some keyboards type it.
+      ['é', 30],
+      ['👍🏽', 31],
+    ] as const) {
+      const name = secondVersionName(whole.repeat(40), max);
+      expect(name.length).toBeLessThanOrEqual(max);
+      expect(name.endsWith(suffix)).toBe(true);
+      const base = name.slice(0, -suffix.length);
+      expect(base).toBe(whole.repeat(Math.floor((max - suffix.length) / whole.length)));
+    }
+    // A name that fits is kept whole.
+    expect(secondVersionName('Call 👨‍👩‍👧‍👦', 60)).toBe('Call 👨‍👩‍👧‍👦 (second version)');
+  });
 });
 
 describe('dropForgotten', () => {

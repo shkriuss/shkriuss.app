@@ -331,19 +331,34 @@ export function keepBoth(
 }
 
 /**
+ * Characters as people see them, to cut between (made the first time a
+ * name is cut). Firefox before 125 can't tell them apart: there, each code
+ * point is one, as in @shkriuss/ui's cutToLength.
+ */
+let characters: Intl.Segmenter | null | undefined;
+
+/**
  * The name for this device's version of an item kept by keepBoth, e.g.
  * "Shopping (second version)". Fits in `max` characters (as JavaScript
- * counts them, never splitting an emoji) by shortening the name, so it
- * passes the app's own checks.
+ * counts them) by shortening the name, so it passes the app's own checks.
+ * It's cut between characters as people see them: cut by code points, a
+ * flag, a family emoji, a skin tone or a letter typed with its accent
+ * ended in half a character (audit 5 F3-2, audit 6 F1-3).
  */
 export function secondVersionName(name: string, max: number): string {
   const suffix = ' (second version)';
-  let base = '';
-  for (const character of name.trim()) {
-    if (base.length + character.length > max - suffix.length) break;
-    base += character;
+  const text = name.trim();
+  characters ??=
+    typeof Intl.Segmenter === 'function'
+      ? new Intl.Segmenter('en', { granularity: 'grapheme' })
+      : null;
+  const parts = characters ? characters.segment(text) : [...text].map((segment) => ({ segment }));
+  let end = 0;
+  for (const { segment } of parts) {
+    if (end + segment.length > max - suffix.length) break;
+    end += segment.length;
   }
-  base = base.trimEnd();
+  const base = text.slice(0, end).trimEnd();
   return base ? `${base}${suffix}` : 'Second version'.slice(0, max);
 }
 

@@ -144,6 +144,15 @@ describe('secondVersion', () => {
       'Dentist (second version)',
     );
   });
+
+  it('cuts a long title between whole characters, never inside a flag (audit 6 F1-3)', () => {
+    const [event] = withEvents(draft({ title: '🇬🇪'.repeat(30) })).events;
+    if (!event) throw new Error('Expected an event');
+    const copy = secondVersion(event, 'copy');
+    // 83 of the characters JavaScript counts are left for the title: 20 flags.
+    expect(copy.title).toBe(`${'🇬🇪'.repeat(20)} (second version)`);
+    expect(isCalendarState({ events: [event, copy] })).toBe(true);
+  });
 });
 
 describe('occurrencesBetween', () => {
