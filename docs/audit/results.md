@@ -1089,8 +1089,8 @@ repair's photos, and four problems in CI's package checks.
 
 ### What's left for you
 
-- Under **Settings → Environments**, delete `claude` and `claude-audit`
-  ([ADR 0021](../adr/0021-no-claude-workflow.md)).
+- Done on 1 November 2026: the `claude` and `claude-audit` environments
+  are deleted ([ADR 0021](../adr/0021-no-claude-workflow.md)).
 - If you saved your recovery key with "Show recovery key" while signed in,
   check that the file has the key the dialog shows (6A-1, run 21).
 - Titles of notes already in a browser's history stay there until you clear
@@ -1229,7 +1229,7 @@ Severity is the auditor's; where two runs disagreed, the higher one.
 | 6H-3 (run 20), 6H-8 (run 9) | Low      | The Claude workflow's "never force push" rule was easy to step around                                          | Fixed: the workflow is removed ([#116](https://github.com/shkriuss/shkriuss.app/pull/116))                                                      |
 | 6H-9 (run 9)                | Info     | "Re-run failed jobs" can't deploy a day later: the saved build is kept for a day                               | Fixed in deployment.md: "Re-run all jobs" ([#119](https://github.com/shkriuss/shkriuss.app/pull/119))                                           |
 | 6H-10 (run 9)               | Info     | PLAN.md's list of workflows left out the newest                                                                | Fixed ([#119](https://github.com/shkriuss/shkriuss.app/pull/119))                                                                               |
-| 6H-4 (run 20)               | Info     | deployment.md said `production` was the only environment                                                       | Fixed ([#119](https://github.com/shkriuss/shkriuss.app/pull/119)); true again once `claude` and `claude-audit` are deleted                      |
+| 6H-4 (run 20)               | Info     | deployment.md said `production` was the only environment                                                       | Fixed ([#119](https://github.com/shkriuss/shkriuss.app/pull/119)); true again since `claude` and `claude-audit` were deleted (1 November)       |
 | 6H-5 (run 20)               | Info     | A moderate `minimatch` advisory, through ESLint, that Dependabot can't fix                                     | Explained: below CI's gate and lint-only; it waits for ESLint to allow minimatch 11 ([#119](https://github.com/shkriuss/shkriuss.app/pull/119)) |
 
 #### J. Architecture and tests
