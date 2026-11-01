@@ -50,6 +50,7 @@ import {
   toRepairForm,
   totals,
   unitOf,
+  unusedPhotos,
   vehicleName,
   vehicleSummaries,
   withSettings,
@@ -1142,6 +1143,17 @@ describe('photos', () => {
       'p2',
       'p3',
     ]);
+  });
+
+  // Audit 6 F2-1: an older version could save a copy of a repair with the
+  // same photos; deleting the copy deleted the original's photos.
+  it('deletes only the photos no repair left has', () => {
+    const original = repair({ id: 'a', photos: ['p1', 'p2'] });
+    const copy = repair({ id: 'b', photos: ['p1'] });
+    const left = removeRepair(repairs(original, copy), 'b');
+    expect(unusedPhotos(copy.photos, left)).toEqual([]);
+    expect(unusedPhotos(['p1', 'p2', 'p3'], removeRepair(left, 'a'))).toEqual(['p1', 'p2', 'p3']);
+    expect(unusedPhotos(['p2', 'p3'], left)).toEqual(['p3']);
   });
 
   it('sync as a thumbnail and a full photo, each a file', () => {

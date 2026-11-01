@@ -30,6 +30,30 @@ test.beforeEach(async ({ page }) => {
 
 const status = (page: Page, text: string) => page.getByRole('status').filter({ hasText: text });
 
+/**
+ * Holds up the worker that makes photos smaller, as a big photo from the
+ * camera does, until the function returned is called. Call it again after a
+ * reload: the worker starts again then.
+ */
+async function holdPhotos(page: Page): Promise<() => void> {
+  let letGo = (): void => undefined;
+  const waiting = new Promise<void>((resolve) => {
+    letGo = resolve;
+  });
+  await page.route('**/_astro/make-photo.worker*.js', async (route) => {
+    await waiting;
+    await route.continue();
+  });
+  return letGo;
+}
+
+/** Once the photos picked in the repair form are made smaller (or dropped), and a moment more. */
+async function photosDone(page: Page): Promise<void> {
+  await expect(repairDialog(page).locator('[data-photos-busy]')).toHaveAttribute('hidden', '');
+  // A save would be done by now.
+  await page.waitForTimeout(500);
+}
+
 test('adds photos to a repair, made smaller, and keeps them on the device', async ({ page }) => {
   // Counted before the app has made its files: counting mustn't get in its way.
   expect(await storedPhotos(page)).toBe(0);
@@ -143,6 +167,133 @@ test('a full device: says the photos couldn’t be saved, and saves nothing half
   await dialog.getByRole('button', { name: 'Save' }).click();
   await expect(status(page, 'Saved the repair on Bus 105')).toBeAttached();
   expect(await storedPhotos(page)).toBe(1);
+});
+
+test('Save waits for a photo still being made smaller, then saves the repair once', async ({
+  page,
+}) => {
+  const letGo = await holdPhotos(page);
+  await page.getByRole('button', { name: 'New repair' }).click();
+  const dialog = repairDialog(page);
+  await dialog.getByLabel('Vehicle').fill('Bus 105');
+  await addPhotos(page, [jpeg('door.jpg', await picture(page, { width: 400, height: 300 }))]);
+  await expect(dialog.getByText('Adding photos…')).toBeVisible();
+  await dialog.getByRole('button', { name: 'Save' }).click();
+  await dialog.getByRole('button', { name: 'Save' }).click();
+  await expect(dialog).toBeVisible();
+  letGo();
+  await expect(status(page, 'Saved the repair on Bus 105')).toBeAttached();
+  await expect(dialog).toBeHidden();
+  await photosDone(page);
+  await expect(repairItems(page)).toHaveCount(1);
+  await expect(repairItems(page).first().locator('[data-photos] img')).toHaveCount(1);
+  expect(await storedPhotos(page)).toBe(1);
+});
+
+// Audit 6 F2-1: closing the form while Save waited for a photo saved it
+// anyway, as a new repair with the same photos as the one that was open;
+// deleting that copy then deleted the first one's photos, on every device.
+test('closing the form while Save waits for a photo saves nothing', async ({ page }) => {
+  await seed(page, {
+    vehicles: [vehicle({ id: 'b105', name: 'Bus 105' })],
+    repairs: [repair({ id: 'r', photos: ['on-the-tablet'] })],
+  });
+  const dialog = repairDialog(page);
+  const saved = async () =>
+    (
+      await readStore<{ repairs: { id: string; work: string; photos: string[] }[] }>(
+        page,
+        'repairs',
+      )
+    )?.data.repairs ?? [];
+  const small = await picture(page, { width: 400, height: 300 });
+
+  // Cancel.
+  let letGo = await holdPhotos(page);
+  await repairItems(page).first().locator('[data-action="edit-repair"]').click();
+  await dialog.getByLabel('Work done').fill('Changed my mind about this');
+  await addPhotos(page, [jpeg('door.jpg', small)]);
+  await expect(dialog.getByText('Adding photos…')).toBeVisible();
+  await dialog.getByRole('button', { name: 'Save' }).click();
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  letGo();
+  await photosDone(page);
+  await expect(repairItems(page)).toHaveCount(1);
+  expect(await saved()).toEqual([
+    expect.objectContaining({
+      id: 'r',
+      work: 'Replaced the front pads',
+      photos: ['on-the-tablet'],
+    }),
+  ]);
+  expect(await storedPhotos(page)).toBe(0);
+
+  // Escape, on a new repair.
+  await page.reload();
+  letGo = await holdPhotos(page);
+  await page.getByRole('button', { name: 'New repair' }).click();
+  await dialog.getByLabel('Vehicle').fill('Bus 7');
+  await addPhotos(page, [jpeg('door.jpg', small)]);
+  await expect(dialog.getByText('Adding photos…')).toBeVisible();
+  await dialog.getByRole('button', { name: 'Save' }).click();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  letGo();
+  await photosDone(page);
+  expect((await saved()).map((entry) => entry.id)).toEqual(['r']);
+  await expect(page.locator('[data-vehicles] li')).toHaveCount(1);
+  expect(await storedPhotos(page)).toBe(0);
+
+  // Deleted while it waits: it stays deleted.
+  await page.reload();
+  letGo = await holdPhotos(page);
+  await repairItems(page).first().locator('[data-action="edit-repair"]').click();
+  await addPhotos(page, [jpeg('door.jpg', small)]);
+  await expect(dialog.getByText('Adding photos…')).toBeVisible();
+  await dialog.getByRole('button', { name: 'Save' }).click();
+  await dialog.getByRole('button', { name: 'Delete' }).click();
+  await page
+    .getByRole('dialog', { name: 'Delete this repair?' })
+    .getByRole('button', { name: 'Delete' })
+    .click();
+  await expect(status(page, 'Deleted the repair.')).toBeAttached();
+  letGo();
+  await photosDone(page);
+  expect(await saved()).toEqual([]);
+  expect(await storedPhotos(page)).toBe(0);
+});
+
+// Audit 6 F2-1: two repairs with the same photo (a copy an older version
+// saved): deleting one took the photo from the other.
+test('deleting a repair keeps the photos another repair has too', async ({ page }) => {
+  await page.getByRole('button', { name: 'New repair' }).click();
+  await repairDialog(page).getByLabel('Vehicle').fill('Bus 105');
+  await addPhotos(page, [jpeg('door.jpg', await picture(page, { width: 400, height: 300 }))]);
+  await expect(repairDialog(page).locator('[data-form-photos] img')).toHaveCount(1);
+  await fillRepair(page, { work: 'Replaced the door glass' });
+  await expect(status(page, 'Saved the repair on Bus 105')).toBeAttached();
+  const first = await readStore<{ repairs: { vehicle: string; photos: string[] }[] }>(
+    page,
+    'repairs',
+  );
+  const { vehicle: bus, photos } = first?.data.repairs[0] ?? { vehicle: '', photos: [] };
+  await seed(page, {
+    vehicles: [vehicle({ id: bus, name: 'Bus 105' })],
+    repairs: [
+      repair({ id: 'original', vehicle: bus, date: '2026-10-20', photos }),
+      repair({ id: 'copy', vehicle: bus, photos }),
+    ],
+  });
+  await repairItems(page).first().locator('[data-action="edit-repair"]').click();
+  await repairDialog(page).getByRole('button', { name: 'Delete' }).click();
+  await page
+    .getByRole('dialog', { name: 'Delete this repair?' })
+    .getByRole('button', { name: 'Delete' })
+    .click();
+  await expect(status(page, 'Deleted the repair.')).toBeAttached();
+  await page.waitForTimeout(500);
+  expect(await storedPhotos(page)).toBe(1);
+  await expect(repairItems(page).first().locator('[data-photos] img')).toHaveCount(1);
 });
 
 // Audit 4 F2-8: a photo taken off a repair was deleted before the repair was

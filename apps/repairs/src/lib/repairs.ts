@@ -931,6 +931,19 @@ export const photosOf = (repairs: readonly Repair[]): string[] =>
   repairs.flatMap((repair) => repair.photos);
 
 /**
+ * Of these photos, the ones no repair in `state` has: those to delete once
+ * the repairs that had them are deleted, or saved without them. A photo two
+ * repairs have stays while one of them is left: an older version saved a
+ * copy of a repair, with the same photos, when its form was closed while it
+ * waited for a photo (audit 6 F2-1), and deleting the copy deleted the
+ * original's photos.
+ */
+export function unusedPhotos(photos: readonly string[], state: RepairsState): string[] {
+  const used = new Set(photosOf(state.repairs));
+  return photos.filter((photo) => !used.has(photo));
+}
+
+/**
  * The biggest a saved photo may be, in bytes: the sync server takes files up
  * to 1.5 MB, sealed. Photos come out far smaller; a very detailed one is
  * saved again at a lower JPEG quality (PHOTO_QUALITIES, best first).

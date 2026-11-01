@@ -90,9 +90,13 @@ private car's service history. Lives at <https://repairs.shkriuss.app>.
   device downloads the thumbnail when the list shows it and the full photo
   when it's opened, and says "1 photo hasn't arrived yet" until it can (with
   sync off: "1 photo on another device"). A photo is saved small enough to
-  sync (`MAX_PHOTO_BYTES`, `PHOTO_QUALITIES`). Photos aren't in backups;
+  sync (`MAX_PHOTO_BYTES`, `PHOTO_QUALITIES`). Saving the form waits for
+  photos still being made smaller; if the form is closed meanwhile
+  (Cancel, Escape, or Delete), nothing is saved (audit 6 F2-1: it was saved
+  anyway, as a copy with the same photos). Photos aren't in backups;
   "Save a copy" saves one as a file. Deleting a repair, a vehicle or a year
-  deletes their photos (online too, with sync on); "Delete all data"
+  deletes their photos (online too, with sync on), except those another
+  repair has too (`unusedPhotos`); "Delete all data"
   deletes them on this device only (sync is turned off first). A photo
   taken off a repair in its form, or deleted with it, goes only once the
   change is saved: if it can't be (a full device), the repair as saved

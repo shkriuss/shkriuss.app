@@ -208,16 +208,18 @@ export function mountFormPhotos(
     inUse: () => [...formPhotos, ...pendingPhotos.keys()],
     ready: () => addingPhotos,
     async save() {
+      // These ones: the form may be closed, and opened again, while they're saved.
+      const saving = [...pendingPhotos.values()];
       try {
-        await savePhotos([...pendingPhotos.values()]);
+        await savePhotos(saving);
       } catch {
         showPhotoProblem('Couldn’t save the photos. Your device may be out of space.');
         addPhotosButton.focus();
         return null;
       }
-      const added = [...pendingPhotos.keys()];
+      const added = saving.map((photo) => photo.id);
+      for (const id of added) pendingPhotos.delete(id);
       const removed = removedPhotos;
-      pendingPhotos.clear();
       removedPhotos = [];
       return { added, removed };
     },

@@ -21,6 +21,7 @@ import {
   saveVehicle,
   toRepairForm,
   unitOf,
+  unusedPhotos,
   vehicleName,
   type PartForm,
   type Repair,
@@ -98,7 +99,15 @@ export function mountRepairForm(root: ParentNode, page: RepairFormPage): RepairF
   let editingRepair: string | null = null;
   /** The form as it opened, to tell what the person changed (see withEdits). */
   let openedRepair: RepairForm | null = null;
-  let saving = false;
+  /**
+   * Goes up each time the form closes. A save started (Save tapped) goes on
+   * only while the form it was started in is still open (audit 6 F2-1).
+   */
+  let session = 0;
+  /** The session whose Save was tapped and is still saving, or null. */
+  let saving: number | null = null;
+  /** Whether the form's photos are being written on the device just now. */
+  let storing = false;
   const formPhotos = mountFormPhotos(root, repairForm, { syncOn: () => page.syncOn() });
   // A paste longer than a box takes is cut by the browser: say so (audit 4
   // F2-7). Not the parts' short boxes, drawn later inside their labels,
@@ -248,25 +257,35 @@ export function mountRepairForm(root: ParentNode, page: RepairFormPage): RepairF
     }
   });
 
+  /** Whether the form Save was tapped in is still open. */
+  const stillOpen = (tapped: number) => tapped === session && repairDialog.open;
+
   repairForm.addEventListener('submit', (event) => {
     event.preventDefault();
-    if (saving) return;
-    saving = true;
-    // Photos still being made smaller are waited for.
+    const tapped = session;
+    if (saving === tapped) return;
+    saving = tapped;
+    // Photos still being made smaller are waited for. If the form is closed
+    // meanwhile (Cancel, Escape, the back gesture, or Delete), nothing is
+    // saved: it was saved anyway, as a new repair with the same photos, and
+    // deleting that one deleted the photos of the one it came from (audit 6
+    // F2-1).
     void formPhotos
       .ready()
-      .then(submitRepair)
+      .then(() => (stillOpen(tapped) ? submitRepair(tapped) : undefined))
       .finally(() => {
-        saving = false;
+        if (saving === tapped) saving = null;
       });
   });
 
-  async function submitRepair(): Promise<void> {
-    const id = editingRepair ?? crypto.randomUUID();
-    const before = page.data();
-    // A sync or another tab may have changed the repair while the form was
-    // open: only what was changed here goes on it (audit 3 F2-1).
-    const read = readEditedRepair(
+  /**
+   * Reads the form into the repair with this id. A sync or another tab may
+   * have changed the repair while the form was open: only what was changed
+   * here goes on it as it is now (audit 3 F2-1).
+   */
+  function readForm(id: string): ReturnType<typeof readEditedRepair> {
+    const { vehicles, repairs } = page.data();
+    return readEditedRepair(
       openedRepair,
       {
         vehicle: field<HTMLInputElement>('vehicle').value,
@@ -281,44 +300,67 @@ export function mountRepairForm(root: ParentNode, page: RepairFormPage): RepairF
         photos: formPhotos.ids(),
       },
       id,
-      before.repairs,
-      before.vehicles,
+      repairs,
+      vehicles,
       () => crypto.randomUUID(),
     );
-    if (!read.repair) {
-      showRepairProblems(read.problems);
+  }
+
+  async function submitRepair(tapped: number): Promise<void> {
+    const id = editingRepair ?? crypto.randomUUID();
+    const checked = readForm(id);
+    if (!checked.repair) {
+      showRepairProblems(checked.problems);
       return;
     }
-    const { repair, newVehicle } = read;
-    const photos = await formPhotos.save();
+    storing = true;
+    const photos = await formPhotos.save().finally(() => {
+      storing = false;
+    });
     if (!photos) return;
+    // Closed while the photos were saved (Cancel, or the repair deleted on
+    // another device): the repair isn't saved, so its new photos go.
+    if (!stillOpen(tapped)) {
+      void deletePhotos(photos.added);
+      return;
+    }
     page.filesAdded(photoFiles(photos.added));
+    // Read again, as the repairs are now: a sync may have come while the
+    // photos were saved. If the two don't fit together, the form as it was
+    // checked wins.
+    const again = readForm(id);
+    const { repair, newVehicle } = again.repair ? again : checked;
     repairDialog.close();
-    // As they are now: a sync may have come while the photos were saved.
     const { vehicles, repairs } = page.data();
     const name = newVehicle?.name ?? vehicleName(vehicles, repair.vehicle);
+    const next = saveRepair(repairs, repair);
     page.keepShown(repair.id);
     const saved = page.save(
       {
-        repairs: saveRepair(repairs, repair),
+        repairs: next,
         ...(newVehicle ? { vehicles: saveVehicle(vehicles, newVehicle) } : {}),
       },
       newVehicle
         ? `Saved the repair on ${name}, and added ${name} to your vehicles.`
         : `Saved the repair on ${name}.`,
     );
-    // Photos taken off it go once it's saved without them. If it couldn't
-    // be, the repair as saved still has them: they stay (audit 4 F2-8).
+    // Photos taken off it go once it's saved without them, unless another
+    // repair has them (audit 6 F2-1). If it couldn't be saved, the repair as
+    // saved still has them: they stay (audit 4 F2-8).
     if (saved) {
-      void deletePhotos(photos.removed);
-      page.filesRemoved(photoFiles(photos.removed));
+      const gone = unusedPhotos(photos.removed, next);
+      void deletePhotos(gone);
+      page.filesRemoved(photoFiles(gone));
     }
     page.focusRepair(repair.id);
   }
 
   repairDialog.addEventListener('close', () => {
     editingRepair = null;
-    formPhotos.close(saving);
+    session += 1;
+    // Photos picked but not saved go, unless they're being written just now
+    // (then the save deletes them, as it stops).
+    formPhotos.close(storing);
   });
 
   return {
