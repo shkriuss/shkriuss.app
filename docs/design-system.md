@@ -62,7 +62,7 @@ import { AppShell, Button, Card, AppIcon, Icon, DataControls } from '@shkriuss/u
   <Card title="Tally" href="https://tally.shkriuss.app/">Count things.</Card>
   <AppIcon icon="tally" color="indigo" size="lg" />
   <Icon name="info" label="Information" />        <!-- decorative unless it has a label -->
-  <DataControls />                                <!-- "Your data": back up / restore / delete (backup={false}: delete only) -->
+  <DataControls />                                <!-- "Your data": back up / restore / delete (backup={false} keepFirst="…": delete only) -->
 </AppShell>
 ```
 

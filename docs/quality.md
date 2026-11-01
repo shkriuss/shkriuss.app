@@ -27,7 +27,8 @@ written in newer syntax fails it (audit 4 J-3). Write that code the ES2022
 way, or leave out the package that brings it. It checks only the syntax:
 a package that calls a function Safari 16.4 doesn't have (like
 `Object.groupBy`) passes, so check that in the support tables. The type
-check holds the code here to ES2022, functions included
+check holds the code here to ES2022's functions, plus ES2023's array
+methods (`findLast`, `toSorted`…), which Safari 16.4 has
 (`tsconfig.base.json`). It also refuses a page that loads anything from
 another website: a `link` (a `preconnect` or `dns-prefetch` hint too, which
 the browser tests can't see), `script`, `img`, `iframe`, `source`, `video`

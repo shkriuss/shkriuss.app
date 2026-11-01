@@ -116,8 +116,11 @@ third-party version once for the whole repo.
 - **Origins and isolation.** Each subdomain is its own browser "origin", so
   one app can never read another app's saved data.
 - **Production deploys.** On every merge to `main`, once every check passes,
-  GitHub Actions deploys the exact files it tested, then checks that every
-  live site answers with the right security headers.
+  GitHub Actions deploys the build it tested (two parts are made again at
+  deploy time from the same pinned inputs: each site's server code, which
+  wrangler bundles, and Grammar's big model download;
+  [deployment](deployment.md)), then checks that every live site answers
+  with the right security headers.
 - **No previews for pull requests** ([ADR 0019](adr/0019-no-pull-request-previews.md)).
   A preview would run a pull request's code, before it's merged, with the
   Cloudflare token. A pull request gets CI's checks; once merged, look at
@@ -240,7 +243,7 @@ flag that before starting.
 | Type checking             | `astro check` + `tsc`                                             | type errors                                                                                                                              |
 | Unit tests                | Vitest                                                            | a test fails (app logic, storage, registry, generator, colour contrast in both themes, pinned actions)                                   |
 | Build                     | Astro                                                             | any site fails to build                                                                                                                  |
-| CSP safety + size budgets | `pnpm check:dist`                                                 | inline code in built HTML, a page over its gzipped HTML/CSS/JS budget, or a script newer than ES2022 (what Safari 16.4 reads)            |
+| CSP safety + size budgets | `pnpm check:dist`                                                 | inline code, a page over its size budget, a script newer than ES2022 (Safari 16.4), and more: see [quality.md](quality.md)               |
 | End-to-end                | Playwright on `wrangler dev`, phone-sized screen                  | user flows break (for example, a Tally count doesn't survive a reload)                                                                   |
 | Accessibility             | axe-core, WCAG 2.2 A/AA + best practices, light **and** dark mode | any violation on any page, broken skip link, sideways scrolling at 320px                                                                 |
 | Security and privacy      | Playwright                                                        | a header is missing, a console error (including CSP violations), a cookie, or a request to another domain                                |
@@ -337,8 +340,8 @@ they ran out.)
   ([ADR 0005](adr/0005-pnpm-typescript-versions.md)).
 - Before an app's page script grows much more: split it by feature, as was
   done for Calendar, Repairs, Tasks and Budget (audit 5 J-2, J-3). The
-  biggest are now Shelf, Repairs, the Account page and Meals (800 to 900
-  lines each), then Photos, Trades and Tasks (about 700). If that's no
+  biggest are now Shelf, the Account page, Repairs, Photos and Meals (800
+  to 900 lines each), then Trades and Tasks (700 to 750). If that's no
   longer enough, [ADR 0001](adr/0001-static-astro-sites.md) says
   when to consider a UI framework, with a decision record (audit 4 J-10).
 - Before Photos' libraries reach many tens of thousands of photos: load its

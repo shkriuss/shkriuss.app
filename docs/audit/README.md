@@ -518,14 +518,15 @@ subdomain.
 **Check:**
 
 - Is logic copied between apps that should be in a shared package? Are there
-  files too large to work with? The largest files are Trades' rules
-  (`apps/trades/src/lib/trades.ts`), the sync client
-  (`packages/sync/src/client.ts`), Repairs' rules
-  (`apps/repairs/src/lib/repairs.ts`), the online library's Worker
-  (`packages/library/src/worker.ts`) and Tasks' page script
-  (`apps/tasks/src/scripts/tasks.ts`), each about 1,000 to 1,100 lines;
-  the largest test file is the sync client's (`client.test.ts`, about
-  2,500 lines) (audit 5 J-7).
+  files too large to work with? Count them, as sizes change with every
+  audit's fixes: `git ls-files '*.ts' '*.astro' | xargs wc -l | sort -rn`.
+  At the sixth audit, the largest code files were the rules of Trades and
+  Repairs (`apps/*/src/lib/`), the sync client
+  (`packages/sync/src/client.ts`) and the online library's Worker
+  (`packages/library/src/worker.ts`), each over 1,000 lines; the largest
+  page scripts are named in [PLAN.md](../PLAN.md) (Milestone 2); and the
+  largest test file, the sync client's (`client.test.ts`), had about 3,000
+  lines (audit 5 J-7, audit 6 J-8).
 - Do the docs still match the code? Every AI session reads them before it
   works, so a wrong step there becomes a wrong change. Check each concrete
   claim (paths and names, commands, limits and numbers, steps, what a

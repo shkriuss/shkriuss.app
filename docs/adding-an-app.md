@@ -6,20 +6,20 @@ any extra work.
 
 ## Choose the details
 
-| Field           | Example                              | Rules                                                                                                                                                                                   |
-| --------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **slug**        | `notes`                              | The address and folder name. 2–30 lowercase letters, digits or single hyphens, starting with a letter. Can't be a reserved word (`www`, `api`, `hub`, …). It can't easily change later. |
-| **name**        | `Notes`                              | Shown to people. Up to 30 characters.                                                                                                                                                   |
-| **description** | `Quick notes, saved on your device.` | One sentence for the hub card. Up to 160 characters.                                                                                                                                    |
-| **icon**        | `note`                               | One of the icons in `packages/ui/src/icons/index.ts`.                                                                                                                                   |
-| **color**       | `blue`                               | teal, blue, indigo, violet, pink, red, orange, green or slate.                                                                                                                          |
-| **stores**      | `Your notes`                         | What the app saves on the device, in plain words, for the privacy page. Separate several with `;`. The theme choice is always added (every page saves it).                              |
+| Field           | Example                                    | Rules                                                                                                                                                                                   |
+| --------------- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **slug**        | `journal`                                  | The address and folder name. 2–30 lowercase letters, digits or single hyphens, starting with a letter. Can't be a reserved word (`www`, `api`, `hub`, …). It can't easily change later. |
+| **name**        | `Journal`                                  | Shown to people. Up to 30 characters.                                                                                                                                                   |
+| **description** | `A few lines a day, saved on your device.` | One sentence for the hub card. Up to 160 characters.                                                                                                                                    |
+| **icon**        | `note`                                     | One of the icons in `packages/ui/src/icons/index.ts`.                                                                                                                                   |
+| **color**       | `blue`                                     | teal, blue, indigo, violet, pink, red, orange, green or slate.                                                                                                                          |
+| **stores**      | `Your journal entries`                     | What the app saves on the device, in plain words, for the privacy page. Separate several with `;`. The theme choice is always added (every page saves it).                              |
 
 ## Option A: ask Claude
 
-Say something like: _"Add a new app called Notes at notes.shkriuss.app: quick
-notes saved on my device."_ Claude runs the generator, builds the app, and
-opens a pull request.
+Say something like: _"Add a new app called Journal at journal.shkriuss.app:
+a few lines a day, saved on my device."_ Claude runs the generator, builds
+the app, and opens a pull request.
 
 ## Option B: from your phone, with the New app workflow
 
@@ -41,10 +41,10 @@ in that pull request, or in a new one.
 ## Option C: on a computer
 
 ```sh
-pnpm new-app notes --name "Notes" --description "Quick notes, saved on your device." \
-  --icon note --color blue --stores "Your notes"
+pnpm new-app journal --name "Journal" --description "A few lines a day, saved on your device." \
+  --icon note --color blue --stores "Your journal entries"
 pnpm install
-pnpm --filter notes dev
+pnpm --filter journal dev
 ```
 
 ## What the generator does
@@ -72,10 +72,13 @@ in alphabetical order, so where an entry sits in `apps.json` doesn't matter.
 - Save data with `createStore` from `@shkriuss/storage`, and keep
   `<DataControls />` on the page so people can back up, restore or delete their
   data. Apps whose data is too big for a backup file (like Photos) use
-  `<DataControls backup={false}>`, with a sentence inside saying what to do
-  instead. With `deleteNote`, "Delete all data?" gets one more line, which
-  the app's script fills in (`[data-delete-note]`) with what it knows only
-  then, like Photos' count of photos not online yet.
+  `<DataControls backup={false} keepFirst="…">`, with a sentence inside
+  saying what to do instead of backing up, and in `keepFirst` what "Delete
+  all data?" says to do first to keep the data (without it, that dialog
+  says nothing about keeping it; audit 4 D-4). With `deleteNote`, "Delete
+  all data?" gets one more line, which the app's script fills in
+  (`[data-delete-note]`) with what it knows only then, like Photos' count of
+  photos not online yet.
 - Data from outside (a backup being restored, a file, another device's
   copy) is untrusted: `createStore`'s `validate` checks its shape, and
   `nestedTooDeep()` from `@shkriuss/storage/nesting` refuses JSON nested
@@ -97,7 +100,8 @@ in alphabetical order, so where an entry sits in `apps.json` doesn't matter.
   says "Saved" when it did. After showing a form's errors, put focus on the
   first wrong field with `focusProblem()`, which reads the error out if the
   person pressed Enter in that field. `showFieldProblems()` from
-  `@shkriuss/ui/dom` does both for a whole form.
+  `@shkriuss/ui/dom` shows a whole form's errors, and with
+  `{ focusFirst: true }` puts focus on the first wrong field too.
 - When the page is drawn again in the background (another tab's `storage`
   event, sync's `onChange`, a new day), draw it with `keepFocus(render, …)`
   from `@shkriuss/ui/keep-focus`, so keyboard focus stays on the same control
@@ -132,7 +136,7 @@ in alphabetical order, so where an entry sits in `apps.json` doesn't matter.
 
 - If the app needs a browser feature (for example keeping the screen on),
   allow it in `astro.config.ts`:
-  `defineAppConfig({ slug: 'notes', allowFeatures: ['screen-wake-lock'] })`.
+  `defineAppConfig({ slug: 'journal', allowFeatures: ['screen-wake-lock'] })`.
 
 ### Changing what an app saves
 
@@ -331,9 +335,9 @@ or:
    `APPLIED_MIGRATIONS` in `tests/unit/registry-consistency.test.ts` too,
    after any the app already has, as in the notifications steps.
 4. Add `"@shkriuss/sync": "workspace:*"` to the app's `package.json`. Each
-   app with sync adds its own storage limit on the server (120 MB): if
-   `tests/unit/free-plan.test.ts` then fails, the limits need lowering
-   first ([ADR 0017](adr/0017-storage-limits.md)).
+   app with sync adds its own storage limit on the server (120 MB, or 1 GB
+   with files, below): if `tests/unit/free-plan.test.ts` then fails, the
+   limits need lowering first ([ADR 0017](adr/0017-storage-limits.md)).
 5. Put `<SyncControls />` above `<DataControls />`. In the page script, call
    `createSync({ app: site.slug, stores: [syncedStore({ store, items, withItems })], onChange })`,
    then `mountSyncControls(…)`, and `sync.changed()` after every save. See
@@ -344,6 +348,16 @@ or:
    use it). Browser tests of syncing go in `apps/<slug>/e2e/sync.spec.ts`,
    with the helpers in `tests/e2e/account.ts` (`expectSealed()` checks that
    what goes online is sealed).
+
+**Syncing files too**, like Repairs' photos
+([ADR 0014](adr/0014-syncing-photos.md)): the Worker uses
+`syncHandler({ files: true })` (see `apps/repairs/src/worker.ts`), and its
+storage limit is 1 GB instead of 120 MB (`STORAGE_LIMITS` in
+`packages/sync/src/worker.ts`; `tests/unit/free-plan.test.ts` counts it).
+In the page script, give `createSync` a `files` option (which files are
+wanted, and how to read one), and call `sync.filesAdded()` and
+`sync.filesRemoved()` when photos are added or removed. See
+`apps/repairs/src/scripts/repairs.ts` and `photos.ts`.
 
 **Testing a Worker.** Unit tests run a Worker's real code in memory, with
 the fakes in `@shkriuss/server/testing`: `memoryNamespace()` makes a Durable
