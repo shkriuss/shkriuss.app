@@ -35,7 +35,10 @@ function fail(title: string, message: string): never {
   process.exit(1);
 }
 
-/** Reads something, or fails with the reason: what pnpm would refuse, this refuses too. */
+/**
+ * Reads something, or fails with the reason: what pnpm would refuse, this
+ * refuses too, and so is YAML that pnpm would read differently (audit 6 H-2).
+ */
 function readable<T>(what: string, read: () => T): T {
   try {
     return read();
@@ -44,7 +47,7 @@ function readable<T>(what: string, read: () => T): T {
     const reason = (error instanceof Error ? error.message : String(error)).replace(/\s+/g, ' ');
     return fail(
       `${what} unreadable`,
-      `${what}, this pull request's or ${base}'s, can't be read: ${reason}. pnpm would refuse it too. Let pnpm write it (pnpm install).`,
+      `${what}, this pull request's or ${base}'s, can't be checked: ${reason}. Write it the way pnpm does: let pnpm write the lockfile (pnpm install), and write pnpm-workspace.yaml as plain YAML.`,
     );
   }
 }

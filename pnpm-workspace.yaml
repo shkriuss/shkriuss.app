@@ -32,7 +32,8 @@ catalog:
   vitest: ^5.0.5
   wrangler: ^4.151.1
   # Reads pnpm-lock.yaml and the workflows as YAML, the way pnpm and GitHub
-  # read them (scripts/lockfile-age.ts, audit 5 H-1; tests/unit/workflows.test.ts).
+  # read them (scripts/lockfile-age.ts, audit 5 H-1, which refuses YAML pnpm
+  # reads differently, audit 6 H-2; tests/unit/workflows.test.ts).
   # Already there for Astro.
   yaml: ^2.9.1
 

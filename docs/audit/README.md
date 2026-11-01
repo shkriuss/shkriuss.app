@@ -462,7 +462,10 @@ This area is split into three tasks:
   `pnpm-workspace.yaml` or `package.json`) change what the lockfile check
   (`scripts/lockfile-age.ts`) reads or runs, or add a package it doesn't
   see? `main`'s copy runs first in its job, with `main`'s packages, and
-  nothing from the pull request is installed there (audit 6 H-1).
+  nothing from the pull request is installed there (audit 6 H-1). Look for
+  YAML that pnpm (js-yaml) and the check (the `yaml` package) read
+  differently: it refuses `<<` merge keys, keys written as lists, anchors,
+  aliases, tags and directives (audit 6 H-2).
 - For every dependency:
   - is it needed and maintained?
   - are install scripts allowed only where listed?

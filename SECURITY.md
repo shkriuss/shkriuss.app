@@ -131,7 +131,9 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
   lockfile as YAML, the way pnpm does, so an entry written in another style
   than pnpm's own is checked all the same, and it refuses a pull request
   that adds an `.npmrc` or changes where pnpm downloads from in
-  `pnpm-workspace.yaml` (audit 5 H-1). CI runs `main`'s copy of that check,
+  `pnpm-workspace.yaml` (audit 5 H-1). YAML that pnpm reads differently
+  from the check (a `<<` merge key, for one) is refused too (audit 6 H-2).
+  CI runs `main`'s copy of that check,
   with `main`'s packages, before anything from the pull request is
   installed or run, so a pull request can't change the check or what reads
   its lockfile (audit 5 H-3, audit 6 H-1). It can change CI itself: GitHub

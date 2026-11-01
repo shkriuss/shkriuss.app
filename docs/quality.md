@@ -38,7 +38,12 @@ service worker saves on the first visit, under 30 MB (Grammar's is about
 21 MB, the others under 1 MB; audit 5 Z-4).
 
 The package age check reads the lockfile as YAML, as pnpm reads it, so an
-entry counts however it's written (audit 5 H-1). It also fails when a pull
+entry counts however it's written (audit 5 H-1). YAML that pnpm never
+writes, and reads differently from the check, is refused in `pnpm-lock.yaml`
+and `pnpm-workspace.yaml`: a `<<` merge key or a key written as a list
+(either hid every package from the check while pnpm installed them), and
+anchors (`&name`), aliases (`*name`), tags (`!name`) and `%` directives
+(audit 6 H-2). It also fails when a pull
 request adds an `.npmrc`, or changes where pnpm downloads from (a registry,
 proxy, certificate or `fetch…` setting in `pnpm-workspace.yaml`): nothing
 here needs that, so ask Claude; the check has to allow it first, in a pull

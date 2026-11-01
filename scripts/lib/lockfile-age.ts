@@ -8,7 +8,8 @@
  * The lockfile is read as YAML, as pnpm reads it. Read line by line, these
  * checks saw only entries written the way pnpm writes them, so an entry
  * written on one line (`evil@1.0.0: {resolution: {…}}`), or with a comment
- * after its name, was installed without any check (audit 5 H-1).
+ * after its name, was installed without any check (audit 5 H-1). YAML that
+ * pnpm reads differently from the yaml package is refused (audit 6 H-2).
  */
 // Found from this file's folder, never from the working directory: CI runs
 // main's copy of these scripts in a folder of its own, with main's packages
@@ -16,7 +17,7 @@
 // from the working directory, the YAML reader was the one the pull request's
 // own lockfile installed, so it could make its lockfile read as anything
 // (audit 6 H-1).
-import { parse } from 'yaml';
+import { type Document, isScalar, parseDocument, visit } from 'yaml';
 
 type Mapping = Record<string, unknown>;
 
@@ -24,12 +25,66 @@ const isMapping = (value: unknown): value is Mapping =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
+ * What a YAML file uses that pnpm never writes, and that pnpm (which reads
+ * YAML with js-yaml) reads differently from the yaml package: a "<<" merge
+ * key, which pnpm applies and this reader doesn't, or a key written as a
+ * list or a mapping (`? [packages]`), which pnpm reads as "packages" and
+ * this one as "[ packages ]". Either hid every package from these checks
+ * while pnpm still installed them (audit 6 H-2). Anchors, aliases, tags and
+ * `%` directives are refused too: pnpm writes none of them, and they're
+ * where YAML readers differ. Undefined for plain YAML.
+ */
+function notPlainYaml(document: Document.Parsed): string | undefined {
+  const { yaml, tags } = document.directives;
+  if (
+    yaml.explicit ||
+    Object.entries(tags).some(
+      ([handle, prefix]) => handle !== '!!' || prefix !== 'tag:yaml.org,2002:',
+    )
+  ) {
+    return 'a % directive';
+  }
+  let found: string | undefined;
+  visit(document, {
+    Alias() {
+      found = 'an alias (*name)';
+      return visit.BREAK;
+    },
+    Pair(_, pair) {
+      const key = pair.key;
+      if (!isScalar(key)) found = 'a key written as a list or a mapping';
+      // In YAML 1.1 the yaml package reads a merge key as a symbol.
+      else if (key.value === '<<' || key.source === '<<' || typeof key.value === 'symbol') {
+        found = 'a "<<" merge key';
+      }
+      return found ? visit.BREAK : undefined;
+    },
+    Node(_, node) {
+      if (node.anchor) found = 'an anchor (&name)';
+      else if (node.tag) found = 'a tag (!name)';
+      return found ? visit.BREAK : undefined;
+    },
+  });
+  return found;
+}
+
+/**
  * A YAML file read as a mapping (an empty file is an empty one). YAML the
  * parser refuses, like a key written twice, is an error here too: pnpm
- * would refuse the file as well.
+ * would refuse the file as well. So is YAML that pnpm would read
+ * differently (see notPlainYaml).
  */
 function mappingOf(text: string, what: string): Mapping {
-  const document: unknown = parse(text);
+  const parsed = parseDocument(text);
+  const [error] = parsed.errors;
+  if (error) throw error;
+  const unusual = notPlainYaml(parsed);
+  if (unusual) {
+    throw new Error(
+      `${what} uses ${unusual}, which pnpm never writes and reads differently from this check (audit 6 H-2)`,
+    );
+  }
+  const document: unknown = parsed.toJS();
   if (document === null || document === undefined) return {};
   if (!isMapping(document)) throw new Error(`${what} isn't a YAML mapping`);
   return document;
