@@ -98,7 +98,9 @@ and times: `timeLabel` for "8:00 PM" or "20:00", `dayLabel` for "Today",
 sorting lists alphabetically, and `foldText`, for comparing and searching
 without minding case, accents or extra spaces: the accents of Latin, Greek
 and Cyrillic letters, while the vowel signs of scripts like Hindi or Thai,
-which are letters, still count),
+which are letters, still count; `cutToLength`, for cutting text to a box's
+limit between characters as people see them, and `withinLength`, for checking
+saved or synced text against a limit the same way in every browser),
 `@shkriuss/ui/text-limit` (`watchTextLimit`, for a text box with a
 `maxlength`, and `watchTextLimits`, for every one in a form: browsers keep
 only the start of a paste that's too long, and ignore typing past the

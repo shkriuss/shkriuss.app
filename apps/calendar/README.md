@@ -124,7 +124,13 @@ its notification server, docs/adr/0009).
   never refused, on saving or when it's loaded or synced (audit 5 F1-5). A
   device still on the version before this one can't read a text that only
   this counting lets in, and shows a sync problem until it's updated
-  (reload the page there).
+  (reload the page there). Browsers don't all count the same way, though:
+  some letters, like Hindi "क्ष", are one character in newer browsers and
+  two in older ones. So events that are loaded or synced are checked only
+  against what any browser's box can hold (`withinLength`: at most 16 of
+  JavaScript's characters for each one), and an event saved on a newer
+  device always loads on an older one; there, the editor may ask for a
+  shorter title before it saves a change to it (audit 6 F1-4).
 - **Import limits.** Calendar can't show everything a .ics file can say yet:
   repeats like "every 2 weeks" or "Mondays and Wednesdays", and changes to
   single dates of a repeating event, are listed as not imported. Times with a
