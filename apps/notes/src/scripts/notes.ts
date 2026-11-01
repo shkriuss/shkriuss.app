@@ -204,11 +204,14 @@ export function mountNotes(root: Document): void {
 
   function showEdited(note: Note): void {
     edited.textContent = isEmpty(note) ? '' : `Edited ${editedLabel(note.updated, Date.now())}`;
-    document.title = `${titleText(note)} · ${pageTitle}`;
   }
 
   function openNote(note: Note): void {
     current = note.id;
+    // Says what the page is for, never what the note says: browsers keep
+    // page titles in their history (and sync it), where "Delete all data"
+    // can't reach (audit 6 Z-2).
+    document.title = `Note · ${pageTitle}`;
     unsaved = false;
     fromList = listShown;
     titleField.value = note.title;

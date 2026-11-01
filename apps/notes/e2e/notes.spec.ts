@@ -42,7 +42,9 @@ test('writes a note, lists its title, and keeps it after a reload', async ({ pag
   await expect(bodyBox(page)).toBeFocused();
   await bodyBox(page).fill('Milk\nEggs and bread');
   await expect(page.getByText(/^Edited /)).toBeVisible();
-  await expect(page).toHaveTitle('Shopping list · Notes');
+  // The page's title says a note is open, not what it says: browsers keep
+  // titles in their history, where "Delete all data" can't reach (audit 6 Z-2).
+  await expect(page).toHaveTitle('Note · Notes');
 
   await page.getByRole('button', { name: 'All notes' }).click();
   const shopping = card(page, 'Shopping list');

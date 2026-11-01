@@ -11,7 +11,9 @@ Write things down. Lives at <https://notes.shkriuss.app>.
   one note;
   `#note=<id>` in the address opens a note, so the back button works; the
   id is encoded there, so a note from a backup opens whatever its id
-  (audit 6 F3-1).
+  (audit 6 F3-1). With a note open, the page's title is "Note · Notes",
+  never the note's own title: browsers keep page titles in their history
+  (and sync it), where "Delete all data" can't reach (audit 6 Z-2).
   Typing is saved a moment after the last key press, and straight away when
   leaving the note or the page. A new note (made since the page opened)
   left empty goes when it's left, closing the page too (one a closed page
