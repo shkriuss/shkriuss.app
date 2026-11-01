@@ -44,10 +44,13 @@ and `pnpm-workspace.yaml`: a `<<` merge key or a key written as a list
 (either hid every package from the check while pnpm installed them), and
 anchors (`&name`), aliases (`*name`), tags (`!name`) and `%` directives
 (audit 6 H-2). It also fails when a pull
-request adds an `.npmrc`, or changes where pnpm downloads from (a registry,
-proxy, certificate or `fetch…` setting in `pnpm-workspace.yaml`): nothing
-here needs that, so ask Claude; the check has to allow it first, in a pull
-request of its own. The copy of the check that runs is `main`'s, in a
+request adds an `.npmrc`, changes where pnpm downloads from (a registry,
+proxy, certificate or `fetch…` setting in `pnpm-workspace.yaml`), or adds
+code that pnpm runs itself: a config dependency (`configDependencies`, in
+`pnpm-workspace.yaml` or in `package.json`'s `pnpm` field, which pnpm
+installs whenever it starts, with no 7-day wait), a `pnpmfile` setting or a
+`.pnpmfile.cjs` (audit 6 H-3). Nothing here needs those, so ask Claude; the
+check has to allow it first, in a pull request of its own. The copy of the check that runs is `main`'s, in a
 folder outside the checkout with `main`'s packages installed beside it (its
 YAML reader among them), and it runs before any pnpm command in the pull
 request's checkout: the **Dependency audit** job never installs the pull

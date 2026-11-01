@@ -132,7 +132,9 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
   than pnpm's own is checked all the same, and it refuses a pull request
   that adds an `.npmrc` or changes where pnpm downloads from in
   `pnpm-workspace.yaml` (audit 5 H-1). YAML that pnpm reads differently
-  from the check (a `<<` merge key, for one) is refused too (audit 6 H-2).
+  from the check (a `<<` merge key, for one) is refused too (audit 6 H-2),
+  and so is code pnpm would run itself: a config dependency, which pnpm
+  installs with no 7-day wait, or a pnpmfile (audit 6 H-3).
   CI runs `main`'s copy of that check,
   with `main`'s packages, before anything from the pull request is
   installed or run, so a pull request can't change the check or what reads

@@ -4,7 +4,9 @@
  * or a hash for a registry version that isn't the registry's own (see
  * scripts/lib/lockfile-age.ts), and when the pull request changes where
  * pnpm downloads from: an .npmrc file, or a registry, proxy, certificate or
- * fetch setting in pnpm-workspace.yaml (audit 5 H-1). Run by CI on pull
+ * fetch setting in pnpm-workspace.yaml (audit 5 H-1); or code pnpm runs
+ * itself: a config dependency (in pnpm-workspace.yaml or package.json), a
+ * pnpmfile setting or a .pnpmfile.cjs (audit 6 H-3). Run by CI on pull
  * requests, in the pull request's checkout with the base branch fetched:
  *
  *   node scripts/lockfile-age.ts origin/main
@@ -17,9 +19,11 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import {
   addedPackages,
+  changedManifestSettings,
   changedPackages,
   changedSourceSettings,
   npmrcFiles,
+  pnpmfiles,
   registryIntegrity,
   releaseAgeRules,
   tooNew,
@@ -56,24 +60,33 @@ const before = git('show', `${base}:pnpm-lock.yaml`);
 const now = readFileSync('pnpm-lock.yaml', 'utf8');
 const workspaceBefore = git('show', `${base}:pnpm-workspace.yaml`);
 const workspaceNow = readFileSync('pnpm-workspace.yaml', 'utf8');
+const manifestBefore = git('show', `${base}:package.json`);
+const manifestNow = readFileSync('package.json', 'utf8');
 
 // Where pnpm downloads from isn't expected to change: an .npmrc, or a
 // registry, proxy, certificate or fetch setting, could point it somewhere
-// else (audit 5 H-1).
-const npmrc = npmrcFiles(
-  git('diff', '--name-only', '--no-renames', '--diff-filter=d', base, '--').split('\n'),
-);
+// else (audit 5 H-1). Nor is code that pnpm runs itself: a config
+// dependency skips every check here, and it and a .pnpmfile.cjs run with
+// every pnpm command (audit 6 H-3).
+const changedFiles = git('diff', '--name-only', '--no-renames', '--diff-filter=d', base, '--')
+  .split('\n')
+  .filter(Boolean);
+const files = [...npmrcFiles(changedFiles), ...pnpmfiles(changedFiles)];
 const sources = readable('pnpm-workspace.yaml', () =>
   changedSourceSettings(workspaceBefore, workspaceNow),
 );
-if (npmrc.length > 0 || sources.length > 0) {
+const manifest = readable('package.json', () =>
+  changedManifestSettings(manifestBefore, manifestNow),
+);
+if (files.length > 0 || sources.length > 0 || manifest.length > 0) {
   const what = [
-    ...npmrc.map((path) => `the file ${path}`),
+    ...files.map((path) => `the file ${path}`),
     ...sources.map((setting) => `${setting} in pnpm-workspace.yaml`),
+    ...manifest.map((setting) => `${setting} in package.json`),
   ].join(', ');
   fail(
     'Where packages come from',
-    `This pull request changes where pnpm downloads packages from, or how (${what}). Nothing here needs that, so this check refuses it. If it's really needed, ask Claude: this check (scripts/lockfile-age.ts, run as ${base} has it) has to allow it first, in a pull request of its own.`,
+    `This pull request changes where pnpm downloads packages from or how, or code that pnpm runs itself (${what}). Nothing here needs that, so this check refuses it. If it's really needed, ask Claude: this check (scripts/lockfile-age.ts, run as ${base} has it) has to allow it first, in a pull request of its own.`,
   );
 }
 

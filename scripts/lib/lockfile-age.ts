@@ -224,6 +224,9 @@ export function tooNew(
     .map(([name, version]) => `${name}@${version}`);
 }
 
+/** A setting's name as pnpm matches it, "strict-ssl" (.npmrc) and "strictSsl" alike. */
+const settingName = (setting: string) => setting.toLowerCase().replaceAll('-', '');
+
 /**
  * Whether a pnpm setting says where packages come from, or how they're
  * fetched: the registry (for a scope too, "@types:registry"), a line about
@@ -231,7 +234,7 @@ export function tooNew(
  * fetch… settings. These aren't expected to change (audit 5 H-1).
  */
 export function saysWhereFrom(setting: string): boolean {
-  const name = setting.toLowerCase().replaceAll('-', '');
+  const name = settingName(setting);
   return (
     name.includes('registry') ||
     name.startsWith('fetch') ||
@@ -241,14 +244,28 @@ export function saysWhereFrom(setting: string): boolean {
 }
 
 /**
- * The settings in pnpm-workspace.yaml that `head` adds, changes or removes
- * among those that say where packages come from (audit 5 H-1).
+ * Whether a pnpm setting names code that pnpm itself loads and runs: config
+ * dependencies, which pnpm installs whenever it starts (for `pnpm audit`
+ * too), before anything else, with no 7-day wait, and which aren't in the
+ * lockfile's packages, so these checks never saw them; pnpm then runs the
+ * hooks file (pnpmfile.cjs) of each one named like a plugin with every
+ * command. Or a hooks file of its own (pnpmfile, globalPnpmfile). Nothing
+ * here uses any of them, so they aren't expected to change (audit 6 H-3).
  */
-export function changedSourceSettings(base: string, head: string): string[] {
-  const settingsOf = (text: string) =>
+export function runsCode(setting: string): boolean {
+  return ['configdependencies', 'pnpmfile', 'globalpnpmfile'].includes(settingName(setting));
+}
+
+/** The settings `head` adds, changes or removes among those `guarded` picks. */
+function changedSettings(
+  base: Mapping,
+  head: Mapping,
+  guarded: (setting: string) => boolean,
+): string[] {
+  const settingsOf = (settings: Mapping) =>
     new Map(
-      Object.entries(mappingOf(text, 'pnpm-workspace.yaml'))
-        .filter(([key]) => saysWhereFrom(key))
+      Object.entries(settings)
+        .filter(([key]) => guarded(key))
         .map(([key, value]) => [key, JSON.stringify(value)]),
     );
   const before = settingsOf(base);
@@ -259,8 +276,50 @@ export function changedSourceSettings(base: string, head: string): string[] {
 }
 
 /**
+ * The settings in pnpm-workspace.yaml that `head` adds, changes or removes
+ * among those that say where packages come from (audit 5 H-1), or that name
+ * code pnpm runs (audit 6 H-3).
+ */
+export function changedSourceSettings(base: string, head: string): string[] {
+  return changedSettings(
+    mappingOf(base, 'pnpm-workspace.yaml'),
+    mappingOf(head, 'pnpm-workspace.yaml'),
+    (setting) => saysWhereFrom(setting) || runsCode(setting),
+  );
+}
+
+/** The "pnpm" field of a package.json. */
+function pnpmFieldOf(packageJson: string): Mapping {
+  const manifest: unknown = JSON.parse(packageJson);
+  if (!isMapping(manifest)) throw new Error("package.json isn't a JSON object");
+  const field = manifest['pnpm'] ?? {};
+  if (!isMapping(field)) throw new Error('"pnpm" in package.json isn\'t an object');
+  return field;
+}
+
+/**
+ * The settings in the root package.json's "pnpm" field that `head` adds,
+ * changes or removes among those that name code pnpm runs, as
+ * "pnpm.<setting>": pnpm reads configDependencies from there too
+ * (audit 6 H-3).
+ */
+export function changedManifestSettings(base: string, head: string): string[] {
+  return changedSettings(pnpmFieldOf(base), pnpmFieldOf(head), runsCode).map(
+    (setting) => `pnpm.${setting}`,
+  );
+}
+
+/**
  * The .npmrc files among these paths, in any folder: pnpm reads each of
  * them, and one can name another registry (audit 5 H-1).
  */
 export const npmrcFiles = (paths: readonly string[]): string[] =>
   paths.filter((path) => path === '.npmrc' || path.endsWith('/.npmrc'));
+
+/**
+ * The pnpm hooks files (.pnpmfile.cjs) among these paths, in any folder:
+ * pnpm runs the one at the top of the repository with every command, even
+ * one that then refuses to install (audit 6 H-3).
+ */
+export const pnpmfiles = (paths: readonly string[]): string[] =>
+  paths.filter((path) => path === '.pnpmfile.cjs' || path.endsWith('/.pnpmfile.cjs'));

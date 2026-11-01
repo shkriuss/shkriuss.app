@@ -465,7 +465,9 @@ This area is split into three tasks:
   nothing from the pull request is installed there (audit 6 H-1). Look for
   YAML that pnpm (js-yaml) and the check (the `yaml` package) read
   differently: it refuses `<<` merge keys, keys written as lists, anchors,
-  aliases, tags and directives (audit 6 H-2).
+  aliases, tags and directives (audit 6 H-2). And for anything else pnpm
+  installs or runs that isn't in the lockfile's `packages:`, like config
+  dependencies and pnpmfiles, which it refuses (audit 6 H-3).
 - For every dependency:
   - is it needed and maintained?
   - are install scripts allowed only where listed?

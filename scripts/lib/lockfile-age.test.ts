@@ -6,12 +6,15 @@ import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   addedPackages,
+  changedManifestSettings,
   changedPackages,
   changedSourceSettings,
   lockedPackages,
   npmrcFiles,
+  pnpmfiles,
   registryIntegrity,
   releaseAgeRules,
+  runsCode,
   saysWhereFrom,
   tooNew,
   unregisteredPackages,
@@ -349,6 +352,48 @@ snapshots:
     expect(
       npmrcFiles(['.npmrc', 'apps/tally/.npmrc', 'docs/npmrc.md', 'x/.npmrc.bak', '']),
     ).toEqual(['.npmrc', 'apps/tally/.npmrc']);
+  });
+
+  it('notices config dependencies and pnpmfiles, code pnpm runs with no check (audit 6 H-3)', () => {
+    // pnpm 10.34.7 installed a 4-day-old version this way, whatever
+    // minimumReleaseAge said, and installs them for any command, pnpm audit too.
+    const base = 'packages:\n  - apps/*\nminimumReleaseAge: 10080\n';
+    for (const [line, setting] of [
+      ['configDependencies:\n  pnpm-plugin-x: "1.0.0+sha512-AAAA"', 'configDependencies'],
+      ["config-dependencies:\n  '@pnpm/plugin-x': 1.0.0+sha512-AAAA", 'config-dependencies'],
+      ['pnpmfile: tools/hooks.cjs', 'pnpmfile'],
+      ['globalPnpmfile: /tmp/hooks.cjs', 'globalPnpmfile'],
+    ]) {
+      expect(changedSourceSettings(base, `${base}${line}\n`), line).toEqual([setting]);
+      expect(runsCode(setting ?? ''), setting).toBe(true);
+    }
+    for (const setting of ['catalog', 'overrides', 'onlyBuiltDependencies', 'packages']) {
+      expect(runsCode(setting), setting).toBe(false);
+    }
+
+    // pnpm reads configDependencies from the root package.json's "pnpm" field too.
+    const manifest = '{"name": "x", "pnpm": {"overrides": {"a": "1.0.0"}}}';
+    const withConfigDependency =
+      '{"name": "x", "pnpm": {"overrides": {"a": "1.0.0"}, "configDependencies": {"pnpm-plugin-x": "1.0.0+sha512-AAAA"}}}';
+    expect(changedManifestSettings(manifest, withConfigDependency)).toEqual([
+      'pnpm.configDependencies',
+    ]);
+    expect(changedManifestSettings(withConfigDependency, manifest)).toEqual([
+      'pnpm.configDependencies',
+    ]);
+    expect(changedManifestSettings('{"name": "x"}', manifest)).toEqual([]);
+    expect(() => changedManifestSettings(manifest, '{"pnpm": []}')).toThrow(/isn't an object/);
+    const own = readFileSync('package.json', 'utf8');
+    expect(changedManifestSettings(own, own)).toEqual([]);
+
+    expect(
+      pnpmfiles([
+        '.pnpmfile.cjs',
+        'apps/tally/.pnpmfile.cjs',
+        'docs/pnpmfile.md',
+        '.pnpmfile.cjs.bak',
+      ]),
+    ).toEqual(['.pnpmfile.cjs', 'apps/tally/.pnpmfile.cjs']);
   });
 
   it('reads YAML with the yaml package beside it, never the working directory’s (audit 6 H-1)', () => {
