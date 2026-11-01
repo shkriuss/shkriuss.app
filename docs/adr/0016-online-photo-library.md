@@ -149,6 +149,14 @@ every device. That's far beyond what sync can hold:
   same caller's tries in different hours: audit 3 D-8.) Someone with many
   addresses gets more tries, so what really stops guessing is the code
   itself: five or more random words (about 64 bits), far too many to guess.
+  People who share one address share its 20 tries: phones on a mobile
+  network without IPv6 often share an IPv4 address with many others. A
+  stranger there who gives 20 wrong codes makes the right one wait until
+  the hour is over, for anyone at that address (Photos says to try again
+  in an hour). That's once per library, for an hour at most, so it stays
+  (audit 6): letting the right code through at the limit would let a
+  guesser's right guess through too, since anyone can make up a new
+  library for every guess.
 - **Limits per library:** 400,000 photos, and 95 MB per photo (Cloudflare
   takes at most 100 MB in one request).
 - **A library that was never unlocked costs nothing in R2.** Thumbnails and
