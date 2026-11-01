@@ -573,9 +573,10 @@ export function createSync(options: {
     const { token, key } = await syncKeys(fromBase64Url(secret));
     const now = Date.now();
 
-    // 1. This device.
+    // 1. This device. What was edited here counts as noted only once what this
+    // device knew is saved with it (step 5 or 6): if the app is put away
+    // before that, the edit is noted then (audit 6 S22).
     const { before, local, changed: localChanged } = observeAll(state, now);
-    edited = false;
     knownSaved = false;
     const upgraded = state.known !== stored.known;
     try {
@@ -774,6 +775,8 @@ export function createSync(options: {
               canonical(merged[synced.store.key]) === canonical(remote.stores[synced.store.key]),
           );
     const knowns = knownsOf(merged);
+    /** What this device knew was saved as just before the upload (none without one). */
+    let pending: Record<string, Known> | null = null;
     if (!same) {
       // Remember the merge first: if the upload fails, the next round uploads it
       // as it is, instead of mistaking it for new edits made on this device.
@@ -789,17 +792,20 @@ export function createSync(options: {
       // stay in what this device knew: if the upload fails, or another
       // device wrote first, the next round still knows they were deleted
       // here (audit 6 S5).
-      const pending: Record<string, Known> = {};
+      const unsent: Record<string, Known> = {};
       for (const [storeKey, snapshot] of Object.entries(unpruned)) {
-        pending[storeKey] = knownFrom(pruneUnsent(snapshot, seenOnline?.stores[storeKey], now));
+        unsent[storeKey] = knownFrom(pruneUnsent(snapshot, seenOnline?.stores[storeKey], now));
       }
-      if (!updateState(secret, { known: pending, dirty: true, base: seenOnline })) {
+      if (!updateState(secret, { known: unsent, dirty: true, base: seenOnline })) {
         throw stateNotSaved();
       }
-      // What this device knew says the merge now: nothing to undo, and
-      // nothing to note if the upload fails (round()).
+      pending = unsent;
+      // What this device knew says the merge now, with every edit made here
+      // until step 4 checked: nothing to undo, and nothing to note if the
+      // upload fails (round()).
       changed.length = 0;
       knownSaved = true;
+      edited = false;
       const data = await sealStores(key, options.app, merged, written + 1);
       if (data.length > MAX_SEALED_CHARS) throw new SyncError('too-big');
       const base = remote.kind === 'none' ? null : (online?.version ?? null);
@@ -817,11 +823,25 @@ export function createSync(options: {
       online = { ...saved, written: written + 1 };
     }
 
-    // 6. Remember. The copy online is now the merge.
+    // 6. Remember. The copy online is now the merge. An edit made while the
+    // upload was on its way, and noted as the app was put away (here or in
+    // another tab: rememberEdits), keeps that note and its time: the next
+    // round uploads it, maybe only when the app is opened again, days later.
+    // Before, this step saved over the note, and that round dated the edit
+    // (audit 6 S22).
+    const noted = pending !== null && canonical(loadState()?.known) !== canonical(pending);
     const base = online ? { epoch: online.epoch, stores: knowns } : null;
-    const saved = { remote: online, known: knowns, dirty: false, base, last: now, ...answered() };
+    const saved = {
+      remote: online,
+      ...(noted ? {} : { known: knowns, dirty: false }),
+      base,
+      last: now,
+      ...answered(),
+    };
     if (!updateState(secret, saved)) throw stateNotSaved();
     knownSaved = true;
+    // Without an upload, nothing could be edited here since step 4 checked.
+    if (pending === null) edited = false;
 
     // 7. The old copies are in the new one now (and their files, re-sealed with
     // the new key, and the app's linked data): delete them, so devices still
@@ -1161,8 +1181,9 @@ export function createSync(options: {
 
   /**
    * Sync is on, but no round has noted an edit made here yet (none reached
-   * the copy, or the page is being put away before the next one): it's noted
-   * now, with its time, as `dirty` for the next round to upload. An edit
+   * the copy, or the page is being put away before the next one, or while
+   * one waits for the server): it's noted now, with its time, as `dirty`
+   * for the next round to upload. An edit
    * made on day 1 was otherwise dated by the first round that reached the
    * copy, day 21 say, and won over a newer edit made elsewhere on day 10
    * (audit 5 E-1). Stopped meanwhile, or data this version can't read: the
@@ -1191,7 +1212,8 @@ export function createSync(options: {
 
   // Keep up with other devices while the app is open. Put away (the phone
   // locked, another app): an edit no round has noted yet is noted now, with
-  // its time, as the page may not run again before it's closed (audit 5 E-1).
+  // its time, as the page may not run again before it's closed (audit 5 E-1),
+  // also while a sync waits for the server (audit 6 S22).
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') schedule(0);
     else if (edited) rememberEdits();

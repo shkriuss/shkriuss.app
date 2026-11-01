@@ -1400,6 +1400,121 @@ describe('an edit made with no connection (audit 5 E-1)', () => {
     vi.useRealTimers();
   });
 
+  describe('put away while a sync waits for the server (audit 6 S22)', () => {
+    /** The page's visibilitychange listeners, and putting it away or back. */
+    function page() {
+      const listeners: (() => void)[] = [];
+      const doc = {
+        visibilityState: 'visible',
+        addEventListener: (type: string, listener: () => void) => {
+          if (type === 'visibilitychange') listeners.push(listener);
+        },
+      };
+      vi.stubGlobal('document', doc);
+      return {
+        hide(device: Device) {
+          doc.visibilityState = 'hidden';
+          device.use();
+          for (const listener of listeners) listener();
+        },
+        show() {
+          doc.visibilityState = 'visible';
+        },
+      };
+    }
+
+    /** From now on, requests (or only uploads) wait; `reached` resolves when one does. */
+    function holdRequests(onlyUploads: boolean) {
+      const realFetch = globalThis.fetch;
+      let reached: () => void = () => undefined;
+      let release: () => void = () => undefined;
+      const arrived = new Promise<void>((resolve) => {
+        reached = resolve;
+      });
+      const released = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      vi.stubGlobal('fetch', async (input: string, init?: RequestInit) => {
+        if (!onlyUploads || init?.method === 'PUT') {
+          reached();
+          await released;
+        }
+        return realFetch(input, init);
+      });
+      return { arrived, release, restore: () => vi.stubGlobal('fetch', realFetch) };
+    }
+
+    it('an edit made during the upload keeps its time, so a newer edit elsewhere wins', async () => {
+      const { hide, show } = page();
+      const secret = randomBytes(32);
+      const phone = new Device(secret);
+      const tablet = new Device(secret);
+      vi.setSystemTime(T0);
+      phone.counters = [counter('milk', 1)];
+      await phone.syncNow();
+      await tablet.syncNow();
+
+      // Day 1: an edit, and its upload is slow; meanwhile another edit, and
+      // the tablet is locked. Then the upload's answer comes.
+      vi.setSystemTime(T0 + DAY);
+      tablet.counters = [counter('milk', 2)];
+      const upload = holdRequests(true);
+      const sync = tablet.syncNow();
+      await upload.arrived;
+      vi.setSystemTime(T0 + DAY + 2000);
+      tablet.counters = [counter('milk', 3)];
+      hide(tablet);
+      upload.release();
+      await sync;
+      upload.restore();
+
+      vi.setSystemTime(T0 + 3 * DAY);
+      phone.counters = [counter('milk', 7)];
+      expect((await phone.syncNow()).problem).toBeNull();
+      vi.setSystemTime(T0 + 5 * DAY);
+      show();
+      expect((await tablet.syncNow()).problem).toBeNull();
+      await phone.syncNow();
+      expect(tablet.counters).toEqual([counter('milk', 7)]);
+      expect(phone.counters).toEqual([counter('milk', 7)]);
+    });
+
+    it('an edit made just before keeps its time, even if the app is closed before the answer', async () => {
+      const { hide, show } = page();
+      const secret = randomBytes(32);
+      const phone = new Device(secret);
+      const tablet = new Device(secret);
+      vi.setSystemTime(T0);
+      phone.counters = [counter('milk', 1)];
+      await phone.syncNow();
+      await tablet.syncNow();
+
+      // Day 1: an edit; its sync waits for a server that doesn't answer, and
+      // the tablet is locked. The phone closes the app in the background
+      // (the sync never finishes, and its tab's lock goes with it).
+      vi.setSystemTime(T0 + DAY);
+      tablet.counters = [counter('milk', 2)];
+      const requests = holdRequests(false);
+      void tablet.syncNow();
+      await requests.arrived;
+      hide(tablet);
+      requests.restore();
+      vi.stubGlobal('navigator', deviceLocks());
+
+      vi.setSystemTime(T0 + 10 * DAY);
+      phone.counters = [counter('milk', 7)];
+      expect((await phone.syncNow()).problem).toBeNull();
+      // Day 21: the app is opened again on the tablet.
+      vi.setSystemTime(T0 + 21 * DAY);
+      show();
+      const reopened = tablet.reopen(1);
+      expect((await reopened.syncNow()).problem).toBeNull();
+      await phone.syncNow();
+      expect(reopened.counters).toEqual([counter('milk', 7)]);
+      expect(phone.counters).toEqual([counter('milk', 7)]);
+    });
+  });
+
   it('keeps both versions, in apps that ask for it, as before', async () => {
     const secret = randomBytes(32);
     const phone = new Device(secret, 1, true);

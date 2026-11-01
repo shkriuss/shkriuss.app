@@ -19,9 +19,10 @@
  * fingerprint of each item from the last sync, and an item whose
  * fingerprint changed counts as edited when the device next looks: at the
  * sync a moment after saving, or, if that sync can't reach the copy (no
- * connection) or the app is put away first, then, with that time noted
- * (client.ts, rememberEdits), so the edit doesn't get the time of a sync
- * weeks later and win over newer edits made elsewhere (audit 5 E-1). While
+ * connection) or the app is put away before it's done, then, with that time
+ * noted (client.ts, rememberEdits), so the edit doesn't get the time of a
+ * sync weeks later and win over newer edits made elsewhere (audit 5 E-1,
+ * audit 6 S22). While
  * sync is off, each save notes it the same way (rememberWhileOff).
  */
 

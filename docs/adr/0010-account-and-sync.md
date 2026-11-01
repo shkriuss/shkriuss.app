@@ -30,7 +30,9 @@ and it's cancelled when it's hidden as expired (A-1); the hub asks the browser
 to keep the account, as the apps keep their data (E-6); a device link costs 4
 row writes, not 2 or 3, as deleting it counts too (see "Free quota"); a
 deletion made with sync off or no connection is kept until it's online, even
-after 180 days (S5).
+after 180 days (S5); a deletion made with sync off or no connection is kept
+until it's online, even after 180 days (S5); an edit keeps its time also when
+the app is put away while a sync waits for the server (S22).
 
 ## Context
 
@@ -326,10 +328,13 @@ in with `sync: true` in `apps.json`.
     always gets a time after the version it was made from, so a device
     whose clock is behind doesn't lose its own edits. The time is that of
     the sync a moment after the change, or, when that sync can't reach the
-    copy (no connection) or the app is put away first, the time it noted
-    the change then: before, a change made on day 1 with no connection
-    got the time of the first sync that reached the copy, day 21 say, and
-    beat a newer change made elsewhere on day 10 (audit 5 E-1).
+    copy (no connection) or the app is put away before it's done, the time
+    it noted the change then: before, a change made on day 1 with no
+    connection got the time of the first sync that reached the copy, day 21
+    say, and beat a newer change made elsewhere on day 10 (audit 5 E-1).
+    That includes a change made while a sync waits for the server, and one
+    noted while an upload is on its way, which that upload's last step
+    used to save over (audit 6 S22).
   - Deleting leaves a marker with the time, so deletions sync. Markers are
     dropped after 180 days. A device away longer still deletes an item it
     saw in the copy that the same copy no longer has, unless it changed the
