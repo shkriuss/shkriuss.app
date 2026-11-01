@@ -118,6 +118,20 @@ describe('cutToLength (audit 4 F3-4)', () => {
     expect(withinLength(`a${'́'.repeat(10_000)}`, 200)).toBe(false);
   });
 
+  it('says what a box may have let in, in any browser (audit 6 F1-4)', () => {
+    // Whatever cutToLength keeps, in any browser, withinLength takes.
+    const texts = [
+      '👨‍👩‍👧‍👦'.repeat(200),
+      '🏴󠁧󠁢󠁳󠁣󠁴󠁿'.repeat(200),
+      'क्ष'.repeat(200),
+      `${'a'}${'́'.repeat(10_000)}`,
+    ];
+    for (const text of texts) expect(withinLength(cutToLength(text, 200), 200)).toBe(true);
+    // Counted as JavaScript does, 16 for each character at most.
+    expect(withinLength('x'.repeat(3200), 200)).toBe(true);
+    expect(withinLength('x'.repeat(3201), 200)).toBe(false);
+  });
+
   it('still loads, and keeps emoji whole, where the browser can’t tell characters apart', async () => {
     // Firefox before 125 has no Intl.Segmenter. Most apps load this file only
     // to compare text: it mustn't stop their page there.

@@ -220,6 +220,16 @@ describe('changing', () => {
       ...reminder('z', '2026-10-21', '18:00'),
       text: 'Call Mum (second version)',
     });
+    // A long text is cut between whole characters: cut inside a family emoji,
+    // it ended in a smaller family and a lone joiner (audit 6 F1-3).
+    const family = '👨‍👩‍👧‍👦';
+    const copy = secondVersion(
+      { ...reminder('a', '2026-10-21', '18:00'), text: `Call ${family.repeat(10)}` },
+      'z',
+    );
+    expect(copy.text).toBe(`Call ${family.repeat(8)} (second version)`);
+    expect(copy.text.length).toBeLessThanOrEqual(MAX_TEXT_LENGTH);
+    expect(isRemindersState({ reminders: [copy] })).toBe(true);
   });
 
   it('suggests the next full hour', () => {

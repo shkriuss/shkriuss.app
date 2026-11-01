@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { addEvent } from './editing.ts';
 import {
   draftProblems,
@@ -131,6 +131,37 @@ describe('isCalendarState', () => {
     expect(isCalendarState({ events: [draft()] })).toBe(false); // no id
     expect(isCalendarState(null)).toBe(false);
   });
+
+  it('reads saved and synced text however this browser counts characters (audit 6 F1-4)', async () => {
+    // Browsers don't all count characters as people see them the same way:
+    // Hindi "क्ष" is one in newer ones and more in older ones. A title one
+    // device let in was refused by another's check on saved data, and that
+    // device couldn't sync any more. Here, a browser that counts each code
+    // point (one without Intl.Segmenter): "क्ष" is three.
+    const title = 'क्ष'.repeat(MAX_TITLE_LENGTH);
+    const notes = 'क्ष'.repeat(MAX_NOTES_LENGTH);
+    expect(isCalendarState({ events: [{ id: 'x', ...draft({ title, notes }) }] })).toBe(true);
+    vi.stubGlobal(
+      'Intl',
+      Object.assign(Object.create(Intl) as typeof Intl, { Segmenter: undefined }),
+    );
+    vi.resetModules();
+    try {
+      const older = await import('./events.ts');
+      expect(older.isCalendarState({ events: [{ id: 'x', ...draft({ title, notes }) }] })).toBe(
+        true,
+      );
+      // Its editor still asks for a shorter title before saving a change.
+      expect(older.draftProblems(draft({ title })).title).toMatch(/100/);
+    } finally {
+      vi.unstubAllGlobals();
+      vi.resetModules();
+    }
+    // Text far longer than any box lets in is still refused.
+    const huge = { id: 'x', ...draft({ notes: 'x'.repeat(MAX_NOTES_LENGTH * 16 + 1) }) };
+    expect(isCalendarState({ events: [huge] })).toBe(false);
+    expect(isCalendarState({ events: [{ id: 'x', ...draft({ title: '  ' }) }] })).toBe(false);
+  });
 });
 
 describe('secondVersion', () => {
@@ -143,6 +174,15 @@ describe('secondVersion', () => {
     expect(secondVersion({ ...event, title: 'Dentist' }, 'c').title).toBe(
       'Dentist (second version)',
     );
+  });
+
+  it('cuts a long title between whole characters, never inside a flag (audit 6 F1-3)', () => {
+    const [event] = withEvents(draft({ title: '🇬🇪'.repeat(30) })).events;
+    if (!event) throw new Error('Expected an event');
+    const copy = secondVersion(event, 'copy');
+    // 83 of the characters JavaScript counts are left for the title: 20 flags.
+    expect(copy.title).toBe(`${'🇬🇪'.repeat(20)} (second version)`);
+    expect(isCalendarState({ events: [event, copy] })).toBe(true);
   });
 });
 

@@ -165,6 +165,18 @@ test('cancelling changes nothing', async ({ page }) => {
   await expect(chips(page)).toHaveCount(STARTING.length);
 });
 
+test('cancelling after a tap that focused nothing goes back to the category', async ({ page }) => {
+  // Safari doesn't focus a button that's tapped or clicked: focus went to
+  // "Add category" instead (audit 6 G-1). element.click() doesn't focus either.
+  await chip(page, 'Home').evaluate((button: HTMLElement) => button.click());
+  await expect(categoryForm(page)).toBeVisible();
+  await categoryForm(page)
+    .getByRole('button', { name: 'Cancel' })
+    .evaluate((button: HTMLElement) => button.click());
+  await expect(categoryForm(page)).toBeHidden();
+  await expect(chip(page, 'Home')).toBeFocused();
+});
+
 test('works with every starting category deleted', async ({ page }) => {
   const removed = STARTING.map((id) => ({ id, name: id, removed: true }));
   await seed(page, [{ name: 'Olive oil', category: 'food' }], removed);

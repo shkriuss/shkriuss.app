@@ -169,13 +169,15 @@ describe('the form', () => {
     expect(stepsText(trip)).toBe('1 of 2 steps');
     expect(stepsText({ ...trip, steps: trip.steps.slice(0, 1) })).toBe('1 of 1 step');
     expect(stepsText(task())).toBe('');
-    // Up to MAX_STEPS.
+    // The form adds up to MAX_STEPS (step-edits.ts). A task with more, from
+    // steps added on two devices at once, keeps them all when it's saved:
+    // the ones past the limit were dropped without a word (audit 6 F1-5).
     const many = Array.from({ length: MAX_STEPS + 5 }, (_, index) => ({
       id: `s${index}`,
       title: `Step ${index}`,
       done: false,
     }));
-    expect(taskFromDraft(draft({ steps: many }), 'm', 1).steps).toHaveLength(MAX_STEPS);
+    expect(taskFromDraft(draft({ steps: many }), 'm', 1).steps).toEqual(many);
   });
 
   it('cuts a long title, step or note by whole characters, never half an emoji', () => {
@@ -308,11 +310,27 @@ describe('changes', () => {
         steps: [{ id: 'fern', title: 'The fern', done: false }],
         updated: 6000,
       });
-      // Saving with nothing changed changes nothing but the time.
-      expect(editedTask(opened, opened, plants.id, 6000, current)).toEqual({
-        ...current,
-        updated: 6000,
-      });
+      // Saving with nothing changed keeps the task as it is now.
+      expect(editedTask(opened, opened, plants.id, 6000, current)).toEqual(current);
+    });
+
+    it('is no new edit when nothing changes, so it can’t win over one elsewhere (audit 6 F1-1)', () => {
+      // Save with nothing changed made the task "changed now": with sync, it
+      // then won over a change another device had made but not synced yet.
+      expect(editedTask(opened, opened, plants.id, 6000, plants)).toBe(plants);
+      expect(editedTask(opened, opened, plants.id, 6000, current)).toBe(current);
+      // A step ticked here that was ticked there already: nothing new either.
+      const fern = { ...opened, steps: [{ id: 'fern', title: 'The fern', done: false }] };
+      const unticked = { ...plants, steps: [{ id: 'fern', title: 'The fern', done: false }] };
+      expect(editedTask(opened, fern, plants.id, 6000, unticked)).toBe(unticked);
+      // Saved by version 1, its fields in another order: the same.
+      const { steps: _, ...old } = plants;
+      const reordered = { steps: plants.steps, ...old };
+      expect(editedTask(opened, opened, plants.id, 6000, reordered)).toBe(reordered);
+      // A change is a new edit.
+      expect(
+        editedTask(opened, { ...opened, notes: 'Not too much' }, plants.id, 6000, plants),
+      ).toMatchObject({ notes: 'Not too much', updated: 6000 });
     });
 
     it('lets the change here win where both changed the same thing', () => {
@@ -404,6 +422,32 @@ describe('changes', () => {
         // Removed here even though it was ticked there.
         const ticked = tickStep(stateOf(trip), trip.id, 'tickets', true, 5000).tasks[0];
         expect(stepsOf(edited, ticked).map((step) => step.id)).toEqual(['hotel', 'pack', 'visa']);
+      });
+
+      it('keeps a step added elsewhere when the form added the last one there was room for', () => {
+        // 49 steps: "Pack" added here (50), "Book a taxi" on the tablet (50
+        // there). The merged 51 were cut to 50, dropping the tablet's on
+        // every device without a word (audit 6 F1-5).
+        const move = task({
+          title: 'Move house',
+          steps: Array.from({ length: MAX_STEPS - 1 }, (_, index) => ({
+            id: `box-${index}`,
+            title: `Box ${index + 1}`,
+            done: false,
+          })),
+        });
+        const opened = draftOf(move);
+        const here = {
+          ...opened,
+          steps: [...opened.steps, { id: 'pack', title: 'Pack', done: false }],
+        };
+        const there = {
+          ...move,
+          steps: [...move.steps, { id: 'taxi', title: 'Book a taxi', done: false }],
+        };
+        const steps = editedTask(opened, here, move.id, 9000, there).steps;
+        expect(steps).toHaveLength(MAX_STEPS + 1);
+        expect(steps.slice(-2).map((step) => step.title)).toEqual(['Pack', 'Book a taxi']);
       });
 
       it('keeps the merged steps when the form wins over a change that doesn’t fit it', () => {

@@ -72,6 +72,51 @@ test('adds steps in the form, and ticks them in the list', async ({ page }) => {
   await expect(summary(page, 'Prepare for the trip')).toHaveText(/1 of 2 steps$/);
 });
 
+test('saves a step still in “New step” with the task (audit 6 F1-1)', async ({ page }) => {
+  // Typed but not added with "Add step" or Enter: Save dropped it, and said "Saved".
+  await addTask(page, 'Trip');
+  await page.getByRole('button', { name: 'Edit Trip' }).click();
+  await newStep(page).fill('Book the hotel');
+  await editor(page).getByRole('button', { name: 'Save' }).click();
+  await expect(editor(page)).toBeHidden();
+  await expect(summary(page, 'Trip')).toHaveText(/0 of 1 step$/);
+  // Enter in the title saves the form too.
+  await page.getByRole('button', { name: 'Edit Trip' }).click();
+  await newStep(page).fill('Pack');
+  await editor(page).getByLabel('Title', { exact: true }).press('Enter');
+  await expect(editor(page)).toBeHidden();
+  await expect(summary(page, 'Trip')).toHaveText(/0 of 2 steps$/);
+  await summary(page, 'Trip').click();
+  await expect(row(page, 'Trip').getByRole('checkbox', { name: 'Pack' })).toBeVisible();
+});
+
+test('says when a task has all the steps it can take, on Save too', async ({ page }) => {
+  const boxes = Array.from({ length: 50 }, (_, index) => ({
+    id: `box-${index}`,
+    title: `Box ${index + 1}`,
+    done: false,
+  }));
+  await seed(page, [{ title: 'Move house', steps: boxes }]);
+  await page.getByRole('button', { name: 'Edit Move house' }).click();
+  await newStep(page).fill('One more box');
+  await editor(page).getByRole('button', { name: 'Add step' }).click();
+  await expect(editor(page).getByText('A task can have up to 50 steps.')).toBeVisible();
+  // Save doesn't drop it without a word: the form stays open, saying why.
+  await editor(page).getByRole('button', { name: 'Save' }).click();
+  await expect(editor(page)).toBeVisible();
+  await expect(newStep(page)).toBeFocused();
+  await expect(newStep(page)).toHaveAccessibleDescription(
+    'A task can have up to 50 steps, so this one can’t be added. Clear it to save without it.',
+  );
+  await newStep(page).fill('');
+  await editor(page).getByRole('button', { name: 'Save' }).click();
+  await expect(editor(page)).toBeHidden();
+  await expect(summary(page, 'Move house')).toHaveText(/0 of 50 steps$/);
+  // Opened again, the box is no longer marked as wrong.
+  await page.getByRole('button', { name: 'Edit Move house' }).click();
+  await expect(newStep(page)).not.toHaveAttribute('aria-invalid');
+});
+
 test('a repeating task starts its steps again', async ({ page }) => {
   await seed(page, [
     {

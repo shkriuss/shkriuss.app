@@ -114,3 +114,75 @@ test('deleting a list keeps its tasks, moves them, or deletes them', async ({ pa
   await expect(page.locator('[data-list-tag]:visible')).toHaveCount(0);
   await expect(page.locator('[data-views] button')).toHaveCount(2);
 });
+
+test('a list deleted elsewhere while its form is open', async ({ page }) => {
+  // The form said nothing: Delete did nothing, closing it left focus on the
+  // page itself, and Save brought the list back without a word (audit 6 G-3).
+  const gone =
+    'This list was deleted on another device or in another tab. Saving a change brings it back.';
+  const lists = [
+    { id: 'w', name: 'Work' },
+    { id: 'h', name: 'Home' },
+    { id: 's', name: 'Shopping' },
+    { id: 'g', name: 'Garden' },
+  ];
+  await seed(page, [{ title: 'Call mum' }], lists);
+  const edit = async (name: string) => {
+    await chip(page, name).click();
+    await page.getByRole('button', { name: 'Rename or delete this list' }).click();
+    await expect(listForm(page)).toHaveAccessibleName('Edit list');
+  };
+  const deleteElsewhere = async (name: string) => {
+    const other = await page.context().newPage();
+    await other.goto('/');
+    await chip(other, name).click();
+    await other.getByRole('button', { name: 'Rename or delete this list' }).click();
+    await listForm(other).getByRole('button', { name: 'Delete' }).click();
+    await deleteDialog(other).getByRole('button', { name: 'Delete' }).click();
+    await expect(listForm(other)).toBeHidden();
+    await other.close();
+    await expect(heading(page)).toHaveText('All tasks');
+  };
+
+  // The form says so; Cancel puts focus on the heading, not the page itself.
+  await edit('Work');
+  await deleteElsewhere('Work');
+  await expect(listForm(page).locator('[data-list-gone-note]')).toHaveText(gone);
+  await expect(listForm(page).locator('[data-dialog-messages]')).toHaveText(gone);
+  await checkA11y(page, 'form of a list deleted elsewhere');
+  await listForm(page).getByRole('button', { name: 'Cancel' }).click();
+  await expect(listForm(page)).toBeHidden();
+  await expect(heading(page)).toBeFocused();
+
+  // Delete: it was already deleted.
+  await edit('Home');
+  await deleteElsewhere('Home');
+  await listForm(page).getByRole('button', { name: 'Delete' }).click();
+  await expect(listForm(page)).toBeHidden();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Home was already deleted.' }),
+  ).toBeAttached();
+  await expect(heading(page)).toBeFocused();
+
+  // Save with no change: it stays deleted.
+  await edit('Shopping');
+  await deleteElsewhere('Shopping');
+  await listForm(page).getByRole('button', { name: 'Save' }).click();
+  await expect(listForm(page)).toBeHidden();
+  await expect(
+    page
+      .getByRole('status')
+      .filter({ hasText: 'Shopping stays deleted: nothing in it was changed.' }),
+  ).toBeAttached();
+  await expect(chip(page, 'Shopping')).toHaveCount(0);
+  await expect(heading(page)).toBeFocused();
+
+  // A change brings it back, as with sync.
+  await edit('Garden');
+  await deleteElsewhere('Garden');
+  await listForm(page).getByLabel('Name').fill('Garden jobs');
+  await listForm(page).getByRole('button', { name: 'Save' }).click();
+  await expect(listForm(page)).toBeHidden();
+  await expect(chip(page, 'Garden jobs')).toBeVisible();
+  await expect(page.locator('[data-views] button')).toHaveCount(3);
+});

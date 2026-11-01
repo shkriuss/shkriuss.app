@@ -31,7 +31,10 @@ Get reminded at the right time, once or again and again. Lives at
 - `src/worker.ts`: runs the shared notification and sync servers
   ([ADR 0010](../../docs/adr/0010-account-and-sync.md)). With sync on, the
   newest change to each reminder wins; one changed on two devices at once is
-  kept in both versions. Each device uploads its own notification schedule.
+  kept in both versions. Each device uploads its own notification schedule,
+  so a reminder ticked off or changed on another device stops or moves on
+  this device's notification service only once Reminders opens here and
+  syncs: until then, it may still come at its old time (the page says so).
   The change form, if a sync (or another tab) changes its reminder while
   it's open, saves only what was changed in it (`editReminder`): one ticked
   done elsewhere stays done, unless its time was changed here. Its checks

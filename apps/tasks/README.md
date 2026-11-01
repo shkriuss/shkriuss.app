@@ -5,7 +5,8 @@ Your to-do list, with dates, lists and reminders. Lives at
 
 - `src/lib/tasks.ts`: the rules as plain functions, with unit tests next to
   them (`tasks.test.ts`). A task has a title, plus optional notes, steps
-  (smaller things to do in it, each with its own tick, up to 50), a date
+  (smaller things to do in it, each with its own tick; the form adds up to
+  50, and steps added on two devices at once are all kept), a date
   and time, a repeat (every day, weekday, week, month or year, or every so
   many: "every 2 weeks", up to 99), a reminder, a list and an "important"
   star. Saved on the device under `shkriuss:tasks` (data version 3; older
@@ -33,7 +34,7 @@ Your to-do list, with dates, lists and reminders. Lives at
     list);
   - `task-form.ts`: the form that opens from a task's title, where steps
     are added, renamed, ticked and removed (`step-edits.ts`; kept only on
-    "Save");
+    "Save", which adds a step still typed in "New step" too);
   - `order.ts`: "My order", where a task is moved by dragging its handle
     (pointer events, so it works with a finger, a mouse or a pen), by
     tapping the handle for "Move up" and "Move down", or with the arrow
@@ -60,10 +61,13 @@ Your to-do list, with dates, lists and reminders. Lives at
   (or another tab) changes the task saves only what was changed in the form
   (`editedTask`), so the other change stays: a task ticked off elsewhere
   stays on its next date, and its steps are merged one by one, so a step
-  ticked elsewhere stays ticked while another step is renamed here. A task
-  deleted meanwhile: the form says so, and
+  ticked elsewhere stays ticked while another step is renamed here. Save
+  with nothing changed changes nothing, not even the time the task last
+  changed, so it can't win over a change another device hasn't synced yet.
+  A task deleted meanwhile: the form says so, and
   saving a change brings it back; Save with nothing changed, or Delete,
-  leaves it deleted.
+  leaves it deleted. The same goes for a list deleted while "Edit list" is
+  open.
 - `e2e/`: browser tests (`helpers.ts` is shared by them). The shared
   accessibility, security and offline checks in `tests/e2e/` run too.
 

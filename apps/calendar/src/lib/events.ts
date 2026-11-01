@@ -3,7 +3,7 @@
  * Every function returns new data instead of changing the old.
  */
 import { secondVersionName } from '@shkriuss/sync';
-import { cutToLength } from '@shkriuss/ui/text';
+import { cutToLength, withinLength } from '@shkriuss/ui/text';
 import {
   addDays,
   compareDates,
@@ -77,8 +77,8 @@ export type DraftField =
  * Whether text fits a box that takes `max` characters, counted as people
  * see them (an emoji once), the way an iPhone's box counts: counted as
  * JavaScript does, a box full of emoji was refused as too long (audit 5
- * F1-5). Saved data is checked the same way (isCalendarState), so what an
- * iPhone lets in is kept.
+ * F1-5). Saved data is checked with withinLength instead (isCalendarState), which
+ * never refuses what any browser's box lets in.
  */
 const fits = (text: string, max: number): boolean => cutToLength(text, max) === text;
 
@@ -107,12 +107,20 @@ function maxSpanFor(repeat: Repeat): number {
   }
 }
 
-/** Problems with a draft, by field. An empty object means it can be saved. */
-export function draftProblems(draft: EventDraft): Partial<Record<DraftField, string>> {
+/**
+ * Problems with a draft, by field. An empty object means it can be saved.
+ * `textFits` says whether the title and notes are short enough: in the
+ * editor, counted as people see them (fits); for saved and synced data,
+ * withinLength, which doesn't depend on how this browser counts (isCalendarEvent).
+ */
+export function draftProblems(
+  draft: EventDraft,
+  textFits: (text: string, max: number) => boolean = fits,
+): Partial<Record<DraftField, string>> {
   const problems: Partial<Record<DraftField, string>> = {};
   const title = draft.title.trim();
   if (!title) problems.title = 'Enter a title.';
-  else if (!fits(title, MAX_TITLE_LENGTH))
+  else if (!textFits(title, MAX_TITLE_LENGTH))
     problems.title = `Use ${MAX_TITLE_LENGTH} characters or fewer.`;
 
   if (!isIsoDate(draft.startDate)) problems.startDate = 'Enter a valid start date.';
@@ -163,7 +171,7 @@ export function draftProblems(draft: EventDraft): Partial<Record<DraftField, str
   }
   if (draft.reminder !== null && !isValidReminder(draft.reminder, allDay))
     problems.reminder = 'Choose when to be reminded.';
-  if (!fits(draft.notes, MAX_NOTES_LENGTH))
+  if (!textFits(draft.notes, MAX_NOTES_LENGTH))
     problems.notes = `Use ${MAX_NOTES_LENGTH} characters or fewer.`;
   return problems;
 }
@@ -197,7 +205,9 @@ function isCalendarEvent(value: unknown): value is CalendarEvent {
     notes: event['notes'],
   };
   if (typeof draft.title !== 'string' || typeof draft.notes !== 'string') return false;
-  return Object.keys(draftProblems(draft as EventDraft)).length === 0;
+  // The text limits as any browser's box may have let them in (withinLength): one
+  // that counts characters differently mustn't refuse them (audit 6 F1-4).
+  return Object.keys(draftProblems(draft as EventDraft, withinLength)).length === 0;
 }
 
 /** True when saved data has the shape Calendar expects. */

@@ -124,7 +124,13 @@ its notification server, docs/adr/0009).
   never refused, on saving or when it's loaded or synced (audit 5 F1-5). A
   device still on the version before this one can't read a text that only
   this counting lets in, and shows a sync problem until it's updated
-  (reload the page there).
+  (reload the page there). Browsers don't all count the same way, though:
+  some letters, like Hindi "क्ष", are one character in newer browsers and
+  two in older ones. So events that are loaded or synced are checked only
+  against what any browser's box can hold (`withinLength`: at most 16 of
+  JavaScript's characters for each one), and an event saved on a newer
+  device always loads on an older one; there, the editor may ask for a
+  shorter title before it saves a change to it (audit 6 F1-4).
 - **Import limits.** Calendar can't show everything a .ics file can say yet:
   repeats like "every 2 weeks" or "Mondays and Wednesdays", and changes to
   single dates of a repeating event, are listed as not imported. Times with a
@@ -137,8 +143,9 @@ its notification server, docs/adr/0009).
   in odd files), the rest are listed as not imported. Only the first 5,000
   events in a file are read (Calendar holds 2,000), and the import says how
   many more there were; an event the file ends in the middle of is listed
-  as not imported. Titles over 100 characters and notes over 1,000 are cut
-  short, never in the middle of an emoji.
+  as not imported. Titles over 100 characters and notes over 1,000, counted
+  as the editor counts them (a flag or a family emoji is one), are cut
+  short, never in the middle of an emoji, a flag or an accented letter.
 - **Repeating events from another time zone** keep the time their first date
   has on the phone. When that time zone changes its clocks (summer time) on
   other dates than the phone's, some of the times end up an hour off: a weekly

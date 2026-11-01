@@ -41,6 +41,10 @@ const only = (text: string, opts = options): EventDraft => {
   return event.draft;
 };
 
+/** How many characters as people see them, the way Calendar's limits count. */
+const characters = (text: string): number =>
+  [...new Intl.Segmenter('en', { granularity: 'grapheme' }).segment(text)].length;
+
 /** Random numbers, the same every run. */
 function random(seed: number): () => number {
   return () => {
@@ -793,7 +797,7 @@ describe('parseIcs', () => {
 
   it('cuts long titles and notes by whole characters, so an emoji isn’t cut in half', () => {
     // Cut in the middle, half an emoji showed as "�", in notifications too
-    // (audit 4 F1-10). Each emoji here is two of the characters the limits count.
+    // (audit 4 F1-10). The limits count an emoji once (audit 5 F1-5).
     const lone = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
     for (const before of [97, 98]) {
       const draft = only(
@@ -807,12 +811,42 @@ describe('parseIcs', () => {
         [draft.title, 100],
         [draft.notes, 1000],
       ] as const) {
-        expect(text.length).toBeLessThanOrEqual(max);
-        expect(text.length).toBeGreaterThanOrEqual(max - 1);
+        expect(characters(text)).toBe(max);
         expect(text.endsWith('…')).toBe(true);
         expect(lone.test(text)).toBe(false);
       }
     }
+  });
+
+  it('keeps titles and notes that fit, and cuts others between flags and families (audit 6 F1-2)', () => {
+    // The import counted as JavaScript does, so these were cut short although
+    // the editor takes them, and its cut split a flag or a family in half.
+    const family = '👨‍👩‍👧‍👦';
+    const kept = [
+      '🇬🇪'.repeat(60),
+      // Hindi letters with a vowel sign: two of JavaScript's characters each.
+      'की'.repeat(60),
+      `Family ${family.repeat(20)}`,
+    ];
+    const events = (titles: string[], notes = '') =>
+      calendar(
+        ...titles.map((title, index) => [
+          `UID:${index}`,
+          'DTSTART:20261017T090000',
+          `SUMMARY:${title}`,
+          ...(notes ? [`DESCRIPTION:${notes}`] : []),
+        ]),
+      );
+    const result = parseIcs(events(kept), options);
+    expect(result.events.map((event) => event.draft.title)).toEqual(kept);
+    // What the import makes, Calendar takes.
+    expect(importEvents({ events: [] }, result.events).added).toBe(kept.length);
+
+    const flags = only(events(['🇬🇪'.repeat(120)])).title;
+    expect(flags).toBe(`${'🇬🇪'.repeat(99)}…`);
+    expect(only(events(['x'], 'की'.repeat(1000))).notes).toBe('की'.repeat(1000));
+    const notes = only(events(['x'], family.repeat(1001))).notes;
+    expect(notes).toBe(`${family.repeat(999)}…`);
   });
 
   it('lists an event the file ends in the middle of as not imported', () => {
