@@ -134,13 +134,12 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
   `pnpm-workspace.yaml` (audit 5 H-1). YAML that pnpm reads differently
   from the check (a `<<` merge key, for one) is refused too (audit 6 H-2),
   and so is code pnpm would run itself: a config dependency, which pnpm
-  installs with no 7-day wait, or a pnpmfile (audit 6 H-3).
-  CI runs `main`'s copy of that check,
-  with `main`'s packages, before anything from the pull request is
-  installed or run, so a pull request can't change the check or what reads
-  its lockfile (audit 5 H-3, audit 6 H-1). It can change CI itself: GitHub
-  runs a pull request's own copy of the workflows (`.github/`), so changes
-  there are read like code before merging
+  installs with no 7-day wait, or a pnpmfile (audit 6 H-3). CI runs
+  `main`'s copy of that check, with `main`'s packages, before anything from
+  the pull request is installed or run, so a pull request can't change the
+  check or what reads its lockfile (audit 5 H-3, audit 6 H-1). It can
+  change CI itself: GitHub runs a pull request's own copy of the workflows
+  (`.github/`), so changes there are read like code before merging
   ([quality.md](docs/quality.md)).
 - Production deploys only happen from `main`, after every check passes,
   including the dependency audit, and only for `main`'s newest commit (so
