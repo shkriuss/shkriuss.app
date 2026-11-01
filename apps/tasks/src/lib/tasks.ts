@@ -24,6 +24,7 @@ import {
   type Stamp,
 } from '@shkriuss/dates';
 import type { Notice } from '@shkriuss/push';
+import { fingerprint } from '@shkriuss/sync';
 import { withEdits } from '@shkriuss/sync/edits';
 import { compareText, cutToLength, foldText } from '@shkriuss/ui/text';
 import { DATE_LOCALE, timeLabel } from '@shkriuss/ui/locale';
@@ -269,10 +270,11 @@ export function taskFromDraft(draft: TaskDraft, id: string, now: number, existin
     id,
     title: cut(draft.title, LIMITS.title),
     notes: cut(draft.notes, LIMITS.notes),
+    // Not cut to MAX_STEPS, the most the form adds (step-edits.ts): steps
+    // added on two devices at once may be more, and are all kept (audit 6 F1-5).
     steps: draft.steps
       .map((step) => ({ ...step, title: cut(step.title, LIMITS.step) }))
-      .filter((step) => step.title !== '')
-      .slice(0, MAX_STEPS),
+      .filter((step) => step.title !== ''),
     list: draft.list,
     important: draft.important,
     date,
@@ -338,6 +340,11 @@ function editedSteps(opened: Step[], edited: Step[], current: Step[]): Step[] {
  * F1-1). `opened` is the form as it opened and `edited` as it is now;
  * `current` is the task now, if it's still there (one deleted meanwhile comes
  * back with the change).
+ *
+ * When that's the task as it is now (Save with nothing changed, or only
+ * with changes it has already), it's `current` itself, its time of change
+ * too: a new time made it a new edit, which sync let win over a change
+ * another device had made but not synced yet (audit 6 F1-1).
  */
 export function editedTask(
   opened: TaskDraft,
@@ -354,7 +361,12 @@ export function editedTask(
     : edited;
   const draft =
     Object.keys(draftProblems(merged)).length === 0 ? merged : { ...edited, steps: merged.steps };
-  return taskFromDraft(draft, id, now, current);
+  const task = taskFromDraft(draft, id, now, current);
+  // Compared as sync compares (its fingerprint), apart from the time.
+  const unchanged =
+    current !== undefined &&
+    fingerprint({ ...task, updated: current.updated }) === fingerprint(current);
+  return unchanged ? current : task;
 }
 
 /** The form's values for a task, to edit it. */
