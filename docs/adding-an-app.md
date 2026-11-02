@@ -265,7 +265,12 @@ is the simplest example to copy. Ask Claude, or:
    notifications** button (`data-notify-enable` around a
    `<Button data-action="enable-notifications">`) and `<PushControls />`
    (the "Also remind me when … is closed" switch), as Habits does. The
-   shared browser tests check these. In the page script, call
+   shared browser tests check these. If the app syncs too, say on the page
+   that each device sends the reminders it uploaded until the app is opened
+   there again ("While Habits is closed on a device, it may still remind
+   you of a habit ticked off or changed on another one, until Habits is
+   opened there again."): `tests/unit/reminder-notes.test.ts` checks that
+   it's there. In the page script, call
    `mountLocalReminders(document, { app, due, notices, announce })` from
    `@shkriuss/ui/local-reminders`, and its `changed()` after every change.
    `due()` says what's due while the app is open; `notices()` returns the

@@ -35,7 +35,8 @@ Drink enough water each day. Lives at <https://water.shkriuss.app>.
   the same on all devices; each device uploads its own schedule. So drinks
   added on another device only count for this device's reminders once Water
   opens here and syncs: until then, its notification service keeps sending
-  them, also after the goal was reached elsewhere (the page says so).
+  them, also after the goal was reached, or the reminders were changed or
+  turned off, elsewhere (the page says so).
 - `src/scripts/water.ts`: connects the page to those rules. "Other amount"
   adds any amount, earlier today or yesterday. Today's drinks, and
   yesterday's (under "Yesterday's drinks", which opens when one is added

@@ -112,7 +112,9 @@ its notification server, docs/adr/0009).
   a deletion; Save with nothing changed, or Delete, leaves it deleted. A reminder is part
   of its event, so it syncs too; each device then uploads it to its own
   notification service, the next time Calendar opens there
-  (`e2e/sync.spec.ts` checks this). See
+  (`e2e/sync.spec.ts` checks this). Until then, an event changed or
+  deleted elsewhere is still reminded there at its old time (the page says
+  so). See
   [ADR 0010](../../docs/adr/0010-account-and-sync.md).
 - **Phones without Google services** (like GrapheneOS): use a browser with
   UnifiedPush, such as IronFox with the Sunup app.
