@@ -205,7 +205,9 @@ first (another of the person's, or the lost one): this device doesn't sign
 in with its own new key, which no other device would have, but signs out,
 as a device with a replaced key does, and says why. And "Replace the
 account key" started again after an answer that never came shows the same
-new key, so trying again finishes that replacement. Before, the service
+new key, so trying again finishes that replacement; once the service says
+the old key isn't replaced (that replacement never got there), the device
+forgets that new key, and the next replacement gets a new one. Before, the service
 answered every replacement alike: this device signed in with its new key,
 kept the old one for the apps, and nothing ever told it (audit 7 A-2, run
 27).

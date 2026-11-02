@@ -218,6 +218,18 @@ export function replacingWith(account: Account): Uint8Array<ArrayBuffer> | null 
 }
 
 /**
+ * Forgets the key this device was replacing `account`'s with, once the
+ * account service says the old key isn't replaced: that replacement never
+ * got there. Kept, it was the key "Replace the account key" showed again,
+ * however long after (audit 7 A-2, run 27).
+ */
+export function forgetReplacing(account: Account): void {
+  const { next, ...saved } = read();
+  if (next === undefined || saved.secret !== toBase64Url(account.secret)) return;
+  write(saved);
+}
+
+/**
  * Remembers that an account key was replaced, and the tag of the key that
  * replaced it (null if not known). If this device is signed in with it, it's
  * signed out.

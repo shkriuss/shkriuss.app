@@ -7,6 +7,7 @@
 import { hkdf, toBase64Url } from '@shkriuss/crypto';
 import {
   forgetReplaced,
+  forgetReplacing,
   noteReplaced,
   noteReplacing,
   replacingWith,
@@ -124,6 +125,12 @@ async function settle(
 export async function checkReplaced(account: Account): Promise<KeyCheck> {
   const note = await replacedNote(account.secret).catch(() => null);
   if (!note) return UNCHANGED;
+  if (!note.replaced) {
+    // A replacement this device started never got there: the next one
+    // gets a new key.
+    forgetReplacing(account);
+    return UNCHANGED;
+  }
   return settle(account, note, replacingWith(account));
 }
 

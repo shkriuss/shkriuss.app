@@ -300,8 +300,18 @@ describe('a key replacement whose answer never came (audit 6 A-1)', () => {
     await expect(replaceAccountKey(old, next)).rejects.toMatchObject({ code: 'server' });
     vi.stubGlobal('fetch', service);
 
+    // Can't be told: the new key is kept, in case the service noted it.
+    vi.stubGlobal('fetch', () => Promise.reject(new TypeError('Offline')));
+    expect(await pageOpens()).toEqual(UNCHANGED);
+    const stored = () => JSON.parse(localStorage.getItem('shkriuss-device:account') ?? '{}');
+    expect(stored()).toHaveProperty('next');
+    vi.stubGlobal('fetch', service);
+    // Not replaced: that replacement never got there, so the next one gets
+    // a new key, not this one months later (audit 7 A-2, run 27).
     expect(await pageOpens()).toEqual(UNCHANGED);
     expect((await currentAccount())?.secret).toEqual(old);
+    expect(stored()).not.toHaveProperty('next');
+    expect(stored().secret).toBe(toBase64Url(old));
     // Trying again works as usual.
     expect(await replaceAccountKey(old, next)).toEqual(REPLACED);
     expect((await currentAccount())?.secret).toEqual(next);
