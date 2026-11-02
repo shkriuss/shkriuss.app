@@ -2,7 +2,7 @@
  * Replacing the account key: the account service's record of replaced keys
  * (worker.ts, kept in memory here) and what the device remembers (device.ts).
  */
-import { randomBytes, toBase64Url } from '@shkriuss/crypto';
+import { hkdf, randomBytes, toBase64Url } from '@shkriuss/crypto';
 import type { DurableObjectNamespace } from '@shkriuss/server';
 import { memoryNamespace } from '@shkriuss/server/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -70,6 +70,28 @@ afterEach(() => {
 
 /** What checkReplaced says when nothing changed. */
 const UNCHANGED = { outcome: 'unchanged' };
+/** What replacing the key here says when it worked. */
+const REPLACED = { outcome: 'replaced', saved: true, noted: true };
+
+/** Replaces `old` with `next`: the account service notes it, but its answer is lost. */
+async function replaceWithLostAnswer(old: Uint8Array<ArrayBuffer>, next: Uint8Array<ArrayBuffer>) {
+  const service = globalThis.fetch;
+  vi.stubGlobal('fetch', async (input: string, init?: RequestInit) => {
+    await service(input, init);
+    throw new TypeError('The connection was lost');
+  });
+  await expect(replaceAccountKey(old, next)).rejects.toMatchObject({ code: 'server' });
+  vi.stubGlobal('fetch', service);
+}
+
+/** Replaces `old` with `next` on another device (its own browser storage). */
+async function replaceElsewhere(old: Uint8Array<ArrayBuffer>, next: Uint8Array<ArrayBuffer>) {
+  const here = globalThis.localStorage;
+  vi.stubGlobal('localStorage', new MemoryStorage());
+  await saveAccount(old);
+  await replaceAccountKey(old, next);
+  vi.stubGlobal('localStorage', here);
+}
 /** A small limit, so the tests fill it quickly. */
 const SMALL_LIMIT = 4_000_000;
 const madeUpToken = () => toBase64Url(randomBytes(32));
@@ -112,7 +134,7 @@ describe('replacing the account key', () => {
     await saveAccount(old);
     expect(await isReplaced(old)).toBe(false);
 
-    expect(await replaceAccountKey(old, next)).toEqual({ saved: true, noted: true });
+    expect(await replaceAccountKey(old, next)).toEqual(REPLACED);
     expect(await isReplaced(old)).toBe(true);
     expect(await isReplaced(next)).toBe(false);
     expect((await currentAccount())?.secret).toEqual(next);
@@ -222,20 +244,6 @@ describe('a key replacement whose answer never came (audit 6 A-1)', () => {
     return checkReplaced(account);
   }
 
-  /** Replaces `old` with `next`: the account service notes it, but its answer is lost. */
-  async function replaceWithLostAnswer(
-    old: Uint8Array<ArrayBuffer>,
-    next: Uint8Array<ArrayBuffer>,
-  ) {
-    const service = globalThis.fetch;
-    vi.stubGlobal('fetch', async (input: string, init?: RequestInit) => {
-      await service(input, init);
-      throw new TypeError('The connection was lost');
-    });
-    await expect(replaceAccountKey(old, next)).rejects.toMatchObject({ code: 'server' });
-    vi.stubGlobal('fetch', service);
-  }
-
   it('is finished the next time the page opens, keeping the old key for the apps', async () => {
     const [old, next] = [randomBytes(32), randomBytes(32)];
     await saveAccount(old);
@@ -243,7 +251,7 @@ describe('a key replacement whose answer never came (audit 6 A-1)', () => {
     expect(await isReplaced(old)).toBe(true);
     expect((await currentAccount())?.secret).toEqual(old);
 
-    expect(await pageOpens()).toEqual({ outcome: 'replaced', saved: true, noted: true });
+    expect(await pageOpens()).toEqual(REPLACED);
     const account = await currentAccount();
     expect(account?.secret).toEqual(next);
     expect(replacedSecrets()).toEqual([old]);
@@ -279,7 +287,7 @@ describe('a key replacement whose answer never came (audit 6 A-1)', () => {
     expect([...syncedApps(phone.code).keys()]).toEqual(['notes']);
 
     // Next time, it's finished.
-    expect(await pageOpens()).toEqual({ outcome: 'replaced', saved: true, noted: true });
+    expect(await pageOpens()).toEqual(REPLACED);
     expect((await currentAccount())?.secret).toEqual(next);
     expect(replacedSecrets()).toEqual([old]);
   });
@@ -295,7 +303,7 @@ describe('a key replacement whose answer never came (audit 6 A-1)', () => {
     expect(await pageOpens()).toEqual(UNCHANGED);
     expect((await currentAccount())?.secret).toEqual(old);
     // Trying again works as usual.
-    expect(await replaceAccountKey(old, next)).toEqual({ saved: true, noted: true });
+    expect(await replaceAccountKey(old, next)).toEqual(REPLACED);
     expect((await currentAccount())?.secret).toEqual(next);
     expect(replacedSecrets()).toEqual([old]);
   });
@@ -308,15 +316,88 @@ describe('a key replacement whose answer never came (audit 6 A-1)', () => {
     await expect(replaceAccountKey(old, next)).rejects.toMatchObject({ code: 'server' });
     vi.stubGlobal('fetch', service);
     // Meanwhile, the lost device replaced the key with one of its own.
-    const here = globalThis.localStorage;
-    vi.stubGlobal('localStorage', new MemoryStorage());
-    await saveAccount(old);
-    await replaceAccountKey(old, theirs);
-    vi.stubGlobal('localStorage', here);
+    await replaceElsewhere(old, theirs);
 
     expect(await pageOpens()).toEqual({ outcome: 'signed-out', apps: [] });
     expect(await currentAccount()).toBeNull();
     expect(replacedSecrets()).toEqual([]);
+  });
+});
+
+describe('replacing a key that was already replaced (audit 7 A-2, run 27)', () => {
+  // The account service answered every replacement alike, so the page took
+  // it for done: when another device (perhaps the lost one) had replaced the
+  // key first, this one signed in with a key the note didn't name, and kept
+  // the old key for the apps. Nothing ever signed it out, and its apps moved
+  // the old copies to an account no other device had.
+
+  it('signs this device out when another device replaced it first, as its next visit would', async () => {
+    const [old, mine, theirs] = [randomBytes(32), randomBytes(32), randomBytes(32)];
+    await replaceElsewhere(old, theirs);
+    await saveAccount(old);
+    const phone = await currentAccount();
+    if (!phone) throw new Error('Not signed in');
+    noteSyncOn('notes', phone.code, 'https://notes.shkriuss.app');
+
+    expect(await replaceAccountKey(old, mine)).toEqual({ outcome: 'signed-out', apps: ['notes'] });
+    expect(await currentAccount()).toBeNull();
+    expect(replacedSecrets()).toEqual([]);
+    expect(localStorage.getItem('shkriuss-device:account')).toBeNull();
+    // The note still names the first replacement.
+    expect((await replacedNote(old)).successor).toBe(await successorTag(old, theirs));
+  });
+
+  it('is finished by trying again with the same new key, after an answer that never came', async () => {
+    const [old, next] = [randomBytes(32), randomBytes(32)];
+    await saveAccount(old);
+    await replaceWithLostAnswer(old, next);
+    expect(await replaceAccountKey(old, next)).toEqual(REPLACED);
+    expect((await currentAccount())?.secret).toEqual(next);
+    expect(replacedSecrets()).toEqual([old]);
+  });
+
+  it('the service answers with the note it keeps', async () => {
+    const [old, first] = [randomBytes(32), randomBytes(32)];
+    const put = async (successor: string) =>
+      (
+        await worker.fetch(
+          new Request('https://shkriuss.app/api/account/status', {
+            method: 'PUT',
+            body: JSON.stringify({ successor }),
+            headers: {
+              Authorization: `Bearer ${toBase64Url(await hkdf(old, 'shkriuss account status v1'))}`,
+              'Content-Type': 'application/json',
+            },
+          }),
+          server.env,
+        )
+      ).json();
+    const tag = await successorTag(old, first);
+    expect(await put(tag)).toEqual({ replaced: true, successor: tag });
+    expect(await put(await successorTag(old, randomBytes(32)))).toEqual({
+      replaced: true,
+      successor: tag,
+    });
+  });
+
+  it('isn’t taken for done when the answer doesn’t say the key is replaced', async () => {
+    const [old, next] = [randomBytes(32), randomBytes(32)];
+    await saveAccount(old);
+    vi.stubGlobal('fetch', async () => Response.json({ replaced: false }));
+    await expect(replaceAccountKey(old, next)).rejects.toMatchObject({ code: 'server' });
+    expect((await currentAccount())?.secret).toEqual(old);
+  });
+
+  it('works as before with an account service from before, which answered with nothing', async () => {
+    const [old, next] = [randomBytes(32), randomBytes(32)];
+    await saveAccount(old);
+    const service = globalThis.fetch;
+    vi.stubGlobal('fetch', async (input: string, init?: RequestInit) => {
+      const response = await service(input, init);
+      return init?.method === 'PUT' ? new Response(null, { status: 204 }) : response;
+    });
+    expect(await replaceAccountKey(old, next)).toEqual(REPLACED);
+    expect((await currentAccount())?.secret).toEqual(next);
   });
 });
 
@@ -541,7 +622,7 @@ describe('the account service’s room', () => {
     for (; kept < 1000; kept += 1) {
       const response = await stranger(HUB.origin, 'status', { method: 'PUT' });
       if (response.status === 507) break;
-      expect(response.status).toBe(204);
+      expect(response.status).toBe(200);
     }
     expect(kept).toBe(Math.floor(SMALL_LIMIT / (16 * 1024)));
     // Asking about a made-up token keeps nothing.
@@ -562,7 +643,7 @@ describe('the account service’s room', () => {
     const old = randomBytes(32);
     const next = randomBytes(32);
     await saveAccount(old);
-    expect(await replaceAccountKey(old, next)).toEqual({ saved: true, noted: false });
+    expect(await replaceAccountKey(old, next)).toEqual({ ...REPLACED, noted: false });
     expect((await currentAccount())?.secret).toEqual(next);
     expect(replacedSecrets()).toEqual([old]);
     expect(await isReplaced(old)).toBe(false);

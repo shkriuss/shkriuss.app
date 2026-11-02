@@ -14,7 +14,7 @@ import {
   type Account,
 } from './device.ts';
 import { AccountError, api } from './errors.ts';
-import { successorTag } from './secret.ts';
+import { accountCodeOf, successorTag } from './secret.ts';
 import { SUCCESSOR_PATTERN } from './validate.ts';
 
 /** Checking gives up after this long (then the device carries on as it is). */
@@ -129,13 +129,17 @@ export async function checkReplaced(account: Account): Promise<KeyCheck> {
 
 /**
  * Replaces this device's account key with `next`: marks `current` as
- * replaced for good, then signs in here with `next`. `saved` and `noted` as
- * in KeyCheck "replaced".
+ * replaced for good, then signs in here with `next` (KeyCheck "replaced").
+ * If another device replaced it first, this one signs out instead
+ * ("signed-out"), as it would have when the Account page next opened.
+ * Throws AccountError("server") if the account service can't be reached:
+ * then trying again with the same `next` finishes it, if the service noted
+ * it after all.
  */
 export async function replaceAccountKey(
   current: Uint8Array<ArrayBuffer>,
   next: Uint8Array<ArrayBuffer>,
-): Promise<{ saved: boolean; noted: boolean }> {
+): Promise<KeyCheck> {
   // The note says which key replaced this one, in a way only devices that
   // have both can check: they keep the old key only for that account.
   const successor = await successorTag(current, next);
@@ -146,8 +150,23 @@ export async function replaceAccountKey(
     { method: 'PUT', body: JSON.stringify({ successor }) },
     await statusToken(current),
   );
-  const noted = response.status !== 507;
-  if (!response.ok && noted) throw new AccountError('server', 'Couldn’t replace the account key.');
-  noteReplaced(current, successor);
-  return { saved: await saveAccount(next), noted };
+  if (response.status === 507) {
+    // No room to note it (docs/adr/0017): replaced all the same.
+    noteReplaced(current, successor);
+    return { outcome: 'replaced', saved: await saveAccount(next), noted: false };
+  }
+  const failed = new AccountError('server', 'Couldn’t replace the account key.');
+  if (!response.ok) throw failed;
+  // The note as the service keeps it: the first one's. Taking any answer for
+  // success, this device signed in with a key the note doesn't name when
+  // another device (perhaps the lost one) had replaced it first: then
+  // nothing ever signed it out, and its apps moved the old copies to an
+  // account no other device has (audit 7 A-2, run 27). An older Worker said
+  // nothing (204), as before.
+  const note: Note =
+    response.status === 204
+      ? { replaced: true, successor }
+      : noteOf(await response.json().catch(() => null));
+  if (!note.replaced) throw failed;
+  return settle({ secret: current, code: await accountCodeOf(current) }, note, next);
 }

@@ -637,6 +637,62 @@ test('a key replaced here whose answer never came stays as it is when the check 
   await finishedWith(page, key, oldSecret);
 });
 
+test('replacing the key again after an answer that never came shows the same new key, and finishes (audit 7 A-2, run 27)', async ({
+  page,
+  guard,
+}) => {
+  // It showed another new key: the page signed in with that one, while the
+  // account service's note named the first, and each key signed in to an
+  // account of its own.
+  const old = await createAccount(page);
+  const oldSecret = (await storedAccount(page))?.secret;
+  guard.allowConsole('net::ERR_CONNECTION_RESET');
+  const key = await replaceWithLostAnswer(page);
+  await page.getByRole('button', { name: 'Cancel' }).click();
+  await page.getByRole('button', { name: 'Replace the account key' }).click();
+  await page.getByRole('button', { name: 'Get a new key' }).click();
+  await expect(page.locator('[data-new-key]')).toHaveText(key);
+  await expect(page.locator('[data-new-status]')).toHaveText(
+    'It’s the same new key as last time, as replacing the key didn’t finish then.',
+  );
+  await page.getByLabel("I've saved my recovery key").check();
+  await page.getByRole('button', { name: 'Replace the key' }).click();
+  await expect(message(page)).toHaveText(/^Your account key is replaced\./);
+  await expect(accountCode(page)).not.toHaveText(old.code);
+  await finishedWith(page, key, oldSecret);
+});
+
+test('replacing a key another device replaced first signs this one out, and says so (audit 7 A-2, run 27)', async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  // This device was told it had worked, and signed in with its own new key:
+  // an account no other device had, and nothing ever signed it out.
+  const old = await createAccount(page);
+  const tablet = await (await otherDevice(browser, baseURL)).newPage();
+  await tablet.goto('/account/');
+  await signInWithKey(tablet, old.key);
+  await expect(accountCode(tablet)).toHaveText(old.code);
+  const theirs = await replaceKey(tablet);
+
+  // The phone's page was open since before: it replaces the key too.
+  await page.getByRole('button', { name: 'Replace the account key' }).click();
+  await page.getByRole('button', { name: 'Get a new key' }).click();
+  await page.getByLabel("I've saved my recovery key").check();
+  await page.getByRole('button', { name: 'Replace the key' }).click();
+  await expect(view(page, 'signed-out')).toBeVisible();
+  await expect(message(page)).toHaveText(
+    /^Your account key was already replaced on another device, so this device is signed out, and the new key you just saved isn’t used\./,
+  );
+  expect(await storedAccount(page)).toBeNull();
+  await checkA11y(page, 'account: the key was already replaced');
+  // With the key it was replaced with, it's on the tablet's account.
+  await signInWithKey(page, theirs.key);
+  await expect(accountCode(page)).toHaveText(theirs.code);
+  await tablet.context().close();
+});
+
 test('asks the browser to keep the account on this device', async ({ page }) => {
   // The apps asked, the hub didn't, though it keeps the account key and the
   // replaced keys the apps need (audit 6 E-6).

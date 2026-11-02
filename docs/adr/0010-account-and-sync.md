@@ -37,7 +37,10 @@ page left open from before an update), "Turn on sync" says to reload the page
 rather than check the connection (S40). Changed by audit 7: the Account page
 asks the account service once as it opens and acts on that one answer, so a
 replacement whose answer was lost is finished then or left for the next time,
-never taken for a lost device's (A-1, run 27).
+never taken for a lost device's (A-1, run 27); the account service answers a
+replacement with the note it keeps, so a device replacing a key that another
+device replaced first signs out instead of taking it for done, and trying
+again after a lost answer shows the same new key (A-2, run 27).
 
 ## Context
 
@@ -188,6 +191,17 @@ it opens, and acts on that one answer: if the service can't be reached,
 nothing changes until the next time. It used to ask twice, and when only
 the first check failed, the second still took it for a lost device (audit 7
 A-1, run 27).
+
+The service answers step 2 with the note it keeps, and only the first
+note counts. If its tag names another key, another device replaced the key
+first (another of the person's, or the lost one): this device doesn't sign
+in with its own new key, which no other device would have, but signs out,
+as a device with a replaced key does, and says why. And "Replace the
+account key" started again after an answer that never came shows the same
+new key, so trying again finishes that replacement. Before, the service
+answered every replacement alike: this device signed in with its new key,
+kept the old one for the apps, and nothing ever told it (audit 7 A-2, run
+27).
 
 Then:
 
@@ -455,7 +469,8 @@ in with `sync: true` in `apps.json`.
   - Edits made on the lost device before an app moves its copy come along
     with the move.
   - Someone holding the lost device could replace the key first. Then the
-    person's own devices are signed out; they create a new account and turn
+    person's own devices are signed out (also the one where they then
+    replace it: audit 7 A-2, run 27); they create a new account and turn
     on sync again, and their data comes along from their devices.
   - If the lost device also has the person's password manager, a new passkey
     would reach it too. The Account page says to remove the device from the

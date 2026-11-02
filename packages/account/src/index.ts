@@ -10,6 +10,7 @@ export {
   noteSyncOff,
   noteSyncOn,
   replacedSecrets,
+  replacingWith,
   saveAccount,
   syncedApps,
   type Account,

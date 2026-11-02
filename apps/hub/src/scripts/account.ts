@@ -25,6 +25,7 @@ import {
   removePasskey,
   replaceAccountKey,
   replacedSecrets,
+  replacingWith,
   sameSecret,
   saveAccount,
   signInWithPasskey,
@@ -129,19 +130,23 @@ const REPLACED = {
   passkey: `This passkey is for an account key that was replaced on another device, so it can’t sign in any more. ${SIGN_IN_AGAIN} Then you can add a new passkey.`,
   done: `Your account key is replaced. Devices with the old key are signed out when they next open this page. ${AFTER_REPLACING}`,
   unnoted: `Your account key is replaced, but the account service had no room to note the old one just now, so devices that still have it won’t sign out by themselves. ${AFTER_REPLACING}`,
+  // Replacing it here too would leave this device on an account that no
+  // other device has (audit 7 A-2, run 27).
+  first:
+    'Your account key was already replaced on another device, so this device is signed out, and the new key you just saved isn’t used. If you replaced it on another of your devices, sign in here with the recovery key you saved there, or add this device with a code from it. If you didn’t, someone else did, with a lost device or your old recovery key: create a new account, then turn on sync again in each app. Your data comes along from your devices.',
 };
 
 const listFormat = new Intl.ListFormat('en-GB', { type: 'conjunction' });
 
 /**
- * REPLACED.here, naming the apps that synced on this device with the
- * replaced key: they still may, and this device no longer lists them
- * (audit 3 D-8).
+ * `signedOut` (REPLACED.here unless said), naming the apps that synced on
+ * this device with the replaced key: they still may, and this device no
+ * longer lists them (audit 3 D-8).
  */
-const replacedHere = (names: readonly string[]): string =>
+const replacedHere = (names: readonly string[], signedOut: string = REPLACED.here): string =>
   names.length === 0
-    ? REPLACED.here
-    : `${REPLACED.here} ${listFormat.format(names)} may still sync here with the old key: once you’re signed in, turn on sync in ${names.length === 1 ? 'it' : 'each'} again.`;
+    ? signedOut
+    : `${signedOut} ${listFormat.format(names)} may still sync here with the old key: once you’re signed in, turn on sync in ${names.length === 1 ? 'it' : 'each'} again.`;
 
 /** Someone used the device code: maybe not the person (audit A-5). */
 const LINK_USED =
@@ -236,6 +241,9 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
       return { link, slug, name, turnOn: link.href };
     },
   );
+  /** The names of these apps (slugs), in the page's order. */
+  const appNames = (slugs: readonly string[]): string[] =>
+    syncLinks.filter(({ slug }) => slugs.includes(slug)).map(({ name }) => name);
 
   let account: Account | null = await currentAccount();
   /** A new key (a new account, or replacing this one), until the person confirms they saved it. */
@@ -378,7 +386,12 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
   /** Shows a new recovery key to save, for a new account or to replace this one. */
   async function showNewKey(replacing: boolean): Promise<void> {
     say(null);
-    const secret = generateSecret();
+    // Tried before without an answer (the connection dropped): the account
+    // service may have noted that key, so it's shown again, and trying again
+    // finishes that replacement. A new one was another key than the note's,
+    // and signed in all the same (audit 7 A-2, run 27).
+    const earlier = replacing && account ? replacingWith(account) : null;
+    const secret = earlier ?? generateSecret();
     pending = {
       secret,
       key: await recoveryKeyOf(secret),
@@ -389,7 +402,9 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
     finishLabel.textContent = replacing ? 'Replace the key' : 'Continue';
     replaceOnly.hidden = !replacing;
     newKey.textContent = pending.key;
-    newStatus.textContent = '';
+    newStatus.textContent = earlier
+      ? 'It’s the same new key as last time, as replacing the key didn’t finish then.'
+      : '';
     savedCheck.checked = false;
     finishCreate.disabled = true;
     show('new');
@@ -588,7 +603,7 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
       if (!account) return;
       const current = account;
       newStatus.textContent = 'Replacing the key…';
-      let result: { saved: boolean; noted: boolean };
+      let result: KeyCheck;
       try {
         result = await withButton(button, () => replaceAccountKey(current.secret, secret));
       } catch (error) {
@@ -600,8 +615,12 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
       void dropLink();
       linkStatus.textContent = '';
       home();
-      if (!result.saved) say(STORAGE_BLOCKED, true);
-      else say(result.noted ? REPLACED.done : REPLACED.unnoted, !result.noted);
+      if (result.outcome === 'signed-out') {
+        say(replacedHere(appNames(result.apps), REPLACED.first), true);
+      } else if (result.outcome === 'replaced') {
+        if (!result.saved) say(STORAGE_BLOCKED, true);
+        else say(result.noted ? REPLACED.done : REPLACED.unnoted, !result.noted);
+      }
     },
     replace: () => {
       say(null);
@@ -851,8 +870,7 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
   const checked: KeyCheck = account ? await checkReplaced(account) : { outcome: 'unchanged' };
   if (checked.outcome === 'signed-out') {
     account = null;
-    const names = syncLinks.filter(({ slug }) => checked.apps.includes(slug));
-    say(replacedHere(names.map(({ name }) => name)), true);
+    say(replacedHere(appNames(checked.apps)), true);
   } else if (checked.outcome === 'replaced') {
     account = await currentAccount();
     say(checked.saved ? REPLACED.done : STORAGE_BLOCKED, !checked.saved);
