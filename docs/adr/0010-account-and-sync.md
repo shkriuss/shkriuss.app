@@ -40,7 +40,9 @@ replacement whose answer was lost is finished then or left for the next time,
 never taken for a lost device's (A-1, run 27); the account service answers a
 replacement with the note it keeps, so a device replacing a key that another
 device replaced first signs out instead of taking it for done, and trying
-again after a lost answer shows the same new key (A-2, run 27).
+again after a lost answer shows the same new key (A-2, run 27); a device
+showing a code says a device opened it, not that one is signed in (A-6,
+run 27).
 
 ## Context
 
@@ -112,7 +114,9 @@ The requirements:
    - The new device fetches the sealed secret once, then it's deleted. It
      immediately removes the key from the address bar, shows the account code,
      and asks before signing in.
-   - The first device shows when the code has been used.
+   - The first device shows when the code has been used: that a device
+     opened it, so it can sign in. It doesn't say the device is signed in,
+     as its person may still tap Cancel (audit 7 A-6, run 27).
    - "Done" (or showing a new code, or signing out) cancels the code at
      once: the device that made it sends a token only it has
      (`DELETE /api/account/link/<id>`). If that doesn't get through, it keeps
@@ -508,9 +512,9 @@ in with `sync: true` in `apps.json`.
   connects.
 - **Someone sees the QR code.** Anyone who sees a QR code before it's used,
   cancelled ("Done") or expired could use it first. The device showing it
-  then says a device used it and to replace the key if it wasn't the one
-  meant, and the person's own device says someone already used the code, so
-  it's noticed.
+  then says a device opened it and to replace the key if it wasn't one of
+  the person's, and the person's own device says someone already used the
+  code, so it's noticed.
 - **The account code is 8 characters (40 bits).** It catches a link from
   someone else by mistake, but a determined attacker who knows a person's
   code could make an account with the same code by brute force. Linking only

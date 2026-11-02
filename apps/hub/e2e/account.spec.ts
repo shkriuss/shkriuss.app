@@ -193,8 +193,9 @@ test('adds another device with a one-time code', async ({ page, browser, baseURL
   await expect(view(second, 'signed-in')).toBeVisible();
   await expect(accountCode(second)).toHaveText(code);
 
+  // Opened, not "signed in": its person may still tap Cancel (audit 7 A-6, run 27).
   await expect(page.locator('[data-link-status]')).toHaveText(
-    /^A device used this code and is now signed in\. If it wasn’t the one you meant/,
+    'A device opened this code, so it can sign in to your account. If it wasn’t one of yours, replace your account key now (below).',
   );
   await expect(page.locator('[data-link-qr] svg')).toHaveCount(0);
 

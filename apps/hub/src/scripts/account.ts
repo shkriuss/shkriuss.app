@@ -149,9 +149,14 @@ const replacedHere = (names: readonly string[], signedOut: string = REPLACED.her
     ? signedOut
     : `${signedOut} ${listFormat.format(names)} may still sync here with the old key: once you’re signed in, turn on sync in ${names.length === 1 ? 'it' : 'each'} again.`;
 
-/** Someone used the device code: maybe not the person (audit A-5). */
+/**
+ * Someone used the device code: maybe not the person (audit A-5). Opening
+ * it gets the account key, before "Add this device?" is answered: a device
+ * whose person then taps Cancel isn't signed in, so it doesn't say that
+ * (audit 7 A-6, run 27).
+ */
 const LINK_USED =
-  'A device used this code and is now signed in. If it wasn’t the one you meant, replace your account key now (below).';
+  'A device opened this code, so it can sign in to your account. If it wasn’t one of yours, replace your account key now (below).';
 
 /** True if this key was replaced on another device (false if that can't be checked now). */
 const wasReplaced = (secret: Uint8Array<ArrayBuffer>): Promise<boolean> =>
