@@ -23,7 +23,10 @@ their own, kept by `LibraryGate`, instead of a guess outside every meter.
 So the limits add up to about 3.3 GB, and about seven more apps with sync
 and notifications fit, not eight. And what caps the device links, with the
 old per-link objects that may be left over, is said right (see "Device
-links").
+links"). Changed by audit 7: the Account page says that the old recovery
+key and passkeys still sign in when the old key couldn't be noted (A-4, run
+27), and that they can't sign in only while the note is kept (D-3; see
+"What people see").
 
 ## Context
 
@@ -171,7 +174,12 @@ lowering first.
 - Replacing the account key when there's no room to note the old one: the
   key is replaced all the same (the apps move their copies to the new key
   when sync is turned on again), and the Account page says that devices with
-  the old key won't sign out by themselves.
+  the old key won't sign out by themselves, and that the old recovery key
+  and passkeys can still sign in with it (audit 7 A-4, run 27). It doesn't
+  try to note it again later: whoever filled the room can keep it full.
+  Before it continues, the page says the old ones can't sign in "for as
+  long as the account service keeps its note", which covers this and the
+  13-month clean-up below (audit 7 D-3).
 - Adding a passkey or notifications: the usual "couldn't, try again later".
 - A new online library: Photos says the online library is full, and photos
   stay on the device.

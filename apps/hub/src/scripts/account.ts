@@ -129,7 +129,8 @@ const REPLACED = {
   key: `This key was replaced on another device, so it can’t sign in any more. ${SIGN_IN_AGAIN}`,
   passkey: `This passkey is for an account key that was replaced on another device, so it can’t sign in any more. ${SIGN_IN_AGAIN} Then you can add a new passkey.`,
   done: `Your account key is replaced. Devices with the old key are signed out when they next open this page. ${AFTER_REPLACING}`,
-  unnoted: `Your account key is replaced, but the account service had no room to note the old one just now, so devices that still have it won’t sign out by themselves. ${AFTER_REPLACING}`,
+  // Without the note, the old key isn't refused anywhere (audit 7 A-4, run 27).
+  unnoted: `Your account key is replaced, but the account service had no room to note the old one just now. So devices that still have it won’t sign out by themselves, and your old recovery key and passkeys can still sign in with it. ${AFTER_REPLACING}`,
   // Replacing it here too would leave this device on an account that no
   // other device has (audit 7 A-2, run 27).
   first:

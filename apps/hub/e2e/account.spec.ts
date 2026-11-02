@@ -637,6 +637,36 @@ test('a key replaced here whose answer never came stays as it is when the check 
   await finishedWith(page, key, oldSecret);
 });
 
+test('says the old recovery key and passkeys still sign in when the old key couldn’t be noted (audit 7 A-4, run 27)', async ({
+  page,
+  guard,
+}) => {
+  // It said only that devices with the old key wouldn't sign out by
+  // themselves: without the note, the old key isn't refused anywhere.
+  await createAccount(page);
+  guard.allowConsole('status of 507');
+  await page.route('**/api/account/status', (route) =>
+    route.request().method() === 'PUT'
+      ? route.fulfill({ status: 507, contentType: 'application/json', body: '{"error":"x"}' })
+      : route.fallback(),
+  );
+  await page.getByRole('button', { name: 'Replace the account key' }).click();
+  // Before it's done, the page says that this holds only while the note is
+  // kept: 13 months after the last try, they sign in again (audit 7 D-3).
+  await expect(view(page, 'replace')).toContainText(
+    "The old one, and your passkeys, can't sign in any more, for as long as the account service keeps its note about the old key: until no device has tried it for 13 months.",
+  );
+  await page.getByRole('button', { name: 'Get a new key' }).click();
+  await expect(page.locator('[data-replace-only]')).toHaveText(
+    "When you continue, your old recovery key and passkeys can't sign in any more, for as long as the account service keeps its note about the old key.",
+  );
+  await page.getByLabel("I've saved my recovery key").check();
+  await page.getByRole('button', { name: 'Replace the key' }).click();
+  await expect(message(page)).toHaveText(
+    /^Your account key is replaced, but the account service had no room to note the old one just now\. So devices that still have it won’t sign out by themselves, and your old recovery key and passkeys can still sign in with it\. /,
+  );
+});
+
 test('replacing the key again after an answer that never came shows the same new key, and finishes (audit 7 A-2, run 27)', async ({
   page,
   guard,
