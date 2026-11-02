@@ -410,7 +410,8 @@ snapshots:
       ['"bin": {"wrangler": "./not-wrangler.js"}', 'bin'],
       ['"dependenciesMeta": {"x": {"injected": true}}', 'dependenciesMeta'],
     ] as const) {
-      const head = manifest.replace('{', `{${json}, `);
+      // The field goes first: after the object's opening brace.
+      const head = `{${json}, ${manifest.slice(1)}`;
       expect(unknownManifestFields(manifest, head), json).toEqual([field]);
       // In a new package.json too, and removed.
       expect(unknownManifestFields(undefined, head), json).toEqual([field]);
