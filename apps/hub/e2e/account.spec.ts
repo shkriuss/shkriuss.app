@@ -625,7 +625,9 @@ async function replaceWithLostAnswer(page: Page): Promise<string> {
   });
   await page.getByRole('button', { name: 'Replace the account key' }).click();
   await page.getByRole('button', { name: 'Get a new key' }).click();
+  await expect(page.getByRole('heading', { name: 'Save your new recovery key' })).toBeVisible();
   const key = (await page.locator('[data-new-key]').textContent()) ?? '';
+  expect(key).toMatch(RECOVERY_KEY);
   await page.getByLabel("I've saved my recovery key").check();
   await page.getByRole('button', { name: 'Replace the key' }).click();
   await expect(page.locator('[data-new-status]')).toHaveText(/^Couldn’t reach shkriuss\.app/);
