@@ -193,6 +193,7 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
   const newKey = required<HTMLElement>(root, '[data-new-key]');
   const newStatus = required<HTMLElement>(root, '[data-new-status]');
   const replaceOnly = required<HTMLElement>(root, '[data-replace-only]');
+  const createReplace = required<HTMLElement>(root, '[data-create-replace]');
   const finishLabel = required<HTMLElement>(root, '[data-finish-label]');
   const savedCheck = required<HTMLInputElement>(root, '[data-saved-check]');
   const finishCreate = required<HTMLButtonElement>(root, '[data-action="finish-create"]');
@@ -402,6 +403,7 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
     newTitle.textContent = replacing ? 'Save your new recovery key' : 'Save your recovery key';
     finishLabel.textContent = replacing ? 'Replace the key' : 'Continue';
     replaceOnly.hidden = !replacing;
+    createReplace.hidden = true;
     newKey.textContent = pending.key;
     newStatus.textContent = earlier
       ? 'It’s the same new key as last time, as replacing the key didn’t finish then.'
@@ -855,6 +857,9 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
       }
       // Asked whether to add this device: says whether it would replace an account.
       linkReplace.hidden = !account;
+      // Making a new account: the same. Continue signed it in to that one
+      // instead, saying nothing (audit 7 G-12).
+      createReplace.hidden = !account || !pending || pending.replacing;
       if (pending || linked) return;
       home(false);
       // Focus that was in what's now hidden goes to the top of what's shown.

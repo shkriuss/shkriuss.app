@@ -314,6 +314,37 @@ test('signed out in another tab: says so, closes the recovery key, and moves foc
   await other.close();
 });
 
+test('making an account while another tab signs in says Continue switches this device to it (audit 7 G-12)', async ({
+  page,
+}) => {
+  // "Save your recovery key" stayed as it was, and Continue then signed the
+  // device in to the new account instead, without a word.
+  await page.goto('/account/');
+  await page.getByRole('button', { name: 'Create an account' }).click();
+  const warning = page.locator('[data-create-replace]');
+  await expect(warning).toBeHidden();
+  const other = await page.context().newPage();
+  const first = await createAccount(other);
+  await page.bringToFront();
+  await expect(message(page)).toHaveText('This device was signed in, in another tab.');
+  await expect(page.getByRole('heading', { name: 'Save your recovery key' })).toBeVisible();
+  await expect(warning).toHaveText(
+    'This device was signed in to an account in another tab. Continuing signs it in to this new account instead.',
+  );
+  await checkA11y(page, 'account: a new key while another tab signed in');
+  // Signed out there again: nothing to switch from.
+  await signOut(other);
+  await expect(warning).toBeHidden();
+  await createAccount(other);
+  await expect(warning).toBeVisible();
+  // Continuing does what it says.
+  await page.getByLabel("I've saved my recovery key").check();
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await expect(view(page, 'signed-in')).toBeVisible();
+  await expect(accountCode(page)).not.toHaveText(first.code);
+  await other.close();
+});
+
 test('another account in another tab: the old one’s code stops working, and its key replacement goes', async ({
   page,
   browser,

@@ -140,6 +140,11 @@ const pushApps = listedApps.filter((app) => app.pushNotifications === true);
         <input type="checkbox" data-saved-check />
         <span>I've saved my recovery key</span>
       </label>
+      {/* A new account, while another tab signed this device in (audit 7 G-12). */}
+      <p class="notice notice--danger" data-create-replace hidden>
+        This device was signed in to an account in another tab. Continuing signs it in to this new
+        account instead.
+      </p>
       <div class="cluster">
         <Button variant="primary" data-action="finish-create" disabled>
           <span data-finish-label>Continue</span>
