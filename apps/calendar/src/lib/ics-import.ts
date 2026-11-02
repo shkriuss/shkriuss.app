@@ -235,7 +235,45 @@ interface When {
   unknownZone: boolean;
 }
 
+/**
+ * Clock readers, by time zone, the last used last. Zone names are the same
+ * in any case ("eUROPE/bERLIN" is Europe/Berlin), so all the spellings of a
+ * zone share one; and at most MAX_FORMATTERS are kept, as a file can name
+ * thousands of zones of its own too ("+00:01", "+00:02"…). One was kept for
+ * each, as written, for as long as the page was open: a crafted file took
+ * about 300 MB (audit 7 C-1; audit 1 B-13 in the notification service).
+ */
 const formatters = new Map<string, Intl.DateTimeFormat>();
+const MAX_FORMATTERS = 50;
+
+/** The time zones with a clock reader kept (for tests). */
+export const cachedTimeZones = (): string[] => [...formatters.keys()];
+
+/** Reads clocks in `timeZone`. Throws for unknown zones. */
+function formatterFor(timeZone: string): Intl.DateTimeFormat {
+  const key = timeZone.toLowerCase();
+  let format = formatters.get(key);
+  if (format) formatters.delete(key);
+  else {
+    format = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      hourCycle: 'h23',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+    // The one used longest ago goes (a Map keeps the order they were put in).
+    for (const oldest of formatters.keys()) {
+      if (formatters.size < MAX_FORMATTERS) break;
+      formatters.delete(oldest);
+    }
+  }
+  formatters.set(key, format);
+  return format;
+}
 
 interface Clock {
   year: number;
@@ -248,21 +286,7 @@ interface Clock {
 
 /** The date and time a moment shows on clocks in `timeZone`. Throws for unknown zones. */
 function wallClock(ms: number, timeZone: string): Clock {
-  let format = formatters.get(timeZone);
-  if (!format) {
-    format = new Intl.DateTimeFormat('en-US', {
-      timeZone,
-      hourCycle: 'h23',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    });
-    formatters.set(timeZone, format);
-  }
-  const found = format.formatToParts(new Date(ms));
+  const found = formatterFor(timeZone).formatToParts(new Date(ms));
   const read = (type: Intl.DateTimeFormatPartTypes) =>
     Number(found.find((part) => part.type === type)?.value ?? 0);
   return {
@@ -289,8 +313,8 @@ function knownZone(timeZone: string): string | null {
   for (const zone of zones) {
     if (!zone) continue;
     try {
-      wallClock(0, zone);
-      return zone;
+      // Its own name, whatever the spelling, so it's compared as itself.
+      return formatterFor(zone).resolvedOptions().timeZone;
     } catch {
       // Not a time zone this browser knows.
     }

@@ -12,6 +12,7 @@ import {
 import { importEvents } from './editing.ts';
 import { occurrencesBetween, type CalendarEvent, type EventDraft, type Repeat } from './events.ts';
 import {
+  cachedTimeZones,
   lastStart,
   MAX_READ_EVENTS,
   parseDuration,
@@ -178,6 +179,32 @@ describe('parseIcs', () => {
         london,
       ),
     ).toMatchObject({ startTime: '08:00', endTime: null });
+  });
+
+  it('keeps a few clock readers, however a file spells its time zones (audit 7 C-1)', () => {
+    // Zone names are the same in any case, and each spelling kept a reader of
+    // its own: a crafted file of 5,000 events kept about 300 MB.
+    const spell = (zone: string, n: number) =>
+      [...zone].map((letter, i) => ((n >> i) & 1 ? letter.toUpperCase() : letter)).join('');
+    const spelled = Array.from({ length: 300 }, (_, i) => [
+      `DTSTART;TZID=${spell('europe/berlin', i)}:20260115T090000`,
+      `SUMMARY:Spelled ${i}`,
+    ]);
+    const result = parseIcs(calendar(...spelled), { ...options, timeZone: 'Europe/London' });
+    expect(result.events).toHaveLength(300);
+    expect(new Set(result.events.map((event) => event.draft.startTime))).toEqual(
+      new Set(['08:00']),
+    );
+    expect(cachedTimeZones().filter((zone) => zone === 'europe/berlin')).toHaveLength(1);
+    expect(cachedTimeZones().filter((zone) => zone.startsWith('europe/b'))).toHaveLength(1);
+    // A file can name thousands of zones of its own too ("+00:01"…): only a
+    // few readers are kept.
+    const offsets = Array.from({ length: 300 }, (_, i) => [
+      `DTSTART;TZID=+${String(Math.floor(i / 60)).padStart(2, '0')}:${String(i % 60).padStart(2, '0')}:20260115T090000`,
+      `SUMMARY:Offset ${i}`,
+    ]);
+    parseIcs(calendar(...offsets), options);
+    expect(cachedTimeZones().length).toBeLessThanOrEqual(50);
   });
 
   it('reads a time the clocks skip or show twice as RFC 5545 says', () => {

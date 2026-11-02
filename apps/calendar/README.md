@@ -163,7 +163,12 @@ its notification server, docs/adr/0009).
   most 100 of them; past that (only in odd files), a repeat counts as one
   that may be an hour off. The two clocks are compared again only after a
   change that moves one against the other, so time zones with the same
-  rules (Paris and Berlin) cost almost nothing. It also says when a monthly or
+  rules (Paris and Berlin) cost almost nothing. The import keeps clock
+  readers for at most 50 time zones (the one used longest ago makes room
+  for a new one), and all the spellings of a zone share one
+  ("eUROPE/bERLIN" is Europe/Berlin): one for each, as written, let a
+  crafted file take about 300 MB while the page was open (audit 7 C-1).
+  It also says when a monthly or
   yearly event moved to another day near the end of a month: 22:00 UTC on the
   31st is 02:00 on the 1st in Tbilisi, and Calendar would show it on the 1st
   of every month, also after months without a 31st.
