@@ -271,7 +271,9 @@ I-1 to I-10).
 
 A deploy runs every check first, and they need a few outside services:
 npm (the packages, installed again from scratch for the deploy itself),
-Ubuntu's mirrors (the browser's system libraries) and GitHub. Playwright's
+PyPI (zizmor, the workflow checker, which **Secret scan** installs on every
+run; audit 7 J-3), Ubuntu's mirrors (the browser's system libraries) and
+GitHub. Playwright's
 browser and Grammar's model come from CI's cache, so their download servers
 (Playwright's, and Hugging Face) are needed only after an update, or when
 the cache has gone: GitHub deletes a cache nobody has used for 7 days. The

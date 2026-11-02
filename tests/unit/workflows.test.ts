@@ -317,6 +317,27 @@ describe('the build CI tested is the one deployed', () => {
   });
 });
 
+describe('deployment.md names every outside service the checks download from (audit 7 J-3)', () => {
+  // A check that needs a service which is down stops every deploy, so the
+  // owner has to find it in "When a service CI needs is down".
+  const doc = readFileSync(join(github, '../docs/deployment.md'), 'utf8');
+  const section = /## When a service CI needs is down\n([\s\S]*?)\n## /.exec(doc)?.[1] ?? '';
+  const commands = Object.values(ci.jobs)
+    .flatMap((job) => job.steps ?? [])
+    .map((step) => step.run ?? '')
+    .join('\n');
+
+  it.each([
+    [/\bpip"? install\b/, 'PyPI'],
+    [/\bpnpm install\b/, 'npm'],
+    [/--with-deps/, "Ubuntu's mirrors"],
+    [/https:\/\/github\.com\//, 'GitHub'],
+  ])('%s needs %s', (command, service) => {
+    expect(commands).toMatch(command);
+    expect(section).toContain(service);
+  });
+});
+
 /** The `options:` list under an input in new-app.yml. */
 function choiceOptions(input: string): string[] {
   const yaml = readFileSync(join(github, 'workflows/new-app.yml'), 'utf8');

@@ -90,16 +90,16 @@ each audit found, and what happened to each finding, is in
 
 **Who might attack, and how:**
 
-| Who                                                 | What they can do                                                                                                               |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| Anyone on the internet                              | Call every `/api` route directly, with any input, as often as they like. They know the code, because the repository is public. |
-| Cloudflare, or someone reading the servers' storage | See everything the Workers store and receive. They must see only sealed data, plus sizes, counts, times and IP addresses.      |
-| Another website                                     | Link to, frame or send requests to our sites from someone's browser.                                                           |
-| One of our own subdomains, if it were compromised   | Run code on `<slug>.shkriuss.app`. It must not be able to read another app's data or keys.                                     |
-| A file someone imports                              | Calendar files (`.ics`), backups, photos (Exif) and data synced from another device are untrusted input.                       |
-| A pull request from someone's fork, or a dependency | Try to run code in CI with secrets, or ship code to production (supply chain).                                                 |
-| Someone with a person's unlocked, signed-in device  | Out of scope, except that "Replace the account key" must shut that device out, and "Delete all data" must delete it.           |
-| An outside service we depend on                     | Hugging Face, npm, the push services or GitHub can fail, slow down or disappear. That mustn't stop a fix from being deployed.  |
+| Who                                                 | What they can do                                                                                                                    |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Anyone on the internet                              | Call every `/api` route directly, with any input, as often as they like. They know the code, because the repository is public.      |
+| Cloudflare, or someone reading the servers' storage | See everything the Workers store and receive. They must see only sealed data, plus sizes, counts, times and IP addresses.           |
+| Another website                                     | Link to, frame or send requests to our sites from someone's browser.                                                                |
+| One of our own subdomains, if it were compromised   | Run code on `<slug>.shkriuss.app`. It must not be able to read another app's data or keys.                                          |
+| A file someone imports                              | Calendar files (`.ics`), backups, photos (Exif) and data synced from another device are untrusted input.                            |
+| A pull request from someone's fork, or a dependency | Try to run code in CI with secrets, or ship code to production (supply chain).                                                      |
+| Someone with a person's unlocked, signed-in device  | Out of scope, except that "Replace the account key" must shut that device out, and "Delete all data" must delete it.                |
+| An outside service we depend on                     | Hugging Face, npm, PyPI, the push services or GitHub can fail, slow down or disappear. That mustn't stop a fix from being deployed. |
 
 **Security goals:**
 
