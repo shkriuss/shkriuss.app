@@ -152,12 +152,21 @@ export function mountNotificationStatus(
       () => {
         const hadFocus = enable.contains(root.activeElement);
         render();
+        const answer = permission();
         // The button is gone now; keep keyboard focus nearby. Moving focus
         // there reads the line out, so it isn't announced as well (audit 3 G-11).
         if (hadFocus && enable.hidden) {
           status.tabIndex = -1;
           status.focus();
-        } else if (permission() === 'granted') announce('Notifications are on.');
+        } else if (answer !== 'default') {
+          // Focus wasn't on the button (Safari doesn't focus a tapped one, and
+          // apps ask after a reminder is set): the new line is read out,
+          // allowed or blocked. "Blocked" said nothing, and the button just
+          // disappeared (audit 7 G-8). An answer that changes nothing (the
+          // question closed, or a browser that has stopped asking) says
+          // nothing, rather than talk over what the app just said.
+          announce(texts[answer]);
+        }
       },
       () => undefined,
     );

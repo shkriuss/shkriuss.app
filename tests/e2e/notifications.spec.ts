@@ -30,6 +30,41 @@ test('turns on notifications with the button, keeping focus near it', async ({ p
   await expect(page.locator('[data-announcer]')).not.toHaveText(/Notifications are on/);
 });
 
+// Safari doesn't focus a button that's tapped, so focus wasn't moved after
+// the answer, and nothing was read out unless notifications were allowed:
+// "Don't Allow" just made the button disappear (audit 7 G-8).
+for (const answer of ['denied', 'granted'] as const) {
+  test(`reads out the answer (${answer}) when the tap didn’t focus the button, as in Safari`, async ({
+    page,
+  }) => {
+    await fakeNotifications(page, 'default', { answer });
+    await page.goto('/');
+    await expect(status(page)).toHaveText(/^Notifications are off\./);
+    // A click that doesn't focus what it's on, as a tap in Safari.
+    await enable(page).dispatchEvent('click');
+    await expect(enable(page)).toBeHidden();
+    const line = (await status(page).textContent()) ?? '';
+    expect(line).toMatch(
+      answer === 'denied' ? /^Notifications are blocked/ : /^Notifications are on/,
+    );
+    await expect(page.locator('[data-announcer]')).toContainText(line);
+  });
+}
+
+test('says nothing when the question is closed without an answer, and keeps the button', async ({
+  page,
+}) => {
+  await fakeNotifications(page, 'default', { answer: 'default' });
+  await page.goto('/');
+  await enable(page).dispatchEvent('click');
+  await expect.poll(() => page.evaluate(() => 'permissionAsked' in window)).toBe(true);
+  // A moment for the answer to be shown.
+  await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 100)));
+  await expect(enable(page)).toBeVisible();
+  await expect(status(page)).toHaveText(/^Notifications are off\./);
+  await expect(page.locator('[data-announcer]')).toHaveText('');
+});
+
 test('says when notifications are blocked', async ({ page }, testInfo) => {
   const { name } = getSite(testInfo.project.name);
   await fakeNotifications(page, 'denied');

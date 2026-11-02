@@ -102,35 +102,46 @@ export async function fakeSubscription(page: Page, rig: PushRig, options: { fail
 
 export type Permission = NotificationPermission | 'unsupported';
 
-/** Replaces the browser's notifications with a recorder (see shownNotifications). */
-export async function fakeNotifications(page: Page, permission: Permission): Promise<void> {
-  await page.addInitScript((initial: Permission) => {
-    const target = window as unknown as Record<string, unknown>;
-    if (initial === 'unsupported') {
-      delete target['Notification'];
-      return;
-    }
-    let current = initial;
-    const shown: unknown[] = [];
-    target['shownNotifications'] = shown;
-    function FakeNotification(
-      title: string,
-      options: NotificationOptions & { renotify?: boolean },
-    ): void {
-      // As Chrome does.
-      if (options.renotify && !options.tag) throw new TypeError('renotify needs a tag');
-      shown.push({ title, ...options });
-    }
-    Object.defineProperty(FakeNotification, 'permission', { get: () => current });
-    Object.assign(FakeNotification, {
-      requestPermission: async () => {
-        target['permissionAsked'] = true;
-        current = 'granted';
-        return current;
-      },
-    });
-    target['Notification'] = FakeNotification;
-  }, permission);
+/**
+ * Replaces the browser's notifications with a recorder (see
+ * shownNotifications). Asked for permission, the person gives `answer`
+ * (allows them, unless said otherwise).
+ */
+export async function fakeNotifications(
+  page: Page,
+  permission: Permission,
+  { answer = 'granted' }: { answer?: NotificationPermission } = {},
+): Promise<void> {
+  await page.addInitScript(
+    ({ initial, answer }) => {
+      const target = window as unknown as Record<string, unknown>;
+      if (initial === 'unsupported') {
+        delete target['Notification'];
+        return;
+      }
+      let current = initial;
+      const shown: unknown[] = [];
+      target['shownNotifications'] = shown;
+      function FakeNotification(
+        title: string,
+        options: NotificationOptions & { renotify?: boolean },
+      ): void {
+        // As Chrome does.
+        if (options.renotify && !options.tag) throw new TypeError('renotify needs a tag');
+        shown.push({ title, ...options });
+      }
+      Object.defineProperty(FakeNotification, 'permission', { get: () => current });
+      Object.assign(FakeNotification, {
+        requestPermission: async () => {
+          target['permissionAsked'] = true;
+          current = answer;
+          return current;
+        },
+      });
+      target['Notification'] = FakeNotification;
+    },
+    { initial: permission, answer },
+  );
 }
 
 /** The notifications shown so far, as { title, ...options }. */
