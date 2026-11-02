@@ -256,6 +256,14 @@ test.describe('backing up and restoring', () => {
 
     await dialog.getByLabel('Show passphrase').check();
     await expect(passphrase).toHaveAttribute('type', 'text');
+    // Text fields now: no spell-checker (some send what's typed to a server),
+    // no autocorrection or capitals, which Restore wouldn't repeat (audit 7
+    // A-3, run 27).
+    for (const field of [passphrase, again]) {
+      await expect(field).toHaveAttribute('spellcheck', 'false');
+      await expect(field).toHaveAttribute('autocorrect', 'off');
+      await expect(field).toHaveAttribute('autocapitalize', 'off');
+    }
     await again.fill(PASSPHRASE);
     const download = page.waitForEvent('download');
     await dialog.getByRole('button', { name: 'Download backup' }).click();
@@ -280,6 +288,8 @@ test.describe('backing up and restoring', () => {
     await checkA11y(page, 'restore dialog');
     const unlock = restoreDialog(page).getByLabel('Passphrase');
     await expect(unlock).toBeFocused();
+    await expect(unlock).toHaveAttribute('spellcheck', 'false');
+    await expect(unlock).toHaveAttribute('autocorrect', 'off');
     await unlock.fill('not the right passphrase');
     await restoreDialog(page).getByRole('button', { name: 'Restore' }).click();
     await expect(unlock).toHaveAccessibleDescription(/doesn’t unlock this backup/);

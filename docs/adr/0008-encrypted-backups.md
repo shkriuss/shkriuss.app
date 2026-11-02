@@ -8,7 +8,10 @@ turned down as damaged (E-6, A-4); a restore replaces each key in its place
 and says so if the old data couldn't all be put back (E-7); a plain copy
 keeps every saved text exactly (E-8); a restore is refused while what's
 saved is from a newer version of the app, as after a rollback, since it
-would replace the person's latest data (E-3).
+would replace the person's latest data (E-3). Changed by audit 7: the
+passphrase fields turn off spell-checkers, autocorrection and capitals,
+which apply once "Show passphrase" makes them plain text fields (A-3, run
+27).
 
 ## Context
 
@@ -29,6 +32,12 @@ format.)
   is still available, with a warning that anyone with the file can read it.
 - **Locking happens on the device** with the browser's Web Crypto, in
   `@shkriuss/storage/backup`. The passphrase and data never leave the device.
+  - The passphrase is used exactly as typed (only NFC, below). Its fields
+    turn off spell-checking, autocorrection and capitals: "Show passphrase"
+    makes them plain text fields, where some browsers' spell-checkers send
+    what's typed to a server, and a phone's keyboard can change a word or
+    its first letter (both fields alike, so they'd match), which Restore's
+    password field wouldn't repeat (audit 7 A-3, run 27).
   - Key: **PBKDF2-SHA-256, 600,000 rounds** (OWASP's current advice), from a
     passphrase of at least 12 characters (Unicode NFC, so it matches across
     keyboards), with a random 16-byte salt. Argon2 would resist guessing

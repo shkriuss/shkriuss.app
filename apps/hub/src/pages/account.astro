@@ -90,6 +90,7 @@ const pushApps = listedApps.filter((app) => app.pushNotifications === true);
             rows="3"
             autocomplete="off"
             autocapitalize="characters"
+            autocorrect="off"
             spellcheck="false"
             aria-describedby="recovery-key-hint recovery-key-error"
           ></textarea>
@@ -120,8 +121,10 @@ const pushApps = listedApps.filter((app) => app.pushNotifications === true);
       <p class="notice notice--danger">
         If you lose it and every signed-in device, nobody can get your account back, not even us.
       </p>
+      {/* Only while the service keeps its note (audit 7 D-3; audit 7 A-4, run 27). */}
       <p class="notice" data-replace-only hidden>
-        When you continue, your old recovery key and passkeys can't sign in any more.
+        When you continue, your old recovery key and passkeys can't sign in any more, for as long as
+        the account service keeps its note about the old key.
       </p>
       <p class="code-text" data-new-key></p>
       <div class="cluster">
@@ -137,6 +140,11 @@ const pushApps = listedApps.filter((app) => app.pushNotifications === true);
         <input type="checkbox" data-saved-check />
         <span>I've saved my recovery key</span>
       </label>
+      {/* A new account, while another tab signed this device in (audit 7 G-12). */}
+      <p class="notice notice--danger" data-create-replace hidden>
+        This device was signed in to an account in another tab. Continuing signs it in to this new
+        account instead.
+      </p>
       <div class="cluster">
         <Button variant="primary" data-action="finish-create" disabled>
           <span data-finish-label>Continue</span>
@@ -155,9 +163,10 @@ const pushApps = listedApps.filter((app) => app.pushNotifications === true);
       </p>
       <ul>
         <li>
-          You get a new recovery key. The old one, and your passkeys, can't sign in any more. A
-          passkey can still unlock the old key, though: remove them afterwards with “Remove a
-          passkey”.
+          You get a new recovery key. The old one, and your passkeys, can't sign in any more, for as
+          long as the account service keeps its note about the old key: until no device has tried it
+          for 13 months. A passkey can still unlock the old key, though: remove them afterwards with
+          “Remove a passkey”.
         </li>
         <li>
           Devices with the old key are signed out when they next open this page. Their apps keep

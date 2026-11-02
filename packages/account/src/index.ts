@@ -10,6 +10,7 @@ export {
   noteSyncOff,
   noteSyncOn,
   replacedSecrets,
+  replacingWith,
   saveAccount,
   syncedApps,
   type Account,
@@ -41,10 +42,10 @@ export {
   type RecoveryKeyResult,
 } from './secret.ts';
 export {
-  finishReplacing,
+  checkReplaced,
   isReplaced,
   replaceAccountKey,
   replacedNote,
-  signOutIfReplaced,
+  type KeyCheck,
 } from './status.ts';
 export { LINK_LIFETIME_MS } from './validate.ts';

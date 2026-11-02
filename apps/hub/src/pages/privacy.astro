@@ -21,7 +21,7 @@ const whereLabel: Record<StorageKind, string> = {
 // The day this page's text last changed (people rely on it), and a
 // fingerprint of that text: ../privacy.test.ts fails when the text changes
 // but they don't, and says what to set (audit 3 D-7).
-const LAST_UPDATED = '1 November 2026'; // text 8123a54a865f05f9
+const LAST_UPDATED = '1 November 2026'; // text 5033ea627ce25bb0
 // The page shows the day that change was merged, so went live, if that's
 // later than the day it was written (audit 6 D-2).
 const shownDate = lastUpdated(LAST_UPDATED);
@@ -177,9 +177,10 @@ const shownDate = lastUpdated(LAST_UPDATED);
         it sign out and forget it. The note is deleted once no device has asked about it for 13
         months. The device you replace it on keeps the old key for 13 months, or until you sign out
         (or sign in to another account), so your apps can move their synced data to the new one.
-        Passkeys you added before can't sign in any more, but the old key stays on the server,
-        locked for each of them, until you remove that passkey (“Remove a passkey” on the Account
-        page; one already deleted from your password manager can't be removed, so it stays, locked).{' '}
+        While the note is kept, passkeys you added before can't sign in any more, but the old key
+        stays on the server, locked for each of them, until you remove that passkey (“Remove a
+        passkey” on the Account page; one already deleted from your password manager can't be
+        removed, so it stays, locked).{' '}
         {pushSites.length > 0 && (
           <>
             Reminders while an app is closed aren't part of the account, so the lost device keeps

@@ -34,7 +34,16 @@ after 180 days (S5); an edit keeps its time also when the app is put away
 while a sync waits for the server (S22); an older version of an app keeps the
 stores a newer one added in the copy (S4); when that code can't be loaded (a
 page left open from before an update), "Turn on sync" says to reload the page
-rather than check the connection (S40).
+rather than check the connection (S40). Changed by audit 7: the Account page
+asks the account service once as it opens and acts on that one answer, so a
+replacement whose answer was lost is finished then or left for the next time,
+never taken for a lost device's (A-1, run 27); the account service answers a
+replacement with the note it keeps, so a device replacing a key that another
+device replaced first signs out instead of taking it for done, and trying
+again after a lost answer shows the same new key (A-2, run 27); a device
+showing a code says a device opened it, not that one is signed in (A-6,
+run 27); a copied recovery key comes with a word about clipboard histories
+(A-3, run 39).
 
 ## Context
 
@@ -77,7 +86,9 @@ The requirements:
      device. The page says that on an iPhone or iPad a download usually goes
      to iCloud Drive, which Apple can read without Advanced Data
      Protection, so a password manager or paper is safer there (audit 6
-     D-4).
+     D-4). Copied, it says that some keyboards and computers keep a history
+     of what's copied (some sync it), to clear once the key is pasted
+     where it's kept (audit 7 A-3, run 39).
 2. **Passkey (optional).** This works where the password manager supports the
    WebAuthn **PRF** extension, for example Google Password Manager on Android,
    or iCloud Keychain on iOS 18 and later.
@@ -106,7 +117,9 @@ The requirements:
    - The new device fetches the sealed secret once, then it's deleted. It
      immediately removes the key from the address bar, shows the account code,
      and asks before signing in.
-   - The first device shows when the code has been used.
+   - The first device shows when the code has been used: that a device
+     opened it, so it can sign in. It doesn't say the device is signed in,
+     as its person may still tap Cancel (audit 7 A-6, run 27).
    - "Done" (or showing a new code, or signing out) cancels the code at
      once: the device that made it sends a token only it has
      (`DELETE /api/account/link/<id>`). If that doesn't get through, it keeps
@@ -180,7 +193,24 @@ connection drops, or the page is closed); then the next time the Account
 page opens, the note's tag names that new key, which only this device
 could have made, so it finishes step 3 instead of taking itself for a
 lost device. Before, it signed out and forgot the old key, so no app could
-move its old copy any more (audit 6 A-1).
+move its old copy any more (audit 6 A-1). The page asks the service once as
+it opens, and acts on that one answer: if the service can't be reached,
+nothing changes until the next time. It used to ask twice, and when only
+the first check failed, the second still took it for a lost device (audit 7
+A-1, run 27).
+
+The service answers step 2 with the note it keeps, and only the first
+note counts. If its tag names another key, another device replaced the key
+first (another of the person's, or the lost one): this device doesn't sign
+in with its own new key, which no other device would have, but signs out,
+as a device with a replaced key does, and says why. And "Replace the
+account key" started again after an answer that never came shows the same
+new key, so trying again finishes that replacement; once the service says
+the old key isn't replaced (that replacement never got there), the device
+forgets that new key, and the next replacement gets a new one. Before, the service
+answered every replacement alike: this device signed in with its new key,
+kept the old one for the apps, and nothing ever told it (audit 7 A-2, run
+27).
 
 Then:
 
@@ -448,7 +478,8 @@ in with `sync: true` in `apps.json`.
   - Edits made on the lost device before an app moves its copy come along
     with the move.
   - Someone holding the lost device could replace the key first. Then the
-    person's own devices are signed out; they create a new account and turn
+    person's own devices are signed out (also the one where they then
+    replace it: audit 7 A-2, run 27); they create a new account and turn
     on sync again, and their data comes along from their devices.
   - If the lost device also has the person's password manager, a new passkey
     would reach it too. The Account page says to remove the device from the
@@ -483,12 +514,18 @@ in with `sync: true` in `apps.json`.
   that item is lost.
 - **iPhone Home Screen apps** keep their own storage, separate from Safari. An
   app added to the Home Screen may need its own sign-in on the hub when it
-  connects.
+  connects. Whether "Turn on sync" comes back to such an app at all hasn't
+  been tried on an iPhone: the app keeps its half of the request in the
+  tab's own storage (`sessionStorage`), and iOS may open the hub, and the
+  way back, in a browser view of its own. If so, the app says "Turning on
+  sync didn't finish", and nothing leaks: the key is sealed to that tab
+  (audit 7 A-4, run 39, a suspicion). Try it with Tally on the Home Screen
+  before changing where the request is kept.
 - **Someone sees the QR code.** Anyone who sees a QR code before it's used,
   cancelled ("Done") or expired could use it first. The device showing it
-  then says a device used it and to replace the key if it wasn't the one
-  meant, and the person's own device says someone already used the code, so
-  it's noticed.
+  then says a device opened it and to replace the key if it wasn't one of
+  the person's, and the person's own device says someone already used the
+  code, so it's noticed.
 - **The account code is 8 characters (40 bits).** It catches a link from
   someone else by mistake, but a determined attacker who knows a person's
   code could make an account with the same code by brute force. Linking only

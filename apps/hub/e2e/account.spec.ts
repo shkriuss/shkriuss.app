@@ -107,6 +107,9 @@ test('signs in with the recovery key, forgiving spaces and case, catching typos'
   const input = page.getByRole('textbox', { name: 'Recovery key' });
   const signIn = page.getByRole('button', { name: 'Sign in', exact: true });
   const error = page.locator('#recovery-key-error');
+  // Typed as it is, and kept from spell-checkers (audit 7 A-3, run 27).
+  await expect(input).toHaveAttribute('spellcheck', 'false');
+  await expect(input).toHaveAttribute('autocorrect', 'off');
 
   await input.fill('not a key');
   await signIn.click();
@@ -190,8 +193,9 @@ test('adds another device with a one-time code', async ({ page, browser, baseURL
   await expect(view(second, 'signed-in')).toBeVisible();
   await expect(accountCode(second)).toHaveText(code);
 
+  // Opened, not "signed in": its person may still tap Cancel (audit 7 A-6, run 27).
   await expect(page.locator('[data-link-status]')).toHaveText(
-    /^A device used this code and is now signed in\. If it wasn’t the one you meant/,
+    'A device opened this code, so it can sign in to your account. If it wasn’t one of yours, replace your account key now (below).',
   );
   await expect(page.locator('[data-link-qr] svg')).toHaveCount(0);
 
@@ -288,7 +292,10 @@ test('“Show recovery key” saves and copies this account’s key, even after 
   expect(text).not.toContain(unsaved);
   await expect(status).toHaveText('Download started. Keep the file somewhere safe.');
   await dialog.getByRole('button', { name: 'Copy' }).click();
-  await expect(status).toHaveText('Copied.');
+  // Keyboards' and computers' clipboard histories keep it (audit 7 A-3, run 39).
+  await expect(status).toHaveText(
+    'Copied. Some keyboards and computers keep a history of what’s copied: once you’ve pasted the key where you keep it, delete it from there.',
+  );
   expect(await second.evaluate(() => navigator.clipboard.readText())).toBe(key);
   await other.close();
 });
@@ -308,6 +315,37 @@ test('signed out in another tab: says so, closes the recovery key, and moves foc
   await expect(keyDialog).toBeHidden();
   await expect(view(page, 'signed-out')).toBeVisible();
   await expect(page.locator('[data-view="signed-out"] [tabindex="-1"]')).toBeFocused();
+  await other.close();
+});
+
+test('making an account while another tab signs in says Continue switches this device to it (audit 7 G-12)', async ({
+  page,
+}) => {
+  // "Save your recovery key" stayed as it was, and Continue then signed the
+  // device in to the new account instead, without a word.
+  await page.goto('/account/');
+  await page.getByRole('button', { name: 'Create an account' }).click();
+  const warning = page.locator('[data-create-replace]');
+  await expect(warning).toBeHidden();
+  const other = await page.context().newPage();
+  const first = await createAccount(other);
+  await page.bringToFront();
+  await expect(message(page)).toHaveText('This device was signed in, in another tab.');
+  await expect(page.getByRole('heading', { name: 'Save your recovery key' })).toBeVisible();
+  await expect(warning).toHaveText(
+    'This device was signed in to an account in another tab. Continuing signs it in to this new account instead.',
+  );
+  await checkA11y(page, 'account: a new key while another tab signed in');
+  // Signed out there again: nothing to switch from.
+  await signOut(other);
+  await expect(warning).toBeHidden();
+  await createAccount(other);
+  await expect(warning).toBeVisible();
+  // Continuing does what it says.
+  await page.getByLabel("I've saved my recovery key").check();
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await expect(view(page, 'signed-in')).toBeVisible();
+  await expect(accountCode(page)).not.toHaveText(first.code);
   await other.close();
 });
 
@@ -545,6 +583,67 @@ test('replacing the key signs out every device that has the old one', async ({
   await tablet.context().close();
 });
 
+test('a mistake in the recovery key isn’t said again once fixed, when it fails for another reason (audit 7 G-10)', async ({
+  page,
+}) => {
+  // It stayed under the box, marked as wrong, and was read out again as
+  // focus came back there: the person kept looking for a typo.
+  const old = await createAccount(page);
+  await replaceKey(page);
+  await signOut(page);
+  const input = page.getByRole('textbox', { name: 'Recovery key' });
+  const error = page.locator('#recovery-key-error');
+  await signInWithKey(page, old.key.replace(/^./, old.key.startsWith('A') ? 'B' : 'A'));
+  await expect(error).toHaveText(/There’s a mistake/);
+  await expect(input).toHaveAttribute('aria-invalid', 'true');
+  await signInWithKey(page, old.key);
+  await expect(message(page)).toHaveText(/^This key was replaced on another device/);
+  await expect(input).toBeFocused();
+  await expect(error).toHaveText('');
+  await expect(input).not.toHaveAttribute('aria-invalid');
+});
+
+/** What this device keeps about its account: the key, and the replaced keys. */
+const storedAccount = (page: Page) =>
+  page.evaluate(
+    () =>
+      JSON.parse(localStorage.getItem('shkriuss-device:account') ?? 'null') as {
+        secret?: string;
+        replaced?: string[];
+      } | null,
+  );
+
+/**
+ * Replaces the key on a signed-in page: the account service notes it, but
+ * its answer is lost (the connection drops). Returns the new recovery key.
+ */
+async function replaceWithLostAnswer(page: Page): Promise<string> {
+  await page.route('**/api/account/status', async (route) => {
+    if (route.request().method() !== 'PUT') return route.fallback();
+    await route.fetch();
+    return route.abort('connectionreset');
+  });
+  await page.getByRole('button', { name: 'Replace the account key' }).click();
+  await page.getByRole('button', { name: 'Get a new key' }).click();
+  await expect(page.getByRole('heading', { name: 'Save your new recovery key' })).toBeVisible();
+  const key = (await page.locator('[data-new-key]').textContent()) ?? '';
+  expect(key).toMatch(RECOVERY_KEY);
+  await page.getByLabel("I've saved my recovery key").check();
+  await page.getByRole('button', { name: 'Replace the key' }).click();
+  await expect(page.locator('[data-new-status]')).toHaveText(/^Couldn’t reach shkriuss\.app/);
+  await page.unrouteAll();
+  return key;
+}
+
+/** Checks the page is signed in with `key`, keeping `old` for the apps to move their old copies. */
+async function finishedWith(page: Page, key: string, old: string | undefined): Promise<void> {
+  await page.getByRole('button', { name: 'Show recovery key' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Your recovery key' });
+  await expect(dialog.locator('[data-dialog-key]')).toHaveText(key);
+  await dialog.getByRole('button', { name: 'Close' }).click();
+  expect((await storedAccount(page))?.replaced).toEqual([old]);
+}
+
 test('a key replaced here whose answer never came is finished when the page opens again', async ({
   page,
   guard,
@@ -554,44 +653,134 @@ test('a key replaced here whose answer never came is finished when the page open
   // for a lost one, signed out and forgot the old key, so no app could move
   // its old copy any more (audit 6 A-1).
   const old = await createAccount(page);
-  const oldSecret = await page.evaluate(
-    () =>
-      (JSON.parse(localStorage.getItem('shkriuss-device:account') ?? '{}') as { secret: string })
-        .secret,
-  );
-  await page.route('**/api/account/status', async (route) => {
-    if (route.request().method() !== 'PUT') return route.fallback();
-    await route.fetch();
-    return route.abort('connectionreset');
-  });
+  const oldSecret = (await storedAccount(page))?.secret;
   guard.allowConsole('net::ERR_CONNECTION_RESET');
-  await page.getByRole('button', { name: 'Replace the account key' }).click();
-  await page.getByRole('button', { name: 'Get a new key' }).click();
-  const key = (await page.locator('[data-new-key]').textContent()) ?? '';
-  await page.getByLabel("I've saved my recovery key").check();
-  await page.getByRole('button', { name: 'Replace the key' }).click();
-  await expect(page.locator('[data-new-status]')).toHaveText(/^Couldn’t reach shkriuss\.app/);
-  await page.unrouteAll();
+  const key = await replaceWithLostAnswer(page);
 
   await page.reload();
   await expect(view(page, 'signed-in')).toBeVisible();
   await expect(message(page)).toHaveText(/^Your account key is replaced\./);
   await expect(accountCode(page)).not.toHaveText(old.code);
-  await page.getByRole('button', { name: 'Show recovery key' }).click();
-  await expect(
-    page.getByRole('dialog', { name: 'Your recovery key' }).locator('[data-dialog-key]'),
-  ).toHaveText(key);
-  // The old key stays, for the apps to move their old copies.
-  expect(
-    await page.evaluate(
-      () =>
-        (
-          JSON.parse(localStorage.getItem('shkriuss-device:account') ?? '{}') as {
-            replaced?: string[];
-          }
-        ).replaced,
-    ),
-  ).toEqual([oldSecret]);
+  await finishedWith(page, key, oldSecret);
+});
+
+test('a key replaced here whose answer never came stays as it is when the check fails, then is finished (audit 7 A-1, run 27)', async ({
+  page,
+  guard,
+}) => {
+  // The page asked the account service twice as it opened: when only the
+  // first check failed, the second took this device for a lost one. It
+  // signed out, and forgot the old key (and the new one).
+  const old = await createAccount(page);
+  const oldSecret = (await storedAccount(page))?.secret;
+  guard.allowConsole('net::ERR_CONNECTION_RESET');
+  guard.allowConsole('net::ERR_FAILED');
+  const key = await replaceWithLostAnswer(page);
+
+  let checks = 0;
+  await page.route('**/api/account/status', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    checks += 1;
+    return checks === 1 ? route.abort('connectionreset') : route.fallback();
+  });
+  await page.reload();
+  await expect(view(page, 'signed-in')).toBeVisible();
+  await expect(accountCode(page)).toHaveText(old.code);
+  await expect(message(page)).toBeHidden();
+  expect(checks).toBe(1);
+  expect((await storedAccount(page))?.secret).toBe(oldSecret);
+
+  await page.reload();
+  await expect(message(page)).toHaveText(/^Your account key is replaced\./);
+  await expect(accountCode(page)).not.toHaveText(old.code);
+  expect(checks).toBe(2);
+  await finishedWith(page, key, oldSecret);
+});
+
+test('says the old recovery key and passkeys still sign in when the old key couldn’t be noted (audit 7 A-4, run 27)', async ({
+  page,
+  guard,
+}) => {
+  // It said only that devices with the old key wouldn't sign out by
+  // themselves: without the note, the old key isn't refused anywhere.
+  await createAccount(page);
+  guard.allowConsole('status of 507');
+  await page.route('**/api/account/status', (route) =>
+    route.request().method() === 'PUT'
+      ? route.fulfill({ status: 507, contentType: 'application/json', body: '{"error":"x"}' })
+      : route.fallback(),
+  );
+  await page.getByRole('button', { name: 'Replace the account key' }).click();
+  // Before it's done, the page says that this holds only while the note is
+  // kept: 13 months after the last try, they sign in again (audit 7 D-3).
+  await expect(view(page, 'replace')).toContainText(
+    "The old one, and your passkeys, can't sign in any more, for as long as the account service keeps its note about the old key: until no device has tried it for 13 months.",
+  );
+  await page.getByRole('button', { name: 'Get a new key' }).click();
+  await expect(page.locator('[data-replace-only]')).toHaveText(
+    "When you continue, your old recovery key and passkeys can't sign in any more, for as long as the account service keeps its note about the old key.",
+  );
+  await page.getByLabel("I've saved my recovery key").check();
+  await page.getByRole('button', { name: 'Replace the key' }).click();
+  await expect(message(page)).toHaveText(
+    /^Your account key is replaced, but the account service had no room to note the old one just now\. So devices that still have it won’t sign out by themselves, and your old recovery key and passkeys can still sign in with it\. /,
+  );
+});
+
+test('replacing the key again after an answer that never came shows the same new key, and finishes (audit 7 A-2, run 27)', async ({
+  page,
+  guard,
+}) => {
+  // It showed another new key: the page signed in with that one, while the
+  // account service's note named the first, and each key signed in to an
+  // account of its own.
+  const old = await createAccount(page);
+  const oldSecret = (await storedAccount(page))?.secret;
+  guard.allowConsole('net::ERR_CONNECTION_RESET');
+  const key = await replaceWithLostAnswer(page);
+  await page.getByRole('button', { name: 'Cancel' }).click();
+  await page.getByRole('button', { name: 'Replace the account key' }).click();
+  await page.getByRole('button', { name: 'Get a new key' }).click();
+  await expect(page.locator('[data-new-key]')).toHaveText(key);
+  await expect(page.locator('[data-new-status]')).toHaveText(
+    'It’s the same new key as last time, as replacing the key didn’t finish then.',
+  );
+  await page.getByLabel("I've saved my recovery key").check();
+  await page.getByRole('button', { name: 'Replace the key' }).click();
+  await expect(message(page)).toHaveText(/^Your account key is replaced\./);
+  await expect(accountCode(page)).not.toHaveText(old.code);
+  await finishedWith(page, key, oldSecret);
+});
+
+test('replacing a key another device replaced first signs this one out, and says so (audit 7 A-2, run 27)', async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  // This device was told it had worked, and signed in with its own new key:
+  // an account no other device had, and nothing ever signed it out.
+  const old = await createAccount(page);
+  const tablet = await (await otherDevice(browser, baseURL)).newPage();
+  await tablet.goto('/account/');
+  await signInWithKey(tablet, old.key);
+  await expect(accountCode(tablet)).toHaveText(old.code);
+  const theirs = await replaceKey(tablet);
+
+  // The phone's page was open since before: it replaces the key too.
+  await page.getByRole('button', { name: 'Replace the account key' }).click();
+  await page.getByRole('button', { name: 'Get a new key' }).click();
+  await page.getByLabel("I've saved my recovery key").check();
+  await page.getByRole('button', { name: 'Replace the key' }).click();
+  await expect(view(page, 'signed-out')).toBeVisible();
+  await expect(message(page)).toHaveText(
+    /^Your account key was already replaced on another device, so this device is signed out, and the new key you just saved isn’t used\./,
+  );
+  expect(await storedAccount(page)).toBeNull();
+  await checkA11y(page, 'account: the key was already replaced');
+  // With the key it was replaced with, it's on the tablet's account.
+  await signInWithKey(page, theirs.key);
+  await expect(accountCode(page)).toHaveText(theirs.code);
+  await tablet.context().close();
 });
 
 test('asks the browser to keep the account on this device', async ({ page }) => {

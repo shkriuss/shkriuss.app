@@ -17,6 +17,9 @@ own, 320 MB for all of an app's libraries together, counting what each
 photo and each deletion note really takes (see "Protecting the bill" and
 "The list's size"), and a request for thumbnails names each photo once,
 and what reads from R2 can cost is written down ("Reading from R2").
+Changed by audit 7: when the lost device replaced the account key first,
+the person's devices no longer move the library with a key of their own
+(A-2, run 27; see "When the lost device moves the library first").
 
 ## Context
 
@@ -190,10 +193,14 @@ every device. That's far beyond what sync can hold:
   keep their key.
 - **When the lost device moves the library first.** The old key's token
   proves the move, and the lost device has the old key too. Photos moves an
-  old key's data only to the key that replaced it, which only the person's
-  own devices can tell (audit A-3), so making an account of its own there
-  moves nothing. But an older version of Photos still on that phone, or a
-  request made by hand, could move a library first. Then the library is
+  old key's data only to the key that replaced it, which only the device
+  that replaced the key can tell (audit A-3), so making an account of its
+  own there moves nothing. If the lost device replaced the key first, that
+  device is the one: the person's devices are signed out, even the one
+  where they then replace it themselves, so they never race it with a key
+  of their own (ADR 0010; audit 7 A-2, run 27). And an older version of
+  Photos still on that phone, or a request made by hand, could move a
+  library first. Then the library is
   theirs, and the server refuses the person's move (403). The person's device then marks the library as taken in its
   record, still retires the old copy, and starts a new library with the new
   key. Only the library's own refusal, which says so (`notYours`), counts:

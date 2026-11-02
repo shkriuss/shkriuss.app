@@ -114,6 +114,9 @@ const privateWindow = `In a private window, everything is deleted when you close
         Keep the passphrase somewhere safe, like a password manager. Without it the backup can’t be
         opened, not even by us.
       </p>
+      {/* "Show passphrase" makes these text fields, so they turn off spell-checkers (some send
+       what's typed to a server), autocorrection and capitals: the passphrase stays on the device,
+       exactly as typed (audit 7 A-3, run 27). */}
       <div class="field">
         <label class="field__label" for="backup-passphrase">
           Passphrase
@@ -127,6 +130,9 @@ const privateWindow = `In a private window, everything is deleted when you close
           name="passphrase"
           type="password"
           autocomplete="new-password"
+          spellcheck="false"
+          autocorrect="off"
+          autocapitalize="off"
           aria-describedby="backup-passphrase-hint backup-passphrase-error"
         />
         <p class="field__error" id="backup-passphrase-error" data-error-for="passphrase"></p>
@@ -141,6 +147,9 @@ const privateWindow = `In a private window, everything is deleted when you close
           name="repeat"
           type="password"
           autocomplete="new-password"
+          spellcheck="false"
+          autocorrect="off"
+          autocapitalize="off"
           aria-describedby="backup-repeat-error"
         />
         <p class="field__error" id="backup-repeat-error" data-error-for="repeat"></p>
@@ -189,6 +198,9 @@ const privateWindow = `In a private window, everything is deleted when you close
           name="passphrase"
           type="password"
           autocomplete="current-password"
+          spellcheck="false"
+          autocorrect="off"
+          autocapitalize="off"
           aria-describedby="restore-passphrase-error"
         />
         <p class="field__error" id="restore-passphrase-error" data-error-for="passphrase"></p>

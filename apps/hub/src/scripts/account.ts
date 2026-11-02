@@ -8,10 +8,10 @@ import {
   addPasskey,
   appSecretOf,
   cancelLink,
+  checkReplaced,
   claimLink,
   createLink,
   currentAccount,
-  finishReplacing,
   forgetAccount,
   generateSecret,
   isReplaced,
@@ -25,14 +25,15 @@ import {
   removePasskey,
   replaceAccountKey,
   replacedSecrets,
+  replacingWith,
   sameSecret,
   saveAccount,
   signInWithPasskey,
-  signOutIfReplaced,
   syncedApps,
   type Account,
   type AccountErrorCode,
   type DeviceLink,
+  type KeyCheck,
   type LinkState,
 } from '@shkriuss/account';
 import { today } from '@shkriuss/dates';
@@ -128,28 +129,47 @@ const REPLACED = {
   key: `This key was replaced on another device, so it can’t sign in any more. ${SIGN_IN_AGAIN}`,
   passkey: `This passkey is for an account key that was replaced on another device, so it can’t sign in any more. ${SIGN_IN_AGAIN} Then you can add a new passkey.`,
   done: `Your account key is replaced. Devices with the old key are signed out when they next open this page. ${AFTER_REPLACING}`,
-  unnoted: `Your account key is replaced, but the account service had no room to note the old one just now, so devices that still have it won’t sign out by themselves. ${AFTER_REPLACING}`,
+  // Without the note, the old key isn't refused anywhere (audit 7 A-4, run 27).
+  unnoted: `Your account key is replaced, but the account service had no room to note the old one just now. So devices that still have it won’t sign out by themselves, and your old recovery key and passkeys can still sign in with it. ${AFTER_REPLACING}`,
+  // Replacing it here too would leave this device on an account that no
+  // other device has (audit 7 A-2, run 27).
+  first:
+    'Your account key was already replaced on another device, so this device is signed out, and the new key you just saved isn’t used. If you replaced it on another of your devices, sign in here with the recovery key you saved there, or add this device with a code from it. If you didn’t, someone else did, with a lost device or your old recovery key: create a new account, then turn on sync again in each app. Your data comes along from your devices.',
 };
 
 const listFormat = new Intl.ListFormat('en-GB', { type: 'conjunction' });
 
 /**
- * REPLACED.here, naming the apps that synced on this device with the
- * replaced key: they still may, and this device no longer lists them
- * (audit 3 D-8).
+ * `signedOut` (REPLACED.here unless said), naming the apps that synced on
+ * this device with the replaced key: they still may, and this device no
+ * longer lists them (audit 3 D-8).
  */
-const replacedHere = (names: readonly string[]): string =>
+const replacedHere = (names: readonly string[], signedOut: string = REPLACED.here): string =>
   names.length === 0
-    ? REPLACED.here
-    : `${REPLACED.here} ${listFormat.format(names)} may still sync here with the old key: once you’re signed in, turn on sync in ${names.length === 1 ? 'it' : 'each'} again.`;
+    ? signedOut
+    : `${signedOut} ${listFormat.format(names)} may still sync here with the old key: once you’re signed in, turn on sync in ${names.length === 1 ? 'it' : 'each'} again.`;
 
-/** Someone used the device code: maybe not the person (audit A-5). */
+/**
+ * Someone used the device code: maybe not the person (audit A-5). Opening
+ * it gets the account key, before "Add this device?" is answered: a device
+ * whose person then taps Cancel isn't signed in, so it doesn't say that
+ * (audit 7 A-6, run 27).
+ */
 const LINK_USED =
-  'A device used this code and is now signed in. If it wasn’t the one you meant, replace your account key now (below).';
+  'A device opened this code, so it can sign in to your account. If it wasn’t one of yours, replace your account key now (below).';
 
 /** True if this key was replaced on another device (false if that can't be checked now). */
 const wasReplaced = (secret: Uint8Array<ArrayBuffer>): Promise<boolean> =>
   isReplaced(secret).catch(() => false);
+
+/**
+ * A recovery key copied: Gboard's and Samsung's keyboards, and Windows
+ * (which can sync it), keep a history of what's copied, so it says so, as
+ * for iCloud Drive and downloads (audit 7 A-3, run 39). A device code's
+ * link needs no such note: it works once, for 10 minutes.
+ */
+const KEY_COPIED =
+  'Copied. Some keyboards and computers keep a history of what’s copied: once you’ve pasted the key where you keep it, delete it from there.';
 
 const timeFormat = new Intl.DateTimeFormat(DATE_LOCALE, { hour: 'numeric', minute: '2-digit' });
 
@@ -187,6 +207,7 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
   const newKey = required<HTMLElement>(root, '[data-new-key]');
   const newStatus = required<HTMLElement>(root, '[data-new-status]');
   const replaceOnly = required<HTMLElement>(root, '[data-replace-only]');
+  const createReplace = required<HTMLElement>(root, '[data-create-replace]');
   const finishLabel = required<HTMLElement>(root, '[data-finish-label]');
   const savedCheck = required<HTMLInputElement>(root, '[data-saved-check]');
   const finishCreate = required<HTMLButtonElement>(root, '[data-action="finish-create"]');
@@ -236,6 +257,9 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
       return { link, slug, name, turnOn: link.href };
     },
   );
+  /** The names of these apps (slugs), in the page's order. */
+  const appNames = (slugs: readonly string[]): string[] =>
+    syncLinks.filter(({ slug }) => slugs.includes(slug)).map(({ name }) => name);
 
   let account: Account | null = await currentAccount();
   /** A new key (a new account, or replacing this one), until the person confirms they saved it. */
@@ -378,7 +402,12 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
   /** Shows a new recovery key to save, for a new account or to replace this one. */
   async function showNewKey(replacing: boolean): Promise<void> {
     say(null);
-    const secret = generateSecret();
+    // Tried before without an answer (the connection dropped): the account
+    // service may have noted that key, so it's shown again, and trying again
+    // finishes that replacement. A new one was another key than the note's,
+    // and signed in all the same (audit 7 A-2, run 27).
+    const earlier = replacing && account ? replacingWith(account) : null;
+    const secret = earlier ?? generateSecret();
     pending = {
       secret,
       key: await recoveryKeyOf(secret),
@@ -388,8 +417,11 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
     newTitle.textContent = replacing ? 'Save your new recovery key' : 'Save your recovery key';
     finishLabel.textContent = replacing ? 'Replace the key' : 'Continue';
     replaceOnly.hidden = !replacing;
+    createReplace.hidden = replacing || !account;
     newKey.textContent = pending.key;
-    newStatus.textContent = '';
+    newStatus.textContent = earlier
+      ? 'It’s the same new key as last time, as replacing the key didn’t finish then.'
+      : '';
     savedCheck.checked = false;
     finishCreate.disabled = true;
     show('new');
@@ -402,10 +434,10 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
     status.textContent = 'Download started. Keep the file somewhere safe.';
   }
 
-  async function copy(text: string, status: HTMLElement): Promise<void> {
+  async function copy(text: string, status: HTMLElement, copied = 'Copied.'): Promise<void> {
     try {
       await navigator.clipboard.writeText(text);
-      status.textContent = 'Copied.';
+      status.textContent = copied;
     } catch {
       status.textContent = 'Couldn’t copy. Select the text and copy it instead.';
     }
@@ -588,7 +620,7 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
       if (!account) return;
       const current = account;
       newStatus.textContent = 'Replacing the key…';
-      let result: { saved: boolean; noted: boolean };
+      let result: KeyCheck;
       try {
         result = await withButton(button, () => replaceAccountKey(current.secret, secret));
       } catch (error) {
@@ -600,8 +632,12 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
       void dropLink();
       linkStatus.textContent = '';
       home();
-      if (!result.saved) say(STORAGE_BLOCKED, true);
-      else say(result.noted ? REPLACED.done : REPLACED.unnoted, !result.noted);
+      if (result.outcome === 'signed-out') {
+        say(replacedHere(appNames(result.apps), REPLACED.first), true);
+      } else if (result.outcome === 'replaced') {
+        if (!result.saved) say(STORAGE_BLOCKED, true);
+        else say(result.noted ? REPLACED.done : REPLACED.unnoted, !result.noted);
+      }
     },
     replace: () => {
       say(null);
@@ -613,14 +649,14 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
       if (pending) downloadKey(pending.key, pending.code, newStatus);
     },
     'copy-key': async () => {
-      if (pending) await copy(pending.key, newStatus);
+      if (pending) await copy(pending.key, newStatus, KEY_COPIED);
     },
     // "Your recovery key": this account's, whatever else the page holds (audit 6 A-1).
     'download-account-key': async () => {
       if (account) downloadKey(await recoveryKeyOf(account.secret), account.code, dialogStatus);
     },
     'copy-account-key': async () => {
-      if (account) await copy(await recoveryKeyOf(account.secret), dialogStatus);
+      if (account) await copy(await recoveryKeyOf(account.secret), dialogStatus, KEY_COPIED);
     },
     'show-recovery-form': () => {
       say(null);
@@ -776,6 +812,11 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
         focusProblem(recoveryInput, recoveryError.textContent ?? '');
         return;
       }
+      // It reads now: a mistake said before is fixed. Left, it stayed under
+      // the box, and was read out again when a later try failed for another
+      // reason and focus came back to it (audit 7 G-10).
+      recoveryError.textContent = '';
+      recoveryInput.removeAttribute('aria-invalid');
       say('Signing in…');
       if (await signIn(result.secret, 'Signed in with your recovery key.')) {
         recoveryInput.value = '';
@@ -830,6 +871,9 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
       }
       // Asked whether to add this device: says whether it would replace an account.
       linkReplace.hidden = !account;
+      // Making a new account: the same. Continue signed it in to that one
+      // instead, saying nothing (audit 7 G-12).
+      createReplace.hidden = !account || !pending || pending.replacing;
       if (pending || linked) return;
       home(false);
       // Focus that was in what's now hidden goes to the top of what's shown.
@@ -842,21 +886,19 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
 
   window.addEventListener('hashchange', () => void openLink(location.hash));
 
-  // Replaced here, but the answer never came (the connection dropped, or
-  // the page was closed): finished now, as if it had (audit 6 A-1).
-  const finished = account ? await finishReplacing(account) : null;
-  if (finished) account = await currentAccount();
-
-  // Replaced on another device (a lost device): signed out here, keeping
-  // nothing of it, as "Sign out" does (audit 3 D-8). Its apps here keep
-  // their own keys: the message names them, now that the list is gone.
-  const stillSyncing = account ? await signOutIfReplaced(account) : null;
-  if (stillSyncing) {
+  // One question to the account service, and one answer acted on (audit 7
+  // A-1, run 27). Replaced on another device (a lost device): signed out
+  // here, keeping nothing of it, as "Sign out" does (audit 3 D-8). Its apps
+  // here keep their own keys: the message names them, now that the list is
+  // gone. Replaced here, but the answer never came (the connection dropped,
+  // or the page was closed): finished now, as if it had (audit 6 A-1).
+  const checked: KeyCheck = account ? await checkReplaced(account) : { outcome: 'unchanged' };
+  if (checked.outcome === 'signed-out') {
     account = null;
-    const names = syncLinks.filter(({ slug }) => stillSyncing.includes(slug));
-    say(replacedHere(names.map(({ name }) => name)), true);
-  } else if (finished) {
-    say(finished.saved ? REPLACED.done : STORAGE_BLOCKED, !finished.saved);
+    say(replacedHere(appNames(checked.apps)), true);
+  } else if (checked.outcome === 'replaced') {
+    account = await currentAccount();
+    say(checked.saved ? REPLACED.done : STORAGE_BLOCKED, !checked.saved);
   }
   // The account key, and the replaced keys the apps need, are only in this
   // browser: it's asked not to delete them when it's short of space, as

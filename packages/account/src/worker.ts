@@ -28,7 +28,8 @@
  *   POST   /api/account/passkey/remove   { assertion }: delete it
  *   GET    /api/account/status           { replaced, successor? } (Bearer: status token)
  *   PUT    /api/account/status           mark this key as replaced (for good), with
- *                                        { successor }: a tag of the key that replaced it
+ *                                        { successor }: a tag of the key that replaced it;
+ *                                        answers as GET does (the first note's tag)
  *
  * There are no account ids, names, emails or passwords: nothing here can be
  * linked to a person, or to the data in any app.
@@ -428,13 +429,15 @@ export class AccountStatus {
           await this.state.storage.put('replaced', now);
           if (successor) await this.state.storage.put('successor', successor);
         }
-        await this.#touch(now);
-        return noContent();
+      } else if (!replaced) {
+        return json({ replaced });
       }
-      if (!replaced) return json({ replaced });
       await this.#touch(now);
+      // The note as kept, after a PUT too: whether it names the device's own
+      // new key is how it tells its replacement from one made first on
+      // another device, which it was told had worked (audit 7 A-2, run 27).
       const successor = await this.state.storage.get<string>('successor');
-      return json(successor ? { replaced, successor } : { replaced });
+      return json(successor ? { replaced: true, successor } : { replaced: true });
     });
   }
 
