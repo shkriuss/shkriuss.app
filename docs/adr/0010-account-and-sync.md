@@ -42,7 +42,8 @@ replacement with the note it keeps, so a device replacing a key that another
 device replaced first signs out instead of taking it for done, and trying
 again after a lost answer shows the same new key (A-2, run 27); a device
 showing a code says a device opened it, not that one is signed in (A-6,
-run 27).
+run 27); a copied recovery key comes with a word about clipboard histories
+(A-3, run 39).
 
 ## Context
 
@@ -85,7 +86,9 @@ The requirements:
      device. The page says that on an iPhone or iPad a download usually goes
      to iCloud Drive, which Apple can read without Advanced Data
      Protection, so a password manager or paper is safer there (audit 6
-     D-4).
+     D-4). Copied, it says that some keyboards and computers keep a history
+     of what's copied (some sync it), to clear once the key is pasted
+     where it's kept (audit 7 A-3, run 39).
 2. **Passkey (optional).** This works where the password manager supports the
    WebAuthn **PRF** extension, for example Google Password Manager on Android,
    or iCloud Keychain on iOS 18 and later.

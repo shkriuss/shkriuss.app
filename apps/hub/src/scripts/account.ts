@@ -162,6 +162,15 @@ const LINK_USED =
 const wasReplaced = (secret: Uint8Array<ArrayBuffer>): Promise<boolean> =>
   isReplaced(secret).catch(() => false);
 
+/**
+ * A recovery key copied: Gboard's and Samsung's keyboards, and Windows
+ * (which can sync it), keep a history of what's copied, so it says so, as
+ * for iCloud Drive and downloads (audit 7 A-3, run 39). A device code's
+ * link needs no such note: it works once, for 10 minutes.
+ */
+const KEY_COPIED =
+  'Copied. Some keyboards and computers keep a history of what’s copied: once you’ve pasted the key where you keep it, delete it from there.';
+
 const timeFormat = new Intl.DateTimeFormat(DATE_LOCALE, { hour: 'numeric', minute: '2-digit' });
 
 /** The text of the downloaded recovery key file. */
@@ -425,10 +434,10 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
     status.textContent = 'Download started. Keep the file somewhere safe.';
   }
 
-  async function copy(text: string, status: HTMLElement): Promise<void> {
+  async function copy(text: string, status: HTMLElement, copied = 'Copied.'): Promise<void> {
     try {
       await navigator.clipboard.writeText(text);
-      status.textContent = 'Copied.';
+      status.textContent = copied;
     } catch {
       status.textContent = 'Couldn’t copy. Select the text and copy it instead.';
     }
@@ -640,14 +649,14 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
       if (pending) downloadKey(pending.key, pending.code, newStatus);
     },
     'copy-key': async () => {
-      if (pending) await copy(pending.key, newStatus);
+      if (pending) await copy(pending.key, newStatus, KEY_COPIED);
     },
     // "Your recovery key": this account's, whatever else the page holds (audit 6 A-1).
     'download-account-key': async () => {
       if (account) downloadKey(await recoveryKeyOf(account.secret), account.code, dialogStatus);
     },
     'copy-account-key': async () => {
-      if (account) await copy(await recoveryKeyOf(account.secret), dialogStatus);
+      if (account) await copy(await recoveryKeyOf(account.secret), dialogStatus, KEY_COPIED);
     },
     'show-recovery-form': () => {
       say(null);

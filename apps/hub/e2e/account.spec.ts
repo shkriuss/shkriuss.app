@@ -292,7 +292,10 @@ test('“Show recovery key” saves and copies this account’s key, even after 
   expect(text).not.toContain(unsaved);
   await expect(status).toHaveText('Download started. Keep the file somewhere safe.');
   await dialog.getByRole('button', { name: 'Copy' }).click();
-  await expect(status).toHaveText('Copied.');
+  // Keyboards' and computers' clipboard histories keep it (audit 7 A-3, run 39).
+  await expect(status).toHaveText(
+    'Copied. Some keyboards and computers keep a history of what’s copied: once you’ve pasted the key where you keep it, delete it from there.',
+  );
   expect(await second.evaluate(() => navigator.clipboard.readText())).toBe(key);
   await other.close();
 });
