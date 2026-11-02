@@ -417,7 +417,7 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
     newTitle.textContent = replacing ? 'Save your new recovery key' : 'Save your recovery key';
     finishLabel.textContent = replacing ? 'Replace the key' : 'Continue';
     replaceOnly.hidden = !replacing;
-    createReplace.hidden = true;
+    createReplace.hidden = replacing || !account;
     newKey.textContent = pending.key;
     newStatus.textContent = earlier
       ? 'It’s the same new key as last time, as replacing the key didn’t finish then.'
