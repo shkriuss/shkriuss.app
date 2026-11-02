@@ -134,12 +134,18 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
   address counts too), or a new or changed hash that isn't the one the npm
   registry has for that version (`scripts/lockfile-age.ts`). It reads the
   lockfile as YAML, the way pnpm does, so an entry written in another style
-  than pnpm's own is checked all the same, and it refuses a pull request
-  that adds an `.npmrc` or changes where pnpm downloads from in
-  `pnpm-workspace.yaml` (audit 5 H-1). YAML that pnpm reads differently
-  from the check (a `<<` merge key, for one) is refused too (audit 6 H-2),
-  and so is code pnpm would run itself: a config dependency, which pnpm
-  installs with no 7-day wait, or a pnpmfile (audit 6 H-3). CI runs
+  than pnpm's own is checked all the same (audit 5 H-1), and YAML that pnpm
+  reads differently from the check (a `<<` merge key, for one) is refused
+  (audit 6 H-2). It also refuses any pnpm setting or file it doesn't
+  understand: a setting in `pnpm-workspace.yaml`, or a field in a
+  `package.json`, that this repository doesn't use, and any file that pnpm
+  or wrangler read by its name, like an `.npmrc`, a pnpmfile, a second
+  `pnpm-workspace.yaml` or lockfile, or a `.env`. Each of those could make
+  pnpm download from somewhere else, or run code, in the deploy too: a
+  config dependency, which pnpm installs with no 7-day wait (audit 6 H-3),
+  a lockfile only `main`'s runs read, code run with every script, or a
+  Node.js in no lockfile (audit 7 H-1 to H-3, run 32, and H-1, run 44)
+  ([quality.md](docs/quality.md#the-package-age-check)). CI runs
   `main`'s copy of that check, with `main`'s packages, before anything from
   the pull request is installed or run, so a pull request can't change the
   check or what reads its lockfile (audit 5 H-3, audit 6 H-1). It can
@@ -149,7 +155,8 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
 - Production deploys only happen from `main`, after every check passes,
   including the dependency audit, and only for `main`'s newest commit (so
   re-running an older run can't put older code back, nor cancel the newest
-  one's deploy: audit 6 H-6). Only the deploy steps
+  one's deploy: audit 6 H-6, and audit 7 H-4, run 32, for a re-run of only
+  the deploy job). Only the deploy steps
   see the token, and the deploy job installs without the shared package
   cache. That stops mistakes, not a bad dependency: any code that runs in a
   job (an install script, a build step) can read every secret of that job

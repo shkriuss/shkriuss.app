@@ -6,17 +6,16 @@ import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   addedPackages,
-  changedManifestSettings,
   changedPackages,
-  changedSourceSettings,
+  changedWorkspaceSettings,
+  isManifest,
   lockedPackages,
-  npmrcFiles,
-  pnpmfiles,
   registryIntegrity,
   releaseAgeRules,
-  runsCode,
-  saysWhereFrom,
   tooNew,
+  toolFiles,
+  unknownManifestFields,
+  unknownWorkspaceSettings,
   unregisteredPackages,
 } from './lockfile-age.ts';
 
@@ -274,16 +273,18 @@ snapshots:
   it('refuses the same in pnpm-workspace.yaml, where a "<<" set a registry unseen (audit 6 H-2)', () => {
     const base = 'packages: []\n';
     const merged = 'packages: []\nx: &x\n  registry: https://example.invalid/\n<<: *x\n';
-    expect(() => changedSourceSettings(base, merged)).toThrow(/pnpm never writes/);
+    expect(() => unknownWorkspaceSettings(base, merged)).toThrow(/pnpm never writes/);
     const inline = 'packages: []\n<<:\n  registry: https://example.invalid/\n';
-    expect(() => changedSourceSettings(base, inline)).toThrow(/merge key, which pnpm never writes/);
+    expect(() => unknownWorkspaceSettings(base, inline)).toThrow(
+      /merge key, which pnpm never writes/,
+    );
     expect(() => releaseAgeRules('x: &x\n  minimumReleaseAge: 0\n<<: *x\n')).toThrow(
       /pnpm never writes/,
     );
     // This repository's own files are plain YAML.
     const workspace = readFileSync('pnpm-workspace.yaml', 'utf8');
     expect(releaseAgeRules(workspace).minutes).toBe(10080);
-    expect(changedSourceSettings(workspace, workspace)).toEqual([]);
+    expect(unknownWorkspaceSettings(workspace, workspace)).toEqual([]);
   });
 
   it('finds the registry versions a pull request adds or gives another hash (audit 3 H-1)', () => {
@@ -317,13 +318,14 @@ snapshots:
     expect(changedPackages('packages:\n', current).length).toBe(lockedPackages(current).size);
   });
 
-  it('notices a changed registry, proxy, certificate or fetch setting (audit 5 H-1)', () => {
+  it('refuses any pnpm-workspace.yaml setting this repository doesn’t use (audit 7 H-1 and H-3, run 32; H-1, run 44)', () => {
+    // A list of the dangerous ones missed one in each audit; this is a list
+    // of the safe ones instead.
     const base =
       'packages:\n  - apps/*\ncatalog:\n  astro: ^7.4.0\nminimumReleaseAge: 10080\nfetchRetries: 2\n';
-    expect(changedSourceSettings(base, base)).toEqual([]);
-    // What doesn't say where packages come from can change.
-    expect(changedSourceSettings(base, base.replace('10080', '20160'))).toEqual([]);
+    expect(unknownWorkspaceSettings(base, base)).toEqual([]);
     for (const [line, setting] of [
+      // Where packages come from, or how (audit 5 H-1).
       ['registry: https://registry.example/', 'registry'],
       ["'@types:registry': https://registry.example/", '@types:registry'],
       ["'//registry.example/:_authToken': secret", '//registry.example/:_authToken'],
@@ -332,68 +334,163 @@ snapshots:
       ['httpsProxy: http://proxy.example:8080', 'httpsProxy'],
       ['cafile: ./ca.pem', 'cafile'],
       ['fetchTimeout: 1', 'fetchTimeout'],
-    ]) {
-      expect(changedSourceSettings(base, `${base}${line}\n`), line).toEqual([setting]);
-      expect(saysWhereFrom(setting ?? ''), setting).toBe(true);
-    }
-    // Changed and removed count too.
-    expect(changedSourceSettings(base, base.replace('fetchRetries: 2', 'fetchRetries: 9'))).toEqual(
-      ['fetchRetries'],
-    );
-    expect(changedSourceSettings(base, base.replace('fetchRetries: 2\n', ''))).toEqual([
-      'fetchRetries',
-    ]);
-    for (const setting of ['catalog', 'packages', 'overrides', 'minimumReleaseAge', 'catalogs']) {
-      expect(saysWhereFrom(setting), setting).toBe(false);
-    }
-  });
-
-  it('finds .npmrc files in any folder (audit 5 H-1)', () => {
-    expect(
-      npmrcFiles(['.npmrc', 'apps/tally/.npmrc', 'docs/npmrc.md', 'x/.npmrc.bak', '']),
-    ).toEqual(['.npmrc', 'apps/tally/.npmrc']);
-  });
-
-  it('notices config dependencies and pnpmfiles, code pnpm runs with no check (audit 6 H-3)', () => {
-    // pnpm 10.34.7 installed a 4-day-old version this way, whatever
-    // minimumReleaseAge said, and installs them for any command, pnpm audit too.
-    const base = 'packages:\n  - apps/*\nminimumReleaseAge: 10080\n';
-    for (const [line, setting] of [
+      // Code pnpm runs itself (audit 6 H-3). pnpm 10.34.7 installed a
+      // 4-day-old config dependency, whatever minimumReleaseAge said.
       ['configDependencies:\n  pnpm-plugin-x: "1.0.0+sha512-AAAA"', 'configDependencies'],
       ["config-dependencies:\n  '@pnpm/plugin-x': 1.0.0+sha512-AAAA", 'config-dependencies'],
       ['pnpmfile: tools/hooks.cjs', 'pnpmfile'],
       ['globalPnpmfile: /tmp/hooks.cjs', 'globalPnpmfile'],
+      // Only main's runs (on the branch "main") read pnpm-lock.main.yaml, so
+      // the deploy installed from a lockfile no check had read (audit 7 H-1,
+      // run 32).
+      ['gitBranchLockfile: true', 'gitBranchLockfile'],
+      ['mergeGitBranchLockfiles: true', 'mergeGitBranchLockfiles'],
+      ['lockfileDir: apps/photos', 'lockfileDir'],
+      ['sharedWorkspaceLockfile: false', 'sharedWorkspaceLockfile'],
+      // Code with every script, and every install script allowed (audit 7
+      // H-3, run 32).
+      ['nodeOptions: "--import=data:text/javascript,1"', 'nodeOptions'],
+      ['scriptShell: ./tools/shell.sh', 'scriptShell'],
+      ['dangerouslyAllowAllBuilds: true', 'dangerouslyAllowAllBuilds'],
+      ['onlyBuiltDependenciesFile: tools/allowed.json', 'onlyBuiltDependenciesFile'],
+      // A Node.js in no lockfile (audit 7 H-1, run 44).
+      ['useNodeVersion: 22.3.0', 'useNodeVersion'],
+      ['nodeDownloadMirrors:\n  release: http://mirror.example/', 'nodeDownloadMirrors'],
+      ['executionEnv:\n  nodeVersion: 22.3.0', 'executionEnv'],
+      // Others nothing here uses: a patch applied at install, a name pnpm
+      // fills in from an environment variable, named catalogs.
+      ['patchedDependencies:\n  astro: patches/astro.patch', 'patchedDependencies'],
+      ["'${HOME}': x", '${HOME}'],
+      ['catalogs:\n  next:\n    astro: ^8.0.0', 'catalogs'],
     ]) {
-      expect(changedSourceSettings(base, `${base}${line}\n`), line).toEqual([setting]);
-      expect(runsCode(setting ?? ''), setting).toBe(true);
+      expect(unknownWorkspaceSettings(base, `${base}${line}\n`), line).toEqual([setting]);
     }
-    for (const setting of ['catalog', 'overrides', 'onlyBuiltDependencies', 'packages']) {
-      expect(runsCode(setting), setting).toBe(false);
-    }
-
-    // pnpm reads configDependencies from the root package.json's "pnpm" field too.
-    const manifest = '{"name": "x", "pnpm": {"overrides": {"a": "1.0.0"}}}';
-    const withConfigDependency =
-      '{"name": "x", "pnpm": {"overrides": {"a": "1.0.0"}, "configDependencies": {"pnpm-plugin-x": "1.0.0+sha512-AAAA"}}}';
-    expect(changedManifestSettings(manifest, withConfigDependency)).toEqual([
-      'pnpm.configDependencies',
-    ]);
-    expect(changedManifestSettings(withConfigDependency, manifest)).toEqual([
-      'pnpm.configDependencies',
-    ]);
-    expect(changedManifestSettings('{"name": "x"}', manifest)).toEqual([]);
-    expect(() => changedManifestSettings(manifest, '{"pnpm": []}')).toThrow(/isn't an object/);
-    const own = readFileSync('package.json', 'utf8');
-    expect(changedManifestSettings(own, own)).toEqual([]);
-
+    // Changed and removed count too.
     expect(
-      pnpmfiles([
-        '.pnpmfile.cjs',
-        'apps/tally/.pnpmfile.cjs',
-        'docs/pnpmfile.md',
-        '.pnpmfile.cjs.bak',
-      ]),
-    ).toEqual(['.pnpmfile.cjs', 'apps/tally/.pnpmfile.cjs']);
+      unknownWorkspaceSettings(base, base.replace('fetchRetries: 2', 'fetchRetries: 9')),
+    ).toEqual(['fetchRetries']);
+    expect(unknownWorkspaceSettings(base, base.replace('fetchRetries: 2\n', ''))).toEqual([
+      'fetchRetries',
+    ]);
+    // What the check understands can change: versions go into the lockfile,
+    // and the release age rules are read from main.
+    const changed = `${base.replace('10080', '20160').replace('^7.4.0', '^7.5.0')}overrides:\n  a: 1.0.0\nonlyBuiltDependencies:\n  - esbuild\nignoredBuiltDependencies:\n  - protobufjs\nauditConfig:\n  ignoreGhsas: [GHSA-xxxx-xxxx-xxxx]\nstrictDepBuilds: false\nminimumReleaseAgeExclude:\n  - astro\n`;
+    expect(unknownWorkspaceSettings(base, changed)).toEqual([]);
+    // Every setting this repository has is on the list.
+    const own = readFileSync('pnpm-workspace.yaml', 'utf8');
+    expect(unknownWorkspaceSettings('', own)).toEqual([]);
+  });
+
+  it('names a change to which packages may run install scripts (audit 7 H-3, run 32)', () => {
+    const base = 'onlyBuiltDependencies:\n  - esbuild\nstrictDepBuilds: true\n';
+    const more = 'onlyBuiltDependencies:\n  - esbuild\n  - sharp\nstrictDepBuilds: true\n';
+    expect(changedWorkspaceSettings(base, more, ['onlyBuiltDependencies'])).toEqual([
+      'onlyBuiltDependencies',
+    ]);
+    expect(changedWorkspaceSettings(base, base, ['onlyBuiltDependencies'])).toEqual([]);
+    expect(
+      changedWorkspaceSettings(base, base.replace('true', 'false'), ['onlyBuiltDependencies']),
+    ).toEqual([]);
+  });
+
+  it('refuses any package.json field this repository doesn’t use, in any folder (audit 6 H-3; audit 7 H-1, run 44, and H-6, run 32)', () => {
+    const manifest = '{"name": "x", "private": true, "scripts": {"build": "astro build"}}';
+    expect(unknownManifestFields(manifest, manifest)).toEqual([]);
+    for (const [json, field] of [
+      // A config dependency, which pnpm reads from the root package.json too
+      // (audit 6 H-3).
+      ['"pnpm": {"configDependencies": {"pnpm-plugin-x": "1.0.0+sha512-AAAA"}}', 'pnpm'],
+      // Another Node.js for this package's scripts, read in any package.json
+      // (audit 7 H-1, run 44).
+      ['"pnpm": {"executionEnv": {"nodeVersion": "22.3.0"}}', 'pnpm'],
+      // The pnpm CI installs, read before packageManager, a range too
+      // (audit 7 H-6, run 32).
+      ['"devEngines": {"packageManager": {"name": "pnpm", "version": "^10"}}', 'devEngines'],
+      ['"resolutions": {"wrangler": "4.0.0"}', 'resolutions'],
+      ['"bin": {"wrangler": "./not-wrangler.js"}', 'bin'],
+      ['"dependenciesMeta": {"x": {"injected": true}}', 'dependenciesMeta'],
+    ] as const) {
+      // The field goes first: after the object's opening brace.
+      const head = `{${json}, ${manifest.slice(1)}`;
+      expect(unknownManifestFields(manifest, head), json).toEqual([field]);
+      // In a new package.json too, and removed.
+      expect(unknownManifestFields(undefined, head), json).toEqual([field]);
+      expect(unknownManifestFields(head, manifest), json).toEqual([field]);
+    }
+    // What the check understands can change.
+    const changed =
+      '{"name": "y", "version": "1.0.0", "description": "Y.", "private": true, "type": "module", "exports": {".": "./x.ts"}, "scripts": {}, "dependencies": {"a": "1.0.0"}, "devDependencies": {}, "peerDependencies": {}, "packageManager": "pnpm@10.34.7", "engines": {"node": ">=24"}}';
+    expect(unknownManifestFields(manifest, changed)).toEqual([]);
+    expect(() => unknownManifestFields(manifest, '[]')).toThrow(/isn't a JSON object/);
+    expect(() => unknownManifestFields(manifest, '{"name": ')).toThrow();
+    // This repository's own package.json files pass, as they are and as new files.
+    for (const path of [
+      'package.json',
+      'apps/hub/package.json',
+      'apps/photos/package.json',
+      'packages/ui/package.json',
+      'packages/astro-config/package.json',
+      'templates/app/package.json',
+    ]) {
+      const own = readFileSync(path, 'utf8');
+      expect(unknownManifestFields(own, own), path).toEqual([]);
+      expect(unknownManifestFields(undefined, own), path).toEqual([]);
+    }
+    expect(
+      ['package.json', 'apps/x/package.json', 'apps/x/package.json5', 'x/my-package.json'].filter(
+        isManifest,
+      ),
+    ).toEqual(['package.json', 'apps/x/package.json']);
+  });
+
+  it('refuses files pnpm or wrangler read by their name, in any folder (audit 5 H-1, audit 6 H-3, audit 7 H-1 and H-2, run 32)', () => {
+    const refused = [
+      // Where packages come from (audit 5 H-1).
+      '.npmrc',
+      'apps/tally/.npmrc',
+      // pnpm's hooks (audit 6 H-3).
+      '.pnpmfile.cjs',
+      'apps/tally/.pnpmfile.cjs',
+      '.pnpmfile.mjs',
+      'tools/pnpmfile.cjs',
+      // A lockfile for the branch, which pnpm reads on main (audit 7 H-1, run 32).
+      'pnpm-lock.main.yaml',
+      'apps/photos/pnpm-lock.yaml',
+      // Settings pnpm takes when it runs in that folder (audit 7 H-2, run 32).
+      'apps/photos/pnpm-workspace.yaml',
+      'pnpm-workspace.yml',
+      // Read as a package.json.
+      'apps/photos/package.yaml',
+      'apps/photos/package.json5',
+      // Written by pnpm.
+      'node_modules/.modules.yaml',
+      'apps/photos/node_modules/.bin/wrangler',
+      // Loaded into wrangler's environment, or read before wrangler.jsonc.
+      'apps/photos/.env',
+      '.env.local',
+      'apps/photos/.dev.vars',
+      '.dev.vars.production',
+      'wrangler.json',
+      'apps/photos/wrangler.toml',
+      'apps/photos/.wrangler/deploy/config.json',
+    ];
+    const allowed = [
+      'pnpm-workspace.yaml',
+      'pnpm-lock.yaml',
+      'package.json',
+      'apps/photos/package.json',
+      'apps/photos/wrangler.jsonc',
+      'docs/npmrc.md',
+      'x/.npmrc.bak',
+      'docs/about-pnpm.md',
+      'apps/photos/src/environment.ts',
+      'apps/photos/.envoy',
+      '',
+    ];
+    expect(toolFiles([...refused, ...allowed])).toEqual(refused);
+    // Nothing in this repository is one of those.
+    const tracked = execFileSync('git', ['ls-files', '-z'], { encoding: 'utf8' }).split('\0');
+    expect(toolFiles(tracked)).toEqual([]);
   });
 
   it('reads YAML with the yaml package beside it, never the working directory’s (audit 6 H-1)', () => {

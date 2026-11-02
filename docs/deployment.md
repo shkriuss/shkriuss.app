@@ -116,6 +116,22 @@ newest **CI** run on `main` → **Re-run all jobs**. Only the newest commit on
 `main` deploys: re-running an older run checks it but deploys nothing, and
 no other run (an older one re-run, or one started with **Run workflow**)
 can cancel the newest one's deploy while it waits its turn (audit 6 H-6).
+**Re-run failed jobs** (or re-running only the deploy job) doesn't deploy:
+it doesn't check again which commit is the newest, so its deploy stops at
+once and says to use **Re-run all jobs** (it could otherwise cancel a newer
+commit's deploy: audit 7 H-4, run 32).
+
+GitHub starts no run for a commit whose message asks it to skip CI (words
+like `[skip ci]` or `[no ci]`). A squash merge writes the pull request's
+title, and its commits' messages or its description, into `main`'s commit,
+so such words there would leave that commit undeployed. The **Checks** job
+fails a pull request with them in its title, description or commits
+(`scripts/skip-ci.ts`). Editing the title or description later isn't
+checked again until the next push, so don't add them then. If a commit on
+`main` does end up with no run while an older run is still going, that run
+fails with "Nothing deploys main's newest commit" instead of quietly
+leaving it to the newer one: merge another pull request to deploy it
+(audit 7 H-5, run 32).
 
 ### GitHub settings
 
@@ -255,7 +271,9 @@ I-1 to I-10).
 
 A deploy runs every check first, and they need a few outside services:
 npm (the packages, installed again from scratch for the deploy itself),
-Ubuntu's mirrors (the browser's system libraries) and GitHub. Playwright's
+PyPI (zizmor, the workflow checker, which **Secret scan** installs on every
+run; audit 7 J-3), Ubuntu's mirrors (the browser's system libraries) and
+GitHub. Playwright's
 browser and Grammar's model come from CI's cache, so their download servers
 (Playwright's, and Hugging Face) are needed only after an update, or when
 the cache has gone: GitHub deletes a cache nobody has used for 7 days. The
@@ -313,6 +331,8 @@ Everything here fits Cloudflare's and GitHub's free plans:
 | Problem                                                        | Fix                                                                                                                                                                           |
 | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Deploy fails with "Add the CLOUDFLARE_API_TOKEN secret"        | Add it to the `production` environment (see setup).                                                                                                                           |
+| Deploy fails with "Re-run all jobs"                            | Only some jobs were re-run. Open the newest **CI** run on `main` → **Re-run all jobs**.                                                                                       |
+| A run fails with "Nothing deploys main's newest commit"        | That commit's message asked GitHub to skip CI, so it has no run. Merge another pull request (any small change) to deploy it.                                                  |
 | Every pull request fails **Dependency audit**, nothing deploys | A new advisory in a dependency: [quality.md](quality.md#when-a-new-advisory-stops-every-merge) says how to go on.                                                             |
 | Deploy fails with "Authentication error [code: 10000]"         | The token is missing a permission or the zone. Edit it in Cloudflare (**My Profile** → **API Tokens** → **Edit**) and check all three permission rows and both resource rows. |
 | "Custom domain … already exists / conflicting DNS record"      | A DNS record already uses that name. Delete it in Cloudflare (**shkriuss.app** → **DNS** → **Records**) and re-run the workflow.                                              |

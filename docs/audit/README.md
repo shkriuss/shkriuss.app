@@ -90,16 +90,16 @@ each audit found, and what happened to each finding, is in
 
 **Who might attack, and how:**
 
-| Who                                                 | What they can do                                                                                                               |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| Anyone on the internet                              | Call every `/api` route directly, with any input, as often as they like. They know the code, because the repository is public. |
-| Cloudflare, or someone reading the servers' storage | See everything the Workers store and receive. They must see only sealed data, plus sizes, counts, times and IP addresses.      |
-| Another website                                     | Link to, frame or send requests to our sites from someone's browser.                                                           |
-| One of our own subdomains, if it were compromised   | Run code on `<slug>.shkriuss.app`. It must not be able to read another app's data or keys.                                     |
-| A file someone imports                              | Calendar files (`.ics`), backups, photos (Exif) and data synced from another device are untrusted input.                       |
-| A pull request from someone's fork, or a dependency | Try to run code in CI with secrets, or ship code to production (supply chain).                                                 |
-| Someone with a person's unlocked, signed-in device  | Out of scope, except that "Replace the account key" must shut that device out, and "Delete all data" must delete it.           |
-| An outside service we depend on                     | Hugging Face, npm, the push services or GitHub can fail, slow down or disappear. That mustn't stop a fix from being deployed.  |
+| Who                                                 | What they can do                                                                                                                    |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Anyone on the internet                              | Call every `/api` route directly, with any input, as often as they like. They know the code, because the repository is public.      |
+| Cloudflare, or someone reading the servers' storage | See everything the Workers store and receive. They must see only sealed data, plus sizes, counts, times and IP addresses.           |
+| Another website                                     | Link to, frame or send requests to our sites from someone's browser.                                                                |
+| One of our own subdomains, if it were compromised   | Run code on `<slug>.shkriuss.app`. It must not be able to read another app's data or keys.                                          |
+| A file someone imports                              | Calendar files (`.ics`), backups, photos (Exif) and data synced from another device are untrusted input.                            |
+| A pull request from someone's fork, or a dependency | Try to run code in CI with secrets, or ship code to production (supply chain).                                                      |
+| Someone with a person's unlocked, signed-in device  | Out of scope, except that "Replace the account key" must shut that device out, and "Delete all data" must delete it.                |
+| An outside service we depend on                     | Hugging Face, npm, PyPI, the push services or GitHub can fail, slow down or disappear. That mustn't stop a fix from being deployed. |
 
 **Security goals:**
 
@@ -460,8 +460,9 @@ This area is split into three tasks:
 - Could a broken or malicious build reach production? Deploys should run
   only from `main`, after every check, using the same build that was tested.
 - Could `main`'s newest commit end up never deployed, with nothing failing?
-  Look at the concurrency groups, re-runs and runs started by hand (audit 6
-  H-6).
+  Look at the concurrency groups, re-runs (of every job, or only some) and
+  runs started by hand (audit 6 H-6, audit 7 H-4, run 32), and commits
+  GitHub starts no run for (audit 7 H-5, run 32).
 - Can a pull request's own files (its `pnpm-lock.yaml`,
   `pnpm-workspace.yaml` or `package.json`) change what the lockfile check
   (`scripts/lockfile-age.ts`) reads or runs, or add a package it doesn't
@@ -470,8 +471,12 @@ This area is split into three tasks:
   YAML that pnpm (js-yaml) and the check (the `yaml` package) read
   differently: it refuses `<<` merge keys, keys written as lists, anchors,
   aliases, tags and directives (audit 6 H-2). And for anything else pnpm
-  installs or runs that isn't in the lockfile's `packages:`, like config
-  dependencies and pnpmfiles, which it refuses (audit 6 H-3).
+  (or wrangler, in the deploy job) installs, reads or runs that isn't in the
+  lockfile's `packages:`: the check refuses every `pnpm-workspace.yaml`
+  setting and `package.json` field not on its lists, and files the tools
+  read by name in any folder (audit 6 H-3; audit 7 H-1 to H-3, run 32, and
+  H-1, run 44). Is anything on those lists unsafe, or does a tool read a
+  file by name that the list of files misses?
 - For every dependency:
   - is it needed and maintained?
   - are install scripts allowed only where listed?
