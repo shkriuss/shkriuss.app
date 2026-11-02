@@ -148,9 +148,13 @@ the page in `apps/<slug>/src/pages/index.astro`. Full guide:
 
 ## Never
 
-- Commit secrets, tokens, `.env` or `.dev.vars` files (gitleaks runs in CI).
+- Commit secrets, tokens, `.env` or `.dev.vars` files (gitleaks runs in CI,
+  and the package check refuses those files).
 - Add a dependency without a clear need; prefer the platform. Pin new
-  versions in the `catalog` in `pnpm-workspace.yaml`.
+  versions in the `catalog` in `pnpm-workspace.yaml`. A pnpm setting, a
+  `package.json` field or a pnpm file this repository doesn't use yet is
+  refused by CI until `scripts/lib/lockfile-age.ts` allows it, in a pull
+  request of its own ([quality.md](docs/quality.md#the-package-age-check)).
 - Skip, disable or weaken tests, lint rules, the CSP or size budgets to make
   CI pass.
 - Use unpinned GitHub Actions (`uses:` must be a full commit SHA).

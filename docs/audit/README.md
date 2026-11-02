@@ -470,8 +470,12 @@ This area is split into three tasks:
   YAML that pnpm (js-yaml) and the check (the `yaml` package) read
   differently: it refuses `<<` merge keys, keys written as lists, anchors,
   aliases, tags and directives (audit 6 H-2). And for anything else pnpm
-  installs or runs that isn't in the lockfile's `packages:`, like config
-  dependencies and pnpmfiles, which it refuses (audit 6 H-3).
+  (or wrangler, in the deploy job) installs, reads or runs that isn't in the
+  lockfile's `packages:`: the check refuses every `pnpm-workspace.yaml`
+  setting and `package.json` field not on its lists, and files the tools
+  read by name in any folder (audit 6 H-3; audit 7 H-1 to H-3, run 32, and
+  H-1, run 44). Is anything on those lists unsafe, or does a tool read a
+  file by name that the list of files misses?
 - For every dependency:
   - is it needed and maintained?
   - are install scripts allowed only where listed?

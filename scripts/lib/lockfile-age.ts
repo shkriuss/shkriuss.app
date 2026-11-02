@@ -224,37 +224,67 @@ export function tooNew(
     .map(([name, version]) => `${name}@${version}`);
 }
 
-/** A setting's name as pnpm matches it, "strict-ssl" (.npmrc) and "strictSsl" alike. */
-const settingName = (setting: string) => setting.toLowerCase().replaceAll('-', '');
+/**
+ * The settings of pnpm-workspace.yaml that this repository uses, and that
+ * these checks understand: every other one is refused when a pull request
+ * adds, changes or removes it. pnpm takes every key of that file as a
+ * setting, and it has dozens: refusing a list of the dangerous ones missed
+ * one in each audit (where packages come from: audit 5 H-1; config
+ * dependencies and pnpmfiles: audit 6 H-3; a lockfile for the branch,
+ * gitBranchLockfile, which only main's runs read, so the deploy installed
+ * from a file no check had read: audit 7 H-1, run 32; nodeOptions, code run
+ * with every script, and dangerouslyAllowAllBuilds: audit 7 H-3, run 32;
+ * useNodeVersion and nodeDownloadMirrors, a Node.js in no lockfile: audit 7
+ * H-1, run 44). So the list is of what's safe instead. Adding one is a pull
+ * request of its own that changes this list first, as main's copy of the
+ * check is the one that runs.
+ */
+export const WORKSPACE_SETTINGS: readonly string[] = [
+  // Which folders are packages.
+  'packages',
+  // Versions: pnpm writes what they pick into the lockfile, checked above.
+  'catalog',
+  'overrides',
+  // The 7-day wait, which the check reads from main (releaseAgeRules).
+  'minimumReleaseAge',
+  'minimumReleaseAgeExclude',
+  // Which packages may run install scripts (a change gets a warning).
+  'onlyBuiltDependencies',
+  'ignoredBuiltDependencies',
+  'strictDepBuilds',
+  // Advisories pnpm audit ignores for now (docs/quality.md).
+  'auditConfig',
+];
 
 /**
- * Whether a pnpm setting says where packages come from, or how they're
- * fetched: the registry (for a scope too, "@types:registry"), a line about
- * a registry's address ("//registry…"), proxies, certificates and the
- * fetch… settings. These aren't expected to change (audit 5 H-1).
+ * The fields of a package.json that this repository uses, and that these
+ * checks understand: dependencies, which are in the lockfile, and the rest,
+ * which pnpm only reads as the package's name, scripts and code. pnpm reads
+ * more as settings, in any package.json: "pnpm" (configDependencies, audit
+ * 6 H-3, or executionEnv, which made pnpm download and run another Node.js
+ * for that package's scripts: audit 7 H-1, run 44), "resolutions",
+ * "devEngines" (which pnpm/action-setup reads first, to choose the pnpm CI
+ * installs: audit 7 H-6, run 32) or "bin" (a command in other packages'
+ * node_modules/.bin). So a change to any field not listed here is refused,
+ * as in pnpm-workspace.yaml.
  */
-export function saysWhereFrom(setting: string): boolean {
-  const name = settingName(setting);
-  return (
-    name.includes('registry') ||
-    name.startsWith('fetch') ||
-    name.startsWith('//') ||
-    ['proxy', 'httpsproxy', 'noproxy', 'strictssl', 'ca', 'cafile', 'cert', 'key'].includes(name)
-  );
-}
-
-/**
- * Whether a pnpm setting names code that pnpm itself loads and runs: config
- * dependencies, which pnpm installs whenever it starts (for `pnpm audit`
- * too), before anything else, with no 7-day wait, and which aren't in the
- * lockfile's packages, so these checks never saw them; pnpm then runs the
- * hooks file (pnpmfile.cjs) of each one named like a plugin with every
- * command. Or a hooks file of its own (pnpmfile, globalPnpmfile). Nothing
- * here uses any of them, so they aren't expected to change (audit 6 H-3).
- */
-export function runsCode(setting: string): boolean {
-  return ['configdependencies', 'pnpmfile', 'globalpnpmfile'].includes(settingName(setting));
-}
+export const MANIFEST_FIELDS: readonly string[] = [
+  'name',
+  'version',
+  'description',
+  'private',
+  'type',
+  'exports',
+  'scripts',
+  'dependencies',
+  'devDependencies',
+  'peerDependencies',
+  // The root's: which pnpm and Node.js CI installs. Read like code
+  // (docs/quality.md); a runtime under "engines" is written into the
+  // lockfile ("node@runtime:…"), which unregisteredPackages refuses.
+  'packageManager',
+  'engines',
+];
 
 /** The settings `head` adds, changes or removes among those `guarded` picks. */
 function changedSettings(
@@ -276,50 +306,91 @@ function changedSettings(
 }
 
 /**
- * The settings in pnpm-workspace.yaml that `head` adds, changes or removes
- * among those that say where packages come from (audit 5 H-1), or that name
- * code pnpm runs (audit 6 H-3).
+ * The settings of pnpm-workspace.yaml outside WORKSPACE_SETTINGS that `head`
+ * adds, changes or removes, written as they are (so "strict-ssl" and
+ * "strictSsl" alike).
  */
-export function changedSourceSettings(base: string, head: string): string[] {
+export function unknownWorkspaceSettings(base: string, head: string): string[] {
   return changedSettings(
     mappingOf(base, 'pnpm-workspace.yaml'),
     mappingOf(head, 'pnpm-workspace.yaml'),
-    (setting) => saysWhereFrom(setting) || runsCode(setting),
+    (setting) => !WORKSPACE_SETTINGS.includes(setting),
   );
 }
 
-/** The "pnpm" field of a package.json. */
-function pnpmFieldOf(packageJson: string): Mapping {
+/** Which of these settings of pnpm-workspace.yaml `head` adds, changes or removes. */
+export function changedWorkspaceSettings(
+  base: string,
+  head: string,
+  settings: readonly string[],
+): string[] {
+  return changedSettings(
+    mappingOf(base, 'pnpm-workspace.yaml'),
+    mappingOf(head, 'pnpm-workspace.yaml'),
+    (setting) => settings.includes(setting),
+  );
+}
+
+/** A package.json read as JSON (undefined, a file that isn't there, as an empty one). */
+function manifestOf(packageJson: string | undefined): Mapping {
+  if (packageJson === undefined) return {};
   const manifest: unknown = JSON.parse(packageJson);
   if (!isMapping(manifest)) throw new Error("package.json isn't a JSON object");
-  const field = manifest['pnpm'] ?? {};
-  if (!isMapping(field)) throw new Error('"pnpm" in package.json isn\'t an object');
-  return field;
+  return manifest;
 }
 
 /**
- * The settings in the root package.json's "pnpm" field that `head` adds,
- * changes or removes among those that name code pnpm runs, as
- * "pnpm.<setting>": pnpm reads configDependencies from there too
- * (audit 6 H-3).
+ * The fields of a package.json outside MANIFEST_FIELDS that `head` adds,
+ * changes or removes; `base` is undefined for a new file.
  */
-export function changedManifestSettings(base: string, head: string): string[] {
-  return changedSettings(pnpmFieldOf(base), pnpmFieldOf(head), runsCode).map(
-    (setting) => `pnpm.${setting}`,
+export function unknownManifestFields(base: string | undefined, head: string): string[] {
+  return changedSettings(
+    manifestOf(base),
+    manifestOf(head),
+    (field) => !MANIFEST_FIELDS.includes(field),
   );
 }
 
-/**
- * The .npmrc files among these paths, in any folder: pnpm reads each of
- * them, and one can name another registry (audit 5 H-1).
- */
-export const npmrcFiles = (paths: readonly string[]): string[] =>
-  paths.filter((path) => path === '.npmrc' || path.endsWith('/.npmrc'));
+/** The files at the top of the repository that these checks read themselves. */
+const CHECKED_FILES = ['pnpm-workspace.yaml', 'pnpm-lock.yaml'];
 
 /**
- * The pnpm hooks files (.pnpmfile.cjs) among these paths, in any folder:
- * pnpm runs the one at the top of the repository with every command, even
- * one that then refuses to install (audit 6 H-3).
+ * The files among these paths that pnpm or wrangler read by their name,
+ * other than the ones these checks read (CHECKED_FILES, and every
+ * package.json, through unknownManifestFields). Nothing here uses them, and
+ * each could change what the deploy job runs, with the Cloudflare token:
+ * - an .npmrc, in any folder: where packages come from (audit 5 H-1);
+ * - any file whose name starts with "pnpm" or ".pnpm": a pnpmfile, code pnpm
+ *   runs with every command (audit 6 H-3); a pnpm-workspace.yaml in an
+ *   app's folder, whose settings pnpm takes when it runs there, as the
+ *   deploy does (audit 7 H-2, run 32); another lockfile, like
+ *   pnpm-lock.main.yaml (audit 7 H-1, run 32);
+ * - package.json5 and package.yaml, which pnpm reads as a package.json;
+ * - anything in node_modules, which pnpm writes itself;
+ * - wrangler's own: .env and .dev.vars files, which wrangler loads into its
+ *   environment (an address for Cloudflare's API, say, which would get the
+ *   token), wrangler.json and wrangler.toml, which it reads before the
+ *   sites' wrangler.jsonc, in that folder or any folder above, and the
+ *   .wrangler folder (found while fixing audit 7 H-2, run 32).
  */
-export const pnpmfiles = (paths: readonly string[]): string[] =>
-  paths.filter((path) => path === '.pnpmfile.cjs' || path.endsWith('/.pnpmfile.cjs'));
+export function toolFiles(paths: readonly string[]): string[] {
+  return paths.filter((path) => {
+    if (CHECKED_FILES.includes(path)) return false;
+    const folders = path.split('/');
+    const name = folders.pop() ?? '';
+    return (
+      folders.some((folder) => folder === 'node_modules' || folder === '.wrangler') ||
+      name === '.npmrc' ||
+      /^\.?pnpm/.test(name) ||
+      name === 'package.json5' ||
+      name === 'package.yaml' ||
+      /^\.(?:env|dev\.vars)(?:\.|$)/.test(name) ||
+      name === 'wrangler.json' ||
+      name === 'wrangler.toml'
+    );
+  });
+}
+
+/** Whether a path is a package.json, in any folder. */
+export const isManifest = (path: string): boolean =>
+  path === 'package.json' || path.endsWith('/package.json');

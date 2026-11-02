@@ -2,12 +2,14 @@
  * Fails when pnpm-lock.yaml adds a package version published less than
  * minimumReleaseAge ago, a package that doesn't come from the npm registry,
  * or a hash for a registry version that isn't the registry's own (see
- * scripts/lib/lockfile-age.ts), and when the pull request changes where
- * pnpm downloads from: an .npmrc file, or a registry, proxy, certificate or
- * fetch setting in pnpm-workspace.yaml (audit 5 H-1); or code pnpm runs
- * itself: a config dependency (in pnpm-workspace.yaml or package.json), a
- * pnpmfile setting or a .pnpmfile.cjs (audit 6 H-3). Run by CI on pull
- * requests, in the pull request's checkout with the base branch fetched:
+ * scripts/lib/lockfile-age.ts), and when the pull request changes a pnpm
+ * setting or file that the check doesn't understand: any setting in
+ * pnpm-workspace.yaml, or field in a package.json, that this repository
+ * doesn't use, and any file pnpm or wrangler read by its name, like an
+ * .npmrc, a pnpmfile, a second pnpm-workspace.yaml or lockfile, or a .env
+ * (audit 5 H-1, audit 6 H-3, audit 7 H-1 to H-3, run 32, and H-1, run 44).
+ * Run by CI on pull requests, in the pull request's checkout with the base
+ * branch fetched:
  *
  *   node scripts/lockfile-age.ts origin/main
  *
@@ -19,14 +21,15 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import {
   addedPackages,
-  changedManifestSettings,
   changedPackages,
-  changedSourceSettings,
-  npmrcFiles,
-  pnpmfiles,
+  changedWorkspaceSettings,
+  isManifest,
   registryIntegrity,
   releaseAgeRules,
   tooNew,
+  toolFiles,
+  unknownManifestFields,
+  unknownWorkspaceSettings,
   unregisteredPackages,
 } from './lib/lockfile-age.ts';
 
@@ -60,33 +63,64 @@ const before = git('show', `${base}:pnpm-lock.yaml`);
 const now = readFileSync('pnpm-lock.yaml', 'utf8');
 const workspaceBefore = git('show', `${base}:pnpm-workspace.yaml`);
 const workspaceNow = readFileSync('pnpm-workspace.yaml', 'utf8');
-const manifestBefore = git('show', `${base}:package.json`);
-const manifestNow = readFileSync('package.json', 'utf8');
 
-// Where pnpm downloads from isn't expected to change: an .npmrc, or a
-// registry, proxy, certificate or fetch setting, could point it somewhere
-// else (audit 5 H-1). Nor is code that pnpm runs itself: a config
-// dependency skips every check here, and it and a .pnpmfile.cjs run with
-// every pnpm command (audit 6 H-3).
-const changedFiles = git('diff', '--name-only', '--no-renames', '--diff-filter=d', base, '--')
-  .split('\n')
+/** A file as the base branch has it, or undefined if it has none. */
+function atBase(path: string): string | undefined {
+  try {
+    return execFileSync('git', ['show', `${base}:${path}`], {
+      encoding: 'utf8',
+      maxBuffer: 1 << 28,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+  } catch {
+    return undefined;
+  }
+}
+
+// What pnpm and wrangler read isn't expected to change, beyond what this
+// check understands: an .npmrc or a setting could point pnpm somewhere else
+// (audit 5 H-1), or name code it runs with every command (audit 6 H-3), and
+// pnpm has dozens of settings, and reads files by name in any folder, so
+// each audit found one more that a list of the dangerous ones missed (audit
+// 7 H-1 to H-3, run 32, and H-1, run 44). So anything else is refused.
+// Separated by NUL characters, as git writes them: one per line, git
+// quotes a path with a letter like "é" in it, so its file name ended in a
+// quote mark, not ".npmrc".
+const changedFiles = git('diff', '-z', '--name-only', '--no-renames', '--diff-filter=d', base, '--')
+  .split('\0')
   .filter(Boolean);
-const files = [...npmrcFiles(changedFiles), ...pnpmfiles(changedFiles)];
-const sources = readable('pnpm-workspace.yaml', () =>
-  changedSourceSettings(workspaceBefore, workspaceNow),
+const files = toolFiles(changedFiles);
+const settings = readable('pnpm-workspace.yaml', () =>
+  unknownWorkspaceSettings(workspaceBefore, workspaceNow),
 );
-const manifest = readable('package.json', () =>
-  changedManifestSettings(manifestBefore, manifestNow),
-);
-if (files.length > 0 || sources.length > 0 || manifest.length > 0) {
-  const what = [
+const fields = changedFiles
+  .filter(isManifest)
+  .flatMap((path) =>
+    readable(path, () => unknownManifestFields(atBase(path), readFileSync(path, 'utf8'))).map(
+      (field) => `"${field}" in ${path}`,
+    ),
+  );
+if (files.length > 0 || settings.length > 0 || fields.length > 0) {
+  const all = [
     ...files.map((path) => `the file ${path}`),
-    ...sources.map((setting) => `${setting} in pnpm-workspace.yaml`),
-    ...manifest.map((setting) => `${setting} in package.json`),
-  ].join(', ');
+    ...settings.map((setting) => `${setting} in pnpm-workspace.yaml`),
+    ...fields,
+  ];
+  // A whole node_modules folder would make this too long to read.
+  const what = [...all.slice(0, 20), ...(all.length > 20 ? [`${all.length - 20} more`] : [])].join(
+    ', ',
+  );
   fail(
-    'Where packages come from',
-    `This pull request changes where pnpm downloads packages from or how, or code that pnpm runs itself (${what}). Nothing here needs that, so this check refuses it. If it's really needed, ask Claude: this check (scripts/lockfile-age.ts, run as ${base} has it) has to allow it first, in a pull request of its own.`,
+    'A pnpm setting or file this check does not know',
+    `This pull request changes a setting or file that pnpm or wrangler read by themselves, which this check doesn't understand (${what}). Such a change can make pnpm download from somewhere else, or run code, in the deploy too, unseen by this check. Nothing here uses it, so this check refuses it. If it's really needed, ask Claude: this check (scripts/lockfile-age.ts, run as ${base} has it) has to allow it first, in a pull request of its own.`,
+  );
+}
+
+// Allowed, but worth a look before merging: an install script runs at every
+// install, the deploy's included (audit 7 H-3, run 32).
+if (changedWorkspaceSettings(workspaceBefore, workspaceNow, ['onlyBuiltDependencies']).length > 0) {
+  console.log(
+    `::warning title=Install scripts::This pull request changes which packages may run install scripts (onlyBuiltDependencies in pnpm-workspace.yaml). Their scripts run at every install, the deploy's too: check why each one is needed before merging.`,
   );
 }
 

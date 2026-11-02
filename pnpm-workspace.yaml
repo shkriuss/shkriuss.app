@@ -1,4 +1,7 @@
 # pnpm workspace: every folder listed here is a package in the monorepo.
+# CI refuses a pull request that adds a setting not listed in
+# WORKSPACE_SETTINGS in scripts/lib/lockfile-age.ts (audit 7 H-1, run 32):
+# add it there first, in a pull request of its own.
 packages:
   - apps/*
   - packages/*
