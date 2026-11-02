@@ -83,13 +83,14 @@ describe('endpointProblem', () => {
 
 // Addresses there share most of an app's daily messages (audit 3 B-2).
 describe('isKnownPushService', () => {
-  it('knows the push services browsers use, by whole parts of their host names', () => {
+  it('knows the push services browsers use, by their own host names', () => {
     for (const endpoint of [
       'https://fcm.googleapis.com/fcm/send/abc:def',
       'https://fcm.googleapis.com/wp/abc',
       'https://web.push.apple.com/QGkz',
       'https://updates.push.services.mozilla.com/wpush/v2/gAAA',
       'https://wns2-par02p.notify.windows.com/w/?token=abc',
+      'https://db5p.notify.windows.com/w/?token=abc',
     ]) {
       expect(isKnownPushService(endpoint), endpoint).toBe(true);
     }
@@ -99,6 +100,14 @@ describe('isKnownPushService', () => {
       'https://fcm.googleapis.com.example.com/x',
       'https://notfcm.googleapis.com/x',
       'https://pushapple.com/x',
+      // Any other name under their domains, which may not even exist (audit 7 B-2, run 28).
+      'https://no-such-host.fcm.googleapis.com/x',
+      'https://push.apple.com/x',
+      'https://other.push.apple.com/x',
+      'https://push.services.mozilla.com/x',
+      'https://made.up.push.services.mozilla.com/x',
+      'https://notify.windows.com/w/?token=abc',
+      'https://a.b.notify.windows.com/w/?token=abc',
       'not a url',
     ]) {
       expect(isKnownPushService(endpoint), endpoint).toBe(false);

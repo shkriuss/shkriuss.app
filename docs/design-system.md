@@ -163,7 +163,10 @@ try {
 
 Use `disabled` only for something that stays unavailable until the person
 does something else, like "Continue" until a box is ticked. If a panel with
-the focused button is hidden, move focus to what takes its place.
+the focused button is hidden, move focus to what takes its place. Safari
+doesn't focus a button that's tapped, so when a button disappears without
+focus on it, read the new state out instead, as "Turn on notifications"
+does with the answer (audit 7 G-8).
 
 Drawing a list again (`replaceChildren`) removes the control that has
 focus, and focus falls back to the top of the page. After the person's own

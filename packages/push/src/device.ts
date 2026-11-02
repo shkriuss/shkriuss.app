@@ -204,17 +204,40 @@ export async function registration(): Promise<ServiceWorkerRegistration> {
   }
 }
 
+/**
+ * The most a request may send and still finish after the page is closed
+ * (`keepalive`): browsers allow 64 KiB for all such requests of a page.
+ */
+const KEEPALIVE_BYTES = 60 * 1024;
+
+/**
+ * A request to the app's notification server. With `keepalive`, it's sent
+ * so that it finishes even if the page is closed meanwhile (audit 7 Z-1),
+ * when it's small enough; if the browser refuses that (its limit used up
+ * by others on their way), it's sent again as usual.
+ */
 export async function api(path: string, init: RequestInit, deviceKey?: string): Promise<Response> {
   const headers = new Headers(init.headers);
   if (deviceKey) headers.set('Authorization', `Bearer ${deviceKey}`);
   if (init.body) headers.set('Content-Type', 'application/json');
-  const bytes = typeof init.body === 'string' ? init.body.length : 0;
-  let response: Response;
-  try {
-    response = await fetch(`${API}${path}`, {
+  const body = typeof init.body === 'string' ? init.body : '';
+  const bytes = body.length;
+  const send = (keepalive: boolean) =>
+    fetch(`${API}${path}`, {
       ...init,
       headers,
+      keepalive,
       signal: AbortSignal.timeout(timeLimit(bytes)),
+    });
+  const keepalive =
+    init.keepalive === true &&
+    bytes <= KEEPALIVE_BYTES &&
+    new TextEncoder().encode(body).length <= KEEPALIVE_BYTES;
+  let response: Response;
+  try {
+    response = await send(keepalive).catch((error: unknown) => {
+      if (keepalive && error instanceof TypeError) return send(false);
+      throw error;
     });
   } catch {
     throw new PushError('server', 'Couldn’t reach the notification service.');

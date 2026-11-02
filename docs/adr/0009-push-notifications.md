@@ -8,7 +8,12 @@ the server still has its schedule, "minutes before" reminders in the hour
 clocks skip go off as they change, and an open app tells whether the server
 sends a reminder reminder by reminder (all below). Changed by audit 6: a
 test notification from a device without a schedule keeps nothing on the
-server (see "What the server stores").
+server (see "What the server stores"). Changed by audit 7: an app's day
+and a device's day count only the messages really sent (and the time spent
+waiting), the big push services are known by their own host names, and
+reminders a device skips are skipped together, not one wake-up each (see
+"Limits" and "Consequences"); and a change goes up at once when the app is
+put away or closed (see "Uploading after a change").
 
 ## Context
 
@@ -132,11 +137,38 @@ browsers like IronFox receive Web Push through **UnifiedPush**.
   servers, and made-up ones), and 100 for test messages. And one device
   gets at most 100 messages a day, tries again included: the rest that day
   are skipped, like late ones, and uploading again doesn't start the count
-  again.
+  again. The push services browsers use are known by the exact host names
+  of their addresses (`fcm.googleapis.com`, `web.push.apple.com`,
+  `updates.push.services.mozilla.com`, and Microsoft's by region, like
+  `wns2-par02p.notify.windows.com`): any other name under their domains,
+  even one that doesn't exist, shares the 200 like any other address.
+- **Only what's really sent counts** (audit 7 B-2, run 28): a wake-up signs
+  for all it means to send (up to 25), but once one fails for now the rest
+  wait for the try again with it, so it gives back the ones it didn't send.
+  Each second spent waiting counts as one more message for the device too,
+  as it does for the app. So one device can't use more of an app's day than
+  its own 100, whatever its push address does. Before, one made-up device
+  whose address never took a message used up the 1,700 every day.
+- **Skipped together** (audit 7 B-3, run 28): once a device has had its 100
+  messages, all its reminders due before 00:00 UTC are skipped at once, and
+  all those more than an hour late are skipped in one wake-up. So a device
+  wakes the server about once for each message it gets, not for each
+  reminder it skips. Before, one upload of 500 reminders a minute apart
+  woke it about 500 times a day, for 13 months.
 - **Checked by the device's object:** the Worker only reads an upload, in
   one go, and passes it on; the device's object checks the rest. Reading
   and checking the biggest schedule in the Worker took more than the free
   plan's 10 ms of CPU time (audit finding B-9); an object has 30 seconds.
+- **Uploading after a change:** the app waits 800 ms, so quick edits go up
+  together, but not once it's put away (the phone locked, another app) or
+  closed: then it uploads at once, and a change made while it's put away
+  goes up straight away too. The upload is sent so that it finishes even
+  if the page is closed meanwhile (`keepalive`), when it's at most 60 KiB
+  (about 100 reminders; browsers allow 64 KiB in all for such
+  requests); a bigger one is sent as usual. Before audit 7 Z-1 a reminder
+  set just before leaving stayed on the device and didn't arrive while the
+  app was closed. Still worth trying once on an iPhone from the Home
+  Screen: set a reminder for two minutes later, press Home at once, wait.
 - **Not stored in backups:** the device key and subscription keys live under
   `shkriuss-device:` in `localStorage`, which backups skip, so restoring on
   another phone can't take over this one's notifications.
@@ -173,7 +205,10 @@ browsers like IronFox receive Web Push through **UnifiedPush**.
   the push address; never their content. The privacy page says so.
 - Free within Cloudflare's free plan (Durable Objects: 100,000 requests a
   day; each wake-up of a device is about two: the wake-up, and one signature
-  for up to 25 messages). Durable Objects also have 13,000 GB-s of time a
+  for up to 25 messages, plus one more afterwards when some weren't sent or
+  it waited; a device wakes about once for each message it gets, at most,
+  and a few times a day for the reminders it skips or holds until 00:00
+  UTC). Durable Objects also have 13,000 GB-s of time a
   day, counted while an object waits too: 2,000 seconds of waiting is about
   256 GB-s per app, and a unit test checks that all the apps with
   notifications together stay well inside it (`tests/unit/free-plan.test.ts`).
@@ -193,8 +228,10 @@ browsers like IronFox receive Web Push through **UnifiedPush**.
   people using UnifiedPush until 00:00 UTC, and the 100 test messages can
   be used up too. But to pause them for people at Google's, Apple's,
   Mozilla's or Microsoft's push services, someone needs at least 17 devices
-  subscribed there (as a browser would subscribe), each getting its 100
-  messages a day. It can't cost money on the free plan
+  with push addresses at those services' own hosts (as a browser would
+  subscribe), each using up its own 100 messages a day. Before audit 7
+  B-2, one made-up device was enough (see "Only what's really sent
+  counts"). It can't cost money on the free plan
   and can't reveal anything. A Cloudflare rate-limiting rule on `/api/`
   slows this down ([deployment](../deployment.md)). Someone could also fill
   that app's room for schedules; then new devices wait until the junk is

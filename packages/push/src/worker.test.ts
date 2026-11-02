@@ -399,6 +399,20 @@ describe('a push service that’s slow or never answers (audit B-1)', () => {
     expect(await counted()).toBeGreaterThanOrEqual(25 + 75);
   });
 
+  // Each second spent waiting counted for the app but not for the device, so
+  // one device at an address that never answers counted 6 for each try, and
+  // more than its own 100 a day (audit 7 B-2, run 28).
+  it('lets one device count no more than its own day, seconds spent waiting included', async () => {
+    const sent = slowPushService(null);
+    const many = Array.from({ length: 500 }, (_, index) => entry({ id: `e${index}` }));
+    const endpoint = 'https://fcm.googleapis.com/fcm/send/never-answers';
+    expect((await device().schedule(many, { endpoint })).status).toBe(200);
+    await passDays(1);
+    // Its last try may go over by one wait.
+    expect(await counted()).toBeLessThanOrEqual(DEVICE_DAILY_SENDS + 1 + SEND_MS / 1000);
+    expect(sent.mock.calls.length).toBeLessThan(DEVICE_DAILY_SENDS / (1 + SEND_MS / 1000) + 1);
+  });
+
   it('can make an app wait about DAILY_SENDS seconds a day at most', async () => {
     // A test message at a time, each to a push address that answers just before the limit.
     slowPushService(SEND_MS - 1);
@@ -583,6 +597,47 @@ describe('strangers’ made-up devices (audit 3 B-2)', () => {
     expect(sent.mock.calls).toHaveLength(2 * DEVICE_DAILY_SENDS);
   }, 30_000);
 
+  /** What the app counted in each share of its day, on the day it last counted. */
+  const shares = async () =>
+    (await server.keysStorage.get<{ shares: Record<string, number> }>('sent'))?.shares ?? {};
+
+  // One made-up device whose push address never took a message used up the
+  // app's day at the push services browsers use: each wake-up counted the 25
+  // it meant to send, though it stopped at the first that failed, and each
+  // try again counted them again (audit 7 B-2, run 28).
+  it('can’t use up the push services’ messages with an address that never takes one', async () => {
+    const JUNK = 'https://fcm.googleapis.com/fcm/send/never-gets-through';
+    const sent = vi.fn(async (input: string) => {
+      if (input === JUNK) throw new TypeError('Network connection lost');
+      return new Response(null, { status: 201 });
+    });
+    vi.stubGlobal('fetch', sent);
+    expect((await device().schedule(junk, { endpoint: JUNK })).status).toBe(200);
+    const real = [entry({ id: 'real', start: '2026-10-01T12:00' })];
+    expect((await device().schedule(real, { endpoint: REAL })).status).toBe(200);
+    for (let day = 1; day <= 2; day += 1) {
+      await passDays(1);
+      expect(sent.mock.calls.filter(([url]) => url === REAL)).toHaveLength(day);
+      // No more than the made-up device's own day, and the real one.
+      expect((await shares())['known']).toBeLessThanOrEqual(DEVICE_DAILY_SENDS + 1);
+    }
+  }, 30_000);
+
+  // "Known" went by the end of the host name, so a host that doesn't exist,
+  // like this one, shared the big push services' part (audit 7 B-2, run 28).
+  it('counts a made-up host under a push service’s domain as any other address', async () => {
+    const JUNK = 'https://no-such-host.fcm.googleapis.com/x';
+    vi.stubGlobal('fetch', async (input: string) => {
+      if (input === JUNK) throw new TypeError('getaddrinfo ENOTFOUND');
+      return new Response(null, { status: 201 });
+    });
+    expect((await device().schedule(junk, { endpoint: JUNK })).status).toBe(200);
+    await passDays(1);
+    const counted = await shares();
+    expect(counted['known']).toBeUndefined();
+    expect(counted['other']).toBeGreaterThan(0);
+  });
+
   it('can use up the test messages of a day, but not the reminders', async () => {
     const sent = pushService();
     let tests = 0;
@@ -592,6 +647,72 @@ describe('strangers’ made-up devices (audit 3 B-2)', () => {
     expect((await device().schedule([entry()], { endpoint: REAL })).status).toBe(200);
     await passDays(1);
     expect(sent.mock.calls.filter(([url]) => url === REAL)).toHaveLength(1);
+  });
+});
+
+// A device past its messages for the day was still woken for every reminder
+// it then skipped, so one upload of 500 reminders a minute apart cost about
+// 500 wake-ups a day, for 13 months (audit 7 B-3, run 28).
+describe('wake-ups', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ now: Date.UTC(2026, 9, 22), toFake: ['Date'] });
+  });
+
+  const pad = (value: number) => String(value).padStart(2, '0');
+  /** 500 daily reminders a minute apart, from 01:00 UTC. */
+  const minuteApart = Array.from({ length: 500 }, (_, index) =>
+    entry({
+      id: `e${index}`,
+      start: `2026-10-01T${pad(1 + Math.floor(index / 60))}:${pad(index % 60)}`,
+    }),
+  );
+
+  it('wakes a device about once for each message it gets, not for each one it skips', async () => {
+    const sent = pushService();
+    expect((await device().schedule(minuteApart)).status).toBe(200);
+    for (let day = 0; day < 3; day += 1) {
+      const before = { ...server.counts, sent: sent.mock.calls.length };
+      await passDays(1);
+      expect(sent.mock.calls.length - before.sent).toBe(DEVICE_DAILY_SENDS);
+      expect(server.counts.wakes - before.wakes).toBeLessThanOrEqual(DEVICE_DAILY_SENDS + 1);
+      expect(server.counts.signs - before.signs).toBe(DEVICE_DAILY_SENDS);
+    }
+    // Still there, for tomorrow's.
+    expect([...server.devices.values()].map(({ storage }) => storage.map.has('device'))).toEqual([
+      true,
+    ]);
+  }, 30_000);
+
+  it('keeps a try again that comes after 00:00 UTC, when the device has messages again', async () => {
+    vi.setSystemTime(Date.UTC(2026, 9, 22, 23, 50));
+    // The day's 100th message fails; tried again a minute later, it gets through.
+    let calls = 0;
+    const sent = pushService(() => (++calls === DEVICE_DAILY_SENDS ? 503 : 201));
+    // 99 at 23:52, then one at 23:59.
+    const entries = [
+      ...Array.from({ length: DEVICE_DAILY_SENDS - 1 }, (_, index) =>
+        entry({ id: `e${index}`, start: '2026-10-22T23:52', repeat: 'none' }),
+      ),
+      entry({ id: 'last', start: '2026-10-22T23:59', repeat: 'none' }),
+    ];
+    expect((await device().schedule(entries)).status).toBe(200);
+    await passDays(1);
+    // 99, then the last one tried at 23:59 and again at 00:00 the next day.
+    expect(sent.mock.calls).toHaveLength(DEVICE_DAILY_SENDS + 1);
+    expect([...server.devices.values()].map(({ storage }) => storage.map.size)).toEqual([0]);
+  });
+
+  it('skips reminders more than an hour late in one wake-up', async () => {
+    const sent = pushService();
+    expect((await device().schedule(daily(500))).status).toBe(200);
+    // The server only gets to them at 20:00, more than an hour after the last.
+    vi.setSystemTime(Date.UTC(2026, 9, 22, 20));
+    await server.runAlarms();
+    expect(sent).not.toHaveBeenCalled();
+    expect(server.counts).toEqual({ wakes: 1, signs: 0 });
+    // All due again tomorrow.
+    await passDays(1);
+    expect(sent).toHaveBeenCalledTimes(DEVICE_DAILY_SENDS);
   });
 });
 

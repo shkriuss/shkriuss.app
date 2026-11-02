@@ -24,7 +24,10 @@ import {
 import { setBusy } from './busy.ts';
 import { RELOAD_TO_UPDATE } from './problem.ts';
 
-/** Waits this long after a change before uploading, so quick edits go up together. */
+/**
+ * Waits this long after a change before uploading, so quick edits go up
+ * together; not when the app is put away or closed (see mountPushControls).
+ */
 const SYNC_DELAY_MS = 800;
 
 /**
@@ -140,9 +143,32 @@ export function mountPushControls(block: HTMLElement, options: PushControlsOptio
   function sync(): void {
     if (!isPushEnabled()) return;
     window.clearTimeout(timer);
+    // Put away (or a change from another tab or device meanwhile): at once,
+    // as the page may not run again before it's closed.
+    if (document.visibilityState === 'hidden') {
+      timer = undefined;
+      upload();
+      return;
+    }
     timer = window.setTimeout(() => {
+      timer = undefined;
       upload();
     }, SYNC_DELAY_MS);
+  }
+
+  /**
+   * Put away (the phone locked, another app) or closed with a change still
+   * waiting to go up: it goes up now. It waited 800 ms, and nothing sent it
+   * sooner, so a reminder set just before leaving stayed on the device and
+   * didn't arrive while the app was closed (audit 7 Z-1). The upload is
+   * sent so that it finishes even if the page is closed meanwhile
+   * (`keepalive`, in @shkriuss/push).
+   */
+  function leaving(): void {
+    if (timer === undefined) return;
+    window.clearTimeout(timer);
+    timer = undefined;
+    upload();
   }
 
   toggle.addEventListener('change', () => {
@@ -203,7 +229,10 @@ export function mountPushControls(block: HTMLElement, options: PushControlsOptio
     // follows (an unchanged schedule isn't sent again).
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') refresh();
+      else leaving();
     });
+    // Closed or left, also where that doesn't make the page hidden first.
+    window.addEventListener('pagehide', leaving);
   } else {
     toggle.disabled = true;
     status.textContent =

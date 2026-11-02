@@ -2,6 +2,7 @@
 // notification service while it's closed (packages/push, docs/adr/0009).
 // Notifications and the push service are fakes that record what they get
 // (tests/e2e/notifications.ts).
+import type { Page } from '@playwright/test';
 import { fromBase64Url } from '../../../packages/push/src/base64.ts';
 import { expect, test } from '../../../tests/e2e/fixtures.ts';
 import {
@@ -9,6 +10,7 @@ import {
   fakeSubscription,
   shownNotifications,
   startRig,
+  type PushRig,
 } from '../../../tests/e2e/notifications.ts';
 import { REMINDER_BODY } from '../src/lib/reminders.ts';
 import { addReminder, editDialog, NOW, reminder, seed, TIME_ZONE } from './helpers.ts';
@@ -115,6 +117,83 @@ test('asks to show notifications when a reminder is set', async ({ page }) => {
 
 test.describe('while Reminders is closed', () => {
   test.use({ serviceWorkers: 'allow' });
+
+  const ON = 'On: reminders arrive even when Reminders is closed.';
+  const isUpload = (request: { url(): string; method(): string }) =>
+    request.url().endsWith('/api/push/schedule') && request.method() === 'PUT';
+  /** As when the phone is locked, another app opened, or the tab closed. */
+  const leave = (page: Page, event: 'visibilitychange' | 'pagehide') =>
+    page.evaluate((event) => {
+      if (event === 'pagehide') {
+        window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: false }));
+        return;
+      }
+      Object.defineProperty(document, 'visibilityState', {
+        configurable: true,
+        get: () => 'hidden',
+      });
+      document.dispatchEvent(new Event('visibilitychange'));
+    }, event);
+
+  /** Reminders with "Also remind me when Reminders is closed" on, and its clock stopped. */
+  async function turnedOn(page: Page, rig: PushRig): Promise<void> {
+    await page.clock.install({ time: NOW });
+    await fakeSubscription(page, rig);
+    await page.goto('/');
+    await page.getByLabel('Also remind me when Reminders is closed').check();
+    await expect(page.locator('[data-closed-status]')).toHaveText(ON);
+    // From now on, the wait before an upload never ends by itself.
+    await page.clock.pauseAt(new Date(NOW.getTime() + 60_000));
+  }
+
+  /** The reminders in an upload. */
+  const startsOf = (request: { postData(): string | null }) =>
+    (JSON.parse(request.postData() ?? '') as { entries: Entry[] }).entries.map(
+      (entry) => entry.start,
+    );
+
+  // A change waited 800 ms before going up, and nothing sent it sooner when
+  // the app was put away or closed: a reminder set just before stayed on the
+  // device, and didn't arrive while the app was closed (audit 7 Z-1).
+  for (const event of ['visibilitychange', 'pagehide'] as const) {
+    test(`uploads a change at once when Reminders is put away or closed (${event})`, async ({
+      page,
+    }) => {
+      const rig = await startRig();
+      try {
+        await turnedOn(page, rig);
+        const uploads: string[][] = [];
+        page.on('request', (request) => {
+          if (isUpload(request)) uploads.push(startsOf(request));
+        });
+        await addReminder(page, 'Take the cake out', { time: '18:00' });
+        await expect(page.getByRole('button', { name: 'Take the cake out' })).toBeVisible();
+        expect(uploads).toEqual([]);
+        const upload = page.waitForRequest(isUpload, { timeout: 10_000 });
+        await leave(page, event);
+        expect(startsOf(await upload)).toEqual(['2026-10-21T18:00']);
+        // Once: the wait it cut short doesn't send it again.
+        await page.clock.runFor(2_000);
+        expect(uploads).toHaveLength(1);
+      } finally {
+        rig.server.close();
+      }
+    });
+  }
+
+  test('uploads a change made while Reminders is put away at once', async ({ page }) => {
+    const rig = await startRig();
+    try {
+      await turnedOn(page, rig);
+      await leave(page, 'visibilitychange');
+      // Say, from another tab, or another device through sync.
+      const upload = page.waitForRequest(isUpload, { timeout: 10_000 });
+      await addReminder(page, 'Water the plants', { time: '19:00' });
+      expect(startsOf(await upload)).toEqual(['2026-10-21T19:00']);
+    } finally {
+      rig.server.close();
+    }
+  });
 
   test('uploads reminders encrypted, and drops them once done', async ({ page }) => {
     const rig = await startRig();
