@@ -512,7 +512,13 @@ in with `sync: true` in `apps.json`.
   that item is lost.
 - **iPhone Home Screen apps** keep their own storage, separate from Safari. An
   app added to the Home Screen may need its own sign-in on the hub when it
-  connects.
+  connects. Whether "Turn on sync" comes back to such an app at all hasn't
+  been tried on an iPhone: the app keeps its half of the request in the
+  tab's own storage (`sessionStorage`), and iOS may open the hub, and the
+  way back, in a browser view of its own. If so, the app says "Turning on
+  sync didn't finish", and nothing leaks: the key is sealed to that tab
+  (audit 7 A-4, run 39, a suspicion). Try it with Tally on the Home Screen
+  before changing where the request is kept.
 - **Someone sees the QR code.** Anyone who sees a QR code before it's used,
   cancelled ("Done") or expired could use it first. The device showing it
   then says a device opened it and to replace the key if it wasn't one of
