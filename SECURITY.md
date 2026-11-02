@@ -30,8 +30,11 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
   redirects are refused. A device whose messages all fail or are refused for
   two days is forgotten, and each app sends at most 2,000 messages a day:
   each device at most 100, push addresses outside Google's, Apple's,
-  Mozilla's and Microsoft's push services 200 in all, and test messages
-  100, so made-up devices can't use up everyone's. A
+  Mozilla's and Microsoft's push services (known by their exact host
+  names) 200 in all, and test messages 100, so made-up devices can't use
+  up everyone's. Only messages really sent count, for the app and for the
+  device, so one device can't use more than its own 100, and a device
+  skips the reminders it can't send all at once, not one wake-up each. A
   push service gets 5 seconds to answer, and time spent waiting counts
   against those messages, so a slow push address can't tie up the servers.
 - The hub also runs a small Worker for `/api/account/*`, for the optional

@@ -76,16 +76,21 @@ export function endpointProblem(endpoint: unknown, allowLocal = false): string |
 }
 
 /**
- * The push services browsers use: Google's (Chrome, Android, Samsung
- * Internet), Apple's (Safari), Mozilla's (Firefox) and Microsoft's (Edge on
- * Windows), by the end of their addresses' host names.
+ * The push services browsers use, by the host names of the addresses they
+ * give: Google's (Chrome, Android, Samsung Internet), Apple's (Safari) and
+ * Mozilla's (Firefox). Only these names: any other under their domains, such
+ * as one that doesn't even exist, counted as theirs, so one made-up device
+ * could use their part of an app's day (audit 7 B-2, run 28). If one of them
+ * starts giving out addresses at another host, add it here; until then,
+ * those devices share the smaller part.
  */
-const PUSH_SERVICES = [
+const PUSH_HOSTS = [
   'fcm.googleapis.com',
-  'push.apple.com',
-  'push.services.mozilla.com',
-  'notify.windows.com',
+  'web.push.apple.com',
+  'updates.push.services.mozilla.com',
 ];
+/** Microsoft's (Edge on Windows), whose hosts are by region, like wns2-par02p.notify.windows.com. */
+const WNS_HOST = /^[a-z0-9-]+\.notify\.windows\.com$/;
 
 /**
  * Whether this push address is at one of the push services browsers use.
@@ -99,7 +104,7 @@ export function isKnownPushService(endpoint: string): boolean {
   } catch {
     return false;
   }
-  return PUSH_SERVICES.some((service) => host === service || host.endsWith(`.${service}`));
+  return PUSH_HOSTS.includes(host) || WNS_HOST.test(host);
 }
 
 function payloadProblem(payload: unknown): string | undefined {
