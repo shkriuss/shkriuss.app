@@ -31,6 +31,7 @@ import {
   reminderNotices,
   REMINDER_BODY,
   removeTask,
+  removeListTasks,
   removeTasks,
   reopenTask,
   searchWords,
@@ -690,6 +691,25 @@ describe('changes', () => {
     const report = task({ list: 'work' });
     const moved = moveTasks(stateOf(rent, report), 'home', NO_LIST);
     expect(moved.tasks.map((entry) => entry.list)).toEqual([NO_LIST, 'work']);
+  });
+
+  it('deletes only the tasks “Delete this list?” counted (audit 7 F1-3)', () => {
+    // It said "Its 2 tasks"; meanwhile another device added one to the list
+    // and moved one out. Delete took every task in the list then.
+    const report = task({ title: 'Report', list: 'work' });
+    const slides = task({ title: 'Slides', list: 'work' });
+    const counted = new Set([report.id, slides.id]);
+    const moved = { ...slides, list: 'home' };
+    const added = task({ title: 'Prepare the talk', list: 'work' });
+    const other = task({ title: 'Call mum', list: 'home' });
+    const { state, kept } = removeListTasks(stateOf(report, moved, added, other), 'work', counted);
+    expect(state.tasks.map((entry) => [entry.title, entry.list])).toEqual([
+      ['Slides', 'home'],
+      ['Prepare the talk', NO_LIST],
+      ['Call mum', 'home'],
+    ]);
+    expect(kept).toBe(1);
+    expect(removeListTasks(stateOf(report, other), 'work', counted)).toMatchObject({ kept: 0 });
   });
 
   it('reads tasks saved by older versions', () => {

@@ -12,7 +12,9 @@ Get reminded at the right time, once or again and again. Lives at
   leap years, the same as Calendar and the notification service.
   - One that doesn't repeat can be ticked done, and once its time has passed
     it's "Overdue" until it is, with "In 1 hour" and "Tomorrow" to put it
-    off. Done ones are kept under "Done" until cleared.
+    off. Done ones are kept under "Done" until cleared. "Delete done
+    reminders" deletes only those its dialog counted when it opened: one
+    ticked done on another device meanwhile stays (audit 7 F1-3).
   - One that repeats has no tick box: it moves on to its next time
     (`nextTime`). The list groups reminders by their next time: today,
     tomorrow or later.

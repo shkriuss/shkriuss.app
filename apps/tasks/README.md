@@ -21,7 +21,11 @@ Your to-do list, with dates, lists and reminders. Lives at
 - `src/lib/lists.ts`: your lists ("Work", "Home"…), with tests
   (`lists.test.ts`). There are none to begin with. Saved under
   `shkriuss:task-lists`. Deleting a list keeps its tasks (without a list),
-  moves them to another list, or deletes them, as you choose.
+  moves them to another list, or deletes them, as you choose. "Delete them
+  too" and "Delete done tasks" delete only the tasks their dialog counted
+  when it opened: one added to the list, or ticked off, on another device
+  meanwhile stays (a task added to the deleted list stays without a list,
+  and the page says so; `removeListTasks`, audit 7 F1-3).
 - `src/scripts/tasks.ts`: connects the page to those rules and saves with
   `@shkriuss/storage`. "Add" puts a task in what's shown (a list, or
   Important). Search finds tasks in what's shown by every word typed, in

@@ -571,9 +571,13 @@ export function mountTasks(root: Document): void {
     announce('Search cleared.');
   });
 
+  /** The done tasks "Delete done tasks?" counted, as it opened: Delete deletes only these. */
+  let counted = new Set<string>();
+
   required<HTMLButtonElement>(root, '[data-action="clear-done"]').addEventListener('click', () => {
     typedSearch.flush();
-    const count = doneTasks(tasks, views.view(), search).length;
+    counted = new Set(doneTasks(tasks, views.view(), search).map((task) => task.id));
+    const count = counted.size;
     clearText.textContent =
       count === 1
         ? 'The done task shown here will be removed. This can’t be undone.'
@@ -584,7 +588,10 @@ export function mountTasks(root: Document): void {
 
   clearDialog.addEventListener('close', () => {
     if (clearDialog.returnValue !== 'confirm') return;
-    const done = doneTasks(tasks, views.view(), search);
+    // Only those it counted, if they're still done: a task ticked off on
+    // another device meanwhile stays, and so does one made to do again
+    // there (audit 7 F1-3).
+    const done = doneTasks(tasks, views.view(), search).filter((task) => counted.has(task.id));
     if (saveTasks(removeTasks(tasks, new Set(done.map((task) => task.id))))) {
       announce(`Deleted ${done.length} done ${done.length === 1 ? 'task' : 'tasks'}.`);
     }

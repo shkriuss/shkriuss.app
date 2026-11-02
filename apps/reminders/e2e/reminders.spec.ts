@@ -152,6 +152,32 @@ test('ticks reminders done, puts off overdue ones, and clears done ones', async 
   await expect(page.getByRole('button', { name: 'Buy bread' })).toHaveCount(0);
 });
 
+// Audit 7 F1-3: Delete deleted the done reminders there were when it was
+// tapped, also ones ticked done elsewhere after the dialog said how many.
+test('“Delete done reminders” deletes only those it counted', async ({ page }) => {
+  await seed(page, [
+    reminder('a', 'Buy bread', '2026-10-21', '09:00', 'none', '2026-10-21T09:05'),
+    reminder('b', 'Call the dentist', '2026-10-21', '18:00'),
+  ]);
+  await page.locator('[data-done-section] summary').click();
+  await page.getByRole('button', { name: 'Delete done reminders' }).click();
+  const ask = page.getByRole('dialog', { name: 'Delete done reminders?' });
+  await expect(ask).toContainText('The done reminder will be removed.');
+  // Meanwhile, another tab (or a sync from another device) ticks one done.
+  const other = await page.context().newPage();
+  await other.clock.setFixedTime(NOW);
+  await other.goto('/');
+  await other.getByRole('checkbox', { name: 'Call the dentist: done' }).click();
+  await expect(page.locator('[data-done-section] summary')).toHaveText('Done (2)');
+  await other.close();
+
+  await ask.getByRole('button', { name: 'Delete' }).click();
+  await expect(status(page, 'Deleted 1 done reminder.')).toBeAttached();
+  await expect(page.locator('[data-done-section] summary')).toHaveText('Done (1)');
+  await expect(page.getByRole('button', { name: 'Call the dentist', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Buy bread', exact: true })).toHaveCount(0);
+});
+
 test('saving a change keeps what changed elsewhere while it was open', async ({ page }) => {
   // Overdue ones: correcting the text was refused with "Choose a time that’s
   // still to come" once the other device had ticked or put off the reminder,

@@ -585,6 +585,24 @@ export function removeTasks(state: TasksState, ids: ReadonlySet<string>): TasksS
   return { tasks: state.tasks.filter((task) => !ids.has(task.id)) };
 }
 
+/**
+ * "Delete them too", when a list is deleted: deletes the list's tasks that
+ * are in `ids`, the ones "Delete this list?" counted. Any others in it now
+ * (added to it on another device while the dialog was open) stay, without
+ * a list, with how many (audit 7 F1-3).
+ */
+export function removeListTasks(
+  state: TasksState,
+  list: string,
+  ids: ReadonlySet<string>,
+): { state: TasksState; kept: number } {
+  const gone = new Set(
+    state.tasks.filter((task) => task.list === list && ids.has(task.id)).map((task) => task.id),
+  );
+  const kept = state.tasks.filter((task) => task.list === list).length - gone.size;
+  return { state: moveTasks(removeTasks(state, gone), list, NO_LIST), kept };
+}
+
 // ---------- Showing them ----------
 
 /** Which tasks to show: all of them, the important ones, or one list's. */

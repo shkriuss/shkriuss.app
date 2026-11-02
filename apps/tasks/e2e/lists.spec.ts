@@ -115,6 +115,42 @@ test('deleting a list keeps its tasks, moves them, or deletes them', async ({ pa
   await expect(page.locator('[data-views] button')).toHaveCount(2);
 });
 
+// Audit 7 F1-3: "Delete them too" deleted every task in the list when it was
+// tapped, also one added to it elsewhere after the dialog said how many.
+test('deleting a list deletes only the tasks it counted', async ({ page }) => {
+  await seed(
+    page,
+    [
+      { title: 'Write report', list: 'w' },
+      { title: 'Book the room', list: 'w' },
+    ],
+    [{ id: 'w', name: 'Work' }],
+  );
+  await chip(page, 'Work').click();
+  await page.getByRole('button', { name: 'Rename or delete this list' }).click();
+  await listForm(page).getByRole('button', { name: 'Delete' }).click();
+  await deleteDialog(page).getByLabel('Its 2 tasks').selectOption({ label: 'Delete them too' });
+  // Meanwhile, another tab (or a sync from another device) adds one to Work.
+  const other = await page.context().newPage();
+  await other.goto('/');
+  await chip(other, 'Work').click();
+  await addTask(other, 'Prepare the talk');
+  await expect(titles(other)).toHaveCount(3);
+  await other.close();
+  await expect(chip(page, 'Work')).toHaveText(/3$/);
+
+  await deleteDialog(page).getByRole('button', { name: 'Delete' }).click();
+  await expect(
+    page.getByRole('status').filter({
+      hasText:
+        'Deleted list Work. 1 task added to it on another device meanwhile was kept, without a list.',
+    }),
+  ).toBeAttached();
+  await expect(heading(page)).toHaveText('All tasks');
+  await expect(titles(page)).toHaveText(['Prepare the talk']);
+  await expect(chip(page, 'Work')).toHaveCount(0);
+});
+
 test('a list deleted elsewhere while its form is open', async ({ page }) => {
   // The form said nothing: Delete did nothing, closing it left focus on the
   // page itself, and Save brought the list back without a word (audit 6 G-3).

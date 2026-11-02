@@ -23,7 +23,7 @@ import {
 import {
   moveTasks,
   NO_LIST,
-  removeTasks,
+  removeListTasks,
   tasksCount,
   type TasksState,
   type View,
@@ -84,6 +84,8 @@ export function mountListEditor(root: Document, page: ListsPage): ListEditor {
   let savedListId: string | null = null;
   /** The list's name as the form opened, to tell if it was changed and to name it once it's gone. */
   let openedName = '';
+  /** The tasks "Delete this list?" counted, as it opened: "Delete them too" deletes only these. */
+  let countedTasks = new Set<string>();
 
   const exists = (id: string | null): boolean => page.lists().lists.some((list) => list.id === id);
 
@@ -202,7 +204,9 @@ export function mountListEditor(root: Document, page: ListsPage): ListEditor {
     const lists = page.lists();
     const name = listName(lists, editingListId);
     const id = editingListId;
-    const count = page.tasks().tasks.filter((task) => task.list === id).length;
+    const inList = page.tasks().tasks.filter((task) => task.list === id);
+    countedTasks = new Set(inList.map((task) => task.id));
+    const count = inList.length;
     listDeleteName.textContent = name;
     // Its tasks can stay (without a list), move to another list, or go too.
     listTasksField.hidden = count === 0;
@@ -239,15 +243,20 @@ export function mountListEditor(root: Document, page: ListsPage): ListEditor {
     const tasks = page.tasks();
     const inList = tasks.tasks.filter((task) => task.list === id);
     let saved = true;
+    let kept = 0;
     if (inList.length > 0) {
-      saved = page.saveTasks(
-        choice === DELETE_TASKS
-          ? removeTasks(tasks, new Set(inList.map((task) => task.id)))
-          : moveTasks(tasks, id, choice),
-      );
+      // Only the tasks it counted go: one added to the list on another
+      // device meanwhile stays, without a list (audit 7 F1-3).
+      const removed = choice === DELETE_TASKS ? removeListTasks(tasks, id, countedTasks) : null;
+      kept = removed?.kept ?? 0;
+      saved = page.saveTasks(removed?.state ?? moveTasks(tasks, id, choice));
     }
     saved = page.saveLists(removeList(page.lists(), id)) && saved;
-    if (saved) page.announce(`Deleted list ${name}.`);
+    const keptText =
+      kept === 0
+        ? ''
+        : ` ${tasksCount(kept)} added to it on another device meanwhile ${kept === 1 ? 'was' : 'were'} kept, without a list.`;
+    if (saved) page.announce(`Deleted list ${name}.${keptText}`);
     editingListId = null;
     listOpener = focusSpot(page.viewHeading);
     listEditor.close();
