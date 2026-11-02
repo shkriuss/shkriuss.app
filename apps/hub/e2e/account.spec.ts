@@ -548,6 +548,26 @@ test('replacing the key signs out every device that has the old one', async ({
   await tablet.context().close();
 });
 
+test('a mistake in the recovery key isn’t said again once fixed, when it fails for another reason (audit 7 G-10)', async ({
+  page,
+}) => {
+  // It stayed under the box, marked as wrong, and was read out again as
+  // focus came back there: the person kept looking for a typo.
+  const old = await createAccount(page);
+  await replaceKey(page);
+  await signOut(page);
+  const input = page.getByRole('textbox', { name: 'Recovery key' });
+  const error = page.locator('#recovery-key-error');
+  await signInWithKey(page, old.key.replace(/^./, old.key.startsWith('A') ? 'B' : 'A'));
+  await expect(error).toHaveText(/There’s a mistake/);
+  await expect(input).toHaveAttribute('aria-invalid', 'true');
+  await signInWithKey(page, old.key);
+  await expect(message(page)).toHaveText(/^This key was replaced on another device/);
+  await expect(input).toBeFocused();
+  await expect(error).toHaveText('');
+  await expect(input).not.toHaveAttribute('aria-invalid');
+});
+
 /** What this device keeps about its account: the key, and the replaced keys. */
 const storedAccount = (page: Page) =>
   page.evaluate(

@@ -796,6 +796,11 @@ export async function mountAccount(root: HTMLElement): Promise<void> {
         focusProblem(recoveryInput, recoveryError.textContent ?? '');
         return;
       }
+      // It reads now: a mistake said before is fixed. Left, it stayed under
+      // the box, and was read out again when a later try failed for another
+      // reason and focus came back to it (audit 7 G-10).
+      recoveryError.textContent = '';
+      recoveryInput.removeAttribute('aria-invalid');
       say('Signing in…');
       if (await signIn(result.secret, 'Signed in with your recovery key.')) {
         recoveryInput.value = '';
