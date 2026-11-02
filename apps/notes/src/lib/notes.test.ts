@@ -98,6 +98,18 @@ describe('writing notes', () => {
     expect(editNote(state, 'a', { title: `${nearly}😀` }, 2).notes[0]?.title).toBe(nearly);
   });
 
+  it('keeps text it didn’t change, however this browser counts it (audit 7 F1-1)', () => {
+    // Browsers don't all count characters the same way: Hindi "क्ष" is one
+    // in newer ones and two or three in older ones. A title another device
+    // let in can be too long as this browser counts it (as here, where
+    // every character counts once): typing in the body cut it.
+    const title = 'x'.repeat(MAX_TITLE_LENGTH + 5);
+    const state: NotesState = { notes: [note('a', title, 'Body')] };
+    const typed = editNote(state, 'a', { title, body: 'Body, and more' }, 2);
+    expect(typed.notes[0]).toMatchObject({ title, body: 'Body, and more', updated: 2 });
+    expect(editNote(state, 'a', { title, body: 'Body' }, 2).notes).toEqual(state.notes);
+  });
+
   it('pins, unpins and removes notes', () => {
     let state: NotesState = { notes: [note('a', 'A'), note('b', 'B')] };
     state = setPinned(state, 'b', true);

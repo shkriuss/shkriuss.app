@@ -7,7 +7,7 @@
  */
 import { isIsoDate, parts, type IsoDate } from '@shkriuss/dates';
 import { secondVersionName } from '@shkriuss/sync';
-import { compareText, cutToLength, foldText } from '@shkriuss/ui/text';
+import { compareText, cutChanged, cutToLength, foldText } from '@shkriuss/ui/text';
 import {
   decimalText,
   formatMoney,
@@ -229,9 +229,11 @@ export function draftProblems(
 /**
  * Text cut to `max` characters as people see them (as Safari's text boxes
  * count): what a box lets in is never cut on saving, nor an emoji in half
- * (audit 4 F3-4).
+ * (audit 4 F3-4). Text the item has now (`saved`) stays as it is: another
+ * device may count its characters differently (audit 7 F1-1).
  */
-const cut = (text: string, max: number): string => cutToLength(text.trim(), max);
+const cut = (text: string, max: number, saved?: string): string =>
+  cutChanged(text.trim(), max, saved);
 
 /**
  * The item a (checked) draft describes. Keeps `created` from the item it
@@ -246,17 +248,17 @@ export function itemFromDraft(
 ): Item {
   return {
     id,
-    name: cut(draft.name, LIMITS.name),
-    brand: cut(draft.brand, LIMITS.brand),
+    name: cut(draft.name, LIMITS.name, existing?.name),
+    brand: cut(draft.brand, LIMITS.brand, existing?.brand),
     category: draft.category,
     opinion: oneOf(draft.opinion, OPINIONS) ? draft.opinion : 'use',
     price: parsePrice(draft.price, locale) ?? null,
     currency: oneOf(draft.currency, CURRENCIES) ? draft.currency : DEFAULT_CURRENCY,
-    shop: cut(draft.shop, LIMITS.shop),
+    shop: cut(draft.shop, LIMITS.shop, existing?.shop),
     link: normalizeLink(draft.link) ?? '',
-    variant: cut(draft.variant, LIMITS.variant),
+    variant: cut(draft.variant, LIMITS.variant, existing?.variant),
     bought: isIsoDate(draft.bought) ? draft.bought : null,
-    notes: cut(draft.notes, LIMITS.notes),
+    notes: cut(draft.notes, LIMITS.notes, existing?.notes),
     created: existing?.created ?? now,
     updated: now,
   };

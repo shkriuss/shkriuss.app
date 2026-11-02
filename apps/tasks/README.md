@@ -21,7 +21,11 @@ Your to-do list, with dates, lists and reminders. Lives at
 - `src/lib/lists.ts`: your lists ("Work", "Home"…), with tests
   (`lists.test.ts`). There are none to begin with. Saved under
   `shkriuss:task-lists`. Deleting a list keeps its tasks (without a list),
-  moves them to another list, or deletes them, as you choose.
+  moves them to another list, or deletes them, as you choose. "Delete them
+  too" and "Delete done tasks" delete only the tasks their dialog counted
+  when it opened: one added to the list, or ticked off, on another device
+  meanwhile stays (a task added to the deleted list stays without a list,
+  and the page says so; `removeListTasks`, audit 7 F1-3).
 - `src/scripts/tasks.ts`: connects the page to those rules and saves with
   `@shkriuss/storage`. "Add" puts a task in what's shown (a list, or
   Important). Search finds tasks in what's shown by every word typed, in
@@ -51,7 +55,9 @@ Your to-do list, with dates, lists and reminders. Lives at
   service ([ADR 0009](../../docs/adr/0009-push-notifications.md)). Without a
   time, a task is reminded about at 9:00. A reminder is part of its task, so
   it syncs too; each device then uploads it to its own notification service,
-  the next time Tasks opens there (`e2e/sync.spec.ts` checks this).
+  the next time Tasks opens there (`e2e/sync.spec.ts` checks this). Until
+  then, a task ticked off or changed elsewhere is still reminded there at
+  its old time (the page says so).
 - `src/pages/index.astro`: the page, built from `@shkriuss/ui` components.
   `<template>`s hold the markup for a group, a task, a step (in the list and
   in the form) and a list button; the forms are dialogs.
@@ -63,7 +69,12 @@ Your to-do list, with dates, lists and reminders. Lives at
   stays on its next date, and its steps are merged one by one, so a step
   ticked elsewhere stays ticked while another step is renamed here. Save
   with nothing changed changes nothing, not even the time the task last
-  changed, so it can't win over a change another device hasn't synced yet.
+  changed, so it can't win over a change another device hasn't synced yet
+  (also for the done copy of a monthly or yearly task, audit 7 F1-2). Text
+  the form didn't change is saved as it is, never cut: browsers don't all
+  count characters the same way (Hindi "क्ष" is one in newer ones, two or
+  three in older ones), so text another device let in can count as too long
+  here (`cutChanged`, audit 7 F1-1). List names too.
   A task deleted meanwhile: the form says so, and
   saving a change brings it back; Save with nothing changed, or Delete,
   leaves it deleted. The same goes for a list deleted while "Edit list" is

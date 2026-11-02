@@ -127,6 +127,8 @@ export function mountReminders(root: Document): void {
   let editing: string | null = null;
   /** That reminder as the form opened with it, to tell what the person changed. */
   let opened: Reminder | null = null;
+  /** The done reminders “Delete done reminders?” counted, as it opened: Delete deletes only these. */
+  let counted = new Set<string>();
 
   const announce = (message: string): void => {
     announcer.textContent = message;
@@ -284,7 +286,10 @@ export function mountReminders(root: Document): void {
     const reminder = find(button?.closest<HTMLElement>('li[data-id]')?.dataset['id']);
     if (action === 'clear-done') {
       // Asks first, like deleting one: they can't be brought back.
-      const count = state.reminders.filter((entry) => entry.done !== null).length;
+      counted = new Set(
+        state.reminders.filter((entry) => entry.done !== null).map((entry) => entry.id),
+      );
+      const count = counted.size;
       clearText.textContent =
         count === 1
           ? 'The done reminder will be removed. This can’t be undone.'
@@ -367,9 +372,12 @@ export function mountReminders(root: Document): void {
 
   clearDialog.addEventListener('close', () => {
     if (clearDialog.returnValue !== 'confirm') return;
-    const count = state.reminders.filter((entry) => entry.done !== null).length;
+    // Only those it counted, if they're still done: one ticked done on
+    // another device meanwhile stays (audit 7 F1-3).
+    const next = clearDone(state, counted);
+    const count = state.reminders.length - next.reminders.length;
     // The same words as Tasks' "Delete done tasks" (audit 4 G-12).
-    save(clearDone(state), `Deleted ${count} done ${count === 1 ? 'reminder' : 'reminders'}.`);
+    save(next, `Deleted ${count} done ${count === 1 ? 'reminder' : 'reminders'}.`);
     add.text.focus();
   });
 

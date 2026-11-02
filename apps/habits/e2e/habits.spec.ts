@@ -4,7 +4,7 @@
 import type { Page } from '@playwright/test';
 import { addDays } from '@shkriuss/dates';
 import { checkA11y, expect, failSaving, test } from '../../../tests/e2e/fixtures.ts';
-import { seedStores } from '../../../tests/e2e/storage.ts';
+import { readStore, seedStores } from '../../../tests/e2e/storage.ts';
 import {
   checkId,
   CHECKS_VERSION,
@@ -279,6 +279,64 @@ test('deletes the check marks from a year, to make room', async ({ page }) => {
   await expect(deleteYear).toBeFocused();
   // The streak counts the days kept: from 1 January.
   await expect(streak(page, 'Read')).toHaveText('291-day streak');
+});
+
+// Audit 7 G-1: when the year chosen was deleted in another tab or on another
+// device, the dialog quietly chose the next year, and Delete deleted that.
+test('“Delete check marks from a year” stops, and says why, when its year changes elsewhere', async ({
+  page,
+}) => {
+  const read: Habit = { id: 'read', name: 'Read', days: [...EVERY_DAY] };
+  const marks = (year: number, count: number): Check[] =>
+    Array.from({ length: count }, (_, index) => {
+      const date = addDays(`${year}-03-01`, index);
+      return { id: checkId('read', date), habit: 'read', date };
+    });
+  await seed(page, [read], [...marks(2024, 10), ...marks(2025, 20)]);
+  const other = await page.context().newPage();
+  await other.clock.install({ time: new Date('2026-10-19T10:00:00+02:00') });
+  await other.goto('/');
+  await page.bringToFront();
+  const deleteYear = page.getByRole('button', { name: 'Delete check marks from a year…' });
+  const dialog = page.getByRole('dialog', { name: 'Delete check marks from a year' });
+  const year = dialog.getByLabel('Year');
+  const otherDialog = other.getByRole('dialog', { name: 'Delete check marks from a year' });
+  const left = async () =>
+    (await readStore<{ checks: Check[] }>(page, 'habit-checks'))?.data.checks.length;
+
+  // The year chosen is deleted there: nothing is deleted here.
+  await deleteYear.click();
+  await expect(year).toHaveValue('2024');
+  await other.getByRole('button', { name: 'Delete check marks from a year…' }).click();
+  await otherDialog.getByRole('button', { name: 'Delete 10 check marks' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole('alert')).toHaveText(
+    'The check marks from 2024 were deleted on another device.',
+  );
+  await expect(deleteYear).toBeFocused();
+  expect(await left()).toBe(20);
+
+  // A change to another year keeps the dialog open, with the year chosen.
+  await deleteYear.click();
+  await expect(year).toHaveValue('2025');
+  await doneToday(other, 'Read').click();
+  await expect(year.locator('option')).toHaveText(['2025 (20 check marks)', '2026 (1 check mark)']);
+  await expect(year).toHaveValue('2025');
+  await expect(dialog.getByRole('button', { name: 'Delete 20 check marks' })).toBeVisible();
+
+  // More check marks in the year chosen: it closes, and says how many there are now.
+  await year.selectOption('2026');
+  await expect(dialog.getByRole('button', { name: 'Delete 1 check mark' })).toBeVisible();
+  await other.getByRole('button', { name: 'Edit Read' }).click();
+  await editor(other).getByLabel('Yesterday').check();
+  await editor(other).getByRole('button', { name: 'Save' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole('alert')).toHaveText(
+    '2026 has 2 check marks now, after changes on another device. Nothing was deleted.',
+  );
+  await expect(deleteYear).toBeFocused();
+  expect(await left()).toBe(22);
+  await other.close();
 });
 
 test('says when Habits is nearly full, and how to make room', async ({ page }) => {

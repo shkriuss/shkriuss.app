@@ -339,6 +339,33 @@ test('deletes a task, and done ones, with a confirmation', async ({ page }) => {
   await expect(titles(page)).toHaveText(['Keep me']);
 });
 
+// Audit 7 F1-3: Delete deleted the done tasks there were when it was tapped,
+// also ones ticked off elsewhere after the dialog said how many.
+test('“Delete done tasks” deletes only those it counted', async ({ page }) => {
+  await seed(page, [
+    { title: 'Old receipt', done: 5 },
+    { title: 'Old ticket', done: 6 },
+    { title: 'Pay rent' },
+  ]);
+  await page.locator('[data-done-summary]').click();
+  await page.getByRole('button', { name: 'Delete done tasks' }).click();
+  const clear = page.getByRole('dialog', { name: 'Delete done tasks?' });
+  await expect(clear).toContainText('The 2 done tasks shown here will be removed.');
+  // Meanwhile, another tab (or a sync from another device) ticks one off.
+  const other = await page.context().newPage();
+  await other.clock.setFixedTime(NOW);
+  await other.goto('/');
+  await box(other, 'Pay rent').click();
+  await expect(doneTitles(page)).toHaveCount(3);
+  await other.close();
+
+  await clear.getByRole('button', { name: 'Delete' }).click();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Deleted 2 done tasks.' }),
+  ).toBeAttached();
+  await expect(doneTitles(page)).toHaveText(['Pay rent']);
+});
+
 // Audit 5 F1-4: the browser kept the start of a long paste without a word.
 test('says when a pasted note, step or title doesn’t all fit', async ({ page }) => {
   const add = page.getByLabel('New task');

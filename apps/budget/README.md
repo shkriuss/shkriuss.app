@@ -84,7 +84,9 @@ See where your money goes, month by month. Lives at
   a tap still finds the form there (audit 5 J-2).
   `src/scripts/reminders.ts`: shows the reminder while Budget is open, and
   sends its schedule to the notification service for "Also remind me when
-  Budget is closed".
+  Budget is closed". With sync on, each device sends its own: a reminder
+  changed or turned off on another device only counts here once Budget
+  opens here and syncs (the page says so).
 - `src/pages/index.astro`: the page, built from `@shkriuss/ui` components.
   `<template>`s hold the markup for a category and an entry; the forms and
   "Delete a year" are dialogs.

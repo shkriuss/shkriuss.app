@@ -126,6 +126,35 @@ test('adds any amount, earlier today or yesterday', async ({ page }) => {
   await expect(total(page)).toHaveText('330 ml');
 });
 
+// Audit 7 F1-4: only today's drinks had Remove, so a drink added to
+// yesterday by mistake, or logged just before midnight, could never be taken back.
+test('removes a drink from yesterday', async ({ page }) => {
+  await addOther(page, '2000', '22:30', 'Yesterday');
+  await expect(history(page).nth(1)).toHaveText(/Yesterday\s*2,000 ml/);
+  const yesterday = page.locator('[data-yesterday]');
+  await expect(yesterday.locator('summary')).toHaveText('Yesterday’s drinks (1)');
+  // Open straight away, so a mistake can be taken back.
+  await expect(yesterday).toHaveAttribute('open', '');
+  await checkA11y(page, 'yesterday’s drinks');
+  await page.getByRole('button', { name: 'Remove 2,000 ml at 10:30 PM yesterday' }).click();
+  await expect(status(page, 'Removed 2,000 ml from yesterday.')).toBeAttached();
+  await expect(history(page).nth(1)).toHaveText(/Yesterday\s*0 ml/);
+  await expect(yesterday).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Other amount' })).toBeFocused();
+
+  // A glass just before midnight is yesterday's a moment later: it can still go.
+  await page.clock.setFixedTime(new Date('2026-10-21T23:50:00+04:00'));
+  await page.reload();
+  await page.getByRole('button', { name: 'Glass 250 ml' }).click();
+  await page.clock.setFixedTime(new Date('2026-10-22T00:05:00+04:00'));
+  await page.reload();
+  await expect(page.getByText('Nothing yet today.')).toBeVisible();
+  await yesterday.locator('summary').click();
+  await page.getByRole('button', { name: 'Remove 250 ml at 11:50 PM yesterday' }).click();
+  await expect(status(page, 'Removed 250 ml from yesterday.')).toBeAttached();
+  await expect(history(page).nth(1)).toHaveText(/Yesterday\s*0 ml/);
+});
+
 test('reaching the goal, days in a row and the last 7 days', async ({ page }) => {
   await seed(page, {
     drinks: [

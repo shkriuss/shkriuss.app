@@ -247,8 +247,18 @@ export const putOff = (state: RemindersState, id: string, until: Stamp): Reminde
   ),
 });
 
-export const clearDone = (state: RemindersState): RemindersState => ({
-  reminders: state.reminders.filter((reminder) => reminder.done === null),
+/**
+ * Deletes the done reminders: only those in `counted`, if given, the ones
+ * "Delete done reminders?" counted as it opened. One ticked done on another
+ * device while it was open stays (audit 7 F1-3).
+ */
+export const clearDone = (
+  state: RemindersState,
+  counted?: ReadonlySet<string>,
+): RemindersState => ({
+  reminders: state.reminders.filter(
+    (reminder) => reminder.done === null || (counted !== undefined && !counted.has(reminder.id)),
+  ),
 });
 
 /**

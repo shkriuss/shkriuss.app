@@ -120,6 +120,9 @@ export function mountWater(root: Document): void {
   const noDrinks = required<HTMLElement>(root, '[data-none]');
   const drinkList = required<HTMLUListElement>(root, '[data-drinks]');
   const drinkTemplate = required<HTMLTemplateElement>(root, '[data-drink-template]');
+  const yesterday = required<HTMLDetailsElement>(root, '[data-yesterday]');
+  const yesterdayCount = required<HTMLElement>(yesterday, '[data-yesterday-count]');
+  const yesterdayList = required<HTMLUListElement>(yesterday, '[data-yesterday-drinks]');
   const streakLine = required<HTMLElement>(root, '[data-streak]');
   const averageLine = required<HTMLElement>(root, '[data-average]');
   const dayList = required<HTMLUListElement>(root, '[data-days]');
@@ -175,7 +178,8 @@ export function mountWater(root: Document): void {
 
   // ---------- Showing it ----------
 
-  function renderDrink(drink: Drink): HTMLLIElement {
+  /** A drink with its Remove button; `when` is " yesterday" for yesterday's. */
+  function renderDrink(drink: Drink, when = ''): HTMLLIElement {
     const fragment = drinkTemplate.content.cloneNode(true) as DocumentFragment;
     const item = required<HTMLLIElement>(fragment, 'li');
     item.dataset['id'] = drink.id;
@@ -184,7 +188,7 @@ export function mountWater(root: Document): void {
     required<HTMLElement>(item, '[data-amount]').textContent = amount(drink.ml);
     required<HTMLElement>(item, '[data-action="remove"]').setAttribute(
       'aria-label',
-      `Remove ${amount(drink.ml)} at ${time}`,
+      `Remove ${amount(drink.ml)} at ${time}${when}`,
     );
     return item;
   }
@@ -220,7 +224,14 @@ export function mountWater(root: Document): void {
     const todays = drinksOn(drinks, day);
     noDrinks.hidden = todays.length > 0;
     drinkList.hidden = todays.length === 0;
-    drinkList.replaceChildren(...todays.map(renderDrink));
+    drinkList.replaceChildren(...todays.map((drink) => renderDrink(drink)));
+    // Yesterday's can be removed too: "Other amount" adds to yesterday, and
+    // a drink logged just before midnight is yesterday's a moment later.
+    // Before, neither could ever be taken back (audit 7 F1-4).
+    const yesterdays = drinksOn(drinks, addDays(day, -1));
+    yesterday.hidden = yesterdays.length === 0;
+    yesterdayCount.textContent = String(yesterdays.length);
+    yesterdayList.replaceChildren(...yesterdays.map((drink) => renderDrink(drink, ' yesterday')));
   }
 
   function renderHistory(): void {
@@ -280,6 +291,8 @@ export function mountWater(root: Document): void {
     if (!reachedOn(drinks, day, goal) && reachedOn(next, day, goal)) {
       message += ` ${GOAL_REACHED}`;
     }
+    // Shown, so it can be removed straight away if it was a mistake.
+    if (date !== day) yesterday.open = true;
     save({ drinks: next }, message);
   }
 
@@ -297,18 +310,22 @@ export function mountWater(root: Document): void {
     });
   }
 
-  drinkList.addEventListener('click', (event) => {
-    const button = (event.target as Element).closest<HTMLButtonElement>('[data-action="remove"]');
-    const item = button?.closest<HTMLLIElement>('li');
-    const drink = drinks.drinks.find((entry) => entry.id === item?.dataset['id']);
-    if (!item || !drink) return;
-    const index = [...drinkList.children].indexOf(item);
-    save({ drinks: removeDrink(drinks, drink.id) }, `Removed ${amount(drink.ml)}.`);
-    // Keep keyboard focus in the list (or go back to the buttons when it's empty).
-    const buttons = drinkList.querySelectorAll<HTMLButtonElement>('[data-action="remove"]');
-    const next = buttons[Math.min(index, buttons.length - 1)];
-    (next ?? required<HTMLButtonElement>(root, '[data-add="glass"]')).focus();
-  });
+  /** A Remove button in `list` removes its drink; `empty` gets focus once the list is. */
+  function removeFrom(list: HTMLUListElement, empty: HTMLElement, when: string): void {
+    list.addEventListener('click', (event) => {
+      const button = (event.target as Element).closest<HTMLButtonElement>('[data-action="remove"]');
+      const item = button?.closest<HTMLLIElement>('li');
+      const drink = drinks.drinks.find((entry) => entry.id === item?.dataset['id']);
+      if (!item || !drink) return;
+      const index = [...list.children].indexOf(item);
+      save({ drinks: removeDrink(drinks, drink.id) }, `Removed ${amount(drink.ml)}${when}.`);
+      // Keep keyboard focus in the list (or go back to the buttons when it's empty).
+      const buttons = list.querySelectorAll<HTMLButtonElement>('[data-action="remove"]');
+      (buttons[Math.min(index, buttons.length - 1)] ?? empty).focus();
+    });
+  }
+  removeFrom(drinkList, required<HTMLButtonElement>(root, '[data-add="glass"]'), '');
+  removeFrom(yesterdayList, otherButton, ' from yesterday');
 
   // "Other amount": any amount, at another time today or yesterday.
   otherButton.addEventListener('click', () => {

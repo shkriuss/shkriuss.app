@@ -178,6 +178,13 @@ describe('changing', () => {
     expect(setDone(start, 'b', NOW)).toEqual(start);
     expect(setDone(done, 'a', null)).toEqual(start);
     expect(clearDone(done).reminders.map((entry) => entry.id)).toEqual(['b']);
+    // Only the ones "Delete done reminders?" counted: one ticked done on
+    // another device while it was open stays (audit 7 F1-3).
+    const more = setDone(addReminder(done, reminder('c', '2026-10-23', '12:00')), 'c', NOW);
+    expect(more.reminders[2]?.done).toBe(NOW);
+    expect(clearDone(more, new Set(['a'])).reminders.map((entry) => entry.id)).toEqual(['b', 'c']);
+    // One counted that was made to do again there stays too.
+    expect(clearDone(start, new Set(['a'])).reminders).toEqual(start.reminders);
     // Changing a done one sets it again.
     expect(
       updateReminder(done, 'a', { text: 'a', date: '2026-10-25', time: '09:00', repeat: 'none' })

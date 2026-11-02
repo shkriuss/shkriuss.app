@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   addTask,
   completeTask,
@@ -31,6 +31,7 @@ import {
   reminderNotices,
   REMINDER_BODY,
   removeTask,
+  removeListTasks,
   removeTasks,
   reopenTask,
   searchWords,
@@ -333,6 +334,77 @@ describe('changes', () => {
       ).toMatchObject({ notes: 'Not too much', updated: 6000 });
     });
 
+    it('is no new edit for the done copy of a monthly task either (audit 7 F1-2)', () => {
+      // The done copy keeps the day the task repeated on, which the form
+      // leaves out once it doesn't repeat: Save with nothing changed was an edit.
+      const rent = task({ date: '2026-10-31', repeat: 'monthly' });
+      expect(rent.day).toBe(31);
+      const { state } = completeTask(stateOf(rent), rent.id, 5000, TODAY, 'copy');
+      const copy = state.tasks.find((entry) => entry.id === 'copy');
+      if (!copy) throw new Error('Expected a done copy');
+      expect(copy).toMatchObject({ repeat: 'none', day: 31 });
+      const form = draftOf(copy);
+      expect(editedTask(form, form, copy.id, 9000, copy)).toBe(copy);
+      // A change is still saved, without the day.
+      const renamed = editedTask(form, { ...form, title: 'Paid rent' }, copy.id, 9000, copy);
+      expect(renamed).toMatchObject({ title: 'Paid rent', updated: 9000 });
+      expect(renamed).not.toHaveProperty('day');
+      // A monthly task saved before tasks kept that day: the form adds one.
+      const { day: _, ...old } = rent;
+      const before = draftOf(old);
+      expect(editedTask(before, before, old.id, 9000, old)).toBe(old);
+    });
+
+    it('keeps text it didn’t change, however this browser counts it (audit 7 F1-1)', async () => {
+      // Hindi "क्ष" is one character in newer browsers, and more in older
+      // ones (here, one without Intl.Segmenter: three). Saving there cut the
+      // text another device let in, on every device, even with nothing changed.
+      const long = (count: number) => 'क्ष'.repeat(count);
+      const step = { id: 's', title: long(LIMITS.step), done: false };
+      const saved: Task = {
+        ...task({ date: TODAY }),
+        title: long(LIMITS.title),
+        notes: long(LIMITS.notes),
+        steps: [step],
+      };
+      vi.stubGlobal(
+        'Intl',
+        Object.assign(Object.create(Intl) as typeof Intl, { Segmenter: undefined }),
+      );
+      vi.resetModules();
+      try {
+        const older = await import('./tasks.ts');
+        const form = older.draftOf(saved);
+        expect(older.editedTask(form, form, saved.id, 9000, saved)).toBe(saved);
+        // Another field changed: the text stays as it was.
+        const moved = older.editedTask(
+          form,
+          { ...form, date: '2026-10-22' },
+          saved.id,
+          9000,
+          saved,
+        );
+        expect(moved).toMatchObject({
+          title: saved.title,
+          notes: saved.notes,
+          steps: [step],
+          date: '2026-10-22',
+        });
+        // Text typed here is still cut to its box's limit.
+        const typed = older.editedTask(
+          form,
+          { ...form, title: 'x'.repeat(LIMITS.title + 1) },
+          saved.id,
+          9000,
+          saved,
+        );
+        expect(typed.title).toBe('x'.repeat(LIMITS.title));
+      } finally {
+        vi.unstubAllGlobals();
+        vi.resetModules();
+      }
+    });
+
     it('lets the change here win where both changed the same thing', () => {
       const moved = editedTask(opened, { ...opened, date: '2026-10-22' }, plants.id, 6000, current);
       expect(moved).toMatchObject({ date: '2026-10-22', title: 'Water plants' });
@@ -619,6 +691,25 @@ describe('changes', () => {
     const report = task({ list: 'work' });
     const moved = moveTasks(stateOf(rent, report), 'home', NO_LIST);
     expect(moved.tasks.map((entry) => entry.list)).toEqual([NO_LIST, 'work']);
+  });
+
+  it('deletes only the tasks “Delete this list?” counted (audit 7 F1-3)', () => {
+    // It said "Its 2 tasks"; meanwhile another device added one to the list
+    // and moved one out. Delete took every task in the list then.
+    const report = task({ title: 'Report', list: 'work' });
+    const slides = task({ title: 'Slides', list: 'work' });
+    const counted = new Set([report.id, slides.id]);
+    const moved = { ...slides, list: 'home' };
+    const added = task({ title: 'Prepare the talk', list: 'work' });
+    const other = task({ title: 'Call mum', list: 'home' });
+    const { state, kept } = removeListTasks(stateOf(report, moved, added, other), 'work', counted);
+    expect(state.tasks.map((entry) => [entry.title, entry.list])).toEqual([
+      ['Slides', 'home'],
+      ['Prepare the talk', NO_LIST],
+      ['Call mum', 'home'],
+    ]);
+    expect(kept).toBe(1);
+    expect(removeListTasks(stateOf(report, other), 'work', counted)).toMatchObject({ kept: 0 });
   });
 
   it('reads tasks saved by older versions', () => {

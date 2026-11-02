@@ -88,3 +88,14 @@ export function cutToLength(text: string, max: number): string {
  */
 export const withinLength = (text: string, max: number): boolean =>
   text.length <= max * MOST_PER_CHARACTER;
+
+/**
+ * Text from a form, ready to save: cut as cutToLength cuts it, unless it's
+ * `saved`, the text the item has now, which stays as it is (while
+ * withinLength takes it). Another device may count its characters
+ * differently (see withinLength), so text that fit there can be too long
+ * here: cut on a save that didn't change it (or only changed something
+ * else), its end was lost on every device (audit 7 F1-1).
+ */
+export const cutChanged = (text: string, max: number, saved?: string): string =>
+  text === saved && withinLength(text, max) ? text : cutToLength(text, max);

@@ -18,7 +18,10 @@ Build habits one day at a time. Lives at <https://habits.shkriuss.app>.
   says so; when it's full, a new tick waits until there's room. "Delete check
   marks from a year…" (under Check marks) makes room: every habit's marks
   from the year chosen go, on every device with sync on, and streaks then
-  count only the days that are kept.
+  count only the days that are kept. If that year's check marks change on
+  another device or tab while the dialog is open, it closes and says so,
+  rather than deleting another year or more than it said, as in Budget,
+  Repairs and Trades.
 - `src/pages/index.astro`: the page, built from `@shkriuss/ui` components.
   `<template>`s hold the markup for one habit and one day of its week. The
   edit dialog changes the name, days and reminder, ticks the last 2 weeks
@@ -30,9 +33,9 @@ Build habits one day at a time. Lives at <https://habits.shkriuss.app>.
   (`src/worker.ts`, [ADR 0009](../../docs/adr/0009-push-notifications.md)):
   one a week for each planned day. Ticking a habit off uploads them again,
   so it isn't reminded that day. Ticking it off on another device only
-  counts once this device opens Habits and syncs. A reminder is part of its
-  habit, so it syncs too; each device then uploads it to its own
-  notification service (`e2e/sync.spec.ts` checks this).
+  counts once this device opens Habits and syncs (the page says so). A
+  reminder is part of its habit, so it syncs too; each device then uploads
+  it to its own notification service (`e2e/sync.spec.ts` checks this).
 - Dates come from the shared `@shkriuss/dates` package (also used by
   Calendar): plain "YYYY-MM-DD" days, so time zones and daylight saving can't
   move a check mark.

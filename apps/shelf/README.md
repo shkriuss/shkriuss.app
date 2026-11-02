@@ -57,7 +57,9 @@ anything else, with brands, prices, shops and links. Lives at
   deleted elsewhere meanwhile stays deleted (saying so), and one renamed
   there keeps that name (audit 6 F3-4).
   Text limits count characters as people see them, as Safari's text boxes
-  do, so nothing a box lets in is cut (audit 4 F3-4).
+  do, so nothing a box lets in is cut (audit 4 F3-4). Text the form didn't
+  change is saved as it is: another device may count its characters
+  differently, so it can count as too long here (`cutChanged`, audit 7 F1-1).
 - `src/pages/index.astro`: the page, built from `@shkriuss/ui` components.
   `<template>`s hold the markup for one item, brand and category; the forms
   are dialogs.

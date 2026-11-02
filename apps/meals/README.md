@@ -65,6 +65,9 @@ Plan your meals for the week, and what to buy for them. Lives at
   reminder only on days with something planned for that meal. The
   notification service gets the soonest 100 (`MAX_NOTICES`), and the next
   ones each time Meals is opened, or the plan or a reminder time changes.
+  With sync on, each device uploads its own: a change to the plan or the
+  reminders on another device only counts here once Meals opens here and
+  syncs (the page says so).
   With reminders for all four meals of the day and every meal planned, 100
   last 25 days: for a plan made further ahead than that, open Meals at least
   once in 25 days, or the later reminders don't come while it's closed. Why
