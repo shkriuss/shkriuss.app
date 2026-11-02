@@ -155,7 +155,8 @@ and [ADR 0004](docs/adr/0004-security-headers.md).
 - Production deploys only happen from `main`, after every check passes,
   including the dependency audit, and only for `main`'s newest commit (so
   re-running an older run can't put older code back, nor cancel the newest
-  one's deploy: audit 6 H-6). Only the deploy steps
+  one's deploy: audit 6 H-6, and audit 7 H-4, run 32, for a re-run of only
+  the deploy job). Only the deploy steps
   see the token, and the deploy job installs without the shared package
   cache. That stops mistakes, not a bad dependency: any code that runs in a
   job (an install script, a build step) can read every secret of that job

@@ -460,8 +460,9 @@ This area is split into three tasks:
 - Could a broken or malicious build reach production? Deploys should run
   only from `main`, after every check, using the same build that was tested.
 - Could `main`'s newest commit end up never deployed, with nothing failing?
-  Look at the concurrency groups, re-runs and runs started by hand (audit 6
-  H-6).
+  Look at the concurrency groups, re-runs (of every job, or only some) and
+  runs started by hand (audit 6 H-6, audit 7 H-4, run 32), and commits
+  GitHub starts no run for (audit 7 H-5, run 32).
 - Can a pull request's own files (its `pnpm-lock.yaml`,
   `pnpm-workspace.yaml` or `package.json`) change what the lockfile check
   (`scripts/lockfile-age.ts`) reads or runs, or add a package it doesn't

@@ -49,6 +49,17 @@ jobs:
       - name: Set up
         uses: ./.github/actions/setup
 
+      # A squash merge writes the pull request's title, and its commits'
+      # messages or its description, into main's commit, and GitHub starts
+      # no run for a commit that asks to skip CI: then nothing deploys it
+      # (audit 7 H-5, run 32). Through env, never pasted into the script.
+      - name: Nothing in the pull request's text stops its deploy
+        if: github.event_name == 'pull_request'
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: node scripts/skip-ci.ts
+
       - name: Grammar's Deep check model, from the cache
         uses: ./.github/actions/deep-check-model
         with:
@@ -220,6 +231,10 @@ jobs:
   # in the "production" group: GitHub keeps one waiting job per group and
   # cancels it when another one queues, so a run that won't deploy must never
   # queue there, or it could cancel the newest commit's deploy (audit 6 H-6).
+  # A newer commit deploys instead only if it has a run of its own: GitHub
+  # starts none for a commit whose message asks to skip CI, and then this
+  # fails, so it doesn't go unnoticed (audit 7 H-5, run 32). Its run can
+  # take a moment to appear, so it's looked for a few times.
   newest:
     name: Newest commit on main
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -227,9 +242,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
+      # To find a newer commit's run.
+      actions: read
       contents: read
     outputs:
       deploy: ${{ steps.newest.outputs.deploy }}
+      # Which try of this run gave that answer: "Re-run failed jobs" doesn't
+      # run this job again, and keeps the first try's (audit 7 H-4, run 32).
+      attempt: ${{ github.run_attempt }}
     steps:
       - name: Deploy only the newest commit on main
         id: newest
@@ -239,10 +259,19 @@ jobs:
           latest=$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq .sha)
           if [ "$latest" = "$GITHUB_SHA" ]; then
             echo "deploy=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "::notice title=Not deployed::A newer commit (${latest:0:7}) is on main. It deploys instead, so this older one doesn't."
-            echo "deploy=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+          for wait in 0 10 20 30 60; do
+            sleep "$wait"
+            runs=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${latest}&event=push" --jq .total_count)
+            if [ "$runs" != "0" ]; then
+              echo "::notice title=Not deployed::A newer commit (${latest:0:7}) is on main. It deploys instead, so this older one doesn't."
+              echo "deploy=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          done
+          echo "::error title=Nothing deploys main's newest commit::The newest commit on main (${latest:0:7}) has no CI run, so it isn't deployed, and this older one isn't either. GitHub starts none for a commit whose message asks to skip CI. To deploy it, merge another pull request (docs/deployment.md)."
+          exit 1
 
   deploy:
     name: Deploy to production
@@ -255,17 +284,34 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
+      # To find a newer commit's run, as the job above does.
+      actions: read
       contents: read
+    # Waits its turn in "production" only with an answer from this same try
+    # of the run. "Re-run failed jobs" (or re-running this job alone) runs
+    # this job again but not the one above, whose answer may be out of date:
+    # queued there, this job would cancel a newer commit's waiting deploy
+    # before its first step found out it wasn't the newest (audit 7 H-4,
+    # run 32). With an older answer it waits in a group of its own instead,
+    # and its first step stops it.
     concurrency:
-      group: production
+      group: ${{ needs.newest.outputs.attempt == github.run_attempt && 'production' || format('not-deploying-{0}-{1}', github.run_id, github.run_attempt) }}
       cancel-in-progress: false
     env:
       # Not a secret: it only says which Cloudflare account to deploy to.
       CLOUDFLARE_ACCOUNT_ID: 29431d9d1143cc458db3ad0598c84302
     steps:
+      - name: Only with this try's answer about the newest commit
+        env:
+          ANSWERED_IN_TRY: ${{ needs.newest.outputs.attempt }}
+        run: |
+          if [ "$ANSWERED_IN_TRY" != "$GITHUB_RUN_ATTEMPT" ]; then
+            echo "::error title=Re-run all jobs::Only some jobs were re-run, so this deploy can't wait its turn safely: it could cancel the deploy of a newer commit. To deploy, open the newest CI run on main and tap Re-run all jobs (docs/deployment.md)."
+            exit 1
+          fi
+
       # Checked again, the same way: a newer commit may have been merged while
-      # this job waited its turn, and "Re-run failed jobs" keeps the answer
-      # the job above gave the first time.
+      # this job waited its turn.
       - name: Deploy only the newest commit on main
         id: newest
         env:
@@ -274,10 +320,19 @@ jobs:
           latest=$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq .sha)
           if [ "$latest" = "$GITHUB_SHA" ]; then
             echo "deploy=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "::notice title=Not deployed::A newer commit (${latest:0:7}) is on main. It deploys instead, so this older one doesn't."
-            echo "deploy=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+          for wait in 0 10 20 30 60; do
+            sleep "$wait"
+            runs=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${latest}&event=push" --jq .total_count)
+            if [ "$runs" != "0" ]; then
+              echo "::notice title=Not deployed::A newer commit (${latest:0:7}) is on main. It deploys instead, so this older one doesn't."
+              echo "deploy=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          done
+          echo "::error title=Nothing deploys main's newest commit::The newest commit on main (${latest:0:7}) has no CI run, so it isn't deployed, and this older one isn't either. GitHub starts none for a commit whose message asks to skip CI. To deploy it, merge another pull request (docs/deployment.md)."
+          exit 1
 
       - name: Check out code
         if: steps.newest.outputs.deploy == 'true'

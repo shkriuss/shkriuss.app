@@ -32,7 +32,7 @@ packages/server/     shared Worker helpers: createWorker() for /api/*, JSON, lim
 templates/app/       copied by `pnpm new-app` (placeholder slug: template-app)
 tests/e2e/           shared Playwright tests that run against EVERY site
 tests/unit/          cross-cutting unit tests (contrast, registry consistency, workflows)
-scripts/             new-app, check-dist, deploy, buckets, smoke-test, lockfile-age
+scripts/             new-app, check-dist, deploy, buckets, smoke-test, lockfile-age, skip-ci
 ```
 
 ## Commands (Node 24, pnpm 10)
