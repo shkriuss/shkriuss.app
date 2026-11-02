@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { STARTING_CATEGORIES } from './categories.ts';
 import {
   addItem,
@@ -245,6 +245,33 @@ describe('the form', () => {
     expect(itemFromDraft(draft({ brand: `${'b'.repeat(99)}😀😀` }), 'b', 1).brand).toBe(
       `${'b'.repeat(99)}😀`,
     );
+  });
+
+  it('keeps text it didn’t change, however this browser counts it (audit 7 F1-1)', async () => {
+    // Hindi "क्ष" is one character in newer browsers, three in one without
+    // Intl.Segmenter: saving there cut what another device let in.
+    const saved = { ...item(), name: 'क्ष'.repeat(LIMITS.name), notes: 'क्ष'.repeat(LIMITS.notes) };
+    vi.stubGlobal(
+      'Intl',
+      Object.assign(Object.create(Intl) as typeof Intl, { Segmenter: undefined }),
+    );
+    vi.resetModules();
+    try {
+      const older = await import('./items.ts');
+      const made = older.itemFromDraft(older.draftOf(saved), saved.id, 9000, saved);
+      expect(made).toMatchObject({ name: saved.name, notes: saved.notes });
+      // Text typed here is still cut to its box's limit.
+      const typed = older.itemFromDraft(
+        draft({ name: 'x'.repeat(LIMITS.name + 1) }),
+        'n',
+        1,
+        saved,
+      );
+      expect(typed.name).toBe('x'.repeat(LIMITS.name));
+    } finally {
+      vi.unstubAllGlobals();
+      vi.resetModules();
+    }
   });
 });
 

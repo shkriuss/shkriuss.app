@@ -6,7 +6,7 @@
  */
 import { secondVersionName } from '@shkriuss/sync';
 import { DATE_LOCALE } from '@shkriuss/ui/locale';
-import { cutToLength, foldText } from '@shkriuss/ui/text';
+import { cutChanged, foldText } from '@shkriuss/ui/text';
 
 export interface Note {
   id: string;
@@ -139,8 +139,10 @@ export function editNote(
   return {
     notes: state.notes.map((note) => {
       if (note.id !== id) return note;
-      const title = cutToLength(changes.title ?? note.title, MAX_TITLE_LENGTH);
-      const body = cutToLength(changes.body ?? note.body, MAX_BODY_LENGTH);
+      // What the note has now stays as it is: another device may count its
+      // characters differently, and typing in the body cut the title (audit 7 F1-1).
+      const title = cutChanged(changes.title ?? note.title, MAX_TITLE_LENGTH, note.title);
+      const body = cutChanged(changes.body ?? note.body, MAX_BODY_LENGTH, note.body);
       return title === note.title && body === note.body
         ? note
         : { ...note, title, body, updated: now };

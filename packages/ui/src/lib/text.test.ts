@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { compareText, cutToLength, foldText, withinLength } from './text.ts';
+import { compareText, cutChanged, cutToLength, foldText, withinLength } from './text.ts';
 
 describe('compareText', () => {
   it('sorts like localeCompare, ignoring case and accents, with numbers in order', () => {
@@ -130,6 +130,19 @@ describe('cutToLength (audit 4 F3-4)', () => {
     // Counted as JavaScript does, 16 for each character at most.
     expect(withinLength('x'.repeat(3200), 200)).toBe(true);
     expect(withinLength('x'.repeat(3201), 200)).toBe(false);
+  });
+
+  it('keeps text the form didn’t change, however this browser counts it (audit 7 F1-1)', () => {
+    // Saved by a device that let it in: kept, even where it counts as too long.
+    const saved = 'क्ष'.repeat(300);
+    expect(cutToLength(saved, 100)).not.toBe(saved);
+    expect(cutChanged(saved, 100, saved)).toBe(saved);
+    // Text changed in the form is cut as cutToLength cuts it.
+    expect(cutChanged(`${'a'.repeat(5)}😀😀`, 6, saved)).toBe(`${'a'.repeat(5)}😀`);
+    expect(cutChanged('Plain text', 5)).toBe('Plain');
+    // Saved text far longer than any box lets in is cut too.
+    const huge = 'x'.repeat(16 * 5 + 1);
+    expect(cutChanged(huge, 5, huge)).toBe('xxxxx');
   });
 
   it('still loads, and keeps emoji whole, where the browser can’t tell characters apart', async () => {

@@ -3,7 +3,7 @@
  * tasks without a list are simply in "All". A list can be renamed or
  * deleted at any time.
  */
-import { cutToLength, foldText } from '@shkriuss/ui/text';
+import { cutChanged, foldText } from '@shkriuss/ui/text';
 import { byText } from './tasks.ts';
 
 export interface List {
@@ -44,15 +44,20 @@ export const sortedLists = (state: ListsState): List[] =>
 export const listName = (state: ListsState, id: string): string =>
   state.lists.find((list) => list.id === id)?.name ?? '';
 
-/** A name cut to fit, by whole characters: never half an emoji (audit 4 F3-4). */
-const cutName = (name: string): string => cutToLength(name.trim(), LIST_NAME_MAX).trim();
+/**
+ * A name cut to fit, by whole characters: never half an emoji (audit 4
+ * F3-4). The name the list has now (`saved`) stays as it is: another device
+ * may count its characters differently (audit 7 F1-1).
+ */
+const cutName = (name: string, saved?: string): string =>
+  cutChanged(name.trim(), LIST_NAME_MAX, saved).trim();
 
 /**
  * What's wrong with a name for a list, or null if it can be saved. `id` is
  * the list being renamed (null for a new one).
  */
 export function listProblem(state: ListsState, name: string, id: string | null): string | null {
-  const wanted = foldText(cutName(name));
+  const wanted = foldText(cutName(name, id === null ? undefined : listName(state, id)));
   if (wanted === '') return 'Give it a name.';
   const same = state.lists.find((list) => list.id !== id && foldText(list.name) === wanted);
   if (same) return `You already have a list called “${same.name}”.`;
@@ -70,7 +75,7 @@ export function addList(state: ListsState, id: string, name: string): ListsState
 
 /** Renames a list (one deleted on another device meanwhile comes back). */
 export function renameList(state: ListsState, id: string, name: string): ListsState {
-  const list = { id, name: cutName(name) };
+  const list = { id, name: cutName(name, listName(state, id)) };
   if (!state.lists.some((entry) => entry.id === id)) return { lists: [...state.lists, list] };
   return { lists: state.lists.map((entry) => (entry.id === id ? list : entry)) };
 }

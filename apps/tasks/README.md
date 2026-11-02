@@ -63,7 +63,12 @@ Your to-do list, with dates, lists and reminders. Lives at
   stays on its next date, and its steps are merged one by one, so a step
   ticked elsewhere stays ticked while another step is renamed here. Save
   with nothing changed changes nothing, not even the time the task last
-  changed, so it can't win over a change another device hasn't synced yet.
+  changed, so it can't win over a change another device hasn't synced yet
+  (also for the done copy of a monthly or yearly task, audit 7 F1-2). Text
+  the form didn't change is saved as it is, never cut: browsers don't all
+  count characters the same way (Hindi "क्ष" is one in newer ones, two or
+  three in older ones), so text another device let in can count as too long
+  here (`cutChanged`, audit 7 F1-1). List names too.
   A task deleted meanwhile: the form says so, and
   saving a change brings it back; Save with nothing changed, or Delete,
   leaves it deleted. The same goes for a list deleted while "Edit list" is

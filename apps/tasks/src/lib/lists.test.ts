@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   addList,
   emptyLists,
@@ -40,6 +40,30 @@ describe('lists', () => {
     expect(listName(addList(emptyLists(), 'p', name), 'p')).toBe(name);
     expect(listName(addList(emptyLists(), 'p', `${name}🎉 `), 'p')).toBe(name);
     expect(listName(renameList(emptyLists(), 'p', ` ${name}🎉`), 'p')).toBe(name);
+  });
+
+  it('keeps a name it didn’t change, however this browser counts it (audit 7 F1-1)', async () => {
+    // 50 characters where it was typed; 150 in a browser that can't tell
+    // "क्ष" is one. "Edit list", then Save, cut it there.
+    const name = 'क्ष'.repeat(LIST_NAME_MAX);
+    const state = { lists: [{ id: 'p', name }] };
+    vi.stubGlobal(
+      'Intl',
+      Object.assign(Object.create(Intl) as typeof Intl, { Segmenter: undefined }),
+    );
+    vi.resetModules();
+    try {
+      const older = await import('./lists.ts');
+      expect(older.renameList(state, 'p', name)).toEqual(state);
+      expect(older.listProblem(state, name, 'p')).toBeNull();
+      // A name typed here is still cut to the box's limit.
+      expect(older.listName(older.renameList(state, 'p', 'x'.repeat(60)), 'p')).toBe(
+        'x'.repeat(LIST_NAME_MAX),
+      );
+    } finally {
+      vi.unstubAllGlobals();
+      vi.resetModules();
+    }
   });
 
   it('keeps to the most lists', () => {

@@ -26,7 +26,7 @@ import {
 import type { Notice } from '@shkriuss/push';
 import { fingerprint } from '@shkriuss/sync';
 import { withEdits } from '@shkriuss/sync/edits';
-import { compareText, cutToLength, foldText } from '@shkriuss/ui/text';
+import { compareText, cutChanged, foldText } from '@shkriuss/ui/text';
 import { DATE_LOCALE, timeLabel } from '@shkriuss/ui/locale';
 
 export const REPEATS = ['none', 'daily', 'weekdays', 'weekly', 'monthly', 'yearly'] as const;
@@ -250,8 +250,14 @@ export function draftProblems(draft: TaskDraft): Partial<Record<DraftField, stri
   return problems;
 }
 
-/** Cut by whole characters, as Shelf and Notes do: never half an emoji (audit 4 J-11). */
-const cut = (text: string, max: number): string => cutToLength(text.trim(), max);
+/**
+ * Cut by whole characters, as Shelf and Notes do: never half an emoji (audit
+ * 4 J-11). Text the task has now (`saved`) stays as it is: another device
+ * may count its characters differently, and a save that didn't change it
+ * cut its end off (audit 7 F1-1).
+ */
+const cut = (text: string, max: number, saved?: string): string =>
+  cutChanged(text.trim(), max, saved);
 
 /** The task a (checked) draft describes. Keeps `created` and `done` from the task it changes. */
 export function taskFromDraft(draft: TaskDraft, id: string, now: number, existing?: Task): Task {
@@ -266,14 +272,15 @@ export function taskFromDraft(draft: TaskDraft, id: string, now: number, existin
         ? existing.day
         : parts(date).day
       : undefined;
+  const savedSteps = new Map(existing?.steps.map((step) => [step.id, step.title]));
   return {
     id,
-    title: cut(draft.title, LIMITS.title),
-    notes: cut(draft.notes, LIMITS.notes),
+    title: cut(draft.title, LIMITS.title, existing?.title),
+    notes: cut(draft.notes, LIMITS.notes, existing?.notes),
     // Not cut to MAX_STEPS, the most the form adds (step-edits.ts): steps
     // added on two devices at once may be more, and are all kept (audit 6 F1-5).
     steps: draft.steps
-      .map((step) => ({ ...step, title: cut(step.title, LIMITS.step) }))
+      .map((step) => ({ ...step, title: cut(step.title, LIMITS.step, savedSteps.get(step.id)) }))
       .filter((step) => step.title !== ''),
     list: draft.list,
     important: draft.important,
@@ -362,10 +369,14 @@ export function editedTask(
   const draft =
     Object.keys(draftProblems(merged)).length === 0 ? merged : { ...edited, steps: merged.steps };
   const task = taskFromDraft(draft, id, now, current);
-  // Compared as sync compares (its fingerprint), apart from the time.
+  // Compared as sync compares (its fingerprint), apart from the time, with
+  // the task as the form saves it unchanged: a done copy of a monthly task
+  // keeps the day it repeated on, which the form leaves out, and one saved
+  // before tasks had that day gets one (audit 7 F1-2).
   const unchanged =
     current !== undefined &&
-    fingerprint({ ...task, updated: current.updated }) === fingerprint(current);
+    fingerprint({ ...task, updated: current.updated }) ===
+      fingerprint(taskFromDraft(draftOf(current), id, current.updated, current));
   return unchanged ? current : task;
 }
 

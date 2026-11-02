@@ -31,7 +31,10 @@ Write things down. Lives at <https://notes.shkriuss.app>.
   and the page says the typing is gone (audit 4 F3-1); the same when the
   note's deletion can't be saved either (audit 6 F3-3). Titles (200) and
   notes (100,000) are limited in characters as people see them, as Safari's
-  text boxes count, so nothing a box lets in is cut (audit 4 F3-4).
+  text boxes count, so nothing a box lets in is cut (audit 4 F3-4). The
+  title or body not typed in is saved as it is: another device may count
+  its characters differently, so it can count as too long here
+  (`cutChanged`, audit 7 F1-1).
 - `src/pages/index.astro`: the page, built from `@shkriuss/ui` components.
   A `<template>` holds the markup for one note in the list.
 - Sync between devices (optional): `src/worker.ts` runs the shared sync
