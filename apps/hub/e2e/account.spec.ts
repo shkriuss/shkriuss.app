@@ -107,6 +107,9 @@ test('signs in with the recovery key, forgiving spaces and case, catching typos'
   const input = page.getByRole('textbox', { name: 'Recovery key' });
   const signIn = page.getByRole('button', { name: 'Sign in', exact: true });
   const error = page.locator('#recovery-key-error');
+  // Typed as it is, and kept from spell-checkers (audit 7 A-3, run 27).
+  await expect(input).toHaveAttribute('spellcheck', 'false');
+  await expect(input).toHaveAttribute('autocorrect', 'off');
 
   await input.fill('not a key');
   await signIn.click();
