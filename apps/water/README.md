@@ -37,7 +37,11 @@ Drink enough water each day. Lives at <https://water.shkriuss.app>.
   opens here and syncs: until then, its notification service keeps sending
   them, also after the goal was reached elsewhere (the page says so).
 - `src/scripts/water.ts`: connects the page to those rules. "Other amount"
-  adds any amount, earlier today or yesterday.
+  adds any amount, earlier today or yesterday. Today's drinks, and
+  yesterday's (under "Yesterday's drinks", which opens when one is added
+  there), each have Remove, so a drink added to yesterday by mistake, or
+  logged just before midnight, can be taken back (audit 7 F1-4). Older days
+  show only their totals.
 - `src/pages/index.astro`: the page, built from `@shkriuss/ui` components.
   `<template>`s hold the markup for a drink and a day of the last 7.
 - `src/worker.ts`: runs the shared notification and sync servers

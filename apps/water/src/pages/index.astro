@@ -1,9 +1,9 @@
 ---
 /**
  * Water: today's total against the daily goal, quick "Glass" and "Bottle"
- * buttons (and any other amount), today's drinks, the last 7 days, the goal
- * and sizes, and reminders. Behaviour: ../scripts/water.ts and
- * ../scripts/reminders.ts.
+ * buttons (and any other amount), today's drinks (and yesterday's, to
+ * remove one), the last 7 days, the goal and sizes, and reminders.
+ * Behaviour: ../scripts/water.ts and ../scripts/reminders.ts.
  */
 import { AppShell, Button, DataControls, Icon, PushControls, SyncControls } from '@shkriuss/ui';
 import { DEFAULT_REMINDERS, EVERY_CHOICES, everyLabel } from '../lib/water.ts';
@@ -58,6 +58,13 @@ import { DEFAULT_REMINDERS, EVERY_CHOICES, everyLabel } from '../lib/water.ts';
         Nothing yet today.
       </p>
       <ul role="list" class="drinks" aria-label="Today’s drinks" data-drinks></ul>
+      <!-- Yesterday's, to remove one added there by mistake (or just before midnight). -->
+      <details class="disclosure" data-yesterday hidden>
+        <summary>
+          Yesterday’s drinks (<span data-yesterday-count>0</span>)
+        </summary>
+        <ul role="list" class="drinks" aria-label="Yesterday’s drinks" data-yesterday-drinks></ul>
+      </details>
     </section>
 
     <section class="stack" aria-labelledby="history-heading">
@@ -187,7 +194,7 @@ import { DEFAULT_REMINDERS, EVERY_CHOICES, everyLabel } from '../lib/water.ts';
   <!-- Live region: tells screen reader users what changed. -->
   <p class="visually-hidden" role="status" data-announcer></p>
 
-  <!-- One of today's drinks, copied by the script for each. -->
+  <!-- One of today's (or yesterday's) drinks, copied by the script for each. -->
   <template data-drink-template>
     <li class="drink">
       <span class="drink__time" data-time></span>
