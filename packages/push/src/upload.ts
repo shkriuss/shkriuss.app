@@ -394,7 +394,12 @@ async function uploadSchedule(
     sent = true;
     const response = await api(
       '/schedule',
-      { method: 'PUT', body: JSON.stringify({ endpoint: state.endpoint, timeZone, entries }) },
+      {
+        method: 'PUT',
+        body: JSON.stringify({ endpoint: state.endpoint, timeZone, entries }),
+        // Finishes even if the app is closed meanwhile (audit 7 Z-1).
+        keepalive: true,
+      },
       state.deviceKey,
     );
     if (!response.ok)

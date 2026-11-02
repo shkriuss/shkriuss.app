@@ -59,6 +59,10 @@ let network: 'up' | 'down' | 'failing' | 'hanging';
 let limits: { ms: number; controller: AbortController }[];
 /** Requests to the app's server so far, as "METHOD /path". */
 let requests: string[];
+/** Uploads so far: whether each was to finish after the page is closed (keepalive). */
+let keptAlive: boolean[];
+/** Like a browser whose limit for those is used up: such a request fails at once. */
+let keepaliveRefused: boolean;
 /** Requests to hold on their way (see holdNext), by "METHOD /path". */
 let holds: Map<string, { when: 'before' | 'after'; wait: Promise<void>; reached: () => void }>;
 /** The browser gives this device a new push address, as browsers sometimes do. */
@@ -167,6 +171,10 @@ async function phone(): Promise<void> {
     if (input.startsWith(ENDPOINT)) return new Response(null, { status: 201 });
     const request = `${init?.method ?? 'GET'} ${input}`;
     requests.push(request);
+    if (init?.method === 'PUT') {
+      keptAlive.push(init.keepalive === true);
+      if (init.keepalive && keepaliveRefused) throw new TypeError('Failed to fetch');
+    }
     const hold = holds.get(request);
     if (hold) {
       holds.delete(request);
@@ -196,6 +204,8 @@ beforeEach(async () => {
   network = 'up';
   limits = [];
   requests = [];
+  keptAlive = [];
+  keepaliveRefused = false;
   holds = new Map();
   await phone();
 });
@@ -316,6 +326,30 @@ describe('syncPush', () => {
     await syncPush([notice()]);
     expect(puts()).toBe(2);
     vi.useRealTimers();
+  });
+
+  // A change set just before the app was closed was lost with the page
+  // (audit 7 Z-1): an upload now finishes even then, where the browser lets
+  // it (64 KiB for all such requests of a page).
+  it('sends an upload so that it finishes after the page is closed, when it’s small enough', async () => {
+    expect(await syncPush([notice()])).toEqual({ scheduled: 1, left: 0 });
+    // About 600 bytes a reminder: about 100 fit, 500 don’t.
+    const many = Array.from({ length: 500 }, (_, index) =>
+      notice({
+        id: `n${index}`,
+        start: `2099-01-01T${String(Math.floor(index / 60) % 24).padStart(2, '0')}:${String(index % 60).padStart(2, '0')}`,
+        repeat: 'yearly',
+      }),
+    );
+    expect(await syncPush(many)).toEqual({ scheduled: 500, left: 0 });
+    expect(keptAlive).toEqual([true, false]);
+  });
+
+  it('sends it again as usual when the browser refuses one that finishes after the page is closed', async () => {
+    keepaliveRefused = true;
+    expect(await syncPush([notice()])).toEqual({ scheduled: 1, left: 0 });
+    expect(keptAlive).toEqual([true, false]);
+    expect(storedIds()).toEqual(['1']);
   });
 
   it('gives up on a server that never answers, as on one it can’t reach', async () => {

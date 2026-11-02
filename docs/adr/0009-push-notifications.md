@@ -12,7 +12,8 @@ server (see "What the server stores"). Changed by audit 7: an app's day
 and a device's day count only the messages really sent (and the time spent
 waiting), the big push services are known by their own host names, and
 reminders a device skips are skipped together, not one wake-up each (see
-"Limits" and "Consequences").
+"Limits" and "Consequences"); and a change goes up at once when the app is
+put away or closed (see "Uploading after a change").
 
 ## Context
 
@@ -158,6 +159,16 @@ browsers like IronFox receive Web Push through **UnifiedPush**.
   one go, and passes it on; the device's object checks the rest. Reading
   and checking the biggest schedule in the Worker took more than the free
   plan's 10 ms of CPU time (audit finding B-9); an object has 30 seconds.
+- **Uploading after a change:** the app waits 800 ms, so quick edits go up
+  together, but not once it's put away (the phone locked, another app) or
+  closed: then it uploads at once, and a change made while it's put away
+  goes up straight away too. The upload is sent so that it finishes even
+  if the page is closed meanwhile (`keepalive`), when it's at most 60 KiB
+  (about 100 reminders; browsers allow 64 KiB in all for such
+  requests); a bigger one is sent as usual. Before audit 7 Z-1 a reminder
+  set just before leaving stayed on the device and didn't arrive while the
+  app was closed. Still worth trying once on an iPhone from the Home
+  Screen: set a reminder for two minutes later, press Home at once, wait.
 - **Not stored in backups:** the device key and subscription keys live under
   `shkriuss-device:` in `localStorage`, which backups skip, so restoring on
   another phone can't take over this one's notifications.
