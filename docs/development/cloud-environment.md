@@ -10,14 +10,21 @@ section 13 of the [plan](../plan/PLAN.md).
 | Setting | Value |
 |---|---|
 | Name | `android` |
-| Network access | Custom: `dl.google.com` plus the default list |
+| Network access | Custom: `dl.google.com`, `keys.openpgp.org` and `pgp.mit.edu`, plus the default list |
 | Environment variables | See below |
 | Setup script | See below |
 | Secrets | None |
 
 Newer versions of the Claude app call the Custom level **Limited**. There,
-`dl.google.com` goes under **Allowed domains**, with **Allow package
-managers** ticked.
+the three hosts go under **Allowed domains**, with **Allow package managers**
+ticked.
+
+Why each allowed domain is there:
+
+- `dl.google.com`: the Android SDK and Google's Maven repository.
+- `keys.openpgp.org` and `pgp.mit.edu`: PGP key servers. Gradle asks these,
+  and `keyserver.ubuntu.com`, when it writes PGP verification metadata.
+  `keyserver.ubuntu.com` is reachable without being listed.
 
 Environment variables:
 
@@ -69,10 +76,94 @@ script.
 The setup script installs the Android SDK and the cloud-only Gradle init
 script for the mirror.
 
-<!-- SETUP SCRIPT START: the owner pastes the current setup script below. -->
+This is a copy of the script in the environment's settings. Keep the two
+identical.
+
+<!-- SETUP SCRIPT START: keep this copy identical to the environment's setup script. -->
 
 ```bash
-# Open: the owner pastes the setup script here in review.
+#!/bin/bash
+# shkriuss.app cloud environment setup script.
+# Installs the Android SDK and a Gradle mirror setting for cloud sessions.
+# It never blocks a session: if it fails, ask Claude to run
+#   install-android-sdk
+# and to show /var/log/android-sdk-setup.log
+
+cat > /usr/local/bin/install-android-sdk <<'INSTALLER'
+#!/bin/bash
+set -euo pipefail
+
+export ANDROID_HOME="${ANDROID_HOME:-/opt/android-sdk}"
+TOOLS_ZIP="commandlinetools-linux-15859902_latest.zip"
+TOOLS_SHA256="4e4c464f145a7512b57d088ac6c278c03c9eea610886b35a5e0804e74eedf583"
+PACKAGES=("platform-tools" "platforms;android-37.0" "build-tools;36.0.0")
+
+sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+if [ ! -x "$sdkmanager" ]; then
+  tmp="$(mktemp -d)"
+  trap 'rm -rf "$tmp"' EXIT
+  curl -fsSL --retry 3 -o "$tmp/tools.zip" \
+    "https://dl.google.com/android/repository/$TOOLS_ZIP"
+  echo "$TOOLS_SHA256  $tmp/tools.zip" | sha256sum -c -
+  unzip -q "$tmp/tools.zip" -d "$tmp"
+  mkdir -p "$ANDROID_HOME/cmdline-tools"
+  rm -rf "$ANDROID_HOME/cmdline-tools/latest"
+  mv "$tmp/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
+fi
+
+# sdkmanager is a Java program. Tell it about the proxy if Java was not told.
+proxy_args=()
+if [ -n "${HTTPS_PROXY:-}" ] && [[ "${JAVA_TOOL_OPTIONS:-}" != *proxyHost* ]]; then
+  hostport="${HTTPS_PROXY#*://}"
+  hostport="${hostport##*@}"
+  hostport="${hostport%%/*}"
+  proxy_args=(--proxy=http "--proxy_host=${hostport%:*}" "--proxy_port=${hostport##*:}")
+fi
+
+set +o pipefail
+yes | "$sdkmanager" "${proxy_args[@]}" --licenses > /dev/null
+set -o pipefail
+"$sdkmanager" "${proxy_args[@]}" "${PACKAGES[@]}" > /dev/null
+
+# Cloud sessions only: ask Google's public mirror of Maven Central first.
+# Maven Central limits how often the shared cloud address may download.
+# The project's dependency verification still checks every file.
+mkdir -p "$HOME/.gradle/init.d"
+cat > "$HOME/.gradle/init.d/cloud-mirror.init.gradle.kts" <<'GRADLE'
+val centralMirror = "https://maven-central.storage-download.googleapis.com/maven2/"
+
+beforeSettings {
+    pluginManagement {
+        repositories {
+            maven { name = "MavenCentralMirror"; url = uri(centralMirror) }
+        }
+    }
+    dependencyResolutionManagement {
+        repositories {
+            maven { name = "MavenCentralMirror"; url = uri(centralMirror) }
+        }
+    }
+}
+
+allprojects {
+    tasks.withType<Test>().configureEach {
+        // Robolectric downloads Android images itself when tests run.
+        systemProperty("robolectric.dependency.repo.url", centralMirror)
+        systemProperty("robolectric.dependency.repo.id", "MavenCentralMirror")
+    }
+}
+GRADLE
+
+echo "Android SDK ready in $ANDROID_HOME"
+INSTALLER
+chmod +x /usr/local/bin/install-android-sdk
+
+if install-android-sdk > /var/log/android-sdk-setup.log 2>&1; then
+  echo "Android SDK installed."
+else
+  echo "Android SDK setup failed. See /var/log/android-sdk-setup.log"
+fi
+exit 0
 ```
 
 <!-- SETUP SCRIPT END -->
