@@ -45,6 +45,7 @@ If a task seems to need it, stop and say so in the PR description.
 - `backend/` sync Worker (Cloudflare Workers, D1, R2).
 - `site/` static hub website. Built from `docs/` plus `site/`.
 - `docs/` all documentation. `docs/adr/` architecture decisions.
+- `docs/plan/PLAN.md` the project plan.
 - `tools/` scripts used by CI.
 - `.claude/rules/` rules that apply only to some paths. Read the ones that match
   the files you touch.
