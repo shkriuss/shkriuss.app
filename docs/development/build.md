@@ -25,8 +25,12 @@ Nothing outside section 3 of the [plan](../plan/PLAN.md) is used.
 - `android/settings.gradle.kts`: the modules and the repositories.
 - `android/gradle.properties`: Gradle settings.
 - `android/gradle/`: the wrapper, the version catalog, the JDK version, and
-  dependency verification. The wrapper and the verification files are
-  owner-only ([CODEOWNERS](../../.github/CODEOWNERS)).
+  dependency verification.
+
+Owner-only ([CODEOWNERS](../../.github/CODEOWNERS)): the wrapper, the
+verification metadata and keyring, both `settings.gradle.kts` files (they
+hold the repositories), and the two build checks `CheckApkRulesTask.kt` and
+`CheckGraphicsPathUseTask.kt`.
 - `android/build-logic/`: the convention plugins. All module build config
   lives here. A module's own build file only names its plugins, its
   namespace, its app ID and version, and its dependencies.
@@ -73,7 +77,7 @@ The commands after a dependency change are in
 
 | Plugin | What it does |
 |---|---|
-| `shkriuss.android.application` | Apps: SDK levels, build types, lint, warnings as errors, reproducible-build settings, the APK rules check. |
+| `shkriuss.android.application` | Apps: SDK levels, build types, lint, warnings as errors, reproducible-build settings, the APK rules check and the graphics-path check. |
 | `shkriuss.android.library` | Libraries: SDK levels, lint, warnings as errors. |
 | `shkriuss.android.compose` | Compose compiler, Compose BOM, Compose test library. |
 | `shkriuss.android.unit-test` | JUnit 4 and Robolectric, offline. |
@@ -152,21 +156,29 @@ At font scale 2.0 the title grows by about 1.5 times, not 2 times. Android
 ## Lint
 
 1. Android Lint runs in `check`. Warnings are errors.
-2. Lint findings are fixed, not hidden. Two single lines are suppressed,
-   each with its reason next to it:
-   - `MissingClass` on `androidx.startup.InitializationProvider` in
-     Catalog's manifest. The class comes from a library Compose uses only
-     at run time, so lint cannot see it. It is in the APK.
-   - `NewerVersionAvailable` on the Robolectric image in the version
-     catalog. Lint suggests the image of the next Robolectric release, which
-     4.17 cannot use.
+2. Lint findings are fixed, not hidden. One single line is suppressed, with
+   its reason next to it: `MissingClass` on
+   `androidx.startup.InitializationProvider` in Catalog's manifest. The
+   class comes from a library Compose uses only at run time, so lint cannot
+   see it. It is in the APK.
 3. Compose and Activity ask for Lifecycle 2.9. Its built-in lint checks no
    longer load in this version of lint ("Library lint checks reference
    invalid APIs"). A version constraint lifts Lifecycle to 2.11.0, whose
    checks work.
-
-Open: some lint checks look up the newest versions online while they run.
-See [Open](#open).
+4. Three checks are turned off in every module: `GradleDependency`,
+   `NewerVersionAvailable` and `AndroidGradlePluginVersion`.
+   - Why: they look up the newest versions online while lint runs. Their
+     result depends on the date and the network, not on the code, so the
+     same commit could pass today and fail tomorrow. In Phase 0, step 3,
+     one of them asked `repo.gradle.org` for the newest Gradle release, which
+     the cloud environment blocks but GitHub Actions does not.
+   - Updates are handled by prompt R5 in [PROMPTS.md](PROMPTS.md) instead.
+   - This is the owner's decision on
+     [pull request 5](https://github.com/shkriuss/shkriuss.app/pull/5). It is
+     not a precedent. Every other lint check stays on, and turning off
+     another one needs the owner's decision too (hard rule 9).
+   - The setting, with the same reason, is in `build-logic`,
+     `AndroidCommon.kt`.
 
 ## Dependency verification
 
@@ -303,28 +315,82 @@ Compose UI depends on `androidx.graphics:graphics-path`. That library
 ships a small JNI library, `libandroidx.graphics.path.so`. Hard rule 2
 allows no native code outside Grammar.
 
-What the build does:
+### The decision
 
-1. It leaves that library out of every APK
-   (`packaging.jniLibs.excludes`).
+The owner decided on
+[pull request 5](https://github.com/shkriuss/shkriuss.app/pull/5) to leave
+the JNI library out, with no second exception. Reasons:
+
+- The plan allows no C or C++.
+- GrapheneOS turns memory tagging on by default only for user-installed
+  apps without native libraries.
+
+It is recorded in
+[ADR 0011](../adr/0011-no-native-code-grammar-exception.md), point 4.
+
+### What the build does
+
+1. It leaves the library out of every APK (`packaging.jniLibs.excludes`).
 2. The APK rules check fails the build if any `.so` file gets in.
+3. The graphics-path check fails the build if any code could load the
+   library. See below.
 
-Why this works: Compose loads the library only when code walks through the
-segments of a `Path`. That happens through `Path.iterator()`,
-`PathEasing`, `PathHitTester`, and the helpers `computeDirection()`,
-`divide()`, `reverse()` and `toSvg()`. In the Compose versions used now,
-no Compose UI, Foundation, Material 3 or Animation code calls these
-itself. No module in this project calls them.
+### Why leaving it out works, and the risk
 
-The risk: if a module, or a future Compose version, calls one of them, the
-app crashes with `UnsatisfiedLinkError` on every Android version. The
-library's loader runs even on Android 14 and later, where it is not used.
-Screenshot tests would likely catch it first, because the library cannot
-load on the JVM either.
+Compose loads the library only when code walks through the segments of a
+`Path`. That happens through `Path.iterator()`, `PathEasing`,
+`PathHitTester`, and the helpers `computeDirection()`, `divide()`,
+`reverse()` and `toSvg()`. In the Compose versions used now, no Compose
+UI, Foundation, Material 3 or Animation code calls these itself, and no
+module in this project does.
 
-Open: whether to keep this, or to allow this one AndroidX library in
-[ADR 0011](../adr/0011-no-native-code-grammar-exception.md). The owner
-decides.
+If any code did, the app would crash with `UnsatisfiedLinkError` on every
+Android version. The library's loader runs even on Android 14 and later,
+where the library is not used. The graphics-path check turns that crash
+into a build failure.
+
+### The graphics-path check
+
+The task `check<Variant>GraphicsPathUse` reads every class the app runs:
+the app's own classes, every module and every library. It runs before
+every `assemble` task, and the `debug` one also runs in `check`.
+
+1. A class fails the check if it refers to the package
+   `androidx.graphics.path`, or to one of these:
+   - `androidx.compose.ui.graphics.PathIterator`
+   - `androidx.compose.ui.graphics.AndroidPathIterator`
+   - `androidx.compose.ui.graphics.PathHitTester`
+   - `androidx.compose.ui.graphics.PathGeometryKt` (`computeDirection()`,
+     `divide()`, `reverse()`)
+   - `androidx.compose.ui.graphics.PathSvgKt` (`toSvg()`, `addSvg()`)
+   - `androidx.compose.animation.core.PathEasing`
+2. Only the classes that define these may refer to them: the classes
+   themselves, their nested classes, the package `androidx.graphics.path`,
+   and five classes in Compose that belong to the same definitions:
+   - `Path` and `Path$DefaultImpls`, which declare `Path.iterator()`.
+   - `AndroidPathIterator_androidKt` and its `$WhenMappings`, from the same
+     source file as `AndroidPathIterator`. They hold the `PathIterator(...)`
+     factory.
+   - `PathHitTesterKt`, from the same source file as `PathHitTester`. It
+     holds the `PathHitTester(...)` factory.
+
+   Code that calls one of those five still names `PathIterator` or
+   `PathHitTester` in its own class file, because a JVM method reference
+   carries its return type. So that code is still caught.
+3. The failure message lists each class and what it refers to, and says to
+   stop and ask the owner. Never add the library back, change the check, or
+   work around it to make a build pass.
+
+The report is written to `build/reports/graphics-path-use/`. In Phase 0 it
+checked 11,630 classes for each Catalog variant.
+
+How it was tested:
+
+1. A temporary file in Catalog walked through a `Path` and built a
+   `PathEasing`. `assembleDebug` failed and named both uses.
+2. A temporary file in `core/design` built a `PathHitTester`.
+   `assembleRelease` failed and named it.
+3. With both files removed, all three variants passed.
 
 ## Entries removed from library manifests
 
@@ -354,19 +420,6 @@ does.
 
 ## Open
 
-- **Lint looks up versions online.** Some lint checks ask Google's Maven
-  repository, Maven Central and `repo.gradle.org` for the newest versions
-  while they run. With warnings as errors, a build can then fail only
-  because something new was published. In the cloud environment,
-  `repo.gradle.org` is blocked, so the Gradle version check finds nothing.
-  In GitHub Actions it is reachable, and lint will likely report that
-  Gradle 9.9.1 (published on 2026-11-10) is newer than 9.6.1. The owner
-  decides between turning off the three version checks
-  (`GradleDependency`, `NewerVersionAvailable`,
-  `AndroidGradlePluginVersion`) and relying on the monthly update prompt R5,
-  or keeping them and updating whenever they fire. Hard rule 9 says not to
-  turn lint checks off without that decision.
-- **Native code from Compose.** See [above](#native-code-from-compose).
 - **Obfuscation.** R8 renames classes in `release` and `preview`. That
   makes stack traces in bug reports harder to read. It could keep the names
   and still shrink. Not decided.

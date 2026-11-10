@@ -179,9 +179,9 @@ exit 0
 - Two hosts are blocked here:
   - `downloads.gradle.org`, where Gradle's `.sha256` files now live. The
     checksums on `services.gradle.org` work instead.
-  - `repo.gradle.org`, which Android Lint asks for the newest Gradle
-    version. See "Open" in [build.md](build.md#open). Allowing it would make
-    lint here behave as it will in GitHub Actions.
+  - `repo.gradle.org`. Android Lint asked it for the newest Gradle version.
+    The owner turned off lint's version lookups (see [build.md](build.md#lint)),
+    so lint no longer asks, and the build does not need this host.
 - Key server lookups failed now and then while Gradle wrote the
   verification metadata. A second run with `--refresh-keys` worked.
 - No build download answered 429. The build fetched every Maven Central
@@ -193,6 +193,5 @@ exit 0
 
 - `sdkmanager` is deprecated in favour of the Android CLI. Switch the setup
   script when the CLI is ready.
-- Whether to remove the two unused Robolectric lines from the init script,
-  and whether to allow `repo.gradle.org`. Only the owner can change the
-  environment's settings.
+- Whether to remove the two unused Robolectric lines from the init script.
+  Only the owner can change the environment's settings.

@@ -12,9 +12,7 @@ junit = "4.13.2"
 robolectric = "4.17"
 # The Android image that Robolectric 4.17 runs for SDK 37. It is resolved
 # by Gradle, so dependency verification checks it. Change it together with
-# robolectric. Lint suggests newer images, but those belong to newer
-# Robolectric releases, so that lint check is suppressed on this line only.
-#noinspection NewerVersionAvailable
+# robolectric. Newer images belong to newer Robolectric releases.
 robolectric-android-all = "17-robolectric-15733970-i7"
 roborazzi = "1.78.0"
 # Not direct dependencies. Used as version constraints only.

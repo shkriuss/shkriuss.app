@@ -63,8 +63,8 @@
 - The wrapper's checksum comes from Gradle's version list on
   `services.gradle.org`. The cloud environment blocks `downloads.gradle.org`,
   where the `.sha256` files live.
-- `verification-metadata.xml` and `gradle/wrapper/` are owner-only
-  ([CODEOWNERS](../../.github/CODEOWNERS)).
-- Open: whether `verification-keyring.keys`, `settings.gradle.kts` and
-  `build-logic/settings.gradle.kts` should also be owner-only. The settings
-  files hold the repositories. Only the owner can change CODEOWNERS.
+- `verification-metadata.xml`, `verification-keyring.keys`,
+  `gradle/wrapper/`, and both `settings.gradle.kts` files, which hold the
+  repositories, are owner-only ([CODEOWNERS](../../.github/CODEOWNERS)).
+  The keyring and the settings files were added by the owner's decision on
+  [pull request 5](https://github.com/shkriuss/shkriuss.app/pull/5).
