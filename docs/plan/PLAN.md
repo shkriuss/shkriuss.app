@@ -173,8 +173,10 @@ release.
 
 - GitHub Actions is the authoritative build. Claude Code's cloud environment
   is the fast loop for compiling, unit tests, lint and screenshots.
-- Cloud environment `android`: network access Custom with `dl.google.com`
-  plus the default list; variables `ANDROID_HOME=/opt/android-sdk`,
+- Cloud environment `android`: network access Custom with `dl.google.com`,
+  `keys.openpgp.org` and `pgp.mit.edu` plus the default list (Gradle asks
+  these key servers, and `keyserver.ubuntu.com`, when it writes PGP
+  verification metadata); variables `ANDROID_HOME=/opt/android-sdk`,
   `BASH_DEFAULT_TIMEOUT_MS=600000`, `BASH_MAX_TIMEOUT_MS=1800000`; the setup
   script installs the Android SDK and a cloud-only Gradle init script that
   asks Google's public mirror of Maven Central first. No secrets there.

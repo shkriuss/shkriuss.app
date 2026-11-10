@@ -1,0 +1,19 @@
+# Text files are stored and checked out with LF line endings.
+* text=auto eol=lf
+
+# Images
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.avif binary
+*.bmp binary
+*.ico binary
+
+# Other binary files
+*.jar binary
+*.apk binary
+*.aab binary
+*.zip binary
+*.pdf binary

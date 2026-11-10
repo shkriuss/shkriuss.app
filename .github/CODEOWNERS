@@ -1,0 +1,18 @@
+# Owner-only paths. A change to any of these needs the owner's review.
+# See docs/development/working-with-claude.md.
+
+/.github/                                    @shkriuss
+/CLAUDE.md                                   @shkriuss
+/.claude/                                    @shkriuss
+/android/gradle/verification-metadata.xml    @shkriuss
+/android/gradle/wrapper/                     @shkriuss
+
+# Signing configuration and key material, wherever they appear.
+# Release and preview signing are planned to run only in workflows under
+# .github/, which is covered above.
+# Open: the path of any signing config inside the Gradle project.
+# Add it here when it exists.
+*.jks                                        @shkriuss
+*.keystore                                   @shkriuss
+*.p12                                        @shkriuss
+*.pfx                                        @shkriuss
