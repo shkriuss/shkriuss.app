@@ -17,7 +17,8 @@ from a phone browser at claude.ai/code or the Code tab of the Claude app.
 6. Select **Create PR**. Turn on **Auto-fix** in the pull request's menu if
    you want Claude to repair failing checks by itself.
 7. In GitHub: wait for the checks, install the preview APK, look at the
-   screenshots. Then approve and merge, or write what to change.
+   screenshots ([test-a-pull-request.md](test-a-pull-request.md)). Then
+   approve and merge, or write what to change.
 
 Rules of thumb:
 

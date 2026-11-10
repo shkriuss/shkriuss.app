@@ -71,5 +71,8 @@
   [CODEOWNERS](../../.github/CODEOWNERS).
 - Only the owner provides the fingerprints in
   `docs/security/fingerprints.md`.
+- The throwaway preview key (point 9) is made inside each preview job,
+  used once and deleted. Every run makes a new one, so a preview cannot
+  update an older preview. See [ci.md](../development/ci.md#pr-preview).
 - Open: the details are completed in Phase 0, step 6
   ([PROMPTS.md](../development/PROMPTS.md)).

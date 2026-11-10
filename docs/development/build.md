@@ -63,6 +63,11 @@ Claude runs these from `android/`. The same list is in
 The commands after a dependency change are in
 [After a dependency change](#after-a-dependency-change).
 
+CI runs `./gradlew check verifyRoborazziDebug` together with
+`:app:<name>:checkReleaseApkRules` and
+`:app:<name>:checkReleaseGraphicsPathUse` for every app. See
+[ci.md](ci.md#job-check).
+
 ## Repositories
 
 1. Gradle downloads from Google's Maven repository and Maven Central only.
@@ -184,7 +189,9 @@ Roborazzi takes screenshots on the JVM, through Robolectric.
    - Phone: 411 by 914 dp at 420 dpi, close to the Pixel 9 Pro.
    - Tablet: 1280 by 800 dp at 320 dpi in landscape, the Pixel Tablet.
 2. The reference images are committed in `src/test/screenshots/` of each
-   module. Open them in the pull request's **Files changed** tab.
+   module. Open them in the pull request's **Files changed** tab, or
+   download the new and changed ones as one zip
+   ([test-a-pull-request.md](test-a-pull-request.md#look-at-the-screenshots)).
 3. `verifyRoborazziDebug` fails when a screenshot differs from its reference.
 4. After an intended UI change, `recordRoborazziDebug` writes new reference
    images. Commit them with the change.
@@ -314,6 +321,12 @@ steps above.
   published checksum `497c8c2a…a194a9c7`.
 - The cloud environment blocks `downloads.gradle.org`, where the
   `.sha256` files now live. The version list on `services.gradle.org` works.
+- CI checks the jar, `distributionUrl` and `distributionSha256Sum` against
+  that version list on every pull request
+  ([ci.md](ci.md#job-gradle-wrapper)). The jar must be the one of the
+  version named in `distributionUrl`. The wrapper task writes the jar of
+  the Gradle that runs it, so after changing the version, run the wrapper
+  task a second time.
 
 ## Reproducible builds
 
@@ -372,6 +385,10 @@ and fails the build if:
 
 The report is written to `build/reports/apk-rules/`. A library can add any
 of these without anyone noticing. The check makes sure someone does.
+
+CI runs `checkReleaseApkRules` by name for every app, and checks that its
+report was written. So removing the check from the build, or turning it
+off, fails CI ([ci.md](ci.md#job-check)).
 
 ## Native code from Compose
 
@@ -449,6 +466,10 @@ every `assemble` task, and the `debug` one also runs in `check`.
 
 The report is written to `build/reports/graphics-path-use/`. In Phase 0 it
 checked 11,630 classes for each Catalog variant.
+
+CI runs `checkReleaseGraphicsPathUse` by name for every app, and checks
+that its report was written, as for the APK rules check
+([ci.md](ci.md#job-check)).
 
 How it was tested:
 
