@@ -3,7 +3,8 @@
 - Status: Accepted
 - Date: 2026-11-10
 - Source: [plan](../plan/PLAN.md) sections 1, 2 (decisions 3 and 7), 3, 5
-  and 17
+  and 17, and the owner's review of
+  [pull request 4](https://github.com/shkriuss/shkriuss.app/pull/4)
 
 ## Context
 
@@ -27,9 +28,11 @@
 
 ## Options rejected
 
-- **SQLCipher.** Reason not recorded.
-- **The bundled SQLite driver.** Reason not recorded. Note: section 3
-  describes the chosen driver as "system SQLite, no bundled native code".
+- **SQLCipher.** It is a C library loaded through JNI. The cost is
+  accepted: the app lock is an access gate for database rows, not
+  encryption.
+- **The bundled SQLite driver.** It ships its own SQLite and calls it
+  through JNI.
 
 ## Consequences
 

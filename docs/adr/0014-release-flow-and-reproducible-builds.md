@@ -2,7 +2,9 @@
 
 - Status: Accepted
 - Date: 2026-11-10
-- Source: [plan](../plan/PLAN.md) sections 1, 10, 13, 15, 16 and 17
+- Source: [plan](../plan/PLAN.md) sections 1, 10, 13, 15, 16 and 17, and
+  the owner's review of
+  [pull request 4](https://github.com/shkriuss/shkriuss.app/pull/4)
 
 ## Context
 
@@ -48,7 +50,14 @@
 
 ## Options rejected
 
-None recorded.
+- **Signing inside the build job.** Build jobs must hold no secrets.
+- **A workflow that creates the tag and publishes.** Only the owner creates
+  tags. Publishing is the owner's last check.
+- **Connecting Claude with the owner's GitHub account.** Claude could then
+  merge its own pull requests. Claude uses a machine account with write
+  access only.
+- **A status check in place of a required review.** A pull request branch
+  could fake it.
 
 ## Consequences
 

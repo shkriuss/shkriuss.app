@@ -3,7 +3,8 @@
 - Status: Accepted
 - Date: 2026-11-10
 - Source: [plan](../plan/PLAN.md) sections 1, 2 (decision 4), 3, 4, 7, 10
-  and 16
+  and 16, and the owner's review of
+  [pull request 4](https://github.com/shkriuss/shkriuss.app/pull/4)
 
 ## Context
 
@@ -25,7 +26,11 @@
 
 ## Options rejected
 
-None recorded.
+- **The network permission in every data app** (decision 4, option a).
+  Every app could then reach the network. With no permission declared,
+  anyone can check on any Android that a data app cannot connect. Only one
+  small app needs a network audit. The cost is accepted: more work, and
+  sync needs a second app.
 
 ## Consequences
 

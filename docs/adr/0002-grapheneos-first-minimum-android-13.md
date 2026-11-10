@@ -3,7 +3,8 @@
 - Status: Accepted
 - Date: 2026-11-10
 - Source: [plan](../plan/PLAN.md) sections 1, 2 (decision 8), 13, 16
-  and 17
+  and 17, and the owner's review of
+  [pull request 4](https://github.com/shkriuss/shkriuss.app/pull/4)
 
 ## Context
 
@@ -32,7 +33,9 @@
 
 ## Options rejected
 
-None recorded.
+- **A minimum below Android 13.** The photo picker, the notification
+  permission, `USE_EXACT_ALARM` and key rotation with signature scheme v3.1
+  all start at Android 13. No test device runs anything older.
 
 ## Consequences
 

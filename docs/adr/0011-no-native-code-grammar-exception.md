@@ -2,7 +2,9 @@
 
 - Status: Accepted
 - Date: 2026-11-10
-- Source: [plan](../plan/PLAN.md) sections 2 (decision 7), 3 and 16
+- Source: [plan](../plan/PLAN.md) sections 2 (decision 7), 3 and 16, and
+  the owner's review of
+  [pull request 4](https://github.com/shkriuss/shkriuss.app/pull/4)
 
 ## Context
 
@@ -21,7 +23,8 @@
 
 ## Options rejected
 
-- **A language model for Grammar.** Reason not recorded.
+- **A language model for Grammar.** On-device models are large, and their
+  runtimes are C++. A hosted model would send text to a third party.
 
 ## Consequences
 
@@ -31,3 +34,5 @@
   ([PROMPTS.md](../development/PROMPTS.md)).
 - Grammar passes the same GrapheneOS checklist as every other app. See
   [0002](0002-grapheneos-first-minimum-android-13.md).
+- No WebView and no runtime code loading are in
+  [0019](0019-no-webview-no-runtime-code-loading.md).

@@ -2,7 +2,9 @@
 
 - Status: Accepted
 - Date: 2026-11-10
-- Source: [plan](../plan/PLAN.md) sections 1, 5, 6, 7, 10, 13 and 16
+- Source: [plan](../plan/PLAN.md) sections 1, 5, 6, 7, 10, 13 and 16, and
+  the owner's review of
+  [pull request 4](https://github.com/shkriuss/shkriuss.app/pull/4)
 
 ## Context
 
@@ -18,7 +20,8 @@
 ## Decision
 
 1. The server is one Cloudflare Worker.
-   - D1 holds encrypted records with server-assigned sequence numbers.
+   - D1 holds encrypted records with server-assigned sequence numbers. Each
+     record is one opaque blob. See [0006](0006-tink-and-key-hierarchy.md).
    - R2 holds encrypted file chunks.
 2. Devices pull changes since a cursor and push batches.
 3. Conflicts are resolved on the device. The last writer wins per record,
@@ -32,8 +35,12 @@
 
 ## Options rejected
 
-- **Durable Objects.** Reason not recorded.
-- **CRDT libraries.** Reason not recorded.
+- **Durable Objects.** More moving parts than one Worker with D1 and R2
+  needs. Revisit this for live push.
+- **CRDT libraries.** Their cores are native code or JavaScript, which the
+  apps cannot ship. One user with a few devices does not need them.
+- **Resolving conflicts on the server.** Impossible, because the server
+  sees only ciphertext.
 
 ## Consequences
 

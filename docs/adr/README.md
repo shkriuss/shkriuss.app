@@ -8,9 +8,12 @@ To write a new record, follow [template.md](template.md). Why the project
 keeps these records is in
 [0001](0001-record-architecture-decisions.md).
 
-Records 0001 to 0018 come from section 18 of the [plan](../plan/PLAN.md).
-Where the plan gives no reason for a rejected option, the record says
-"Reason not recorded".
+Records 0001 to 0018 come from section 18 of the [plan](../plan/PLAN.md),
+with reasons and details the owner added in review. Record 0019 covers hard
+rule 1 in [CLAUDE.md](../../CLAUDE.md).
+
+How a record may be edited or replaced is in point 7 of
+[0001](0001-record-architecture-decisions.md).
 
 | No. | Decision | Status |
 |---|---|---|
@@ -32,3 +35,4 @@ Where the plan gives no reason for a rejected option, the record says
 | 0016 | [No developer registration with Google for now](0016-no-google-developer-registration-for-now.md) | Accepted |
 | 0017 | [Design system tokens](0017-design-system-tokens.md) | Accepted |
 | 0018 | [Licences](0018-licences.md) | Accepted |
+| 0019 | [No WebView, no runtime code loading](0019-no-webview-no-runtime-code-loading.md) | Accepted |

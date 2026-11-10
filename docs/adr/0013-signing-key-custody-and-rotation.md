@@ -3,7 +3,8 @@
 - Status: Accepted
 - Date: 2026-11-10
 - Source: [plan](../plan/PLAN.md) sections 2 (decision 5), 10, 13, 14
-  and 15
+  and 15, and the owner's review of
+  [pull request 4](https://github.com/shkriuss/shkriuss.app/pull/4)
 
 ## Context
 
@@ -36,10 +37,25 @@
    before the first public release.
 9. Preview builds use a throwaway key and the application ID suffix
    `.preview`, so they install next to the real app.
+10. The encrypted backup:
+    - It is the file `backup/signing-key.tar.gpg` in the owner's private
+      repository `signing-ceremony`.
+    - It is encrypted with a passphrase that only the owner holds.
+    - `backup/fingerprint.txt` in that repository holds the certificate's
+      SHA-256.
+    - The owner keeps two more copies outside GitHub.
+11. Restore: the owner runs the `signing-ceremony` repository's workflow
+    with the action `restore`. It decrypts the backup and writes the three
+    secrets into the `release` environment again.
 
 ## Options rejected
 
-None recorded.
+- **A cloud key service with a non-exportable key** (decision 5, option b).
+  It needs a Google, AWS or Azure account, and it allows no offline backup.
+  A move to one stays possible later, through key rotation.
+- **One key per app.** The Sync app and the data apps talk through a
+  signature-level permission, which needs the same key. One key is also one
+  thing to guard.
 
 ## Consequences
 
@@ -55,7 +71,5 @@ None recorded.
   [CODEOWNERS](../../.github/CODEOWNERS).
 - Only the owner provides the fingerprints in
   `docs/security/fingerprints.md`.
-- Open: where the encrypted backup is kept, and how a restore works. The
-  plan names a signing-ceremony repository but does not say what it holds.
 - Open: the details are completed in Phase 0, step 6
   ([PROMPTS.md](../development/PROMPTS.md)).

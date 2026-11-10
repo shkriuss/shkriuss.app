@@ -2,7 +2,9 @@
 
 - Status: Accepted
 - Date: 2026-11-10
-- Source: [plan](../plan/PLAN.md) sections 2 (decisions 3 and 12), 5 and 6
+- Source: [plan](../plan/PLAN.md) sections 2 (decisions 3 and 12), 5 and 6,
+  and the owner's review of
+  [pull request 4](https://github.com/shkriuss/shkriuss.app/pull/4)
 
 ## Context
 
@@ -16,7 +18,8 @@
 1. A backup is one file, in a place the user picks with the system file
    picker.
 2. The file has a versioned header, then streaming authenticated
-   encryption.
+   encryption. The encryption is Tink's AES-GCM-HKDF streaming scheme. See
+   [0006](0006-tink-and-key-hierarchy.md).
 3. Backup keys derive from the recovery key. See
    [0007](0007-recovery-key-instead-of-passwords.md).
 4. The format carries a version number, a migration path and tests.
@@ -25,7 +28,9 @@
 
 ## Options rejected
 
-None recorded.
+- **Sync instead of a backup file.** Sync is not a backup. A deletion or a
+  damaged record spreads to every device. Apps must also work with no
+  account.
 
 ## Consequences
 

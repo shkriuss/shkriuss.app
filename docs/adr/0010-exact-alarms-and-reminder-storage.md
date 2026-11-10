@@ -2,7 +2,8 @@
 
 - Status: Accepted
 - Date: 2026-11-10
-- Source: [plan](../plan/PLAN.md) sections 3, 8 and 16
+- Source: [plan](../plan/PLAN.md) sections 3, 8 and 16, and the owner's
+  review of [pull request 4](https://github.com/shkriuss/shkriuss.app/pull/4)
 
 ## Context
 
@@ -26,7 +27,14 @@
 
 ## Options rejected
 
-None recorded. The opt-in mode in point 5 is deferred, not rejected.
+- **`SCHEDULE_EXACT_ALARM`.** It is denied by default on new installs.
+  `USE_EXACT_ALARM` is granted at install and is meant for calendar and
+  alarm apps.
+- **Inexact alarms or WorkManager.** Battery saving can delay them.
+- **Push messages.** They need Google's push service or a network
+  connection. Data apps have neither.
+
+The opt-in mode in point 5 is deferred, not rejected.
 
 ## Consequences
 

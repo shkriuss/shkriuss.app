@@ -2,7 +2,9 @@
 
 - Status: Accepted
 - Date: 2026-11-10
-- Source: [plan](../plan/PLAN.md) sections 2 (decision 11), 4, 9 and 11
+- Source: [plan](../plan/PLAN.md) sections 2 (decision 11), 4, 9 and 11,
+  and the owner's review of
+  [pull request 4](https://github.com/shkriuss/shkriuss.app/pull/4)
 
 ## Context
 
@@ -26,29 +28,45 @@
    | Secondary text | `#4A4F4C` | `#A9AEAA` |
    | Outline | `#7A807C` | `#6F7571` |
    | Accent | `#00695C` | `#5FD6C2` |
-   | Text on accent | Not given | `#00201B` |
+   | Text on accent | `#FFFFFF` | `#00201B` |
    | Error | `#B3261E` | `#FFB4AB` |
    | Success | `#1B6E3C` | `#7FDB9A` |
    | Warning | `#7A5800` | `#F2C24B` |
 
 2. Checked contrast: every text pair is at least 5.1:1. Outlines are at
-   least 3.3:1.
+   least 3.3:1. Light text on accent, `#FFFFFF` on `#00695C`, is 6.61:1.
 3. Shape: pill buttons, 12dp fields, 16dp cards, 28dp sheets and dialogs.
 4. Density: compact, on a 4dp grid.
    - Margins: 16dp on phones, 24dp on tablets.
    - Body text: 14sp.
    - Touch targets stay at least 48dp.
-5. True black: raised surfaces use a lighter grey plus an outline, not
-   shadows.
-6. Type: the system font, six text styles, no bundled fonts.
+5. Raised surfaces use a surface colour plus an outline, not shadows. This
+   is the same in both themes. In the true-black theme, the surface is a
+   lighter grey.
+6. Type: the system font, six text styles, no bundled fonts. Starting
+   values, to be confirmed in the Catalog in Phase 1, step 1:
+
+   | Style | Size (sp) | Line height (sp) |
+   |---|---|---|
+   | Headline | 24 | 32 |
+   | Title | 20 | 28 |
+   | Subtitle | 16 | 24 |
+   | Body | 14 | 20 |
+   | Label | 14 | 20 |
+   | Caption | 12 | 16 |
+
+   Subtitle and Label use medium weight.
+
 7. App icons: adaptive, with a monochrome layer.
 
 ## Options rejected
 
-- **Dynamic colour.** Reason not recorded.
-- **Shadows on raised surfaces.** Reason not recorded. Note: the plan
-  states this under "True black".
-- **Bundled fonts.** Reason not recorded.
+- **Dynamic colour.** The owner chose a fixed palette. Contrast can then be
+  checked once for every pair, and screenshots look the same on every
+  device.
+- **Shadows on raised surfaces.** They vanish on a true-black background.
+- **Bundled fonts.** The system font follows the user's settings and
+  covers Georgian. There are no font files to license, ship and verify.
 
 ## Consequences
 
@@ -58,11 +76,6 @@
   outline pair under 3:1 (step 1.1 in
   [PROMPTS.md](../development/PROMPTS.md)).
 - The Catalog app shows the colour, type, shape and spacing tokens.
-- Open: the text-on-accent colour for the light theme. The plan gives it
-  only for the dark theme.
-- Open: whether "no shadows" applies to the light theme too.
-- Open: the names and sizes of the six text styles, other than 14sp body
-  text.
 - Open: token names, and the rest of the details. They come in
   `docs/development/design-system.md` in Phase 1, step 1, which completes
   this record ([PROMPTS.md](../development/PROMPTS.md)).

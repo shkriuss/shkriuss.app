@@ -4,7 +4,7 @@ Use this for every new decision record in this folder.
 
 ## How to use it
 
-1. Pick the next free number. Numbers have four digits, for example `0019`.
+1. Pick the next free number. Numbers have four digits, for example `0020`.
 2. Name the file `NNNN-short-title.md`, in lower case with hyphens.
 3. Copy the block below. On GitHub, tap the copy button at its top right.
 4. Fill in every section. Use plain English and short sentences.
@@ -22,6 +22,8 @@ Rules:
   rejected, write "Reason not recorded."
 - Write "Open:" in front of anything not decided yet, and list it in the
   pull request.
+- To edit or replace an accepted record, follow point 7 of
+  [0001](0001-record-architecture-decisions.md).
 
 ## The template
 

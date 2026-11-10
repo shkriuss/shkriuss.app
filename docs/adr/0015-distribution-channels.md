@@ -2,7 +2,9 @@
 
 - Status: Accepted
 - Date: 2026-11-10
-- Source: [plan](../plan/PLAN.md) sections 2 (decision 13), 12, 14 and 16
+- Source: [plan](../plan/PLAN.md) sections 2 (decision 13), 12, 14 and 16,
+  and the owner's review of
+  [pull request 4](https://github.com/shkriuss/shkriuss.app/pull/4)
 
 ## Context
 
@@ -24,7 +26,11 @@
 
 ## Options rejected
 
-None recorded. The later channels are deferred, not rejected.
+- **The main F-Droid repository signing with its own key.** Android does
+  not allow switching keys later. Only its reproducible-build route is
+  acceptable.
+
+The later channels are deferred, not rejected.
 
 ## Consequences
 

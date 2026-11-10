@@ -2,7 +2,9 @@
 
 - Status: Accepted
 - Date: 2026-11-10
-- Source: [plan](../plan/PLAN.md) sections 2 (decision 16), 3 and 4
+- Source: [plan](../plan/PLAN.md) sections 2 (decision 16), 3 and 4, and
+  the owner's review of
+  [pull request 4](https://github.com/shkriuss/shkriuss.app/pull/4)
 
 ## Context
 
@@ -17,8 +19,10 @@
 
 ## Options rejected
 
-- **Hilt.** Reason not recorded.
-- **Koin.** Reason not recorded.
+- **Hilt.** Annotation processing and generated code that a project this
+  size does not need.
+- **Koin.** A service locator. Mistakes show at run time, not at compile
+  time. CLAUDE.md forbids service locators.
 
 ## Consequences
 

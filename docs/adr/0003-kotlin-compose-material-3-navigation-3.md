@@ -2,7 +2,9 @@
 
 - Status: Accepted
 - Date: 2026-11-10
-- Source: [plan](../plan/PLAN.md) sections 1, 2 (decision 2), 3, 4 and 17
+- Source: [plan](../plan/PLAN.md) sections 1, 2 (decision 2), 3, 4 and 17,
+  and the owner's review of
+  [pull request 4](https://github.com/shkriuss/shkriuss.app/pull/4)
 
 ## Context
 
@@ -39,10 +41,14 @@ record of their own. Room and DataStore are in
 
 ## Options rejected
 
-- **Java for new code.** Reason not recorded.
-- **Kotlin Multiplatform.** Reason not recorded.
-- **Cross-platform toolkits.** Reason not recorded.
-- **XML views.** Reason not recorded.
+- **Java for new code.** Compose needs Kotlin, and one language is simpler
+  to maintain.
+- **Kotlin Multiplatform.** There is no second platform.
+- **Cross-platform toolkits.** They bundle their own native engines, which
+  breaks the no-native-code rule
+  ([0011](0011-no-native-code-grammar-exception.md)).
+- **XML views.** A second UI toolkit to maintain. The adaptive and Material
+  3 libraries the project uses are built for Compose.
 - **Google's Compose Preview Screenshot Testing.** It is still
   experimental. Roborazzi is used instead.
 

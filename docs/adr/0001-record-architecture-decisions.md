@@ -3,7 +3,8 @@
 - Status: Accepted
 - Date: 2026-11-10
 - Source: [plan](../plan/PLAN.md), opening note and sections 3, 5, 12
-  and 18
+  and 18, and the owner's review of
+  [pull request 4](https://github.com/shkriuss/shkriuss.app/pull/4)
 
 ## Context
 
@@ -32,22 +33,26 @@
 5. New decisions go into a new record, not into the plan.
 6. After Phase 0, the records and docs win over the plan. The plan is kept
    as history.
+7. Editing records:
+   - A record that [PROMPTS.md](../development/PROMPTS.md) says is
+     completed in a later step may be extended in place until that phase
+     ends. These are 0005, 0006, 0007, 0008, 0009, 0013, 0014 and 0017.
+   - After that, a pull request may fix a record or add detail, as long as
+     the decision stays the same.
+   - A changed decision needs a new record. The old record is marked
+     "Superseded by NNNN".
 
 ## Options rejected
 
-- **Keep recording decisions in the plan after Phase 0.** Reason not
-  recorded.
+- **Keep recording decisions in the plan after Phase 0.** One growing file
+  hides when and why a decision changed. Separate dated records can be
+  reviewed, linked and replaced one at a time.
 
 ## Consequences
 
-- Records 0001 to 0018 come from section 18 of the plan. They take the
-  plan's content and add no new decisions.
-- Where the plan gives no reason for a rejected option, the record says
-  "Reason not recorded". The owner can add the reason later.
+- Records 0001 to 0018 come from section 18 of the plan. The owner added
+  reasons and details in review.
+- Record 0019 covers hard rule 1 in CLAUDE.md, which section 18 did not
+  list.
 - A pull request that adds a runtime dependency or a permission, or changes
   a format, includes its record.
-- Open: whether an accepted record may be edited later, or must be replaced
-  by a new record. Some records are meant to be completed in later steps:
-  0005, 0006, 0007, 0008, 0009, 0013, 0014 and 0017
-  ([PROMPTS.md](../development/PROMPTS.md)). The template offers the status
-  "Superseded by NNNN" for a record that a newer one replaces.
