@@ -12,9 +12,11 @@
 /android/settings.gradle.kts                 @shkriuss
 /android/build-logic/settings.gradle.kts     @shkriuss
 
-# Build checks that enforce hard rules 2, 3 and 4.
-/android/build-logic/src/main/kotlin/app/shkriuss/buildlogic/CheckApkRulesTask.kt          @shkriuss
-/android/build-logic/src/main/kotlin/app/shkriuss/buildlogic/CheckGraphicsPathUseTask.kt   @shkriuss
+# Build checks that enforce hard rules 2, 3 and 4, and the plugin that
+# connects them to the build.
+/android/build-logic/src/main/kotlin/app/shkriuss/buildlogic/CheckApkRulesTask.kt                   @shkriuss
+/android/build-logic/src/main/kotlin/app/shkriuss/buildlogic/CheckGraphicsPathUseTask.kt            @shkriuss
+/android/build-logic/src/main/kotlin/app/shkriuss/buildlogic/AndroidApplicationConventionPlugin.kt  @shkriuss
 
 # Signing configuration and key material, wherever they appear.
 # Release and preview signing are planned to run only in workflows under

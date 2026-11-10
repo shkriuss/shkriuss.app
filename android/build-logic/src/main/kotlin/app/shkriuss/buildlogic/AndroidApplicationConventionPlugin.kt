@@ -16,7 +16,8 @@ import org.gradle.kotlin.dsl.register
  *
  * Build types:
  * - `debug` for development and tests.
- * - `release`, shrunk by R8 and left unsigned. The release workflow signs it.
+ * - `release`, shrunk and optimised by R8 but not renamed, and left
+ *   unsigned. The release workflow signs it.
  * - `preview`, the same as `release` with the application ID suffix
  *   `.preview`, so it installs next to the real app. The preview workflow
  *   signs it with a throwaway key (section 13 of docs/plan/PLAN.md).
@@ -38,7 +39,13 @@ class AndroidApplicationConventionPlugin : Plugin<Project> {
                     getByName("release") {
                         isMinifyEnabled = true
                         isShrinkResources = true
-                        proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+                        // R8 shrinks and optimises, but never renames. It
+                        // keeps the source file and line number attributes
+                        // for the mapping file. See r8/app-rules.pro.
+                        proguardFiles(
+                            getDefaultProguardFile("proguard-android-optimize.txt"),
+                            isolated.rootProject.projectDirectory.file(R8_RULES).asFile,
+                        )
                         // The commit ID would make the APK depend on the Git
                         // checkout, not only on the source files.
                         vcsInfo.include = false
@@ -73,6 +80,11 @@ class AndroidApplicationConventionPlugin : Plugin<Project> {
             registerApkRulesCheck()
             registerGraphicsPathUseCheck()
         }
+    }
+
+    private companion object {
+        /** The R8 rules every app shares, relative to `android/`. */
+        const val R8_RULES = "build-logic/r8/app-rules.pro"
     }
 
     private fun Project.registerGraphicsPathUseCheck() {

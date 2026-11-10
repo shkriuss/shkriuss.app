@@ -26,20 +26,25 @@ Nothing outside section 3 of the [plan](../plan/PLAN.md) is used.
 - `android/gradle.properties`: Gradle settings.
 - `android/gradle/`: the wrapper, the version catalog, the JDK version, and
   dependency verification.
-
-Owner-only ([CODEOWNERS](../../.github/CODEOWNERS)): the wrapper, the
-verification metadata and keyring, both `settings.gradle.kts` files (they
-hold the repositories), and the two build checks `CheckApkRulesTask.kt` and
-`CheckGraphicsPathUseTask.kt`.
-- `android/build-logic/`: the convention plugins. All module build config
-  lives here. A module's own build file only names its plugins, its
-  namespace, its app ID and version, and its dependencies.
+- `android/build-logic/`: the convention plugins, and the R8 rules every
+  app shares (`r8/app-rules.pro`). All module build config lives here. A
+  module's own build file only names its plugins, its namespace, its app ID
+  and version, and its dependencies.
 - `android/core/design/`: the design system. For now, a theme stub.
 - `android/app/catalog/`: the Catalog app, `app.shkriuss.catalog`. For now,
   one screen that says "Catalog".
 
 How the modules depend on each other is in
 [architecture/modules.md](../architecture/modules.md).
+
+Owner-only ([CODEOWNERS](../../.github/CODEOWNERS)):
+
+- the wrapper, and the verification metadata and keyring,
+- both `settings.gradle.kts` files, which hold the repositories,
+- the two build checks, `CheckApkRulesTask.kt` and
+  `CheckGraphicsPathUseTask.kt`,
+- `AndroidApplicationConventionPlugin.kt`, which connects both checks to
+  the build.
 
 ## Commands
 
@@ -87,19 +92,76 @@ Compiler warnings are errors in every module and in `build-logic` itself.
 
 ## Build types
 
-| Build type | App ID | Shrunk by R8 | Signed by |
+| Build type | App ID | R8 | Signed by |
 |---|---|---|---|
 | `debug` | `app.shkriuss.<name>` | No | The machine's debug key |
-| `release` | `app.shkriuss.<name>` | Yes | The release workflow, with the suite key |
-| `preview` | `app.shkriuss.<name>.preview` | Yes | The preview workflow, with a throwaway key |
+| `release` | `app.shkriuss.<name>` | Shrinks and optimises, no renaming | The release workflow, with the suite key |
+| `preview` | `app.shkriuss.<name>.preview` | Shrinks and optimises, no renaming | The preview workflow, with a throwaway key |
 
 - `preview` is a copy of `release` with the ID suffix `.preview`, so it
   installs next to the real app (section 13 of the plan). Its version name
   ends in `-preview`, and Catalog's preview is labelled "Catalog preview".
 - Gradle never signs `release` or `preview`. The workflows sign them with
   `apksigner` (plan section 13, [ADR 0014](../adr/0014-release-flow-and-reproducible-builds.md)).
-- R8 shrinks and renames code with the default
-  `proguard-android-optimize.txt` rules.
+- R8 uses the default `proguard-android-optimize.txt` rules plus
+  `build-logic/r8/app-rules.pro`. See [R8](#r8).
+
+## R8
+
+R8 makes `release` and `preview` smaller and faster. It removes unused code
+and resources, and it optimises the code that is left.
+
+### The decision
+
+The owner decided on
+[pull request 5](https://github.com/shkriuss/shkriuss.app/pull/5):
+
+1. Keep shrinking and optimisation.
+2. Turn class and member renaming off (`-dontobfuscate`).
+3. Keep the source file and line number attributes
+   (`-keepattributes SourceFile,LineNumberTable`).
+
+Reasons:
+
+- The code is public, so renaming hides nothing.
+- There is no crash reporter, so users paste stack traces. The owner has no
+  computer to translate renamed ones.
+
+The rules are in `android/build-logic/r8/app-rules.pro`.
+
+### What a stack trace shows
+
+- Class and method names are the real ones, as in the source code.
+- The source file shows as `r8-map-id-...`, and line numbers are
+  instruction offsets, not source lines. R8 always does this while it
+  optimises. Only the release's mapping file turns them back into exact
+  files and lines.
+- Turning optimisation off (`-dontoptimize`) would give exact files and
+  lines. The owner chose against it: the APK would be 2.3 times as big, and
+  Compose is slower without R8's optimisation.
+
+### Size
+
+Catalog's unsigned release APK, from the same source, on 2026-11-10:
+
+| R8 setting | APK size | `classes.dex` |
+|---|---|---|
+| Renaming on (before) | 1,204,979 bytes | 1,083,532 bytes |
+| Renaming off (now) | 1,365,890 bytes | 1,245,284 bytes |
+| Renaming and optimisation off (rejected) | 2,755,308 bytes | 2,620,676 bytes |
+
+Turning renaming off adds 160,911 bytes, about 13 percent.
+
+### The mapping file
+
+R8 writes a mapping file for every `release` and `preview` build, at
+`app/<name>/build/outputs/mapping/<build type>/mapping.txt`. It is what
+turns a pasted stack trace back into exact files and lines. Two clean builds
+write the same mapping file, byte for byte.
+
+Open, for Phase 0, step 6: the release workflow must attach the R8 mapping
+file to every release, so that a pasted stack trace can be translated later.
+See [Open](#open).
 
 ## Tests
 
@@ -286,9 +348,11 @@ copies of the source:
 - the second build offline,
 - each with `--no-daemon --no-build-cache`.
 
-The `debug`, `release` and `preview` APKs were byte for byte the same. A
-release APK built inside the Git checkout also matched one built from a
-copy without `.git`.
+The `debug`, `release` and `preview` APKs were byte for byte the same, and
+so were the R8 mapping files. A release APK built inside the Git checkout
+also matched one built from a copy without `.git`. The check was repeated
+after each change to the build in pull request 5, last with R8 renaming
+turned off.
 
 ### What it does not cover
 
@@ -376,7 +440,9 @@ every `assemble` task, and the `debug` one also runs in `check`.
 
    Code that calls one of those five still names `PathIterator` or
    `PathHitTester` in its own class file, because a JVM method reference
-   carries its return type. So that code is still caught.
+   carries its return type. So that code is still caught. The owner
+   confirmed this list on
+   [pull request 5](https://github.com/shkriuss/shkriuss.app/pull/5).
 3. The failure message lists each class and what it refers to, and says to
    stop and ask the owner. Never add the library back, change the check, or
    work around it to make a build pass.
@@ -420,6 +486,9 @@ does.
 
 ## Open
 
-- **Obfuscation.** R8 renames classes in `release` and `preview`. That
-  makes stack traces in bug reports harder to read. It could keep the names
-  and still shrink. Not decided.
+- **Phase 0, step 6: attach the R8 mapping file to every release.** The
+  release workflow must attach `mapping.txt` from the release build to
+  every release, next to the APK, so that a pasted stack trace can be
+  translated later. Owner decision on
+  [pull request 5](https://github.com/shkriuss/shkriuss.app/pull/5). See
+  [The mapping file](#the-mapping-file).
