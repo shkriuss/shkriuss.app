@@ -1,0 +1,54 @@
+# The only place where dependency versions are set.
+# Every entry stays within the stack in section 3 of docs/plan/PLAN.md.
+# A change here also updates gradle/verification-metadata.xml in the same
+# pull request (hard rule 5 in CLAUDE.md).
+
+[versions]
+agp = "9.5.1"
+kotlin = "2.4.21"
+compose-bom = "2026.09.00"
+activity = "1.13.0"
+junit = "4.13.2"
+robolectric = "4.17"
+# The Android image that Robolectric 4.17 runs for SDK 37. It is resolved
+# by Gradle, so dependency verification checks it. Change it together with
+# robolectric. Lint suggests newer images, but those belong to newer
+# Robolectric releases, so that lint check is suppressed on this line only.
+#noinspection NewerVersionAvailable
+robolectric-android-all = "17-robolectric-15733970-i7"
+roborazzi = "1.78.0"
+# Not direct dependencies. Used as version constraints only.
+# Compose and Activity ask for Lifecycle 2.9, whose lint checks no longer
+# load in this lint version. 2.11.0 fixes them.
+lifecycle = "2.11.0"
+# Compose UI tests ask for Espresso 3.5, which fails on the Android 17
+# image. 3.7.0 works.
+espresso = "3.7.0"
+
+[libraries]
+# Gradle plugins, used only by build-logic.
+android-gradle-plugin = { module = "com.android.tools.build:gradle", version.ref = "agp" }
+kotlin-gradle-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
+compose-compiler-gradle-plugin = { module = "org.jetbrains.kotlin:compose-compiler-gradle-plugin", version.ref = "kotlin" }
+roborazzi-gradle-plugin = { module = "io.github.takahirom.roborazzi:roborazzi-gradle-plugin", version.ref = "roborazzi" }
+
+# Runtime.
+compose-bom = { module = "androidx.compose:compose-bom", version.ref = "compose-bom" }
+compose-ui = { module = "androidx.compose.ui:ui" }
+compose-foundation = { module = "androidx.compose.foundation:foundation" }
+compose-material3 = { module = "androidx.compose.material3:material3" }
+activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activity" }
+lifecycle-runtime = { module = "androidx.lifecycle:lifecycle-runtime", version.ref = "lifecycle" }
+
+# Tests.
+junit = { module = "junit:junit", version.ref = "junit" }
+robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
+robolectric-android-all = { module = "org.robolectric:android-all-instrumented", version.ref = "robolectric-android-all" }
+compose-ui-test-junit4 = { module = "androidx.compose.ui:ui-test-junit4" }
+espresso-core = { module = "androidx.test.espresso:espresso-core", version.ref = "espresso" }
+roborazzi = { module = "io.github.takahirom.roborazzi:roborazzi", version.ref = "roborazzi" }
+
+[plugins]
+# Used only to compile build-logic itself.
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlin-sam-with-receiver = { id = "org.jetbrains.kotlin.plugin.sam.with.receiver", version.ref = "kotlin" }

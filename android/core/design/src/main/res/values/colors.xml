@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Background in the light theme (ADR 0017). -->
+    <color name="shk_window_background">#FFFFFFFF</color>
+</resources>

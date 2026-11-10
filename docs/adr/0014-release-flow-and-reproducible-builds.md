@@ -47,6 +47,18 @@
    - The `release` environment needs the owner's approval.
 6. Planned workflows: `ci`, `pr-preview`, `protected-paths`, `release`,
    `site`, and later `backend`.
+7. Reproducible builds (Phase 0, step 3):
+   - Gradle never signs release or preview APKs. The compared file is the
+     unsigned APK.
+   - Version control info is left out of the APK, so it depends only on
+     the source files, not on the `.git` folder.
+   - AGP's dependency info block, encrypted for Google Play, is left out.
+   - Everything that goes into a build is pinned: Gradle with a checksum,
+     every dependency (see
+     [0020](0020-dependency-verification.md)), the JDK, the SDK platform
+     and the build tools.
+   - The details, and how two clean builds were compared, are in
+     [build.md](../development/build.md#reproducible-builds).
 
 ## Options rejected
 

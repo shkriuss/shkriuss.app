@@ -7,6 +7,10 @@ captures/
 .cxx/
 local.properties
 
+# Gradle writes the dependency verification keyring twice. Only the readable
+# copy, android/gradle/verification-keyring.keys, is committed.
+android/gradle/verification-keyring.gpg
+
 # Signing material never belongs in the repository
 *.jks
 *.keystore

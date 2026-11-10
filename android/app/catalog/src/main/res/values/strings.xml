@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The app's name under its icon. -->
+    <string name="app_name">Catalog</string>
+    <!-- The title at the top of the Catalog screen. -->
+    <string name="catalog_title">Catalog</string>
+</resources>

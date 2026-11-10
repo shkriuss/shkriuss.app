@@ -48,7 +48,8 @@
   reminders.
 - Stock Android users install without Google developer registration. See
   [0016](0016-no-google-developer-registration-for-now.md).
-- Open: the exact compile SDK, 37.0 or a later minor, that the Android
-  Gradle Plugin and Robolectric support. In a test build, `compileSdk = 37`
-  with `platforms;android-37.0` and `build-tools;36.0.0` worked
-  (section 17).
+- Settled in Phase 0, step 3 (section 17): `compileSdk = 37` builds against
+  the SDK platform `android-37.0`, with build tools 36.0.0, the default of
+  Android Gradle Plugin 9.5.1. Robolectric 4.17 runs its Android 17 image
+  for SDK 37. The settings are in
+  [build.md](../development/build.md).

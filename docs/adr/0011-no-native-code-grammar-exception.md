@@ -28,7 +28,16 @@
 
 ## Consequences
 
-- Every other app and module ships no native code.
+- Every other app and module ships no native code. Every APK build checks
+  this and fails if a `.so` file gets in
+  ([build.md](../development/build.md#apk-rules-check)).
+- Compose UI depends on `androidx.graphics:graphics-path`, which ships a
+  small JNI library. The build leaves it out of every APK. Compose loads it
+  only when code walks through a `Path`, which no module does. If one ever
+  did, the app would crash. Details in
+  [build.md](../development/build.md#native-code-from-compose).
+- Open: whether to keep leaving that library out, or to allow it as a
+  second exception. The owner decides.
 - Before any Grammar code, its Rust build, its supply chain and its memory
   tagging tests need their own design doc and the owner's approval
   ([PROMPTS.md](../development/PROMPTS.md)).
