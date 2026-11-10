@@ -26,11 +26,10 @@
 
 ## Options rejected
 
-- **The network permission in every data app** (decision 4, option a).
-  Every app could then reach the network. With no permission declared,
-  anyone can check on any Android that a data app cannot connect. Only one
-  small app needs a network audit. The cost is accepted: more work, and
-  sync needs a second app.
+- **The network permission in every data app.** Every app could then reach
+  the network. With no permission declared, anyone can check on any Android
+  that a data app cannot connect. Only one small app needs a network audit.
+  The cost is accepted: more work, and sync needs a second app.
 
 ## Consequences
 

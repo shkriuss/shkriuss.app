@@ -50,9 +50,9 @@
 
 ## Options rejected
 
-- **A cloud key service with a non-exportable key** (decision 5, option b).
-  It needs a Google, AWS or Azure account, and it allows no offline backup.
-  A move to one stays possible later, through key rotation.
+- **A cloud key service with a non-exportable key.** It needs a Google, AWS
+  or Azure account, and it allows no offline backup. A move to one stays
+  possible later, through key rotation.
 - **One key per app.** The Sync app and the data apps talk through a
   signature-level permission, which needs the same key. One key is also one
   thing to guard.
