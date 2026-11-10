@@ -168,10 +168,30 @@ exit 0
 
 <!-- SETUP SCRIPT END -->
 
+## What Phase 0, step 3 found
+
+- The packages the setup script installs are the right ones:
+  `platforms;android-37.0` for compile SDK 37, and `build-tools;36.0.0`,
+  which the build pins. See [build.md](build.md).
+- Robolectric now runs offline. Gradle downloads its Android image and
+  checks it. The two Robolectric lines in the init script are no longer
+  used. They do no harm.
+- Two hosts are blocked here:
+  - `downloads.gradle.org`, where Gradle's `.sha256` files now live. The
+    checksums on `services.gradle.org` work instead.
+  - `repo.gradle.org`. Android Lint asked it for the newest Gradle version.
+    The owner turned off lint's version lookups (see [build.md](build.md#lint)),
+    so lint no longer asks, and the build does not need this host.
+- Key server lookups failed now and then while Gradle wrote the
+  verification metadata. A second run with `--refresh-keys` worked.
+- No build download answered 429. The build fetched every Maven Central
+  file through the mirror and never contacted `repo.maven.apache.org`.
+  Direct test requests to `repo.maven.apache.org` from the same session did
+  answer 429, so the mirror is still needed.
+
 ## Open
 
 - `sdkmanager` is deprecated in favour of the Android CLI. Switch the setup
   script when the CLI is ready.
-- The exact compile SDK and build tools to install. A test build worked with
-  `platforms;android-37.0` and `build-tools;36.0.0`. Phase 0, step 3
-  confirms them.
+- Whether to remove the two unused Robolectric lines from the init script.
+  Only the owner can change the environment's settings.

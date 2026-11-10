@@ -2,9 +2,12 @@
 
 - Status: Accepted
 - Date: 2026-11-10
-- Source: [plan](../plan/PLAN.md) sections 2 (decision 7), 3 and 16, and
-  the owner's review of
-  [pull request 4](https://github.com/shkriuss/shkriuss.app/pull/4)
+- Source: [plan](../plan/PLAN.md) sections 2 (decision 7), 3 and 16, the
+  owner's review of
+  [pull request 4](https://github.com/shkriuss/shkriuss.app/pull/4), and the
+  owner's decision on
+  [pull request 5](https://github.com/shkriuss/shkriuss.app/pull/5)
+  (point 4)
 
 ## Context
 
@@ -20,15 +23,29 @@
 2. The one exception is Grammar, `android/app/grammar`. It uses the Harper
    engine, written in Rust. It runs on the device, with no language model.
 3. Grammar is the only app with native code. It is built last, in Phase 9.
+4. Native code that a library brings in is left out of the APK. It is
+   never a second exception. Today this is the JNI library of
+   `androidx.graphics:graphics-path`, which Compose UI depends on.
 
 ## Options rejected
 
 - **A language model for Grammar.** On-device models are large, and their
   runtimes are C++. A hosted model would send text to a third party.
+- **Allowing the JNI library of `androidx.graphics:graphics-path` as a
+  second exception.** The plan allows no C or C++. GrapheneOS turns memory
+  tagging on by default only for user-installed apps without native
+  libraries.
 
 ## Consequences
 
-- Every other app and module ships no native code.
+- Every other app and module ships no native code. Every APK build checks
+  this and fails if a `.so` file gets in
+  ([build.md](../development/build.md#apk-rules-check)).
+- Compose loads the graphics-path library only when code walks through a
+  `Path`. Without the library, that code would crash on every Android
+  version. A second build check reads every class an app runs and fails if
+  any can reach that library. If it fails, stop and ask the owner. Details
+  in [build.md](../development/build.md#native-code-from-compose).
 - Before any Grammar code, its Rust build, its supply chain and its memory
   tagging tests need their own design doc and the owner's approval
   ([PROMPTS.md](../development/PROMPTS.md)).

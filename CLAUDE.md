@@ -58,7 +58,9 @@ Run from `android/`. Keep this list correct when tasks change.
 - `./gradlew :app:<name>:assembleDebug` build one app.
 - `./gradlew verifyRoborazziDebug` compare screenshots with the committed ones.
 - `./gradlew recordRoborazziDebug` re-record screenshots after an intended UI change.
-- `./gradlew --write-verification-metadata sha256,pgp help` after a dependency change.
+- After a dependency change: `./gradlew clean`, then
+  `./gradlew --write-verification-metadata sha256,pgp --export-keys help check verifyRoborazziDebug assembleDebug assembleRelease assemblePreview`.
+  Then follow the checks in `docs/development/build.md`.
 
 Emulator tests, signing and releases run only in GitHub Actions.
 

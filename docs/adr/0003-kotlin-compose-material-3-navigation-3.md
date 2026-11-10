@@ -61,11 +61,16 @@ record of their own. Room and DataStore are in
   request updates `android/gradle/libs.versions.toml` and
   `android/gradle/verification-metadata.xml` (hard rule 5 in
   [CLAUDE.md](../../CLAUDE.md)).
-- Open: exact versions are pinned in Phase 0.
-- Open: Roborazzi rendering with the current Robolectric Android image. In
-  a test, Robolectric 4.17 ran on its Android 17 image with JDK 21 only
-  after adding the test JVM flags
-  `--add-opens=java.base/java.io=ALL-UNNAMED` and
-  `--add-exports=java.base/jdk.internal.access=ALL-UNNAMED`. Check whether
-  both are still needed, and whether a newer release removes the need
-  (section 17).
+- Exact versions were pinned in Phase 0, step 3, in
+  `android/gradle/libs.versions.toml`: Android Gradle Plugin 9.5.1 with
+  Gradle 9.6.1 (AGP 9.5.1 needs at least 9.6.0), Kotlin 2.4.21, Compose
+  BOM 2026.09.00, Robolectric 4.17, Roborazzi 1.78.0. The list and the
+  reasons are in [build.md](../development/build.md).
+- Settled in Phase 0, step 3 (section 17): Roborazzi renders with
+  Robolectric 4.17's Android 17 image on JDK 21. Only one test JVM flag is
+  still needed, `--add-exports=java.base/jdk.internal.access=ALL-UNNAMED`.
+  `--add-opens=java.base/java.io=ALL-UNNAMED` is not. No newer stable
+  Robolectric exists yet; 4.18 is a beta.
+- Compose UI tests need Espresso 3.7.0 or later on the Android 17 image,
+  and Lifecycle 2.11.0 or later for its lint checks to load. Both are set
+  as version constraints, not as new dependencies.

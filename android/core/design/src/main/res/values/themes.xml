@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        The window theme for every app. It only sets the window background,
+        so the screen does not flash white in dark theme before Compose
+        draws. Everything else is drawn by ShkTheme.
+    -->
+    <style name="Theme.Shk" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/shk_window_background</item>
+    </style>
+</resources>

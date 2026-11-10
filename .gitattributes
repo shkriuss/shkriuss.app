@@ -1,6 +1,9 @@
 # Text files are stored and checked out with LF line endings.
 * text=auto eol=lf
 
+# Windows batch files, such as android/gradlew.bat, need CRLF to run.
+*.bat text eol=crlf
+
 # Images
 *.png binary
 *.jpg binary
