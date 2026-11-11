@@ -358,8 +358,9 @@ around it.
 - The box of a checkbox and the ring of a radio button grow with the font
   size, by the rule for an icon next to text (owner decision on pull
   request 14). See [Icons](#icons).
-- The switch keeps its size at every font size (owner decision on pull
-  request 14). So does the slider, whose track already fills the width.
+- The switch and the slider keep their size at every font size (owner
+  decisions on pull request 14). The slider's track already fills the
+  width.
 
 ### TalkBack
 
@@ -623,6 +624,3 @@ whole in the next.
   then.
 - Focus uses Material 3's light state layer. There is no separate focus
   ring for keyboards.
-- The owner's decision on pull request 14 names the checkbox, the radio
-  button and the switch, not the slider. The slider keeps Material 3's
-  size, as before.
