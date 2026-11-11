@@ -375,10 +375,14 @@ class ShkComponentsTest(private val case: ComponentCase, private val fontScale: 
                 canBeDisabled = false,
                 icon = IconCase(STATE_ICON, nextToText = true),
             ) { label, _, onClick, icon ->
-                ShkEmptyState(title = STATE_TITLE, icon = icon, actionText = label, onAction = onClick)
+                ShkEmptyState(
+                    title = STATE_TITLE,
+                    icon = icon,
+                    action = ShkStateAction(text = label, onClick = onClick),
+                )
             },
             ComponentCase("ErrorStateButton", Role.Button, ButtonShape, canBeDisabled = false) { label, _, onClick, _ ->
-                ShkErrorState(title = STATE_TITLE, actionText = label, onAction = onClick)
+                ShkErrorState(title = STATE_TITLE, action = ShkStateAction(text = label, onClick = onClick))
             },
         )
     }

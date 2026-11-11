@@ -1,6 +1,11 @@
 package app.shkriuss.catalog
 
+import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -8,12 +13,15 @@ import app.shkriuss.core.design.ShkEmptyState
 import app.shkriuss.core.design.ShkErrorState
 import app.shkriuss.core.design.ShkLoadingState
 import app.shkriuss.core.design.ShkScreen
+import app.shkriuss.core.design.ShkStateAction
+import app.shkriuss.core.design.ShkSwitch
 
 /**
  * The empty state with and without an icon and a button, the loading
  * state, and the error state with and without a button, each also with
- * long text. In an app each fills the screen or list it stands in for;
- * here they sit in the page. Their buttons do nothing when tapped.
+ * long text, then a loading and an error state to try. In an app each
+ * fills the screen or list it stands in for; here they sit in the page.
+ * Only the switch and the button under "Try it" do something when tapped.
  */
 @Composable
 fun ContentStatesPage(modifier: Modifier = Modifier) {
@@ -29,8 +37,7 @@ fun ContentStatesPage(modifier: Modifier = Modifier) {
                         title = stringResource(R.string.sample_no_notes),
                         body = stringResource(R.string.sample_no_notes_body),
                         icon = painterResource(R.drawable.sample_icon_note),
-                        actionText = stringResource(R.string.sample_new_note),
-                        onAction = {},
+                        action = ShkStateAction(text = stringResource(R.string.sample_new_note), onClick = {}),
                     )
                 },
                 ComponentState(R.string.state_without_button) {
@@ -48,8 +55,7 @@ fun ContentStatesPage(modifier: Modifier = Modifier) {
                         title = stringResource(R.string.sample_long_empty_title),
                         body = stringResource(R.string.sample_long_empty_body),
                         icon = painterResource(R.drawable.sample_icon_note),
-                        actionText = stringResource(R.string.sample_new_note),
-                        onAction = {},
+                        action = ShkStateAction(text = stringResource(R.string.sample_new_note), onClick = {}),
                     )
                 },
             ),
@@ -74,8 +80,7 @@ fun ContentStatesPage(modifier: Modifier = Modifier) {
                     ShkErrorState(
                         title = stringResource(R.string.sample_backup_error),
                         body = stringResource(R.string.sample_backup_error_body),
-                        actionText = stringResource(R.string.sample_try_again),
-                        onAction = {},
+                        action = ShkStateAction(text = stringResource(R.string.sample_try_again), onClick = {}),
                     )
                 },
                 ComponentState(R.string.state_without_button) {
@@ -88,11 +93,38 @@ fun ContentStatesPage(modifier: Modifier = Modifier) {
                     ShkErrorState(
                         title = stringResource(R.string.sample_long_error_title),
                         body = stringResource(R.string.sample_long_error_body),
-                        actionText = stringResource(R.string.sample_try_again),
-                        onAction = {},
+                        action = ShkStateAction(text = stringResource(R.string.sample_try_again), onClick = {}),
                     )
                 },
+                ComponentState(R.string.state_try_states) { StatesToTry() },
             ),
         )
+    }
+}
+
+/**
+ * An error state that turns into a loading state, as a screen does when
+ * it tries again. "Try again" and the switch show the loading state; the
+ * switch shows the error again. TalkBack announces each state as it
+ * appears, so the owner can hear the announcements on a phone.
+ */
+@Composable
+private fun StatesToTry() {
+    var loading by rememberSaveable { mutableStateOf(false) }
+    Column {
+        ShkSwitch(
+            text = stringResource(R.string.sample_show_loading),
+            checked = loading,
+            onCheckedChange = { loading = it },
+        )
+        if (loading) {
+            ShkLoadingState(text = stringResource(R.string.sample_try_loading))
+        } else {
+            ShkErrorState(
+                title = stringResource(R.string.sample_try_error),
+                body = stringResource(R.string.sample_try_error_body),
+                action = ShkStateAction(text = stringResource(R.string.sample_try_again), onClick = { loading = true }),
+            )
+        }
     }
 }

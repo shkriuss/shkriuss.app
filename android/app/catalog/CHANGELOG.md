@@ -43,6 +43,14 @@ development.
   icon and a button, the loading state, and the error state with and
   without a button, each also with long text. TalkBack reads a loading
   state as its text and "in progress".
+- On Empty, loading and error, an error state to try turns into a
+  loading state and back. TalkBack announces each loading and error state
+  as it appears.
+- The text of list items, section headers, checkboxes, switches and
+  radio buttons now starts at the same edge as the page title. Only the
+  pressed highlight reaches a little past it.
+- Dividers are a lighter grey, the new divider colour. Colours lists it,
+  with its contrast on each background.
 
 ## 0.1.0 (2026-11-11)
 

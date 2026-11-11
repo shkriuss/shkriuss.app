@@ -10,6 +10,7 @@
     <string name="token_text" translatable="false">text</string>
     <string name="token_text_secondary" translatable="false">textSecondary</string>
     <string name="token_outline" translatable="false">outline</string>
+    <string name="token_divider" translatable="false">divider</string>
     <string name="token_accent" translatable="false">accent</string>
     <string name="token_text_on_accent" translatable="false">textOnAccent</string>
     <string name="token_error" translatable="false">error</string>

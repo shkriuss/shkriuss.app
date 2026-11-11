@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsActions
@@ -146,7 +147,9 @@ class ShkContentComponentsTest(private val fontScale: Float) {
     @Test
     fun aSectionHeaderIsAHeadingAndLongTextWraps() {
         show {
-            Box(Modifier.width(NARROW_WIDTH)) { ShkSectionHeader(text = LONG_HEADER, modifier = Modifier.testTag(TARGET)) }
+            Box(Modifier.width(NARROW_WIDTH)) {
+                ShkSectionHeader(text = LONG_HEADER, modifier = Modifier.testTag(TARGET))
+            }
         }
 
         compose.onNodeWithTag(TARGET).assert(isHeading())
@@ -192,7 +195,7 @@ class ShkContentComponentsTest(private val fontScale: Float) {
     @Test
     fun theWordsOfAnEmptyStateAreReadAsOneItemAndItsButtonOnItsOwn() {
         show {
-            ShkEmptyState(title = TITLE, body = BODY, icon = SizeOnlyPainter(), actionText = ACTION, onAction = {})
+            ShkEmptyState(title = TITLE, body = BODY, icon = SizeOnlyPainter(), action = SAMPLE_ACTION)
         }
 
         assertEquals(listOf(TITLE, BODY), texts(compose.onNode(hasText(TITLE)).fetchSemanticsNode().config))
@@ -202,7 +205,7 @@ class ShkContentComponentsTest(private val fontScale: Float) {
 
     @Test
     fun theWordsOfAnErrorStateAreReadAsOneItemAndItsIconIsDecorative() {
-        show { ShkErrorState(title = TITLE, body = BODY, actionText = ACTION, onAction = {}) }
+        show { ShkErrorState(title = TITLE, body = BODY, action = SAMPLE_ACTION) }
 
         assertEquals(listOf(TITLE, BODY), texts(compose.onNode(hasText(TITLE)).fetchSemanticsNode().config))
         assertEquals(listOf(ACTION), texts(compose.onNode(hasClickAction()).fetchSemanticsNode().config))
@@ -231,6 +234,25 @@ class ShkContentComponentsTest(private val fontScale: Float) {
         // Material 3's circle on its own would be a second item, read as
         // "in progress" without the text.
         compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo)).assertCountEquals(1)
+    }
+
+    @Test
+    fun theLoadingAndTheErrorStateAreAnnouncedPolitelyWithTheirWords() {
+        show {
+            Column {
+                ShkLoadingState(text = LOADING)
+                ShkErrorState(title = TITLE, body = BODY, action = SAMPLE_ACTION)
+            }
+        }
+
+        // The live region is the item that holds the words, so the
+        // announcement says them, and there is one per state, so nothing
+        // is announced twice.
+        val polite = SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite)
+        compose.onNode(hasText(LOADING)).assert(polite)
+        compose.onNode(hasText(TITLE)).assert(polite)
+        compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.LiveRegion), useUnmergedTree = true)
+            .assertCountEquals(2)
     }
 
     @Test
@@ -295,8 +317,8 @@ class ShkContentComponentsTest(private val fontScale: Float) {
 
     /** No node, merged or not, has a content description: every icon is decorative. */
     private fun assertNoContentDescriptions() {
-        compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.ContentDescription), useUnmergedTree = true)
-            .assertCountEquals(0)
+        val described = SemanticsMatcher.keyIsDefined(SemanticsProperties.ContentDescription)
+        compose.onAllNodes(described, useUnmergedTree = true).assertCountEquals(0)
     }
 
     /** What TalkBack reads from a node: its descriptions and its text. */
@@ -335,12 +357,15 @@ class ShkContentComponentsTest(private val fontScale: Float) {
         /** Narrower than any phone, so long text wraps at every font scale. */
         private val NARROW_WIDTH = 200.dp
 
+        /** The button of the sample states. It does nothing. */
+        private val SAMPLE_ACTION = ShkStateAction(text = ACTION, onClick = {})
+
         private val STATES = listOf(
             StateCase("EmptyState", listOf(LONG_TITLE, LONG_BODY), hasButton = true) {
-                ShkEmptyState(title = LONG_TITLE, body = LONG_BODY, icon = SizeOnlyPainter(), actionText = ACTION, onAction = {})
+                ShkEmptyState(title = LONG_TITLE, body = LONG_BODY, icon = SizeOnlyPainter(), action = SAMPLE_ACTION)
             },
             StateCase("ErrorState", listOf(LONG_TITLE, LONG_BODY), hasButton = true) {
-                ShkErrorState(title = LONG_TITLE, body = LONG_BODY, actionText = ACTION, onAction = {})
+                ShkErrorState(title = LONG_TITLE, body = LONG_BODY, action = SAMPLE_ACTION)
             },
             StateCase("LoadingState", listOf(LONG_LOADING), hasButton = false) {
                 ShkLoadingState(text = LONG_LOADING)

@@ -26,6 +26,12 @@ class ShkColors internal constructor(
     val textSecondary: Color,
     /** Borders of raised surfaces, fields and other controls. Never for text. */
     val outline: Color,
+    /**
+     * Lines that only separate content, such as a divider between list
+     * items. Lighter than [outline], because it is decorative. Never for
+     * text or the border of a control.
+     */
+    val divider: Color,
     /** The teal accent: main actions, selection, links and focus. */
     val accent: Color,
     /** Text and icons on a filled accent area. */
@@ -46,6 +52,7 @@ internal val LightShkColors = ShkColors(
     text = Color(0xFF131514),
     textSecondary = Color(0xFF4A4F4C),
     outline = Color(0xFF7A807C),
+    divider = Color(0xFFB8BCB9),
     accent = Color(0xFF00695C),
     textOnAccent = Color(0xFFFFFFFF),
     error = Color(0xFFB3261E),
@@ -61,6 +68,7 @@ internal val DarkShkColors = ShkColors(
     text = Color(0xFFECEEEC),
     textSecondary = Color(0xFFA9AEAA),
     outline = Color(0xFF6F7571),
+    divider = Color(0xFF3B3F3D),
     accent = Color(0xFF5FD6C2),
     textOnAccent = Color(0xFF00201B),
     error = Color(0xFFFFB4AB),

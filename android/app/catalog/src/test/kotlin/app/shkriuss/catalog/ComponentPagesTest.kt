@@ -1,12 +1,14 @@
 package app.shkriuss.catalog
 
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
@@ -175,9 +177,36 @@ class ComponentPagesTest {
         back()
 
         open(CatalogPage.ContentStates)
-        compose.onNode(hasText(text(R.string.sample_loading_notes)))
+        val inProgress = SemanticsMatcher.expectValue(
+            SemanticsProperties.ProgressBarRangeInfo,
+            ProgressBarRangeInfo.Indeterminate,
+        )
+        compose.onNode(hasText(text(R.string.sample_loading_notes))).performScrollTo().assert(inProgress)
+    }
+
+    @Test
+    fun statesToTrySwapAndAreAnnouncedPolitely() {
+        open(CatalogPage.ContentStates)
+        // These words are only under "Try it".
+        val error = hasText(text(R.string.sample_try_error))
+        val loading = hasText(text(R.string.sample_try_loading))
+        val polite = SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite)
+        compose.onNode(error).performScrollTo().assert(polite)
+        compose.onAllNodes(loading).assertCountEquals(0)
+
+        // "Try again" is on three error states; the one to try is the last.
+        compose.onAllNodes(hasText(text(R.string.sample_try_again)) and hasClickAction())
+            .onLast()
             .performScrollTo()
-            .assert(SemanticsMatcher.expectValue(SemanticsProperties.ProgressBarRangeInfo, ProgressBarRangeInfo.Indeterminate))
+            .performClick()
+        compose.onNode(loading).assert(polite)
+        compose.onAllNodes(error).assertCountEquals(0)
+
+        compose.onNode(hasText(text(R.string.sample_show_loading)) and hasClickAction())
+            .performScrollTo()
+            .assertIsOn()
+            .performClick()
+        compose.onNode(error).assert(polite)
     }
 
     private fun text(id: Int): String = compose.activity.getString(id)

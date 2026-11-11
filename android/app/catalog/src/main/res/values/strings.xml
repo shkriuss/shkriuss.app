@@ -46,7 +46,7 @@
     <string name="colors_intro">The palette of the theme in use. Turn dark theme on or off in the system settings to see the other one.</string>
     <string name="colors_tokens_heading">Tokens</string>
     <string name="colors_pairs_heading">Text on backgrounds</string>
-    <string name="colors_pairs_intro">Every text colour needs at least 4.5:1 on every background. The outline needs at least 3:1.</string>
+    <string name="colors_pairs_intro">Every text colour needs at least 4.5:1 on every background. The outline needs at least 3:1. The divider, a decorative line, needs at least 1.5:1 and less than the outline.</string>
     <string name="colors_accent_heading">Text on accent</string>
     <!-- A token's code name and its value, for example "accent · #00695C". -->
     <string name="colors_token_value">%1$s · %2$s</string>
@@ -60,6 +60,7 @@
     <string name="color_text">Text</string>
     <string name="color_text_secondary">Secondary text</string>
     <string name="color_outline">Outline</string>
+    <string name="color_divider">Divider</string>
     <string name="color_accent">Accent</string>
     <string name="color_text_on_accent">Text on accent</string>
     <string name="color_error">Error</string>
@@ -163,6 +164,7 @@
     <string name="state_without_button">Without a button</string>
     <string name="state_title_only">Title only</string>
     <string name="state_loading">Loading</string>
+    <string name="state_try_states">Try it: tap Try again, or turn the switch on and off. With TalkBack on, each state is announced as it appears.</string>
 
     <!-- Component pages: the words on the sample components. -->
     <string name="sample_save">Save</string>
@@ -237,6 +239,10 @@
     <string name="sample_load_error">Could not show the notes</string>
     <string name="sample_load_error_body">Close the app and open it again.</string>
     <string name="sample_long_error_title">Could not open the backup file you chose</string>
+    <string name="sample_show_loading">Show loading</string>
+    <string name="sample_try_loading">Loading the list</string>
+    <string name="sample_try_error">Could not load the list</string>
+    <string name="sample_try_error_body">Check that the file is still there.</string>
     <string name="sample_long_error_body">The file is damaged, or it is not a backup made by this app. Choose another file.</string>
 
     <!-- Buttons page. -->
@@ -298,7 +304,7 @@
     <string name="divider_use">A thin line between groups, where space alone does not show where one ends. TalkBack skips it.</string>
 
     <!-- Empty, loading and error page. -->
-    <string name="states_intro">What a screen or a list shows in place of its content. In an app it fills that space; here it sits in the page. The buttons do nothing when tapped.</string>
+    <string name="states_intro">What a screen or a list shows in place of its content. In an app it fills that space; here it sits in the page. Only the switch and the button under Try it do something when tapped.</string>
     <string name="empty_state_title">Empty state</string>
     <string name="empty_state_use">When there is nothing yet, such as before the first note. It says what is missing and what to do.</string>
     <string name="loading_state_title">Loading state</string>

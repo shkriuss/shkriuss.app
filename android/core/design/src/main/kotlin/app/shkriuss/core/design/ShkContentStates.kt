@@ -17,8 +17,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
@@ -32,10 +34,9 @@ import androidx.compose.ui.unit.dp
  * [ShkLoadingState]. When it could not be shown, use [ShkErrorState].
  *
  * [title] says what is missing. [body] is an optional line on what to do
- * about it. [icon] is optional and decorative. Pass [actionText] and
- * [onAction] together for a button that does it, such as "New note". Leave
- * the button out when the screen already has a floating action button for
- * the same action.
+ * about it. [icon] is optional and decorative. Pass [action] for a button
+ * that does it, such as "New note". Leave the button out when the screen
+ * already has a floating action button for the same action.
  *
  * It fills the width it is given and centres its content. Give it the
  * whole height of the screen or list, for example with `weight(1f)`, to
@@ -48,16 +49,15 @@ fun ShkEmptyState(
     modifier: Modifier = Modifier,
     body: String? = null,
     icon: Painter? = null,
-    actionText: String? = null,
-    onAction: (() -> Unit)? = null,
+    action: ShkStateAction? = null,
 ) {
     StateMessage(
         title = title,
         body = body,
         icon = icon,
         iconColor = ShkTheme.colors.textSecondary,
-        actionText = actionText,
-        onAction = onAction,
+        announce = false,
+        action = action,
         modifier = modifier,
     )
 }
@@ -69,7 +69,9 @@ fun ShkEmptyState(
  *
  * [text] says what is loading, such as "Loading notes". It is required,
  * so TalkBack never says only "in progress": it reads the text and "in
- * progress" as one item.
+ * progress" as one item. It is a status message (WCAG 2.2, success
+ * criterion 4.1.3), so TalkBack also announces it when it appears, after
+ * what it is saying.
  *
  * A circle in the accent colour turns above the text. It keeps Material
  * 3's size, 40dp, at every font size; the text grows and wraps. It fills
@@ -81,7 +83,10 @@ fun ShkLoadingState(text: String, modifier: Modifier = Modifier) {
         modifier = modifier
             .fillMaxWidth()
             .padding(vertical = ShkSpacing.ExtraLarge)
-            .semantics(mergeDescendants = true) { progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate },
+            .semantics(mergeDescendants = true) {
+                progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate
+                liveRegion = LiveRegionMode.Polite
+            },
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -103,36 +108,51 @@ fun ShkLoadingState(text: String, modifier: Modifier = Modifier) {
  * [ShkTextField] instead.
  *
  * [title] says what went wrong, in plain words. [body] is an optional line
- * on why, or what to do. Pass [actionText] and [onAction] together for a
- * button that tries again or fixes it, such as "Try again".
+ * on why, or what to do. Pass [action] for a button that tries again or
+ * fixes it, such as "Try again".
  *
  * It shows the suite's error icon in the error colour, so the state does
- * not rely on the words alone. The icon is decorative. Otherwise it is
- * laid out, read by TalkBack and grows as [ShkEmptyState] does.
+ * not rely on the words alone. The icon is decorative. It is a status
+ * message (WCAG 2.2, success criterion 4.1.3), so TalkBack announces the
+ * title and the body when it appears, after what it is saying. Otherwise
+ * it is laid out, read by TalkBack and grows as [ShkEmptyState] does.
  */
 @Composable
 fun ShkErrorState(
     title: String,
     modifier: Modifier = Modifier,
     body: String? = null,
-    actionText: String? = null,
-    onAction: (() -> Unit)? = null,
+    action: ShkStateAction? = null,
 ) {
     StateMessage(
         title = title,
         body = body,
         icon = painterResource(R.drawable.shk_icon_error),
         iconColor = ShkTheme.colors.error,
-        actionText = actionText,
-        onAction = onAction,
+        announce = true,
+        action = action,
         modifier = modifier,
     )
 }
 
 /**
+ * The button of an empty or an error state: the words on it and what a
+ * tap does. They come as one value, so a state can never show a button
+ * that does nothing, or an action without its words (owner decision on
+ * pull request 15).
+ */
+class ShkStateAction(
+    /** The words on the button, such as "New note" or "Try again". */
+    val text: String,
+    /** What a tap on the button does. */
+    val onClick: () -> Unit,
+)
+
+/**
  * The layout of the empty and the error state: the icon, the title and
  * the body, centred one under the other, and the button under them.
- * TalkBack reads the title and the body as one item.
+ * TalkBack reads the title and the body as one item. With [announce], it
+ * also announces them politely when they appear.
  */
 @Composable
 private fun StateMessage(
@@ -140,11 +160,10 @@ private fun StateMessage(
     body: String?,
     icon: Painter?,
     iconColor: Color,
-    actionText: String?,
-    onAction: (() -> Unit)?,
+    announce: Boolean,
+    action: ShkStateAction?,
     modifier: Modifier,
 ) {
-    require((actionText == null) == (onAction == null)) { "Pass actionText and onAction together, or neither" }
     val colors = ShkTheme.colors
     Column(
         modifier = modifier
@@ -163,7 +182,9 @@ private fun StateMessage(
             Spacer(Modifier.height(ShkSpacing.Large))
         }
         Column(
-            modifier = Modifier.semantics(mergeDescendants = true) {},
+            modifier = Modifier.semantics(mergeDescendants = true) {
+                if (announce) liveRegion = LiveRegionMode.Polite
+            },
             verticalArrangement = Arrangement.spacedBy(ShkSpacing.Small),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
@@ -172,9 +193,9 @@ private fun StateMessage(
                 CentredText(text = body, style = ShkTextStyle.Body, color = colors.textSecondary)
             }
         }
-        if (actionText != null && onAction != null) {
+        if (action != null) {
             Spacer(Modifier.height(ShkSpacing.Large))
-            ShkTonalButton(text = actionText, onClick = onAction)
+            ShkTonalButton(text = action.text, onClick = action.onClick)
         }
     }
 }

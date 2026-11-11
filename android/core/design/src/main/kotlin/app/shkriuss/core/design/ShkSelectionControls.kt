@@ -6,9 +6,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -25,7 +22,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
@@ -200,8 +196,9 @@ fun ShkRadioGroup(modifier: Modifier = Modifier, content: @Composable ColumnScop
 /**
  * The row a checkbox, switch or radio button sits in with its text. It
  * fills the width, is at least 48dp tall, and [action] makes the whole row
- * one touch target and one TalkBack item. Its pressed state is a rounded
- * [ShkShapes.Field], the shape of inputs.
+ * one touch target and one TalkBack item. Its content starts at the edge
+ * of the space it is given, and its touch target and pressed state, a
+ * rounded [ShkShapes.Field], reach 8dp past it ([shkRow]).
  */
 @Composable
 private fun SelectionRow(
@@ -210,12 +207,7 @@ private fun SelectionRow(
     content: @Composable RowScope.() -> Unit,
 ) {
     Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .heightIn(min = ShkSpacing.MinTouchTarget)
-            .clip(ShkShapes.Field)
-            .then(action)
-            .padding(horizontal = ShkSpacing.Small, vertical = ShkSpacing.ExtraSmall),
+        modifier = modifier.shkRow(action = action, verticalPadding = ShkSpacing.ExtraSmall),
         horizontalArrangement = Arrangement.spacedBy(ShkSpacing.Medium),
         verticalAlignment = Alignment.CenterVertically,
         content = content,
