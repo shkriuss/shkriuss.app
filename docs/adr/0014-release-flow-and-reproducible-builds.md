@@ -80,7 +80,8 @@
    - the run is on `main`,
    - CI passed on that exact commit. Only the newest run that GitHub
      Actions made from `ci.yml` for a push of that commit to `main`
-     counts. The run must have succeeded, and its latest attempt must hold
+     counts. It is found by the workflow number of
+     `.github/workflows/ci.yml` in this repository. The run must have succeeded, and its latest attempt must hold
      the jobs "Gradle wrapper" and "Check", both passed. A check from
      another workflow with the same name does not count,
    - the tag `<app>-v<version>` does not exist,

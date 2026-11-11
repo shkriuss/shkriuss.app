@@ -97,14 +97,26 @@ jobs:
         run: |
           set -u
           short="${GITHUB_SHA:0:7}"
+
+          # The workflow ci.yml in this repository, by its number.
+          workflow_id="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml" \
+            --jq 'select(.path == ".github/workflows/ci.yml") | .id')"
+          if ! [[ "$workflow_id" =~ ^[0-9]+$ ]]; then
+            echo "::error::Could not find the workflow .github/workflows/ci.yml."
+            exit 1
+          fi
+
           runs="$RUNNER_TEMP/ci-runs.json"
-          gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA&event=push&branch=main&per_page=100" > "$runs"
-          # The filters in the address are checked again here. The newest
-          # matching run counts; a re-run keeps its number.
-          mapfile -t run < <(jq -r --arg sha "$GITHUB_SHA" --arg repo "$GITHUB_REPOSITORY" '
+          gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow_id/runs?head_sha=$GITHUB_SHA&event=push&branch=main&per_page=100" > "$runs"
+          # The filters in the address are checked again here. A run's path
+          # may end in "@<ref>". The newest matching run counts; a re-run
+          # keeps its number.
+          mapfile -t run < <(jq -r --argjson workflow "$workflow_id" --arg sha "$GITHUB_SHA" --arg repo "$GITHUB_REPOSITORY" '
             [.workflow_runs[]
-              | select(.path == ".github/workflows/ci.yml" and .head_sha == $sha
-                       and .event == "push" and .head_branch == "main"
+              | select(.workflow_id == $workflow
+                       and (.path | test("^\\.github/workflows/ci\\.yml(@.+)?$"))
+                       and .head_sha == $sha and .event == "push"
+                       and .head_branch == "main"
                        and .head_repository.full_name == $repo)]
             | sort_by(.id) | last
             | if . == null then empty else .id, .status, (.conclusion // "none") end
