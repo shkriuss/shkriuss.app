@@ -238,8 +238,8 @@ decision on pull request 13).
 
 Batch 2 leaves out these parts of Material 3: the checkbox with a third,
 mixed state, the range slider and the vertical slider, and text field
-icons, prefixes, suffixes and placeholders. Open: build them when an app
-needs them, as for the chips above.
+icons, prefixes, suffixes and placeholders. They are built when the first
+app needs them, not before (owner decision on pull request 14).
 
 ### How they look
 
@@ -260,9 +260,9 @@ The inputs of batch 2:
 | Component | Off, or not focused | On, selected or focused | Shape | Drawn size |
 |---|---|---|---|---|
 | Text field | Box outlined in `outline`, 1 dp. Label above and help under in `textSecondary`. Text in `text`. | Box outlined in `accent`, 2 dp, and label in `accent`. In error, the box, the label and the line under the box are `error`. | `Field`, 12 dp | Box 56 dp tall at one line, with the label above it and the help under it |
-| Checkbox | Box outlined in `textSecondary` | Box filled with `accent`, check mark in `textOnAccent` | Square, 2 dp corners | 18 dp box, in a row at least 48 dp tall |
+| Checkbox | Box outlined in `textSecondary` | Box filled with `accent`, check mark in `textOnAccent` | Square, 2 dp corners | 20 dp box, in a row at least 48 dp tall. It grows with the font size. |
 | Switch | Track `surfaceHigh`, outlined in `outline`. Thumb `outline`. | Track `accent`. Thumb `textOnAccent`, with a check mark in `accent`. | Fully round | 52 by 32 dp, at the end of a row at least 48 dp tall |
-| Radio button | Ring in `textSecondary` | Ring and dot in `accent` | Circle | 20 dp, in a row at least 48 dp tall |
+| Radio button | Ring in `textSecondary` | Ring and dot in `accent` | Circle | 20 dp, in a row at least 48 dp tall. It grows with the font size. |
 | Slider | Track after the thumb in `outline`, its step marks in `background` | Track before the thumb, and the thumb, in `accent`. Its step marks in `textOnAccent`. | Rounded track | Track 16 dp tall, thumb 4 by 44 dp |
 
 - Every pair in the two tables is one the contrast tests already check,
@@ -278,7 +278,8 @@ The inputs of batch 2:
   takes a `TextFieldState`. `ShkTextField` takes a `String` and
   `onValueChange` instead, which fits the one immutable state a view
   model exposes (CLAUDE.md, "Architecture rules"). It draws the label
-  above the box itself, inset 4 dp, as Material 3 does.
+  above the box itself, inset 4 dp, in `Caption`, as Material 3 does
+  (owner decision on pull request 14).
 - The box of a checkbox and the ring of a radio button that are off are
   `textSecondary`, as in Material 3. That is stronger than the outline
   (8.35:1 against 4.03:1 on the light background), because they are small
@@ -287,11 +288,12 @@ The inputs of batch 2:
   container" colour. This theme maps that role to `textOnAccent`, the
   thumb's own colour, so the mark would not show. `ShkSwitch` draws it in
   `accent`.
-- The track after a slider's thumb is `outline`. Material 3 uses the
-  higher surface colour there, which is 1.22:1 on the background. WCAG
-  asks for 3:1 for the parts of a control, and the outline is at least
-  3.30:1 on all three backgrounds. The step marks on it are the
-  background colour, so they stand out from the track by the same pair.
+- The track after a slider's thumb is `outline` (owner decision on pull
+  request 14). Material 3 uses the higher surface colour there, which is
+  1.22:1 on the background. WCAG asks for 3:1 for the parts of a control,
+  and the outline is at least 3.30:1 on all three backgrounds. The step
+  marks on it are the background colour, so they stand out from the
+  track by the same pair.
 - Material 3 marks the end of a slider's track with a dot in the accent.
   On the outline it is 1.64:1 in the light theme and 2.67:1 in the dark
   one. It repeats what the track already shows, where the range ends.
@@ -353,9 +355,11 @@ around it.
 - The text of a checkbox, switch or radio button wraps beside the
   control, which stays centred on it. The text of a slider's label wraps
   beside its value.
-- The checkbox, the radio button, the switch and the slider keep Material
-  3's size at every font size. They are controls, not icons next to text,
-  so the icon rule does not cover them. Open: should they grow too?
+- The box of a checkbox and the ring of a radio button grow with the font
+  size, by the rule for an icon next to text (owner decision on pull
+  request 14). See [Icons](#icons).
+- The switch keeps its size at every font size (owner decision on pull
+  request 14). So does the slider, whose track already fills the width.
 
 ### TalkBack
 
@@ -410,8 +414,14 @@ around it.
      action button, keeps its size. So at large font sizes a collapsed
      extended floating action button shows a larger icon than a floating
      action button.
-   - The check mark on a switch's thumb keeps Material 3's 16 dp, because
-     the thumb has a fixed size.
+   - The box of a checkbox and the ring of a radio button follow the same
+     rule (owner decision on pull request 14). Both are 20 dp at the
+     default font size and grow like a 20 dp icon: 34 dp at font scale
+     2.0. Material 3 draws them at a fixed size, so `ShkCheckbox` and
+     `ShkRadioButton` scale the drawing about its centre and make room
+     for it. Their strokes grow with them, as an icon's strokes do.
+   - The switch keeps its size, and so does the check mark on its thumb,
+     Material 3's 16 dp.
    - `iconSizeNextToText` in `ShkIconSize.kt` does this. Use it for every
      new component that puts an icon next to text.
 
@@ -495,6 +505,12 @@ for every component with an icon next to text.
    disabled.
 4. A long label wraps, is not cut, and leaves room for the value beside
    it.
+
+`ShkSelectionControlSizeTest` checks, at font scale 1.0 and 2.0, how wide
+the checkbox, the radio button and the switch are drawn in their rows.
+The checkbox and the radio button take Material 3's 24 dp at 1.0 and
+grow like a 20 dp icon above it, to 40.8 dp at 2.0. The switch keeps
+52 dp. Without the growing, the test fails for both at 2.0.
 
 `ShkRadioGroupTest` checks that a `ShkRadioGroup` tells TalkBack its radio
 buttons belong to one group.
@@ -588,7 +604,9 @@ whole in the next.
    error, then delete some to clear it.
 9. On Selection controls, tap the rows under "Try it", on the text as
    well as on the control. With TalkBack on, each row is read once, with
-   its text, its role and its state.
+   its text, its role and its state. At the largest font size, the boxes
+   of the checkboxes and the rings of the radio buttons are larger, and
+   the switches keep their size.
 10. On Sliders, drag the slider under "Try it". The number of glasses
     changes. With TalkBack on, the slider is read as "Daily goal" and the
     number of glasses, not a percentage.
@@ -605,12 +623,6 @@ whole in the next.
   then.
 - Focus uses Material 3's light state layer. There is no separate focus
   ring for keyboards.
-- From batch 2, for the owner to confirm:
-  - The text field's label always sits above the box, in `Caption`, not
-    in the border. See [How they look](#how-they-look).
-  - The slider's track after the thumb is `outline`, not Material 3's
-    higher surface colour.
-  - The checkbox, radio button, switch and slider keep their size at
-    large font sizes. See [Large text](#large-text).
-  - The parts of Material 3 left out of batch 2 are built when an app
-    needs them. See [Which one to use](#which-one-to-use).
+- The owner's decision on pull request 14 names the checkbox, the radio
+  button and the switch, not the slider. The slider keeps Material 3's
+  size, as before.

@@ -32,6 +32,8 @@ development.
 - New page Sliders: the slider without steps, with steps, disabled and
   with a long label, and one to try. TalkBack reads its value in words,
   such as "8 glasses".
+- At larger font sizes, checkboxes and radio buttons grow with the text.
+  Switches keep their size.
 
 ## 0.1.0 (2026-11-11)
 

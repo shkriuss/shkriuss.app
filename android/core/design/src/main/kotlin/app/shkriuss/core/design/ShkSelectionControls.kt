@@ -26,8 +26,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 
 /**
  * A checkbox with its text, for an option the user turns on or off as
@@ -39,7 +42,8 @@ import androidx.compose.ui.semantics.Role
  * The whole row is one touch target, at least 48dp tall, so a tap on the
  * text works too. Tapping it calls [onCheckedChange] with the new value;
  * the caller changes [checked]. TalkBack reads [text], "checkbox" and
- * whether it is checked. Long text wraps.
+ * whether it is checked. Long text wraps, and the box grows with the font
+ * size, as an icon next to text does.
  */
 @Composable
 fun ShkCheckbox(
@@ -63,6 +67,7 @@ fun ShkCheckbox(
             checked = checked,
             // The row takes the tap, so the checkbox has no action of its own.
             onCheckedChange = null,
+            modifier = Modifier.grownBy(iconSizeNextToText(SelectionControlSize) / SelectionControlSize),
             enabled = enabled,
             colors = CheckboxDefaults.colors(
                 checkedColor = colors.accent,
@@ -81,7 +86,8 @@ fun ShkCheckbox(
  *
  * The text comes first and the switch sits at the end of the row. When on,
  * the switch is filled with the accent colour and its thumb shows a check
- * mark, so the state does not rely on colour or position alone.
+ * mark, so the state does not rely on colour or position alone. The switch
+ * keeps its size at every font size; only its text grows.
  *
  * The whole row is one touch target, at least 48dp tall. Tapping it calls
  * [onCheckedChange] with the new value; the caller changes [checked].
@@ -145,7 +151,8 @@ fun ShkSwitch(
  * The whole row is one touch target, at least 48dp tall. Tapping it calls
  * [onClick]; the caller selects this option and clears the others.
  * TalkBack reads [text], "radio button", whether it is selected, and its
- * place in the group. Long text wraps.
+ * place in the group. Long text wraps, and the radio button grows with
+ * the font size, as an icon next to text does.
  */
 @Composable
 fun ShkRadioButton(
@@ -169,6 +176,7 @@ fun ShkRadioButton(
             selected = selected,
             // The row takes the tap, so the radio button has no action of its own.
             onClick = null,
+            modifier = Modifier.grownBy(iconSizeNextToText(SelectionControlSize) / SelectionControlSize),
             enabled = enabled,
             colors = RadioButtonDefaults.colors(
                 selectedColor = colors.accent,
@@ -226,6 +234,36 @@ private fun SelectionText(text: String, enabled: Boolean, modifier: Modifier) {
         modifier = modifier,
         color = if (enabled) color else color.copy(alpha = DisabledContentAlpha),
     )
+}
+
+/**
+ * The size Material 3 draws the box of a checkbox and the ring of a radio
+ * button at, at the default font size. They grow from it like an icon of
+ * this size next to text (owner decision on pull request 14).
+ */
+private val SelectionControlSize = 20.dp
+
+/**
+ * Draws a control [scale] times as large as it measures, and takes that
+ * much space, so the row around it makes room. Material 3 draws its
+ * checkbox and radio button at a fixed size that a size modifier cannot
+ * change, so the drawing is scaled about its centre instead, strokes
+ * included, as an icon's strokes grow with it. At a scale of 1 it changes
+ * nothing.
+ */
+private fun Modifier.grownBy(scale: Float): Modifier {
+    if (scale <= 1f) return this
+    return layout { measurable, constraints ->
+        val placeable = measurable.measure(constraints)
+        val width = (placeable.width * scale).roundToInt()
+        val height = (placeable.height * scale).roundToInt()
+        layout(width, height) {
+            placeable.placeWithLayer(x = (width - placeable.width) / 2, y = (height - placeable.height) / 2) {
+                scaleX = scale
+                scaleY = scale
+            }
+        }
+    }
 }
 
 /**
