@@ -1,0 +1,498 @@
+# Builds the hub website from docs/ and site/. Pull requests only build it.
+# Pushes to main, and runs started by hand on main, also deploy it to the
+# Cloudflare Worker shkriuss-hub, which serves static files only.
+# How it works, and how to set it up from a phone: docs/development/site.md.
+# Why it works this way: ADR 0022 (the generator) and ADR 0023 (hosting and
+# deploy) in docs/adr/.
+
+name: Site
+
+# Read-only token. No job in this workflow needs more. Deploy reaches
+# Cloudflare with the token of the cloudflare environment, not this one.
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    # Only pull requests that can change the site, how it is built, or how
+    # it is deployed.
+    paths:
+      - "docs/**"
+      - "site/**"
+      - "tools/site/**"
+      - ".github/site-deploy/**"
+      - ".github/workflows/site.yml"
+  # Every push to main, with no path filter. So the newest commit on main
+  # always has a run, and only that run deploys (see Deploy, step 1).
+  push:
+    branches: [main]
+  # To deploy by hand, for example right after setting up the environment.
+  workflow_dispatch:
+
+defaults:
+  run:
+    # Stops a step at the first failing command, also inside a pipe.
+    shell: bash
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    concurrency:
+      group: site-build-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    outputs:
+      files_sha256: ${{ steps.sums.outputs.files_sha256 }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The Python that GitHub's Ubuntu runner comes with. The generator
+      # uses only its standard library, so nothing is downloaded.
+      - name: Test the site generator
+        run: |
+          python3 --version
+          python3 -B -I -m unittest discover --start-directory tools/site --top-level-directory tools/site
+
+      - name: Build the site
+        run: python3 -B -I tools/site/build.py --commit "$GITHUB_SHA" "$RUNNER_TEMP/site"
+
+      # These checks do not trust the generator. They look at what it wrote.
+      # A script, a Cloudflare control file such as _redirects, or anything
+      # loaded from another site stops the run.
+      - name: Check the built site
+        working-directory: ${{ runner.temp }}/site
+        run: |
+          set -u
+          fail() {
+            echo "::error::$1"
+            exit 1
+          }
+
+          # 1. Plain files only, with simple names, of three kinds.
+          if [ -n "$(find . ! -type f ! -type d -print -quit)" ]; then
+            fail "The built site may hold only plain files and folders."
+          fi
+          while IFS= read -r -d '' file; do
+            if ! [[ "${file#./}" =~ ^([a-z0-9-]+/)*[a-z0-9-]+\.(html|css|svg)$ ]]; then
+              fail "The built site may hold only .html, .css and .svg files with lower-case names."
+            fi
+          done < <(find . -type f -print0)
+          for required in index.html 404.html style.css; do
+            [ -f "$required" ] || fail "The built site has no $required."
+          done
+
+          # 2. No scripts, styles in the page, frames, forms or plugins.
+          #    Text in a page is escaped, so these match only real tags.
+          if grep -rliE '<(script|style|iframe|frame|object|embed|form|base|foreignobject)\b|<meta[^>]*http-equiv' .; then
+            fail "These files have a tag that the site does not allow."
+          fi
+          if grep -rliE '<[^>]*[[:space:]](on[a-z]+|style|src|srcset|data|action|formaction|poster)[[:space:]]*=' .; then
+            fail "These files have an attribute that the site does not allow."
+          fi
+          if grep -rliE '<[^>]*javascript:' .; then
+            fail "These files have a javascript: address."
+          fi
+
+          # 3. Links go to https://, to this site or to a heading. Style
+          #    sheets and the icon come from this site only. Nothing else is
+          #    loaded.
+          if grep -rhoE 'href="[^"]*"' --include='*.html' . | grep -vE '^href="(https://|#|/"|/[^/])'; then
+            fail "A link that is not https://..., /... or #... was found."
+          fi
+          if grep -rhoiE '<link[^>]*>' --include='*.html' . | grep -vE 'href="/[a-z0-9./-]+"'; then
+            fail "A <link> that points outside the site was found."
+          fi
+          if grep -rliE 'url\(|@import|expression\(|href' --include='*.css' --include='*.svg' .; then
+            fail "A style sheet or the icon loads something."
+          fi
+          echo "The built site passed every check."
+
+      # Cloudflare sends these headers with every file of the Worker's static
+      # assets (docs/development/site.md#security-headers). They live here,
+      # in an owner-only file, and Deploy checks that the live site sends
+      # them.
+      - name: Add the security headers
+        run: |
+          cat > "$RUNNER_TEMP/site/_headers" <<'HEADERS'
+          /*
+            Content-Security-Policy: default-src 'none'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+            Strict-Transport-Security: max-age=63072000; includeSubDomains
+            X-Content-Type-Options: nosniff
+            X-Frame-Options: DENY
+            Referrer-Policy: no-referrer
+            Permissions-Policy: accelerometer=(), autoplay=(), camera=(), display-capture=(), encrypted-media=(), fullscreen=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), publickey-credentials-get=(), screen-wake-lock=(), serial=(), usb=(), xr-spatial-tracking=()
+            Cross-Origin-Opener-Policy: same-origin
+            Cross-Origin-Resource-Policy: same-origin
+            Cross-Origin-Embedder-Policy: require-corp
+          HEADERS
+          cat "$RUNNER_TEMP/site/_headers"
+
+      # Deploy checks that it uploads exactly these files.
+      - name: Record the checksums
+        id: sums
+        working-directory: ${{ runner.temp }}/site
+        run: |
+          set -u
+          find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > "$RUNNER_TEMP/site.sha256"
+          cat "$RUNNER_TEMP/site.sha256"
+          echo "files_sha256=$(sha256sum < "$RUNNER_TEMP/site.sha256" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload the site
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: site
+          path: ${{ runner.temp }}/site/
+          retention-days: 7
+          if-no-files-found: error
+          overwrite: true
+
+      - name: Write the summary
+        run: |
+          set -u
+          {
+            echo "## Site"
+            echo
+            if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+              echo "Built and checked. Pull requests are never deployed."
+            else
+              echo "Built and checked. The job **Deploy** puts it online."
+            fi
+            echo
+            echo "| File | SHA-256 |"
+            echo "|---|---|"
+            # The backticks are Markdown, not a command.
+            # shellcheck disable=SC2016
+            sed -E 's|^([0-9a-f]{64})  \./(.*)$|\| `\2` \| `\1` \||' "$RUNNER_TEMP/site.sha256"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy-tool:
+    name: Deploy tool
+    # Main installs the tool in Deploy. A pull request installs it here and
+    # tries the deploy with the built site, without uploading anything. So
+    # a broken pin or Worker configuration fails the pull request, not
+    # main. No secrets.
+    needs: build
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    concurrency:
+      group: site-deploy-tool-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    steps:
+      - name: Check out the deploy tool's lockfile
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/site-deploy
+          sparse-checkout-cone-mode: false
+
+      - name: Download the site
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: site
+          path: ${{ runner.temp }}/site
+
+      - name: Install the pinned deploy tool
+        run: .github/site-deploy/install.sh "$RUNNER_TEMP/deploy"
+
+      - name: Try the deploy without uploading
+        working-directory: ${{ runner.temp }}/deploy
+        env:
+          WRANGLER_SEND_METRICS: "false"
+        run: ./node_modules/.bin/wrangler deploy --config wrangler.jsonc --dry-run
+
+  deploy:
+    name: Deploy
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # The cloudflare environment holds the Cloudflare token. Only main may
+    # use it (docs/development/site.md#set-up-cloudflare).
+    environment:
+      name: cloudflare
+      url: ${{ steps.deploy.outputs.url }}
+    # Deploys wait for each other and are never cancelled half-way.
+    concurrency:
+      group: site-deploy
+      cancel-in-progress: false
+    steps:
+      # 1. An older run must not replace a newer site. Every push to main
+      #    has its own run, so the newest commit always deploys.
+      - name: Check that this is the newest commit on main
+        id: newest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -u
+          head="$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)"
+          if ! [[ "$head" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Could not read the newest commit on main."
+            exit 1
+          fi
+          if [ "$head" = "$GITHUB_SHA" ]; then
+            echo "newest=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::A newer commit is on main. Its run deploys the site, so this run does not."
+            echo "newest=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Only the lockfile, the install script and the Worker's
+      # configuration. No other project file is on this runner, and no
+      # project code runs here.
+      - name: Check out the deploy tool's lockfile
+        if: steps.newest.outputs.newest == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/site-deploy
+          sparse-checkout-cone-mode: false
+
+      - name: Download the site
+        if: steps.newest.outputs.newest == 'true'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: site
+          path: ${{ runner.temp }}/site
+
+      - name: Check the downloaded site
+        if: steps.newest.outputs.newest == 'true'
+        working-directory: ${{ runner.temp }}/site
+        env:
+          FILES_SHA256: ${{ needs.build.outputs.files_sha256 }}
+        run: |
+          set -u
+          actual="$(find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -d ' ' -f 1)"
+          if ! [[ "$FILES_SHA256" =~ ^[0-9a-f]{64}$ ]] || [ "$actual" != "$FILES_SHA256" ]; then
+            echo "::error::The downloaded site is not the one the job Build made and checked."
+            exit 1
+          fi
+          echo "The site is the one the job Build made and checked."
+
+      - name: Install the pinned deploy tool
+        if: steps.newest.outputs.newest == 'true'
+        run: .github/site-deploy/install.sh "$RUNNER_TEMP/deploy"
+
+      # The only step that sees the token. Rules:
+      # - Never print it, never use set -x.
+      # - curl reads it from a private file, never from its command line,
+      #   and the trap deletes the file. Wrangler reads it from the
+      #   environment.
+      # - The Worker must already exist. This step never creates it, and
+      #   the token, which may only edit that one Worker, could not either.
+      # - Wrangler runs outside the checkout, with wrangler.jsonc only:
+      #   static assets, no Worker script, no routes, no custom domains.
+      - name: Deploy to the Cloudflare Worker
+        id: deploy
+        if: steps.newest.outputs.newest == 'true'
+        working-directory: ${{ runner.temp }}/deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          # Wrangler sends no usage data to Cloudflare.
+          WRANGLER_SEND_METRICS: "false"
+          WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/wrangler-output.json
+        run: |
+          set -u
+          # The Worker's name, from wrangler.jsonc. Exactly one such line.
+          mapfile -t names < <(sed -n 's/^  "name": "\([a-z0-9-]*\)",$/\1/p' wrangler.jsonc)
+          if [ "${#names[@]}" -ne 1 ] || ! [[ "${names[0]}" =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]]; then
+            echo "::error file=.github/site-deploy/wrangler.jsonc::Expected exactly one line of the form:   \"name\": \"worker-name\","
+            exit 1
+          fi
+          worker="${names[0]}"
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::error::The cloudflare environment has no secret CLOUDFLARE_API_TOKEN."
+            exit 1
+          fi
+          if ! [[ "$CLOUDFLARE_ACCOUNT_ID" =~ ^[0-9a-f]{32}$ ]]; then
+            echo "::error::The cloudflare environment needs the variable CLOUDFLARE_ACCOUNT_ID: the account ID, 32 characters 0-9 and a-f."
+            exit 1
+          fi
+
+          auth="$RUNNER_TEMP/cloudflare-auth"
+          answer="$RUNNER_TEMP/cloudflare-answer.json"
+          trap 'rm -f "$auth" "$answer"' EXIT
+          (umask 077 && printf 'Authorization: Bearer %s\n' "$CLOUDFLARE_API_TOKEN" > "$auth")
+
+          # 1. The Worker must exist. Its tag identifies it.
+          status="$(curl -sS --retry 3 --max-time 60 -o "$answer" -w '%{http_code}' -H @"$auth" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/services/$worker")"
+          rm -f "$auth"
+          jq -r '.errors[]? | "Cloudflare error \(.code): \(.message)"' "$answer" 2> /dev/null || true
+          if [ "$status" = 404 ] || jq -e '.errors | any(.code == 10007 or .code == 10090)' "$answer" > /dev/null 2>&1; then
+            echo "::error::The Worker $worker does not exist. Create it by hand in the Cloudflare dashboard (docs/development/site.md#1-the-worker). This workflow never creates it."
+            exit 1
+          fi
+          if [ "$status" = 401 ] || [ "$status" = 403 ]; then
+            echo "::error::The token cannot reach the Worker $worker. The Worker may not exist, or the token is not an account API token with Editor on it (docs/development/site.md#set-up-cloudflare)."
+            exit 1
+          fi
+          if [ "$status" != 200 ]; then
+            echo "::error::Could not read the Worker $worker (HTTP $status)."
+            exit 1
+          fi
+          tag="$(jq -r '.result.default_environment.script.tag // ""' "$answer")"
+          if ! [[ "$tag" =~ ^[0-9a-f]{32}$ ]]; then
+            echo "::error::Unexpected answer about the Worker $worker."
+            exit 1
+          fi
+          echo "The Worker $worker exists."
+
+          # 2. Upload a new version of the Worker and deploy it.
+          ./node_modules/.bin/wrangler deploy --config wrangler.jsonc
+
+          # 3. What Wrangler reports: the same Worker, a new version, and
+          #    its workers.dev address.
+          mapfile -t deployment < <(jq -rs --arg name "$worker" '
+            [.[] | select(.type == "deploy" and .worker_name == $name)] | last
+            | if . == null then empty else
+                (.worker_tag // ""), (.version_id // ""),
+                ([.targets[]? | strings | select(endswith(".workers.dev"))] | first // "")
+              end
+          ' "$WRANGLER_OUTPUT_FILE_PATH")
+          if [ "${#deployment[@]}" -ne 3 ] || [ "${deployment[0]}" != "$tag" ]; then
+            echo "::error::Wrangler did not report a deploy to the existing Worker $worker."
+            exit 1
+          fi
+          if ! [[ "${deployment[1]}" =~ ^[0-9a-f-]{36}$ ]]; then
+            echo "::error::Wrangler did not report the new version."
+            exit 1
+          fi
+          if ! [[ "${deployment[2]}" =~ ^https://${worker}\.[a-z0-9-]+\.workers\.dev$ ]]; then
+            echo "::error::Wrangler did not report the workers.dev address of $worker."
+            exit 1
+          fi
+          {
+            echo "url=${deployment[2]}"
+            echo "version=${deployment[1]}"
+            echo "worker=$worker"
+          } >> "$GITHUB_OUTPUT"
+          echo "Deployed version ${deployment[1]} of $worker to ${deployment[2]}."
+
+      # No secrets. Asks the live site for every file until it serves the
+      # files that were just uploaded, byte for byte. Then checks that each
+      # answer has every header in _headers, once, with exactly its value.
+      # First on the workers.dev address, then on the owner's own domain,
+      # if the variable SITE_DOMAIN of the cloudflare environment names it.
+      - name: Check the live site
+        id: live
+        if: steps.newest.outputs.newest == 'true'
+        env:
+          SITE_URL: ${{ steps.deploy.outputs.url }}
+          SITE_DOMAIN: ${{ vars.SITE_DOMAIN }}
+        run: |
+          set -u
+          site="$RUNNER_TEMP/site"
+          response="$RUNNER_TEMP/response-headers.txt"
+          body="$RUNNER_TEMP/response-body"
+          # workers.dev turns away clients that send a default library
+          # User-Agent, so this check names itself.
+          agent="shkriuss-site-check/1 (+$GITHUB_SERVER_URL/$GITHUB_REPOSITORY)"
+          mapfile -t expected < <(sed -n 's/^  \([A-Za-z-]*\): \(.*\)$/\1: \2/p' "$site/_headers")
+          if [ "${#expected[@]}" -lt 9 ]; then
+            echo "::error::Could not read the headers from _headers."
+            exit 1
+          fi
+
+          # A plain host name, such as shkriuss.app: lower case, no scheme,
+          # no path, no port. Checked before it is used.
+          domain=""
+          if [ -n "$SITE_DOMAIN" ]; then
+            label='[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?'
+            if ! [[ "$SITE_DOMAIN" =~ ^$label(\.$label)+$ ]]; then
+              echo "::error::The variable SITE_DOMAIN of the cloudflare environment must be a plain domain name, such as shkriuss.app, with no https:// and no slash."
+              exit 1
+            fi
+            domain="$SITE_DOMAIN"
+          fi
+
+          # A new version can take a few seconds to answer everywhere.
+          fetch() {
+            local status="" got=""
+            for _ in $(seq 1 20); do
+              status="$(curl -sS --max-time 30 -A "$agent" -o "$body" -D "$response" -w '%{http_code}' "$1" || true)"
+              got="$(sha256sum "$body" 2> /dev/null | cut -d ' ' -f 1)"
+              if [ "$status" = "$2" ] && [ "$got" = "$3" ]; then return 0; fi
+              sleep 6
+            done
+            echo "::error::$1 answered HTTP $status, not $2 with the uploaded file."
+            exit 1
+          }
+          failed=0
+          check_headers() {
+            local line name value
+            for line in "${expected[@]}"; do
+              name="${line%%: *}"
+              value="${line#*: }"
+              mapfile -t got < <(tr -d '\r' < "$response" | grep -i "^$name:" | sed 's/^[^:]*:[[:space:]]*//')
+              if [ "${#got[@]}" -ne 1 ] || [ "${got[0]}" != "$value" ]; then
+                echo "::$2::$1 does not send the header $name exactly as in _headers. It sends: ${got[*]:-nothing}"
+                if [ "$2" = error ]; then failed=1; fi
+              fi
+            done
+          }
+          # Every file of the site at one address, and the 404 answer.
+          check_site() {
+            local file path checked=0
+            while IFS= read -r -d '' file; do
+              path="/${file#./}"
+              path="${path%index.html}"
+              if [ "$path" = /404.html ] || [ "$path" = /_headers ]; then continue; fi
+              fetch "$1$path" 200 "$(sha256sum "$site/$file" | cut -d ' ' -f 1)"
+              check_headers "$1$path" error
+              checked=$((checked + 1))
+            done < <(cd "$site" && find . -type f -print0 | LC_ALL=C sort -z)
+            # Unknown addresses get 404.html with the status 404. Its
+            # headers are only warned about: Cloudflare's documentation
+            # does not say whether _headers applies to this answer.
+            fetch "$1/no-such-page/" 404 "$(sha256sum "$site/404.html" | cut -d ' ' -f 1)"
+            check_headers "$1/no-such-page/" warning
+            echo "$1: $checked files checked."
+          }
+
+          check_site "$SITE_URL"
+          if [ -n "$domain" ]; then
+            check_site "https://$domain"
+            echo "domain=https://$domain" >> "$GITHUB_OUTPUT"
+          else
+            echo "SITE_DOMAIN is not set, so the site was not checked on your own domain."
+          fi
+          if [ "$failed" != 0 ]; then exit 1; fi
+          echo "Every file is live, byte for byte, and sends the security headers."
+
+      - name: Write the summary
+        if: always() && steps.newest.outputs.newest != ''
+        env:
+          NEWEST: ${{ steps.newest.outputs.newest }}
+          SITE_URL: ${{ steps.deploy.outputs.url }}
+          VERSION: ${{ steps.deploy.outputs.version }}
+          WORKER: ${{ steps.deploy.outputs.worker }}
+          DOMAIN_URL: ${{ steps.live.outputs.domain }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -u
+          short="${GITHUB_SHA:0:7}"
+          {
+            echo "## Deploy"
+            echo
+            if [ "$NEWEST" != true ]; then
+              echo "Not deployed: a newer commit is on \`main\`. Its run deploys the site."
+            elif [ "$JOB_STATUS" = success ]; then
+              echo "Commit \`$short\` is live at <$SITE_URL>, as version \`$VERSION\` of the Worker \`$WORKER\`."
+              echo
+              echo "Every file was checked on the live site: the content and the security headers."
+              echo
+              if [ -n "$DOMAIN_URL" ]; then
+                echo "Checked the same way on your own domain, <$DOMAIN_URL>."
+              else
+                echo "**Your own domain was not checked**: the variable \`SITE_DOMAIN\` of the \`cloudflare\` environment is not set. Set it after you attach the domain (docs/development/site.md, step 6)."
+              fi
+            else
+              echo "The deploy of commit \`$short\` failed. Open the failed step above to see why."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

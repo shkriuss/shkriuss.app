@@ -20,7 +20,8 @@ If a task seems to need it, stop and say so in the PR description.
 4. Data apps never declare `android.permission.INTERNET`. Only `android/app/sync` may.
 5. No new dependency without an ADR. A dependency change always updates
    `android/gradle/libs.versions.toml` and `android/gradle/verification-metadata.xml`
-   in the same PR.
+   in the same PR. Tools outside Gradle, such as wrangler, are pinned with a
+   lockfile and checksums in an owner-only folder, and also need an ADR.
 6. Never edit signing config, release workflows (`.github/workflows/release*.yml`),
    repository settings files or anything listed in `.github/CODEOWNERS` as
    owner-only, unless the owner asked for exactly that change.
@@ -62,6 +63,11 @@ Run from `android/`. Keep this list correct when tasks change.
 - After a dependency change: `./gradlew clean`, then
   `./gradlew --write-verification-metadata sha256,pgp --export-keys help check verifyRoborazziDebug assembleDebug assembleRelease assemblePreview`.
   Then follow the checks in `docs/development/build.md`.
+
+Run from the repository root:
+
+- `python3 -B -m unittest discover -s tools/site -t tools/site` tests the hub site generator.
+- `python3 -B tools/site/build.py <new or empty folder>` builds the hub site. See `docs/development/site.md`.
 
 Emulator tests, signing and releases run only in GitHub Actions.
 

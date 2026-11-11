@@ -196,5 +196,6 @@
 - Open: that a draft release works with the tag rules, and that the owner
   can publish it (section 17). The rehearsal in
   [release.md](../development/release.md#rehearsal-with-catalog) checks it.
-- Open: whether the `site` workflow needs any third-party action, so the
-  owner can allow it in the repository settings (section 17).
+- The `site` workflow needs no third-party action (section 17). It uses
+  the same commits of `checkout`, `upload-artifact` and
+  `download-artifact` ([0023](0023-hub-site-hosting-and-deploy.md)).

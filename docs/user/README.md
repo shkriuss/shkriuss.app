@@ -1,12 +1,19 @@
 # User guides
 
-Guides for people who use the apps. Written for a phone screen first.
+Guides for people who use the apps. Written for a phone screen first. The
+hub website shows the first three pages
+([site.md](../development/site.md)).
 
-What belongs here:
+Pages:
 
-- How to install the apps and verify that they are genuine.
-- One guide per app.
+- [Apps](apps.md): every app of the suite and how far each one is.
+- [Install with Obtainium](install.md): how to install the apps and get
+  updates.
+- [Verify with AppVerifier](verify.md): how to check that an app is
+  genuine, against the signing fingerprint.
+
+What else belongs here:
+
+- One guide per app. The first one comes with the Water app.
 - How to back up and restore.
 - How to set up sync.
-
-There are no guides yet. The first one comes with the Water app.

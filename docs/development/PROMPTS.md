@@ -658,9 +658,11 @@ Model: `sonnet`. Effort: `medium`.
 
 ```text
 Check for updates to: the Gradle wrapper, the Android Gradle Plugin, Kotlin,
-every library in the version catalog, and every pinned action. I am the owner
-and I ask you to update the wrapper, the verification metadata and the action
-pins as needed.
+every library in the version catalog, every pinned action, and the hub site's
+deploy tool, Wrangler, pinned in `.github/site-deploy/`. I am the owner and I
+ask you to update the wrapper, the verification metadata, the action pins,
+and the Wrangler pin and its lockfile as needed. For Wrangler, follow "Update
+Wrangler" in docs/development/site.md.
 
 One pull request per group that belongs together. For each update: read the
 release notes, say what changed that matters to us, update the catalog and

@@ -24,3 +24,7 @@ What else belongs here:
 
 How the build checks every downloaded file is in
 [ADR 0020](../adr/0020-dependency-verification.md).
+
+The hub website shows the fingerprint, read from `fingerprints.md` at
+build time. Its security headers, and what it may contain, are in
+[site.md](../development/site.md#security-headers).

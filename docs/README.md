@@ -1,7 +1,7 @@
 # Documentation
 
 All project documentation lives in this folder. The hub website is built
-from these files.
+from these files ([site.md](development/site.md)).
 
 | Folder | What belongs there |
 |---|---|

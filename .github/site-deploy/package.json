@@ -1,0 +1,9 @@
+{
+  "name": "shkriuss-site-deploy",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The tool that deploys the hub site, pinned to one exact version. See docs/adr/0023-hub-site-hosting-and-deploy.md.",
+  "dependencies": {
+    "wrangler": "4.156.2"
+  }
+}
