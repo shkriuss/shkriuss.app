@@ -12,8 +12,8 @@ module. Feature modules never depend on each other.
 
 | Module | Kind | What it holds | Depends on |
 |---|---|---|---|
-| `core/design` | Library | The design system: `ShkTheme`, the colour, type, shape and spacing tokens, `ShkText`, the stub `ShkScreen`, the window theme `Theme.Shk`, and the `Shk*` components: buttons, floating action buttons, chips, the text field, the checkbox, switch and radio button, and the slider. See [design-system.md](../development/design-system.md). | Compose UI, Foundation, Material 3 |
-| `app/catalog` | App, `app.shkriuss.catalog` | The design gallery: a start screen, one page each for colours, type, shape and spacing, and one page each for buttons, floating action buttons, chips, text fields, selection controls and sliders. | `core/design`, Activity Compose |
+| `core/design` | Library | The design system: `ShkTheme`, the colour, type, shape and spacing tokens, `ShkText`, the stub `ShkScreen`, the window theme `Theme.Shk`, and the `Shk*` components: buttons, floating action buttons, chips, the text field, the checkbox, switch and radio button, the slider, the card, the list item, the divider, the section header, and the empty, loading and error states. See [design-system.md](../development/design-system.md). | Compose UI, Foundation, Material 3 |
+| `app/catalog` | App, `app.shkriuss.catalog` | The design gallery: a start screen, one page each for colours, type, shape and spacing, and one page each for buttons, floating action buttons, chips, text fields, selection controls, sliders, cards, lists, and the empty, loading and error states. | `core/design`, Activity Compose |
 
 - Only `core/design` uses Material 3. It is an `implementation`
   dependency, so other modules cannot import it by accident.

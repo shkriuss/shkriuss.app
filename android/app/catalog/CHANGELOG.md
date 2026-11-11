@@ -34,6 +34,15 @@ development.
   such as "8 glasses".
 - At larger font sizes, checkboxes and radio buttons grow with the text.
   Switches keep their size.
+- New page Cards: the card that cannot be tapped, alone and with a
+  button, and the card that can be tapped, with short and long text.
+- New page Lists: list items with one or two lines, an icon, text at the
+  end, tappable, disabled and with long text; section headers, alone and
+  above list items; and dividers between list items.
+- New page Empty, loading and error: the empty state with and without an
+  icon and a button, the loading state, and the error state with and
+  without a button, each also with long text. TalkBack reads a loading
+  state as its text and "in progress".
 
 ## 0.1.0 (2026-11-11)
 

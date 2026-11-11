@@ -45,8 +45,9 @@ import org.robolectric.annotation.GraphicsMode
 
 /**
  * Checks every `Shk*` button, floating action button, chip, checkbox,
- * switch and radio button, at font scale 1.0 and 2.0, for the rules in
- * CLAUDE.md, "UI and accessibility":
+ * switch and radio button, the card and list item that can be tapped, and
+ * the buttons of the empty and error states, at font scale 1.0 and 2.0,
+ * for the rules in CLAUDE.md, "UI and accessibility":
  *
  * - the space it takes is at least 48 by 48 dp, so its touch target is,
  * - TalkBack hears its label once, its role, and whether it is turned
@@ -203,6 +204,12 @@ class ShkComponentsTest(private val case: ComponentCase, private val fontScale: 
         private val SMALL_ICON = 18.dp
         private val ICON = 24.dp
 
+        /** The icon above the title of an empty or an error state. */
+        private val STATE_ICON = 48.dp
+
+        /** The title of the empty and error states whose button is checked. */
+        private const val STATE_TITLE = "No notes yet"
+
         private val CASES = listOf(
             ComponentCase("FilledButton", Role.Button, ButtonShape) { label, enabled, onClick, _ ->
                 ShkFilledButton(text = label, onClick = onClick, enabled = enabled)
@@ -339,6 +346,39 @@ class ShkComponentsTest(private val case: ComponentCase, private val fontScale: 
                 selected = true,
             ) { label, enabled, onClick, _ ->
                 ShkRadioButton(text = label, selected = true, onClick = onClick, enabled = enabled)
+            },
+            // A card that can be tapped is one button, read by all its text.
+            // It has no disabled state.
+            ComponentCase("TappableCard", Role.Button, ShkShapes.Card, canBeDisabled = false) { label, _, onClick, _ ->
+                ShkCard(onClick = onClick) { ShkText(text = label) }
+            },
+            // The whole row of a list item is its touch target, and its
+            // pressed state is drawn in the field shape, as a selection
+            // control's row is.
+            ComponentCase("TappableListItem", Role.Button, ShkShapes.Field) { label, enabled, onClick, _ ->
+                ShkListItem(headline = label, onClick = onClick, enabled = enabled)
+            },
+            ComponentCase(
+                "TappableListItemWithIcon",
+                Role.Button,
+                ShkShapes.Field,
+                icon = IconCase(ICON, nextToText = true),
+            ) { label, enabled, onClick, icon ->
+                ShkListItem(headline = label, onClick = onClick, enabled = enabled, icon = icon)
+            },
+            // The states' buttons are tonal buttons, and the icon of the
+            // empty state sits above its title, next to text.
+            ComponentCase(
+                "EmptyStateButton",
+                Role.Button,
+                ButtonShape,
+                canBeDisabled = false,
+                icon = IconCase(STATE_ICON, nextToText = true),
+            ) { label, _, onClick, icon ->
+                ShkEmptyState(title = STATE_TITLE, icon = icon, actionText = label, onAction = onClick)
+            },
+            ComponentCase("ErrorStateButton", Role.Button, ButtonShape, canBeDisabled = false) { label, _, onClick, _ ->
+                ShkErrorState(title = STATE_TITLE, actionText = label, onAction = onClick)
             },
         )
     }

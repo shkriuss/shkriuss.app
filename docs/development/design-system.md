@@ -5,9 +5,11 @@ components built from them, and how both are checked. They live in
 `android/core/design`. The tokens were built in Phase 1, step 1. The
 decision and its reasons are in
 [ADR 0017](../adr/0017-design-system-tokens.md). The components come in
-Phase 1, step 2, batch by batch. Two batches are here. Batch 1: buttons,
-floating action buttons and chips. Batch 2: the text field, checkbox,
-switch, radio button and slider. See [Components](#components).
+Phase 1, step 2, batch by batch. Three batches are here. Batch 1:
+buttons, floating action buttons and chips. Batch 2: the text field,
+checkbox, switch, radio button and slider. Batch 3: the card, list item,
+divider and section header, and the empty, loading and error states. See
+[Components](#components).
 
 ## Rules
 
@@ -41,8 +43,12 @@ switch, radio button and slider. See [Components](#components).
 | `ShkTextField.kt` | `ShkTextField`. |
 | `ShkSelectionControls.kt` | `ShkCheckbox`, `ShkSwitch`, `ShkRadioButton` and `ShkRadioGroup`. |
 | `ShkSlider.kt` | `ShkSlider`. |
+| `ShkCard.kt` | `ShkCard`, with and without `onClick`. |
+| `ShkLists.kt` | `ShkListItem`, `ShkDivider` and `ShkSectionHeader`. |
+| `ShkContentStates.kt` | `ShkEmptyState`, `ShkLoadingState` and `ShkErrorState`. |
 | `ShkIconSize.kt` | `iconSizeNextToText`, the size of an icon next to text at the user's font size. Internal to `core/design`. |
 | `res/drawable/shk_icon_check.xml` | The check mark on a selected filter chip and on the thumb of a switch that is on. |
+| `res/drawable/shk_icon_error.xml` | The circle with an exclamation mark at the top of an error state. |
 
 ## Colour
 
@@ -205,14 +211,19 @@ So a Material 3 text field uses `Body`, 14 sp, not Material's 16 sp.
 
 Components set their shape themselves; this mapping is the fallback.
 Buttons and chips use the pill described under [Shape](#shape), the
-floating action buttons `ShkShapes.Card`. The text field's box and the
-pressed state of a checkbox, switch or radio button row use
-`ShkShapes.Field`.
+floating action buttons and cards `ShkShapes.Card`. The text field's box
+and the pressed state of a checkbox, switch or radio button row, or of a
+list item, use `ShkShapes.Field`.
 
 ## Components
 
-Batches 1 and 2 of Phase 1, step 2. Each component is one function in
+Batches 1, 2 and 3 of Phase 1, step 2. Each component is one function in
 `core/design`, built on Material 3. Apps call these, never Material 3.
+`ShkListItem`, `ShkSectionHeader` and the three states are laid out by
+`core/design` itself, from Material 3's text, icons, pressed state,
+progress circle and tonal button. That way list items and section
+headers line up with each other and with the rows of batch 2 (see
+[How they look](#how-they-look)).
 
 ### Which one to use
 
@@ -231,6 +242,13 @@ Batches 1 and 2 of Phase 1, step 2. Each component is one function in
 | `ShkSwitch` | A setting that takes effect as soon as it changes, such as "Daily reminder" on a settings screen. | An option in a form that is saved later. Use a checkbox. |
 | `ShkRadioButton` | One choice out of a few that are all shown, such as the unit "Millilitres" or "Ounces". Put them in a `ShkRadioGroup`. | More than about six options, or options that change. Use a list. |
 | `ShkSlider` | A value in a range where the exact number matters less than where it sits, such as a daily goal. | A value that must be exact. Use a text field. |
+| `ShkCard` | One item set apart from the things around it, such as a note in a list of notes. Give it `onClick` when tapping it opens the item. | Rows of things that look alike. Use list items. |
+| `ShkListItem` | One row in a list of things that look alike, such as tasks, settings or files. Give it `onClick` when tapping it opens or changes something. | A setting that turns on and off. Use a switch. |
+| `ShkSectionHeader` | The heading of a group on a screen, such as "Today" above a list of tasks. | The title of a screen. Each screen has one title. |
+| `ShkDivider` | A line between groups, where space alone does not show where one ends. | Between every two list items. Most lists need no line. |
+| `ShkEmptyState` | What a screen or list shows when it has nothing yet, such as "No notes yet", or no results. | Content that is still loading. |
+| `ShkLoadingState` | What a screen or list shows while its content is on its way, when the wait is long enough to notice. | A short wait. Show nothing; a flash of it is worse. |
+| `ShkErrorState` | What a screen or list shows when its content could not be shown, such as "Could not open the backup". | A wrong value the user typed. Use the text field's error. |
 
 Material 3 also has input chips (a removable tag) and suggestion chips.
 They are built when the first app needs them, not before (owner
@@ -240,6 +258,12 @@ Batch 2 leaves out these parts of Material 3: the checkbox with a third,
 mixed state, the range slider and the vertical slider, and text field
 icons, prefixes, suffixes and placeholders. They are built when the first
 app needs them, not before (owner decision on pull request 14).
+
+Batch 3 leaves out, in the same way: the elevated and the filled card, a
+card that can be selected, a list item with a third "overline" line or
+with an image, a control or an icon button at the end of a list item, the
+vertical divider, and a progress circle that shows how far it has got.
+A row with a switch at its end is a `ShkSwitch`.
 
 ### How they look
 
@@ -265,7 +289,19 @@ The inputs of batch 2:
 | Radio button | Ring in `textSecondary` | Ring and dot in `accent` | Circle | 20 dp, in a row at least 48 dp tall. It grows with the font size. |
 | Slider | Track after the thumb in `outline`, its step marks in `background` | Track before the thumb, and the thumb, in `accent`. Its step marks in `textOnAccent`. | Rounded track | Track 16 dp tall, thumb 4 by 44 dp |
 
-- Every pair in the two tables is one the contrast tests already check,
+The parts of batch 3:
+
+| Component | Fill | Text and icon | Outline | Shape | Size |
+|---|---|---|---|---|---|
+| Card | `surface` | `text`, unless the content picks another | `outline`, 1 dp | `Card`, 16 dp | Fills the width. Content 16 dp in from the edges. |
+| List item | None | Main line `text` in `Subtitle`. Second line `textSecondary` in `Body`. Text at the end `textSecondary` in `Caption`. Icon `textSecondary`. | None | Pressed: `Field`, 12 dp | Fills the width, at least 48 dp tall. Text 8 dp in from the edges. |
+| Section header | None | `accent`, in `Subtitle` | None | None | Fills the width. 24 dp above, 8 dp below. Text 8 dp in from the start. |
+| Divider | `outline` | None | None | None | 1 dp tall, fills the width. |
+| Empty state | None | Title `text` in `Title`, centred. Body `textSecondary` in `Body`, centred. Icon `textSecondary`. A tonal button. | None | None | Fills the width, 24 dp above and below. Icon 48 dp. |
+| Loading state | None | A turning circle in `accent`, 4 dp wide. Text `textSecondary` in `Body`, centred. | None | Circle | Circle 40 dp. Fills the width, 24 dp above and below. |
+| Error state | None | As the empty state, with the suite's error icon in `error`. | None | None | As the empty state. |
+
+- Every pair in the three tables is one the contrast tests already check,
   except the dot at the end of a slider's track (below).
 - No component has a shadow, in any state. Material 3's elevation is
   turned off, also for a mouse hovering and a chip being dragged
@@ -302,6 +338,24 @@ The inputs of batch 2:
   Material 3's default, the higher surface colour, is hard to tell from
   not selected. It also shows a check mark, so the state does not depend
   on colour alone.
+- A card is drawn the way every raised surface is: the surface colour
+  and a 1 dp outline, no shadow (rule 5 and ADR 0017, point 5). It is
+  Material 3's outlined card, with its shadow turned off in every state,
+  also while it is dragged.
+- The main line of a list item and a section header both use `Subtitle`,
+  as the type table says. The section header is in the accent colour, so
+  it does not look like the first list item under it. Android's own
+  settings draw their group headings in the accent colour too.
+- A list item, a section header and the rows of a checkbox, switch or
+  radio button put their text 8 dp in from their edges. So a section
+  header, list items and switches in one list line up. A list item's icon
+  takes as much space as a checkbox, with the same gap to its text, so
+  their text lines up too.
+- A divider is the outline colour, the colour of every other line in the
+  suite. Material 3 uses its lighter "outline variant" colour, which this
+  theme maps to the outline as well.
+- The text of the states is centred, because it stands alone in the
+  middle of a screen. Text everywhere else starts at the start edge.
 - Text on buttons, chips and floating action buttons uses the `Label`
   style. The text of a checkbox, switch, radio button or slider uses
   `Body`, and so does the text typed in a field. The label above a text
@@ -324,6 +378,13 @@ The inputs of batch 2:
 | Error (`errorText` given) | Text field. |
 | With steps (`steps` more than 0) | Slider. |
 | Collapsed (`expanded = false`) | Extended floating action button. |
+| Tappable (`onClick` given) | Card, list item. A card that can be tapped has no disabled state: when it cannot be opened, leave out `onClick`. |
+| With supporting or trailing text, with an icon | List item. |
+| With a button (`actionText` and `onAction` given) | Empty state, error state. Pass both or neither. |
+
+The states themselves cannot be turned off. Their button is a
+`ShkTonalButton` that is always enabled: when its action is not
+possible, leave the button out.
 
 ### Touch targets
 
@@ -331,6 +392,13 @@ Buttons and chips are drawn smaller than 48 dp, in the compact density of
 ADR 0017. Material 3 reserves at least 48 by 48 dp of space around each
 one, and a touch anywhere in that space counts. So rule 7 holds without
 making the components look bigger. Floating action buttons are 56 dp.
+
+A card that can be tapped is one touch target, as large as the card and
+at least 48 dp tall. A list item that can be tapped is one touch target
+as wide as the space it is given and at least 48 dp tall, text included,
+as the row of a checkbox is. The button of an empty or error state is a
+tonal button. A card without `onClick`, the section header, the divider
+and the loading state cannot be touched.
 
 A checkbox, switch or radio button sits in a row with its text. The
 whole row is one touch target, at least 48 dp tall and as wide as the
@@ -361,6 +429,13 @@ around it.
 - The switch and the slider keep their size at every font size (owner
   decisions on pull request 14). The slider's track already fills the
   width.
+- The text of a card, a list item, a section header and the states
+  wraps. In a list item, the text at the end keeps its place beside the
+  main lines, which wrap, and the icon stays centred on them.
+- The icon of a list item, and of an empty state, grows with the font
+  size, by the rule for an icon next to text. The error icon grows the
+  same way. The loading circle keeps its size: it is not next to text in
+  a line, and it shows only that something is happening.
 
 ### TalkBack
 
@@ -387,6 +462,24 @@ around it.
   TalkBack never reads a bare number or a percentage. The label and the
   value shown above the slider are hidden from TalkBack, so they are not
   read twice.
+- A card that can be tapped is read as one item: all the text in it,
+  then "button". So it must hold text, and no button or other control of
+  its own. Material 3 gives it no role, so `ShkCard` sets "button". A
+  card without `onClick` is read one item at a time, and its buttons are
+  read as buttons.
+- A list item is read as one item: its main line, its second line and
+  the text at the end, in that order. With `onClick` it is also read as
+  "button". Its icon is decorative.
+- A section header is read as a heading, so TalkBack users can jump from
+  group to group.
+- A divider is not read.
+- The title and the body of an empty or an error state are read as one
+  item, then the button on its own. The icons are decorative.
+- A loading state is read as its text and "in progress", as one item.
+  Material 3 makes the circle an item of its own, which TalkBack would
+  read as "in progress" without saying what is loading. So
+  `ShkLoadingState` hides the circle and says "in progress" with the
+  text. `text` is a required argument.
 - A disabled component is read as "disabled".
 
 ### Icons
@@ -395,14 +488,18 @@ around it.
    `painterResource(R.drawable.<icon>)` with a vector drawable.
 2. There is no icon library in the build. Material's icon library would be
    a new dependency, which needs an ADR (hard rule 5 in CLAUDE.md).
-3. The only icon `core/design` needs, the check mark on a selected filter
-   chip and on the thumb of a switch that is on, is drawn for the suite
-   as one stroke (`shk_icon_check.xml`). The Catalog's sample icons (plus,
-   search and a clock) are drawn the same way and live in the Catalog.
+3. `core/design` needs two icons of its own, drawn for the suite. The
+   check mark on a selected filter chip and on the thumb of a switch that
+   is on is one stroke (`shk_icon_check.xml`). The error icon of an error
+   state is a circle and a line in one stroke, and a dot
+   (`shk_icon_error.xml`). The Catalog's sample icons (plus, search, a
+   clock and a note) are drawn the same way and live in the Catalog.
 4. An icon is a vector drawable on a 24 dp grid, drawn in black. The
    component replaces the colour and sets the size.
 5. Size at the default font size, as in Material 3: 18 dp in buttons and
-   chips, 24 dp elsewhere.
+   chips, 24 dp elsewhere, a list item included. The icon at the top of an
+   empty or an error state is 48 dp, because it stands for the whole
+   screen.
 6. An icon next to text grows when the user makes text larger. It grows
    the way text of its own size grows: an 18 dp icon like 18 sp text,
    along Android's own font size curve. At font scale 2.0 an 18 dp icon
@@ -423,6 +520,10 @@ around it.
      for it. Their strokes grow with them, as an icon's strokes do.
    - The switch keeps its size, and so does the check mark on its thumb,
      Material 3's 16 dp.
+   - The icon of a list item grows like 24 sp text, to 36 dp at font
+     scale 2.0. The icon of an empty or an error state grows like 48 sp
+     text. Android's curve grows large text less, so it is about 54 dp at
+     font scale 2.0.
    - `iconSizeNextToText` in `ShkIconSize.kt` does this. Use it for every
      new component that puts an icon next to text.
 
@@ -459,8 +560,10 @@ the owner.
 ### Component tests
 
 `ShkComponentsTest` in `core/design` draws every button, floating action
-button, chip, checkbox, switch and radio button on its own, at font scale
-1.0 and 2.0, with and without an icon, and checks:
+button, chip, checkbox, switch and radio button, the card and the list
+item that can be tapped, and the button of the empty and the error
+state, on its own, at font scale 1.0 and 2.0, with and without an icon,
+and checks:
 
 1. The space it takes is at least 48 by 48 dp.
 2. TalkBack hears its label exactly once, and its role: button, checkbox,
@@ -516,10 +619,35 @@ grow like a 20 dp icon above it, to 40.8 dp at 2.0. The switch keeps
 `ShkRadioGroupTest` checks that a `ShkRadioGroup` tells TalkBack its radio
 buttons belong to one group.
 
+`ShkContentComponentsTest` checks the parts of batch 3 at font scale 1.0
+and 2.0. It runs on the screen of the screenshot phone, because at font
+scale 2.0 the long samples are taller than Robolectric's own small
+screen. It checks:
+
+1. A list item is at least 48 dp tall. TalkBack reads it as one item, with
+   all its text in order, and as a button when it can be tapped. Turned
+   off, it is read as disabled. Its icon is not read.
+2. A section header is read as a heading. A divider is 1 dp tall, fills
+   the width and is not read.
+3. A card without `onClick` holds a button that is its own touch target,
+   and the card's text is not part of the button.
+4. The title and the body of an empty or an error state are read as one
+   item, and the button on its own. No icon is read. Without an action
+   there is no button.
+5. A loading state is read as its text and "in progress", as one item,
+   and there is no second "in progress" item. With Material 3's circle
+   left as it is, this check fails.
+6. Long text in a list item, a section header, a card and the three
+   states, in a space 200 dp wide, wraps, is not cut by its own layout and
+   stays inside the component. The text at the end of a list item stays
+   beside the main lines. The text of the states stays centred, line by
+   line, and the button sits under it.
+
 `ComponentPagesTest` in the Catalog opens each component page and checks
 the components where they sit: each has a label and a role, no two touch
 targets overlap, and every component that can be turned off is shown
-turned off. It also tries the components under "Try it": the filter
+turned off. On Lists, a section header is read as a heading. On Empty,
+loading and error, the loading state is read with "in progress". It also tries the components under "Try it": the filter
 chips select and clear, the checkboxes and switches turn on and off, a
 radio button clears the others in its group, the text field takes typing
 and shows its error past 20 characters, and the slider moves and says its
@@ -560,6 +688,16 @@ Components:
    few of each to try.
 10. **Sliders**: the slider without steps, with steps, disabled and with
     a long label, then one to try.
+11. **Cards**: the card that cannot be tapped, alone and with a button,
+    and the card that can be tapped, with short and long text.
+12. **Lists**: the list item with one line, with supporting text, with an
+    icon, with trailing text, tappable, disabled and with long text; the
+    section header with one line, with long text and above list items;
+    the divider between list items.
+13. **Empty, loading and error**: the empty state with an icon and a
+    button, without a button, with a title only and with long text; the
+    loading state with short and long text; the error state with and
+    without a button and with long text.
 
 Each component page names a component, says when to use it, then shows
 each state under a caption. Only the components under "Try it" respond
@@ -583,6 +721,9 @@ the window is captured to its end: the first image is
 `<Page>_<config>_part2.png`, `_part3.png` and so on. Each next image
 repeats the last 48 dp of the one before, so a line cut at an edge shows
 whole in the next.
+
+Compose tests stop animations that never end, so the screenshots show the
+loading circle as it starts: a short arc at its top. On a phone it turns.
 
 ## How to check it on a phone
 
@@ -611,6 +752,18 @@ whole in the next.
 10. On Sliders, drag the slider under "Try it". The number of glasses
     changes. With TalkBack on, the slider is read as "Daily goal" and the
     number of glasses, not a percentage.
+11. On Cards, touch and hold the tappable cards to see them pressed. With
+    TalkBack on, a tappable card is read as one item with all its text,
+    then "button". In the card with a button, the card's text and the
+    Edit button are read one at a time.
+12. On Lists, touch and hold the tappable list items. With TalkBack on,
+    each list item is read as one item with all its text, and the
+    disabled one as "disabled". Set TalkBack's reading control to
+    "Headings": moving by heading then stops at each section header.
+13. On Empty, loading and error, check that the loading circles turn.
+    With TalkBack on, a loading state is read as its text and "in
+    progress", and the title and body of each empty and error state as
+    one item.
 
 ## Open
 
@@ -624,3 +777,11 @@ whole in the next.
   then.
 - Focus uses Material 3's light state layer. There is no separate focus
   ring for keyboards.
+- Batch 3 choices for the owner to confirm in its pull request: the
+  section header in the accent colour, the 8 dp inset that lines up list
+  items, section headers and selection rows, the divider in the outline
+  colour, no disabled state for a card that can be tapped, the 48 dp icon
+  of the empty and error states, and a tonal button in both.
+- A loading or an error state is not announced when it appears. TalkBack
+  reads it when the user reaches it. Announcing changes may come with the
+  snackbar in batch 5.

@@ -1,6 +1,7 @@
 package app.shkriuss.catalog
 
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -13,6 +14,7 @@ import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasParent
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isHeading
 import androidx.compose.ui.test.isNotEnabled
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onLast
@@ -79,7 +81,8 @@ class ComponentPagesTest {
         // Buttons: filled, tonal, text and icon. Chips: two filter chips and
         // one assist chip. Floating action buttons have no disabled state.
         // Selection controls: two each of checkbox, switch and radio button,
-        // off and on.
+        // off and on. Lists: one list item. Cards, and the buttons of the
+        // empty and error states, have no disabled state.
         val expected = mapOf(
             CatalogPage.Buttons to 4,
             CatalogPage.FloatingActionButtons to 0,
@@ -87,6 +90,9 @@ class ComponentPagesTest {
             CatalogPage.TextFields to 1,
             CatalogPage.SelectionControls to 6,
             CatalogPage.Sliders to 1,
+            CatalogPage.Cards to 0,
+            CatalogPage.Lists to 1,
+            CatalogPage.ContentStates to 0,
         )
         assertEquals("every component page is checked", COMPONENT_PAGES.toSet(), expected.keys)
         expected.forEach { (page, count) ->
@@ -159,6 +165,19 @@ class ComponentPagesTest {
 
         val three = compose.activity.resources.getQuantityString(R.plurals.sample_glasses, 3, 3)
         slider.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, three))
+    }
+
+    @Test
+    fun sectionHeadersAreHeadingsAndTheLoadingStateIsReadWithItsText() {
+        open(CatalogPage.Lists)
+        // "Tomorrow" is only a section header.
+        compose.onNode(hasText(text(R.string.sample_tomorrow))).performScrollTo().assert(isHeading())
+        back()
+
+        open(CatalogPage.ContentStates)
+        compose.onNode(hasText(text(R.string.sample_loading_notes)))
+            .performScrollTo()
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.ProgressBarRangeInfo, ProgressBarRangeInfo.Indeterminate))
     }
 
     private fun text(id: Int): String = compose.activity.getString(id)
