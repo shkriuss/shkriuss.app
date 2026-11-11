@@ -49,8 +49,10 @@ In the repository itself:
 - `.claude/rules/` holds extra rules for some paths.
 - [.github/CODEOWNERS](../../.github/CODEOWNERS) lists the owner-only paths.
   Claude changes them only when the owner asks for exactly that change.
-- A planned `protected-paths` workflow will flag pull requests that touch
-  workflows, signing or dependency verification.
+- The `protected-paths` workflow flags every pull request that changes an
+  owner-only path from CODEOWNERS: it adds a label and one comment that
+  lists the files. It never blocks a merge. See
+  [protected-paths.md](../security/protected-paths.md).
 
 ## What the machine account can still do
 

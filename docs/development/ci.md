@@ -9,13 +9,15 @@ Phase 0, step 4.
 |---|---|---|---|
 | CI | [`ci.yml`](../../.github/workflows/ci.yml) | Every pull request, every push to `main` | Checks the Gradle wrapper. Runs unit tests, lint, screenshot verification and the release rules checks. |
 | PR preview | [`pr-preview.yml`](../../.github/workflows/pr-preview.yml) | Every pull request | Builds and signs a preview APK of every app the pull request touches. Uploads it and the changed screenshots. Keeps one comment on the pull request with the links. |
+| Protected paths | [`protected-paths.yml`](../../.github/workflows/protected-paths.yml) | Every pull request, as `pull_request_target` | Labels a pull request `protected-paths` and keeps one comment listing its owner-only files, by CODEOWNERS on `main`. Never blocks a merge. |
 
 How to install a preview on a phone is in
 [test-a-pull-request.md](test-a-pull-request.md). Emulator tests are not set
-up yet. The plan is in [emulator-tests.md](emulator-tests.md).
+up yet. The plan is in [emulator-tests.md](emulator-tests.md). What the
+protected-paths flag protects against, and what it does not, is in
+[protected-paths.md](../security/protected-paths.md).
 
-Still to come (plan section 13): `protected-paths`, `release`, `site`, and
-later `backend`.
+Still to come (plan section 13): `release`, `site`, and later `backend`.
 
 ## Rules every workflow follows
 
@@ -26,11 +28,15 @@ The full list is in `.claude/rules/workflows.md`. In short:
 2. Only GitHub's own actions are used. Everything else is a short shell
    step.
 3. The token is read-only (`permissions: contents: read`). A job that needs
-   more says why in a comment. One job does: "Comment" in PR preview has
-   `pull-requests: write` and nothing else.
-4. No secrets. No `pull_request_target`.
+   more says why in a comment. Two jobs do. "Comment" in PR preview has
+   `pull-requests: write` and nothing else. "Flag owner-only paths" in
+   Protected paths has `pull-requests: write`, and `contents: read` only to
+   read CODEOWNERS through the API.
+4. No secrets. No `pull_request_target`, except in Protected paths, which
+   never checks out, builds or runs anything from the pull request.
 5. Every job has a timeout and a concurrency group. A new push to a pull
-   request cancels the older run.
+   request cancels the older run. Protected paths is the exception: its
+   runs wait for each other, so a run never stops half-way through writing.
 6. Values from the event, from files and from earlier steps reach a shell
    only through `env`. File names are matched against fixed patterns and
    never run.
@@ -196,6 +202,19 @@ three taps ([test-a-pull-request.md](test-a-pull-request.md)).
    for them. If writing is refused anyway, as for Dependabot, the job only
    warns. The links are still in the job summaries.
 
+## Protected paths
+
+One job, "Flag owner-only paths". It runs on `pull_request_target`, so
+GitHub always runs the copy of the workflow on `main`. It checks out
+nothing and uses no action. It reads CODEOWNERS from `main` and the
+pull request's changed files from the API. Then it adds the label
+`protected-paths` and writes or updates one comment.
+
+It runs when a pull request is opened or reopened, after every push, and
+when the base branch changes. It is not a required check. The full
+description, with what it protects against and what it does not, is in
+[protected-paths.md](../security/protected-paths.md).
+
 ## The download cache
 
 Gradle downloads about 950 MB: the Gradle distribution, the Android Gradle
@@ -218,7 +237,7 @@ Plugin, every library and Robolectric's Android image.
 ## Actions used
 
 All are GitHub's own. No other action is used, so nothing needs to be
-allowed in the repository settings.
+allowed in the repository settings. Protected paths uses no action at all.
 
 | Action | Version | Commit | Used for |
 |---|---|---|---|
@@ -241,16 +260,20 @@ Not used, and why:
 
 ## What a pull request can do in these workflows
 
-1. The workflow file comes from the pull request itself. A pull request
-   that changes a workflow runs its own version. CODEOWNERS, and the planned
-   `protected-paths` flag (prompt 0.5), make such a change visible.
+1. For CI and PR preview, the workflow file comes from the pull request
+   itself. A pull request that changes one of them runs its own version.
+   CODEOWNERS and the protected-paths flag make such a change visible. The
+   flag tells you only after that run has started
+   ([protected-paths.md](../security/protected-paths.md)).
 2. Build code from the pull request runs on GitHub's runner, with a
    read-only token and no secrets. It cannot push, cannot change the cache
-   of `main`, and cannot reach the release key. The one job that may write
-   (a comment) runs none of that code.
-3. Pull requests from forks get a read-only token from GitHub anyway. The
-   repository settings decide whether a first-time contributor's run needs
-   the owner's approval.
+   of `main`, and cannot reach the release key. The two jobs that may write
+   (comments and a label) run none of that code.
+3. In CI and PR preview, pull requests from forks get a read-only token
+   from GitHub anyway. The repository settings decide whether a first-time
+   contributor's run needs the owner's approval. Protected paths gets a
+   token that can write the label and the comment, also for forks. That is
+   why it never runs anything from the pull request.
 
 ## Required checks
 

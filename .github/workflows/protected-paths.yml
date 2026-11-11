@@ -1,0 +1,342 @@
+# Flags pull requests that change a path only the owner may change, by
+# .github/CODEOWNERS on the default branch. It adds the label
+# "protected-paths" and keeps one comment that lists the files. It never
+# blocks a merge.
+# What it protects against, and what it does not:
+# docs/security/protected-paths.md.
+
+name: Protected paths
+
+# Read-only by default, as in every workflow here. The one job below
+# replaces this with exactly what it needs.
+permissions:
+  contents: read
+
+on:
+  # pull_request_target runs this file as it is on the default branch,
+  # never the pull request's copy. It also gets a token that can write, even
+  # for pull requests from forks. So this workflow must never check out,
+  # build or run anything from the pull request. It reads file names
+  # through the API only, as text.
+  pull_request_target:
+    types: [opened, reopened, synchronize, edited]
+
+defaults:
+  run:
+    # Stops a step at the first failing command, also inside a pipe.
+    shell: bash
+
+jobs:
+  flag:
+    name: Flag owner-only paths
+    # "edited" also fires for a new title or description, which changes no
+    # file. A new base branch does change the files.
+    if: github.event.action != 'edited' || github.event.changes.base != null
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    # Only these two. The job replaces the read-only default above.
+    permissions:
+      # Only for reading CODEOWNERS from the default branch through the API.
+      # It is never used to check out code. In a public repository it grants
+      # nothing new, and with it the flag also works if the repository is
+      # made private.
+      contents: read
+      pull-requests: write # the label and the comment
+    concurrency:
+      group: protected-paths-${{ github.event.pull_request.number }}
+      # Runs wait for each other instead of cancelling, so a run never stops
+      # half-way through writing. Each run reads the pull request afresh.
+      cancel-in-progress: false
+    steps:
+      # No checkout: nothing from the pull request is on this runner, and
+      # nothing from it runs. File names are untrusted text. They stay inside
+      # jq and the JSON sent to the API. They never reach a shell line and
+      # are never printed to the log.
+      - name: Label and comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -u
+          if ! [[ "$PR_NUMBER" =~ ^[0-9]+$ && "$HEAD_SHA" =~ ^[0-9a-f]{40}$ && "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Unexpected pull request number or commit."
+            exit 1
+          fi
+          repo="repos/$GITHUB_REPOSITORY"
+          repo_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY"
+          work="$RUNNER_TEMP/protected-paths"
+          mkdir -p "$work"
+          label=protected-paths
+
+          # 1. Read the pull request. If a newer commit was pushed, stop: the
+          #    newer push has its own run, which writes the result.
+          read_pull_request() {
+            gh api "$repo/pulls/$PR_NUMBER" > "$work/pull.json" || exit 1
+            if [ "$(jq -r .head.sha "$work/pull.json")" != "$HEAD_SHA" ]; then
+              echo "A newer commit was pushed. Its run writes the result."
+              exit 0
+            fi
+          }
+          read_pull_request
+          changed="$(jq -r .changed_files "$work/pull.json")"
+          if ! [[ "$changed" =~ ^[0-9]+$ ]]; then
+            echo "::error::Unexpected number of changed files."
+            exit 1
+          fi
+
+          # 2. CODEOWNERS as it is on the default branch, at the commit this
+          #    run comes from. Never the pull request's copy. GitHub uses the
+          #    first of these three places that has one.
+          codeowners=""
+          for path in .github/CODEOWNERS CODEOWNERS docs/CODEOWNERS; do
+            if gh api -H 'Accept: application/vnd.github.raw+json' \
+                "$repo/contents/$path?ref=$GITHUB_SHA" > "$work/CODEOWNERS" 2> "$work/error.txt"; then
+              codeowners="$path"
+              break
+            fi
+            if ! grep -q 'HTTP 404' "$work/error.txt"; then
+              cat "$work/error.txt"
+              echo "::error::Could not read $path on the default branch."
+              exit 1
+            fi
+          done
+          if [ -z "$codeowners" ]; then
+            echo "::error::Found no CODEOWNERS file on the default branch."
+            exit 1
+          fi
+
+          # 3. The changed files, from the API. One file per line, as JSON,
+          #    so a name with a line break in it stays one value. The API
+          #    lists at most 3000 files; step 5 notices when there are more.
+          gh api --paginate "$repo/pulls/$PR_NUMBER/files?per_page=100" \
+            --jq '.[] | {filename, previous_filename, status} | tojson' > "$work/files.jsonl"
+
+          # 4. Read the pull request again, so the list belongs to the commit
+          #    that the comment names.
+          read_pull_request
+
+          # 5. Match every file, and its old name if it was renamed, against
+          #    CODEOWNERS. Then write the comment's text.
+          cat > "$work/match.jq" <<'JQ'
+          # One character of a pattern as a regular expression. ASCII
+          # punctuation is escaped. Everything else stands for itself.
+          def literal:
+            if test("\\A[!-/:-@\\[-`{-~]\\z") then "\\" + . else . end;
+
+          # One part of a pattern between slashes, such as "*.jks". "*" and
+          # "?" never match a slash. A backslash makes the next character
+          # plain. GitHub does not support "[ ]" or "!" in CODEOWNERS, so
+          # they are plain characters here.
+          def part:
+            [scan("\\\\[\\s\\S]|[\\s\\S]")]
+            | map(if . == "*" then "[^/]*"
+                  elif . == "?" then "[^/]"
+                  elif length == 2 then .[1:] | literal
+                  else literal end)
+            | join("");
+
+          # A CODEOWNERS pattern as a regular expression for a file's path:
+          # - A slash at the start or in the middle ties the pattern to the
+          #   repository root. Without one, it matches at any depth.
+          # - A slash at the end means everything inside that folder.
+          # - "**" matches any number of folders.
+          # - A pattern also covers everything inside a folder it matches,
+          #   except one that ends in "/*". That matches only the folder's
+          #   own files, as GitHub documents.
+          def pattern_regex:
+            endswith("/") as $folder
+            | if $folder then .[:-1] else . end
+            | contains("/") as $rooted
+            | ltrimstr("/")
+            | split("/") as $parts
+            | ($parts | length) as $n
+            | $parts[$n - 1] as $last
+            | "\\A"
+              + (if $rooted then "" else "(?:[\\s\\S]*/)?" end)
+              + ([range(0; $n) as $i
+                  | if $parts[$i] == "**" then
+                      (if $i == $n - 1 then "[\\s\\S]*" else "(?:[\\s\\S]*/)?" end)
+                    else
+                      ($parts[$i] | part) + (if $i < $n - 1 then "/" else "" end)
+                    end]
+                 | join(""))
+              + (if $last == "**" then "\\z"
+                 elif $folder then "/"
+                 elif $last == "*" and $n > 1 then "\\z"
+                 else "(?:/|\\z)" end);
+
+          # The rules of CODEOWNERS, in file order. Blank lines and comments
+          # are skipped. A rule without an owner takes ownership away again.
+          def rules:
+            $codeowners
+            | split("\n")[]
+            | sub("\r\\z"; "")
+            | sub("\\A\\s+"; "")
+            | select(length > 0 and (startswith("#") | not))
+            | capture("\\A(?<pattern>(?:\\\\[\\s\\S]|[^\\s\\\\])+)(?<rest>[\\s\\S]*)\\z")
+            | {pattern,
+               regex: (.pattern | pattern_regex),
+               owned: ([.rest | splits("\\s+") | select(length > 0)]
+                       | (map(startswith("#")) | index(true)) as $comment
+                       | if $comment == null then . else .[:$comment] end
+                       | length > 0)};
+
+          # The rule that decides a path's owners: the last one that matches.
+          def deciding_rule($rules):
+            . as $path | [$rules[] | select(.regex as $r | $path | test($r))] | last;
+
+          def hex:
+            if . < 16 then "0123456789abcdef"[.:. + 1]
+            else ((. / 16 | floor) | hex) + (. % 16 | hex) end;
+
+          # Characters that are invisible, or that change the order or the
+          # look of the text around them, shown as \u{...}. So a file name
+          # cannot hide what it really is.
+          def visible:
+            gsub("(?<c>[\\x{0}-\\x{1f}\\x{7f}-\\x{9f}\\x{ad}\\x{34f}\\x{61c}\\x{115f}\\x{1160}\\x{17b4}\\x{17b5}\\x{180b}-\\x{180f}\\x{200b}-\\x{200f}\\x{2028}-\\x{202e}\\x{2060}-\\x{206f}\\x{3164}\\x{fe00}-\\x{fe0f}\\x{feff}\\x{ffa0}\\x{fff0}-\\x{fffb}\\x{e0000}-\\x{e0fff}])";
+                 "\\u{" + (.c | explode[0] | hex) + "}");
+
+          # A text as a Markdown code span, so GitHub shows it as plain text:
+          # no links, mentions, references or formatting. The fence of
+          # backticks is longer than any run of backticks inside. GitHub
+          # removes the two spaces next to the fence again.
+          def code:
+            ([scan("`+") | length] | max // 0) as $longest
+            | ("`" * ($longest + 1)) as $fence
+            | $fence + " " + . + " " + $fence;
+
+          # A path for the comment: visible, at most 300 characters, as code.
+          def shown:
+            visible
+            | if length > 300 then (.[:300] | code) + " (shortened)" else code end;
+
+          def change:
+            if .status == "added" then "added"
+            elif .status == "removed" then "deleted"
+            elif .status == "renamed" and (.previous_filename | type) == "string" then
+              "renamed from " + (.previous_filename | shown)
+            elif .status == "copied" and (.previous_filename | type) == "string" then
+              "copied from " + (.previous_filename | shown)
+            else "changed" end;
+
+          [rules] as $rules
+          | [$files[]
+             | . as $file
+             | [.filename, .previous_filename
+                | select(type == "string")
+                | deciding_rule($rules)
+                | select(. != null and .owned)]
+             | select(length > 0)
+             | "- " + ($file.filename | shown) + ": " + ($file | change)
+               + ". Rule " + (.[0].pattern | shown) + "."]
+            as $lines
+          | ($lines | length) as $count
+          | ($files | length) as $listed
+          | ($listed >= $changed) as $complete
+          # A comment may have 65536 characters. List at most 100 files, and
+          # stop well before that size.
+          | (reduce $lines[] as $line ({kept: [], size: 0, full: false};
+               if .full or (.kept | length) >= 100 or .size + ($line | length) > 50000
+               then .full = true
+               else .kept += [$line] | .size += ($line | length) + 1 end)
+             | .kept) as $kept
+          | (if $count == 1 then "1 file" else "\($count) files" end) as $count_text
+          | {
+              flag: ($count > 0 or ($complete | not)),
+              protected: $count,
+              listed: $listed,
+              changed: $changed,
+              body: ([
+                "<!-- shkriuss-protected-paths -->",
+                "### Owner-only paths",
+                "",
+                (if $count > 0 then
+                   "This pull request changes \($count_text) that only the owner may change, as listed in [CODEOWNERS](\($codeowners_url)) on the default branch:",
+                   "",
+                   $kept[],
+                   (if $count > ($kept | length) then
+                      "- And \($count - ($kept | length)) more. See the **Files changed** tab."
+                    else empty end),
+                   "",
+                   "Read these changes yourself before you approve. This comment does not block the merge."
+                 elif $complete then
+                   "This pull request no longer changes an owner-only path. An earlier commit did. This workflow does not remove the label `protected-paths`. Remove it yourself when you have checked."
+                 else
+                   "None of the first \($listed) changed files is owner-only."
+                 end),
+                (if $complete then empty else
+                   "",
+                   "**Not every file was checked.** GitHub lists only \($listed) of the \($changed) changed files. Treat this pull request as if it changes owner-only paths, and look through the **Files changed** tab."
+                 end),
+                "",
+                "Checked at commit `\($sha[0:7])`. Updated after every push. [What this means](\($docs_url)) · [This run](\($run_url))"
+              ] | join("\n"))
+            }
+          JQ
+          jq -n \
+            --rawfile codeowners "$work/CODEOWNERS" \
+            --slurpfile files "$work/files.jsonl" \
+            --argjson changed "$changed" \
+            --arg sha "$HEAD_SHA" \
+            --arg codeowners_url "$repo_url/blob/$GITHUB_SHA/$codeowners" \
+            --arg docs_url "$repo_url/blob/main/docs/security/protected-paths.md" \
+            --arg run_url "$repo_url/actions/runs/$GITHUB_RUN_ID" \
+            -f "$work/match.jq" > "$work/result.json"
+          flag="$(jq -r .flag "$work/result.json")"
+          jq -j .body "$work/result.json" > "$work/body.md"
+          # Numbers only. Never a file name.
+          jq -r '"Owner-only files: \(.protected). Files listed: \(.listed) of \(.changed)."' "$work/result.json"
+
+          # 6. The one comment this workflow keeps: written by GitHub Actions
+          #    and starting with the marker. It never edits anyone else's.
+          #    If listing fails, the step stops here, so it never adds a
+          #    second comment.
+          gh api --paginate "$repo/issues/$PR_NUMBER/comments?per_page=100" \
+            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- shkriuss-protected-paths -->"))) | .id' \
+            > "$work/comment-ids.txt"
+          existing="$(head -n 1 "$work/comment-ids.txt")"
+          if ! [[ "$existing" =~ ^[0-9]*$ ]]; then
+            echo "::error::Unexpected comment number."
+            exit 1
+          fi
+          if [ "$flag" != true ] && [ -z "$existing" ]; then
+            echo "No owner-only path changed, and no comment yet. Nothing written."
+            exit 0
+          fi
+
+          # 7. The label. It is made the first time it is needed, then only
+          #    added. This workflow never removes it.
+          if [ "$flag" = true ]; then
+            if ! gh api "$repo/labels/$label" --silent 2> /dev/null; then
+              jq -n --arg name "$label" \
+                '{name: $name, color: "b60205", description: "Changes a path that only the owner may change"}' \
+                > "$work/label.json"
+              # Another run may make it at the same moment. Then it exists.
+              if ! gh api --method POST "$repo/labels" --input "$work/label.json" --silent 2> "$work/error.txt" &&
+                 ! gh api "$repo/labels/$label" --silent; then
+                cat "$work/error.txt"
+                echo "::error::Could not make the label."
+                exit 1
+              fi
+            fi
+            jq -n --arg name "$label" '{labels: [$name]}' > "$work/labels.json"
+            gh api --method POST "$repo/issues/$PR_NUMBER/labels" --input "$work/labels.json" --silent
+            echo "Label added."
+          fi
+
+          # 8. Write the comment, or update it in place if it changed.
+          jq -n --rawfile body "$work/body.md" '{body: $body}' > "$work/comment.json"
+          if [ -n "$existing" ]; then
+            gh api "$repo/issues/comments/$existing" > "$work/existing.json"
+            if jq -e --rawfile body "$work/body.md" '.body == $body' "$work/existing.json" > /dev/null; then
+              echo "The comment is up to date."
+            else
+              gh api --method PATCH "$repo/issues/comments/$existing" --input "$work/comment.json" --jq .html_url
+            fi
+          else
+            gh api --method POST "$repo/issues/$PR_NUMBER/comments" --input "$work/comment.json" --jq .html_url
+          fi
+
+          # 9. The same text on the run's summary page.
+          cat "$work/body.md" >> "$GITHUB_STEP_SUMMARY"
