@@ -42,6 +42,9 @@ enum class CatalogPage(
     Cards(R.string.page_cards_title, R.string.page_cards_summary, CatalogGroup.Components),
     Lists(R.string.page_lists_title, R.string.page_lists_summary, CatalogGroup.Components),
     ContentStates(R.string.page_states_title, R.string.page_states_summary, CatalogGroup.Components),
+    TopBars(R.string.page_top_bars_title, R.string.page_top_bars_summary, CatalogGroup.Components),
+    Navigation(R.string.page_navigation_title, R.string.page_navigation_summary, CatalogGroup.Components),
+    ListDetail(R.string.page_list_detail_title, R.string.page_list_detail_summary, CatalogGroup.Components),
 }
 
 /**
@@ -71,5 +74,8 @@ fun CatalogApp() {
         CatalogPage.Cards -> CardsPage()
         CatalogPage.Lists -> ListsPage()
         CatalogPage.ContentStates -> ContentStatesPage()
+        CatalogPage.TopBars -> TopBarsPage()
+        CatalogPage.Navigation -> NavigationPage()
+        CatalogPage.ListDetail -> ListDetailPage()
     }
 }

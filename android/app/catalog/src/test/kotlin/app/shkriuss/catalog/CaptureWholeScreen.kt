@@ -2,6 +2,7 @@ package app.shkriuss.catalog
 
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.junit4.ComposeTestRule
 import androidx.compose.ui.test.onRoot
@@ -17,9 +18,13 @@ import com.github.takahirom.roborazzi.captureRoboImage
  * scrolls down by one window less an overlap and captures
  * `<name>_<config>_part2.png`, and so on to the end. The overlap shows
  * the lines cut at the edge of one image whole in the next.
+ *
+ * It scrolls the screen itself: the outermost part that scrolls. Samples
+ * on a page, such as a navigation rail or the panes of a list and detail,
+ * can scroll inside it.
  */
 fun ComposeTestRule.captureWholeScreen(name: String, config: ScreenshotConfig) {
-    val scroller = onNode(hasScrollAction())
+    val scroller = onNode(hasScrollAction() and !hasAnyAncestor(hasScrollAction()))
     var part = 1
     onRoot().captureRoboImage(path(name, config, part))
     while (true) {

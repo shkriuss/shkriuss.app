@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- What TalkBack reads for the Back button at the start of a top bar. -->
+    <string name="shk_back">Back</string>
+</resources>
