@@ -185,6 +185,18 @@ class ComponentPagesTest {
     }
 
     @Test
+    fun onlyTheEmptyStateThatAnswersASearchIsAnnounced() {
+        open(CatalogPage.ContentStates)
+        // "No results" answers a search, so it is announced. "No notes yet"
+        // is what a screen shows when it opens, so it is not.
+        val polite = SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite)
+        compose.onNode(hasText(text(R.string.sample_no_results))).performScrollTo().assert(polite)
+        compose.onNode(hasText(text(R.string.sample_no_notes)))
+            .performScrollTo()
+            .assert(SemanticsMatcher.keyNotDefined(SemanticsProperties.LiveRegion))
+    }
+
+    @Test
     fun statesToTrySwapAndAreAnnouncedPolitely() {
         open(CatalogPage.ContentStates)
         // These words are only under "Try it".

@@ -256,6 +256,22 @@ class ShkContentComponentsTest(private val fontScale: Float) {
     }
 
     @Test
+    fun anEmptyStateIsAnnouncedPolitelyOnlyWhenItAnswersSomethingTheUserDid() {
+        show {
+            Column {
+                ShkEmptyState(title = TITLE, body = BODY)
+                ShkEmptyState(title = NO_RESULTS, body = NO_RESULTS_BODY, announce = true)
+            }
+        }
+
+        val polite = SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite)
+        compose.onNode(hasText(NO_RESULTS)).assert(polite)
+        compose.onNode(hasText(TITLE)).assert(SemanticsMatcher.keyNotDefined(SemanticsProperties.LiveRegion))
+        compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.LiveRegion), useUnmergedTree = true)
+            .assertCountEquals(1)
+    }
+
+    @Test
     fun longTextOfTheStatesWrapsCentredAndTheButtonSitsUnderIt() {
         var shown by mutableStateOf(STATES.first())
         show {
@@ -350,6 +366,8 @@ class ShkContentComponentsTest(private val fontScale: Float) {
         private const val BODY = "Notes you write show here."
         private const val ACTION = "New note"
         private const val LOADING = "Loading notes"
+        private const val NO_RESULTS = "No results"
+        private const val NO_RESULTS_BODY = "Try other words."
         private const val LONG_TITLE = "Could not open the backup you chose"
         private const val LONG_BODY = "The file is damaged, or it is not a backup made by this app."
         private const val LONG_LOADING = "Reading your notes from the backup. This can take a minute."

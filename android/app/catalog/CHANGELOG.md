@@ -45,7 +45,8 @@ development.
   state as its text and "in progress".
 - On Empty, loading and error, an error state to try turns into a
   loading state and back. TalkBack announces each loading and error state
-  as it appears.
+  as it appears, and the empty state "No results", which answers a
+  search.
 - The text of list items, section headers, checkboxes, switches and
   radio buttons now starts at the same edge as the page title. Only the
   pressed highlight reaches a little past it.

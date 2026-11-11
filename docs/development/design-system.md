@@ -415,6 +415,7 @@ columns are 16 dp apart.
 | Collapsed (`expanded = false`) | Extended floating action button. |
 | Tappable (`onClick` given) | Card, list item. A card that can be tapped has no disabled state: when it cannot be opened, leave out `onClick` (owner decision on pull request 15). |
 | With supporting or trailing text, with an icon | List item. |
+| Announced (`announce = true`) | Empty state, when it answers something the user just did. Loading and error states are always announced. See [TalkBack](#talkback). |
 | With a button (`action` given) | Empty state, error state. `action` is a `ShkStateAction`: the words on the button and what a tap does, together, so a state cannot show a button that does nothing (owner decision on pull request 15). |
 
 The states themselves cannot be turned off. Their button is a
@@ -521,7 +522,13 @@ around it.
   politely: after what it is saying, without moving its focus (owner
   decision on pull request 15). The loading state announces its text, the
   error state its title and body, not its button. They are polite live
-  regions, as Material 3's snackbar is. An empty state is not announced.
+  regions, as Material 3's snackbar is.
+- An empty state is announced the same way only with `announce = true`.
+  Turn it on when the state answers something the user just did, such as
+  a search or a filter that found nothing: then it is a status message.
+  Leave it off, the default, when the state is simply what a screen shows
+  when it opens, such as "No notes yet" (owner decision on pull request
+  15).
 - A disabled component is read as "disabled".
 
 ### Icons
@@ -684,7 +691,8 @@ screen. It checks:
 6. The loading state and the error state are polite live regions, on the
    item that holds their words, so TalkBack announces those words when
    they appear. There is one live region for each, so nothing is
-   announced twice.
+   announced twice. An empty state is a polite live region only with
+   `announce = true`.
 7. Long text in a list item, a section header, a card and the three
    states, in a space 200 dp wide, wraps, is not cut by its own layout and
    stays inside the component. The text at the end of a list item stays
@@ -703,8 +711,9 @@ check fails.
 the components where they sit: each has a label and a role, no two touch
 targets overlap, and every component that can be turned off is shown
 turned off. On Lists, a section header is read as a heading. On Empty,
-loading and error, the loading state is read with "in progress", and the
-states under "Try it" swap and are polite live regions. It also tries
+loading and error, the loading state is read with "in progress", "No
+results" is announced and "No notes yet" is not, and the states under
+"Try it" swap and are polite live regions. It also tries
 the components under "Try it": the filter
 chips select and clear, the checkboxes and switches turn on and off, a
 radio button clears the others in its group, the text field takes typing
@@ -753,10 +762,11 @@ Components:
     section header with one line, with long text and above list items;
     the divider between list items.
 13. **Empty, loading and error**: the empty state with an icon and a
-    button, without a button, with a title only and with long text; the
+    button, answering a search (announced), with a title only and with
+    long text; the
     loading state with short and long text; the error state with and
     without a button and with long text; then an error state to try,
-    which turns into a loading state.
+    which turns into a loading state (owner decision on pull request 15).
 
 Each component page names a component, says when to use it, then shows
 each state under a caption. Only the components under "Try it" respond
@@ -845,6 +855,3 @@ loading circle as it starts: a short arc at its top. On a phone it turns.
   then.
 - Focus uses Material 3's light state layer. There is no separate focus
   ring for keyboards.
-- Whether an empty state that answers a search, such as "No results", is
-  announced too. WCAG 2.2 counts the result of a search as a status
-  message. Today no empty state is announced.

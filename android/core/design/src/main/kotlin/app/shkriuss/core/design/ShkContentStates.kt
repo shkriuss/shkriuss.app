@@ -38,6 +38,14 @@ import androidx.compose.ui.unit.dp
  * that does it, such as "New note". Leave the button out when the screen
  * already has a floating action button for the same action.
  *
+ * Turn [announce] on when the state answers something the user just did,
+ * such as a search or a filter that found nothing. It is then a status
+ * message (WCAG 2.2, success criterion 4.1.3), and TalkBack announces the
+ * title and the body politely when it appears. Leave it off when the
+ * state is simply what a screen shows when it opens, such as "No notes
+ * yet": the user has asked for nothing, so there is nothing to announce
+ * (owner decision on pull request 15).
+ *
  * It fills the width it is given and centres its content. Give it the
  * whole height of the screen or list, for example with `weight(1f)`, to
  * centre it there too. TalkBack reads the title and the body as one item,
@@ -50,13 +58,14 @@ fun ShkEmptyState(
     body: String? = null,
     icon: Painter? = null,
     action: ShkStateAction? = null,
+    announce: Boolean = false,
 ) {
     StateMessage(
         title = title,
         body = body,
         icon = icon,
         iconColor = ShkTheme.colors.textSecondary,
-        announce = false,
+        announce = announce,
         action = action,
         modifier = modifier,
     )

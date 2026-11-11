@@ -17,9 +17,10 @@ import app.shkriuss.core.design.ShkStateAction
 import app.shkriuss.core.design.ShkSwitch
 
 /**
- * The empty state with and without an icon and a button, the loading
- * state, and the error state with and without a button, each also with
- * long text, then a loading and an error state to try. In an app each
+ * The empty state with an icon and a button, answering a search, with a
+ * title only and with long text, the loading
+ * state with short and long text, and the error state with and without a
+ * button and with long text, then a loading and an error state to try. In an app each
  * fills the screen or list it stands in for; here they sit in the page.
  * Only the switch and the button under "Try it" do something when tapped.
  */
@@ -40,11 +41,13 @@ fun ContentStatesPage(modifier: Modifier = Modifier) {
                         action = ShkStateAction(text = stringResource(R.string.sample_new_note), onClick = {}),
                     )
                 },
-                ComponentState(R.string.state_without_button) {
+                // It answers a search, so TalkBack announces it.
+                ComponentState(R.string.state_answers_search) {
                     ShkEmptyState(
                         title = stringResource(R.string.sample_no_results),
                         body = stringResource(R.string.sample_no_results_body),
                         icon = painterResource(R.drawable.sample_icon_search),
+                        announce = true,
                     )
                 },
                 ComponentState(R.string.state_title_only) {

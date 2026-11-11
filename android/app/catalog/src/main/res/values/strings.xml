@@ -162,6 +162,7 @@
     <string name="state_with_icon_button">With an icon and a button</string>
     <string name="state_with_button">With a button</string>
     <string name="state_without_button">Without a button</string>
+    <string name="state_answers_search">Answering a search, announced by TalkBack</string>
     <string name="state_title_only">Title only</string>
     <string name="state_loading">Loading</string>
     <string name="state_try_states">Try it: tap Try again, or turn the switch on and off. With TalkBack on, each state is announced as it appears.</string>
