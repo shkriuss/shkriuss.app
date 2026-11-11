@@ -291,6 +291,8 @@ Read CLAUDE.md and docs/plan/PLAN.md. I am the owner and I ask you to add
 
 ### Phase 0 gate (you, on the phone)
 
+Done on 2026-11-11 with Catalog 0.1.0.
+
 1. Run the release workflow for Catalog. Approve the signing step.
 2. Publish the draft release.
 3. Add the repository to Obtainium and install Catalog.

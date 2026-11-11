@@ -10,6 +10,7 @@ fingerprint, and a link to the source. Set up in Phase 0, step 7.
 - It is served by the Cloudflare Worker `shkriuss-hub`, which has static
   files only and no Worker script. Why, and how the deploy is protected:
   [ADR 0023](../adr/0023-hub-site-hosting-and-deploy.md).
+- It is live at <https://shkriuss.app> since 2026-11-11.
 - The site has no JavaScript, no cookies, no analytics and no fonts from
   other sites. Light and dark follow the phone's setting, with the palette
   of [ADR 0017](../adr/0017-design-system-tokens.md).
@@ -147,6 +148,9 @@ Worker only with an account API token.
 9. Copy the token. It starts with `cfat_`. Cloudflare shows it only once.
    Never paste it into a Claude session.
 
+The token in use was made this way: the scope **Specified Workers**,
+`shkriuss-hub`, with the role **Editor**.
+
 #### If your account does not offer Specified Workers
 
 1. Make the same account API token, but with the scope **All Workers** and
@@ -184,6 +188,8 @@ add `shkriuss`.
 
 ### 5. The first deploy
 
+Done on 2026-11-11.
+
 1. Merge the pull request. Its push to `main` starts the workflow. Or, if
    it is merged already, open
    `github.com/shkriuss/shkriuss.app/actions/workflows/site.yml`, tap **Run
@@ -202,6 +208,9 @@ page.
 
 You attach `shkriuss.app` by hand. The workflow never changes routes or
 domains, and the token cannot.
+
+Done on 2026-11-11. `SITE_DOMAIN` is set to `shkriuss.app`, so Deploy
+checks the domain too.
 
 1. In **Workers & Pages**, tap `shkriuss-hub`.
 2. Open **Settings**, then **Domains & Routes**. Tap **Add**, then
@@ -380,7 +389,19 @@ Before the first merge, in the cloud environment:
    `workers.dev` address, which a Worker made in the dashboard has.
 7. `actionlint` with `shellcheck` found no problems.
 
-Not tried, because Claude has no Cloudflare access: the real token and its
-per-Worker scope, the real upload, how Cloudflare sends `_headers`, and the
-labels in the Cloudflare dashboard. The first deploy tries the first three,
-and the job Deploy checks them on every run.
+Not tried in the cloud environment, because Claude has no Cloudflare
+access: the real token and its per-Worker scope, the real upload, how
+Cloudflare sends `_headers`, and the labels in the Cloudflare dashboard.
+
+The first deploys, on 2026-11-11, tried the first three:
+
+1. The token is an account API token with the scope **Specified
+   Workers**, `shkriuss-hub`, and the role **Editor**. The fallback for
+   all Workers was not needed.
+2. Deploy uploaded the site. Every file was live, byte for byte, with
+   every security header, on the `workers.dev` address and on
+   <https://shkriuss.app>.
+3. The job Deploy checks the same on every run.
+
+Of the dashboard labels, only the token's scope and role are confirmed.
+Write down any other label that differs, so Claude can fix this page.

@@ -1,8 +1,9 @@
 # shkriuss.app project plan
 
-Agreed between the owner and Claude on 2026-11-10. This file is the source of
-truth until Phase 0 turns each part into ADRs and docs. After that, the ADRs
-and docs win and this file is kept as history.
+Agreed between the owner and Claude on 2026-11-10. This file was the source
+of truth until Phase 0 turned each part into ADRs and docs. Phase 0 ended on
+2026-11-11. Since then, the ADRs and docs win and this file is kept as
+history.
 
 ## 1. Goal and hard constraints
 
@@ -242,7 +243,7 @@ Each phase ends at a gate the owner checks on real devices.
 
 0. Foundations. Gate: an empty Catalog app builds reproducibly in CI, is
    signed, and installs through Obtainium. Every pull request gives a preview
-   APK and screenshots.
+   APK and screenshots. Done on 2026-11-11 with Catalog 0.1.0.
 1. Core: design system, data, crypto, backup, notifications. Gate: Catalog
    approved on all three devices; backup round-trip and alarm tests pass.
 2. Water (pilot). Gate: GrapheneOS checklist below, TalkBack pass, two weeks

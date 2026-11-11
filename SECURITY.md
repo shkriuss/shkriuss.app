@@ -28,8 +28,8 @@ Please never include real user data, recovery keys, tokens or passwords.
 
 ## Supported versions
 
-There are no releases yet. This section will list the supported versions
-after the first release.
+Only the newest release of each app gets security fixes. The
+[apps page](docs/user/apps.md) shows the newest version of each app.
 
 ## Scope
 

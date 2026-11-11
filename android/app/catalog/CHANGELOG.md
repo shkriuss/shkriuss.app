@@ -3,9 +3,9 @@
 Catalog (`app.shkriuss.catalog`) is the design gallery used during
 development.
 
-## Unreleased
+## 0.1.0 (2026-11-11)
 
-### 0.1.0
+Released as `catalog-v0.1.0`.
 
 - First build: one screen that says "Catalog", in a light theme and a
   true-black dark theme that follow the system setting.
