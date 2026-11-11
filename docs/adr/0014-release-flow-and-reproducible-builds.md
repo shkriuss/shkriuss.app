@@ -86,7 +86,8 @@
 - Open: that a draft release works with the tag rules, and that the owner
   can publish it (section 17).
 - The `ci` and `pr-preview` workflows (Phase 0, step 4) use only GitHub's
-  own actions: `checkout`, `upload-artifact` and `cache`. The commits are
+  own actions: `checkout`, `upload-artifact`, `download-artifact` and
+  `cache`. The commits are
   listed in [ci.md](../development/ci.md#actions-used).
 - Open: whether the `release` and `site` workflows need any third-party
   action, so the owner can allow it in the repository settings

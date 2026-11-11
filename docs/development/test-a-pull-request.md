@@ -31,28 +31,40 @@ them. How it works is in [ci.md](ci.md#pr-preview).
 
 1. Open the pull request in your phone's browser.
 2. Wait until its checks are done. The preview takes a few minutes.
-3. Scroll to the checks at the bottom of the **Conversation** tab. If they
-   are folded, tap to show them.
-4. Tap **Preview (catalog)**, or the line with the app you want to test.
-   The job's page opens.
-5. Tap **Summary** at the top of that page. The summary has one section per
-   app, and one for the screenshots.
-6. In the app's section, tap the link that ends in `.apk`. The browser
-   downloads the file.
-7. Tap **Open** in the browser's download message. If you missed it, open
+3. In the **Conversation** tab, find the comment **Preview of this pull
+   request** from **github-actions**. There is only one. Each new push
+   updates it.
+4. Check that its last line names the newest commit of the pull request.
+   If it names an older one, the new preview is not ready yet.
+5. Tap the link that ends in `.apk`. The browser downloads the file.
+6. Tap **Open** in the browser's download message. If you missed it, open
    the **Files** app, tap **Downloads**, and tap the file.
-8. The first time, Android says the browser may not install apps. Tap
+7. The first time, Android says the browser may not install apps. Tap
    **Settings**, turn on **Allow from this source**, and go back.
-9. Tap **Install**.
-10. Open the app from the app drawer. Its name ends in "preview".
+8. Tap **Install**.
+9. Open the app from the app drawer. Its name ends in "preview".
 
-If a pull request changes no app, for example only docs, the summary says
-so and there is no APK.
+If a pull request changes no app, for example only docs, there is no APK.
+The comment says so, or there is no comment at all.
+
+### Without the comment
+
+Pull requests from forks and from Dependabot get no comment, because their
+token may not write one. The same links are in the run's summary:
+
+1. Open the pull request's **Checks** tab.
+2. Tap **PR preview** in the list. The run's summary page opens.
+3. Scroll to the section named after the app, for example **Catalog
+   preview**. You see it only when you are signed in.
+4. Tap the link that ends in `.apk`. Then go on with step 6 above.
+
+The **Artifacts** list on the same page has the APK and the screenshots
+zip too, under their file names.
 
 ## Look at the screenshots
 
-1. Open the summary page, as in steps 1 to 5 above.
-2. Under **Screenshots**, tap the link that ends in `.zip`.
+1. Open the pull request's preview comment, as in steps 1 to 4 above.
+2. Tap the link that ends in `.zip`.
 3. Open the **Files** app, tap **Downloads**, and tap the zip. It opens
    like a folder.
 4. Open the folders. They are named after the module, for example
@@ -81,7 +93,8 @@ Uninstalling deletes the preview's data. The real app is not touched.
 | What you see | What to do |
 |---|---|
 | No **Preview** line in the checks | The pull request changes no app. Nothing to install. |
-| **Preview** failed | The APK could not be built. Ask Claude with prompt R1 in [PROMPTS.md](PROMPTS.md). |
+| The comment names an older commit | The new preview is still being built. Wait for the checks. |
+| The comment says "no APK", or **Preview** failed | The APK could not be built. Ask Claude with prompt R1 in [PROMPTS.md](PROMPTS.md). |
 | The link opens a sign-in page or "Not Found" | Sign in to GitHub in this browser. A link also stops working when the files expire (see below). |
 | Android says "App not installed" | An older preview is still installed. Uninstall it first. |
 | Android says the package is invalid | The download stopped early. Download it again. |
@@ -112,6 +125,9 @@ request onto a phone with only a browser. Options:
    the Files app before it can install, which adds steps.
 3. **A release per pull request.** A release needs a tag, and only the
    owner creates tags (section 15 of the [plan](../plan/PLAN.md)).
-4. **A comment on the pull request with the link.** It would save steps 3
-   to 5, but the workflow would need permission to write to pull requests.
-   Open: the owner decides whether that is worth it.
+4. **A comment on the pull request with the link (added).** It saves three
+   taps: the checks, the job and its summary. The owner decided on
+   [pull request 6](https://github.com/shkriuss/shkriuss.app/pull/6) to add
+   it, in its own small job that may only write to pull requests, checks
+   out nothing and runs no code from the pull request
+   ([ci.md](ci.md#job-comment)).

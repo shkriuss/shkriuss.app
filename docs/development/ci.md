@@ -8,7 +8,7 @@ Phase 0, step 4.
 | Workflow | File | Runs on | What it does |
 |---|---|---|---|
 | CI | [`ci.yml`](../../.github/workflows/ci.yml) | Every pull request, every push to `main` | Checks the Gradle wrapper. Runs unit tests, lint, screenshot verification and the release rules checks. |
-| PR preview | [`pr-preview.yml`](../../.github/workflows/pr-preview.yml) | Every pull request | Builds and signs a preview APK of every app the pull request touches. Uploads it and the changed screenshots. |
+| PR preview | [`pr-preview.yml`](../../.github/workflows/pr-preview.yml) | Every pull request | Builds and signs a preview APK of every app the pull request touches. Uploads it and the changed screenshots. Keeps one comment on the pull request with the links. |
 
 How to install a preview on a phone is in
 [test-a-pull-request.md](test-a-pull-request.md). Emulator tests are not set
@@ -26,7 +26,8 @@ The full list is in `.claude/rules/workflows.md`. In short:
 2. Only GitHub's own actions are used. Everything else is a short shell
    step.
 3. The token is read-only (`permissions: contents: read`). A job that needs
-   more says why in a comment. No job needs more today.
+   more says why in a comment. One job does: "Comment" in PR preview has
+   `pull-requests: write` and nothing else.
 4. No secrets. No `pull_request_target`.
 5. Every job has a timeout and a concurrency group. A new push to a pull
    request cancels the older run.
@@ -97,8 +98,9 @@ Why the release checks are named one by one:
 - Naming the task builds the release APK, so R8 runs on every pull request
   too.
 
-In the cloud environment, the same Gradle command took 4 minutes 35 seconds
-with nothing downloaded yet.
+With nothing cached, the Gradle command took 3 minutes 43 seconds on
+GitHub's runner on 2026-11-11, and 4 minutes 35 seconds in the cloud
+environment.
 
 ### When CI fails
 
@@ -163,6 +165,37 @@ workflow, so a preview job must never have a real key.
 The preview is built from the test merge commit, so it shows the pull
 request as it would be after merging.
 
+Each job also hands the APK's artifact number to "Comment", as a tiny
+`comment-data-<app>` file that is kept for one day. Job outputs cannot
+carry it, because every app's job would overwrite the same output.
+
+### Job "Comment"
+
+The owner's decision on
+[pull request 6](https://github.com/shkriuss/shkriuss.app/pull/6). It keeps
+one comment on the pull request, **Preview of this pull request**, with a
+direct link to each APK and to the screenshots zip. It saves the owner
+three taps ([test-a-pull-request.md](test-a-pull-request.md)).
+
+1. It has only `pull-requests: write`. It checks out nothing and runs no
+   code from the pull request.
+2. It runs after the preview jobs, also when one failed or none was
+   needed. A failed app gets the line "no APK" with a link to the run.
+3. It reads the app list from "Find apps and screenshots", which ran no
+   code from the pull request. From the preview jobs, which did, it takes
+   only one number per app, and only if it is a number. Every link is
+   built from the run's own values.
+4. It finds its earlier comment by a hidden marker and by its author,
+   GitHub Actions, and updates it in place. It never edits anyone else's
+   comment.
+5. If a newer commit was pushed in the meantime, it does nothing. The
+   newer run writes the comment.
+6. A pull request that changes no app and no screenshot gets no new
+   comment. An existing comment is updated to say so.
+7. Pull requests from forks get a read-only token, so the job is skipped
+   for them. If writing is refused anyway, as for Dependabot, the job only
+   warns. The links are still in the job summaries.
+
 ## The download cache
 
 Gradle downloads about 950 MB: the Gradle distribution, the Android Gradle
@@ -190,11 +223,13 @@ allowed in the repository settings.
 | Action | Version | Commit | Used for |
 |---|---|---|---|
 | `actions/checkout` | v7.0.1 | `3d3c42e5aac5ba805825da76410c181273ba90b1` | Getting the code |
-| `actions/upload-artifact` | v7.0.2 | `cf430e030ddbb5b0abf93d22962f4752f3646cd9` | The APK, the screenshots, the screenshot differences |
+| `actions/upload-artifact` | v7.0.2 | `cf430e030ddbb5b0abf93d22962f4752f3646cd9` | The APK, the screenshots, the screenshot differences, the artifact numbers for the comment |
+| `actions/download-artifact` | v8.0.2 | `9000827ccba6bdab643e8b6fd33ac0654aef8333` | The artifact numbers, in the comment job |
 | `actions/cache/restore` and `actions/cache/save` | v6.1.0 | `55cc8345863c7cc4c66a329aec7e433d2d1c52a9` | The download cache |
 
-The commits were read from the actions' own repositories on 2026-11-10.
-Each version was more than a month old then. Prompt R5 in
+The commits were read from the actions' own repositories on 2026-11-10 and
+2026-11-11. Each version was more than a month old then. The comment is
+written with the GitHub CLI, `gh`, which GitHub's runners come with. Prompt R5 in
 [PROMPTS.md](PROMPTS.md) updates them.
 
 Not used, and why:
@@ -211,7 +246,8 @@ Not used, and why:
    `protected-paths` flag (prompt 0.5), make such a change visible.
 2. Build code from the pull request runs on GitHub's runner, with a
    read-only token and no secrets. It cannot push, cannot change the cache
-   of `main`, and cannot reach the release key.
+   of `main`, and cannot reach the release key. The one job that may write
+   (a comment) runs none of that code.
 3. Pull requests from forks get a read-only token from GitHub anyway. The
    repository settings decide whether a first-time contributor's run needs
    the owner's approval.
