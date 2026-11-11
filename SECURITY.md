@@ -28,11 +28,8 @@ Please never include real user data, recovery keys, tokens or passwords.
 
 ## Supported versions
 
-The only release so far is Catalog 0.1.0, the design gallery used during
-development.
-
-Open: which versions get security fixes. This section will list them once
-that is decided.
+Only the newest release of each app gets security fixes. The
+[apps page](docs/user/apps.md) shows the newest version of each app.
 
 ## Scope
 

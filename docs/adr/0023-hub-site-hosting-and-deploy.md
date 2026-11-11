@@ -5,8 +5,10 @@
 - Source: the owner's prompt for Phase 0, step 7
   ([PROMPTS.md](../development/PROMPTS.md)), the owner's review of and
   decisions on
-  [pull request 10](https://github.com/shkriuss/shkriuss.app/pull/10), and
-  [plan](../plan/PLAN.md) sections 7, 10, 13, 15 and 17
+  [pull request 10](https://github.com/shkriuss/shkriuss.app/pull/10),
+  [plan](../plan/PLAN.md) sections 7, 10, 13, 15 and 17, and the owner's
+  report on [pull request 11](https://github.com/shkriuss/shkriuss.app/pull/11)
+  after the first deploys
 
 ## Context
 
@@ -176,11 +178,17 @@
   token.
 - The owner sets `SITE_DOMAIN` after attaching the domain. Until then,
   only the `workers.dev` address is checked. A zone setting that adds a
-  header, such as HSTS, makes the check fail on the domain alone.
-- Not tried before the first deploy: the real token and its per-Worker
-  scope, the real upload, and whether Cloudflare sends `_headers` exactly
-  as written (section 17, "That the Cloudflare token works with the deploy
-  tool"). Deploy checks all three every time.
+  header, such as HSTS, makes the check fail on the domain alone. The
+  site is live at `https://shkriuss.app`, and `SITE_DOMAIN` is set to
+  `shkriuss.app`, since 2026-11-11.
+- Settled at the first deploys on 2026-11-11 (section 17, "That the
+  Cloudflare token works with the deploy tool"): the token is an account
+  API token with the scope Specified Workers, `shkriuss-hub`, and the role
+  Editor, as in point 3. The fallback token for all Workers was not
+  needed. Deploy uploaded the site, and found every file live, byte for
+  byte, with every security header exactly as in `_headers`, on the
+  `workers.dev` address and on `https://shkriuss.app`. Deploy checks all
+  of this every time.
 - The `backend` workflow (section 13) gets its own token for its own
   Worker in Phase 5.
 - The generator is in [0022](0022-hub-site-generator.md).

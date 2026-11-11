@@ -181,6 +181,8 @@ The rehearsal tries all of them.
 
 ### Part A: a dry run that leaves nothing behind
 
+Done on 2026-11-11. The draft was deleted afterwards.
+
 1. Do all of [Before the first release](#before-the-first-release).
 2. Start a run with a wrong version, `0.1`. **Build** must fail within a
    minute with "The version must look like 1.0.0".
