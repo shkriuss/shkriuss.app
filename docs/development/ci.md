@@ -13,7 +13,7 @@ step 7.
 | PR preview | [`pr-preview.yml`](../../.github/workflows/pr-preview.yml) | Every pull request | Builds and signs a preview APK of every app the pull request touches. Uploads it and the changed screenshots. Keeps one comment on the pull request with the links. |
 | Protected paths | [`protected-paths.yml`](../../.github/workflows/protected-paths.yml) | Every pull request, as `pull_request_target` | Labels a pull request `protected-paths` and keeps one comment listing its owner-only files, by CODEOWNERS on `main`. Never blocks a merge. |
 | Release | [`release.yml`](../../.github/workflows/release.yml) | By hand, on `main` | Builds an app twice and compares the builds. Signs it after the owner's approval, attests it and creates a draft release. See [release.md](release.md). |
-| Site | [`site.yml`](../../.github/workflows/site.yml) | Pull requests that change the site, every push to `main`, and by hand | Builds the hub site from `docs/` and `site/` and checks it. On `main` only, deploys it to Cloudflare Pages and checks the live security headers. See [site.md](site.md). |
+| Site | [`site.yml`](../../.github/workflows/site.yml) | Pull requests that change the site, every push to `main`, and by hand | Builds the hub site from `docs/` and `site/` and checks it. On `main` only, deploys it to the Cloudflare Worker `shkriuss-hub`, which serves static files only, and checks the live site and its security headers. See [site.md](site.md). |
 
 How to install a preview on a phone is in
 [test-a-pull-request.md](test-a-pull-request.md). Emulator tests are not set
@@ -66,8 +66,9 @@ Site has two more files outside its workflow file:
 - The generator, `tools/site/build.py`. It is not owner-only. It runs only
   in the job "Build", which has no secrets, and the workflow checks what it
   writes before anything is deployed.
-- The deploy tool's pin and install script, in `.github/site-deploy/`.
-  They are owner-only, like the workflow.
+- The deploy tool's pin, its install script and the Worker's
+  configuration, in `.github/site-deploy/`. They are owner-only, like the
+  workflow.
 
 ## CI
 
@@ -255,7 +256,8 @@ phone, is in [release.md](release.md). Why it works this way is in
 
 Three jobs: "Build", "Deploy tool" and "Deploy". Pull requests run only
 "Build" and "Deploy tool", with no secrets. "Deploy" runs only on `main`,
-in the `cloudflare` environment, and runs no project code. What each job
+in the `cloudflare` environment, and runs no project code. Its token may
+only edit the one Worker of the site. What each job
 does, the security headers, and how to set up Cloudflare from a phone are
 in [site.md](site.md). Why it works this way is in
 [ADR 0022](../adr/0022-hub-site-generator.md) and

@@ -1,6 +1,7 @@
 #!/bin/bash
 # Installs the hub site's deploy tool, Wrangler, exactly as package-lock.json
-# in this folder pins it, into the folder given as the only argument.
+# in this folder pins it, into the folder given as the only argument. Also
+# copies the Worker's configuration, wrangler.jsonc, there.
 # Used by the jobs "Deploy tool" and "Deploy" in .github/workflows/site.yml.
 # Why: docs/adr/0023-hub-site-hosting-and-deploy.md.
 set -euo pipefail
@@ -17,7 +18,7 @@ lock_name=.github/site-deploy/package-lock.json
 # 1. Wrangler is pinned to one exact version.
 expected="$(jq -r '.dependencies.wrangler // ""' "$here/package.json")"
 if ! [[ "$expected" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-  echo "::error file=.github/site-deploy/package.json::Pin wrangler to one exact version, such as 4.149.0."
+  echo "::error file=.github/site-deploy/package.json::Pin wrangler to one exact version, such as 4.156.2."
   exit 1
 fi
 
@@ -38,7 +39,7 @@ fi
 #    --ignore-scripts: no package may run code while it is installed.
 #    --engine-strict: fail if this Node.js is too old for a package.
 mkdir -p "$target"
-cp "$here/package.json" "$lock" "$target/"
+cp "$here/package.json" "$lock" "$here/wrangler.jsonc" "$target/"
 cd "$target"
 echo "Node.js $(node --version), npm $(npm --version)"
 npm ci --ignore-scripts --engine-strict --no-audit --no-fund --registry=https://registry.npmjs.org/

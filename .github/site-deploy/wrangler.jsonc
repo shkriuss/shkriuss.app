@@ -1,0 +1,26 @@
+// The hub site's Worker: static assets only, with no Worker script, so no
+// code of ours runs on Cloudflare. Used by .github/workflows/site.yml, which
+// copies this file to $RUNNER_TEMP/deploy. The checked site is then in
+// $RUNNER_TEMP/site, which is "../site" from there.
+// Why: docs/adr/0023-hub-site-hosting-and-deploy.md.
+{
+  // The Worker the owner creates by hand. The deploy token may edit only
+  // this Worker and cannot create one.
+  "name": "shkriuss-hub",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "../site",
+    // /apps/ serves apps/index.html, and /apps redirects to /apps/.
+    "html_handling": "auto-trailing-slash",
+    // An unknown address gets 404.html with the status 404.
+    "not_found_handling": "404-page"
+  },
+  // The address <name>.<account subdomain>.workers.dev stays on, so every
+  // deploy can be checked there. Preview addresses for each version are off.
+  "workers_dev": true,
+  "preview_urls": false,
+  // No routes and no custom domains here. The owner attaches the domain by
+  // hand, and the token has no zone permission. Leaving them out means
+  // Wrangler never changes them.
+  "send_metrics": false
+}

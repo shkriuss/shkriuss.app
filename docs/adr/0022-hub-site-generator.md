@@ -89,7 +89,7 @@
   and text for all 62 Markdown files of the repository. The only
   differences were intended: the fingerprint on the verify page, front
   matter in `.claude/rules/`, and an empty list item, which the script
-  refuses. All 380 headings got the same anchors.
+  refuses. All 382 headings got the same anchors.
 - The fingerprint on the site is the one the release workflow enforces. If
   `fingerprints.md` changes its form, the site build fails, like a release.
 - Only the pages in `site.json` are on the site. Other docs are linked on
