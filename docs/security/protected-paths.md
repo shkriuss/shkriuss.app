@@ -26,7 +26,10 @@ and when its base branch changes. Then:
      file, what happened to it (added, changed, deleted, renamed), and the
      CODEOWNERS rule that makes it owner-only.
 5. After a new push it updates the same comment. If no owner-only file is
-   left, the comment says so. The workflow never removes the label.
+   left, the comment says so. The workflow never removes the label, so a
+   change that was added and then reverted still leaves a mark. The
+   owner's decision on
+   [pull request 7](https://github.com/shkriuss/shkriuss.app/pull/7).
 6. It also flags the owner's own pull requests.
 
 The check **Protected paths / Flag owner-only paths** passes when it flags.
@@ -99,20 +102,15 @@ required check.
    can still differ for patterns that GitHub does not support: `!`, `[ ]`,
    and `\#` at the start of a line. GitHub also skips a line with an error
    in it. Keep CODEOWNERS simple, as it is today.
-8. **It needs the repository to be public.** The token has no `contents`
-   permission. GitHub lets the workflow read CODEOWNERS anyway, because the
-   repository is public. If the repository is made private, every run fails
-   with "Found no CODEOWNERS file", and nothing is flagged. The job would
-   then also need `contents: read`.
-9. **No label does not prove that no owner-only file changed.** The flag is
+8. **No label does not prove that no owner-only file changed.** The flag is
    missing if the run failed, if GitHub Actions was down or turned off, or
    if GitHub did not start the workflow. GitHub does not start
    `pull_request_target` workflows for some branch names, such as names
    that look like a commit SHA. Check **Files changed** yourself.
-10. **It does not cover the account or the settings.** It cannot help
-    against a stolen owner account, a change to the repository settings or
-    a direct push to `main`. The ruleset on `main` blocks direct pushes.
-11. **It sees file names, not contents.** It does not look inside files.
+9. **It does not cover the account or the settings.** It cannot help
+   against a stolen owner account, a change to the repository settings or
+   a direct push to `main`. The ruleset on `main` blocks direct pushes.
+10. **It sees file names, not contents.** It does not look inside files.
 
 ## How it is built
 
@@ -124,11 +122,15 @@ required check.
    that calls the GitHub API with `gh` and handles the data with `jq`. Both
    come with GitHub's runners.
 3. The workflow starts with `permissions: contents: read`, like every
-   workflow here. The job replaces that with `pull-requests: write` and
-   nothing else. That one permission covers every call the job makes:
-   reading the pull request, its files, its comments and the label, and
-   writing the label and the comment. Reading CODEOWNERS needs no
-   permission in a public repository.
+   workflow here. The job replaces that with exactly two permissions:
+   - `contents: read`, only for reading CODEOWNERS from the default branch
+     through the API. It is never used to check out code. In a public
+     repository it grants nothing new. With it, the flag also works if the
+     repository is made private. The owner's decision on
+     [pull request 7](https://github.com/shkriuss/shkriuss.app/pull/7).
+   - `pull-requests: write`, for every other call: reading the pull
+     request, its files, its comments and the label, and writing the label
+     and the comment.
 4. File names travel only as JSON: from the API into `jq`, and from `jq`
    into the JSON sent back to the API. The log shows only counts.
 5. The workflow keeps one comment. It finds that comment by a hidden marker

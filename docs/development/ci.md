@@ -28,9 +28,10 @@ The full list is in `.claude/rules/workflows.md`. In short:
 2. Only GitHub's own actions are used. Everything else is a short shell
    step.
 3. The token is read-only (`permissions: contents: read`). A job that needs
-   more says why in a comment. Two jobs do: "Comment" in PR preview and
-   "Flag owner-only paths" in Protected paths. Each has
-   `pull-requests: write` and nothing else.
+   more says why in a comment. Two jobs do. "Comment" in PR preview has
+   `pull-requests: write` and nothing else. "Flag owner-only paths" in
+   Protected paths has `pull-requests: write`, and `contents: read` only to
+   read CODEOWNERS through the API.
 4. No secrets. No `pull_request_target`, except in Protected paths, which
    never checks out, builds or runs anything from the pull request.
 5. Every job has a timeout and a concurrency group. A new push to a pull

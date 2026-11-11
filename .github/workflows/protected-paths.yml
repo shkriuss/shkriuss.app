@@ -34,10 +34,13 @@ jobs:
     if: github.event.action != 'edited' || github.event.changes.base != null
     runs-on: ubuntu-24.04
     timeout-minutes: 5
-    # Only this, to add the label and write the one comment. The token has
-    # no "contents" permission. CODEOWNERS can still be read through the
-    # API, because the repository is public.
+    # Only these two. The job replaces the read-only default above.
     permissions:
+      # Only for reading CODEOWNERS from the default branch through the API.
+      # It is never used to check out code. In a public repository it grants
+      # nothing new, and with it the flag also works if the repository is
+      # made private.
+      contents: read
       pull-requests: write # the label and the comment
     concurrency:
       group: protected-paths-${{ github.event.pull_request.number }}
@@ -99,7 +102,7 @@ jobs:
             fi
           done
           if [ -z "$codeowners" ]; then
-            echo "::error::Found no CODEOWNERS file on the default branch. If the repository is private, this job also needs 'contents: read'."
+            echo "::error::Found no CODEOWNERS file on the default branch."
             exit 1
           fi
 
