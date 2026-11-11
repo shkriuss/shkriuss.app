@@ -19,6 +19,8 @@ defaults:
 
 jobs:
   wrapper:
+    # A required check on main, by this name. A pull request that renames
+    # it must say so, because the owner must update the repository rules.
     name: Gradle wrapper
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -105,6 +107,8 @@ jobs:
           echo "Gradle $version: the wrapper jar, the download address and its checksum match Gradle's published values."
 
   check:
+    # A required check on main, by this name. A pull request that renames
+    # it must say so, because the owner must update the repository rules.
     name: Check
     # The build runs ./gradlew, so it waits until the wrapper is checked.
     needs: wrapper

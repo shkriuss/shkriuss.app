@@ -216,12 +216,42 @@ Not used, and why:
    repository settings decide whether a first-time contributor's run needs
    the owner's approval.
 
-## Open
+## Required checks
 
-- Which checks should be required before merging. The owner sets this in
-  the repository rules. The job names are "Gradle wrapper", "Check" and
-  "Preview (app)". "Find apps and screenshots" always runs; the preview
-  jobs run only when an app is touched.
-- Whether CLAUDE.md and `.claude/rules/android.md` should list the release
-  checks next to `./gradlew check`, so Claude runs them before every push.
-  Both files are owner-only.
+The owner's decision on
+[pull request 6](https://github.com/shkriuss/shkriuss.app/pull/6): "Gradle
+wrapper" and "Check" must pass before a pull request can be merged into
+`main`. The owner turns this on after their first green run, because GitHub
+suggests only checks that have run.
+
+The names are the job names in `ci.yml`. A pull request that renames either
+job must say so in its description, because the owner must then update the
+rule. Otherwise every pull request waits for a check that never comes.
+
+To require them, on a phone:
+
+1. Open `github.com/shkriuss/shkriuss.app/settings/rules` in the browser.
+2. Tap the ruleset that protects `main`.
+3. Tick **Require status checks to pass**.
+4. Tap **Add checks**. Type `Gradle wrapper` and pick it. Do the same for
+   `Check`.
+5. Next to each check, set the source to **GitHub Actions**, not "any
+   source". Then a status that someone posts by hand through the API
+   cannot stand in for it.
+6. Leave **Require branches to be up to date before merging** off, unless
+   you want every pull request to be updated after each merge.
+7. Tap **Save changes**.
+
+If `main` is protected by a branch protection rule instead of a ruleset:
+open `github.com/shkriuss/shkriuss.app/settings/branches`, tap **Edit** on
+the rule for `main`, tick **Require status checks to pass before
+merging**, add the same two checks, and tap **Save changes**.
+
+The preview jobs are not required. They run only when a pull request
+touches an app, so a required preview would block every docs-only pull
+request.
+
+What a required check proves: that the jobs named "Gradle wrapper" and
+"Check" passed, as the pull request's own copy of `ci.yml` defines them. A
+pull request that changes `ci.yml` can change what they do. So read every
+change to `.github/` yourself before you approve it.
