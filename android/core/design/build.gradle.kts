@@ -1,6 +1,7 @@
 plugins {
     id("shkriuss.android.library")
     id("shkriuss.android.compose")
+    id("shkriuss.android.unit-test")
 }
 
 android {

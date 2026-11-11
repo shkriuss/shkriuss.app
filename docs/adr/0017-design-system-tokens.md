@@ -3,8 +3,10 @@
 - Status: Accepted
 - Date: 2026-11-10
 - Source: [plan](../plan/PLAN.md) sections 2 (decision 11), 4, 9 and 11,
-  and the owner's review of
-  [pull request 4](https://github.com/shkriuss/shkriuss.app/pull/4)
+  the owner's review of
+  [pull request 4](https://github.com/shkriuss/shkriuss.app/pull/4), and
+  Phase 1, step 1 in [PROMPTS.md](../development/PROMPTS.md), which
+  completed points 8 to 12
 
 ## Context
 
@@ -44,7 +46,8 @@
    is the same in both themes. In the true-black theme, the surface is a
    lighter grey.
 6. Type: the system font, six text styles, no bundled fonts. Starting
-   values, to be confirmed in the Catalog in Phase 1, step 1:
+   values, shown in the Catalog since Phase 1, step 1. The owner confirms
+   them on the three devices at the Phase 1 gate:
 
    | Style | Size (sp) | Line height (sp) |
    |---|---|---|
@@ -58,6 +61,34 @@
    Subtitle and Label use medium weight.
 
 7. App icons: adaptive, with a monochrome layer.
+8. Token names in code, in `core/design`:
+
+   | Kind | Names |
+   |---|---|
+   | Colour (`ShkTheme.colors`) | `background`, `surface`, `surfaceHigh`, `text`, `textSecondary`, `outline`, `accent`, `textOnAccent`, `error`, `success`, `warning`, in the order of the table in point 1 |
+   | Type (`ShkTextStyle`) | `Headline`, `Title`, `Subtitle`, `Body`, `Label`, `Caption` |
+   | Shape (`ShkShapes`) | `Pill`, `Field` (12dp), `Card` (16dp), `Sheet` (28dp, sheets and dialogs) |
+   | Spacing (`ShkSpacing`) | `ExtraSmall` 4dp, `Small` 8dp, `Medium` 12dp, `Large` 16dp, `ExtraLarge` 24dp |
+   | Screen (`ShkSpacing`) | `ScreenMargin` 16dp, `ScreenMarginWide` 24dp, `WideWindowWidth` 600dp, `MinTouchTarget` 48dp |
+
+9. "Tablet" in point 4 means a window at least 600dp wide, where Android's
+   medium window size class starts. That includes an open foldable and a
+   phone held sideways.
+10. Only colours change with the theme. Text styles, shapes and spacing
+    are the same in both themes, so they are plain constants, not theme
+    values.
+11. Material 3, which only `core/design` uses, gets every colour role, text
+    style and shape from these tokens. No colour of Material's own
+    palette is used. Its tonal elevation is turned off by setting the
+    surface tint to the background (point 5). The full mapping is in
+    [design-system.md](../development/design-system.md).
+12. Two unit tests in `core/design` check the tokens in both themes, with
+    the WCAG 2.2 formula:
+    - every text colour on every background, and text on accent: at
+      least 4.5:1,
+    - the outline on every background: at least 3:1,
+    - every Material 3 colour is a token, and Material 3's own text and
+      outline pairs keep the same limits.
 
 ## Options rejected
 
@@ -74,8 +105,14 @@
   ([CLAUDE.md](../../CLAUDE.md)).
 - A unit test checks contrast. It fails a text pair under 4.5:1 and an
   outline pair under 3:1 (step 1.1 in
-  [PROMPTS.md](../development/PROMPTS.md)).
-- The Catalog app shows the colour, type, shape and spacing tokens.
-- Open: token names, and the rest of the details. They come in
-  `docs/development/design-system.md` in Phase 1, step 1, which completes
-  this record ([PROMPTS.md](../development/PROMPTS.md)).
+  [PROMPTS.md](../development/PROMPTS.md)). A new colour token fails it
+  until the token is put in a group, so no colour can skip the check.
+- A Material 3 update that adds a colour role stops the build until the
+  role is mapped to a token.
+- The Catalog app shows the colour, type, shape and spacing tokens, one
+  page each, with screenshots in the eight standard configurations.
+- How to use the tokens is in
+  [design-system.md](../development/design-system.md).
+- Changing a colour value changes this decision, so it needs the owner and
+  a new record (point 7 of [0001](0001-record-architecture-decisions.md)).
+- Open: the owner confirms the text styles at the Phase 1 gate (point 6).

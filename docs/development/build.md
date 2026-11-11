@@ -30,9 +30,10 @@ Nothing outside section 3 of the [plan](../plan/PLAN.md) is used.
   app shares (`r8/app-rules.pro`). All module build config lives here. A
   module's own build file only names its plugins, its namespace, its app ID
   and version, and its dependencies.
-- `android/core/design/`: the design system. For now, a theme stub.
-- `android/app/catalog/`: the Catalog app, `app.shkriuss.catalog`. For now,
-  one screen that says "Catalog".
+- `android/core/design/`: the design system. See
+  [design-system.md](design-system.md).
+- `android/app/catalog/`: the Catalog app, `app.shkriuss.catalog`, the
+  design gallery.
 
 How the modules depend on each other is in
 [architecture/modules.md](../architecture/modules.md).
@@ -177,16 +178,24 @@ second build must write the same mapping file, or the release stops. See
 - They run for the `debug` build type only. `release` and `preview` compile
   the same Kotlin code, and R8 does not run for unit tests, so running them
   again would test nothing new.
-- Catalog has one unit test, `CatalogScreenTest`. It starts the app's
-  activity and checks that the screen shows "Catalog" as a heading, which
-  is what TalkBack announces.
+- `core/design` has two, `ShkColorsContrastTest` and
+  `ShkThemeMaterialTest`. They check the contrast of every colour pair and
+  how Material 3 is set up
+  ([design-system.md](design-system.md#tests)).
+- Catalog has `CatalogScreenTest`. It starts the app's activity and checks
+  the title is a heading, which is what TalkBack announces, that every page
+  has a button at least 48 dp tall, that each page opens and back returns,
+  and what TalkBack hears for a contrast.
 
 ### Screenshot tests
 
 Roborazzi takes screenshots on the JVM, through Robolectric.
 
 1. Every screen is captured in eight configurations: phone and tablet,
-   light and dark, font scale 1.0 and 2.0.
+   light and dark, font scale 1.0 and 2.0. A screen taller than the
+   window is captured to its end, one window per image: `_part2`,
+   `_part3` and so on
+   ([design-system.md](design-system.md#screenshots)).
    - Phone: 411 by 914 dp at 420 dpi, close to the Pixel 9 Pro.
    - Tablet: 1280 by 800 dp at 320 dpi in landscape, the Pixel Tablet.
 2. The reference images are committed in `src/test/screenshots/` of each

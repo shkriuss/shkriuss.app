@@ -7,8 +7,8 @@ import androidx.activity.enableEdgeToEdge
 import app.shkriuss.core.design.ShkTheme
 
 /**
- * The Catalog app's only activity. It shows the design gallery, which for
- * now is the empty Catalog screen.
+ * The Catalog app's only activity. It shows the design gallery: the start
+ * screen and a page for each group of design tokens.
  */
 class CatalogActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -16,7 +16,7 @@ class CatalogActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             ShkTheme {
-                CatalogScreen()
+                CatalogApp()
             }
         }
     }

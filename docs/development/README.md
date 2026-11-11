@@ -18,6 +18,9 @@ Pages:
 - [Hub site](site.md): how the website is built from the docs, checked
   and deployed to Cloudflare, its security headers, and how to set up
   Cloudflare from a phone.
+- [Design system](design-system.md): the colour, type, shape and spacing
+  tokens in `core/design`, how Material 3 is set up from them, and the
+  contrast tests.
 - [Emulator tests](emulator-tests.md): the plan for instrumented tests on
   an emulator. Not set up yet.
 - [Working with Claude](working-with-claude.md): who can do what, and how a
@@ -28,4 +31,5 @@ Pages:
 
 What else belongs here, as each part is built:
 
-- Design system: the tokens and the `Shk*` components.
+- The `Shk*` components, added to [design-system.md](design-system.md) in
+  Phase 1, step 2.

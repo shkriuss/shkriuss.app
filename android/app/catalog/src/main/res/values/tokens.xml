@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The code names of the colour tokens, as in ShkTheme.colors. They are
+    names in code, so they are never translated.
+-->
+<resources>
+    <string name="token_background" translatable="false">background</string>
+    <string name="token_surface" translatable="false">surface</string>
+    <string name="token_surface_high" translatable="false">surfaceHigh</string>
+    <string name="token_text" translatable="false">text</string>
+    <string name="token_text_secondary" translatable="false">textSecondary</string>
+    <string name="token_outline" translatable="false">outline</string>
+    <string name="token_accent" translatable="false">accent</string>
+    <string name="token_text_on_accent" translatable="false">textOnAccent</string>
+    <string name="token_error" translatable="false">error</string>
+    <string name="token_success" translatable="false">success</string>
+    <string name="token_warning" translatable="false">warning</string>
+</resources>
