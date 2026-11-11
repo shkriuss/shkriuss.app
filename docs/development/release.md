@@ -15,7 +15,7 @@ step 6.
 
 | Job | What it does | Secrets |
 |---|---|---|
-| Build | Checks the inputs, that CI passed on the commit, that the tag is new and that the fingerprint file is in order. Builds the unsigned release APK and the R8 mapping file. Checks the APK's package name and version. | None |
+| Build | Checks the inputs, that `ci.yml` passed for this commit on `main`, that the tag is new and that the fingerprint file is in order. Builds the unsigned release APK and the R8 mapping file. Checks the APK's package name, its version, and that its version code follows the rule in [ADR 0021](../adr/0021-version-names-and-version-codes.md). | None |
 | Rebuild and compare | Builds again on a new runner, in another folder, in another time zone and with another file permission mask. Fails unless the APK and the mapping file are the same, byte for byte. | None |
 | Sign | Waits for your approval. Signs the APK with the suite key, using `apksigner` only. Verifies the signature. Fails unless the certificate matches [fingerprints.md](../security/fingerprints.md). | The three release secrets, in one step |
 | Draft release | Adds a build provenance attestation for the signed APK. Creates a draft release with the APK, the mapping file and their SHA-256 checksums. Never creates a tag. | None |
@@ -88,10 +88,13 @@ with another certificate.
 
 Before you start:
 
-1. The version is set in `android/app/<app>/build.gradle.kts`
-   (`versionName`, and a higher `versionCode`), and the change is merged
-   into `main`. Claude prepares this in a pull request (prompt R6 in
-   [PROMPTS.md](PROMPTS.md)).
+1. The version is set in `android/app/<app>/build.gradle.kts`, and the
+   change is merged into `main`. `versionCode` follows from `versionName`
+   by the rule in
+   [ADR 0021](../adr/0021-version-names-and-version-codes.md): for
+   example `1.0.0-rc.1` is 10000301 and `1.0.0` is 10000900. CI fails the
+   pull request if it does not. Claude prepares this in a pull request
+   (prompt R6 in [PROMPTS.md](PROMPTS.md)).
 2. CI is green on the newest commit of `main`. Open the **Actions** tab and
    tap **CI**. The top run on `main` must have a green tick. Right after a
    merge, wait for it.
@@ -102,8 +105,8 @@ Then:
 2. Tap **Run workflow**.
 3. Leave the branch at `main`.
 4. Pick the app. Type the version exactly as `versionName`, for example
-   `0.1.0`. A version with a hyphen, such as `1.0.0-rc.1`, becomes a
-   pre-release.
+   `0.1.0`. A version ending in `-alpha.N`, `-beta.N` or `-rc.N`, such as
+   `1.0.0-rc.1`, becomes a pre-release.
 5. Tap **Run workflow**. Pull the page down to reload it, then tap the new
    run, named "Release" with the app and the version.
 6. Wait for **Build** and **Rebuild and compare**. Each builds the app from
@@ -145,11 +148,14 @@ asked to approve.
 |---|---|
 | Start the release on the branch main. | Run it again with the branch `main`. |
 | Unknown app. | Pick an app from the list. A new app is added to the list in a pull request (prompt 2.6). |
-| The version must be a semantic version ... | Type a version such as `1.0.0` or `1.0.0-rc.1`. No `v` in front, no `+` part. |
-| The CI check ... has not passed on commit ... | Wait until CI on `main` is green, then start again. If CI failed, fix that first. |
+| The version must look like 1.0.0, 1.0.0-alpha.1, 1.0.0-beta.1 or 1.0.0-rc.1 ... | Type a version in one of those forms. No `v` in front. |
+| CI (ci.yml) has not run for commit ... on main. | CI has not started yet, or the commit is not on `main`. Wait a minute, then start again. |
+| CI (ci.yml) has not passed for commit ... | CI is still running, or it failed. The message links to the run. Wait until it is green, or fix it first, then start again. |
+| The CI job "..." has not passed for commit ... | One of the two required CI jobs is missing or did not pass in the newest attempt. Open the linked run. |
 | The tag ... already exists. | That version was released already. Raise the version in a pull request. |
 | Expected exactly one line of the form: Current certificate SHA-256 ... | [fingerprints.md](../security/fingerprints.md) was changed. Put the line back in its form. |
 | The version typed in (...) is not the APK's versionName. | Type the `versionName` from the app's `build.gradle.kts`, or change it there in a pull request. |
+| versionName ... needs versionCode ..., but it is ... | The app's `versionCode` breaks the rule in ADR 0021. CI should have caught this. Fix it in a pull request. |
 | ... differs between the two builds. | The build is not reproducible. Do not release. Tap **Re-run jobs**, then **Re-run failed jobs** once, in case GitHub changed its runner between the two builds. If it fails again, ask Claude to find the cause. The second build's files are in the run's artifact `rebuild-differs`. |
 | A release secret is missing. | Check the three secrets of the `release` environment. |
 | SIGNING_KEYSTORE_B64 is not a base64-encoded keystore. | Write the secrets again with the `restore` action of `signing-ceremony`. |
@@ -174,7 +180,7 @@ The rehearsal tries all of them.
 
 1. Do all of [Before the first release](#before-the-first-release).
 2. Start a run with a wrong version, `0.1`. **Build** must fail within a
-   minute with "The version must be a semantic version".
+   minute with "The version must look like 1.0.0".
 3. Start a run with app `catalog` and version `0.1.0`
    ([Run a release](#run-a-release)). Approve **Sign**.
 4. On the run's summary page, check:

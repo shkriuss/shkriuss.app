@@ -71,24 +71,31 @@
    inputs:
    - `app`: picked from a fixed list in the workflow. Every job checks the
      same list again, because the API accepts any text.
-   - `version`: a semantic version 2.0, at most 64 characters, with no
-     build metadata (`+...`).
+   - `version`: one of the version forms in
+     [0021](0021-version-names-and-version-codes.md), such as `1.0.0` or
+     `1.0.0-rc.1`.
    - Inputs reach shell steps only through `env`. Nothing from an input is
      printed before it has passed the checks.
 9. Before it builds, the job "Build" stops unless:
    - the run is on `main`,
-   - the CI checks "Gradle wrapper" and "Check" passed on that exact
-     commit,
+   - CI passed on that exact commit. Only the newest run that GitHub
+     Actions made from `ci.yml` for a push of that commit to `main`
+     counts. The run must have succeeded, and its latest attempt must hold
+     the jobs "Gradle wrapper" and "Check", both passed. A check from
+     another workflow with the same name does not count,
    - the tag `<app>-v<version>` does not exist,
    - [fingerprints.md](../security/fingerprints.md) has its one line in
      the expected form.
 10. After it builds, it stops unless the APK's package is
-    `app.shkriuss.<app>` and its `versionName` equals the `version` input.
+    `app.shkriuss.<app>`, its `versionName` equals the `version` input,
+    and its `versionCode` is the one that
+    [0021](0021-version-names-and-version-codes.md) gives. CI checks the
+    same rule for every app in every pull request, with the same script.
 11. Jobs, in order:
 
     | Job | Token | Secrets | Project code |
     |---|---|---|---|
-    | Build | `contents: read`, `checks: read` (the CI check) | None | Runs Gradle |
+    | Build | `contents: read`, `actions: read` (the CI run) | None | Runs Gradle |
     | Rebuild and compare | `contents: read` | None | Runs Gradle |
     | Sign | `contents: read`, environment `release` | The three release secrets, in one step | None |
     | Draft release | `contents: write`, `id-token: write`, `attestations: write` | None | None, no checkout |
@@ -145,6 +152,10 @@
   build provenance. Using `actions/attest` directly is one action fewer.
 - **Building once.** It would not prove that the APK can be built again
   from the source.
+- **Counting any check run named "Gradle wrapper" or "Check".** Any
+  workflow, also one added in a later pull request, could report a check
+  with the same name. The owner asked on pull request 9 that only
+  `ci.yml`'s own run counts.
 
 ## Consequences
 

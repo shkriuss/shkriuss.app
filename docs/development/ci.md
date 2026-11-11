@@ -33,8 +33,8 @@ The full list is in `.claude/rules/workflows.md`. In short:
    more says why in a comment. Four jobs do. "Comment" in PR preview has
    `pull-requests: write` and nothing else. "Flag owner-only paths" in
    Protected paths has `pull-requests: write`, and `contents: read` only to
-   read CODEOWNERS through the API. In Release, "Build" adds `checks: read`
-   to read the commit's CI results, and "Draft release" has
+   read CODEOWNERS through the API. In Release, "Build" adds `actions: read`
+   to read `ci.yml`'s run for the commit, and "Draft release" has
    `contents: write`, `id-token: write` and `attestations: write` to make
    the attestation and the draft. It checks out nothing.
 4. No secrets, except in Release: one step of its job "Sign" gets the three
@@ -53,7 +53,9 @@ The full list is in `.claude/rules/workflows.md`. In short:
 
 The workflows are owner-only ([CODEOWNERS](../../.github/CODEOWNERS)). Their
 shell steps live inside the workflow files, not in `tools/`, so that a
-change to them always needs the owner's review.
+change to them always needs the owner's review. A script that two
+workflows share lives in `.github/scripts/`, which is owner-only too. Today
+that is one: `check-version-code.sh`, used by CI and Release.
 
 ## CI
 
@@ -93,9 +95,15 @@ checked. Then:
    `:app:<name>:checkReleaseApkRules` and
    `:app:<name>:checkReleaseGraphicsPathUse`.
 6. It checks that both release checks wrote their report for every app.
-7. If anything failed, it uploads the screenshot differences, if there
+7. It checks every app's version: the `versionCode` must follow from the
+   `versionName` by the rule in
+   [ADR 0021](../adr/0021-version-names-and-version-codes.md). It reads
+   both from the release APK's `output-metadata.json` and runs
+   `.github/scripts/check-version-code.sh`, the same script that Release
+   runs. So a wrong code fails the pull request, not the release.
+8. If anything failed, it uploads the screenshot differences, if there
    are any.
-8. On `main`, it saves the downloads for later runs.
+9. On `main`, it saves the downloads for later runs.
 
 Why the release checks are named one by one:
 
