@@ -36,7 +36,7 @@ the repository goes to that file on GitHub.
 |---|---|---|---|
 | Build | Pull requests that change `docs/`, `site/`, `tools/site/` or the site's workflow files, and every push to `main` | Runs the generator's tests. Builds the site. Checks the built files. Adds the security headers. Records a SHA-256 for every file. Uploads the site as the artifact `site`. | None |
 | Deploy tool | Pull requests only | Installs the pinned Wrangler and tries the deploy with the built site, without uploading. So a broken pin or Worker configuration fails the pull request, not `main`. | None |
-| Deploy | Pushes to `main`, and runs started by hand on `main` | Stops if a newer commit is on `main`. Checks the files against Build's SHA-256 values. Installs the pinned Wrangler. Stops unless the Worker exists. Deploys a new version of it. Checks that the live site serves exactly the uploaded files, with every security header. | `CLOUDFLARE_API_TOKEN`, in one step |
+| Deploy | Pushes to `main`, and runs started by hand on `main` | Stops if a newer commit is on `main`. Checks the files against Build's SHA-256 values. Installs the pinned Wrangler. Stops unless the Worker exists. Deploys a new version of it. Checks that the live site serves exactly the uploaded files, with every security header: on the `workers.dev` address, and on your own domain if `SITE_DOMAIN` is set. | `CLOUDFLARE_API_TOKEN`, in one step |
 
 Pull requests are never deployed. "Site / Build" is not a required check.
 It runs only when a pull request changes the site.
@@ -60,9 +60,10 @@ The checks do not trust the generator. They look at what it wrote:
 `site.yml` writes them into the file `_headers`, which Cloudflare reads for
 the Worker's static files. They are in the workflow, not in `site/`, so
 only the owner can change them. After every deploy, the job Deploy asks the
-live site for every file. It fails unless each answer has each header once,
-with exactly the value below. For an address that does not exist, it only
-warns.
+live site for every file: on the `workers.dev` address, and on your own
+domain if the variable `SITE_DOMAIN` names it. It fails unless each answer
+has each header once, with exactly the value below. For an address that
+does not exist, it only warns.
 
 | Header | Value | Why |
 |---|---|---|
@@ -90,8 +91,9 @@ environment that does not exist creates it, with no protection.
 | The Worker `shkriuss-hub` | Made by you, by hand | Cloudflare dashboard |
 | `CLOUDFLARE_API_TOKEN` | Secret | Environment secret of the `cloudflare` environment on GitHub |
 | `CLOUDFLARE_ACCOUNT_ID` | Not secret | Environment variable of the `cloudflare` environment on GitHub |
+| `SITE_DOMAIN` | Not secret, optional | Environment variable of the `cloudflare` environment on GitHub, after you attach the domain ([Your domain](#6-your-domain)) |
 
-Neither value goes into the repository or a Claude session. The account ID
+None of these values goes into the repository or a Claude session. The account ID
 appears in the public run logs. That is fine: it does nothing without a
 token.
 
@@ -211,8 +213,26 @@ CNAME record for that name. Cloudflare makes the DNS record and the
 certificate. Every later deploy keeps the domain, and it serves the same
 version as the `workers.dev` address.
 
-Open: whether Deploy should also check the headers on `shkriuss.app`.
-Today it checks the `workers.dev` address.
+Then let Deploy check the domain too:
+
+4. Open `github.com/shkriuss/shkriuss.app/settings/environments` and tap
+   `cloudflare`.
+5. Under **Environment variables**, tap **Add environment variable**.
+   Name: `SITE_DOMAIN`. Value: `shkriuss.app`, with no `https://` and no
+   slash. Tap **Add variable**.
+6. Open `github.com/shkriuss/shkriuss.app/actions/workflows/site.yml`, tap
+   **Run workflow**, leave the branch at `main` and tap **Run workflow**.
+7. When **Deploy** is green, its summary says "Checked the same way on your
+   own domain".
+
+Until `SITE_DOMAIN` is set, Deploy checks only the `workers.dev` address,
+and its summary says that your own domain was not checked.
+
+Your domain's zone settings can add headers of their own, for example
+**HTTP Strict Transport Security** under **SSL/TLS**, **Edge
+Certificates**. Then the domain sends that header twice, and Deploy fails
+on the domain only. Turn that zone setting off: the site sends the header
+itself.
 
 ## When Deploy fails
 
@@ -228,7 +248,8 @@ Tap the failed step to see the message.
 | A Wrangler error with "Authentication error" or code 10000 | Wrangler needed a permission the token does not have. Ask Claude, with the message. Do not widen the token on a guess. |
 | Wrangler did not report ... | Ask Claude, with the message. |
 | ... answered HTTP ..., not 200 with the uploaded file. | The new version did not appear within two minutes. Run the workflow again. If it happens again, ask Claude. |
-| ... does not send the header ... exactly as in _headers. | Cloudflare changed or added a header. The site is online, but not as strict as intended. Ask Claude, with the message. |
+| The variable SITE_DOMAIN of the cloudflare environment must be a plain domain name ... | Set it to the domain alone, for example `shkriuss.app`, with no `https://` and no slash ([Your domain](#6-your-domain), step 5). |
+| ... does not send the header ... exactly as in _headers. | Cloudflare changed or added a header. The site is online, but not as strict as intended. If only your own domain fails, a zone setting adds the header ([Your domain](#6-your-domain)). Otherwise ask Claude, with the message. |
 | The downloaded site is not the one the job Build made and checked. | Nothing was deployed. Run the workflow again. If it happens again, ask Claude. |
 | A newer commit is on main. | Not an error. The newer commit's run deploys. |
 
@@ -308,9 +329,10 @@ take screenshots of the built pages in a session.
 The files in `.github/site-deploy/` are owner-only. Claude changes them
 only when you ask for exactly that.
 
-1. Pick a Wrangler release that is more than a month old, unless a fix is
-   needed, as for 4.156.2 ([ADR 0023](../adr/0023-hub-site-hosting-and-deploy.md)).
-   Read its release notes.
+1. Pick a Wrangler release that is more than a month old. Read its release
+   notes. The owner accepted 4.156.2, 9 days old, as an exception, because
+   no older release deploys with a per-Worker token
+   ([ADR 0023](../adr/0023-hub-site-hosting-and-deploy.md)).
 2. Change the version in `.github/site-deploy/package.json`.
 3. In `.github/site-deploy/`, run
    `npm install --package-lock-only --ignore-scripts --no-audit --no-fund`.
@@ -320,7 +342,8 @@ only when you ask for exactly that.
 5. Open a pull request. The job **Deploy tool** installs it again on
    GitHub, and tries the deploy without uploading.
 
-Open: whether prompt R5 in [PROMPTS.md](PROMPTS.md) should include this.
+Prompt R5 in [PROMPTS.md](PROMPTS.md), the monthly updates, includes
+these steps.
 
 ## How it was tested
 
@@ -336,15 +359,17 @@ Before the first merge, in the cloud environment:
    sideways, the style sheet and the icon loaded, every menu link was at
    least 48 px high, and the lowest text contrast was 6.61:1 in light and
    7.68:1 in dark. The AppVerifier box copies as exactly two lines.
-4. The shell steps of `site.yml`, taken from the file, passed 69 checks
-   against stand-ins for GitHub, the Cloudflare API, Wrangler and
-   `workers.dev`. Among them: 22 kinds of harmful file that Build must
+4. The shell steps of `site.yml`, taken from the file, passed 77 checks
+   against stand-ins for GitHub, the Cloudflare API, Wrangler,
+   `workers.dev` and your own domain. Among them: 22 kinds of harmful file that Build must
    refuse; a Worker that does not exist, a token that cannot reach it, a
    missing secret or variable, where Wrangler never ran; Wrangler
    reporting another Worker, no new version or another address; an older
    commit; a changed artifact; and a live site that still serves the old
    version, sends a header twice or not at all, or turns away a default
-   User-Agent. The token never appeared on a command line or in the log.
+   User-Agent; `SITE_DOMAIN` not set, set, or set with `https://`, a path
+   or capitals; and a domain that adds a second HSTS header. The token
+   never appeared on a command line or in the log.
 5. `install.sh` installed the pinned Wrangler from the lockfile. A changed
    checksum in the lockfile, and a too-old Node.js, both stopped it. The
    real Wrangler 4.156.2 tried the deploy of the built site with the real

@@ -3,7 +3,8 @@
 - Status: Accepted
 - Date: 2026-11-11
 - Source: the owner's prompt for Phase 0, step 7
-  ([PROMPTS.md](../development/PROMPTS.md)), the owner's review of
+  ([PROMPTS.md](../development/PROMPTS.md)), the owner's review of and
+  decisions on
   [pull request 10](https://github.com/shkriuss/shkriuss.app/pull/10), and
   [plan](../plan/PLAN.md) sections 7, 10, 13, 15 and 17
 
@@ -53,6 +54,8 @@
    Worker, and cannot create, delete or reach any other Worker, route or
    domain. The account ID is the variable `CLOUDFLARE_ACCOUNT_ID` of the
    `cloudflare` environment. It is not a secret.
+   The owner's domain is the optional variable `SITE_DOMAIN` of the same
+   environment, also not a secret.
 4. The owner attaches `shkriuss.app` to the Worker by hand in the
    dashboard. The Worker's configuration has no routes and no custom
    domains, so Wrangler never changes them.
@@ -67,7 +70,8 @@
      with the status 404.
 7. The deploy tool is Wrangler 4.156.2, the first version that deploys
    with a per-Worker Editor token to a Worker last changed in the
-   dashboard.
+   dashboard. It was 9 days old. The owner accepted it as an exception to
+   the habit of pinning versions that are more than a month old.
    - [`.github/site-deploy/package.json`](../../.github/site-deploy/package.json)
      pins it to that exact version.
    - `package-lock.json` next to it pins every package with its SHA-512
@@ -109,6 +113,10 @@
        header once, with exactly its value. It names itself in the
        User-Agent, because `workers.dev` turns away default library
        User-Agents.
+    8. does the same on `https://<SITE_DOMAIN>`, if the variable is set.
+       It checks the value first: a plain domain name, with no scheme, path
+       or port. If the variable is not set, it skips the domain, and the
+       summary says so.
 13. Wrangler sends no usage data (`WRANGLER_SEND_METRICS=false`).
 
 ## Options rejected
@@ -153,16 +161,22 @@
   version that was pinned anyway could misuse the token. The token reaches
   only the Worker `shkriuss-hub`. Users are told to compare the fingerprint
   with the one on GitHub.
-- Wrangler 4.156.2 was 9 days old when it was chosen. The project's habit
-  is to pin versions that are more than a month old. No older version
-  works with a per-Worker Editor token, as above.
+- Wrangler 4.156.2 was 9 days old when it was chosen. No older version
+  works with a per-Worker Editor token, as above. The owner accepted the
+  exception on pull request 10. Later updates go back to versions that are
+  more than a month old.
 - A Wrangler update is a new lockfile in a pull request. It is owner-only
-  and flagged by the protected-paths workflow. Open: whether prompt R5
-  ([PROMPTS.md](../development/PROMPTS.md)) should cover it.
+  and flagged by the protected-paths workflow. Prompt R5
+  ([PROMPTS.md](../development/PROMPTS.md)), the monthly updates, covers
+  it.
+- Hard rule 5 in [CLAUDE.md](../../CLAUDE.md) covers tools outside Gradle:
+  they are pinned with a lockfile and checksums in an owner-only folder,
+  and need a record. This is that record for Wrangler.
 - The account ID appears in the public run logs. It does nothing without a
   token.
-- The live check uses the `workers.dev` address. Open: whether to also
-  check `shkriuss.app` after it is attached.
+- The owner sets `SITE_DOMAIN` after attaching the domain. Until then,
+  only the `workers.dev` address is checked. A zone setting that adds a
+  header, such as HSTS, makes the check fail on the domain alone.
 - Not tried before the first deploy: the real token and its per-Worker
   scope, the real upload, and whether Cloudflare sends `_headers` exactly
   as written (section 17, "That the Cloudflare token works with the deploy

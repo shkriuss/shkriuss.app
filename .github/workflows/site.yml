@@ -377,10 +377,14 @@ jobs:
       # No secrets. Asks the live site for every file until it serves the
       # files that were just uploaded, byte for byte. Then checks that each
       # answer has every header in _headers, once, with exactly its value.
+      # First on the workers.dev address, then on the owner's own domain,
+      # if the variable SITE_DOMAIN of the cloudflare environment names it.
       - name: Check the live site
+        id: live
         if: steps.newest.outputs.newest == 'true'
         env:
           SITE_URL: ${{ steps.deploy.outputs.url }}
+          SITE_DOMAIN: ${{ vars.SITE_DOMAIN }}
         run: |
           set -u
           site="$RUNNER_TEMP/site"
@@ -395,14 +399,25 @@ jobs:
             exit 1
           fi
 
-          # A new version can take a few seconds to answer everywhere. An
-          # empty expected checksum skips the comparison of the content.
+          # A plain host name, such as shkriuss.app: lower case, no scheme,
+          # no path, no port. Checked before it is used.
+          domain=""
+          if [ -n "$SITE_DOMAIN" ]; then
+            label='[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?'
+            if ! [[ "$SITE_DOMAIN" =~ ^$label(\.$label)+$ ]]; then
+              echo "::error::The variable SITE_DOMAIN of the cloudflare environment must be a plain domain name, such as shkriuss.app, with no https:// and no slash."
+              exit 1
+            fi
+            domain="$SITE_DOMAIN"
+          fi
+
+          # A new version can take a few seconds to answer everywhere.
           fetch() {
             local status="" got=""
             for _ in $(seq 1 20); do
               status="$(curl -sS --max-time 30 -A "$agent" -o "$body" -D "$response" -w '%{http_code}' "$1" || true)"
               got="$(sha256sum "$body" 2> /dev/null | cut -d ' ' -f 1)"
-              if [ "$status" = "$2" ] && { [ -z "$3" ] || [ "$got" = "$3" ]; }; then return 0; fi
+              if [ "$status" = "$2" ] && [ "$got" = "$3" ]; then return 0; fi
               sleep 6
             done
             echo "::error::$1 answered HTTP $status, not $2 with the uploaded file."
@@ -421,23 +436,34 @@ jobs:
               fi
             done
           }
+          # Every file of the site at one address, and the 404 answer.
+          check_site() {
+            local file path checked=0
+            while IFS= read -r -d '' file; do
+              path="/${file#./}"
+              path="${path%index.html}"
+              if [ "$path" = /404.html ] || [ "$path" = /_headers ]; then continue; fi
+              fetch "$1$path" 200 "$(sha256sum "$site/$file" | cut -d ' ' -f 1)"
+              check_headers "$1$path" error
+              checked=$((checked + 1))
+            done < <(cd "$site" && find . -type f -print0 | LC_ALL=C sort -z)
+            # Unknown addresses get 404.html with the status 404. Its
+            # headers are only warned about: Cloudflare's documentation
+            # does not say whether _headers applies to this answer.
+            fetch "$1/no-such-page/" 404 "$(sha256sum "$site/404.html" | cut -d ' ' -f 1)"
+            check_headers "$1/no-such-page/" warning
+            echo "$1: $checked files checked."
+          }
 
-          checked=0
-          while IFS= read -r -d '' file; do
-            path="/${file#./}"
-            path="${path%index.html}"
-            if [ "$path" = /404.html ] || [ "$path" = /_headers ]; then continue; fi
-            fetch "$SITE_URL$path" 200 "$(sha256sum "$site/$file" | cut -d ' ' -f 1)"
-            check_headers "$SITE_URL$path" error
-            checked=$((checked + 1))
-          done < <(cd "$site" && find . -type f -print0 | LC_ALL=C sort -z)
-          # Unknown addresses get 404.html with the status 404. Its headers
-          # are only warned about: Cloudflare's documentation does not say
-          # whether _headers applies to this answer.
-          fetch "$SITE_URL/no-such-page/" 404 "$(sha256sum "$site/404.html" | cut -d ' ' -f 1)"
-          check_headers "$SITE_URL/no-such-page/" warning
+          check_site "$SITE_URL"
+          if [ -n "$domain" ]; then
+            check_site "https://$domain"
+            echo "domain=https://$domain" >> "$GITHUB_OUTPUT"
+          else
+            echo "SITE_DOMAIN is not set, so the site was not checked on your own domain."
+          fi
           if [ "$failed" != 0 ]; then exit 1; fi
-          echo "All $checked files are live, byte for byte, and send the security headers."
+          echo "Every file is live, byte for byte, and sends the security headers."
 
       - name: Write the summary
         if: always() && steps.newest.outputs.newest != ''
@@ -446,6 +472,7 @@ jobs:
           SITE_URL: ${{ steps.deploy.outputs.url }}
           VERSION: ${{ steps.deploy.outputs.version }}
           WORKER: ${{ steps.deploy.outputs.worker }}
+          DOMAIN_URL: ${{ steps.live.outputs.domain }}
           JOB_STATUS: ${{ job.status }}
         run: |
           set -u
@@ -459,7 +486,12 @@ jobs:
               echo "Commit \`$short\` is live at <$SITE_URL>, as version \`$VERSION\` of the Worker \`$WORKER\`."
               echo
               echo "Every file was checked on the live site: the content and the security headers."
-              echo "A domain you attached in the Cloudflare dashboard serves the same version."
+              echo
+              if [ -n "$DOMAIN_URL" ]; then
+                echo "Checked the same way on your own domain, <$DOMAIN_URL>."
+              else
+                echo "**Your own domain was not checked**: the variable \`SITE_DOMAIN\` of the \`cloudflare\` environment is not set. Set it after you attach the domain (docs/development/site.md, step 6)."
+              fi
             else
               echo "The deploy of commit \`$short\` failed. Open the failed step above to see why."
             fi

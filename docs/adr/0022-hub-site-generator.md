@@ -3,8 +3,9 @@
 - Status: Accepted
 - Date: 2026-11-11
 - Source: the owner's prompt for Phase 0, step 7
-  ([PROMPTS.md](../development/PROMPTS.md)), and
-  [plan](../plan/PLAN.md) sections 12, 14 and 17
+  ([PROMPTS.md](../development/PROMPTS.md)), the owner's decision on
+  [pull request 10](https://github.com/shkriuss/shkriuss.app/pull/10) to
+  keep the script, and [plan](../plan/PLAN.md) sections 12, 14 and 17
 
 ## Context
 
