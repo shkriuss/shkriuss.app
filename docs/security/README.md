@@ -9,6 +9,9 @@ Pages:
 - [Protected-paths flag](protected-paths.md): how a pull request that
   changes an owner-only path is flagged, what that protects against and
   what it does not.
+- [Signing certificate fingerprints](fingerprints.md): the suite key's
+  certificate, so users can verify the apps. The release workflow checks
+  every release against it.
 
 What else belongs here:
 
@@ -17,8 +20,6 @@ What else belongs here:
 - The cryptography design. All cryptography follows it. File:
   `crypto-design.md`.
 - The data inventory: what data each app stores, and where.
-- The signing certificate fingerprints, so users can verify the apps. File:
-  `fingerprints.md`.
 - How to report a problem: see [SECURITY.md](../../SECURITY.md).
 
 How the build checks every downloaded file is in

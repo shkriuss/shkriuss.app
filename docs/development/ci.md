@@ -1,15 +1,17 @@
 # Continuous integration
 
-The GitHub Actions workflows that check every pull request. GitHub Actions
-is the authoritative build (section 13 of the [plan](../plan/PLAN.md),
+The GitHub Actions workflows that check every pull request, and the one
+that makes releases. GitHub Actions is the authoritative build (section 13
+of the [plan](../plan/PLAN.md),
 [ADR 0014](../adr/0014-release-flow-and-reproducible-builds.md)). Set up in
-Phase 0, step 4.
+Phase 0, step 4. Release was added in Phase 0, step 6.
 
 | Workflow | File | Runs on | What it does |
 |---|---|---|---|
 | CI | [`ci.yml`](../../.github/workflows/ci.yml) | Every pull request, every push to `main` | Checks the Gradle wrapper. Runs unit tests, lint, screenshot verification and the release rules checks. |
 | PR preview | [`pr-preview.yml`](../../.github/workflows/pr-preview.yml) | Every pull request | Builds and signs a preview APK of every app the pull request touches. Uploads it and the changed screenshots. Keeps one comment on the pull request with the links. |
 | Protected paths | [`protected-paths.yml`](../../.github/workflows/protected-paths.yml) | Every pull request, as `pull_request_target` | Labels a pull request `protected-paths` and keeps one comment listing its owner-only files, by CODEOWNERS on `main`. Never blocks a merge. |
+| Release | [`release.yml`](../../.github/workflows/release.yml) | By hand, on `main` | Builds an app twice and compares the builds. Signs it after the owner's approval, attests it and creates a draft release. See [release.md](release.md). |
 
 How to install a preview on a phone is in
 [test-a-pull-request.md](test-a-pull-request.md). Emulator tests are not set
@@ -17,7 +19,7 @@ up yet. The plan is in [emulator-tests.md](emulator-tests.md). What the
 protected-paths flag protects against, and what it does not, is in
 [protected-paths.md](../security/protected-paths.md).
 
-Still to come (plan section 13): `release`, `site`, and later `backend`.
+Still to come (plan section 13): `site`, and later `backend`.
 
 ## Rules every workflow follows
 
@@ -28,15 +30,21 @@ The full list is in `.claude/rules/workflows.md`. In short:
 2. Only GitHub's own actions are used. Everything else is a short shell
    step.
 3. The token is read-only (`permissions: contents: read`). A job that needs
-   more says why in a comment. Two jobs do. "Comment" in PR preview has
+   more says why in a comment. Four jobs do. "Comment" in PR preview has
    `pull-requests: write` and nothing else. "Flag owner-only paths" in
    Protected paths has `pull-requests: write`, and `contents: read` only to
-   read CODEOWNERS through the API.
-4. No secrets. No `pull_request_target`, except in Protected paths, which
-   never checks out, builds or runs anything from the pull request.
+   read CODEOWNERS through the API. In Release, "Build" adds `checks: read`
+   to read the commit's CI results, and "Draft release" has
+   `contents: write`, `id-token: write` and `attestations: write` to make
+   the attestation and the draft. It checks out nothing.
+4. No secrets, except in Release: one step of its job "Sign" gets the three
+   secrets of the `release` environment. No `pull_request_target`, except
+   in Protected paths, which never checks out, builds or runs anything from
+   the pull request.
 5. Every job has a timeout and a concurrency group. A new push to a pull
-   request cancels the older run. Protected paths is the exception: its
-   runs wait for each other, so a run never stops half-way through writing.
+   request cancels the older run. Protected paths and Release are the
+   exceptions: their runs wait for each other, so a run never stops
+   half-way through writing.
 6. Values from the event, from files and from earlier steps reach a shell
    only through `env`. File names are matched against fixed patterns and
    never run.
@@ -215,6 +223,14 @@ when the base branch changes. It is not a required check. The full
 description, with what it protects against and what it does not, is in
 [protected-paths.md](../security/protected-paths.md).
 
+## Release
+
+Started by hand on `main`. Four jobs: "Build", "Rebuild and compare",
+"Sign" and "Draft release". What each does, and how to run a release from a
+phone, is in [release.md](release.md). Why it works this way is in
+[ADR 0013](../adr/0013-signing-key-custody-and-rotation.md) and
+[ADR 0014](../adr/0014-release-flow-and-reproducible-builds.md).
+
 ## The download cache
 
 Gradle downloads about 950 MB: the Gradle distribution, the Android Gradle
@@ -232,22 +248,27 @@ Plugin, every library and Robolectric's Android image.
    it ([ADR 0020](../adr/0020-dependency-verification.md)).
 5. It also means fewer downloads from Maven Central, which limits busy
    shared addresses (see [cloud-environment.md](cloud-environment.md)).
-6. The release workflow will use no cache (plan section 13, prompt 0.6).
+6. The release workflow uses no cache (plan section 13,
+   [release.md](release.md)).
 
 ## Actions used
 
 All are GitHub's own. No other action is used, so nothing needs to be
 allowed in the repository settings. Protected paths uses no action at all.
+Release uses the same commits of `checkout`, `upload-artifact` and
+`download-artifact`, plus `attest`.
 
 | Action | Version | Commit | Used for |
 |---|---|---|---|
 | `actions/checkout` | v7.0.1 | `3d3c42e5aac5ba805825da76410c181273ba90b1` | Getting the code |
-| `actions/upload-artifact` | v7.0.2 | `cf430e030ddbb5b0abf93d22962f4752f3646cd9` | The APK, the screenshots, the screenshot differences, the artifact numbers for the comment |
-| `actions/download-artifact` | v8.0.2 | `9000827ccba6bdab643e8b6fd33ac0654aef8333` | The artifact numbers, in the comment job |
-| `actions/cache/restore` and `actions/cache/save` | v6.1.0 | `55cc8345863c7cc4c66a329aec7e433d2d1c52a9` | The download cache |
+| `actions/upload-artifact` | v7.0.2 | `cf430e030ddbb5b0abf93d22962f4752f3646cd9` | The APK, the screenshots, the screenshot differences, the artifact numbers for the comment. In Release, the files passed between jobs |
+| `actions/download-artifact` | v8.0.2 | `9000827ccba6bdab643e8b6fd33ac0654aef8333` | The artifact numbers, in the comment job. In Release, the files from earlier jobs |
+| `actions/cache/restore` and `actions/cache/save` | v6.1.0 | `55cc8345863c7cc4c66a329aec7e433d2d1c52a9` | The download cache. Not used in Release |
+| `actions/attest` | v4.2.2 | `1e69f48acb82d1966a394da916b4c1698aa569d6` | Release only: the build provenance attestation of the signed APK |
 
 The commits were read from the actions' own repositories on 2026-11-10 and
-2026-11-11. Each version was more than a month old then. The comment is
+2026-11-11. Each version was more than a month old then. `actions/attest`
+v4.2.2 is from 2026-08-04. The comment is
 written with the GitHub CLI, `gh`, which GitHub's runners come with. Prompt R5 in
 [PROMPTS.md](PROMPTS.md) updates them.
 
@@ -257,6 +278,11 @@ Not used, and why:
   GitHub's own. A shell step and `actions/cache` do the same.
 - `actions/setup-java`: GitHub's own, but not needed. The runners already
   have JDK 21.
+- `actions/attest-build-provenance`: GitHub's own, but since version 4 it
+  only passes its inputs on to `actions/attest`. Release uses
+  `actions/attest` directly.
+- Third-party actions for signing or releases: not GitHub's own.
+  `apksigner` and `gh` do the same in a few lines.
 
 ## What a pull request can do in these workflows
 
@@ -269,7 +295,12 @@ Not used, and why:
    read-only token and no secrets. It cannot push, cannot change the cache
    of `main`, and cannot reach the release key. The two jobs that may write
    (comments and a label) run none of that code.
-3. In CI and PR preview, pull requests from forks get a read-only token
+3. Release has no pull request trigger. A pull request can change its own
+   copy of `release.yml`, and the **Run workflow** form can pick any
+   branch. But every job stops unless the branch is `main`, and the
+   `release` environment lets only `main` use its secrets. So a change to
+   `release.yml` reaches the key only after the owner merges it.
+4. In CI and PR preview, pull requests from forks get a read-only token
    from GitHub anyway. The repository settings decide whether a first-time
    contributor's run needs the owner's approval. Protected paths gets a
    token that can write the label and the comment, also for forks. That is

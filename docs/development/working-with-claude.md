@@ -97,6 +97,8 @@ cannot update an installed app.
 3. The owner approves the signing job.
 4. The owner publishes the draft release. That creates the tag.
 
+The steps, on a phone, are in [release.md](release.md).
+
 ## Secrets
 
 Never paste a password, token or recovery key into a session. Claude never
