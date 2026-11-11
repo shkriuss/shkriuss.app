@@ -1,6 +1,7 @@
 package app.shkriuss.core.design
 
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
@@ -44,7 +45,8 @@ fun ShkFloatingActionButton(
         contentColor = colors.textOnAccent,
         elevation = noElevation(),
     ) {
-        Icon(painter = icon, contentDescription = contentDescription)
+        // No text sits next to this icon, so it keeps its size.
+        Icon(painter = icon, contentDescription = contentDescription, modifier = Modifier.size(FabIconSize))
     }
 }
 
@@ -54,7 +56,8 @@ fun ShkFloatingActionButton(
  *
  * TalkBack reads [text]. The icon is decorative. With [expanded] false it
  * shrinks to the icon alone, for example while a list scrolls, and
- * TalkBack still reads [text]. It is at least 56dp tall. Long text wraps.
+ * TalkBack still reads [text]. It is at least 56dp tall. Long text wraps,
+ * and the icon grows with the font size.
  */
 @Composable
 fun ShkExtendedFloatingActionButton(
@@ -76,7 +79,16 @@ fun ShkExtendedFloatingActionButton(
                 modifier = Modifier.padding(vertical = ShkSpacing.Small),
             )
         },
-        icon = { Icon(painter = icon, contentDescription = null) },
+        icon = {
+            // The icon grows with the font size, so it keeps its
+            // proportion to the text. It keeps that size while collapsed,
+            // so it does not jump when the button shrinks.
+            Icon(
+                painter = icon,
+                contentDescription = null,
+                modifier = Modifier.size(iconSizeNextToText(FabIconSize)),
+            )
+        },
         onClick = onClick,
         // Material 3 1.4 hides the text from TalkBack, in both states, so
         // the button would be read as "Button" alone. This gives it its
@@ -89,6 +101,9 @@ fun ShkExtendedFloatingActionButton(
         elevation = noElevation(),
     )
 }
+
+/** The size Material 3 draws the icon of a floating action button. */
+private val FabIconSize = 24.dp
 
 /** No shadow in any state (ADR 0017, point 5). */
 @Composable

@@ -67,8 +67,9 @@ fun ShkFilterChip(
  * use a button for the main ones.
  *
  * TalkBack reads [text]. [icon] is optional, drawn in the accent colour
- * before the text, and decorative. Long text wraps. The chip is drawn 32dp
- * tall, and its touch target is at least 48dp.
+ * before the text, decorative, and grows with the font size. Long text
+ * wraps. The chip is drawn 32dp tall, and its touch target is at least
+ * 48dp.
  */
 @Composable
 fun ShkAssistChip(
@@ -117,8 +118,15 @@ private fun ChipLabel(text: String) {
     )
 }
 
-/** A decorative icon at the start of a chip. */
+/**
+ * A decorative icon at the start of a chip. It grows with the font size,
+ * so it keeps its proportion to the text.
+ */
 @Composable
 private fun ChipIcon(icon: Painter) {
-    Icon(painter = icon, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize))
+    Icon(
+        painter = icon,
+        contentDescription = null,
+        modifier = Modifier.size(iconSizeNextToText(FilterChipDefaults.IconSize)),
+    )
 }

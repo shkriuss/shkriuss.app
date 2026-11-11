@@ -22,6 +22,8 @@ development.
   extended one expanded, collapsed and with a long label.
 - New page Chips: filter chips and assist chips in every state, and three
   filter chips to try.
+- At larger font sizes, icons next to text in buttons, chips and the
+  extended floating action button grow with the text.
 
 ## 0.1.0 (2026-11-11)
 

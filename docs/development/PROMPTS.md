@@ -332,7 +332,7 @@ Read CLAUDE.md and docs/development/design-system.md. Add this batch of
 For every component: a short KDoc that says when to use it, a Catalog page
 with all states, a TalkBack label where it is interactive, a touch target of
 at least 48dp, no clipped text at font scale 2.0, and screenshot tests in the
-six standard configurations. Only `core/design` may import Material 3.
+eight standard configurations. Only `core/design` may import Material 3.
 ```
 
 Batches:
@@ -622,7 +622,7 @@ Check, in this order:
 2. Security against docs/security/threat-model.md: secrets, permissions,
    exported components, input handling, logging of user content.
 3. Correctness and the tests: what is not tested that should be?
-4. Accessibility and the six screenshot configurations.
+4. Accessibility and the eight screenshot configurations.
 5. Docs and changelog.
 
 Give me a list ordered by severity. For each finding: file and line, what

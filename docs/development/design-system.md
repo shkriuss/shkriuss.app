@@ -37,6 +37,7 @@ buttons and chips. See [Components](#components).
 | `ShkButtons.kt` | `ShkFilledButton`, `ShkTonalButton`, `ShkTextButton` and `ShkIconButton`. |
 | `ShkFloatingActionButton.kt` | `ShkFloatingActionButton` and `ShkExtendedFloatingActionButton`. |
 | `ShkChips.kt` | `ShkFilterChip` and `ShkAssistChip`. |
+| `ShkIconSize.kt` | `iconSizeNextToText`, the size of an icon next to text at the user's font size. Internal to `core/design`. |
 | `res/drawable/shk_icon_check.xml` | The check mark on a selected filter chip. |
 
 ## Colour
@@ -113,8 +114,13 @@ ShkText(text = stringResource(R.string.title), style = ShkTextStyle.Headline)
 Buttons and chips are pills at their normal height of one line. When
 large text wraps them onto more lines, their corners keep the radius of
 one line: 20 dp for buttons, 16 dp for chips. A fully rounded end on a
-taller button would cut off the corners of the text. See
-[Large text](#large-text).
+taller button would cut off the corners of the text. This is what "pill
+buttons" means in ADR 0017, point 3 (owner decision on
+[pull request 13](https://github.com/shkriuss/shkriuss.app/pull/13)).
+See [Large text](#large-text).
+
+The floating action buttons use `ShkShapes.Card`, 16 dp corners, as
+Material 3 does (owner decision on pull request 13).
 
 ## Spacing
 
@@ -215,6 +221,10 @@ Batch 1 of Phase 1, step 2. Each component is one function in
 | `ShkFilterChip` | Turning a filter on or off, such as "Done" above a list of tasks. Several sit in a group. | Actions. Use an assist chip or a button. |
 | `ShkAssistChip` | A small, optional action related to the content near it, such as "Add a reminder" under a task. | The main action. Use a button. |
 
+Material 3 also has input chips (a removable tag) and suggestion chips.
+They are built when the first app needs them, not before (owner
+decision on pull request 13).
+
 ### How they look
 
 | Component | Fill | Text and icon | Outline | Shape | Drawn size |
@@ -234,8 +244,10 @@ Batch 1 of Phase 1, step 2. Each component is one function in
   turned off, also for a mouse hovering and a chip being dragged
   (ADR 0017, point 5).
 - A selected filter chip is filled with the accent colour, because the
-  accent is the colour of selection. It also shows a check mark, so the
-  state does not depend on colour alone.
+  accent is the colour of selection (owner decision on pull request 13).
+  Material 3's default, the higher surface colour, is hard to tell from
+  not selected. It also shows a check mark, so the state does not depend
+  on colour alone.
 - Text uses the `Label` style.
 - Disabled components use Material 3's disabled colours: text and icons in
   the `text` colour at 38 % opacity, fills in the `text` colour at 10 to
@@ -265,8 +277,9 @@ making the components look bigger. Floating action buttons are 56 dp.
   See [Shape](#shape).
 - Wrapped text keeps space above and below it, so it never touches the
   edge of a chip or a floating action button.
-- Icons stay 18 dp in buttons and chips and 24 dp elsewhere. They do not
-  grow with the font size, as in Material 3.
+- An icon next to text grows with the font size, so it keeps its
+  proportion to the text (owner decision on pull request 13). See
+  [Icons](#icons).
 
 ### TalkBack
 
@@ -292,7 +305,23 @@ making the components look bigger. Floating action buttons are 56 dp.
    (`shk_icon_check.xml`). The Catalog's sample icons (plus, search and a
    clock) are drawn the same way and live in the Catalog.
 4. An icon is a vector drawable on a 24 dp grid, drawn in black. The
-   component replaces the colour.
+   component replaces the colour and sets the size.
+5. Size at the default font size, as in Material 3: 18 dp in buttons and
+   chips, 24 dp elsewhere.
+6. An icon next to text grows when the user makes text larger. It grows
+   the way text of its own size grows: an 18 dp icon like 18 sp text,
+   along Android's own font size curve. At font scale 2.0 an 18 dp icon
+   is 30 dp, and at 1.3 it is 21.6 dp. It never gets smaller than its
+   size at the default font size.
+   - This covers icons in buttons, in chips and in the extended floating
+     action button. The extended one keeps the grown icon while it is
+     collapsed, so the icon does not jump when the button shrinks.
+   - An icon with no text next to it, in an icon button or a floating
+     action button, keeps its size. So at large font sizes a collapsed
+     extended floating action button shows a larger icon than a floating
+     action button.
+   - `iconSizeNextToText` in `ShkIconSize.kt` does this. Use it for every
+     new component that puts an icon next to text.
 
 ## Tests
 
@@ -338,10 +367,18 @@ at font scale 1.0 and 2.0, with and without an icon, and checks:
 4. A long label in a space 200 dp wide wraps onto more lines, is not cut
    by its own layout, and all four corners of the text lie inside the
    component's shape.
+5. An icon next to text is its Material 3 size at font scale 1.0 and
+   larger at 2.0, but never more than twice that size. An icon alone
+   keeps its size. The test passes an icon that records the size it is
+   drawn at.
 
 It runs with real fonts (Robolectric's native graphics). With fully
 rounded ends instead of the capped pill, check 4 fails for every button
-and chip at font scale 2.0.
+and chip at font scale 2.0. With icons that do not grow, check 5 fails
+for every component with an icon next to text.
+
+`ShkIconSizeTest` checks the icon size rule itself at font scales 0.85,
+1.0, 1.3 and 2.0: the same size up to 1.0, and larger above it.
 
 `ComponentPagesTest` in the Catalog opens each component page and checks
 the components where they sit: each has a label and a role, no two touch
@@ -422,17 +459,7 @@ whole in the next.
   component batches.
 - `ScreenshotConfig` and `captureWholeScreen` live in the Catalog's tests.
   They move to `core/testing` when that module is made.
-- Buttons and chips keep the corner radius of one line when large text
-  makes them taller. ADR 0017 says only "pill buttons". The owner
-  confirms this at the Phase 1 gate.
-- The floating action buttons use the `Card` shape, 16 dp corners, as in
-  Material 3. A round one would use the pill.
-- A selected filter chip is filled with the accent colour. Material 3's
-  default is the higher surface colour.
-- Icons in buttons and chips do not grow with the font size.
 - A shared icon set for the apps. Each icon is drawn for the suite until
   then.
 - Focus uses Material 3's light state layer. There is no separate focus
   ring for keyboards.
-- Input chips (a removable tag) and suggestion chips are not built yet.
-  They come with the first app that needs them.

@@ -22,8 +22,9 @@ import androidx.compose.ui.text.style.TextAlign
  * screen. Use [ShkTonalButton] or [ShkTextButton] for the other actions.
  *
  * TalkBack reads [text]. [icon] is optional, sits before the text and is
- * decorative. Long text wraps, so nothing is cut off at large font sizes.
- * The button is drawn 40dp tall, and its touch target is at least 48dp.
+ * decorative. It grows with the font size. Long text wraps, so nothing is
+ * cut off at large font sizes. The button is drawn 40dp tall, and its
+ * touch target is at least 48dp.
  */
 @Composable
 fun ShkFilledButton(
@@ -58,7 +59,8 @@ fun ShkFilledButton(
  * is already the higher surface, use [ShkTextButton] instead.
  *
  * TalkBack reads [text]. [icon] is optional, sits before the text and is
- * decorative. Long text wraps. The touch target is at least 48dp.
+ * decorative, and grows with the font size. Long text wraps. The touch
+ * target is at least 48dp.
  */
 @Composable
 fun ShkTonalButton(
@@ -92,7 +94,8 @@ fun ShkTonalButton(
  * often.
  *
  * TalkBack reads [text]. [icon] is optional, sits before the text and is
- * decorative. Long text wraps. The touch target is at least 48dp.
+ * decorative, and grows with the font size. Long text wraps. The touch
+ * target is at least 48dp.
  */
 @Composable
 fun ShkTextButton(
@@ -155,11 +158,18 @@ fun ShkIconButton(
  */
 internal val ButtonShape = RoundedCornerShape(ButtonDefaults.MinHeight / 2)
 
-/** The optional icon and the text of a button, in the label style. */
+/**
+ * The optional icon and the text of a button, in the label style. The
+ * icon grows with the font size, so it keeps its proportion to the text.
+ */
 @Composable
 private fun ButtonContent(text: String, icon: Painter?) {
     if (icon != null) {
-        Icon(painter = icon, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+        Icon(
+            painter = icon,
+            contentDescription = null,
+            modifier = Modifier.size(iconSizeNextToText(ButtonDefaults.IconSize)),
+        )
         Spacer(Modifier.width(ShkSpacing.Small))
     }
     Text(text = text, style = ShkTextStyle.Label.textStyle, textAlign = TextAlign.Center)
