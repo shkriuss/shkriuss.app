@@ -4,8 +4,8 @@ Every app of the suite is signed with one key. AppVerifier shows the
 fingerprint of the key that signed an app on your phone. If it is the
 fingerprint below, the app comes from this project and was not changed.
 
-These steps have not been tried with a real release yet. They will be
-checked, and corrected if needed, with the first release, Catalog 0.1.0.
+These steps were checked with the first release, Catalog 0.1.0, on
+2026-11-11.
 
 ## What you need
 

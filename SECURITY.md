@@ -28,8 +28,11 @@ Please never include real user data, recovery keys, tokens or passwords.
 
 ## Supported versions
 
-There are no releases yet. This section will list the supported versions
-after the first release.
+The only release so far is Catalog 0.1.0, the design gallery used during
+development.
+
+Open: which versions get security fixes. This section will list them once
+that is decided.
 
 ## Scope
 

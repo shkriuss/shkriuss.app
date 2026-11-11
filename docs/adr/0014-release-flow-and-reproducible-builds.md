@@ -188,14 +188,17 @@
 - Phase 0 ends when an empty Catalog app builds reproducibly in CI, is
   signed, and installs through Obtainium (section 16). The steps are the
   rehearsal in [release.md](../development/release.md#rehearsal-with-catalog).
+  Phase 0 ended on 2026-11-11, when Catalog 0.1.0 was released, installed
+  with Obtainium and checked with AppVerifier.
 - The signing key itself is covered in
   [0013](0013-signing-key-custody-and-rotation.md).
 - The `ci`, `pr-preview` and `release` workflows use only GitHub's own
   actions. The commits are listed in
   [ci.md](../development/ci.md#actions-used).
-- Open: that a draft release works with the tag rules, and that the owner
-  can publish it (section 17). The rehearsal in
-  [release.md](../development/release.md#rehearsal-with-catalog) checks it.
+- Settled at the Phase 0 gate (section 17): a draft release works with
+  the tag rules, and the owner can publish it. The owner published
+  Catalog 0.1.0 as `catalog-v0.1.0` on 2026-11-11
+  ([release.md](../development/release.md#part-b-the-phase-0-gate)).
 - The `site` workflow needs no third-party action (section 17). It uses
   the same commits of `checkout`, `upload-artifact` and
   `download-artifact` ([0023](0023-hub-site-hosting-and-deploy.md)).

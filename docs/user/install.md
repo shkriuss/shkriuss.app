@@ -7,10 +7,9 @@ an update is out.
 Not every app has a release yet. The [apps page](apps.md) shows which ones
 do.
 
-These steps have not been tried with a real release yet. They will be
-checked, and corrected if needed, with the first release, Catalog 0.1.0.
-The names of buttons and settings can differ a little between versions of
-Obtainium.
+These steps were checked with the first release, Catalog 0.1.0, on
+2026-11-11. The names of buttons and settings can differ a little between
+versions of Obtainium.
 
 ## What you need
 

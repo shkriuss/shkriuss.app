@@ -38,6 +38,7 @@ The later channels are deferred, not rejected.
   them, in `docs/security/fingerprints.md`.
 - The user docs explain how to install and verify (section 12).
 - The Phase 0 gate includes installing Catalog through Obtainium
-  (section 16).
+  (section 16). This was done on 2026-11-11 with Catalog 0.1.0, which was
+  also checked with AppVerifier.
 - The route into the main F-Droid repository depends on reproducible
   builds. See [0014](0014-release-flow-and-reproducible-builds.md).

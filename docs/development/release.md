@@ -75,9 +75,6 @@ Publishing a draft creates its tag in your name. If a ruleset limits who
 may create tags, your account must be allowed, for example on its bypass
 list.
 
-Open: that publishing works with the tag rule is confirmed in the
-rehearsal below.
-
 ### 4. The fingerprint
 
 [fingerprints.md](../security/fingerprints.md) holds the certificate's
@@ -207,6 +204,10 @@ The rehearsal tries all of them.
    again.
 
 ### Part B: the Phase 0 gate
+
+Done on 2026-11-11. Catalog 0.1.0 was published as `catalog-v0.1.0`,
+installed with Obtainium and checked with AppVerifier. Nothing differed
+from these steps.
 
 This makes a real, permanent release. The tag `catalog-v0.1.0` can never be
 used again, even if the release is deleted.
