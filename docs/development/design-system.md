@@ -5,8 +5,9 @@ components built from them, and how both are checked. They live in
 `android/core/design`. The tokens were built in Phase 1, step 1. The
 decision and its reasons are in
 [ADR 0017](../adr/0017-design-system-tokens.md). The components come in
-Phase 1, step 2, batch by batch. Batch 1 is here: buttons, floating action
-buttons and chips. See [Components](#components).
+Phase 1, step 2, batch by batch. Two batches are here. Batch 1: buttons,
+floating action buttons and chips. Batch 2: the text field, checkbox,
+switch, radio button and slider. See [Components](#components).
 
 ## Rules
 
@@ -37,8 +38,11 @@ buttons and chips. See [Components](#components).
 | `ShkButtons.kt` | `ShkFilledButton`, `ShkTonalButton`, `ShkTextButton` and `ShkIconButton`. |
 | `ShkFloatingActionButton.kt` | `ShkFloatingActionButton` and `ShkExtendedFloatingActionButton`. |
 | `ShkChips.kt` | `ShkFilterChip` and `ShkAssistChip`. |
+| `ShkTextField.kt` | `ShkTextField`. |
+| `ShkSelectionControls.kt` | `ShkCheckbox`, `ShkSwitch`, `ShkRadioButton` and `ShkRadioGroup`. |
+| `ShkSlider.kt` | `ShkSlider`. |
 | `ShkIconSize.kt` | `iconSizeNextToText`, the size of an icon next to text at the user's font size. Internal to `core/design`. |
-| `res/drawable/shk_icon_check.xml` | The check mark on a selected filter chip. |
+| `res/drawable/shk_icon_check.xml` | The check mark on a selected filter chip and on the thumb of a switch that is on. |
 
 ## Colour
 
@@ -201,11 +205,13 @@ So a Material 3 text field uses `Body`, 14 sp, not Material's 16 sp.
 
 Components set their shape themselves; this mapping is the fallback.
 Buttons and chips use the pill described under [Shape](#shape), the
-floating action buttons `ShkShapes.Card`.
+floating action buttons `ShkShapes.Card`. The text field's box and the
+pressed state of a checkbox, switch or radio button row use
+`ShkShapes.Field`.
 
 ## Components
 
-Batch 1 of Phase 1, step 2. Each component is one function in
+Batches 1 and 2 of Phase 1, step 2. Each component is one function in
 `core/design`, built on Material 3. Apps call these, never Material 3.
 
 ### Which one to use
@@ -220,10 +226,20 @@ Batch 1 of Phase 1, step 2. Each component is one function in
 | `ShkExtendedFloatingActionButton` | The same, with text, when the icon alone is not clear. It can collapse to its icon while a list scrolls (`expanded = false`). | The same as above. |
 | `ShkFilterChip` | Turning a filter on or off, such as "Done" above a list of tasks. Several sit in a group. | Actions. Use an assist chip or a button. |
 | `ShkAssistChip` | A small, optional action related to the content near it, such as "Add a reminder" under a task. | The main action. Use a button. |
+| `ShkTextField` | Typing text, such as a name, an amount or a short note. | Choosing from a few fixed options. Use radio buttons. |
+| `ShkCheckbox` | An option in a form that is saved later, such as "Remind me" in a new task. Several in a group can each be on. | A setting that takes effect at once. Use a switch. |
+| `ShkSwitch` | A setting that takes effect as soon as it changes, such as "Daily reminder" on a settings screen. | An option in a form that is saved later. Use a checkbox. |
+| `ShkRadioButton` | One choice out of a few that are all shown, such as the unit "Millilitres" or "Ounces". Put them in a `ShkRadioGroup`. | More than about six options, or options that change. Use a list. |
+| `ShkSlider` | A value in a range where the exact number matters less than where it sits, such as a daily goal. | A value that must be exact. Use a text field. |
 
 Material 3 also has input chips (a removable tag) and suggestion chips.
 They are built when the first app needs them, not before (owner
 decision on pull request 13).
+
+Batch 2 leaves out these parts of Material 3: the checkbox with a third,
+mixed state, the range slider and the vertical slider, and text field
+icons, prefixes, suffixes and placeholders. Open: build them when an app
+needs them, as for the chips above.
 
 ### How they look
 
@@ -239,19 +255,60 @@ decision on pull request 13).
 | Filter chip, selected | `accent` | `textOnAccent`, with a check mark | None | Pill, 16 dp | 32 dp tall |
 | Assist chip | None | `text`, icon in `accent` | `outline` | Pill, 16 dp | 32 dp tall |
 
-- Every pair in the table is one the contrast test already checks.
+The inputs of batch 2:
+
+| Component | Off, or not focused | On, selected or focused | Shape | Drawn size |
+|---|---|---|---|---|
+| Text field | Box outlined in `outline`, 1 dp. Label above and help under in `textSecondary`. Text in `text`. | Box outlined in `accent`, 2 dp, and label in `accent`. In error, the box, the label and the line under the box are `error`. | `Field`, 12 dp | Box 56 dp tall at one line, with the label above it and the help under it |
+| Checkbox | Box outlined in `textSecondary` | Box filled with `accent`, check mark in `textOnAccent` | Square, 2 dp corners | 18 dp box, in a row at least 48 dp tall |
+| Switch | Track `surfaceHigh`, outlined in `outline`. Thumb `outline`. | Track `accent`. Thumb `textOnAccent`, with a check mark in `accent`. | Fully round | 52 by 32 dp, at the end of a row at least 48 dp tall |
+| Radio button | Ring in `textSecondary` | Ring and dot in `accent` | Circle | 20 dp, in a row at least 48 dp tall |
+| Slider | Track after the thumb in `outline`, its step marks in `background` | Track before the thumb, and the thumb, in `accent`. Its step marks in `textOnAccent`. | Rounded track | Track 16 dp tall, thumb 4 by 44 dp |
+
+- Every pair in the two tables is one the contrast tests already check,
+  except the dot at the end of a slider's track (below).
 - No component has a shadow, in any state. Material 3's elevation is
   turned off, also for a mouse hovering and a chip being dragged
   (ADR 0017, point 5).
+- A text field's label sits above its box, never in its border. Material
+  3 puts the label in the border once the field has text, and it keeps
+  room there for one short line only. A label that wraps at a large font
+  size would stick out above the field and cover what is there.
+  Material 3 1.4 offers a label above only for its newer field that
+  takes a `TextFieldState`. `ShkTextField` takes a `String` and
+  `onValueChange` instead, which fits the one immutable state a view
+  model exposes (CLAUDE.md, "Architecture rules"). It draws the label
+  above the box itself, inset 4 dp, as Material 3 does.
+- The box of a checkbox and the ring of a radio button that are off are
+  `textSecondary`, as in Material 3. That is stronger than the outline
+  (8.35:1 against 4.03:1 on the light background), because they are small
+  and thin.
+- Material 3 draws the check mark on a switch's thumb in its "on primary
+  container" colour. This theme maps that role to `textOnAccent`, the
+  thumb's own colour, so the mark would not show. `ShkSwitch` draws it in
+  `accent`.
+- The track after a slider's thumb is `outline`. Material 3 uses the
+  higher surface colour there, which is 1.22:1 on the background. WCAG
+  asks for 3:1 for the parts of a control, and the outline is at least
+  3.30:1 on all three backgrounds. The step marks on it are the
+  background colour, so they stand out from the track by the same pair.
+- Material 3 marks the end of a slider's track with a dot in the accent.
+  On the outline it is 1.64:1 in the light theme and 2.67:1 in the dark
+  one. It repeats what the track already shows, where the range ends.
 - A selected filter chip is filled with the accent colour, because the
   accent is the colour of selection (owner decision on pull request 13).
   Material 3's default, the higher surface colour, is hard to tell from
   not selected. It also shows a check mark, so the state does not depend
   on colour alone.
-- Text uses the `Label` style.
+- Text on buttons, chips and floating action buttons uses the `Label`
+  style. The text of a checkbox, switch, radio button or slider uses
+  `Body`, and so does the text typed in a field. The label above a text
+  field and the line under it use `Caption`, as in Material 3.
 - Disabled components use Material 3's disabled colours: text and icons in
   the `text` colour at 38 % opacity, fills in the `text` colour at 10 to
-  12 %. WCAG does not ask for contrast on a control that is turned off.
+  12 %. The text next to a disabled checkbox, switch, radio button or
+  slider dims the same way. WCAG does not ask for contrast on a control
+  that is turned off.
 
 ### States
 
@@ -259,8 +316,11 @@ decision on pull request 13).
 |---|---|
 | Enabled | All. |
 | Disabled (`enabled = false`) | All but the floating action buttons. When the action of a floating action button is not possible, leave the button out. |
-| Pressed and focused | All. Material 3 draws a light layer of the component's text colour over it. Touch and hold to see it. |
-| Selected (`selected = true`) | Filter chip. |
+| Pressed and focused | All. Material 3 draws a light layer of the component's text colour over it. Touch and hold to see it. A checkbox, switch or radio button shows it on its whole row. A focused text field is the one being typed in: its box and label turn `accent`. |
+| Selected (`selected = true`) | Filter chip, radio button. |
+| On (`checked = true`) | Checkbox, switch. |
+| Error (`errorText` given) | Text field. |
+| With steps (`steps` more than 0) | Slider. |
 | Collapsed (`expanded = false`) | Extended floating action button. |
 
 ### Touch targets
@@ -269,6 +329,13 @@ Buttons and chips are drawn smaller than 48 dp, in the compact density of
 ADR 0017. Material 3 reserves at least 48 by 48 dp of space around each
 one, and a touch anywhere in that space counts. So rule 7 holds without
 making the components look bigger. Floating action buttons are 56 dp.
+
+A checkbox, switch or radio button sits in a row with its text. The
+whole row is one touch target, at least 48 dp tall and as wide as the
+space it is given, so a tap on the text works too. A text field is at
+least 56 dp tall, and a tap anywhere on it, its label included, focuses
+it. A slider is drawn 44 dp tall, and Material 3 reserves 48 dp of space
+around it.
 
 ### Large text
 
@@ -280,6 +347,15 @@ making the components look bigger. Floating action buttons are 56 dp.
 - An icon next to text grows with the font size, so it keeps its
   proportion to the text (owner decision on pull request 13). See
   [Icons](#icons).
+- A text field's label and help wrap above and below its box. A field of
+  one line scrolls sideways when the text is wider than the box, as every
+  text field does.
+- The text of a checkbox, switch or radio button wraps beside the
+  control, which stays centred on it. The text of a slider's label wraps
+  beside its value.
+- The checkbox, the radio button, the switch and the slider keep Material
+  3's size at every font size. They are controls, not icons next to text,
+  so the icon rule does not cover them. Open: should they grow too?
 
 ### TalkBack
 
@@ -292,6 +368,20 @@ making the components look bigger. Floating action buttons are 56 dp.
   is collapsed. Material 3 1.4 hides that text from TalkBack, so
   `ShkExtendedFloatingActionButton` sets it as the button's label.
 - Icons inside buttons and chips are decorative. TalkBack skips them.
+- A text field is read with its label and its help. `label` is a required
+  argument. An error is read once, as the field's error. Material 3 1.4
+  reads every error as "Invalid input", so `ShkTextField` gives TalkBack
+  `errorText` itself, and hides the line under the box from TalkBack so
+  the error is not read twice.
+- A checkbox, switch or radio button is read as one item with its row:
+  its text, its role ("checkbox", "switch" or "radio button"), and whether
+  it is checked, on or selected. Radio buttons inside a `ShkRadioGroup`
+  are read as one group.
+- A slider is read by its label and its value in words, for example
+  "Daily goal, 8 glasses". `valueText` is a required argument, so
+  TalkBack never reads a bare number or a percentage. The label and the
+  value shown above the slider are hidden from TalkBack, so they are not
+  read twice.
 - A disabled component is read as "disabled".
 
 ### Icons
@@ -301,9 +391,9 @@ making the components look bigger. Floating action buttons are 56 dp.
 2. There is no icon library in the build. Material's icon library would be
    a new dependency, which needs an ADR (hard rule 5 in CLAUDE.md).
 3. The only icon `core/design` needs, the check mark on a selected filter
-   chip, is drawn for the suite as one stroke
-   (`shk_icon_check.xml`). The Catalog's sample icons (plus, search and a
-   clock) are drawn the same way and live in the Catalog.
+   chip and on the thumb of a switch that is on, is drawn for the suite
+   as one stroke (`shk_icon_check.xml`). The Catalog's sample icons (plus,
+   search and a clock) are drawn the same way and live in the Catalog.
 4. An icon is a vector drawable on a 24 dp grid, drawn in black. The
    component replaces the colour and sets the size.
 5. Size at the default font size, as in Material 3: 18 dp in buttons and
@@ -320,6 +410,8 @@ making the components look bigger. Floating action buttons are 56 dp.
      action button, keeps its size. So at large font sizes a collapsed
      extended floating action button shows a larger icon than a floating
      action button.
+   - The check mark on a switch's thumb keeps Material 3's 16 dp, because
+     the thumb has a fixed size.
    - `iconSizeNextToText` in `ShkIconSize.kt` does this. Use it for every
      new component that puts an icon next to text.
 
@@ -355,13 +447,15 @@ the owner.
 
 ### Component tests
 
-`ShkComponentsTest` in `core/design` draws every component on its own,
-at font scale 1.0 and 2.0, with and without an icon, and checks:
+`ShkComponentsTest` in `core/design` draws every button, floating action
+button, chip, checkbox, switch and radio button on its own, at font scale
+1.0 and 2.0, with and without an icon, and checks:
 
 1. The space it takes is at least 48 by 48 dp.
-2. TalkBack hears its label exactly once, and its role: button, or
-   checkbox for a filter chip. A filter chip also says whether it is
-   selected.
+2. TalkBack hears its label exactly once, and its role: button, checkbox,
+   switch or radio button. A filter chip is a checkbox to TalkBack. A
+   filter chip and a radio button also say whether they are selected, a
+   checkbox and a switch whether they are on.
 3. A tap calls its action. Turned off, it ignores taps and is read as
    disabled.
 4. A long label in a space 200 dp wide wraps onto more lines, is not cut
@@ -380,10 +474,39 @@ for every component with an icon next to text.
 `ShkIconSizeTest` checks the icon size rule itself at font scales 0.85,
 1.0, 1.3 and 2.0: the same size up to 1.0, and larger above it.
 
+`ShkTextFieldTest` checks the text field at font scale 1.0 and 2.0:
+
+1. It is at least 48 by 48 dp.
+2. TalkBack hears its label and its help exactly once each. An error is
+   heard once, as the field's error, and replaces the help.
+3. Typing reaches the caller. Turned off, it is read as disabled.
+4. A long label and long help in a space 200 dp wide wrap, are not cut,
+   lie inside the field, and leave at least 48 dp between them for the
+   box. With Material 3's own field, which puts the label in the border,
+   this check fails at both font scales: the label sticks out above the
+   field. The error check fails too: Material 3 reads "Invalid input".
+
+`ShkSliderTest` checks the slider at font scale 1.0 and 2.0:
+
+1. It takes at least 48 dp under its text.
+2. TalkBack hears its label and its value in words, from the slider. The
+   same words shown above it are hidden from TalkBack.
+3. Moving it reaches the caller, at a step. Turned off, it is read as
+   disabled.
+4. A long label wraps, is not cut, and leaves room for the value beside
+   it.
+
+`ShkRadioGroupTest` checks that a `ShkRadioGroup` tells TalkBack its radio
+buttons belong to one group.
+
 `ComponentPagesTest` in the Catalog opens each component page and checks
 the components where they sit: each has a label and a role, no two touch
-targets overlap, every component that can be turned off is shown turned
-off, and the filter chips under "Try it" select and clear.
+targets overlap, and every component that can be turned off is shown
+turned off. It also tries the components under "Try it": the filter
+chips select and clear, the checkboxes and switches turn on and off, a
+radio button clears the others in its group, the text field takes typing
+and shows its error past 20 characters, and the slider moves and says its
+new value.
 
 ### Catalog
 
@@ -412,10 +535,20 @@ Components:
    and disabled, and with a long label, then three filter chips to try.
    The assist chip with and without an icon, disabled and with a long
    label.
+8. **Text fields**: the text field empty, with text, with help, in
+   error, disabled, with several lines, and with a long label and long
+   help, then one to try.
+9. **Selection controls**: the checkbox, the switch and the radio button,
+   each off, on, disabled, on and disabled, and with a long label, then a
+   few of each to try.
+10. **Sliders**: the slider without steps, with steps, disabled and with
+    a long label, then one to try.
 
 Each component page names a component, says when to use it, then shows
-each state under a caption. Only the chips under "Try it" respond to a
-tap, so every other sample always shows the state its caption names.
+each state under a caption. Only the components under "Try it" respond
+to a tap, typing or dragging, so every other sample always shows the
+state its caption names. A text field that is not under "Try it" can
+still be focused, but it keeps its text.
 
 Open a page by tapping it. Go back with the back gesture. In a window at
 least 600 dp wide, the pages lay their items out in two or three columns.
@@ -450,6 +583,15 @@ whole in the next.
 7. With TalkBack on, swipe through a component page. Each component is
    read with its label and "button", or for a filter chip whether it is
    selected. Disabled ones are read as "disabled".
+8. On Text fields, tap the field under "Try it" and type. Its border and
+   label turn the accent colour. Type more than 20 characters to see the
+   error, then delete some to clear it.
+9. On Selection controls, tap the rows under "Try it", on the text as
+   well as on the control. With TalkBack on, each row is read once, with
+   its text, its role and its state.
+10. On Sliders, drag the slider under "Try it". The number of glasses
+    changes. With TalkBack on, the slider is read as "Daily goal" and the
+    number of glasses, not a percentage.
 
 ## Open
 
@@ -463,3 +605,12 @@ whole in the next.
   then.
 - Focus uses Material 3's light state layer. There is no separate focus
   ring for keyboards.
+- From batch 2, for the owner to confirm:
+  - The text field's label always sits above the box, in `Caption`, not
+    in the border. See [How they look](#how-they-look).
+  - The slider's track after the thumb is `outline`, not Material 3's
+    higher surface colour.
+  - The checkbox, radio button, switch and slider keep their size at
+    large font sizes. See [Large text](#large-text).
+  - The parts of Material 3 left out of batch 2 are built when an app
+    needs them. See [Which one to use](#which-one-to-use).

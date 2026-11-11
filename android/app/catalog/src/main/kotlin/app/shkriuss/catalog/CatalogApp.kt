@@ -36,6 +36,9 @@ enum class CatalogPage(
     Buttons(R.string.page_buttons_title, R.string.page_buttons_summary, CatalogGroup.Components),
     FloatingActionButtons(R.string.page_fab_title, R.string.page_fab_summary, CatalogGroup.Components),
     Chips(R.string.page_chips_title, R.string.page_chips_summary, CatalogGroup.Components),
+    TextFields(R.string.page_text_fields_title, R.string.page_text_fields_summary, CatalogGroup.Components),
+    SelectionControls(R.string.page_selection_title, R.string.page_selection_summary, CatalogGroup.Components),
+    Sliders(R.string.page_sliders_title, R.string.page_sliders_summary, CatalogGroup.Components),
 }
 
 /**
@@ -59,5 +62,8 @@ fun CatalogApp() {
         CatalogPage.Buttons -> ButtonsPage()
         CatalogPage.FloatingActionButtons -> FloatingActionButtonsPage()
         CatalogPage.Chips -> ChipsPage()
+        CatalogPage.TextFields -> TextFieldsPage()
+        CatalogPage.SelectionControls -> SelectionControlsPage()
+        CatalogPage.Sliders -> SlidersPage()
     }
 }

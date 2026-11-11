@@ -136,6 +136,14 @@ private fun materialColorScheme(colors: ShkColors, inverse: ShkColors, dark: Boo
     )
 
 /**
+ * The opacity of the text and icons of a component that is turned off.
+ * It is Material 3's, so text the suite draws next to a disabled Material 3
+ * control dims the same way. WCAG asks for no contrast on a disabled
+ * control.
+ */
+internal const val DisabledContentAlpha = 0.38f
+
+/**
  * Material 3's fifteen text styles, each set to one of the suite's six.
  * Material 3 components then use only the suite's styles.
  */

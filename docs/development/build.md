@@ -178,24 +178,25 @@ second build must write the same mapping file, or the release stops. See
 - They run for the `debug` build type only. `release` and `preview` compile
   the same Kotlin code, and R8 does not run for unit tests, so running them
   again would test nothing new.
-- `core/design` has four, `ShkColorsContrastTest`,
-  `ShkThemeMaterialTest`, `ShkComponentsTest` and `ShkIconSizeTest`. They
-  check the contrast of every colour pair, how Material 3 is set up, and
-  every `Shk*` component at font scale 1.0 and 2.0: its touch target,
-  what TalkBack hears, that long text wraps inside its shape, and that an
-  icon next to text grows with it
+- `core/design` has seven: `ShkColorsContrastTest`,
+  `ShkThemeMaterialTest`, `ShkComponentsTest`, `ShkIconSizeTest`,
+  `ShkTextFieldTest`, `ShkSliderTest` and `ShkRadioGroupTest`. They check
+  the contrast of every colour pair, how Material 3 is set up, and every
+  `Shk*` component at font scale 1.0 and 2.0: its touch target, what
+  TalkBack hears, that long text wraps inside its shape, and that an icon
+  next to text grows with it
   ([design-system.md](design-system.md#tests)).
-  - `ShkComponentsTest` and `ShkIconSizeTest` draw in a plain
-    `ComponentActivity`. No manifest of the library declares one, so the
-    test registers it with Robolectric's package manager first. That needs
-    no extra test library.
+  - The tests that draw components use a plain `ComponentActivity`. No
+    manifest of the library declares one, so the test registers it with
+    Robolectric's package manager first. That needs no extra test
+    library.
 - Catalog has `CatalogScreenTest`. It starts the app's activity and checks
   the title is a heading, which is what TalkBack announces, that every page
   has a button at least 48 dp tall, that each page opens and back returns,
   and what TalkBack hears for a contrast.
 - Catalog also has `ComponentPagesTest`. It opens each component page and
   checks the components where they sit: labels and roles, touch targets
-  that do not overlap, the disabled states, and the chips to try.
+  that do not overlap, the disabled states, and the components to try.
 
 ### Screenshot tests
 

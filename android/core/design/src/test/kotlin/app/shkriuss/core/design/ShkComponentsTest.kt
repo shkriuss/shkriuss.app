@@ -16,6 +16,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertHeightIsAtLeast
@@ -43,12 +44,13 @@ import org.robolectric.ParameterizedRobolectricTestRunner
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * Checks every `Shk*` button, floating action button and chip, at font
- * scale 1.0 and 2.0, for the rules in CLAUDE.md, "UI and accessibility":
+ * Checks every `Shk*` button, floating action button, chip, checkbox,
+ * switch and radio button, at font scale 1.0 and 2.0, for the rules in
+ * CLAUDE.md, "UI and accessibility":
  *
  * - the space it takes is at least 48 by 48 dp, so its touch target is,
  * - TalkBack hears its label once, its role, and whether it is turned
- *   off or selected,
+ *   off, selected, or on,
  * - long text wraps, is not cut by its own layout, and stays inside the
  *   component's shape, so a round end never cuts a corner of the text,
  * - an icon next to text grows with the font size, and an icon alone
@@ -85,6 +87,9 @@ class ShkComponentsTest(private val case: ComponentCase, private val fontScale: 
         assertEquals("$case: TalkBack should hear the label once", listOf(SHORT_LABEL), heard)
         case.selected?.let { selected ->
             component.assert(SemanticsMatcher.expectValue(SemanticsProperties.Selected, selected))
+        }
+        case.toggleableState?.let { state ->
+            component.assert(SemanticsMatcher.expectValue(SemanticsProperties.ToggleableState, state))
         }
         component.performClick()
         compose.runOnIdle { assertEquals(1, clicks) }
@@ -170,8 +175,10 @@ class ShkComponentsTest(private val case: ComponentCase, private val fontScale: 
         val showsText: Boolean = true,
         /** False for floating action buttons, which have no disabled state. */
         val canBeDisabled: Boolean = true,
-        /** For chips that can be selected: whether this one is. */
+        /** For chips and radio buttons, which can be selected: whether this one is. */
         val selected: Boolean? = null,
+        /** For checkboxes and switches, which turn on and off: whether this one is on. */
+        val toggleableState: ToggleableState? = null,
         /** The icon it draws from the painter it is given, if any. */
         val icon: IconCase? = null,
         val content: @Composable (label: String, enabled: Boolean, onClick: () -> Unit, icon: Painter) -> Unit,
@@ -287,6 +294,51 @@ class ShkComponentsTest(private val case: ComponentCase, private val fontScale: 
                 icon = IconCase(SMALL_ICON, nextToText = true),
             ) { label, enabled, onClick, icon ->
                 ShkAssistChip(text = label, onClick = onClick, enabled = enabled, icon = icon)
+            },
+            // The whole row of a selection control is its touch target, and
+            // its pressed state is drawn in the field shape.
+            ComponentCase(
+                "Checkbox",
+                Role.Checkbox,
+                ShkShapes.Field,
+                toggleableState = ToggleableState.Off,
+            ) { label, enabled, onClick, _ ->
+                ShkCheckbox(text = label, checked = false, onCheckedChange = { onClick() }, enabled = enabled)
+            },
+            ComponentCase(
+                "CheckedCheckbox",
+                Role.Checkbox,
+                ShkShapes.Field,
+                toggleableState = ToggleableState.On,
+            ) { label, enabled, onClick, _ ->
+                ShkCheckbox(text = label, checked = true, onCheckedChange = { onClick() }, enabled = enabled)
+            },
+            ComponentCase(
+                "Switch",
+                Role.Switch,
+                ShkShapes.Field,
+                toggleableState = ToggleableState.Off,
+            ) { label, enabled, onClick, _ ->
+                ShkSwitch(text = label, checked = false, onCheckedChange = { onClick() }, enabled = enabled)
+            },
+            ComponentCase(
+                "CheckedSwitch",
+                Role.Switch,
+                ShkShapes.Field,
+                toggleableState = ToggleableState.On,
+            ) { label, enabled, onClick, _ ->
+                ShkSwitch(text = label, checked = true, onCheckedChange = { onClick() }, enabled = enabled)
+            },
+            ComponentCase("RadioButton", Role.RadioButton, ShkShapes.Field, selected = false) { label, enabled, onClick, _ ->
+                ShkRadioButton(text = label, selected = false, onClick = onClick, enabled = enabled)
+            },
+            ComponentCase(
+                "SelectedRadioButton",
+                Role.RadioButton,
+                ShkShapes.Field,
+                selected = true,
+            ) { label, enabled, onClick, _ ->
+                ShkRadioButton(text = label, selected = true, onClick = onClick, enabled = enabled)
             },
         )
     }
