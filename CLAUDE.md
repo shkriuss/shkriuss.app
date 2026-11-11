@@ -1,4 +1,4 @@
-# shkriuss.app
+# shkriuss-app
 
 Open-source suite of native Android apps (`app.shkriuss.<name>`), built from shared
 core modules. GrapheneOS is the first target. Local-first, no Google services,
