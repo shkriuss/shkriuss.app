@@ -12,3 +12,6 @@ development.
 - No permissions. Android backup and device-to-device transfer are off.
 - A preview build, "Catalog preview" (`app.shkriuss.catalog.preview`),
   installs next to the real app.
+- Version code 100900, from the version code rule in
+  [ADR 0021](../../../docs/adr/0021-version-names-and-version-codes.md).
+  It was 1. No build was released with it.

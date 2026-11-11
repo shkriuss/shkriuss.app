@@ -13,6 +13,8 @@ Pages:
 - [Test a pull request on a phone](test-a-pull-request.md): how to install
   a pull request's preview APK and look at its screenshots, with only a
   browser.
+- [Release](release.md): how to run a release from a phone, check and
+  publish the draft, and the rehearsal with Catalog.
 - [Emulator tests](emulator-tests.md): the plan for instrumented tests on
   an emulator. Not set up yet.
 - [Working with Claude](working-with-claude.md): who can do what, and how a
@@ -23,5 +25,4 @@ Pages:
 
 What else belongs here, as each part is built:
 
-- Release: how a release is run from a phone.
 - Design system: the tokens and the `Shk*` components.

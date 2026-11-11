@@ -27,3 +27,8 @@
 *.keystore                                   @shkriuss
 *.p12                                        @shkriuss
 *.pfx                                        @shkriuss
+
+# The signing certificate's fingerprint. The release workflow refuses to
+# release an APK whose certificate is different, and users check the apps
+# against it. Only the owner provides it.
+/docs/security/fingerprints.md               @shkriuss

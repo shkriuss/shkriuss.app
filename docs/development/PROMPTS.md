@@ -504,8 +504,9 @@ Prepare Water 1.0.0 for release. Do not start the release workflow.
 - `CHANGELOG.md` for the app.
 - `docs/apps/water/release-checklist.md`: the GrapheneOS checklist from
   PLAN.md section 16 as tick boxes with exact steps for each item.
-- Add Water to the hub site and to the release workflow's list of apps
-  (I am the owner and I ask for that one-line change).
+- Add Water to the hub site and to the release workflow's list of apps:
+  the `app` options and the "Check the inputs" step of every job (I am the
+  owner and I ask for exactly that change).
 - List every known problem honestly.
 ```
 
@@ -672,8 +673,9 @@ checksum without saying where it comes from. Skip pre-releases.
 Model: `sonnet`. Effort: `medium`.
 
 ```text
-Prepare <app> <version>. Bump the version, finish the changelog from the
-merged pull requests since the last release, update the user guide, and copy
+Prepare <app> <version>. Bump versionName, and set versionCode by the rule
+in docs/adr/0021-version-names-and-version-codes.md. Finish the changelog
+from the merged pull requests since the last release, update the user guide, and copy
 the release checklist for this version. Do not start the release workflow
 and do not create a tag.
 ```

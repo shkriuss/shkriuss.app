@@ -1,0 +1,919 @@
+# Builds one app twice, checks that both builds are the same, signs it with
+# the suite key after the owner's approval, attests it and makes a draft
+# release. The owner publishes the draft, which creates the tag.
+# How to run it from a phone: docs/development/release.md.
+# Why it works this way: ADR 0013 and ADR 0014 in docs/adr/.
+
+name: Release
+run-name: Release ${{ inputs.app }} ${{ inputs.version }}
+
+# Read-only token. Two jobs get more, and say why: "Build" may read
+# workflow runs, and "Draft release" may write the draft and the
+# attestation.
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: App
+        type: choice
+        required: true
+        # The fixed list of apps that can be released. Every job checks the
+        # same list again in its step "Check the inputs". Change all of
+        # them together.
+        options:
+          - catalog
+      version:
+        description: Version, for example 1.0.0 or 1.0.0-rc.1. The same as versionName in the app's build.gradle.kts.
+        type: string
+        required: true
+
+defaults:
+  run:
+    # Stops a step at the first failing command, also inside a pipe.
+    shell: bash
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      # Only to read the CI run of the commit that is released.
+      actions: read
+    # Every job has its own group, and runs wait instead of cancelling.
+    # Two release runs never do the same job at the same time.
+    concurrency:
+      group: release-build
+      cancel-in-progress: false
+    env:
+      APP: ${{ inputs.app }}
+      VERSION: ${{ inputs.version }}
+    outputs:
+      version_code: ${{ steps.collect.outputs.version_code }}
+      apk_sha256: ${{ steps.collect.outputs.apk_sha256 }}
+      mapping_sha256: ${{ steps.collect.outputs.mapping_sha256 }}
+    steps:
+      # The same in every job, so a re-run of any one job is checked too.
+      # Nothing from the inputs is printed before it has passed these
+      # checks.
+      - name: Check the inputs
+        id: inputs
+        env:
+          # github.actor started the run. github.triggering_actor started
+          # this attempt, which differs after someone else's re-run.
+          ACTOR: ${{ github.actor }}
+          TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -u
+          # Only the owner starts or re-runs a release (ADR 0014).
+          if [ -z "$OWNER" ] || [ "$ACTOR" != "$OWNER" ] || [ "$TRIGGERING_ACTOR" != "$OWNER" ]; then
+            echo "::error::Only the repository owner may start or re-run a release."
+            exit 1
+          fi
+          if [ "$GITHUB_REF" != refs/heads/main ]; then
+            echo "::error::Start the release on the branch main."
+            exit 1
+          fi
+          case "$APP" in
+            catalog) ;;
+            *) echo "::error::Unknown app. Apps that can be released: catalog."; exit 1 ;;
+          esac
+          # The version forms of ADR 0021: 1.2.3, or 1.2.3 followed by
+          # -alpha.N, -beta.N or -rc.N. The same pattern as in
+          # .github/scripts/check-version-code.sh, which also checks the
+          # versionCode after the build.
+          pattern='^(0|[1-9][0-9]?|1[0-9]{2}|20[0-9])\.(0|[1-9][0-9]?)\.(0|[1-9][0-9]?)(-(alpha|beta|rc)\.([1-9][0-9]?))?$'
+          if ! [[ "$VERSION" =~ $pattern ]]; then
+            echo "::error::The version must look like 1.0.0, 1.0.0-alpha.1, 1.0.0-beta.1 or 1.0.0-rc.1 (ADR 0021)."
+            exit 1
+          fi
+          prerelease=false
+          if [[ "$VERSION" == *-* ]]; then prerelease=true; fi
+          {
+            echo "tag=$APP-v$VERSION"
+            echo "prerelease=$prerelease"
+          } >> "$GITHUB_OUTPUT"
+          echo "Release $APP $VERSION, tag $APP-v$VERSION, pre-release: $prerelease."
+
+      # A commit whose tests, lint or screenshots failed is never released.
+      # Only the run that GitHub Actions made from ci.yml for a push of this
+      # exact commit to main counts, not any check with the same name.
+      - name: Check that CI passed on this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -u
+          short="${GITHUB_SHA:0:7}"
+
+          # The workflow ci.yml in this repository, by its number.
+          workflow_id="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml" \
+            --jq 'select(.path == ".github/workflows/ci.yml") | .id')"
+          if ! [[ "$workflow_id" =~ ^[0-9]+$ ]]; then
+            echo "::error::Could not find the workflow .github/workflows/ci.yml."
+            exit 1
+          fi
+
+          runs="$RUNNER_TEMP/ci-runs.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow_id/runs?head_sha=$GITHUB_SHA&event=push&branch=main&per_page=100" > "$runs"
+          # The filters in the address are checked again here. A run's path
+          # may end in "@<ref>". The newest matching run counts; a re-run
+          # keeps its number.
+          mapfile -t run < <(jq -r --argjson workflow "$workflow_id" --arg sha "$GITHUB_SHA" --arg repo "$GITHUB_REPOSITORY" '
+            [.workflow_runs[]
+              | select(.workflow_id == $workflow
+                       and (.path | test("^\\.github/workflows/ci\\.yml(@.+)?$"))
+                       and .head_sha == $sha and .event == "push"
+                       and .head_branch == "main"
+                       and .head_repository.full_name == $repo)]
+            | sort_by(.id) | last
+            | if . == null then empty else .id, .status, (.conclusion // "none") end
+          ' "$runs")
+          if [ "${#run[@]}" -eq 0 ]; then
+            echo "::error::CI (ci.yml) has not run for commit $short on main. Wait for it, then start the release again."
+            exit 1
+          fi
+          if ! [[ "${run[0]}" =~ ^[0-9]+$ ]]; then
+            echo "::error::Unexpected CI run number."
+            exit 1
+          fi
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/${run[0]}"
+          if [ "${run[1]}" != completed ] || [ "${run[2]}" != success ]; then
+            echo "::error::CI (ci.yml) has not passed for commit $short on main: ${run[1]}, ${run[2]}. See $run_url. Wait until it is green, then start the release again."
+            exit 1
+          fi
+
+          # Both required jobs must be in that run, and have passed in its
+          # latest attempt. A renamed or skipped job does not count.
+          jobs="$RUNNER_TEMP/ci-jobs.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/${run[0]}/jobs?filter=latest&per_page=100" > "$jobs"
+          for job in "Gradle wrapper" "Check"; do
+            result="$(jq -r --arg name "$job" '
+              [.jobs[] | select(.name == $name)] | sort_by(.id) | last
+              | if . == null then "not in the run" else "\(.status), \(.conclusion // "no result yet")" end
+            ' "$jobs")"
+            if [ "$result" != "completed, success" ]; then
+              echo "::error::The CI job \"$job\" has not passed for commit $short ($result). See $run_url."
+              exit 1
+            fi
+          done
+          echo "CI (ci.yml) passed for commit $short on main, with the jobs Gradle wrapper and Check: $run_url"
+
+      - name: Check that the tag is new
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.inputs.outputs.tag }}
+        run: |
+          set -u
+          refs="$(gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/$TAG" --jq '.[].ref')"
+          if grep -qxF "refs/tags/$TAG" <<< "$refs"; then
+            echo "::error::The tag $TAG already exists. Raise the version in the app's build.gradle.kts first."
+            exit 1
+          fi
+          echo "The tag $TAG does not exist yet."
+
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The job "Sign" compares the certificate with this file. Checking its
+      # form here stops a release before the owner is asked to approve.
+      - name: Check the fingerprint file
+        run: |
+          set -u
+          file=docs/security/fingerprints.md
+          # The backticks are part of the line in the file, not a command.
+          # shellcheck disable=SC2016
+          pattern='^Current certificate SHA-256: `([0-9A-F]{2}(:[0-9A-F]{2}){31})`$'
+          mapfile -t lines < <(grep -E '^Current certificate SHA-256:' "$file" || true)
+          if [ "${#lines[@]}" -ne 1 ] || ! [[ "${lines[0]}" =~ $pattern ]]; then
+            echo "::error file=$file::Expected exactly one line of the form: Current certificate SHA-256: \`AA:BB:...\` (32 pairs of upper-case hex digits)."
+            exit 1
+          fi
+          echo "Current certificate SHA-256: ${BASH_REMATCH[1]}"
+
+      - name: Use JDK 21
+        run: |
+          # GitHub's Ubuntu runners come with JDK 21 installed.
+          if [ -z "${JAVA_HOME_21_X64:-}" ]; then
+            echo "::error::This runner has no JDK 21."
+            exit 1
+          fi
+          echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
+
+      # Keep these in step with build-logic (ShkBuild.kt), ci.yml and the
+      # cloud setup script in docs/development/cloud-environment.md.
+      - name: Install the Android SDK packages the build pins
+        run: |
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          log="$RUNNER_TEMP/sdkmanager.log"
+          set +o pipefail
+          if ! yes | "$sdkmanager" --licenses > "$log" 2>&1; then cat "$log"; exit 1; fi
+          set -o pipefail
+          if ! "$sdkmanager" "platforms;android-37.0" "build-tools;36.0.0" >> "$log" 2>&1; then cat "$log"; exit 1; fi
+
+      # No caches: no download cache, no build cache, no configuration
+      # cache. The two release checks also run as part of assembleRelease.
+      # Naming them makes the build fail if either is ever removed.
+      - name: Build the unsigned release APK
+        working-directory: android
+        run: |
+          set -u
+          if [ ! -f "app/$APP/build.gradle.kts" ]; then
+            echo "::error::android/app/$APP/build.gradle.kts does not exist."
+            exit 1
+          fi
+          ./gradlew --no-daemon --console=plain --no-build-cache --no-configuration-cache \
+            ":app:$APP:assembleRelease" \
+            ":app:$APP:checkReleaseApkRules" \
+            ":app:$APP:checkReleaseGraphicsPathUse"
+          for report in "app/$APP/build/reports/apk-rules/release.txt" \
+                        "app/$APP/build/reports/graphics-path-use/release.txt"; do
+            if [ ! -s "$report" ]; then
+              echo "::error::android/$report was not written. A release check was skipped."
+              exit 1
+            fi
+          done
+
+      # The package name and version are read from the APK itself.
+      - name: Check the APK and collect the files
+        id: collect
+        env:
+          TAG: ${{ steps.inputs.outputs.tag }}
+        run: |
+          set -u
+          build_tools="$ANDROID_HOME/build-tools/36.0.0"
+          apk_dir="android/app/$APP/build/outputs/apk/release"
+          mapping="android/app/$APP/build/outputs/mapping/release/mapping.txt"
+
+          mapfile -t outputs < <(jq -r '.elements[] | .outputFile' "$apk_dir/output-metadata.json")
+          if [ "${#outputs[@]}" -ne 1 ] || ! [[ "${outputs[0]}" =~ ^[A-Za-z0-9_.-]+\.apk$ ]]; then
+            echo "::error::Expected exactly one release APK in $apk_dir."
+            exit 1
+          fi
+          unsigned="$apk_dir/${outputs[0]}"
+          if [ ! -s "$mapping" ]; then
+            echo "::error::R8 wrote no mapping file at $mapping."
+            exit 1
+          fi
+
+          # Into a file first: piping straight into head would stop aapt2
+          # early, and pipefail would then fail the step.
+          "$build_tools/aapt2" dump badging "$unsigned" > "$RUNNER_TEMP/badging.txt"
+          package_line="$(head -n 1 "$RUNNER_TEMP/badging.txt")"
+          badging_pattern="^package: name='([a-z][a-z0-9_.]*)' versionCode='([1-9][0-9]*)' versionName='([^']*)'"
+          if ! [[ "$package_line" =~ $badging_pattern ]]; then
+            echo "::error::Could not read the package name and version from the APK."
+            exit 1
+          fi
+          package="${BASH_REMATCH[1]}"
+          version_code="${BASH_REMATCH[2]}"
+          version_name="${BASH_REMATCH[3]}"
+          if [ "$package" != "app.shkriuss.$APP" ]; then
+            echo "::error::The APK's package is $package, not app.shkriuss.$APP."
+            exit 1
+          fi
+          if [ "$version_name" != "$VERSION" ]; then
+            echo "::error::The version typed in ($VERSION) is not the APK's versionName. Set versionName in android/app/$APP/build.gradle.kts first, or type the version it has."
+            exit 1
+          fi
+          # The same check that CI runs for every app (ADR 0021).
+          .github/scripts/check-version-code.sh "$version_name" "$version_code"
+
+          out="$RUNNER_TEMP/unsigned"
+          mkdir -p "$out"
+          cp -- "$unsigned" "$out/$TAG-unsigned.apk"
+          cp -- "$mapping" "$out/$TAG-mapping.txt"
+          apk_sha256="$(sha256sum "$out/$TAG-unsigned.apk" | cut -d ' ' -f 1)"
+          mapping_sha256="$(sha256sum "$out/$TAG-mapping.txt" | cut -d ' ' -f 1)"
+          {
+            echo "version_code=$version_code"
+            echo "apk_sha256=$apk_sha256"
+            echo "mapping_sha256=$mapping_sha256"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "## Build"
+            echo
+            echo "| Detail | Value |"
+            echo "|---|---|"
+            echo "| Package | \`$package\` |"
+            echo "| Version | \`$version_name\` (code $version_code) |"
+            echo "| Commit | \`$GITHUB_SHA\` |"
+            echo "| Unsigned APK SHA-256 | \`$apk_sha256\` |"
+            echo "| Mapping file SHA-256 | \`$mapping_sha256\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Kept long enough for the owner's approval, which may wait days.
+      # A re-run of this job replaces the files. Every later job checks them
+      # against this job's SHA-256 values, so they always belong together.
+      - name: Upload the unsigned APK and the mapping file
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: unsigned
+          path: ${{ runner.temp }}/unsigned/
+          if-no-files-found: error
+          retention-days: 35
+          overwrite: true
+
+  rebuild:
+    name: Rebuild and compare
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    concurrency:
+      group: release-rebuild
+      cancel-in-progress: false
+    env:
+      APP: ${{ inputs.app }}
+      VERSION: ${{ inputs.version }}
+      # Another folder, with a longer path than the first build's.
+      SOURCE: rebuild/a/second/copy/of/the/source
+    steps:
+      - name: Check the inputs
+        id: inputs
+        env:
+          # github.actor started the run. github.triggering_actor started
+          # this attempt, which differs after someone else's re-run.
+          ACTOR: ${{ github.actor }}
+          TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -u
+          # Only the owner starts or re-runs a release (ADR 0014).
+          if [ -z "$OWNER" ] || [ "$ACTOR" != "$OWNER" ] || [ "$TRIGGERING_ACTOR" != "$OWNER" ]; then
+            echo "::error::Only the repository owner may start or re-run a release."
+            exit 1
+          fi
+          if [ "$GITHUB_REF" != refs/heads/main ]; then
+            echo "::error::Start the release on the branch main."
+            exit 1
+          fi
+          case "$APP" in
+            catalog) ;;
+            *) echo "::error::Unknown app. Apps that can be released: catalog."; exit 1 ;;
+          esac
+          # The version forms of ADR 0021: 1.2.3, or 1.2.3 followed by
+          # -alpha.N, -beta.N or -rc.N. The same pattern as in
+          # .github/scripts/check-version-code.sh, which also checks the
+          # versionCode after the build.
+          pattern='^(0|[1-9][0-9]?|1[0-9]{2}|20[0-9])\.(0|[1-9][0-9]?)\.(0|[1-9][0-9]?)(-(alpha|beta|rc)\.([1-9][0-9]?))?$'
+          if ! [[ "$VERSION" =~ $pattern ]]; then
+            echo "::error::The version must look like 1.0.0, 1.0.0-alpha.1, 1.0.0-beta.1 or 1.0.0-rc.1 (ADR 0021)."
+            exit 1
+          fi
+          prerelease=false
+          if [[ "$VERSION" == *-* ]]; then prerelease=true; fi
+          {
+            echo "tag=$APP-v$VERSION"
+            echo "prerelease=$prerelease"
+          } >> "$GITHUB_OUTPUT"
+          echo "Release $APP $VERSION, tag $APP-v$VERSION, pre-release: $prerelease."
+
+      # A new runner: a fresh Gradle home, no downloads and no work shared
+      # with the first build.
+      - name: Check out into another folder
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          path: ${{ env.SOURCE }}
+
+      - name: Use JDK 21
+        run: |
+          # GitHub's Ubuntu runners come with JDK 21 installed.
+          if [ -z "${JAVA_HOME_21_X64:-}" ]; then
+            echo "::error::This runner has no JDK 21."
+            exit 1
+          fi
+          echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
+
+      # Keep these in step with build-logic (ShkBuild.kt), ci.yml and the
+      # cloud setup script in docs/development/cloud-environment.md.
+      - name: Install the Android SDK packages the build pins
+        run: |
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          log="$RUNNER_TEMP/sdkmanager.log"
+          set +o pipefail
+          if ! yes | "$sdkmanager" --licenses > "$log" 2>&1; then cat "$log"; exit 1; fi
+          set -o pipefail
+          if ! "$sdkmanager" "platforms;android-37.0" "build-tools;36.0.0" >> "$log" 2>&1; then cat "$log"; exit 1; fi
+
+      # The same build as in the job "Build", with another time zone
+      # (UTC+14, the first build runs in UTC) and another file permission
+      # mask. Neither may change the APK.
+      - name: Build the unsigned release APK again
+        working-directory: ${{ env.SOURCE }}/android
+        env:
+          TZ: Pacific/Kiritimati
+        run: |
+          set -u
+          umask 077
+          ./gradlew --no-daemon --console=plain --no-build-cache --no-configuration-cache \
+            ":app:$APP:assembleRelease" \
+            ":app:$APP:checkReleaseApkRules" \
+            ":app:$APP:checkReleaseGraphicsPathUse"
+
+      - name: Download the first build
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: unsigned
+          path: ${{ runner.temp }}/first
+
+      - name: Compare the two builds byte for byte
+        id: compare
+        env:
+          TAG: ${{ steps.inputs.outputs.tag }}
+          FIRST_APK_SHA256: ${{ needs.build.outputs.apk_sha256 }}
+          FIRST_MAPPING_SHA256: ${{ needs.build.outputs.mapping_sha256 }}
+        run: |
+          set -u
+          first="$RUNNER_TEMP/first"
+          apk_dir="$SOURCE/android/app/$APP/build/outputs/apk/release"
+          mapping="$SOURCE/android/app/$APP/build/outputs/mapping/release/mapping.txt"
+
+          mapfile -t outputs < <(jq -r '.elements[] | .outputFile' "$apk_dir/output-metadata.json")
+          if [ "${#outputs[@]}" -ne 1 ] || ! [[ "${outputs[0]}" =~ ^[A-Za-z0-9_.-]+\.apk$ ]]; then
+            echo "::error::Expected exactly one release APK in $apk_dir."
+            exit 1
+          fi
+
+          # Kept for the upload below, if the builds differ.
+          second="$RUNNER_TEMP/second"
+          mkdir -p "$second"
+          cp -- "$apk_dir/${outputs[0]}" "$second/$TAG-unsigned.apk"
+          if [ -s "$mapping" ]; then cp -- "$mapping" "$second/$TAG-mapping.txt"; fi
+
+          # The downloaded files must be the ones the job "Build" made.
+          if [ "$(sha256sum "$first/$TAG-unsigned.apk" | cut -d ' ' -f 1)" != "$FIRST_APK_SHA256" ] ||
+             [ "$(sha256sum "$first/$TAG-mapping.txt" | cut -d ' ' -f 1)" != "$FIRST_MAPPING_SHA256" ]; then
+            echo "::error::The downloaded files are not the ones the job Build made."
+            exit 1
+          fi
+
+          same=true
+          for file in "$TAG-unsigned.apk" "$TAG-mapping.txt"; do
+            if [ ! -f "$second/$file" ]; then
+              echo "::error::The second build did not write $file."
+              same=false
+            elif cmp -- "$first/$file" "$second/$file"; then
+              echo "$file: the same, byte for byte ($(stat -c %s "$second/$file") bytes)."
+            else
+              echo "::error::$file differs between the two builds. First: $(stat -c %s "$first/$file") bytes. Second: $(stat -c %s "$second/$file") bytes."
+              same=false
+            fi
+          done
+          if [ "$same" != true ]; then
+            echo "The second build's files are uploaded as the artifact rebuild-differs."
+            exit 1
+          fi
+          {
+            echo "## Rebuild"
+            echo
+            echo "A second, separate build made the same unsigned APK and the same mapping file, byte for byte."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the second build, because it differs
+        if: failure() && steps.compare.outcome == 'failure'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: rebuild-differs
+          path: ${{ runner.temp }}/second/
+          if-no-files-found: ignore
+          retention-days: 30
+          overwrite: true
+
+  sign:
+    name: Sign
+    needs: [build, rebuild]
+    runs-on: ubuntu-24.04
+    # The time spent waiting for the owner's approval does not count.
+    timeout-minutes: 15
+    # The release environment holds the signing key. GitHub only lets main
+    # use it, and starts this job only after the owner approves.
+    environment: release
+    concurrency:
+      group: release-sign
+      cancel-in-progress: false
+    env:
+      APP: ${{ inputs.app }}
+      VERSION: ${{ inputs.version }}
+    outputs:
+      apk_sha256: ${{ steps.verify.outputs.apk_sha256 }}
+      cert_sha256: ${{ steps.verify.outputs.cert_sha256 }}
+    steps:
+      - name: Check the inputs
+        id: inputs
+        env:
+          # github.actor started the run. github.triggering_actor started
+          # this attempt, which differs after someone else's re-run.
+          ACTOR: ${{ github.actor }}
+          TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -u
+          # Only the owner starts or re-runs a release (ADR 0014).
+          if [ -z "$OWNER" ] || [ "$ACTOR" != "$OWNER" ] || [ "$TRIGGERING_ACTOR" != "$OWNER" ]; then
+            echo "::error::Only the repository owner may start or re-run a release."
+            exit 1
+          fi
+          if [ "$GITHUB_REF" != refs/heads/main ]; then
+            echo "::error::Start the release on the branch main."
+            exit 1
+          fi
+          case "$APP" in
+            catalog) ;;
+            *) echo "::error::Unknown app. Apps that can be released: catalog."; exit 1 ;;
+          esac
+          # The version forms of ADR 0021: 1.2.3, or 1.2.3 followed by
+          # -alpha.N, -beta.N or -rc.N. The same pattern as in
+          # .github/scripts/check-version-code.sh, which also checks the
+          # versionCode after the build.
+          pattern='^(0|[1-9][0-9]?|1[0-9]{2}|20[0-9])\.(0|[1-9][0-9]?)\.(0|[1-9][0-9]?)(-(alpha|beta|rc)\.([1-9][0-9]?))?$'
+          if ! [[ "$VERSION" =~ $pattern ]]; then
+            echo "::error::The version must look like 1.0.0, 1.0.0-alpha.1, 1.0.0-beta.1 or 1.0.0-rc.1 (ADR 0021)."
+            exit 1
+          fi
+          prerelease=false
+          if [[ "$VERSION" == *-* ]]; then prerelease=true; fi
+          {
+            echo "tag=$APP-v$VERSION"
+            echo "prerelease=$prerelease"
+          } >> "$GITHUB_OUTPUT"
+          echo "Release $APP $VERSION, tag $APP-v$VERSION, pre-release: $prerelease."
+
+      # Only the fingerprint file. No project code is on this runner.
+      - name: Check out the fingerprint file
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: docs/security/fingerprints.md
+          sparse-checkout-cone-mode: false
+
+      # Keep this in step with build-logic (ShkBuild.kt).
+      - name: Install the Android build tools
+        run: |
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          log="$RUNNER_TEMP/sdkmanager.log"
+          set +o pipefail
+          if ! yes | "$sdkmanager" --licenses > "$log" 2>&1; then cat "$log"; exit 1; fi
+          set -o pipefail
+          if ! "$sdkmanager" "build-tools;36.0.0" >> "$log" 2>&1; then cat "$log"; exit 1; fi
+
+      - name: Download the unsigned APK
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: unsigned
+          path: ${{ runner.temp }}/unsigned
+
+      - name: Check the unsigned APK
+        env:
+          TAG: ${{ steps.inputs.outputs.tag }}
+          APK_SHA256: ${{ needs.build.outputs.apk_sha256 }}
+        run: |
+          set -u
+          if [ "$(sha256sum "$RUNNER_TEMP/unsigned/$TAG-unsigned.apk" | cut -d ' ' -f 1)" != "$APK_SHA256" ]; then
+            echo "::error::The downloaded APK is not the one the job Build made."
+            exit 1
+          fi
+          echo "The unsigned APK is the one the jobs Build and Rebuild made."
+
+      # The only step that sees the secrets. Rules:
+      # - Never print a secret, never use set -x.
+      # - The keystore exists only as a private file in this runner's
+      #   temporary folder, and the trap deletes it however the step ends.
+      # - The password reaches apksigner as the name of a variable
+      #   (env:...), never as a command-line argument.
+      # - Standard input is closed, so apksigner can never wait for a
+      #   password prompt.
+      # - The keystore is PKCS12, which has one password for the store and
+      #   the key (ADR 0013).
+      - name: Sign with the suite key
+        env:
+          TAG: ${{ steps.inputs.outputs.tag }}
+          SIGNING_KEYSTORE_B64: ${{ secrets.SIGNING_KEYSTORE_B64 }}
+          SIGNING_KEYSTORE_PASSWORD: ${{ secrets.SIGNING_KEYSTORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+        run: |
+          set -u
+          if [ -z "$SIGNING_KEYSTORE_B64" ] || [ -z "$SIGNING_KEYSTORE_PASSWORD" ] || [ -z "$SIGNING_KEY_ALIAS" ]; then
+            echo "::error::A release secret is missing. The release environment needs SIGNING_KEYSTORE_B64, SIGNING_KEYSTORE_PASSWORD and SIGNING_KEY_ALIAS."
+            exit 1
+          fi
+          build_tools="$ANDROID_HOME/build-tools/36.0.0"
+          unsigned="$RUNNER_TEMP/unsigned/$TAG-unsigned.apk"
+          out="$RUNNER_TEMP/signed"
+          mkdir -p "$out"
+
+          umask 077
+          key_dir="$(mktemp -d "$RUNNER_TEMP/key.XXXXXXXX")"
+          trap 'rm -rf -- "$key_dir"' EXIT
+          key_store="$key_dir/release.p12"
+          if ! printf '%s' "$SIGNING_KEYSTORE_B64" | base64 --decode > "$key_store" 2> /dev/null ||
+             [ ! -s "$key_store" ]; then
+            echo "::error::SIGNING_KEYSTORE_B64 is not a base64-encoded keystore."
+            exit 1
+          fi
+
+          if ! "$build_tools/apksigner" sign \
+                 --ks "$key_store" --ks-type PKCS12 \
+                 --ks-pass env:SIGNING_KEYSTORE_PASSWORD \
+                 --key-pass env:SIGNING_KEYSTORE_PASSWORD \
+                 --ks-key-alias "$SIGNING_KEY_ALIAS" \
+                 --v4-signing-enabled false \
+                 --out "$out/$TAG.apk" \
+                 "$unsigned" < /dev/null; then
+            echo "::error::apksigner could not sign. Check that the keystore, its password and the key's alias in the release secrets belong together."
+            exit 1
+          fi
+          echo "Signed."
+
+      # No secrets from here on.
+      - name: Verify the signature and the certificate
+        id: verify
+        env:
+          TAG: ${{ steps.inputs.outputs.tag }}
+        run: |
+          set -u
+          build_tools="$ANDROID_HOME/build-tools/36.0.0"
+          signed="$RUNNER_TEMP/signed/$TAG.apk"
+          unsigned="$RUNNER_TEMP/unsigned/$TAG-unsigned.apk"
+
+          # apksigner verify fails unless the signature is valid on every
+          # Android version the APK supports (min SDK 33).
+          verification="$RUNNER_TEMP/apksigner-verify.txt"
+          if ! "$build_tools/apksigner" verify --verbose --print-certs "$signed" > "$verification" 2>&1; then
+            cat "$verification"
+            echo "::error::apksigner could not verify the signed APK."
+            exit 1
+          fi
+          for line in "Verifies" \
+                      "Verified using v3 scheme (APK Signature Scheme v3): true" \
+                      "Number of signers: 1"; do
+            if ! grep -qxF "$line" "$verification"; then
+              cat "$verification"
+              echo "::error::apksigner did not report: $line"
+              exit 1
+            fi
+          done
+          if ! "$build_tools/zipalign" -c -P 16 4 "$signed"; then
+            echo "::error::The signed APK is not aligned."
+            exit 1
+          fi
+          # Into files first: piping straight into head would stop aapt2
+          # early, and pipefail would then fail the step.
+          "$build_tools/aapt2" dump badging "$signed" > "$RUNNER_TEMP/badging-signed.txt"
+          "$build_tools/aapt2" dump badging "$unsigned" > "$RUNNER_TEMP/badging-unsigned.txt"
+          if [ "$(head -n 1 "$RUNNER_TEMP/badging-signed.txt")" != "$(head -n 1 "$RUNNER_TEMP/badging-unsigned.txt")" ]; then
+            echo "::error::Signing changed the APK's package or version."
+            exit 1
+          fi
+
+          # The certificate must be the one the owner published.
+          cert_sha256="$(sed -n 's/^Signer #1 certificate SHA-256 digest: \([0-9a-f]\{64\}\)$/\1/p' "$verification")"
+          if ! [[ "$cert_sha256" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "::error::apksigner did not report the certificate's SHA-256."
+            exit 1
+          fi
+          file=docs/security/fingerprints.md
+          # The backticks are part of the line in the file, not a command.
+          # shellcheck disable=SC2016
+          pattern='^Current certificate SHA-256: `([0-9A-F]{2}(:[0-9A-F]{2}){31})`$'
+          mapfile -t lines < <(grep -E '^Current certificate SHA-256:' "$file" || true)
+          if [ "${#lines[@]}" -ne 1 ] || ! [[ "${lines[0]}" =~ $pattern ]]; then
+            echo "::error file=$file::Expected exactly one line of the form: Current certificate SHA-256: \`AA:BB:...\`."
+            exit 1
+          fi
+          expected="${BASH_REMATCH[1]}"
+          found="$(sed 's/../&:/g; s/:$//' <<< "$cert_sha256" | tr 'a-f' 'A-F')"
+          if [ "$found" != "$expected" ]; then
+            echo "::error::The APK was signed with a certificate that is not the one in $file. The release secrets hold another key. Nothing was uploaded."
+            echo "Expected: $expected"
+            echo "Found:    $found"
+            exit 1
+          fi
+          echo "Certificate SHA-256 $found matches $file."
+
+          apk_sha256="$(sha256sum "$signed" | cut -d ' ' -f 1)"
+          {
+            echo "apk_sha256=$apk_sha256"
+            echo "cert_sha256=$cert_sha256"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "## Sign"
+            echo
+            echo "| Detail | Value |"
+            echo "|---|---|"
+            echo "| Signed APK SHA-256 | \`$apk_sha256\` |"
+            echo "| Certificate SHA-256 | \`$found\` |"
+            echo
+            echo "The certificate matches docs/security/fingerprints.md."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the signed APK
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: signed
+          path: ${{ runner.temp }}/signed/
+          if-no-files-found: error
+          retention-days: 7
+          overwrite: true
+
+  draft:
+    name: Draft release
+    needs: [build, sign]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # This job checks out nothing and runs no code from the repository.
+    permissions:
+      # To create the draft release and upload its files.
+      contents: write
+      # For the attestation: GitHub's sign-in token for Sigstore.
+      id-token: write
+      # For the attestation: to store it in this repository.
+      attestations: write
+    concurrency:
+      group: release-draft
+      cancel-in-progress: false
+    env:
+      APP: ${{ inputs.app }}
+      VERSION: ${{ inputs.version }}
+    steps:
+      - name: Check the inputs
+        id: inputs
+        env:
+          # github.actor started the run. github.triggering_actor started
+          # this attempt, which differs after someone else's re-run.
+          ACTOR: ${{ github.actor }}
+          TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -u
+          # Only the owner starts or re-runs a release (ADR 0014).
+          if [ -z "$OWNER" ] || [ "$ACTOR" != "$OWNER" ] || [ "$TRIGGERING_ACTOR" != "$OWNER" ]; then
+            echo "::error::Only the repository owner may start or re-run a release."
+            exit 1
+          fi
+          if [ "$GITHUB_REF" != refs/heads/main ]; then
+            echo "::error::Start the release on the branch main."
+            exit 1
+          fi
+          case "$APP" in
+            catalog) ;;
+            *) echo "::error::Unknown app. Apps that can be released: catalog."; exit 1 ;;
+          esac
+          # The version forms of ADR 0021: 1.2.3, or 1.2.3 followed by
+          # -alpha.N, -beta.N or -rc.N. The same pattern as in
+          # .github/scripts/check-version-code.sh, which also checks the
+          # versionCode after the build.
+          pattern='^(0|[1-9][0-9]?|1[0-9]{2}|20[0-9])\.(0|[1-9][0-9]?)\.(0|[1-9][0-9]?)(-(alpha|beta|rc)\.([1-9][0-9]?))?$'
+          if ! [[ "$VERSION" =~ $pattern ]]; then
+            echo "::error::The version must look like 1.0.0, 1.0.0-alpha.1, 1.0.0-beta.1 or 1.0.0-rc.1 (ADR 0021)."
+            exit 1
+          fi
+          prerelease=false
+          if [[ "$VERSION" == *-* ]]; then prerelease=true; fi
+          {
+            echo "tag=$APP-v$VERSION"
+            echo "prerelease=$prerelease"
+          } >> "$GITHUB_OUTPUT"
+          echo "Release $APP $VERSION, tag $APP-v$VERSION, pre-release: $prerelease."
+
+      - name: Download the mapping file
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: unsigned
+          path: ${{ runner.temp }}/unsigned
+
+      - name: Download the signed APK
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: signed
+          path: ${{ runner.temp }}/signed
+
+      - name: Check the files and write the checksums
+        id: files
+        env:
+          TAG: ${{ steps.inputs.outputs.tag }}
+          APK_SHA256: ${{ needs.sign.outputs.apk_sha256 }}
+          MAPPING_SHA256: ${{ needs.build.outputs.mapping_sha256 }}
+        run: |
+          set -u
+          if [ "$(sha256sum "$RUNNER_TEMP/signed/$TAG.apk" | cut -d ' ' -f 1)" != "$APK_SHA256" ]; then
+            echo "::error::The downloaded APK is not the one the job Sign made."
+            exit 1
+          fi
+          if [ "$(sha256sum "$RUNNER_TEMP/unsigned/$TAG-mapping.txt" | cut -d ' ' -f 1)" != "$MAPPING_SHA256" ]; then
+            echo "::error::The downloaded mapping file is not the one the job Build made."
+            exit 1
+          fi
+          files="$RUNNER_TEMP/release"
+          mkdir -p "$files"
+          cp -- "$RUNNER_TEMP/signed/$TAG.apk" "$files/$TAG.apk"
+          cp -- "$RUNNER_TEMP/unsigned/$TAG-mapping.txt" "$files/$TAG-mapping.txt"
+          (cd "$files" && sha256sum -- "$TAG.apk" "$TAG-mapping.txt" > SHA256SUMS)
+          cat "$files/SHA256SUMS"
+          echo "apk_path=$files/$TAG.apk" >> "$GITHUB_OUTPUT"
+
+      # SLSA build provenance for the signed APK: which workflow, which
+      # commit and which run made it. Anyone can check it on GitHub.
+      - name: Attest the signed APK
+        id: attest
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: ${{ steps.files.outputs.apk_path }}
+
+      # A draft release has no tag. GitHub creates the tag when the owner
+      # publishes the draft, at the commit given with --target: the commit
+      # that was built, not whatever is on main by then.
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ steps.inputs.outputs.tag }}
+          PRERELEASE: ${{ steps.inputs.outputs.prerelease }}
+          VERSION_CODE: ${{ needs.build.outputs.version_code }}
+          APK_SHA256: ${{ needs.sign.outputs.apk_sha256 }}
+          MAPPING_SHA256: ${{ needs.build.outputs.mapping_sha256 }}
+          CERT_SHA256: ${{ needs.sign.outputs.cert_sha256 }}
+          ATTESTATION_ID: ${{ steps.attest.outputs.attestation-id }}
+        run: |
+          set -u
+          if ! [[ "$VERSION_CODE" =~ ^[1-9][0-9]*$ && "$APK_SHA256" =~ ^[0-9a-f]{64}$ &&
+                  "$MAPPING_SHA256" =~ ^[0-9a-f]{64}$ && "$CERT_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "::error::Unexpected version code or SHA-256 from an earlier job."
+            exit 1
+          fi
+          repo_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY"
+          run_url="$repo_url/actions/runs/$GITHUB_RUN_ID"
+          # The link is built here from the number, as the action builds it.
+          if [[ "$ATTESTATION_ID" =~ ^[0-9]+$ ]]; then
+            attestation_url="$repo_url/attestations/$ATTESTATION_ID"
+          else
+            echo "::warning::The attestation has no number. The notes link to the list of attestations."
+            attestation_url="$repo_url/attestations"
+          fi
+          files="$RUNNER_TEMP/release"
+          cert="$(sed 's/../&:/g; s/:$//' <<< "$CERT_SHA256" | tr 'a-f' 'A-F')"
+
+          # One release per tag, draft or not. This token can see drafts.
+          tags="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq '.[].tag_name')"
+          if grep -qxF "$TAG" <<< "$tags"; then
+            echo "::error::A release or draft for $TAG already exists. Delete the old draft first, or raise the version."
+            exit 1
+          fi
+          refs="$(gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/$TAG" --jq '.[].ref')"
+          if grep -qxF "refs/tags/$TAG" <<< "$refs"; then
+            echo "::error::The tag $TAG already exists."
+            exit 1
+          fi
+
+          notes="$RUNNER_TEMP/notes.md"
+          {
+            echo "${APP^} $VERSION (\`app.shkriuss.$APP\`, version code $VERSION_CODE)."
+            echo
+            echo "Built from commit \`$GITHUB_SHA\` on \`main\` by [this workflow run]($run_url)."
+            echo "Two separate builds made the same APK, byte for byte. It was signed after the owner's approval."
+            echo
+            echo "Signing certificate SHA-256, to check with AppVerifier:"
+            echo
+            echo "\`$cert\`"
+            echo
+            echo "It must match [docs/security/fingerprints.md]($repo_url/blob/$GITHUB_SHA/docs/security/fingerprints.md)."
+            echo
+            echo "| File | SHA-256 |"
+            echo "|---|---|"
+            echo "| \`$TAG.apk\` | \`$APK_SHA256\` |"
+            echo "| \`$TAG-mapping.txt\` | \`$MAPPING_SHA256\` |"
+            echo
+            echo "- Build provenance: [attestation]($attestation_url)"
+            echo "- What changed: [CHANGELOG.md]($repo_url/blob/$GITHUB_SHA/android/app/$APP/CHANGELOG.md)"
+            echo "- \`$TAG-mapping.txt\` turns a pasted stack trace back into exact source files and lines. You do not need it to install the app."
+          } > "$notes"
+
+          prerelease_flag=()
+          if [ "$PRERELEASE" = true ]; then prerelease_flag=(--prerelease); fi
+          url="$(gh release create "$TAG" --draft --target "$GITHUB_SHA" --title "$TAG" \
+            --notes-file "$notes" "${prerelease_flag[@]}" \
+            "$files/$TAG.apk" "$files/$TAG-mapping.txt" "$files/SHA256SUMS")"
+          echo "Draft: $url"
+
+          refs="$(gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/$TAG" --jq '.[].ref')"
+          if grep -qxF "refs/tags/$TAG" <<< "$refs"; then
+            echo "::error::The tag $TAG exists now. The workflow must not create tags. Tell the owner."
+            exit 1
+          fi
+
+          {
+            echo "## Draft release $TAG"
+            echo
+            echo "1. Open the [Releases page]($repo_url/releases) and tap the draft **$TAG**."
+            echo "2. Check that the certificate SHA-256 is \`$cert\`, the same as in docs/security/fingerprints.md."
+            echo "3. Check that it has three files: \`$TAG.apk\`, \`$TAG-mapping.txt\` and \`SHA256SUMS\`."
+            echo "4. Tap the pencil, then **Publish release**. That creates the tag."
+            echo
+            echo "All steps: [docs/development/release.md]($repo_url/blob/main/docs/development/release.md)."
+          } >> "$GITHUB_STEP_SUMMARY"

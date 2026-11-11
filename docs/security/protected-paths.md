@@ -4,7 +4,8 @@ A workflow that tells the owner when a pull request changes a path that only
 the owner may change. Those paths are listed in
 [CODEOWNERS](../../.github/CODEOWNERS): the workflows, `CLAUDE.md`, the
 Claude rules, dependency verification, the Gradle wrapper, the repository
-list, the build checks for hard rules 2, 3 and 4, and signing files.
+list, the build checks for hard rules 2, 3 and 4, signing files and the
+signing certificate fingerprint.
 
 The flag is a notice. It never blocks a merge. The gate is the owner's
 review ([working-with-claude.md](../development/working-with-claude.md)).

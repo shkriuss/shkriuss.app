@@ -164,9 +164,10 @@ R8 writes a mapping file for every `release` and `preview` build, at
 turns a pasted stack trace back into exact files and lines. Two clean builds
 write the same mapping file, byte for byte.
 
-Open, for Phase 0, step 6: the release workflow must attach the R8 mapping
-file to every release, so that a pasted stack trace can be translated later.
-See [Open](#open).
+The release workflow attaches it to every release, next to the APK, as
+`<app>-v<version>-mapping.txt` (owner decision on pull request 5). Its
+second build must write the same mapping file, or the release stops. See
+[release.md](release.md#the-mapping-file).
 
 ## Tests
 
@@ -344,7 +345,9 @@ steps above.
 4. **Unsigned outputs.** Gradle does not sign `release` or `preview`, so
    the APK that is compared contains no signature.
 5. **No caches for release builds.** The comparison runs with
-   `--no-build-cache`. The release workflow uses no caches (prompt 0.6).
+   `--no-build-cache`. The release workflow uses no caches, and runs Gradle
+   with `--no-build-cache` and `--no-configuration-cache`
+   ([release.md](release.md)).
 
 Gradle, AGP, R8 and the Kotlin compiler already write files in a fixed
 order with fixed timestamps. Nothing else was needed.
@@ -366,6 +369,14 @@ so were the R8 mapping files. A release APK built inside the Git checkout
 also matched one built from a copy without `.git`. The check was repeated
 after each change to the build in pull request 5, last with R8 renaming
 turned off.
+
+The release workflow repeats this check for every release: its job
+"Rebuild and compare" builds again on a new runner, in another folder, in
+UTC+14 and with the mask `077`, and fails unless the APK and the mapping
+file match ([release.md](release.md)). On 2026-11-11 the workflow's own
+steps were run in the cloud environment on two such builds of Catalog.
+The unsigned APK (1,365,890 bytes) and the mapping file (18,200,713 bytes)
+were the same.
 
 ### What it does not cover
 
@@ -507,9 +518,6 @@ does.
 
 ## Open
 
-- **Phase 0, step 6: attach the R8 mapping file to every release.** The
-  release workflow must attach `mapping.txt` from the release build to
-  every release, next to the APK, so that a pasted stack trace can be
-  translated later. Owner decision on
-  [pull request 5](https://github.com/shkriuss/shkriuss.app/pull/5). See
-  [The mapping file](#the-mapping-file).
+Nothing open. The last item, attaching the R8 mapping file to every
+release, was done in Phase 0, step 6. See
+[The mapping file](#the-mapping-file).

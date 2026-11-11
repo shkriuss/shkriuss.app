@@ -9,7 +9,8 @@ android {
 
     defaultConfig {
         applicationId = "app.shkriuss.catalog"
-        versionCode = 1
+        // Follows from versionName by the rule in ADR 0021. CI checks it.
+        versionCode = 100900
         versionName = "0.1.0"
     }
 }

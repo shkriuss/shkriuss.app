@@ -158,7 +158,8 @@ jobs:
       # The release checks are named one by one, for every app. If either
       # check is removed from the build, Gradle cannot find its task and this
       # step fails. If one is turned off, its report is missing and this step
-      # fails too.
+      # fails too. Every app's versionCode must follow from its versionName
+      # (ADR 0021), checked with the same script that release.yml uses.
       - name: Unit tests, lint, screenshots and release checks
         working-directory: android
         run: |
@@ -195,6 +196,17 @@ jobs:
               fi
             done
             echo "Release checks ran for $app."
+
+            # The release checks built the release APK, and its metadata
+            # holds the version the build used.
+            metadata="app/$app/build/outputs/apk/release/output-metadata.json"
+            mapfile -t version < <(jq -r '.elements[] | (.versionName // ""), (.versionCode // "")' "$metadata")
+            if [ "${#version[@]}" -ne 2 ]; then
+              echo "::error::Expected one release APK with a version in android/$metadata."
+              exit 1
+            fi
+            echo "Version of $app:"
+            ../.github/scripts/check-version-code.sh "${version[0]}" "${version[1]}"
           done
 
       # When a screenshot differs, Roborazzi writes the new image and a

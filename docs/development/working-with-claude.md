@@ -60,7 +60,9 @@ The plan accepts these, with these limits:
 
 - It can push branches, including workflow files. Those workflows then run
   without secrets.
-- It can start workflows on `main`.
+- It can start workflows on `main`. A release run it starts, or re-runs,
+  fails at once: only the owner may start or re-run a release
+  ([release.md](release.md#run-a-release)).
 - It can create draft releases. The owner publishes only the draft that the
   release workflow just made.
 
@@ -96,6 +98,8 @@ cannot update an installed app.
 2. The owner starts the `release` workflow on `main`.
 3. The owner approves the signing job.
 4. The owner publishes the draft release. That creates the tag.
+
+The steps, on a phone, are in [release.md](release.md).
 
 ## Secrets
 
