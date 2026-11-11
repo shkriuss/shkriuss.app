@@ -1,0 +1,448 @@
+# Builds the hub website from docs/ and site/. Pull requests only build it.
+# Pushes to main, and runs started by hand on main, also deploy it to
+# Cloudflare Pages.
+# How it works, and how to set it up from a phone: docs/development/site.md.
+# Why it works this way: ADR 0022 (the generator) and ADR 0023 (hosting and
+# deploy) in docs/adr/.
+
+name: Site
+
+# Read-only token. No job in this workflow needs more. Deploy reaches
+# Cloudflare with the token of the cloudflare environment, not this one.
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    # Only pull requests that can change the site, how it is built, or how
+    # it is deployed.
+    paths:
+      - "docs/**"
+      - "site/**"
+      - "tools/site/**"
+      - ".github/site-deploy/**"
+      - ".github/workflows/site.yml"
+  # Every push to main, with no path filter. So the newest commit on main
+  # always has a run, and only that run deploys (see Deploy, step 1).
+  push:
+    branches: [main]
+  # To deploy by hand, for example right after setting up the environment.
+  workflow_dispatch:
+
+defaults:
+  run:
+    # Stops a step at the first failing command, also inside a pipe.
+    shell: bash
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    concurrency:
+      group: site-build-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    outputs:
+      files_sha256: ${{ steps.sums.outputs.files_sha256 }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The Python that GitHub's Ubuntu runner comes with. The generator
+      # uses only its standard library, so nothing is downloaded.
+      - name: Test the site generator
+        run: |
+          python3 --version
+          python3 -B -I -m unittest discover --start-directory tools/site --top-level-directory tools/site
+
+      - name: Build the site
+        run: python3 -B -I tools/site/build.py --commit "$GITHUB_SHA" "$RUNNER_TEMP/site"
+
+      # These checks do not trust the generator. They look at what it wrote.
+      # A script, a Cloudflare control file such as _worker.js or
+      # _redirects, or anything loaded from another site stops the run.
+      - name: Check the built site
+        working-directory: ${{ runner.temp }}/site
+        run: |
+          set -u
+          fail() {
+            echo "::error::$1"
+            exit 1
+          }
+
+          # 1. Plain files only, with simple names, of three kinds.
+          if [ -n "$(find . ! -type f ! -type d -print -quit)" ]; then
+            fail "The built site may hold only plain files and folders."
+          fi
+          while IFS= read -r -d '' file; do
+            if ! [[ "${file#./}" =~ ^([a-z0-9-]+/)*[a-z0-9-]+\.(html|css|svg)$ ]]; then
+              fail "The built site may hold only .html, .css and .svg files with lower-case names."
+            fi
+          done < <(find . -type f -print0)
+          for required in index.html 404.html style.css; do
+            [ -f "$required" ] || fail "The built site has no $required."
+          done
+
+          # 2. No scripts, styles in the page, frames, forms or plugins.
+          #    Text in a page is escaped, so these match only real tags.
+          if grep -rliE '<(script|style|iframe|frame|object|embed|form|base|foreignobject)\b|<meta[^>]*http-equiv' .; then
+            fail "These files have a tag that the site does not allow."
+          fi
+          if grep -rliE '<[^>]*[[:space:]](on[a-z]+|style|src|srcset|data|action|formaction|poster)[[:space:]]*=' .; then
+            fail "These files have an attribute that the site does not allow."
+          fi
+          if grep -rliE '<[^>]*javascript:' .; then
+            fail "These files have a javascript: address."
+          fi
+
+          # 3. Links go to https://, to this site or to a heading. Style
+          #    sheets and the icon come from this site only. Nothing else is
+          #    loaded.
+          if grep -rhoE 'href="[^"]*"' --include='*.html' . | grep -vE '^href="(https://|#|/"|/[^/])'; then
+            fail "A link that is not https://..., /... or #... was found."
+          fi
+          if grep -rhoiE '<link[^>]*>' --include='*.html' . | grep -vE 'href="/[a-z0-9./-]+"'; then
+            fail "A <link> that points outside the site was found."
+          fi
+          if grep -rliE 'url\(|@import|expression\(|href' --include='*.css' --include='*.svg' .; then
+            fail "A style sheet or the icon loads something."
+          fi
+          echo "The built site passed every check."
+
+      # Cloudflare Pages sends these headers with every file
+      # (docs/development/site.md#security-headers). They live here, in an
+      # owner-only file, and Deploy checks that the live site sends them.
+      - name: Add the security headers
+        run: |
+          cat > "$RUNNER_TEMP/site/_headers" <<'HEADERS'
+          /*
+            Content-Security-Policy: default-src 'none'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+            Strict-Transport-Security: max-age=63072000; includeSubDomains
+            X-Content-Type-Options: nosniff
+            X-Frame-Options: DENY
+            Referrer-Policy: no-referrer
+            Permissions-Policy: accelerometer=(), autoplay=(), camera=(), display-capture=(), encrypted-media=(), fullscreen=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), publickey-credentials-get=(), screen-wake-lock=(), serial=(), usb=(), xr-spatial-tracking=()
+            Cross-Origin-Opener-Policy: same-origin
+            Cross-Origin-Resource-Policy: same-origin
+            Cross-Origin-Embedder-Policy: require-corp
+          HEADERS
+          cat "$RUNNER_TEMP/site/_headers"
+
+      # Deploy checks that it uploads exactly these files.
+      - name: Record the checksums
+        id: sums
+        working-directory: ${{ runner.temp }}/site
+        run: |
+          set -u
+          find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > "$RUNNER_TEMP/site.sha256"
+          cat "$RUNNER_TEMP/site.sha256"
+          echo "files_sha256=$(sha256sum < "$RUNNER_TEMP/site.sha256" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload the site
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: site
+          path: ${{ runner.temp }}/site/
+          retention-days: 7
+          if-no-files-found: error
+          overwrite: true
+
+      - name: Write the summary
+        run: |
+          set -u
+          {
+            echo "## Site"
+            echo
+            if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+              echo "Built and checked. Pull requests are never deployed."
+            else
+              echo "Built and checked. The job **Deploy** puts it online."
+            fi
+            echo
+            echo "| File | SHA-256 |"
+            echo "|---|---|"
+            # The backticks are Markdown, not a command.
+            # shellcheck disable=SC2016
+            sed -E 's|^([0-9a-f]{64})  \./(.*)$|\| `\2` \| `\1` \||' "$RUNNER_TEMP/site.sha256"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy-tool:
+    name: Deploy tool
+    # Main installs it in Deploy. A pull request installs it here, so a
+    # broken pin fails the pull request, not main. No secrets.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    concurrency:
+      group: site-deploy-tool-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    steps:
+      - name: Check out the deploy tool's lockfile
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/site-deploy
+          sparse-checkout-cone-mode: false
+
+      - name: Install the pinned deploy tool
+        run: .github/site-deploy/install.sh "$RUNNER_TEMP/deploy"
+
+  deploy:
+    name: Deploy
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # The cloudflare environment holds the Cloudflare token. Only main may
+    # use it (docs/development/site.md#set-up-cloudflare).
+    environment:
+      name: cloudflare
+      url: ${{ steps.deploy.outputs.url }}
+    # Deploys wait for each other and are never cancelled half-way.
+    concurrency:
+      group: site-deploy
+      cancel-in-progress: false
+    steps:
+      # 1. An older run must not replace a newer site. Every push to main
+      #    has its own run, so the newest commit always deploys.
+      - name: Check that this is the newest commit on main
+        id: newest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -u
+          head="$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)"
+          if ! [[ "$head" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Could not read the newest commit on main."
+            exit 1
+          fi
+          if [ "$head" = "$GITHUB_SHA" ]; then
+            echo "newest=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::A newer commit is on main. Its run deploys the site, so this run does not."
+            echo "newest=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Only the lockfile and the install script. No other project file is
+      # on this runner, and no project code runs here.
+      - name: Check out the deploy tool's lockfile
+        if: steps.newest.outputs.newest == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/site-deploy
+          sparse-checkout-cone-mode: false
+
+      - name: Download the site
+        if: steps.newest.outputs.newest == 'true'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: site
+          path: ${{ runner.temp }}/site
+
+      - name: Check the downloaded site
+        if: steps.newest.outputs.newest == 'true'
+        working-directory: ${{ runner.temp }}/site
+        env:
+          FILES_SHA256: ${{ needs.build.outputs.files_sha256 }}
+        run: |
+          set -u
+          actual="$(find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -d ' ' -f 1)"
+          if ! [[ "$FILES_SHA256" =~ ^[0-9a-f]{64}$ ]] || [ "$actual" != "$FILES_SHA256" ]; then
+            echo "::error::The downloaded site is not the one the job Build made and checked."
+            exit 1
+          fi
+          echo "The site is the one the job Build made and checked."
+
+      - name: Install the pinned deploy tool
+        if: steps.newest.outputs.newest == 'true'
+        run: .github/site-deploy/install.sh "$RUNNER_TEMP/deploy"
+
+      # The only step that sees the token. Rules:
+      # - Never print it, never use set -x.
+      # - curl reads it from a private file, never from its command line,
+      #   and the trap deletes the file. Wrangler reads it from the
+      #   environment.
+      # - Wrangler runs outside the checkout, in a folder with no Wrangler
+      #   configuration and no functions/ folder. So it uploads only the
+      #   checked files, and no code runs on Cloudflare.
+      - name: Deploy to Cloudflare Pages
+        id: deploy
+        if: steps.newest.outputs.newest == 'true'
+        working-directory: ${{ runner.temp }}/deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          # Wrangler sends no usage data to Cloudflare.
+          WRANGLER_SEND_METRICS: "false"
+          WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/wrangler-output.json
+        run: |
+          set -u
+          # The Pages project. Its name is part of the address,
+          # shkriuss-app.pages.dev. Change it only together with the docs.
+          project=shkriuss-app
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::error::The cloudflare environment has no secret CLOUDFLARE_API_TOKEN."
+            exit 1
+          fi
+          if ! [[ "$CLOUDFLARE_ACCOUNT_ID" =~ ^[0-9a-f]{32}$ ]]; then
+            echo "::error::The cloudflare environment needs the variable CLOUDFLARE_ACCOUNT_ID: the account ID, 32 characters 0-9 and a-f."
+            exit 1
+          fi
+
+          auth="$RUNNER_TEMP/cloudflare-auth"
+          answer="$RUNNER_TEMP/cloudflare-answer.json"
+          trap 'rm -f "$auth" "$answer"' EXIT
+          (umask 077 && printf 'Authorization: Bearer %s\n' "$CLOUDFLARE_API_TOKEN" > "$auth")
+          api="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects"
+
+          # Calls the Cloudflare API. Prints the HTTP status. The answer is
+          # in $answer and is never printed whole.
+          call() {
+            curl -sS --retry 3 --max-time 60 -o "$answer" -w '%{http_code}' -H @"$auth" "$@"
+          }
+          explain() {
+            jq -r '.errors[]? | "Cloudflare error \(.code): \(.message)"' "$answer" 2> /dev/null || true
+            echo "::error::$1 The token needs Account, Cloudflare Pages, Edit, for this account (docs/development/site.md#set-up-cloudflare)."
+            exit 1
+          }
+
+          # 1. The project. The first deploy makes it.
+          status="$(call "$api/$project")"
+          if [ "$status" = 404 ] && jq -e '.errors | any(.code == 8000007)' "$answer" > /dev/null 2>&1; then
+            echo "The Pages project $project does not exist yet. Making it."
+            body="$(jq -nc --arg name "$project" '{name: $name, production_branch: "main"}')"
+            status="$(call -X POST -H 'Content-Type: application/json' --data "$body" "$api")"
+            [ "$status" = 200 ] || explain "Could not make the Pages project $project (HTTP $status)."
+          elif [ "$status" != 200 ]; then
+            explain "Could not read the Pages project $project (HTTP $status)."
+          fi
+          mapfile -t project_info < <(jq -r '.result | .name, .production_branch, .subdomain' "$answer")
+          if [ "${#project_info[@]}" -ne 3 ] || [ "${project_info[0]}" != "$project" ]; then
+            echo "::error::Unexpected answer about the Pages project $project."
+            exit 1
+          fi
+          if [ "${project_info[1]}" != main ]; then
+            echo "::error::The production branch of the Pages project $project is not main. Set it to main in the Cloudflare dashboard."
+            exit 1
+          fi
+          subdomain="${project_info[2]}"
+          if ! [[ "$subdomain" =~ ^[a-z0-9-]+\.pages\.dev$ ]]; then
+            echo "::error::Unexpected address for the Pages project $project."
+            exit 1
+          fi
+          rm -f "$auth"
+
+          # 2. Upload. --branch main makes it the production deployment.
+          ./node_modules/.bin/wrangler pages deploy "$RUNNER_TEMP/site" \
+            --project-name "$project" \
+            --branch main \
+            --commit-hash "$GITHUB_SHA" \
+            --commit-message "Commit ${GITHUB_SHA:0:7} on main" \
+            --commit-dirty=false
+
+          # 3. What Wrangler reports about the deployment.
+          mapfile -t deployment < <(jq -rs '
+            [.[] | select(.type == "pages-deploy-detailed")] | last
+            | if . == null then empty else .url, .environment end
+          ' "$WRANGLER_OUTPUT_FILE_PATH")
+          if [ "${#deployment[@]}" -ne 2 ] || ! [[ "${deployment[0]}" =~ ^https://[a-z0-9-]+\.${subdomain//./\\.}$ ]]; then
+            echo "::error::Wrangler did not report the address of the deployment."
+            exit 1
+          fi
+          if [ "${deployment[1]}" != production ]; then
+            echo "::error::The deployment is not the production deployment: ${deployment[1]}."
+            exit 1
+          fi
+          {
+            echo "url=https://$subdomain"
+            echo "deployment_url=${deployment[0]}"
+          } >> "$GITHUB_OUTPUT"
+          echo "Deployed to https://$subdomain (this deployment: ${deployment[0]})."
+
+      # No secrets. Asks the live site for every file, and checks that each
+      # answer has every header in _headers, once, with exactly its value.
+      - name: Check the live site
+        if: steps.newest.outputs.newest == 'true'
+        env:
+          SITE_URL: ${{ steps.deploy.outputs.url }}
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment_url }}
+        run: |
+          set -u
+          site="$RUNNER_TEMP/site"
+          response="$RUNNER_TEMP/response-headers.txt"
+          mapfile -t expected < <(sed -n 's/^  \([A-Za-z-]*\): \(.*\)$/\1: \2/p' "$site/_headers")
+          if [ "${#expected[@]}" -lt 9 ]; then
+            echo "::error::Could not read the headers from _headers."
+            exit 1
+          fi
+
+          # A new deployment can take a few seconds to answer everywhere.
+          fetch() {
+            local status=""
+            for _ in 1 2 3 4 5 6 7 8 9 10; do
+              status="$(curl -sS --max-time 30 -o /dev/null -D "$response" -w '%{http_code}' "$1" || true)"
+              if [ "$status" = "$2" ]; then return 0; fi
+              sleep 6
+            done
+            echo "::error::$1 answered HTTP $status, not $2."
+            exit 1
+          }
+          failed=0
+          check_headers() {
+            local line name value
+            for line in "${expected[@]}"; do
+              name="${line%%: *}"
+              value="${line#*: }"
+              mapfile -t got < <(tr -d '\r' < "$response" | grep -i "^$name:" | sed 's/^[^:]*:[[:space:]]*//')
+              if [ "${#got[@]}" -ne 1 ] || [ "${got[0]}" != "$value" ]; then
+                echo "::$2::$1 does not send the header $name exactly as in _headers. It sends: ${got[*]:-nothing}"
+                if [ "$2" = error ]; then failed=1; fi
+              fi
+            done
+          }
+
+          checked=0
+          while IFS= read -r -d '' file; do
+            path="/${file#./}"
+            path="${path%index.html}"
+            if [ "$path" = /404.html ] || [ "$path" = /_headers ]; then continue; fi
+            fetch "$DEPLOYMENT_URL$path" 200
+            check_headers "$DEPLOYMENT_URL$path" error
+            checked=$((checked + 1))
+          done < <(cd "$site" && find . -type f -print0 | LC_ALL=C sort -z)
+          fetch "$SITE_URL/" 200
+          check_headers "$SITE_URL/" error
+          # Unknown addresses get 404.html with the status 404. Its headers
+          # are only warned about: Cloudflare's documentation does not say
+          # whether _headers applies to this answer.
+          fetch "$DEPLOYMENT_URL/no-such-page/" 404
+          check_headers "$DEPLOYMENT_URL/no-such-page/" warning
+          if [ "$failed" != 0 ]; then exit 1; fi
+          echo "All $checked files and the production address send the security headers."
+
+      - name: Write the summary
+        if: always() && steps.newest.outputs.newest != ''
+        env:
+          NEWEST: ${{ steps.newest.outputs.newest }}
+          SITE_URL: ${{ steps.deploy.outputs.url }}
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment_url }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -u
+          short="${GITHUB_SHA:0:7}"
+          {
+            echo "## Deploy"
+            echo
+            if [ "$NEWEST" != true ]; then
+              echo "Not deployed: a newer commit is on \`main\`. Its run deploys the site."
+            elif [ "$JOB_STATUS" = success ]; then
+              echo "Commit \`$short\` is live at <$SITE_URL>."
+              echo
+              echo "This deployment alone: <$DEPLOYMENT_URL>. Every page sends the security headers."
+            else
+              echo "The deploy of commit \`$short\` failed. Open the failed step above to see why."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

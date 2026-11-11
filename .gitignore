@@ -22,7 +22,10 @@ android/gradle/verification-keyring.gpg
 .env.*
 .dev.vars
 
-# Node and Cloudflare tooling for backend/
+# Python bytecode from the site generator's tests in tools/site/
+__pycache__/
+
+# Node and Cloudflare tooling for backend/ and .github/site-deploy/
 node_modules/
 .wrangler/
 

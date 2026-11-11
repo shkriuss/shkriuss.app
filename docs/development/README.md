@@ -15,6 +15,9 @@ Pages:
   browser.
 - [Release](release.md): how to run a release from a phone, check and
   publish the draft, and the rehearsal with Catalog.
+- [Hub site](site.md): how the website is built from the docs, checked
+  and deployed to Cloudflare, its security headers, and how to set up
+  Cloudflare from a phone.
 - [Emulator tests](emulator-tests.md): the plan for instrumented tests on
   an emulator. Not set up yet.
 - [Working with Claude](working-with-claude.md): who can do what, and how a

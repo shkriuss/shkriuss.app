@@ -1,10 +1,11 @@
 # Continuous integration
 
-The GitHub Actions workflows that check every pull request, and the one
-that makes releases. GitHub Actions is the authoritative build (section 13
-of the [plan](../plan/PLAN.md),
+The GitHub Actions workflows that check every pull request, the one that
+makes releases, and the one that deploys the hub site. GitHub Actions is
+the authoritative build (section 13 of the [plan](../plan/PLAN.md),
 [ADR 0014](../adr/0014-release-flow-and-reproducible-builds.md)). Set up in
-Phase 0, step 4. Release was added in Phase 0, step 6.
+Phase 0, step 4. Release was added in Phase 0, step 6, and Site in Phase 0,
+step 7.
 
 | Workflow | File | Runs on | What it does |
 |---|---|---|---|
@@ -12,6 +13,7 @@ Phase 0, step 4. Release was added in Phase 0, step 6.
 | PR preview | [`pr-preview.yml`](../../.github/workflows/pr-preview.yml) | Every pull request | Builds and signs a preview APK of every app the pull request touches. Uploads it and the changed screenshots. Keeps one comment on the pull request with the links. |
 | Protected paths | [`protected-paths.yml`](../../.github/workflows/protected-paths.yml) | Every pull request, as `pull_request_target` | Labels a pull request `protected-paths` and keeps one comment listing its owner-only files, by CODEOWNERS on `main`. Never blocks a merge. |
 | Release | [`release.yml`](../../.github/workflows/release.yml) | By hand, on `main` | Builds an app twice and compares the builds. Signs it after the owner's approval, attests it and creates a draft release. See [release.md](release.md). |
+| Site | [`site.yml`](../../.github/workflows/site.yml) | Pull requests that change the site, every push to `main`, and by hand | Builds the hub site from `docs/` and `site/` and checks it. On `main` only, deploys it to Cloudflare Pages and checks the live security headers. See [site.md](site.md). |
 
 How to install a preview on a phone is in
 [test-a-pull-request.md](test-a-pull-request.md). Emulator tests are not set
@@ -19,7 +21,7 @@ up yet. The plan is in [emulator-tests.md](emulator-tests.md). What the
 protected-paths flag protects against, and what it does not, is in
 [protected-paths.md](../security/protected-paths.md).
 
-Still to come (plan section 13): `site`, and later `backend`.
+Still to come (plan section 13): `backend`.
 
 ## Rules every workflow follows
 
@@ -37,14 +39,16 @@ The full list is in `.claude/rules/workflows.md`. In short:
    to read `ci.yml`'s run for the commit, and "Draft release" has
    `contents: write`, `id-token: write` and `attestations: write` to make
    the attestation and the draft. It checks out nothing.
-4. No secrets, except in Release: one step of its job "Sign" gets the three
-   secrets of the `release` environment. No `pull_request_target`, except
+4. No secrets, except in two steps. In Release, one step of the job "Sign"
+   gets the three secrets of the `release` environment. In Site, one step
+   of the job "Deploy" gets `CLOUDFLARE_API_TOKEN` of the `cloudflare`
+   environment. No `pull_request_target`, except
    in Protected paths, which never checks out, builds or runs anything from
    the pull request.
 5. Every job has a timeout and a concurrency group. A new push to a pull
-   request cancels the older run. Protected paths and Release are the
-   exceptions: their runs wait for each other, so a run never stops
-   half-way through writing.
+   request cancels the older run. Protected paths, Release and Site's job
+   "Deploy" are the exceptions: their runs wait for each other, so a run
+   never stops half-way through writing.
 6. Values from the event, from files and from earlier steps reach a shell
    only through `env`. File names are matched against fixed patterns and
    never run.
@@ -56,6 +60,14 @@ shell steps live inside the workflow files, not in `tools/`, so that a
 change to them always needs the owner's review. A script that two
 workflows share lives in `.github/scripts/`, which is owner-only too. Today
 that is one: `check-version-code.sh`, used by CI and Release.
+
+Site has two more files outside its workflow file:
+
+- The generator, `tools/site/build.py`. It is not owner-only. It runs only
+  in the job "Build", which has no secrets, and the workflow checks what it
+  writes before anything is deployed.
+- The deploy tool's pin and install script, in `.github/site-deploy/`.
+  They are owner-only, like the workflow.
 
 ## CI
 
@@ -239,6 +251,16 @@ phone, is in [release.md](release.md). Why it works this way is in
 [ADR 0013](../adr/0013-signing-key-custody-and-rotation.md) and
 [ADR 0014](../adr/0014-release-flow-and-reproducible-builds.md).
 
+## Site
+
+Three jobs: "Build", "Deploy tool" and "Deploy". Pull requests run only
+"Build" and "Deploy tool", with no secrets. "Deploy" runs only on `main`,
+in the `cloudflare` environment, and runs no project code. What each job
+does, the security headers, and how to set up Cloudflare from a phone are
+in [site.md](site.md). Why it works this way is in
+[ADR 0022](../adr/0022-hub-site-generator.md) and
+[ADR 0023](../adr/0023-hub-site-hosting-and-deploy.md).
+
 ## The download cache
 
 Gradle downloads about 950 MB: the Gradle distribution, the Android Gradle
@@ -264,13 +286,16 @@ Plugin, every library and Robolectric's Android image.
 All are GitHub's own. No other action is used, so nothing needs to be
 allowed in the repository settings. Protected paths uses no action at all.
 Release uses the same commits of `checkout`, `upload-artifact` and
-`download-artifact`, plus `attest`.
+`download-artifact`, plus `attest`. Site uses the same commits of
+`checkout`, `upload-artifact` and `download-artifact`, and no other action.
+Its deploy tool, Wrangler, is not an action: it is an npm package, pinned
+with a lockfile ([ADR 0023](../adr/0023-hub-site-hosting-and-deploy.md)).
 
 | Action | Version | Commit | Used for |
 |---|---|---|---|
 | `actions/checkout` | v7.0.1 | `3d3c42e5aac5ba805825da76410c181273ba90b1` | Getting the code |
-| `actions/upload-artifact` | v7.0.2 | `cf430e030ddbb5b0abf93d22962f4752f3646cd9` | The APK, the screenshots, the screenshot differences, the artifact numbers for the comment. In Release, the files passed between jobs |
-| `actions/download-artifact` | v8.0.2 | `9000827ccba6bdab643e8b6fd33ac0654aef8333` | The artifact numbers, in the comment job. In Release, the files from earlier jobs |
+| `actions/upload-artifact` | v7.0.2 | `cf430e030ddbb5b0abf93d22962f4752f3646cd9` | The APK, the screenshots, the screenshot differences, the artifact numbers for the comment. In Release, the files passed between jobs. In Site, the built site |
+| `actions/download-artifact` | v8.0.2 | `9000827ccba6bdab643e8b6fd33ac0654aef8333` | The artifact numbers, in the comment job. In Release, the files from earlier jobs. In Site, the built site, in "Deploy" |
 | `actions/cache/restore` and `actions/cache/save` | v6.1.0 | `55cc8345863c7cc4c66a329aec7e433d2d1c52a9` | The download cache. Not used in Release |
 | `actions/attest` | v4.2.2 | `1e69f48acb82d1966a394da916b4c1698aa569d6` | Release only: the build provenance attestation of the signed APK |
 
@@ -309,7 +334,12 @@ Not used, and why:
    both started the run and started this attempt, and the `release`
    environment lets only `main` use its secrets. So a change to
    `release.yml` reaches the key only after the owner merges it.
-4. In CI and PR preview, pull requests from forks get a read-only token
+4. Site deploys only from `main`. A pull request runs its own copy of
+   `site.yml`, but only the jobs "Build" and "Deploy tool", which have no
+   secrets. The `cloudflare` environment lets only `main` use its token. So
+   a change to `site.yml`, to the generator or to the deploy tool reaches
+   the token only after the owner merges it.
+5. In CI and PR preview, pull requests from forks get a read-only token
    from GitHub anyway. The repository settings decide whether a first-time
    contributor's run needs the owner's approval. Protected paths gets a
    token that can write the label and the comment, also for forks. That is
