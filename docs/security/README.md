@@ -6,6 +6,9 @@ Pages:
 
 - [Permissions](permissions.md): every permission each app declares, and
   why.
+- [Protected-paths flag](protected-paths.md): how a pull request that
+  changes an owner-only path is flagged, what that protects against and
+  what it does not.
 
 What else belongs here:
 
